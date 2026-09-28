@@ -75,13 +75,15 @@ jobs:
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsuZXhhbXBsZS5jb20k
       CLERK_SECRET_KEY: sk_live_dummy
       NEXT_PUBLIC_API_BASE: http://localhost:8080
-      # Replay Review Exchange pages are exercised against the fixture API
-      # (tests/e2e/mock-review-api.mjs); the flag is inlined at build time.
+      # Replay Review Exchange and build-guide pages are exercised against
+      # the fixture API (tests/e2e/mock-review-api.mjs + mock-guides-api.mjs);
+      # the flags are inlined at build time (and decide the /meta redirect).
       NEXT_PUBLIC_REVIEWS_ENABLED: "on"
       # Instant Analysis (/try) is on for the smoke, so the prebuild MUST
       # produce the browser engine (public/pyodide + public/engine) or fail.
       NEXT_PUBLIC_INSTANT_IMPORT: all
       INSTANT_ENGINE_REQUIRED: '1'
+      NEXT_PUBLIC_GUIDES_ENABLED: "on"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

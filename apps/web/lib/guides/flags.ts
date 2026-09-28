@@ -5,18 +5,18 @@
  *
  * `NEXT_PUBLIC_*` values are inlined at build time, so the env var must
  * be read with its literal name (never a computed key) for client
- * bundles to see it.
+ * bundles to see it. The value itself is parsed by the shared
+ * `isGuidesFlagOn` (also used by next.config.mjs for the /meta redirect).
  */
-
-const ENABLED_VALUES: ReadonlySet<string> = new Set(["1", "true"]);
+import { isGuidesFlagOn } from "@/lib/guides/guidesFlag.mjs";
 
 /**
- * True when `NEXT_PUBLIC_GUIDES_ENABLED` is exactly "1" or "true".
+ * True when `NEXT_PUBLIC_GUIDES_ENABLED` is "1", "true" or "on"
+ * (trimmed, case-insensitive — the NEXT_PUBLIC_REVIEWS_ENABLED convention).
  *
- * Example: with `NEXT_PUBLIC_GUIDES_ENABLED=1`, `guidesEnabled()` → true;
+ * Example: with `NEXT_PUBLIC_GUIDES_ENABLED=On`, `guidesEnabled()` → true;
  * unset, "0" or "yes" → false.
  */
 export function guidesEnabled(): boolean {
-  const raw = process.env.NEXT_PUBLIC_GUIDES_ENABLED;
-  return typeof raw === "string" && ENABLED_VALUES.has(raw);
+  return isGuidesFlagOn(process.env.NEXT_PUBLIC_GUIDES_ENABLED);
 }

@@ -72,7 +72,7 @@ export function GuideVideoRow({
                   {video.title}
                 </span>
                 <span className="block text-micro text-text-dim">
-                  {fmtGuideDate(video.publishedAt)} · YouTube
+                  {video.publishedAt ? `${fmtGuideDate(video.publishedAt)} · YouTube` : "YouTube"}
                   <span className="sr-only"> (opens in a new tab)</span>
                 </span>
               </span>

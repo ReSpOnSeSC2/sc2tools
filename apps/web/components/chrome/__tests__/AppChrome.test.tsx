@@ -74,13 +74,16 @@ describe("AppChrome navigation", () => {
       "/app/builds",
       "/app/arcade",
       "/builds",
-      "/meta",
       "/community",
       "/devices",
       "/settings",
     ]) {
       expect(railHrefs()).toContain(href);
     }
+    // The public guides live in the marketing shell, not the rail, and
+    // the retired /meta radar has no entry at all.
+    expect(railHrefs()).not.toContain("/guides");
+    expect(railHrefs()).not.toContain("/meta");
     expect(railHrefs()).not.toContain("/admin");
     expect(railHrefs()).not.toContain("/coaching");
   });
@@ -127,7 +130,6 @@ describe("AppChrome navigation", () => {
     ["/devices", "/devices", "Devices"],
     ["/builds", "/builds", "Custom builds"],
     ["/community/builds/some-slug", "/community", "Community"],
-    ["/meta", "/meta", "Meta"],
     ["/admin/users", "/admin", "Admin"],
     ["/coaching", "/coaching", "Coaching"],
     ["/app/opponents/1-S2-1-99", "/app/opponents", "Opponents"],
@@ -197,13 +199,13 @@ describe("AppChrome mobile navigation", () => {
       "/app/macro",
       "/app/arcade",
       "/builds",
-      "/meta",
       "/community",
       "/devices",
       "/settings",
     ]) {
       expect(sheetHrefs).toContain(href);
     }
+    expect(sheetHrefs).not.toContain("/meta");
     expect(sheetHrefs).not.toContain("/coaching");
     expect(sheetHrefs).not.toContain("/app/trends");
   });
@@ -256,7 +258,7 @@ describe("AppChrome for signed-out visitors", () => {
     expect(screen.getByRole("navigation", { name: "App navigation" })).toBeTruthy();
     expect(screen.getByTestId("app-chrome-main")).toBeTruthy();
 
-    expect(railHrefs()).toEqual(["/", "/meta", "/community"]);
+    expect(railHrefs()).toEqual(["/", "/community"]);
     expect(railHrefs()).not.toContain("/coaching");
 
     const header = screen.getByRole("banner");
@@ -268,6 +270,6 @@ describe("AppChrome for signed-out visitors", () => {
     const bar = screen.getByRole("navigation", { name: "Quick sections" });
     expect(
       Array.from(bar.querySelectorAll("a")).map((a) => a.getAttribute("href")),
-    ).toEqual(["/meta", "/community", "/sign-in"]);
+    ).toEqual(["/community", "/sign-in"]);
   });
 });

@@ -81,6 +81,9 @@ const { buildGuideRevalidator } = require("./services/guideRevalidate");
 const { buildGuideStatsRecomputeJob } = require("./jobs/guideStatsRecomputeJob");
 const { GuideVideosService } = require("./services/guideVideos");
 const { buildGuideVideosSyncJob } = require("./jobs/guideVideosSyncJob");
+const { GuideNotesService } = require("./services/guideNotes");
+const { GuidesService } = require("./services/guides");
+const { buildGuidesRouter } = require("./routes/guides");
 const { CommunityService } = require("./services/community");
 const { SeasonsService } = require("./services/seasons");
 const { ArcadeService } = require("./services/arcade");
@@ -389,7 +392,8 @@ function makeServices(deps) {
   });
   // Ladder Meta Radar — effectiveness-weighted opener meta by league
   // band + matchup from the corpus (jobs/ladderMetaRecomputeJob),
-  // served PUBLICLY by routes/ladderMeta.js for the /meta SEO page.
+  // served PUBLICLY by routes/ladderMeta.js for the analyzer's Ladder
+  // Pulse (the old /meta page now redirects to the /guides pages).
   const ladderMeta = new LadderMetaService(deps.db, { logger: deps.logger });
   // Skill Fingerprint — replay-derived build, game-length, and matchup
   // tendencies plus a player-population-calibrated archetype for Trends.
@@ -666,6 +670,10 @@ function makeServices(deps) {
     logger: deps.logger,
   });
   const guideVideosJob = buildGuideVideosSyncJob({ guideVideos, logger: deps.logger });
+  // SC2 Tools Guides read layer (public /v1/guides, routes/guides.js) and
+  // the admin-edited coach's notes it shows (routes/adminGuides.js).
+  const guideNotes = new GuideNotesService(deps.db);
+  const guides = new GuidesService(deps.db, { guideNotes, guideVideos, logger: deps.logger });
   const gdpr = new GdprService(deps.db, {
     opponents,
     logger: deps.logger,
@@ -817,6 +825,8 @@ function makeServices(deps) {
     guideStatsJob,
     guideVideos,
     guideVideosJob,
+    guideNotes,
+    guides,
     publicProfile,
     chatbot,
     pulseDirectory,
@@ -1019,11 +1029,24 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     );
   }
   app.use(SERVICE.ROUTE_PREFIX, buildSeasonsRouter({ seasons: services.seasons }));
-  // Public, corpus-wide, k-anonymous meta report (no user data) — SEO
-  // surface, mounts with the public routers.
+  // Public, corpus-wide, k-anonymous meta report (no user data) — read
+  // by the web's Ladder Pulse without a token; mounts with the public
+  // routers.
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildLadderMetaRouter({ ladderMeta: services.ladderMeta }),
+  );
+  // SC2 Tools Guides — public, SEO-facing build guides over the nightly
+  // guide_stats aggregate. No router-level auth (only /guides/me/* applies
+  // it per route); every /guides path 404s while GUIDES_ENABLED is off.
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildGuidesRouter({
+      guides: services.guides,
+      guideSamples: services.guideSamples,
+      auth,
+      enabled: Boolean(deps.config.guidesEnabled),
+    }),
   );
   // Public marketing-page replay preview. Unauth'd by design — the
   // landing page demo accepts a single .SC2Replay upload and returns
@@ -1265,6 +1288,12 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       },
       gameDetailsStoreKind: deps.config.gameDetailsStore,
       replayFilesStoreKind: deps.config.replayFilesStore,
+      guideNotes: services.guideNotes,
+      guides: services.guides,
+      guideStats: services.guideStats,
+      guideStatsJob: services.guideStatsJob,
+      guideSamplesBackfill: services.guideSamplesBackfill,
+      guideVideos: services.guideVideos,
     }),
   );
   // User → admin messaging (bug reports). Auth-gated per-path inside

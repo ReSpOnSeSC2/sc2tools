@@ -1,6 +1,7 @@
-// Shared types + helpers for the public Ladder Meta Radar page. Kept
-// framework-agnostic (no "use client") so the server page and the client
-// report/controls components can all import it without duplication.
+// Shared types + helpers for the Ladder Meta data (the signed-in Ladder
+// Pulse card; the public /meta radar page was replaced by /guides). Kept
+// framework-agnostic (no "use client") so server and client code can both
+// import it without duplication.
 //
 // The shapes mirror the API's GET /v1/meta/ladder response
 // (apps/api/src/services/ladderMeta.js -> shapeServedRow).
@@ -169,7 +170,16 @@ export function parseMatchup(raw: unknown): string {
   return isValidMatchup(canonical) ? canonical : DEFAULT_MATCHUP;
 }
 
-/** Canonical shareable URL for one axis, opponent band, and matchup. */
+/** The build-guide matchup page that replaced the /meta radar. */
+const GUIDES_PATH = "/guides";
+/** Only the older patch era is spelled out; the current era is the default. */
+const PREVIOUS_ERA: PatchEra = "before";
+
+/** Build-guide URL for one axis, opponent band, and matchup: the guide
+ *  matchup page filtered to that band, in the query format the guide pages
+ *  parse (`band=<axis>:<band>`, `era=before` only for the older patch).
+ *
+ *  Example: `metaHref("league", 4, "PvZ")` → "/guides/pvz?band=league:4". */
 export function metaHref(
   axis: BandAxis,
   band: number,
@@ -178,12 +188,9 @@ export function metaHref(
 ): string {
   const canonicalAxis = parseAxis(axis);
   const canonicalBand = parseBand(canonicalAxis, band);
-  const canonicalMatchup = parseMatchup(matchup);
-  const canonicalEra = parsePatchEra(era);
-  return (
-    `/meta?axis=${canonicalAxis}&band=${canonicalBand}` +
-    `&matchup=${encodeURIComponent(canonicalMatchup)}&era=${canonicalEra}`
-  );
+  const matchupSlug = parseMatchup(matchup).toLowerCase();
+  const eraQuery = parsePatchEra(era) === PREVIOUS_ERA ? `&era=${PREVIOUS_ERA}` : "";
+  return `${GUIDES_PATH}/${matchupSlug}?band=${canonicalAxis}:${canonicalBand}${eraQuery}`;
 }
 
 /** Strip the redundant "<X>v<Y> - " matchup prefix the agent bakes into

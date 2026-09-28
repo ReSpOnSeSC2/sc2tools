@@ -4,7 +4,7 @@ import {
   FiltersContext,
   type AnalyzerFilters,
 } from "@/lib/filterContext";
-import { BuildEditorModal } from "../BuildEditorModal";
+import { BuildEditorModal, communityGuideHref } from "../BuildEditorModal";
 
 const apiCallMock = vi.fn().mockResolvedValue({ items: [] });
 
@@ -29,6 +29,47 @@ vi.mock("@/components/builds/BuildPublishModal", () => ({
 afterEach(() => {
   cleanup();
   apiCallMock.mockClear();
+  vi.unstubAllEnvs();
+});
+
+const FILTERS: AnalyzerFilters = { preset: "all" } as AnalyzerFilters;
+
+function renderModal(buildName: string) {
+  return render(
+    <FiltersContext.Provider
+      value={{ filters: FILTERS, setFilters: () => undefined, dbRev: 1, bumpRev: () => undefined, seasons: [] }}
+    >
+      <BuildEditorModal buildName={buildName} onClose={() => undefined} />
+    </FiltersContext.Provider>,
+  );
+}
+
+describe("BuildEditorModal community guide link", () => {
+  it("links a matchup-prefixed catalog opener to its public guide while guides are on", () => {
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");
+    renderModal("PvZ - Stargate into Glaives");
+    const link = screen.getByRole("link", { name: "Community guide" });
+    expect(link.getAttribute("href")).toBe("/guides/pvz/stargate-into-glaives");
+  });
+
+  it.each([
+    "PvT - Macro Transition (Unclassified)",
+    "Unclassified - PvZ",
+    "Zerg - 12 Pool",
+    "My custom opener",
+    "PvZ - Game Too Short",
+  ])("offers no guide link for %j", (name) => {
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");
+    expect(communityGuideHref(name)).toBeNull();
+    renderModal(name);
+    expect(screen.queryByRole("link", { name: "Community guide" })).toBeNull();
+  });
+
+  it("offers no guide link while guides are off", () => {
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "");
+    renderModal("PvZ - Stargate into Glaives");
+    expect(screen.queryByRole("link", { name: "Community guide" })).toBeNull();
+  });
 });
 
 describe("BuildEditorModal global filter scope", () => {

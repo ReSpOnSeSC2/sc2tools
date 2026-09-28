@@ -2,8 +2,17 @@ import type { MetadataRoute } from "next";
 import { getJson } from "@/lib/serverApi";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import { reviewsRollout } from "@/lib/reviews";
+import { fetchGuideSitemap } from "@/lib/guides/api";
+import { guidesEnabled } from "@/lib/guides/flags";
+import type { CommunitySitemapPayload } from "@/lib/guides/types";
+import {
+  communitySitemapRows,
+  finalizeSitemap,
+  guideSitemapRows,
+  type SitemapRows,
+} from "@/lib/sitemapEntries";
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com").replace(/\/+$/, "");
 
 type Route = {
   path: string;
@@ -13,13 +22,13 @@ type Route = {
 
 // Public, indexable routes only. Auth/token-gated routes (/app, /devices,
 // /streaming, /overlay, /admin, /settings, /welcome) are intentionally
-// excluded — crawlers just get bounced to sign-in there.
+// excluded — crawlers just get bounced to sign-in there. (/meta is gone:
+// it redirects to /guides.)
 const ROUTES: Route[] = [
   { path: "/", priority: 1.0, changeFrequency: "weekly" },
   { path: "/download", priority: 0.9, changeFrequency: "weekly" },
   { path: "/community", priority: 0.8, changeFrequency: "daily" },
   { path: "/builds", priority: 0.7, changeFrequency: "daily" },
-  { path: "/meta", priority: 0.7, changeFrequency: "daily" },
   { path: "/definitions", priority: 0.5, changeFrequency: "monthly" },
   { path: "/donate", priority: 0.4, changeFrequency: "monthly" },
   { path: "/legal/privacy", priority: 0.2, changeFrequency: "yearly" },
@@ -34,37 +43,80 @@ function staticRoutes(): Route[] {
   return getInstantImportMode() === "all" ? [...ROUTES, TRY_ROUTE] : ROUTES;
 }
 
-// Regenerated at most hourly; the API list is already capped.
+const REVIEW_ID_RE = /^[A-Za-z0-9_-]{16}$/;
+const LIST_REVALIDATE_SEC = 3600;
+
+// Regenerated at most hourly (the reviews list moves fastest); the guide
+// list is also purged on demand by /api/revalidate-guides after the
+// nightly recompute. The API lists are already capped.
 export const revalidate = 3600;
 
-/**
- * Static marketing routes plus, once the Replay Review Exchange is live,
- * the review board and every review that passed the quality gate (at
- * least one helpful or best review — the API's ``indexable`` flag). An
- * unreachable API degrades to the static list, never an error.
- */
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const lastModified = new Date();
-  const entries: MetadataRoute.Sitemap = staticRoutes().map((route) => ({
+function staticRows(lastModified: Date): SitemapRows {
+  return staticRoutes().map((route) => ({
     url: `${SITE_URL}${route.path}`,
     lastModified,
     changeFrequency: route.changeFrequency,
     priority: route.priority,
   }));
-  if (reviewsRollout() !== "on") return entries;
-  entries.push({ url: `${SITE_URL}/reviews`, lastModified, changeFrequency: "hourly", priority: 0.7 });
+}
+
+/**
+ * Once the Replay Review Exchange is live: the review board and every
+ * review that passed the quality gate (the API's ``indexable`` flag).
+ */
+async function reviewRows(lastModified: Date): Promise<SitemapRows> {
+  if (reviewsRollout() !== "on") return [];
+  const rows: SitemapRows = [
+    { url: `${SITE_URL}/reviews`, lastModified, changeFrequency: "hourly", priority: 0.7 },
+  ];
   const reviews = await getJson<{ items: Array<{ id: string; lastModified: string | null }> }>(
     "/v1/reviews/sitemap",
-    { revalidateSec: 3600 },
+    { revalidateSec: LIST_REVALIDATE_SEC },
   );
   for (const item of reviews?.items ?? []) {
-    if (!/^[A-Za-z0-9_-]{16}$/.test(item.id)) continue;
-    entries.push({
+    if (!REVIEW_ID_RE.test(item.id)) continue;
+    rows.push({
       url: `${SITE_URL}/reviews/${item.id}`,
       lastModified: item.lastModified ? new Date(item.lastModified) : lastModified,
       changeFrequency: "weekly",
       priority: 0.6,
     });
   }
-  return entries;
+  return rows;
+}
+
+/**
+ * Published guide pages (flag on). Even "/guides" itself comes from the
+ * API list, never a static route: the API lists the hub only while it is
+ * indexable (a published build or a channel video), so the sitemap never
+ * submits the hub's noindex "nothing published yet" state, and an API
+ * outage lists no guide URL at all.
+ */
+async function guideRows(lastModified: Date): Promise<SitemapRows> {
+  if (!guidesEnabled()) return [];
+  const result = await fetchGuideSitemap();
+  return guideSitemapRows(SITE_URL, result.kind === "ok" ? result.data : null, lastModified);
+}
+
+/** Published community builds and their authors' public /p/ profiles. */
+async function communityRows(lastModified: Date): Promise<SitemapRows> {
+  const payload = await getJson<CommunitySitemapPayload>("/v1/community/sitemap", {
+    revalidateSec: LIST_REVALIDATE_SEC,
+  });
+  return communitySitemapRows(SITE_URL, payload, lastModified);
+}
+
+/**
+ * Static marketing routes, then reviews, guides, community builds and
+ * profiles (in that priority order, so the cap trims profiles first).
+ * An unreachable API degrades to the static list, never an error.
+ */
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const lastModified = new Date();
+  const [reviews, guides, community] = await Promise.all([
+    reviewRows(lastModified),
+    guideRows(lastModified),
+    communityRows(lastModified),
+  ]);
+  return finalizeSitemap([...staticRows(lastModified), ...reviews, ...guides, ...community]);
 }

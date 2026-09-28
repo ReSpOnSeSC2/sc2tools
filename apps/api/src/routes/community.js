@@ -2,6 +2,7 @@
 
 const express = require("express");
 const rateLimitModule = require("express-rate-limit");
+const { GUIDE_CACHE_CONTROL } = require("../config/guides");
 
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
@@ -17,6 +18,9 @@ const rateLimit =
  *                                        used by the Arcade Stock Market
  *   GET /community/authors/:userId     — public author profile
  *   GET /community/opponents/:pulseId  — k-anonymous aggregate
+ *   GET /community/sitemap             — published build slugs + opt-in
+ *                                        profile handles for the web
+ *                                        sitemap (cached like the guides)
  *
  * Authed writes:
  *   POST   /community/builds                 — publish a private build
@@ -157,6 +161,15 @@ function buildCommunityRouter(deps) {
       }
     },
   );
+
+  router.get("/community/sitemap", async (_req, res, next) => {
+    try {
+      const sitemap = await deps.community.sitemap();
+      res.set("Cache-Control", GUIDE_CACHE_CONTROL).json(sitemap);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   router.get("/community/builds/:slug", async (req, res, next) => {
     try {

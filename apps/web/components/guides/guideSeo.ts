@@ -55,6 +55,13 @@ export interface GuideMetadataInput {
   /** True for "not enough games yet" / unavailable states. */
   noindex?: boolean;
   ogType?: "website" | "article";
+  /**
+   * The route has its own `opengraph-image.tsx` (build, counter and
+   * matchup pages). Next only uses a file-based image when the page's
+   * metadata sets no `openGraph.images` (and Twitter inherits it when the
+   * page sets no `twitter.images`), so both are left out here.
+   */
+  routeOgImage?: boolean;
 }
 
 /**
@@ -66,6 +73,10 @@ export interface GuideMetadataInput {
 export function guideMetadata(input: GuideMetadataInput): Metadata {
   const description = clampDescription(input.description);
   const canonical = input.canonical.split("?")[0];
+  const images = input.routeOgImage ? {} : { images: [{ ...OG_IMAGE, alt: input.title }] };
+  // A page-level `twitter` object replaces the root one wholesale, so the
+  // site card image is restated here (a route image is inherited instead).
+  const twitterImages = input.routeOgImage ? {} : { images: [OG_IMAGE.url] };
   const metadata: Metadata = {
     title: input.title,
     description,
@@ -76,11 +87,9 @@ export function guideMetadata(input: GuideMetadataInput): Metadata {
       title: input.title,
       description,
       url: guideAbsoluteUrl(canonical),
-      images: [{ ...OG_IMAGE, alt: input.title }],
+      ...images,
     },
-    // A page-level `twitter` object replaces the root one wholesale, so
-    // the card image is restated here.
-    twitter: { card: "summary_large_image", title: input.title, description, images: [OG_IMAGE.url] },
+    twitter: { card: "summary_large_image", title: input.title, description, ...twitterImages },
   };
   if (input.noindex) metadata.robots = { index: false, follow: true };
   return metadata;
@@ -154,11 +163,14 @@ export function buildArticleJsonLd(
 /**
  * schema.org VideoObject for an embedded channel video, or null when its
  * URLs are not the first-party YouTube shapes the page would render (the
- * structured data never describes a player the page refuses to show).
+ * structured data never describes a player the page refuses to show) or
+ * when it has no upload date (an admin-added video the feed hasn't listed
+ * yet: `uploadDate` is required and is never guessed).
  */
 export function videoJsonLd(video: GuideVideo): Record<string, unknown> | null {
   const urls = safeVideoUrls(video);
   if (!urls.embed || !urls.watch || !urls.thumb) return null;
+  if (!video.publishedAt || Number.isNaN(Date.parse(video.publishedAt))) return null;
   return {
     "@context": SCHEMA_CONTEXT,
     "@type": "VideoObject",

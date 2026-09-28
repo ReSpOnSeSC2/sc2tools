@@ -13,8 +13,16 @@ import { guidesEnabled } from "@/lib/guides/flags";
  * opponent band (`?band=league:4`, `?band=mmr:4500`) and patch era
  * (`?era=before`). Unknown filter values are ignored (all bands, current
  * patch). The canonical URL never carries the query.
+ *
+ * Rendered per request, like /guides: as an ISR page, an API blip would
+ * freeze the "temporarily unavailable" state for the whole 6 h window,
+ * and switching an ISR page to dynamic at runtime (noStore) is a 500 in
+ * Next 15. The API reads stay cached: lib/guides/api.ts fetches with
+ * `next.revalidate = GUIDE_REVALIDATE_SEC` + the "guides" tag (Next
+ * caches only 200s) and shares one call between generateMetadata and the
+ * page (React cache).
  */
-export const revalidate = 21600; // = GUIDE_REVALIDATE_SEC (literal: segment config must be static)
+export const dynamic = "force-dynamic";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 

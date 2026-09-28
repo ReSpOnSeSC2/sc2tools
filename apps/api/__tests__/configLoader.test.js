@@ -1,6 +1,6 @@
 "use strict";
 
-const { loadConfig } = require("../src/config/loader");
+const { loadConfig, parseGuidesConfig } = require("../src/config/loader");
 
 const BASE_ENV = {
   MONGODB_URI: "mongodb://localhost:27017",
@@ -223,5 +223,41 @@ describe("config loader - replay review rollout", () => {
     expect(loadConfig({ ...BASE_ENV, REVIEWS_ENABLED: " ON " }).reviewsEnabled).toBe("on");
     expect(loadConfig({ ...BASE_ENV, REVIEWS_ENABLED: "true" }).reviewsEnabled).toBe("on");
     expect(loadConfig({ ...BASE_ENV, REVIEWS_ENABLED: "maybe" }).reviewsEnabled).toBe("off");
+  });
+});
+
+describe("config loader - SC2 Tools Guides", () => {
+  test("everything is off/unset by default", () => {
+    expect(parseGuidesConfig({})).toEqual({
+      guidesEnabled: false,
+      guidesRevalidateUrl: null,
+      guidesRevalidateSecret: null,
+      guidesYoutubeChannelId: null,
+      guidesYoutubeChannelUrl: null,
+    });
+  });
+
+  test("loadConfig carries every guides field from the env", () => {
+    const cfg = loadConfig({
+      ...BASE_ENV,
+      GUIDES_ENABLED: "true",
+      GUIDES_REVALIDATE_URL: "https://sc2tools.com/api/revalidate-guides",
+      GUIDES_REVALIDATE_SECRET: "revalidate-secret",
+      GUIDES_YOUTUBE_CHANNEL_ID: "UCZS3YP1mvpqyuU5vPvHVG7g",
+      GUIDES_YOUTUBE_CHANNEL_URL: "https://www.youtube.com/@ReSpOnSeSC2",
+    });
+    expect(cfg).toMatchObject({
+      guidesEnabled: true,
+      guidesRevalidateUrl: "https://sc2tools.com/api/revalidate-guides",
+      guidesRevalidateSecret: "revalidate-secret",
+      guidesYoutubeChannelId: "UCZS3YP1mvpqyuU5vPvHVG7g",
+      guidesYoutubeChannelUrl: "https://www.youtube.com/@ReSpOnSeSC2",
+    });
+  });
+
+  test("only a truthy GUIDES_ENABLED turns the guides on", () => {
+    expect(loadConfig({ ...BASE_ENV }).guidesEnabled).toBe(false);
+    expect(loadConfig({ ...BASE_ENV, GUIDES_ENABLED: "1" }).guidesEnabled).toBe(true);
+    expect(loadConfig({ ...BASE_ENV, GUIDES_ENABLED: "false" }).guidesEnabled).toBe(false);
   });
 });

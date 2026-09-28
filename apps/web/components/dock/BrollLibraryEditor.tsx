@@ -5,48 +5,16 @@ import type {
   StudioBrollClip,
   StudioBrollConfig,
 } from "@/lib/multichat/useStudioState";
+import { parseYouTubeVideoId } from "@/lib/youtube";
 
-const VIDEO_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+// Moved to lib/youtube.ts (shared with the admin Guides videos panel);
+// re-exported so existing imports of this module keep working.
+export { parseYouTubeVideoId } from "@/lib/youtube";
+
 const CLIP_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const MAX_IMPORT_CLIPS = 100;
 const MAX_TIMESTAMP_SECONDS = 86_400;
 const MAX_TITLE_LENGTH = 120;
-
-/** Accept a bare video ID or the common YouTube watch/share/live URL shapes. */
-export function parseYouTubeVideoId(input: string): string | null {
-  const value = input.trim();
-  if (VIDEO_ID_RE.test(value)) return value;
-
-  let parsed: URL;
-  try {
-    parsed = new URL(
-      /^https?:\/\//i.test(value) ? value : `https://${value}`,
-    );
-  } catch {
-    return null;
-  }
-
-  const hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
-  let candidate = "";
-  if (hostname === "youtu.be") {
-    candidate = parsed.pathname.split("/").filter(Boolean)[0] ?? "";
-  } else if (
-    hostname === "youtube.com" ||
-    hostname.endsWith(".youtube.com") ||
-    hostname === "youtube-nocookie.com" ||
-    hostname.endsWith(".youtube-nocookie.com")
-  ) {
-    candidate = parsed.searchParams.get("v") ?? "";
-    if (!candidate) {
-      const parts = parsed.pathname.split("/").filter(Boolean);
-      if (["embed", "live", "shorts", "v", "video"].includes(parts[0] ?? "")) {
-        candidate = parts[1] ?? "";
-      }
-    }
-  }
-
-  return VIDEO_ID_RE.test(candidate) ? candidate : null;
-}
 
 /** Parse seconds, mm:ss, or hh:mm:ss into a whole non-negative second. */
 export function parseBrollTimecode(input: string): number | null {

@@ -5,7 +5,8 @@
  * components/), so every utility spelled here is emitted. The recipes
  * mirror the existing kit: the hard-shadow card (`rounded-xl border-2
  * border-line bg-bg-surface shadow-hard`), the `hard-press` pill links
- * from LadderPulse / Header, and the elevated table head used on /meta.
+ * from LadderPulse / Header, and the elevated table head of the retired
+ * /meta radar.
  */
 import type { GuideCell, GuideMatchup } from "@/lib/guides/types";
 
@@ -25,8 +26,13 @@ export const GUIDE_PRIMARY_ACTION_CLASS =
 export const GUIDE_SECONDARY_ACTION_CLASS =
   "hard-press inline-flex min-h-[44px] items-center justify-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py-2 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-60";
 
-/** Scroll container that keeps wide tables from overflowing the page. */
-export const GUIDE_TABLE_WRAP_CLASS = `${GUIDE_PANEL_CLASS} overflow-x-auto`;
+/**
+ * Scroll container that keeps wide tables from overflowing the page.
+ * `relative` makes it the containing block of the cells' absolutely
+ * positioned `sr-only` spans; without it they escape the scroller and
+ * widen the whole page on phones (caught by the 360 / 375 px e2e).
+ */
+export const GUIDE_TABLE_WRAP_CLASS = `${GUIDE_PANEL_CLASS} relative overflow-x-auto`;
 
 export const GUIDE_TABLE_CLASS = "w-full min-w-[520px] text-caption";
 export const GUIDE_THEAD_CLASS =

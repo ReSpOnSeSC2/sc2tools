@@ -228,6 +228,23 @@ class GdprService {
   }
 
   /**
+   * Coach's notes an admin wrote stay on the guides (published content);
+   * only the editor's internal id is scrubbed from the audit field.
+   * Null-guarded: focused tests build GdprService over partial dbs.
+   *
+   * @param {string} userId
+   * @returns {Promise<number|null>} notes scrubbed, or null without the collection
+   */
+  async _scrubGuideNoteEditor(userId) {
+    if (!this.db.guideNotes) return null;
+    const res = await this.db.guideNotes.updateMany(
+      { updatedBy: userId },
+      { $set: { updatedBy: null } },
+    );
+    return res.modifiedCount || 0;
+  }
+
+  /**
    * Permanently delete every per-user document including the user
    * record itself. Returns counts so the caller can audit-log them.
    *
@@ -302,6 +319,9 @@ class GdprService {
       await gdprFence.assert();
       counts.guideSamples = await this.guideSamples.deleteForUser(userId);
     }
+
+    const guideNotesScrubbed = await this._scrubGuideNoteEditor(userId);
+    if (guideNotesScrubbed !== null) counts.guideNotesScrubbed = guideNotesScrubbed;
 
     // Manual snapshots hold a FULL export of the user's data — the
     // single most sensitive thing to leave behind.

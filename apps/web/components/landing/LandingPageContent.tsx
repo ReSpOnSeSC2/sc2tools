@@ -22,6 +22,7 @@ import {
 } from "@/components/landing/HeroCarousel";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { RealGameShowcase } from "@/components/landing/RealGameShowcase";
+import { GuidesStrip } from "@/components/landing/GuidesStrip";
 import { ReplayDemo } from "@/components/landing/ReplayDemo";
 import {
   PracticePreview,
@@ -351,6 +352,7 @@ function PracticeChapter() {
         <PracticePreview />
       </div>
       <ArcadeStrip />
+      <GuidesStrip />
     </section>
   );
 }

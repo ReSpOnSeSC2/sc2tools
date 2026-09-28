@@ -13,6 +13,26 @@ corresponding GitHub Release.
 
 ### Added
 
+- **SC2 Tools Guides** — a public build-order encyclopedia at `/guides`
+  whose every number comes from real ladder games synced by SC2 Tools
+  players. Each opener gets a page per matchup with its win rate and 95%
+  interval, results by opponent league and MMR band, community timing
+  benchmarks (p25 / median / p75, with winners vs losers), the army at 6, 8
+  and 10 minutes, what it beats and loses to, when it wins, its best and
+  worst maps and the macro leaks players hit with it. "How to beat …"
+  counter pages, map pages and a hub with what's winning this week round it
+  out. Nothing is shown below 5 players and 30 games (100 games for a whole
+  page), no player can move a number with more than 50 games, and lists
+  rank by the lower edge of the interval rather than raw win rate. Pages
+  embed ReSpOnSe's build-order videos from YouTube with his own build
+  checklists, let signed-in players compare their win rate and timings with
+  the community's, and can arm a Ghost Build target from the community
+  medians. Dynamic OG images, JSON-LD, a data-driven sitemap and on-demand
+  revalidation make the pages indexable. Admins can add Coach's notes and
+  curate videos per guide. Off by default behind `GUIDES_ENABLED` /
+  `NEXT_PUBLIC_GUIDES_ENABLED`; timing samples are captured from new
+  uploads right away so data accumulates first. See
+  [`docs/guides.md`](docs/guides.md).
 - **Instant Analysis: analyse replays in your browser** — drop replays or a
   zip on `/try` and get a report on your own games in seconds, with no
   account and no install. Replays are parsed on your device by the desktop
@@ -114,6 +134,14 @@ corresponding GitHub Release.
   files with disjoint query/reference replays and the production scorer. The
   report distinguishes same-account retrieval from unverified alternate-account
   identity and uncalibrated probability estimates.
+
+### Removed
+
+- **The public `/meta` page** — the Ladder Meta Radar page is replaced by
+  `/guides`, which covers the same openers with more depth; `/meta` links
+  redirect there (or to the home page while guides are switched off). The
+  signed-in Ladder Pulse keeps its meta view and now links to the matching
+  guide. `GET /v1/meta/ladder` is unchanged.
 
 ### Fixed
 
