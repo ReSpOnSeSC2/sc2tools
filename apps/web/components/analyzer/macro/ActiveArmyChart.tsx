@@ -34,6 +34,7 @@ import {
   type HoverState,
 } from "./ActiveArmyChartParts";
 import { MetricSwitch, TimelineSummary } from "./TimelineControls";
+import type { GamePace } from "@/lib/apm";
 import {
   DEFAULT_TIMELINE_METRIC,
   timelineMetricsFor,
@@ -96,6 +97,8 @@ export interface ActiveArmyChartProps {
   myRace?: string | null;
   /** Metrics this game offers; APM is included only with a trusted curve. */
   metrics?: readonly TimelineMetricDef[];
+  /** Each player's game-average APM and SPM, shown under the APM view. */
+  apmAverages?: { my: GamePace | null; opp: GamePace | null } | null;
   /** Draw the supply-block bands (the host owns the on/off switch). */
   showSupplyBlocks?: boolean;
   /** Render the "Match timeline" caption (off when the host titles it). */
@@ -150,6 +153,7 @@ export function ActiveArmyChart({
   oppName,
   myRace,
   metrics = BASE_METRICS,
+  apmAverages = null,
   showSupplyBlocks = true,
   showTitle = true,
   className = "",
@@ -361,6 +365,7 @@ export function ActiveArmyChart({
         opp={readout.opp}
         myName={you}
         oppName={them}
+        averages={layout.metric.key === "apm" ? apmAverages : null}
       />
 
       <AccessibleLeakTable leaks={leaks} highlightedKey={highlightedKey} />

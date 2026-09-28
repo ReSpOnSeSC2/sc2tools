@@ -25,7 +25,7 @@ import type {
 } from "./MacroBreakdownPanel.types";
 import { buildSeries } from "./activeArmyLayout";
 import { timelineMetricsFor } from "./timelineMetrics";
-import { withApm, type GameApm } from "@/lib/apm";
+import { gamePace, withApm, type GameApm } from "@/lib/apm";
 
 export interface MacroChartSectionProps {
   samples: StatsEvent[];
@@ -156,6 +156,10 @@ export function MacroChartSection({
     [oppSamples, unitTimeline, buildOrder.data?.opp_events, apm],
   );
   const metrics = useMemo(() => timelineMetricsFor({ apm: apm !== null }), [apm]);
+  const apmAverages = useMemo(
+    () => (apm ? { my: gamePace(apm.me), opp: gamePace(apm.opp) } : null),
+    [apm],
+  );
 
   const handleHover = useCallback((event: HoverEvent) => {
     setHover((prev) => {
@@ -217,6 +221,7 @@ export function MacroChartSection({
         oppName={oppName}
         myRace={myRace}
         metrics={metrics}
+        apmAverages={apmAverages}
         showSupplyBlocks={showBlocks}
         showTitle={false}
         className="sticky top-[var(--macro-header-h,0px)] z-[5] bg-bg-surface px-3 pt-2 shadow-[0_8px_12px_-12px_rgb(0_0_0/0.5)] sm:static sm:z-auto sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none"

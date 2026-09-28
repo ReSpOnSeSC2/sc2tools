@@ -2,11 +2,13 @@ import { describe, expect, test } from "vitest";
 import {
   apmAt,
   formatApm,
+  gamePace,
   readGameApm,
   withApm,
   type ApmCurveResponse,
   type ApmSeries,
 } from "@/lib/apm";
+import realCurves from "./fixtures/apmCurves.json";
 
 const v2: ApmCurveResponse = {
   ok: true,
@@ -51,14 +53,70 @@ describe("readGameApm", () => {
       players: [{ is_me: true, avg_apm: 0, samples: [{ t: 0, apm: 150 }, { t: 30, apm: -1 }, { t: 60 }] }],
     })!;
     expect(apm.me.avg).toBeNull();
-    expect(apm.me.samples).toEqual([{ t: 0, apm: 150 }]);
+    expect(apm.me.samples).toEqual([{ t: 0, apm: 150, spm: null }]);
+  });
+});
+
+type FixturePlayer = NonNullable<ApmCurveResponse["players"]>[number] & { name: string };
+type FixtureCurve = {
+  expected_spm: Record<string, number>;
+  response: Omit<ApmCurveResponse, "players"> & { players: FixturePlayer[] };
+};
+
+describe("game-average SPM", () => {
+  const replays = Object.entries(realCurves).filter(([key]) => key !== "_source") as Array<
+    [string, FixtureCurve]
+  >;
+
+  test.each(replays)(
+    "%s: matches each player's selections over their time in the game",
+    (_replay, { expected_spm, response }) => {
+      const apm = readGameApm(response)!;
+      const [me, opp] = [
+        response.players.find((p) => p.is_me)!,
+        response.players.find((p) => !p.is_me)!,
+      ];
+      // expected_spm is counted from sc2reader events (see the fixture's _source).
+      expect(apm.me.avgSpm).toBeCloseTo(expected_spm[me.name], 1);
+      expect(apm.opp!.avgSpm).toBeCloseTo(expected_spm[opp.name], 1);
+    },
+  );
+
+  test("runs the last window to the end of the game", () => {
+    // 60 actions / 15 selections in 30 s, then 10 / 5 in a 20-second tail.
+    const apm = readGameApm({
+      ...v2,
+      game_length_sec: 50,
+      players: [{
+        is_me: true,
+        avg_apm: 84,
+        samples: [{ t: 0, apm: 120, spm: 30 }, { t: 30, apm: 30, spm: 15 }],
+      }],
+    })!;
+    expect(apm.me.avgSpm).toBeCloseTo(84 * 20 / 70, 6);
+  });
+
+  test("is null without every window's SPM or without an average APM", () => {
+    const missing = readGameApm({
+      ...v2,
+      players: [{ is_me: true, avg_apm: 100, samples: [{ t: 0, apm: 100, spm: 20 }, { t: 30, apm: 100 }] }],
+    })!;
+    expect(missing.me.avgSpm).toBeNull();
+    const noAvg = readGameApm({
+      ...v2,
+      players: [{ is_me: true, avg_apm: null, samples: [{ t: 0, apm: 100, spm: 20 }] }],
+    })!;
+    expect(noAvg.me.avgSpm).toBeNull();
+    expect(gamePace(noAvg.me)).toEqual({ apm: null, spm: null });
+    expect(gamePace(null)).toBeNull();
   });
 });
 
 describe("apmAt", () => {
   const series: ApmSeries = {
     avg: 150,
-    samples: [{ t: 0, apm: 100 }, { t: 30, apm: 160 }, { t: 60, apm: 220 }],
+    avgSpm: null,
+    samples: [{ t: 0, apm: 100, spm: null }, { t: 30, apm: 160, spm: null }, { t: 60, apm: 220, spm: null }],
   };
 
   test("holds the first and last window values beyond their middles", () => {
@@ -75,14 +133,18 @@ describe("apmAt", () => {
   });
 
   test("is null without samples", () => {
-    expect(apmAt({ avg: null, samples: [] }, 30, 10)).toBeNull();
+    expect(apmAt({ avg: null, avgSpm: null, samples: [] }, 30, 10)).toBeNull();
   });
 });
 
 describe("withApm", () => {
   test("attaches APM at each point and leaves points alone without a series", () => {
     const points = [{ t: 0 }, { t: 45 }];
-    const series: ApmSeries = { avg: 1, samples: [{ t: 0, apm: 100 }, { t: 30, apm: 160 }] };
+    const series: ApmSeries = {
+      avg: 1,
+      avgSpm: null,
+      samples: [{ t: 0, apm: 100, spm: null }, { t: 30, apm: 160, spm: null }],
+    };
     expect(withApm(points, series, 30)).toEqual([{ t: 0, apm: 100 }, { t: 45, apm: 160 }]);
     expect(withApm(points, null, 30)).toBe(points);
   });

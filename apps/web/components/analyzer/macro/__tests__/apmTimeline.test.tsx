@@ -3,7 +3,8 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MacroChartSection } from "../MacroChartSection";
 import { MacroKpiRow } from "../MacroKpiRow";
 import type { StatsEvent } from "../MacroBreakdownPanel.types";
-import type { GameApm } from "@/lib/apm";
+import { readGameApm, type ApmCurveResponse, type GameApm } from "@/lib/apm";
+import realCurves from "@/lib/__tests__/fixtures/apmCurves.json";
 
 /**
  * APM in the macro breakdown: an APM view on the Match timeline switch
@@ -21,11 +22,11 @@ const samples: StatsEvent[] = [
   { time: 300, army_value: 3000, food_workers: 48 },
 ];
 
-const windows = (values: number[]) => values.map((apm, i) => ({ t: i * 30, apm }));
+const windows = (values: number[]) => values.map((apm, i) => ({ t: i * 30, apm, spm: null }));
 const APM: GameApm = {
   windowSec: 30,
-  me: { avg: 190, samples: windows([120, 160, 180, 190, 200, 200, 190, 200, 210, 210]) },
-  opp: { avg: 250, samples: windows([150, 220, 240, 250, 260, 270, 260, 250, 250, 250]) },
+  me: { avg: 190, avgSpm: 31, samples: windows([120, 160, 180, 190, 200, 200, 190, 200, 210, 210]) },
+  opp: { avg: 250, avgSpm: 48, samples: windows([150, 220, 240, 250, 260, 270, 260, 250, 250, 250]) },
 };
 
 function Section({ apm, gameId = "g1" }: { apm: GameApm | null; gameId?: string }) {
@@ -46,6 +47,11 @@ function Section({ apm, gameId = "g1" }: { apm: GameApm | null; gameId?: string 
 
 function readout() {
   return screen.getByText("Game time").closest("dl") as HTMLElement;
+}
+
+/** The read-out's "Game average" cells, in column order (you, opponent). */
+function averageCells() {
+  return Array.from(readout().querySelectorAll("dd.flex-wrap")).map((el) => el.textContent);
 }
 
 beforeEach(() => {
@@ -85,6 +91,25 @@ describe("Match timeline APM view", () => {
     expect(readout().textContent).toContain("210");
     expect(readout().textContent).toContain("250");
     expect(readout().textContent).toContain("+40");
+  });
+
+  it("shows each player's game-average APM and SPM under the APM view only", () => {
+    // The warpgate fixture replay: ReSpOnSe 189.7 APM / 28.7 SPM,
+    // Squirtuoz 281.5 APM / 53.9 SPM.
+    const real = readGameApm(realCurves.warpgate_adept_tracking.response as ApmCurveResponse);
+    render(<Section apm={real} />);
+    expect(screen.queryByText("Game average")).toBeNull(); // Army view
+    fireEvent.click(screen.getByRole("button", { name: "APM" }));
+    expect(screen.getByText("Game average")).toBeTruthy();
+    expect(averageCells()).toEqual(["190 APM29 SPM", "282 APM54 SPM"]);
+    fireEvent.click(screen.getByRole("button", { name: "Workers" }));
+    expect(screen.queryByText("Game average")).toBeNull();
+  });
+
+  it("shows a dash for an average the game can't provide", () => {
+    render(<Section apm={{ ...APM, opp: null, me: { ...APM.me, avgSpm: null } }} />);
+    fireEvent.click(screen.getByRole("button", { name: "APM" }));
+    expect(averageCells()).toEqual(["190 APM— SPM", "— APM— SPM"]);
   });
 
   it("falls back to Army when the next game has no APM", () => {
