@@ -391,6 +391,104 @@ into one row; a 90-day TTL on `createdAt` keeps it a bell, not an archive.
 
 ---
 
+## SC2 Tools Guides collections
+
+Public build guides (`/guides`, served by
+[`routes/guides.js`](../apps/api/src/routes/guides.js)). Floors and
+windows live in [`config/guides.js`](../apps/api/src/config/guides.js):
+a number is published only for ≥ 30 games from ≥ 5 users, a page only
+for ≥ 100 games from ≥ 5 users. No guide collection is part of the
+GDPR export; `guide_samples` rows are deleted with the account or a
+history wipe, and `guide_notes.updatedBy` is scrubbed to `null`.
+
+### `guide_samples`
+
+Pseudonymous per-game guide inputs captured at ingest
+([`services/guideSamples.js`](../apps/api/src/services/guideSamples.js))
+or by the admin-started backfill. No userId, gameId or name: the keys
+are HMACs with the server pepper.
+
+```jsonc
+{
+  "userHash": "…", "gameHash": "…",          // hmac("guide-sample-user-v1\0"+userId), hmac(…+userId+"\0"+gameId)
+  "buildKey": "PvZ - Stargate into Glaives", "matchup": "PvZ", "era": "after|before",
+  "leagueBand": 4 | null, "mmrBand": 4000 | null, "result": "Victory|Defeat|Tie",
+  "map": "…", "durationSec": 640 | null,
+  "milestones": { "Pylon": 18, "Nexus#2": 95 },          // recorded build-log seconds
+  "army": { "360": { "Adept": 4, "Oracle": 1 } },         // checkpoints 360/480/600 when present
+  "createdAt": ISODate, "updatedAt": ISODate, "_schemaVersion": 1
+}
+```
+
+| Spec | Purpose |
+| ---- | ------- |
+| `{userHash: 1, gameHash: 1}` unique | Idempotent upsert; its prefix serves GDPR deletes and `/guides/me` |
+| `{matchup: 1, buildKey: 1, era: 1}` | Nightly per-matchup aggregation |
+| `{createdAt: 1}` TTL 400 days | Rows age out |
+
+### `guide_stats`
+
+The nightly aggregate
+([`services/guideStats.js`](../apps/api/src/services/guideStats.js)),
+rebuilt in full each run; stale docs are swept. Kinds and keys:
+`build:<era>:<matchup>:<buildSlug>`, `matchup:<era>:<matchup>`,
+`counter:<era>:<matchup>:<strategySlug>`, `map:<era>:<mapSlug>` and one
+`run` doc. Every numeric group is a floor-clearing Cell
+`{games, users, wins, winRate, ci: {low, high}}`; build docs also carry
+bands, timings, army, vs-strategy, lengths, maps, macro, leaks, trend,
+`isNew`, `firstPublishedAt` and up to 3 examples (opted-in replay
+sharers only: handle, display name, result, map, length, date).
+`baseline` / `baselineCandidate` are internal week-over-week snapshots and
+are never served.
+
+| Spec | Purpose |
+| ---- | ------- |
+| `{key: 1}` unique | Replace-by-key writes, page reads |
+| `{kind: 1, era: 1, matchup: 1}` | Hub, matchup, sitemap reads |
+
+### `guide_notes`
+
+Coach's notes (admin-edited;
+[`services/guideNotes.js`](../apps/api/src/services/guideNotes.js)).
+
+```jsonc
+{
+  "matchup": "PvZ", "buildKey": "PvZ - Stargate into Glaives",
+  "body": "### Game plan …",                                 // markdown, ≤ 4000 chars
+  "videos": { "pinned": ["YcTMc_Ee11w"], "hidden": [] },    // per-guide video overrides (≤ 3 / ≤ 20)
+  "updatedBy": "<internal admin userId>" | null,             // PRIVATE; GDPR scrubs to null
+  "updatedAt": ISODate, "_schemaVersion": 1
+}
+```
+
+| Spec | Purpose |
+| ---- | ------- |
+| `{matchup: 1, buildKey: 1}` unique | One note per guide build |
+
+Public pages expose `{body, updatedAt}` only.
+
+### `guide_videos`
+
+The site owner's build-order videos
+([`services/guideVideos.js`](../apps/api/src/services/guideVideos.js)):
+committed snapshot + channel RSS sync + admin additions.
+
+```jsonc
+{
+  "youtubeId": "YcTMc_Ee11w", "title": "…", "description": "…",
+  "publishedAt": ISODate | null,             // null for an admin-added video the feed has not dated
+  "channelId": "UC…", "source": "rss|snapshot|admin",
+  "isShort": false, "hidden": false, "updatedAt": ISODate, "_schemaVersion": 1
+}
+```
+
+| Spec | Purpose |
+| ---- | ------- |
+| `{youtubeId: 1}` unique | Upsert key |
+| `{publishedAt: -1}` | Newest-first reads |
+
+---
+
 ## Schema versioning
 
 Every document carries `_schemaVersion` (integer, currently `1`).

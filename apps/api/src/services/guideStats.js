@@ -25,6 +25,11 @@
  * ``recompute()`` is single-flight per process (concurrent callers share
  * the in-flight run; one extra rerun is queued). Cross-replica exclusion
  * is the job's ``jobLocks`` lease (jobs/guideStatsRecomputeJob.js).
+ *
+ * The games aggregations are hinted on the partial games index that
+ * db/connect.js builds in the BACKGROUND (db/guideIndexes.js), so a run
+ * first waits up to GAMES_INDEX_WAIT_MS for a build still in progress and
+ * otherwise fails fast; the job's next hourly check retries.
  */
 
 const { COLLECTIONS } = require("../config/constants");
@@ -53,6 +58,15 @@ const { loadSharingUsers, examplesForMatchup } = require("./guideStatsExamples")
 
 const RUN_KEY = "run";
 const KIND_RUN = "run";
+const SECOND_MS = 1000;
+/**
+ * How long a run waits for the games index while db/connect.js is still
+ * building it (a first deploy over production games takes minutes). Short
+ * on purpose: the wait holds the job's lock, and the job re-checks hourly.
+ */
+const GAMES_INDEX_WAIT_MS = 60 * SECOND_MS;
+/** Error message of a run refused because the games index is still building. */
+const GAMES_INDEX_BUILDING = "guide_stats_games_index_building";
 /** Replacements per bulkWrite round trip. */
 const WRITE_CHUNK = 500;
 const PRIOR_PROJECTION = Object.freeze({
@@ -119,16 +133,41 @@ async function writeDocs(coll, docs) {
   }
 }
 
+/**
+ * Resolves true when ``promise`` settles (either way) within ``ms``, false
+ * after ``ms`` otherwise. The timer is always cleared.
+ *
+ * @param {Promise<unknown>} promise
+ * @param {number} ms
+ * @returns {Promise<boolean>}
+ */
+async function settlesWithin(promise, ms) {
+  /** @type {NodeJS.Timeout|undefined} */
+  let timer;
+  /** @type {Promise<boolean>} */
+  const expired = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(false), ms);
+  });
+  try {
+    return await Promise.race([promise.then(() => true, () => true), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 class GuideStatsService {
   /**
    * @param {import('../db/connect').DbContext} db uses ``games``, ``guideSamples``, ``guideStats``, ``users``
-   * @param {{ logger?: import('pino').Logger | null, now?: () => number }} [opts]
+   *   (and ``backgroundIndexes`` when present)
+   * @param {{ logger?: import('pino').Logger | null, now?: () => number, indexWaitMs?: number }} [opts]
+   *   ``indexWaitMs`` overrides GAMES_INDEX_WAIT_MS (tests)
    */
   constructor(db, opts = {}) {
     this.db = db;
     this.coll = db.guideStats;
     this.logger = opts.logger || null;
     this.now = opts.now || Date.now;
+    this.indexWaitMs = opts.indexWaitMs ?? GAMES_INDEX_WAIT_MS;
     /** @type {Promise<GuideStatsRun>|null} */
     this.recomputeInFlight = null;
     this.recomputeQueued = false;
@@ -186,6 +225,7 @@ class GuideStatsService {
    * @returns {Promise<GuideStatsRun>}
    */
   async _recomputeOnce(opts) {
+    await this._awaitGamesIndex();
     const startedMs = this.now();
     const computedAt = await this._nextStamp(startedMs);
     const priors = await this._readPriors();
@@ -209,6 +249,23 @@ class GuideStatsService {
       this.logger.info({ durationMs: run.durationMs, counts: run.counts, docs: docs.length }, "guide_stats_recomputed");
     }
     return run;
+  }
+
+  /**
+   * Wait (bounded) for a still-running background build of the games
+   * index every games aggregation is hinted on; throw GAMES_INDEX_BUILDING
+   * if it does not finish in time, before anything is read or written. A
+   * FAILED build falls through: the server may have finished it anyway
+   * (e.g. the client connection dropped), and if not, the hinted aggregate
+   * fails with Mongo's own "hint ... does not correspond to an existing
+   * index" error.
+   */
+  async _awaitGamesIndex() {
+    const builds = this.db.backgroundIndexes;
+    if (!builds || builds.status(GUIDE_GAMES_INDEX_NAME) !== "building") return;
+    if (!(await settlesWithin(builds.settled, this.indexWaitMs))) {
+      throw new Error(GAMES_INDEX_BUILDING);
+    }
   }
 
   /**
@@ -305,4 +362,4 @@ class GuideStatsService {
   }
 }
 
-module.exports = { GuideStatsService, RUN_KEY };
+module.exports = { GuideStatsService, RUN_KEY, GAMES_INDEX_BUILDING };

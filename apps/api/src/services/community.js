@@ -14,6 +14,7 @@ const {
   boundedPublicString,
   matchupFromRaces,
 } = require("./communityBuildSnapshot");
+const { communitySitemap } = require("./communitySitemap");
 
 const K_ANONYMITY_THRESHOLD = 5;
 
@@ -1240,6 +1241,16 @@ class CommunityService {
       { $project: PUBLIC_AGGREGATE_PROJECTION },
     ]).next();
     return row ? publicCommunityBuildSnapshot(row) : null;
+  }
+
+  /**
+   * Web sitemap entries: published builds and opt-in public profiles
+   * (services/communitySitemap.js). Slugs, handles and dates only.
+   *
+   * @returns {ReturnType<typeof communitySitemap>}
+   */
+  async sitemap() {
+    return communitySitemap(this.db.communityBuilds);
   }
 
   /**

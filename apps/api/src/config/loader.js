@@ -99,18 +99,7 @@ function loadConfig(env = process.env) {
   if (!HEX_64_REGEX.test(pepperHex)) {
     throw new Error("SERVER_PEPPER_HEX must be 64 hex characters (32 bytes)");
   }
-  // Fail fast instead of silently reflecting any origin: both the
-  // Express CORS middleware and the Socket.io server fall back to
-  // allow-all when the allowlist is empty. Fine for dev/test; a
-  // misconfigured production deploy must not boot that way.
-  const corsAllowedOrigins = parseCsv(env.CORS_ALLOWED_ORIGINS);
-  if ((env.NODE_ENV || "development") === "production"
-    && corsAllowedOrigins.length === 0) {
-    throw new Error(
-      "CORS_ALLOWED_ORIGINS must be set in production — an empty "
-      + "allowlist makes the API reflect any origin",
-    );
-  }
+  const corsAllowedOrigins = parseCorsAllowedOrigins(env);
   return {
     port: parseInteger(env.PORT, DEFAULTS.PORT),
     nodeEnv: env.NODE_ENV || "development",
@@ -161,28 +150,27 @@ function loadConfig(env = process.env) {
     platformIntegrations: parsePlatformIntegrationsConfig(env),
     reviewsEnabled: parseReviewsRollout(env.REVIEWS_ENABLED),
     ...parseGuidesConfig(env),
-    // SC2 Tools Guides build-order videos: the site owner's YouTube
-    // channel (id feeds the RSS sync, URL is the public "Subscribe" link).
-    // Validated by services/guideVideos.js; unset = no video sync.
-    guidesYoutubeChannelId: env.GUIDES_YOUTUBE_CHANNEL_ID || null,
-    guidesYoutubeChannelUrl: env.GUIDES_YOUTUBE_CHANNEL_URL || null,
   };
 }
 
 /**
- * Replay Review Exchange rollout stage. Default off; ``admins`` exposes
- * every surface only to platform admins (signed-out and ordinary
- * visitors get the same 404 as ``off``); ``true``/``on``/``all`` opens
- * it to everyone.
+ * CORS allowlist (CSV). Fails fast instead of silently reflecting any
+ * origin: both the Express CORS middleware and the Socket.io server fall
+ * back to allow-all when the allowlist is empty. Fine for dev/test; a
+ * misconfigured production deploy must not boot that way.
  *
- * @param {string | undefined} raw
- * @returns {"off" | "admins" | "on"}
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {string[]}
  */
-function parseReviewsRollout(raw) {
-  const value = String(raw || "").trim().toLowerCase();
-  if (value === "admins" || value === "admin") return "admins";
-  if (value === "true" || value === "on" || value === "all" || value === "1") return "on";
-  return "off";
+function parseCorsAllowedOrigins(env) {
+  const origins = parseCsv(env.CORS_ALLOWED_ORIGINS);
+  if ((env.NODE_ENV || "development") === "production" && origins.length === 0) {
+    throw new Error(
+      "CORS_ALLOWED_ORIGINS must be set in production — an empty "
+      + "allowlist makes the API reflect any origin",
+    );
+  }
+  return origins;
 }
 
 /**
@@ -216,22 +204,53 @@ function parseIngestConfig(env) {
 }
 
 /**
- * SC2 Tools Guides switches:
+ * SC2 Tools Guides switches (docs/guides.md):
  *   - ``guidesEnabled`` (GUIDES_ENABLED, default off): the public
- *     /v1/guides routes and the nightly guide_stats job;
+ *     /v1/guides routes and the nightly guide_stats + video jobs;
  *   - ``guidesRevalidateUrl`` / ``guidesRevalidateSecret``: the web ISR
  *     purge pinged after each guide_stats run (services/guideRevalidate.js);
- *     both unset = pages refresh on their own 6 h window.
+ *     both unset = pages refresh on their own 6 h window;
+ *   - ``guidesYoutubeChannelId`` / ``guidesYoutubeChannelUrl``: the site
+ *     owner's build-order channel (the id feeds the RSS sync, the URL is
+ *     the public "Subscribe" link). Validated by services/guideVideos.js;
+ *     unset = no video sync.
+ *
+ * Example:
+ *   parseGuidesConfig({ GUIDES_ENABLED: "true" }).guidesEnabled // -> true
  *
  * @param {NodeJS.ProcessEnv} env
- * @returns {{ guidesEnabled: boolean, guidesRevalidateUrl: string|null, guidesRevalidateSecret: string|null }}
+ * @returns {{
+ *   guidesEnabled: boolean,
+ *   guidesRevalidateUrl: string|null,
+ *   guidesRevalidateSecret: string|null,
+ *   guidesYoutubeChannelId: string|null,
+ *   guidesYoutubeChannelUrl: string|null,
+ * }}
  */
 function parseGuidesConfig(env) {
   return {
     guidesEnabled: parseBool(env.GUIDES_ENABLED),
     guidesRevalidateUrl: env.GUIDES_REVALIDATE_URL || null,
     guidesRevalidateSecret: env.GUIDES_REVALIDATE_SECRET || null,
+    guidesYoutubeChannelId: env.GUIDES_YOUTUBE_CHANNEL_ID || null,
+    guidesYoutubeChannelUrl: env.GUIDES_YOUTUBE_CHANNEL_URL || null,
   };
+}
+
+/**
+ * Replay Review Exchange rollout stage. Default off; ``admins`` exposes
+ * every surface only to platform admins (signed-out and ordinary
+ * visitors get the same 404 as ``off``); ``true``/``on``/``all`` opens
+ * it to everyone.
+ *
+ * @param {string | undefined} raw
+ * @returns {"off" | "admins" | "on"}
+ */
+function parseReviewsRollout(raw) {
+  const value = String(raw || "").trim().toLowerCase();
+  if (value === "admins" || value === "admin") return "admins";
+  if (value === "true" || value === "on" || value === "all" || value === "1") return "on";
+  return "off";
 }
 
 /**
@@ -681,4 +700,5 @@ module.exports = {
   parseAnalyticsConfig,
   parsePlatformIntegrationsConfig,
   parseReviewsRollout,
+  parseGuidesConfig,
 };

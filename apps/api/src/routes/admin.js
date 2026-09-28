@@ -25,10 +25,14 @@
  *                                    own opponents row — drives the
  *                                    "Fix my counters" button on /admin
  *   GET  /admin/health              Mongo ping, uptime, runtime info
+ *   /admin/guides/*                 SC2 Tools Guides: coach's notes, stats
+ *                                    runs, samples backfill, channel videos
+ *                                    (routes/adminGuides.js)
  */
 
 const express = require("express");
 const { buildAdminGlobalTrendsRouter } = require("./adminGlobalTrends");
+const { buildAdminGuidesRouter } = require("./adminGuides");
 
 /**
  * @param {{
@@ -47,6 +51,12 @@ const { buildAdminGlobalTrendsRouter } = require("./adminGlobalTrends");
  *   onAdminGranted?: (clerkUserId: string) => void,
  *   gameDetailsStoreKind?: string,
  *   replayFilesStoreKind?: string,
+ *   guideNotes?: import('../services/guideNotes').GuideNotesService,
+ *   guides?: import('../services/guides').GuidesService,
+ *   guideStats?: import('../services/guideStats').GuideStatsService,
+ *   guideStatsJob?: import('./adminGuides').AdminGuidesDeps["guideStatsJob"],
+ *   guideSamplesBackfill?: import('../jobs/guideSamplesBackfillJob').GuideSamplesBackfillJob,
+ *   guideVideos?: import('../services/guideVideos').GuideVideosService,
  * }} deps
  */
 function buildAdminRouter(deps) {
@@ -66,6 +76,19 @@ function buildAdminRouter(deps) {
   });
 
   router.use("/admin/global-trends", buildAdminGlobalTrendsRouter(deps.adminGlobalTrends));
+  // SC2 Tools Guides admin (notes, runs, backfill, videos). Mounted
+  // whether or not GUIDES_ENABLED is on, so an admin can prepare notes
+  // and data before the public pages launch.
+  if (deps.guideNotes && deps.guides && deps.guideStats && deps.guideStatsJob && deps.guideVideos) {
+    router.use("/admin/guides", buildAdminGuidesRouter({
+      guideNotes: deps.guideNotes,
+      guides: deps.guides,
+      guideStats: deps.guideStats,
+      guideStatsJob: deps.guideStatsJob,
+      guideSamplesBackfill: deps.guideSamplesBackfill || null,
+      guideVideos: deps.guideVideos,
+    }));
+  }
 
   router.get("/admin/storage-stats", async (_req, res, next) => {
     try {

@@ -2,12 +2,13 @@
 
 const { MongoClient } = require("mongodb");
 const { COLLECTIONS, TIMEOUTS } = require("../config/constants");
-const { GUIDE_SAMPLE_TTL_SEC } = require("../config/guides");
+const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndexes");
 
 /**
  * @typedef {{
  *   client: MongoClient,
  *   db: import('mongodb').Db,
+ *   backgroundIndexes?: import('./guideIndexes').BackgroundIndexBuilds,
  *   users: import('mongodb').Collection,
  *   profiles: import('mongodb').Collection,
  *   opponents: import('mongodb').Collection,
@@ -65,19 +66,23 @@ const { GUIDE_SAMPLE_TTL_SEC } = require("../config/guides");
 /**
  * Open the MongoDB connection and return collection handles.
  *
- * @param {{ uri: string, dbName: string }} opts
+ * @param {{ uri: string, dbName: string, awaitBackgroundIndexes?: boolean }} opts
+ *        ``awaitBackgroundIndexes`` (tests): also wait for the
+ *        background index builds before resolving; the boot path leaves
+ *        it off so a slow build never delays ``listen``.
  * @param {{ logger?: import('pino').Logger, slowQueryMs?: number }} [observability]
  *        when a logger is supplied, driver command monitoring is
  *        enabled and any command slower than ``slowQueryMs`` (default
  *        100) is logged with its name, target collection, and
  *        duration — the only way to answer "which query is slow" from
- *        Render logs without an APM.
+ *        Render logs without an APM. The same logger reports the
+ *        background index builds.
  * @returns {Promise<DbContext>}
  *
  * Example:
  *   const ctx = await connect({ uri: cfg.mongoUri, dbName: cfg.mongoDb });
  */
-async function connect({ uri, dbName }, observability = {}) {
+async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observability = {}) {
   const logger = observability.logger || null;
   const client = new MongoClient(uri, {
     serverSelectionTimeoutMS: TIMEOUTS.MONGO_CONNECT_MS,
@@ -147,7 +152,7 @@ async function connect({ uri, dbName }, observability = {}) {
     guideVideos: db.collection(COLLECTIONS.GUIDE_VIDEOS),
     close: () => client.close(),
   };
-  await ensureIndexes(ctx);
+  await ensureIndexes(ctx, { logger, awaitBackground: awaitBackgroundIndexes });
   return ctx;
 }
 
@@ -262,9 +267,17 @@ async function ensureBrowserIngestDailyIndexes(ctx) {
  *   - overlay tokens:     {token} (unique)
  *   - browser ingest cap: {userId, day} (unique, TTL on expiresAt)
  *
+ * Every index is awaited except BACKGROUND_GAMES_INDEXES
+ * (db/guideIndexes.js), which are only started here so a long first build
+ * never holds boot; their progress lands on ``ctx.backgroundIndexes``
+ * (also the return value).
+ *
  * @param {DbContext} ctx
+ * @param {{ logger?: import('pino').Logger|null, awaitBackground?: boolean }} [opts]
+ *        ``awaitBackground`` waits for the background builds too (tests)
+ * @returns {Promise<import('./guideIndexes').BackgroundIndexBuilds>}
  */
-async function ensureIndexes(ctx) {
+async function ensureIndexes(ctx, opts = {}) {
   await ctx.playerIdentities.createIndex({ sourceKeys: 1 }, { unique: true, sparse: true });
   await ctx.playerIdentities.createIndex({ targetKeys: 1, active: 1 });
   await ctx.playerIdentities.createIndex({ kind: 1 }, { unique: true, partialFilterExpression: { kind: "graph-revision" } });
@@ -515,14 +528,9 @@ async function ensureIndexes(ctx) {
   });
   await ctx.games.createIndex({ userId: 1, "opponent.strategy": 1 });
   await ctx.games.createIndex({ userId: 1, map: 1, date: -1 });
-  // Guides nightly aggregate (services/guideStatsPipelines.js): the only
-  // cross-user index a guide pipeline can use (every other one is
-  // userId-prefixed). guideGamesMatch pins myBuild to exact catalog names
-  // and opponent.race to case-prefix regexes → tight bounds on both keys.
-  await ctx.games.createIndex({ myBuild: 1, "opponent.race": 1 }, {
-    name: "guide_stats_build_opp_race",
-    partialFilterExpression: { myBuild: { $type: "string" } },
-  });
+  // The cross-user guides index {myBuild, opponent.race} is built in the
+  // background after the awaited builds: BACKGROUND_GAMES_INDEXES in
+  // db/guideIndexes.js explains why.
 
   // Coaching practice requirements live beside the Locker/calendar documents
   // but are independently revisioned. These indexes keep role-scoped lists
@@ -645,41 +653,14 @@ async function ensureIndexes(ctx) {
   await ctx.pulseCharacterLinks.createIndex({ accountId: 1 }, { sparse: true });
   await ctx.pulseCharacterLinks.createIndex({ toonHandle: 1 }, { sparse: true });
 
+  await ensureGuideIndexes(ctx);
   await ensureReviewIndexes(ctx);
-  await ensureGuideSampleIndexes(ctx);
-  await ensureGuideStatsIndexes(ctx);
-  await ensureGuideVideoIndexes(ctx);
-}
-
-/**
- * ``guide_stats`` (services/guideStats.js). Built here, not lazily in the
- * service (the ladder_meta way): the public read layer queries it from
- * boot, and the recompute's replace-by-key upserts need the unique key.
- *
- * @param {DbContext} ctx
- */
-async function ensureGuideStatsIndexes(ctx) {
-  await ctx.guideStats.createIndex({ key: 1 }, { unique: true, name: "guide_stats_key" });
-  await ctx.guideStats.createIndex({ kind: 1, era: 1, matchup: 1 }, { name: "guide_stats_kind_era_matchup" });
-}
-
-/**
- * ``guide_videos`` (services/guideVideos.js): the site owner's YouTube
- * build-order videos.
- *   - unique {youtubeId}: the RSS/snapshot/admin upsert key;
- *   - {publishedAt: -1}: the newest-first read behind every guide page.
- *
- * @param {DbContext} ctx
- */
-async function ensureGuideVideoIndexes(ctx) {
-  await ctx.guideVideos.createIndex(
-    { youtubeId: 1 },
-    { unique: true, name: "guide_videos_youtube_id" },
-  );
-  await ctx.guideVideos.createIndex(
-    { publishedAt: -1 },
-    { name: "guide_videos_published_at" },
-  );
+  // Last, so the ``games`` collection exists and the long build never
+  // competes with the awaited ones above.
+  const builds = startBackgroundIndexBuilds(ctx, opts.logger || null);
+  ctx.backgroundIndexes = builds;
+  if (opts.awaitBackground) await builds.settled;
+  return builds;
 }
 
 /**
@@ -745,32 +726,6 @@ async function ensureReviewIndexes(ctx) {
     { expireAfterSeconds: 90 * 24 * 60 * 60, name: "notification_ttl" },
   );
   await ctx.users.createIndex({ "reviewer.karma": -1 }, { sparse: true });
-}
-
-/**
- * ``guide_samples`` (services/guideSamples.js): pseudonymous per-game
- * guide inputs.
- *   - unique {userHash, gameHash}: the idempotent ingest/backfill upsert
- *     key; its ``userHash`` prefix also serves GDPR deletes and the /me
- *     comparison, so no separate {userHash:1} index;
- *   - {matchup, buildKey, era}: the nightly per-matchup aggregation;
- *   - TTL on createdAt: rows age out GUIDE_SAMPLE_TTL_SEC after capture.
- *
- * @param {DbContext} ctx
- */
-async function ensureGuideSampleIndexes(ctx) {
-  await ctx.guideSamples.createIndex(
-    { userHash: 1, gameHash: 1 },
-    { unique: true, name: "guide_samples_user_game" },
-  );
-  await ctx.guideSamples.createIndex(
-    { matchup: 1, buildKey: 1, era: 1 },
-    { name: "guide_samples_matchup_build_era" },
-  );
-  await ctx.guideSamples.createIndex(
-    { createdAt: 1 },
-    { expireAfterSeconds: GUIDE_SAMPLE_TTL_SEC, name: "guide_samples_ttl" },
-  );
 }
 
 module.exports = { connect, ensureIndexes, attachSlowQueryLogging };

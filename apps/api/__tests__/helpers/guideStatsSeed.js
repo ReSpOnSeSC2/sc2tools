@@ -21,13 +21,14 @@ const GLAIVES = "PvZ - Stargate into Glaives";
 const PHOENIX = "PvZ - 2 Stargate Phoenix";
 
 /**
- * Start a memory server and connect (indexes included).
+ * Start a memory server and connect (indexes included — also the
+ * background-built guide games index, so plans and hints are deterministic).
  *
  * @param {string} dbName
  */
 async function startDb(dbName) {
   const mongo = await MongoMemoryServer.create();
-  const db = await connect({ uri: mongo.getUri(), dbName });
+  const db = await connect({ uri: mongo.getUri(), dbName, awaitBackgroundIndexes: true });
   return { mongo, db };
 }
 
