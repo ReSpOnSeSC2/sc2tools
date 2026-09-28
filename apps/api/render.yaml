@@ -200,3 +200,31 @@ services:
       # idle window. Value is in milliseconds; minimum enforced at 60000.
       - key: KEEPALIVE_INTERVAL_MS
         sync: false
+      # SC2 Tools Guides master switch: public /v1/guides routes and the
+      # nightly guide_stats rebuild. "true" / "1" to turn on; off when unset.
+      - key: GUIDES_ENABLED
+        sync: false
+      # Web ISR purge after each guide_stats run: the web app's
+      # https://<web origin>/api/revalidate-guides URL and the shared HMAC
+      # secret (same value as the web's GUIDES_REVALIDATE_SECRET). Leave
+      # unset to rely on the pages' 6 h revalidation window.
+      - key: GUIDES_REVALIDATE_URL
+        sync: false
+      - key: GUIDES_REVALIDATE_SECRET
+        sync: false
+      # guide_stats job knobs: 1 = kill switch; interval (default 86400,
+      # floor 3600) and first-check delay after boot (default 900) in seconds.
+      - key: SC2TOOLS_GUIDE_STATS_DISABLED
+        sync: false
+      - key: SC2TOOLS_GUIDE_STATS_INTERVAL_SEC
+        sync: false
+      - key: SC2TOOLS_GUIDE_STATS_START_DELAY_SEC
+        sync: false
+      # SC2 Tools Guides build-order videos: the site owner's YouTube
+      # channel. The id drives the 6-hourly RSS sync into guide_videos
+      # (only while GUIDES_ENABLED is on); the URL is the public
+      # "Subscribe on YouTube" link on /guides.
+      - key: GUIDES_YOUTUBE_CHANNEL_ID
+        value: "UCZS3YP1mvpqyuU5vPvHVG7g"
+      - key: GUIDES_YOUTUBE_CHANNEL_URL
+        value: "https://www.youtube.com/@ReSpOnSeSC2"

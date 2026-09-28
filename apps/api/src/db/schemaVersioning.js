@@ -324,6 +324,11 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.GUIDE_VIDEOS]: {
+    collection: COLLECTIONS.GUIDE_VIDEOS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
 });
 
 /** @type {{collection:string,fromVersion:number,toVersion:number,forward:Function,backward:Function,description?:string}[]} */

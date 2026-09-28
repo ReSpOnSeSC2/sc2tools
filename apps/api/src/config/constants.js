@@ -123,6 +123,9 @@ const COLLECTIONS = Object.freeze({
   GUIDE_SAMPLES: "guide_samples",
   GUIDE_STATS: "guide_stats",
   GUIDE_NOTES: "guide_notes",
+  // ``guide_videos``: the site owner's YouTube build-order videos (channel
+  // RSS + committed snapshot) shown on guide pages — services/guideVideos.js.
+  GUIDE_VIDEOS: "guide_videos",
 });
 
 const LIMITS = Object.freeze({

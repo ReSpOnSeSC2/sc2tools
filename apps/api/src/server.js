@@ -301,6 +301,13 @@ async function main() {
   });
   ladderMetaJob.start();
 
+  // SC2 Tools Guides nightly guide_stats rebuild (+ web ISR revalidation).
+  // First check 15 min after boot (after ladderMeta's boot rebuild), then
+  // hourly; it only recomputes once the last run is ~a day old. Only
+  // started with GUIDES_ENABLED; built (never started) in makeServices.
+  const guideStatsJob = /** @type {any} */ (services).guideStatsJob;
+  if (config.guidesEnabled) guideStatsJob.start();
+
   // Weekly Replay Review Exchange digest (hourly check, weekly send).
   const reviewDigestJob = buildReviewDigestJob({
     reviews: /** @type {any} */ (services).reviews,
@@ -308,6 +315,14 @@ async function main() {
     enabled: config.reviewsEnabled === "on",
   });
   reviewDigestJob.start();
+
+  // SC2 Tools Guides build-order videos: seed the committed channel
+  // snapshot, then re-read the owner's YouTube RSS feed every 6 h. Only
+  // with guides on (GUIDES_ENABLED) and a channel id configured.
+  const guideVideosJob = /** @type {any} */ (services).guideVideosJob;
+  if (config.guidesEnabled && config.guidesYoutubeChannelId) {
+    guideVideosJob.start();
+  }
 
   // Derive compact chart facts from existing replay details in small batches.
   // Normal uploads maintain these facts atomically; no reupload is needed.
@@ -358,10 +373,13 @@ async function main() {
     await fingerprintPopulationCalibrationJob.stop();
     await ladderMetaJob.stop();
     await reviewDigestJob.stop();
+    // Also waits for an admin-forced run when the schedule never started.
+    await guideStatsJob.stop();
     // Admin-triggered guide backfill (never started at boot) and any
     // in-flight fire-and-forget guide sample writes, before Mongo closes.
     await /** @type {any} */ (services).guideSamplesBackfill.stop();
     await /** @type {any} */ (services).guideSamples.drain();
+    await guideVideosJob.stop();
     await /** @type {any} */ (services).customBuilds.stopReclassifications();
     await db.close();
     logger.info("shutdown_complete");

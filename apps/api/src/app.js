@@ -76,6 +76,11 @@ const { GithubReleaseFeed } = require("./services/agentGithubReleases");
 const { GdprService } = require("./services/gdpr");
 const { GuideSamplesService } = require("./services/guideSamples");
 const { buildGuideSamplesBackfillJob } = require("./jobs/guideSamplesBackfillJob");
+const { GuideStatsService } = require("./services/guideStats");
+const { buildGuideRevalidator } = require("./services/guideRevalidate");
+const { buildGuideStatsRecomputeJob } = require("./jobs/guideStatsRecomputeJob");
+const { GuideVideosService } = require("./services/guideVideos");
+const { buildGuideVideosSyncJob } = require("./jobs/guideVideosSyncJob");
 const { CommunityService } = require("./services/community");
 const { SeasonsService } = require("./services/seasons");
 const { ArcadeService } = require("./services/arcade");
@@ -234,6 +239,7 @@ function isCoachingStateJson(req) {
  *   fingerprintPopulationCalibration?: import('./services/fingerprintPopulationCalibration').FingerprintPopulationCalibrationService,
  *   runtimeCapacityRegistry?: import('./services/runtimeCapacity').RuntimeCapacityRegistry,
  *   reviewSeasonWindowStart?: () => Promise<Date>,
+ *   guideVideos?: import('./services/guideVideos').GuideVideosService,
  * }} AppDeps
  */
 
@@ -637,6 +643,29 @@ function makeServices(deps) {
     gameDetails,
     logger: deps.logger,
   });
+  // SC2 Tools Guides nightly aggregate (guide_stats) and its job. The job
+  // is built here but only started by server.js when GUIDES_ENABLED; the
+  // admin "Recompute now" route calls guideStatsJob.runOnce({ force: true }).
+  const guideStats = new GuideStatsService(deps.db, { logger: deps.logger });
+  const guideStatsJob = buildGuideStatsRecomputeJob({
+    db: deps.db,
+    guideStats,
+    logger: deps.logger,
+    revalidate: buildGuideRevalidator({
+      url: deps.config.guidesRevalidateUrl || null,
+      secret: deps.config.guidesRevalidateSecret || null,
+      logger: deps.logger,
+    }),
+  });
+  // SC2 Tools Guides build-order videos from the site owner's YouTube
+  // channel (committed snapshot + RSS sync). The sync job is built here
+  // but only started by server.js (GUIDES_ENABLED + a channel id).
+  const guideVideos = deps.guideVideos || new GuideVideosService(deps.db, {
+    channelId: deps.config.guidesYoutubeChannelId || null,
+    channelUrl: deps.config.guidesYoutubeChannelUrl || null,
+    logger: deps.logger,
+  });
+  const guideVideosJob = buildGuideVideosSyncJob({ guideVideos, logger: deps.logger });
   const gdpr = new GdprService(deps.db, {
     opponents,
     logger: deps.logger,
@@ -783,6 +812,10 @@ function makeServices(deps) {
     ladderMeta,
     guideSamples,
     guideSamplesBackfill,
+    guideStats,
+    guideStatsJob,
+    guideVideos,
+    guideVideosJob,
     publicProfile,
     chatbot,
     pulseDirectory,
