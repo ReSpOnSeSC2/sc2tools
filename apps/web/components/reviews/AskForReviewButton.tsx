@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useId, useState, type MouseEvent, type ReactNode, type SyntheticEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -58,6 +58,9 @@ export function AskForReviewButton({
 }: ButtonProps) {
   const { data: me } = useApi<{ isAdmin?: boolean }>("/v1/me");
   const [open, setOpen] = useState(false);
+  // Stable: the Modal re-runs its focus setup whenever onClose changes, so
+  // a re-rendering host (e.g. a table row) must not yank focus from the form.
+  const close = useCallback(() => setOpen(false), []);
   if (!reviewsVisible(me?.isAdmin)) return null;
   const onClick = (e: MouseEvent) => {
     // Rows in some tables expand on click; asking shouldn't toggle them.
@@ -69,10 +72,32 @@ export function AskForReviewButton({
       <button type="button" onClick={onClick} aria-label={ariaLabel} title={ariaLabel} className={className}>
         <MessageSquarePlus className={iconClassName} aria-hidden /> {label}
       </button>
-      {open ? <AskForReviewDialog {...props} onClose={() => setOpen(false)} /> : null}
+      {open ? (
+        // The dialog is portalled, but React still bubbles its pointer
+        // events through this spot in the tree — into clickable table rows.
+        // Keyboard events are left alone: the Modal handles Esc/Tab on the
+        // document.
+        <span className="contents" {...STOP_POINTER_EVENTS}>
+          <AskForReviewDialog {...props} onClose={close} />
+        </span>
+      ) : null}
     </>
   );
 }
+
+const stopPropagation = (e: SyntheticEvent) => e.stopPropagation();
+
+/** Handlers that keep a portalled dialog's pointer events inside it. */
+export const STOP_POINTER_EVENTS = {
+  onClick: stopPropagation,
+  onDoubleClick: stopPropagation,
+  onMouseDown: stopPropagation,
+  onMouseUp: stopPropagation,
+  onPointerDown: stopPropagation,
+  onPointerUp: stopPropagation,
+  onTouchStart: stopPropagation,
+  onTouchEnd: stopPropagation,
+} as const;
 
 export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Props & { onClose: () => void }) {
   const { getToken } = useAuth();
