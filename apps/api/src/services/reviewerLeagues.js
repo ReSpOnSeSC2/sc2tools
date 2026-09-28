@@ -127,24 +127,37 @@ function ladderLeaguesByRegion(teams, byRegion) {
   /** @type {Map<string, RegionLeague>} */
   const out = new Map();
   for (const team of teams) {
-    const slot = typeof team.region === "string" ? byRegion.get(team.region) : undefined;
-    const band = bandFromId(team.leagueId);
-    const race = normalizeRace(team.race);
-    const rating = Number(team.rating);
-    if (!slot || !band || !race || race === "Random" || !Number.isFinite(rating)) continue;
-    /** @type {RegionLeague} */
-    const entry = {
-      region: String(team.region),
-      band: { id: band.id, label: band.label },
-      race,
-      mmr: rating,
-      games: slot.byRace.get(race)?.length || 0,
-      source: "ladder",
-    };
+    const entry = ladderEntry(team, byRegion);
+    if (!entry) continue;
     const current = out.get(entry.region);
     if (!current || isStronger(entry, current)) out.set(entry.region, entry);
   }
   return out;
+}
+
+/**
+ * One SC2Pulse team as a region league, or null when the row is unusable
+ * (no league, Random, no rating) or its region never appears in the
+ * reviewer's own games.
+ *
+ * @param {LadderTeam} team
+ * @param {Map<string, RegionGames>} byRegion
+ * @returns {RegionLeague | null}
+ */
+function ladderEntry(team, byRegion) {
+  const slot = typeof team.region === "string" ? byRegion.get(team.region) : undefined;
+  const band = bandFromId(team.leagueId);
+  const race = normalizeRace(team.race);
+  const rating = Number(team.rating);
+  if (!slot || !band || !race || race === "Random" || !Number.isFinite(rating)) return null;
+  return {
+    region: String(team.region),
+    band: { id: band.id, label: band.label },
+    race,
+    mmr: rating,
+    games: slot.byRace.get(race)?.length || 0,
+    source: "ladder",
+  };
 }
 
 /**
