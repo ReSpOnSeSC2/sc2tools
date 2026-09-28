@@ -9,7 +9,7 @@ import { guidesEnabled } from "@/lib/guides/flags";
 
 /**
  * /guides — the build-guide hub: what's winning in each of the nine
- * matchups this week, the latest channel videos and the map guides.
+ * matchups since the patch, the latest channel videos and the map guides.
  * Flag off or API 404 → 404; API down → noindex "unavailable" (200).
  *
  * Rendered per request, NOT prerendered: this route has no params, so a

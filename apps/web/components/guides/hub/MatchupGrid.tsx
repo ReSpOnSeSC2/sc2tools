@@ -9,7 +9,9 @@ import type { GuideIndexMatchup, GuideMatchup } from "@/lib/guides/types";
 /**
  * The hub's 3×3 matchup grid: one row per race you play, one tile per
  * matchup with its game count and the top three published openers
- * ("What's winning this week") with their week-over-week arrows.
+ * ("What's winning since patch 5.0.16") with their week-over-week
+ * arrows. The win rates cover the whole patch era, not one week, so
+ * the heading names the era (``period``, from ``eraLabel``).
  */
 
 const RACE_ROWS: ReadonlyArray<{ letter: string; label: string }> = [
@@ -18,13 +20,13 @@ const RACE_ROWS: ReadonlyArray<{ letter: string; label: string }> = [
   { letter: "Z", label: "Playing Zerg" },
 ];
 
-function TopBuilds({ row }: { row: GuideIndexMatchup }) {
+function TopBuilds({ row, period }: { row: GuideIndexMatchup; period: string }) {
   if (!row.published || row.top.length === 0) {
     return <p className="text-caption text-text-dim">Not enough games yet.</p>;
   }
   return (
     <div className="space-y-1.5">
-      <p className="text-micro font-semibold uppercase tracking-wider text-text-dim">What&apos;s winning this week</p>
+      <p className="text-micro font-semibold uppercase tracking-wider text-text-dim">What&apos;s winning {period}</p>
       <ol className="space-y-1.5">
         {row.top.map((build) => (
           <li key={build.buildKey} className="flex items-center justify-between gap-2 text-caption">
@@ -44,7 +46,7 @@ function TopBuilds({ row }: { row: GuideIndexMatchup }) {
   );
 }
 
-function MatchupTile({ row }: { row: GuideIndexMatchup }) {
+function MatchupTile({ row, period }: { row: GuideIndexMatchup; period: string }) {
   return (
     <li className={`${GUIDE_PANEL_CLASS} min-w-0 space-y-3 p-4`}>
       <div className="flex items-baseline justify-between gap-2">
@@ -57,12 +59,19 @@ function MatchupTile({ row }: { row: GuideIndexMatchup }) {
           <span className="text-micro tabular-nums text-text-dim">{fmtCount(row.games)} games</span>
         ) : null}
       </div>
-      <TopBuilds row={row} />
+      <TopBuilds row={row} period={period} />
     </li>
   );
 }
 
-export function MatchupGrid({ matchups }: { matchups: ReadonlyArray<GuideIndexMatchup> }) {
+export function MatchupGrid({
+  matchups,
+  period,
+}: {
+  matchups: ReadonlyArray<GuideIndexMatchup>;
+  /** The stats window, e.g. "since patch 5.0.16" (``eraLabel``). */
+  period: string;
+}) {
   const byMatchup = new Map<GuideMatchup, GuideIndexMatchup>(matchups.map((row) => [row.matchup, row]));
   return (
     <div className="space-y-6">
@@ -76,7 +85,7 @@ export function MatchupGrid({ matchups }: { matchups: ReadonlyArray<GuideIndexMa
             <h3 className="text-caption font-semibold uppercase tracking-wider text-text-dim">{race.label}</h3>
             <ul className="grid gap-4 md:grid-cols-3">
               {rows.map((row) => (
-                <MatchupTile key={row.matchup} row={row} />
+                <MatchupTile key={row.matchup} row={row} period={period} />
               ))}
             </ul>
           </section>

@@ -13,7 +13,8 @@ import { fmtCount, fmtGuideDate } from "@/lib/guides/format";
 import type { GuideChannel, GuideIndexPayload } from "@/lib/guides/types";
 
 /**
- * Body of /guides: the 3×3 matchup grid with this week's top openers,
+ * Body of /guides: the 3×3 matchup grid with each matchup's top openers
+ * since the patch,
  * the latest build-order videos from the channel (+ subscribe link) and
  * the way into the map guides.
  */
@@ -61,7 +62,7 @@ export function GuideHub({ payload }: { payload: GuideIndexPayload }) {
         ) : null}
       </div>
       <Section id="matchups" title="Matchups">
-        <MatchupGrid matchups={payload.matchups} />
+        <MatchupGrid matchups={payload.matchups} period={eraLabel(payload.era, payload.patch)} />
       </Section>
       <GuideVideoRow
         id="channel"

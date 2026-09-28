@@ -20,8 +20,8 @@ corresponding GitHub Release.
   benchmarks (p25 / median / p75, with winners vs losers), the army at 6, 8
   and 10 minutes, what it beats and loses to, when it wins, its best and
   worst maps and the macro leaks players hit with it. "How to beat …"
-  counter pages, map pages and a hub with what's winning this week round it
-  out. By default nothing is shown below 5 players and 30 games (100 games
+  counter pages, map pages and a hub with each matchup's top openers since
+  the patch round it out. By default nothing is shown below 5 players and 30 games (100 games
   for a whole page); each floor can be set per deployment
   (`GUIDES_CELL_MIN_USERS`, `GUIDES_CELL_MIN_GAMES`, `GUIDES_PAGE_MIN_USERS`,
   `GUIDES_PAGE_MIN_GAMES`), for example to publish a build from one
@@ -166,6 +166,10 @@ corresponding GitHub Release.
   region, or is down, that region falls back to its games' MMR. The
   change applies to the "You" card, review badges, the leaderboard and
   public profiles. Cached results are refreshed on the next read.
+- **The Guides hub says which games its win rates cover** — the matchup
+  tiles were headed "What's winning this week", but their win rates cover
+  every ladder game since patch 5.0.16; only the arrows compare with last
+  week. They now read "What's winning since patch 5.0.16".
 - **APM matches StarCraft II** — agent **0.17.3** (`agent-v0.17.3`) uses
   the APM StarCraft II records in each replay for both players, so the
   macro breakdown, the replay page and the league benchmarks show the
