@@ -8,6 +8,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { AnalyzerProvider } from "@/components/AnalyzerProvider";
 import { DoctorBanner } from "@/components/analyzer/DoctorBanner";
@@ -21,7 +22,15 @@ import {
 } from "@/components/onboarding/OnboardingChecklist";
 import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
 import { useImportStatus } from "@/components/imports/useImportStatus";
+import { useInstantImport } from "@/lib/instant/useInstantImport";
 import { useUserSocket } from "@/lib/useUserSocket";
+
+// Loaded only when browser import is enabled, so the flag-off /app bundle
+// does not carry the Folder Sync runner and the engine client.
+const FolderSyncAutoRunner = dynamic(
+  () => import("@/components/instant/FolderSyncAutoRunner").then((mod) => mod.FolderSyncAutoRunner),
+  { ssr: false },
+);
 
 /* ------------------------------------------------------------------
  * AnalyzerFrame — the concerns that belong to /app specifically, as
@@ -32,7 +41,10 @@ import { useUserSocket } from "@/lib/useUserSocket";
  *   - The doctor banner and the global date FilterBar.
  *   - The onboarding gate: the checklist until pairing + first games
  *     complete, then the zero-games empty state, then the section.
+ *     With browser import enabled (Instant Analysis flag) games alone
+ *     complete it, and the empty state offers the browser path too.
  *   - A debounced router.refresh() while those first games land.
+ *   - Background Folder Sync (browser import) while /app is open.
  *
  * Settings, the build library, community, meta, agent and admin get
  * the chrome without any of this — a date filter would be meaningless
@@ -71,16 +83,63 @@ export function AnalyzerFrame({
     pathname === "/app/game" || pathname.startsWith("/app/game/");
   const isArcade = pathname === "/app/arcade";
 
+  const { enabled: browserImportEnabled } = useInstantImport();
   const noGames = me.games.total === 0;
-  const showChecklist = checklistVisible(me);
+  const showChecklist = checklistVisible(me, { browserImportEnabled });
+  useRefreshWhileOnboarding(noGames || showChecklist);
 
-  // The layout handed us a server snapshot of /v1/me; the onboarding
-  // funnel changes it (pairing completes, first imported games land).
-  // Re-run the server fetch when games:changed arrives during that
-  // window, debounced so a 25-games-per-batch backfill doesn't refresh
-  // two hundred times.
+  return (
+    <MeContext.Provider value={me}>
+      <AnalyzerProvider analysisGamesEnabled={isArcade}>
+        {isGameRoute ? (
+          <>
+            {browserImportEnabled ? <FolderSyncAutoRunner className="mb-4" /> : null}
+            {children}
+          </>
+        ) : (
+          <div className="space-y-5">
+            <DoctorBanner />
+
+            {browserImportEnabled ? <FolderSyncAutoRunner /> : null}
+
+            <div className="rounded-xl border-2 border-line bg-bg-surface px-3 py-3 shadow-hard sm:py-2">
+              <FilterBar />
+            </div>
+
+            {showChecklist ? (
+              <OnboardingChecklist
+                me={me}
+                onRefresh={() => router.refresh()}
+                browserImportEnabled={browserImportEnabled}
+              />
+            ) : (
+              <ActiveImportCard />
+            )}
+
+            {noGames ? (
+              showChecklist ? null : (
+                <NoGamesYet browserImportEnabled={browserImportEnabled} />
+              )
+            ) : (
+              children
+            )}
+          </div>
+        )}
+      </AnalyzerProvider>
+    </MeContext.Provider>
+  );
+}
+
+/**
+ * The layout handed us a server snapshot of /v1/me; the onboarding
+ * funnel changes it (pairing completes, first imported games land —
+ * from the agent or a browser import). Re-run the server fetch when
+ * games:changed arrives during that window, debounced so a
+ * 25-games-per-batch backfill doesn't refresh two hundred times.
+ */
+function useRefreshWhileOnboarding(needsRefreshOnGames: boolean): void {
+  const router = useRouter();
   const refreshTimer = useRef<number | null>(null);
-  const needsRefreshOnGames = noGames || showChecklist;
   const socketHandlers = useMemo(
     () =>
       needsRefreshOnGames
@@ -104,32 +163,6 @@ export function AnalyzerFrame({
       }
     },
     [],
-  );
-
-  return (
-    <MeContext.Provider value={me}>
-      <AnalyzerProvider analysisGamesEnabled={isArcade}>
-        {isGameRoute ? (
-          children
-        ) : (
-          <div className="space-y-5">
-            <DoctorBanner />
-
-            <div className="rounded-xl border-2 border-line bg-bg-surface px-3 py-3 shadow-hard sm:py-2">
-              <FilterBar />
-            </div>
-
-            {showChecklist ? (
-              <OnboardingChecklist me={me} onRefresh={() => router.refresh()} />
-            ) : (
-              <ActiveImportCard />
-            )}
-
-            {noGames ? showChecklist ? null : <NoGamesYet /> : children}
-          </div>
-        )}
-      </AnalyzerProvider>
-    </MeContext.Provider>
   );
 }
 

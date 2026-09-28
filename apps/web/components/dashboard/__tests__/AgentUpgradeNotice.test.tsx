@@ -1,8 +1,9 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FALLBACK_LATEST_AGENT_VERSION } from "@/lib/agentNotice";
 import {
   AGENT_STATUS_REFRESH_MS,
+  AGENT_UPSELL_TODAY_KEY,
   AgentUpgradeNotice,
   agentUpgradeNoticeState,
   isAgentVersionAtLeast,
@@ -226,5 +227,52 @@ describe("AgentUpgradeNotice", () => {
     expect(screen.getByText(
       "SC2 Tools Agent v0.17.4 needs to be turned on or installed",
     )).toBeTruthy();
+  });
+});
+
+describe("AgentUpgradeNotice with browser import enabled", () => {
+  it("replaces the no-agent warning with the dismissible live-features upsell", async () => {
+    useApiMock.mockReturnValue({ data: { items: [] }, isLoading: false });
+    render(
+      <AgentUpgradeNotice
+        initialAgent={{ paired: false, version: null, lastSeenAt: null }}
+        browserImportEnabled
+      />,
+    );
+
+    expect(await screen.findByText("Install the agent for live features")).toBeTruthy();
+    expect(screen.queryByLabelText("Required agent update")).toBeNull();
+    expect(screen.getByRole("link", { name: /get the agent/i }).getAttribute("href"))
+      .toBe("/download");
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss the agent suggestion" }));
+    expect(screen.queryByText("Install the agent for live features")).toBeNull();
+    expect(window.localStorage.getItem(AGENT_UPSELL_TODAY_KEY)).toBe("true");
+    window.localStorage.removeItem(AGENT_UPSELL_TODAY_KEY);
+  });
+
+  it("does not flash the warning while confirming an unpaired account", async () => {
+    render(
+      <AgentUpgradeNotice
+        initialAgent={{ paired: false, version: null, lastSeenAt: null }}
+        browserImportEnabled
+      />,
+    );
+    expect(screen.queryByText("Checking your connected agent")).toBeNull();
+    expect(await screen.findByText("Install the agent for live features")).toBeTruthy();
+  });
+
+  it("keeps the warning for an offline or outdated agent", () => {
+    useApiMock.mockReturnValue({
+      data: { items: [{ agentVersion: "0.15.19", lastSeenAt: "2026-08-13T16:59:30Z" }] },
+      isLoading: false,
+    });
+    render(
+      <AgentUpgradeNotice
+        initialAgent={{ paired: true, version: "0.15.19", lastSeenAt: "2026-08-13T16:59:30Z" }}
+        browserImportEnabled
+      />,
+    );
+    expect(screen.getByLabelText("Required agent update")).toBeTruthy();
+    expect(screen.queryByText("Install the agent for live features")).toBeNull();
   });
 });

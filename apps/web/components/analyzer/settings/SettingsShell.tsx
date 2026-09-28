@@ -10,6 +10,7 @@ import {
   Settings2,
   Dices,
   LifeBuoy,
+  Upload,
 } from "lucide-react";
 import { Tabs } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -32,6 +33,7 @@ const TABS: ReadonlyArray<TabDef> = [
   { id: "overlay", label: "Overlay", Icon: MonitorPlay },
   { id: "randomizer", label: "Randomizer", Icon: Dices },
   { id: "voice", label: "Voice", Icon: Volume2 },
+  { id: "import", label: "Import", Icon: Upload },
   { id: "backups", label: "Backups & data", Icon: Database },
   { id: "misc", label: "Misc", Icon: Settings2 },
   { id: "help", label: "Help", Icon: LifeBuoy },
@@ -43,22 +45,70 @@ export type SettingsTabId =
   | "overlay"
   | "randomizer"
   | "voice"
+  | "import"
   | "backups"
   | "misc"
   | "help";
 
+/**
+ * Tabs that stay hidden unless the page opts in through `isTabVisible`
+ * (the browser Import tab is behind the Instant Analysis rollout flag).
+ */
+const OPT_IN_TABS: ReadonlySet<SettingsTabId> = new Set<SettingsTabId>([
+  "import",
+]);
+
+/**
+ * Default tab visibility: every tab except the opt-in ones.
+ *
+ * Example:
+ *   defaultTabVisibility("import"); // -> false
+ */
+export function defaultTabVisibility(id: SettingsTabId): boolean {
+  return !OPT_IN_TABS.has(id);
+}
+
+/**
+ * True for a known settings tab id (e.g. a `?tab=` query value).
+ *
+ * Example:
+ *   isSettingsTabId("overlay"); // -> true
+ */
+export function isSettingsTabId(value: unknown): value is SettingsTabId {
+  return TABS.some((tab) => tab.id === value);
+}
+
+/**
+ * Tab ids shown for a visibility rule, in sidebar order.
+ *
+ * Example:
+ *   visibleSettingsTabs((id) => id !== "voice").includes("voice"); // -> false
+ */
+export function visibleSettingsTabs(
+  isTabVisible: (id: SettingsTabId) => boolean = defaultTabVisibility,
+): SettingsTabId[] {
+  return TABS.filter((tab) => isTabVisible(tab.id)).map((tab) => tab.id);
+}
+
 export interface SettingsShellProps {
   initialTab?: SettingsTabId;
   renderTab: (id: SettingsTabId) => ReactNode;
+  /** Which tabs to show; defaults to every tab except opt-in ones. */
+  isTabVisible?: (id: SettingsTabId) => boolean;
 }
 
 export function SettingsShell({
   initialTab = "foundation",
   renderTab,
+  isTabVisible = defaultTabVisibility,
 }: SettingsShellProps) {
   return (
     <SettingsContextProvider>
-      <SettingsShellInner initialTab={initialTab} renderTab={renderTab} />
+      <SettingsShellInner
+        initialTab={initialTab}
+        renderTab={renderTab}
+        isTabVisible={isTabVisible}
+      />
     </SettingsContextProvider>
   );
 }
@@ -66,8 +116,12 @@ export function SettingsShell({
 function SettingsShellInner({
   initialTab,
   renderTab,
+  isTabVisible,
 }: Required<SettingsShellProps>) {
-  const [active, setActive] = useState<SettingsTabId>(initialTab);
+  const tabs = TABS.filter((t) => isTabVisible(t.id));
+  const [active, setActive] = useState<SettingsTabId>(() =>
+    tabs.some((t) => t.id === initialTab) ? initialTab : (tabs[0]?.id ?? initialTab),
+  );
   const [pending, setPending] = useState<SettingsTabId | null>(null);
   const ctx = useSettingsContext();
 
@@ -104,7 +158,7 @@ function SettingsShellInner({
             aria-orientation="horizontal"
             className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
           >
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <MobileTabTrigger
                 key={t.id}
                 tab={t}
@@ -118,7 +172,7 @@ function SettingsShellInner({
 
         {/* Desktop sidebar */}
         <Tabs.List ariaLabel="Settings sections" className="hidden lg:flex">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <Tabs.Trigger key={t.id} value={t.id}>
               <span className="inline-flex w-full items-center gap-2.5">
                 <t.Icon
@@ -138,7 +192,7 @@ function SettingsShellInner({
           ))}
         </Tabs.List>
 
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <Tabs.Content
             key={t.id}
             value={t.id}

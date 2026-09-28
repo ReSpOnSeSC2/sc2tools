@@ -300,7 +300,9 @@ describe("createEngineClient: crashes and batch failures", () => {
     expect(workers).toHaveLength(2);
     expect(workers[0].terminated).toBe(true);
   });
+});
 
+describe("createEngineClient: failed requests", () => {
   it("recycles the worker after a fatal request-error", async () => {
     const script = scripted((worker, request, nth) => {
       if (request.type !== "parse" || nth !== 0) return false;
@@ -409,5 +411,26 @@ describe("createEngineClient: zip and players", () => {
     expect(await client.listPlayers([intakeFile("x.SC2Replay")])).toEqual([
       { ok: false, errorKind: "parse_failed", detail: "ValueError: x" },
     ]);
+  });
+});
+
+describe("createEngineClient: heap accessor", () => {
+  it("reports null before boot, then the heap from the latest ready and parsed events", async () => {
+    const parsedHeap = HEAP_BYTES * 2;
+    const script = scripted((worker, request) => {
+      if (request.type !== "parse") return false;
+      const outcome = {
+        ok: true as const, fileName: request.fileName, relativePath: request.relativePath, gameId: "g",
+        json: "{}", date: "2026-05-08T19:08:12Z", myToonHandle: null, matchFormat: "1v1" as const, isResumedFromReplay: false, ms: 5,
+      };
+      worker.emit({ type: "parsed", id: request.id, outcome, heapBytes: parsedHeap });
+      return true;
+    });
+    const { client } = harness(script);
+    expect(client.lastHeapBytes?.()).toBeNull();
+    await client.boot();
+    expect(client.lastHeapBytes?.()).toBe(HEAP_BYTES);
+    await client.parseFiles(parseRequests(1));
+    expect(client.lastHeapBytes?.()).toBe(parsedHeap);
   });
 });

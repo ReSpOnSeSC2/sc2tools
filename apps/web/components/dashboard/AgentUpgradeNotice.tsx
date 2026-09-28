@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Download, ShieldAlert } from "lucide-react";
+import { AgentLiveUpsell } from "@/components/instant/AgentLiveUpsell";
 import { useReleaseInfo } from "@/components/onboarding/useReleaseInfo";
 import {
   FALLBACK_LATEST_AGENT_VERSION,
@@ -12,6 +13,8 @@ import { useApi } from "@/lib/clientApi";
 export const REQUIRED_AGENT_VERSION = "0.15.20";
 export const AGENT_ONLINE_WINDOW_MS = 3 * 60 * 1000;
 export const AGENT_STATUS_REFRESH_MS = 15_000;
+/** Remembers a dismissed "Install the agent for live features" on Today. */
+export const AGENT_UPSELL_TODAY_KEY = "sc2tools.instant.agentUpsell.today";
 
 export type AgentDevice = {
   deviceId?: string;
@@ -41,11 +44,18 @@ type NoticeState =
  * heartbeat data. It has no dismiss button or browser persistence: the only
  * successful dismissal condition is a live agent reporting the required
  * version (or newer).
+ *
+ * Exception for browser import (Instant Analysis flag): an account with no
+ * agent at all may be browser-only by choice, so instead of the warning it
+ * gets a soft, dismissible "Install the agent for live features" note.
+ * Offline, outdated and unknown agents keep the warning.
  */
 export function AgentUpgradeNotice({
   initialAgent,
+  browserImportEnabled,
 }: {
   initialAgent: InitialAgentStatus;
+  browserImportEnabled?: boolean;
 }) {
   // Always request Windows metadata, including from a phone: the local agent
   // runs on the player's gaming PC, while this notice itself is responsive and
@@ -92,7 +102,39 @@ export function AgentUpgradeNotice({
         : initialState;
 
   if (state.kind === "ready") return null;
+  if (showsLiveUpsell(browserImportEnabled === true, state, initialState)) {
+    return (
+      <AgentLiveUpsell variant="inline" dismissKey={AGENT_UPSELL_TODAY_KEY} />
+    );
+  }
+  return <AgentNoticeBanner state={state} latestVersion={latestVersion} />;
+}
 
+/**
+ * Browser import on and no agent at all (or still confirming that for an
+ * account the server snapshot says is unpaired): the soft upsell replaces
+ * the warning.
+ *
+ * Example:
+ *   showsLiveUpsell(true, { kind: "missing", ... }, initial); // -> true
+ */
+function showsLiveUpsell(
+  browserImportEnabled: boolean,
+  state: NoticeState,
+  initialState: NoticeState,
+): boolean {
+  if (!browserImportEnabled) return false;
+  return state.kind === "missing"
+    || (state.kind === "checking" && initialState.kind === "missing");
+}
+
+function AgentNoticeBanner({
+  state,
+  latestVersion,
+}: {
+  state: Exclude<NoticeState, { kind: "ready" }>;
+  latestVersion: string;
+}) {
   return (
     <section
       aria-label="Required agent update"

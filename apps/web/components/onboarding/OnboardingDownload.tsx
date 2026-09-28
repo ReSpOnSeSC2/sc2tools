@@ -11,12 +11,16 @@ import type { OnboardingHelpers } from "./OnboardingShell";
  *
  * "I downloaded it" advances to Step 3. We never block — even if the
  * card is in a "no installer" state, the user can still continue and
- * pair from a manual install.
+ * pair from a manual install. When `onBrowserImport` is given (Instant
+ * Analysis enabled) a secondary button skips the download entirely and
+ * imports replays in the browser instead.
  */
 export function OnboardingDownload({
   helpers,
+  onBrowserImport,
 }: {
   helpers: OnboardingHelpers;
+  onBrowserImport?: () => void;
 }) {
   return (
     <section
@@ -42,6 +46,11 @@ export function OnboardingDownload({
       <DownloadCard />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+        {onBrowserImport ? (
+          <Button variant="secondary" size="lg" onClick={onBrowserImport}>
+            Skip the download — import in your browser
+          </Button>
+        ) : null}
         <Button
           size="lg"
           onClick={helpers.next}

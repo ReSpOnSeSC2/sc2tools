@@ -58,6 +58,7 @@ import { GhostLegacyMigration } from "./GhostLegacyMigration";
 import { GhostMatchupManager } from "./GhostMatchupManager";
 import { OverlayThemeSection } from "./OverlayThemeSection";
 import { OverlayScenesSection } from "./OverlayScenesSection";
+import { OverlayAgentUpsell } from "@/components/instant/AgentLiveUpsell";
 
 /**
  * Settings · Overlay tab.
@@ -535,6 +536,8 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
 
   return (
     <div className="space-y-6">
+      {/* Browser-import users without a paired agent: the overlay's live data needs it. */}
+      <OverlayAgentUpsell />
       <Section
         title="OBS Browser Source URLs"
         description="Copy the URLs you want into OBS. Each widget is transparent and positioned independently. The URLs share the same socket connection so your overlay stays in sync."

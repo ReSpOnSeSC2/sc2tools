@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getJson } from "@/lib/serverApi";
+import { getInstantImportMode } from "@/lib/instant/flag";
 import { reviewsRollout } from "@/lib/reviews";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com";
@@ -25,6 +26,14 @@ const ROUTES: Route[] = [
   { path: "/legal/terms", priority: 0.2, changeFrequency: "yearly" },
 ];
 
+// /try (in-browser replay analysis) is public only once Instant Analysis
+// is rolled out to everyone; in "admins"/"off" mode it is not listed.
+const TRY_ROUTE: Route = { path: "/try", priority: 0.8, changeFrequency: "monthly" };
+
+function staticRoutes(): Route[] {
+  return getInstantImportMode() === "all" ? [...ROUTES, TRY_ROUTE] : ROUTES;
+}
+
 // Regenerated at most hourly; the API list is already capped.
 export const revalidate = 3600;
 
@@ -36,7 +45,7 @@ export const revalidate = 3600;
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const lastModified = new Date();
-  const entries: MetadataRoute.Sitemap = ROUTES.map((route) => ({
+  const entries: MetadataRoute.Sitemap = staticRoutes().map((route) => ({
     url: `${SITE_URL}${route.path}`,
     lastModified,
     changeFrequency: route.changeFrequency,

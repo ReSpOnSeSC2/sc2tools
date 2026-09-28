@@ -221,6 +221,12 @@ export interface EngineClient {
   expandZip(file: IntakeFile, options?: ParseOptions): Promise<IntakeFile[]>;
   cancel(): void;
   dispose(): void;
+  /**
+   * Emscripten heap in bytes reported by the most recent boot or parse,
+   * or null before the engine first booted. Read-only; used by the memory
+   * budget measurement. Optional so test doubles need not implement it.
+   */
+  lastHeapBytes?(): number | null;
 }
 
 /** A parsed game ready for upload (from a fresh parse or IndexedDB). */
