@@ -7,8 +7,8 @@ drop replays on `/try` and get a real report without an account or an
 install. A signed-in user can import their history, or keep a replay folder
 in sync, without installing the Windows agent.
 
-How it works and how to run it. The decision record is
-[ADR 0022](adr/0022-instant-analysis-browser-parsing.md).
+How it works and how to run it. Decision record: [ADR 0022](adr/0022-instant-analysis-browser-parsing.md);
+screenshots: [`screenshots/instant-analysis/`](screenshots/instant-analysis/).
 
 - **Python (shared with the agent):**
   - `apps/agent/sc2tools_agent/instant_analysis.py`: sandbox entry point
@@ -33,17 +33,16 @@ How it works and how to run it. The decision record is
 
 ## Goal
 
-- **Zero-install first value.** A visitor sees an analysis of their own games
-  within seconds in a desktop browser, including on a Mac, a Chromebook or a
-  work laptop where the agent cannot run.
+- **Zero-install first value** in a desktop browser, including on a Mac, a
+  Chromebook or a work laptop where the agent cannot run.
 - **The agent's data, exactly.** A browser upload of a replay produces the
   same game row as the agent's upload of the same bytes and perspective, so
   every analyzer tab works and the two never duplicate each other.
-- **No new server load.** Parsing costs the API nothing. Uploads reuse the
+- **No new server load.** Parsing costs the API nothing; uploads reuse the
   existing ingest route and its single admission slot.
-- **Replays stay on the device.** Only parsed game data is uploaded, and
-  only when the user saves or imports, plus the original files when a
-  signed-in import keeps its backup checkbox checked.
+- **Replays stay on the device.** Only parsed game data is uploaded, when
+  the user saves or imports, plus the original files when a signed-in
+  import keeps its backup checkbox checked.
 
 ## User flows
 
@@ -51,13 +50,16 @@ How it works and how to run it. The decision record is
 
 1. The visitor drops `.SC2Replay` files or a `.zip` onto the page, or picks
    files or a folder. `/try` keeps the newest 25 replays per run
-   (`MAX_TRY_FILES`) and filters by date window ("Last 90 days" by default,
-   or "All time"). The file's modification time is checked first, with the
-   agent's 7-day slack. The replay's own date is checked again in the header
-   scan and, finally, after parsing.
-2. The engine starts only now, after the first action, never on page load.
-   The first run downloads the analyzer once. Later visits use the browser's
-   HTTP cache.
+   (`MAX_TRY_FILES`; zip entries carry their own stored times) and defaults
+   to "All time", because the 25-file cap already bounds the work and a
+   90-day window would hide the games of someone who has not played lately.
+   The signed-in import defaults to "Last 90 days". The file's modification
+   time is checked first, with the agent's 7-day slack. The replay's own
+   date is checked again in the header scan and, finally, after parsing.
+2. The engine starts warming up on the visitor's first intent to add
+   replays (pressing "Choose replays", dragging files over the drop zone,
+   focusing the intake: `session.prewarm()`), never on page load. The first
+   run downloads the analyzer once; later visits use the HTTP cache.
 3. A cheap header scan (`list_replay_players`) lists the players in each
    replay. Games against the A.I. and, on `/try`, anything that is not a
    1v1 are dropped here (`ai_game`, `not_1v1`), before anyone is asked
@@ -69,13 +71,16 @@ How it works and how to run it. The decision record is
    matchup, openers, most-faced opponent, macro score and top leaks, and "why
    you lost" for the latest loss (`lib/instant/report.ts`). A card with no
    data is hidden.
-6. **Nothing is uploaded unless the visitor saves.** The parsed games are
-   kept in IndexedDB for 7 days, so the visitor can come back to the report.
+6. **Nothing is uploaded unless the visitor saves.** The parsed games (at
+   most 100) are kept in IndexedDB for 7 days, so the visitor can come back
+   to the report.
    The save card offers sign-up or sign-in, which returns to
    `/try?resume=1`. That page uploads the stored payloads through the
    signed-in upload path below, without parsing again. A visitor who is
-   already signed in gets a save button instead. After a successful save the
-   local copies are deleted and the visitor lands on `/app`.
+   already signed in gets a save button instead. Each game is tagged with
+   the engine version that parsed it, not the one deployed at upload time.
+   After a successful save the local copies are deleted and the visitor
+   lands on `/app`.
 
 ### Signed-in import
 
@@ -100,35 +105,48 @@ empty states offer "Import in your browser" next to "Install the agent":
 
 With the File System Access API (`showDirectoryPicker`, Chromium browsers),
 the user picks their `Accounts` folder once. The page stores a **read-only**
-directory handle in IndexedDB. While the analyzer (`/app`) is open,
-`FolderSyncAutoRunner` checks when the page loads and whenever the tab
-regains focus or becomes visible, and re-scans at most every 10 minutes
-(`MIN_AUTO_SCAN_INTERVAL_MS`). A re-scan walks only
-`<account>/<toon>/Replays/Multiplayer/*.SC2Replay`, at most 6 levels deep,
-and yields to the UI every 32 entries or 16 ms. The engine starts only when
-there are new or changed replays.
+directory handle in IndexedDB, **bound to the signed-in account**. There is
+no timer: `FolderSyncAutoRunner` (mounted by `/app` only) checks when the
+dashboard loads and whenever its tab regains focus or becomes visible, and
+re-scans at most every 10 minutes (`MIN_AUTO_SCAN_INTERVAL_MS`). A re-scan
+walks only `<account>/<toon>/Replays/Multiplayer/*.SC2Replay`, at most 6
+levels deep, and yields to the UI every 32 entries or 16 ms. The engine
+starts only when there are new or changed replays.
 
 A per-file ledger (path, size, modification time, status) means a re-scan
-only parses files that are new, changed, or failed for a reason that might go
-away. When the browser asks to grant read access again on a later visit, the
-page shows a one-click "Resume sync" (browsers only re-grant inside a
-click). "Stop syncing" on the Folder Sync card forgets the folder and its
-ledger. Folder Sync uploads parsed data only, never original files. Other
-browsers fall back to a one-shot `<input webkitdirectory>` folder import
-with no persistence.
+only parses files that are new, changed, or failed for a transient reason
+(timeouts and crashes are retried at most 3 times in all,
+`MAX_RETRYABLE_ATTEMPTS`). A replay whose player could not be identified
+is re-checked only once the profile learns one of its toons. After the
+daily upload cap, auto-sync pauses until the server's reset time
+(persisted per account). When the browser asks to grant read access again,
+the page shows a one-click "Resume sync" (browsers only re-grant inside a
+click). "Stop syncing" forgets the folder and its ledger. Folder Sync
+uploads parsed data only, never original files. When the browser refuses
+storage (private window), a pass still runs with an empty ledger.
+
+**Account binding.** A folder remembered for another account (a shared
+browser) never syncs and shows no "Resume" banner; the card offers "Use this
+folder for this account", which first forgets the other account's ledger
+and scan time. The runner itself refuses such a pass (`notOwner`).
+
+Other browsers get a one-shot `<input webkitdirectory>` folder import. It
+keeps the same account-bound ledger, so a repeat import skips finished
+files, and "Forget import history" on the card clears it.
 
 ### Entry points
 
 Every entry point is gated by the rollout flag (see [Rollout](#rollout)).
 
-- **Landing (only with `all`):** a hero button ("No download — analyze your
-  replays in your browser") and a link under the replay demo ("Analyze
-  privately in your browser instead"), both to `/try`.
+- **Landing (only with `all`):** a hero button and a link under the replay
+  demo, both to `/try`.
 - **`/welcome`:** the onboarding import step offers browser import alongside
   the agent download.
-- **Analyzer empty states and Today:** an account with no games can import
-  in the browser right away. Without an agent, Today and Settings → Overlay
-  show a soft "Install the agent for live features" note → `/download`.
+- **Analyzer empty states and Today:** an account with no games that has
+  not started the agent path sees both options side by side; the agent
+  checklist keeps an "or import in your browser" link until games arrive.
+  Without an agent, Today and Settings → Overlay show a soft "Install the
+  agent for live features" note → `/download`.
 - **Settings → Import:** the browser importer and the Folder Sync card.
 
 ## Architecture
@@ -157,7 +175,7 @@ Every entry point is gated by the rollout flag (see [Rollout](#rollout)).
    │              date, myToonHandle, ...},
    │              digests?}
    ▼
- /try:      IndexedDB (7 days) ─► report cards        (nothing leaves the device until the visitor saves)
+ /try:      IndexedDB (7 days, ≤ 100) ─► report cards  (nothing leaves the device until the visitor saves)
  signed in: POST /v1/games/exists ─► POST /v1/games (≤ 50 games, ≤ 4.5 MiB, one batch at a time)
             ─► optional backup: POST …/replay-upload ─► PUT signed R2 URL ─► POST …/complete
 ```
@@ -191,9 +209,10 @@ reasoning). The API is one Render Starter instance (`numInstances: 1`) with
 one ingest slot (`REPLAY_INGEST_MAX_ACTIVE: 1`), so parsing on the visitor's
 CPU costs the server nothing, and the browser posts the agent's exact payload
 to the same `POST /v1/games`. Parity is a byte comparison in CI rather than a
-reimplementation. The costs: a one-time download of about 15 MB (see
-[Budgets](#budgets)), device-dependent speed and memory, and no SC2Pulse
-lookups while parsing (the server fills those in later).
+reimplementation. The costs: a one-time download of about 7.6 MB over the
+wire (14.6 MB decoded; see [Budgets](#budgets)), device-dependent speed and
+memory, and no SC2Pulse lookups while parsing (the server fills those in
+later).
 
 ## One Python entry point
 
@@ -203,12 +222,10 @@ re-implements nothing. `parse_replay_bytes`:
 1. Rejects anything that is not an MPQ archive (`not_a_replay`) before
    touching sc2reader.
 2. Stages the bytes as a real file under a fresh temp dir in Pyodide's
-   in-memory filesystem. The pipeline needs a real path because map playback
-   re-opens the replay by path. The staged name is `replay.SC2Replay`,
-   prefixed by the toon folder when the original relative path had one
-   (`1-S2-1-267727/replay.SC2Replay`). The user's file and folder names never
-   reach the sandbox filesystem, so they never reach a log line or an
-   exception text.
+   in-memory filesystem (map playback re-opens the replay by path), named
+   `replay.SC2Replay` and prefixed by the toon folder when the original path
+   had one (`1-S2-1-267727/replay.SC2Replay`). The user's file and folder
+   names never reach the sandbox filesystem, logs or exception text.
 3. Masks `SC2TOOLS_OBSERVATION_DIR`, `SC2TOOLS_PLAYER_HANDLE` and
    `SC2TOOLS_PLAYER_CONFIG` for the call, so nothing outside the bytes can
    influence the payload.
@@ -235,9 +252,8 @@ class RuntimeOptions:
     engine_capture: bool = False         # must stay False (no local engine observation artifacts)
 ```
 
-The capability flags make the sandbox contract explicit: `parse_replay_bytes`
-raises `ValueError` if any is True. For `player_toon`, see
-[Which player is me](#which-player-is-me).
+`parse_replay_bytes` raises `ValueError` if any capability flag is True. For
+`player_toon`, see [Which player is me](#which-player-is-me).
 
 ### Parity allowlist: `RUNTIME_ONLY_FIELDS`
 
@@ -252,11 +268,10 @@ a desktop upload and a browser upload of the same bytes and perspective:
 | `mapPlayback` | A local engine observation artifact upgrades playback on the desktop, or replaces it with R2 segments. |
 | `spatial.map_bounds`, `spatial.battles`, `spatial.deaths` | Re-derived from engine-merged playback when that artifact exists. |
 
-The parity test is stricter than the allowlist. On the committed fixtures
-(no engine artifacts, no upload queue) **only** the two Pulse fields may
-differ. The desktop call there uses `resolve_pulse=True` against a stubbed
-resolver. Called with the sandbox flags, the desktop function produces JSON
-byte-identical to the browser's.
+The parity test is stricter: on the committed fixtures **only** the two
+Pulse fields may differ (the desktop call uses `resolve_pulse=True` against a
+stubbed resolver), and with the sandbox flags the desktop function produces
+JSON byte-identical to the browser's.
 
 ### `gameId` determinism
 
@@ -270,16 +285,12 @@ perspective, which is why [Which player is me](#which-player-is-me) matters.
 
 ### Data view: the installed agent, not the source tree
 
-A frozen (PyInstaller) agent resolves `core.paths.APP_DIR` to the exe
-directory, so it reads `<exe>/data/custom_builds.json`, which it creates
-**empty**, and finds **no** `map_bounds.json` (bounds come from the replay's
-MapInfo). A source checkout would use the repo's seed custom build and
-bounds table. The browser bundle mirrors the installed agent: an empty
-`custom_builds.json` (`{"version": <schema version>, "builds": []}`) and no
-`map_bounds.json`, so both uploads get the same `myBuild`,
-`opponent.strategy` and bounds. The parity suite runs every case in both the
-`installed` and the `source` data views, and `gameId`s must match across
-them.
+A frozen (PyInstaller) agent reads `<exe>/data/custom_builds.json`, which
+it creates **empty**, and has **no** `map_bounds.json` (bounds come from the
+replay's MapInfo). The browser bundle mirrors that installed agent (an empty
+`custom_builds.json`, no `map_bounds.json`), so both uploads get the same
+`myBuild`, `opponent.strategy` and bounds. The parity suite runs every case
+in both the `installed` and the `source` data views; `gameId`s must match.
 
 ## What differs from an agent upload
 
@@ -297,30 +308,24 @@ them.
 | Daily volume | Unlimited | `BROWSER_INGEST_DAILY_CAP` games per user per UTC day (default 5000) | Over-cap batches get a non-retryable `429`; the rest stay pending until the UTC day resets. |
 
 Everything else in the payload must match byte for byte (`gameId`, `date`,
-`result`, races, map, build logs, `myBuild`, MMR fields, toon handles,
-`matchFormat`, `macroBreakdown`, `apmCurve`, `opponent.playSignature`, …).
+`result`, races, map, build logs, `myBuild`, MMR fields, toon handles, …).
 
 ## Engine asset pipeline
 
 `npm run engine:build` (`scripts/build-browser-engine.mjs --require`) and the
-`prebuild` hook produce everything under `apps/web/public/pyodide/` and
-`apps/web/public/engine/`. Both directories are generated and gitignored.
+`prebuild` hook generate `apps/web/public/pyodide/` and `public/engine/`
+(gitignored).
 
 1. **Version pins** (`browser-engine/versions.mjs`, always fatal on drift):
-   `INSTANT_ENGINE_VERSION` (`lib/instant/engineVersion.ts`) must equal
-   `apps/replay-engine/VERSION`, and `PYODIDE_VERSION` must equal the exact
-   `pyodide` pin in `apps/web/package.json` (no `^`/`~`) and the installed
-   `node_modules/pyodide`.
+   `INSTANT_ENGINE_VERSION` must equal `apps/replay-engine/VERSION`, and
+   `PYODIDE_VERSION` the exact `pyodide` pin and installed package.
 2. **Wheels** (`browser-engine/wheels.mjs`). A private venv under
    `node_modules/.cache/sc2tools-browser-engine/venv` gets hash-pinned `pip`
-   and `setuptools` (`build-requirements.txt`). Then
-   `pip wheel --no-deps --require-hashes --no-build-isolation` builds
-   `sc2reader==1.8.0` and `mpyq==0.2.5` from `requirements.txt`, where every
-   file pip may pick has a pinned SHA-256. mpyq ships only an sdist, built
-   with the pinned setuptools and `SOURCE_DATE_EPOCH=315532800` into a
-   byte-for-byte reproducible wheel (the clean venv also avoids
-   distro-patched setuptools, which cannot build it). Wheels are cached per
-   requirements hash; any other wheel set is refused.
+   and `setuptools`, then `pip wheel --no-deps --require-hashes
+   --no-build-isolation` builds `sc2reader==1.8.0` and `mpyq==0.2.5` from
+   `requirements.txt` (every file pinned by SHA-256; mpyq's sdist builds with
+   `SOURCE_DATE_EPOCH=315532800` into a reproducible wheel). Wheels are
+   cached per requirements hash; any other wheel set is refused.
 3. **Bundle** (`browser-engine/pyodideBundle.mjs` + `bundle_tools.py`, run
    **inside Pyodide in Node**):
    - Unpack the wheels into site-packages.
@@ -365,18 +370,11 @@ fails, it prints a warning and exits 0 without writing a new pointer, and
 Instant Analysis is unavailable in that build. Version drift is always
 fatal.
 
-Output of the current build (engine 1.6.3, Pyodide 314.0.7, CPython 3.14.2):
-
-| Asset | Bytes |
-| --- | ---: |
-| `pyodide.mjs` | 17,931 |
-| `pyodide.asm.mjs` | 1,250,344 |
-| `pyodide.asm.wasm` | 9,598,218 |
-| `python_stdlib.zip` | 2,545,637 |
-| `engine.zip` | about 1.2 MB |
-
-That is about 14.6 MB on disk. The wasm and JS compress well if the host
-serves them compressed. The stdlib and engine zips are already compressed.
+The current build (engine 1.6.3, Pyodide 314.0.7, CPython 3.14.2) is about
+14.6 MB on disk: `pyodide.asm.wasm` 9.6 MB, `python_stdlib.zip` 2.5 MB,
+`pyodide.asm.mjs` 1.25 MB, `engine.zip` about 1.2 MB and `pyodide.mjs`
+18 kB. Served gzipped, that is about 7.6 MB over the wire (the two zips are
+already compressed).
 
 ## Integrity model
 
@@ -395,28 +393,25 @@ Every byte the worker executes is verified against the manifest before use
 - `pyodide.mjs` and `pyodide.asm.mjs` are imported from **blob: URLs made
   from the verified bytes** (`loadPyodide({createPyodideModule})`). The
   stdlib is passed as a verified `blob:` `stdLibURL`.
-- The WebAssembly is served to Pyodide by a **worker-scoped fetch shim**.
-  The wasm URL gets the verified bytes, `blob:` URLs pass through, and
-  **every other request is refused** while Pyodide starts. A Pyodide code
-  path nobody anticipated can therefore never pull an unverified file.
-- The lock file is **never fetched**: `lockFileContents` is the manifest's
-  `lockInfo` with no packages, so nothing is ever loaded from a CDN.
-- **No network while parsing.** With the assets cached, a boot still
-  revalidates the small `/engine/current.json` (`no-cache`), so it fails
-  offline; parsing needs no network. The Python makes no network calls:
-  SC2Pulse lookups are off and the resolver is not shipped, and sc2reader
-  never downloads maps (`load_map` stays off).
+- The WebAssembly is served to Pyodide by a **worker-scoped fetch shim**:
+  the wasm URL gets the verified bytes, `blob:` URLs pass through, and
+  **every other request is refused** while Pyodide starts.
+- The lock file is **never fetched** (`lockFileContents` is the manifest's
+  `lockInfo` with no packages), so nothing is loaded from a CDN.
+- **No network while parsing.** A boot revalidates the small
+  `/engine/current.json` (so it fails offline); parsing needs no network:
+  SC2Pulse lookups are off (the resolver is not shipped) and sc2reader never
+  downloads maps.
 
-The model trusts the manifest, served by the same origin as the page's
-JavaScript. It catches corrupted or tampered static files and caches, and
-keeps every third-party host out of the execution path.
+The model trusts the manifest (same origin as the page's JavaScript): it
+catches corrupted or tampered static files and caches, and keeps every
+third-party host out of the execution path.
 
 ## Content Security Policy
 
-The site sets no CSP today. If one is ever added, it must allow the engine.
-Workers enforce the policy delivered with **their own script response**, so
-the worker chunk under `/_next/static/` needs these directives too, not just
-the HTML page:
+The site sets no CSP today. If one is added, it must allow the engine, and
+the worker chunk under `/_next/static/` needs these directives too (workers
+enforce the policy of **their own script response**):
 
 | Directive | Needed value | Why |
 | --- | --- | --- |
@@ -424,13 +419,11 @@ the HTML page:
 | `worker-src` | `'self'` | The worker script is a same-origin chunk. |
 | `connect-src` | `'self' blob:` | The pointer, manifest and assets are same-origin, and Pyodide `fetch()`es the verified stdlib from a `blob:` URL, which `'self'` does not match. |
 
-These values were checked in headless Chromium against the engine client
-bundled by Next's webpack (classic worker), with `default-src 'none'` and
-the header on every response. Boot and parse succeeded with exactly the
-values above. Without `blob:` in `connect-src`, or in `script-src`, the boot
-fails with `engine_boot_failed`. Without `'wasm-unsafe-eval'`, the
-WebAssembly compile is refused and the boot hangs until the 120 s boot
-timeout. Firefox and Safari were not checked.
+Checked in headless Chromium (Next's classic worker, `default-src 'none'`,
+the header on every response): boot and parse succeed with exactly these
+values; without `blob:` the boot fails with `engine_boot_failed`, and
+without `'wasm-unsafe-eval'` it hangs until the 120 s timeout. Firefox and
+Safari were not checked.
 
 The rest of the flow also needs `connect-src` entries that are not about the
 engine: the API origin (`NEXT_PUBLIC_API_BASE`), Clerk, and the R2 bucket
@@ -443,7 +436,8 @@ code:
 
 - **Lazy.** The worker is created on the first call (`boot`, `listPlayers`,
   `parseFiles`, `expandZip`). Concurrent boots share one promise. Pyodide
-  loads only after a user action, or when Folder Sync finds new replays.
+  loads only after a user action (first intent to add replays), or when
+  Folder Sync finds new replays.
 - **Strictly sequential.** Calls queue behind each other, and files go to the
   worker one at a time. Each file is read with `blob.arrayBuffer()` just
   before sending and **transferred**, not copied, so the main thread never
@@ -464,14 +458,17 @@ code:
 - **Cancellable.** `cancel()` or an aborted `AbortSignal` terminates the
   worker, and in-flight and queued files resolve as `cancelled`.
 - **Size guards.** Before a file reaches the engine client, the session intake
-  (`sessionIntake.ts`) and the Folder Sync runner fail a file over 32 MiB
-  (`MAX_REPLAY_BYTES`) as `too_large` without reading it. Zip files are
-  expanded by Python's `zipfile` inside the worker (`expand_replay_zip`).
-  Only `*.SC2Replay` entries are returned, with guards of at most 1,000
-  replay entries, 20 MiB per entry and 128 MiB in total.
-- **Next.js detail.** Next's webpack emits the worker as a *classic* worker
-  (module workers need `output.module`). Pyodide's ESM refuses to start when
-  it sees `importScripts`, so `withImportScriptsHidden` hides it during boot.
+  (`sessionIntake.ts`) and the Folder Sync runner fail a replay over 32 MiB
+  (`MAX_REPLAY_BYTES`), and the intake a `.zip` over 256 MiB
+  (`MAX_ZIP_ARCHIVE_BYTES`: an archive sits in memory twice before Python's
+  guards run), as `too_large` without reading it. Python's `zipfile`
+  expands archives inside the worker (`expand_replay_zip`): at most 20,000
+  entries of any kind, 1,000 replay entries, 20 MiB per entry and 128 MiB
+  in total. Each returned `*.SC2Replay` carries its stored modification
+  time (read as UTC), so the newest-first cap applies inside zips too.
+- **Next.js detail.** Next emits a *classic* worker; Pyodide's ESM refuses
+  to start when it sees `importScripts`, so `withImportScriptsHidden` hides
+  it during boot.
 
 ### Error kinds
 
@@ -497,7 +494,7 @@ constants. A test fails if the two lists drift apart. Friendly copy lives in
 | `timeout` | client | No answer within 60 s. | no, replaced |
 | `out_of_memory` | client | The WebAssembly heap or the JS engine ran out of memory. | no, replaced |
 | `worker_crashed` | client | The worker died or Pyodide itself failed. | no, replaced |
-| `too_large` | client / zip | The file (over 32 MiB) or the zip exceeds the intake guards. | yes |
+| `too_large` | client / zip | The replay (over 32 MiB), the archive (over 256 MiB) or the zip's contents exceed the intake guards. | yes |
 | `not_1v1` | client policy | `/try` analyses 1v1 games only (decided from the header scan). | n/a |
 | `resumed_replay` | client policy | `/try` skips "resume from replay" sessions (decided after parsing). | n/a |
 | `outside_date_range` | client policy | The file's modification time, the header scan's date or the parsed date is outside the chosen window. | n/a |
@@ -526,15 +523,13 @@ agent first and falls back to softer evidence only with confirmation:
 Each file is then parsed with `player_toon` set, which Python resolves to
 that player's in-replay name for the unchanged pipeline. A file where the
 chosen toon did not play fails `player_unresolved` without calling the
-engine. After the parse, Python checks the payload's `myToonHandle` against
-the requested toon, and a mismatch fails `player_ambiguous`. That is the
-**guard** against the pipeline's display-name substring match picking
-"BobBy" for "Bob".
+engine. After the parse, a payload `myToonHandle` other than the requested
+toon fails `player_ambiguous`: the **guard** against the pipeline's
+display-name substring match picking "BobBy" for "Bob".
 
 After a signed-in import, confirmed toons are appended to the profile's
-`pulseIds` (maximum 20; `profileHandles.ts`). `PUT /v1/me/profile` replaces
-the profile, so the client does GET → copy every accepted key → append →
-PUT, and skips the PUT when nothing is new.
+`pulseIds` (maximum 20; `profileHandles.ts`) with GET → merge → PUT, since
+`PUT /v1/me/profile` replaces the profile; nothing new, no PUT.
 
 ## Uploads
 
@@ -545,7 +540,8 @@ slot:
    500 ids per call and drops games already stored, so no upload budget is
    spent on them.
 2. **Tag and batch.** `"ingestSource":"browser","engineVersion":"1.6.3"` is
-   spliced after the opening brace of each game's Python JSON. The JSON is
+   spliced after the opening brace of each game's Python JSON (a stored
+   `/try` game keeps the version that parsed it). The JSON is
    never re-serialised, which would change bytes. Bodies are packed into
    batches of **at most 50 games and 4.5 MiB** (the server caps bodies at
    5 MiB and must receive them within 45 s over a home uplink). A game
@@ -559,15 +555,16 @@ slot:
    via CORS; unreadable, it counts as 5 s. A `413` splits the batch in half.
 5. **Daily cap.** `429 browser_ingest_daily_cap` refuses a batch that would
    cross `BROWSER_INGEST_DAILY_CAP` (default 5000 games per user per UTC
-   day) and says how many still fit (`remaining`). That many are sent once
-   as a smaller batch, then the run stops; the rest stay pending.
+   day) and says how many still fit (`remaining`) and when the cap resets
+   (`resetAt`). That many are sent once as a smaller batch, then the run
+   stops; the rest stay pending and the UI says when uploads resume (local
+   time). Progress counts games already in the account as done.
 6. **Per-game rejections** marked `retryable`, and ids missing from the
    response, are requeued once into a later batch.
 
 The server derives `ingestSource` from the auth source (device token →
-`agent`, Clerk session → `browser`), whatever the payload claims, keeps
-`engineVersion` only for browser uploads (both are on the slim game row),
-and never counts device uploads against the daily cap.
+`agent`, Clerk session → `browser`), keeps `engineVersion` only for browser
+uploads (both on the slim game row), and never caps device uploads.
 
 ## Local storage
 
@@ -576,26 +573,24 @@ Only the `/try` games a visitor chooses to save are ever sent anywhere:
 
 | Store | Key | Holds | Lifetime |
 | --- | --- | --- | --- |
-| `tryGames` | `gameId` | `/try` parsed payloads (`json`, `date`, `storedAt`, `expiresAt`) | 7 days (`TRY_TTL_MS`); expired rows are deleted before every read. Emptied by **Clear local data** on `/try` (`LocalDataControls` → `clearTryData()`) and after a successful save to an account. |
-| `ledger` | relative path | Folder Sync status per file: `size`, `lastModified`, `uploaded`/`skipped`/`failed`, `gameId`, `errorKind`, `updatedAt` | Until **Stop syncing** on the Folder Sync card |
-| `handles` | `folder` | The Folder Sync directory handle (read-only permission) | Until **Stop syncing** |
-| `meta` | name | Small values such as the last folder scan time | Until the site's data is cleared |
+| `tryGames` | `gameId` | `/try` parsed payloads (`json`, `date`, `engineVersion`, `storedAt`, `expiresAt`); at most 100 (`MAX_STORED_TRY_GAMES`, oldest-stored dropped) | Expire after 7 days (`TRY_TTL_MS`) and are deleted the next time `/try` reads them (not by a timer). Emptied by **Clear local data** on `/try` and after a successful save to an account. |
+| `ledger` | relative path | Folder Sync / folder import status per file: `size`, `lastModified`, `uploaded`/`skipped`/`failed`, `gameId`, `errorKind`, `attempts`, `toons`, `updatedAt` | Until **Stop syncing** (Chrome/Edge) or **Forget import history** (other browsers), or until another account claims Folder Sync in this browser |
+| `handles` | `folder` | The Folder Sync directory handle (read-only permission), bound to the account in `meta.folderOwner` | Until **Stop syncing** |
+| `meta` | name | `lastFolderScanAt`, `folderOwner` (Clerk user id the Folder Sync state belongs to), `browserIngestPausedUntil` (per-account daily-cap pause) | Owner and scan time until **Stop syncing**; the pause until it passes |
 
-Everything read back is validated. Rows with an unknown shape are dropped,
-and an error kind this app version does not know is ignored. Clearing the
-site's data in the browser settings removes the whole database.
-`clearAll()` in `localStore.ts` empties every store, but no control calls it
-yet.
+Everything read back is validated: rows with an unknown shape, and error
+kinds this app version does not know, are dropped. Clearing the site's data
+in the browser removes the whole database.
 
 ## Original replay backup
 
 Backup is optional and offered only by the signed-in import panel
-(`BrowserImportPanel`), never by `/try` or Folder Sync. The panel shows its
-"Also back up original replay files" checkbox only when
-`GET /v1/me/replay-archive-status` returns `enabled: true`, which is true
-when the API runs with `REPLAY_FILES_STORE=r2`. The checkbox is **checked by
-default**, matching the agent, which archives originals automatically. The
-worker computes digests only while it is checked. Backup covers only the
+(`BrowserImportPanel`), never by `/try` or Folder Sync. Its "Also back up
+original replay files" checkbox appears only when
+`GET /v1/me/replay-archive-status` returns `enabled: true`
+(`REPLAY_FILES_STORE=r2`) and is then **checked by default**, like the
+agent; the panel's intro says a private copy of each file is uploaded while
+it is ticked. Digests are computed only while it is checked. Backup covers only the
 games the server accepted, skips files over 5 MiB (the server's
 `REPLAY_FILE_MAX_BYTES`) and files the server already stores, and uses the
 agent's three-step protocol (`replayBackup.ts`) strictly one file at a time:
@@ -640,11 +635,11 @@ The full picture behind the in-app comparison (`BrowserVsAgentTable`):
 
 | | Browser (Instant Analysis) | Windows agent |
 | --- | --- | --- |
-| Analyse replays, every analyzer tab | ✓ | ✓ |
+| Analyze replays, every analyzer tab | ✓ | ✓ |
 | Same game data (byte-identical payload) | ✓, except the SC2Pulse fields, which the server fills in later | ✓ |
 | No install | ✓ | ✗ |
 | Works on Mac, Linux, Chromebook, iPad | ✓ (desktop Chromium tested; see [limitations](#known-limitations)) | ✗ (Windows only) |
-| Sync new games automatically | Folder Sync while the analyzer is open (Chromium) | ✓, in the background while you play |
+| Sync new games automatically | Folder Sync when you open or return to the dashboard (Chromium) | ✓, in the background while you play |
 | Live pre-game scouting and OBS overlay data | ✗ (a web page cannot read the SC2 client API on `localhost:6119`) | ✓ |
 | Accurate (engine) playback capture | ✗ (needs StarCraft II installed) | ✓ (opt-in) |
 | OBS scene switching | ✗ | ✓ |
@@ -659,27 +654,27 @@ The full picture behind the in-app comparison (`BrowserVsAgentTable`):
   checkbox is left checked. Folder Sync uploads parsed data only.
 - **Self-hosted runtime.** Pyodide and the engine are served from the site's
   own origin. No third-party CDN sees the visitor or runs code in the page.
-- **No names in logs or telemetry.** In the browser, Python's stdout and
-  stderr are discarded and the worker never logs. The entry point's own log
-  lines carry only counts, timings, sizes and error kinds, and the user's
-  file and folder names never reach the sandbox filesystem. Error details
-  are class names plus fixed text.
+- **No names in logs or telemetry.** Python's stdout and stderr are
+  discarded and the worker never logs; the entry point's log lines carry only
+  counts, timings, sizes and error kinds, and error details are class names
+  plus fixed text.
+- **Folder Sync state is per account.** It syncs only into the account that
+  set it up in this browser (see [Folder Sync](#folder-sync-chromium-desktop)).
 - **Analytics** (GA4, only after cookie consent; `lib/instant/analytics.ts`):
   `instant_open`, `instant_files_selected {count, source}`,
   `instant_parse_done {ok, failed, median_ms}`, `instant_report_view`,
   `instant_signup_click`, `instant_upload_done {games}`,
-  `instant_folder_sync_resume` and `instant_error {kind}`, where `kind` is an
-  `ErrorKind`, `upload_<stop reason>` or `storage_unavailable`. Only counts,
-  timings, fixed codes and the intake source (drop, picker, folder, zip).
-- The privacy policy (`app/legal/privacy/page.tsx`) covers in-browser
-  parsing and the IndexedDB data.
+  `instant_folder_sync_resume` and `instant_error {kind}` (`kind`: an
+  `ErrorKind`, `upload_<stop reason>`, `storage_unavailable` or
+  `folder_permission_denied`). Only counts, timings, fixed codes and the
+  intake source. The privacy policy (`app/legal/privacy/page.tsx`) covers
+  in-browser parsing and the IndexedDB data.
 
 ## Rollout
 
 `NEXT_PUBLIC_INSTANT_IMPORT` (`lib/instant/flag.ts`) is inlined at build
-time, so change it on Vercel, then redeploy. Use the lowercase values: the
-page accepts any case, but the prebuild treats only lowercase `admins` and
-`all` as making the engine build required.
+time, so change it on Vercel, then redeploy. The page and the prebuild both
+read it trimmed and case-insensitively, so `All` also requires the engine.
 
 | Value | Who sees it |
 | --- | --- |
@@ -689,20 +684,16 @@ page accepts any case, but the prebuild treats only lowercase `admins` and
 
 1. **`off`.** The prebuild still builds the engine when Python is available,
    but a failure does not fail the deploy.
-2. **`admins`.** The engine build becomes required (a deploy without it
-   fails). Dogfood signed-in imports and Folder Sync, watch
-   `ingestSource: "browser"` rows, `instant_error` kinds and the
-   `browser_ingest_daily` counts.
+2. **`admins`.** The engine build becomes required. Dogfood signed-in
+   imports and Folder Sync; watch `ingestSource: "browser"` rows,
+   `instant_error` kinds and the `browser_ingest_daily` counts.
 3. **`all`.** Open `/try` and the entry points to everyone. The landing
-   hero and the replay demo then link to `/try`. The demo itself still
-   POSTs the file to `/v1/public/preview-replay` for a server-side preview,
-   and its copy says so ("sent to our server, parsed once and discarded").
-   Moving the demo onto the in-browser engine, and retiring that server
-   route, is follow-up work.
+   replay demo still POSTs to `/v1/public/preview-replay` (its copy says
+   so); moving it onto the in-browser engine and retiring that route is
+   follow-up work.
 
-The API needs no flag. It accepts Clerk-session uploads today, and the
-daily cap is its safety valve. **Rollback:** set the flag to `off` and
-redeploy. Games already uploaded from browsers remain valid and are
+The API needs no flag; the daily cap is its safety valve. **Rollback:** set
+the flag to `off` and redeploy. Browser-uploaded games stay valid and are
 identifiable by `ingestSource: "browser"` and `engineVersion`.
 
 ## Budgets
@@ -713,33 +704,26 @@ hardware; the parse-time fixture is a 15-minute 1v1 ladder replay.
 | Budget | Target | Measured |
 | --- | --- | --- |
 | Cold start (first visit: download + compile + import) at 50 Mbit/s | ≤ 6 s | **3.6 s** (median of 3, range 3.58–3.70 s). Downloading 7.6 MB (14.6 MB decoded) takes 1.5 s, starting Python 1.8 s and importing the engine 0.13 s. |
-| Warm start (repeat visit, assets in the HTTP cache) | ≤ 1 s | **2.3 s, not met** (median of 9, range 2.19–2.42 s). Reading the assets from the cache takes 0.07 s, SHA-256 and the Pyodide JS 0.12 s, starting Python 1.86 s and importing the engine 0.14 s. Starting Python is CPU work that no cache removes. The fix is a Pyodide memory snapshot (follow-up). |
+| Warm start (repeat visit, assets in the HTTP cache) | ≤ 1 s | **2.3 s, not met** (median of 9, range 2.19–2.42 s). Reading the assets from the cache takes 0.07 s, SHA-256 and the Pyodide JS 0.12 s, starting Python 1.86 s and importing the engine 0.14 s. Starting Python is CPU work that no cache removes. **Mitigation:** the boot starts on the visitor's first intent (see step 2 of `/try`), so it mostly overlaps the file dialog; the time from choosing files to the analysis starting is not re-measured. The next step is a Pyodide memory snapshot. |
 | Median parse, 15-minute 1v1 | ≤ 3 s | **1.19 s**: the 18-minute TvZ fixture through `/try`, median of 5 (1.11–1.30 s). It takes 5.3 s with the CPU about 4.4× slower. |
 | Worker memory | ≤ 700 MB | **75 MiB** WebAssembly heap after 40 parses on one worker, with no growth after the first 20. The renderer process grows by 201 MiB RSS (173 → 374 MiB, median of 4). |
 | New server CPU for parsing | 0 | **0.** The browser sent no request to the API. After the visitor picks replays, `/try` fetches only static files (`/_next/static`, `/pyodide`, `/engine`) and Next's prefetch of the prerendered `/download` page. |
 
-**How measured (2026-09-28).** These numbers come from a cloud container,
-not a 2020 laptop: a KVM guest with an Intel Xeon @ 2.10 GHz, 4 vCPUs and
-16 GB RAM, running headless Chromium 141. The site was a production build
-(`NEXT_PUBLIC_INSTANT_IMPORT=all npm run build`, then `next start`, which
-gzips responses). Playwright drove the real `/try` page, and the Chrome
-DevTools Protocol throttled the network to 50/10 Mbit/s with 20 ms of
-latency. Start time runs from the file-input `change` event to the worker's
-`ready` message, cold in a new browser profile and warm on a revisit in the
-same profile. Parse times are the worker's own per-file `ms`. For the 4.4×
-slower CPU run, the DevTools throttle slowed the main thread 4×; Chromium
-cannot throttle workers this way, so a per-thread cgroup CPU quota slowed
-the rest of the renderer. Memory is the size of the WebAssembly heap plus
-the renderer's RSS, while 25 replays were analyzed twice. Main thread: in 3
-end-to-end runs there was no long task over 50 ms between selecting replays
-and seeing the report. A CPU profile put the longest stretch of main-thread
-work at about 43 ms. On a 4× slower main thread, rendering the report,
-saving the games and handling the selection each take 50–100 ms. A cold
-visit at 50 Mbit/s, from the landing page to the report for 10 replays (8
-parsed, 2 team games skipped), took 12.0 s (median of 3). Apart from the
-analysis, the site's stats widget, present on every page, calls
-`/api/site/stats` on load and every 30 s. The measurement scripts are not
-in the repository.
+**How measured (2026-09-28).** A cloud container, not a 2020 laptop: a KVM
+guest (Intel Xeon @ 2.10 GHz, 4 vCPUs, 16 GB RAM), headless Chromium 141, a
+production build served gzipped by `next start`, Playwright on the real
+`/try` page, and the network throttled to 50/10 Mbit/s with 20 ms latency.
+Start time runs from the file-input `change` event to the worker's `ready`
+(cold: new profile; warm: revisit). Parse times are the worker's per-file
+`ms`; the 4.4× slower CPU run throttled the main thread 4× over DevTools and
+the rest of the renderer with a cgroup CPU quota. Memory is the WebAssembly
+heap plus the renderer's RSS while 25 replays were analyzed twice. Main thread: no
+long task over 50 ms in 3 end-to-end runs (longest stretch about 43 ms);
+on a 4× slower main thread, rendering the report, saving the games and
+handling the selection each take 50–100 ms. A cold visit at 50 Mbit/s,
+landing page to report for 10 replays, took 12.0 s (median of 3). The
+site's stats widget calls `/api/site/stats` on every page; nothing else
+reached the server. The measurement scripts are not in the repository.
 
 ## Upgrading Pyodide or the engine
 
@@ -772,49 +756,45 @@ in the repository.
 3. If the Python ↔ worker message shapes change, bump `ENGINE_PROTOCOL` in
    `instant_analysis.py` and `engineVersion.ts` together.
 
-No cache purge is ever needed. The bundle path is content-addressed
-(`bundleId` changes whenever any byte of the bundle or manifest changes), and
-only `/engine/current.json` is revalidated. A tab opened before the deploy
-fetches the new pointer on its next boot. If the engine version or protocol
-changed, it gets `engine_unavailable` ("engine updated; reload the page")
-instead of running a mismatched engine.
+No cache purge is ever needed: bundle paths are content-addressed and only
+`/engine/current.json` is revalidated. A tab opened before the deploy gets
+`engine_unavailable` ("engine updated; reload the page") on its next boot if
+the engine version or protocol changed, never a mismatched engine.
 
 ## Testing
 
 | Layer | Command | What it proves |
 | --- | --- | --- |
 | Python parity | `cd apps/agent && python -m pytest tests/test_instant_analysis.py -ra` | Every fixture × every human perspective × both data views (`installed`, `source`, run in fresh interpreters by `tests/instant_golden.py`). Only the two Pulse fields differ from the desktop path. The sandbox-flag desktop call is byte-identical. Name, folder, mtime and toon-folder variants give identical JSON. Logs never contain file or folder names. Error kinds match `types.ts`. |
-| Pyodide parity | `python apps/agent/tests/instant_golden.py --out /tmp/instant-golden`, then in `apps/web`: `npm run engine:build && INSTANT_GOLDEN_DIR=/tmp/instant-golden npm run test:engine` | The built bundle's assets match the manifest. The worker's real Python glue in Pyodide gives envelopes identical to CPython's, including the upload `json`. |
+| Pyodide parity | `python apps/agent/tests/instant_golden.py --out /tmp/instant-golden`, then in `apps/web`: `npm run engine:build && INSTANT_GOLDEN_DIR=/tmp/instant-golden npm run test:engine` | The built bundle's assets match the manifest. The worker's real Python glue in Pyodide gives envelopes identical to CPython's, including the upload `json`, and unzips entries with their stored times. `tests/engine/required.test.mjs` checks the prebuild reads the flag like the app. |
 | Web units | `cd apps/web && npx vitest run lib/instant components/instant` | Boot and integrity (mocked worker), client queue, timeouts and recycling, intake, identity, IndexedDB (`fake-indexeddb`), batching, uploader, backup, report, flag, analytics and components. |
 | API | `cd apps/api && npx jest __tests__/gamesBrowserIngest.test.js __tests__/gamesExists.test.js __tests__/browserIngestQuota.test.js __tests__/gamesIngestPolicy.test.js __tests__/replayFiles.test.js` | Provenance stamping, the exists route, the daily cap, ingest policy and Clerk-session backup. |
 | End to end | Build with `NEXT_PUBLIC_INSTANT_IMPORT=all`, then `NEXT_PUBLIC_INSTANT_IMPORT=all npx playwright test try-instant --project=desktop-1280` (`tests/e2e/try-instant.spec.ts`, tagged `@slow`; it skips itself without the flag) | The real engine in Chromium: drop a fixture on `/try`, get a report, and no request reaches the API origin. |
 
 CI: `python-tests.yml` → `instant-parity` runs the Python parity suite in a
-venv holding **only** sc2reader and pytest (the browser path needs no numpy
-or scipy), then builds the bundle and runs `test:engine` against the
-goldens. `web-ci.yml` builds with `NEXT_PUBLIC_INSTANT_IMPORT=all` and
-`INSTANT_ENGINE_REQUIRED=1`, so a broken engine build fails the PR.
-`version-check.yml` pins the engine and Pyodide versions.
+venv holding **only** sc2reader and pytest, then builds the bundle and runs
+`test:engine` against the goldens. `web-ci.yml` builds with
+`NEXT_PUBLIC_INSTANT_IMPORT=all` and `INSTANT_ENGINE_REQUIRED=1`, so a
+broken engine build fails the PR. `version-check.yml` pins the versions.
 
 ## Known limitations
 
-- **Firefox and Safari are untested.** Next emits the worker as a classic
-  worker, and the engine imports its verified modules there with dynamic
-  `import()` of `blob:` URLs. Chromium is covered by Playwright. Firefox and
-  Safari need a manual check before they are advertised as supported.
-- **iOS and iPadOS memory.** Mobile Safari terminates pages and workers far
-  below desktop limits. Long batches can hit `out_of_memory`. The client
-  replaces the worker and continues, and recycles it every 150 files anyway,
-  but very long games may not fit.
+- **Firefox and Safari are untested.** The classic worker imports its
+  verified modules with dynamic `import()` of `blob:` URLs; only Chromium is
+  covered by Playwright.
+- **iOS and iPadOS memory.** Mobile Safari kills pages and workers far below
+  desktop limits, so long batches can hit `out_of_memory` (the worker is
+  replaced and the batch continues), and very long games may not fit.
 - **Agent-only features.** Pre-game scouting, overlay data, OBS scene
   switching, syncing without a tab open and accurate engine playback need
   the agent (see [Browser vs agent](#browser-vs-agent)).
 - **No SC2Pulse at parse time.** Pulse links arrive via the server crons;
   MMR enrichment covers at most the last 30 days (ADR 0019).
 - **Custom builds are not applied locally**, matching the installed agent.
-- **Folder Sync** needs a Chromium desktop browser and an open analyzer
-  tab, and the browser may ask to re-grant folder access on a later visit.
-- **First-visit download** of about 15 MB (less on the wire if the host
-  compresses it), cached immutably afterwards.
+- **Folder Sync** needs a Chromium desktop browser and runs only when the
+  dashboard is opened or returned to; the browser may ask to re-grant
+  folder access on a later visit.
+- **First-visit download** of about 7.6 MB over the wire (14.6 MB decoded),
+  cached immutably afterwards.
 - **No interrupt.** Without cross-origin isolation, a stuck parse costs up to
   60 s before the worker is replaced.

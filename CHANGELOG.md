@@ -33,19 +33,20 @@ corresponding GitHub Release.
   `NEXT_PUBLIC_GUIDES_ENABLED`; timing samples are captured from new
   uploads right away so data accumulates first. See
   [`docs/guides.md`](docs/guides.md).
-- **Instant Analysis: analyse replays in your browser** — drop replays or a
+- **Instant Analysis: analyze replays in your browser** — drop replays or a
   zip on `/try` and get a report on your own games in seconds, with no
   account and no install. Replays are parsed on your device by the desktop
   agent's own analyzer, running in the browser, and `/try` uploads nothing
   unless you choose to save the games to an account. Signed in, you can
   import your history from Settings, onboarding or an empty dashboard and
   get the same game data the agent sends, without duplicates. Chromium
-  browsers can also keep your replay folder in sync while the dashboard is
-  open. Original replay files are uploaded only by a signed-in import, and
+  browsers can also keep your replay folder in sync each time you open or
+  return to the dashboard (bound to the account that set it up). Original
+  replay files are uploaded only by a signed-in import, and
   only when its backup checkbox stays checked (the default where replay
   storage is on). Live scouting, the OBS overlay, accurate playback capture
   and syncing while you play still need the agent. The first visit downloads
-  the analyzer once (about 15 MB) and caches it. Off by default behind
+  the analyzer once (about 7.6 MB) and caches it. Off by default behind
   `NEXT_PUBLIC_INSTANT_IMPORT` (`off` → `admins` → `all`); see
   [`docs/instant-analysis.md`](docs/instant-analysis.md).
 - **APM on the macro breakdown and replay analysis** — games synced with

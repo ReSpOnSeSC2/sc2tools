@@ -240,9 +240,10 @@ function BrowserStoredData() {
       <BrowserStoredItems />
       <p>
         To remove this data, use <strong>Clear local data</strong> on the{" "}
-        <TryPath /> page (for the analysed games) or{" "}
-        <strong>Stop syncing</strong> on the Folder Sync card (for the folder
-        permission and the ledger), or clear this site&apos;s data in your
+        <TryPath /> page (for the analyzed games), or on the Folder Sync card{" "}
+        <strong>Stop syncing</strong> (Chrome and Edge) or{" "}
+        <strong>Forget import history</strong> (other browsers) for the folder
+        permission and the ledger, or clear this site&apos;s data in your
         browser settings to remove all of it. This does not delete games you
         already saved to your account. To delete those, use{" "}
         <DataSettingsLink />.
@@ -255,24 +256,33 @@ function BrowserStoredItems() {
   return (
     <ul className={LIST_CLASS}>
       <li>
-        <strong>Games analysed on /try.</strong> The parsed game data, so
-        you can come back to your report or save the games after signing
-        up. Each game expires 7 days after it was analysed and is deleted
-        the next time you open <TryPath /> in that browser. Saving the
-        games to your account also deletes them from the browser.
+        <strong>Games analyzed on /try.</strong> The parsed game data (at
+        most the 100 most recently analyzed games), so you can come back to
+        your report or save the games after signing up. Each game expires 7
+        days after it was analyzed and is deleted the next time you open{" "}
+        <TryPath /> in that browser. Saving the games to your account also
+        deletes them from the browser.
       </li>
       <li>
-        <strong>Folder Sync ledger.</strong> If you use Folder Sync, a list
-        of the replay files it has handled: each file&apos;s path within
-        the folder you picked, its size and modified date, whether it was
-        uploaded, skipped, or failed, and the game it matched. Later scans
-        use it to skip files that are already done.
+        <strong>Folder Sync ledger.</strong> If you use Folder Sync or import
+        a whole folder, a list of the replay files it has handled: each
+        file&apos;s path within the folder you picked, its size and modified
+        date, whether it was uploaded, skipped, or failed, and the game it
+        matched. For a replay where it couldn&apos;t tell which player is
+        you, it also keeps the players&apos; StarCraft II account IDs, so
+        the file is checked again once your profile knows one of them.
+        Later scans and imports use it to skip files that are already done.
       </li>
       <li>
         <strong>Folder permission.</strong> The browser&apos;s read-only
-        handle to the folder you picked for Folder Sync, and the time of
-        the last scan. Your browser may ask you to allow access again on a
-        later visit.
+        handle to the folder you picked for Folder Sync, the time of the
+        last scan, which account set it up and, once the daily browser
+        upload limit is reached, when it may sync again. Folder Sync only
+        ever syncs into that account: if someone else signs in on the same
+        browser, nothing is synced until they choose to use the folder for
+        their own account, which first forgets the previous account&apos;s
+        ledger. Your browser may ask you to allow access again on a later
+        visit.
       </li>
     </ul>
   );
