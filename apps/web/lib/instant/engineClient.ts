@@ -9,7 +9,8 @@
  * - Resilient: a file that exceeds `perFileTimeoutMs`, crashes the worker or
  *   runs it out of memory fails alone (`timeout` / `worker_crashed` /
  *   `out_of_memory`); the worker is replaced and the batch continues.
- * - Bounded heap: the worker is recycled after every `recycleEvery` parses.
+ * - Bounded heap: the worker is recycled after every `recycleEvery` parses;
+ *   `lastHeapBytes()` reports the heap size from the latest boot or parse.
  * - Cancellable: `cancel()` or an aborted `signal` terminates the worker;
  *   in-flight and queued files resolve as `cancelled`.
  *
@@ -158,6 +159,8 @@ class QueuedEngineClient implements EngineClient {
   private disposed = false;
   private nextId = 1;
   private running: Job | null = null;
+  /** Heap reported by the latest `ready` / `parsed` event (see EngineSession). */
+  private heapBytes: number | null = null;
   private readonly bootListeners = new Set<(event: EngineProgress) => void>();
   private readonly pointerUrl: string;
 
@@ -198,6 +201,10 @@ class QueuedEngineClient implements EngineClient {
   dispose(): void {
     this.cancel();
     this.disposed = true;
+  }
+
+  lastHeapBytes(): number | null {
+    return this.heapBytes;
   }
 
   private makeJob(options: ParseOptions = {}): Job {
@@ -258,6 +265,7 @@ class QueuedEngineClient implements EngineClient {
     } finally {
       if (listener) this.bootListeners.delete(listener);
     }
+    this.heapBytes = session.heapBytes;
     return session;
   }
 
@@ -344,6 +352,7 @@ class QueuedEngineClient implements EngineClient {
       return;
     }
     if (step.phase !== "parse") return;
+    if (event.type === "parsed") this.heapBytes = session.heapBytes;
     session.parsedCount += 1;
     if (session.parsedCount >= this.config.recycleEvery) this.retire(session);
   }
