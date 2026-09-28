@@ -43,8 +43,11 @@ corresponding GitHub Release.
   browsers can also keep your replay folder in sync each time you open or
   return to the dashboard (bound to the account that set it up). Original
   replay files are uploaded only by a signed-in import, and
-  only when its backup checkbox stays checked (the default where replay
-  storage is on). Live scouting, the OBS overlay, accurate playback capture
+  only when its backup checkbox stays checked (the default once Admin →
+  Health shows **Browser replay backup: Ready**; the API sets up the R2
+  bucket for browser uploads itself when its key allows it). The report
+  also shows your opponents' openers, both build orders and the macro
+  timeline for each game, and your MMR against each opponent. Live scouting, the OBS overlay, accurate playback capture
   and syncing while you play still need the agent. The first visit downloads
   the analyzer once (about 7.6 MB) and caches it. Off by default behind
   `NEXT_PUBLIC_INSTANT_IMPORT` (`off` → `admins` → `all`); see

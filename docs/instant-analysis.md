@@ -68,9 +68,15 @@ screenshots: [`screenshots/instant-analysis/`](screenshots/instant-analysis/).
 4. Each remaining replay is parsed in the worker. `/try` also skips
    "resume from replay" sessions (`resumed_replay`).
 5. The report shows only cards the payloads support: record, record by
-   matchup, openers, most-faced opponent, macro score and top leaks, and "why
-   you lost" for the latest loss (`lib/instant/report.ts`). A card with no
-   data is hidden.
+   matchup, your openers and your opponents' openers (with your W-L against
+   each), most-faced opponent, macro score and top leaks, an MMR card, and
+   "why you lost" for the latest loss (`lib/instant/report.ts`). "Game by
+   game" lets the visitor pick a game and see both build orders side by side
+   and the macro timeline, rendered offline from the payload (no API call).
+   MMR is the pre-game MMR the replay records; the per-game change is the
+   difference to the next ladder game on the same account and queue in the
+   set, and is labelled that way because it includes any games the visitor
+   didn't add. A card with no data is hidden.
 6. **Nothing is uploaded unless the visitor saves.** The parsed games (at
    most 100) are kept in IndexedDB for 7 days, so the visitor can come back
    to the report.
@@ -842,7 +848,7 @@ the engine version or protocol changed, never a mismatched engine.
 | Pyodide parity | `python apps/agent/tests/instant_golden.py --out /tmp/instant-golden`, then in `apps/web`: `npm run engine:build && INSTANT_GOLDEN_DIR=/tmp/instant-golden npm run test:engine` | The built bundle's assets match the manifest. The worker's real Python glue in Pyodide gives envelopes identical to CPython's, including the upload `json`, and unzips entries with their stored times. `tests/engine/required.test.mjs` checks the prebuild reads the flag like the app. |
 | Web units | `cd apps/web && npx vitest run lib/instant components/instant` | Boot and integrity (mocked worker), client queue, timeouts and recycling, intake, identity, IndexedDB (`fake-indexeddb`), batching, uploader, backup, report, flag, analytics and components. |
 | API | `cd apps/api && npx jest __tests__/gamesBrowserIngest.test.js __tests__/gamesExists.test.js __tests__/browserIngestQuota.test.js __tests__/gamesIngestPolicy.test.js __tests__/replayFiles.test.js` | Provenance stamping, the exists route, the daily cap, ingest policy and Clerk-session backup. |
-| End to end | Build with `NEXT_PUBLIC_INSTANT_IMPORT=all`, then `NEXT_PUBLIC_INSTANT_IMPORT=all npx playwright test try-instant --project=desktop-1280` (`tests/e2e/try-instant.spec.ts`, tagged `@slow`; it skips itself without the flag) | The real engine in Chromium: drop a fixture on `/try`, get a report, and no request reaches the API origin. |
+| End to end | Build with `NEXT_PUBLIC_INSTANT_IMPORT=all`, then `NEXT_PUBLIC_INSTANT_IMPORT=all npx playwright test try-instant` (`tests/e2e/try-instant.spec.ts`, tagged `@slow`; runs on desktop-1280 and mobile-360 and skips itself without the flag) | The real engine in Chromium: drop fixtures on `/try`, get a report with opponent openers, the MMR card and a game's build orders and macro timeline, and no request reaches the API origin. |
 
 CI: `python-tests.yml` → `instant-parity` runs the Python parity suite in a
 venv holding **only** sc2reader and pytest, then builds the bundle and runs

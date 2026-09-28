@@ -18,7 +18,7 @@
  *   const summary = await runBrowserUpload({
  *     parsedWithFiles: session.parsedWithFiles, getToken, apiBase: API_BASE,
  *     engineVersion: INSTANT_ENGINE_VERSION,
- *     backup: { enabled: true, capabilityEnabled: archive.enabled },
+ *     backup: { enabled: true, capabilityEnabled: archive.enabled && archive.browserUploadReady },
  *     confirmedToons: session.chosenToon ? [session.chosenToon] : [],
  *     signal: controller.signal, onProgress: setProgress,
  *   });
@@ -88,7 +88,10 @@ export interface BrowserUploadInput {
   backup: {
     /** The visitor's "also back up original replay files" choice. */
     enabled: boolean;
-    /** `GET /v1/me/replay-archive-status` → `.enabled` (server has a store). */
+    /**
+     * `GET /v1/me/replay-archive-status` → `.enabled && .browserUploadReady`
+     * (the server has a store and the bucket accepts browser uploads).
+     */
     capabilityEnabled: boolean;
   };
   /** Toon handles the visitor confirmed as themselves ("which player is you?"). */
