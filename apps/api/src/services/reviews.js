@@ -22,6 +22,10 @@ const { publicVerification } = require("./reviewerReputation");
 
 const ID_RE = /^[A-Za-z0-9_-]{16}$/;
 const ACTIVE_STATUSES = Object.freeze(["open", "answered"]);
+// review_blocks.origin: made as the anonymous asker of a request (filters
+// the blocker's view only) or anywhere else (also enforced as refusals).
+const ANONYMOUS_BLOCK = "anonymous_request";
+const NAMED_BLOCK = "named";
 const HOT_EPOCH_SEC = Date.UTC(2026, 0, 1) / 1000;
 // Reddit-style: every 12.5 h of recency is worth one order of magnitude
 // of engagement, so the score never needs a decay sweep.
@@ -108,6 +112,7 @@ class ReviewsService {
       {
         projection: {
           _id: 0, gameId: 1, date: 1, result: 1, map: 1, myRace: 1, myMmr: 1, myBuild: 1,
+          customBuildSlug: 1, _customBuildSlug: 1, customOpponentStrategySlug: 1, _customOpponentStrategySlug: 1,
           durationSec: 1, macroScore: 1, matchFormat: 1, playerCount: 1, playbackArtifact: 1,
           "opponent.race": 1, "opponent.mmr": 1, "opponent.strategy": 1,
         },
@@ -335,7 +340,7 @@ class ReviewsService {
     if (!ACTIVE_STATUSES.includes(doc.status)) return { ...base, canComment: false, reason: "closed" };
     if (viewer.source && viewer.source !== "clerk") return { ...base, canComment: false, reason: "browser_session_required" };
     if (isAsker) return { ...base, canComment: true, canReview: false, reason: null };
-    if (doc.askerDisplay === "named" && await this._isBlocked(doc.userId, viewer.userId)) {
+    if (doc.askerDisplay === "named" && await this._isBlocked(doc.userId, viewer.userId, { enforcedOnly: true })) {
       return { ...base, canComment: false, reason: "blocked" };
     }
     const games = await this.reputation.syncedGameCount(viewer.userId);
@@ -424,7 +429,9 @@ class ReviewsService {
       .limit(40)
       .toArray();
     const blockedBy = new Set(
-      (await this.db.reviewBlocks.find({ blockedId: userId }, { projection: { _id: 0, blockerId: 1 } }).toArray())
+      (await this.db.reviewBlocks
+        .find({ blockedId: userId, origin: { $ne: ANONYMOUS_BLOCK } }, { projection: { _id: 0, blockerId: 1 } })
+        .toArray())
         .map((b) => b.blockerId),
     );
     const items = rows
@@ -588,7 +595,11 @@ class ReviewsService {
         oppStrategy: doc.oppStrategy,
       },
       macroBreakdown: reviewMacroBreakdown(macro),
-      buildOrder: reviewBuildOrder(build, { opponentLabel: doc.opponentLabel }),
+      buildOrder: reviewBuildOrder(build, {
+        opponentLabel: doc.opponentLabel,
+        myBuild: doc.myBuild || null,
+        oppStrategy: doc.oppStrategy || null,
+      }),
       playback: { mode: playbackMode },
     };
   }
@@ -655,15 +666,20 @@ class ReviewsService {
       }
       if (parent.status !== "visible") throw reviewError(409, "parent_unavailable", "That review is no longer available.");
     }
+    // Validate the comment itself before any block check, so a throwaway
+    // invalid body can't be used to probe who has blocked you for free.
+    const fields = this._commentFields(input, doc);
     if (!isAsker) {
       // A named asker's block refuses outright. An ANONYMOUS asker's block
       // must not reveal who they are, so the comment is accepted but the
       // asker never sees it or hears about it (serializeThread and
-      // _notifyNewComment filter it).
-      if (doc.askerDisplay === "named" && await this._isBlocked(doc.userId, userId)) {
+      // _notifyNewComment filter it). Blocks made AS an anonymous asker are
+      // never enforced as refusals anywhere (see blockAuthor).
+      if (doc.askerDisplay === "named" && await this._isBlocked(doc.userId, userId, { enforcedOnly: true })) {
         throw reviewError(403, "review_blocked", "The asker has blocked you from commenting on their requests.");
       }
-      if (parent && !parent.isAskerComment && parent.authorId && await this._isBlocked(parent.authorId, userId)) {
+      if (parent && !parent.isAskerComment && parent.authorId
+        && await this._isBlocked(parent.authorId, userId, { enforcedOnly: true })) {
         throw reviewError(403, "review_blocked", "That reviewer has blocked you, so you can't reply to them.");
       }
       const games = await this.reputation.syncedGameCount(userId);
@@ -682,7 +698,6 @@ class ReviewsService {
     }
     await this._enforceCommentRate(userId, 0);
     await this._enforceThreadCap(doc._id, 0);
-    const fields = this._commentFields(input, doc);
     const now = new Date(this.now());
     const comment = stampVersion(
       {
@@ -1267,16 +1282,29 @@ class ReviewsService {
     // (named in /me/review-blocks) to an anonymous request.
     if (comment.isAskerComment) throw reviewError(400, "asker_comment", "You can't block the asker from their own request.");
     if (comment.authorId === viewer.userId) throw reviewError(400, "own_comment", "You can't block yourself.");
+    // A block made AS the anonymous asker of this request only filters the
+    // asker's own view and notifications. Enforcing it as a refusal on the
+    // asker's named surfaces (their reviews, named requests, for-me) would
+    // let the blocked person work out who the anonymous asker is.
+    const origin = doc.userId === viewer.userId && doc.askerDisplay !== "named" ? ANONYMOUS_BLOCK : NAMED_BLOCK;
     const id = newId();
     try {
       await this.db.reviewBlocks.insertOne(
         stampVersion(
-          { _id: id, blockerId: viewer.userId, blockedId: comment.authorId, createdAt: new Date(this.now()) },
+          { _id: id, blockerId: viewer.userId, blockedId: comment.authorId, origin, createdAt: new Date(this.now()) },
           COLLECTIONS.REVIEW_BLOCKS,
         ),
       );
     } catch (err) {
       if (!isDuplicateKey(err)) throw err;
+      // Blocking the same person again from a named context upgrades an
+      // anonymous-origin block to an enforced one; never the reverse.
+      if (origin === NAMED_BLOCK) {
+        await this.db.reviewBlocks.updateOne(
+          { blockerId: viewer.userId, blockedId: comment.authorId },
+          { $set: { origin: NAMED_BLOCK } },
+        );
+      }
     }
     return { blocked: true };
   }
@@ -1308,10 +1336,17 @@ class ReviewsService {
   /**
    * @param {string} blockerId
    * @param {string} blockedId
+   * @param {{enforcedOnly?: boolean}} [opts] ``enforcedOnly`` ignores blocks
+   *   made as an anonymous asker — use it for anything the BLOCKED person
+   *   can observe (refusals, listings). Filtering the blocker's own view
+   *   and notifications uses every block.
    */
-  async _isBlocked(blockerId, blockedId) {
+  async _isBlocked(blockerId, blockedId, opts = {}) {
     if (!blockerId || !blockedId || blockerId === blockedId) return false;
-    return Boolean(await this.db.reviewBlocks.findOne({ blockerId, blockedId }, { projection: { _id: 1 } }));
+    /** @type {Record<string, any>} */
+    const filter = { blockerId, blockedId };
+    if (opts.enforcedOnly) filter.origin = { $ne: ANONYMOUS_BLOCK };
+    return Boolean(await this.db.reviewBlocks.findOne(filter, { projection: { _id: 1 } }));
   }
 
   /** @param {string} userId */

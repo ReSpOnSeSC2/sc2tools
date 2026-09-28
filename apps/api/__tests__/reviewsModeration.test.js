@@ -221,6 +221,22 @@ describe("reviews: report → moderation queue → auto-hide, and blocks", () =>
     expect((await pageAs("asker")).body.comments.some((x) => x.id === hidden.body.id)).toBe(false);
     expect(await h.db.notifications.countDocuments({ userId: h.userId("asker") })).toBe(before);
     expect((await request(h.app).get("/v1/me/notifications/unread-count").set("authorization", h.bearer("asker"))).body.count).toBe(unread);
+
+    // That block was made AS the anonymous asker, so it is never enforced
+    // on the asker's NAMED surfaces either (a refusal there would name them).
+    const namedId = (await h.db.reviewRequests.findOne({ userId: h.userId("asker"), askerDisplay: "named" }))._id;
+    const namedView = await request(h.app).get(`/v1/reviews/${namedId}`).set("authorization", h.bearer("sleuth"));
+    expect(namedView.body.viewer).toMatchObject({ canComment: true });
+    const onNamed = await request(h.app).post(`/v1/reviews/${namedId}/comments`).set("authorization", h.bearer("sleuth"))
+      .send({ body: "Commenting on the asker's named request.", gameTimeSec: 25 });
+    expect(onNamed.status).toBe(201);
+    // …while the asker still never sees sleuth's comments anywhere.
+    const askerNamedView = (await request(h.app).get(`/v1/reviews/${namedId}`).set("authorization", h.bearer("asker"))).body.comments;
+    expect(askerNamedView.some((x) => x.id === onNamed.body.id)).toBe(false);
+    // An invalid body is rejected before any block check (no free probe).
+    const probe = await request(h.app).post(`/v1/reviews/${namedId}/comments`).set("authorization", h.bearer("good"))
+      .send({ body: "x", gameTimeSec: 1 });
+    expect(probe.status).toBe(400);
   });
 
   test("GDPR export never carries the moderator's id", async () => {

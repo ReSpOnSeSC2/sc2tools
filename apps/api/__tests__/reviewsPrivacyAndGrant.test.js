@@ -147,6 +147,41 @@ describe("reviews: opponent redaction and the scoped grant", () => {
     expect(doc.status).toBe("closed");
   });
 
+  test("a build name from the asker's private custom library is never published", async () => {
+    await h.seedUser("customasker", { displayName: "CustomAsker" });
+    const customGame = await h.seedGame("customasker", { gameId: "custom-labelled-game", myBuild: "JaysSecretBlinkSpecial" });
+    await h.db.games.updateOne(
+      { userId: h.userId("customasker"), gameId: customGame },
+      { $set: {
+        _customBuildSlug: "jays-secret-blink-special",
+        "opponent.strategy": "JaysRoachCounterNotes",
+        _customOpponentStrategySlug: "jays-roach-counter-notes",
+      } },
+    );
+    const created = await request(h.app).post("/v1/reviews").set("authorization", h.bearer("customasker"))
+      .send({ gameId: customGame, question: QUESTION });
+    expect(created.status).toBe(201);
+    const id = created.body.id;
+    const surfaces = await Promise.all([
+      request(h.app).get(`/v1/reviews/${id}`),
+      request(h.app).get(`/v1/reviews/${id}/analysis`),
+      request(h.app).get(`/v1/reviews/${id}/og`),
+      request(h.app).get("/v1/reviews?sort=new"),
+      request(h.app).get("/v1/reviews/for-me").set("authorization", h.bearer("reviewer")),
+    ]);
+    for (const res of surfaces) {
+      const json = JSON.stringify(res.body);
+      expect(json).not.toContain("JaysSecretBlinkSpecial");
+      expect(json).not.toContain("JaysRoachCounterNotes");
+      expect(json).not.toContain("jays-secret");
+    }
+    const page = surfaces[0].body;
+    expect(page.request.game.myBuild).toBeNull();
+    expect(page.request.game.oppStrategy).toBeNull();
+    // A shared agent/community label is still shown for other games.
+    expect((await request(h.app).get(`/v1/reviews/${reviewId}`)).body.request.game.myBuild).toBe("PvZ - Blink All-in");
+  });
+
   test("segment scan fails closed on identity keys; manifests are allow-listed", () => {
     const clean = Buffer.from(JSON.stringify({ schema: "sc2tools-playback-segment-v1", playback: { units: [{ owner: "me", name: "Probe" }] } }));
     const dirty = Buffer.from(JSON.stringify({ schema: "sc2tools-playback-segment-v1", playback: { units: [{ owner: "opp", playerName: SECRET.name }] } }));

@@ -376,7 +376,9 @@ verified, leaderboardOptIn, digestOptOut, digestWeek`; index
 
 ### `review_blocks`
 
-`{_id, blockerId, blockedId, createdAt}` — unique `{blockerId, blockedId}`,
+`{_id, blockerId, blockedId, origin: "named"|"anonymous_request", createdAt}` —
+`anonymous_request` blocks (made as an anonymous asker) only filter the
+blocker's view and are never enforced as refusals. Unique `{blockerId, blockedId}`,
 plus `{blockedId}`.
 
 ### `notifications`

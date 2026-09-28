@@ -126,10 +126,28 @@ function buildGameSnapshot(game) {
     opponentBand: opponentBand ? { id: opponentBand.id, label: opponentBand.label } : null,
     opponentMmr: oppMmr,
     opponentLabel: opponentLabel({ race: oppRace, mmr: opponent.mmr }),
-    myBuild: boundedString(game.myBuild, 120),
-    oppStrategy: boundedString(opponent.strategy, 120),
+    // A label from the user's OWN custom build library is their private,
+    // user-authored name — and a distinctive one can be matched to their
+    // public profile or published builds, unmasking an anonymous asker.
+    // Only the shared agent/community classification is ever published.
+    myBuild: hasCustomLabel(game, "you") ? null : boundedString(game.myBuild, 120),
+    oppStrategy: hasCustomLabel(game, "opponent") ? null : boundedString(opponent.strategy, 120),
     macroScore: boundedNumber(game.macroScore, 0, 100, false),
   };
+}
+
+/**
+ * Whether the game's build (or opponent strategy) label was written by
+ * the user's custom build classifier (see customBuilds.js provenance).
+ *
+ * @param {Record<string, any>} game
+ * @param {"you" | "opponent"} perspective
+ */
+function hasCustomLabel(game, perspective) {
+  if (!game || typeof game !== "object") return false;
+  return perspective === "opponent"
+    ? Boolean(game.customOpponentStrategySlug || game._customOpponentStrategySlug)
+    : Boolean(game.customBuildSlug || game._customBuildSlug);
 }
 
 /** @param {unknown} raw */
@@ -153,17 +171,21 @@ function reviewMacroBreakdown(raw) {
  * ``complete_time`` (the replay roster needs it for upgrade completion)
  * and never returns ``game_id`` or the opponent's name.
  *
+ * The build labels come from the request's redacted snapshot, never the
+ * live row: a later reclassification against the user's private custom
+ * builds must not start publishing those names.
+ *
  * @param {unknown} raw
- * @param {{opponentLabel: string}} opts
+ * @param {{opponentLabel: string, myBuild: string | null, oppStrategy: string | null}} opts
  */
 function reviewBuildOrder(raw, opts) {
   const source = objectOrEmpty(raw);
   if (source.ok !== true) return null;
   return {
     ok: true,
-    my_build: boundedString(source.my_build, 200),
+    my_build: opts.myBuild,
     my_race: normalizeRace(source.my_race),
-    opp_strategy: boundedString(source.opp_strategy, 200),
+    opp_strategy: opts.oppStrategy,
     opponent: opts.opponentLabel,
     opp_race: normalizeRace(source.opp_race),
     map: boundedString(source.map, 200),
