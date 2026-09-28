@@ -85,6 +85,7 @@ export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Pr
   const [level, setLevel] = useState<DesiredLevel>("anyone");
   const [visibility, setVisibility] = useState<"public" | "link">("public");
   const [named, setNamed] = useState(false);
+  const [shareReplay, setShareReplay] = useState(false);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +110,7 @@ export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Pr
           desiredLevel: level,
           visibility,
           askerDisplay: named ? "named" : "anonymous",
+          shareReplay,
         }),
       });
       gaEvent("review_requested", { matchup: matchup ?? "unknown", visibility, level });
@@ -211,10 +213,24 @@ export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Pr
           </span>
         </label>
 
+        <label className="flex items-start gap-2 text-caption text-text">
+          <input type="checkbox" checked={shareReplay} onChange={(e) => setShareReplay(e.target.checked)} className="mt-0.5 h-4 w-4" />
+          <span>
+            Let reviewers download the replay file.{" "}
+            <span className="text-text-dim">Signed-in players can then open it in StarCraft II. You can stop sharing at any time.</span>
+          </span>
+        </label>
+        {shareReplay ? (
+          <p role="note" className="rounded-lg border border-warning/50 bg-warning/10 p-2 text-caption text-text">
+            The .SC2Replay file contains both players&apos; in-game names, including yours and your opponent&apos;s, even if you post anonymously.
+            If the desktop agent hasn&apos;t backed up this replay yet, the download appears once it has.
+          </p>
+        ) : null}
+
         {error ? (
           <p role="alert" className="rounded-lg border border-danger/50 bg-danger/10 p-2 text-caption text-danger">
             {error}{" "}
-            {existing ? <Link href="/reviews" className="underline">See your requests</Link> : null}
+            {existing ? <Link href="/reviews/mine" className="underline">See your requests</Link> : null}
           </p>
         ) : null}
       </form>

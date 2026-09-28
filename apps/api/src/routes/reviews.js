@@ -32,6 +32,8 @@ const SHA256_RE = /^[a-f0-9]{64}$/;
  *   POST   /reviews                                — create from your own gameId
  *   GET    /reviews/for-me                         — "Requests you can help with"
  *   POST   /reviews/:id/close | /report
+ *   POST   /reviews/:id/replay-sharing             — asker: {value} share the replay file
+ *   GET    /reviews/:id/replay                     — signed download link (when shared)
  *   POST   /reviews/:id/comments
  *   PATCH  /reviews/:id/comments/:cid              — 15-minute edit window
  *   DELETE /reviews/:id/comments/:cid              — "[deleted]" when it has replies
@@ -252,6 +254,16 @@ function buildReviewsRouter(deps) {
     const parsed = validateReviewInput("create", req.body);
     if (!parsed.valid) return invalid(res, parsed.errors);
     res.status(201).json(await deps.reviews.create(signedViewer(req).userId, parsed.value));
+  }));
+
+  // Replay file: opt-in by the asker; signed-in website users only.
+  router.post("/reviews/:id/replay-sharing", validId, ...signedIn, handle(async (req, res) => {
+    res.json(await deps.reviews.setReplaySharing(String(req.params.id), signedViewer(req), flag(req.body)));
+  }));
+
+  router.get("/reviews/:id/replay", heavyLimiter, validId, ...signedIn, handle(async (req, res) => {
+    privateNoStore(res);
+    res.json(await deps.reviews.replayDownload(String(req.params.id)));
   }));
 
   router.post("/reviews/:id/close", validId, ...signedIn, handle(async (req, res) => {

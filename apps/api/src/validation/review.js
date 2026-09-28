@@ -49,6 +49,8 @@ const CREATE_SCHEMA = {
     desiredLevel: { type: "string", enum: [...DESIRED_LEVELS] },
     visibility: { type: "string", enum: [...VISIBILITIES] },
     askerDisplay: { type: "string", enum: [...ASKER_DISPLAY] },
+    // Opt-in: let signed-in reviewers download the .SC2Replay file.
+    shareReplay: { type: "boolean" },
   },
 };
 

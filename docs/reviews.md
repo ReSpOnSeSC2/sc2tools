@@ -67,8 +67,19 @@ own synced games, and helpful reviewers earn karma.
   A distinctive one could be matched to their public profile or published
   builds, so requests only ever show the shared agent/community label, or
   nothing.
-- **No replay file.** The original `.SC2Replay` contains every player's
-  identity, so review pages never offer it.
+- **The replay file is opt-in.** The original `.SC2Replay` contains every
+  player's in-game name, the opponent's included, so it is never offered by
+  default.
+  - The asker can tick "Let reviewers download the replay file" when
+    posting, and switch it on or off later on the request page. The form
+    and the switch both warn that the file names both players, including
+    the asker, even when posting anonymously.
+  - Only signed-in website users can download it, only while the request is
+    open and not hidden. Each click gets a fresh short-lived signed link
+    (`GET /v1/reviews/:id/replay`), so turning sharing off takes effect
+    immediately.
+  - The file is served as `sc2tools-review-<id>.SC2Replay`. The normal
+    download name includes the opponent's name.
 - **No chat.** Chat is not extracted from replays, so there is nothing to
   redact. Keep it that way.
 - **Allow-lists everywhere.** Every public payload is rebuilt from an
@@ -351,6 +362,9 @@ own synced games, and helpful reviewers earn karma.
   - `POST /v1/reviews`
   - `GET /v1/reviews/for-me`
   - `POST /v1/reviews/:id/close`, `POST /v1/reviews/:id/report`
+  - `POST /v1/reviews/:id/replay-sharing` (asker: `{value}`; a moderator
+    can only turn it off), `GET /v1/reviews/:id/replay` (signed download
+    link when shared)
   - `POST /v1/reviews/:id/comments`
   - `PATCH /v1/reviews/:id/comments/:cid`,
     `DELETE /v1/reviews/:id/comments/:cid`

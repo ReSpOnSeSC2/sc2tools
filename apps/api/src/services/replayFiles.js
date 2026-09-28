@@ -346,8 +346,12 @@ class ReplayFilesService {
     return marker;
   }
 
-  /** @param {string} userId @param {string} gameId */
-  async prepareDownload(userId, gameId) {
+  /**
+   * @param {string} userId
+   * @param {string} gameId
+   * @param {{filename?: string}} [opts]
+   */
+  async prepareDownload(userId, gameId, opts = {}) {
     const game = await this._ownedGame(userId, gameId);
     if (!game) throw httpError(404, "game_not_found");
     if (!game.replayFile || !game.replayFile.storedAt) {
@@ -361,7 +365,9 @@ class ReplayFilesService {
       await this._clearMarker(userId, gameId, game.replayFile.storedAt);
       throw httpError(404, "replay_unavailable");
     }
-    const filename = replayDownloadFilename(game);
+    // Callers that must not reveal the opponent (review downloads) pass a
+    // neutral name; the default names the opponent and map.
+    const filename = opts.filename || replayDownloadFilename(game);
     const command = new GetObjectCommand({
       Bucket: this.bucket,
       Key: key,

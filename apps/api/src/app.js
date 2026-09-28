@@ -658,6 +658,7 @@ function makeServices(deps) {
     reputation: reviewerReputation,
     notifications,
     community,
+    replayFiles,
     logger: deps.logger,
   });
   gdpr.reviews = reviews;

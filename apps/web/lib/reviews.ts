@@ -117,6 +117,8 @@ export type ReviewCard = {
   visibility?: "public" | "link";
   /** Only on the asker's own list: hidden pending moderator review. */
   hidden?: boolean;
+  /** The asker lets signed-in players download the replay file. */
+  replayShared?: boolean;
 };
 
 export type ReviewBoardResponse = { items: ReviewCard[]; nextCursor: string | null };
@@ -167,6 +169,8 @@ export type ReviewRequestView = {
   opponent: { label: string; race: Race | null; band: Band | null; mmr: number | null };
   stats: { reviewCount: number; commentCount: number; helpfulCount: number; upvoteTotal: number };
   bestCommentId: string | null;
+  /** Replay file download: opted in by the asker, and backed up yet. */
+  replay?: { shared: boolean; available: boolean };
   createdAt: string | null;
   lastActivityAt: string | null;
 };

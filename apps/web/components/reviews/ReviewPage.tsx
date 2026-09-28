@@ -23,6 +23,7 @@ import {
   type ReviewPageData,
 } from "@/lib/reviews";
 import { ReviewComposer, type DraftPin } from "./ReviewComposer";
+import { ReviewReplayDownload } from "./ReviewReplayDownload";
 import { ReviewReplayPanel } from "./ReviewReplayPanel";
 import { ReviewShareMenu } from "./ReviewShareMenu";
 import { ReviewThread } from "./ReviewThread";
@@ -222,7 +223,22 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
 function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: () => Promise<unknown> }) {
   const { getToken } = useAuth();
   const [closing, setClosing] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
   const r = data.request;
+  const active = r.status === "open" || r.status === "answered";
+  async function setReplaySharing(value: boolean) {
+    setSharing(true);
+    setShareError(null);
+    try {
+      await apiCall(getToken, `/v1/reviews/${encodeURIComponent(r.id)}/replay-sharing`, { method: "POST", body: JSON.stringify({ value }) });
+      await onChanged();
+    } catch (err) {
+      setShareError((err as { message?: string })?.message || "Couldn't change replay sharing.");
+    } finally {
+      setSharing(false);
+    }
+  }
   const headline = reviewHeadline(r.question, r.game.matchup);
   async function close() {
     if (!window.confirm("Close this request? New comments stop and the replay analysis is no longer shared. The thread stays readable.")) return;
@@ -265,11 +281,30 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
           {r.game.myBuild ? <Badge variant="neutral" size="sm">{r.game.myBuild}</Badge> : null}
         </div>
         <div className="flex flex-wrap items-center gap-2 pt-1">
+          {r.replay?.shared ? (
+            <ReviewReplayDownload requestId={r.id} requestUrl={r.url} variant="page" available={r.replay.available} />
+          ) : null}
           <ReviewShareMenu path={r.url} question={r.question} matchup={r.game.matchup} />
-          {r.asker.isYou && (r.status === "open" || r.status === "answered") ? (
+          {r.asker.isYou && active ? (
             <Button variant="ghost" size="sm" loading={closing} onClick={() => void close()}>Close request</Button>
           ) : null}
         </div>
+        {r.asker.isYou && active ? (
+          <label className="flex items-start gap-2 text-caption text-text-muted">
+            <input
+              type="checkbox"
+              checked={r.replay?.shared === true}
+              disabled={sharing}
+              onChange={(e) => void setReplaySharing(e.target.checked)}
+              className="mt-0.5 h-4 w-4"
+            />
+            <span>
+              Let reviewers download my replay file.{" "}
+              <span className="text-text-dim">It contains both players&apos; in-game names, including yours, even when you post anonymously.</span>
+              {shareError ? <span role="alert" className="block text-danger">{shareError}</span> : null}
+            </span>
+          </label>
+        ) : null}
         {r.status === "closed" && r.closedReason === "game_unavailable" ? (
           <p className="text-caption text-text-muted">The asker removed this game, so its replay is no longer shared.</p>
         ) : null}

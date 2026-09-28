@@ -30,6 +30,8 @@ test("review board renders signed out without horizontal scroll", async ({ page 
   await expect(card).toBeVisible();
   await expect(card).toContainText("Why did my blink all-in fail");
   await expect(card).toContainText("3 reviews");
+  // The asker shared the replay file: signed-out visitors are sent to sign in.
+  await expect(page.getByRole("link", { name: "Sign in to download the replay" }).first()).toBeVisible();
   await expectNoHorizontalScroll(page, "/reviews");
 });
 
@@ -48,6 +50,7 @@ test("review page shows the replay and readable comments signed out", async ({ p
   await expect(comments.first()).toBeVisible();
   await expect(comments.first()).toContainText("blink timing");
   await expect(page.getByText("Best review").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in to download the replay" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
 
   // The consent banner (fixed to the bottom on phones) would sit over
