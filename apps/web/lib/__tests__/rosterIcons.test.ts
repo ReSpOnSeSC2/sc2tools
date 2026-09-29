@@ -67,6 +67,15 @@ describe("canonicalSpriteName", () => {
     expect(canonicalSpriteName("NotAThing")).toBeNull();
   });
 
+  it("folds catalog spellings that have no sheet of their own onto the baked model", () => {
+    // Without these the roster fell through to a two-letter text badge.
+    expect(canonicalSpriteName("OracleStasisTrap")).toBe("StasisWard");
+    expect(canonicalSpriteName("CreepTumorQueen")).toBe("CreepTumor");
+    expect(canonicalSpriteName("LocustMPFlying")).toBe("LocustFlying");
+    expect(canonicalSpriteName("Broodlord")).toBe("BroodLord");
+    expect(canonicalSpriteName("TemplarArchives")).toBe("TemplarArchive");
+  });
+
   it("keeps the Adept phase-shift on the Adept model, per the alias table", () => {
     // The map already folds it (a shade IS an Adept), so the rails must
     // not invent a different answer — same table, same result.
@@ -126,5 +135,16 @@ describe("the flat-icon fallback is real", () => {
     expect(getIconPath("StimPack", "upgrade")).toBeTruthy();
     expect(getIconPath("CombatShield", "upgrade")).toBeTruthy();
     expect(getIconPath("TerranInfantryWeaponsLevel1", "upgrade")).toBeTruthy();
+  });
+});
+
+describe("the flat icon registry", () => {
+  it("covers the Sensor Tower, which has no 3D render", () => {
+    // No sheet was baked for it, so the flat icon is the only art.
+    expect(canonicalSpriteName("SensorTower")).toBeNull();
+    expect(getIconPath("SensorTower", "building")).toBe("/icons/sc2/buildings/sensortower.png");
+    expect(
+      fs.existsSync(path.join(process.cwd(), "public", "icons", "sc2", "buildings", "sensortower.png")),
+    ).toBe(true);
   });
 });

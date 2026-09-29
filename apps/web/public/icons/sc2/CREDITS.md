@@ -24,3 +24,7 @@ from the [BurnySc2/sc2-planner](https://github.com/BurnySc2/sc2-planner)
 project, which is MIT-licensed (Copyright (c) 2020 BurnySc2).
 
 License text preserved at `LICENSE-burnysc2.txt` in this folder.
+
+`buildings/sensortower.png` is that project's
+`btn-building-terran-sensordome.png` (SC2's internal name for the
+Sensor Tower), renamed to match the registry's naming convention.

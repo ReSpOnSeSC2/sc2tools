@@ -24,8 +24,8 @@ const BUILDINGS = [
   "hive", "hydraliskden", "infestationpit", "lair", "lurkerden",
   "missileturret", "nexus", "nydusnetwork", "orbitalcommand",
   "photoncannon", "planetaryfortress", "pylon", "reactor", "refinery",
-  "roachwarren", "roboticsbay", "roboticsfacility", "shieldbattery",
-  "spawningpool", "spinecrawler", "spire", "sporecrawler", "stargate",
+  "roachwarren", "roboticsbay", "roboticsfacility", "sensortower",
+  "shieldbattery", "spawningpool", "spinecrawler", "spire", "sporecrawler", "stargate",
   "starport", "supplydepot", "techlab", "templararchive",
   "twilightcouncil", "ultraliskcavern", "warpgate",
 ] as const;
@@ -549,6 +549,7 @@ const KEYWORDS: ReadonlyArray<{ kw: string; rel: string }> = [
   { kw: "ghostacademy", rel: "buildings/ghostacademy.png" },
   { kw: "missileturret", rel: "buildings/missileturret.png" },
   { kw: "turret", rel: "buildings/missileturret.png" },
+  { kw: "sensortower", rel: "buildings/sensortower.png" },
   { kw: "bunker", rel: "buildings/bunker.png" },
   { kw: "refinery", rel: "buildings/refinery.png" },
   { kw: "supplydepot", rel: "buildings/supplydepot.png" },
