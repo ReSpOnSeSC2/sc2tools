@@ -10,8 +10,8 @@ import { Toggle } from "@/components/ui/Toggle";
 import { useApi } from "@/lib/clientApi";
 import {
   ActiveArmyChart,
+  TIMELINE_CONTROL_ATTR,
   type ActiveArmySupplyBlockWindow,
-  type HoverEvent,
 } from "./ActiveArmyChart";
 import {
   CompositionSnapshot,
@@ -25,6 +25,12 @@ import type {
 } from "./MacroBreakdownPanel.types";
 import { buildSeries } from "./activeArmyLayout";
 import { timelineMetricsFor } from "./timelineMetrics";
+import {
+  INITIAL_HOVER,
+  nextHover,
+  type HoverEvent,
+  type HoverState,
+} from "./timelineSelection";
 import { gamePace, withApm, type GameApm } from "@/lib/apm";
 
 export interface MacroChartSectionProps {
@@ -60,18 +66,6 @@ export interface MacroChartSectionProps {
   apm?: GameApm | null;
 }
 
-/** Hover state with sticky semantics. ``sticky=true`` means the value
- *  was selected by a click or tap and persists until another selection.
- *  ``sticky=false`` is the latest mouse position: it remains
- *  visible after pointer-leave, then resumes following the cursor as
- *  soon as the mouse re-enters the plot. */
-interface HoverState {
-  time: number | null;
-  sticky: boolean;
-}
-
-const INITIAL_HOVER: HoverState = { time: null, sticky: false };
-
 /**
  * Match timeline chart + the live unit/building composition panel
  * beneath it. The two share a hovered-time state so scrubbing the
@@ -87,12 +81,15 @@ const INITIAL_HOVER: HoverState = { time: null, sticky: false };
  * exact-time lookup with a food*8 fallback, which silently diverged
  * from the roster whenever sample/timeline times didn't align.
  *
- * Hover behaviour:
+ * Hover behaviour (``timelineSelection``):
  *   - Mouse: continuous hover; pointer-leave keeps the last inspected
  *     time, tooltip, composition, and vertical crosshair visible.
  *   - Click / tap: locks the crosshair until another chart click or tap.
- *     Scrolling, outside interactions, and hovering preserve the lock.
- *     A sideways touch drag scrubs the lock along the chart.
+ *     Scrolling and hovering preserve the lock. A sideways touch drag
+ *     scrubs the lock along the chart.
+ *   - Click / tap off the chart: closes the tooltip and releases the
+ *     lock; the inspected time (crosshair, read-out, roster) stays.
+ *     Scrolling never closes it.
  *     Opening a different game resets the selection.
  */
 export function MacroChartSection({
@@ -161,25 +158,10 @@ export function MacroChartSection({
     [apm],
   );
 
-  const handleHover = useCallback((event: HoverEvent) => {
-    setHover((prev) => {
-      if (event.type === "tap") {
-        // A deliberate click or tap replaces the lock. Scrolling and
-        // moving the pointer must not change the selected time.
-        return { time: event.time, sticky: true };
-      }
-      if (event.type === "hover") {
-        // Hover previews are available until a click or tap locks a time.
-        if (prev.sticky) return prev;
-        return { time: event.time, sticky: false };
-      }
-      // event.type === "leave". Preserve the last mouse position so the
-      // tooltip, composition snapshot, and vertical crosshair stay locked
-      // together after the pointer exits. Because sticky remains false, the
-      // very next mouse move inside the chart updates the selection normally.
-      return prev;
-    });
-  }, []);
+  const handleHover = useCallback(
+    (event: HoverEvent) => setHover((prev) => nextHover(prev, event)),
+    [],
+  );
 
   return (
     // This wrapper is the sticky chart's containing block: on phones the
@@ -196,7 +178,10 @@ export function MacroChartSection({
           </p>
         </div>
         {hasBlocks ? (
-          <label className="flex flex-shrink-0 items-center gap-2 text-micro font-semibold text-text-muted">
+          <label
+            {...{ [TIMELINE_CONTROL_ATTR]: "" }}
+            className="flex flex-shrink-0 items-center gap-2 text-micro font-semibold text-text-muted"
+          >
             <span className="whitespace-nowrap">Supply blocks</span>
             <Toggle
               checked={showBlocks}
@@ -216,6 +201,7 @@ export function MacroChartSection({
         highlightedKey={highlightedKey}
         hoveredTime={hover.time}
         locked={hover.sticky}
+        tooltipOpen={hover.card}
         onHover={handleHover}
         myName={myName}
         oppName={oppName}

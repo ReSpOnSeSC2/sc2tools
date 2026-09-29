@@ -216,12 +216,21 @@ describe("GamesSection builds and chart", () => {
 
 describe("OfflineMacroChart selection rule", () => {
   it("previews on hover until a click or tap locks a time", () => {
-    const idle = { time: null, sticky: false };
-    expect(nextHover(idle, { type: "hover", time: 90 })).toEqual({ time: 90, sticky: false });
+    const idle = { time: null, sticky: false, card: false };
+    expect(nextHover(idle, { type: "hover", time: 90 })).toEqual({ time: 90, sticky: false, card: true });
     const locked = nextHover(idle, { type: "tap", time: 30 });
-    expect(locked).toEqual({ time: 30, sticky: true });
+    expect(locked).toEqual({ time: 30, sticky: true, card: true });
     expect(nextHover(locked, { type: "hover", time: 90 })).toBe(locked);
     expect(nextHover(locked, { type: "leave" })).toBe(locked);
-    expect(nextHover(locked, { type: "tap", time: 60 })).toEqual({ time: 60, sticky: true });
+    expect(nextHover(locked, { type: "tap", time: 60 })).toEqual({ time: 60, sticky: true, card: true });
+  });
+
+  it("closes the card and releases the lock on a tap off the chart, keeping the time", () => {
+    const locked = { time: 30, sticky: true, card: true };
+    const dismissed = nextHover(locked, { type: "dismiss" });
+    expect(dismissed).toEqual({ time: 30, sticky: false, card: false });
+    expect(nextHover(dismissed, { type: "dismiss" })).toBe(dismissed);
+    // Hover previews resume, and bring the card back.
+    expect(nextHover(dismissed, { type: "hover", time: 90 })).toEqual({ time: 90, sticky: false, card: true });
   });
 });

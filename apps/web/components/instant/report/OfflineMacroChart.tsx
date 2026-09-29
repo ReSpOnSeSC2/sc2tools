@@ -12,8 +12,8 @@
  * GET /v1/games/:id/build-order. With no game id it fetches nothing and
  * its roster then says "Buildings unavailable" and "No upgrades yet" —
  * the second is false for any game with an upgrade. This thin host keeps
- * its selection behaviour (hover previews, click/tap locks, supply-block
- * switch) and hands the roster the build order parsed on this device,
+ * its selection behaviour (hover previews, click/tap locks, tap-off
+ * dismissal, supply-block switch) and hands the roster the build order parsed on this device,
  * so every row is real and the page still makes no API request.
  *
  * Example:
@@ -21,34 +21,22 @@
  *   {props ? <OfflineMacroChart {...props} /> : null}
  */
 import { useCallback, useMemo, useState } from "react";
-import { ActiveArmyChart, type HoverEvent } from "@/components/analyzer/macro/ActiveArmyChart";
+import { ActiveArmyChart, TIMELINE_CONTROL_ATTR } from "@/components/analyzer/macro/ActiveArmyChart";
 import { CompositionSnapshot } from "@/components/analyzer/macro/CompositionSnapshot";
 import { buildSeries } from "@/components/analyzer/macro/activeArmyLayout";
 import { timelineMetricsFor } from "@/components/analyzer/macro/timelineMetrics";
+import { INITIAL_HOVER, nextHover, type HoverEvent, type HoverState } from "@/components/analyzer/macro/timelineSelection";
 import { Toggle } from "@/components/ui/Toggle";
 import { gamePace, withApm } from "@/lib/apm";
 import type { OfflineMacroChartProps } from "@/lib/instant/reportGameDetail";
 
-/** Inspected time; `sticky` once a click or tap locked it. */
-export interface HoverState {
-  time: number | null;
-  sticky: boolean;
-}
-
-const INITIAL_HOVER: HoverState = { time: null, sticky: false };
-
 /**
- * `MacroChartSection`'s selection rule: a click/tap locks a time, hover
- * previews until something is locked, leaving keeps the last time.
- *
- * Example:
- *   nextHover({ time: 30, sticky: true }, { type: "hover", time: 90 }); // -> { time: 30, sticky: true }
+ * `MacroChartSection`'s selection rule (see `timelineSelection`): a
+ * click/tap locks a time, hover previews until something is locked,
+ * leaving keeps the last time, a tap off the chart closes the card.
  */
-export function nextHover(prev: HoverState, event: HoverEvent): HoverState {
-  if (event.type === "tap") return { time: event.time, sticky: true };
-  if (event.type === "hover") return prev.sticky ? prev : { time: event.time, sticky: false };
-  return prev;
-}
+export { nextHover };
+export type { HoverState };
 
 /** Both players' per-tick series with APM, built once for chart and roster. */
 function useSeries(props: OfflineMacroChartProps) {
@@ -74,7 +62,7 @@ function TimelineHeader({ hasBlocks, showBlocks, onShowBlocks }: { hasBlocks: bo
         <p className="text-micro text-text-muted">Hover, tap or drag across the chart to inspect a moment</p>
       </div>
       {hasBlocks ? (
-        <label className="flex flex-shrink-0 items-center gap-2 text-micro font-semibold text-text-muted">
+        <label {...{ [TIMELINE_CONTROL_ATTR]: "" }} className="flex flex-shrink-0 items-center gap-2 text-micro font-semibold text-text-muted">
           <span className="whitespace-nowrap">Supply blocks</span>
           <Toggle checked={showBlocks} onChange={onShowBlocks} label="Show supply blocks" />
         </label>
@@ -108,6 +96,7 @@ export function OfflineMacroChart(props: OfflineMacroChartProps) {
         oppSupplyBlockWindows={oppSupplyBlockWindows}
         hoveredTime={hover.time}
         locked={hover.sticky}
+        tooltipOpen={hover.card}
         onHover={handleHover}
         myName={myName}
         oppName={oppName}

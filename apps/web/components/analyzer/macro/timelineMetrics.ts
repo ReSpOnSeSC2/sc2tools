@@ -2,7 +2,9 @@
  * The metrics behind the Match timeline switch: army value, workers,
  * supply, income and, for games with a trusted APM curve, APM. Pure
  * data and number formatting; ``activeArmyLayout`` plots whichever
- * metric is selected and the chart parts render it.
+ * metrics are selected and the chart parts render them. Several can be
+ * on at once: each keeps its players' colours and gets its own line
+ * pattern (``dash``) so the lines stay apart.
  *
  * The first four read tracker ``PlayerStatsEvent`` fields the agent
  * already uploads, so they work on existing games. APM comes from the
@@ -37,6 +39,11 @@ export interface TimelineMetricDef {
   icon?: Record<RaceLetter, string>;
   /** Generic glyph for a metric with no race-specific in-game icon. */
   glyph?: LucideIcon;
+  /**
+   * SVG ``stroke-dasharray`` (round caps) that tells this metric's lines
+   * apart when several metrics share the plot; absent means solid.
+   */
+  dash?: string;
 }
 
 export const TIMELINE_METRICS: readonly TimelineMetricDef[] = [
@@ -57,6 +64,7 @@ export const TIMELINE_METRICS: readonly TimelineMetricDef[] = [
     read: (p) => p.workers,
     floor: 12,
     icon: { P: "Probe", T: "SCV", Z: "Drone" },
+    dash: "9 5.5",
   },
   {
     key: "supply",
@@ -72,6 +80,7 @@ export const TIMELINE_METRICS: readonly TimelineMetricDef[] = [
           ? `${Math.round(p.supply)}/${Math.round(p.supplyCap)}`
           : String(Math.round(p.supply)),
     icon: { P: "Pylon", T: "SupplyDepot", Z: "Overlord" },
+    dash: "0.1 5",
   },
   {
     key: "income",
@@ -81,6 +90,7 @@ export const TIMELINE_METRICS: readonly TimelineMetricDef[] = [
     read: (p) => (typeof p.income === "number" ? p.income : null),
     floor: 200,
     icon: { P: "Nexus", T: "CommandCenter", Z: "Hatchery" },
+    dash: "9 5.5 0.1 5.5",
   },
   {
     key: "apm",
@@ -90,6 +100,7 @@ export const TIMELINE_METRICS: readonly TimelineMetricDef[] = [
     read: (p) => (typeof p.apm === "number" ? p.apm : null),
     floor: 100,
     glyph: Keyboard,
+    dash: "3 5.5",
   },
 ];
 
@@ -105,6 +116,21 @@ export const DEFAULT_TIMELINE_METRIC: TimelineMetric = "army";
 
 export function timelineMetric(key: TimelineMetric): TimelineMetricDef {
   return TIMELINE_METRICS.find((m) => m.key === key) ?? TIMELINE_METRICS[0];
+}
+
+/**
+ * The chosen metrics this game can show, in switch order. Choosing
+ * nothing is allowed (the chart then says to pick one); a choice the
+ * game cannot show at all, like APM on an older upload, falls back to
+ * the default instead of drawing an empty chart.
+ */
+export function selectedMetrics(
+  chosen: readonly TimelineMetric[],
+  available: readonly TimelineMetricDef[],
+): TimelineMetricDef[] {
+  const shown = available.filter((m) => chosen.includes(m.key));
+  if (shown.length > 0 || chosen.length === 0) return shown;
+  return available.filter((m) => m.key === DEFAULT_TIMELINE_METRIC);
 }
 
 /** The metric's icon for a race ("Protoss", "P", …); null when unknown. */

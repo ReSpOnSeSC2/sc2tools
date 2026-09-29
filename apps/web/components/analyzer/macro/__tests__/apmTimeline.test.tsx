@@ -49,6 +49,14 @@ function readout() {
   return screen.getByText("Game time").closest("dl") as HTMLElement;
 }
 
+/** Plot ``label`` alone: "All" on, "All" off, then that metric. */
+function showOnly(label: string) {
+  const all = screen.getByRole("button", { name: "All" });
+  if (all.getAttribute("aria-pressed") !== "true") fireEvent.click(all);
+  fireEvent.click(all);
+  fireEvent.click(screen.getByRole("button", { name: label }));
+}
+
 /** The read-out's "Game average" cells, in column order (you, opponent). */
 function averageCells() {
   return Array.from(readout().querySelectorAll("dd.flex-wrap")).map((el) => el.textContent);
@@ -84,7 +92,7 @@ describe("Match timeline APM view", () => {
   it("plots both players' APM with the leader's margin", () => {
     render(<Section apm={APM} />);
     const button = screen.getByRole("button", { name: "APM" });
-    fireEvent.click(button);
+    showOnly("APM");
     expect(button.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("img", { name: /^Actions per minute/ })).toBeTruthy();
     // Game end: 210 for you, 250 for the opponent, who leads by 40.
@@ -99,22 +107,23 @@ describe("Match timeline APM view", () => {
     const real = readGameApm(realCurves.warpgate_adept_tracking.response as ApmCurveResponse);
     render(<Section apm={real} />);
     expect(screen.queryByText("Game average")).toBeNull(); // Army view
-    fireEvent.click(screen.getByRole("button", { name: "APM" }));
+    showOnly("APM");
     expect(screen.getByText("Game average")).toBeTruthy();
     expect(averageCells()).toEqual(["190 APM29 SPM", "282 APM54 SPM"]);
+    // Alongside other metrics the read-out is a per-metric table.
     fireEvent.click(screen.getByRole("button", { name: "Workers" }));
     expect(screen.queryByText("Game average")).toBeNull();
   });
 
   it("shows a dash for an average the game can't provide", () => {
     render(<Section apm={{ ...APM, opp: null, me: { ...APM.me, avgSpm: null } }} />);
-    fireEvent.click(screen.getByRole("button", { name: "APM" }));
+    showOnly("APM");
     expect(averageCells()).toEqual(["190 APM— SPM", "— APM— SPM"]);
   });
 
   it("falls back to Army when the next game has no APM", () => {
     const { rerender } = render(<Section apm={APM} />);
-    fireEvent.click(screen.getByRole("button", { name: "APM" }));
+    showOnly("APM");
     rerender(<Section apm={null} gameId="g2" />);
     expect(screen.queryByRole("button", { name: "APM" })).toBeNull();
     expect(screen.getByRole("button", { name: "Army" }).getAttribute("aria-pressed")).toBe("true");

@@ -9,19 +9,17 @@
  *
  * The look: light horizontal grid, compact "5.0k" value labels, one
  * solid line per player (you blue, opponent red) with the gap between
- * them shaded in the leader's colour, labelled "Supply Blocked" bands,
- * a dashed crosshair with point markers, and a dark tooltip. The layout
- * is drawn 1:1 in CSS pixels, so font sizes here are real pixel sizes.
+ * them shaded in the leader's colour, labelled "Supply Blocked" bands
+ * and a dashed crosshair with point markers. With several metrics on,
+ * each keeps the player colours and draws in its own line pattern on a
+ * 0%–"Peak" axis, unshaded. The dark read-out card lives in
+ * ``TimelineTooltip``. The layout is drawn 1:1 in CSS pixels, so font
+ * sizes here are real pixel sizes.
  */
 
 import { formatGameClock, leakKey } from "@/lib/macro";
 import type { LeakItem } from "./MacroBreakdownPanel.types";
 import type { ChartLayout, SeriesPoint } from "./activeArmyLayout";
-import {
-  describeMetric,
-  formatAxisValue,
-  metricLead,
-} from "./timelineMetrics";
 
 export const COLOR_AXIS = "rgb(var(--text-dim))";
 export const COLOR_GRID = "rgb(var(--border))";
@@ -65,11 +63,10 @@ export interface HoverState {
 export function Grid({ layout }: { layout: ChartLayout }) {
   return (
     <g aria-hidden>
-      {layout.yTicks.map((v) => {
-        const y = layout.yOf(v);
+      {layout.yTicks.map(({ y }) => {
         return (
           <line
-            key={`grid-${v}`}
+            key={`grid-${y}`}
             x1={layout.plotLeft}
             y1={y}
             x2={layout.plotRight}
@@ -87,19 +84,21 @@ export function Grid({ layout }: { layout: ChartLayout }) {
 export function YAxisLabels({ layout }: { layout: ChartLayout }) {
   return (
     <g aria-hidden style={{ fontVariantNumeric: "tabular-nums" }}>
-      {layout.yTicks.map((v) => (
-        <text
-          key={`y-${v}`}
-          x={layout.plotLeft - 6}
-          y={layout.yOf(v)}
-          dy="0.32em"
-          textAnchor="end"
-          fontSize={AXIS_FONT_PX}
-          fill={COLOR_AXIS}
-        >
-          {formatAxisValue(v)}
-        </text>
-      ))}
+      {layout.yTicks.map(({ y, label }) =>
+        label ? (
+          <text
+            key={`y-${y}`}
+            x={layout.plotLeft - 6}
+            y={y}
+            dy="0.32em"
+            textAnchor="end"
+            fontSize={AXIS_FONT_PX}
+            fill={COLOR_AXIS}
+          >
+            {label}
+          </text>
+        ) : null,
+      )}
     </g>
   );
 }
@@ -142,39 +141,41 @@ export function XAxis({ layout }: { layout: ChartLayout }) {
   );
 }
 
-/** One line per player; yours is drawn last so it stays on top. */
+/**
+ * One line per player per metric. Every opponent line is drawn first so
+ * yours stay on top; with several metrics on, each metric's pair shares
+ * its line pattern.
+ */
 export function SeriesLines({ layout }: { layout: ChartLayout }) {
+  const lines = [
+    ...layout.tracks.map((tr) => ({ key: `opp-${tr.metric.key}`, d: tr.oppPath, color: COLOR_OPP, tr })),
+    ...layout.tracks.map((tr) => ({ key: `my-${tr.metric.key}`, d: tr.myPath, color: COLOR_YOU, tr })),
+  ];
   return (
     <g>
-      {layout.oppPath ? (
-        <path
-          d={layout.oppPath}
-          fill="none"
-          stroke={COLOR_OPP}
-          strokeWidth={LINE_WIDTH}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      ) : null}
-      {layout.myPath ? (
-        <path
-          d={layout.myPath}
-          fill="none"
-          stroke={COLOR_YOU}
-          strokeWidth={LINE_WIDTH}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-        />
-      ) : null}
+      {lines.map(({ key, d, color, tr }) =>
+        d ? (
+          <path
+            key={key}
+            d={d}
+            fill="none"
+            stroke={color}
+            strokeWidth={LINE_WIDTH}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            strokeDasharray={layout.indexed ? tr.metric.dash : undefined}
+          />
+        ) : null,
+      )}
     </g>
   );
 }
 
 /**
- * The gap between the two lines, washed in the colour of whoever leads
- * at each moment: blue where your line is above the opponent's, red
- * where it is below. Crossings split cleanly because each half is
- * clipped at the opponent's line.
+ * The gap between the two lines of a lone metric, washed in the colour
+ * of whoever leads at each moment: blue where your line is above the
+ * opponent's, red where it is below. Crossings split cleanly because
+ * each half is clipped at the opponent's line.
  */
 export function LeadShading({
   layout,
@@ -244,114 +245,23 @@ export function HoverCrosshair({
   );
 }
 
+/** A point on every plotted line at the inspected sample. */
 function hoverMarkers(
   layout: ChartLayout,
   hover: HoverState,
 ): Array<{ key: string; y: number; color: string }> {
   const out: Array<{ key: string; y: number; color: string }> = [];
-  const oppV = hover.opp ? layout.metric.read(hover.opp) : null;
-  const myV = hover.my ? layout.metric.read(hover.my) : null;
-  if (oppV != null) out.push({ key: "opp", y: layout.yOf(oppV), color: COLOR_OPP });
-  if (myV != null) out.push({ key: "my", y: layout.yOf(myV), color: COLOR_YOU });
+  const sides = [
+    { side: "opp", point: hover.opp, color: COLOR_OPP },
+    { side: "my", point: hover.my, color: COLOR_YOU },
+  ];
+  for (const { side, point, color } of sides) {
+    for (const tr of layout.tracks) {
+      const v = point ? tr.metric.read(point) : null;
+      if (v != null) out.push({ key: `${side}-${tr.metric.key}`, y: tr.yOf(v), color });
+    }
+  }
   return out;
-}
-
-/**
- * The dark hover card: the clock, then each player's value (and whether
- * they were supply blocked at that moment).
- */
-export function ChartTooltip({
-  layout,
-  hover,
-  scaleX,
-  myName,
-  oppName,
-  myBlocked,
-  oppBlocked,
-}: {
-  layout: ChartLayout;
-  hover: HoverState;
-  /** CSS pixels per layout unit (1 once the chart has measured itself). */
-  scaleX: number;
-  myName: string;
-  oppName: string;
-  myBlocked: boolean;
-  oppBlocked: boolean;
-}) {
-  const width = layout.width * scaleX < 420 ? 176 : 204;
-  const cursorX = hover.xMouseView * scaleX;
-  const containerW = layout.width * scaleX;
-  // Beside the crosshair; flipped to its left near the right edge.
-  const flip = cursorX + width + 16 > containerW;
-  const left = flip ? Math.max(4, cursorX - width - 12) : cursorX + 12;
-  const metric = layout.metric;
-  const lead = metricLead(metric, hover.my, hover.opp);
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      style={{ left: `${left}px`, top: `${layout.plotTop + 4}px`, width: `${width}px` }}
-      className="pointer-events-none absolute z-10 rounded-md bg-text px-3 py-2 text-micro text-bg shadow-lg"
-    >
-      <div className="text-caption font-bold tabular-nums">
-        {formatGameClock(hover.t)}
-      </div>
-      <div aria-hidden className="my-1.5 h-px bg-bg/25" />
-      <TooltipRow
-        color={COLOR_YOU}
-        name={myName}
-        value={describeMetric(metric, hover.my)}
-        blocked={myBlocked}
-      />
-      <TooltipRow
-        color={COLOR_OPP}
-        name={oppName}
-        value={describeMetric(metric, hover.opp)}
-        blocked={oppBlocked}
-      />
-      {lead != null ? (
-        <div className="mt-1 border-t border-bg/25 pt-1 tabular-nums">
-          {leadSentence(lead, myName, oppName)}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function leadSentence(lead: number, myName: string, oppName: string): string {
-  if (lead === 0) return "Even";
-  return `${lead > 0 ? myName : oppName} ahead by ${Math.abs(lead).toLocaleString()}`;
-}
-
-function TooltipRow({
-  color,
-  name,
-  value,
-  blocked,
-}: {
-  color: string;
-  name: string;
-  value: string;
-  blocked: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-2 py-0.5">
-      <span className="flex min-w-0 items-center gap-1.5">
-        <span
-          aria-hidden
-          className="h-2.5 w-2.5 flex-shrink-0 rounded-full"
-          style={{ background: color }}
-        />
-        <span className="truncate font-medium">{name}</span>
-        {blocked ? (
-          <span className="flex-shrink-0 rounded bg-bg/20 px-1 font-semibold">
-            blocked
-          </span>
-        ) : null}
-      </span>
-      <span className="flex-shrink-0 font-bold tabular-nums">{value}</span>
-    </div>
-  );
 }
 
 interface Band {

@@ -19,6 +19,7 @@ import type {
   UnitTimelineEntry,
 } from "./MacroBreakdownPanel.types";
 import {
+  formatAxisValue,
   timelineMetric,
   type TimelineMetric,
   type TimelineMetricDef,
@@ -140,6 +141,26 @@ export interface XTickLabel {
   anchor: "middle" | "end";
 }
 
+/** A horizontal grid line and its axis label. */
+export interface YTick {
+  y: number;
+  label: string;
+}
+
+/** One plotted metric: its scale and both players' lines. */
+export interface MetricTrack {
+  metric: TimelineMetricDef;
+  /**
+   * The value at the top of the plot: a round ceiling when the metric
+   * is plotted alone, the game's peak when it shares the plot.
+   */
+  yMax: number;
+  /** Value to pixel y on this metric's scale. */
+  yOf: (v: number) => number;
+  myPath: string;
+  oppPath: string;
+}
+
 export interface ChartLayout {
   width: number;
   height: number;
@@ -151,25 +172,24 @@ export interface ChartLayout {
   plotRight: number;
   plotBottom: number;
   maxT: number;
-  /** The metric being plotted. */
-  metric: TimelineMetricDef;
-  /** Value range of the y axis. */
-  yMin: number;
-  yMax: number;
-  /** Values that get a grid line and a label. */
-  yTicks: number[];
+  /** The plotted metrics in switch order; empty when none is selected. */
+  tracks: MetricTrack[];
+  /**
+   * Several metrics share the plot, each indexed to its own game peak
+   * (the axis reads 0% to "Peak"), so one axis stays honest.
+   */
+  indexed: boolean;
+  /** Grid lines with their labels; unlabelled when nothing is plotted. */
+  yTicks: YTick[];
   xOf: (t: number) => number;
-  yOf: (v: number) => number;
   /** Inverse of xOf — maps pixel x back to game-time seconds. */
   tOfX: (px: number) => number;
-  /** One line per player (value metrics). */
-  myPath: string;
-  oppPath: string;
   /**
-   * Lead shading: the band between the two lines, and the regions above
-   * and below the opponent's line. Clipped to the region above, the band
-   * is where you lead; below, where the opponent does. Empty unless both
-   * players have a line.
+   * Lead shading for a lone metric: the band between the two lines, and
+   * the regions above and below the opponent's line. Clipped to the
+   * region above, the band is where you lead; below, where the opponent
+   * does. Empty unless exactly one metric is plotted and both players
+   * have a line.
    */
   leadArea: string;
   oppAbove: string;
@@ -182,7 +202,8 @@ export interface ChartLayout {
 }
 
 export interface LayoutOptions {
-  metric?: TimelineMetric;
+  /** Metrics to plot, in switch order (default: army value alone). */
+  metrics?: readonly TimelineMetric[];
   /** Measured drawing size in CSS pixels. */
   width?: number;
   height?: number;
@@ -321,7 +342,8 @@ function sampleArmyValue(sample: StatsEvent): number | null {
 }
 
 /**
- * Build the chart layout for one metric from a PRE-BUILT pair of series.
+ * Build the chart layout for the selected metrics from a PRE-BUILT pair
+ * of series.
  *
  * Why the series come in pre-built rather than being constructed here:
  * the roster panel beneath the chart needs the SAME SeriesPoint at
@@ -329,6 +351,12 @@ function sampleArmyValue(sample: StatsEvent): number | null {
  * cannot diverge. The parent (``MacroChartSection``) builds the
  * series once via ``buildSeries`` and threads the result to both
  * children.
+ *
+ * One metric is drawn on its own round scale with the lead shaded.
+ * Several share the plot indexed to their game peaks: army value in the
+ * thousands and workers under a hundred cannot share a value axis, but
+ * "share of the game's peak" is one honest axis for both. Both players
+ * of a metric share its peak, so their lines still compare directly.
  *
  * ``opts.width`` / ``opts.height`` are the chart's measured CSS size:
  * the SVG is drawn 1:1 in pixels so text and strokes are never
@@ -343,20 +371,38 @@ export function buildLayout(
   const clipped = clipToGame(mySeries, oppSeries, gameLengthSec);
   if (!clipped) return null;
   const { maxT, myArr, oppArr } = clipped;
-  const metric = timelineMetric(opts.metric ?? "army");
+  const metrics = (opts.metrics ?? ["army"]).map(timelineMetric);
+  const indexed = metrics.length > 1;
   const width = sizeOr(opts.width, DEFAULT_VIEW_W, 160);
   const height = sizeOr(opts.height, DEFAULT_VIEW_H, 120);
   const innerW = width - PAD_LEFT - PAD_RIGHT;
   const innerH = height - PAD_TOP - PAD_BOTTOM;
-  const { yMin, yMax } = valueRange(metric, myArr.concat(oppArr));
   const xOf = (t: number) => PAD_LEFT + (t / maxT) * innerW;
-  const yOf = (v: number) => PAD_TOP + (1 - (v - yMin) / (yMax - yMin)) * innerH;
   const tOfX = (px: number) => {
     const clamped = Math.max(PAD_LEFT, Math.min(PAD_LEFT + innerW, px));
     return ((clamped - PAD_LEFT) / innerW) * maxT;
   };
-  const myPts = plotPoints(myArr, metric.read, xOf, yOf);
-  const oppPts = plotPoints(oppArr, metric.read, xOf, yOf);
+  const both = myArr.concat(oppArr);
+  const tracks = metrics.map((metric): MetricTrack => {
+    const yMax = indexed ? peakOf(metric, both) : valueRange(metric, both).yMax;
+    const yOf = (v: number) => PAD_TOP + (1 - v / yMax) * innerH;
+    return {
+      metric,
+      yMax,
+      yOf,
+      myPath: pathOf(myArr, metric.read, xOf, yOf),
+      oppPath: pathOf(oppArr, metric.read, xOf, yOf),
+    };
+  });
+  const lone = tracks.length === 1 ? tracks[0] : null;
+  const shading = lone
+    ? leadShading(
+        plotPoints(myArr, lone.metric.read, xOf, lone.yOf),
+        plotPoints(oppArr, lone.metric.read, xOf, lone.yOf),
+        PAD_TOP,
+        PAD_TOP + innerH,
+      )
+    : { leadArea: "", oppAbove: "", oppBelow: "" };
   const xTicks = computeXTicks(maxT);
   return {
     width,
@@ -368,21 +414,41 @@ export function buildLayout(
     plotRight: PAD_LEFT + innerW,
     plotBottom: PAD_TOP + innerH,
     maxT,
-    metric,
-    yMin,
-    yMax,
-    yTicks: Y_TICK_FRACTIONS.map((f) => yMin + f * (yMax - yMin)),
+    tracks,
+    indexed,
+    yTicks: Y_TICK_FRACTIONS.map((f) => ({
+      y: PAD_TOP + (1 - f) * innerH,
+      label: yTickLabel(f, lone, indexed),
+    })),
     xOf,
-    yOf,
     tOfX,
-    myPath: pathOf(myArr, metric.read, xOf, yOf),
-    oppPath: pathOf(oppArr, metric.read, xOf, yOf),
-    ...leadShading(myPts, oppPts, PAD_TOP, PAD_TOP + innerH),
+    ...shading,
     xTicks,
     xTickLabels: labelXTicks(xTicks, xOf),
     mySeries: myArr,
     oppSeries: oppArr,
   };
+}
+
+/** "5.0k" on a lone metric's scale, "25%"… "Peak" when indexed. */
+function yTickLabel(
+  fraction: number,
+  lone: MetricTrack | null,
+  indexed: boolean,
+): string {
+  if (lone) return formatAxisValue(fraction * lone.yMax);
+  if (!indexed) return "";
+  return fraction === 1 ? "Peak" : `${Math.round(fraction * 100)}%`;
+}
+
+/** Highest value either player reached (1 when nobody moved off zero). */
+function peakOf(metric: TimelineMetricDef, points: SeriesPoint[]): number {
+  let peak = 0;
+  for (const p of points) {
+    const v = metric.read(p);
+    if (v != null && Number.isFinite(v) && v > peak) peak = v;
+  }
+  return peak > 0 ? peak : 1;
 }
 
 /**
@@ -432,18 +498,14 @@ function sizeOr(v: number | undefined, fallback: number, min: number): number {
 }
 
 /**
- * Y range for ``metric``: 0 up to a "nice" ceiling (200/400/600/800,
+ * Y range for a lone ``metric``: 0 up to a "nice" ceiling (200/400/600/800,
  * not 173/345/518/691), so the grid lines read as round values.
  */
 function valueRange(
   metric: TimelineMetricDef,
   points: SeriesPoint[],
 ): { yMin: number; yMax: number } {
-  let peak = 0;
-  for (const p of points) {
-    const v = metric.read(p);
-    if (v != null && Number.isFinite(v) && v > peak) peak = v;
-  }
+  const peak = peakOf(metric, points);
   return { yMin: 0, yMax: niceCeil(Math.max(peak, metric.floor)) };
 }
 

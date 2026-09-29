@@ -394,16 +394,44 @@ describe("buildLayout — metric tabs and measured size", () => {
     expect(layout.xOf(600)).toBe(layout.plotRight);
   });
 
-  it("plots the selected metric on its own nice scale", () => {
+  it("plots a lone metric on its own nice scale", () => {
     const my = [point(0, { workers: 12 }), point(300, { workers: 61 })];
     const opp = [point(0, { workers: 12 }), point(300, { workers: 44 })];
-    const layout = buildLayout(my, opp, 300, { metric: "workers" })!;
-    expect(layout.metric.key).toBe("workers");
-    expect(layout.yMin).toBe(0);
-    expect(layout.yMax).toBe(80);
-    expect(layout.yTicks).toEqual([0, 20, 40, 60, 80]);
-    expect(layout.myPath.startsWith("M")).toBe(true);
-    expect(layout.oppPath.startsWith("M")).toBe(true);
+    const layout = buildLayout(my, opp, 300, { metrics: ["workers"] })!;
+    expect(layout.indexed).toBe(false);
+    expect(layout.tracks).toHaveLength(1);
+    const [track] = layout.tracks;
+    expect(track.metric.key).toBe("workers");
+    expect(track.yMax).toBe(80);
+    expect(layout.yTicks.map((t) => t.label)).toEqual(["0", "20", "40", "60", "80"]);
+    expect(track.yOf(0)).toBe(layout.plotBottom);
+    expect(track.yOf(80)).toBe(layout.plotTop);
+    expect(track.myPath.startsWith("M")).toBe(true);
+    expect(track.oppPath.startsWith("M")).toBe(true);
+  });
+
+  it("indexes several metrics to their game peaks on one 0%–Peak axis", () => {
+    const my = [point(0, { army: 0, workers: 12 }), point(300, { army: 4000, workers: 61 })];
+    const opp = [point(0, { army: 0, workers: 12 }), point(300, { army: 5000, workers: 44 })];
+    const layout = buildLayout(my, opp, 300, { metrics: ["army", "workers"] })!;
+    expect(layout.indexed).toBe(true);
+    expect(layout.tracks.map((t) => t.metric.key)).toEqual(["army", "workers"]);
+    expect(layout.yTicks.map((t) => t.label)).toEqual(["0%", "25%", "50%", "75%", "Peak"]);
+    const [army, workers] = layout.tracks;
+    // Both players of a metric share its peak, so their lines still compare.
+    expect(army.yMax).toBe(5000);
+    expect(workers.yMax).toBe(61);
+    expect(army.yOf(5000)).toBe(layout.plotTop);
+    expect(workers.yOf(61)).toBe(layout.plotTop);
+    // Lead shading only makes sense for a lone metric.
+    expect(layout.leadArea).toBe("");
+  });
+
+  it("plots nothing, with unlabelled grid lines, when no metric is selected", () => {
+    const layout = buildLayout([point(0), point(60)], [], 60, { metrics: [] })!;
+    expect(layout.tracks).toEqual([]);
+    expect(layout.yTicks).toHaveLength(5);
+    expect(layout.yTicks.every((t) => t.label === "")).toBe(true);
   });
 
   it("lifts the pen over samples that lack the metric instead of drawing zero", () => {
@@ -412,14 +440,14 @@ describe("buildLayout — metric tabs and measured size", () => {
       point(10),
       point(20, { supply: 20 }),
     ];
-    const layout = buildLayout(my, [], 20, { metric: "supply" })!;
-    expect(layout.myPath.match(/M/g)).toHaveLength(2);
+    const layout = buildLayout(my, [], 20, { metrics: ["supply"] })!;
+    expect(layout.tracks[0].myPath.match(/M/g)).toHaveLength(2);
   });
 
   it("shades the gap between the lines, split at the opponent's line", () => {
     const my = [point(0, { income: 500 }), point(60, { income: 900 })];
     const opp = [point(0, { income: 700 }), point(60, { income: 600 })];
-    const layout = buildLayout(my, opp, 60, { metric: "income" })!;
+    const layout = buildLayout(my, opp, 60, { metrics: ["income"] })!;
     // The band runs out along your line and back along the opponent's.
     expect(layout.leadArea).toMatch(/^M.*Z$/);
     expect(layout.leadArea.match(/L/g)).toHaveLength(3);

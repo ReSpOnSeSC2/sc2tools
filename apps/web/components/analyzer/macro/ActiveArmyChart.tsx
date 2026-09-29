@@ -9,6 +9,7 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type RefObject,
 } from "react";
 import { AlertCircle } from "lucide-react";
 import type { LeakItem } from "./MacroBreakdownPanel.types";
@@ -20,7 +21,6 @@ import {
 } from "./activeArmyLayout";
 import {
   AccessibleLeakTable,
-  ChartTooltip,
   Grid,
   HoverCrosshair,
   LeadShading,
@@ -34,27 +34,26 @@ import {
   type HoverState,
 } from "./ActiveArmyChartParts";
 import { MetricSwitch, TimelineSummary } from "./TimelineControls";
+import { TimelineTooltip } from "./TimelineTooltip";
+import type { HoverEvent } from "./timelineSelection";
 import type { GamePace } from "@/lib/apm";
 import {
   DEFAULT_TIMELINE_METRIC,
+  selectedMetrics,
   timelineMetricsFor,
   type TimelineMetric,
   type TimelineMetricDef,
 } from "./timelineMetrics";
 
 export type { ActiveArmySupplyBlockWindow } from "./ActiveArmyChartParts";
+export type { HoverEvent } from "./timelineSelection";
 
 /**
- * Single hover dispatch — the chart emits these to the parent so the
- * parent can manage preview-vs-locked selection state. Mouse moves emit
- * "hover" and the parent retains the last value on "leave"; clicks,
- * taps and sideways touch drags lock the selection ("tap"). Scrolling
- * never emits a selection.
+ * Mark a host control that sits outside the chart but belongs to it
+ * (e.g. the supply-block switch) with this attribute, so tapping it
+ * does not close the read-out card.
  */
-export type HoverEvent =
-  | { type: "hover"; time: number }
-  | { type: "tap"; time: number }
-  | { type: "leave" };
+export const TIMELINE_CONTROL_ATTR = "data-timeline-control";
 
 /** The metrics every game has; APM joins them when its curve is trusted. */
 const BASE_METRICS = timelineMetricsFor({ apm: false });
@@ -87,7 +86,13 @@ export interface ActiveArmyChartProps {
   hoveredTime?: number | null;
   /** True when a tap or click has pinned ``hoveredTime``. */
   locked?: boolean;
-  /** Callback fired for every hover/tap/leave event. */
+  /**
+   * Show the dark read-out card at ``hoveredTime`` (default true). Hosts
+   * turn it off on the "dismiss" event — a tap off the chart — while the
+   * crosshair and read-out keep the moment.
+   */
+  tooltipOpen?: boolean;
+  /** Callback fired for every hover/tap/leave/dismiss event. */
   onHover?: (event: HoverEvent) => void;
   /** Display name of the local player (for the tooltip header). */
   myName?: string | null;
@@ -109,6 +114,8 @@ export interface ActiveArmyChartProps {
 
 /** Sideways travel, in pixels, before a touch drag scrubs the chart. */
 const SCRUB_SLOP_PX = 8;
+/** Travel, in pixels, that turns a press off the chart into a drag. */
+const TAP_SLOP_PX = 10;
 
 interface TouchGesture {
   id: number;
@@ -120,19 +127,22 @@ interface TouchGesture {
 /**
  * Match timeline — interactive SVG chart.
  *
- * One metric at a time (army value, workers, supply, income), both
- * players overlaid in their colours with the gap between them shaded
- * for whoever leads, labelled supply-block bands, a dashed crosshair, a
- * dark tooltip and a "Game time | you | opponent" read-out underneath.
- * The hovered time is lifted to the parent so the unit roster below
- * stays in sync.
+ * Any mix of metrics (army value, workers, supply, income, APM), both
+ * players overlaid in their colours. One metric gets its real scale and
+ * the gap between the lines shaded for whoever leads; several share the
+ * plot indexed to their game peaks, told apart by line pattern. Also:
+ * labelled supply-block bands, a dashed crosshair, a dark read-out card
+ * and a "Game time | you | opponent" read-out underneath. The hovered
+ * time is lifted to the parent so the unit roster below stays in sync.
  *
  * The SVG is laid out at its measured pixel size, so it fills the
  * width of any screen without stretching text. Height comes from CSS.
  *
  * Mouse: moving previews a time; click locks it. Touch: tap locks a
  * time and a sideways drag scrubs it, while vertical drags scroll the
- * page (``touch-action: pan-y``) and never move the lock.
+ * page (``touch-action: pan-y``) and never move the lock. A click or
+ * tap anywhere off the chart asks the host to close the card
+ * ("dismiss"); scrolling never does.
  *
  * Army values come from ``buildSeries`` (sc2reader's army value when
  * present, derived composition otherwise), so the chart and the
@@ -148,6 +158,7 @@ export function ActiveArmyChart({
   highlightedKey,
   hoveredTime = null,
   locked = false,
+  tooltipOpen = true,
   onHover,
   myName,
   oppName,
@@ -160,24 +171,31 @@ export function ActiveArmyChart({
 }: ActiveArmyChartProps) {
   const chartId = useId();
   const clipId = `timeline-${chartId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const figureRef = useRef<HTMLElement | null>(null);
   const overlayRef = useRef<SVGRectElement | null>(null);
   const gesture = useRef<TouchGesture | null>(null);
   const [containerRef, size] = useElementSize();
-  const [chosenMetric, setMetric] = useState<TimelineMetric>(DEFAULT_TIMELINE_METRIC);
-  // A metric this game can't show (e.g. APM on an older upload) falls
-  // back to the default instead of drawing an empty chart.
-  const metric = metrics.some((m) => m.key === chosenMetric)
-    ? chosenMetric
-    : DEFAULT_TIMELINE_METRIC;
+  const [chosen, setChosen] = useState<TimelineMetric[]>([DEFAULT_TIMELINE_METRIC]);
+  const shown = useMemo(
+    () => selectedMetrics(chosen, metrics).map((m) => m.key),
+    [chosen, metrics],
+  );
 
   const layout = useMemo(
     () =>
       buildLayout(mySeries, oppSeries, gameLengthSec, {
-        metric,
+        metrics: shown,
         width: size?.width,
         height: size?.height,
       }),
-    [mySeries, oppSeries, gameLengthSec, metric, size],
+    [mySeries, oppSeries, gameLengthSec, shown, size],
+  );
+
+  const dismiss = useCallback(() => onHover?.({ type: "dismiss" }), [onHover]);
+  useDismissOnTapOutside(
+    figureRef,
+    Boolean(onHover) && hoveredTime != null && (tooltipOpen || locked),
+    dismiss,
   );
 
   /**
@@ -275,10 +293,11 @@ export function ActiveArmyChart({
   const you = myName?.trim() || "You";
   const them = oppName?.trim() || "Opponent";
   const scaleX = size ? size.width / layout.width : 1;
-  const title = layout.metric.title;
+  const plotted = layout.tracks.map((tr) => tr.metric);
 
   return (
     <figure
+      ref={figureRef}
       aria-label={showTitle ? undefined : "Match timeline chart"}
       aria-labelledby={showTitle ? `${clipId}-title` : undefined}
       className={`space-y-2 ${className}`}
@@ -292,7 +311,7 @@ export function ActiveArmyChart({
         </figcaption>
       ) : null}
 
-      <MetricSwitch metric={metric} onMetric={setMetric} race={myRace} metrics={metrics} />
+      <MetricSwitch selected={shown} onChange={setChosen} race={myRace} metrics={metrics} />
 
       <div
         ref={containerRef}
@@ -304,7 +323,7 @@ export function ActiveArmyChart({
       >
         <svg
           role="img"
-          aria-label={`${title} for both players over game time. Hover to inspect a moment; click or tap to lock it, or drag sideways to scrub.`}
+          aria-label={chartLabel(plotted)}
           viewBox={`0 0 ${layout.width} ${layout.height}`}
           preserveAspectRatio="none"
           className="absolute inset-0 block h-full w-full"
@@ -344,8 +363,18 @@ export function ActiveArmyChart({
             aria-hidden
           />
         </svg>
-        {hover ? (
-          <ChartTooltip
+        {plotted.length === 0 ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-center"
+            style={{ bottom: `${layout.height - layout.plotBottom}px`, paddingLeft: `${layout.plotLeft * scaleX}px` }}
+          >
+            <p className="rounded-full border border-border bg-bg-surface/90 px-3 py-1 text-micro font-semibold text-text-muted shadow-sm">
+              Pick a metric above to plot it
+            </p>
+          </div>
+        ) : null}
+        {hover && tooltipOpen && plotted.length > 0 ? (
+          <TimelineTooltip
             layout={layout}
             hover={hover}
             scaleX={scaleX}
@@ -358,19 +387,85 @@ export function ActiveArmyChart({
       </div>
 
       <TimelineSummary
-        metric={layout.metric}
+        metrics={plotted}
         time={readout.t}
         locked={locked && hover != null}
         my={readout.my}
         opp={readout.opp}
         myName={you}
         oppName={them}
-        averages={layout.metric.key === "apm" ? apmAverages : null}
+        averages={apmAverages}
       />
 
       <AccessibleLeakTable leaks={leaks} highlightedKey={highlightedKey} />
     </figure>
   );
+}
+
+/** The chart's accessible name for the plotted metrics. */
+function chartLabel(plotted: readonly TimelineMetricDef[]): string {
+  const how =
+    "Hover to inspect a moment; click or tap to lock it, or drag sideways to scrub.";
+  if (plotted.length === 0) {
+    return "Match timeline with no metric selected. Pick one above to plot it.";
+  }
+  const titles = plotted.map((m) => m.title);
+  const named =
+    titles.length === 1
+      ? titles[0]
+      : `${titles.slice(0, -1).join(", ")} and ${titles[titles.length - 1]}`;
+  const scale = plotted.length > 1 ? ", each as a share of its game peak" : "";
+  return `${named} for both players over game time${scale}. ${how}`;
+}
+
+/**
+ * While the read-out card is up (or a moment is locked), a click or tap
+ * that starts and ends off the chart calls ``onDismiss``. Presses on the
+ * chart itself or on a host control marked ``TIMELINE_CONTROL_ATTR``
+ * never do, and neither does scrolling: a touch pan cancels the pointer,
+ * any scroll during the press voids it, and a press that travels is a
+ * drag, not a tap.
+ */
+function useDismissOnTapOutside(
+  figureRef: RefObject<HTMLElement | null>,
+  active: boolean,
+  onDismiss: () => void,
+) {
+  useEffect(() => {
+    if (!active) return;
+    let press: { id: number; x: number; y: number } | null = null;
+    const onChart = (target: EventTarget | null) =>
+      target instanceof Element &&
+      (figureRef.current?.contains(target) === true ||
+        target.closest(`[${TIMELINE_CONTROL_ATTR}]`) != null);
+    const down = (e: PointerEvent) => {
+      press =
+        e.isPrimary === false || e.button > 0 || onChart(e.target)
+          ? null
+          : { id: e.pointerId, x: e.clientX, y: e.clientY };
+    };
+    const up = (e: PointerEvent) => {
+      const start = press;
+      press = null;
+      if (!start || start.id !== e.pointerId) return;
+      if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > TAP_SLOP_PX) return;
+      onDismiss();
+    };
+    const drop = () => {
+      press = null;
+    };
+    const listen = { capture: true, passive: true } as const;
+    document.addEventListener("pointerdown", down, listen);
+    document.addEventListener("pointerup", up, listen);
+    document.addEventListener("pointercancel", drop, listen);
+    document.addEventListener("scroll", drop, listen);
+    return () => {
+      document.removeEventListener("pointerdown", down, listen);
+      document.removeEventListener("pointerup", up, listen);
+      document.removeEventListener("pointercancel", drop, listen);
+      document.removeEventListener("scroll", drop, listen);
+    };
+  }, [active, onDismiss, figureRef]);
 }
 
 /**

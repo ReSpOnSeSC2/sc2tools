@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MacroChartSection } from "../MacroChartSection";
 import type { StatsEvent } from "../MacroBreakdownPanel.types";
+import { timelineMetric } from "../timelineMetrics";
 
 const useApiMock = vi.fn();
 
@@ -50,6 +51,13 @@ function tap(overlay: SVGRectElement, time: number, pointerType = "touch") {
   fireEvent.pointerUp(overlay, point(pointerType, time));
   // A deliberate pointer gesture generates a browser click; canceled pans do not.
   fireEvent.click(overlay, { clientX: time, clientY: 30 });
+}
+
+/** A tap that starts and ends on ``target`` without travelling. */
+function tapOn(target: Element, pointerType = "touch") {
+  fireEvent.pointerDown(target, { ...point(pointerType, 40, 40), buttons: 1, pressure: 0.5 });
+  fireEvent.pointerUp(target, point(pointerType, 42, 41));
+  fireEvent.click(target, { clientX: 42, clientY: 41 });
 }
 
 function expectSelection(clock: string, army: string) {
@@ -154,6 +162,63 @@ describe("MacroChartSection selection", () => {
     expect(overlay.style.touchAction).toContain("pan-y");
   });
 
+  it("closes the card on a tap off the chart but keeps the inspected moment", () => {
+    render(<TestPage />);
+    const overlay = chartOverlay();
+    tap(overlay, 75);
+    expectSelection("1:15", "725");
+
+    tapOn(screen.getByTestId("page-bottom"));
+    expect(screen.queryByRole("status")).toBeNull();
+    // The crosshair, its markers, the read-out and the roster stay at 1:15,
+    // released from the lock.
+    expect(screen.getByRole("region", { name: "You composition at 1:15" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: /Army value/ }).querySelectorAll("circle")).toHaveLength(2);
+    expect(screen.getByText("Game time").closest("dl")!.textContent).toContain("1:15");
+    expect(screen.queryByText("locked")).toBeNull();
+
+    // A mouse passing over the chart previews again, card and all.
+    fireEvent.pointerMove(overlay, point("mouse", 140));
+    expectSelection("2:20", "1,425");
+    tapOn(screen.getByTestId("page-bottom"), "mouse");
+    expect(screen.queryByRole("status")).toBeNull();
+    // A tap on the chart brings it back, locked.
+    tap(overlay, 75);
+    expectSelection("1:15", "725");
+    expect(screen.getByText("locked")).toBeTruthy();
+  });
+
+  it("keeps the card through taps on the chart's own controls and drags off it", () => {
+    render(
+      <div>
+        <MacroChartSection
+          gameId="controls"
+          samples={samples}
+          oppSamples={samples}
+          leaks={[]}
+          gameLengthSec={300}
+          supplyBlockWindows={[{ start: 60, end: 90 }]}
+        />
+        <div data-testid="page-bottom">Below</div>
+      </div>,
+    );
+    const overlay = chartOverlay();
+    tap(overlay, 75);
+    expectSelection("1:15", "725");
+
+    tapOn(screen.getByRole("switch", { name: "Show supply blocks" }));
+    tapOn(screen.getByRole("button", { name: "Supply" }));
+    tapOn(screen.getByText("Game time"));
+    expect(screen.getByRole("status").textContent).toContain("1:15");
+
+    // Pressing off the chart and dragging (a text selection, a pan that
+    // the browser did not cancel) is not a tap.
+    const bottom = screen.getByTestId("page-bottom");
+    fireEvent.pointerDown(bottom, { ...point("mouse", 10, 10), buttons: 1 });
+    fireEvent.pointerUp(bottom, point("mouse", 10, 90));
+    expect(screen.getByRole("status").textContent).toContain("1:15");
+  });
+
   it("resets the selection for a different game", () => {
     const view = render(<TestPage />);
     const overlay = chartOverlay();
@@ -192,42 +257,55 @@ describe("Match timeline tabs and read-out", () => {
     return overlay;
   }
 
-  it("switches the plotted metric and shows who leads on each", () => {
-    render(
-      <MacroChartSection
-        gameId="tabs"
-        samples={mine}
-        oppSamples={theirs}
-        leaks={[]}
-        gameLengthSec={300}
-        myName="ReSpOnSe"
-        oppName="Koht"
-        myRace="Protoss"
-      />,
+  function renderTabs() {
+    return render(
+      <div>
+        <MacroChartSection
+          gameId="tabs"
+          samples={mine}
+          oppSamples={theirs}
+          leaks={[]}
+          gameLengthSec={300}
+          myName="ReSpOnSe"
+          oppName="Koht"
+          myRace="Protoss"
+        />
+        <div data-testid="page-bottom">Below</div>
+      </div>,
     );
+  }
+
+  const pressed = (name: string) =>
+    screen.getByRole("button", { name }).getAttribute("aria-pressed");
+
+  it("plots one metric at a time and shows who leads on it", () => {
+    renderTabs();
     // Before any inspection the read-out shows the end of the game, with
     // your 625 army-value lead beside your number.
     expect(readout().textContent).toContain("5:00");
     expect(readout().textContent).toContain("3,025");
     expect(readout().textContent).toContain("2,400");
     expect(readout().textContent).toContain("+625");
-    expect(screen.getByRole("group", { name: "Chart metric" })).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Army" }).getAttribute("aria-pressed"),
-    ).toBe("true");
+    expect(screen.getByRole("group", { name: "Chart metrics" })).toBeTruthy();
+    expect(pressed("Army")).toBe("true");
+    expect(pressed("All")).toBe("false");
 
-    const workers = screen.getByRole("button", { name: "Workers" });
-    fireEvent.click(workers);
-    expect(workers.getAttribute("aria-pressed")).toBe("true");
+    // Workers joins Army; turning Army off leaves Workers alone.
+    fireEvent.click(screen.getByRole("button", { name: "Workers" }));
+    fireEvent.click(screen.getByRole("button", { name: "Army" }));
+    expect(pressed("Workers")).toBe("true");
+    expect(pressed("Army")).toBe("false");
     expect(screen.getByRole("img", { name: /^Workers for both players/ })).toBeTruthy();
     expect(readout().textContent).toContain("48");
     expect(readout().textContent).toContain("40");
 
     fireEvent.click(screen.getByRole("button", { name: "Supply" }));
+    fireEvent.click(screen.getByRole("button", { name: "Workers" }));
     expect(readout().textContent).toContain("95/110");
     expect(readout().textContent).toContain("80/94");
 
     fireEvent.click(screen.getByRole("button", { name: "Income" }));
+    fireEvent.click(screen.getByRole("button", { name: "Supply" }));
     expect(readout().textContent).toContain("1,500");
     expect(readout().textContent).toContain("1,350");
     expect(readout().textContent).toContain("+150");
@@ -236,6 +314,69 @@ describe("Match timeline tabs and read-out", () => {
     expect(tooltip.textContent).toContain("2:30");
     expect(tooltip.textContent).toContain("ReSpOnSe ahead by 200");
     expect(readout().textContent).toContain("locked");
+  });
+
+  it("overlays several metrics, each indexed to its peak and keyed by line pattern", () => {
+    renderTabs();
+    fireEvent.click(screen.getByRole("button", { name: "Workers" }));
+    expect(pressed("Army")).toBe("true");
+    expect(pressed("Workers")).toBe("true");
+
+    const chart = screen.getByRole("img", {
+      name: /^Army value and Workers for both players over game time, each as a share of its game peak/,
+    });
+    // One axis: share of each metric's game peak.
+    expect(chart.textContent).toContain("Peak");
+    expect(chart.textContent).toContain("50%");
+    // Four lines: army solid, workers dashed, in each player's colour.
+    const lines = Array.from(chart.querySelectorAll("path[fill='none']"));
+    expect(lines).toHaveLength(4);
+    const workersDash = timelineMetric("workers").dash;
+    expect(workersDash).toBeTruthy();
+    expect(lines.filter((l) => l.getAttribute("stroke-dasharray") === workersDash)).toHaveLength(2);
+    expect(lines.filter((l) => !l.hasAttribute("stroke-dasharray"))).toHaveLength(2);
+    // The lit segments carry the legend: their line pattern.
+    const group = screen.getByRole("group", { name: "Chart metrics" });
+    expect(within(group).getByRole("button", { name: "Workers" }).querySelector("line")).toBeTruthy();
+
+    tap(overlayOf(/^Army value and Workers/), 150);
+    expect(chart.querySelectorAll("circle")).toHaveLength(4);
+    const card = screen.getByRole("status");
+    const rows = within(card).getAllByRole("row").slice(1);
+    expect(rows.map((r) => r.textContent)).toEqual([
+      "Army1,5001,800 (ahead)+300",
+      "Workers30 (ahead)26+4",
+    ]);
+    // The leader on each row is underlined in their colour.
+    expect(within(rows[0]).getByText("1,800").className).toContain("decoration-player-opp");
+    expect(within(rows[1]).getByText("30").className).toContain("decoration-player-you");
+
+    // Below the chart, one column per metric.
+    const table = screen.getByRole("table", { name: /^Army value, Workers for both players at 2:30/ });
+    expect(within(table).getByRole("row", { name: /ReSpOnSe/ }).textContent).toContain("1,500");
+    expect(within(table).getByRole("row", { name: /Koht/ }).textContent).toContain("26");
+  });
+
+  it("turns every metric on or off with All", () => {
+    renderTabs();
+    const all = screen.getByRole("button", { name: "All" });
+    fireEvent.click(all);
+    expect(all.getAttribute("aria-pressed")).toBe("true");
+    for (const name of ["Army", "Workers", "Supply", "Income"]) expect(pressed(name)).toBe("true");
+    expect(
+      screen.getByRole("img", { name: /^Army value, Workers, Supply used and Income/ }),
+    ).toBeTruthy();
+
+    fireEvent.click(all);
+    for (const name of ["Army", "Workers", "Supply", "Income", "All"]) expect(pressed(name)).toBe("false");
+    const chart = screen.getByRole("img", { name: /no metric selected/ });
+    expect(chart.querySelectorAll("path[fill='none']")).toHaveLength(0);
+    expect(screen.getByText("Pick a metric above to plot it")).toBeTruthy();
+    expect(screen.getByText("No metric selected")).toBeTruthy();
+    // Inspecting still moves the roster; there is just no card to show.
+    tap(overlayOf(/no metric selected/), 150);
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.getByRole("region", { name: "ReSpOnSe composition at 2:30" })).toBeTruthy();
   });
 
   it("scrubs the locked time with a sideways touch drag", () => {

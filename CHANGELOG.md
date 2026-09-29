@@ -366,6 +366,24 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **Match timeline plots several metrics at once** — the Army / Workers /
+  Supply / Income / APM switch in the macro breakdown is now a set of
+  toggles, with an "All" segment to turn every metric on or off. One metric
+  keeps its real scale and lead shading; with several on, each line is
+  drawn as a share of its game peak (one 0%–"Peak" axis rather than
+  stacked value axes), keeps the you-blue / opponent-red colours and gets
+  its own line pattern, which the lit switch segments show as a legend.
+  The dark hover card becomes a small table — one row per metric, the
+  leader's value underlined in their colour, the margin on wider screens —
+  and the read-out under the chart gets one column per metric. On phones
+  the card moves to the top or bottom of the plot, whichever hides fewer
+  of the inspected points.
+- **Tapping off the Match timeline closes its hover card** — a click or
+  tap anywhere off the chart now closes the card and releases the lock,
+  keeping the inspected moment in the crosshair, read-out and roster.
+  Scrolling (touch, wheel or scrollbar) still never closes it, and taps
+  on the chart's own controls (metric switch, supply-block switch) leave
+  it open.
 - **Daily Pulse now appears before Ladder Pulse on Today** — the page and its
   loading state share the same more useful information order.
 - **Every analyzer section is now a real URL** — the dashboard's seven
