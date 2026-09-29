@@ -304,3 +304,20 @@ describe("independent virtual-set scenes", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe("sc2tools.com credit", () => {
+  it("shows on full-canvas cards", () => {
+    render(<OverlaySceneClient token="tok" scene="starting-soon" demo />);
+    expect(screen.getByTestId("overlay-credit").textContent).toBe("Overlay by sc2tools.com");
+  });
+
+  it("stays off the Between Games frame, which sits behind the camera", () => {
+    render(<OverlaySceneClient token="tok" scene="between-games" demo />);
+    expect(screen.queryByTestId("overlay-credit")).toBeNull();
+  });
+
+  it("is hidden when the Browser Source URL says credit=0", () => {
+    render(<OverlaySceneClient token="tok" scene="brb" demo showCredit={false} />);
+    expect(screen.queryByTestId("overlay-credit")).toBeNull();
+  });
+});

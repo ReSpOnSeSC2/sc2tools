@@ -3,6 +3,7 @@ import {
   isValidScene,
   VALID_SCENES,
 } from "@/components/overlay/scenes/sceneVariants";
+import { isOverlayCreditHidden, OVERLAY_CREDIT_PARAM } from "@/lib/overlayCredit";
 
 export const metadata = {
   title: "Live overlay scene",
@@ -63,6 +64,7 @@ export default async function OverlayScenePage({
       scene={name}
       staticMode={staticMode}
       demo={demo}
+      showCredit={!isOverlayCreditHidden(sp[OVERLAY_CREDIT_PARAM])}
     />
   );
 }

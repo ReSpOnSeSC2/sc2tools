@@ -16,11 +16,13 @@ import { Clapperboard, Layers, Monitor } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { appendOverlayThemeToUrl, type OverlayTheme } from "@/lib/overlayTheme";
+import { appendOverlayCreditToUrl } from "@/lib/overlayCredit";
 import {
   STREAM_BACKGROUNDS,
   type StreamBackgroundId,
 } from "@/lib/streamBackgrounds";
 import { UrlRow } from "./OverlayUrlRow";
+import { useOverlayCreditPreference } from "./useOverlayCreditPreference";
 
 type LegacySceneId =
   | "between-games"
@@ -89,11 +91,14 @@ export function OverlayScenesSection({
   theme: OverlayTheme;
 }) {
   const [preview, setPreview] = useState<string>("between-games");
+  // Same choice as the All-in-one row's credit toggle (lib/overlayCredit).
+  const [showCredit] = useOverlayCreditPreference();
   const base = origin ?? "";
   const selectedScene = SCENES.find((scene) => scene.id === preview);
-  const previewUrl = `${base}/overlay/${token}/scene/${preview}${
-    selectedScene?.kind === "virtual-set" ? "" : "?demo=1"
-  }`;
+  const previewUrl =
+    selectedScene?.kind === "virtual-set"
+      ? `${base}/overlay/${token}/scene/${preview}`
+      : appendOverlayCreditToUrl(`${base}/overlay/${token}/scene/${preview}?demo=1`, showCredit);
 
   return (
     <Section
@@ -135,7 +140,7 @@ export function OverlayScenesSection({
             const url =
               scene.kind === "virtual-set"
                 ? sceneUrl
-                : appendOverlayThemeToUrl(sceneUrl, theme);
+                : appendOverlayCreditToUrl(appendOverlayThemeToUrl(sceneUrl, theme), showCredit);
             const SceneIcon =
               scene.kind === "virtual-set" ? Clapperboard : Layers;
             return (

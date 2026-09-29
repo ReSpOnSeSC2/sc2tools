@@ -114,8 +114,10 @@ async function main() {
   }
 
   await mkdir(args.out, { recursive: true });
+  // credit=0: exported stills/loops stay unbranded — a streamer can't
+  // switch a credit off inside a video file (see lib/overlayCredit.ts).
   const sceneUrl = (extra) =>
-    `${args.base.replace(/\/$/, "")}/overlay/${args.token}/scene/${args.scene}?demo=1${extra}`;
+    `${args.base.replace(/\/$/, "")}/overlay/${args.token}/scene/${args.scene}?demo=1&credit=0${extra}`;
 
   const browser = await chromium.launch(launchOptions());
   try {

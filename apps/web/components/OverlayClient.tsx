@@ -32,6 +32,7 @@ import {
 } from "@/components/overlay/overlayResilience";
 import { ReconnectDot } from "@/components/overlay/ReconnectDot";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
+import { OverlayCredit } from "@/components/overlay/OverlayCredit";
 import { OpponentWidget } from "@/components/overlay/widgets/OpponentWidget";
 import { MatchResultWidget } from "@/components/overlay/widgets/MatchResultWidget";
 import { PostGameWidget } from "@/components/overlay/widgets/PostGameWidget";
@@ -85,6 +86,7 @@ import {
 export function OverlayClient({
   token,
   themeParam = null,
+  showCredit = true,
 }: {
   token: string;
   /**
@@ -94,6 +96,11 @@ export function OverlayClient({
    * overlay root, where every WidgetShell picks them up.
    */
   themeParam?: string | null;
+  /**
+   * Show the "Overlay by sc2tools.com" credit while widgets are on
+   * screen (default). The server page turns it off for ``?credit=0``.
+   */
+  showCredit?: boolean;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
@@ -197,6 +204,12 @@ export function OverlayClient({
     return visibleLive.has(id);
   }
 
+  // The credit rides along only while this composite source actually
+  // shows a widget, so a between-games scene stays fully transparent.
+  // Dedicated ``?w=`` sources never show it (several would stack up).
+  const creditVisible =
+    showCredit && singleWidget === null && COMPOSITE_WIDGETS.some(shouldShow);
+
   return (
     <div
       className="relative h-screen w-screen"
@@ -236,9 +249,30 @@ export function OverlayClient({
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
       ) : null}
+      {creditVisible ? <OverlayCredit placement="top-left" /> : null}
     </div>
   );
 }
+
+/** The widgets this all-in-one source renders (keep in step with the JSX above). */
+const COMPOSITE_WIDGETS: ReadonlyArray<WidgetId> = [
+  "opponent",
+  "match-result",
+  "post-game",
+  "mmr-delta",
+  "streak",
+  "cheese",
+  "rematch",
+  "rival",
+  "rank",
+  "meta",
+  "topbuilds",
+  "fav-opening",
+  "best-answer",
+  "scouting",
+  "session",
+  "randomizer",
+];
 
 /**
  * Subscribe to the overlay socket and push the event streams into the
