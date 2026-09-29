@@ -18,7 +18,8 @@ import { Card, Skeleton } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
 import { Toggle } from "@/components/ui/Toggle";
-import { appendOverlayCreditToUrl, OVERLAY_CREDIT_TEXT } from "@/lib/overlayCredit";
+import { appendOverlayCreditToUrl } from "@/lib/overlayCredit";
+import { OverlayCreditToggle } from "./OverlayCreditToggle";
 import { useOverlayCreditPreference } from "./useOverlayCreditPreference";
 import { Badge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -790,19 +791,7 @@ function AllInOneRow({
         </span>
       </div>
       <UrlRow url={url} compact={false} />
-      <label className="flex items-start gap-2 text-caption text-text-dim">
-        <Toggle
-          checked={showCredit}
-          onChange={setShowCredit}
-          label={`Show “${OVERLAY_CREDIT_TEXT}” on stream`}
-        />
-        <span>
-          Show a small “{OVERLAY_CREDIT_TEXT}” credit (top-left while widgets
-          are on screen, and on the Starting Soon / BRB scenes). It helps other
-          players find the tool. After switching it off, copy your URLs into
-          OBS again.
-        </span>
-      </label>
+      <OverlayCreditToggle checked={showCredit} onChange={setShowCredit} />
     </div>
   );
 }

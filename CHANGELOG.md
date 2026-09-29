@@ -13,6 +13,24 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Stream Studio page** — `/stream-studio` walks through every StarCraft II
+  overlay and scene SC2 Tools gives OBS: what each widget shows, how to add
+  the Browser Sources, and answers to common questions. The home page's
+  stream chapter and the footer link to it.
+- **"Overlay by sc2tools.com" credit on streams** — the all-in-one overlay
+  shows a small credit in its top-left corner while a widget is on screen,
+  and the full-screen Starting Soon, BRB and Intermission scenes show it at
+  the bottom. It is on by default; the switch under the all-in-one URL in
+  Settings → Overlay turns it off by adding `credit=0` to the overlay URLs
+  (paste the new URL into OBS). Single-widget sources, the Between Games
+  frame, virtual sets and rendered scene videos never show it.
+- **Phones can send the download to a PC** — on a phone, /download offers
+  to email, share or copy the link for later instead of a Windows installer
+  the phone can't run. Each send is counted as a `download_link_sent`
+  analytics event.
+- **/try explains itself** — below the analyzer, a section describes the
+  report, where StarCraft II keeps replays on Windows and macOS, and common
+  questions, so the page reads in full before any replay is added.
 - **SC2 Tools Guides** — a public build-order encyclopedia at `/guides`
   whose every number comes from real ladder games synced by SC2 Tools
   players. Each opener gets a page per matchup with its win rate and 95%
@@ -366,6 +384,26 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **Cleaner Google Analytics data** — page views report the page URL with
+  IDs collapsed (for example `/app/game/:gameId`) and only campaign
+  parameters kept, so `/?source=pwa` no longer doubles up; admin, overlay,
+  dock and replay-file pages are not tracked; admins' browsers are tagged
+  as internal traffic; and a new account sends one `sign_up` event.
+- **Mac and Linux visitors are pointed at the browser analyzer** — when
+  there is no installer for their system, /download leads with /try (while
+  it is open to everyone) and its run-from-source steps use `python3`. The
+  page's structured data names Windows 10 and 11, and the sign-up page no
+  longer quotes an old "450 MB" download size.
+- **Home and /try headings say what the pages are** — "StarCraft II replay
+  analyzer & stream overlays" and "Free StarCraft II replay analyzer".
+- **Guide descriptions label both win rates** — when a guide's title quotes
+  its win rate against one league, the search description gives that rate
+  and the overall one, each named.
+- **Sitemap dates are real** — each static page's `lastmod` is the date it
+  last changed, and `/reviews` uses its newest review, instead of the time
+  of the request.
+- **Old /optimizer links land on /guides** (or the home page while guides
+  are switched off).
 - **Match timeline plots several metrics at once** — the Army / Workers /
   Supply / Income / APM switch in the macro breakdown is now a set of
   toggles, with an "All" segment to turn every metric on or off. One metric
