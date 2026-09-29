@@ -157,3 +157,25 @@ describe("CompositionSnapshot chips", () => {
     );
   });
 });
+
+describe("CompositionSnapshot chip art", () => {
+  it("draws a Broodling with the Brood Lord's 3D model, not a text badge", () => {
+    render(
+      <CompositionSnapshot
+        mySeries={[point({ Broodling: 6 })]}
+        oppSeries={[point({ Marine: 20 })]}
+        hoveredTime={600}
+        gameLengthSec={900}
+        myName="Jonathan"
+        oppName="Rival"
+        myRace="Zerg"
+        oppRace="Terran"
+        buildOrderData={BUILD_ORDER}
+      />,
+    );
+    const chip = screen.getByRole("button", { name: "Broodling — 6 on the field" });
+    const img = chip.querySelector("img");
+    expect(img?.getAttribute("src")).toBe("/sprites/icons/BroodLord_blue.webp");
+  });
+});
+

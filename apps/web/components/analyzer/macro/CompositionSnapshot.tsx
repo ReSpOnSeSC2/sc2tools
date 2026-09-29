@@ -105,6 +105,13 @@ const MODEL_ONLY_ICONS: ReadonlySet<string> = new Set([
   "NydusCanal",
 ]);
 
+/** Units with no art of their own, drawn with the model of the unit
+ *  that spawns them. Roster-only on purpose: in the shared alias table
+ *  the map would paint a full Brood Lord at every Broodling. */
+const STAND_IN_MODELS: Readonly<Record<string, string>> = {
+  Broodling: "BroodLord",
+};
+
 /**
  * The chip the user tapped, frozen at the moment of the tap. Frozen
  * rather than live because the roster re-snaps as the pointer moves
@@ -625,9 +632,11 @@ function ChipIcon({
       />
     );
   }
-  const sprite = canonicalSpriteName(name);
-  // Resolve aliases before applying the audited artwork exceptions.
-  const useModelOnly = sprite !== null && MODEL_ONLY_ICONS.has(sprite);
+  const standIn = STAND_IN_MODELS[name];
+  const sprite = canonicalSpriteName(name) ?? (standIn ? canonicalSpriteName(standIn) : null);
+  // Resolve aliases before applying the audited artwork exceptions. A
+  // stand-in keeps to the 3D model, never the other unit's flat icon.
+  const useModelOnly = sprite !== null && (MODEL_ONLY_ICONS.has(sprite) || standIn !== undefined);
   // Tracker state names (e.g. SiegeTankSieged) share their base icon.
   const gameIcon = useModelOnly
     ? null
