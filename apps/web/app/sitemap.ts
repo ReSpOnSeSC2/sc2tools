@@ -9,6 +9,7 @@ import {
   communitySitemapRows,
   finalizeSitemap,
   guideSitemapRows,
+  sitemapDate,
   type SitemapRows,
 } from "@/lib/sitemapEntries";
 
@@ -18,26 +19,34 @@ type Route = {
   path: string;
   priority: number;
   changeFrequency: NonNullable<MetadataRoute.Sitemap[number]["changeFrequency"]>;
+  /**
+   * When the page's own content last changed meaningfully (YYYY-MM-DD).
+   * Update it in the same commit as the edit. Listing pages whose content
+   * comes from the API (/community) have none. Search engines only use
+   * lastmod that tracks real changes, so this is never the request time.
+   */
+  lastModified?: string;
 };
 
 // Public, indexable routes only. Auth/token-gated routes (/app, /devices,
 // /streaming, /overlay, /admin, /settings, /welcome) are intentionally
-// excluded — crawlers just get bounced to sign-in there. (/meta is gone:
-// it redirects to /guides.)
+// excluded — crawlers just get bounced to sign-in there. (/meta and
+// /optimizer are gone: they redirect to /guides.)
 const ROUTES: Route[] = [
-  { path: "/", priority: 1.0, changeFrequency: "weekly" },
-  { path: "/download", priority: 0.9, changeFrequency: "weekly" },
+  { path: "/", priority: 1.0, changeFrequency: "weekly", lastModified: "2026-09-29" },
+  { path: "/download", priority: 0.9, changeFrequency: "weekly", lastModified: "2026-09-29" },
+  { path: "/stream-studio", priority: 0.9, changeFrequency: "monthly", lastModified: "2026-09-29" },
   { path: "/community", priority: 0.8, changeFrequency: "daily" },
-  { path: "/builds", priority: 0.7, changeFrequency: "daily" },
-  { path: "/definitions", priority: 0.5, changeFrequency: "monthly" },
-  { path: "/donate", priority: 0.4, changeFrequency: "monthly" },
-  { path: "/legal/privacy", priority: 0.2, changeFrequency: "yearly" },
-  { path: "/legal/terms", priority: 0.2, changeFrequency: "yearly" },
+  { path: "/builds", priority: 0.7, changeFrequency: "daily", lastModified: "2026-06-01" },
+  { path: "/definitions", priority: 0.5, changeFrequency: "monthly", lastModified: "2026-09-04" },
+  { path: "/donate", priority: 0.4, changeFrequency: "monthly", lastModified: "2026-08-11" },
+  { path: "/legal/privacy", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-09-28" },
+  { path: "/legal/terms", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-08-11" },
 ];
 
 // /try (in-browser replay analysis) is public only once Instant Analysis
 // is rolled out to everyone; in "admins"/"off" mode it is not listed.
-const TRY_ROUTE: Route = { path: "/try", priority: 0.8, changeFrequency: "monthly" };
+const TRY_ROUTE: Route = { path: "/try", priority: 0.8, changeFrequency: "monthly", lastModified: "2026-09-29" };
 
 function staticRoutes(): Route[] {
   return getInstantImportMode() === "all" ? [...ROUTES, TRY_ROUTE] : ROUTES;
@@ -51,38 +60,55 @@ const LIST_REVALIDATE_SEC = 3600;
 // nightly recompute. The API lists are already capped.
 export const revalidate = 3600;
 
-function staticRows(lastModified: Date): SitemapRows {
-  return staticRoutes().map((route) => ({
-    url: `${SITE_URL}${route.path}`,
-    lastModified,
-    changeFrequency: route.changeFrequency,
-    priority: route.priority,
-  }));
+function staticRows(): SitemapRows {
+  return staticRoutes().map((route) => {
+    const lastModified = sitemapDate(route.lastModified);
+    return {
+      url: `${SITE_URL}${route.path}`,
+      ...(lastModified ? { lastModified } : {}),
+      changeFrequency: route.changeFrequency,
+      priority: route.priority,
+    };
+  });
+}
+
+/** The newest of the given dates, if any. */
+function newest(dates: ReadonlyArray<Date | undefined>): Date | undefined {
+  return dates.reduce<Date | undefined>((latest, date) => (date && (!latest || date > latest) ? date : latest), undefined);
 }
 
 /**
  * Once the Replay Review Exchange is live: the review board and every
  * review that passed the quality gate (the API's ``indexable`` flag).
  */
-async function reviewRows(lastModified: Date): Promise<SitemapRows> {
+async function reviewRows(): Promise<SitemapRows> {
   if (reviewsRollout() !== "on") return [];
-  const rows: SitemapRows = [
-    { url: `${SITE_URL}/reviews`, lastModified, changeFrequency: "hourly", priority: 0.7 },
-  ];
   const reviews = await getJson<{ items: Array<{ id: string; lastModified: string | null }> }>(
     "/v1/reviews/sitemap",
     { revalidateSec: LIST_REVALIDATE_SEC },
   );
+  const items: SitemapRows = [];
   for (const item of reviews?.items ?? []) {
     if (!REVIEW_ID_RE.test(item.id)) continue;
-    rows.push({
+    const lastModified = sitemapDate(item.lastModified);
+    items.push({
       url: `${SITE_URL}/reviews/${item.id}`,
-      lastModified: item.lastModified ? new Date(item.lastModified) : lastModified,
+      ...(lastModified ? { lastModified } : {}),
       changeFrequency: "weekly",
       priority: 0.6,
     });
   }
-  return rows;
+  // The board changes when a review does: its lastmod is the newest one.
+  const boardModified = newest(items.map((row) => (row.lastModified ? new Date(row.lastModified) : undefined)));
+  return [
+    {
+      url: `${SITE_URL}/reviews`,
+      ...(boardModified ? { lastModified: boardModified } : {}),
+      changeFrequency: "hourly",
+      priority: 0.7,
+    },
+    ...items,
+  ];
 }
 
 /**
@@ -92,18 +118,18 @@ async function reviewRows(lastModified: Date): Promise<SitemapRows> {
  * submits the hub's noindex "nothing published yet" state, and an API
  * outage lists no guide URL at all.
  */
-async function guideRows(lastModified: Date): Promise<SitemapRows> {
+async function guideRows(): Promise<SitemapRows> {
   if (!guidesEnabled()) return [];
   const result = await fetchGuideSitemap();
-  return guideSitemapRows(SITE_URL, result.kind === "ok" ? result.data : null, lastModified);
+  return guideSitemapRows(SITE_URL, result.kind === "ok" ? result.data : null);
 }
 
 /** Published community builds and their authors' public /p/ profiles. */
-async function communityRows(lastModified: Date): Promise<SitemapRows> {
+async function communityRows(): Promise<SitemapRows> {
   const payload = await getJson<CommunitySitemapPayload>("/v1/community/sitemap", {
     revalidateSec: LIST_REVALIDATE_SEC,
   });
-  return communitySitemapRows(SITE_URL, payload, lastModified);
+  return communitySitemapRows(SITE_URL, payload);
 }
 
 /**
@@ -112,11 +138,6 @@ async function communityRows(lastModified: Date): Promise<SitemapRows> {
  * An unreachable API degrades to the static list, never an error.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const lastModified = new Date();
-  const [reviews, guides, community] = await Promise.all([
-    reviewRows(lastModified),
-    guideRows(lastModified),
-    communityRows(lastModified),
-  ]);
-  return finalizeSitemap([...staticRows(lastModified), ...reviews, ...guides, ...community]);
+  const [reviews, guides, community] = await Promise.all([reviewRows(), guideRows(), communityRows()]);
+  return finalizeSitemap([...staticRows(), ...reviews, ...guides, ...community]);
 }

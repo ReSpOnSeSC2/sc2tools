@@ -117,7 +117,9 @@ afterEach(() => {
 describe("TryPage intake and progress", () => {
   it("shows the privacy line and the intake, and tracks one open", async () => {
     render(<TryPage mode="all" />);
-    expect(screen.getByRole("heading", { level: 1, name: "Analyze your replays in your browser" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Free StarCraft II replay analyzer Analyze your replays in your browser" }),
+    ).toBeTruthy();
     expect(screen.getByText(PRIVACY_LINE)).toBeTruthy();
     expect(screen.getByText("Add your replays")).toBeTruthy();
     expect(screen.getByText("In your browser vs the desktop agent")).toBeTruthy();

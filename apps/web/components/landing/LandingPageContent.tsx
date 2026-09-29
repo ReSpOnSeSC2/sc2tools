@@ -76,10 +76,16 @@ function LandingHero() {
     <section className="pt-10 md:pt-16">
       <div className="grid items-start gap-x-10 gap-y-10 lg:grid-cols-12">
         <div className="lg:col-span-5 lg:pr-2">
-          <p className="kicker">The complete StarCraft II companion</p>
-          <h1 className="mt-5 font-serif text-[44px] font-semibold leading-[1.02] tracking-[-0.01em] text-text md:text-[60px]">
-            Built for ladder players,{" "}
-            <em className="font-serif italic text-editorial">by ladder players.</em>
+          {/* The kicker line is part of the H1 so the page's main heading
+              carries the terms people search for ("sc2 replay analyzer",
+              "starcraft 2 overlay"); visually it stays a kicker above the
+              tagline. */}
+          <h1>
+            <span className="kicker block">StarCraft II replay analyzer &amp; stream overlays</span>
+            <span className="mt-5 block font-serif text-[44px] font-semibold leading-[1.02] tracking-[-0.01em] text-text md:text-[60px]">
+              Built for ladder players,{" "}
+              <em className="font-serif italic text-editorial">by ladder players.</em>
+            </span>
           </h1>
           <p className="drop-initial mt-6 max-w-prose text-body-lg text-text-muted">
             Play normally. SC2 Tools reads every replay, reconstructs the
@@ -408,6 +414,15 @@ function StreamChapter() {
         </div>
         <VirtualSetStrip />
       </div>
+      <p className="mt-8">
+        <Link
+          href="/stream-studio"
+          className="inline-flex min-h-[44px] items-center gap-2 font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+        >
+          See every StarCraft II overlay in Stream Studio
+          <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
+      </p>
     </section>
   );
 }

@@ -91,6 +91,35 @@ describe("sitemap", () => {
     expect(list).not.toContain(`${SITE}/reviews/short`);
   });
 
+  it("dates static pages by their last content change, never the request time", async () => {
+    const rows = await sitemap();
+    const home = rows.find((row) => row.url === `${SITE}/`);
+    expect(home?.lastModified).toEqual(new Date("2026-09-29"));
+    expect(rows.find((row) => row.url === `${SITE}/stream-studio`)?.lastModified).toEqual(new Date("2026-09-29"));
+    // A listing fed by the API carries no invented date.
+    const community = rows.find((row) => row.url === `${SITE}/community`);
+    expect(community).toBeTruthy();
+    expect(community && "lastModified" in community).toBe(false);
+  });
+
+  it("dates the review board by its newest review and leaves undated reviews undated", async () => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    apiRoutes({
+      "/v1/community/sitemap": COMMUNITY,
+      "/v1/reviews/sitemap": {
+        items: [
+          { id: "reviewAAAAAAAAAA", lastModified: "2026-09-10T00:00:00.000Z" },
+          { id: "reviewBBBBBBBBBB", lastModified: "2026-09-12T00:00:00.000Z" },
+          { id: "reviewCCCCCCCCCC", lastModified: null },
+        ],
+      },
+    });
+    const rows = await sitemap();
+    expect(rows.find((row) => row.url === `${SITE}/reviews`)?.lastModified).toEqual(new Date("2026-09-12T00:00:00.000Z"));
+    const undated = rows.find((row) => row.url === `${SITE}/reviews/reviewCCCCCCCCCC`);
+    expect(undated && "lastModified" in undated).toBe(false);
+  });
+
   it("degrades to the static routes when the API is down", async () => {
     vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "1");
     vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
@@ -106,33 +135,27 @@ describe("sitemap", () => {
 });
 
 describe("sitemap helpers", () => {
-  it("accepts only well-formed guide paths", () => {
-    const now = new Date("2026-09-28T00:00:00.000Z");
-    const rows = guideSitemapRows(
-      SITE,
-      {
-        computedAt: null,
-        entries: [
-          { path: "/guides/pvz/counter/8-pool", lastModified: "garbage" },
-          { path: "https://evil.example/guides", lastModified: "2026-09-27T00:00:00.000Z" },
-          { path: "/guides/../admin", lastModified: "2026-09-27T00:00:00.000Z" },
-          { path: "/guides/pvz/a/b/c", lastModified: "2026-09-27T00:00:00.000Z" },
-        ],
-      },
-      now,
-    );
-    expect(rows).toEqual([
-      { url: `${SITE}/guides/pvz/counter/8-pool`, lastModified: now, changeFrequency: "daily", priority: 0.6 },
-    ]);
+  it("accepts only well-formed guide paths, with no made-up lastmod for a bad date", () => {
+    const rows = guideSitemapRows(SITE, {
+      computedAt: null,
+      entries: [
+        { path: "/guides/pvz/counter/8-pool", lastModified: "garbage" },
+        { path: "https://evil.example/guides", lastModified: "2026-09-27T00:00:00.000Z" },
+        { path: "/guides/../admin", lastModified: "2026-09-27T00:00:00.000Z" },
+        { path: "/guides/pvz/a/b/c", lastModified: "2026-09-27T00:00:00.000Z" },
+      ],
+    });
+    expect(rows).toEqual([{ url: `${SITE}/guides/pvz/counter/8-pool`, changeFrequency: "daily", priority: 0.6 }]);
+    expect("lastModified" in rows[0]).toBe(false);
   });
 
   it("lists community builds before profiles (so a cap trims profiles) and tolerates no payload", () => {
-    const now = new Date("2026-09-28T00:00:00.000Z");
-    expect(communitySitemapRows(SITE, COMMUNITY, now).map((row) => [row.url, row.priority])).toEqual([
+    expect(communitySitemapRows(SITE, COMMUNITY).map((row) => [row.url, row.priority])).toEqual([
       [`${SITE}/community/builds/build-0123456789abcdef0123456789abcdef`, 0.5],
       [`${SITE}/p/fixture-author`, 0.4],
     ]);
-    expect(communitySitemapRows(SITE, null, now)).toEqual([]);
+    expect(communitySitemapRows(SITE, COMMUNITY)[0].lastModified).toEqual(new Date("2026-09-20T10:00:00.000Z"));
+    expect(communitySitemapRows(SITE, null)).toEqual([]);
   });
 
   it("caps the list at 45,000 URLs with a warning (counts only)", () => {

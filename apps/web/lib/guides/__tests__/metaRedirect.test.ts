@@ -66,3 +66,27 @@ describe("/meta redirect (next.config.mjs)", () => {
     },
   );
 });
+
+describe("/optimizer redirect (next.config.mjs)", () => {
+  async function optimizerRedirects() {
+    const redirects = nextConfig.redirects;
+    if (!redirects) throw new Error("next.config.mjs has no redirects()");
+    return (await redirects()).filter((rule) => rule.source.startsWith("/optimizer"));
+  }
+
+  test("passes the retired Build adapter URL to the guides permanently", async () => {
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");
+    expect(await optimizerRedirects()).toEqual([
+      { source: "/optimizer", destination: "/guides", permanent: true },
+      { source: "/optimizer/:path*", destination: "/guides", permanent: true },
+    ]);
+  });
+
+  test("points home temporarily when guides are off", async () => {
+    vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", undefined);
+    expect(await optimizerRedirects()).toEqual([
+      { source: "/optimizer", destination: "/", permanent: false },
+      { source: "/optimizer/:path*", destination: "/", permanent: false },
+    ]);
+  });
+});

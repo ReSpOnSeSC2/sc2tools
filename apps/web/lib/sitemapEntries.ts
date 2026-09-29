@@ -5,6 +5,10 @@
  *
  * Nothing here fetches; a missing payload (API down) is simply an empty
  * contribution, so the sitemap degrades to its static routes.
+ *
+ * `lastModified` is only ever a real content date from the API. A row
+ * whose date is missing or unreadable carries none: search engines stop
+ * trusting a sitemap whose lastmod is always "now".
  */
 import type { MetadataRoute } from "next";
 import type {
@@ -37,10 +41,17 @@ const PROFILE_PRIORITY = 0.4;
 const GUIDE_CHANGE_FREQUENCY: ChangeFrequency = "daily";
 const COMMUNITY_CHANGE_FREQUENCY: ChangeFrequency = "weekly";
 
-function toDate(iso: string | null | undefined, fallback: Date): Date {
-  if (!iso) return fallback;
+/** A valid date from an API ISO string, else undefined (never a stand-in "now"). */
+export function sitemapDate(iso: string | null | undefined): Date | undefined {
+  if (!iso) return undefined;
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? fallback : date;
+  return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+/** `{ lastModified }` when there is a real date, else nothing. */
+function lastModifiedField(iso: string | null | undefined): { lastModified?: Date } {
+  const date = sitemapDate(iso);
+  return date ? { lastModified: date } : {};
 }
 
 function guidePriority(path: string): number {
@@ -59,14 +70,13 @@ function guidePriority(path: string): number {
 export function guideSitemapRows(
   siteUrl: string,
   payload: GuideSitemapPayload | null,
-  now: Date,
 ): SitemapRows {
   const rows: SitemapRows = [];
   for (const entry of payload?.entries ?? []) {
     if (typeof entry?.path !== "string" || !GUIDE_PATH_RE.test(entry.path)) continue;
     rows.push({
       url: `${siteUrl}${entry.path}`,
-      lastModified: toDate(entry.lastModified, now),
+      ...lastModifiedField(entry.lastModified),
       changeFrequency: GUIDE_CHANGE_FREQUENCY,
       priority: guidePriority(entry.path),
     });
@@ -77,14 +87,13 @@ export function guideSitemapRows(
 function communityBuildRows(
   siteUrl: string,
   builds: ReadonlyArray<CommunitySitemapBuild>,
-  now: Date,
 ): SitemapRows {
   const rows: SitemapRows = [];
   for (const build of builds) {
     if (typeof build?.slug !== "string" || !COMMUNITY_SLUG_RE.test(build.slug)) continue;
     rows.push({
       url: `${siteUrl}/community/builds/${encodeURIComponent(build.slug)}`,
-      lastModified: toDate(build.lastModified, now),
+      ...lastModifiedField(build.lastModified),
       changeFrequency: COMMUNITY_CHANGE_FREQUENCY,
       priority: COMMUNITY_BUILD_PRIORITY,
     });
@@ -95,14 +104,13 @@ function communityBuildRows(
 function profileRows(
   siteUrl: string,
   profiles: ReadonlyArray<CommunitySitemapProfile>,
-  now: Date,
 ): SitemapRows {
   const rows: SitemapRows = [];
   for (const profile of profiles) {
     if (typeof profile?.handle !== "string" || !PROFILE_HANDLE_RE.test(profile.handle)) continue;
     rows.push({
       url: `${siteUrl}/p/${encodeURIComponent(profile.handle)}`,
-      lastModified: toDate(profile.lastModified, now),
+      ...lastModifiedField(profile.lastModified),
       changeFrequency: COMMUNITY_CHANGE_FREQUENCY,
       priority: PROFILE_PRIORITY,
     });
@@ -120,11 +128,10 @@ function profileRows(
 export function communitySitemapRows(
   siteUrl: string,
   payload: CommunitySitemapPayload | null,
-  now: Date,
 ): SitemapRows {
   return [
-    ...communityBuildRows(siteUrl, payload?.builds ?? [], now),
-    ...profileRows(siteUrl, payload?.profiles ?? [], now),
+    ...communityBuildRows(siteUrl, payload?.builds ?? []),
+    ...profileRows(siteUrl, payload?.profiles ?? []),
   ];
 }
 
