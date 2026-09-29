@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { DownloadCard } from "./DownloadCard";
 import { usePlatformDetect } from "./usePlatformDetect";
+import { useIsMobileDevice } from "./useIsMobileDevice";
 import { useReleaseInfo, formatBytes } from "./useReleaseInfo";
 import type { DetectedOS } from "./types";
 
@@ -45,13 +46,16 @@ const STATIC_SYS_REQUIREMENTS: ReadonlyArray<{ heading: string; body: string }> 
  */
 export function DownloadInteractive() {
   const detected = usePlatformDetect();
+  // Phones and tablets get the send-to-PC card (see DownloadCard); an
+  // iPhone would otherwise be "detected" as macOS and Android as Linux.
+  const mobile = useIsMobileDevice();
   const [active, setActive] = useState<DetectedOS | null>(null);
-  const os = active ?? (detected === "unknown" ? "windows" : detected);
+  const os = active ?? (detected === "unknown" || mobile ? "windows" : detected);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,360px)]">
       <section className="space-y-4">
-        <OsTabs active={os} onChange={setActive} detected={detected} />
+        {mobile ? null : <OsTabs active={os} onChange={setActive} detected={detected} />}
         <DownloadCard os={os} />
         <ManualInstall />
       </section>

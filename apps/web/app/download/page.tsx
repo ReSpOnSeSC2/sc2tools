@@ -18,7 +18,9 @@ const SOFTWARE_JSON_LD = {
   "@type": "SoftwareApplication",
   name: "SC2 Tools Agent",
   applicationCategory: "GameApplication",
-  operatingSystem: "Windows, macOS, Linux",
+  // The published installer is Windows-only (macOS and Linux run the agent
+  // from source), so search results shouldn't promise a Mac download.
+  operatingSystem: "Windows 10, Windows 11",
   description:
     "A background watcher that syncs StarCraft II replay analysis and original replay files to a private SC2 Tools dashboard library.",
   offers: {
