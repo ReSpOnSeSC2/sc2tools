@@ -2,13 +2,18 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DownloadCard } from "./DownloadCard";
 
-const { gaEventMock, usePlatformDetectMock, useReleaseInfoMock } = vi.hoisted(
+const { gaEventMock, usePlatformDetectMock, useReleaseInfoMock, useIsMobileDeviceMock } = vi.hoisted(
   () => ({
     gaEventMock: vi.fn(),
     usePlatformDetectMock: vi.fn(),
     useReleaseInfoMock: vi.fn(),
+    useIsMobileDeviceMock: vi.fn(() => false),
   }),
 );
+
+vi.mock("./useIsMobileDevice", () => ({
+  useIsMobileDevice: () => useIsMobileDeviceMock(),
+}));
 
 vi.mock("./usePlatformDetect", () => ({
   usePlatformDetect: () => usePlatformDetectMock(),
@@ -47,6 +52,23 @@ describe("DownloadCard", () => {
 
   afterEach(() => {
     cleanup();
+    useIsMobileDeviceMock.mockReturnValue(false);
+    vi.unstubAllEnvs();
+  });
+
+  it("sends phone and tablet visitors to their PC instead of offering an installer", () => {
+    useIsMobileDeviceMock.mockReturnValue(true);
+    render(<DownloadCard />);
+    expect(screen.getByRole("heading", { name: "Install it on your PC" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Download for/ })).toBeNull();
+  });
+
+  it("points Mac visitors at the in-browser analyzer and python3", () => {
+    vi.stubEnv("NEXT_PUBLIC_INSTANT_IMPORT", "all");
+    useReleaseInfoMock.mockReturnValue({ isLoading: false, error: null, data: { artifact: null } });
+    render(<DownloadCard os="macos" />);
+    expect(screen.getByRole("link", { name: "Open the replay analyzer" }).getAttribute("href")).toBe("/try");
+    expect(screen.getByText(/python3 -m sc2tools_agent/)).toBeTruthy();
   });
 
   it("posts the resolved installer through the tracked server redirect", () => {

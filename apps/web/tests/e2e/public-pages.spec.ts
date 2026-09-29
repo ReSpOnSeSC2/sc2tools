@@ -20,6 +20,7 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
   { path: "/guides/pvz", expectText: /PvZ build orders/i },
   { path: "/guides/pvz/stargate-into-glaives", expectText: /Stargate into Glaives/ },
   { path: "/download", expectText: /download|agent/i },
+  { path: "/stream-studio", expectText: /StarCraft II overlays for OBS/i },
   { path: "/community", expectText: /community|build/i },
   { path: "/donate", expectText: /donate|chip in|free/i },
   {

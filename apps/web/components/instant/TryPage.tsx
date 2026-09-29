@@ -68,7 +68,14 @@ function TryHero() {
   return (
     <header className="space-y-4">
       <p className="kicker">No download · No account needed</p>
-      <h1 className="font-display text-h1 text-text md:text-display-lg">Analyze your replays in your browser</h1>
+      {/* The first line keeps the searched-for name ("StarCraft II replay
+          analyzer") in the H1 without changing the visual headline. */}
+      <h1>
+        <span className="block text-body font-semibold text-text-muted">Free StarCraft II replay analyzer</span>
+        <span className="mt-1 block font-display text-h1 text-text md:text-display-lg">
+          Analyze your replays in your browser
+        </span>
+      </h1>
       <p className="max-w-prose text-body-lg text-text-muted">
         Drop up to {MAX_TRY_FILES} StarCraft II replays and get an instant report: your record by matchup, your
         openers, your macro and why you lost your last game.

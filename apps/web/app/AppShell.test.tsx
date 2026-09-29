@@ -113,8 +113,6 @@ describe("app chrome routes", () => {
     "/community/builds/slug",
     "/devices",
     "/settings",
-    "/admin",
-    "/admin/users",
     "/coaching",
   ])(
     "keeps Clerk and site-wide concerns on %s without the marketing shell",
@@ -133,6 +131,23 @@ describe("app chrome routes", () => {
       expect(screen.getByTestId("site-presence")).toBeTruthy();
       expect(screen.queryByTestId("site-header")).toBeNull();
       expect(screen.queryByTestId("site-footer")).toBeNull();
+    },
+  );
+});
+
+describe("admin routes", () => {
+  it.each(["/admin", "/admin/users", "/admin/users/u1/opponents"])(
+    "keeps the app chrome but never mounts analytics on %s",
+    (pathname) => {
+      renderAt(pathname);
+
+      expect(screen.getByTestId("clerk-provider")).toBeTruthy();
+      expect(screen.getByTestId("app-chrome")).toBeTruthy();
+      expect(screen.getByTestId("route-content")).toBeTruthy();
+      expect(screen.getByTestId("cookie-banner")).toBeTruthy();
+      expect(screen.getByTestId("service-worker")).toBeTruthy();
+      // Operator-only screens stay out of the GA reports entirely.
+      expect(screen.queryByTestId("google-analytics")).toBeNull();
     },
   );
 });

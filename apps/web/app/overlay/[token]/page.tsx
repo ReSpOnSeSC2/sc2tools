@@ -1,5 +1,6 @@
 import { OverlayClient } from "@/components/OverlayClient";
 import { OVERLAY_THEME_PARAM } from "@/lib/overlayTheme";
+import { isOverlayCreditHidden, OVERLAY_CREDIT_PARAM } from "@/lib/overlayCredit";
 
 export const metadata = {
   title: "Live overlay",
@@ -31,5 +32,7 @@ export default async function OverlayPage({
   const themeParam = typeof sp[OVERLAY_THEME_PARAM] === "string"
     ? (sp[OVERLAY_THEME_PARAM] as string)
     : null;
-  return <OverlayClient token={token} themeParam={themeParam} />;
+  // ``?credit=0`` hides the "Overlay by sc2tools.com" credit (lib/overlayCredit).
+  const showCredit = !isOverlayCreditHidden(sp[OVERLAY_CREDIT_PARAM]);
+  return <OverlayClient token={token} themeParam={themeParam} showCredit={showCredit} />;
 }

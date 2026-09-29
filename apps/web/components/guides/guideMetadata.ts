@@ -78,13 +78,29 @@ export function buildHeadline(data: GuideBuildPayload): string {
   return `${base} — ${fmtPct(winRate)} ladder win rate ${patchTag(data.patch)}`;
 }
 
-/** Search description for a build guide. */
+/**
+ * Search description for a build guide.
+ *
+ * When the title quotes the league-band win rate ("46.3% win rate vs
+ * Master"), the description leads with that same number before the
+ * overall one, so a search result never shows two different win rates
+ * without saying which is which.
+ *
+ * Example: "Robo First (PvT) wins 46.3% vs Master opponents and 55.0% of
+ * decided games overall, across 109 ladder games from 5 players since
+ * patch 5.0.16. …"
+ */
 export function buildDescription(data: GuideBuildPayload): string {
   if (!data.published) {
     return `${data.name} (${data.matchup}): ${data.description} Not enough ladder games yet for published stats.`;
   }
-  const { overall } = data;
-  return `${data.name} (${data.matchup}) wins ${fmtPct(overall.winRate)} of decided games across ${fmtCountNoun(overall.games, "ladder game")} from ${fmtCountNoun(overall.users, "player")} ${eraLabel(data.era, data.patch)}. Key timings, army and matchups from real replays.${updated(data.computedAt)}`;
+  const { overall, headline } = data;
+  const sample = `${fmtCountNoun(overall.games, "ladder game")} from ${fmtCountNoun(overall.users, "player")} ${eraLabel(data.era, data.patch)}`;
+  const record =
+    headline && headline.scope === "league" && headline.label
+      ? `wins ${fmtPct(headline.winRate)} vs ${headline.label} opponents and ${fmtPct(overall.winRate)} of decided games overall, across ${sample}`
+      : `wins ${fmtPct(overall.winRate)} of decided games across ${sample}`;
+  return `${data.name} (${data.matchup}) ${record}. Key timings, army and matchups from real replays.${updated(data.computedAt)}`;
 }
 
 export function buildMetadata(data: GuideBuildPayload): Metadata {

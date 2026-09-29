@@ -25,7 +25,8 @@ interface FooterLink {
 const PRODUCT_LINKS: readonly FooterLink[] = [
   { href: "/#analyze", label: "Analyze" },
   { href: "/#practice", label: "Practice" },
-  { href: "/#stream", label: "Stream Studio" },
+  // The dedicated page (SEO landing for "sc2 overlay"), not the homepage anchor.
+  { href: "/stream-studio", label: "Stream Studio" },
   { href: "/builds", label: "Custom builds" },
   { href: "/devices", label: "Devices" },
   { href: "/download", label: "Download agent" },

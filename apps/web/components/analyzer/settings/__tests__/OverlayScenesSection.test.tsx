@@ -1,9 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { setOverlayCreditPreference } from "@/lib/overlayCredit";
 import { STREAM_BACKGROUNDS } from "@/lib/streamBackgrounds";
 import { OverlayScenesSection } from "../OverlayScenesSection";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.localStorage.clear();
+});
 
 describe("OverlayScenesSection virtual sets", () => {
   it("lists all seven stable Browser Source URLs without theme churn", () => {
@@ -41,5 +45,18 @@ describe("OverlayScenesSection virtual sets", () => {
       `https://studio.example/overlay/overlay-token/scene/${background.id}`,
     );
     expect(screen.getByText(/clean virtual set/i)).toBeTruthy();
+  });
+});
+
+describe("OverlayScenesSection credit flag", () => {
+  it("bakes credit=0 into the animated scenes once the credit is switched off", () => {
+    render(<OverlayScenesSection token="overlay-token" origin="https://studio.example" theme={{}} />);
+    const urls = () => screen.getAllByLabelText("Widget Browser Source URL").map((node) => node.textContent);
+    expect(urls()).toContain("https://studio.example/overlay/overlay-token/scene/starting-soon");
+
+    act(() => setOverlayCreditPreference(false));
+    expect(urls()).toContain("https://studio.example/overlay/overlay-token/scene/starting-soon?credit=0");
+    // Virtual sets never show the credit, so their URLs never change.
+    expect(urls()).toContain(`https://studio.example/overlay/overlay-token/scene/${STREAM_BACKGROUNDS[0].id}`);
   });
 });

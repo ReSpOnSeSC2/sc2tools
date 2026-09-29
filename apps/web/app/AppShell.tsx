@@ -11,6 +11,7 @@ import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 import { ToastProvider } from "@/components/ui/Toast";
 import { clerkAppearanceBase } from "@/lib/clerk-appearance";
 import { isTokenAuthRoute } from "@/lib/tokenAuthRoutes";
+import { isUntrackedPath } from "@/lib/analytics/pageLocation";
 import { AppChrome } from "@/components/chrome/AppChrome";
 import { isAppSurfacePath } from "@/components/chrome/appNav";
 import { SiteStats } from "@/components/chrome/SiteStats";
@@ -18,19 +19,6 @@ import { SitePresence } from "@/components/chrome/SitePresence";
 
 const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
-
-/**
- * Shared replay URLs can carry a player slug plus replay filters. Keep those
- * paths out of page-view analytics so a player's shared archive activity is
- * not disclosed to the analytics provider. The /p form remains during the
- * legacy-link redirect window.
- */
-function isPublicReplayRoute(pathname: string | null): boolean {
-  return Boolean(
-    pathname
-      && /^\/(?:p|players)\/[^/]+\/replays(?:\/|$)/.test(pathname),
-  );
-}
 
 /**
  * Chooses the browser surface before mounting Clerk or normal site chrome.
@@ -55,7 +43,11 @@ function isPublicReplayRoute(pathname: string | null): boolean {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isTokenSurface = isTokenAuthRoute(pathname);
-  const analyticsAllowed = !isPublicReplayRoute(pathname);
+  // Google Analytics never loads on untracked surfaces: shared replay
+  // archives (a player's archive activity is not disclosed to the analytics
+  // provider; the /p form remains during the legacy-link redirect window)
+  // and the operator-only /admin screens. See lib/analytics/pageLocation.
+  const analyticsAllowed = !isUntrackedPath(pathname);
 
   if (isTokenSurface) {
     return (

@@ -6,6 +6,7 @@ import {
   videoJsonLd,
 } from "@/components/guides/guideSeo";
 import {
+  buildDescription,
   buildHeadline,
   counterHeadline,
   counterListMetadata,
@@ -84,6 +85,32 @@ describe("guideMetadata", () => {
   it("keeps numbers out of unpublished headlines", () => {
     expect(buildHeadline(FIXTURE_BUILD_UNPUBLISHED)).toBe("Carrier Rush PvZ build order guide (Patch 5.0.16)");
     expect(buildHeadline(FIXTURE_BUILD_PUBLISHED)).toMatch(/— \d+\.\d% win rate vs Diamond \(/);
+  });
+
+  it("leads the build description with the same win rate as the title", () => {
+    const { headline, overall } = FIXTURE_BUILD_PUBLISHED;
+    if (!headline || headline.scope !== "league") throw new Error("fixture needs a league headline");
+    const title = buildHeadline(FIXTURE_BUILD_PUBLISHED);
+    const description = buildDescription(FIXTURE_BUILD_PUBLISHED);
+    expect(title).toContain(`${fmtPct(headline.winRate)} win rate vs ${headline.label}`);
+    expect(description).toContain(
+      `wins ${fmtPct(headline.winRate)} vs ${headline.label} opponents and ${fmtPct(overall.winRate)} of decided games overall`,
+    );
+  });
+
+  it("keeps the overall-only description without a league headline", () => {
+    const data = {
+      ...FIXTURE_BUILD_PUBLISHED,
+      headline: {
+        scope: "all" as const,
+        value: null,
+        label: null,
+        games: FIXTURE_BUILD_PUBLISHED.overall.games,
+        winRate: FIXTURE_BUILD_PUBLISHED.overall.winRate,
+      },
+    };
+    expect(buildDescription(data)).toContain(`wins ${fmtPct(data.overall.winRate)} of decided games across`);
+    expect(buildHeadline(data)).toContain(`${fmtPct(data.overall.winRate)} ladder win rate`);
   });
 
   it("titles the unfiltered matchup page with the opener count", () => {

@@ -12,6 +12,7 @@
  */
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { TryExplainer } from "@/components/instant/TryExplainer";
 import { TryPage } from "@/components/instant/TryPage";
 import { getInstantImportMode, type InstantImportMode } from "@/lib/instant/flag";
 
@@ -25,9 +26,11 @@ import { getInstantImportMode, type InstantImportMode } from "@/lib/instant/flag
 function tryMetadata(mode: InstantImportMode): Metadata {
   if (mode === "off") return {};
   return {
-    title: "Analyze your replays in your browser — SC2 Tools",
+    // Leads with the query people search ("sc2 replay analyzer"); the page's
+    // H1 carries the same phrase.
+    title: "SC2 Replay Analyzer: free StarCraft II replay stats | SC2 Tools",
     description:
-      "Drop your StarCraft II replays and get an instant report — record by matchup, openers, macro and why you lost — analyzed privately in your browser. No download, no account.",
+      "Free StarCraft II replay analyzer: drop your .SC2Replay files and get your record by matchup, openers, macro and why you lost, analyzed privately in your browser. No download, no account.",
     alternates: { canonical: "/try" },
     ...(mode === "all" ? {} : { robots: { index: false, follow: false } }),
   };
@@ -44,5 +47,11 @@ export const metadata: Metadata = tryMetadata(getInstantImportMode());
 export default function TryRoute() {
   const mode = getInstantImportMode();
   if (mode === "off") notFound();
-  return <TryPage mode={mode} />;
+  return (
+    <>
+      <TryPage mode={mode} />
+      {/* The crawlable description is public only when the tool is. */}
+      {mode === "all" ? <TryExplainer /> : null}
+    </>
+  );
 }

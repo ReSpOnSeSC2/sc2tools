@@ -86,6 +86,21 @@ function metaMatchupRedirects() {
   }));
 }
 
+/**
+ * The Build adapter (/optimizer) was removed in July 2026, but Google kept
+ * ranking its URL. Its closest living successor is the build-order guides,
+ * so the old URL passes its ranking there with a permanent redirect while
+ * guides are on, and points home temporarily while they are off (same
+ * reasoning as the /meta rules above).
+ *
+ * @param {boolean} guidesOn
+ * @returns {Array<{ source: string, destination: string, permanent: boolean }>}
+ */
+function retiredToolRedirects(guidesOn) {
+  const destination = guidesOn ? "/guides" : "/";
+  return ["/optimizer", "/optimizer/:path*"].map((source) => ({ source, destination, permanent: guidesOn }));
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -96,7 +111,8 @@ const nextConfig = {
   // sharp/onnxruntime-node requires.
   serverExternalPackages: ["@xenova/transformers"],
   async redirects() {
-    return metaRedirects(isGuidesFlagOn(process.env.NEXT_PUBLIC_GUIDES_ENABLED));
+    const guidesOn = isGuidesFlagOn(process.env.NEXT_PUBLIC_GUIDES_ENABLED);
+    return [...metaRedirects(guidesOn), ...retiredToolRedirects(guidesOn)];
   },
   // Tighten the cache for the analyzer page so it always reflects the
   // user's latest data, but let the marketing routes use Vercel's edge.

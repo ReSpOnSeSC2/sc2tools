@@ -41,8 +41,10 @@ import {
   SC2BackdropScene,
   accentForRace,
   DEFAULT_BACKDROP_ACCENT,
+  VARIANT_LAYOUT,
   type BackdropVariant,
 } from "./SC2BackdropScene";
+import { OverlayCredit } from "../OverlayCredit";
 import { CinematicBackgroundScene } from "./CinematicBackgroundScene";
 import { StreamSceneCanvas } from "../widgets/StreamSceneWidget";
 import { useBrollAudioOwner } from "../widgets/brollAudio";
@@ -83,11 +85,18 @@ export function OverlaySceneClient({
   scene,
   staticMode = false,
   demo = false,
+  showCredit = true,
 }: {
   token: string;
   scene: OverlaySceneVariant;
   staticMode?: boolean;
   demo?: boolean;
+  /**
+   * "Overlay by sc2tools.com" on the full-canvas Starting Soon / BRB /
+   * Intermission cards (never on the Between Games frame, a virtual set,
+   * or the transparent manual cover). Off for ``?credit=0``.
+   */
+  showCredit?: boolean;
 }) {
   // Virtual sets are deliberately independent of live-game and Stream Dock
   // state. Their named URL always paints the same camera backdrop and opens no
@@ -102,6 +111,7 @@ export function OverlaySceneClient({
       scene={scene}
       staticMode={staticMode}
       demo={demo}
+      showCredit={showCredit}
     />
   );
 }
@@ -111,11 +121,13 @@ function DockDrivenOverlaySceneClient({
   scene,
   staticMode,
   demo,
+  showCredit,
 }: {
   token: string;
   scene: DockDrivenSceneVariant;
   staticMode: boolean;
   demo: boolean;
+  showCredit: boolean;
 }) {
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [live, setLive] = useState<LiveGamePayload | null>(null);
@@ -233,23 +245,33 @@ function DockDrivenOverlaySceneClient({
   // legacy SC2 backdrop branch before its b-roll snapshot arrived.
   if (scene === "manual" && !demo && dockScene) {
     return (
-      <StreamSceneCanvas
-        scene={dockScene}
-        broll={studio.broll}
-        remainMs={countdownMs}
-        brollAudioOwner={brollAudioOwner}
-        videoFormat="horizontal"
-      />
+      <>
+        <StreamSceneCanvas
+          scene={dockScene}
+          broll={studio.broll}
+          remainMs={countdownMs}
+          brollAudioOwner={brollAudioOwner}
+          videoFormat="horizontal"
+        />
+        {showCredit ? <OverlayCredit placement="bottom-center" /> : null}
+      </>
     );
   }
 
   return (
-    <SC2BackdropScene
-      variant={variant}
-      accent={accent}
-      message={dockScene?.message || null}
-      countdownMs={countdownMs}
-      staticMode={staticMode}
-    />
+    <>
+      <SC2BackdropScene
+        variant={variant}
+        accent={accent}
+        message={dockScene?.message || null}
+        countdownMs={countdownMs}
+        staticMode={staticMode}
+      />
+      {/* Full-canvas cards only: the Between Games frame sits behind the
+          streamer's camera and stays unbranded. */}
+      {showCredit && VARIANT_LAYOUT[variant] === "full" ? (
+        <OverlayCredit placement="bottom-center" />
+      ) : null}
+    </>
   );
 }

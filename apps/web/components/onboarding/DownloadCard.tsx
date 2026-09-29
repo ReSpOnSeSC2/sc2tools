@@ -13,7 +13,10 @@ import {
 } from "lucide-react";
 import { useReleaseInfo, formatBytes } from "./useReleaseInfo";
 import { usePlatformDetect } from "./usePlatformDetect";
+import { useIsMobileDevice } from "./useIsMobileDevice";
+import { SendToPcCard } from "./SendToPcCard";
 import { gaEvent } from "@/lib/analytics/gtag";
+import { getInstantImportMode } from "@/lib/instant/flag";
 import type { DetectedOS } from "./types";
 
 const OS_LABEL: Record<Exclude<DetectedOS, "unknown">, string> = {
@@ -27,7 +30,8 @@ const OS_LABEL: Record<Exclude<DetectedOS, "unknown">, string> = {
  * and the standalone /download page. Pulls real release metadata from
  * `/v1/agent/version` so version, file size, and SHA-256 are never
  * hardcoded. Falls back to a "no installer yet" callout if the API
- * has nothing for the user's platform.
+ * has nothing for the user's platform. Phones and tablets, which can't
+ * run the agent, get a send-the-link-to-your-PC card instead.
  */
 export function DownloadCard({
   os: osOverride,
@@ -36,9 +40,11 @@ export function DownloadCard({
   os?: DetectedOS;
 }) {
   const detectedOs = usePlatformDetect();
+  const mobile = useIsMobileDevice();
   const os = osOverride ?? detectedOs;
   const release = useReleaseInfo(os);
 
+  if (mobile) return <SendToPcCard />;
   if (release.isLoading) return <DownloadCardSkeleton />;
   if (release.error || !release.data?.artifact) {
     return <DownloadCardNoArtifact os={os} />;
@@ -273,8 +279,12 @@ function DownloadCardSkeleton() {
 
 function DownloadCardNoArtifact({ os }: { os: DetectedOS }) {
   const isLinux = os === "linux";
+  const isMac = os === "macos";
+  // Windows' launcher is `py`; macOS and Linux ship `python3`.
+  const python = isLinux || isMac ? "python3" : "py";
   return (
     <article className="space-y-3 rounded-xl border border-warning/40 bg-warning/5 p-5 sm:p-6">
+      {(isMac || isLinux) && getInstantImportMode() === "all" ? <BrowserAnalyzerLead /> : null}
       <header className="flex items-start gap-2">
         <AlertTriangle
           className="mt-0.5 h-5 w-5 flex-shrink-0 text-warning"
@@ -283,7 +293,7 @@ function DownloadCardNoArtifact({ os }: { os: DetectedOS }) {
         <div className="min-w-0 space-y-1">
           <h3 className="text-body-lg font-semibold text-text">
             No installer published yet
-            {isLinux ? " for Linux" : os === "macos" ? " for macOS" : ""}
+            {isLinux ? " for Linux" : isMac ? " for macOS" : ""}
           </h3>
           <p className="text-caption text-text-muted">
             Run the agent from source while we ship signed binaries.
@@ -294,10 +304,31 @@ function DownloadCardNoArtifact({ os }: { os: DetectedOS }) {
       <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
         {`git clone https://github.com/ReSpOnSeSC2/sc2tools.git
 cd sc2tools/apps/agent
-py -m pip install -r requirements.txt
-py -m sc2tools_agent`}
+${python} -m pip install -r requirements.txt
+${python} -m sc2tools_agent`}
       </pre>
     </article>
+  );
+}
+
+/**
+ * The easy path for Mac and Linux visitors: the in-browser analyzer
+ * needs no install at all (shown only while /try is public).
+ */
+function BrowserAnalyzerLead() {
+  return (
+    <div className="rounded-lg border border-accent-cyan/30 bg-bg-surface p-4">
+      <p className="text-body font-semibold text-text">Not on Windows? Analyze your replays in your browser.</p>
+      <p className="mt-1 text-caption text-text-muted">
+        The same analysis runs right in the page, with nothing to install.
+      </p>
+      <Link
+        href="/try"
+        className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg bg-accent-cyan px-4 text-body font-semibold text-white hover:bg-accent-cyan/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+      >
+        Open the replay analyzer
+      </Link>
+    </div>
   );
 }
 
