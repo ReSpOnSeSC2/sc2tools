@@ -253,7 +253,7 @@ function DockDrivenOverlaySceneClient({
           brollAudioOwner={brollAudioOwner}
           videoFormat="horizontal"
         />
-        {showCredit ? <OverlayCredit placement="bottom-center" /> : null}
+        <OverlayCredit placement="bottom-center" visible={showCredit} />
       </>
     );
   }
@@ -267,11 +267,16 @@ function DockDrivenOverlaySceneClient({
         countdownMs={countdownMs}
         staticMode={staticMode}
       />
-      {/* Full-canvas cards only: the Between Games frame sits behind the
-          streamer's camera and stays unbranded. */}
-      {showCredit && VARIANT_LAYOUT[variant] === "full" ? (
-        <OverlayCredit placement="bottom-center" />
-      ) : null}
+      <OverlayCredit placement="bottom-center" visible={backdropCreditVisible(showCredit, variant)} />
     </>
   );
+}
+
+/**
+ * Only the full-canvas cards (Starting Soon / BRB / Intermission) carry the
+ * credit: the Between Games frame sits behind the streamer's camera and
+ * stays unbranded.
+ */
+function backdropCreditVisible(showCredit: boolean, variant: BackdropVariant): boolean {
+  return showCredit && VARIANT_LAYOUT[variant] === "full";
 }

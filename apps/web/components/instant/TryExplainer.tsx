@@ -70,6 +70,8 @@ function SectionHeading({ children }: { children: string }) {
   return <h2 className="font-display text-h2 text-text">{children}</h2>;
 }
 
+const LINK_CLASS = "font-semibold text-accent underline-offset-4 hover:underline";
+
 export function TryExplainer() {
   return (
     <section aria-labelledby="try-explainer-title" className="mx-auto mt-16 max-w-4xl space-y-10 border-t border-border pt-12">
@@ -84,59 +86,74 @@ export function TryExplainer() {
           install and no account needed.
         </p>
       </div>
-
-      <div className="space-y-3">
-        <SectionHeading>What the replay report shows</SectionHeading>
-        <ul className="max-w-prose list-disc space-y-2 pl-5 text-body text-text">
-          {REPORT_ITEMS.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </div>
-
-      <div className="space-y-3">
-        <SectionHeading>Where to find your StarCraft II replays</SectionHeading>
-        <p className="max-w-prose text-body text-text-muted">
-          StarCraft II saves replays inside its Accounts folder. Choose that whole folder, or drag it onto the
-          analyzer, and it finds the replays for you.
-        </p>
-        <dl className="grid gap-3 sm:grid-cols-2">
-          {FOLDERS.map(({ os, path }) => (
-            <div key={os} className="min-w-0 rounded-lg border border-border bg-bg-surface p-3">
-              <dt className="text-caption font-semibold text-text-muted">{os}</dt>
-              <dd className="mt-1 break-all font-mono text-caption text-text">{path}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-
-      <div className="space-y-3">
-        <SectionHeading>Questions</SectionHeading>
-        <div className="space-y-4">
-          {FAQ.map(({ q, a }) => (
-            <div key={q} className="max-w-prose">
-              <h3 className="text-body-lg font-semibold text-text">{q}</h3>
-              <p className="mt-1 text-body text-text-muted">{a}</p>
-            </div>
-          ))}
-        </div>
-        <p className="max-w-prose text-body text-text-muted">
-          Want every game analyzed automatically?{" "}
-          <Link href="/download" className="font-semibold text-accent underline-offset-4 hover:underline">
-            Get the free desktop agent
-          </Link>
-          {guidesEnabled() ? (
-            <>
-              {" "}or see the{" "}
-              <Link href="/guides" className="font-semibold text-accent underline-offset-4 hover:underline">
-                build-order guides
-              </Link>{" "}
-              built from real ladder replays
-            </>
-          ) : null}
-          .
-        </p>
-      </div>
+      <ReportContents />
+      <ReplayFolders />
+      <Questions />
     </section>
+  );
+}
+
+function ReportContents() {
+  return (
+    <div className="space-y-3">
+      <SectionHeading>What the replay report shows</SectionHeading>
+      <ul className="max-w-prose list-disc space-y-2 pl-5 text-body text-text">
+        {REPORT_ITEMS.map((item) => (
+          <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ReplayFolders() {
+  return (
+    <div className="space-y-3">
+      <SectionHeading>Where to find your StarCraft II replays</SectionHeading>
+      <p className="max-w-prose text-body text-text-muted">
+        StarCraft II saves replays inside its Accounts folder. Choose that whole folder, or drag it onto the
+        analyzer, and it finds the replays for you.
+      </p>
+      <dl className="grid gap-3 sm:grid-cols-2">
+        {FOLDERS.map(({ os, path }) => (
+          <div key={os} className="min-w-0 rounded-lg border border-border bg-bg-surface p-3">
+            <dt className="text-caption font-semibold text-text-muted">{os}</dt>
+            <dd className="mt-1 break-all font-mono text-caption text-text">{path}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function Questions() {
+  return (
+    <div className="space-y-3">
+      <SectionHeading>Questions</SectionHeading>
+      <div className="space-y-4">
+        {FAQ.map(({ q, a }) => (
+          <div key={q} className="max-w-prose">
+            <h3 className="text-body-lg font-semibold text-text">{q}</h3>
+            <p className="mt-1 text-body text-text-muted">{a}</p>
+          </div>
+        ))}
+      </div>
+      <p className="max-w-prose text-body text-text-muted">
+        Want every game analyzed automatically?{" "}
+        <Link href="/download" className={LINK_CLASS}>
+          Get the free desktop agent
+        </Link>
+        {guidesEnabled() ? (
+          <>
+            {" "}or see the{" "}
+            <Link href="/guides" className={LINK_CLASS}>
+              build-order guides
+            </Link>{" "}
+            built from real ladder replays
+          </>
+        ) : null}
+        .
+      </p>
+    </div>
   );
 }

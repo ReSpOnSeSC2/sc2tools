@@ -40,7 +40,15 @@ const BASE_STYLE: CSSProperties = {
   textShadow: "0 1px 2px rgba(0, 0, 0, 0.6)",
 };
 
-export function OverlayCredit({ placement = "top-left" }: { placement?: OverlayCreditPlacement }) {
+export function OverlayCredit({
+  placement = "top-left",
+  visible = true,
+}: {
+  placement?: OverlayCreditPlacement;
+  /** The caller's show/hide decision; false renders nothing. */
+  visible?: boolean;
+}) {
+  if (!visible) return null;
   return (
     <span data-testid="overlay-credit" data-placement={placement} style={{ ...BASE_STYLE, ...PLACEMENT_STYLE[placement] }}>
       {OVERLAY_CREDIT_TEXT}

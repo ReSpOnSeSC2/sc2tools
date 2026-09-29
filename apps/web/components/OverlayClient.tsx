@@ -86,7 +86,7 @@ import {
 export function OverlayClient({
   token,
   themeParam = null,
-  showCredit = true,
+  showCredit,
 }: {
   token: string;
   /**
@@ -204,12 +204,6 @@ export function OverlayClient({
     return visibleLive.has(id);
   }
 
-  // The credit rides along only while this composite source actually
-  // shows a widget, so a between-games scene stays fully transparent.
-  // Dedicated ``?w=`` sources never show it (several would stack up).
-  const creditVisible =
-    showCredit && singleWidget === null && COMPOSITE_WIDGETS.some(shouldShow);
-
   return (
     <div
       className="relative h-screen w-screen"
@@ -249,9 +243,23 @@ export function OverlayClient({
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
       ) : null}
-      {creditVisible ? <OverlayCredit placement="top-left" /> : null}
+      <OverlayCredit placement="top-left" visible={compositeCreditVisible(showCredit, singleWidget, shouldShow)} />
     </div>
   );
+}
+
+/**
+ * The credit rides along only while this composite source actually shows
+ * a widget, so a between-games scene stays fully transparent. Dedicated
+ * ``?w=`` sources never show it (several would stack up). An unset
+ * ``showCredit`` means shown, the default.
+ */
+function compositeCreditVisible(
+  showCredit: boolean | undefined,
+  singleWidget: WidgetId | null,
+  shouldShow: (id: WidgetId) => boolean,
+): boolean {
+  return showCredit !== false && singleWidget === null && COMPOSITE_WIDGETS.some(shouldShow);
 }
 
 /** The widgets this all-in-one source renders (keep in step with the JSX above). */
