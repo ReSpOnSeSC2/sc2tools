@@ -356,6 +356,7 @@ export function metaSelectionForGame(
  * build), then replay time (8-worker from the 5.0.16 release until 5.0.17
  * reaches the live ladder). A malformed legacy row defaults to the live era rather than
  * surfacing obsolete 8-worker guidance.
+ *
  * Accepts any row carrying these fields: the slim game row, a /try
  * payload, or a date-only header.
  */

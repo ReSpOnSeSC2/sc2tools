@@ -108,9 +108,9 @@ describe("macroChartProps", () => {
     expect(payload).toMatchObject({ gameVersion: "5.0.15.96883", gameBuild: 96883 });
     expect(macroChartProps(payload, builds)?.patchEra).toBe("after");
     expect(macroChartProps({ ...payload, gameVersion: "5.0.16.97425" }, builds)?.patchEra).toBe("before");
-    // Without version metadata the replay date decides.
+    // Without version metadata the replay date decides (patchEraForGame).
     const undated = { ...payload, gameVersion: null, gameBuild: null };
     expect(macroChartProps({ ...undated, date: "2026-07-20T00:00:00Z" }, builds)?.patchEra).toBe("before");
-    expect(macroChartProps({ ...undated, date: "2026-10-01T00:00:00Z" }, builds)?.patchEra).toBe("after");
+    expect(macroChartProps({ ...undated, date: "2026-05-01T00:00:00Z" }, builds)?.patchEra).toBe("after");
   });
 });

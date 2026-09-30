@@ -443,7 +443,7 @@ function BreakdownBody({
   );
   const gameApm = useMemo(() => readGameApm(apmReq.data), [apmReq.data]);
   // The calling rows carry the replay's date but no version, so the
-  // era prices units by the date rule (8 workers only inside 5.0.16).
+  // era prices units by patchEraForGame's date rule.
   const patchEra = patchEraForGame({ date: headerMeta?.dateIso });
 
   return (
