@@ -8,9 +8,10 @@ This module is data-only -- it has no logic. It exposes:
     SKIP_UNITS         -- unit names to ignore (workers, larva, broodlings, etc.)
     SKIP_BUILDINGS     -- structures to ignore for strategy detection
     KNOWN_BUILDS       -- sorted list of named builds suitable for DB seeding
+    EIGHT_WORKER_BUILD_NAMES -- names the 8-worker patch 5.0.16 used instead
 """
 
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set
 
 # =========================================================
 # BUILD DEFINITIONS  (50+ named strategies)
@@ -254,6 +255,37 @@ BUILD_SIGNATURES: Dict[str, Dict[str, object]] = {
         ("ZvZ - Roach Aggression", "Zerg", "Zerg"),
     )
 }
+
+
+# The pool-first openers were "8 Pool" on the 8-worker patch 5.0.16 and
+# "12 Pool" before it and again from 5.0.17, which restored 12 starting
+# workers. The detection rules are the same; only the name follows the
+# patch the replay was played on.
+EIGHT_WORKER_VERSION_PREFIX = "5.0.16."
+EIGHT_WORKER_BUILD_NAMES: Dict[str, str] = {
+    "Zerg - 12 Pool": "Zerg - 8 Pool",
+    "ZvP - 12 Pool Rush": "ZvP - 8 Pool Rush",
+    "ZvZ - 12 Pool into Baneling": "ZvZ - 8 Pool into Baneling",
+    "ZvZ - 12 Pool Speedling": "ZvZ - 8 Pool Speedling",
+}
+
+
+def name_for_game_version(name: Optional[str], game_version: Optional[str]) -> Optional[str]:
+    """Return a build name as the replay's patch calls it.
+
+    Example:
+        >>> name_for_game_version("Zerg - 12 Pool", "5.0.16.97425")
+        'Zerg - 8 Pool'
+        >>> name_for_game_version("Zerg - 12 Pool", "5.0.17.98000")
+        'Zerg - 12 Pool'
+    """
+    if (
+        name in EIGHT_WORKER_BUILD_NAMES
+        and isinstance(game_version, str)
+        and game_version.startswith(EIGHT_WORKER_VERSION_PREFIX)
+    ):
+        return EIGHT_WORKER_BUILD_NAMES[name]
+    return name
 
 
 def candidate_signatures_for(

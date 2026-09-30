@@ -231,14 +231,17 @@ not announced as new again.
   break URLs. To retire a slug, add an entry to `SLUG_ALIASES` in
   `guideSlugs.js`. The API then answers 301 and the page issues a permanent
   redirect.
-- **Renamed builds:** 5.0.17 renamed the "8 Pool" openers back to "12 Pool".
-  Their old slugs are aliases, and ingest stores "12 Pool" whatever an agent
-  sends (`apps/api/src/util/poolBuildNames.js`). To rename labels that are
-  already stored, run
-  `node apps/api/src/db/migrations/2026-09-30-rename-8-pool-builds.js --dry-run`
-  with `MONGODB_URI` and `MONGODB_DB` set, then run it without `--dry-run`, then
-  press **Recompute now**. It covers games, guide samples and the guide's admin
-  notes and pins.
+- **Pool openers are named by patch:** "8 Pool" on the 8-worker patch 5.0.16,
+  and "12 Pool" before it and from 5.0.17 on. The catalog and the guide pages
+  use the 12 Pool names, and the old `8-pool` slugs redirect to them. The
+  8-worker view leaves the 8 Pool games off.
+  - The engine names each replay by its version.
+  - Ingest corrects labels from older agents (`apps/api/src/util/poolBuildNames.js`).
+  - To correct labels already stored, run
+    `node apps/api/src/db/migrations/2026-09-30-rename-8-pool-builds.js --dry-run`
+    with `MONGODB_URI` and `MONGODB_DB` set. Then run it without `--dry-run` and
+    press **Recompute now**. It covers games and guide samples, and it moves the
+    8 Pool guides' admin notes and pins to the 12 Pool guides.
 - **After editing `apps/web/lib/build-definitions`:**
 
   ```bash

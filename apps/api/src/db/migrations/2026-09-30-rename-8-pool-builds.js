@@ -1,33 +1,36 @@
 "use strict";
 
 /**
- * One-shot migration — rename the "8 Pool" build labels to "12 Pool".
+ * One-shot migration — name the pool-first openers for their patch.
  *
- * StarCraft II 5.0.16 cut the starting workers from 12 to 8, and agents
- * 0.14.3 to 0.17.3 named the pool-first openers "8 Pool" (a re-sync also
- * relabelled older games). 5.0.17 restored 12 workers, and the catalog,
- * the guides and agent 0.17.4 know only the "12 Pool" names. Ingest renames
- * new uploads (util/poolBuildNames.js); this renames what is already stored,
- * so every game of an opener carries one name:
+ * The openers are "8 Pool" on the 8-worker patch 5.0.16 and "12 Pool"
+ * before it and again from 5.0.17, which restored 12 starting workers
+ * (util/poolBuildNames.js). Agents 0.14.3 to 0.17.3 sent "8 Pool" for every
+ * patch (a re-sync also relabelled older games), and earlier agents sent
+ * "12 Pool" for 5.0.16 games. Ingest corrects new uploads. This corrects
+ * what is already stored, by each row's era (util/patchEra.js):
  *
  *   - ``games``: ``myBuild``, ``opponent.strategy`` and the legacy
  *     ``opp_strategy``;
- *   - ``guide_samples``: ``buildKey``;
- *   - ``guide_notes``: ``buildKey``. The guide's admin notes and video pins
- *     move to the 12 Pool guide, unless that guide already has a note (the
- *     pair is unique); a conflict is reported and left for the admin.
+ *   - ``guide_samples``: ``buildKey``. Rule-1 rows are relabelled to the
+ *     current era rule first (relabelEraRule), so their era can be trusted;
+ *   - ``guide_notes``: ``buildKey``. The guide pages describe the 12-worker
+ *     game, so an 8 Pool guide's admin notes and video pins move to the
+ *     12 Pool guide, unless that guide already has a note (the pair is
+ *     unique). A conflict is reported and left for the admin.
  *
  * Afterwards press **Recompute now** on /admin/guides. Ladder Meta rebuilds
  * nightly and at boot.
  *
- * Idempotent: re-running is a no-op once no "8 Pool" label is left.
+ * Idempotent: re-running is a no-op once every label matches its patch.
  *
  * Run with:
  *   MONGODB_URI=... MONGODB_DB=... \
  *     node src/db/migrations/2026-09-30-rename-8-pool-builds.js
  *
  * Flags:
- *   --dry-run   Print the planned counts without writing.
+ *   --dry-run   Print the planned counts without writing (guide samples
+ *               still under era rule 1 are not counted).
  */
 
 const path = require("path");
@@ -35,8 +38,15 @@ const { MongoClient } = require("mongodb");
 
 const { COLLECTIONS } = require(path.join(__dirname, "..", "..", "config", "constants"));
 const { TWELVE_POOL_NAMES } = require(path.join(__dirname, "..", "..", "util", "poolBuildNames"));
+const {
+  PATCH_ERA_AFTER,
+  PATCH_ERA_BEFORE,
+  PATCH_ERA_RULE,
+  buildEraMatch,
+} = require(path.join(__dirname, "..", "..", "util", "patchEra"));
+const { relabelEraRule } = require(path.join(__dirname, "..", "..", "services", "guideSamples"));
 
-/** Label fields renamed on ``games`` rows. */
+/** Label fields named on ``games`` rows. */
 const GAME_FIELDS = Object.freeze(["myBuild", "opponent.strategy", "opp_strategy"]);
 
 /**
@@ -83,7 +93,7 @@ async function moveNotes(notes, from, to, dryRun, counts) {
 }
 
 /**
- * Rename every stored 8 Pool label to its 12 Pool name.
+ * Name every stored pool-opener label for its patch.
  *
  * Example: `await renamePoolBuilds(db, { dryRun: true })` →
  * `{ games: 42, samples: 3, notes: 0, noteConflicts: [] }`.
@@ -97,14 +107,24 @@ async function renamePoolBuilds(db, opts = {}) {
   const games = db.collection(COLLECTIONS.GAMES);
   const samples = db.collection(COLLECTIONS.GUIDE_SAMPLES);
   const notes = db.collection(COLLECTIONS.GUIDE_NOTES);
+  if (!dryRun) await relabelEraRule(samples);
+  const twelveWorker = buildEraMatch(PATCH_ERA_AFTER);
+  const eightWorker = buildEraMatch(PATCH_ERA_BEFORE);
   /** @type {RenameCounts} */
   const counts = { games: 0, samples: 0, notes: 0, noteConflicts: [] };
-  for (const [from, to] of Object.entries(TWELVE_POOL_NAMES)) {
+  for (const [eight, twelve] of Object.entries(TWELVE_POOL_NAMES)) {
     for (const field of GAME_FIELDS) {
-      counts.games += await renameMany(games, { [field]: from }, { [field]: to }, dryRun);
+      counts.games += await renameMany(games, { $and: [twelveWorker, { [field]: eight }] }, { [field]: twelve }, dryRun);
+      counts.games += await renameMany(games, { $and: [eightWorker, { [field]: twelve }] }, { [field]: eight }, dryRun);
     }
-    counts.samples += await renameMany(samples, { buildKey: from }, { buildKey: to }, dryRun);
-    await moveNotes(notes, from, to, dryRun, counts);
+    const stamped = { eraRule: PATCH_ERA_RULE };
+    counts.samples += await renameMany(
+      samples, { ...stamped, era: PATCH_ERA_AFTER, buildKey: eight }, { buildKey: twelve }, dryRun,
+    );
+    counts.samples += await renameMany(
+      samples, { ...stamped, era: PATCH_ERA_BEFORE, buildKey: twelve }, { buildKey: eight }, dryRun,
+    );
+    await moveNotes(notes, eight, twelve, dryRun, counts);
   }
   return counts;
 }
