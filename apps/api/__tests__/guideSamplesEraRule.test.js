@@ -10,7 +10,7 @@
 
 const { relabelEraRule } = require("../src/services/guideSamples");
 const { GuideStatsService } = require("../src/services/guideStats");
-const { NOW_MS, startDb, resetDb, sampleRow } = require("./helpers/guideStatsSeed");
+const { NOW_MS, startDb, resetDb, sampleRow, statsByKey } = require("./helpers/guideStatsSeed");
 
 describe("guide_samples era rule", () => {
   let mongo;
@@ -57,10 +57,26 @@ describe("guide_samples era rule", () => {
     expect(await eras()).toEqual(once);
   });
 
+  test("rows stamped by a later rule are never swapped", async () => {
+    await db.guideSamples.insertMany([
+      sampleRow({ gameHash: "rule-1", era: "after", eraRule: 1 }),
+      sampleRow({ gameHash: "rule-3", era: "after", eraRule: 3 }),
+    ]);
+    expect(await relabelEraRule(db.guideSamples)).toBe(1);
+    expect(await eras()).toEqual({ "rule-1": ["before", 2], "rule-3": ["after", 3] });
+  });
+
   test("a recompute relabels before it aggregates", async () => {
-    await db.guideSamples.insertOne(sampleRow({ gameHash: "old-after", era: "after" }));
-    await db.guideSamples.updateOne({ gameHash: "old-after" }, { $unset: { eraRule: "" } });
+    // 30 rule-1 "after" samples (8-worker games) from 7 users clear the
+    // timing floor only once they are relabelled and stamped.
+    const rows = Array.from({ length: 30 }, (_, i) =>
+      sampleRow({ gameHash: `old-${String(i).padStart(2, "0")}`, era: "after", milestones: { Pylon: 18 } }));
+    await db.guideSamples.insertMany(rows);
+    await db.guideSamples.updateMany({}, { $unset: { eraRule: "" } });
     await new GuideStatsService(db, { logger: null, now: () => NOW_MS }).recompute();
-    expect(await eras()).toEqual({ "old-after": ["before", 2] });
+    const docs = await statsByKey(db);
+    expect(docs.get("build:before:PvZ:stargate-into-glaives").timings).toMatchObject({ samples: 30 });
+    expect(docs.get("build:after:PvZ:stargate-into-glaives").timings).toBeNull();
+    expect(Object.values(await eras()).every(([era, rule]) => era === "before" && rule === 2)).toBe(true);
   });
 });

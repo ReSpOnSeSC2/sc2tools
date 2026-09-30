@@ -107,6 +107,10 @@ describe("public /v1/guides", () => {
     expect(before.body).toMatchObject({
       era: "before", published: false, openers: [], games: null, computedAt: run.computedAt.toISOString(),
     });
+    // The 8-worker view keeps the channel's 8-worker patch videos; the
+    // 12-worker view leaves them off.
+    expect(before.body.videos.length).toBeGreaterThan(0);
+    expect((await get("/v1/guides/pvz")).body.videos).toEqual([]);
     const junk = await get("/v1/guides/pvz?era=yesterday&era=before");
     expect(junk.body.era).toBe("after");
     const repeated = await get("/v1/guides/pvz?band=league:4&band=mmr:4000");

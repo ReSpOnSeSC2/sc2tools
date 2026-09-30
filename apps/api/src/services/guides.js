@@ -121,7 +121,7 @@ class GuidesService {
     const [doc, buildDocs, videos] = await Promise.all([
       this._doc(`matchup:${era}:${matchup}`),
       this.coll.find({ kind: "build", era, matchup }, { projection: BUILD_BAND_PROJECTION }).toArray(),
-      this.guideVideos ? this.guideVideos.videosForMatchup(matchup, GUIDE_VIDEOS_LATEST) : [],
+      this.guideVideos ? this.guideVideos.videosForMatchup(matchup, GUIDE_VIDEOS_LATEST, era) : [],
     ]);
     return shapeMatchupPayload({ matchup, era, band, doc, buildDocs, videos });
   }

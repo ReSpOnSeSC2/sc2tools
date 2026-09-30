@@ -172,18 +172,21 @@ function selectForGuide(rows, matches, overrides) {
 
 /**
  * Latest visible build-order videos, optionally of one matchup. A
- * matchup's list sits beside its 12-worker openers, so it leaves out
- * 8-worker patch videos; the channel-wide list keeps them.
+ * matchup page showing the 12-worker openers leaves out 8-worker patch
+ * videos (``skipEightWorker``); its 8-worker view and the channel-wide
+ * list keep them.
  *
  * @param {ReadonlyArray<VideoRow>} rows sorted newest first
  * @param {unknown} n requested length (clamped by listCount)
  * @param {string|null} matchup "PvZ" form, or null for every matchup
+ * @param {boolean} [skipEightWorker] leave out 8-worker patch videos
  * @returns {PublicVideo[]}
  */
-function selectLatest(rows, n, matchup) {
+function selectLatest(rows, n, matchup, skipEightWorker = false) {
   return rows
     .filter((row) => !row.doc.hidden && row.buildOrder
-      && (matchup === null || (row.match.matchup === matchup && !row.eightWorkerPatch)))
+      && (matchup === null || row.match.matchup === matchup)
+      && !(skipEightWorker && row.eightWorkerPatch))
     .slice(0, listCount(n))
     .map((row) => copyVideo(row.video));
 }

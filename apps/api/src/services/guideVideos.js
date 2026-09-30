@@ -71,7 +71,12 @@ const {
   lookupOembed,
 } = require("./guideVideoHttp");
 const SNAPSHOT = require("../config/guideVideosSnapshot.json");
-const { PATCH_5_0_16_RELEASE, PATCH_5_0_17_RELEASE } = require("../util/patchEra");
+const {
+  PATCH_ERA_AFTER,
+  PATCH_ERA_BEFORE,
+  PATCH_5_0_16_RELEASE,
+  PATCH_5_0_17_RELEASE,
+} = require("../util/patchEra");
 
 /** Publish dates of videos recorded on the 8-worker patch 5.0.16. */
 const EIGHT_WORKER_VIDEO_WINDOW = Object.freeze({ from: PATCH_5_0_16_RELEASE, until: PATCH_5_0_17_RELEASE });
@@ -382,15 +387,18 @@ class GuideVideosService {
   }
 
   /**
-   * Latest build-order videos of one matchup, newest first.
+   * Latest build-order videos of one matchup, newest first. The current
+   * (12-worker) view leaves out 8-worker patch videos; the 8-worker view
+   * (era "before") keeps them.
    *
    * @param {string} matchup "PvZ" form
    * @param {number} [n] 1..12, default 4
+   * @param {string} [era] util/patchEra.js era id, default the current one
    * @returns {Promise<PublicVideo[]>}
    */
-  async videosForMatchup(matchup, n = VIDEO_LIST_DEFAULT) {
+  async videosForMatchup(matchup, n = VIDEO_LIST_DEFAULT, era = PATCH_ERA_AFTER) {
     if (!MATCHUPS.includes(matchup)) return [];
-    return selectLatest(await this.cachedRows(), n, matchup);
+    return selectLatest(await this.cachedRows(), n, matchup, era !== PATCH_ERA_BEFORE);
   }
 
   /**

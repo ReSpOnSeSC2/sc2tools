@@ -211,6 +211,9 @@ describe("GuideVideosService", () => {
       expect(await svc.videosForBuild("PvZ", "PvZ - Rail's Disruptor Drop")).toEqual([]);
       expect(await svc.videosForCounter("PvT", "Terran - 3 Rax")).toEqual([]);
       expect(await svc.videosForMatchup("PvZ")).toEqual([]);
+      // The matchup page's 8-worker view keeps them.
+      expect((await svc.videosForMatchup("PvZ", 4, "before")).map((v) => v.youtubeId))
+        .toEqual(["AnmLN-xFtAc", "guRK0SIbM8Y", "RYjRs_no8t4", "aSGYCTVBjqY"]);
       // The channel-wide row is not about one build order.
       expect((await svc.latest()).map((v) => v.youtubeId))
         .toEqual(["_U1MPQB_Q90", "AnmLN-xFtAc", "guRK0SIbM8Y", "RYjRs_no8t4"]);

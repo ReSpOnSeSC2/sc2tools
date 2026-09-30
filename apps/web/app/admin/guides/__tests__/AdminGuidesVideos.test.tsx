@@ -70,7 +70,7 @@ describe("admin Guides per-guide video pin/hide", () => {
     expect(titles).toEqual([ADMIN_VIDEO_8_POOLS.title, ADMIN_VIDEO_GLAIVES.title, ADMIN_VIDEO_CARRIERS.title]);
     // 8-worker patch videos never auto-show on the 12-worker guides.
     expect(within(list).queryAllByText("Auto match")).toHaveLength(0);
-    expect(within(list).getAllByText("8-worker patch · shows only if pinned")).toHaveLength(3);
+    expect(within(list).getAllByText("8-worker patch · build guides show it only if pinned")).toHaveLength(3);
   });
 
   it("badges a 12-worker video that names the build as an auto match", () => {
@@ -143,7 +143,7 @@ describe("admin Guides channel videos", () => {
     const list = screen.getByRole("list", { name: "Channel videos (4)" });
     expect(within(list).getByText("PvZ · builds: Stargate into Glaives · counters: none")).toBeTruthy();
     expect(within(list).getByText("PvZ · builds: none · counters: none")).toBeTruthy();
-    expect(within(list).getAllByText("8-worker patch · shows only if pinned")).toHaveLength(4);
+    expect(within(list).getAllByText("8-worker patch · build guides show it only if pinned")).toHaveLength(4);
   });
 
   it("hides and unhides a video on every guide with PATCH", async () => {

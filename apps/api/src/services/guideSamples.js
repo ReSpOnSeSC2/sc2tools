@@ -636,7 +636,8 @@ class GuideSamplesService {
 }
 
 /**
- * Relabel samples stored under era rule 1, idempotently. Rule 1 had
+ * Relabel samples stored under era rule 1 (no ``eraRule``, or 1),
+ * idempotently. Rule 1 had
  * "after" = patch 5.0.16 and later and "before" = earlier games; rule 2
  * has "after" = the 12-worker game and "before" = the 8-worker patch
  * 5.0.16. A sample keeps no game version, so the labels are swapped: exact
@@ -651,7 +652,9 @@ class GuideSamplesService {
  */
 async function relabelEraRule(coll) {
   const res = await coll.updateMany(
-    { eraRule: { $ne: PATCH_ERA_RULE }, era: { $in: [PATCH_ERA_AFTER, PATCH_ERA_BEFORE] } },
+    // Only rule-1 rows: a later rule must bring its own conversion rather
+    // than swap rows this one already labelled.
+    { eraRule: { $in: [null, 1] }, era: { $in: [PATCH_ERA_AFTER, PATCH_ERA_BEFORE] } },
     [
       {
         $set: {
