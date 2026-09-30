@@ -8,6 +8,7 @@
  */
 
 import { formatGameClock } from "@/lib/macro";
+import type { PatchEra } from "@/lib/meta";
 import { computeArmyValue } from "@/lib/sc2-units";
 import {
   deriveUnitComposition,
@@ -225,9 +226,10 @@ export interface LayoutOptions {
  *      using it directly removes ALL of the fragility around the
  *      timeline/build-order fallback cascade. ``armySource = "stats"``.
  *
- *   2. ``computeArmyValue(derived.units)`` — Σ cost over the alive
+ *   2. ``computeArmyValue(derived.units, era)`` — Σ cost over the alive
  *      composition derived by ``deriveUnitComposition`` (timeline-
- *      preferred, build-order + timeline-deaths fallback). Used when
+ *      preferred, build-order + timeline-deaths fallback), priced for
+ *      the game's patch ``era`` (default: the live 12-worker game). Used when
  *      ``army_value`` is missing from the wire payload (legacy
  *      uploads). Clamped to ``ARMY_FALLBACK_CAP`` when the derivation
  *      came from build-order without timeline-derived deaths — that's
@@ -245,6 +247,7 @@ export function buildSeries(
   unitTimeline: UnitTimelineEntry[] | undefined,
   side: "my" | "opp",
   buildEvents?: BuildEvent[] | undefined,
+  era?: PatchEra | null,
 ): SeriesPoint[] {
   if (!Array.isArray(samples) || samples.length === 0) return [];
   const hasTimeline = Array.isArray(unitTimeline) && unitTimeline.length > 0;
@@ -272,10 +275,10 @@ export function buildSeries(
       army = stats;
       armySource = "stats";
     } else if (derived.source === "timeline") {
-      army = computeArmyValue(derived.units);
+      army = computeArmyValue(derived.units, era);
       armySource = "timeline";
     } else if (derived.source === "hybrid") {
-      army = computeArmyValue(derived.units);
+      army = computeArmyValue(derived.units, era);
       armySource = "hybrid";
     } else if (derived.source === "build_order") {
       // No timeline-derived deaths available — the cumulative count
@@ -284,7 +287,7 @@ export function buildSeries(
       // vertical spike. The roster surfaces a "build order" badge
       // for this case so users know the absolute number is upper-
       // bounded rather than authoritative.
-      army = Math.min(ARMY_FALLBACK_CAP, computeArmyValue(derived.units));
+      army = Math.min(ARMY_FALLBACK_CAP, computeArmyValue(derived.units, era));
       armySource = "build_order";
     } else {
       // ``derived.source === "empty"`` — slim payload with no

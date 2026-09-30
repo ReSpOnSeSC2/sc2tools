@@ -100,4 +100,17 @@ describe("macroChartProps", () => {
     expect(macroChartProps({ ...payload, macroBreakdown: null }, builds)).toBeNull();
     expect(macroChartProps({ ...payload, apmCurve: null }, builds)?.apm).toBeNull();
   });
+
+  it("prices units for the replay's patch era", () => {
+    const payload = realWin();
+    const builds = gameBuilds(payload);
+    // The real game is a 5.0.15 replay: the 12-worker balance.
+    expect(payload).toMatchObject({ gameVersion: "5.0.15.96883", gameBuild: 96883 });
+    expect(macroChartProps(payload, builds)?.patchEra).toBe("after");
+    expect(macroChartProps({ ...payload, gameVersion: "5.0.16.97425" }, builds)?.patchEra).toBe("before");
+    // Without version metadata the replay date decides.
+    const undated = { ...payload, gameVersion: null, gameBuild: null };
+    expect(macroChartProps({ ...undated, date: "2026-07-20T00:00:00Z" }, builds)?.patchEra).toBe("before");
+    expect(macroChartProps({ ...undated, date: "2026-10-01T00:00:00Z" }, builds)?.patchEra).toBe("after");
+  });
 });

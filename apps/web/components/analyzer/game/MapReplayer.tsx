@@ -82,6 +82,7 @@ import {
   workerCountAt,
   type LossSummary,
 } from "@/lib/mapReplayLosses";
+import type { PatchEra } from "@/lib/meta";
 import { drawSpellEffects, spellEffectsVersion } from "@/lib/spellEffects";
 import { collectCreepSources, drawEstimatedCreep, type CreepSource } from "@/lib/replayCreep";
 import { drawObservedCreep } from "@/lib/replayObservedCreep";
@@ -357,6 +358,10 @@ export function MapReplayer({
   onWorldClick,
   markers,
   onMarkerClick,
+  /** The game's patch era (lib/ladderPulse ``patchEraForGame``). It
+   * prices the units-lost panels; omitted, the live 12-worker game.
+   * MapPlayback carries no game version, so the host passes it. */
+  patchEra,
 }: {
   playback: MapPlayback;
   /** The loaded segment. The clock waits at its end until the next arrives. */
@@ -374,6 +379,7 @@ export function MapReplayer({
   onWorldClick?: (x: number, y: number, t: number) => void;
   markers?: readonly ReplayMapMarker[];
   onMarkerClick?: (id: string) => void;
+  patchEra?: PatchEra | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -903,12 +909,12 @@ export function MapReplayer({
     [playback],
   );
   const meLosses = useMemo(
-    () => computeLosses(playback.units, "me", timeSec, consumed),
-    [playback, timeSec, consumed],
+    () => computeLosses(playback.units, "me", timeSec, consumed, patchEra),
+    [playback, timeSec, consumed, patchEra],
   );
   const oppLosses = useMemo(
-    () => computeLosses(playback.units, "opp", timeSec, consumed),
-    [playback, timeSec, consumed],
+    () => computeLosses(playback.units, "opp", timeSec, consumed, patchEra),
+    [playback, timeSec, consumed, patchEra],
   );
 
   return (

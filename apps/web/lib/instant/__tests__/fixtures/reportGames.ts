@@ -72,6 +72,8 @@ export function bare(patch: Partial<InstantPayload> = {}): InstantPayload {
     myToonHandle: null,
     myLadderRace: null,
     isLadderGame: null,
+    gameVersion: null,
+    gameBuild: null,
     opponent: null,
     macroBreakdown: null,
     buildLog: [],

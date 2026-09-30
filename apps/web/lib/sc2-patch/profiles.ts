@@ -11,6 +11,7 @@
  *   - `null` deletes the key (removes a unit/upgrade from the game)
  *   - arrays replace wholesale (a delta can't append to `requires`)
  */
+import type { PatchEra } from "../meta";
 import lotvBase from "./data/lotv-base.json";
 import patch5016 from "./data/patch-5-0-16.json";
 import patch5016a from "./data/patch-5-0-16a.json";
@@ -29,8 +30,32 @@ const REGISTRY: Record<string, PatchProfileFile> = {
   [patch5016b.id]: patch5016b as PatchProfileFile,
 };
 
-/** Profile the UI selects by default — the live balance patch. */
-export const DEFAULT_PROFILE_ID = "5.0.16b";
+/**
+ * The balance each patch era was played on (``PatchEra``, the era ids of
+ * apps/api/src/util/patchEra.js; ``patchEraForGame`` in lib/ladderPulse
+ * picks a game's era). "after" is the 12-worker game — before 5.0.16,
+ * and 5.0.17 on, which reverted 5.0.16 to the 5.0.15 balance — so it
+ * prices at the LotV base. "before" is the 8-worker 5.0.16 window,
+ * priced at its final hotfix.
+ */
+const ERA_PROFILE_IDS: Readonly<Record<PatchEra, string>> = {
+  after: "lotv-base",
+  before: "5.0.16b",
+};
+
+/** Profile the UI selects by default — the live (12-worker) balance. */
+export const DEFAULT_PROFILE_ID = ERA_PROFILE_IDS.after;
+
+/**
+ * Profile id for a game's patch era. Only "before" selects the 8-worker
+ * balance; a missing era is the live 12-worker game, the same default
+ * ``patchEraForGame`` gives a row with no version or date.
+ *
+ * Example: `profileIdForEra("before")` → "5.0.16b"; `profileIdForEra(null)` → "lotv-base".
+ */
+export function profileIdForEra(era?: PatchEra | null): string {
+  return era === "before" ? ERA_PROFILE_IDS.before : ERA_PROFILE_IDS.after;
+}
 
 export interface ProfileSummary {
   id: string;

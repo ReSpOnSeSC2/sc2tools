@@ -54,6 +54,7 @@ import {
   type ReplayCast,
 } from "./mapReplay";
 import { morphConsumedIndices, unitCost } from "./mapReplayLosses";
+import type { PatchEra } from "./meta";
 
 export type ReplaySide = "me" | "opp";
 
@@ -430,7 +431,12 @@ const OPENING_IGNORED: ReadonlySet<string> = new Set([
 ]);
 const OPENING_STEPS = 3;
 
-export function deriveReplayHud(playback: MapPlayback): ReplayHudModel {
+/** ``era``: the game's patch era, which prices the kills and losses
+ * (``mapReplayLosses.unitCost``); omitted, the live 12-worker game. */
+export function deriveReplayHud(
+  playback: MapPlayback,
+  era?: PatchEra | null,
+): ReplayHudModel {
   const gameLength = Math.max(1, playback.gameLength);
   const consumed = morphConsumedIndices(
     playback.units,
@@ -607,7 +613,7 @@ export function deriveReplayHud(playback: MapPlayback): ReplayHudModel {
     // Same gate ``computeLosses`` uses: an unpriced name (Larva, Egg,
     // Broodling, Interceptor) is not a loss, so the HUD's kill count
     // and the replayer's own loss panel agree to the unit.
-    const cost = unitCost(unitNameAt(u, u.died));
+    const cost = unitCost(unitNameAt(u, u.died), era);
     if (!cost) return;
     const pos = unitPositionAt(u.wp, u.died) ?? { x: 0, y: 0 };
     deathRows[u.owner].push({

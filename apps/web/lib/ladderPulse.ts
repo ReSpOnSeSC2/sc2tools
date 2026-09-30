@@ -70,6 +70,9 @@ export interface PulseGame {
   opponent?: PulseOpponent | null;
 }
 
+/** The fields ``patchEraForGame`` reads, all optional. */
+export type PatchEraGame = Pick<PulseGame, "gameVersion" | "gameBuild" | "date">;
+
 export interface PulseGamesPage {
   items?: PulseGame[] | null;
   nextBefore?: string | null;
@@ -353,9 +356,11 @@ export function metaSelectionForGame(
  * build), then replay time (8-worker from the 5.0.16 release until 5.0.17
  * reaches the live ladder). A malformed legacy row defaults to the live era rather than
  * surfacing obsolete 8-worker guidance.
+ * Accepts any row carrying these fields: the slim game row, a /try
+ * payload, or a date-only header.
  */
 export function patchEraForGame(
-  game: PulseGame | null | undefined,
+  game: PatchEraGame | null | undefined,
 ): PatchEra {
   if (typeof game?.gameVersion === "string") {
     return EIGHT_WORKER_VERSION_RE.test(game.gameVersion) ? "before" : "after";

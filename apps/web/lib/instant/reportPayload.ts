@@ -62,6 +62,10 @@ export interface InstantPayload {
   myLadderRace: string | null;
   /** True for ranked 1v1 ladder games; null when the payload does not say. */
   isLadderGame: boolean | null;
+  /** Replay release string ("5.0.16.97425") and numeric client build;
+   *  they pick the patch era that prices units (`patchEraForGame`). */
+  gameVersion: string | null;
+  gameBuild: number | null;
   opponent: InstantOpponent | null;
   macroBreakdown: InstantMacroBreakdown | null;
   buildLog: string[];
@@ -350,6 +354,8 @@ export function parseInstantPayload(json: string): InstantPayload | null {
     myToonHandle: str(value.myToonHandle),
     myLadderRace: str(value.myLadderRace),
     isLadderGame: bool(value.isLadderGame),
+    gameVersion: str(value.gameVersion),
+    gameBuild: num(value.gameBuild),
     opponent: toOpponent(value.opponent),
     macroBreakdown: toMacroBreakdown(value.macroBreakdown),
     buildLog: strings(value.buildLog),

@@ -26,6 +26,7 @@ import {
   type OpponentNavigationContext,
 } from "@/lib/opponentNavigation";
 import { clampReplayTime } from "@/lib/replayLink";
+import { patchEraForGame } from "@/lib/ladderPulse";
 
 /**
  * GameDetailPage — the per-replay deep dive ("I just lost a weird
@@ -193,6 +194,7 @@ function GameDetailContent({
         oppName={oppName}
         myRace={ghostMyRace}
         oppRace={ghostOpponentRace}
+        patchEra={patchEraForGame(game)}
       />
 
       <div className="grid gap-6 md:grid-cols-2">
