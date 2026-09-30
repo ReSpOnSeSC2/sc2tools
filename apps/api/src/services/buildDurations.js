@@ -17,11 +17,11 @@
  * The user-facing build orders should always show "I started this
  * at 2:00", not "this finished at 2:30". This module exposes:
  *
- *   - ``isFinishTimeEvent(name, isBuilding)``: heuristic that says
+ *   - ``isFinishTimeEvent(name, hints)``: heuristic that says
  *     whether the recorded time should be treated as a finish.
- *   - ``buildSecondsFor(name)``: build/research duration in seconds,
- *     or null when unknown.
- *   - ``toStartSeconds(name, recordedSec, isBuilding)``: applies
+ *   - ``buildSecondsFor(name, hints)``: build/research duration in
+ *     seconds, or null when unknown.
+ *   - ``toStartSeconds(name, recordedSec, hints)``: applies
  *     both, returning the adjusted start time (clamped at 0).
  *
  * Numbers are pulled from Liquipedia (LotV 5.0.x balance, the same
@@ -30,6 +30,14 @@
  * use the current patch-5.0.13 LotV values; the resulting drift on
  * older replays is small enough not to swamp the natural variance
  * in median timings.
+ *
+ * Patch-aware: the tables below are the 12-worker game's balance —
+ * every patch before 5.0.16, and 5.0.17 on, which reverted 5.0.16 in
+ * full. The 8-worker patch 5.0.16 retuned a handful of entries
+ * (``EIGHT_WORKER_BUILD_SECONDS``). Pass the game as ``hints.game``
+ * (any row carrying ``gameVersion`` / ``gameBuild`` / ``date``) and
+ * those apply when ``util/patchEra.isEightWorkerGame(game)`` is true;
+ * without a game the live 12-worker values apply.
  *
  * Time-base note: as of the 2026-05-17 timebase migration (PR #309 +
  * the 2026-05-17-rescale-timebase migration), ``recordedSec`` is in
@@ -40,6 +48,8 @@
  * was written for. No code change here was needed — the contract was
  * always right; the upstream data finally matches it.
  */
+
+const { isEightWorkerGame } = require("../util/patchEra");
 
 /**
  * Morph chains — the recorded event for these is the morph
@@ -56,7 +66,7 @@ const STRUCTURE_MORPHS = Object.freeze({
   OrbitalCommand: 25,
   PlanetaryFortress: 36,
   // Protoss
-  WarpGate: 4,
+  WarpGate: 7,
   // Some replays surface alt-name forms; map them too.
   WarpGateResearch: 100,
 });
@@ -134,9 +144,9 @@ const UNIT_BUILD_SECONDS = Object.freeze({
   Zealot: 27,
   Stalker: 30,
   Sentry: 26,
-  Adept: 33,
-  HighTemplar: 40,
-  DarkTemplar: 40,
+  Adept: 27,
+  HighTemplar: 39,
+  DarkTemplar: 39,
   Archon: 9,
   Observer: 21,
   Immortal: 39,
@@ -153,7 +163,7 @@ const UNIT_BUILD_SECONDS = Object.freeze({
   SCV: 12,
   Marine: 18,
   Marauder: 21,
-  Reaper: 34,
+  Reaper: 32,
   Ghost: 29,
   Hellion: 21,
   Hellbat: 21,
@@ -191,6 +201,25 @@ const UNIT_BUILD_SECONDS = Object.freeze({
   Interceptor: 9,
   Changeling: 0,
   Broodling: 0,
+});
+
+/**
+ * The 8-worker patch 5.0.16's values for the entries it retuned (the
+ * WarpGate morph and four unit trains); every other entry kept its
+ * 12-worker value. Applied only to games ``isEightWorkerGame`` places
+ * on 5.0.16, so 8-worker build orders keep their own back-dating while
+ * the 12-worker game uses the tables above.
+ *
+ * @type {Record<string, number>}
+ */
+const EIGHT_WORKER_BUILD_SECONDS = Object.freeze({
+  // Structure morph
+  WarpGate: 4,
+  // Units
+  Adept: 33,
+  HighTemplar: 40,
+  DarkTemplar: 40,
+  Reaper: 34,
 });
 
 /**
@@ -329,6 +358,30 @@ const UNIT_BUILD_LOOKUP = new Map(
 const UPGRADE_BUILD_LOOKUP = new Map(
   Object.entries(UPGRADE_BUILD_SECONDS).map(([n, s]) => [key(n), s]),
 );
+/** @type {Map<string, number>} */
+const EIGHT_WORKER_LOOKUP = new Map(
+  Object.entries(EIGHT_WORKER_BUILD_SECONDS).map(([n, s]) => [key(n), s]),
+);
+
+/**
+ * A game row, or anything carrying the fields ``util/patchEra`` reads.
+ * @typedef {{
+ *   gameVersion?: unknown,
+ *   gameBuild?: unknown,
+ *   date?: unknown,
+ *   [field: string]: unknown,
+ * }} EraGame
+ */
+
+/**
+ * @typedef {{
+ *   isBuilding?: boolean,
+ *   category?: string,
+ *   game?: EraGame | null,
+ * }} DurationHints
+ *   ``game`` picks the balance: the 8-worker patch 5.0.16 values when
+ *   ``isEightWorkerGame(game)``, else (or when omitted) the 12-worker ones.
+ */
 
 /**
  * Returns whether the recorded ``time`` for this entity should be
@@ -343,7 +396,7 @@ const UPGRADE_BUILD_LOOKUP = new Map(
  *     drone consumption).
  *
  * @param {string} name
- * @param {{ isBuilding?: boolean, category?: string }} [hints]
+ * @param {DurationHints} [hints]
  * @returns {boolean}
  */
 function isFinishTimeEvent(name, hints) {
@@ -368,8 +421,11 @@ function isFinishTimeEvent(name, hints) {
  * Returns ``null`` when the entity isn't in the catalog (caller
  * should leave the time unchanged in that case).
  *
+ * Example: `buildSecondsFor("Adept")` → 27;
+ * `buildSecondsFor("Adept", { game: { gameVersion: "5.0.16.97425" } })` → 33.
+ *
  * @param {string} name
- * @param {{ isBuilding?: boolean, category?: string }} [hints]
+ * @param {DurationHints} [hints]
  * @returns {number | null}
  */
 function buildSecondsFor(name, hints) {
@@ -380,6 +436,9 @@ function buildSecondsFor(name, hints) {
     (hints && hints.category === "upgrade");
   if (isUpgrade) {
     return UPGRADE_BUILD_LOOKUP.get(k) ?? null;
+  }
+  if (EIGHT_WORKER_LOOKUP.has(k) && isEightWorkerGame(hints && hints.game)) {
+    return EIGHT_WORKER_LOOKUP.get(k) ?? null;
   }
   if (STRUCTURE_MORPH_LOOKUP.has(k)) {
     return STRUCTURE_MORPH_LOOKUP.get(k) ?? null;
@@ -401,7 +460,7 @@ function buildSecondsFor(name, hints) {
  *
  * @param {string} name
  * @param {number} recordedSec
- * @param {{ isBuilding?: boolean, category?: string }} [hints]
+ * @param {DurationHints} [hints]
  * @returns {number}
  */
 function toStartSeconds(name, recordedSec, hints) {
@@ -418,6 +477,7 @@ module.exports = {
   STRUCTURE_BUILD_SECONDS,
   UNIT_BUILD_SECONDS,
   UPGRADE_BUILD_SECONDS,
+  EIGHT_WORKER_BUILD_SECONDS,
   isFinishTimeEvent,
   buildSecondsFor,
   toStartSeconds,

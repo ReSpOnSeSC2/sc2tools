@@ -7,6 +7,10 @@ const DOSSIER_PROJECTION = {
   _id: 0,
   gameId: 1,
   date: 1,
+  // Patch era, with ``date`` (util/patchEra): DNA timings' 8- vs 12-worker
+  // build durations.
+  gameVersion: 1,
+  gameBuild: 1,
   result: 1,
   map: 1,
   myRace: 1,

@@ -598,6 +598,52 @@ describe("services/perGameCompute", () => {
     });
   });
 
+  describe("patch-era back-dating (8-worker 5.0.16 vs the 12-worker game)", () => {
+    test("eventsToStartTime rewinds by the game's patch balance", () => {
+      const recorded = parseBuildLogLines(["[3:00] Adept", "[4:00] WarpGate"]);
+      const byName = (game) => new Map(
+        eventsToStartTime(recorded, game).map((e) => [e.name, e.time_display]),
+      );
+      // 5.0.16: Adept trains in 33s, WarpGate morphs in 4s.
+      const eight = byName({ gameVersion: "5.0.16.97425" });
+      expect(eight.get("Adept")).toBe("2:27");
+      expect(eight.get("WarpGate")).toBe("3:56");
+      // 12-worker game (5.0.17 on, pre-5.0.16, or no game): 27s / 7s.
+      for (const game of [{ gameVersion: "5.0.17.98000" }, { gameBuild: 96883 }, undefined]) {
+        const twelve = byName(game);
+        expect(twelve.get("Adept")).toBe("2:33");
+        expect(twelve.get("WarpGate")).toBe("3:53");
+      }
+    });
+
+    test("buildOrder projects the era fields and back-dates by them", async () => {
+      let projection = null;
+      const row = (gameVersion) => ({
+        gameId: "g1",
+        myRace: "Protoss",
+        gameVersion,
+        date: new Date("2026-09-30T12:00:00Z"),
+        buildLog: ["[3:00] Adept"],
+        oppBuildLog: ["[3:00] Reaper"],
+      });
+      const svcFor = (game) => new PerGameComputeService({
+        games: {
+          async findOne(_filter, opts) {
+            projection = opts.projection;
+            return game;
+          },
+        },
+      });
+      const eight = await svcFor(row("5.0.16.97425")).buildOrder("u1", "g1");
+      expect(projection).toEqual(expect.objectContaining({ gameVersion: 1, gameBuild: 1, date: 1 }));
+      expect(eight.events[0].time_display).toBe("2:27");
+      expect(eight.opp_events[0].time_display).toBe("2:26");
+      const twelve = await svcFor(row("5.0.17.98000")).buildOrder("u1", "g1");
+      expect(twelve.events[0].time_display).toBe("2:33");
+      expect(twelve.opp_events[0].time_display).toBe("2:28");
+    });
+  });
+
   describe("listForRulePreview — save→match coherence", () => {
     // Regression guard: when the user saves a custom build off the
     // start-time timeline, the saved ``time_lt`` is calibrated against
@@ -794,6 +840,36 @@ describe("services/perGameCompute", () => {
         userId: "u1",
         isResumedFromReplay: { $ne: true },
       });
+    });
+
+    test("rule-eval events use each game's patch era; the era fields are projected", async () => {
+      const rows = [
+        { gameId: "eight", gameVersion: "5.0.16.97425", buildLog: ["[3:00] Adept"], oppBuildLog: [] },
+        { gameId: "twelve", gameVersion: "5.0.17.98000", buildLog: ["[3:00] Adept"], oppBuildLog: [] },
+      ];
+      let projection = null;
+      const games = {
+        find(_filter, opts) {
+          projection = opts.projection;
+          return {
+            sort: () => ({ limit: () => ({ toArray: async () => rows }) }),
+          };
+        },
+      };
+      const svc = new PerGameComputeService({ games });
+      const listed = await svc.listForRulePreview("u1");
+      expect(projection).toEqual(expect.objectContaining({ gameVersion: 1, gameBuild: 1, date: 1 }));
+      expect(listed.map((g) => g.events[0].time)).toEqual([147, 153]);
+
+      // The paged form reads each replay's logs one row at a time.
+      const findOne = async (filter) => rows.find((r) => r.gameId === filter.gameId);
+      const paged = new PerGameComputeService({ games: { ...games, findOne } });
+      const times = [];
+      for await (const page of paged.iterateRulePreviewPages("u1")) {
+        for (const g of page.games) times.push(g.events[0].time);
+      }
+      expect(projection).toEqual(expect.objectContaining({ gameVersion: 1, gameBuild: 1, date: 1 }));
+      expect(times).toEqual([147, 153]);
     });
 
     test("a rule saved as 'Lair before 4:30 (start)' matches a game that completed Lair at 5:00", async () => {

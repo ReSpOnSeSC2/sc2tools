@@ -171,9 +171,12 @@ function readBuildLog(g, key) {
 /**
  * @param {unknown} log
  * @param {string} tokenSubstring
+ * @param {import("./buildDurations").EraGame | null} [game] the
+ *   game the log belongs to; its patch era picks the morph durations
+ *   (8-worker 5.0.16 vs the 12-worker game, the default)
  * @returns {number|null}
  */
-function firstOccurrenceSeconds(log, tokenSubstring) {
+function firstOccurrenceSeconds(log, tokenSubstring, game) {
   if (!Array.isArray(log) || log.length === 0) return null;
   const tokLower = tokenSubstring.toLowerCase();
   let best = null;
@@ -188,7 +191,7 @@ function firstOccurrenceSeconds(log, tokenSubstring) {
     // carry start-of-construction times. Morphs (Lair/Hive/etc.) come
     // through as completion times, so ``toStartSeconds`` rewinds them.
     const sec = Math.round(
-      toStartSeconds(rawName, recorded, { isBuilding: true }),
+      toStartSeconds(rawName, recorded, { isBuilding: true, game }),
     );
     if (best === null || sec < best) best = sec;
   }
@@ -414,7 +417,7 @@ function collectSamples(g, samples, ownInternalSet, my) {
   for (const tk of eligible) {
     if (samples[tk.internalName] === undefined) continue;
     const log = ownInternalSet.has(tk.internalName) ? myLog : oppLog;
-    const sec = firstOccurrenceSeconds(log, tk.token);
+    const sec = firstOccurrenceSeconds(log, tk.token, g);
     if (sec === null) continue;
     // Non-null: the `=== undefined` guard above already skipped
     // tokens missing from the pre-seeded map.
