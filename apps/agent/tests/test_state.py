@@ -163,6 +163,20 @@ def test_modern_list_round_trips(tmp_path: Path) -> None:
     assert loaded.replay_folders_override == ["/a", "/b", "/c"]
 
 
+def test_excluded_folders_round_trip(tmp_path: Path) -> None:
+    s = AgentState(replay_folders_excluded=["/a/98-S2-1-1/Replays/Multiplayer"])
+    save_state(tmp_path, s)
+    loaded = load_state(tmp_path)
+    assert loaded.replay_folders_excluded == ["/a/98-S2-1-1/Replays/Multiplayer"]
+
+
+def test_state_without_excluded_folders_loads_empty(tmp_path: Path) -> None:
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"replay_folders_override": ["/x"]}), encoding="utf-8",
+    )
+    assert load_state(tmp_path).replay_folders_excluded == []
+
+
 def test_string_in_list_field_is_tolerated(tmp_path: Path) -> None:
     """Defensive parsing — a hand-edited state file that drops a single
     string into the list field should still load."""

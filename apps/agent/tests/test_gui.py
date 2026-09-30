@@ -135,6 +135,16 @@ def test_settings_payload_empty_folder_list_means_clear() -> None:
     assert p.replay_folders is not None
 
 
+def test_settings_payload_carries_removed_folders(tmp_path: Path) -> None:
+    """Removals travel separately from the list, so the runner can tell a
+    folder the user removed from one that appeared after Settings opened."""
+    from sc2tools_agent.ui.gui import SettingsPayload
+
+    assert SettingsPayload().replay_folders_removed is None
+    p = SettingsPayload(replay_folders=[], replay_folders_removed=[tmp_path])
+    assert p.replay_folders_removed == [tmp_path]
+
+
 def test_replay_archive_status_is_retained_until_qt_signals_exist(
     tmp_path: Path,
 ) -> None:
