@@ -12,7 +12,7 @@
 const request = require("supertest");
 const { GUIDE_CACHE_CONTROL } = require("../src/config/guides");
 const { GUIDE_NOT_FOUND_CACHE_CONTROL } = require("../src/routes/guides");
-const { createGuidesHarness, seedGuideCorpus, GLAIVES, ROBO, EIGHT_POOL } = require("./helpers/guidesHarness");
+const { createGuidesHarness, seedGuideCorpus, GLAIVES, ROBO, TWELVE_POOL } = require("./helpers/guidesHarness");
 
 jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 
@@ -64,7 +64,7 @@ describe("public /v1/guides", () => {
     expect(res.body.openers.map((o) => [o.buildKey, o.published])).toEqual([[GLAIVES, true], [ROBO, false]]);
     expect(res.body.openers[0]).toMatchObject({ name: "Stargate into Glaives", games: 121, prevalence: expect.any(Number) });
     expect(res.body.counters[0]).toEqual({
-      strategyKey: EIGHT_POOL, strategySlug: "8-pool", name: "8 Pool", published: true, games: 121,
+      strategyKey: TWELVE_POOL, strategySlug: "12-pool", name: "12 Pool", published: true, games: 121,
     });
     expect(res.body.counters.find((c) => c.strategySlug === "ling-bane-bust")).toEqual({
       strategyKey: "ZvP - Ling Bane Bust", strategySlug: "ling-bane-bust", name: "Ling Bane Bust", published: false, games: null,
@@ -124,7 +124,7 @@ describe("public /v1/guides", () => {
       "/guides/pvz",
       "/guides/pvz/stargate-into-glaives",
       "/guides/pvz/counter",
-      "/guides/pvz/counter/8-pool",
+      "/guides/pvz/counter/12-pool",
       "/guides/maps",
       "/guides/maps/site-delta-le",
     ]);
@@ -148,10 +148,21 @@ describe("public /v1/guides", () => {
     expect(res.headers["cache-control"]).toBe(GUIDE_NOT_FOUND_CACHE_CONTROL);
   });
 
+  test.each([
+    ["/v1/guides/pvz/counter/8-pool", "/guides/pvz/counter/12-pool"],
+    ["/v1/guides/zvp/8-pool-rush", "/guides/zvp/12-pool-rush"],
+    ["/v1/guides/zvz/counter/8-pool-speedling", "/guides/zvz/counter/12-pool-speedling"],
+  ])("the 8-worker patch's %s slug 301s to %s", async (path, movedTo) => {
+    const res = await get(path);
+    expect(res.status).toBe(301);
+    expect(res.headers.location).toBe(`/v1${movedTo}`);
+    expect(res.body).toEqual({ movedTo });
+  });
+
   test("unmatched /guides paths and methods are 404s, never a later router's 401", async () => {
     for (const res of [
       await get("/v1/guides/pvz/stargate-into-glaives/extra"),
-      await get("/v1/guides/pvz/counter/8-pool/extra"),
+      await get("/v1/guides/pvz/counter/12-pool/extra"),
       await request(h.app).post("/v1/guides").send({}),
       await request(h.app).delete("/v1/guides/pvz"),
     ]) {

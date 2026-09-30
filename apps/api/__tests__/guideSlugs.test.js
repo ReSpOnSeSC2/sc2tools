@@ -168,7 +168,8 @@ describe("config/guideSlugs name lookups", () => {
     expect(buildSlug("PvZ", "Protoss - DT Rush")).toBeNull();
     expect(buildSlug("PvZ", "PvZ - Game Too Short")).toBeNull();
     expect(buildSlug("PvX", "PvZ - Stargate into Glaives")).toBeNull();
-    expect(isGuideBuildName("ZvP", "Zerg - 8 Pool")).toBe(true);
+    expect(isGuideBuildName("ZvP", "Zerg - 12 Pool")).toBe(true);
+    expect(isGuideBuildName("ZvP", "Zerg - 8 Pool")).toBe(false);
     expect(isGuideBuildName("ZvP", "Zerg - Hatch First")).toBe(false);
     expect(isGuideBuildName("PvZ", "PvZ - Macro Transition (Unclassified)")).toBe(false);
     expect(isGuideBuildName("PvZ", "My custom build")).toBe(false);
@@ -231,10 +232,26 @@ describe("config/guideSlugs matchups and resolution", () => {
 });
 
 describe("config/guideSlugs aliases", () => {
-  test("SLUG_ALIASES ships empty and valid", () => {
-    expect(SLUG_ALIASES).toEqual({ builds: {}, counters: {} });
+  test("SLUG_ALIASES redirects the 8-worker 8 Pool slugs to 12 Pool and is valid", () => {
+    const pool = { "8-pool": "12-pool" };
+    const zvzPool = {
+      "8-pool": "12-pool",
+      "8-pool-into-baneling": "12-pool-into-baneling",
+      "8-pool-speedling": "12-pool-speedling",
+    };
+    expect(SLUG_ALIASES).toEqual({
+      builds: { zvp: { ...pool, "8-pool-rush": "12-pool-rush" }, zvt: pool, zvz: zvzPool },
+      counters: { pvz: { ...pool, "8-pool-rush": "12-pool-rush" }, tvz: pool, zvz: zvzPool },
+    });
     expect(Object.isFrozen(SLUG_ALIASES)).toBe(true);
     expect(validateSlugAliases(SLUG_ALIASES)).toEqual([]);
+    expect(resolveStrategy("pvz", "8-pool")).toEqual({ redirect: { matchupSlug: "pvz", slug: "12-pool" } });
+    expect(resolveStrategy("tvz", "8-pool")).toEqual({ redirect: { matchupSlug: "tvz", slug: "12-pool" } });
+    expect(resolveBuild("zvp", "8-pool-rush")).toEqual({ redirect: { matchupSlug: "zvp", slug: "12-pool-rush" } });
+    expect(resolveBuild("zvz", "8-pool-speedling")).toEqual({
+      redirect: { matchupSlug: "zvz", slug: "12-pool-speedling" },
+    });
+    expect(resolveStrategy("pvz", "12-pool")).toEqual({ matchup: "PvZ", name: "Zerg - 12 Pool", slug: "12-pool" });
   });
 
   test("an aliased (retired) slug resolves to a redirect to the live slug", () => {
@@ -253,7 +270,7 @@ describe("config/guideSlugs aliases", () => {
     expect(resolveStrategy("pvz", "old-nydus", counters)).toEqual({
       redirect: { matchupSlug: "pvz", slug: "zerg-2-base-nydus" },
     });
-    // The default alias table is the (empty) shipped one.
+    // The default alias table is the shipped one.
     expect(resolveBuild("pvz", "old-glaives")).toBeNull();
   });
 
@@ -271,11 +288,13 @@ describe("config/guideSlugs aliases", () => {
 
 describe("config/guideSlugs catalog rows, display names and map slugs", () => {
   test("catalogEntry returns the frozen catalog row or null", () => {
-    const entry = catalogEntry("Zerg - 8 Pool");
-    expect(entry).toEqual(expect.objectContaining({ name: "Zerg - 8 Pool", race: "Zerg", matchup: null, opener: true }));
+    const entry = catalogEntry("Zerg - 12 Pool");
+    expect(entry).toEqual(expect.objectContaining({ name: "Zerg - 12 Pool", race: "Zerg", matchup: null, opener: true }));
     expect(Object.isFrozen(entry)).toBe(true);
     expect(catalogEntry("PvZ - Game Too Short")).toEqual(expect.objectContaining({ opener: false }));
     expect(catalogEntry("Zerg - Hatch First")).toBeNull();
+    // The 8-worker patch's name for the same opener is no longer a catalog name.
+    expect(catalogEntry("Zerg - 8 Pool")).toBeNull();
     expect(catalogEntry(undefined)).toBeNull();
   });
 
@@ -299,7 +318,7 @@ describe("config/guideSlugs catalog rows, display names and map slugs", () => {
     expect(guideName("counters", "PvT", "Terran - Widow Mine Drop")).toBe("Widow Mine Drop (any matchup)");
     expect(guideName("builds", "ZvP", "ZvP - 2 Base Nydus")).toBe("2 Base Nydus");
     expect(guideName("builds", "ZvP", "Zerg - 2 Base Nydus")).toBe("2 Base Nydus (any matchup)");
-    expect(guideName("builds", "ZvP", "Zerg - 8 Pool")).toBe("8 Pool");
+    expect(guideName("builds", "ZvP", "Zerg - 12 Pool")).toBe("12 Pool");
     expect(guideName("builds", "PvZ", "PvZ - Stargate into Glaives")).toBe("Stargate into Glaives");
     expect(guideName("builds", "PvX", "Zerg - 2 Base Nydus")).toBe("2 Base Nydus");
   });

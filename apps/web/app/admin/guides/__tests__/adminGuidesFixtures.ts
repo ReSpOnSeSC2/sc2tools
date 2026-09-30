@@ -34,7 +34,7 @@ export const ADMIN_VIDEO_8_POOLS: GuideAdminVideo = {
   ...VIDEO_PVZ_CRACKING_8_POOLS,
   matchup: "PvZ",
   builds: [],
-  counters: ["Zerg - 8 Pool"],
+  counters: [],
   source: "snapshot",
   hidden: false,
   isShort: false,

@@ -65,7 +65,7 @@ const EXPECTED_AUTO = {
   YcTMc_Ee11w: mu("PvZ", ["PvZ - Stargate into Glaives"]),
   KelX4RycY6Q: NONE, // randomizer: no matchup token or hashtag
   VcPGKEoPBYk: mu("PvP"), // "Proxy 1 Gate" ≠ "Proxy 2 Gate"
-  "A4x6gR7J-AY": mu("PvZ", [], ["Zerg - 8 Pool"]),
+  "A4x6gR7J-AY": mu("PvZ"), // "8 Pools" is the 8-worker patch's name; the catalog says 12 Pool
   Jkyjd8R7Qfs: mu("PvP"), // curated below
   bMi6u0czxQI: mu("PvT"),
   "luGDs_-yVMs": mu("PvZ"),
@@ -130,7 +130,7 @@ describe("matchVideo over the whole snapshot", () => {
     expect(by.H8PKfSR9u_s.builds).toEqual(["PvT - Stargate into Charge"]);
     expect(by.RYjRs_no8t4.builds).toEqual(["PvZ - Carrier Rush"]);
     expect(by["5FJmQtglOxo"].builds).toEqual(["PvT - DT Drop"]);
-    expect(by["A4x6gR7J-AY"].counters).toEqual(["Zerg - 8 Pool"]);
+    expect(by["A4x6gR7J-AY"].counters).toEqual([]);
     expect(by._EZbooc6wLM.counters).toEqual(["Terran - 3 Rax"]);
   });
 
@@ -234,9 +234,11 @@ describe("matching rules", () => {
     // "Stargate into Glaives" contains no other PvZ phrase; "Stargate Opener" is not a sub-phrase.
     expect(matchVideo({ title: "PvZ Stargate into Glaives vs Stargate Opener", description: "" }).builds)
       .toEqual(["PvZ - Stargate Opener", "PvZ - Stargate into Glaives"]);
-    // ZvP: "8 Pool Rush" (ZvP-prefixed) subsumes the race-generic "8 Pool".
-    expect(matchVideo({ title: "PvZ 8 Pool Rush defense", description: "" }).counters)
-      .toEqual(["ZvP - 8 Pool Rush"]);
+    // ZvP: "12 Pool Rush" (ZvP-prefixed) subsumes the race-generic "12 Pool".
+    expect(matchVideo({ title: "PvZ 12 Pool Rush defense", description: "" }).counters)
+      .toEqual(["ZvP - 12 Pool Rush"]);
+    expect(matchVideo({ title: "PvZ Cracking 12 Pools", description: "" }).counters)
+      .toEqual(["Zerg - 12 Pool"]);
   });
 
   test("builds come from the matchup's namespace only", () => {
@@ -269,6 +271,7 @@ describe("matching robustness and curated links", () => {
     expect(applyCuratedLinks("BBBBBBBBBBB", NONE, [link])).toEqual(NONE);
     expect(isValidCuratedLink({ ...link, name: "PvZ - Not A Build" })).toBe(false);
     expect(isValidCuratedLink({ ...link, kind: "counter" })).toBe(false);
-    expect(isValidCuratedLink({ ...link, kind: "counter", name: "Zerg - 8 Pool" })).toBe(true);
+    expect(isValidCuratedLink({ ...link, kind: "counter", name: "Zerg - 12 Pool" })).toBe(true);
+    expect(isValidCuratedLink({ ...link, kind: "counter", name: "Zerg - 8 Pool" })).toBe(false);
   });
 });

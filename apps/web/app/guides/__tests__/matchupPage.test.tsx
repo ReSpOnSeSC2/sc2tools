@@ -96,8 +96,8 @@ describe("/guides/[matchup] filters", () => {
       "/guides/pvz?band=league:4&era=before",
     );
     expect(screen.queryByRole("columnheader", { name: "Played in" })).toBeNull();
-    expect(screen.getByRole("link", { name: "How to beat 8 Pool" }).getAttribute("href")).toBe(
-      "/guides/pvz/counter/8-pool",
+    expect(screen.getByRole("link", { name: "How to beat 12 Pool" }).getAttribute("href")).toBe(
+      "/guides/pvz/counter/12-pool",
     );
     expect(screen.queryByRole("link", { name: "How to beat Ling Bane Bust" })).toBeNull();
     expect(screen.getByRole("heading", { level: 2, name: "Latest PvZ videos" })).toBeTruthy();
@@ -185,8 +185,8 @@ describe("/guides/[matchup]/counter", () => {
     );
     expect(md.alternates?.canonical).toBe("/guides/pvz/counter");
     render(await CounterListPage({ params: Promise.resolve({ matchup: "pvz" }) }));
-    const pool = screen.getByRole("link", { name: "How to beat 8 Pool" });
-    expect(pool.getAttribute("href")).toBe("/guides/pvz/counter/8-pool");
+    const pool = screen.getByRole("link", { name: "How to beat 12 Pool" });
+    expect(pool.getAttribute("href")).toBe("/guides/pvz/counter/12-pool");
     expect(pool.closest("li")?.textContent).toContain("236 games");
     const lurker = screen.getByRole("link", { name: "How to beat Lurker Contain" });
     expect(lurker.closest("li")?.textContent).toContain("Not enough games yet");

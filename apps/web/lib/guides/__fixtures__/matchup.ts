@@ -132,7 +132,7 @@ const PVZ_BASE: Omit<GuideMatchupPayload, "band" | "openers"> = {
       published: true,
       games: 1311,
     },
-    { strategyKey: "Zerg - 8 Pool", strategySlug: "8-pool", name: "8 Pool", published: true, games: 236 },
+    { strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool", name: "12 Pool", published: true, games: 236 },
     {
       strategyKey: "ZvP - Ling Bane Bust",
       strategySlug: "ling-bane-bust",

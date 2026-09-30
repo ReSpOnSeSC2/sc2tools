@@ -1,5 +1,5 @@
 /**
- * TEST FIXTURES ONLY — counter pages (PvZ vs 8 Pool published, PvZ vs
+ * TEST FIXTURES ONLY — counter pages (PvZ vs 12 Pool published, PvZ vs
  * Lurker Contain unpublished), the Old Sun Temple map page, the guide
  * sitemap and the signed-in `/v1/guides/me` comparison.
  */
@@ -42,10 +42,10 @@ export const FIXTURE_COUNTER_PUBLISHED: GuideCounterPublished = {
   published: true,
   matchup: "PvZ",
   matchupSlug: "pvz",
-  strategyKey: "Zerg - 8 Pool",
-  strategySlug: "8-pool",
-  name: "8 Pool",
-  description: fixtureDescription("Zerg - 8 Pool"),
+  strategyKey: "Zerg - 12 Pool",
+  strategySlug: "12-pool",
+  name: "12 Pool",
+  description: fixtureDescription("Zerg - 12 Pool"),
   myRace: "Protoss",
   oppRace: "Zerg",
   era: "after",
@@ -133,7 +133,7 @@ export const FIXTURE_SITEMAP: GuideSitemapPayload = {
     "/guides/pvz",
     "/guides/pvz/stargate-into-glaives",
     "/guides/pvz/standard-blink-macro",
-    "/guides/pvz/counter/8-pool",
+    "/guides/pvz/counter/12-pool",
     "/guides/maps/old-sun-temple",
   ].map((path) => ({ path, lastModified: FIXTURE_COMPUTED_AT })),
 };

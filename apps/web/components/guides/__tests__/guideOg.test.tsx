@@ -105,8 +105,8 @@ describe("guide OG card data", () => {
     const top = FIXTURE_MATCHUP.openers.find((row) => row.published);
     expect(matchupOgCard(FIXTURE_MATCHUP)?.rate).toMatchObject({ label: `Top opener: ${top?.name}`, games: top?.games });
     expect(counterOgCard(FIXTURE_COUNTER_PUBLISHED)).toMatchObject({
-      title: "How to beat 8 Pool",
-      rate: { label: "Protoss win rate vs 8 Pool", games: FIXTURE_COUNTER_PUBLISHED.overall.games },
+      title: "How to beat 12 Pool",
+      rate: { label: "Protoss win rate vs 12 Pool", games: FIXTURE_COUNTER_PUBLISHED.overall.games },
     });
   });
 
@@ -173,7 +173,7 @@ describe("opengraph-image routes", () => {
   it("never fetches while guides are off", async () => {
     vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "");
     await MatchupOg({ params: Promise.resolve({ matchup: "pvz" }) });
-    await CounterOg({ params: Promise.resolve({ matchup: "pvz", strategy: "8-pool" }) });
+    await CounterOg({ params: Promise.resolve({ matchup: "pvz", strategy: "12-pool" }) });
     expect(mocks.fetchGuideMatchup).not.toHaveBeenCalled();
     expect(mocks.fetchGuideCounter).not.toHaveBeenCalled();
     expect(mocks.images.map((image) => (image.element.props as { card: unknown }).card)).toEqual([null, null]);
@@ -185,8 +185,8 @@ describe("opengraph-image routes", () => {
     await MatchupOg({ params: Promise.resolve({ matchup: "pvz" }) });
     expect(mocks.fetchGuideMatchup).toHaveBeenCalledWith("pvz");
     expect(lastCard()).toEqual(matchupOgCard(FIXTURE_MATCHUP));
-    await CounterOg({ params: Promise.resolve({ matchup: "pvz", strategy: "8-pool" }) });
-    expect(mocks.fetchGuideCounter).toHaveBeenCalledWith("pvz", "8-pool");
+    await CounterOg({ params: Promise.resolve({ matchup: "pvz", strategy: "12-pool" }) });
+    expect(mocks.fetchGuideCounter).toHaveBeenCalledWith("pvz", "12-pool");
     expect(lastCard()).toEqual(counterOgCard(FIXTURE_COUNTER_PUBLISHED));
   });
 });

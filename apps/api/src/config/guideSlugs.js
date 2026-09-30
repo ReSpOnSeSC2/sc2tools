@@ -111,12 +111,31 @@ const SLUG_KINDS = Object.freeze(["builds", "counters"]);
  * Retired slugs that must keep working, per kind and matchup slug:
  * `{ builds: { pvz: { "old-slug": "live-slug" } }, counters: { … } }`.
  * Targets must be live slugs (no chains); validated at require time.
- * Empty until a catalog rename needs one.
+ *
+ * The "8-pool" slugs are the pool-first openers' names from the 8-worker
+ * patch 5.0.16; 5.0.17 restored 12 starting workers and the "12 Pool"
+ * names they had before.
  * @type {Readonly<Record<SlugKind, AliasTable>>}
  */
 const SLUG_ALIASES = Object.freeze({
-  builds: Object.freeze({}),
-  counters: Object.freeze({}),
+  builds: Object.freeze({
+    zvp: Object.freeze({ "8-pool": "12-pool", "8-pool-rush": "12-pool-rush" }),
+    zvt: Object.freeze({ "8-pool": "12-pool" }),
+    zvz: Object.freeze({
+      "8-pool": "12-pool",
+      "8-pool-into-baneling": "12-pool-into-baneling",
+      "8-pool-speedling": "12-pool-speedling",
+    }),
+  }),
+  counters: Object.freeze({
+    pvz: Object.freeze({ "8-pool": "12-pool", "8-pool-rush": "12-pool-rush" }),
+    tvz: Object.freeze({ "8-pool": "12-pool" }),
+    zvz: Object.freeze({
+      "8-pool": "12-pool",
+      "8-pool-into-baneling": "12-pool-into-baneling",
+      "8-pool-speedling": "12-pool-speedling",
+    }),
+  }),
 });
 
 /** @type {ReadonlyArray<string>} */
@@ -310,7 +329,7 @@ function namespaceFor(kind, matchup) {
  * unknown matchup). This is the allowlist for guide `myBuild` values.
  *
  * Example: `buildNamesForMatchup("ZvP")` includes "ZvP - 2 Base Nydus" and
- * "Zerg - 8 Pool".
+ * "Zerg - 12 Pool".
  *
  * @param {string} matchup "PvZ" form
  * @returns {ReadonlyArray<string>}
@@ -325,7 +344,7 @@ function buildNamesForMatchup(matchup) {
  * `opponent.strategy` values in games the user played as `matchup`.
  *
  * Example: `strategyNamesForMatchup("PvZ")` includes "ZvP - Ling Bane Bust"
- * and "Zerg - 8 Pool"; `strategyNamesForMatchup("ZvP")` is "Protoss - …" only.
+ * and "Zerg - 12 Pool"; `strategyNamesForMatchup("ZvP")` is "Protoss - …" only.
  *
  * @param {string} matchup "PvZ" form (the user's matchup)
  * @returns {ReadonlyArray<string>}
@@ -480,7 +499,7 @@ function resolveStrategy(matchupSlugValue, slug, aliases = SLUG_ALIASES.counters
 /**
  * Catalog row for an exact catalog name (openers and non-openers).
  *
- * Example: `catalogEntry("Zerg - 8 Pool").race` → "Zerg".
+ * Example: `catalogEntry("Zerg - 12 Pool").race` → "Zerg".
  *
  * @param {unknown} name
  * @returns {GuideCatalogEntry|null}

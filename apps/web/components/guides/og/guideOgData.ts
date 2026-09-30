@@ -92,7 +92,7 @@ export function buildOgCard(data: GuideBuildPayload): GuideOgCardData | null {
 /**
  * Card for a "How to beat …" page; null below the publishing floor.
  *
- * Example: → title "How to beat 8 Pool", rate label "Protoss win rate vs 8 Pool".
+ * Example: → title "How to beat 12 Pool", rate label "Protoss win rate vs 12 Pool".
  */
 export function counterOgCard(data: GuideCounterPayload): GuideOgCardData | null {
   if (!data.published) return null;

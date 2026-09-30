@@ -53,7 +53,8 @@ const CASES = [
   ["legacy: no ladder flag but a league", game({ isLadderGame: undefined, playerCount: undefined, matchFormat: undefined }), null],
   ["lowercase races", game({ myRace: "protoss", opponent: { race: "zerg", leagueId: 2 } }), null],
   ["race-generic name is not a Protoss build", game({ myBuild: "Protoss - Stargate Opener" }), "not_guide_build"],
-  ["Zerg race-generic build", game({ myRace: "Zerg", myBuild: "Zerg - 8 Pool", opponent: { race: "Protoss", leagueId: 1 } }), null],
+  ["Zerg race-generic build", game({ myRace: "Zerg", myBuild: "Zerg - 12 Pool", opponent: { race: "Protoss", leagueId: 1 } }), null],
+  ["8-worker patch name is not a catalog build", game({ myRace: "Zerg", myBuild: "Zerg - 8 Pool", opponent: { race: "Protoss", leagueId: 1 } }), "not_guide_build"],
   ["resumed replay", game({ isResumedFromReplay: true }), "resumed"],
   ["custom build slug", game({ _customBuildSlug: "my-build" }), "custom_build"],
   ["team game", game({ playerCount: 4 }), "not_1v1"],
@@ -86,7 +87,8 @@ describe("guideRules (pure)", () => {
   });
 
   test("strategyAllowed uses the counters namespace of the user's matchup", () => {
-    expect(strategyAllowed("PvZ", "Zerg - 8 Pool")).toBe(true);
+    expect(strategyAllowed("PvZ", "Zerg - 12 Pool")).toBe(true);
+    expect(strategyAllowed("PvZ", "Zerg - 8 Pool")).toBe(false);
     expect(strategyAllowed("PvZ", "ZvP - Ling Bane Bust")).toBe(true);
     expect(strategyAllowed("ZvP", "Protoss - DT Rush")).toBe(true);
     expect(strategyAllowed("ZvP", "PvZ - Stargate into Glaives")).toBe(false);

@@ -126,7 +126,7 @@ export function buildMetadata(data: GuideBuildPayload): Metadata {
  * ("PvZ" → Protoss / Zerg), never from the payload's free-form race
  * labels, so the copy reads the same whatever form the API labels races in.
  *
- * Example: "How to beat 8 Pool as Protoss — 63.4% win rate over 236 ladder
+ * Example: "How to beat 12 Pool as Protoss — 63.4% win rate over 236 ladder
  * games (Patch 5.0.16)"; unpublished → "How to beat Lurker Contain as
  * Protoss — best openers by win rate (Patch 5.0.16)".
  */

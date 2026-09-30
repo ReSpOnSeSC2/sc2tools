@@ -440,6 +440,8 @@ export function resolveLeagueIcon(input: string): string | null {
  * ============================================================ */
 
 const STRATEGY_OVERRIDES: Record<string, string[]> = {
+  "Zerg - 12 Pool": ["buildings/spawningpool.png", "units/zergling.png"],
+  // Games stored during the 8-worker patch 5.0.16 carry this label.
   "Zerg - 8 Pool": ["buildings/spawningpool.png", "units/zergling.png"],
   "Zerg - 13/12 Baneling Bust": ["buildings/banelingnest.png", "units/baneling.png"],
   "Zerg - 13/12 Speedling Aggression": ["units/zergling.png", "upgrades/speed.png"],

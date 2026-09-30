@@ -12,7 +12,7 @@
 const request = require("supertest");
 const { GUIDE_CACHE_CONTROL } = require("../src/config/guides");
 const {
-  createGuidesHarness, seedGuideCorpus, GLAIVES, ROBO, EIGHT_POOL, SHARER_SLUG,
+  createGuidesHarness, seedGuideCorpus, GLAIVES, ROBO, TWELVE_POOL, SHARER_SLUG,
 } = require("./helpers/guidesHarness");
 
 jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
@@ -84,7 +84,7 @@ describe("guide pages", () => {
     expect(b.bands.league).toEqual([expect.objectContaining({ value: 4, label: "Diamond", games: 121 })]);
     expect(b.bands.mmr).toEqual([expect.objectContaining({ value: 4000, label: "4000–4500" })]);
     expect(b.vsStrategy).toEqual([expect.objectContaining({
-      strategyKey: EIGHT_POOL, strategySlug: "8-pool", name: "8 Pool", published: true, games: 121,
+      strategyKey: TWELVE_POOL, strategySlug: "12-pool", name: "12 Pool", published: true, games: 121,
     })]);
     expect(b.maps).toEqual([expect.objectContaining({ map: "Site Delta LE", mapSlug: "site-delta-le" })]);
     expect(b.lengths).toEqual([expect.objectContaining({ bucket: "10-15", minSec: 600, maxSec: 900 })]);
@@ -163,16 +163,18 @@ describe("guide pages", () => {
   });
 
   test("published counter: overall + openers with their page flags", async () => {
-    const res = await get("/v1/guides/pvz/counter/8-pool");
+    const res = await get("/v1/guides/pvz/counter/12-pool");
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
-      published: true, matchup: "PvZ", matchupSlug: "pvz", strategyKey: EIGHT_POOL, strategySlug: "8-pool",
-      name: "8 Pool", myRace: "Protoss", oppRace: "Zerg", era: "after", overall: { games: 121, users: 6 },
+      published: true, matchup: "PvZ", matchupSlug: "pvz", strategyKey: TWELVE_POOL, strategySlug: "12-pool",
+      name: "12 Pool", myRace: "Protoss", oppRace: "Zerg", era: "after", overall: { games: 121, users: 6 },
     });
     expect(res.body.openers).toEqual([expect.objectContaining({
       buildKey: GLAIVES, buildSlug: "stargate-into-glaives", name: "Stargate into Glaives", published: true,
     })]);
-    expect(res.body.videos.map((v) => v.youtubeId)).toContain("A4x6gR7J-AY");
+    // "PvZ Cracking 8 Pools" is about the 8-worker patch's 8 Pool; it no
+    // longer matches the 12 Pool counter.
+    expect(res.body.videos.map((v) => v.youtubeId)).not.toContain("A4x6gR7J-AY");
   });
 
   test("unpublished counter: identity + videos only", async () => {

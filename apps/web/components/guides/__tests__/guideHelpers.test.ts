@@ -258,7 +258,7 @@ describe("verifier regressions", () => {
   it("words counter pages from the matchup, whatever the payload's race labels", () => {
     const terse = { ...FIXTURE_COUNTER_PUBLISHED, myRace: "P", oppRace: "Z" };
     expect(counterHeadline(terse)).toBe(
-      `How to beat 8 Pool as Protoss — ${fmtPct(FIXTURE_COUNTER_PUBLISHED.overall.winRate)} win rate over 236 ladder games (Patch 5.0.16)`,
+      `How to beat 12 Pool as Protoss — ${fmtPct(FIXTURE_COUNTER_PUBLISHED.overall.winRate)} win rate over 236 ladder games (Patch 5.0.16)`,
     );
     expect(String(counterMetadata(terse).description)).toMatch(/^Protoss players win /);
     const unpublished = { ...FIXTURE_COUNTER_UNPUBLISHED, myRace: "P", oppRace: "Z" };
@@ -269,7 +269,7 @@ describe("verifier regressions", () => {
   });
 
   it("gives same-named published counters distinct titles from their own numbers", () => {
-    const other = { ...FIXTURE_COUNTER_PUBLISHED, strategySlug: "zerg-8-pool", overall: fixtureCell(180, 33, 97) };
+    const other = { ...FIXTURE_COUNTER_PUBLISHED, strategySlug: "zerg-12-pool", overall: fixtureCell(180, 33, 97) };
     expect(counterHeadline(other)).not.toBe(counterHeadline(FIXTURE_COUNTER_PUBLISHED));
     expect(counterHeadline(other)).toContain("over 180 ladder games");
   });

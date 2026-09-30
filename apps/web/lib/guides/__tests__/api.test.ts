@@ -60,8 +60,8 @@ describe("guide fetchers", () => {
     fetchMock.mockImplementation(async () => jsonResponse(200, { ok: true }));
     await fetchGuideBuild("pvz", "stargate-into-glaives");
     expect(lastUrl()).toMatch(/\/v1\/guides\/pvz\/stargate-into-glaives$/);
-    await fetchGuideCounter("pvz", "8-pool");
-    expect(lastUrl()).toMatch(/\/v1\/guides\/pvz\/counter\/8-pool$/);
+    await fetchGuideCounter("pvz", "12-pool");
+    expect(lastUrl()).toMatch(/\/v1\/guides\/pvz\/counter\/12-pool$/);
     await fetchGuideMap("old-sun-temple");
     expect(lastUrl()).toMatch(/\/v1\/guides\/maps\/old-sun-temple$/);
     await fetchGuideSitemap();
@@ -86,7 +86,7 @@ describe("guide fetchers", () => {
       fetchGuideBuild("pvz", "../admin"),
       fetchGuideBuild("pvz", "a".repeat(81)),
       fetchGuideBuild("pvz", ""),
-      fetchGuideCounter("pvz", "8 pool"),
+      fetchGuideCounter("pvz", "12 pool"),
       fetchGuideMap("Old%20Sun"),
     ]);
     for (const result of results) expect(result).toEqual({ kind: "not_found" });
@@ -133,11 +133,11 @@ describe("guide fetchers", () => {
 
   test("301 without a body falls back to the Location header", async () => {
     fetchMock.mockResolvedValueOnce(
-      new Response(null, { status: 308, headers: { location: "/v1/guides/pvz/counter/8-pool" } }),
+      new Response(null, { status: 308, headers: { location: "/v1/guides/pvz/counter/12-pool" } }),
     );
-    expect(await fetchGuideCounter("pvz", "old-8-pool")).toEqual({
+    expect(await fetchGuideCounter("pvz", "12-pool")).toEqual({
       kind: "moved",
-      path: "/guides/pvz/counter/8-pool",
+      path: "/guides/pvz/counter/12-pool",
     });
   });
 
@@ -165,7 +165,7 @@ describe("toSiteGuidePath", () => {
     expect(toSiteGuidePath("http://localhost:8080/v1/guides/maps/rainfall")).toBe(
       "/guides/maps/rainfall",
     );
-    expect(toSiteGuidePath("/guides/pvz/counter/8-pool")).toBe("/guides/pvz/counter/8-pool");
+    expect(toSiteGuidePath("/guides/pvz/counter/12-pool")).toBe("/guides/pvz/counter/12-pool");
   });
 
   test("refuses anything that is not a safe guide path", () => {

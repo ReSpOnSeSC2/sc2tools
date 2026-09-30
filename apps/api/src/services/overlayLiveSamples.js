@@ -59,7 +59,7 @@ function buildSamplePayload(widget) {
         lengthText: "3:47",
         map: "10000 Feet LE",
         myBuild: "PvZ - Macro Transition (Unclassified)",
-        oppBuild: "Zerg - 8 Pool",
+        oppBuild: "Zerg - 12 Pool",
         oppRace: "Zerg",
       },
       {

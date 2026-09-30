@@ -56,6 +56,10 @@ describe("services/overlayLive — pure helpers", () => {
     expect(cheeseProbability("Proxy 2 Gate")).toBeGreaterThanOrEqual(0.4);
     expect(cheeseProbability("Cannon rush")).toBeGreaterThanOrEqual(0.4);
     expect(cheeseProbability("All-in 4 Gate")).toBeGreaterThanOrEqual(0.4);
+    expect(cheeseProbability("Zerg - 12 Pool")).toBeGreaterThanOrEqual(0.4);
+    expect(cheeseProbability("ZvP - 12 Pool Rush")).toBeGreaterThanOrEqual(0.4);
+    // Games stored during the 8-worker patch 5.0.16 keep the "8 Pool" label.
+    expect(cheeseProbability("Zerg - 8 Pool")).toBeGreaterThanOrEqual(0.4);
     // Non-cheese strategies stay below the threshold so the widget hides.
     expect(cheeseProbability("Macro")).toBeLessThan(0.4);
     expect(cheeseProbability("Standard")).toBeLessThan(0.4);
@@ -553,7 +557,7 @@ describe("services/overlayLive.buildFromGame", () => {
         map: "Map A",
         durationSec: 421,
         date: new Date(now - 4000),
-        opponent: { race: "Zerg", pulseId: "pulse-1", strategy: "8 Pool" },
+        opponent: { race: "Zerg", pulseId: "pulse-1", strategy: "12 Pool" },
       },
       {
         userId: "u1",

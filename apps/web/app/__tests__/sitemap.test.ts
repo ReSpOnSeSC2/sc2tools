@@ -139,13 +139,13 @@ describe("sitemap helpers", () => {
     const rows = guideSitemapRows(SITE, {
       computedAt: null,
       entries: [
-        { path: "/guides/pvz/counter/8-pool", lastModified: "garbage" },
+        { path: "/guides/pvz/counter/12-pool", lastModified: "garbage" },
         { path: "https://evil.example/guides", lastModified: "2026-09-27T00:00:00.000Z" },
         { path: "/guides/../admin", lastModified: "2026-09-27T00:00:00.000Z" },
         { path: "/guides/pvz/a/b/c", lastModified: "2026-09-27T00:00:00.000Z" },
       ],
     });
-    expect(rows).toEqual([{ url: `${SITE}/guides/pvz/counter/8-pool`, changeFrequency: "daily", priority: 0.6 }]);
+    expect(rows).toEqual([{ url: `${SITE}/guides/pvz/counter/12-pool`, changeFrequency: "daily", priority: 0.6 }]);
     expect("lastModified" in rows[0]).toBe(false);
   });
 

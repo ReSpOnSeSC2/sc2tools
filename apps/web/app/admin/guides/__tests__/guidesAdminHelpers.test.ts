@@ -87,7 +87,7 @@ describe("withDraft", () => {
 describe("guides admin helpers", () => {
   it("builds the notes path from the catalog slug", () => {
     expect(guideNoteApiPath("PvZ", STARGATE_GLAIVES)).toBe("/v1/admin/guides/notes/pvz/stargate-into-glaives");
-    expect(guideNoteApiPath("PvZ", "Zerg - 8 Pool")).toBeNull();
+    expect(guideNoteApiPath("PvZ", "Zerg - 12 Pool")).toBeNull();
   });
 
   it("defaults the selection to the matchup's first catalog build", () => {

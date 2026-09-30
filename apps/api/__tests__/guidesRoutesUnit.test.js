@@ -17,7 +17,7 @@ const { GUIDE_CACHE_CONTROL } = require("../src/config/guides");
 
 const ALIASES = {
   builds: { pvz: { "old-glaives": "stargate-into-glaives" } },
-  counters: { pvz: { "old-8-pool": "8-pool" } },
+  counters: { pvz: { "old-12-pool": "12-pool" } },
 };
 
 function stubGuides() {
@@ -61,10 +61,10 @@ describe("guides router (isolated)", () => {
   });
 
   test("a retired counter slug 301s to the canonical counter guide", async () => {
-    const res = await request(appWith({ guides: stubGuides() })).get("/v1/guides/pvz/counter/old-8-pool");
+    const res = await request(appWith({ guides: stubGuides() })).get("/v1/guides/pvz/counter/old-12-pool");
     expect(res.status).toBe(301);
-    expect(res.headers.location).toBe("/v1/guides/pvz/counter/8-pool");
-    expect(res.body).toEqual({ movedTo: "/guides/pvz/counter/8-pool" });
+    expect(res.headers.location).toBe("/v1/guides/pvz/counter/12-pool");
+    expect(res.body).toEqual({ movedTo: "/guides/pvz/counter/12-pool" });
   });
 
   test("/me follows an alias to the canonical build instead of redirecting", async () => {

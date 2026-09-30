@@ -938,6 +938,13 @@
     "opener": true
   },
   {
+    "name": "Zerg - 12 Pool",
+    "race": "Zerg",
+    "matchup": null,
+    "description": "Detected if Spawning Pool starts < 50s and NO new drones were built (Strict 12 Supply).",
+    "opener": true
+  },
+  {
     "name": "Zerg - 13/12 Baneling Bust",
     "race": "Zerg",
     "matchup": null,
@@ -1008,13 +1015,6 @@
     "opener": true
   },
   {
-    "name": "Zerg - 8 Pool",
-    "race": "Zerg",
-    "matchup": null,
-    "description": "Detected if Spawning Pool starts < 50s and NO new drones were built (Strict 8 Supply).",
-    "opener": true
-  },
-  {
     "name": "Zerg - Early Pool (14/14 or 15 Pool)",
     "race": "Zerg",
     "matchup": null,
@@ -1064,6 +1064,13 @@
     "opener": false
   },
   {
+    "name": "ZvP - 12 Pool Rush",
+    "race": "Zerg",
+    "matchup": "ZvP",
+    "description": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the cheese rush vs Protoss.",
+    "opener": true
+  },
+  {
     "name": "ZvP - 2 Base Nydus",
     "race": "Zerg",
     "matchup": "ZvP",
@@ -1075,13 +1082,6 @@
     "race": "Zerg",
     "matchup": "ZvP",
     "description": "Detected when a Roach Warren produces a wall of Roaches and Ravagers off two bases on a low drone count -- the ZvP roach/ravager all-in.",
-    "opener": true
-  },
-  {
-    "name": "ZvP - 8 Pool Rush",
-    "race": "Zerg",
-    "matchup": "ZvP",
-    "description": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the cheese rush vs Protoss.",
     "opener": true
   },
   {
@@ -1218,24 +1218,24 @@
     "opener": true
   },
   {
-    "name": "ZvZ - 2 Base Nydus",
-    "race": "Zerg",
-    "matchup": "ZvZ",
-    "description": "Detected when a Nydus Network goes down off two bases -- the ZvZ Nydus all-in.",
-    "opener": true
-  },
-  {
-    "name": "ZvZ - 8 Pool Speedling",
+    "name": "ZvZ - 12 Pool Speedling",
     "race": "Zerg",
     "matchup": "ZvZ",
     "description": "Detected when the Spawning Pool starts before 0:55 into a wall of Zerglings on one base -- the aggressive ZvZ speedling opener.",
     "opener": true
   },
   {
-    "name": "ZvZ - 8 Pool into Baneling",
+    "name": "ZvZ - 12 Pool into Baneling",
     "race": "Zerg",
     "matchup": "ZvZ",
     "description": "Detected when a sub-55s Pool goes straight into a Baneling Nest and Banelings -- the early ZvZ baneling all-in.",
+    "opener": true
+  },
+  {
+    "name": "ZvZ - 2 Base Nydus",
+    "race": "Zerg",
+    "matchup": "ZvZ",
+    "description": "Detected when a Nydus Network goes down off two bases -- the ZvZ Nydus all-in.",
     "opener": true
   },
   {

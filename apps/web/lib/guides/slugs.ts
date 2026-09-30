@@ -119,7 +119,7 @@ export function matchupFromGuideSlug(slug: unknown): GuideMatchup | null {
 
 /**
  * Matchup of a matchup-prefixed catalog name; null for race-generic
- * ("Zerg - 8 Pool") and non-catalog names.
+ * ("Zerg - 12 Pool") and non-catalog names.
  *
  * Example: `matchupFromBuildName("PvZ - Stargate into Glaives")` → "PvZ".
  */
@@ -279,7 +279,7 @@ export function guideBuildPath(matchup: string, name: string): string | null {
 /**
  * Counter page path for an opponent strategy in the viewer's matchup.
  *
- * Example: `guideCounterPath("PvZ", "Zerg - 8 Pool")` → "/guides/pvz/counter/8-pool".
+ * Example: `guideCounterPath("PvZ", "Zerg - 12 Pool")` → "/guides/pvz/counter/12-pool".
  */
 export function guideCounterPath(matchup: string, name: string): string | null {
   const slug = guideStrategySlug(matchup, name);

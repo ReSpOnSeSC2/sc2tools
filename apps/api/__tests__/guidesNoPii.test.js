@@ -71,7 +71,7 @@ async function seedPiiGames(db) {
       replayFile: { storedAt: new Date(), sizeBytes: 5, key: `replays/${userId(u)}/${i}.SC2Replay` },
       opponent: {
         displayName: opp, battleTag: `${opp}#PIITAG`, clan: "PIICLAN", pulseId: `1-S2-1-PIIPULSE${i}`,
-        toonHandle: `2-S2-1-PIITOON${i}`, pulseCharacterId: `PIICHAR_${i}`, strategy: "Zerg - 8 Pool",
+        toonHandle: `2-S2-1-PIITOON${i}`, pulseCharacterId: `PIICHAR_${i}`, strategy: "Zerg - 12 Pool",
         mmr: 4120, leagueId: 4,
       },
     }));
@@ -134,7 +134,7 @@ describe("NO-PII: public guides payloads", () => {
       "/v1/guides/pvz?band=league:4", "/v1/guides/pvz?band=mmr:4000", "/v1/guides/pvz?era=before",
       "/v1/guides/pvz/stargate-into-glaives",
       "/v1/guides/pvz/robo-opener",
-      "/v1/guides/pvz/counter/8-pool",
+      "/v1/guides/pvz/counter/12-pool",
       "/v1/guides/pvz/counter/ling-bane-bust",
       "/v1/guides/maps/site-delta-le",
       "/v1/guides/sitemap",
@@ -158,7 +158,7 @@ describe("NO-PII: public guides payloads", () => {
     expect(build.examples).toEqual([expect.objectContaining({ handle: SHARER_SLUG, displayName: "Public Sharer" })]);
     expect(build.communityBuilds).toEqual([{ slug: "build-anonymous", title: "Stargate into Glaives" }]);
     expect(build.notes).toEqual({ body: "### Plan\nOpen Stargate.", updatedAt: "2026-09-10T00:00:00.000Z" });
-    expect(bodies.get("/v1/guides/pvz/counter/8-pool").published).toBe(true);
+    expect(bodies.get("/v1/guides/pvz/counter/12-pool").published).toBe(true);
     expect(bodies.get("/v1/guides/maps/site-delta-le").published).toBe(true);
     expect(bodies.get("/v1/guides/pvz/robo-opener").published).toBe(false);
     expect(bodies.get("/v1/guides/sitemap").entries.length).toBeGreaterThan(3);

@@ -195,7 +195,7 @@ not announced as new again.
 - **Build pages** live at `/guides/<matchup>/<build>`, for example
   `/guides/pvz/stargate-into-glaives`.
 - **Counter pages** live at `/guides/<matchup>/counter/<strategy>`, for
-  example `/guides/pvz/counter/8-pool` ("How to beat 8 Pool as Protoss").
+  example `/guides/pvz/counter/12-pool` ("How to beat 12 Pool as Protoss").
 - **Slug rule:** take the text after the catalog name's `" - "` prefix,
   lowercase it, and turn every run of non-alphanumerics into `-`.
 - **Collisions within a matchup:** the matchup-specific name keeps the plain

@@ -377,7 +377,7 @@ function openerLine(id: string, lead: string, row: GuideCell & { name: string })
 /**
  * Intro for a counter page (how to beat an opponent strategy). Unpublished → [].
  *
- * Example: `buildCounterIntro(published)[0].text` → "Against 8 Pool,
+ * Example: `buildCounterIntro(published)[0].text` → "Against 12 Pool,
  * Protoss players win 61.0% of decided games across 312 PvZ ladder games
  * from 58 players."
  */

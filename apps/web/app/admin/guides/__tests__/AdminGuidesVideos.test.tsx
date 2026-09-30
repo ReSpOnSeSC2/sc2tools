@@ -131,7 +131,7 @@ describe("admin Guides channel videos", () => {
     render(<AdminGuidesPage />);
     const list = screen.getByRole("list", { name: "Channel videos (4)" });
     expect(within(list).getByText("PvZ · builds: Stargate into Glaives · counters: none")).toBeTruthy();
-    expect(within(list).getByText("PvZ · builds: none · counters: 8 Pool")).toBeTruthy();
+    expect(within(list).getByText("PvZ · builds: none · counters: none")).toBeTruthy();
   });
 
   it("hides and unhides a video on every guide with PATCH", async () => {

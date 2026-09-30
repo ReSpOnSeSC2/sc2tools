@@ -82,7 +82,7 @@ export interface GuideCatalogEntry {
 /**
  * True when a catalog definition describes an opener (see module comment).
  *
- * Example: `isGuideOpenerDefinition({ id: "zerg-8-pool", name: "Zerg - 8 Pool" })`
+ * Example: `isGuideOpenerDefinition({ id: "zerg-12-pool", name: "Zerg - 12 Pool" })`
  * → true; `"PvZ - Game Too Short"` → false.
  */
 export function isGuideOpenerDefinition(

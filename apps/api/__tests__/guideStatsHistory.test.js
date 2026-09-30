@@ -175,7 +175,7 @@ describe("GuideStatsService — history, examples and privacy", () => {
         replayFile: { storedAt: new Date(NOW_MS), sizeBytes: 5 },
         opponent: {
           displayName: `PII_NAME_${i}`, pulseId: `1-S2-1-PII${i}`, toonHandle: `2-S2-1-PIITOON${i}`,
-          pulseCharacterId: `PII_CHAR_${i}`, strategy: "Zerg - 8 Pool", mmr: 4120, leagueId: 4,
+          pulseCharacterId: `PII_CHAR_${i}`, strategy: "Zerg - 12 Pool", mmr: 4120, leagueId: 4,
         },
       }));
     }

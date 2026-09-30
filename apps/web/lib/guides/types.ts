@@ -392,7 +392,7 @@ export interface GuideCounterOpener extends GuideCell {
 interface GuideCounterBase {
   matchup: GuideMatchup;
   matchupSlug: string;
-  /** Exact opponent-strategy catalog name, e.g. "Zerg - 8 Pool". */
+  /** Exact opponent-strategy catalog name, e.g. "Zerg - 12 Pool". */
   strategyKey: string;
   strategySlug: string;
   name: string;

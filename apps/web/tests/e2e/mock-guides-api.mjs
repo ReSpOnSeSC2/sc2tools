@@ -91,7 +91,7 @@ const MATCHUP = {
   bandOptions: { league: [{ value: 4, label: "Diamond" }], mmr: [] },
   openers: PVZ_OPENERS,
   counters: [
-    { strategyKey: "Zerg - 8 Pool", strategySlug: "8-pool", name: "8 Pool", published: true, games: 180 },
+    { strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool", name: "12 Pool", published: true, games: 180 },
     { strategyKey: "ZvP - 2 Base Nydus", strategySlug: "2-base-nydus", name: "2 Base Nydus", published: false, games: null },
   ],
   videos: [],
@@ -148,7 +148,7 @@ const BUILD = {
     },
   },
   vsStrategy: [
-    { ...cell(120, 30, 70), strategyKey: "Zerg - 8 Pool", strategySlug: "8-pool", name: "8 Pool", published: true },
+    { ...cell(120, 30, 70), strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool", name: "12 Pool", published: true },
   ],
   lengths: [
     { ...cell(140, 40, 81), bucket: "6-10", minSec: 360, maxSec: 600 },
@@ -171,7 +171,7 @@ const BUILD = {
 
 const SITEMAP = {
   computedAt: NOW,
-  entries: ["/guides", "/guides/pvz", "/guides/pvz/stargate-into-glaives", "/guides/pvz/counter/8-pool"].map((path) => ({
+  entries: ["/guides", "/guides/pvz", "/guides/pvz/stargate-into-glaives", "/guides/pvz/counter/12-pool"].map((path) => ({
     path, lastModified: NOW,
   })),
 };

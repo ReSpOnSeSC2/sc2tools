@@ -197,7 +197,7 @@ function guideGamesMatch(matchup) {
  * True when an ``opponent.strategy`` label may be shown on a guide for the
  * user's matchup (exact catalog opener in the matchup's counters namespace).
  *
- * Example: `strategyAllowed("PvZ", "Zerg - 8 Pool")` → true.
+ * Example: `strategyAllowed("PvZ", "Zerg - 12 Pool")` → true.
  *
  * @param {string} matchup
  * @param {unknown} strategy
