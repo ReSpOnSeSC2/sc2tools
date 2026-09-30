@@ -125,6 +125,15 @@ const SPRITE_ALIASES: Readonly<Record<string, string>> = {
   WarpPrismPhasing: "WarpPrism",
   AdeptPhaseShift: "Adept",
   AssimilatorRich: "Assimilator",
+  // Tracker / catalog spellings with no sheet of their own. The Oracle's
+  // trap and the Queen-laid tumour ARE the baked models; the flying
+  // Locust's state suffix is on "LocustMP", which has no sheet, so the
+  // generic suffix strip cannot reach ``LocustFlying``.
+  OracleStasisTrap: "StasisWard",
+  CreepTumorQueen: "CreepTumor",
+  LocustMPFlying: "LocustFlying",
+  Broodlord: "BroodLord",
+  TemplarArchives: "TemplarArchive",
   MothershipCore: "Mothership",
   BattleCruiser: "Battlecruiser",
   Battlecruiser: "Battlecruiser",
