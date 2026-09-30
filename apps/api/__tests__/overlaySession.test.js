@@ -37,11 +37,9 @@ jest.mock("@clerk/backend", () => ({
 
 // Only fake Date / new Date() — leave timer functions real so
 // mongodb-memory-server's internal heartbeats keep ticking. The service
-// reads ``Date.now()`` and ``new Date()`` to derive both the 14-day
-// cutoff AND the today-day-key filter, so faking just those pins the
-// clock to a fixed instant and keeps time-relative tests from flaking
-// on the hour (e.g. games built at ``now - 25m`` spilling into the
-// previous UTC day when the suite runs just after midnight).
+// reads ``Date.now()`` to derive the 14-day lookback and four-hour
+// inactivity boundary. Faking just Date pins those boundaries while
+// allowing MongoDB's timers to keep running.
 const TIMER_FAKE_OPTS = {
   doNotFake: [
     "setImmediate",
@@ -107,7 +105,7 @@ describe("services/games.todaySession", () => {
     expect(fresh).toMatchObject({ games: 1, wins: 1, losses: 0 });
   });
 
-  test("counts only games that fall on today's local-day key", async () => {
+  test("counts the current play burst without including older sessions or other users", async () => {
     jest.useFakeTimers({
       ...TIMER_FAKE_OPTS,
       now: new Date("2026-05-10T15:00:00Z").getTime(),
@@ -1287,10 +1285,7 @@ describe("services/games.todaySession", () => {
   });
 
   test("populates streak / sessionStartedAt / region for the SPA-style session widget", async () => {
-    // Pin the clock to mid-day UTC. Without this the games below are
-    // built relative to the wall clock, so a run just after UTC
-    // midnight pushes the earliest ones into the previous day, the
-    // today-key filter drops them, and wins/losses come up short.
+    // Pin the clock so the session's elapsed time stays deterministic.
     jest.useFakeTimers({
       ...TIMER_FAKE_OPTS,
       now: new Date("2026-05-10T15:00:00Z").getTime(),
@@ -1328,14 +1323,160 @@ describe("services/games.todaySession", () => {
       jest.useRealTimers();
     });
 
+    test.each([
+      ["America/New_York", "2026-05-10T04:00:00Z"],
+      ["UTC", "2026-05-10T00:00:00Z"],
+    ])("keeps the play burst through midnight in %s and the next replay", async (timezone, midnightIso) => {
+      const midnight = new Date(midnightIso).getTime();
+      const minute = 60 * 1000;
+      jest.useFakeTimers({
+        ...TIMER_FAKE_OPTS,
+        now: midnight - minute,
+      });
+      const firstDate = new Date(midnight - 30 * minute);
+      await db.games.insertMany([
+        { gameId: "before-1", result: "Victory", date: firstDate, myMmr: 5200 },
+        { gameId: "before-2", result: "Defeat", date: new Date(midnight - 20 * minute), myMmr: 5180 },
+        { gameId: "before-3", result: "Victory", date: new Date(midnight - 10 * minute), myMmr: 5210 },
+        { gameId: "before-4", result: "Victory", date: new Date(midnight - 2 * minute), myMmr: 5230 },
+      ].map((game) => ({ ...game, userId: "u1", myToonHandle: "1-S2-1-222222" })));
+
+      const before = await svc.todaySession("u1", timezone);
+      expect(before).toMatchObject({
+        games: 4,
+        wins: 3,
+        losses: 1,
+        mmrStart: 5200,
+        mmrCurrent: 5230,
+        region: "NA",
+        streak: { kind: "win", count: 2 },
+        sessionStartedAt: firstDate.toISOString(),
+      });
+
+      // A periodic refresh after midnight must preserve every field,
+      // even before another replay has arrived.
+      jest.setSystemTime(midnight + minute);
+      await expect(svc.todaySession("u1", timezone)).resolves.toEqual(before);
+      await expect(svc.todaySession("u1", "Asia/Seoul")).resolves.toEqual(before);
+
+      jest.setSystemTime(midnight + 3 * minute);
+      await svc.upsert("u1", {
+        gameId: "after-midnight",
+        result: "Victory",
+        date: new Date(midnight + 2 * minute),
+        myMmr: 5250,
+        myMmrSource: "replay",
+        myToonHandle: "1-S2-1-222222",
+      });
+      await expect(svc.todaySession("u1", timezone)).resolves.toMatchObject({
+        games: 5,
+        wins: 4,
+        losses: 1,
+        mmrStart: 5200,
+        mmrCurrent: 5250,
+        region: "NA",
+        streak: { kind: "win", count: 3 },
+        sessionStartedAt: firstDate.toISOString(),
+      });
+    });
+
+    test.each([1, 26])("ignores a replay %s hours in the future when selecting the active burst", async (futureHours) => {
+      jest.useFakeTimers({
+        ...TIMER_FAKE_OPTS,
+        now: new Date("2026-05-10T15:00:00Z").getTime(),
+      });
+      const recent = new Date(Date.now() - 10 * 60 * 1000);
+      await db.games.insertMany([
+        {
+          userId: "u1",
+          gameId: "recent-valid",
+          result: "Victory",
+          date: recent,
+          myMmr: 5200,
+          myToonHandle: "1-S2-1-222222",
+        },
+        {
+          userId: "u1",
+          gameId: "future-invalid",
+          result: "Defeat",
+          date: new Date(Date.now() + futureHours * 60 * 60 * 1000),
+          myMmr: 3900,
+          myToonHandle: "2-S2-1-111111",
+        },
+      ]);
+      await expect(svc.todaySession("u1", "UTC")).resolves.toMatchObject({
+        games: 1,
+        wins: 1,
+        losses: 0,
+        mmrStart: 5200,
+        mmrCurrent: 5200,
+        region: "NA",
+        sessionStartedAt: recent.toISOString(),
+      });
+    });
+
+    test("a future replay cannot supply the historical MMR fallback", async () => {
+      jest.useFakeTimers({
+        ...TIMER_FAKE_OPTS,
+        now: new Date("2026-05-10T15:00:00Z").getTime(),
+      });
+      await db.games.insertOne({
+        userId: "u1",
+        gameId: "future-only",
+        result: "Victory",
+        date: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        myMmr: 9000,
+      });
+      await expect(svc.todaySession("u1", "UTC")).resolves.toEqual({
+        games: 0,
+        wins: 0,
+        losses: 0,
+      });
+    });
+
+    test.each([
+      [0, 1],
+      [1, 0],
+    ])("expires only after four hours of inactivity plus %s ms", async (extraMs, expectedGames) => {
+      jest.useFakeTimers({
+        ...TIMER_FAKE_OPTS,
+        now: new Date("2026-05-10T15:00:00Z").getTime(),
+      });
+      const date = new Date(Date.now() - 4 * 60 * 60 * 1000 - extraMs);
+      await db.games.insertOne({ userId: "u1", gameId: "boundary", result: "Victory", date });
+      const out = await svc.todaySession("u1", "UTC");
+      expect(out.games).toBe(expectedGames);
+      expect(out.wins).toBe(expectedGames);
+      expect(out.sessionStartedAt).toBe(expectedGames ? date.toISOString() : undefined);
+    });
+
+    test.each([
+      [0, 2],
+      [1, 1],
+    ])("splits only after an inter-game gap of four hours plus %s ms", async (extraMs, expectedGames) => {
+      jest.useFakeTimers({
+        ...TIMER_FAKE_OPTS,
+        now: new Date("2026-05-10T15:00:00Z").getTime(),
+      });
+      const recent = new Date(Date.now() - 60 * 1000);
+      const earlier = new Date(recent.getTime() - 4 * 60 * 60 * 1000 - extraMs);
+      await db.games.insertMany([
+        { userId: "u1", gameId: "earlier", result: "Victory", date: earlier, myMmr: 5100 },
+        { userId: "u1", gameId: "recent", result: "Victory", date: recent, myMmr: 5120 },
+      ]);
+      const out = await svc.todaySession("u1", "UTC");
+      expect(out.games).toBe(expectedGames);
+      expect(out.mmrStart).toBe(expectedGames === 2 ? 5100 : 5120);
+      expect(out.sessionStartedAt).toBe((expectedGames === 2 ? earlier : recent).toISOString());
+    });
+
     test("zeroes the session when the most recent game is older than 4 hours", async () => {
       jest.useFakeTimers({
         ...TIMER_FAKE_OPTS,
         now: new Date("2026-05-10T15:00:00Z").getTime(),
       });
       const fixedNow = Date.now();
-      // 5 hours ago — still "today" in UTC (the day-key filter passes)
-      // but past the inactivity threshold (the gap walk rejects).
+      // Five hours ago is past the inactivity threshold.
       const fiveHoursAgo = new Date(fixedNow - 5 * 60 * 60 * 1000);
       await db.games.insertOne({
         userId: "u1",
@@ -1465,8 +1606,8 @@ describe("services/games.todaySession", () => {
           userId: "u1",
           gameId: "late-yesterday",
           result: "Victory",
-          // 18 hours ago — still inside the 14-day window the service
-          // pulls but well outside today's UTC day.
+          // Eighteen hours ago is inside the 14-day lookback but
+          // separated from the current burst by a long break.
           date: new Date(fixedNow - 18 * 60 * 60 * 1000),
           myMmr: 5050,
         },
@@ -1490,10 +1631,9 @@ describe("services/games.todaySession", () => {
     });
   });
 
-  test("respects the requested timezone when bucketing day boundaries", async () => {
-    // At 04:30 UTC it is 00:30 in New York. A game from one hour ago is
-    // therefore part of today's UTC bucket but yesterday's New York
-    // bucket, giving the two timezone queries deterministic answers.
+  test("returns the same active session across overlay timezones", async () => {
+    // At 04:30 UTC it is 00:30 in New York. A game from an hour ago
+    // belongs to the same play burst even though New York crossed midnight.
     jest.useFakeTimers({
       ...TIMER_FAKE_OPTS,
       now: new Date("2026-05-10T04:30:00Z").getTime(),
@@ -1508,7 +1648,7 @@ describe("services/games.todaySession", () => {
     const utc = await svc.todaySession("u1", "UTC");
     expect(utc.games).toBe(1);
     const ny = await svc.todaySession("u1", "America/New_York");
-    expect(ny.games).toBe(0);
+    expect(ny).toEqual(utc);
   });
 });
 
