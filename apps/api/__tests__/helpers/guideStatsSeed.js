@@ -14,9 +14,13 @@ const { connect } = require("../../src/db/connect");
 /** A fixed "now" after the 5.0.16 release. */
 const NOW_MS = Date.parse("2026-08-01T12:00:00.000Z");
 const DAY_MS = 24 * 60 * 60 * 1000;
-/** A replay build on the current patch (≥ 97364) and one before it. */
-const AFTER_BUILD = 97425;
-const BEFORE_BUILD = 96883;
+/**
+ * A replay build of the current era ("after": the 12-worker game, here
+ * 5.0.15) and one of the previous era ("before": the 8-worker patch
+ * 5.0.16, ≥ 97364). util/patchEra.js has the rule.
+ */
+const AFTER_BUILD = 96883;
+const BEFORE_BUILD = 97425;
 const GLAIVES = "PvZ - Stargate into Glaives";
 const PHOENIX = "PvZ - 2 Stargate Phoenix";
 
@@ -111,6 +115,7 @@ function sampleRow(overrides = {}) {
     buildKey: GLAIVES,
     matchup: "PvZ",
     era: "after",
+    eraRule: 2,
     leagueBand: 4,
     mmrBand: 4000,
     result: "Victory",

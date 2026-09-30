@@ -22,7 +22,7 @@ jest.mock("@clerk/backend", () => ({
 const HOUR_MS = 60 * 60 * 1000;
 const logger = pino({ level: "silent" });
 const RUN = Object.freeze({
-  computedAt: new Date(NOW_MS), durationMs: 5, counts: { builds: 1, published: 1, counters: 0, maps: 0 },
+  computedAt: new Date(NOW_MS), durationMs: 5, counts: { builds: 1, published: 1, counters: 0, maps: 0 }, eraRule: 2,
 });
 
 /** A guideStats stand-in: ``readRun`` returns ``last``; ``recompute`` calls onProgress ``progress`` times. */
@@ -121,6 +121,13 @@ describe("guide stats recompute job", () => {
     // The interval floor is 1 h, so a 1 s interval can never be "fresh".
     const floor = fakeStats({ last: { ...RUN, computedAt: new Date(NOW_MS - 1000) } });
     expect((await build({ guideStats: floor, intervalMs: 1000 }).runOnce()).ran).toBe(true);
+
+    // A run under an older era rule (util/patchEra.js) is never fresh: the
+    // first check after a rule change recomputes.
+    for (const eraRule of [1, null]) {
+      const oldRule = fakeStats({ last: { ...RUN, computedAt: new Date(NOW_MS - 2 * HOUR_MS), eraRule } });
+      expect((await build({ guideStats: oldRule }).runOnce()).ran).toBe(true);
+    }
   });
 
   test("re-checks freshness under the lock: a run another replica just finished is not repeated", async () => {

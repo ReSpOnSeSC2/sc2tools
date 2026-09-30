@@ -150,21 +150,31 @@ describe("GuideStatsService.recompute — games aggregate", () => {
     expect(first.ci).toEqual(wilsonInterval(230, 300));
   });
 
-  test("patch eras are aggregated separately (gameBuild, then gameVersion, then date)", async () => {
+  test("12-worker and 8-worker games are aggregated separately (gameVersion, then gameBuild, then date)", async () => {
     await db.games.insertMany([
+      // Current era: the 12-worker game, before 5.0.16 and from 5.0.17 on.
       ...cellGames({ users: 6, perUser: 20, winsPerUser: 10, userPrefix: "now" }),
+      ...cellGames({
+        users: 6, perUser: 2, winsPerUser: 1, userPrefix: "v17",
+        overrides: { gameBuild: undefined, gameVersion: "5.0.17.98000" },
+      }),
+      ...cellGames({
+        users: 6, perUser: 1, winsPerUser: 0, userPrefix: "pre",
+        overrides: { gameBuild: undefined, date: new Date("2026-05-01T00:00:00.000Z") },
+      }),
+      // Previous era: the 8-worker patch 5.0.16.
       ...cellGames({ users: 6, perUser: 5, winsPerUser: 5, userPrefix: "old", overrides: { gameBuild: BEFORE_BUILD } }),
       ...cellGames({
         users: 6, perUser: 3, winsPerUser: 0, userPrefix: "ver",
-        overrides: { gameBuild: undefined, gameVersion: "5.0.15.96883" },
+        overrides: { gameBuild: undefined, gameVersion: "5.0.16.97425" },
       }),
       ...cellGames({
         users: 6, perUser: 2, winsPerUser: 2, userPrefix: "date",
-        overrides: { gameBuild: undefined, date: new Date("2026-05-01T00:00:00.000Z") },
+        overrides: { gameBuild: undefined, date: new Date("2026-07-01T00:00:00.000Z") },
       }),
     ]);
     const docs = await recompute();
-    expect(docs.get(KEY_GLAIVES).overall).toMatchObject({ games: 120, wins: 60 });
+    expect(docs.get(KEY_GLAIVES).overall).toMatchObject({ games: 138, users: 18, wins: 66 });
     const before = docs.get("build:before:PvZ:stargate-into-glaives");
     expect(before.overall).toMatchObject({ games: 60, users: 18, wins: 42 });
     expect(before.published).toBe(false);
@@ -291,7 +301,7 @@ describe("GuideStatsService.recompute — games aggregate", () => {
     expect(docs.has("map:after:retired-map")).toBe(false);
     expect(docs.get("run")).toMatchObject({ kind: "run", counts: { builds: 1, published: 1, counters: 0, maps: 1 } });
     expect(await db.guideStats.countDocuments({ key: KEY_GLAIVES })).toBe(1);
-    expect(await svc.readRun()).toEqual({ computedAt: second.computedAt, durationMs: 0, counts: second.counts });
+    expect(await svc.readRun()).toEqual({ computedAt: second.computedAt, durationMs: 0, counts: second.counts, eraRule: 2 });
     const kinds = new Set([...docs.values()].map((d) => d.kind));
     expect(kinds).toEqual(new Set(["build", "matchup", "counter", "map", "run"]));
     // Every catalog build and strategy of every matchup gets a doc per era.

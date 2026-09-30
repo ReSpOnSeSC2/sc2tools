@@ -34,7 +34,7 @@ describe("public /v1/guides", () => {
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe(GUIDE_CACHE_CONTROL);
     const body = res.body;
-    expect(body).toMatchObject({ era: "after", patch: "5.0.16", computedAt: run.computedAt.toISOString() });
+    expect(body).toMatchObject({ era: "after", patch: "5.0.17", computedAt: run.computedAt.toISOString() });
     expect(body.matchups.map((m) => m.slug)).toEqual(["pvp", "pvt", "pvz", "tvp", "tvt", "tvz", "zvp", "zvt", "zvz"]);
     const pvz = body.matchups.find((m) => m.matchup === "PvZ");
     expect(pvz).toMatchObject({ published: true, games: 161, users: 11, publishedBuilds: 1 });
@@ -59,7 +59,7 @@ describe("public /v1/guides", () => {
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe(GUIDE_CACHE_CONTROL);
     expect(res.body).toMatchObject({
-      matchup: "PvZ", slug: "pvz", era: "after", patch: "5.0.16", published: true, games: 161, users: 11, band: null,
+      matchup: "PvZ", slug: "pvz", era: "after", patch: "5.0.17", published: true, games: 161, users: 11, band: null,
     });
     expect(res.body.openers.map((o) => [o.buildKey, o.published])).toEqual([[GLAIVES, true], [ROBO, false]]);
     expect(res.body.openers[0]).toMatchObject({ name: "Stargate into Glaives", games: 121, prevalence: expect.any(Number) });

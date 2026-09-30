@@ -50,8 +50,8 @@ function ladderGame(gameId, overrides = {}) {
     playerCount: 2,
     matchFormat: "1v1",
     isLadderGame: true,
-    gameVersion: "5.0.16.97425",
-    gameBuild: 97425,
+    gameVersion: "5.0.17.98000",
+    gameBuild: 98000,
     buildLog: ["[0:00] Nexus", "[0:18] Pylon", "[0:40] Gateway", "[1:30] Nexus", "[3:05] Stargate", "[4:31] TwilightCouncil"],
     oppBuildLog: ["[0:00] Hatchery"],
     macroBreakdown: {
@@ -116,7 +116,7 @@ describe("POST /v1/games captures guide_samples", () => {
     expect(doc).toMatchObject({
       userHash: guideUserHash(PEPPER, userId),
       gameHash: guideGameHash(PEPPER, userId, "g-guide-1"),
-      buildKey: "PvZ - Stargate into Glaives", matchup: "PvZ", era: "after", leagueBand: 4, mmrBand: 4000,
+      buildKey: "PvZ - Stargate into Glaives", matchup: "PvZ", era: "after", eraRule: 2, leagueBand: 4, mmrBand: 4000,
       result: "Victory", map: "Site Delta LE", durationSec: 700, _schemaVersion: 1,
       milestones: { Pylon: 18, Gateway: 40, "Nexus#2": 90, Stargate: 185, TwilightCouncil: 271 },
       army: { 360: { Adept: 4, Oracle: 1 }, 600: { Adept: 8, Stalker: 2 } },

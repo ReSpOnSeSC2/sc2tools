@@ -9,7 +9,13 @@ const {
 const { GUIDE_MILESTONES } = require("../config/guideMilestones");
 const { stampVersion } = require("../db/schemaVersioning");
 const { guideUserHash, guideGameHash } = require("../util/guideHash");
-const { dateMs, eraForGame } = require("../util/patchEra");
+const {
+  PATCH_ERA_AFTER,
+  PATCH_ERA_BEFORE,
+  PATCH_ERA_RULE,
+  dateMs,
+  eraForGame,
+} = require("../util/patchEra");
 const { parseBuildLogLines } = require("./perGameCompute");
 const {
   MAX_UNIT_KEYS_PER_TICK_SIDE,
@@ -56,6 +62,10 @@ const {
  *
  * Kill switch: SC2TOOLS_GUIDE_SAMPLES_DISABLED=1 turns capture and sample
  * writes off (reads and GDPR deletes still work).
+ *
+ * Era rule: every write stamps ``eraRule: PATCH_ERA_RULE`` next to the
+ * stored ``era`` (util/patchEra.js). Readers count only stamped rows;
+ * ``relabelEraRule`` converts rows stored under rule 1 (see there).
  */
 
 /** In-flight upsert cap; beyond it samples are dropped (and counted). */
@@ -564,7 +574,7 @@ class GuideSamplesService {
     await this.coll.updateOne(
       { userHash, gameHash },
       {
-        $set: { ...sample, updatedAt: now },
+        $set: { ...sample, eraRule: PATCH_ERA_RULE, updatedAt: now },
         $setOnInsert: stampVersion({ createdAt: now }, COLLECTIONS.GUIDE_SAMPLES),
       },
       { upsert: true },
@@ -625,9 +635,39 @@ class GuideSamplesService {
   }
 }
 
+/**
+ * Relabel samples stored under era rule 1, idempotently. Rule 1 had
+ * "after" = patch 5.0.16 and later and "before" = earlier games; rule 2
+ * has "after" = the 12-worker game and "before" = the 8-worker patch
+ * 5.0.16. A sample keeps no game version, so the labels are swapped: exact
+ * for every rule-1 row captured before 5.0.17 went live, which is all of
+ * them when this ships with the rule. The admin samples backfill
+ * re-derives every era from the games themselves if in doubt.
+ *
+ * Example: `await relabelEraRule(db.guideSamples)` → 1234 (rows relabelled).
+ *
+ * @param {import('mongodb').Collection} coll guide_samples
+ * @returns {Promise<number>} rows relabelled
+ */
+async function relabelEraRule(coll) {
+  const res = await coll.updateMany(
+    { eraRule: { $ne: PATCH_ERA_RULE }, era: { $in: [PATCH_ERA_AFTER, PATCH_ERA_BEFORE] } },
+    [
+      {
+        $set: {
+          era: { $cond: [{ $eq: ["$era", PATCH_ERA_AFTER] }, PATCH_ERA_BEFORE, PATCH_ERA_AFTER] },
+          eraRule: PATCH_ERA_RULE,
+        },
+      },
+    ],
+  );
+  return res.modifiedCount;
+}
+
 module.exports = {
   GuideSamplesService,
   extractSample,
+  relabelEraRule,
   MAX_PENDING_WRITES,
   SKIP,
 };

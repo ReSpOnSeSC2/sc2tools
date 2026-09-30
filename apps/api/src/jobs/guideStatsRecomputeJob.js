@@ -27,6 +27,7 @@
  */
 
 const { buildJobLock } = require("../util/jobLock");
+const { PATCH_ERA_RULE } = require("../util/patchEra");
 
 const LOCK_COLLECTION = "jobLocks";
 const LOCK_KEY = "guideStatsRecompute";
@@ -182,10 +183,14 @@ class GuideStatsRecomputeJob {
     }
   }
 
-  /** @returns {Promise<boolean>} the last run is younger than interval − slack */
+  /**
+   * @returns {Promise<boolean>} the last run is younger than interval − slack
+   *   and was computed under the current era rule (util/patchEra.js), so a
+   *   deploy that changes the rule recomputes on the next check
+   */
   async _isFresh() {
     const run = await this.deps.guideStats.readRun();
-    if (!run) return false;
+    if (!run || run.eraRule !== PATCH_ERA_RULE) return false;
     return this.now() - run.computedAt.getTime() < this.schedule.intervalMs - FRESHNESS_SLACK_MS;
   }
 

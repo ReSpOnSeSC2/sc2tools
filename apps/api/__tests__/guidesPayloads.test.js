@@ -151,7 +151,7 @@ describe("shapeCounterPayload / shapeMapPayload", () => {
       doc: { published: true, map: "Site Delta LE", mapSlug: "site-delta-le", games: 99, matchups: [cell(99, 6, 0.4, { matchup: "PvZ" })], computedAt: AT },
     });
     expect(out).toEqual({
-      published: false, map: "Site Delta LE", mapSlug: "site-delta-le", era: "after", patch: "5.0.16", computedAt: AT,
+      published: false, map: "Site Delta LE", mapSlug: "site-delta-le", era: "after", patch: "5.0.17", computedAt: AT,
     });
   });
 });

@@ -44,6 +44,9 @@ const VIDEO_LIST_MAX = 12;
  * @property {VideoMatch} match automatic match + curated links
  * @property {boolean} buildOrder a build-order video (matchup detected;
  *   never a Short or a stream VOD)
+ * @property {boolean} eightWorkerPatch published during the 8-worker patch
+ *   5.0.16, so it shows a build order the 12-worker guides no longer
+ *   teach: never matched automatically, shown only where an admin pins it
  * @property {PublicVideo} video
  */
 
@@ -56,7 +59,7 @@ const VIDEO_LIST_MAX = 12;
 /**
  * @typedef {PublicVideo & {
  *   matchup: string|null, builds: string[], counters: string[],
- *   source: string, hidden: boolean, isShort: boolean,
+ *   source: string, hidden: boolean, isShort: boolean, eightWorkerPatch: boolean,
  * }} AdminVideo
  */
 
@@ -133,13 +136,15 @@ function adminItem(row) {
     source: row.doc.source,
     hidden: row.doc.hidden === true,
     isShort: row.doc.isShort === true,
+    eightWorkerPatch: row.eightWorkerPatch === true,
   };
 }
 
 /**
  * Videos for one guide: pinned videos first (in pin order), per-guide
  * hidden removed, then automatic + curated matches newest first; at most
- * GUIDE_VIDEOS_PER_GUIDE. Globally hidden videos never show, pinned or not.
+ * GUIDE_VIDEOS_PER_GUIDE. Globally hidden videos never show, pinned or not;
+ * 8-worker patch videos show only when pinned.
  *
  * Example: pinned ["A"], hidden ["B"], matches [B, C, D] → [A, C, D].
  *
@@ -160,12 +165,15 @@ function selectForGuide(rows, matches, overrides) {
     if (row) picked.push(row);
   }
   const pickedIds = new Set(pinned);
-  const auto = visible.filter((row) => !pickedIds.has(row.doc.youtubeId) && matches(row.match));
+  const auto = visible.filter((row) =>
+    !pickedIds.has(row.doc.youtubeId) && !row.eightWorkerPatch && matches(row.match));
   return [...picked, ...auto].slice(0, GUIDE_VIDEOS_PER_GUIDE).map((row) => copyVideo(row.video));
 }
 
 /**
- * Latest visible build-order videos, optionally of one matchup.
+ * Latest visible build-order videos, optionally of one matchup. A
+ * matchup's list sits beside its 12-worker openers, so it leaves out
+ * 8-worker patch videos; the channel-wide list keeps them.
  *
  * @param {ReadonlyArray<VideoRow>} rows sorted newest first
  * @param {unknown} n requested length (clamped by listCount)
@@ -175,7 +183,7 @@ function selectForGuide(rows, matches, overrides) {
 function selectLatest(rows, n, matchup) {
   return rows
     .filter((row) => !row.doc.hidden && row.buildOrder
-      && (matchup === null || row.match.matchup === matchup))
+      && (matchup === null || (row.match.matchup === matchup && !row.eightWorkerPatch)))
     .slice(0, listCount(n))
     .map((row) => copyVideo(row.video));
 }

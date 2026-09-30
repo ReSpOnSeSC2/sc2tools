@@ -58,7 +58,9 @@ describe("guide pages", () => {
       { slug: "build-other-mu", title: "Stargate into Glaives", matchup: "PvT", removed: false, votes: 99, publishedAt: at },
     ]);
     await h.db.guideNotes.insertOne({
-      matchup: "PvZ", buildKey: GLAIVES, body: "### Plan\nHide the **Twilight**.", videos: { pinned: [], hidden: [] },
+      // The channel's Glaives video is from the 8-worker patch: it shows
+      // only because the admin pinned it.
+      matchup: "PvZ", buildKey: GLAIVES, body: "### Plan\nHide the **Twilight**.", videos: { pinned: ["YcTMc_Ee11w"], hidden: [] },
       updatedBy: "u_admin_secret_id", updatedAt: new Date("2026-09-20T10:00:00Z"), _schemaVersion: 1,
     });
   });
@@ -74,7 +76,7 @@ describe("guide pages", () => {
     const b = res.body;
     expect(b).toMatchObject({
       published: true, matchup: "PvZ", matchupSlug: "pvz", buildKey: GLAIVES, buildSlug: "stargate-into-glaives",
-      name: "Stargate into Glaives", era: "after", patch: "5.0.16", computedAt: run.computedAt.toISOString(),
+      name: "Stargate into Glaives", era: "after", patch: "5.0.17", computedAt: run.computedAt.toISOString(),
       overall: { games: 121, users: 6 }, matchupGames: 161, isNew: true, trend: null,
       headline: { scope: "league", value: 4, label: "Diamond", games: 121 },
       firstPublishedAt: run.computedAt.toISOString(),
@@ -151,7 +153,8 @@ describe("guide pages", () => {
 
   test.each([
     ["/v1/guides/pvz/robo-opener", []],
-    ["/v1/guides/pvz/carrier-rush", ["RYjRs_no8t4"]],
+    // "PvZ Carrier Rush: Can Zerg Stop It?" is an 8-worker patch video and is not pinned.
+    ["/v1/guides/pvz/carrier-rush", []],
   ])("unpublished build %s: identity only, no numbers (videos still ship)", async (path, videoIds) => {
     const res = await get(path);
     expect(res.status).toBe(200);
@@ -208,7 +211,7 @@ describe("guide pages", () => {
     });
     const res = await get("/v1/guides/maps/alcyone-le");
     expect(res.body).toEqual({
-      published: false, map: "Alcyone LE", mapSlug: "alcyone-le", era: "after", patch: "5.0.16",
+      published: false, map: "Alcyone LE", mapSlug: "alcyone-le", era: "after", patch: "5.0.17",
       computedAt: run.computedAt.toISOString(),
     });
   });

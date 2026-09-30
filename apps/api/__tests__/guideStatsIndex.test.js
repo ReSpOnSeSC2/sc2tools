@@ -73,7 +73,7 @@ function scaleSample(i) {
     milestonesForRace(matchup).slice(0, 8).map((m, k) => [m.key, 15 + k * 20 + (i % 13)]),
   );
   return {
-    buildKey: builds[(i * 31) % builds.length], matchup, era: i % 10 < 7 ? "after" : "before",
+    buildKey: builds[(i * 31) % builds.length], matchup, era: i % 10 < 7 ? "after" : "before", eraRule: 2,
     leagueBand: i % 7, mmrBand: 3000, result: i % 5 < 3 ? "Victory" : "Defeat", map: MAPS[i % MAPS.length],
     durationSec: 600, userHash: `scale-uh-${(i * 7919) % SCALE_USERS}`, gameHash: `scale-gh-${i}`, milestones,
     army: { 360: { Stalker: 1 + (i % 4), Adept: 2 }, 480: { Stalker: 4 + (i % 3) } },

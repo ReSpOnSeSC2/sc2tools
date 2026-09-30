@@ -104,8 +104,10 @@ const OPENER_MIN_SAMPLE = 10;
  *  noise, not signal, to a "top openers" report. */
 const TOP_N = 12;
 
-/** ``_schemaVersion`` stamped on every output row. */
-const SCHEMA_VERSION = 2;
+/** ``_schemaVersion`` stamped on every output row. 3: rows follow era
+ *  rule 2 (util/patchEra.js: "after" = the 12-worker game), so rule-1 rows
+ *  are never read back as week-over-week priors. */
+const SCHEMA_VERSION = 3;
 
 const BAND_TYPE_LEAGUE = "league";
 const BAND_TYPE_MMR = "mmr";
@@ -353,7 +355,7 @@ function isObsoleteBandIndex(index) {
  */
 async function readPriorRows(coll) {
   const docs = /** @type {any[]} */ (
-    await coll.find({}, {
+    await coll.find({ [VERSION_KEY]: SCHEMA_VERSION }, {
       projection: {
         _id: 0,
         bandType: 1,

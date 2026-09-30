@@ -17,7 +17,8 @@ const {
 } = require("../src/util/mmrBracketing");
 
 const BUILD = "PvZ - Gateway Expand";
-const START = Date.UTC(2026, 6, 12, 12);
+// A 12-worker game date (before the 8-worker patch 5.0.16): the live era.
+const START = Date.UTC(2026, 4, 12, 12);
 
   let mongo;
   let db;

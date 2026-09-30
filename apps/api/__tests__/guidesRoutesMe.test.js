@@ -43,6 +43,8 @@ describe("GET /v1/guides/me/:matchup/:build", () => {
       sampleRow({ userHash: hashOf(alice), milestones: { Pylon: 19, Gateway: 44 } }),
       sampleRow({ userHash: hashOf(alice), milestones: { Pylon: 21 } }),
       sampleRow({ userHash: hashOf(alice), era: "before", milestones: { Pylon: 99 } }),
+      // Labelled under era rule 1 ("after" = the 8-worker patch): not trusted.
+      sampleRow({ userHash: hashOf(alice), eraRule: 1, milestones: { Pylon: 99 } }),
       sampleRow({ userHash: hashOf(alice), buildKey: "PvZ - Robo Opener", milestones: { Pylon: 99 } }),
       sampleRow({ userHash: hashOf(bob), milestones: { Pylon: 300, Gateway: 300 } }),
     ]);

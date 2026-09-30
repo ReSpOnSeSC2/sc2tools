@@ -107,6 +107,10 @@ describe("/v1/admin/guides", () => {
   });
 
   test("notes: pins reorder the build's videos, per-guide hides remove them", async () => {
+    // Every channel video so far is from the 8-worker patch, so the
+    // 12-worker page shows one only when it is pinned.
+    const before = await request(h.app).get("/v1/guides/pvz/stargate-into-glaives");
+    expect(before.body.videos).toEqual([]);
     const pin = await admin(request(h.app).put(NOTE_PATH)).send({ videos: { pinned: ["A4x6gR7J-AY"], hidden: ["YcTMc_Ee11w"] } });
     expect(pin.status).toBe(200);
     const page = await request(h.app).get("/v1/guides/pvz/stargate-into-glaives");
@@ -209,11 +213,15 @@ describe("/v1/admin/guides", () => {
   });
 
   test("videos: hide globally, then show again", async () => {
+    await admin(request(h.app).put(NOTE_PATH)).send({ videos: { pinned: ["YcTMc_Ee11w"], hidden: [] } });
+    const pinned = await request(h.app).get("/v1/guides/pvz/stargate-into-glaives");
+    expect(pinned.body.videos.map((v) => v.youtubeId)).toEqual(["YcTMc_Ee11w"]);
     const hide = await admin(request(h.app).patch("/v1/admin/guides/videos/YcTMc_Ee11w")).send({ hidden: true });
     expect(hide.status).toBe(200);
-    expect(hide.body.item).toMatchObject({ youtubeId: "YcTMc_Ee11w", hidden: true });
+    expect(hide.body.item).toMatchObject({ youtubeId: "YcTMc_Ee11w", hidden: true, eightWorkerPatch: true });
     const page = await request(h.app).get("/v1/guides/pvz/stargate-into-glaives");
     expect(page.body.videos.map((v) => v.youtubeId)).not.toContain("YcTMc_Ee11w");
+    await admin(request(h.app).delete(NOTE_PATH));
     const show = await admin(request(h.app).patch("/v1/admin/guides/videos/YcTMc_Ee11w")).send({ hidden: false });
     expect(show.body.item.hidden).toBe(false);
     expect((await admin(request(h.app).patch("/v1/admin/guides/videos/Ab1_cd2-EF3")).send({ hidden: true })).status).toBe(404);
