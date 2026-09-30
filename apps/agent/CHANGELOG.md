@@ -2,6 +2,29 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.17.6
+
+### Fixed - replay folders created while the agent runs are synced
+
+- StarCraft II creates a new replay folder the first time you save a replay
+  with a new region or account, including the 5.0.17 PTR
+  (`...\Accounts\<id>\98-S2-1-<id>\Replays\Multiplayer`). The agent now
+  checks for new folders on every sync pass (every 10 seconds by default)
+  and starts watching them straight away. It used to look only at startup,
+  so a PTR game's replays waited for a restart.
+- Saving Settings no longer switches off folder detection. The Settings list
+  used to be saved as the complete folder list, so a folder created after
+  any Save was never watched. Folders you add are now watched alongside the
+  detected ones, and a detected folder you remove stays unwatched until
+  Auto-detect or Add folder… brings it back. Saving an empty list resets to
+  detection alone. If you removed a detected folder before this release,
+  remove it again, since older versions didn't record removals.
+- "Add replay folder…" on the dashboard and "Choose replay folder…" in the
+  tray add the folder alongside the detected ones. They used to leave only
+  the chosen folder watched after the next restart.
+- Replays in a `StarCraft II PTR` (or Test/Beta) folder next to
+  `StarCraft II` in Documents are picked up too.
+
 ## 0.17.5
 
 ### Changed - pool openers are named by the replay's patch

@@ -59,16 +59,21 @@ class AgentState:
     instead and migrates this field forward at load time."""
 
     replay_folders_override: List[str] = field(default_factory=list)
-    """User-chosen replay folders. Each entry is watched recursively, so
-    a region/account-level path catches every Multiplayer subfolder
-    underneath it. When non-empty, takes precedence over auto-discovery
-    — but auto-discovery is still merged in if the user wants the
-    default + extras (handled in the runner's discovery helper).
+    """Replay folders the user added on top of the detected ones. Each
+    entry is watched recursively, so a region/account-level path catches
+    every Multiplayer subfolder underneath it.
 
-    StarCraft II creates a separate Replays folder per region+toon, so
-    a player who plays on multiple regions or with multiple BattleTags
-    needs more than one entry here. The Settings tab exposes Add/Remove
-    buttons over this list."""
+    Detected folders are always merged in (``replay_finder.
+    watched_replay_folders``), including toon folders SC2 creates while
+    the agent runs, such as a first PTR game's. Until 0.17.6 a Settings
+    Save stored the whole list here and replaced detection for good, so
+    older state files may also list detected folders; the merge
+    de-duplicates them and the next Save drops them from this list."""
+
+    replay_folders_excluded: List[str] = field(default_factory=list)
+    """Detected replay folders the user removed in Settings. They stay
+    unwatched until the user adds them back (Auto-detect or Add folder…)
+    or saves an empty list, which resets the agent to detection alone."""
 
     # ---- GUI preferences (introduced with the PySide6 main window) ----
 
@@ -346,6 +351,9 @@ def load_state(state_dir: Path) -> AgentState:
         paused=bool(raw.get("paused") or False),
         replay_folder_override=legacy_single,
         replay_folders_override=folders,
+        replay_folders_excluded=_coerce_str_list(
+            raw.get("replay_folders_excluded"),
+        ),
         api_base_override=_coerce_str(raw.get("api_base_override")),
         log_level_override=_coerce_str(raw.get("log_level_override")),
         autostart_enabled=bool(raw.get("autostart_enabled") or False),
@@ -432,6 +440,7 @@ def _snapshot(state: AgentState) -> dict:
         path_by_game_id=dict(state.path_by_game_id),
         release_seen=dict(state.release_seen),
         replay_folders_override=list(state.replay_folders_override),
+        replay_folders_excluded=list(state.replay_folders_excluded),
         obs_scene_map=dict(state.obs_scene_map),
     )
     return asdict(stable)

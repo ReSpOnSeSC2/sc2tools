@@ -67,10 +67,9 @@ from .player_handle import (
     write_cache as write_player_handle_cache,
 )
 from .replay_finder import (
-    all_multiplayer_dirs,
-    all_multiplayer_dirs_anywhere,
-    find_all_replays_roots,
-    find_replays_root,
+    detected_replay_folders,
+    path_key,
+    watched_replay_folders,
 )
 from .replay_pipeline import probe_analyzer
 from .state import AgentState, count_synced, load_state, save_state
@@ -446,6 +445,9 @@ def _run_headless(
         on_replay_skipped=lambda p, reason: (
             import_ctl.on_replay_skipped(p, reason) if import_ctl else None
         ),
+        on_roots_changed=lambda folders: (
+            tray.set_replay_folders(folders) if tray else None
+        ),
     )
     import_ctl = ImportController(
         api=api,
@@ -627,12 +629,10 @@ def _run_with_gui(
     initial_settings = SettingsPayload(
         api_base=state.api_base_override,
         log_level=state.log_level_override or "INFO",
-        replay_folders=[Path(p) for p in state.replay_folders_override],
-        replay_folder=(
-            Path(state.replay_folder_override)
-            if state.replay_folder_override
-            else None
-        ),
+        # The watched list, detected folders included: Save stores it as
+        # additions and exclusions, so showing only the saved additions
+        # would hide the detected folders from the user.
+        replay_folders=list(initial_folders),
         autostart_enabled=autostart.is_enabled(),
         start_minimized=state.start_minimized,
         # Surface the cached handle (cloud profile or prior auto-detect)
@@ -864,6 +864,9 @@ def _gui_boot_worker(
             ),
             on_replay_skipped=lambda p, reason: (
                 import_ctl.on_replay_skipped(p, reason) if import_ctl else None
+            ),
+            on_roots_changed=lambda folders: _show_replay_folders(
+                cell, folders,
             ),
         )
         import_ctl = ImportController(
@@ -1177,7 +1180,12 @@ def _handle_choose_folder(
     log: logging.Logger,
     upload: Optional[UploadQueue] = None,
 ) -> None:
-    """Tray "Choose replay folder…" — appends to the override list.
+    """Tray / dashboard "Choose replay folder…" — adds one folder.
+
+    The folder joins the detected ones rather than replacing them: the
+    list used to start empty in auto mode, so after a restart only the
+    picked folder was watched. Picking a detected folder the user had
+    removed in Settings watches it again.
 
     Calls into ``upload.request_full_resync()`` so the watcher picks
     up the new root on its next sweep without needing a restart. The
@@ -1189,22 +1197,35 @@ def _handle_choose_folder(
         log.info("folder_picker_cancelled")
         return
     raw = str(picked)
-    if raw not in state.replay_folders_override:
+    key = path_key(picked)
+    state.replay_folders_excluded = [
+        p for p in state.replay_folders_excluded if path_key(Path(p)) != key
+    ]
+    detected = {path_key(p) for p in detected_replay_folders(cfg.replay_folder)}
+    added = {path_key(Path(p)) for p in state.replay_folders_override}
+    if key not in detected and key not in added:
         state.replay_folders_override.append(raw)
     # Keep the legacy single-string field aligned so a downgrade to an
     # older agent build still finds *something* to watch.
-    state.replay_folder_override = raw
-    save_state(cfg.state_dir, state)
-    log.info(
-        "replay_folder_added path=%s total=%d",
-        picked,
-        len(state.replay_folders_override),
+    state.replay_folder_override = (
+        state.replay_folders_override[0]
+        if state.replay_folders_override else None
     )
-    folders = [Path(p) for p in state.replay_folders_override]
+    save_state(cfg.state_dir, state)
+    folders = _discover_replay_folders(cfg, state)
+    log.info("replay_folder_added path=%s total=%d", picked, len(folders))
     if tray:
         tray.set_replay_folders(folders)
     if upload:
         upload.request_full_resync()
+
+
+def _show_replay_folders(cell, folders: List[Path]) -> None:
+    """Show the watcher's new folder list in the tray and dashboard."""
+    if cell.tray:
+        cell.tray.set_replay_folders(folders)
+    if cell.gui:
+        cell.gui.set_replay_folders(folders)
 
 
 def _handle_choose_folder_gui(
@@ -1218,10 +1239,8 @@ def _handle_choose_folder_gui(
     _handle_choose_folder(
         cfg, state, picked, cell.tray, log, upload=cell.upload,
     )
-    if cell.gui:
-        cell.gui.set_replay_folders(
-            [Path(p) for p in state.replay_folders_override],
-        )
+    if cell.gui and picked:
+        cell.gui.set_replay_folders(_discover_replay_folders(cfg, state))
 
 
 def _notify_replay_capture(tray, console, gui, message: str, log) -> None:
@@ -1343,7 +1362,6 @@ def _handle_save_settings(
             state.sync_filter_until = new_until
     folders_changed = payload.replay_folders is not None
     if folders_changed:
-        # The Settings tab owns the full list — replace, don't merge.
         cleaned: list[str] = []
         seen: set[str] = set()
         for entry in payload.replay_folders:
@@ -1352,10 +1370,12 @@ def _handle_save_settings(
                 continue
             seen.add(raw)
             cleaned.append(raw)
-        state.replay_folders_override = cleaned
-        # Keep the legacy single-folder field pointing at the first
-        # entry so a downgrade still has somewhere to watch.
-        state.replay_folder_override = cleaned[0] if cleaned else None
+        removed = [
+            str(entry).strip()
+            for entry in (payload.replay_folders_removed or [])
+            if str(entry).strip()
+        ]
+        _apply_saved_replay_folders(cfg, state, cleaned, removed)
     if payload.start_minimized is not None:
         state.start_minimized = bool(payload.start_minimized)
     if payload.auto_update_enabled is not None:
@@ -1455,7 +1475,7 @@ def _handle_save_settings(
         raise
 
     if folders_changed:
-        folders = [Path(p) for p in state.replay_folders_override]
+        folders = _discover_replay_folders(cfg, state)
         if cell.tray:
             cell.tray.set_replay_folders(folders)
         if cell.gui:
@@ -1500,12 +1520,13 @@ def _handle_save_settings(
 
     log.info(
         "settings_saved api_base=%s log_level=%s autostart=%s minimised=%s "
-        "folders=%d filter=%s",
+        "folders_added=%d folders_excluded=%d filter=%s",
         bool(state.api_base_override),
         state.log_level_override,
         state.autostart_enabled,
         state.start_minimized,
         len(state.replay_folders_override),
+        len(state.replay_folders_excluded),
         state.sync_filter_preset or "all",
     )
 
@@ -1689,56 +1710,64 @@ def _discover_replay_folders(
     full ``StarCraft II/Accounts`` root) is fine because watchdog plus
     our periodic sweep both walk recursively.
 
-    Resolution order:
-      1. The user's explicit list from the Settings tab. Takes
-         precedence in full when non-empty — auto-discovery is
-         skipped so the user never gets a "ghost" extra folder
-         appearing.
-      2. The single-folder env override (``SC2TOOLS_REPLAY_FOLDER``).
-         Mostly used by tests and headless runs.
-      3. Auto-discovery: every ``Replays/Multiplayer`` dir under the
-         detected ``StarCraft II/Accounts`` root.
+    The list is every detected folder (or the ``SC2TOOLS_REPLAY_FOLDER``
+    env override, used by tests and headless runs), minus the detected
+    folders the user removed in Settings, plus the folders they added.
+    Until 0.17.6 a saved list replaced detection entirely, so a toon
+    folder created later (a first PTR game's) was never watched.
     """
-    out: List[Path] = []
+    return watched_replay_folders(
+        added=state.replay_folders_override,
+        excluded=state.replay_folders_excluded,
+        env_folder=cfg.replay_folder,
+    )
+
+
+def _apply_saved_replay_folders(
+    cfg: AgentConfig,
+    state: AgentState,
+    listed: List[str],
+    removed: List[str],
+) -> None:
+    """Store the Settings folder list as additions and exclusions.
+
+    Detected folders are always watched, so the list itself is not stored:
+    that replaced detection, and a folder SC2 created after the Save was
+    never watched. A detected folder only becomes an exclusion when the
+    user removed it from the list (``removed``); one that appeared after
+    Settings opened is simply absent from ``listed`` and stays watched.
+    An empty list resets the agent to detection alone.
+    """
+    if not listed:
+        state.replay_folders_override = []
+        state.replay_folders_excluded = []
+        state.replay_folder_override = None
+        return
+    detected = {path_key(p) for p in detected_replay_folders(cfg.replay_folder)}
+    listed_keys = {path_key(Path(raw)) for raw in listed}
+    previously_added = {
+        path_key(Path(raw)) for raw in state.replay_folders_override
+    }
+    state.replay_folders_override = [
+        raw for raw in listed if path_key(Path(raw)) not in detected
+    ]
+    excluded: List[str] = []
     seen: set[str] = set()
-
-    def _add(p: Path) -> None:
-        try:
-            key = str(p.resolve())
-        except OSError:
-            key = str(p)
-        if key in seen:
-            return
+    for raw in [*state.replay_folders_excluded, *removed]:
+        key = path_key(Path(raw))
+        if key in seen or key in listed_keys:
+            continue
+        # Removing a folder the user added themselves just drops it.
+        if key in previously_added and key not in detected:
+            continue
         seen.add(key)
-        out.append(p)
-
-    for raw in state.replay_folders_override:
-        path = Path(raw)
-        if path.exists():
-            _add(path)
-
-    if out:
-        return out
-
-    if cfg.replay_folder:
-        return [cfg.replay_folder]
-
-    # Discover every Replays/Multiplayer directory under EVERY detected
-    # StarCraft II Accounts root. A player with one toon per region —
-    # or one regular-Documents and one OneDrive copy of the same tree —
-    # ends up with multiple folders here, and we want all of them.
-    multi = all_multiplayer_dirs_anywhere()
-    if multi:
-        for mp in multi:
-            _add(mp)
-        return out
-
-    # No Multiplayer dirs detected — fall back to watching the Accounts
-    # roots themselves so the recursive walker still picks up replays
-    # SC2 writes after we start.
-    for root in find_all_replays_roots():
-        _add(root)
-    return out
+        excluded.append(raw)
+    state.replay_folders_excluded = excluded
+    # Kept for a downgrade: pre-0.17.6 builds read it as "the" folder.
+    state.replay_folder_override = (
+        state.replay_folders_override[0]
+        if state.replay_folders_override else None
+    )
 
 
 _DEFAULT_DASHBOARD_URL = "https://sc2tools.com"

@@ -4,13 +4,23 @@ SC2 stores replays under
     Documents\\StarCraft II\\Accounts\\<account_id>\\<toon_id>\\Replays\\Multiplayer
 Possible Documents locations on Windows: regular profile, OneDrive,
 or a redirected Pictures\\Documents path. We probe all of them.
+
+A new toon folder appears whenever the player first saves a replay with a
+new region or handle, e.g. ``98-S2-1-<id>`` for the Public Test realm, so
+callers re-run discovery while the agent is up instead of only at startup.
 """
 
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
-from typing import Iterator, List, Optional
+from typing import Iterable, Iterator, List, Optional, Union
+
+# Sibling ``Documents`` folders a test client could write to instead of
+# ``StarCraft II``. Matching only these words keeps a user's backup copy
+# ("StarCraft II - Copy") from being watched and re-parsed.
+_TEST_CLIENT_WORDS = ("ptr", "test", "beta")
 
 
 def candidate_documents_dirs() -> Iterator[Path]:
@@ -62,17 +72,36 @@ def find_all_replays_roots() -> List[Path]:
     out: List[Path] = []
     seen: set[str] = set()
     for docs in candidate_documents_dirs():
-        sc2 = docs / "StarCraft II" / "Accounts"
-        if not sc2.exists():
+        for sc2 in _sc2_accounts_dirs(docs):
+            key = path_key(sc2)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(sc2)
+    return out
+
+
+def _sc2_accounts_dirs(docs: Path) -> List[Path]:
+    """``StarCraft II/Accounts`` plus any test-client sibling's Accounts.
+
+    Live and PTR clients both write to ``StarCraft II`` today (PTR toon
+    handles use gateway 98). The sibling probe covers a test client that
+    writes to its own ``StarCraft II PTR``-style folder instead.
+    """
+    out: List[Path] = []
+    main = docs / "StarCraft II" / "Accounts"
+    if main.exists():
+        out.append(main)
+    for entry in safe_iterdir(docs):
+        name = entry.name.casefold()
+        if not name.startswith("starcraft ii") or name == "starcraft ii":
             continue
-        try:
-            key = str(sc2.resolve())
-        except OSError:
-            key = str(sc2)
-        if key in seen:
+        words = re.split(r"[^a-z0-9]+", name[len("starcraft ii"):])
+        if not any(word in _TEST_CLIENT_WORDS for word in words):
             continue
-        seen.add(key)
-        out.append(sc2)
+        accounts = entry / "Accounts"
+        if accounts.is_dir():
+            out.append(accounts)
     return out
 
 
@@ -113,15 +142,82 @@ def all_multiplayer_dirs_anywhere() -> list[Path]:
     seen: set[str] = set()
     for root in find_all_replays_roots():
         for mp in all_multiplayer_dirs(root):
-            try:
-                key = str(mp.resolve())
-            except OSError:
-                key = str(mp)
+            key = path_key(mp)
             if key in seen:
                 continue
             seen.add(key)
             out.append(mp)
     return out
+
+
+def detected_replay_folders(env_folder: Optional[Path] = None) -> list[Path]:
+    """Folders found without the user's help.
+
+    ``env_folder`` (``SC2TOOLS_REPLAY_FOLDER``, used by tests and headless
+    runs) replaces detection. Otherwise every ``Replays/Multiplayer`` dir,
+    or, before any exists, the ``Accounts`` roots so the recursive watch
+    still catches the first replay SC2 writes.
+    """
+    if env_folder is not None:
+        return [env_folder]
+    return all_multiplayer_dirs_anywhere() or find_all_replays_roots()
+
+
+PathLike = Union[str, Path]
+
+
+def watched_replay_folders(
+    *,
+    added: Iterable[PathLike] = (),
+    excluded: Iterable[PathLike] = (),
+    env_folder: Optional[Path] = None,
+) -> list[Path]:
+    """Every folder the agent should watch: detected, plus the user's.
+
+    Detected folders come first, minus the ones the user removed in
+    Settings (``excluded``); the user's own folders (``added``) follow when
+    they exist. A folder inside another listed folder is dropped, since
+    both the watch and the sweep are recursive and would otherwise see
+    each replay twice. Detection runs on every call, so a toon folder
+    created after startup is included the next time this is called.
+    """
+    excluded_keys = {path_key(Path(p)) for p in excluded}
+    candidates = [
+        p for p in detected_replay_folders(env_folder)
+        if path_key(p) not in excluded_keys
+    ]
+    candidates += [Path(p) for p in added if Path(p).exists()]
+    return drop_nested_folders(candidates)
+
+
+def drop_nested_folders(folders: Iterable[Path]) -> list[Path]:
+    """Keep the first of each folder, minus folders inside another one."""
+    candidates = list(folders)
+    keys = [path_key(p) for p in candidates]
+    out: list[Path] = []
+    for i, (path, key) in enumerate(zip(candidates, keys)):
+        if key in keys[:i]:
+            continue
+        if any(is_within(key, other) for other in keys if other != key):
+            continue
+        out.append(path)
+    return out
+
+
+def path_key(p: Path) -> str:
+    """Comparison key for a folder: resolved, and case-folded on Windows."""
+    try:
+        resolved = p.resolve()
+    except OSError:
+        resolved = p
+    return os.path.normcase(str(resolved))
+
+
+def is_within(key: str, parent_key: str) -> bool:
+    """Whether ``key`` names ``parent_key`` or a folder under it."""
+    if key == parent_key:
+        return True
+    return key.startswith(parent_key.rstrip("\\/") + os.sep)
 
 
 def safe_iterdir(p: Path) -> Iterator[Path]:

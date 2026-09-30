@@ -11,7 +11,9 @@ Two modes — both ALWAYS run:
      fingerprint for missed filesystem events, and refreshes the full
      filesystem snapshot at most once per minute when nothing changed. This
      catches OneDrive / cloud-sync cases without re-statting and sorting a
-     10k-file library on every parser wave.
+     10k-file library on every parser wave. Each sweep also re-runs folder
+     discovery, so a Multiplayer folder SC2 creates after startup (a new
+     region, handle, or the PTR) is swept and handed to the observer.
 
 Both code paths funnel into ``_handle_replay`` which is idempotent on
 the dedupe set in ``state.uploaded``.
@@ -69,13 +71,14 @@ from typing import Callable, Iterable, Optional, Tuple
 
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.api import ObservedWatch
 
 from .config import AgentConfig
 from .replay_finder import (
     all_multiplayer_dirs,
-    all_multiplayer_dirs_anywhere,
-    find_all_replays_roots,
-    find_replays_root,
+    drop_nested_folders,
+    path_key,
+    watched_replay_folders,
 )
 from .replay_pipeline import (
     SKIP_ANALYSIS_FAILED,
@@ -416,6 +419,7 @@ class ReplayWatcher:
         upload: UploadQueue,
         on_replay_skipped: Optional[Callable[[Path, Optional[str]], None]] = None,
         on_capture_notice: Optional[Callable[[str], None]] = None,
+        on_roots_changed: Optional[Callable[[list[Path]], None]] = None,
     ) -> None:
         self._cfg = cfg
         self._state = state
@@ -426,8 +430,16 @@ class ReplayWatcher:
         # it unset.
         self._on_replay_skipped = on_replay_skipped
         self._on_capture_notice = on_capture_notice
+        # Told the new folder list whenever a sweep starts or stops
+        # watching a folder, so the tray and dashboard list stay current.
+        self._on_roots_changed = on_roots_changed
         self._stop = threading.Event()
         self._observer: Optional[Observer] = None
+        # Observer watch per root, keyed by ``path_key``, and the roots
+        # whose watch could not be scheduled. Guarded by ``_roots_lock``
+        # together with ``_roots``.
+        self._watches: dict[str, ObservedWatch] = {}
+        self._watch_failures: set[str] = set()
         self._sweeper: Optional[threading.Thread] = None
         # Resolve which parse-pool flavour to use up-front. The
         # boot-time probe inside ``_make_parse_executor`` is the only
@@ -606,12 +618,13 @@ class ReplayWatcher:
             log.warning(
                 "no_replay_dirs_found; agent will park until one appears.",
             )
-        self._roots = roots
+        # Start the observer before scheduling, so a folder that vanished
+        # since discovery fails its own watch instead of the whole start.
         self._observer = Observer()
-        for root in roots:
-            handler = _Handler(self)
-            self._observer.schedule(handler, str(root), recursive=True)
         self._observer.start()
+        with self._roots_lock:
+            self._roots = roots
+            self._sync_observer_watches()
         self._sweeper = threading.Thread(
             target=self._sweep_loop, name="sc2tools-sweep", daemon=True,
         )
@@ -730,52 +743,89 @@ class ReplayWatcher:
         """Return every folder we should watch + sweep, deduplicated.
 
         Each region and battle.net handle has its own
-        ``Replays/Multiplayer`` directory, so the user may have
-        configured several. Watchdog handlers and the sweep loop both
-        operate per-root, and ``recursive=True`` means a parent dir
-        catches every Multiplayer subfolder underneath it — so the
-        list can be a mix of full account roots and individual
-        Multiplayer dirs without double-uploading anything (the
-        ``state.uploaded`` cursor dedupes by absolute path).
+        ``Replays/Multiplayer`` directory: every one detected under any
+        reachable SC2 Documents folder, plus the folders the user added
+        in Settings, minus the detected ones they removed. Watchdog
+        handlers and the sweep loop both operate per-root and
+        recursively, so a folder inside another root is left out.
         """
-        out: list[Path] = []
-        seen: set[str] = set()
+        return watched_replay_folders(
+            added=getattr(self._state, "replay_folders_override", None) or [],
+            excluded=getattr(self._state, "replay_folders_excluded", None) or [],
+            env_folder=self._cfg.replay_folder,
+        )
 
-        def _add(p: Path) -> None:
+    def _update_roots(self, found: list[Path], *, replace: bool) -> bool:
+        """Adopt ``found`` as the watched roots; return whether they changed.
+
+        ``replace`` (a resync, e.g. after a Settings Save) makes ``found``
+        the whole list. Otherwise roots are only added: a folder missing
+        for one sweep (OneDrive, an unplugged drive) keeps its place, and a
+        newly found folder inside a watched one is already covered.
+        """
+        with self._roots_lock:
+            previous = list(self._roots)
+            roots = drop_nested_folders(found if replace else previous + found)
+            before = {path_key(p) for p in previous}
+            after = {path_key(p) for p in roots}
+            if after != before:
+                for root in roots:
+                    if path_key(root) not in before:
+                        log.info("replay_folder_watch_added path=%s", root)
+                for root in previous:
+                    if path_key(root) not in after:
+                        log.info("replay_folder_watch_removed path=%s", root)
+                self._roots = roots
+            # Every pass, so a watch that failed to schedule is retried.
+            self._sync_observer_watches()
+        if after == before:
+            return False
+        callback = self._on_roots_changed
+        if callback is not None:
             try:
-                key = str(p.resolve())
-            except OSError:
-                key = str(p)
-            if key in seen:
-                return
-            seen.add(key)
-            out.append(p)
+                callback(list(roots))
+            except Exception:  # noqa: BLE001
+                log.exception("on_roots_changed_callback_failed")
+        return True
 
-        # Modern multi-folder override.
-        for raw in getattr(self._state, "replay_folders_override", []) or []:
-            path = Path(raw)
-            if path.exists():
-                _add(path)
+    def _sync_observer_watches(self) -> None:
+        """Make the observer watch exactly ``self._roots``.
 
-        if out:
-            return out
-
-        # Env-var override path (tests, headless servers).
-        if self._cfg.replay_folder:
-            _add(self._cfg.replay_folder)
-            return out
-
-        # Auto-discover every (account, toon) pair under EVERY SC2 root
-        # we can reach (regular Documents, OneDrive, redirected
-        # Pictures\Documents, etc.). Returning a per-root match means a
-        # player with multiple regions/handles sees every Multiplayer
-        # folder watched simultaneously, not just the first one.
-        for mp in all_multiplayer_dirs_anywhere():
-            _add(mp)
-        if not out:
-            for root in find_all_replays_roots():
-                _add(root)
-        return out
+        Caller holds ``_roots_lock``. Before this existed the observer
+        only ever watched the startup roots, so a folder found later (a
+        first PTR game's) was seen by the sweep alone.
+        """
+        observer = self._observer
+        if observer is None or self._stop.is_set():
+            return
+        wanted = {path_key(root): root for root in self._roots}
+        for key in [k for k in self._watches if k not in wanted]:
+            watch = self._watches.pop(key)
+            try:
+                observer.unschedule(watch)
+            except (KeyError, OSError):
+                log.debug("replay_folder_unwatch_failed key=%s", key)
+        for key, root in wanted.items():
+            if key in self._watches:
+                continue
+            try:
+                self._watches[key] = observer.schedule(
+                    _Handler(self), str(root), recursive=True,
+                )
+            except OSError as exc:
+                # The sweep still walks this root; the next sweep retries,
+                # logging at DEBUG so a lasting failure doesn't flood the log.
+                level = (
+                    logging.DEBUG if key in self._watch_failures
+                    else logging.WARNING
+                )
+                self._watch_failures.add(key)
+                log.log(
+                    level, "replay_folder_watch_failed path=%s error=%r",
+                    root, exc,
+                )
+            else:
+                self._watch_failures.discard(key)
 
     def _sweep_loop(self) -> None:
         while not self._stop.wait(self._cfg.poll_interval_sec):
@@ -811,21 +861,23 @@ class ReplayWatcher:
         # Startup, periodic, and user-requested sweeps share a single
         # expensive inventory refresh. Parsing remains concurrent.
         with self._sweep_lock:
-            if self._upload.is_resync_requested():
-                with self._roots_lock:
-                    if self._upload.is_resync_requested():
-                        self._roots = self._discover_roots()
-                        self._upload.acknowledge_resync()
+            # A Settings Save or folder pick asks for a resync after
+            # changing state, and the new list replaces the old one.
+            # Acknowledged before discovering, so a request that lands
+            # mid-discovery gets its own pass instead of being lost.
+            resync = self._upload.is_resync_requested()
+            if resync:
+                self._upload.acknowledge_resync()
+            # Otherwise discovery only adds. It runs every sweep because SC2
+            # creates a toon folder when a new region or handle saves its
+            # first replay (a PTR game's ``98-S2-1-<id>``), which a
+            # startup-only scan never saw.
+            changed = self._update_roots(self._discover_roots(), replace=resync)
+            if changed or resync:
                 with self._history_lock:
                     self._history_refresh_generation += 1
             if not self._roots:
-                with self._roots_lock:
-                    if not self._roots:
-                        self._roots = self._discover_roots()
-                if not self._roots:
-                    return
-                with self._history_lock:
-                    self._history_refresh_generation += 1
+                return
 
             now = time.monotonic()
             root_signatures = self._root_inventory_signatures()

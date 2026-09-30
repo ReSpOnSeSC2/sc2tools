@@ -355,10 +355,14 @@ class SettingsPayload:
     environments. Fields use ``None`` to mean "no change" so the
     runner can update only what the user actually edited.
 
-    ``replay_folders`` carries the FULL list (replace, not merge);
-    ``replay_folder`` is the legacy single-path field — still accepted
-    on input for back-compat with older callers, but the runner reads
-    ``replay_folders`` first and falls back to wrapping the single
+    ``replay_folders`` carries the full list the Settings tab shows;
+    the runner stores it as additions on top of the detected folders.
+    ``replay_folders_removed`` names the entries the user removed from
+    that list, which the runner keeps unwatched; a detected folder that
+    is merely absent (it appeared after the tab was filled) stays
+    watched. ``replay_folder`` is the legacy single-path field — still
+    accepted on input for back-compat with older callers, but the runner
+    reads ``replay_folders`` first and falls back to wrapping the single
     field into a list.
     """
 
@@ -367,6 +371,7 @@ class SettingsPayload:
         "log_level",
         "replay_folder",
         "replay_folders",
+        "replay_folders_removed",
         "autostart_enabled",
         "start_minimized",
         "player_handle",
@@ -394,6 +399,7 @@ class SettingsPayload:
         log_level: Optional[str] = None,
         replay_folder: Optional[Path] = None,
         replay_folders: Optional[List[Path]] = None,
+        replay_folders_removed: Optional[List[Path]] = None,
         autostart_enabled: Optional[bool] = None,
         start_minimized: Optional[bool] = None,
         player_handle: Optional[str] = None,
@@ -422,6 +428,7 @@ class SettingsPayload:
         if replay_folders is None and replay_folder is not None:
             replay_folders = [replay_folder]
         self.replay_folders = replay_folders
+        self.replay_folders_removed = replay_folders_removed
         self.autostart_enabled = autostart_enabled
         self.start_minimized = start_minimized
         # Player handle (battleTag without the # discriminator, or any
@@ -1791,7 +1798,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             # Replay folders: a real list, because StarCraft II writes
             # replays to a separate folder per (region, toon) — players
             # who use multiple regions or BattleTags need more than
-            # one entry. Leaving the list empty re-enables auto-discovery.
+            # one entry. Detected folders are always watched unless the
+            # user removes them here; saving an empty list resets the
+            # agent to detection alone.
+            #
+            # Unsaved removals, sent with Save so only folders the user
+            # removed become exclusions (not ones that appeared later).
+            self._folders_removed: List[str] = []
+            # Set while the list has unsaved edits, so a folder the agent
+            # starts watching meanwhile is appended, not a list rebuild.
+            self._folders_dirty = False
             folder_block = QtWidgets.QWidget()
             folder_v = QtWidgets.QVBoxLayout(folder_block)
             folder_v.setContentsMargins(0, 0, 0, 0)
@@ -1820,6 +1836,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             add_btn.clicked.connect(self._add_folder_row)
             folder_btns.addWidget(add_btn)
             remove_btn = QtWidgets.QPushButton("Remove selected")
+            remove_btn.setToolTip(
+                "Stop watching the selected folders. A folder found "
+                "automatically stays unwatched until Auto-detect or "
+                "Add folder… brings it back.",
+            )
             remove_btn.clicked.connect(self._remove_folder_rows)
             folder_btns.addWidget(remove_btn)
             auto_btn = QtWidgets.QPushButton("Auto-detect")
@@ -2421,7 +2442,17 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _on_folders_changed(self, folders: List[str]) -> None:
             ui._replay_folders = [Path(p) for p in folders]
-            self._sync_folder_list_widget(folders)
+            if self._folders_dirty:
+                # Keep the user's unsaved edits; only add what is new.
+                shown = {
+                    self._folder_list.item(i).text()
+                    for i in range(self._folder_list.count())
+                }
+                for raw in folders:
+                    if raw not in shown and raw not in self._folders_removed:
+                        self._folder_list.addItem(raw)
+            else:
+                self._sync_folder_list_widget(folders)
             self._refresh_status_card()
 
         def _on_settings_status(self, status: str) -> None:
@@ -2609,6 +2640,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 api_base=self._api_input.text().strip() or None,
                 log_level=self._log_combo.currentText(),
                 replay_folders=folders,
+                replay_folders_removed=[
+                    Path(raw) for raw in self._folders_removed
+                ],
                 replay_folder=folders[0] if folders else None,
                 autostart_enabled=self._autostart_check.isChecked(),
                 start_minimized=self._minimized_check.isChecked(),
@@ -2631,6 +2665,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 ),
                 obs_switch_on_replays=self._obs_replay_check.isChecked(),
             )
+            # Cleared before the save call: the runner answers with the
+            # new watched list on this thread, which must replace the
+            # list widget rather than merge into the saved edits.
+            unsaved_removals = self._folders_removed
+            unsaved_edits = self._folders_dirty
+            self._folders_removed = []
+            self._folders_dirty = False
             try:
                 ui._on_save_settings(payload)
                 # Refresh the dashboard's filter chip immediately —
@@ -2657,6 +2698,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 )
             except Exception as exc:  # noqa: BLE001
                 log.exception("gui_save_settings_failed")
+                self._folders_removed = unsaved_removals
+                self._folders_dirty = unsaved_edits
                 self._settings_status.setText(f"Save failed: {exc}")
 
         def _refresh_capture_notice(self) -> None:
@@ -2794,11 +2837,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 except OSError:
                     continue
             self._folder_list.addItem(picked)
+            self._folders_dirty = True
 
         def _remove_folder_rows(self) -> None:
             for item in self._folder_list.selectedItems():
                 row = self._folder_list.row(item)
-                self._folder_list.takeItem(row)
+                removed = self._folder_list.takeItem(row)
+                if removed is not None:
+                    self._folders_removed.append(removed.text())
+                    self._folders_dirty = True
 
         def _auto_detect_folders(self) -> None:
             """Actively scan the StarCraft II Accounts tree and populate
@@ -2874,6 +2921,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._folder_list.addItem(entry)
 
             if new_entries:
+                self._folders_dirty = True
                 self._settings_status.setText(
                     f"Auto-detect added {len(new_entries)} folder"
                     f"{'s' if len(new_entries) != 1 else ''} · "

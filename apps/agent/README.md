@@ -108,7 +108,7 @@ Closing the window minimises it to the tray (the agent keeps running).
 | Pause syncing / Resume syncing | Persists across restarts; queue keeps draining but holds jobs |
 | Open log folder | Opens `%LOCALAPPDATA%\sc2tools\logs` in Explorer |
 | Re-sync from scratch | Clears the dedupe cursor + re-uploads every replay |
-| Choose replay folder | Native folder picker; override persists in `state.replay_folder_override` |
+| Choose replay folder | Native folder picker; the folder is watched alongside the auto-detected ones and persists in `state.replay_folders_override` |
 | Check for updates / Install update X.Y.Z | Polls the cloud release feed; on a fresh release, downloads + verifies + launches the installer |
 | Quit | Stops the agent |
 
