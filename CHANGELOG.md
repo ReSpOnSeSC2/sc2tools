@@ -174,6 +174,18 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Unit costs follow each game's patch** — the replay's units-lost panels
+  and kill counts, the macro chart's army value for older uploads, and the
+  roster's "Cost each" / "Total" priced every game at patch 5.0.16b, so
+  12-worker games showed a Queen at 150 minerals, a Command Center at 300
+  and a Planetary Fortress at 250/150. Games played outside 5.0.16 now use
+  the 12-worker balance (Queen 175, Command Center 400, Planetary Fortress
+  150/150); 5.0.16 games keep the 5.0.16b costs. The patch comes from the
+  replay's version, or its date when the version isn't known. This covers
+  the game page, the macro breakdown, /try and the admin view. Review
+  pages, which don't carry the game's version or date, use the 12-worker
+  costs. The roster now shows a Ravager, Lurker and Brood Lord at their
+  full 3, 3 and 4 supply.
 - **Replay reviews show your real league in each region** — a reviewer's
   league was guessed from the MMR in their synced games, and only 6,500 MMR
   and up counted as Grandmaster. A 5,350 NA Grandmaster therefore showed as
