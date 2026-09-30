@@ -384,6 +384,35 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **StarCraft II is back to 12 starting workers (5.0.17)** — build orders
+  follow the 12-worker game again from 30 September 2026:
+  - The four pool-first openers are named "12 Pool" again ("Zerg - 12
+    Pool", "ZvP - 12 Pool Rush", "ZvZ - 12 Pool into Baneling", "ZvZ - 12
+    Pool Speedling"). Old `/guides/…/8-pool` links redirect to the 12 Pool
+    pages. Any upload with an "8 Pool" label, for example from an agent older
+    than 0.17.4, is stored as "12 Pool". The one-shot script
+    `apps/api/src/db/migrations/2026-09-30-rename-8-pool-builds.js` renames
+    labels already stored on games, guide samples and guide notes. The stream
+    overlay's cheese alert also fires on 12 Pool.
+  - The analyzer's date filter adds **After 5.0.17 · 12 workers**. It starts
+    at midnight US Eastern on 30 September and is the new default. The
+    8-worker filter now ends at that same moment: **5.0.16 · 8 workers (until
+    Sep 30)**. A saved "After 5.0.16" filter moves to the 12-worker one. The
+    Coaching Locker's filters match.
+  - Build guides and the Ladder Pulse now treat the 12-worker game as current.
+    That covers games before 5.0.16 and games from 5.0.17 on; the 8-worker
+    patch is the previous era (`?era=before`). A game's release string
+    decides (5.0.16.x is 8 workers), then its build, then its date.
+    - Guide pages speak in workers: "with 12 starting workers", or "on the
+      8-worker patch 5.0.16".
+    - Stored guide samples are relabelled on the next stats run, and weekly
+      trends start fresh.
+    - Channel videos from the 8-worker patch no longer appear on guides by
+      themselves. Pin one on a build guide under /admin/guides to show it.
+  - Build-order step times use the 12-worker unit times again (Adept 27 s,
+    High and Dark Templar 39 s, Reaper 32 s, Warp Gate morph 7 s). Games
+    played on 5.0.16 keep that patch's times.
+
 - **Cleaner Google Analytics data** — page views report the page URL with
   IDs collapsed (for example `/app/game/:gameId`) and only campaign
   parameters kept, so `/?source=pwa` no longer doubles up; admin, overlay,

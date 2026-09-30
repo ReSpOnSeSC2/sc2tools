@@ -76,6 +76,7 @@ const CHEESE_KEYWORDS = [
   "pool first",
   "6 pool",
   "8 pool",
+  "12 pool",
   "all-in",
   "allin",
   "all in",

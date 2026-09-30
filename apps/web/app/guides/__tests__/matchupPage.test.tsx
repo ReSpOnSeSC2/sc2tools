@@ -45,7 +45,7 @@ describe("/guides/[matchup]", () => {
       era: "after",
     });
     expect(md.title).toBe(
-      `PvZ build orders vs Diamond opponents — ${FIXTURE_MATCHUP_BAND.openers.length} openers ranked by win rate (Patch 5.0.16) | SC2 Tools`,
+      `PvZ build orders vs Diamond opponents — ${FIXTURE_MATCHUP_BAND.openers.length} openers ranked by win rate (12 workers) | SC2 Tools`,
     );
     expect(md.alternates?.canonical).toBe("/guides/pvz");
     expect(String(md.description)).toContain("6,840 games");
@@ -92,18 +92,22 @@ describe("/guides/[matchup] filters", () => {
     expect(within(nav).getByRole("link", { name: "4500–5000 MMR" }).getAttribute("href")).toBe(
       "/guides/pvz?band=mmr:4500",
     );
-    expect(within(nav).getByRole("link", { name: "Before 5.0.16" }).getAttribute("href")).toBe(
+    const twelveWorkers = within(nav).getByRole("link", { name: "12 workers" });
+    expect(twelveWorkers.getAttribute("href")).toBe("/guides/pvz?band=league:4");
+    expect(twelveWorkers.getAttribute("aria-current")).toBe("page");
+    expect(within(nav).getByRole("link", { name: "8 workers · 5.0.16" }).getAttribute("href")).toBe(
       "/guides/pvz?band=league:4&era=before",
     );
+    expect(within(nav).getByText("Game")).toBeTruthy();
     expect(screen.queryByRole("columnheader", { name: "Played in" })).toBeNull();
-    expect(screen.getByRole("link", { name: "How to beat 8 Pool" }).getAttribute("href")).toBe(
-      "/guides/pvz/counter/8-pool",
+    expect(screen.getByRole("link", { name: "How to beat 12 Pool" }).getAttribute("href")).toBe(
+      "/guides/pvz/counter/12-pool",
     );
     expect(screen.queryByRole("link", { name: "How to beat Ling Bane Bust" })).toBeNull();
     expect(screen.getByRole("heading", { level: 2, name: "Latest PvZ videos" })).toBeTruthy();
   });
 
-  it("never links a before-patch ranking to the current-patch guide pages", async () => {
+  it("never links an 8-worker ranking to the current (12-worker) guide pages", async () => {
     const before: GuideMatchupPayload = { ...FIXTURE_MATCHUP, era: "before" };
     mocks.fetchGuideMatchup.mockResolvedValue(ok(before));
     render(await MatchupGuidePage(props({ era: "before" })));
@@ -118,7 +122,7 @@ describe("/guides/[matchup] filters", () => {
     expect(screen.queryByRole("link", { name: /How to beat/ })).toBeNull();
   });
 
-  it("keeps guide links and the unpublished hint in the current-patch view", async () => {
+  it("keeps guide links and the unpublished hint in the current 12-worker view", async () => {
     mocks.fetchGuideMatchup.mockResolvedValue(ok(FIXTURE_MATCHUP));
     render(await MatchupGuidePage(props()));
     const table = screen.getByRole("table", { name: /PvZ openers/ });
@@ -181,12 +185,12 @@ describe("/guides/[matchup]/counter", () => {
     mocks.fetchGuideMatchup.mockResolvedValue(ok(FIXTURE_MATCHUP));
     const md = await counterListMetadata({ params: Promise.resolve({ matchup: "pvz" }) });
     expect(md.title).toBe(
-      "How to beat Zerg openers as Protoss (PvZ) — 3 counter guides (Patch 5.0.16) | SC2 Tools",
+      "How to beat Zerg openers as Protoss (PvZ) — 3 counter guides (12 workers) | SC2 Tools",
     );
     expect(md.alternates?.canonical).toBe("/guides/pvz/counter");
     render(await CounterListPage({ params: Promise.resolve({ matchup: "pvz" }) }));
-    const pool = screen.getByRole("link", { name: "How to beat 8 Pool" });
-    expect(pool.getAttribute("href")).toBe("/guides/pvz/counter/8-pool");
+    const pool = screen.getByRole("link", { name: "How to beat 12 Pool" });
+    expect(pool.getAttribute("href")).toBe("/guides/pvz/counter/12-pool");
     expect(pool.closest("li")?.textContent).toContain("236 games");
     const lurker = screen.getByRole("link", { name: "How to beat Lurker Contain" });
     expect(lurker.closest("li")?.textContent).toContain("Not enough games yet");

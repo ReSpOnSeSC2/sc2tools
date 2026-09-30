@@ -97,7 +97,7 @@ const DEFAULT_MMR_BAND = 4000;
 const DEFAULT_MATCHUP = "PvZ";
 export const DEFAULT_PATCH_ERA: PatchEra = "after";
 
-/** Invalid or missing values deliberately land on the current 8-worker era. */
+/** Invalid or missing values deliberately land on the live 12-worker game. */
 export function parsePatchEra(raw: unknown): PatchEra {
   return typeof raw === "string" && raw.trim().toLowerCase() === "before"
     ? "before"
@@ -172,12 +172,12 @@ export function parseMatchup(raw: unknown): string {
 
 /** The build-guide matchup page that replaced the /meta radar. */
 const GUIDES_PATH = "/guides";
-/** Only the older patch era is spelled out; the current era is the default. */
+/** Only the previous (8-worker 5.0.16) era is spelled out; the current era is the default. */
 const PREVIOUS_ERA: PatchEra = "before";
 
 /** Build-guide URL for one axis, opponent band, and matchup: the guide
  *  matchup page filtered to that band, in the query format the guide pages
- *  parse (`band=<axis>:<band>`, `era=before` only for the older patch).
+ *  parse (`band=<axis>:<band>`, `era=before` only for the 8-worker patch).
  *
  *  Example: `metaHref("league", 4, "PvZ")` → "/guides/pvz?band=league:4". */
 export function metaHref(

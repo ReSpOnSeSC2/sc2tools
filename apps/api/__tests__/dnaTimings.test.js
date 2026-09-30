@@ -51,6 +51,20 @@ describe("dnaTimings.computeMatchupAwareMedianTimings", () => {
     expect(out.Gateway.sampleCount).toBe(1);
     expect(out.Gateway.medianDisplay).toBe("2:30");
   });
+
+  test("rewinds the WarpGate morph by the game's patch era", () => {
+    // The morph takes 4s on the 8-worker patch 5.0.16, 7s in the
+    // 12-worker game (before 5.0.16 and from 5.0.17 on).
+    const warpGateAt = (extra) => {
+      const game = { ...makeGame({ buildLog: ["[3:00] WarpGate"] }), ...extra };
+      return Dna.computeMatchupAwareMedianTimings([game], "P").WarpGate.medianDisplay;
+    };
+    expect(warpGateAt({ gameVersion: "5.0.16.97425" })).toBe("2:56");
+    expect(warpGateAt({ date: "2026-07-15T00:00:00.000Z" })).toBe("2:56");
+    expect(warpGateAt({ gameVersion: "5.0.17.98000" })).toBe("2:53");
+    expect(warpGateAt({ date: "2026-09-30T04:00:00.000Z" })).toBe("2:53");
+    expect(warpGateAt({})).toBe("2:53");
+  });
 });
 
 describe("dnaTimings.recencyWeightedStrategies", () => {
@@ -80,7 +94,7 @@ describe("dnaTimings.resolveMyRace", () => {
   test("falls through Matchup, my_build, build", () => {
     expect(Dna.resolveMyRace([{ myRace: "Protoss" }])).toBe("P");
     expect(Dna.resolveMyRace([{ Matchup: "PvT" }])).toBe("P");
-    expect(Dna.resolveMyRace([{ myBuild: "Zerg - 8 Pool" }])).toBe("Z");
+    expect(Dna.resolveMyRace([{ myBuild: "Zerg - 12 Pool" }])).toBe("Z");
     expect(Dna.resolveMyRace([])).toBe("");
   });
 });

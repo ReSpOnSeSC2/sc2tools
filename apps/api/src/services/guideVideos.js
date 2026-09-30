@@ -21,7 +21,10 @@
  * Reads: matching is recomputed at read time from the live catalog
  * (services/guideVideoMatch.js) plus the snapshot's hand-curated links,
  * over an in-memory copy of the (small) collection refreshed every
- * CACHE_TTL_MS. Guide reads are fail-soft: a Mongo error yields [] so a
+ * CACHE_TTL_MS. Videos published during the 8-worker patch 5.0.16
+ * (``eightWorkerPatch``) teach a build order the 12-worker guides no
+ * longer cover: guides and matchup pages show them only where an admin
+ * pins them. Guide reads are fail-soft: a Mongo error yields [] so a
  * guide page never fails because its video block could not load.
  *
  * Helpers: guideVideoFeed.js (Atom parser), guideVideoMatch.js (catalog
@@ -68,7 +71,15 @@ const {
   lookupOembed,
 } = require("./guideVideoHttp");
 const SNAPSHOT = require("../config/guideVideosSnapshot.json");
+const {
+  PATCH_ERA_AFTER,
+  PATCH_ERA_BEFORE,
+  PATCH_5_0_16_RELEASE,
+  PATCH_5_0_17_RELEASE,
+} = require("../util/patchEra");
 
+/** Publish dates of videos recorded on the 8-worker patch 5.0.16. */
+const EIGHT_WORKER_VIDEO_WINDOW = Object.freeze({ from: PATCH_5_0_16_RELEASE, until: PATCH_5_0_17_RELEASE });
 /** How long guide reads reuse the in-memory copy of guide_videos. */
 const CACHE_TTL_MS = 5 * 60 * 1000;
 /** Most rows read into memory (the channel has a few dozen videos). */
@@ -207,7 +218,9 @@ class GuideVideosService {
    *   fetchImpl?: typeof fetch,
    *   now?: () => number,
    *   snapshot?: VideoSnapshot,
-   * }} [opts]
+   *   eightWorkerWindow?: { from: Date, until: Date } | null,
+   * }} [opts] ``eightWorkerWindow``: publish dates of 8-worker patch videos
+   *   (default: the 5.0.16 release until the 5.0.17 revert; null: none)
    */
   constructor(db, opts = {}) {
     this.db = db;
@@ -220,6 +233,10 @@ class GuideVideosService {
     this.snapshot = opts.snapshot || /** @type {VideoSnapshot} */ (SNAPSHOT);
     /** @type {CuratedLink[]} */
     this.curatedLinks = (this.snapshot.curatedLinks || []).filter(isValidCuratedLink);
+    /** @type {{ from: Date, until: Date } | null} */
+    this.eightWorkerWindow = opts.eightWorkerWindow === undefined
+      ? EIGHT_WORKER_VIDEO_WINDOW
+      : opts.eightWorkerWindow;
     /** @type {{ at: number, rows: VideoRow[] } | null} */
     this.cache = null;
     /** @type {Promise<VideoRow[]> | null} */
@@ -263,7 +280,27 @@ class GuideVideosService {
    */
   decorate(doc) {
     const match = applyCuratedLinks(doc.youtubeId, matchVideo(doc), this.curatedLinks);
-    return { doc, match, buildOrder: match.matchup !== null, video: toPublicVideo(doc) };
+    return {
+      doc,
+      match,
+      buildOrder: match.matchup !== null,
+      eightWorkerPatch: this.isEightWorkerVideo(doc),
+      video: toPublicVideo(doc),
+    };
+  }
+
+  /**
+   * True for a video published during the 8-worker patch. An undated
+   * (admin-added, not yet in the feed) video is not, so it shows at once.
+   *
+   * @param {GuideVideoDoc} doc
+   * @returns {boolean}
+   */
+  isEightWorkerVideo(doc) {
+    const window = this.eightWorkerWindow;
+    if (!window || !(doc.publishedAt instanceof Date)) return false;
+    const at = doc.publishedAt.getTime();
+    return at >= window.from.getTime() && at < window.until.getTime();
   }
 
   /**
@@ -350,15 +387,18 @@ class GuideVideosService {
   }
 
   /**
-   * Latest build-order videos of one matchup, newest first.
+   * Latest build-order videos of one matchup, newest first. The current
+   * (12-worker) view leaves out 8-worker patch videos; the 8-worker view
+   * (era "before") keeps them.
    *
    * @param {string} matchup "PvZ" form
    * @param {number} [n] 1..12, default 4
+   * @param {string} [era] util/patchEra.js era id, default the current one
    * @returns {Promise<PublicVideo[]>}
    */
-  async videosForMatchup(matchup, n = VIDEO_LIST_DEFAULT) {
+  async videosForMatchup(matchup, n = VIDEO_LIST_DEFAULT, era = PATCH_ERA_AFTER) {
     if (!MATCHUPS.includes(matchup)) return [];
-    return selectLatest(await this.cachedRows(), n, matchup);
+    return selectLatest(await this.cachedRows(), n, matchup, era !== PATCH_ERA_BEFORE);
   }
 
   /**

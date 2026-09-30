@@ -34,7 +34,7 @@ import {
   FIXTURE_SITEMAP,
 } from "@/lib/guides/__fixtures__";
 
-const COUNTER_PARAMS = { params: Promise.resolve({ matchup: "pvz", strategy: "8-pool" }) };
+const COUNTER_PARAMS = { params: Promise.resolve({ matchup: "pvz", strategy: "12-pool" }) };
 const MAP_PARAMS = { params: Promise.resolve({ map: "old-sun-temple" }) };
 
 function ok<T>(data: T) {
@@ -58,9 +58,9 @@ describe("/guides/[matchup]/counter/[strategy]", () => {
     const md = await counterMetadata(COUNTER_PARAMS);
     const pct = `${(FIXTURE_COUNTER_PUBLISHED.overall.winRate * 100).toFixed(1)}%`;
     expect(md.title).toBe(
-      `How to beat 8 Pool as Protoss — ${pct} win rate over 236 ladder games (Patch 5.0.16) | SC2 Tools`,
+      `How to beat 12 Pool as Protoss — ${pct} win rate over 236 ladder games (12 workers) | SC2 Tools`,
     );
-    expect(md.alternates?.canonical).toBe("/guides/pvz/counter/8-pool");
+    expect(md.alternates?.canonical).toBe("/guides/pvz/counter/12-pool");
     expect(String(md.description)).toContain("236 PvZ ladder games");
     expect(String(md.description)).toContain("Sep 27, 2026");
     expect(md.robots).toBeUndefined();
@@ -69,9 +69,9 @@ describe("/guides/[matchup]/counter/[strategy]", () => {
   it("ranks the openers with n and their catalog descriptions, plus the video", async () => {
     mocks.fetchGuideCounter.mockResolvedValue(ok(FIXTURE_COUNTER_PUBLISHED));
     const { container } = render(await CounterGuidePage(COUNTER_PARAMS));
-    expect(screen.getByRole("heading", { level: 1, name: "How to beat 8 Pool" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "How to beat 12 Pool" })).toBeTruthy();
     expect(screen.getByText(FIXTURE_COUNTER_PUBLISHED.description)).toBeTruthy();
-    const list = screen.getByRole("heading", { level: 2, name: /Best Protoss openers against 8 Pool/ })
+    const list = screen.getByRole("heading", { level: 2, name: /Best Protoss openers against 12 Pool/ })
       .closest("section") as HTMLElement;
     const names = within(list).getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
     expect(names).toEqual(FIXTURE_COUNTER_PUBLISHED.openers.map((opener) => opener.name));
@@ -115,9 +115,9 @@ describe("/guides/[matchup]/counter/[strategy]", () => {
     expect((await counterMetadata(COUNTER_PARAMS)).robots).toEqual({ index: false, follow: false });
     await expect(CounterGuidePage(COUNTER_PARAMS)).rejects.toBeInstanceOf(GuideUnavailableError);
     mocks.fetchGuideCounter.mockReset();
-    const mixed = { params: Promise.resolve({ matchup: "PvZ", strategy: "8-Pool" }) };
+    const mixed = { params: Promise.resolve({ matchup: "PvZ", strategy: "12-Pool" }) };
     await expect(CounterGuidePage(mixed)).rejects.toThrow("NEXT_REDIRECT");
-    expect(mocks.permanentRedirect).toHaveBeenCalledWith("/guides/pvz/counter/8-pool");
+    expect(mocks.permanentRedirect).toHaveBeenCalledWith("/guides/pvz/counter/12-pool");
     expect(mocks.fetchGuideCounter).not.toHaveBeenCalled();
   });
 
@@ -135,7 +135,7 @@ describe("/guides/maps/[map]", () => {
     mocks.fetchGuideMap.mockResolvedValue(ok(FIXTURE_MAP));
     const md = await mapMetadata(MAP_PARAMS);
     expect(md.title).toBe(
-      "Old Sun Temple — best openers by matchup from 2,418 ladder games (Patch 5.0.16) | SC2 Tools",
+      "Old Sun Temple — best openers by matchup from 2,418 ladder games (12 workers) | SC2 Tools",
     );
     expect(md.alternates?.canonical).toBe("/guides/maps/old-sun-temple");
   });

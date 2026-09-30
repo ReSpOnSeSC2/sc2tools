@@ -11,7 +11,8 @@ import type { LogicalSeason } from "@/lib/useSeasons";
 
 export type PresetId =
   | "all"
-  | "after_5_0_16"
+  | "after_5_0_17"
+  | "patch_5_0_16"
   | "before_5_0_16"
   | "today"
   | "yesterday"
@@ -41,11 +42,19 @@ export type Preset = {
 };
 
 /**
- * Patch 5.0.16 went live on 22 June 2026 and reduced the starting worker
- * count from 12 to 8. Keep this as an instant (rather than a calendar-day
- * calculation) so every browser and API request splits the same games.
+ * Patch 5.0.16 went live on 22 June 2026 and cut the starting worker
+ * count from 12 to 8: the start of the 8-worker window. Keep this as an
+ * instant (rather than a calendar-day calculation) so every browser and
+ * API request splits the same games.
  */
 export const PATCH_5_0_16_RELEASE = new Date("2026-06-22T19:15:00.000Z");
+
+/**
+ * Patch 5.0.17 restored 12 starting workers: the 8-worker window ends
+ * (and the 12-worker patch starts) at midnight US Eastern on 30 Sep 2026.
+ * Must equal PATCH_5_0_17_RELEASE in apps/api/src/util/patchEra.js.
+ */
+export const PATCH_5_0_17_RELEASE = new Date("2026-09-30T04:00:00.000Z");
 
 function startOfDay(d: Date): Date {
   const out = new Date(d);
@@ -82,15 +91,24 @@ function startOfWeek(d: Date): Date {
 
 export const PRESETS: ReadonlyArray<Preset> = [
   {
-    id: "after_5_0_16",
-    label: "After 5.0.16 · 8 workers",
+    id: "after_5_0_17",
+    label: "After 5.0.17 · 12 workers",
+    shortLabel: "12-worker patch",
+    resolve: () => ({ since: new Date(PATCH_5_0_17_RELEASE) }),
+  },
+  {
+    id: "patch_5_0_16",
+    label: "5.0.16 · 8 workers (until Sep 30)",
     shortLabel: "8-worker patch",
-    resolve: () => ({ since: new Date(PATCH_5_0_16_RELEASE) }),
+    resolve: () => ({
+      since: new Date(PATCH_5_0_16_RELEASE),
+      until: new Date(PATCH_5_0_17_RELEASE.getTime() - 1),
+    }),
   },
   {
     id: "before_5_0_16",
     label: "Before 5.0.16 · 12 workers",
-    shortLabel: "12-worker era",
+    shortLabel: "Before 5.0.16",
     resolve: () => ({
       until: new Date(PATCH_5_0_16_RELEASE.getTime() - 1),
     }),
@@ -263,11 +281,37 @@ export function longLabelFor(
 }
 
 /**
- * The picker's default selection. Patch 5.0.16 is the live 8-worker game;
- * keeping it as a fixed preset prevents pre-patch replays from distorting
- * current build and matchup analysis.
+ * The picker's default selection. Patch 5.0.17 is the live 12-worker
+ * game; keeping it as a fixed preset prevents 8-worker (5.0.16) and older
+ * replays from distorting current build and matchup analysis.
  */
-export const DEFAULT_PRESET: PresetId = "after_5_0_16";
+export const DEFAULT_PRESET: PresetId = "after_5_0_17";
+
+/**
+ * Preset ids from older builds that are no longer offered, mapped to
+ * their replacement. "after_5_0_16" followed the live patch, so its
+ * users move to the new live patch rather than a frozen 8-worker window.
+ */
+const LEGACY_PRESET_IDS: ReadonlyMap<string, PresetId> = new Map([
+  ["after_5_0_16", "after_5_0_17"],
+]);
+
+/**
+ * Sanitise a preset id read back from storage (user-writable and older
+ * than this build): legacy ids map to their replacement, valid ids
+ * (including `season:N`, `current_season` and `custom`) pass through,
+ * and anything else falls back to the default.
+ *
+ * Example: `normalizePresetId("after_5_0_16")` → "after_5_0_17".
+ */
+export function normalizePresetId(raw: unknown): PresetId {
+  if (typeof raw !== "string") return DEFAULT_PRESET;
+  const legacy = LEGACY_PRESET_IDS.get(raw);
+  if (legacy) return legacy;
+  if (raw === "custom" || raw === "current_season") return raw;
+  if (/^season:\d+$/.test(raw)) return raw as PresetId;
+  return PRESETS.some((p) => p.id === raw) ? (raw as PresetId) : DEFAULT_PRESET;
+}
 
 /** Helper for KPI consumers — best-effort current-season label. */
 export function currentSeasonPresetId(): PresetId {

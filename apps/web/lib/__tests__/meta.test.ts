@@ -61,7 +61,7 @@ describe("parseLeagueId", () => {
 });
 
 describe("opponent band helpers", () => {
-  it("defaults the patch era to the current 8-worker game", () => {
+  it("defaults the patch era to the live 12-worker game", () => {
     expect(parsePatchEra(undefined)).toBe("after");
     expect(parsePatchEra("after")).toBe("after");
     expect(parsePatchEra("before")).toBe("before");

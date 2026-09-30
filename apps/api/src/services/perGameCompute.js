@@ -189,6 +189,10 @@ class PerGameComputeService {
       "opponent.race": 1,
       "opponent.strategy": 1,
       spatial: 1,
+      // Patch era (util/patchEra): 8- vs 12-worker build durations.
+      gameVersion: 1,
+      gameBuild: 1,
+      date: 1,
     };
     for (const field of fields) slimProjection[field] = 1;
     const slim = opts.slim !== undefined
@@ -255,8 +259,9 @@ class PerGameComputeService {
     // BuildOrderTimeline UI presents construction-START times
     // ("the moment the player commanded this") which is what
     // players naturally reason about. ``eventsToStartTime`` rewinds
-    // the finish-time entries using the build-duration catalog so
-    // every row in the timeline answers the same question.
+    // the finish-time entries using the build-duration catalog (the
+    // game's own patch balance: 8-worker 5.0.16 or the 12-worker game)
+    // so every row in the timeline answers the same question.
     //
     // The raw events are NOT modified for ML or rule evaluation
     // surfaces — those continue to operate on recorded timestamps
@@ -302,10 +307,10 @@ class PerGameComputeService {
       opp_race: slim.opponent?.race || null,
       map: slim.map || null,
       result: slim.result || null,
-      events: eventsToStartTime(rawEvents),
-      early_events: eventsToStartTime(rawEarly),
-      opp_events: eventsToStartTime(rawOpp),
-      opp_early_events: eventsToStartTime(rawOppEarly),
+      events: eventsToStartTime(rawEvents, slim),
+      early_events: eventsToStartTime(rawEarly, slim),
+      opp_events: eventsToStartTime(rawOpp, slim),
+      opp_early_events: eventsToStartTime(rawOppEarly, slim),
       my_status: diagBuildStatus(buildLogPresent, rawEvents.length),
       opp_status: diagBuildStatus(oppBuildLogPresent, rawOpp.length),
     };
@@ -790,6 +795,9 @@ class PerGameComputeService {
       oppBuildLog: 1,
       result: 1,
       date: 1,
+      // Patch era, with ``date`` (util/patchEra): 8- vs 12-worker build durations.
+      gameVersion: 1,
+      gameBuild: 1,
       map: 1,
       durationSec: 1,
       macroScore: 1,
@@ -878,7 +886,7 @@ class PerGameComputeService {
             this.catalog,
             g.spatial?.my_proxies,
             g.spatial?.my_proxy_classification_v === 1,
-          )),
+          ), g),
           oppEvents: eventsToStartTime(
             parseBuildLogLines(
               oppBuildLog,
@@ -886,6 +894,7 @@ class PerGameComputeService {
               g.spatial?.opp_proxies,
               g.spatial?.opp_proxy_classification_v === 1,
             ),
+            g,
           ),
           result: g.result || null,
           date: g.date || null,
@@ -949,6 +958,9 @@ class PerGameComputeService {
       "opponent.strategy": 1,
       result: 1,
       date: 1,
+      // Patch era, with ``date`` (util/patchEra): 8- vs 12-worker build durations.
+      gameVersion: 1,
+      gameBuild: 1,
       map: 1,
       durationSec: 1,
       macroScore: 1,
@@ -1092,14 +1104,14 @@ class PerGameComputeService {
               this.catalog,
               g.spatial?.my_proxies,
               g.spatial?.my_proxy_classification_v === 1,
-            )),
+            ), g),
           oppEvents: perspective === "you" ? []
             : eventsToStartTime(parseBuildLogLines(
               oppBuildLog,
               this.catalog,
               g.spatial?.opp_proxies,
               g.spatial?.opp_proxy_classification_v === 1,
-            )),
+            ), g),
           result: g.result || null,
           date: g.date || null,
           map: g.map || null,
@@ -1584,17 +1596,24 @@ function optimalProxyPairs(rawEvents, rawCandidates) {
  * start time made every upgrade pop into the chip row at the moment
  * the player clicked Research, well before the buff actually applied.
  *
+ * ``game`` (the stored row, or anything carrying its ``gameVersion`` /
+ * ``gameBuild`` / ``date``) picks the balance: an 8-worker patch 5.0.16
+ * game rewinds by that patch's durations, every other game — and a
+ * call without one — by the 12-worker game's (see buildDurations).
+ *
  * Pure: input is unchanged, output is a fresh array sorted by the
  * adjusted time.
  *
  * @param {Array<ReturnType<typeof parseBuildLogLines>[number]>} events
+ * @param {import("./buildDurations").EraGame | null} [game]
  */
-function eventsToStartTime(events) {
+function eventsToStartTime(events, game) {
   if (!Array.isArray(events) || events.length === 0) return [];
   const out = events.map((ev) => {
     const hints = {
       isBuilding: !!ev.is_building,
       category: ev.category,
+      game,
     };
     const startSec = Math.round(toStartSeconds(ev.name, ev.time, hints));
     const m = Math.floor(startSec / 60);

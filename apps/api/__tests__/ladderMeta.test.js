@@ -95,7 +95,8 @@ describe("ladder meta radar", () => {
       out.push({
         userId: `seed-user-${idSeq % 12}`,
         gameId: `g-${idSeq}`,
-        date: new Date(Date.UTC(2026, 6, 1 + (idSeq % 27))),
+        // A 12-worker game (before the 8-worker patch 5.0.16): the live era.
+        date: new Date(Date.UTC(2026, 4, 1 + (idSeq % 27))),
         result: i < wins ? "Victory" : "Defeat",
         myRace,
         map: "Meta Map",
@@ -268,26 +269,24 @@ describe("ladder meta radar", () => {
     expect(await svc.lookup({ leagueId: 2, matchup: "PvZ" })).toBeNull();
   });
 
-  test("before and after 5.0.16 are isolated at the exact release instant", async () => {
+  test("the 8-worker window (before) is isolated at the exact 5.0.16 and 5.0.17 instants", async () => {
     idSeq = 20000;
-    const release = new Date("2026-06-22T19:15:00.000Z");
+    const release16 = new Date("2026-06-22T19:15:00.000Z");
+    const release17 = new Date("2026-09-30T04:00:00.000Z");
     await db.games.insertMany([
-      ...bucket({
-        build: A,
-        count: 60,
-        wins: 45,
-        extra: { date: new Date(release.getTime() - 1) },
-      }),
-      ...bucket({ build: B, count: 60, wins: 15, extra: { date: release } }),
+      ...bucket({ build: A, count: 60, wins: 45, extra: { date: new Date(release16.getTime() - 1) } }),
+      ...bucket({ build: B, count: 60, wins: 15, extra: { date: release16 } }),
+      ...bucket({ build: C, count: 60, wins: 45, extra: { date: new Date(release17.getTime() - 1) } }),
+      ...bucket({ build: D, count: 60, wins: 15, extra: { date: release17 } }),
     ]);
     await svc.recompute();
 
     const before = await svc.lookup({ leagueId: DIAMOND, matchup: "PvZ", era: "before" });
     const after = await svc.lookup({ leagueId: DIAMOND, matchup: "PvZ", era: "after" });
-    expect(before).toMatchObject({ era: "before", n: 60 });
-    expect(after).toMatchObject({ era: "after", n: 60 });
-    expect(before.openers[0].build).toBe(A);
-    expect(after.openers[0].build).toBe(B);
+    expect(before).toMatchObject({ era: "before", n: 120 });
+    expect(after).toMatchObject({ era: "after", n: 120 });
+    expect(before.openers.map((o) => o.build).sort()).toEqual([B, C].sort());
+    expect(after.openers.map((o) => o.build).sort()).toEqual([A, D].sort());
   });
 
   test("replay build and version override a contradictory replay date", async () => {
@@ -323,8 +322,9 @@ describe("ladder meta radar", () => {
     const after = await svc.lookup({ leagueId: DIAMOND, matchup: "PvZ", era: "after" });
     expect(before).toMatchObject({ era: "before", n: 60 });
     expect(after).toMatchObject({ era: "after", n: 60 });
-    expect(before.openers[0].build).toBe(B);
-    expect(after.openers[0].build).toBe(A);
+    // 5.0.16 is the 8-worker patch whatever the date; 5.0.15 is 12 workers.
+    expect(before.openers[0].build).toBe(A);
+    expect(after.openers[0].build).toBe(B);
   });
 
   test("release string is used when build metadata is unavailable", async () => {
@@ -366,8 +366,9 @@ describe("ladder meta radar", () => {
     const after = await svc.lookup({ leagueId: DIAMOND, matchup: "PvZ", era: "after" });
     expect(before).toMatchObject({ era: "before", n: 60 });
     expect(after).toMatchObject({ era: "after", n: 60 });
-    expect(before.openers[0].build).toBe(B);
-    expect(after.openers[0].build).toBe(A);
+    expect(before.openers[0].build).toBe(A);
+    expect(after.openers[0].build).toBe(B);
+    // 5.0.17 restores 12 workers: no 5.0.17 build number is needed.
     await expect(svc.lookup({ leagueId: DIAMOND, matchup: "PvT", era: "after" }))
       .resolves.toMatchObject({ era: "after", n: 60 });
   });
@@ -425,6 +426,22 @@ describe("ladder meta radar", () => {
     // prevalence rose (A now a bigger share of the band)
     expect(opA.freqDelta).toBeGreaterThan(0);
     expect(row.prevUpdatedAt).toBeInstanceOf(Date);
+  });
+
+  test("rows from an older era rule are never week-over-week priors", async () => {
+    await seedCorpus();
+    await svc.recompute();
+    // Under era rule 1 (schema 2) "after" meant the 8-worker patch.
+    await outColl.updateMany({}, { $set: { _schemaVersion: 2 } });
+    await svc.recompute();
+
+    const row = await svc.lookup({ leagueId: DIAMOND, matchup: "PvZ" });
+    expect(row.prevUpdatedAt).toBeNull();
+    for (const o of row.openers) {
+      expect(o.isNew).toBe(true);
+      expect(o.winRateDelta).toBeNull();
+    }
+    expect(await outColl.countDocuments({ _schemaVersion: 2 })).toBe(0);
   });
 
   test("recompute is idempotent: unchanged re-run => zero deltas", async () => {
@@ -563,7 +580,7 @@ describe("GET /v1/meta/ladder", () => {
       docs.push({
         userId: `u_${idSeq % 10}`,
         gameId: `meta_g_${idSeq}`,
-        date: new Date(Date.UTC(2026, 6, 1 + (idSeq % 27))),
+        date: new Date(Date.UTC(2026, 4, 1 + (idSeq % 27))),
         result: i % 2 === 0 ? "Victory" : "Defeat",
         myRace: "Protoss",
         map: "Meta Map",
@@ -577,7 +594,7 @@ describe("GET /v1/meta/ladder", () => {
       docs.push({
         userId: `u_${idSeq % 10}`,
         gameId: `meta_g_${idSeq}`,
-        date: new Date(Date.UTC(2026, 6, 1 + (idSeq % 27))),
+        date: new Date(Date.UTC(2026, 4, 1 + (idSeq % 27))),
         result: i < 5 ? "Victory" : "Defeat",
         myRace: "Protoss",
         map: "Meta Map",

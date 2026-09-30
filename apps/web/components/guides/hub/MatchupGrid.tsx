@@ -9,8 +9,8 @@ import type { GuideIndexMatchup, GuideMatchup } from "@/lib/guides/types";
 /**
  * The hub's 3×3 matchup grid: one row per race you play, one tile per
  * matchup with its game count and the top three published openers
- * ("What's winning since patch 5.0.16") with their week-over-week
- * arrows. The win rates cover the whole patch era, not one week, so
+ * ("What's winning with 12 starting workers") with their week-over-week
+ * arrows. The win rates cover the whole era, not one week, so
  * the heading names the era (``period``, from ``eraLabel``).
  */
 
@@ -69,7 +69,7 @@ export function MatchupGrid({
   period,
 }: {
   matchups: ReadonlyArray<GuideIndexMatchup>;
-  /** The stats window, e.g. "since patch 5.0.16" (``eraLabel``). */
+  /** The stats window, e.g. "with 12 starting workers" (``eraLabel``). */
   period: string;
 }) {
   const byMatchup = new Map<GuideMatchup, GuideIndexMatchup>(matchups.map((row) => [row.matchup, row]));

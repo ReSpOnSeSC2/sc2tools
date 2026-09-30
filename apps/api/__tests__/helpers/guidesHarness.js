@@ -28,7 +28,7 @@ const { cellGames, slimGame, sampleRow, GLAIVES } = require("./guideStatsSeed");
 const CHANNEL_ID = "UCZS3YP1mvpqyuU5vPvHVG7g";
 const CHANNEL_URL = "https://www.youtube.com/@ReSpOnSeSC2";
 const ROBO = "PvZ - Robo Opener";
-const EIGHT_POOL = "Zerg - 8 Pool";
+const TWELVE_POOL = "Zerg - 12 Pool";
 const SHARER_SLUG = "sharer-one-a1b2c3d4e5";
 
 const networkDisabled = async () => {
@@ -92,7 +92,7 @@ async function createGuidesHarness(opts = {}) {
 
 /**
  * A PvZ corpus that publishes one build ("Stargate into Glaives": 6
- * users × 20 games vs 8 Pool on Site Delta LE, all Diamond, one sharing
+ * users × 20 games vs 12 Pool on Site Delta LE, all Diamond, one sharing
  * user with a stored replay) and leaves "Robo Opener" as a
  * floor-clearing but unpublished cell (5 users × 8 games), plus 36
  * Glaives samples. Runs the real recompute.
@@ -106,11 +106,11 @@ async function seedGuideCorpus(h) {
     replaySharing: { enabled: true, slug: SHARER_SLUG, updatedAt: new Date() },
   });
   await db.games.insertMany([
-    ...cellGames({ users: 6, perUser: 20, winsPerUser: 11, userPrefix: "gl", overrides: { opponent: { strategy: EIGHT_POOL } } }),
+    ...cellGames({ users: 6, perUser: 20, winsPerUser: 11, userPrefix: "gl", overrides: { opponent: { strategy: TWELVE_POOL } } }),
     ...cellGames({ users: 5, perUser: 8, winsPerUser: 4, userPrefix: "ro", overrides: { myBuild: ROBO } }),
     slimGame({
       userId: "gl-0", date: new Date(), result: "Victory", durationSec: 612,
-      replayFile: { storedAt: new Date(), sizeBytes: 1000 }, opponent: { strategy: EIGHT_POOL },
+      replayFile: { storedAt: new Date(), sizeBytes: 1000 }, opponent: { strategy: TWELVE_POOL },
     }),
   ]);
   await db.guideSamples.insertMany(Array.from({ length: 36 }, (_, i) => sampleRow({
@@ -127,7 +127,7 @@ module.exports = {
   CHANNEL_URL,
   GLAIVES,
   ROBO,
-  EIGHT_POOL,
+  TWELVE_POOL,
   SHARER_SLUG,
   createGuidesHarness,
   seedGuideCorpus,

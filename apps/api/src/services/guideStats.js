@@ -55,6 +55,8 @@ const {
   shapeMapDocs,
 } = require("./guideStatsDocs");
 const { loadSharingUsers, examplesForMatchup } = require("./guideStatsExamples");
+const { relabelEraRule } = require("./guideSamples");
+const { PATCH_ERA_RULE } = require("../util/patchEra");
 
 const RUN_KEY = "run";
 const KIND_RUN = "run";
@@ -89,6 +91,8 @@ const PRIOR_PROJECTION = Object.freeze({
  * @property {Date} computedAt
  * @property {number} durationMs
  * @property {GuideStatsRunCounts} counts
+ * @property {number|null} eraRule util/patchEra.js PATCH_ERA_RULE the run
+ *   was computed under; null for runs from before the rule was recorded
  */
 
 /**
@@ -214,10 +218,11 @@ class GuideStatsService {
   async readRun() {
     const doc = await this.coll.findOne(
       { kind: KIND_RUN, key: RUN_KEY },
-      { projection: { _id: 0, computedAt: 1, durationMs: 1, counts: 1 } },
+      { projection: { _id: 0, computedAt: 1, durationMs: 1, counts: 1, eraRule: 1 } },
     );
     if (!doc || !(doc.computedAt instanceof Date)) return null;
-    return { computedAt: doc.computedAt, durationMs: doc.durationMs, counts: doc.counts };
+    const eraRule = typeof doc.eraRule === "number" ? doc.eraRule : null;
+    return { computedAt: doc.computedAt, durationMs: doc.durationMs, counts: doc.counts, eraRule };
   }
 
   /**
@@ -227,8 +232,10 @@ class GuideStatsService {
   async _recomputeOnce(opts) {
     await this._awaitGamesIndex();
     const startedMs = this.now();
-    const computedAt = await this._nextStamp(startedMs);
-    const priors = await this._readPriors();
+    const lastRun = await this.readRun();
+    const computedAt = this._nextStamp(startedMs, lastRun);
+    await relabelEraRule(this.db.guideSamples);
+    const priors = await this._readPriors(lastRun);
     /** @type {MatchupResult[]} */
     const results = [];
     for (const matchup of MATCHUPS) {
@@ -239,7 +246,12 @@ class GuideStatsService {
     await writeDocs(this.coll, docs);
     await this.coll.deleteMany({ computedAt: { $lt: computedAt }, kind: { $ne: KIND_RUN } });
     /** @type {GuideStatsRun} */
-    const run = { computedAt, durationMs: Math.max(0, this.now() - startedMs), counts: runCounts(docs) };
+    const run = {
+      computedAt,
+      durationMs: Math.max(0, this.now() - startedMs),
+      counts: runCounts(docs),
+      eraRule: PATCH_ERA_RULE,
+    };
     await this.coll.replaceOne(
       { key: RUN_KEY },
       stampVersion({ kind: KIND_RUN, key: RUN_KEY, ...run }, COLLECTIONS.GUIDE_STATS),
@@ -274,17 +286,26 @@ class GuideStatsService {
    * run wrote.
    *
    * @param {number} nowMs
-   * @returns {Promise<Date>}
+   * @param {GuideStatsRun|null} last the previous run
+   * @returns {Date}
    */
-  async _nextStamp(nowMs) {
-    const last = await this.readRun();
+  _nextStamp(nowMs, last) {
     const floor = Math.max(this.lastComputedMs, last ? last.computedAt.getTime() : 0) + 1;
     this.lastComputedMs = Math.max(nowMs, floor);
     return new Date(this.lastComputedMs);
   }
 
-  /** @returns {Promise<Map<string, Record<string, any>>>} previous build docs by key */
-  async _readPriors() {
+  /**
+   * Previous build docs by key: the week-over-week baselines and first
+   * publish dates. Empty after a run under an older era rule, whose "after"
+   * docs describe other games (the 8-worker patch under rule 1), so the
+   * 12-worker pages start their trends afresh.
+   *
+   * @param {GuideStatsRun|null} lastRun
+   * @returns {Promise<Map<string, Record<string, any>>>}
+   */
+  async _readPriors(lastRun) {
+    if (!lastRun || lastRun.eraRule !== PATCH_ERA_RULE) return new Map();
     const rows = await this.coll.find({ kind: "build" }, { projection: PRIOR_PROJECTION }).toArray();
     return new Map(rows.map((row) => [row.key, row]));
   }

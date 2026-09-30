@@ -27,7 +27,7 @@ function ingestGame(overrides = {}) {
     durationSec: 700,
     playerCount: 2,
     isLadderGame: true,
-    gameVersion: "5.0.16.97425",
+    gameVersion: "5.0.17.98000",
     buildLog: [
       "[0:00] Nexus", "[0:00] Probe", "[0:18] Pylon", "[0:40] Gateway", "[0:48] Assimilator",
       "[1:30] Nexus", "[1:43] CyberneticsCore", "[3:05] Stargate", "[4:31] TwilightCouncil",
@@ -61,6 +61,16 @@ function silentLogger() {
 }
 
 describe("extractSample", () => {
+  test.each([
+    ["the 8-worker patch 5.0.16", { gameVersion: "5.0.16.97425" }, "before"],
+    ["the 12-worker game before 5.0.16", { gameVersion: "5.0.15.96883" }, "after"],
+    ["the 12-worker game from 5.0.17", { gameVersion: "5.0.17.98000" }, "after"],
+    ["a date-only 8-worker game", { gameVersion: undefined, date: "2026-07-01T12:00:00.000Z" }, "before"],
+    ["a date-only game from 30 Sep 2026", { gameVersion: undefined, date: "2026-10-01T12:00:00.000Z" }, "after"],
+  ])("labels %s as era %s", (_label, overrides, era) => {
+    expect(extractSample(ingestGame(overrides)).era).toBe(era);
+  });
+
   test("distils an eligible game into compact sample fields", () => {
     const sample = extractSample(ingestGame());
     expect(sample).toEqual({
@@ -185,7 +195,9 @@ describe("GuideSamplesService.capture", () => {
       userHash: guideUserHash(PEPPER, "u_1"),
       gameHash: guideGameHash(PEPPER, "u_1", game.gameId),
     });
-    expect(update.$set).toMatchObject({ buildKey: game.myBuild, matchup: "PvZ", updatedAt: new Date(1_000) });
+    expect(update.$set).toMatchObject({
+      buildKey: game.myBuild, matchup: "PvZ", era: "after", eraRule: 2, updatedAt: new Date(1_000),
+    });
     expect(update.$setOnInsert).toEqual({ createdAt: new Date(1_000), _schemaVersion: 1 });
     expect(options).toEqual({ upsert: true });
     const text = JSON.stringify([filter, update]);

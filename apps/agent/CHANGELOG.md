@@ -2,6 +2,18 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.17.4
+
+### Changed - 12 starting workers are back (StarCraft II 5.0.17)
+
+- The pool-first openers are named "12 Pool" again ("Zerg - 12 Pool", "ZvP -
+  12 Pool Rush", "ZvZ - 12 Pool into Baneling", "ZvZ - 12 Pool Speedling").
+  From 0.14.3 they were "8 Pool" for the 8-worker patch 5.0.16. Only the
+  names change; detection is the same.
+- The engine's build-time table is back to the 12-worker game's values
+  (Adept 27 s, High and Dark Templar 39 s, Reaper 32 s, Warp Gate morph 7 s).
+  Uploads are unaffected, since they carry the times recorded in the replay.
+
 ## 0.17.3
 
 ### Fixed - APM matches StarCraft II

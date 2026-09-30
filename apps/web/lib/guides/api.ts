@@ -205,7 +205,7 @@ export async function fetchGuideBuild(
 /**
  * Counter page payload for an opponent strategy.
  *
- * Example: `fetchGuideCounter("pvz", "8-pool")` → GET /v1/guides/pvz/counter/8-pool.
+ * Example: `fetchGuideCounter("pvz", "12-pool")` → GET /v1/guides/pvz/counter/12-pool.
  */
 export async function fetchGuideCounter(
   matchupSlug: string,

@@ -82,7 +82,7 @@ describe("guide catalog export", () => {
     const opener = (name: string) =>
       isGuideOpenerDefinition({ id: guideSlugify(name), name });
     expect(opener("PvZ - Stargate into Glaives")).toBe(true);
-    expect(opener("Zerg - 8 Pool")).toBe(true);
+    expect(opener("Zerg - 12 Pool")).toBe(true);
     expect(opener("Zerg - Hydra Comp")).toBe(false);
     expect(opener("Protoss - Gateway / Robo (Immortal/Colossus) Comp")).toBe(false);
     expect(opener("PvT - Macro Transition (Unclassified)")).toBe(false);
@@ -174,7 +174,7 @@ describe("guide path helpers", () => {
     expect(guideBuildPath("ZvP", "Zerg - 2 Base Nydus")).toBe("/guides/zvp/zerg-2-base-nydus");
     expect(guideBuildPath("PvZ", "PvZ - Game Too Short")).toBeNull();
     expect(guideBuildPath("PvZ", "My custom build")).toBeNull();
-    expect(guideCounterPath("PvZ", "Zerg - 8 Pool")).toBe("/guides/pvz/counter/8-pool");
+    expect(guideCounterPath("PvZ", "Zerg - 12 Pool")).toBe("/guides/pvz/counter/12-pool");
     expect(guideCounterPath("PvZ", "PvZ - Stargate into Glaives")).toBeNull();
     expect(guideMapPath("Alcyone LE")).toBe("/guides/maps/alcyone-le");
     expect(guideMapPath("Pylône LE")).toBe("/guides/maps/pylone-le");
@@ -185,7 +185,7 @@ describe("guide path helpers", () => {
     expect(guideDisplayName("PvZ - Stargate into Glaives")).toBe("Stargate into Glaives");
     expect(guideDisplayName("No separator")).toBe("No separator");
     expect(matchupFromBuildName("PvZ - Stargate into Glaives")).toBe("PvZ");
-    expect(matchupFromBuildName("Zerg - 8 Pool")).toBeNull();
+    expect(matchupFromBuildName("Zerg - 12 Pool")).toBeNull();
     expect(matchupFromBuildName("PvX - Something")).toBeNull();
     expect(matchupFromBuildName("Stargate")).toBeNull();
   });

@@ -15,7 +15,7 @@ const ROUND_SCALE = 10_000;
 export const FIXTURE_COMPUTED_AT = "2026-09-27T03:12:44.000Z";
 export const FIXTURE_BASELINE_AT = "2026-09-19T03:10:02.000Z";
 export const FIXTURE_FIRST_PUBLISHED_AT = "2026-08-02T03:11:37.000Z";
-export const FIXTURE_PATCH = "5.0.16";
+export const FIXTURE_PATCH = "5.0.17";
 
 function round4(value: number): number {
   return Math.round(value * ROUND_SCALE) / ROUND_SCALE;

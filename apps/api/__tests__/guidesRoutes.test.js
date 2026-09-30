@@ -12,7 +12,7 @@
 const request = require("supertest");
 const { GUIDE_CACHE_CONTROL } = require("../src/config/guides");
 const { GUIDE_NOT_FOUND_CACHE_CONTROL } = require("../src/routes/guides");
-const { createGuidesHarness, seedGuideCorpus, GLAIVES, ROBO, EIGHT_POOL } = require("./helpers/guidesHarness");
+const { createGuidesHarness, seedGuideCorpus, GLAIVES, ROBO, TWELVE_POOL } = require("./helpers/guidesHarness");
 
 jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 
@@ -34,7 +34,7 @@ describe("public /v1/guides", () => {
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe(GUIDE_CACHE_CONTROL);
     const body = res.body;
-    expect(body).toMatchObject({ era: "after", patch: "5.0.16", computedAt: run.computedAt.toISOString() });
+    expect(body).toMatchObject({ era: "after", patch: "5.0.17", computedAt: run.computedAt.toISOString() });
     expect(body.matchups.map((m) => m.slug)).toEqual(["pvp", "pvt", "pvz", "tvp", "tvt", "tvz", "zvp", "zvt", "zvz"]);
     const pvz = body.matchups.find((m) => m.matchup === "PvZ");
     expect(pvz).toMatchObject({ published: true, games: 161, users: 11, publishedBuilds: 1 });
@@ -59,12 +59,12 @@ describe("public /v1/guides", () => {
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe(GUIDE_CACHE_CONTROL);
     expect(res.body).toMatchObject({
-      matchup: "PvZ", slug: "pvz", era: "after", patch: "5.0.16", published: true, games: 161, users: 11, band: null,
+      matchup: "PvZ", slug: "pvz", era: "after", patch: "5.0.17", published: true, games: 161, users: 11, band: null,
     });
     expect(res.body.openers.map((o) => [o.buildKey, o.published])).toEqual([[GLAIVES, true], [ROBO, false]]);
     expect(res.body.openers[0]).toMatchObject({ name: "Stargate into Glaives", games: 121, prevalence: expect.any(Number) });
     expect(res.body.counters[0]).toEqual({
-      strategyKey: EIGHT_POOL, strategySlug: "8-pool", name: "8 Pool", published: true, games: 121,
+      strategyKey: TWELVE_POOL, strategySlug: "12-pool", name: "12 Pool", published: true, games: 121,
     });
     expect(res.body.counters.find((c) => c.strategySlug === "ling-bane-bust")).toEqual({
       strategyKey: "ZvP - Ling Bane Bust", strategySlug: "ling-bane-bust", name: "Ling Bane Bust", published: false, games: null,
@@ -107,6 +107,10 @@ describe("public /v1/guides", () => {
     expect(before.body).toMatchObject({
       era: "before", published: false, openers: [], games: null, computedAt: run.computedAt.toISOString(),
     });
+    // The 8-worker view keeps the channel's 8-worker patch videos; the
+    // 12-worker view leaves them off.
+    expect(before.body.videos.length).toBeGreaterThan(0);
+    expect((await get("/v1/guides/pvz")).body.videos).toEqual([]);
     const junk = await get("/v1/guides/pvz?era=yesterday&era=before");
     expect(junk.body.era).toBe("after");
     const repeated = await get("/v1/guides/pvz?band=league:4&band=mmr:4000");
@@ -124,7 +128,7 @@ describe("public /v1/guides", () => {
       "/guides/pvz",
       "/guides/pvz/stargate-into-glaives",
       "/guides/pvz/counter",
-      "/guides/pvz/counter/8-pool",
+      "/guides/pvz/counter/12-pool",
       "/guides/maps",
       "/guides/maps/site-delta-le",
     ]);
@@ -148,10 +152,21 @@ describe("public /v1/guides", () => {
     expect(res.headers["cache-control"]).toBe(GUIDE_NOT_FOUND_CACHE_CONTROL);
   });
 
+  test.each([
+    ["/v1/guides/pvz/counter/8-pool", "/guides/pvz/counter/12-pool"],
+    ["/v1/guides/zvp/8-pool-rush", "/guides/zvp/12-pool-rush"],
+    ["/v1/guides/zvz/counter/8-pool-speedling", "/guides/zvz/counter/12-pool-speedling"],
+  ])("the 8-worker patch's %s slug 301s to %s", async (path, movedTo) => {
+    const res = await get(path);
+    expect(res.status).toBe(301);
+    expect(res.headers.location).toBe(`/v1${movedTo}`);
+    expect(res.body).toEqual({ movedTo });
+  });
+
   test("unmatched /guides paths and methods are 404s, never a later router's 401", async () => {
     for (const res of [
       await get("/v1/guides/pvz/stargate-into-glaives/extra"),
-      await get("/v1/guides/pvz/counter/8-pool/extra"),
+      await get("/v1/guides/pvz/counter/12-pool/extra"),
       await request(h.app).post("/v1/guides").send({}),
       await request(h.app).delete("/v1/guides/pvz"),
     ]) {

@@ -25,7 +25,7 @@ const {
 const GLAIVES = "PvZ - Stargate into Glaives";
 const ROBO = "PvZ - Robo Opener";
 const CARRIER = "PvZ - Carrier Rush";
-const EIGHT_POOL = "Zerg - 8 Pool";
+const TWELVE_POOL = "Zerg - 12 Pool";
 const AT = new Date("2026-09-20T00:00:00Z");
 
 /** A floor-clearing cell with an explicit Wilson lower bound. */
@@ -71,7 +71,7 @@ describe("shapeBuildPayload", () => {
     userId: "u_leak", baseline: { games: 90, winRate: 0.5, prevalence: 0.2, at: AT }, baselineCandidate: {},
     overall: cell(150, 6, 0.45),
     bands: { league: [cell(120, 6, 0.44, { value: 4, label: "Diamond" }), cell(20, 3, 0.2, { value: 3, label: "Platinum" })], mmr: [] },
-    vsStrategy: [cell(40, 5, 0.4, { strategyKey: EIGHT_POOL, strategySlug: "8-pool" }), cell(12, 2, 0.1, { strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool" })],
+    vsStrategy: [cell(40, 5, 0.4, { strategyKey: TWELVE_POOL, strategySlug: "12-pool" }), cell(12, 2, 0.1, { strategyKey: "ZvP - Ling Bane Bust", strategySlug: "ling-bane-bust" })],
     timings: {
       samples: 60, users: 6,
       milestones: [
@@ -87,7 +87,7 @@ describe("shapeBuildPayload", () => {
     const out = shapeBuildPayload(buildInput(publishedDoc()));
     expect(out.published).toBe(true);
     expect(out.bands.league.map((b) => b.value)).toEqual([4]);
-    expect(out.vsStrategy.map((r) => r.strategySlug)).toEqual(["8-pool"]);
+    expect(out.vsStrategy.map((r) => r.strategySlug)).toEqual(["12-pool"]);
     expect(out.timings.milestones.map((m) => m.key)).toEqual(["Pylon"]);
     expect(out.timings.milestones[0].winners).toEqual({ games: 30, users: 6, median: 18 });
     expect(out.leaks.items.map((i) => i.name)).toEqual(["Supply block"]);
@@ -124,7 +124,7 @@ describe("shapeBuildPayload", () => {
 
 describe("shapeCounterPayload / shapeMapPayload", () => {
   const counterInput = (doc) => ({
-    matchup: "PvZ", strategyKey: EIGHT_POOL, strategySlug: "8-pool", era: "after", doc, matchupDoc: null, videos: [],
+    matchup: "PvZ", strategyKey: TWELVE_POOL, strategySlug: "12-pool", era: "after", doc, matchupDoc: null, videos: [],
   });
 
   test("a counter flagged published below the page floor is identity-only", () => {
@@ -151,7 +151,7 @@ describe("shapeCounterPayload / shapeMapPayload", () => {
       doc: { published: true, map: "Site Delta LE", mapSlug: "site-delta-le", games: 99, matchups: [cell(99, 6, 0.4, { matchup: "PvZ" })], computedAt: AT },
     });
     expect(out).toEqual({
-      published: false, map: "Site Delta LE", mapSlug: "site-delta-le", era: "after", patch: "5.0.16", computedAt: AT,
+      published: false, map: "Site Delta LE", mapSlug: "site-delta-le", era: "after", patch: "5.0.17", computedAt: AT,
     });
   });
 });
@@ -249,7 +249,7 @@ describe("shapeSitemapPayload", () => {
     { kind: "matchup", matchup: "PvZ", published: true },
     { kind: "build", matchup: "PvZ", buildSlug: "stargate-into-glaives", published: true, overall: cell(150, 6, 0.45) },
     { kind: "build", matchup: "PvZ", buildSlug: "robo-opener", published: true, overall: cell(99, 6, 0.3) },
-    { kind: "counter", matchup: "PvZ", strategySlug: "8-pool", published: true, overall: cell(120, 4, 0.4) },
+    { kind: "counter", matchup: "PvZ", strategySlug: "12-pool", published: true, overall: cell(120, 4, 0.4) },
     { kind: "map", mapSlug: "site-delta-le", published: true, games: 150 },
     { kind: "map", mapSlug: "alcyone-le", published: true, games: 99 },
     { kind: "run", published: true },

@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { guideBandQueryString, type GuideBandQuery } from "@/lib/guides/format";
+import { eraShortLabel } from "@/lib/guides/guideCopy";
 import type { GuideBand, GuideBandOption, GuideBandOptions, GuideEra } from "@/lib/guides/types";
 
 /**
  * Matchup-page filters as plain links (crawlable, no JS): opponent band
- * ("All" = the canonical URL when on the current patch) and the patch
- * era toggle. Only bands the API lists (≥ 1 published cell) appear.
+ * ("All" = the canonical URL when on the current 12-worker era) and the
+ * era toggle (12 workers / the 8-worker patch 5.0.16). Only bands the API
+ * lists (≥ 1 published cell) appear.
  */
 
 const PILL_CLASS =
@@ -66,25 +68,29 @@ export function BandSwitcher({
   matchupSlug,
   band,
   era,
-  patch,
   options,
 }: {
   matchupSlug: string;
   band: GuideBand | null;
   era: GuideEra;
-  patch: string;
+  /**
+   * Ignored: the payload's live patch, which names neither era's games
+   * (the pills are worker-based, `eraShortLabel`). Optional so callers
+   * that still pass it compile.
+   */
+  patch?: string;
   options: GuideBandOptions;
 }) {
   const path = guidePaths.matchup(matchupSlug);
   const current: GuideBandQuery | null = band ? { type: band.type, value: band.value } : null;
   const eraPills: Pill[] = [
-    { key: "after", label: `Patch ${patch}+`, href: `${path}${guideBandQueryString(current, "after")}`, isActive: era === "after" },
-    { key: "before", label: `Before ${patch}`, href: `${path}${guideBandQueryString(current, "before")}`, isActive: era === "before" },
+    { key: "after", label: eraShortLabel("after"), href: `${path}${guideBandQueryString(current, "after")}`, isActive: era === "after" },
+    { key: "before", label: eraShortLabel("before"), href: `${path}${guideBandQueryString(current, "before")}`, isActive: era === "before" },
   ];
   const allPill: Pill = { key: "all", label: "All", href: `${path}${guideBandQueryString(null, era)}`, isActive: !band };
   return (
     <nav aria-label="Filter openers" className="space-y-2">
-      <PillGroup label="Patch" pills={eraPills} />
+      <PillGroup label="Game" pills={eraPills} />
       <PillGroup label="Opponent league" pills={[allPill, ...bandPills(path, "league", options.league, band, era)]} />
       <PillGroup label="Opponent MMR" pills={bandPills(path, "mmr", options.mmr, band, era)} />
     </nav>

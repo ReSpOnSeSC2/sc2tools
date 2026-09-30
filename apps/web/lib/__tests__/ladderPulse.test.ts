@@ -196,12 +196,13 @@ describe("daily replay and personal form", () => {
 
 describe("meta selection and movement", () => {
   it("prefers a valid league and falls back to exact published MMR bands", () => {
+    // Dated inside the 8-worker window with no version metadata.
     const latest = game("g", "2026-07-18T15:00:00.000Z");
     expect(metaSelectionForGame(latest)).toEqual({
       axis: "league",
       band: 4,
       matchup: "PvZ",
-      era: "after",
+      era: "before",
     });
 
     const mmrOnly = game("mmr", "2026-07-18T15:00:00.000Z", {
@@ -215,7 +216,7 @@ describe("meta selection and movement", () => {
       axis: "mmr",
       band: 5000,
       matchup: "PvT",
-      era: "after",
+      era: "before",
     });
     expect(mmrBandFor(1999)).toBe(1000);
     expect(mmrBandFor(6500)).toBe(6500);
@@ -223,24 +224,46 @@ describe("meta selection and movement", () => {
   });
 
   it("uses exact replay provenance for patch era and skips non-ladder meta", () => {
-    const beforeByBuild = game("old-build", "2026-07-18T15:00:00.000Z", {
-      gameBuild: 97_363,
-    });
-    const afterByVersion = game(
-      "new-version",
+    // "before" = the 8-worker patch 5.0.16; "after" = the 12-worker game
+    // on either side of it (apps/api/src/util/patchEra.js eraForGame).
+    const eightWorkerByVersion = game(
+      "v16",
       "2026-01-01T15:00:00.000Z",
-      {
-        gameVersion: "5.0.16.97425",
-      },
+      { gameVersion: "5.0.16.97425", gameBuild: 1 },
     );
-    const beforeByDate = game(
-      "legacy",
-      "2026-06-01T15:00:00.000Z",
+    const twelveWorkerByVersion = game(
+      "v17",
+      "2026-07-18T15:00:00.000Z",
+      { gameVersion: "5.0.17.98000", gameBuild: 97_425 },
     );
-    expect(patchEraForGame(beforeByBuild)).toBe("before");
-    expect(metaSelectionForGame(beforeByBuild)?.era).toBe("before");
-    expect(patchEraForGame(afterByVersion)).toBe("after");
-    expect(patchEraForGame(beforeByDate)).toBe("before");
+    const preEightWorkerVersion = game(
+      "v15",
+      "2026-07-18T15:00:00.000Z",
+      { gameVersion: "5.0.15.96883" },
+    );
+    expect(patchEraForGame(eightWorkerByVersion)).toBe("before");
+    expect(metaSelectionForGame(eightWorkerByVersion)?.era).toBe("before");
+    expect(patchEraForGame(twelveWorkerByVersion)).toBe("after");
+    expect(patchEraForGame(preEightWorkerVersion)).toBe("after");
+
+    // No release string: the numeric build, open-ended from 97364 until
+    // the first 5.0.17 build is known.
+    expect(
+      patchEraForGame(game("b-old", "2026-07-18T15:00:00.000Z", { gameBuild: 97_363 })),
+    ).toBe("after");
+    expect(
+      patchEraForGame(game("b-16", "2026-01-01T15:00:00.000Z", { gameBuild: 97_364 })),
+    ).toBe("before");
+
+    // No version metadata: the date window [5.0.16 release, 5.0.17 release).
+    expect(patchEraForGame(game("d-pre", "2026-06-01T15:00:00.000Z"))).toBe("after");
+    expect(patchEraForGame(game("d-16", "2026-06-22T19:15:00.000Z"))).toBe("before");
+    expect(patchEraForGame(game("d-last", "2026-09-30T03:59:59.999Z"))).toBe("before");
+    expect(patchEraForGame(game("d-17", "2026-09-30T04:00:00.000Z"))).toBe("after");
+    expect(patchEraForGame(game("d-late", "2026-10-02T15:00:00.000Z"))).toBe("after");
+    // No signal at all: the live 12-worker era.
+    expect(patchEraForGame(game("none", "not a date"))).toBe("after");
+    expect(patchEraForGame(null)).toBe("after");
     expect(
       metaSelectionForGame(
         game("team", "2026-07-18T15:00:00.000Z", {

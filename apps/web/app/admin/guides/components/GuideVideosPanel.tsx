@@ -25,6 +25,7 @@ import { GuideVideoOverridesCard } from "./GuideVideoOverrides";
 import {
   AdminNotice,
   AdminSectionHeader,
+  EIGHT_WORKER_BADGE,
   GUIDE_VIDEOS_PATH,
   GUIDE_VIDEOS_SYNC_PATH,
   adminErrorText,
@@ -178,6 +179,7 @@ function ChannelVideoList({
                 <div className="flex flex-wrap items-center gap-1.5 text-caption text-text-dim">
                   <span>{video.publishedAt ? fmtDate(video.publishedAt) : "Upload date pending the next feed sync"} · {SOURCE_LABEL[video.source]}</span>
                   {video.isShort ? <Badge size="sm">Short</Badge> : null}
+                  {video.eightWorkerPatch ? <Badge size="sm">{EIGHT_WORKER_BADGE}</Badge> : null}
                   {video.hidden ? <Badge variant="danger" size="sm">Hidden everywhere</Badge> : null}
                 </div>
               </div>

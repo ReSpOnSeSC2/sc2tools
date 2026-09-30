@@ -97,6 +97,6 @@ describe("GuidePersonalComparison", () => {
         community={COMMUNITY}
       />,
     );
-    expect(screen.getByText(/You haven't played Stargate into Glaives on this patch yet/)).toBeTruthy();
+    expect(screen.getByText(/You haven't played Stargate into Glaives with 12 starting workers yet/)).toBeTruthy();
   });
 });

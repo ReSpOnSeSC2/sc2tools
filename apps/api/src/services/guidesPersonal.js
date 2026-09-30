@@ -14,7 +14,7 @@
 
 const { GUIDE_CURRENT_ERA } = require("../config/guides");
 const { milestonesForRace } = require("../config/guideMilestones");
-const { eraExpression } = require("../util/patchEra");
+const { PATCH_ERA_RULE, eraExpression } = require("../util/patchEra");
 const { round4 } = require("../util/wilson");
 const { guideGamesMatch } = require("./guideRules");
 
@@ -89,7 +89,7 @@ async function myRecord(games, userId, matchup, buildKey) {
 async function myTimings(samples, userHash, matchup, buildKey) {
   const rows = await samples
     .find(
-      { userHash, matchup, buildKey, era: GUIDE_CURRENT_ERA },
+      { userHash, matchup, buildKey, era: GUIDE_CURRENT_ERA, eraRule: PATCH_ERA_RULE },
       { projection: { _id: 0, milestones: 1 }, maxTimeMS: QUERY_MAX_MS },
     )
     // Most recently PLAYED first (older rows without ``playedOn`` last, by

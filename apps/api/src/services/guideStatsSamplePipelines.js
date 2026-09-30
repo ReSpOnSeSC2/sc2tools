@@ -20,7 +20,7 @@
 
 const { GUIDE_CELL_MIN_GAMES, GUIDE_ARMY_CHECKPOINTS_SEC } = require("../config/guides");
 const { buildNamesForMatchup } = require("../config/guideSlugs");
-const { PATCH_ERAS } = require("../util/patchEra");
+const { PATCH_ERAS, PATCH_ERA_RULE } = require("../util/patchEra");
 const {
   RESULT_VICTORY,
   RESULT_DEFEAT,
@@ -66,6 +66,8 @@ function sampleBaseStages(matchup, projection) {
         matchup,
         buildKey: { $in: [...buildNamesForMatchup(matchup)] },
         era: { $in: [...PATCH_ERAS] },
+        // Only rows labelled under the current era rule (guideSamples.js).
+        eraRule: PATCH_ERA_RULE,
         userHash: { $type: "string" },
       },
     },

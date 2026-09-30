@@ -224,8 +224,8 @@ function noMatch() {
 /**
  * Match one video to a matchup and to catalog builds / counters.
  *
- * Example: `matchVideo({ title: "PvZ Cracking 8 Pools", description: "" })`
- * → `{ matchup: "PvZ", builds: [], counters: ["Zerg - 8 Pool"] }`.
+ * Example: `matchVideo({ title: "PvZ Cracking 12 Pools", description: "" })`
+ * → `{ matchup: "PvZ", builds: [], counters: ["Zerg - 12 Pool"] }`.
  *
  * @param {MatchableVideo} video
  * @returns {VideoMatch}

@@ -149,6 +149,10 @@ const PROFILE_GAME_PROJECTION = {
   _id: 1,
   gameId: 1,
   date: 1,
+  // Patch era, with ``date`` (util/patchEra): DNA timings' 8- vs 12-worker
+  // build durations.
+  gameVersion: 1,
+  gameBuild: 1,
   result: 1,
   map: 1,
   myRace: 1,
@@ -3569,6 +3573,8 @@ function profileAnalyticalMetadata(game) {
   return {
     gameId: game?.gameId,
     date: game?.date,
+    gameVersion: game?.gameVersion,
+    gameBuild: game?.gameBuild,
     result: game?.result,
     map: game?.map,
     myRace: game?.myRace,

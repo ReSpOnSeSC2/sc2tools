@@ -6,6 +6,7 @@
  * renders as the neutral branded card.
  */
 import { fmtCount, fmtCountNoun, fmtPct } from "@/lib/guides/format";
+import { eraShortLabel } from "@/lib/guides/guideCopy";
 import type {
   GuideBuildPayload,
   GuideBuildPublished,
@@ -41,10 +42,6 @@ export interface GuideOgCardData {
   stats: GuideOgStat[];
 }
 
-function patchText(patch: string): string {
-  return `Patch ${patch}`;
-}
-
 interface CellLike {
   winRate: number;
   games: number;
@@ -78,12 +75,12 @@ export function buildOgCard(data: GuideBuildPayload): GuideOgCardData | null {
   const { label, cell } = headlineCell(data);
   const stats: GuideOgStat[] = [];
   if (cell.users !== null) stats.push({ label: "Players", value: fmtCount(cell.users) });
-  stats.push({ label: "Patch", value: data.patch });
+  stats.push({ label: "Game", value: eraShortLabel(data.era) });
   return {
     kind: "Build guide",
     matchup: data.matchup,
     title: data.name,
-    subtitle: `${data.matchup} build order · ${patchText(data.patch)}`,
+    subtitle: `${data.matchup} build order · ${eraShortLabel(data.era)}`,
     rate: { label, winRate: cell.winRate, ci: cell.ci, games: cell.games },
     stats,
   };
@@ -92,7 +89,7 @@ export function buildOgCard(data: GuideBuildPayload): GuideOgCardData | null {
 /**
  * Card for a "How to beat …" page; null below the publishing floor.
  *
- * Example: → title "How to beat 8 Pool", rate label "Protoss win rate vs 8 Pool".
+ * Example: → title "How to beat 12 Pool", rate label "Protoss win rate vs 12 Pool".
  */
 export function counterOgCard(data: GuideCounterPayload): GuideOgCardData | null {
   if (!data.published) return null;
@@ -101,7 +98,7 @@ export function counterOgCard(data: GuideCounterPayload): GuideOgCardData | null
     kind: "Counter guide",
     matchup: data.matchup,
     title: `How to beat ${data.name}`,
-    subtitle: `As ${mine} · ${patchText(data.patch)}`,
+    subtitle: `As ${mine} · ${eraShortLabel(data.era)}`,
     rate: {
       label: `${mine} win rate vs ${data.name}`,
       winRate: data.overall.winRate,
@@ -126,7 +123,7 @@ export function matchupOgCard(data: GuideMatchupPayload): GuideOgCardData | null
     kind: "Matchup guide",
     matchup: data.matchup,
     title: `${data.matchup} build orders`,
-    subtitle: `${fmtCountNoun(rankedOpenerCount(data), "opener")} ranked by win rate · ${patchText(data.patch)}`,
+    subtitle: `${fmtCountNoun(rankedOpenerCount(data), "opener")} ranked by win rate · ${eraShortLabel(data.era)}`,
     rate: top
       ? { label: `Top opener: ${top.name}`, winRate: top.winRate, ci: top.ci, games: top.games }
       : null,

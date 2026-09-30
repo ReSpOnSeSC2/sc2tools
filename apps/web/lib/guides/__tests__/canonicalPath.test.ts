@@ -6,7 +6,7 @@ describe("lowercaseGuidePath", () => {
   test("lowercases a mixed-case guide path whose lowercase form is a guide URL", () => {
     expect(lowercaseGuidePath("/guides/PvZ")).toBe("/guides/pvz");
     expect(lowercaseGuidePath("/guides/PvZ/Stargate-into-Glaives")).toBe("/guides/pvz/stargate-into-glaives");
-    expect(lowercaseGuidePath("/guides/ZVP/counter/8-Pool")).toBe("/guides/zvp/counter/8-pool");
+    expect(lowercaseGuidePath("/guides/ZVP/counter/12-Pool")).toBe("/guides/zvp/counter/12-pool");
     expect(lowercaseGuidePath("/guides/maps/Old-Sun-Temple")).toBe("/guides/maps/old-sun-temple");
     expect(lowercaseGuidePath("/guides/Maps/old-sun-temple")).toBe("/guides/maps/old-sun-temple");
   });

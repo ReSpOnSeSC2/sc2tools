@@ -109,18 +109,18 @@ describe("GuideStatsService.recompute — games aggregate", () => {
   });
 
   test("counter pages: PAGE floor on games vs the strategy, openers ranked by Wilson lower bound", async () => {
-    const eightPool = { opponent: { strategy: "Zerg - 8 Pool" } };
+    const twelvePool = { opponent: { strategy: "Zerg - 12 Pool" } };
     await db.games.insertMany([
-      ...cellGames({ users: 6, perUser: 10, winsPerUser: 8, userPrefix: "g", overrides: eightPool }),
+      ...cellGames({ users: 6, perUser: 10, winsPerUser: 8, userPrefix: "g", overrides: twelvePool }),
       ...cellGames({
-        users: 6, perUser: 10, winsPerUser: 5, userPrefix: "v", overrides: { ...eightPool, myBuild: VOID_RAY },
+        users: 6, perUser: 10, winsPerUser: 5, userPrefix: "v", overrides: { ...twelvePool, myBuild: VOID_RAY },
       }),
       ...cellGames({ users: 6, perUser: 5, winsPerUser: 5, userPrefix: "m", overrides: { map: "Alcyone LE" } }),
     ]);
     const docs = await recompute();
-    const counter = docs.get("counter:after:PvZ:8-pool");
+    const counter = docs.get("counter:after:PvZ:12-pool");
     expect(counter).toMatchObject({
-      published: true, strategyKey: "Zerg - 8 Pool",
+      published: true, strategyKey: "Zerg - 12 Pool",
       overall: { games: 120, users: 12, wins: 78, winRate: 0.65, ci: wilsonInterval(78, 120) },
     });
     expect(counter.openers.map((o) => [o.buildKey, o.buildSlug, o.games])).toEqual([
@@ -129,7 +129,7 @@ describe("GuideStatsService.recompute — games aggregate", () => {
     ]);
     const matchup = docs.get("matchup:after:PvZ");
     expect(matchup.counters[0]).toEqual({
-      strategyKey: "Zerg - 8 Pool", strategySlug: "8-pool", published: true, games: 120,
+      strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool", published: true, games: 120,
     });
     expect(matchup.counters.slice(1).every((c) => c.published === false && c.games === null)).toBe(true);
     // A map with one floor-clearing matchup cell but under 100 games: a doc, not a page.
@@ -150,21 +150,31 @@ describe("GuideStatsService.recompute — games aggregate", () => {
     expect(first.ci).toEqual(wilsonInterval(230, 300));
   });
 
-  test("patch eras are aggregated separately (gameBuild, then gameVersion, then date)", async () => {
+  test("12-worker and 8-worker games are aggregated separately (gameVersion, then gameBuild, then date)", async () => {
     await db.games.insertMany([
+      // Current era: the 12-worker game, before 5.0.16 and from 5.0.17 on.
       ...cellGames({ users: 6, perUser: 20, winsPerUser: 10, userPrefix: "now" }),
+      ...cellGames({
+        users: 6, perUser: 2, winsPerUser: 1, userPrefix: "v17",
+        overrides: { gameBuild: undefined, gameVersion: "5.0.17.98000" },
+      }),
+      ...cellGames({
+        users: 6, perUser: 1, winsPerUser: 0, userPrefix: "pre",
+        overrides: { gameBuild: undefined, date: new Date("2026-05-01T00:00:00.000Z") },
+      }),
+      // Previous era: the 8-worker patch 5.0.16.
       ...cellGames({ users: 6, perUser: 5, winsPerUser: 5, userPrefix: "old", overrides: { gameBuild: BEFORE_BUILD } }),
       ...cellGames({
         users: 6, perUser: 3, winsPerUser: 0, userPrefix: "ver",
-        overrides: { gameBuild: undefined, gameVersion: "5.0.15.96883" },
+        overrides: { gameBuild: undefined, gameVersion: "5.0.16.97425" },
       }),
       ...cellGames({
         users: 6, perUser: 2, winsPerUser: 2, userPrefix: "date",
-        overrides: { gameBuild: undefined, date: new Date("2026-05-01T00:00:00.000Z") },
+        overrides: { gameBuild: undefined, date: new Date("2026-07-01T00:00:00.000Z") },
       }),
     ]);
     const docs = await recompute();
-    expect(docs.get(KEY_GLAIVES).overall).toMatchObject({ games: 120, wins: 60 });
+    expect(docs.get(KEY_GLAIVES).overall).toMatchObject({ games: 138, users: 18, wins: 66 });
     const before = docs.get("build:before:PvZ:stargate-into-glaives");
     expect(before.overall).toMatchObject({ games: 60, users: 18, wins: 42 });
     expect(before.published).toBe(false);
@@ -187,12 +197,18 @@ describe("GuideStatsService.recompute — games aggregate", () => {
   });
 
   test("custom builds, private names, custom/unknown strategies and ineligible games are excluded", async () => {
-    const eightPool = { opponent: { strategy: "Zerg - 8 Pool" } };
+    const twelvePool = { opponent: { strategy: "Zerg - 12 Pool" } };
     await db.games.insertMany([
-      ...cellGames({ users: 6, perUser: 10, winsPerUser: 5, userPrefix: "ok", overrides: eightPool }),
+      ...cellGames({ users: 6, perUser: 10, winsPerUser: 5, userPrefix: "ok", overrides: twelvePool }),
       ...cellGames({
         users: 6, perUser: 10, winsPerUser: 5, userPrefix: "ok",
-        overrides: { ...eightPool, _customOpponentStrategySlug: "my-read" },
+        overrides: { ...twelvePool, _customOpponentStrategySlug: "my-read" },
+      }),
+      // The 8-worker patch's label for the same opener is not a catalog
+      // strategy, so it gets no counter row.
+      ...cellGames({
+        users: 6, perUser: 10, winsPerUser: 5, userPrefix: "ok",
+        overrides: { opponent: { strategy: "Zerg - 8 Pool" } },
       }),
       ...cellGames({
         users: 6, perUser: 10, winsPerUser: 5, userPrefix: "ok",
@@ -207,11 +223,12 @@ describe("GuideStatsService.recompute — games aggregate", () => {
     ]);
     const docs = await recompute();
     const doc = docs.get(KEY_GLAIVES);
-    expect(doc.overall).toMatchObject({ games: 180, users: 6, wins: 90 });
+    expect(doc.overall).toMatchObject({ games: 240, users: 6, wins: 120 });
     expect(doc.vsStrategy).toEqual([
-      expect.objectContaining({ strategyKey: "Zerg - 8 Pool", strategySlug: "8-pool", games: 60 }),
+      expect.objectContaining({ strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool", games: 60 }),
     ]);
-    expect(docs.get("counter:after:PvZ:8-pool")).toMatchObject({
+    expect(docs.has("counter:after:PvZ:8-pool")).toBe(false);
+    expect(docs.get("counter:after:PvZ:12-pool")).toMatchObject({
       published: false, overall: expect.objectContaining({ games: 60 }),
     });
     const all = JSON.stringify([...docs.values()]);
@@ -284,7 +301,7 @@ describe("GuideStatsService.recompute — games aggregate", () => {
     expect(docs.has("map:after:retired-map")).toBe(false);
     expect(docs.get("run")).toMatchObject({ kind: "run", counts: { builds: 1, published: 1, counters: 0, maps: 1 } });
     expect(await db.guideStats.countDocuments({ key: KEY_GLAIVES })).toBe(1);
-    expect(await svc.readRun()).toEqual({ computedAt: second.computedAt, durationMs: 0, counts: second.counts });
+    expect(await svc.readRun()).toEqual({ computedAt: second.computedAt, durationMs: 0, counts: second.counts, eraRule: 2 });
     const kinds = new Set([...docs.values()].map((d) => d.kind));
     expect(kinds).toEqual(new Set(["build", "matchup", "counter", "map", "run"]));
     // Every catalog build and strategy of every matchup gets a doc per era.

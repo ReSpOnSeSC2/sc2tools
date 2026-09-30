@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_PRESET,
+  PATCH_5_0_17_RELEASE,
+  type PresetId,
+} from "@/lib/datePresets";
+import {
   hydrateStoredFilters,
   pickPersisted,
 } from "../AnalyzerProvider";
@@ -114,6 +119,25 @@ describe("hydrateStoredFilters", () => {
       game_size: "all",
       exclude_too_short: false,
     });
+  });
+
+  it("moves a stored legacy 8-worker preset to the live 12-worker patch", () => {
+    // "after_5_0_16" followed the live patch until 5.0.17 restored 12
+    // workers; returning users land on the new live patch, re-resolved
+    // (not the stale stored dates, not "All time").
+    const out = hydrateStoredFilters({
+      preset: "after_5_0_16" as PresetId,
+      since: "2026-06-22T19:15:00.000Z",
+    });
+    expect(out.preset).toBe("after_5_0_17");
+    expect(out.since).toBe(PATCH_5_0_17_RELEASE.toISOString());
+    expect(out.until).toBeUndefined();
+  });
+
+  it("defaults a missing or unknown stored preset to the 12-worker patch", () => {
+    expect(hydrateStoredFilters(null).preset).toBe(DEFAULT_PRESET);
+    expect(hydrateStoredFilters({ preset: "bogus" as PresetId }).preset).toBe(DEFAULT_PRESET);
+    expect(DEFAULT_PRESET).toBe("after_5_0_17");
   });
 
   it("restores a stored game-length range", () => {

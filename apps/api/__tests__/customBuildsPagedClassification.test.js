@@ -222,6 +222,29 @@ describe("classification across bounded custom-build pages", () => {
     expect((await games.findOne({ gameId: "game-2" })).myBuild).toBeUndefined();
   });
 
+  test.each(["history", "ingest"])(
+    "%s back-dates each replay by its own patch era (8- vs 12-worker)",
+    async (mode) => {
+      // An Adept finishing at 3:00 started at 2:27 on 5.0.16 (33s) and at
+      // 2:33 in the 12-worker game (27s), so only the 5.0.16 replay is
+      // "Adept before 2:30".
+      await builds.insertOne(definition(0, {
+        rules: [{ type: "before", name: "BuildAdept", time_lt: 150 }],
+      }));
+      const eight = replay(0, { gameVersion: "5.0.16.97425", buildLog: ["[3:00] Adept"] });
+      const twelve = replay(1, { gameVersion: "5.0.17.98000", buildLog: ["[3:00] Adept"] });
+      await games.insertMany([eight, twelve]);
+      if (mode === "history") {
+        await service.reclassifyAll(USER_ID);
+      } else {
+        await service.tagSingleGame(USER_ID, eight);
+        await service.tagSingleGame(USER_ID, twelve);
+      }
+      expect((await games.findOne({ gameId: "game-0" }))._customBuildSlug).toBe("build-000");
+      expect((await games.findOne({ gameId: "game-1" }))._customBuildSlug).toBeUndefined();
+    },
+  );
+
   test("reports the entire library even when no replay pages exist", async () => {
     await builds.insertMany(Array.from({ length: 125 }, (_, i) => definition(i)));
     const result = await service.reclassifyAll(USER_ID);

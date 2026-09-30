@@ -28,16 +28,18 @@ export const ADMIN_VIDEO_GLAIVES: GuideAdminVideo = {
   source: "snapshot",
   hidden: false,
   isShort: false,
+  eightWorkerPatch: true,
 };
 
 export const ADMIN_VIDEO_8_POOLS: GuideAdminVideo = {
   ...VIDEO_PVZ_CRACKING_8_POOLS,
   matchup: "PvZ",
   builds: [],
-  counters: ["Zerg - 8 Pool"],
+  counters: [],
   source: "snapshot",
   hidden: false,
   isShort: false,
+  eightWorkerPatch: true,
 };
 
 export const ADMIN_VIDEO_CARRIERS: GuideAdminVideo = {
@@ -48,6 +50,7 @@ export const ADMIN_VIDEO_CARRIERS: GuideAdminVideo = {
   source: "rss",
   hidden: true,
   isShort: false,
+  eightWorkerPatch: true,
 };
 
 export const ADMIN_VIDEO_PVT_CHARGE: GuideAdminVideo = {
@@ -58,6 +61,7 @@ export const ADMIN_VIDEO_PVT_CHARGE: GuideAdminVideo = {
   source: "snapshot",
   hidden: false,
   isShort: false,
+  eightWorkerPatch: true,
 };
 
 export const ADMIN_VIDEOS: GuideAdminVideo[] = [

@@ -36,8 +36,10 @@ vi.mock("@/components/maps/MapArtwork", () => ({
   ),
 }));
 
+// The fixture replays are dated inside the 8-worker window (5.0.16) with
+// no version metadata, so the pulse reads that era's meta row.
 const META_ROW: MetaRow = {
-  era: "after",
+  era: "before",
   bandType: "league",
   band: 4,
   bandLabel: "Diamond",
@@ -235,7 +237,7 @@ describe("LadderPulse", () => {
       expect.objectContaining({ keepPreviousData: true }),
     );
     expect(useApiMock).toHaveBeenCalledWith(
-      "/v1/meta/ladder?axis=league&band=4&matchup=PvZ&era=after",
+      "/v1/meta/ladder?axis=league&band=4&matchup=PvZ&era=before",
       expect.objectContaining({ refreshInterval: 3_600_000 }),
     );
 
@@ -267,7 +269,9 @@ describe("LadderPulse", () => {
     const guideLink = screen.getByRole("link", {
       name: /Open build guide/i,
     });
-    expect(guideLink.getAttribute("href")).toBe("/guides/pvz?band=league:4");
+    expect(guideLink.getAttribute("href")).toBe(
+      "/guides/pvz?band=league:4&era=before",
+    );
   });
 
   it("hides the build-guide link while guides are switched off", () => {

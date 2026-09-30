@@ -2183,7 +2183,11 @@ class CustomBuildsService {
    *     opp_proxy_classification_v?: number,
    *   },
    *   opponent?: { race?: string|null }|null,
-   * }} game
+   *   gameVersion?: string,
+   *   gameBuild?: number,
+   *   date?: string|Date,
+   * }} game ``gameVersion`` / ``gameBuild`` / ``date`` give the patch era
+   *   that picks 8- vs 12-worker build durations
    * @param {{expectedRevision?: string|null}} [opts]
    * @returns {Promise<null | {
    *   gameId: string,
@@ -2211,7 +2215,8 @@ class CustomBuildsService {
     // user sees. Match against start-time events so what they save
     // matches what they author. ``eventsToStartTime`` rewinds finish-
     // time entries (units / morphs / upgrades) using the build-
-    // duration catalog; non-morph structures pass through unchanged.
+    // duration catalog for this game's patch era; non-morph structures
+    // pass through unchanged.
     const events = eventsToStartTime(
       parseBuildLogLines(
         Array.isArray(game.buildLog) ? game.buildLog : [],
@@ -2219,6 +2224,7 @@ class CustomBuildsService {
         game.spatial?.my_proxies,
         game.spatial?.my_proxy_classification_v === 1,
       ),
+      game,
     );
     const oppEvents = eventsToStartTime(
       parseBuildLogLines(
@@ -2227,6 +2233,7 @@ class CustomBuildsService {
         game.spatial?.opp_proxies,
         game.spatial?.opp_proxy_classification_v === 1,
       ),
+      game,
     );
     const oppRace =
       game.opponent && typeof game.opponent === "object"
@@ -3110,6 +3117,10 @@ function classifiedDossierProjection(opts = {}) {
     "opponent.displayName": 1,
     "opponent.race": 1,
     "opponent.strategy": 1,
+    // Patch era, with ``date`` (util/patchEra): DNA timings' 8- vs
+    // 12-worker morph durations.
+    gameVersion: 1,
+    gameBuild: 1,
   };
   if (opts.includeBuildLogs) {
     // Legacy rows may still hold logs inline; current rows read these fields

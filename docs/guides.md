@@ -81,14 +81,37 @@ allowlist added so private custom-build names can never appear.
 
 ## Eras (patches)
 
-Stats are split into the **current patch** (`after`, 5.0.16 and later) and
-**before**. The era comes from the replay's `gameBuild`, else the last
-segment of `gameVersion`, else the game date against the 5.0.16 release. The
-rules live in `apps/api/src/util/patchEra.js`, shared with the Ladder Meta
-Radar.
+Patch 5.0.16 (22 June 2026) cut the starting workers from 12 to 8, and 5.0.17
+(30 September 2026) put them back. Stats are split by worker count:
 
-Pages publish on the current patch. `?era=before` on a matchup page shows
-the previous patch.
+- **Current** (`after`): the 12-worker game, meaning every game before 5.0.16
+  and every game from 5.0.17 on.
+- **Previous** (`before`): the 8-worker patch 5.0.16.
+
+The era comes from the replay's `gameVersion` first: a `5.0.16.<build>`
+release string is the 8-worker patch, and any other version is the 12-worker
+game. Without a version, a `gameBuild` of 97364 (the first live 5.0.16 build)
+or later counts as 8 workers. Without either, the game date decides: from
+the 5.0.16 release until midnight US Eastern on 30 September 2026 (the same
+instant the analyzer's "After 5.0.17 · 12 workers" filter starts) is the
+8-worker patch. Once 5.0.17's first live build is known, set
+`PATCH_5_0_17_BUILD` so build-only rows split exactly too. The rules live in
+`apps/api/src/util/patchEra.js`, shared with the Ladder Meta Radar, and
+`apps/web/lib/ladderPulse.ts` mirrors them.
+
+Pages publish on the current era. `?era=before` on a matchup page shows the
+8-worker patch.
+
+`guide_samples` store their era, stamped with `eraRule: 2` (the rule above).
+Rule 1 (until 30 September 2026) had `after` = 5.0.16 and later. The stats job
+relabels unstamped rows before every run and only counts stamped ones. After a
+rule change it also recomputes on its next check and starts week-over-week
+trends afresh. Ladder Meta rows moved to schema 3 for the same reason.
+
+Samples were only captured from 27 September 2026, almost all of them 8-worker
+games. So current-era timings and army stay thin until 12-worker games come in
+or the backfill is run with 400 days (below), which reaches back before
+5.0.16.
 
 ## Bands
 
@@ -195,7 +218,7 @@ not announced as new again.
 - **Build pages** live at `/guides/<matchup>/<build>`, for example
   `/guides/pvz/stargate-into-glaives`.
 - **Counter pages** live at `/guides/<matchup>/counter/<strategy>`, for
-  example `/guides/pvz/counter/8-pool` ("How to beat 8 Pool as Protoss").
+  example `/guides/pvz/counter/12-pool` ("How to beat 12 Pool as Protoss").
 - **Slug rule:** take the text after the catalog name's `" - "` prefix,
   lowercase it, and turn every run of non-alphanumerics into `-`.
 - **Collisions within a matchup:** the matchup-specific name keeps the plain
@@ -208,6 +231,14 @@ not announced as new again.
   break URLs. To retire a slug, add an entry to `SLUG_ALIASES` in
   `guideSlugs.js`. The API then answers 301 and the page issues a permanent
   redirect.
+- **Renamed builds:** 5.0.17 renamed the "8 Pool" openers back to "12 Pool".
+  Their old slugs are aliases, and ingest stores "12 Pool" whatever an agent
+  sends (`apps/api/src/util/poolBuildNames.js`). To rename labels that are
+  already stored, run
+  `node apps/api/src/db/migrations/2026-09-30-rename-8-pool-builds.js --dry-run`
+  with `MONGODB_URI` and `MONGODB_DB` set, then run it without `--dry-run`, then
+  press **Recompute now**. It covers games, guide samples and the guide's admin
+  notes and pins.
 - **After editing `apps/web/lib/build-definitions`:**
 
   ```bash
@@ -229,6 +260,11 @@ not announced as new again.
   - Shorts and stream recordings never match.
 - **Curated links:** two videos whose titles don't name the build are
   linked from their descriptions.
+- **8-worker patch videos:** a video published from the 5.0.16 release until
+  the 5.0.17 revert shows an 8-worker build order. Build, counter and matchup
+  pages never show one automatically; a build page shows it only when an
+  admin pins it. The hub's channel row still lists them. The admin page marks
+  them "8-worker patch".
 - **Admin page:** you can pin or hide videos per guide, hide a video
   everywhere, add a video by URL (it must be on the configured channel),
   or sync now.

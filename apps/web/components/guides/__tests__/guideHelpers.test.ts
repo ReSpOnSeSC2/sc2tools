@@ -83,7 +83,7 @@ describe("guideSeo", () => {
 
 describe("guideMetadata", () => {
   it("keeps numbers out of unpublished headlines", () => {
-    expect(buildHeadline(FIXTURE_BUILD_UNPUBLISHED)).toBe("Carrier Rush PvZ build order guide (Patch 5.0.16)");
+    expect(buildHeadline(FIXTURE_BUILD_UNPUBLISHED)).toBe("Carrier Rush PvZ build order guide (12 workers)");
     expect(buildHeadline(FIXTURE_BUILD_PUBLISHED)).toMatch(/— \d+\.\d% win rate vs Diamond \(/);
   });
 
@@ -115,28 +115,39 @@ describe("guideMetadata", () => {
 
   it("titles the unfiltered matchup page with the opener count", () => {
     expect(matchupMetadata(FIXTURE_MATCHUP).title).toBe(
-      `PvZ build orders — ${FIXTURE_MATCHUP.openers.length} openers ranked by win rate (Patch 5.0.16) | SC2 Tools`,
+      `PvZ build orders — ${FIXTURE_MATCHUP.openers.length} openers ranked by win rate (12 workers) | SC2 Tools`,
     );
+  });
+
+  it("names the fixed 8-worker patch on a previous-era page, never the live patch", () => {
+    const before = { ...FIXTURE_MATCHUP, era: "before" as const };
+    const md = matchupMetadata(before);
+    expect(md.title).toBe(
+      `PvZ build orders — ${FIXTURE_MATCHUP.openers.length} openers ranked by win rate (8-worker patch 5.0.16) | SC2 Tools`,
+    );
+    expect(String(md.description)).toContain("on the 8-worker patch 5.0.16.");
+    expect(`${md.title} ${md.description}`).not.toMatch(/5\.0\.17|12-worker/);
+    expect(matchupOgCard(before)?.subtitle).toMatch(/· 8 workers · 5\.0\.16$/);
   });
 
   it("gives the matchup title and its social card the same opener count", () => {
     const published = FIXTURE_MATCHUP.openers.filter((row) => row.published).length;
     expect(published).toBeLessThan(FIXTURE_MATCHUP.openers.length);
     expect(matchupOgCard(FIXTURE_MATCHUP)?.subtitle).toBe(
-      `${FIXTURE_MATCHUP.openers.length} openers ranked by win rate · Patch 5.0.16`,
+      `${FIXTURE_MATCHUP.openers.length} openers ranked by win rate · 12 workers`,
     );
   });
 
   it("pluralizes counts of one in titles and descriptions", () => {
     const one = { ...FIXTURE_MATCHUP, openers: FIXTURE_MATCHUP.openers.slice(0, 1) };
-    expect(matchupMetadata(one).title).toBe("PvZ build orders — 1 opener ranked by win rate (Patch 5.0.16) | SC2 Tools");
+    expect(matchupMetadata(one).title).toBe("PvZ build orders — 1 opener ranked by win rate (12 workers) | SC2 Tools");
     expect(String(matchupMetadata(one).description)).toMatch(/^1 PvZ opener ranked /);
     expect(matchupOgCard(one)?.subtitle).toMatch(/^1 opener ranked /);
     const oneCounter = {
       ...FIXTURE_MATCHUP,
       counters: FIXTURE_MATCHUP.counters.map((row, i) => ({ ...row, published: i === 0 && row.games !== null })),
     };
-    expect(String(counterListMetadata(oneCounter).title)).toContain("— 1 counter guide (Patch");
+    expect(String(counterListMetadata(oneCounter).title)).toContain("— 1 counter guide (12 workers)");
     const oneMap = { ...FIXTURE_INDEX, maps: FIXTURE_INDEX.maps.slice(0, 1) };
     expect(String(mapsListMetadata(oneMap).title)).toContain("— 1 map with openers");
     expect(String(mapsListMetadata(oneMap).description)).toContain("on 1 ladder map,");
@@ -163,10 +174,10 @@ describe("guideMetadata", () => {
       videos: [VIDEO_PVZ_CRACKING_8_POOLS],
     };
     const md = hubMetadata(videosOnly);
-    expect(md.title).toBe("StarCraft II build order guides — 1 build-order video (Patch 5.0.16) | SC2 Tools");
+    expect(md.title).toBe("StarCraft II build order guides — 1 build-order video (12 workers) | SC2 Tools");
     expect(md.robots).toBeUndefined();
     expect(hubMetadata({ ...videosOnly, videos: [] }).title).toBe(
-      "StarCraft II build order guides (Patch 5.0.16) | SC2 Tools",
+      "StarCraft II build order guides (12 workers) | SC2 Tools",
     );
   });
 });
@@ -258,18 +269,18 @@ describe("verifier regressions", () => {
   it("words counter pages from the matchup, whatever the payload's race labels", () => {
     const terse = { ...FIXTURE_COUNTER_PUBLISHED, myRace: "P", oppRace: "Z" };
     expect(counterHeadline(terse)).toBe(
-      `How to beat 8 Pool as Protoss — ${fmtPct(FIXTURE_COUNTER_PUBLISHED.overall.winRate)} win rate over 236 ladder games (Patch 5.0.16)`,
+      `How to beat 12 Pool as Protoss — ${fmtPct(FIXTURE_COUNTER_PUBLISHED.overall.winRate)} win rate over 236 ladder games (12 workers)`,
     );
     expect(String(counterMetadata(terse).description)).toMatch(/^Protoss players win /);
     const unpublished = { ...FIXTURE_COUNTER_UNPUBLISHED, myRace: "P", oppRace: "Z" };
     expect(String(counterMetadata(unpublished).description)).toMatch(/^How to beat Lurker Contain \(Zerg\) as Protoss:/);
     expect(String(counterMetadata(unpublished).description)).not.toMatch(/\d+(\.\d+)?%/);
-    // The only digits an unpublished title carries are the patch's.
-    expect(counterHeadline(unpublished).replace("(Patch 5.0.16)", "")).not.toMatch(/\d/);
+    // The only digits an unpublished title carries are the era tag's.
+    expect(counterHeadline(unpublished).replace("(12 workers)", "")).not.toMatch(/\d/);
   });
 
   it("gives same-named published counters distinct titles from their own numbers", () => {
-    const other = { ...FIXTURE_COUNTER_PUBLISHED, strategySlug: "zerg-8-pool", overall: fixtureCell(180, 33, 97) };
+    const other = { ...FIXTURE_COUNTER_PUBLISHED, strategySlug: "zerg-12-pool", overall: fixtureCell(180, 33, 97) };
     expect(counterHeadline(other)).not.toBe(counterHeadline(FIXTURE_COUNTER_PUBLISHED));
     expect(counterHeadline(other)).toContain("over 180 ladder games");
   });

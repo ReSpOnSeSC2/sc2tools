@@ -5,13 +5,20 @@ import {
   type MetaRow,
   type PatchEra,
 } from "@/lib/meta";
-import { PATCH_5_0_16_RELEASE } from "@/lib/datePresets";
+import {
+  PATCH_5_0_16_RELEASE,
+  PATCH_5_0_17_RELEASE,
+} from "@/lib/datePresets";
 import { isUnclassifiedBuild } from "@/lib/unclassifiedBuilds";
 
 const DAY_MS = 86_400_000;
 export const FRESH_REPLAY_MAX_AGE_MS = 30 * 60 * 1000;
 const FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const PATCH_5_0_16_BUILD = 97_364;
+/** First live 5.0.17 build; null (open-ended) until it is known. */
+const PATCH_5_0_17_BUILD: number | null = null;
+/** Release strings of the 8-worker game: every 5.0.16 build and hotfix. */
+const EIGHT_WORKER_VERSION_RE = /^5\.0\.16\./;
 
 export type PulseResult = "win" | "loss" | "tie" | "unknown";
 
@@ -335,29 +342,32 @@ export function metaSelectionForGame(
 }
 
 /**
- * Match the API's patch-era precedence: exact numeric build, version-string
- * build, then replay time for legacy rows. A malformed legacy row defaults to
- * the live era rather than surfacing obsolete 12-worker guidance.
+ * Mirror of the API's era rule (apps/api/src/util/patchEra.js eraForGame):
+ * "before" is the 8-worker patch 5.0.16, "after" the live 12-worker game
+ * (before 5.0.16 and from 5.0.17 on). Precedence: the release string
+ * ("5.0.16.*" is 8-worker, any other string 12-worker), then the numeric
+ * build (8-worker from the first 5.0.16 build up to the first 5.0.17
+ * build), then replay time (8-worker from the 5.0.16 release until
+ * 5.0.17). A malformed legacy row defaults to the live era rather than
+ * surfacing obsolete 8-worker guidance.
  */
 export function patchEraForGame(
   game: PulseGame | null | undefined,
 ): PatchEra {
-  const numericBuild =
-    typeof game?.gameBuild === "number" &&
-    Number.isInteger(game.gameBuild) &&
-    game.gameBuild > 0
-      ? game.gameBuild
-      : null;
-  const versionBuild =
-    numericBuild === null ? buildFromVersion(game?.gameVersion) : null;
-  const build = numericBuild ?? versionBuild;
-  if (build !== null) {
-    return build >= PATCH_5_0_16_BUILD ? "after" : "before";
+  if (typeof game?.gameVersion === "string") {
+    return EIGHT_WORKER_VERSION_RE.test(game.gameVersion) ? "before" : "after";
+  }
+  if (typeof game?.gameBuild === "number") {
+    const eightWorker =
+      game.gameBuild >= PATCH_5_0_16_BUILD &&
+      (PATCH_5_0_17_BUILD === null || game.gameBuild < PATCH_5_0_17_BUILD);
+    return eightWorker ? "before" : "after";
   }
 
   const playedAt = finiteTimestamp(game?.date);
   return playedAt !== null &&
-    playedAt < PATCH_5_0_16_RELEASE.getTime()
+    playedAt >= PATCH_5_0_16_RELEASE.getTime() &&
+    playedAt < PATCH_5_0_17_RELEASE.getTime()
     ? "before"
     : "after";
 }
@@ -443,16 +453,6 @@ function isVerifiedMmrGame(
     typeof game.myToonHandle === "string" &&
     game.myToonHandle.trim().length > 0
   );
-}
-
-function buildFromVersion(value: unknown): number | null {
-  if (typeof value !== "string") return null;
-  const parts = value.trim().split(".");
-  if (parts.length !== 4 || !parts.every((part) => /^\d+$/.test(part))) {
-    return null;
-  }
-  const build = Number(parts[parts.length - 1]);
-  return Number.isSafeInteger(build) && build > 0 ? build : null;
 }
 
 function queueRace(game: PulseGame): string | null {

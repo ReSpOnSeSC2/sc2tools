@@ -84,7 +84,7 @@ describe("/guides/[matchup]/[build] metadata", () => {
     const md = await generateMetadata(PARAMS);
     expect(HEADLINE_PCT).toBe("56.5%");
     expect(md.title).toBe(
-      `Stargate into Glaives PvZ — ${HEADLINE_PCT} win rate vs Diamond (Patch 5.0.16) | SC2 Tools`,
+      `Stargate into Glaives PvZ — ${HEADLINE_PCT} win rate vs Diamond (12 workers) | SC2 Tools`,
     );
     expect(md.alternates?.canonical).toBe("/guides/pvz/stargate-into-glaives");
     expect(md.robots).toBeUndefined();
@@ -102,7 +102,7 @@ describe("/guides/[matchup]/[build] metadata", () => {
     };
     mocks.fetchGuideBuild.mockResolvedValue(ok(payload));
     const md = await generateMetadata(PARAMS);
-    expect(md.title).toBe("Stargate into Glaives PvZ — 53.9% ladder win rate (Patch 5.0.16) | SC2 Tools");
+    expect(md.title).toBe("Stargate into Glaives PvZ — 53.9% ladder win rate (12 workers) | SC2 Tools");
   });
 
   it("marks an unpublished guide noindex", async () => {
@@ -154,7 +154,7 @@ describe("/guides/[matchup]/[build] page", () => {
     await renderPage();
     expect(screen.getByRole("heading", { level: 1, name: "Stargate into Glaives" })).toBeTruthy();
     expect(screen.getByTestId("guide-headline").textContent).toBe(
-      `${HEADLINE_PCT} win rate over 146 games vs Diamond opponents since patch 5.0.16`,
+      `${HEADLINE_PCT} win rate over 146 games vs Diamond opponents with 12 starting workers`,
     );
     expect(screen.getByText(FIXTURE_BUILD_PUBLISHED.description)).toBeTruthy();
     expect(screen.getByText(/n = 412 games from 63 players · Stats updated Sep 27, 2026/)).toBeTruthy();

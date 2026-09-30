@@ -2,18 +2,19 @@
  * Titles, descriptions and paths for every /guides page.
  *
  * Each title carries a real number from the payload (win rate, opener
- * count, games) plus the patch, so every page's title is unique and
- * specific; unpublished payloads carry no numbers and are noindex.
- * Descriptions state n and the stats date. Nothing here invents a
- * value: every number is formatted straight from the payload.
+ * count, games) plus the era tag ("(12 workers)" / "(8-worker patch
+ * 5.0.16)"), so every page's title is unique and specific; unpublished
+ * payloads carry no numbers and are noindex. Descriptions state n and
+ * the stats date. Nothing here invents a value: every number outside
+ * the fixed era wording is formatted straight from the payload.
  */
 import type { Metadata } from "next";
 import { fmtCountNoun, fmtGuideDate, fmtPct } from "@/lib/guides/format";
+import { eraTitleTag } from "@/lib/guides/guideCopy";
 import type {
   GuideBand,
   GuideBuildPayload,
   GuideCounterPayload,
-  GuideEra,
   GuideIndexPayload,
   GuideMapPayload,
   GuideMatchupPayload,
@@ -47,10 +48,6 @@ export function canLinkGuidePath(published: ReadonlySet<string> | null, path: st
   return published === null || published.has(path);
 }
 
-function patchTag(patch: string, era: GuideEra = "after"): string {
-  return era === "before" ? `(before Patch ${patch})` : `(Patch ${patch})`;
-}
-
 function updated(computedAt: string | null): string {
   return computedAt ? ` Stats updated ${fmtGuideDate(computedAt)}.` : "";
 }
@@ -65,17 +62,17 @@ function updated(computedAt: string | null): string {
  * The league band is the OPPONENT's league (the band the build faces
  * most), so it reads "vs Diamond", never "at Diamond".
  *
- * Example: "Stargate into Glaives PvZ — 56.6% win rate vs Diamond (Patch 5.0.16)".
+ * Example: "Stargate into Glaives PvZ — 56.6% win rate vs Diamond (12 workers)".
  */
 export function buildHeadline(data: GuideBuildPayload): string {
   const base = `${data.name} ${data.matchup}`;
-  if (!data.published) return `${base} build order guide ${patchTag(data.patch)}`;
+  if (!data.published) return `${base} build order guide ${eraTitleTag("after")}`;
   const { headline } = data;
   if (headline && headline.scope === "league" && headline.label) {
-    return `${base} — ${fmtPct(headline.winRate)} win rate vs ${headline.label} ${patchTag(data.patch)}`;
+    return `${base} — ${fmtPct(headline.winRate)} win rate vs ${headline.label} ${eraTitleTag("after")}`;
   }
   const winRate = headline ? headline.winRate : data.overall.winRate;
-  return `${base} — ${fmtPct(winRate)} ladder win rate ${patchTag(data.patch)}`;
+  return `${base} — ${fmtPct(winRate)} ladder win rate ${eraTitleTag("after")}`;
 }
 
 /**
@@ -87,15 +84,15 @@ export function buildHeadline(data: GuideBuildPayload): string {
  * without saying which is which.
  *
  * Example: "Robo First (PvT) wins 46.3% vs Master opponents and 55.0% of
- * decided games overall, across 109 ladder games from 5 players since
- * patch 5.0.16. …"
+ * decided games overall, across 109 ladder games from 5 players with 12
+ * starting workers. …"
  */
 export function buildDescription(data: GuideBuildPayload): string {
   if (!data.published) {
     return `${data.name} (${data.matchup}): ${data.description} Not enough ladder games yet for published stats.`;
   }
   const { overall, headline } = data;
-  const sample = `${fmtCountNoun(overall.games, "ladder game")} from ${fmtCountNoun(overall.users, "player")} ${eraLabel(data.era, data.patch)}`;
+  const sample = `${fmtCountNoun(overall.games, "ladder game")} from ${fmtCountNoun(overall.users, "player")} ${eraLabel(data.era)}`;
   const record =
     headline && headline.scope === "league" && headline.label
       ? `wins ${fmtPct(headline.winRate)} vs ${headline.label} opponents and ${fmtPct(overall.winRate)} of decided games overall, across ${sample}`
@@ -126,16 +123,16 @@ export function buildMetadata(data: GuideBuildPayload): Metadata {
  * ("PvZ" → Protoss / Zerg), never from the payload's free-form race
  * labels, so the copy reads the same whatever form the API labels races in.
  *
- * Example: "How to beat 8 Pool as Protoss — 63.4% win rate over 236 ladder
- * games (Patch 5.0.16)"; unpublished → "How to beat Lurker Contain as
- * Protoss — best openers by win rate (Patch 5.0.16)".
+ * Example: "How to beat 12 Pool as Protoss — 63.4% win rate over 236 ladder
+ * games (12 workers)"; unpublished → "How to beat Lurker Contain as
+ * Protoss — best openers by win rate (12 workers)".
  */
 export function counterHeadline(data: GuideCounterPayload): string {
   const base = `How to beat ${data.name} as ${myRaceWord(data.matchup)}`;
-  if (!data.published) return `${base} — best openers by win rate ${patchTag(data.patch)}`;
+  if (!data.published) return `${base} — best openers by win rate ${eraTitleTag("after")}`;
   const { overall } = data;
   const record = `${fmtPct(overall.winRate)} win rate over ${fmtCountNoun(overall.games, "ladder game")}`;
-  return `${base} — ${record} ${patchTag(data.patch)}`;
+  return `${base} — ${record} ${eraTitleTag("after")}`;
 }
 
 export function counterMetadata(data: GuideCounterPayload): Metadata {
@@ -174,7 +171,7 @@ export function rankedOpenerCount(data: GuideMatchupPayload): number {
 
 export function matchupMetadata(data: GuideMatchupPayload): Metadata {
   const canonical = guidePaths.matchup(data.slug);
-  const tag = patchTag(data.patch, data.era);
+  const tag = eraTitleTag(data.era);
   if (!data.published || data.games === null || data.users === null) {
     return guideMetadata({
       title: `${data.matchup} build orders ${tag}${SUFFIX}`,
@@ -187,7 +184,7 @@ export function matchupMetadata(data: GuideMatchupPayload): Metadata {
   const count = rankedOpenerCount(data);
   return guideMetadata({
     title: `${data.matchup} build orders${bandPhrase(data.band)} — ${fmtCountNoun(count, "opener")} ranked by win rate ${tag}${SUFFIX}`,
-    description: `${fmtCountNoun(count, `${data.matchup} opener`)} ranked by real ladder win rate across ${fmtCountNoun(data.games, "game")} from ${fmtCountNoun(data.users, "player")} ${eraLabel(data.era, data.patch)}.${updated(data.computedAt)}`,
+    description: `${fmtCountNoun(count, `${data.matchup} opener`)} ranked by real ladder win rate across ${fmtCountNoun(data.games, "game")} from ${fmtCountNoun(data.users, "player")} ${eraLabel(data.era)}.${updated(data.computedAt)}`,
     canonical,
     routeOgImage: true,
   });
@@ -214,7 +211,7 @@ export function counterListMetadata(data: GuideMatchupPayload): Metadata {
   const games = publishedCounterGames(data);
   const across = games > 0 ? ` across ${fmtCountNoun(games, `${data.matchup} ladder game`)}` : "";
   return guideMetadata({
-    title: `How to beat ${opp} openers as ${mine} (${data.matchup}) — ${fmtCountNoun(published, "counter guide")} ${patchTag(data.patch)}${SUFFIX}`,
+    title: `How to beat ${opp} openers as ${mine} (${data.matchup}) — ${fmtCountNoun(published, "counter guide")} ${eraTitleTag("after")}${SUFFIX}`,
     description: `Every ${opp} opener we track in ${data.matchup}, with the ${mine} openers that beat it most reliably on ladder${across}.${updated(data.computedAt)}`,
     canonical: guidePaths.counters(data.slug),
     noindex: published === 0,
@@ -256,7 +253,7 @@ function hubTitleCount(builds: number, videos: number): string {
 
 export function hubMetadata(data: GuideIndexPayload): Metadata {
   const totals = hubTotals(data);
-  const tag = patchTag(data.patch, data.era);
+  const tag = eraTitleTag(data.era);
   const title = `StarCraft II build order guides${hubTitleCount(totals.builds, data.videos.length)} ${tag}${SUFFIX}`;
   const description =
     totals.builds > 0
@@ -276,7 +273,7 @@ export function mapsListMetadata(data: GuideIndexPayload): Metadata {
   const games = data.maps.reduce((sum, map) => sum + map.games, 0);
   const from = games > 0 ? fmtCountNoun(games, "real ladder game") : "real ladder games";
   return guideMetadata({
-    title: `SC2 ladder map guides — ${fmtCountNoun(count, "map")} with openers ranked by win rate ${patchTag(data.patch, data.era)}${SUFFIX}`,
+    title: `SC2 ladder map guides — ${fmtCountNoun(count, "map")} with openers ranked by win rate ${eraTitleTag(data.era)}${SUFFIX}`,
     description: `Win rates by matchup and the best openers on ${fmtCountNoun(count, "ladder map")}, from ${from}.${updated(data.computedAt)}`,
     canonical: guidePaths.maps(),
     noindex: count === 0,
@@ -285,7 +282,7 @@ export function mapsListMetadata(data: GuideIndexPayload): Metadata {
 
 export function mapMetadata(data: GuideMapPayload): Metadata {
   const canonical = guidePaths.map(data.mapSlug);
-  const tag = patchTag(data.patch, data.era);
+  const tag = eraTitleTag(data.era);
   if (!data.published) {
     return guideMetadata({
       title: `${data.map} map guide ${tag}${SUFFIX}`,
@@ -296,7 +293,7 @@ export function mapMetadata(data: GuideMapPayload): Metadata {
   }
   return guideMetadata({
     title: `${data.map} — best openers by matchup from ${fmtCountNoun(data.games, "ladder game")} ${tag}${SUFFIX}`,
-    description: `Matchup win rates and the best openers on ${data.map} across ${fmtCountNoun(data.games, "ladder game")} ${eraLabel(data.era, data.patch)}.${updated(data.computedAt)}`,
+    description: `Matchup win rates and the best openers on ${data.map} across ${fmtCountNoun(data.games, "ladder game")} ${eraLabel(data.era)}.${updated(data.computedAt)}`,
     canonical,
   });
 }

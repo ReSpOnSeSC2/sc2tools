@@ -127,9 +127,10 @@ const GUIDE_NOTE_MAX_CHARS = 4000;
 /** Cache-Control on every public guides response. */
 const GUIDE_CACHE_CONTROL = "public, s-maxage=3600, stale-while-revalidate=86400";
 
-/** The live patch era (util/patchEra.js) and its display label. */
+/** The live patch era (util/patchEra.js: the 12-worker game) and the live
+ *  patch's label. The web words each era by worker count, not by this. */
 const GUIDE_CURRENT_ERA = PATCH_ERA_AFTER;
-const GUIDE_PATCH_LABEL = "5.0.16";
+const GUIDE_PATCH_LABEL = "5.0.17";
 
 module.exports = {
   guideFloors,

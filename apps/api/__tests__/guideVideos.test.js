@@ -14,6 +14,7 @@ const pino = require("pino");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const { connect } = require("../src/db/connect");
 const { GuideVideosService } = require("../src/services/guideVideos");
+const { PATCH_5_0_16_RELEASE, PATCH_5_0_17_RELEASE } = require("../src/util/patchEra");
 const { FEED_URL, OEMBED_URL, FEED_TIMEOUT_MS } = require("../src/services/guideVideoHttp");
 const { loadConfig } = require("../src/config/loader");
 const SNAPSHOT = require("../src/config/guideVideosSnapshot.json");
@@ -185,10 +186,73 @@ describe("GuideVideosService", () => {
     });
   });
 
-  describe("guide selection", () => {
+  describe("8-worker patch videos", () => {
     let svc;
     beforeEach(async () => {
       svc = service({ fetchImpl: feedFetch().fetchImpl });
+      await svc.ensureSnapshot();
+      await svc.syncFromChannel();
+    });
+
+    /** @param {string} youtubeId @param {Date|null} publishedAt */
+    async function insertGlaivesVideo(youtubeId, publishedAt) {
+      await db.guideVideos.insertOne({
+        youtubeId, title: "PvZ Stargate into Glaives, 12 workers", description: "", publishedAt,
+        channelId: CHANNEL_ID, source: "admin", isShort: false, hidden: false, updatedAt: new Date(NOW),
+      });
+      svc.invalidate();
+    }
+
+    test("guides and matchup rows leave them off unless an admin pins them", async () => {
+      expect(await svc.videosForBuild("PvZ", "PvZ - Stargate into Glaives")).toEqual([]);
+      expect((await svc.videosForBuild("PvZ", "PvZ - Stargate into Glaives", { pinned: ["YcTMc_Ee11w"] }))
+        .map((v) => v.youtubeId)).toEqual(["YcTMc_Ee11w"]);
+      // Curated links are automatic matches too.
+      expect(await svc.videosForBuild("PvZ", "PvZ - Rail's Disruptor Drop")).toEqual([]);
+      expect(await svc.videosForCounter("PvT", "Terran - 3 Rax")).toEqual([]);
+      expect(await svc.videosForMatchup("PvZ")).toEqual([]);
+      // The matchup page's 8-worker view keeps them.
+      expect((await svc.videosForMatchup("PvZ", 4, "before")).map((v) => v.youtubeId))
+        .toEqual(["AnmLN-xFtAc", "guRK0SIbM8Y", "RYjRs_no8t4", "aSGYCTVBjqY"]);
+      // The channel-wide row is not about one build order.
+      expect((await svc.latest()).map((v) => v.youtubeId))
+        .toEqual(["_U1MPQB_Q90", "AnmLN-xFtAc", "guRK0SIbM8Y", "RYjRs_no8t4"]);
+    });
+
+    test("the window runs from the 5.0.16 release until the 5.0.17 revert; undated videos show", async () => {
+      await insertGlaivesVideo("AAAAAAAAAAA", new Date(PATCH_5_0_17_RELEASE.getTime()));
+      await insertGlaivesVideo("BBBBBBBBBBB", new Date(PATCH_5_0_17_RELEASE.getTime() - 1));
+      await insertGlaivesVideo("CCCCCCCCCCC", new Date(PATCH_5_0_16_RELEASE.getTime()));
+      await insertGlaivesVideo("DDDDDDDDDDD", new Date(PATCH_5_0_16_RELEASE.getTime() - 1));
+      await insertGlaivesVideo("EEEEEEEEEEE", null);
+      expect((await svc.videosForBuild("PvZ", "PvZ - Stargate into Glaives")).map((v) => v.youtubeId))
+        .toEqual(["AAAAAAAAAAA", "DDDDDDDDDDD", "EEEEEEEEEEE"]);
+      expect((await svc.videosForMatchup("PvZ", 12)).map((v) => v.youtubeId))
+        .toEqual(["AAAAAAAAAAA", "DDDDDDDDDDD", "EEEEEEEEEEE"]);
+    });
+
+    test("a globally hidden 8-worker video stays hidden even when pinned", async () => {
+      await svc.setHidden("YcTMc_Ee11w", true);
+      expect(await svc.videosForBuild("PvZ", "PvZ - Stargate into Glaives", { pinned: ["YcTMc_Ee11w"] })).toEqual([]);
+    });
+
+    test("the admin list flags every 8-worker patch video", async () => {
+      await insertGlaivesVideo("AAAAAAAAAAA", new Date(PATCH_5_0_17_RELEASE.getTime()));
+      const items = await svc.listForAdmin();
+      expect(items.filter((v) => v.eightWorkerPatch)).toHaveLength(32);
+      expect(items.find((v) => v.youtubeId === "AAAAAAAAAAA")).toMatchObject({ eightWorkerPatch: false });
+      expect(items.find((v) => v.youtubeId === "YcTMc_Ee11w")).toMatchObject({
+        builds: ["PvZ - Stargate into Glaives"], eightWorkerPatch: true,
+      });
+    });
+  });
+
+  describe("guide selection", () => {
+    let svc;
+    beforeEach(async () => {
+      // Ordering, caps and overrides, independent of publish dates: every
+      // channel video so far is from the 8-worker patch (next block).
+      svc = service({ fetchImpl: feedFetch().fetchImpl, eightWorkerWindow: null });
       await svc.ensureSnapshot();
       await svc.syncFromChannel();
     });
@@ -217,7 +281,9 @@ describe("GuideVideosService", () => {
     });
 
     test("counter guides, unknown names and wrong matchups", async () => {
-      expect((await svc.videosForCounter("PvZ", "Zerg - 8 Pool")).map((v) => v.youtubeId)).toEqual(["A4x6gR7J-AY"]);
+      // "PvZ Cracking 8 Pools" names the 8-worker patch's 8 Pool, not the catalog's 12 Pool.
+      expect(await svc.videosForCounter("PvZ", "Zerg - 12 Pool")).toEqual([]);
+      expect(await svc.videosForCounter("PvZ", "Zerg - 8 Pool")).toEqual([]);
       expect((await svc.videosForCounter("PvT", "Terran - 3 Rax")).map((v) => v.youtubeId)).toEqual(["_EZbooc6wLM"]);
       expect(await svc.videosForBuild("PvZ", "PvZ - Not A Build")).toEqual([]);
       expect(await svc.videosForBuild("PvT", "PvZ - Carrier Rush")).toEqual([]);
@@ -337,18 +403,18 @@ describe("GuideVideosService", () => {
 
     test("adds a channel video by id via oEmbed, undated until the feed dates it", async () => {
       const { fetchImpl, calls } = oembedFetch({
-        title: "PvZ Cracking 8 Pools", author_name: "ReSpOnSeSC2", author_url: "https://www.youtube.com/@ReSpOnSeSC2",
+        title: "PvZ Cracking 12 Pools", author_name: "ReSpOnSeSC2", author_url: "https://www.youtube.com/@ReSpOnSeSC2",
       });
       const item = await service({ fetchImpl }).addVideo("A4x6gR7J-AY");
       expect(calls).toEqual([
         `${OEMBED_URL}?url=${encodeURIComponent("https://www.youtube.com/watch?v=A4x6gR7J-AY")}&format=json`,
       ]);
       expect(item).toMatchObject({
-        youtubeId: "A4x6gR7J-AY", title: "PvZ Cracking 8 Pools", publishedAt: null, excerpt: "", checklist: null,
-        matchup: "PvZ", counters: ["Zerg - 8 Pool"], source: "admin", hidden: false,
+        youtubeId: "A4x6gR7J-AY", title: "PvZ Cracking 12 Pools", publishedAt: null, excerpt: "", checklist: null,
+        matchup: "PvZ", counters: ["Zerg - 12 Pool"], source: "admin", hidden: false,
       });
       const svc = service();
-      expect((await svc.videosForCounter("PvZ", "Zerg - 8 Pool")).map((v) => v.youtubeId)).toEqual(["A4x6gR7J-AY"]);
+      expect((await svc.videosForCounter("PvZ", "Zerg - 12 Pool")).map((v) => v.youtubeId)).toEqual(["A4x6gR7J-AY"]);
     });
 
     test("re-adding a hidden video un-hides it and keeps richer stored fields", async () => {
