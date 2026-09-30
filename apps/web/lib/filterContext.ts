@@ -11,7 +11,7 @@
 // independently.
 
 import { createContext, useContext } from "react";
-import { DEFAULT_PRESET, type PresetId } from "@/lib/datePresets";
+import { DEFAULT_PRESET, patchEraFor, type PresetId } from "@/lib/datePresets";
 import type { LogicalSeason } from "@/lib/useSeasons";
 
 export type AnalyzerFilters = {
@@ -82,7 +82,10 @@ export type AnalyzerFilters = {
    */
   min_minutes?: number;
   max_minutes?: number;
-  /** Preset id selected in the date filter; not sent to the API. */
+  /**
+   * Preset id selected in the date filter. Not sent to the API itself; a
+   * patch preset adds its `patch_era` (see `filtersToQuery`).
+   */
   preset?: PresetId;
 };
 
@@ -160,9 +163,15 @@ function coerceMinutes(raw: unknown): number | undefined {
 /** Keys we never send to the API — UI-only state. */
 const UI_ONLY_KEYS = new Set(["preset"]);
 
-/** Build a query string from filter object — empty values dropped. */
+/**
+ * Build a query string from filter object — empty values dropped. A patch
+ * preset ("After 5.0.17", "5.0.16") also sends `patch_era`, so the API
+ * keeps games by their own version and not only their date.
+ */
 export function filtersToQuery(p: Record<string, unknown>): string {
   const usp = new URLSearchParams();
+  const patchEra = patchEraFor(p.preset as PresetId | undefined);
+  if (patchEra && p.patch_era === undefined) usp.set("patch_era", patchEra);
   for (const [k, v] of Object.entries(p)) {
     if (v === undefined || v === null || v === "") continue;
     if (UI_ONLY_KEYS.has(k)) continue;

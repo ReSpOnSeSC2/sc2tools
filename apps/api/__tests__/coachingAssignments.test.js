@@ -509,6 +509,18 @@ describe("coaching game assignments", () => {
     ]);
   });
 
+  test("tags each game with its patch for the Locker's patch filters", async () => {
+    // Played after the 5.0.17 notes, still on the 8-worker patch.
+    await game("v16", { gameVersion: "5.0.16.97425", date: new Date("2026-09-30T21:00:00.000Z") });
+    await game("v17", { gameVersion: "5.0.17.98000", date: new Date("2026-10-08T13:00:00.000Z") });
+    await game("date-only");
+
+    const eras = Object.fromEntries(
+      (await service.gamesFor("student-user-1")).map((item) => [item.d, item.e]),
+    );
+    expect(eras).toEqual({ "2026-09-30": "before", "2026-10-08": "after", "2026-09-04": "before" });
+  });
+
   test("uses exactly one declared build identity instead of unioning name and slug", async () => {
     await game("name-match", {
       myBuild: "PvP - Blink",

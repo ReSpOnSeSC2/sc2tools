@@ -17,6 +17,7 @@
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
+const { eraForGame } = require("../util/patchEra");
 const { randomUUID } = require("node:crypto");
 
 const DOC_ID = "locker";
@@ -514,7 +515,7 @@ class CoachingService {
         {
           projection: {
             _id: 0, date: 1, map: 1, opponent: 1, result: 1, myBuild: 1,
-            _customBuildSlug: 1,
+            _customBuildSlug: 1, gameVersion: 1, gameBuild: 1,
           },
         },
       )
@@ -529,6 +530,9 @@ class CoachingService {
         res: g.result === "Win" ? "W" : g.result === "Loss" ? "L" : "",
         b: typeof g.myBuild === "string" ? g.myBuild : "",
         bid: typeof g._customBuildSlug === "string" ? g._customBuildSlug : "",
+        // Patch era for the Locker's patch filters: "after" (12 workers) or
+        // "before" (the 8-worker patch 5.0.16), by the game's version.
+        e: eraForGame({ gameVersion: g.gameVersion, gameBuild: g.gameBuild, date: g.date }) || "",
       }))
       .filter((g) => g.d);
   }

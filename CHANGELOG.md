@@ -398,11 +398,16 @@ corresponding GitHub Release.
       same for labels already stored on games and guide samples, and moves
       the 8 Pool guides' admin notes to the 12 Pool guides.
     - The stream overlay's cheese alert also fires on 12 Pool.
-  - The analyzer's date filter adds **After 5.0.17 · 12 workers**. It starts
-    at midnight US Eastern on 30 September and is the new default. The
-    8-worker filter now ends at that same moment: **5.0.16 · 8 workers (until
-    Sep 30)**. A saved "After 5.0.16" filter moves to the 12-worker one. The
-    Coaching Locker's filters match.
+  - The analyzer's date filter adds **After 5.0.17 · 12 workers**, the new
+    default, and the 8-worker filter is now **5.0.16 · 8 workers**. Both keep
+    each game by the patch it was played on: the ladder stays on 5.0.16
+    after the 5.0.17 notes, and those games count as 8 workers, not 5.0.17.
+    A game with no version falls back to its date, split at midnight US
+    Eastern on 30 September. A saved "After 5.0.16" filter moves to the
+    12-worker one. The Coaching Locker's filters match.
+    - Every analyzer tab, the Opponents list and opponent profiles apply the
+      patch through the new `patch_era` query parameter (`after` or
+      `before`).
   - Build guides and the Ladder Pulse now treat the 12-worker game as current.
     That covers games before 5.0.16 and games from 5.0.17 on; the 8-worker
     patch is the previous era (`?era=before`). A game's release string

@@ -196,6 +196,9 @@ function sanitizeGlobalFilters(raw) {
   const until = validDate(source.until);
   if (since) out.since = since;
   if (until) out.until = until;
+  if (source.patchEra === "after" || source.patchEra === "before") {
+    out.patchEra = source.patchEra;
+  }
 
   const race = filterRaceLetter(source.race);
   const oppRace = filterRaceLetter(source.oppRace);

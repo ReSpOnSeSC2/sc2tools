@@ -118,7 +118,7 @@ function gameKey(record) { return `${record.userId}|${record.gameId}`; }
  * @param {boolean} [history] */
 function sourceMatchStages(userId, filters, opts, history = false) {
   const scoped = { ...filters };
-  if (opts.view === "periods") { delete scoped.since; delete scoped.until; }
+  if (opts.view === "periods") { delete scoped.since; delete scoped.until; delete scoped.patchEra; }
   const pipeline = [{ $match: gamesMatchStage(userId, history ? {} : scoped) }];
   if (opts.view === "periods") pipeline.push({ $match: { $or: [
     { date: { $gte: opts.aSince, $lte: opts.aUntil } },
