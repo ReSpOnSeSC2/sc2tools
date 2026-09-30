@@ -12,6 +12,7 @@ const {
   releaseReplayIngestAdmission,
 } = require("../middleware/replayIngestAdmission");
 const { registerGamesExistsRoute } = require("./gamesExists");
+const { normalizePoolBuildNames } = require("../util/poolBuildNames");
 const {
   stampIngestProvenance,
   admitBrowserBatch,
@@ -528,6 +529,10 @@ function buildGamesRouter(deps) {
         const game = /** @type {any} */ (validation.value);
         // Provenance comes from the verified credential, never the payload.
         stampIngestProvenance(game, auth);
+        // Agents from the 8-worker patch still label pool-first openers
+        // "8 Pool"; on a 12-worker game (5.0.17 on) they are "12 Pool"
+        // before any classification, sample or aggregate reads them.
+        normalizePoolBuildNames(game);
         // v0.4.3 storage trim: drop the redundant earlyBuildLog /
         // oppEarlyBuildLog fields if the agent (or a back-compat
         // caller) still sends them. They are derivable from
