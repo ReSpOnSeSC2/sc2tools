@@ -55,8 +55,11 @@ describe("Coaching Locker patch filters", () => {
     // A 5.0.16 game played the day the 5.0.17 notes came out.
     expect(picker.gameEra({ d: "2026-09-30", e: "before" })).toBe("before");
     expect(picker.gameEra({ d: "2026-10-08", e: "after" })).toBe("after");
+    // A 5.0.17 PTR game from the site.
+    expect(picker.gameEra({ d: "2026-09-30", e: "after" })).toBe("after");
+    // No era: 8 workers from 5.0.16 until 5.0.17 reaches the live ladder.
     expect(picker.gameEra({ d: "2026-08-01" })).toBe("before");
-    expect(picker.gameEra({ d: "2026-09-30" })).toBe("after");
+    expect(picker.gameEra({ d: "2026-09-30" })).toBe("before");
     expect(picker.gameEra({ d: "2026-06-01" })).toBe("after");
   });
 });

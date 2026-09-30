@@ -5,8 +5,9 @@
  * The analyzer's patch filter (``patch_era``). 5.0.17's notes came out on
  * 30 Sep 2026, but the ladder stays on 5.0.16 until the patch goes live, so
  * the "After 5.0.17" preset cannot be a date alone: each game is kept by
- * its own version (util/patchEra.js), with the date as the fallback for a
- * game that carries none. Covers parseFilters, gamesMatchStage against a
+ * its own version (util/patchEra.js): a 5.0.17 PTR game is 12-worker, a live
+ * 5.0.16 game is 8-worker, and a game with no version falls back to its
+ * date (8-worker from 5.0.16 until 5.0.17 reaches the live ladder). Covers parseFilters, gamesMatchStage against a
  * real Mongo, the Opponents list and an opponent's profile.
  */
 
@@ -29,13 +30,16 @@ const GAMES = [
   { gameId: "g16-july", gameVersion: "5.0.16.97425", gameBuild: 97425, date: "2026-07-01T12:00:00Z" },
   { gameId: "g17", gameVersion: "5.0.17.98000", gameBuild: 98000, date: "2026-10-08T12:00:00Z" },
   { gameId: "g15", gameVersion: "5.0.15.96883", gameBuild: 96883, date: "2026-05-01T12:00:00Z" },
-  // No version or build: the date decides.
+  // A 5.0.17 PTR game (12 workers), played the day the notes came out.
+  { gameId: "ptr17", gameVersion: "5.0.17.98123", gameBuild: 98123, date: "2026-09-30T22:00:00Z", toon: "98-S2-1-" },
+  // No version or build: the date decides, and live is on 5.0.16 until
+  // 5.0.17 ships.
   { gameId: "date-only-oct", date: "2026-10-02T12:00:00Z" },
   { gameId: "date-only-aug", date: "2026-08-02T12:00:00Z" },
 ];
 
 function gameRow(g, i) {
-  const pulseId = `1-S2-1-${1000 + i}`;
+  const pulseId = `${g.toon || "1-S2-1-"}${1000 + i}`;
   return {
     userId: USER,
     gameId: g.gameId,
@@ -103,13 +107,13 @@ describe("patch_era filter", () => {
   });
 
   test("After 5.0.17 keeps 12-worker games only, not 5.0.16 games played after the notes", async () => {
-    expect(await matchedIds(TWELVE_WORKER)).toEqual(["date-only-oct", "g17"]);
+    expect(await matchedIds(TWELVE_WORKER)).toEqual(["g17", "ptr17"]);
     // The date alone is what the preset used to send.
     expect(await matchedIds({ since: R17 })).toContain("g16-revert-day");
   });
 
   test("5.0.16 keeps every 5.0.16 game, including those after the notes", async () => {
-    expect(await matchedIds(EIGHT_WORKER)).toEqual(["date-only-aug", "g16-july", "g16-revert-day"]);
+    expect(await matchedIds(EIGHT_WORKER)).toEqual(["date-only-aug", "date-only-oct", "g16-july", "g16-revert-day"]);
   });
 
   test("the Opponents list leaves out opponents met only on 5.0.16", async () => {
@@ -118,10 +122,11 @@ describe("patch_era filter", () => {
       const { items } = await svc.list(USER, { filters: parseFilters(query) });
       return items.map((o) => o.displayNameSample).sort();
     };
-    expect(await names(TWELVE_WORKER)).toEqual(["date-only-oct", "g17"]);
-    expect(await names(EIGHT_WORKER)).toEqual(["date-only-aug", "g16-july", "g16-revert-day"]);
+    expect(await names(TWELVE_WORKER)).toEqual(["g17", "ptr17"]);
+    const eightWorker = ["date-only-aug", "date-only-oct", "g16-july", "g16-revert-day"];
+    expect(await names(EIGHT_WORKER)).toEqual(eightWorker);
     // A patch filter alone still leaves the lifetime fast path.
-    expect(await names({ patch_era: "before" })).toEqual(["date-only-aug", "g16-july", "g16-revert-day"]);
+    expect(await names({ patch_era: "before" })).toEqual(eightWorker);
   });
 
   test("an opponent's profile counts only the selected patch's games", async () => {
@@ -133,5 +138,9 @@ describe("patch_era filter", () => {
     const before = await svc.get(USER, pulseId, { filters: parseFilters(EIGHT_WORKER) });
     expect(before.games.map((g) => g.id)).toEqual(["g16-revert-day"]);
     expect(before.totals).toMatchObject({ wins: 1, total: 1 });
+    // The PTR opponent is a 12-worker game.
+    const ptr = gameRow(GAMES[4], 4).opponent.pulseId;
+    expect((await svc.get(USER, ptr, { filters: parseFilters(TWELVE_WORKER) })).games.map((g) => g.id)).toEqual(["ptr17"]);
+    expect((await svc.get(USER, ptr, { filters: parseFilters(EIGHT_WORKER) })).games).toEqual([]);
   });
 });

@@ -280,9 +280,10 @@ function presetRange(p,cA,cB){
 function pkRange(){return presetRange(PK.preset,PK.cA,PK.cB)}
 // The patch filters keep each game's own patch, since 5.0.16 games are still
 // played after the 5.0.17 notes: the era the site sends ("after" = 12
-// workers, "before" = the 8-worker patch 5.0.16), else the game's day.
+// workers, "before" = the 8-worker patch 5.0.16), else the game's day (from
+// 5.0.16 on is 8 workers until 5.0.17 reaches the live ladder).
 function presetEra(p){return p==="after_5_0_17"?"after":p==="patch_5_0_16"?"before":""}
-function gameEra(g){return g.e||(g.d>="2026-06-22"&&g.d<"2026-09-30"?"before":"after")}
+function gameEra(g){return g.e||(g.d>="2026-06-22"?"before":"after")}
 let S; try{S=JSON.parse(document.getElementById("state0").textContent)}catch(e){S={v:1,setup:false,pin:null,coach:"ReSpOnSe",students:[],assets:{}}}
 if(!S.customBuilds)S.customBuilds=[];
 if(!S.wsTemplates)S.wsTemplates=[];

@@ -401,10 +401,11 @@ corresponding GitHub Release.
   - The analyzer's date filter adds **After 5.0.17 · 12 workers**, the new
     default, and the 8-worker filter is now **5.0.16 · 8 workers**. Both keep
     each game by the patch it was played on: the ladder stays on 5.0.16
-    after the 5.0.17 notes, and those games count as 8 workers, not 5.0.17.
-    A game with no version falls back to its date, split at midnight US
-    Eastern on 30 September. A saved "After 5.0.16" filter moves to the
-    12-worker one. The Coaching Locker's filters match.
+    after the 5.0.17 notes, and those games count as 8 workers, while games
+    on the 5.0.17 PTR count as 12. A game with no version falls back to its
+    date, which counts as 8 workers from 5.0.16 until 5.0.17 reaches the live
+    ladder. A saved "After 5.0.16" filter moves to the 12-worker one. The
+    Coaching Locker's filters match.
     - Every analyzer tab, the Opponents list and opponent profiles apply the
       patch through the new `patch_era` query parameter (`after` or
       `before`).

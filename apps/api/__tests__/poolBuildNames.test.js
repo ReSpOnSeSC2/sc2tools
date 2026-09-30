@@ -39,9 +39,13 @@ describe("util/poolBuildNames", () => {
   test.each([
     ["5.0.17", { gameVersion: "5.0.17.98000" }, TWELVE],
     ["5.0.15", { gameVersion: "5.0.15.96883" }, TWELVE],
-    ["date-only from 30 Sep 2026", { date: "2026-10-01T12:00:00.000Z" }, TWELVE],
+    ["5.0.17 PTR, after the notes", { gameVersion: "5.0.17.98123", date: "2026-09-30T21:00:00.000Z" }, TWELVE],
+    ["date-only before 5.0.16", { date: "2026-05-01T12:00:00.000Z" }, TWELVE],
     ["5.0.16", { gameVersion: "5.0.16.97425" }, EIGHT],
     ["date-only 8-worker", { date: "2026-07-01T12:00:00.000Z" }, EIGHT],
+    // Live stays on 5.0.16 until 5.0.17 ships, so a version-less game after
+    // the notes is 8-worker.
+    ["date-only after the 5.0.17 notes", { date: "2026-10-01T12:00:00.000Z" }, EIGHT],
   ])("a %s game gets its patch's names from either spelling", (_label, era, expected) => {
     for (const sent of [TWELVE, EIGHT]) {
       const game = { ...era, ...structuredClone(sent) };

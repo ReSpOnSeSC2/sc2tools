@@ -62,7 +62,9 @@ describe("dnaTimings.computeMatchupAwareMedianTimings", () => {
     expect(warpGateAt({ gameVersion: "5.0.16.97425" })).toBe("2:56");
     expect(warpGateAt({ date: "2026-07-15T00:00:00.000Z" })).toBe("2:56");
     expect(warpGateAt({ gameVersion: "5.0.17.98000" })).toBe("2:53");
-    expect(warpGateAt({ date: "2026-09-30T04:00:00.000Z" })).toBe("2:53");
+    // Live stays on 5.0.16 after the 5.0.17 notes; a 5.0.17 PTR game does not.
+    expect(warpGateAt({ date: "2026-09-30T04:00:00.000Z" })).toBe("2:56");
+    expect(warpGateAt({ gameVersion: "5.0.17.98123", date: "2026-09-30T21:00:00.000Z" })).toBe("2:53");
     expect(warpGateAt({})).toBe("2:53");
   });
 });

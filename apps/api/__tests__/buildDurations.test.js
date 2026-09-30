@@ -107,12 +107,17 @@ describe("services/buildDurations", () => {
     });
 
     test("date-only rows follow the era rule's 8-worker window", () => {
-      // 5.0.16 went live 2026-06-22T19:15Z; 5.0.17 from 2026-09-30T04:00Z.
+      // 5.0.16 went live 2026-06-22T19:15Z. Live stays on 5.0.16 after the
+      // 5.0.17 notes (2026-09-30), until 5.0.17 ships.
       const adeptOn = (iso) => buildSecondsFor("Adept", { game: { date: new Date(iso) } });
       expect(adeptOn("2026-07-01T00:00:00Z")).toBe(33);
       expect(adeptOn("2026-09-30T03:59:59Z")).toBe(33);
-      expect(adeptOn("2026-09-30T04:00:00Z")).toBe(27);
+      expect(adeptOn("2026-09-30T04:00:00Z")).toBe(33);
       expect(adeptOn("2026-06-01T00:00:00Z")).toBe(27);
+      // A 5.0.17 PTR game after the notes has the 12-worker times.
+      expect(buildSecondsFor("Adept", {
+        game: { gameVersion: "5.0.17.98123", date: new Date("2026-09-30T21:00:00Z") },
+      })).toBe(27);
       // A row with no era signal gets the live 12-worker values.
       expect(buildSecondsFor("Adept", { game: {} })).toBe(27);
       expect(buildSecondsFor("Adept", { game: null })).toBe(27);

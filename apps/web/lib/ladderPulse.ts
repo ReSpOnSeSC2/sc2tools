@@ -5,10 +5,7 @@ import {
   type MetaRow,
   type PatchEra,
 } from "@/lib/meta";
-import {
-  PATCH_5_0_16_RELEASE,
-  PATCH_5_0_17_RELEASE,
-} from "@/lib/datePresets";
+import { PATCH_5_0_16_RELEASE } from "@/lib/datePresets";
 import { isUnclassifiedBuild } from "@/lib/unclassifiedBuilds";
 
 const DAY_MS = 86_400_000;
@@ -17,6 +14,12 @@ const FUTURE_CLOCK_SKEW_MS = 5 * 60 * 1000;
 const PATCH_5_0_16_BUILD = 97_364;
 /** First live 5.0.17 build; null (open-ended) until it is known. */
 const PATCH_5_0_17_BUILD: number | null = null;
+/**
+ * When 5.0.17 reaches the live ladder; null (open-ended) until it is known,
+ * as live games stay on 5.0.16 while 5.0.17 is on the PTR. Mirrors
+ * PATCH_5_0_17_LIVE in apps/api/src/util/patchEra.js.
+ */
+const PATCH_5_0_17_LIVE: Date | null = null;
 /** Release strings of the 8-worker game: every 5.0.16 build and hotfix. */
 const EIGHT_WORKER_VERSION_RE = /^5\.0\.16\./;
 
@@ -347,8 +350,8 @@ export function metaSelectionForGame(
  * (before 5.0.16 and from 5.0.17 on). Precedence: the release string
  * ("5.0.16.*" is 8-worker, any other string 12-worker), then the numeric
  * build (8-worker from the first 5.0.16 build up to the first 5.0.17
- * build), then replay time (8-worker from the 5.0.16 release until
- * 5.0.17). A malformed legacy row defaults to the live era rather than
+ * build), then replay time (8-worker from the 5.0.16 release until 5.0.17
+ * reaches the live ladder). A malformed legacy row defaults to the live era rather than
  * surfacing obsolete 8-worker guidance.
  */
 export function patchEraForGame(
@@ -367,7 +370,7 @@ export function patchEraForGame(
   const playedAt = finiteTimestamp(game?.date);
   return playedAt !== null &&
     playedAt >= PATCH_5_0_16_RELEASE.getTime() &&
-    playedAt < PATCH_5_0_17_RELEASE.getTime()
+    (PATCH_5_0_17_LIVE === null || playedAt < PATCH_5_0_17_LIVE.getTime())
     ? "before"
     : "after";
 }

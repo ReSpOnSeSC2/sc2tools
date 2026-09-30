@@ -15,6 +15,7 @@ const {
   PATCH_5_0_16_BUILD,
   PATCH_5_0_16_RELEASE,
   PATCH_5_0_17_BUILD,
+  PATCH_5_0_17_LIVE,
   PATCH_5_0_17_RELEASE,
   PATCH_ERA_RULE,
   PATCH_ERAS,
@@ -30,7 +31,10 @@ const MINUTE_MS = 60_000;
 const PRE_WINDOW_DATE = new Date(PATCH_5_0_16_RELEASE.getTime() - MINUTE_MS);
 /** 8-worker patch 5.0.16. */
 const IN_WINDOW_DATE = new Date(PATCH_5_0_16_RELEASE.getTime() + MINUTE_MS);
-/** 12-worker game again from 5.0.17. */
+/**
+ * After the 5.0.17 notes, while 5.0.17 is on the PTR and live is still
+ * 5.0.16: only the release string can tell the two apart.
+ */
 const POST_WINDOW_DATE = new Date(PATCH_5_0_17_RELEASE.getTime() + MINUTE_MS);
 
 /**
@@ -45,6 +49,8 @@ const MATRIX = [
   ["version 5.0.16 unparsable build", { gameVersion: "5.0.16.beta", date: POST_WINDOW_DATE }, "before"],
   ["version 5.0.15", { gameVersion: "5.0.15.95299", date: IN_WINDOW_DATE }, "after"],
   ["version 5.0.17", { gameVersion: "5.0.17.98000", gameBuild: 98000, date: IN_WINDOW_DATE }, "after"],
+  ["5.0.17 PTR game after the notes", { gameVersion: "5.0.17.98123", gameBuild: 98123, date: POST_WINDOW_DATE }, "after"],
+  ["live 5.0.16 game after the notes", { gameVersion: "5.0.16.97563", gameBuild: 97563, date: POST_WINDOW_DATE }, "before"],
   ["version wins over build", { gameVersion: "5.0.17.1", gameBuild: 97425 }, "after"],
   ["version wins over build (8-worker)", { gameVersion: "5.0.16.97425", gameBuild: 1 }, "before"],
   ["version 5.0.160 is not 5.0.16", { gameVersion: "5.0.160.1" }, "after"],
@@ -63,9 +69,10 @@ const MATRIX = [
   ["date before 5.0.16", { date: PRE_WINDOW_DATE }, "after"],
   ["date at 5.0.16 release", { date: new Date(PATCH_5_0_16_RELEASE.getTime()) }, "before"],
   ["date in the 8-worker window", { date: IN_WINDOW_DATE }, "before"],
-  ["date just before 5.0.17", { date: new Date(PATCH_5_0_17_RELEASE.getTime() - 1) }, "before"],
-  ["date at 5.0.17 release", { date: new Date(PATCH_5_0_17_RELEASE.getTime()) }, "after"],
-  ["date after 5.0.17", { date: POST_WINDOW_DATE }, "after"],
+  ["date just before the 5.0.17 notes", { date: new Date(PATCH_5_0_17_RELEASE.getTime() - 1) }, "before"],
+  // 5.0.17's live date is not known yet: live games stay on 5.0.16.
+  ["date at the 5.0.17 notes", { date: new Date(PATCH_5_0_17_RELEASE.getTime()) }, "before"],
+  ["date after the 5.0.17 notes", { date: POST_WINDOW_DATE }, "before"],
   // No era.
   ["no era: nothing", {}, null],
   ["no era: string date", { date: IN_WINDOW_DATE.toISOString() }, null],
@@ -115,10 +122,13 @@ describe("util/patchEra", () => {
     }
   });
 
-  test("the 8-worker window is 5.0.16 until today's 5.0.17 revert", () => {
+  test("the 8-worker window is 5.0.16 until 5.0.17 reaches the live ladder", () => {
     expect(PATCH_ERA_RULE).toBe(2);
     expect(PATCH_5_0_17_RELEASE.toISOString()).toBe("2026-09-30T04:00:00.000Z");
+    // Both open-ended while 5.0.17 is on the PTR; set them when it ships.
     expect(PATCH_5_0_17_BUILD).toBeNull();
+    expect(PATCH_5_0_17_LIVE).toBeNull();
+    expect(isEightWorkerGame({ gameVersion: "5.0.17.98123", date: POST_WINDOW_DATE })).toBe(false);
     expect(isEightWorkerGame({ gameVersion: "5.0.16.97425" })).toBe(true);
     expect(isEightWorkerGame({ gameVersion: "5.0.17.98000" })).toBe(false);
     expect(isEightWorkerGame({ gameVersion: "5.0.15.95299" })).toBe(false);
@@ -131,7 +141,7 @@ describe("util/patchEra", () => {
   test("ingest payloads carry an ISO date string", () => {
     expect(eraForGame({ date: IN_WINDOW_DATE.toISOString() })).toBe("before");
     expect(eraForGame({ date: PRE_WINDOW_DATE.toISOString() })).toBe("after");
-    expect(eraForGame({ date: POST_WINDOW_DATE.toISOString() })).toBe("after");
+    expect(eraForGame({ date: POST_WINDOW_DATE.toISOString() })).toBe("before");
     expect(eraForGame({ date: "not a date" })).toBeNull();
   });
 
