@@ -2,6 +2,16 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.17.5
+
+### Changed - pool openers are named by the replay's patch
+
+- On 5.0.16, the 8-worker patch, the pool-first openers are named "8 Pool".
+  On every other patch they are "12 Pool": before 5.0.16, and from 5.0.17,
+  which restored 12 starting workers.
+- 0.17.4 named them "12 Pool" on every patch. The website stores 8-worker
+  games as "8 Pool" whichever agent sends them.
+
 ## 0.17.4
 
 ### Changed - 12 starting workers are back (StarCraft II 5.0.17)

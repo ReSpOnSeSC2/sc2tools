@@ -12,7 +12,7 @@
  */
 
 /** Replay-engine release the browser bundle is built from. */
-export const INSTANT_ENGINE_VERSION = "1.6.4";
+export const INSTANT_ENGINE_VERSION = "1.6.5";
 
 /** Self-hosted Pyodide release (CPython compiled to WebAssembly). */
 export const PYODIDE_VERSION = "314.0.7";
