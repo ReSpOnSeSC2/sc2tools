@@ -389,10 +389,11 @@ corresponding GitHub Release.
   - The four pool-first openers are named "12 Pool" again ("Zerg - 12
     Pool", "ZvP - 12 Pool Rush", "ZvZ - 12 Pool into Baneling", "ZvZ - 12
     Pool Speedling"). Old `/guides/…/8-pool` links redirect to the 12 Pool
-    pages. Games played on 5.0.16 keep their "8 Pool" label. Any other game
-    uploaded with an "8 Pool" label, for example from an agent older than
-    0.17.4, is stored as "12 Pool". The stream overlay's cheese alert also
-    fires on 12 Pool.
+    pages. Any upload with an "8 Pool" label, for example from an agent older
+    than 0.17.4, is stored as "12 Pool". The one-shot script
+    `apps/api/src/db/migrations/2026-09-30-rename-8-pool-builds.js` renames
+    labels already stored on games, guide samples and guide notes. The stream
+    overlay's cheese alert also fires on 12 Pool.
   - The analyzer's date filter adds **After 5.0.17 · 12 workers**. It starts
     at midnight US Eastern on 30 September and is the new default. The
     8-worker filter now ends at that same moment: **5.0.16 · 8 workers (until

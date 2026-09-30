@@ -66,7 +66,7 @@ describe("DoctorBanner replay archive prompt", () => {
   });
 
   it("uses the latest-version message for a missing agent", () => {
-    useReleaseInfoMock.mockReturnValue({ data: { latest: "0.17.4" } });
+    useReleaseInfoMock.mockReturnValue({ data: { latest: "9.9.9" } });
     useApiMock.mockReturnValue({
       data: {
         ok: false,
@@ -82,7 +82,7 @@ describe("DoctorBanner replay archive prompt", () => {
     render(<DoctorBanner />);
 
     expect(screen.getByText(
-      "SC2 Tools Agent v0.17.4 needs to be turned on or installed",
+      "SC2 Tools Agent v9.9.9 needs to be turned on or installed",
     )).toBeTruthy();
     expect(screen.queryByText("legacy server copy")).toBeNull();
     expect(useReleaseInfoMock).toHaveBeenCalledWith("windows");

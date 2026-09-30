@@ -3,9 +3,8 @@
 
 /**
  * util/poolBuildNames.js + POST /games — agents from the 8-worker patch
- * still send "8 Pool" labels; ingest renames them to "12 Pool" on
- * 12-worker games (5.0.17 on, or before 5.0.16) and leaves 5.0.16 games
- * alone.
+ * still send "8 Pool" labels; ingest stores the catalog's "12 Pool" names,
+ * whichever patch the game was played on.
  */
 
 const express = require("express");
@@ -24,23 +23,21 @@ describe("util/poolBuildNames", () => {
   });
 
   test.each([
-    ["5.0.17", { gameVersion: "5.0.17.98000" }, true],
-    ["5.0.15", { gameVersion: "5.0.15.96883" }, true],
-    ["a date from 30 Sep 2026", { date: "2026-10-01T12:00:00.000Z" }, true],
-    ["5.0.16", { gameVersion: "5.0.16.97425" }, false],
-    ["a date in the 8-worker window", { date: "2026-07-01T12:00:00.000Z" }, false],
-    ["no era signal", {}, false],
-  ])("a %s game is renamed: %s", (_label, era, renamed) => {
+    ["5.0.17", { gameVersion: "5.0.17.98000" }],
+    ["5.0.16", { gameVersion: "5.0.16.97425" }],
+    ["5.0.15", { gameVersion: "5.0.15.96883" }],
+    ["no era signal", {}],
+  ])("a %s game gets the 12 Pool names", (_label, era) => {
     const game = {
       ...era,
       myBuild: "ZvZ - 8 Pool Speedling",
       opponent: { race: "Zerg", strategy: "Zerg - 8 Pool" },
       opp_strategy: "ZvP - 8 Pool Rush",
     };
-    expect(normalizePoolBuildNames(game)).toBe(renamed);
-    expect(game).toMatchObject(renamed
-      ? { myBuild: "ZvZ - 12 Pool Speedling", opponent: { strategy: "Zerg - 12 Pool" }, opp_strategy: "ZvP - 12 Pool Rush" }
-      : { myBuild: "ZvZ - 8 Pool Speedling", opponent: { strategy: "Zerg - 8 Pool" }, opp_strategy: "ZvP - 8 Pool Rush" });
+    expect(normalizePoolBuildNames(game)).toBe(true);
+    expect(game).toMatchObject({
+      myBuild: "ZvZ - 12 Pool Speedling", opponent: { strategy: "Zerg - 12 Pool" }, opp_strategy: "ZvP - 12 Pool Rush",
+    });
   });
 
   test("other labels, missing fields and junk are untouched", () => {
@@ -52,7 +49,7 @@ describe("util/poolBuildNames", () => {
   });
 });
 
-describe("POST /games renames 8 Pool labels on 12-worker games", () => {
+describe("POST /games stores 8 Pool labels as 12 Pool", () => {
   function buildTestApp() {
     const upserts = [];
     const games = {
@@ -75,7 +72,7 @@ describe("POST /games renames 8 Pool labels on 12-worker games", () => {
     return { app, upserts };
   }
 
-  test("a 5.0.17 upload is stored as 12 Pool; a 5.0.16 upload keeps 8 Pool", async () => {
+  test("5.0.17 and 5.0.16 uploads are both stored as 12 Pool", async () => {
     const { app, upserts } = buildTestApp();
     const game = {
       date: "2026-10-01T12:00:00.000Z",
@@ -94,6 +91,6 @@ describe("POST /games renames 8 Pool labels on 12-worker games", () => {
     expect(res.status).toBe(202);
     const byId = Object.fromEntries(upserts.map((g) => [g.gameId, g]));
     expect(byId.g17).toMatchObject({ myBuild: "Zerg - 12 Pool", opponent: { strategy: "ZvZ - 12 Pool into Baneling" } });
-    expect(byId.g16).toMatchObject({ myBuild: "Zerg - 8 Pool", opponent: { strategy: "ZvZ - 8 Pool into Baneling" } });
+    expect(byId.g16).toMatchObject({ myBuild: "Zerg - 12 Pool", opponent: { strategy: "ZvZ - 12 Pool into Baneling" } });
   });
 });

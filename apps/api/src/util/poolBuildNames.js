@@ -1,17 +1,16 @@
 "use strict";
 
 /**
- * Pool-first opener names by starting-worker count.
+ * Pool-first opener names.
  *
  * The classifier named these openers "8 Pool" during the 8-worker patch
  * 5.0.16 (agents 0.14.3 to 0.17.3) and "12 Pool" before it and again from
- * 5.0.17, which restored 12 starting workers. Agents from before the
- * revert keep sending "8 Pool", so ingest renames those labels on
- * 12-worker games: every game from 5.0.17 on carries the 12 Pool name
- * whichever agent uploaded it. Games played on 5.0.16 keep their label.
+ * 5.0.17, which restored 12 starting workers. The catalog, the guides and
+ * agent 0.17.4 know only the 12 Pool names, whichever patch a game was
+ * played on (the guides' 8-worker view carries that context), so ingest
+ * renames the labels older agents still send, and the one-shot migration
+ * db/migrations/2026-09-30-rename-8-pool-builds.js renames stored ones.
  */
-
-const { PATCH_ERA_AFTER, eraForGame } = require("./patchEra");
 
 /** 8-worker patch label → the 12-worker game's label. */
 const TWELVE_POOL_NAMES = Object.freeze({
@@ -31,17 +30,16 @@ function twelvePoolName(name) {
 }
 
 /**
- * Rename 8 Pool labels to 12 Pool, in place, on a 12-worker game
- * (util/patchEra.js "after"). A game with no era signal is left alone.
+ * Rename 8 Pool labels to 12 Pool, in place.
  *
- * Example: a 5.0.17 game with `myBuild: "Zerg - 8 Pool"` → "Zerg - 12 Pool";
- * the same label on a 5.0.16 game is unchanged.
+ * Example: `myBuild: "Zerg - 8 Pool"` → "Zerg - 12 Pool";
+ * `opponent.strategy: "ZvP - 8 Pool Rush"` → "ZvP - 12 Pool Rush".
  *
  * @param {Record<string, any>|null|undefined} game an ingest payload
  * @returns {boolean} true when a label changed
  */
 function normalizePoolBuildNames(game) {
-  if (!game || eraForGame(game) !== PATCH_ERA_AFTER) return false;
+  if (!game) return false;
   let changed = false;
   const myBuild = twelvePoolName(game.myBuild);
   if (myBuild) {
@@ -63,4 +61,4 @@ function normalizePoolBuildNames(game) {
   return changed;
 }
 
-module.exports = { TWELVE_POOL_NAMES, normalizePoolBuildNames };
+module.exports = { TWELVE_POOL_NAMES, twelvePoolName, normalizePoolBuildNames };

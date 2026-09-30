@@ -13,6 +13,7 @@ const {
   PATCH_ERA_AFTER,
   PATCH_ERA_BEFORE,
   PATCH_ERA_RULE,
+  PATCH_5_0_17_RELEASE,
   dateMs,
   eraForGame,
 } = require("../util/patchEra");
@@ -637,13 +638,14 @@ class GuideSamplesService {
 
 /**
  * Relabel samples stored under era rule 1 (no ``eraRule``, or 1),
- * idempotently. Rule 1 had
- * "after" = patch 5.0.16 and later and "before" = earlier games; rule 2
- * has "after" = the 12-worker game and "before" = the 8-worker patch
- * 5.0.16. A sample keeps no game version, so the labels are swapped: exact
- * for every rule-1 row captured before 5.0.17 went live, which is all of
- * them when this ships with the rule. The admin samples backfill
- * re-derives every era from the games themselves if in doubt.
+ * idempotently. Rule 1 had "after" = patch 5.0.16 and later and "before"
+ * = earlier games; rule 2 has "after" = the 12-worker game and "before" =
+ * the 8-worker patch 5.0.16. A sample keeps no game version, so the
+ * labels are swapped. That is exact for games played before the day of
+ * the 5.0.17 revert, when rule-1 "after" could only be 5.0.16. From that
+ * day on, a rule-1 "after" may be a 12-worker game, so those rows stay
+ * unstamped: readers ignore them until the admin samples backfill (or a
+ * re-upload) re-derives their era from the game.
  *
  * Example: `await relabelEraRule(db.guideSamples)` → 1234 (rows relabelled).
  *
@@ -651,10 +653,16 @@ class GuideSamplesService {
  * @returns {Promise<number>} rows relabelled
  */
 async function relabelEraRule(coll) {
+  const revertDay = new Date(Math.floor(PATCH_5_0_17_RELEASE.getTime() / DAY_MS) * DAY_MS);
   const res = await coll.updateMany(
-    // Only rule-1 rows: a later rule must bring its own conversion rather
-    // than swap rows this one already labelled.
-    { eraRule: { $in: [null, 1] }, era: { $in: [PATCH_ERA_AFTER, PATCH_ERA_BEFORE] } },
+    {
+      // Only rule-1 rows: a later rule must bring its own conversion rather
+      // than swap rows this one already labelled.
+      eraRule: { $in: [null, 1] },
+      era: { $in: [PATCH_ERA_AFTER, PATCH_ERA_BEFORE] },
+      // Rows without ``playedOn`` (older captures) go by capture time.
+      $or: [{ playedOn: { $lt: revertDay } }, { playedOn: null, createdAt: { $lt: revertDay } }],
+    },
     [
       {
         $set: {

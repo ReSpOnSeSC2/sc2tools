@@ -57,6 +57,22 @@ describe("guide_samples era rule", () => {
     expect(await eras()).toEqual(once);
   });
 
+  test("rule-1 rows played from the revert day on stay unstamped for the backfill", async () => {
+    await db.guideSamples.insertMany([
+      sampleRow({ gameHash: "day-before", era: "after", eraRule: 1, playedOn: new Date("2026-09-29T00:00:00Z") }),
+      sampleRow({ gameHash: "revert-day", era: "after", eraRule: 1, playedOn: new Date("2026-09-30T00:00:00Z") }),
+      sampleRow({ gameHash: "no-day-old", era: "after", eraRule: 1, createdAt: new Date("2026-09-28T12:00:00Z") }),
+      sampleRow({ gameHash: "no-day-new", era: "after", eraRule: 1, createdAt: new Date("2026-09-30T12:00:00Z") }),
+    ]);
+    expect(await relabelEraRule(db.guideSamples)).toBe(2);
+    expect(await eras()).toEqual({
+      "day-before": ["before", 2],
+      "no-day-new": ["after", 1],
+      "no-day-old": ["before", 2],
+      "revert-day": ["after", 1],
+    });
+  });
+
   test("rows stamped by a later rule are never swapped", async () => {
     await db.guideSamples.insertMany([
       sampleRow({ gameHash: "rule-1", era: "after", eraRule: 1 }),

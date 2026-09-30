@@ -91,7 +91,7 @@ describe("agentUpgradeNoticeState", () => {
       agentUpgradeNoticeState(
         [{ agentVersion: "0.16.1", lastSeenAt: "2026-08-13T16:59:30Z" }],
         NOW,
-        "0.17.4",
+        "9.9.9",
       ).kind,
     ).toBe("ready");
   });
@@ -213,7 +213,7 @@ describe("AgentUpgradeNotice", () => {
 
   it("uses the live latest release instead of the bundled fallback", () => {
     useReleaseInfoMock.mockReturnValue({
-      data: { latest: "0.17.4" },
+      data: { latest: "9.9.9" },
       isLoading: false,
       error: null,
     });
@@ -225,7 +225,7 @@ describe("AgentUpgradeNotice", () => {
     );
 
     expect(screen.getByText(
-      "SC2 Tools Agent v0.17.4 needs to be turned on or installed",
+      "SC2 Tools Agent v9.9.9 needs to be turned on or installed",
     )).toBeTruthy();
   });
 });
