@@ -32,6 +32,7 @@ vi.mock("@/lib/instant/localStore", () => ({ TRY_TTL_DAYS: 7, loadTryGames: mock
 vi.mock("@/lib/instant/uploader", () => ({ uploadGames: mocks.uploadGames }));
 
 import { SaveGamesCta, TryResume, classifyUpload, useTryUpload } from "../TryResume";
+import { INSTANT_ENGINE_VERSION } from "@/lib/instant/engineVersion";
 
 const GAMES: UploadableGame[] = [
   { gameId: "g1", json: '{"gameId":"g1"}' },
@@ -141,7 +142,7 @@ describe("SaveGamesCta signed in", () => {
     await waitFor(() => expect(mocks.push).toHaveBeenCalledWith("/app"));
     const [games, deps] = mocks.uploadGames.mock.calls[0] as [UploadableGame[], UploadDeps];
     expect(games).toEqual(GAMES);
-    expect(deps).toMatchObject({ apiBase: "https://api.test", engineVersion: "1.6.3" });
+    expect(deps).toMatchObject({ apiBase: "https://api.test", engineVersion: INSTANT_ENGINE_VERSION });
     expect(mocks.clearTryData).toHaveBeenCalledTimes(1);
     expect(mocks.gaEvent).toHaveBeenCalledWith("instant_upload_done", { games: 2 });
     expect(screen.getByText(/Saved! Taking you to your dashboard/)).toBeTruthy();
