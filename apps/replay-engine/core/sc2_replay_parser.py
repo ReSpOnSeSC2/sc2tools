@@ -39,7 +39,7 @@ except (ImportError, ModuleNotFoundError):
     class CorruptTrackerFileError(Exception):
         pass
 
-from .build_definitions import BUILD_DEFINITIONS
+from .build_definitions import BUILD_DEFINITIONS, name_for_game_version
 from .custom_builds import load_custom_builds
 from .event_extractor import build_log_lines, extract_events
 from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
@@ -506,6 +506,9 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
         ctx.me.race,
         game_length_seconds=ctx.length_seconds,
     )
+    # "8 Pool" on the 8-worker patch 5.0.16, "12 Pool" on every other patch.
+    ctx.opp_strategy = name_for_game_version(ctx.opp_strategy, ctx.game_version)
+    ctx.my_build = name_for_game_version(ctx.my_build, ctx.game_version)
 
     ctx.build_log = build_log_lines(my_events, cutoff_seconds=None)
     ctx.early_build_log = build_log_lines(my_events, cutoff_seconds=300)

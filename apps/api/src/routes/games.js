@@ -529,9 +529,10 @@ function buildGamesRouter(deps) {
         const game = /** @type {any} */ (validation.value);
         // Provenance comes from the verified credential, never the payload.
         stampIngestProvenance(game, auth);
-        // Agents from the 8-worker patch still label pool-first openers
-        // "8 Pool"; the catalog calls them "12 Pool" (5.0.17 restored 12
-        // workers), before any classification, sample or aggregate reads them.
+        // Pool-first openers are "8 Pool" on the 8-worker patch 5.0.16 and
+        // "12 Pool" on every other patch; older agents send one name for
+        // every patch. Fix it before any classification, sample or
+        // aggregate reads the label.
         normalizePoolBuildNames(game);
         // v0.4.3 storage trim: drop the redundant earlyBuildLog /
         // oppEarlyBuildLog fields if the agent (or a back-compat

@@ -37,6 +37,7 @@ from analytics.macro_score import compute_macro_score
 # matches the agent deep-parse path
 # (core/sc2_replay_parser.py) so a bulk-imported replay classifies
 # identically to a live-parsed one.
+from .build_definitions import name_for_game_version
 from .custom_builds import load_custom_builds
 from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
 
@@ -137,6 +138,10 @@ def process_replay_task(file_path: str, player_name: str) -> dict:
             me.play_race,
             game_length_seconds=length_sec,
         )
+        # "8 Pool" on the 8-worker patch 5.0.16, "12 Pool" on every other patch.
+        release = getattr(replay, 'release_string', None)
+        opp_strat = name_for_game_version(opp_strat, release)
+        my_build = name_for_game_version(my_build, release)
 
         build_log = []
         for e in sorted(my_events, key=lambda x: x['time']):
