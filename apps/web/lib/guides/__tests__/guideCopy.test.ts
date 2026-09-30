@@ -5,6 +5,10 @@ import {
   buildMapIntro,
   buildMatchupIntro,
   buildTimingsBlurb,
+  EIGHT_WORKER_PATCH,
+  eraPhrase,
+  eraShortLabel,
+  eraTitleTag,
   GUIDE_THIN_SAMPLE_GAMES,
   type GuideCopyLine,
 } from "@/lib/guides/guideCopy";
@@ -48,9 +52,17 @@ function renderedForms(n: number): string[] {
   ];
 }
 
-/** Digit runs left after removing payload strings (names, labels, patch). */
+/** The fixed era wording ("with 12 starting workers", "… patch 5.0.16"): copy, not payload numbers. */
+const ERA_WORDING_RE = new RegExp(
+  [eraPhrase("after"), eraPhrase("before")]
+    .map((phrase) => phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|"),
+  "gi",
+);
+
+/** Digit runs left after removing the era wording and payload strings (names, labels, patch). */
 function numericTokens(text: string, strings: string[]): string[] {
-  let scrubbed = text;
+  let scrubbed = text.replace(ERA_WORDING_RE, " ");
   const withDigits = strings.filter((s) => /\d/.test(s)).sort((a, b) => b.length - a.length);
   for (const s of withDigits) scrubbed = scrubbed.split(s).join(" ");
   return scrubbed.match(/\d[\d,.:]*\d|\d/g) ?? [];
@@ -296,24 +308,36 @@ describe("era wording", () => {
     ]);
   }
 
-  test("current-era copy says 'since patch', never 'on patch'", () => {
+  test("names the era's worker count, and the fixed 8-worker patch only for it", () => {
+    expect(EIGHT_WORKER_PATCH).toBe("5.0.16");
+    expect(eraPhrase("after")).toBe("with 12 starting workers");
+    expect(eraPhrase("before")).toBe("on the 8-worker patch 5.0.16");
+    expect(eraShortLabel("after")).toBe("12 workers");
+    expect(eraShortLabel("before")).toBe("8 workers · 5.0.16");
+    expect(eraTitleTag("after")).toBe("(12 workers)");
+    expect(eraTitleTag("before")).toBe("(8-worker patch 5.0.16)");
+  });
+
+  test("current-era copy says '12 starting workers', never a patch", () => {
+    // The current era is every 12-worker game (before 5.0.16 and 5.0.17 on),
+    // so "since patch <live patch>" would misstate what the numbers cover.
     const texts = overviews(FIXTURE_BUILD_PUBLISHED, FIXTURE_MATCHUP, FIXTURE_MAP);
     // 3 build + 2 matchup + 2 map templates.
     expect(new Set(texts).size).toBe(7);
     for (const text of texts) {
-      expect(text).toMatch(/since patch 5\.0\.16/i);
-      expect(text).not.toMatch(/on patch|before patch/i);
+      expect(text).toMatch(/with 12 starting workers/i);
+      expect(text).not.toMatch(/patch|8-worker/i);
     }
   });
 
-  test("pre-patch payloads say 'before patch' (the numbers are not from 5.0.16)", () => {
+  test("previous-era payloads name the 8-worker patch 5.0.16, never the live patch", () => {
     const build: GuideBuildPublished = { ...FIXTURE_BUILD_PUBLISHED, era: "before" };
     const matchup: GuideMatchupPayload = { ...FIXTURE_MATCHUP, era: "before" };
     const map: GuideMapPublished = { ...FIXTURE_MAP, era: "before" };
     const texts = overviews(build, matchup, map);
     for (const text of texts) {
-      expect(text).toMatch(/before patch 5\.0\.16/i);
-      expect(text).not.toMatch(/since patch|on patch/i);
+      expect(text).toMatch(/on the 8-worker patch 5\.0\.16/i);
+      expect(text).not.toMatch(/12-worker|5\.0\.17|since patch/i);
     }
     expectTraceable(buildIntro(build), build);
     expectTraceable(buildMatchupIntro(matchup), matchup);

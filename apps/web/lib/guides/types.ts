@@ -16,7 +16,11 @@ import type { GuideMatchup } from "@/lib/guides/slugs";
 
 export type { GuideMatchup } from "@/lib/guides/slugs";
 
-/** "after" = the current patch (5.0.16+); "before" = earlier games. */
+/**
+ * "after" = the live 12-worker game (before 5.0.16 and from 5.0.17 on);
+ * "before" = the 8-worker patch 5.0.16. A payload's `patch` names the
+ * live patch for both eras.
+ */
 export type GuideEra = "after" | "before";
 
 /** Which opponent-band axis a matchup page is filtered by. */
@@ -616,6 +620,11 @@ export interface GuideAdminVideo extends GuideVideo {
   hidden: boolean;
   /** A YouTube Short (never auto-matched to a guide). */
   isShort?: boolean;
+  /**
+   * Published during the 8-worker patch 5.0.16: never auto-matched to the
+   * 12-worker guides, shown on a build guide only when pinned.
+   */
+  eightWorkerPatch?: boolean;
 }
 
 export interface GuideAdminVideosPayload {

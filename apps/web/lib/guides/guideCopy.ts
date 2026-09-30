@@ -11,7 +11,9 @@
  * ALL DATA IS REAL: every number in a sentence is a value from the
  * payload (formatted, never computed), and each returned line lists
  * those raw values in `numbers` so tests can trace every rendered digit
- * back to its input. Sentences whose inputs are missing are skipped, and
+ * back to its input; the only other digits are the fixed era wording
+ * (`eraPhrase`: "with 12 starting workers", "on the 8-worker patch
+ * 5.0.16"). Sentences whose inputs are missing are skipped, and
  * unpublished payloads produce `[]` (callers render "Not enough games
  * yet"). Samples under twice the page floor get a plain small-sample
  * caveat.
@@ -89,14 +91,67 @@ function raceWord(matchup: string, index: number): string {
 }
 
 /**
- * Which games a payload covers. The current era is the patch label AND
- * everything after it ("since"), so the phrase stays true when a later
- * balance patch ships; "before" is every earlier game. Never "on patch".
- *
- * Example: `eraPhrase("after", "5.0.16")` → "since patch 5.0.16".
+ * The patch the previous ("before") era covers: 5.0.16 cut the starting
+ * workers from 12 to 8 and 5.0.17 restored them. A fixed historical fact,
+ * so it is not read from a payload (whose `patch` is the live patch).
  */
-function eraPhrase(era: GuideEra, patch: string): string {
-  return `${era === "before" ? "before" : "since"} patch ${patch}`;
+export const EIGHT_WORKER_PATCH = "5.0.16";
+
+interface EraWording {
+  /** Which games the numbers come from, mid-sentence. */
+  phrase: string;
+  /** Pill / badge / card label. */
+  short: string;
+  /** Page-title suffix. */
+  tag: string;
+}
+
+/**
+ * The current era is every 12-worker game — before 5.0.16 AND from
+ * 5.0.17 on — so it is named by worker count, never "since patch …"
+ * (that would drop the pre-5.0.16 games it also covers).
+ */
+const ERA_WORDING: Readonly<Record<GuideEra, EraWording>> = {
+  after: { phrase: "with 12 starting workers", short: "12 workers", tag: "(12 workers)" },
+  before: {
+    phrase: `on the 8-worker patch ${EIGHT_WORKER_PATCH}`,
+    short: `8 workers · ${EIGHT_WORKER_PATCH}`,
+    tag: `(8-worker patch ${EIGHT_WORKER_PATCH})`,
+  },
+};
+
+function eraWording(era: GuideEra): EraWording {
+  return era === "before" ? ERA_WORDING.before : ERA_WORDING.after;
+}
+
+/**
+ * Which games a payload covers, for running copy.
+ *
+ * Example: `eraPhrase("after")` → "with 12 starting workers";
+ * `eraPhrase("before")` → "on the 8-worker patch 5.0.16".
+ */
+export function eraPhrase(era: GuideEra): string {
+  return eraWording(era).phrase;
+}
+
+/**
+ * Short era label for pills, badges and social cards.
+ *
+ * Example: `eraShortLabel("after")` → "12 workers";
+ * `eraShortLabel("before")` → "8 workers · 5.0.16".
+ */
+export function eraShortLabel(era: GuideEra): string {
+  return eraWording(era).short;
+}
+
+/**
+ * Era suffix for page titles.
+ *
+ * Example: `eraTitleTag("after")` → "(12 workers)";
+ * `eraTitleTag("before")` → "(8-worker patch 5.0.16)".
+ */
+export function eraTitleTag(era: GuideEra): string {
+  return eraWording(era).tag;
 }
 
 function capitalize(text: string): string {
@@ -142,7 +197,7 @@ function compact(lines: ReadonlyArray<GuideCopyLine | null>): GuideCopyLine[] {
 interface BuildFacts {
   name: string;
   matchup: string;
-  /** "since patch 5.0.16" / "before patch 5.0.16". */
+  /** "with 12 starting workers" / "on the 8-worker patch 5.0.16". */
   when: string;
   wr: string;
   games: string;
@@ -167,7 +222,7 @@ function buildOverviewLine(p: GuideBuildPublished): GuideCopyLine {
   const facts: BuildFacts = {
     name: p.name,
     matchup: p.matchup,
-    when: eraPhrase(p.era, p.patch),
+    when: eraPhrase(p.era),
     wr: fmtPct(p.overall.winRate),
     games: fmtCount(p.overall.games),
     users: fmtCountNoun(p.overall.users, "player"),
@@ -229,7 +284,7 @@ function buildTrendLine(p: GuideBuildPublished): GuideCopyLine | null {
  *
  * Example: `buildIntro(published)[0].text` → "Stargate into Glaives wins
  * 54.2% of decided games across 1,234 PvZ ladder games from 87 players
- * since patch 5.0.16."
+ * with 12 starting workers."
  */
 export function buildIntro(payload: GuideBuildPayload | null | undefined): GuideCopyLine[] {
   if (!payload || !payload.published) return [];
@@ -429,7 +484,7 @@ const MATCHUP_OVERVIEW: ReadonlyArray<Variant<MatchupFacts>> = [
 function matchupOverviewLine(p: GuideMatchupPayload, games: number, users: number): GuideCopyLine {
   const facts: MatchupFacts = {
     matchup: p.matchup,
-    when: eraPhrase(p.era, p.patch),
+    when: eraPhrase(p.era),
     games: fmtCount(games),
     users: fmtCountNoun(users, "player"),
     have: users === 1 ? "has" : "have",
@@ -467,7 +522,7 @@ function matchupPopularLine(p: GuideMatchupPayload, topKey: string | null): Guid
  * Intro for a matchup page. Unpublished / no totals → [].
  *
  * Example: `buildMatchupIntro(published)[0].text` → "The guide sample
- * covers 18,412 PvZ ladder games from 634 players since patch 5.0.16."
+ * covers 18,412 PvZ ladder games from 634 players with 12 starting workers."
  */
 export function buildMatchupIntro(
   payload: GuideMatchupPayload | null | undefined,
@@ -545,13 +600,13 @@ function mapStandoutLine(rows: MapRows): GuideCopyLine | null {
  * Intro for a map page. Unpublished → [].
  *
  * Example: `buildMapIntro(published)[0].text` → "Alcyone LE has 2,418
- * tracked ladder games since patch 5.0.16."
+ * tracked ladder games with 12 starting workers."
  */
 export function buildMapIntro(payload: GuideMapPayload | null | undefined): GuideCopyLine[] {
   if (!payload || !payload.published) return [];
   const facts: MapFacts = {
     map: payload.map,
-    when: eraPhrase(payload.era, payload.patch),
+    when: eraPhrase(payload.era),
     games: fmtCount(payload.games),
   };
   const overview = pickVariant(MAP_OVERVIEW, payload.mapSlug, "overview");

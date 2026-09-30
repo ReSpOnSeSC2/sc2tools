@@ -8,7 +8,8 @@
  * from LadderPulse / Header, and the elevated table head of the retired
  * /meta radar.
  */
-import type { GuideCell, GuideMatchup } from "@/lib/guides/types";
+import { eraPhrase } from "@/lib/guides/guideCopy";
+import type { GuideCell, GuideEra, GuideMatchup } from "@/lib/guides/types";
 
 /** The site's signature card surface. */
 export const GUIDE_PANEL_CLASS =
@@ -95,12 +96,17 @@ export function oppRaceWord(matchup: GuideMatchup | string): string {
 }
 
 /**
- * "Current patch" wording for the era a payload covers.
+ * Which games a payload covers, worded by worker count (`eraPhrase`, the
+ * one implementation the guide copy shares). A payload's `patch` names
+ * the live patch for BOTH eras, so it is not part of the wording; the
+ * optional second argument is ignored and only keeps older
+ * `eraLabel(era, patch)` call sites compiling.
  *
- * Example: `eraLabel("after", "5.0.16")` → "since patch 5.0.16".
+ * Example: `eraLabel("after")` → "with 12 starting workers";
+ * `eraLabel("before")` → "on the 8-worker patch 5.0.16".
  */
-export function eraLabel(era: "after" | "before", patch: string): string {
-  return `${era === "before" ? "before" : "since"} patch ${patch}`;
+export function eraLabel(era: GuideEra, _patch?: string): string {
+  return eraPhrase(era);
 }
 
 /**

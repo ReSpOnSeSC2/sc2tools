@@ -87,7 +87,7 @@ describe("guide OG card data", () => {
     });
     expect(card?.stats).toEqual([
       { label: "Players", value: String(diamond?.users) },
-      { label: "Patch", value: "5.0.16" },
+      { label: "Game", value: "12 workers" },
     ]);
   });
 

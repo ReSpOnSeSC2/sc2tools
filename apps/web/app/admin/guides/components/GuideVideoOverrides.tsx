@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import {
   AdminNotice,
+  EIGHT_WORKER_BADGE,
   EMPTY_OVERRIDES,
   GUIDE_VIDEO_HIDDEN_MAX,
   GUIDE_VIDEO_PINNED_MAX,
@@ -192,7 +193,13 @@ function OverrideRow({
     <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 space-y-1">
         <p className="break-words text-body font-medium text-text">{video.title}</p>
-        <OverrideBadges pinned={pinned} hidden={hidden} autoMatch={video.builds.includes(buildKey)} hiddenEverywhere={video.hidden} />
+        <OverrideBadges
+          pinned={pinned}
+          hidden={hidden}
+          autoMatch={video.builds.includes(buildKey) && !video.eightWorkerPatch}
+          eightWorkerPatch={video.eightWorkerPatch === true}
+          hiddenEverywhere={video.hidden}
+        />
       </div>
       <div className="flex shrink-0 flex-wrap gap-2">
         <Button size="sm" variant={pinned ? "primary" : "secondary"} aria-pressed={pinned} aria-label={`Pin “${video.title}”`} disabled={disabled || pinFull} onClick={onPin}>Pin</Button>
@@ -206,11 +213,13 @@ function OverrideBadges({
   pinned,
   hidden,
   autoMatch,
+  eightWorkerPatch,
   hiddenEverywhere,
 }: {
   pinned: boolean;
   hidden: boolean;
   autoMatch: boolean;
+  eightWorkerPatch: boolean;
   hiddenEverywhere: boolean;
 }) {
   return (
@@ -218,6 +227,7 @@ function OverrideBadges({
       {pinned ? <Badge variant="accent" size="sm">Pinned</Badge> : null}
       {hidden ? <Badge variant="warning" size="sm">Hidden on this guide</Badge> : null}
       {autoMatch ? <Badge variant="cyan" size="sm">Auto match</Badge> : null}
+      {eightWorkerPatch ? <Badge size="sm">{EIGHT_WORKER_BADGE}</Badge> : null}
       {hiddenEverywhere ? <Badge variant="danger" size="sm">Hidden everywhere</Badge> : null}
     </div>
   );

@@ -43,7 +43,7 @@ describe("/guides hub", () => {
     const md = await hubMetadata();
     // publishedBuilds: PvT 2 + PvZ 4 + TvZ 1 + ZvP 2 = 9.
     expect(md.title).toBe(
-      "StarCraft II build order guides — 9 openers ranked by real ladder win rate (Patch 5.0.16) | SC2 Tools",
+      "StarCraft II build order guides — 9 openers ranked by real ladder win rate (12 workers) | SC2 Tools",
     );
     expect(md.alternates?.canonical).toBe("/guides");
     expect(md.robots).toBeUndefined();
@@ -106,7 +106,7 @@ describe("/guides/maps", () => {
     mocks.fetchGuideIndex.mockResolvedValue(ok(FIXTURE_INDEX));
     const md = await mapsMetadata();
     expect(md.title).toBe(
-      "SC2 ladder map guides — 3 maps with openers ranked by win rate (Patch 5.0.16) | SC2 Tools",
+      "SC2 ladder map guides — 3 maps with openers ranked by win rate (12 workers) | SC2 Tools",
     );
     expect(md.alternates?.canonical).toBe("/guides/maps");
     render(await MapGuidesPage());

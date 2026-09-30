@@ -65,7 +65,7 @@ export function GuideNotEnoughGames({
           size="md"
           icon={<Hourglass className="h-6 w-6" aria-hidden />}
           title="Not enough games yet"
-          description="We publish numbers only once enough players have logged enough ladder games with it this patch. Every game you upload counts toward it."
+          description="We publish numbers only once enough players have logged enough ladder games with it since 12 starting workers returned. Every game you upload counts toward it."
           action={
             <div className="flex flex-col items-center gap-2 sm:flex-row">
               <Link href="/sign-up" className={GUIDE_PRIMARY_ACTION_CLASS}>

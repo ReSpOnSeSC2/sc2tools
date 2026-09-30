@@ -78,7 +78,7 @@ function SignedInComparison({
   if (data.games === 0) {
     return (
       <p className={BOX_CLASS}>
-        You haven&apos;t played {buildName} on this patch yet — upload a few games to compare.
+        You haven&apos;t played {buildName} with 12 starting workers yet — upload a few games to compare.
       </p>
     );
   }

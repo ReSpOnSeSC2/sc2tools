@@ -12,7 +12,7 @@
 
 const NOW = "2026-09-27T03:12:44.000Z";
 const BASELINE = "2026-09-19T03:10:02.000Z";
-const PATCH = "5.0.16";
+const PATCH = "5.0.17";
 const MAP = "Fixture Station LE";
 const MAP_SLUG = "fixture-station-le";
 const WILSON_Z = 1.96;

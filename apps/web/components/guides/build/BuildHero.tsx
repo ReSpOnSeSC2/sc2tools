@@ -6,7 +6,7 @@ import { TrendBadge } from "@/components/guides/TrendBadge";
 import { eraLabel } from "@/components/guides/guideUi";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { fmtCount, fmtCountNoun, fmtGuideDate, fmtPct } from "@/lib/guides/format";
-import type { GuideCopyLine } from "@/lib/guides/guideCopy";
+import { eraShortLabel, type GuideCopyLine } from "@/lib/guides/guideCopy";
 import type { GhostTarget } from "@/lib/ghostBuild";
 import type { GuideBuildPublished } from "@/lib/guides/types";
 
@@ -18,10 +18,10 @@ import type { GuideBuildPublished } from "@/lib/guides/types";
  */
 
 /**
- * Example: "56.6% win rate over 146 games vs Diamond opponents since patch 5.0.16".
+ * Example: "56.6% win rate over 146 games vs Diamond opponents with 12 starting workers".
  */
 export function headlineSentence(payload: GuideBuildPublished): string {
-  const when = eraLabel(payload.era, payload.patch);
+  const when = eraLabel(payload.era);
   const { headline, overall } = payload;
   if (headline && headline.scope === "league" && headline.label) {
     return `${fmtPct(headline.winRate)} win rate over ${fmtCount(headline.games)} games vs ${headline.label} opponents ${when}`;
@@ -50,7 +50,7 @@ export function BuildHero({
       />
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant="cyan">{payload.matchup}</Badge>
-        <Badge variant="neutral">Patch {payload.patch}</Badge>
+        <Badge variant="neutral">{eraShortLabel(payload.era)}</Badge>
         <TrendBadge trend={payload.trend} isNew={payload.isNew} showDelta />
       </div>
       <p className="font-display text-h3 font-bold text-text" data-testid="guide-headline">

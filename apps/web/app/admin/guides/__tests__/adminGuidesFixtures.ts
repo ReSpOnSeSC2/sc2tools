@@ -28,6 +28,7 @@ export const ADMIN_VIDEO_GLAIVES: GuideAdminVideo = {
   source: "snapshot",
   hidden: false,
   isShort: false,
+  eightWorkerPatch: true,
 };
 
 export const ADMIN_VIDEO_8_POOLS: GuideAdminVideo = {
@@ -38,6 +39,7 @@ export const ADMIN_VIDEO_8_POOLS: GuideAdminVideo = {
   source: "snapshot",
   hidden: false,
   isShort: false,
+  eightWorkerPatch: true,
 };
 
 export const ADMIN_VIDEO_CARRIERS: GuideAdminVideo = {
@@ -48,6 +50,7 @@ export const ADMIN_VIDEO_CARRIERS: GuideAdminVideo = {
   source: "rss",
   hidden: true,
   isShort: false,
+  eightWorkerPatch: true,
 };
 
 export const ADMIN_VIDEO_PVT_CHARGE: GuideAdminVideo = {
@@ -58,6 +61,7 @@ export const ADMIN_VIDEO_PVT_CHARGE: GuideAdminVideo = {
   source: "snapshot",
   hidden: false,
   isShort: false,
+  eightWorkerPatch: true,
 };
 
 export const ADMIN_VIDEOS: GuideAdminVideo[] = [

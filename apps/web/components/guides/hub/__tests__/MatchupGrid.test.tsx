@@ -30,16 +30,16 @@ const PVP: GuideIndexMatchup = {
 };
 
 describe("MatchupGrid", () => {
-  it("names the patch era the win rates cover, not one week", () => {
-    render(<MatchupGrid matchups={[PVP, PVT]} period="since patch 5.0.16" />);
-    expect(screen.getByText("What's winning since patch 5.0.16")).toBeTruthy();
+  it("names the era the win rates cover, not one week", () => {
+    render(<MatchupGrid matchups={[PVP, PVT]} period="with 12 starting workers" />);
+    expect(screen.getByText("What's winning with 12 starting workers")).toBeTruthy();
     expect(screen.queryByText(/this week/i)).toBeNull();
     expect(screen.getByRole("link", { name: "Robo First" }).getAttribute("href")).toBe("/guides/pvt/robo-first");
     expect(screen.getByText("408 games")).toBeTruthy();
   });
 
   it("says a matchup without a published opener needs more games", () => {
-    render(<MatchupGrid matchups={[PVP]} period="since patch 5.0.16" />);
+    render(<MatchupGrid matchups={[PVP]} period="with 12 starting workers" />);
     expect(screen.getByText("Not enough games yet.")).toBeTruthy();
   });
 });

@@ -14,7 +14,7 @@ import type { GuideChannel, GuideIndexPayload } from "@/lib/guides/types";
 
 /**
  * Body of /guides: the 3×3 matchup grid with each matchup's top openers
- * since the patch,
+ * with 12 starting workers,
  * the latest build-order videos from the channel (+ subscribe link) and
  * the way into the map guides.
  */
@@ -55,14 +55,14 @@ export function GuideHub({ payload }: { payload: GuideIndexPayload }) {
         <PageHeader
           eyebrow="Build order guides"
           title="What's winning on the SC2 ladder"
-          description={`Every opener ranked by its real ladder win rate from SC2 Tools players, ${eraLabel(payload.era, payload.patch)}. Pick a matchup to see timings, army and how to beat each opponent opener.`}
+          description={`Every opener ranked by its real ladder win rate from SC2 Tools players, ${eraLabel(payload.era)}. Pick a matchup to see timings, army and how to beat each opponent opener.`}
         />
         {payload.computedAt ? (
           <p className="text-caption text-text-dim">Stats updated {fmtGuideDate(payload.computedAt)}</p>
         ) : null}
       </div>
       <Section id="matchups" title="Matchups">
-        <MatchupGrid matchups={payload.matchups} period={eraLabel(payload.era, payload.patch)} />
+        <MatchupGrid matchups={payload.matchups} period={eraLabel(payload.era)} />
       </Section>
       <GuideVideoRow
         id="channel"
