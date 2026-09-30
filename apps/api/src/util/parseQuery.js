@@ -8,6 +8,8 @@
  * keep its existing `?since=...&until=...&race=Z&...` URLs.
  */
 
+const { PATCH_ERA_AFTER, PATCH_ERA_BEFORE, buildEraMatch } = require("./patchEra");
+
 const RACE_LETTERS = new Set(["P", "T", "Z", "R"]);
 const RESULT_BUCKETS = new Set(["win", "loss"]);
 // Battle.net region labels we accept on the ``regions`` filter.
@@ -19,6 +21,7 @@ const REGION_CODES = new Set(["NA", "EU", "KR", "CN", "SEA"]);
  * @typedef {{
  *   since?: Date,
  *   until?: Date,
+ *   patchEra?: 'after'|'before',
  *   race?: 'P'|'T'|'Z'|'R',
  *   oppRace?: 'P'|'T'|'Z'|'R',
  *   map?: string,
@@ -57,6 +60,13 @@ function parseFilters(q) {
   if (since) out.since = since;
   const until = parseDate(q.until);
   if (until) out.until = until;
+  // Patch filter: "after" keeps 12-worker games, "before" the 8-worker
+  // patch 5.0.16, each by the game's own version (util/patchEra.js). The
+  // patch presets send it with their dates, because a patch goes live on
+  // the ladder later than its announced date.
+  if (q.patch_era === PATCH_ERA_AFTER || q.patch_era === PATCH_ERA_BEFORE) {
+    out.patchEra = q.patch_era;
+  }
   const race = parseRaceLetter(q.race);
   if (race) out.race = race;
   const oppRace = parseRaceLetter(q.opp_race);
@@ -225,6 +235,11 @@ function gamesMatchStage(userId, filters) {
     if (f.since) range.$gte = f.since;
     if (f.until) range.$lte = f.until;
     match.date = range;
+  }
+  // Patch filter, by each game's version, then build, then date. Inside
+  // ``$and`` so it can coexist with the region filter's top-level ``$or``.
+  if (f.patchEra) {
+    addAndClause(match, buildEraMatch(f.patchEra));
   }
   if (f.race) {
     match.myRace = raceMatcher(f.race);

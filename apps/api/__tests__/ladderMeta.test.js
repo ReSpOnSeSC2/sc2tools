@@ -269,15 +269,19 @@ describe("ladder meta radar", () => {
     expect(await svc.lookup({ leagueId: 2, matchup: "PvZ" })).toBeNull();
   });
 
-  test("the 8-worker window (before) is isolated at the exact 5.0.16 and 5.0.17 instants", async () => {
+  test("the 8-worker window (before) starts at 5.0.16 and only a 5.0.17 version ends it", async () => {
     idSeq = 20000;
     const release16 = new Date("2026-06-22T19:15:00.000Z");
-    const release17 = new Date("2026-09-30T04:00:00.000Z");
+    const notes17 = new Date("2026-09-30T04:00:00.000Z");
     await db.games.insertMany([
       ...bucket({ build: A, count: 60, wins: 45, extra: { date: new Date(release16.getTime() - 1) } }),
       ...bucket({ build: B, count: 60, wins: 15, extra: { date: release16 } }),
-      ...bucket({ build: C, count: 60, wins: 45, extra: { date: new Date(release17.getTime() - 1) } }),
-      ...bucket({ build: D, count: 60, wins: 15, extra: { date: release17 } }),
+      // Live stays on 5.0.16 after the 5.0.17 notes: a date-only game is
+      // still 8-worker, and a 5.0.17 (PTR) game is 12-worker.
+      ...bucket({ build: C, count: 60, wins: 45, extra: { date: notes17 } }),
+      ...bucket({
+        build: D, count: 60, wins: 15, extra: { date: notes17, gameVersion: "5.0.17.98123", gameBuild: 98123 },
+      }),
     ]);
     await svc.recompute();
 

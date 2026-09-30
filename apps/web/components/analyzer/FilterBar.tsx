@@ -11,6 +11,7 @@ import {
   toDateInputValue,
   fromDateInputValue,
   longLabelFor,
+  patchEraFor,
   type PresetId,
 } from "@/lib/datePresets";
 import { listSeasons, currentSeason, seasonRange, formatSeasonRange } from "@/lib/seasonCatalog";
@@ -234,7 +235,9 @@ export function FilterBar() {
           →{" "}
           {filters.until
             ? new Date(filters.until).toLocaleDateString()
-            : "now"}
+            : patchEraFor(presetId) === "before"
+              ? "5.0.17"
+              : "now"}
         </span>
       ) : null}
 

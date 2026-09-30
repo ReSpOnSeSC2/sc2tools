@@ -66,7 +66,9 @@ describe("extractSample", () => {
     ["the 12-worker game before 5.0.16", { gameVersion: "5.0.15.96883" }, "after"],
     ["the 12-worker game from 5.0.17", { gameVersion: "5.0.17.98000" }, "after"],
     ["a date-only 8-worker game", { gameVersion: undefined, date: "2026-07-01T12:00:00.000Z" }, "before"],
-    ["a date-only game from 30 Sep 2026", { gameVersion: undefined, date: "2026-10-01T12:00:00.000Z" }, "after"],
+    ["a 5.0.17 PTR game after the notes", { gameVersion: "5.0.17.98123", date: "2026-09-30T21:00:00.000Z" }, "after"],
+    // Live stays on 5.0.16 until 5.0.17 ships.
+    ["a date-only game after the 5.0.17 notes", { gameVersion: undefined, date: "2026-10-01T12:00:00.000Z" }, "before"],
   ])("labels %s as era %s", (_label, overrides, era) => {
     expect(extractSample(ingestGame(overrides)).era).toBe(era);
   });

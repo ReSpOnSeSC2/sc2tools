@@ -5,6 +5,7 @@ const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { hmac } = require("../util/hash");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
+const { eraForGame } = require("../util/patchEra");
 const { opponentGamesFilter } = require("../util/opponentIdentity");
 const { regionFromToonHandle } = require("../util/regionFromToonHandle");
 const { canonicalRaceLetter } = require("./oppMmrStamp");
@@ -1491,11 +1492,13 @@ class OpponentsService {
     // Keep this full table cohort slim. The separate analytical selection
     // below is the only path allowed to read replay detail fields.
     // Apply every non-date analyzer facet before deriving profile
-    // aggregates. Date bounds remain separate so recency-oriented panels
-    // can intentionally show the latest games inside the same cohort.
+    // aggregates. Date bounds (and the patch era, a window in time) remain
+    // separate so recency-oriented panels can intentionally show the latest
+    // games inside the same cohort.
     const scopedRawGames = filterGamesByAnalyzerScope(rawGames, filters);
-    const rawFilteredGames = filterGamesByDate(
-      scopedRawGames, filters.since, filters.until,
+    const rawFilteredGames = filterGamesByPatchEra(
+      filterGamesByDate(scopedRawGames, filters.since, filters.until),
+      filters.patchEra,
     );
     const analyticalSelection = selectProfileAnalyticalGames(
       scopedRawGames,
@@ -3694,6 +3697,7 @@ function hasFilters(f) {
   return Boolean(
     f.since
       || f.until
+      || f.patchEra
       || f.race
       || f.oppRace
       || f.map
@@ -3919,6 +3923,22 @@ function filterGamesByDate(games, since, until) {
     if (untilMs !== null && t > untilMs) return false;
     return true;
   });
+}
+
+/**
+ * Restrict a games array to one patch era ("after" = 12 workers,
+ * "before" = the 8-worker patch 5.0.16), by each game's version, then
+ * build, then date — the rule gamesMatchStage applies through
+ * util/patchEra.js. Games with no era signal are excluded when an era is
+ * set, as they fall out of the Mongo match.
+ *
+ * @param {Array<any>} games
+ * @param {'after'|'before'|undefined} era
+ * @returns {Array<any>}
+ */
+function filterGamesByPatchEra(games, era) {
+  if (!era) return games;
+  return games.filter((g) => eraForGame(g) === era);
 }
 
 /**

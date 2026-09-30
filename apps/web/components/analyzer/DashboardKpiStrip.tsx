@@ -100,7 +100,8 @@ export function DashboardKpiStrip() {
   // re-introduce custom/team games that the rest of the dashboard has
   // removed. The falsy/all cases are dropped by `filtersToQuery`.
   const wrQuery = useMemo(() => {
-    const params: Record<string, unknown> = { interval: "day", tz };
+    // The preset itself is not sent; a patch preset adds its patch_era.
+    const params: Record<string, unknown> = { interval: "day", tz, preset: wrPreset };
     if (wrRange.since) params.since = wrRange.since.toISOString();
     if (wrRange.until) params.until = wrRange.until.toISOString();
     if (filters.exclude_too_short) params.exclude_too_short = true;
@@ -110,6 +111,7 @@ export function DashboardKpiStrip() {
     params.max_minutes = filters.max_minutes;
     return filtersToQuery(params);
   }, [
+    wrPreset,
     wrRange,
     tz,
     filters.exclude_too_short,

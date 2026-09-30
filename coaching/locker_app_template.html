@@ -258,7 +258,7 @@ function pkPresets(){
  const out=[{id:"current_season",l:"Season "+CUR_SEASON+" (current)"}];
  for(let n=CUR_SEASON-1;n>=CUR_SEASON-3;n--)out.push({id:"season:"+n,l:"Season "+n});
  out.push({id:"all",l:"All time"},{id:"after_5_0_17",l:"After 5.0.17 · 12 workers"},
-  {id:"patch_5_0_16",l:"5.0.16 · 8 workers (until Sep 30)"},
+  {id:"patch_5_0_16",l:"5.0.16 · 8 workers"},
   {id:"before_5_0_16",l:"Before 5.0.16 · 12 workers"},{id:"today",l:"Today"},
   {id:"last_7d",l:"Last 7 days"},{id:"last_30d",l:"Last 30 days"},
   {id:"last_90d",l:"Last 90 days"},{id:"custom",l:"Custom range…"});
@@ -268,7 +268,7 @@ function presetRange(p,cA,cB){
  const back=n=>{const d=new Date(now);d.setDate(d.getDate()-n);return isoD(d)};
  if(p==="all")return[null,null];
  if(p==="after_5_0_17")return["2026-09-30",null];
- if(p==="patch_5_0_16")return["2026-06-22","2026-09-29"];
+ if(p==="patch_5_0_16")return["2026-06-22",null];
  if(p==="before_5_0_16")return[null,"2026-06-22"];
  if(p==="today")return[isoD(now),isoD(now)];
  if(p==="last_7d")return[back(6),isoD(now)];
@@ -278,6 +278,12 @@ function presetRange(p,cA,cB){
  if(p&&p.startsWith("season:"))return seasonRangeJS(parseInt(p.slice(7),10));
  return seasonRangeJS(CUR_SEASON)}
 function pkRange(){return presetRange(PK.preset,PK.cA,PK.cB)}
+// The patch filters keep each game's own patch, since 5.0.16 games are still
+// played after the 5.0.17 notes: the era the site sends ("after" = 12
+// workers, "before" = the 8-worker patch 5.0.16), else the game's day (from
+// 5.0.16 on is 8 workers until 5.0.17 reaches the live ladder).
+function presetEra(p){return p==="after_5_0_17"?"after":p==="patch_5_0_16"?"before":""}
+function gameEra(g){return g.e||(g.d>="2026-06-22"?"before":"after")}
 let S; try{S=JSON.parse(document.getElementById("state0").textContent)}catch(e){S={v:1,setup:false,pin:null,coach:"ReSpOnSe",students:[],assets:{}}}
 if(!S.customBuilds)S.customBuilds=[];
 if(!S.wsTemplates)S.wsTemplates=[];
@@ -1309,10 +1315,10 @@ async function ensureMyGames(){
  try{const out=await siteApi("/coaching/students/"+encodeURIComponent(SITE_ME.userId)+"/games");MYGAMES=out.games||[];pkUpdate()}catch(e){MYGAMES=[]}}
 function pkUpdate(){
  const q=PK.q.trim().toLowerCase();
- const [since,until]=pkRange();
+ const [since,until]=pkRange(),era=presetEra(PK.preset);
  if(SITE&&PK.src==="mine"&&MYGAMES===null)ensureMyGames();
  const pool=PK.src==="student"?studentGames(byId(PK.sid)):(SITE?(MYGAMES||[]):GAMES);
- window._pkRes=pool.filter(g=>(!q||g.o.toLowerCase().includes(q)||g.m.toLowerCase().includes(q))&&(!since||g.d>=since)&&(!until||g.d<=until)&&(!PK.mu||(g.b||"").startsWith(PK.mu))).slice(0,30);
+ window._pkRes=pool.filter(g=>(!q||g.o.toLowerCase().includes(q)||g.m.toLowerCase().includes(q))&&(!since||g.d>=since)&&(!until||g.d<=until)&&(!era||gameEra(g)===era)&&(!PK.mu||(g.b||"").startsWith(PK.mu))).slice(0,30);
  const el=$("pkList");if(!el)return;
  el.innerHTML=window._pkRes.map((g,i)=>`<div class="item" style="padding:8px 11px">
    <div class="bd"><div class="t" style="font-size:13.5px">${esc(g.m)}${g.o?" · vs "+esc(g.o):""} ${g.res?`<span class="pill ${g.res==="W"?"w":"r"}">${g.res==="W"?"Win":"Loss"}</span>`:""}</div>

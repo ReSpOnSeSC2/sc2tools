@@ -28,9 +28,9 @@
  *   2. else numeric ``gameBuild`` — 8-worker from the first live 5.0.16
  *      build up to the first 5.0.17 build (open-ended while that is
  *      unknown);
- *   3. else ``date`` — 8-worker from the 5.0.16 release until the start of
- *      2026-09-30, the date the 12-worker game returns in the analyzer's
- *      date filters (apps/web/lib/datePresets.ts).
+ *   3. else ``date`` — 8-worker from the 5.0.16 release until 5.0.17
+ *      reaches the live ladder (``PATCH_5_0_17_LIVE``; open-ended while
+ *      that is unknown, as the 5.0.17 PTR runs alongside live 5.0.16).
  * A row with none of the three (or a non-date ``date``) has no era: the
  * ``$match`` form matches neither era and the other two return null.
  * patchEra.test.js asserts all three agree on a matrix of rows.
@@ -65,11 +65,30 @@ const EIGHT_WORKER_VERSION_RE = /^5\.0\.16\./;
  */
 const PATCH_5_0_17_BUILD = null;
 /**
- * The 8-worker window's end for date-only rows: midnight US Eastern on
- * 2026-09-30, the day 5.0.17 brought back 12 workers. The analyzer's
- * "After 5.0.17 · 12 workers" date filter starts at the same instant.
+ * Midnight US Eastern on 2026-09-30, the day the 5.0.17 notes brought back
+ * 12 workers (on the PTR first). The analyzer's "After 5.0.17 · 12
+ * workers" date filter starts here, and rule-1 guide samples from this day
+ * on are left to the backfill (guideSamples.relabelEraRule). It does not end
+ * the 8-worker window: see ``PATCH_5_0_17_LIVE``.
  */
 const PATCH_5_0_17_RELEASE = new Date("2026-09-30T04:00:00.000Z");
+/**
+ * When 5.0.17 reaches the live ladder: the 8-worker window's end for rows
+ * with no version or build. null until known, which keeps that window
+ * open, since live games stay on 5.0.16 while 5.0.17 is on the PTR. (A
+ * PTR game carries its "5.0.17." release string, so it never needs this.)
+ * Set it, and PATCH_5_0_17_BUILD, when the patch ships, and mirror both in
+ * apps/web/lib/ladderPulse.ts.
+ * @type {Date | null}
+ */
+const PATCH_5_0_17_LIVE = null;
+
+/** ``date`` bounds of the 8-worker window as a query operator. */
+function eightWorkerDateRange() {
+  return PATCH_5_0_17_LIVE === null
+    ? { $gte: PATCH_5_0_16_RELEASE }
+    : { $gte: PATCH_5_0_16_RELEASE, $lt: PATCH_5_0_17_LIVE };
+}
 
 /** ``gameBuild`` bounds of the 8-worker window as a query operator. */
 function eightWorkerBuildRange() {
@@ -102,7 +121,7 @@ function buildEraMatch(era) {
           $and: [
             missingVersion,
             missingBuild,
-            { date: { $gte: PATCH_5_0_16_RELEASE, $lt: PATCH_5_0_17_RELEASE } },
+            { date: eightWorkerDateRange() },
           ],
         },
       ],
@@ -111,6 +130,9 @@ function buildEraMatch(era) {
   /** @type {Record<string, any>[]} */
   const twelveWorkerBuild = [{ gameBuild: { $lt: PATCH_5_0_16_BUILD } }];
   if (PATCH_5_0_17_BUILD !== null) twelveWorkerBuild.push({ gameBuild: { $gte: PATCH_5_0_17_BUILD } });
+  /** @type {Record<string, any>[]} */
+  const twelveWorkerDate = [{ date: { $lt: PATCH_5_0_16_RELEASE } }];
+  if (PATCH_5_0_17_LIVE !== null) twelveWorkerDate.push({ date: { $gte: PATCH_5_0_17_LIVE } });
   return {
     $or: [
       { $and: [hasVersion, { gameVersion: { $not: EIGHT_WORKER_VERSION_RE } }] },
@@ -119,7 +141,7 @@ function buildEraMatch(era) {
         $and: [
           missingVersion,
           missingBuild,
-          { $or: [{ date: { $lt: PATCH_5_0_16_RELEASE } }, { date: { $gte: PATCH_5_0_17_RELEASE } }] },
+          { $or: twelveWorkerDate },
         ],
       },
     ],
@@ -140,6 +162,14 @@ function eightWorkerBuildExpression() {
   return PATCH_5_0_17_BUILD === null
     ? from
     : { $and: [from, { $lt: ["$gameBuild", PATCH_5_0_17_BUILD] }] };
+}
+
+/** @returns {Record<string, any>} the date half of the window test */
+function eightWorkerDateExpression() {
+  const from = { $gte: ["$date", PATCH_5_0_16_RELEASE] };
+  return PATCH_5_0_17_LIVE === null
+    ? from
+    : { $and: [from, { $lt: ["$date", PATCH_5_0_17_LIVE] }] };
 }
 
 /**
@@ -164,9 +194,7 @@ function eraExpression() {
         { case: { $isNumber: "$gameBuild" }, then: eraOfWindowExpression(eightWorkerBuildExpression()) },
         {
           case: { $eq: [{ $type: "$date" }, "date"] },
-          then: eraOfWindowExpression({
-            $and: [{ $gte: ["$date", PATCH_5_0_16_RELEASE] }, { $lt: ["$date", PATCH_5_0_17_RELEASE] }],
-          }),
+          then: eraOfWindowExpression(eightWorkerDateExpression()),
         },
       ],
       default: null,
@@ -210,7 +238,8 @@ function eraForGame(game) {
   }
   const ms = dateMs(g.date);
   if (ms === null) return null;
-  const inWindow = ms >= PATCH_5_0_16_RELEASE.getTime() && ms < PATCH_5_0_17_RELEASE.getTime();
+  const live = /** @type {Date | null} */ (PATCH_5_0_17_LIVE);
+  const inWindow = ms >= PATCH_5_0_16_RELEASE.getTime() && (live === null || ms < live.getTime());
   return inWindow ? PATCH_ERA_BEFORE : PATCH_ERA_AFTER;
 }
 
@@ -235,6 +264,7 @@ module.exports = {
   PATCH_5_0_16_BUILD,
   PATCH_5_0_16_RELEASE,
   PATCH_5_0_17_BUILD,
+  PATCH_5_0_17_LIVE,
   PATCH_5_0_17_RELEASE,
   buildEraMatch,
   dateMs,

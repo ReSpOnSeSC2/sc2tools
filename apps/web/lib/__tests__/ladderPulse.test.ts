@@ -255,12 +255,14 @@ describe("meta selection and movement", () => {
       patchEraForGame(game("b-16", "2026-01-01T15:00:00.000Z", { gameBuild: 97_364 })),
     ).toBe("before");
 
-    // No version metadata: the date window [5.0.16 release, 5.0.17 release).
+    // No version metadata: 8-worker from the 5.0.16 release until 5.0.17
+    // reaches the live ladder (not known yet: 5.0.17 is on the PTR, and
+    // live games after the notes are still 5.0.16).
     expect(patchEraForGame(game("d-pre", "2026-06-01T15:00:00.000Z"))).toBe("after");
     expect(patchEraForGame(game("d-16", "2026-06-22T19:15:00.000Z"))).toBe("before");
     expect(patchEraForGame(game("d-last", "2026-09-30T03:59:59.999Z"))).toBe("before");
-    expect(patchEraForGame(game("d-17", "2026-09-30T04:00:00.000Z"))).toBe("after");
-    expect(patchEraForGame(game("d-late", "2026-10-02T15:00:00.000Z"))).toBe("after");
+    expect(patchEraForGame(game("d-17", "2026-09-30T04:00:00.000Z"))).toBe("before");
+    expect(patchEraForGame(game("d-late", "2026-10-02T15:00:00.000Z"))).toBe("before");
     // No signal at all: the live 12-worker era.
     expect(patchEraForGame(game("none", "not a date"))).toBe("after");
     expect(patchEraForGame(null)).toBe("after");

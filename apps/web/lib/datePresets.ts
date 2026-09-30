@@ -1,3 +1,4 @@
+import type { PatchEra } from "@/lib/meta";
 import { currentSeason, seasonRange } from "@/lib/seasonCatalog";
 import type { LogicalSeason } from "@/lib/useSeasons";
 
@@ -39,6 +40,15 @@ export type Preset = {
   shortLabel: string;
   /** Resolve the preset to a concrete date range. */
   resolve: () => DateRange;
+  /**
+   * The patch a patch preset keeps, by each game's own version: "after"
+   * is the 12-worker game, "before" the 8-worker patch 5.0.16. A patch
+   * reaches the ladder later than its announced date, so the dates alone
+   * would count the last 5.0.16 games as 5.0.17. Sent as `patch_era`
+   * (see `filtersToQuery`); the API falls back to the date for a game
+   * with no version.
+   */
+  patchEra?: PatchEra;
 };
 
 /**
@@ -50,9 +60,11 @@ export type Preset = {
 export const PATCH_5_0_16_RELEASE = new Date("2026-06-22T19:15:00.000Z");
 
 /**
- * Patch 5.0.17 restored 12 starting workers: the 8-worker window ends
- * (and the 12-worker patch starts) at midnight US Eastern on 30 Sep 2026.
- * Must equal PATCH_5_0_17_RELEASE in apps/api/src/util/patchEra.js.
+ * Patch 5.0.17 restores 12 starting workers. Its notes came out on 30 Sep
+ * 2026, so the 12-worker preset starts at midnight US Eastern that day.
+ * Games in between that are still on 5.0.16 stay in the 8-worker preset
+ * (`patchEra`). Must equal PATCH_5_0_17_RELEASE in
+ * apps/api/src/util/patchEra.js.
  */
 export const PATCH_5_0_17_RELEASE = new Date("2026-09-30T04:00:00.000Z");
 
@@ -95,15 +107,15 @@ export const PRESETS: ReadonlyArray<Preset> = [
     label: "After 5.0.17 · 12 workers",
     shortLabel: "12-worker patch",
     resolve: () => ({ since: new Date(PATCH_5_0_17_RELEASE) }),
+    patchEra: "after",
   },
   {
     id: "patch_5_0_16",
-    label: "5.0.16 · 8 workers (until Sep 30)",
+    label: "5.0.16 · 8 workers",
     shortLabel: "8-worker patch",
-    resolve: () => ({
-      since: new Date(PATCH_5_0_16_RELEASE),
-      until: new Date(PATCH_5_0_17_RELEASE.getTime() - 1),
-    }),
+    // No end date: the window ends when each game's version says 5.0.17.
+    resolve: () => ({ since: new Date(PATCH_5_0_16_RELEASE) }),
+    patchEra: "before",
   },
   {
     id: "before_5_0_16",
@@ -246,6 +258,16 @@ export function resolvePreset(
   }
   const preset = PRESETS.find((p) => p.id === id);
   return preset ? preset.resolve() : {};
+}
+
+/**
+ * The patch a preset keeps, sent to the API as `patch_era`; undefined for
+ * presets that are dates only.
+ *
+ * Example: `patchEraFor("patch_5_0_16")` → "before".
+ */
+export function patchEraFor(id: PresetId | undefined): PatchEra | undefined {
+  return PRESETS.find((p) => p.id === id)?.patchEra;
 }
 
 /** Short label for a preset id — used inside KPI cards. */

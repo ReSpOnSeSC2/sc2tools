@@ -19,6 +19,22 @@ describe("filtersToQuery", () => {
     expect(query.has("preset")).toBe(false);
   });
 
+  it("sends a patch preset's patch_era, and never the preset id", () => {
+    // Default: "After 5.0.17 · 12 workers" keeps 12-worker games only, so a
+    // game still played on 5.0.16 after the 5.0.17 notes stays out.
+    expect(params(filtersToQuery(DEFAULT_ANALYZER_FILTERS)).get("patch_era")).toBe("after");
+    const eightWorker = params(filtersToQuery({ preset: "patch_5_0_16", since: "2026-06-22T19:15:00.000Z" }));
+    expect(eightWorker.get("patch_era")).toBe("before");
+    expect(eightWorker.has("until")).toBe(false);
+    expect(eightWorker.has("preset")).toBe(false);
+    for (const preset of ["before_5_0_16", "all", "last_7d", "custom", "season:67"]) {
+      expect(params(filtersToQuery({ preset })).has("patch_era")).toBe(false);
+    }
+    // An explicit value wins over the preset's.
+    expect(params(filtersToQuery({ preset: "after_5_0_17", patch_era: "before" })).getAll("patch_era"))
+      .toEqual(["before"]);
+  });
+
   it("omits explicit All sentinels while retaining other filters", () => {
     const query = params(
       filtersToQuery({

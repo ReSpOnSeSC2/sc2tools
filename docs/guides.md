@@ -82,7 +82,8 @@ allowlist added so private custom-build names can never appear.
 ## Eras (patches)
 
 Patch 5.0.16 (22 June 2026) cut the starting workers from 12 to 8, and 5.0.17
-(30 September 2026) put them back. Stats are split by worker count:
+(notes and PTR on 30 September 2026, live a few days later) puts them back.
+Stats are split by worker count:
 
 - **Current** (`after`): the 12-worker game, meaning every game before 5.0.16
   and every game from 5.0.17 on.
@@ -90,14 +91,17 @@ Patch 5.0.16 (22 June 2026) cut the starting workers from 12 to 8, and 5.0.17
 
 The era comes from the replay's `gameVersion` first: a `5.0.16.<build>`
 release string is the 8-worker patch, and any other version is the 12-worker
-game. Without a version, a `gameBuild` of 97364 (the first live 5.0.16 build)
-or later counts as 8 workers. Without either, the game date decides: from
-the 5.0.16 release until midnight US Eastern on 30 September 2026 (the same
-instant the analyzer's "After 5.0.17 · 12 workers" filter starts) is the
-8-worker patch. Once 5.0.17's first live build is known, set
-`PATCH_5_0_17_BUILD` so build-only rows split exactly too. The rules live in
+game. So a 5.0.17 PTR game (`5.0.17.<build>`) is 12 workers while live games
+on the same day are still 8. Without a version, a `gameBuild` of 97364 (the
+first live 5.0.16 build) or later counts as 8 workers. Without either, the
+game date decides: from the 5.0.16 release on is the 8-worker patch until
+5.0.17 reaches the live ladder. When 5.0.17 ships, set `PATCH_5_0_17_BUILD`
+(its first live build, not a PTR build) and `PATCH_5_0_17_LIVE` (its live
+instant) so build-only and date-only rows split exactly too. The rules live in
 `apps/api/src/util/patchEra.js`, shared with the Ladder Meta Radar, and
-`apps/web/lib/ladderPulse.ts` mirrors them.
+`apps/web/lib/ladderPulse.ts` mirrors them. The analyzer's "After 5.0.17 · 12
+workers" filter starts at midnight US Eastern on 30 September 2026 and keeps
+only 12-worker games by this rule.
 
 Pages publish on the current era. `?era=before` on a matchup page shows the
 8-worker patch.
