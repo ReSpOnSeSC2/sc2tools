@@ -4,7 +4,10 @@
  * Prices every unit death in the playback payload with REAL balance
  * data: costs come from the balance-patch dataset in lib/sc2-patch
  * (layered per patch), so there is one source of truth for unit
- * prices. Morphed units (Baneling, Ravager,
+ * prices. The game's patch era picks the balance (``profileIdForEra``:
+ * the 12-worker game at the LotV base, the 8-worker 5.0.16 window at
+ * 5.0.16b — a Queen is 175 or 150 minerals); every price defaults to
+ * the live 12-worker game. Morphed units (Baneling, Ravager,
  * Brood Lord, …) price at their FULL invested cost — the morph price
  * plus the consumed unit's full cost, walked through the dataset's
  * ``builtFrom`` chain — because losing a Brood Lord loses the
@@ -14,10 +17,8 @@
  * replayer component stays a draw loop and this file unit-tests.
  */
 
-import {
-  DEFAULT_PROFILE_ID,
-  resolveProfile,
-} from "./sc2-patch/profiles";
+import type { PatchEra } from "./meta";
+import { profileIdForEra, resolveProfile } from "./sc2-patch/profiles";
 import {
   unitAliveAt,
   unitNameAt,
@@ -40,16 +41,17 @@ const EXTRA_COSTS: Readonly<Record<string, UnitCost>> = {
   Mothership: { minerals: 400, gas: 400 },
 };
 
-let costTable: Map<string, UnitCost> | null = null;
+/** Full invested cost by name, one table per balance profile. */
+const costTables = new Map<string, Map<string, UnitCost>>();
 
-function buildCostTable(): Map<string, UnitCost> {
+function buildCostTable(profileId: string): Map<string, UnitCost> {
   const out = new Map<string, UnitCost>(Object.entries(EXTRA_COSTS));
   let units: Record<
     string,
     { minerals?: number; gas?: number; morphFrom?: string; isStructure?: boolean }
   > = {};
   try {
-    units = resolveProfile(DEFAULT_PROFILE_ID).units;
+    units = resolveProfile(profileId).units;
   } catch {
     units = {};
   }
@@ -79,11 +81,17 @@ function buildCostTable(): Map<string, UnitCost> {
   return out;
 }
 
-/** Full invested cost of one unit by its canonical playback name, or
- * null for structures/unknown/free units (MULEs, larvae). */
-export function unitCost(name: string): UnitCost | null {
-  if (!costTable) costTable = buildCostTable();
-  return costTable.get(name) ?? null;
+/** Full invested cost of one unit by its canonical playback name,
+ * priced for the game's patch ``era`` (default: the live 12-worker
+ * game), or null for structures/unknown/free units (MULEs, larvae). */
+export function unitCost(name: string, era?: PatchEra | null): UnitCost | null {
+  const profileId = profileIdForEra(era);
+  let table = costTables.get(profileId);
+  if (!table) {
+    table = buildCostTable(profileId);
+    costTables.set(profileId, table);
+  }
+  return table.get(name) ?? null;
 }
 
 export interface LostUnitGroup {
@@ -231,13 +239,15 @@ export function morphConsumedIndices(
  * grouped by type, most expensive group first. Free units never
  * count — a dead MULE isn't a loss — and neither do units consumed
  * by their own tech (pass ``consumed`` from
- * {@link morphConsumedIndices}).
+ * {@link morphConsumedIndices}). Deaths are priced for the game's
+ * patch ``era`` (see {@link unitCost}).
  */
 export function computeLosses(
   units: ReadonlyArray<PlaybackUnit>,
   owner: "me" | "opp",
   t: number,
   consumed?: ReadonlySet<number>,
+  era?: PatchEra | null,
 ): LossSummary {
   const groups = new Map<string, LostUnitGroup>();
   let count = 0;
@@ -248,7 +258,7 @@ export function computeLosses(
     if (u.owner !== owner || u.died === null || u.died > t) continue;
     if (consumed?.has(idx)) continue;
     const name = unitNameAt(u, u.died);
-    const cost = unitCost(name);
+    const cost = unitCost(name, era);
     if (!cost) continue;
     count += 1;
     minerals += cost.minerals;

@@ -32,6 +32,7 @@ import {
   type HoverState,
 } from "./timelineSelection";
 import { gamePace, withApm, type GameApm } from "@/lib/apm";
+import type { PatchEra } from "@/lib/meta";
 
 export interface MacroChartSectionProps {
   samples: StatsEvent[];
@@ -64,6 +65,12 @@ export interface MacroChartSectionProps {
    * the timeline switch gains an APM metric; null leaves it out.
    */
   apm?: GameApm | null;
+  /**
+   * The game's patch era (lib/ladderPulse ``patchEraForGame``). It prices
+   * the derived army value and the roster's unit costs; omitted, the
+   * live 12-worker game.
+   */
+  patchEra?: PatchEra | null;
 }
 
 /**
@@ -109,6 +116,7 @@ export function MacroChartSection({
   oppRace,
   gameId,
   apm = null,
+  patchEra,
 }: MacroChartSectionProps) {
   const [hover, setHover] = useState<HoverState>(INITIAL_HOVER);
   const [showBlocks, setShowBlocks] = useState(true);
@@ -137,20 +145,20 @@ export function MacroChartSection({
   const mySeries = useMemo(
     () =>
       withApm(
-        buildSeries(samples, unitTimeline, "my", buildOrder.data?.events),
+        buildSeries(samples, unitTimeline, "my", buildOrder.data?.events, patchEra),
         apm?.me,
         apm?.windowSec ?? 0,
       ),
-    [samples, unitTimeline, buildOrder.data?.events, apm],
+    [samples, unitTimeline, buildOrder.data?.events, apm, patchEra],
   );
   const oppSeries = useMemo(
     () =>
       withApm(
-        buildSeries(oppSamples, unitTimeline, "opp", buildOrder.data?.opp_events),
+        buildSeries(oppSamples, unitTimeline, "opp", buildOrder.data?.opp_events, patchEra),
         apm?.opp,
         apm?.windowSec ?? 0,
       ),
-    [oppSamples, unitTimeline, buildOrder.data?.opp_events, apm],
+    [oppSamples, unitTimeline, buildOrder.data?.opp_events, apm, patchEra],
   );
   const metrics = useMemo(() => timelineMetricsFor({ apm: apm !== null }), [apm]);
   const apmAverages = useMemo(
@@ -228,6 +236,7 @@ export function MacroChartSection({
           buildOrderError={Boolean(buildOrder.error)}
           myProductionBuildings={myProductionBuildings}
           oppProductionBuildings={oppProductionBuildings}
+          patchEra={patchEra}
         />
       </div>
     </div>

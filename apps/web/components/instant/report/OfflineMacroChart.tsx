@@ -40,14 +40,14 @@ export type { HoverState };
 
 /** Both players' per-tick series with APM, built once for chart and roster. */
 function useSeries(props: OfflineMacroChartProps) {
-  const { samples, oppSamples, unitTimeline, buildOrder, apm = null } = props;
+  const { samples, oppSamples, unitTimeline, buildOrder, apm = null, patchEra } = props;
   const mySeries = useMemo(
-    () => withApm(buildSeries(samples, unitTimeline, "my", buildOrder.events), apm?.me, apm?.windowSec ?? 0),
-    [samples, unitTimeline, buildOrder.events, apm],
+    () => withApm(buildSeries(samples, unitTimeline, "my", buildOrder.events, patchEra), apm?.me, apm?.windowSec ?? 0),
+    [samples, unitTimeline, buildOrder.events, apm, patchEra],
   );
   const oppSeries = useMemo(
-    () => withApm(buildSeries(oppSamples, unitTimeline, "opp", buildOrder.opp_events), apm?.opp, apm?.windowSec ?? 0),
-    [oppSamples, unitTimeline, buildOrder.opp_events, apm],
+    () => withApm(buildSeries(oppSamples, unitTimeline, "opp", buildOrder.opp_events, patchEra), apm?.opp, apm?.windowSec ?? 0),
+    [oppSamples, unitTimeline, buildOrder.opp_events, apm, patchEra],
   );
   const metrics = useMemo(() => timelineMetricsFor({ apm: apm !== null }), [apm]);
   const apmAverages = useMemo(() => (apm ? { my: gamePace(apm.me), opp: gamePace(apm.opp) } : null), [apm]);
@@ -121,6 +121,7 @@ export function OfflineMacroChart(props: OfflineMacroChartProps) {
           buildOrderData={props.buildOrder}
           myProductionBuildings={props.myProductionBuildings}
           oppProductionBuildings={props.oppProductionBuildings}
+          patchEra={props.patchEra}
         />
       </div>
     </div>

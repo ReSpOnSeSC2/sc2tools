@@ -20,8 +20,9 @@
  *
  * PERFORMANCE CONTRACT
  *  - ``deriveReplayHud`` runs ONCE per payload (``useMemo`` on
- *    ``playback``): build-order feed, derived production windows,
- *    supply-cap steps, cumulative losses and timeline markers.
+ *    ``playback`` and ``patchEra``): build-order feed, derived
+ *    production windows, supply-cap steps, cumulative losses and
+ *    timeline markers.
  *  - Every panel is ``memo``-wrapped and every callback handed to one
  *    is a stable ``useCallback`` or a bare ``useState`` setter, so a
  *    4 Hz tick re-renders exactly the panels whose numbers moved.
@@ -56,6 +57,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MapPlayback } from "@/lib/mapReplay";
+import type { PatchEra } from "@/lib/meta";
 import {
   deriveReplayHud,
   hudAt,
@@ -95,6 +97,7 @@ export function ReplayStage({
   onCommentMarker,
   mobileCompact = false,
   defaultShowProduction = true,
+  patchEra,
 }: {
   playback: MapPlayback;
   /** Only used to seed the background score, so the same replay always
@@ -143,8 +146,11 @@ export function ReplayStage({
    *  whole stage is short enough to pin above a scrolling thread. */
   mobileCompact?: boolean;
   defaultShowProduction?: boolean;
+  /** The game's patch era, which prices kills and losses. MapPlayback
+   *  carries no game version; omitted, the live 12-worker game. */
+  patchEra?: PatchEra | null;
 }) {
-  const model = useMemo(() => deriveReplayHud(playback), [playback]);
+  const model = useMemo(() => deriveReplayHud(playback, patchEra), [playback, patchEra]);
 
   const [time, setTime] = useState(() => clampReplayTime(initialTimeSec, playback.gameLength) ?? 0);
   const [playing, setPlaying] = useState(false);
@@ -280,6 +286,7 @@ export function ReplayStage({
             markers={mapMarkers}
             onWorldClick={onWorldClick}
             onMarkerClick={onMarkerClick}
+            patchEra={patchEra}
           />
         </div>
 

@@ -13,6 +13,8 @@ import type {
   MacroBreakdownData,
 } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import { computeEffectiveRace } from "@/lib/macro";
+import { patchEraForGame } from "@/lib/ladderPulse";
+import type { PatchEra } from "@/lib/meta";
 import { coerceRace, type Race } from "@/lib/race";
 import type { BuildOrderEvent } from "@/lib/build-events";
 
@@ -168,6 +170,7 @@ export function AdminGameDetail({
         retrying={macro.isValidating}
         onRetry={() => { void macro.mutate().catch(() => {}); }}
         myRace={myRace}
+        patchEra={patchEraForGame({ date: game.date })}
       />
     </div>
   );
@@ -211,6 +214,7 @@ function MacroPanel({
   retrying,
   onRetry,
   myRace,
+  patchEra,
 }: {
   data: MacroBreakdownData | null;
   isLoading: boolean;
@@ -219,6 +223,8 @@ function MacroPanel({
   retrying: boolean;
   onRetry: () => void;
   myRace: Race;
+  /** Prices the derived army value; the admin row has only the date. */
+  patchEra: PatchEra;
 }) {
   if (isLoading && !data) {
     return (
@@ -251,8 +257,8 @@ function MacroPanel({
   const effRace = computeEffectiveRace(myRace, data.raw);
   const chronoTargets = data.raw?.chrono_targets ?? [];
   const gameLengthSec = data.game_length_sec ?? 0;
-  const mySeries = buildSeries(samples, data.unit_timeline, "my");
-  const oppSeries = buildSeries(oppSamples, data.unit_timeline, "opp");
+  const mySeries = buildSeries(samples, data.unit_timeline, "my", undefined, patchEra);
+  const oppSeries = buildSeries(oppSamples, data.unit_timeline, "opp", undefined, patchEra);
 
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

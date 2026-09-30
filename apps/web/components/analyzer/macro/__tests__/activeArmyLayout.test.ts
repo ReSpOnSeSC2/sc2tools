@@ -201,6 +201,28 @@ describe("buildSeries — a wiped army stays wiped in the roster", () => {
   });
 });
 
+describe("buildSeries — derived army value follows the patch era", () => {
+  // No army_value on the wire (legacy upload): the line is priced from
+  // the alive composition, so the game's balance decides a Queen's cost.
+  const timeline: UnitTimelineEntry[] = [
+    { time: 300, my: { Queen: 2, Zergling: 8 }, opp: {} },
+  ];
+  const samples = [sample(300, { food_used: 30, food_workers: 22 })];
+
+  it("prices a 12-worker game at the LotV base balance by default", () => {
+    // 2 × 175 + 8 × 25
+    expect(buildSeries(samples, timeline, "my", undefined, "after")[0].army).toBe(550);
+    expect(buildSeries(samples, timeline, "my", undefined)[0].army).toBe(550);
+  });
+
+  it("prices an 8-worker 5.0.16 game at 5.0.16b", () => {
+    // 2 × 150 + 8 × 25
+    const out = buildSeries(samples, timeline, "my", undefined, "before");
+    expect(out[0].army).toBe(500);
+    expect(out[0].armySource).toBe("timeline");
+  });
+});
+
 describe("buildSeries — food fallback gate", () => {
   it("returns army=0 source=empty when no data of any kind is available", () => {
     const samples: StatsEvent[] = [

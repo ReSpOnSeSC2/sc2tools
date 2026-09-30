@@ -21,6 +21,7 @@ import type { MacroChartSectionProps } from "@/components/analyzer/macro/MacroCh
 import type { StatsEvent } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import { readGameApm } from "@/lib/apm";
 import { buildLogToEvents, type BuildOrderEvent } from "@/lib/build-events";
+import { patchEraForGame } from "@/lib/ladderPulse";
 import { selectLeaks } from "@/lib/macro";
 import type { InstantPayload } from "./reportPayload";
 
@@ -133,8 +134,8 @@ function chartPlayers(payload: InstantPayload) {
  * Macro timeline props for one game, wired exactly like the analyzer's
  * macro panel (samples, unit timeline, production buildings, leaks via
  * `selectLeaks`, supply-block windows, trusted APM), plus both build
- * orders for the roster's buildings and upgrades; null when the payload
- * has no stats samples to plot.
+ * orders for the roster's buildings and upgrades and the patch era that
+ * prices its units; null when the payload has no stats samples to plot.
  *
  * Example:
  *   macroChartProps(payload, gameBuilds(payload))?.samples.length; // -> 32
@@ -149,6 +150,7 @@ export function macroChartProps(payload: InstantPayload, builds: GameBuilds): Of
     gameLengthSec: payload.durationSec ?? undefined,
     leaks: selectLeaks({ ok: true, ...breakdown }),
     apm: readGameApm(payload.apmCurve),
+    patchEra: patchEraForGame(payload),
     buildOrder: { ok: true, events: builds.myEvents, opp_events: builds.oppEvents },
   };
 }

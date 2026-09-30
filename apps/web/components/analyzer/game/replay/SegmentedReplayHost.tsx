@@ -22,7 +22,7 @@ type Props = {
   /** Clock mirror for hosts that need the current time. */
   onPlaybackTimeChange?: (time: number) => void;
 } & Pick<ComponentProps<typeof ReplayStage>,
-  "seekRequest" | "mapMarkers" | "onWorldClick" | "onMarkerClick" | "commentMarkers" | "onCommentMarker" | "mobileCompact" | "defaultShowProduction">;
+  "seekRequest" | "mapMarkers" | "onWorldClick" | "onMarkerClick" | "commentMarkers" | "onCommentMarker" | "mobileCompact" | "defaultShowProduction" | "patchEra">;
 
 export function SegmentedReplayHost({ manifest, compact, segmentPath, anonymous = false, onPlaybackTimeChange: onHostTime, ...props }: Props) {
   const { getToken, userId } = useAuth();

@@ -11,6 +11,7 @@ import {
 } from "@/lib/spriteSheets";
 import { formatGameClock } from "@/lib/macro";
 import { humanizeBuildName } from "@/lib/build-events";
+import type { PatchEra } from "@/lib/meta";
 import { getUnitCost, sortedArmyComposition } from "@/lib/sc2-units";
 import type {
   ProductionBuildingRecord,
@@ -77,6 +78,9 @@ export interface CompositionSnapshotProps {
    */
   myProductionBuildings?: ProductionBuildingRecord[];
   oppProductionBuildings?: ProductionBuildingRecord[];
+  /** The game's patch era, which prices the roster order and the chip
+   *  dialog's costs. Omitted, the live 12-worker game. */
+  patchEra?: PatchEra | null;
 }
 
 /** Pixel size for unit/building chip icons. Bumped from the catalog
@@ -170,6 +174,7 @@ export function CompositionSnapshot({
   buildOrderError,
   myProductionBuildings,
   oppProductionBuildings,
+  patchEra,
 }: CompositionSnapshotProps) {
   const hasMySeries = Array.isArray(mySeries) && mySeries.length > 0;
   const hasOppSeries = Array.isArray(oppSeries) && oppSeries.length > 0;
@@ -326,6 +331,7 @@ export function CompositionSnapshot({
           upgrades={myUpgrades}
           time={snapshotTime}
           buildOrderState={buildOrderState}
+          patchEra={patchEra}
           onSelect={setDetail}
         />
         <PlayerStrip
@@ -341,11 +347,12 @@ export function CompositionSnapshot({
           upgrades={oppUpgrades}
           time={snapshotTime}
           buildOrderState={buildOrderState}
+          patchEra={patchEra}
           onSelect={setDetail}
         />
       </div>
 
-      <ChipDetailDialog detail={detail} onClose={closeDetail} />
+      <ChipDetailDialog detail={detail} onClose={closeDetail} patchEra={patchEra} />
     </div>
   );
 }
@@ -365,6 +372,7 @@ function PlayerStrip({
   upgrades,
   time,
   buildOrderState,
+  patchEra,
   onSelect,
 }: {
   side: "me" | "opp";
@@ -379,12 +387,13 @@ function PlayerStrip({
   upgrades: Record<string, number>;
   time: number;
   buildOrderState: BuildOrderState;
+  patchEra?: PatchEra | null;
   /** Opens the enlarge dialog for a chip. */
   onSelect: (detail: ChipDetail) => void;
 }) {
   const sortedUnits = useMemo(
-    () => sortedArmyComposition(composition),
-    [composition],
+    () => sortedArmyComposition(composition, patchEra),
+    [composition, patchEra],
   );
   const sortedBuildings = useMemo(
     () => sortByCountDesc(buildings),
@@ -768,14 +777,16 @@ interface ChipContext {
 function ChipDetailDialog({
   detail,
   onClose,
+  patchEra,
 }: {
   detail: ChipDetail | null;
   onClose: () => void;
+  patchEra?: PatchEra | null;
 }) {
   if (!detail) return null;
   const { name, kind, count, side, playerName, playerRace, time } = detail;
   // Upgrades are not in the unit catalog and have no cost row.
-  const cost = kind === "upgrade" ? null : getUnitCost(name);
+  const cost = kind === "upgrade" ? null : getUnitCost(name, patchEra);
   const race = raceLabel(cost?.race ?? playerRace);
   const displayName = chipDisplayName(name, kind);
   const subtitle = [playerName, KIND_WORD[kind], race, formatGameClock(time)]

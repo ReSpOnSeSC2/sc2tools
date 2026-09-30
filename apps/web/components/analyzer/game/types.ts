@@ -29,6 +29,10 @@ export interface GameSummary {
   durationSec?: number | null;
   playerCount?: number | null;
   matchFormat?: "1v1" | "team" | "ffa" | "other" | null;
+  /** Replay release string ("5.0.16.97425") and numeric client build;
+   *  with ``date`` they give the patch era (``patchEraForGame``). */
+  gameVersion?: string | null;
+  gameBuild?: number | null;
   macroScore?: number | null;
   apm?: number | null;
   spq?: number | null;

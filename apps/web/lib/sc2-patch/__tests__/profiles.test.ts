@@ -3,6 +3,7 @@ import {
   DEFAULT_PROFILE_ID,
   listProfiles,
   mergeLayer,
+  profileIdForEra,
   resolveProfile,
 } from "../profiles";
 
@@ -66,7 +67,6 @@ describe("patch profile layering", () => {
   it("applies every modeled 5.0.16b gameplay change", () => {
     const p = resolveProfile("5.0.16b");
 
-    expect(DEFAULT_PROFILE_ID).toBe("5.0.16b");
     expect(p.mechanics.warpgate.gatewayTrainTimeReduction).toBe(0.5);
     expect(p.mechanics.warpgate.gatewaySpeedMultiplier).toBe(2);
     expect(p.mechanics.warpgate.boostedBuildTimes).toBeUndefined();
@@ -152,5 +152,16 @@ describe("patch profile layering", () => {
     expect(ids).toContain("5.0.16");
     expect(ids).toContain("5.0.16a");
     expect(ids).toContain(DEFAULT_PROFILE_ID);
+    // 5.0.17 restored 12 workers and the 5.0.15 balance.
+    expect(DEFAULT_PROFILE_ID).toBe("lotv-base");
+  });
+
+  it("maps each patch era to the balance its games were played on", () => {
+    expect(profileIdForEra("after")).toBe("lotv-base");
+    expect(profileIdForEra("before")).toBe("5.0.16b");
+    expect(profileIdForEra(null)).toBe("lotv-base");
+    expect(profileIdForEra(undefined)).toBe("lotv-base");
+    expect(resolveProfile(profileIdForEra("after")).starting.workers).toBe(12);
+    expect(resolveProfile(profileIdForEra("before")).starting.workers).toBe(8);
   });
 });

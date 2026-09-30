@@ -26,6 +26,7 @@
  */
 
 import { useMapReplay, type MapReplayController } from "@/lib/useMapReplay";
+import type { PatchEra } from "@/lib/meta";
 import { CompactReplayHost } from "./replay/CompactReplayHost";
 import { ReplayStage } from "./replay/ReplayStage";
 import dynamic from "next/dynamic";
@@ -49,6 +50,7 @@ export function MapReplaySection({
   buildName,
   buildMatchPct,
   initialTimeSec,
+  patchEra,
 }: {
   gameId: string;
   /** Share the host’s recording action and progress without a second request. */
@@ -72,6 +74,9 @@ export function MapReplaySection({
   buildMatchPct?: number | null;
   /** Seek once when this game/timestamp navigation opens; never starts capture. */
   initialTimeSec?: number | null;
+  /** The game's patch era (``patchEraForGame`` on the game row), which
+   *  prices kills and losses. Omitted, the live 12-worker game. */
+  patchEra?: PatchEra | null;
 }) {
   const fallback = useMapReplay(controller ? null : gameId);
   const { playback, manifest, isLoading, error, canRefresh, refreshing, refreshMessage, refresh } = controller ?? fallback;
@@ -97,7 +102,7 @@ export function MapReplaySection({
     <SegmentedReplayHost key={JSON.stringify([gameId, manifest.artifactId, initialTimeSec ?? null])}
       manifest={manifest} gameId={gameId} compact={compact} initialTimeSec={initialTimeSec}
       maxHeightPx={stageMaxH} myName={myName} oppName={oppName} myRace={myRace} oppRace={oppRace}
-      buildName={buildName} buildMatchPct={buildMatchPct} />
+      buildName={buildName} buildMatchPct={buildMatchPct} patchEra={patchEra} />
   </section>;
 
   if (isLoading) {
@@ -151,6 +156,7 @@ export function MapReplaySection({
           initialTimeSec={initialTimeSec}
           myRace={myRace}
           maxHeightPx={stageMaxH}
+          patchEra={patchEra}
         />
       </section>
     );
@@ -171,6 +177,7 @@ export function MapReplaySection({
       oppRace={oppRace}
       buildName={buildName}
       buildMatchPct={buildMatchPct}
+      patchEra={patchEra}
     />
     </div>
   );

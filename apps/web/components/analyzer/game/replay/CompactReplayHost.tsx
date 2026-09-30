@@ -38,6 +38,7 @@
 
 import { useCallback, useState } from "react";
 import type { MapPlayback } from "@/lib/mapReplay";
+import type { PatchEra } from "@/lib/meta";
 import { useReplayMusic } from "@/lib/replayMusic";
 import { clampReplayTime } from "@/lib/replayLink";
 import { MapReplayer } from "../MapReplayer";
@@ -53,6 +54,7 @@ export function CompactReplayHost({
   onPlaybackTimeChange,
   playbackWindow,
   buffering = false,
+  patchEra,
 }: {
   playback: MapPlayback;
   /** Seeds the score so one game always draws the same track. */
@@ -64,6 +66,8 @@ export function CompactReplayHost({
   onPlaybackTimeChange?: (time: number) => void;
   playbackWindow?: { start: number; end: number };
   buffering?: boolean;
+  /** The game's patch era, which prices the units-lost panels. */
+  patchEra?: PatchEra | null;
 }) {
   const [time, setTime] = useState(() => clampReplayTime(initialTimeSec, playback.gameLength) ?? 0);
   const [playing, setPlaying] = useState(false);
@@ -104,6 +108,7 @@ export function CompactReplayHost({
         onPlayingChange={handlePlayingChange}
         speed={speed}
         onSpeedChange={handleSpeedChange}
+        patchEra={patchEra}
       />
     </>
   );

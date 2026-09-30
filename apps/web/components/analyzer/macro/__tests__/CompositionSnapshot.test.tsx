@@ -158,6 +158,41 @@ describe("CompositionSnapshot chips", () => {
   });
 });
 
+describe("CompositionSnapshot costs by patch era", () => {
+  function openQueen(patchEra?: "after" | "before") {
+    render(
+      <CompositionSnapshot
+        mySeries={[point({ Queen: 3 })]}
+        oppSeries={[point({ Marine: 20 })]}
+        hoveredTime={600}
+        gameLengthSec={900}
+        myRace="Zerg"
+        oppRace="Terran"
+        buildOrderData={BUILD_ORDER}
+        patchEra={patchEra}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Queen — 3 on the field" }));
+    return screen.getByRole("dialog").textContent;
+  }
+
+  it("prices a 12-worker game at the LotV base balance", () => {
+    const text = openQueen("after");
+    expect(text).toContain("175 minerals · 2 supply");
+    expect(text).toContain("525 minerals · 6 supply");
+  });
+
+  it("prices an 8-worker 5.0.16 game at 5.0.16b", () => {
+    const text = openQueen("before");
+    expect(text).toContain("150 minerals · 2 supply");
+    expect(text).toContain("450 minerals · 6 supply");
+  });
+
+  it("defaults to the live 12-worker balance", () => {
+    expect(openQueen()).toContain("175 minerals · 2 supply");
+  });
+});
+
 describe("CompositionSnapshot chip art", () => {
   it("draws a Broodling with the Brood Lord's 3D model, not a text badge", () => {
     render(

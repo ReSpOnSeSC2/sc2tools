@@ -43,6 +43,17 @@ describe("unitCost", () => {
     expect(unitCost("Broodling")).toBeNull();
     expect(unitCost("NotARealUnit")).toBeNull();
   });
+
+  it("prices by the game's patch era, defaulting to the 12-worker game", () => {
+    // 12-worker game (LotV base balance) vs the 8-worker 5.0.16b Queen.
+    expect(unitCost("Queen", "after")).toEqual({ minerals: 175, gas: 0 });
+    expect(unitCost("Queen", "before")).toEqual({ minerals: 150, gas: 0 });
+    expect(unitCost("Queen")).toEqual({ minerals: 175, gas: 0 });
+    expect(unitCost("Queen", null)).toEqual({ minerals: 175, gas: 0 });
+    // Unchanged between eras.
+    expect(unitCost("Marine", "before")).toEqual({ minerals: 50, gas: 0 });
+    expect(unitCost("Baneling", "before")).toEqual({ minerals: 50, gas: 25 });
+  });
 });
 
 describe("computeLosses", () => {
@@ -73,6 +84,13 @@ describe("computeLosses", () => {
       { name: "Roach", count: 1, minerals: 75, gas: 25 },
     ]);
     expect(computeLosses(units, "opp", 600).count).toBe(2);
+  });
+
+  it("prices deaths for the game's patch era", () => {
+    const queens = [unit("opp", "Queen", 60, 200), unit("opp", "Queen", 60, 220)];
+    expect(computeLosses(queens, "opp", 300, undefined, "after").minerals).toBe(350);
+    expect(computeLosses(queens, "opp", 300, undefined, "before").minerals).toBe(300);
+    expect(computeLosses(queens, "opp", 300).minerals).toBe(350);
   });
 });
 

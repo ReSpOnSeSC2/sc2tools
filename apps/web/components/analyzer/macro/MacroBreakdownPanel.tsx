@@ -34,6 +34,7 @@ import { MacroLeaksList } from "./MacroLeaksList";
 import { MacroPenaltyBars } from "./MacroPenaltyBars";
 import { MacroKpiRow } from "./MacroKpiRow";
 import { readGameApm, type ApmCurveResponse } from "@/lib/apm";
+import { patchEraForGame } from "@/lib/ladderPulse";
 import type {
   LeakItem,
   MacroBreakdownData,
@@ -441,6 +442,9 @@ function BreakdownBody({
     { revalidateOnFocus: false, shouldRetryOnError: false },
   );
   const gameApm = useMemo(() => readGameApm(apmReq.data), [apmReq.data]);
+  // The calling rows carry the replay's date but no version, so the
+  // era prices units by patchEraForGame's date rule.
+  const patchEra = patchEraForGame({ date: headerMeta?.dateIso });
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -472,6 +476,7 @@ function BreakdownBody({
             oppRace={headerMeta?.opponentRace ?? null}
             gameId={gameId}
             apm={gameApm}
+            patchEra={patchEra}
           />
         )}
       </section>
@@ -481,6 +486,7 @@ function BreakdownBody({
         compact
         controller={replayController}
         myRace={headerMeta?.myRace ?? data.race ?? null}
+        patchEra={patchEra}
       />
 
       <Headline score={score} colourClass={headlineColour} />
