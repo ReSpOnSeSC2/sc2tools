@@ -257,7 +257,8 @@ function seasonRangeJS(n){
 function pkPresets(){
  const out=[{id:"current_season",l:"Season "+CUR_SEASON+" (current)"}];
  for(let n=CUR_SEASON-1;n>=CUR_SEASON-3;n--)out.push({id:"season:"+n,l:"Season "+n});
- out.push({id:"all",l:"All time"},{id:"after_5_0_16",l:"After 5.0.16 · 8 workers"},
+ out.push({id:"all",l:"All time"},{id:"after_5_0_17",l:"After 5.0.17 · 12 workers"},
+  {id:"patch_5_0_16",l:"5.0.16 · 8 workers (until Sep 30)"},
   {id:"before_5_0_16",l:"Before 5.0.16 · 12 workers"},{id:"today",l:"Today"},
   {id:"last_7d",l:"Last 7 days"},{id:"last_30d",l:"Last 30 days"},
   {id:"last_90d",l:"Last 90 days"},{id:"custom",l:"Custom range…"});
@@ -266,7 +267,8 @@ function presetRange(p,cA,cB){
  const now=new Date();
  const back=n=>{const d=new Date(now);d.setDate(d.getDate()-n);return isoD(d)};
  if(p==="all")return[null,null];
- if(p==="after_5_0_16")return["2026-06-22",null];
+ if(p==="after_5_0_17")return["2026-09-30",null];
+ if(p==="patch_5_0_16")return["2026-06-22","2026-09-29"];
  if(p==="before_5_0_16")return[null,"2026-06-22"];
  if(p==="today")return[isoD(now),isoD(now)];
  if(p==="last_7d")return[back(6),isoD(now)];

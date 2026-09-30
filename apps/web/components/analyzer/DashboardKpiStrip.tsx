@@ -18,6 +18,7 @@ import {
 import {
   PRESETS,
   DEFAULT_PRESET,
+  normalizePresetId,
   resolvePreset,
   shortLabelFor,
   type PresetId,
@@ -26,7 +27,8 @@ import {
 const LS_KEY = "analyzer.kpi.winRatePreset";
 
 const WIN_RATE_PRESET_OPTIONS: PresetId[] = [
-  "after_5_0_16",
+  "after_5_0_17",
+  "patch_5_0_16",
   "before_5_0_16",
   "current_season",
   "today",
@@ -44,7 +46,8 @@ function readStoredPreset(): PresetId | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(LS_KEY);
-    return raw ? (raw as PresetId) : null;
+    // Legacy ids ("after_5_0_16") move to their replacement.
+    return raw ? normalizePresetId(raw) : null;
   } catch {
     return null;
   }
@@ -71,7 +74,7 @@ export function DashboardKpiStrip() {
   const { filters, seasons, dbRev } = useFilters();
 
   // Keep this independent picker aligned with the global default so every
-  // first-visit page view starts on the live 8-worker game version.
+  // first-visit page view starts on the live 12-worker game version.
   const [wrPreset, setWrPreset] = useState<PresetId>(DEFAULT_PRESET);
   useEffect(() => {
     const stored = readStoredPreset();

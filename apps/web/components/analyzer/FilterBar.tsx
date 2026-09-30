@@ -25,7 +25,8 @@ const SEASONS_TO_SHOW = 16;
  * Activity tabs at once.
  *
  * The picker presents three groups:
- *   - Patch + quick presets (8-worker/12-worker eras, today, last 7d, etc.)
+ *   - Patch + quick presets (12-worker 5.0.17, the 8-worker 5.0.16 window,
+ *     pre-5.0.16 12-worker games, today, last 7d, etc.)
  *   - Recent SC2 ladder seasons — sourced from SC2Pulse via /v1/seasons
  *     so the boundaries are authoritative; falls back to the local
  *     quarterly approximation if the catalog hasn't arrived yet.
@@ -159,7 +160,8 @@ export function FilterBar() {
                   active={presetId}
                   onPick={(id) => apply(id)}
                   ids={[
-                    "after_5_0_16",
+                    "after_5_0_17",
+                    "patch_5_0_16",
                     "before_5_0_16",
                     "all",
                     "today",

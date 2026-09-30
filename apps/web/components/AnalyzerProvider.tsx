@@ -7,7 +7,12 @@ import {
   normalizeGameLengthBounds,
   type AnalyzerFilters,
 } from "@/lib/filterContext";
-import { DEFAULT_PRESET, resolvePreset, type PresetId } from "@/lib/datePresets";
+import {
+  DEFAULT_PRESET,
+  normalizePresetId,
+  resolvePreset,
+  type PresetId,
+} from "@/lib/datePresets";
 import {
   rollUpSeasons,
   useSeasons,
@@ -113,7 +118,9 @@ export function hydrateStoredFilters(
     ...DEFAULT_ANALYZER_FILTERS,
     ...(stored || {}),
   };
-  if (!next.preset) next.preset = DEFAULT_PRESET;
+  // A legacy id ("after_5_0_16", the old live patch) moves to its
+  // replacement; a missing or unknown one falls back to the default.
+  next.preset = normalizePresetId(next.preset);
   if (next.preset !== "custom") {
     const range = resolvePreset(next.preset, undefined, logicalSeasons);
     next.since = range.since ? range.since.toISOString() : undefined;
@@ -139,8 +146,8 @@ export function hydrateStoredFilters(
  * they re-fetch when the user clicks Refresh.
  *
  * The chosen date preset is persisted to localStorage so it survives
- * page reloads. New users default to the post-5.0.16 8-worker era. A
- * non-custom preset is re-resolved against "now" (and
+ * page reloads. New users default to the live 12-worker patch (5.0.17
+ * on). A non-custom preset is re-resolved against "now" (and
  * against the latest SC2Pulse season catalog) on every mount, so a
  * saved "Last 7 days" reflects today's window and "Current season"
  * tracks whichever season is current right now. Fresh and legacy
