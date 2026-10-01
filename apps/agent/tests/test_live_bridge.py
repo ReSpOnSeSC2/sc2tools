@@ -378,6 +378,28 @@ def test_pulse_lookup_region_hint_absent_without_handle() -> None:
         bridge.stop()
 
 
+def test_pulse_lookup_region_hint_absent_on_ptr() -> None:
+    """SC2Pulse has no PTR ladder, so a PTR streamer sends no region
+    hint and Pulse searches every region, exactly as with no handle."""
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    pulse = _StubPulseClient(
+        profile=OpponentProfile(name="OppPlayer", mmr=3500),
+    )
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle,
+        pulse=pulse,
+        user_name_hint="Streamer",
+        user_toon_handle="98-S2-1-30230",  # region byte 98 → PTR
+    )
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event())
+        assert _wait_for(lambda: len(pulse.calls) >= 1)
+        assert pulse.calls[0]["region"] is None
+    finally:
+        bridge.stop()
+
+
 def test_in_progress_does_not_refetch_pulse() -> None:
     """A periodic MATCH_IN_PROGRESS tick re-emits opponent state from
     the cached context — it must NOT spam Pulse with one lookup per

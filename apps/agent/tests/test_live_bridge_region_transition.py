@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional
 
 from sc2tools_agent.live.bridge import LiveBridge
 from sc2tools_agent.live.event_bus import EventBus
-from sc2tools_agent.live.region import region_from_toon_handle
+from sc2tools_agent.live.region import is_ladder_region, region_from_toon_handle
 from sc2tools_agent.live.types import (
     LiveGameState,
     LiveLifecycleEvent,
@@ -96,9 +96,19 @@ def test_region_helper_maps_leading_byte_to_label() -> None:
     assert region_from_toon_handle("3-S2-1-12345") == "KR"
     assert region_from_toon_handle("5-S2-1-12345") == "CN"
     assert region_from_toon_handle("6-S2-1-12345") == "SEA"
+    assert region_from_toon_handle("98-S2-1-30230") == "PTR"
     assert region_from_toon_handle("9-S2-1-12345") is None
     assert region_from_toon_handle(None) is None
     assert region_from_toon_handle("") is None
+
+
+def test_ptr_is_not_a_ladder_region() -> None:
+    """PTR is a server but has no SC2Pulse ladder to look players up on."""
+    for label in ("NA", "EU", "KR", "CN", "SEA"):
+        assert is_ladder_region(label) is True
+    assert is_ladder_region("PTR") is False
+    assert is_ladder_region("US") is False
+    assert is_ladder_region(None) is False
 
 
 def test_first_set_user_toon_handle_does_not_flag_transition() -> None:
@@ -146,6 +156,25 @@ def test_region_change_clears_current_and_flags_transition() -> None:
         assert bridge._pending_server_transition is True
         # _current must be reset so the prior NA match can't bleed
         # into anything.
+        assert bridge._current is None
+    finally:
+        bridge.stop()
+
+
+def test_switch_to_ptr_flags_transition() -> None:
+    """NA → PTR is a server switch: the prior NA opponent must not carry
+    over into the first PTR match."""
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle, pulse=_StubPulseClient(),
+    )
+    bridge.start()
+    try:
+        bridge.set_user_toon_handle("1-S2-1-11111")
+        lifecycle.publish(_loading_event("PriorOpp", "na-game"))
+        bridge.set_user_toon_handle("98-S2-1-30230")
+        assert bridge.current_user_region() == "PTR"
+        assert bridge._pending_server_transition is True
         assert bridge._current is None
     finally:
         bridge.stop()

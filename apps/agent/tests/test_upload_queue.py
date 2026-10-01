@@ -21,6 +21,7 @@ from sc2tools_agent.uploader.queue import (
     TerminalUploadError,
     UploadJob,
     UploadQueue,
+    _region_from_toon_handle,
 )
 from sc2tools_agent.uploader.archive_journal import (
     ReplayArchiveJournal,
@@ -1184,6 +1185,7 @@ def test_legacy_single_upload_also_includes_resumed_aliases(
 #   - the happy path (push fires + state updates),
 #   - the no-MMR skip,
 #   - the older-replay-skip (no clobbering during a backfill),
+#   - the PTR skip (a Public Test Realm rating is not ladder MMR),
 #   - the network-error fail-soft (MMR push must not break uploads).
 # -------------------------------------------------------------------------
 
@@ -1214,6 +1216,97 @@ def test_successful_upload_pushes_last_mmr(tmp_path: Path) -> None:
     assert state.last_known_mmr == 4730
     assert state.last_known_mmr_date_iso == "2026-05-07T10:00:00Z"
     assert state.last_known_mmr_region == "NA"
+
+
+# A real PTR replay: toon folder 98-S2-1-30230, Blackrock LE, 5.0.17.98274.
+_PTR_TOON = "98-S2-1-30230"
+
+
+def test_region_from_toon_handle_maps_ptr() -> None:
+    assert _region_from_toon_handle(_PTR_TOON) == "PTR"
+    assert _region_from_toon_handle("1-S2-1-267727") == "NA"
+    assert _region_from_toon_handle("9-S2-1-1") is None
+
+
+def test_accepted_ptr_upload_never_pushes_sticky_mmr(tmp_path: Path) -> None:
+    """A PTR game newer than the sticky MMR must not replace the ladder value."""
+    state = AgentState(
+        device_token="t",
+        last_known_mmr=4730,
+        last_known_mmr_date_iso="2026-09-30T10:00:00Z",
+        last_known_mmr_region="NA",
+    )
+    api = _StubApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    q.start()
+    try:
+        q.submit(
+            _game(
+                tmp_path, "ptr.SC2Replay",
+                my_mmr=3769,
+                my_toon_handle=_PTR_TOON,
+                date_iso="2026-10-01T22:37:51Z",
+            ),
+        )
+        assert _wait_for(lambda: len(api.calls) == 1, timeout=6.0)
+        time.sleep(0.2)
+    finally:
+        q.stop()
+    # The game itself is accepted; only the sticky-MMR push is skipped.
+    assert len(api.calls) == 1
+    assert api.mmr_calls == []
+    assert state.last_known_mmr == 4730
+    assert state.last_known_mmr_date_iso == "2026-09-30T10:00:00Z"
+    assert state.last_known_mmr_region == "NA"
+
+
+def test_legacy_single_ptr_upload_never_pushes_sticky_mmr(
+    tmp_path: Path,
+) -> None:
+    state = AgentState(device_token="t")
+    api = _StubApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+
+    q._upload_one(
+        _game(
+            tmp_path, "legacy-ptr.SC2Replay",
+            my_mmr=3769,
+            my_toon_handle=_PTR_TOON,
+            date_iso="2026-10-01T22:37:51Z",
+        ),
+    )
+
+    assert len(api.calls) == 1
+    assert api.mmr_calls == []
+    assert state.last_known_mmr is None
+
+
+def test_newer_ptr_game_in_batch_does_not_mask_live_game_mmr(
+    tmp_path: Path,
+) -> None:
+    """The batch picks the newest *ladder* game, not a newer PTR one."""
+    state = AgentState(device_token="t")
+    api = _StubApi()
+    q = UploadQueue(cfg=_cfg(tmp_path), state=state, api=api)
+    live = _game(
+        tmp_path, "live.SC2Replay",
+        my_mmr=4730,
+        my_toon_handle="1-S2-1-267727",
+        date_iso="2026-10-01T20:00:00Z",
+    )
+    ptr = _game(
+        tmp_path, "ptr.SC2Replay",
+        my_mmr=3769,
+        my_toon_handle=_PTR_TOON,
+        date_iso="2026-10-01T22:37:51Z",
+    )
+
+    q._push_last_mmr_for_newest([live, ptr])
+
+    assert [call["mmr"] for call in api.mmr_calls] == [4730]
+    assert api.mmr_calls[0]["region"] == "NA"
+    assert state.last_known_mmr == 4730
+    assert state.last_known_mmr_date_iso == "2026-10-01T20:00:00Z"
 
 
 def test_upload_without_mmr_does_not_ping(tmp_path: Path) -> None:
