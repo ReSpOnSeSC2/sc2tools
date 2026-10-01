@@ -144,6 +144,61 @@ describe("services/trendsInsights.mmrProgression", () => {
     expect(out.coverage.untrustedNumericMmrGames).toBe(1);
   });
 
+  test("PTR accounts chart as their own PTR series, never folded into NA", async () => {
+    await db.games.insertMany([
+      makeGame("na1", { myMmr: 4100 }),
+      // PTR games played the same day at a wildly different rating.
+      makeGame("ptr1", {
+        date: new Date("2026-05-01T13:00:00Z"),
+        myToonHandle: "98-S2-1-30230",
+        myMmr: 2900,
+      }),
+      makeGame("ptr2", {
+        date: new Date("2026-05-02T13:00:00Z"),
+        myToonHandle: "98-S2-1-30230",
+        myMmr: 2950,
+      }),
+      makeGame("eu1", {
+        date: new Date("2026-05-02T12:00:00Z"),
+        myToonHandle: "2-S2-1-555",
+        myMmr: 3800,
+      }),
+      // "9-" is not PTR; it stays Unknown and sorts after PTR.
+      makeGame("unknown1", { myToonHandle: "9-S2-1-77", myMmr: 3000 }),
+    ]);
+
+    const out = await svc.mmrProgression(
+      "u1",
+      { interval: "day", tz: "UTC" },
+      {},
+    );
+
+    expect(out.regions.map((r) => r.region)).toEqual([
+      "NA",
+      "EU",
+      "PTR",
+      "U",
+    ]);
+    const ptrRegion = out.regions.find((r) => r.region === "PTR");
+    expect(ptrRegion.points).toHaveLength(2);
+    expect(ptrRegion.latest.mmr).toBe(2950);
+    const naRegion = out.regions.find((r) => r.region === "NA");
+    expect(naRegion.points).toHaveLength(1);
+    expect(naRegion.peak.mmr).toBe(4100);
+    expect(naRegion.trough.mmr).toBe(4100);
+
+    expect(out.series.map((s) => s.label)).toEqual([
+      "NA 12345 · Zerg",
+      "EU 555 · Zerg",
+      "PTR 30230 · Zerg",
+      "?? 77 · Zerg",
+    ]);
+    expect(out.series[2]).toMatchObject({
+      toonHandle: "98-S2-1-30230",
+      region: "PTR",
+    });
+  });
+
   test("widens the interval instead of truncating long histories", async () => {
     // 400 daily games — more day-buckets than TIMESERIES_MAX_BUCKETS
     // (365). MMR *descends* over time so the all-time peak sits in the

@@ -401,9 +401,17 @@ function fingerprintFilters(filters, matchup) {
   return { filters: out, strippedFilters };
 }
 
-/** @param {Record<string, any> | null | undefined} filters */
+/**
+ * A patch filter counts as a range: the 8-worker preset sends only
+ * `patch_era`, with no dates, so it keeps the 5.0.16 PTR games played
+ * before the live release.
+ *
+ * @param {Record<string, any> | null | undefined} filters
+ */
 function hasDateRange(filters) {
-  return Boolean(filters && (filters.since || filters.until));
+  return Boolean(
+    filters && (filters.since || filters.until || filters.patchEra),
+  );
 }
 
 class SkillFingerprintService {

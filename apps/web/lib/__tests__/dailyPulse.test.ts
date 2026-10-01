@@ -77,6 +77,11 @@ describe("helpers", () => {
     expect(shortAccountLabel("2-S2-1-267727")).toBe("EU 267727");
     expect(shortAccountLabel("3-S2-1-9")).toBe("KR 9");
     expect(shortAccountLabel("9-S2-1-1")).toBe("?? 1");
+    // PTR (Public Test Realm) handles: the whole first segment, not its
+    // first byte, names the region.
+    expect(shortAccountLabel("98-S2-1-30230")).toBe("PTR 30230");
+    expect(shortAccountLabel("6-S2-1-7")).toBe("SEA 7");
+    expect(shortAccountLabel("10-S2-1-1")).toBe("?? 1");
     expect(shortAccountLabel("")).toBe("Unknown");
   });
 

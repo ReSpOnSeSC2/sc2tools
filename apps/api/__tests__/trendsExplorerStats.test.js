@@ -170,6 +170,30 @@ describe("Trends explorer exact summary calculations", () => {
     expect(row(result, "fourth-plus").gameKeys).toEqual(["u1|fourth"]);
   });
 
+  test("rematches recognise PTR 98- opponent handles but not other unknown segments", () => {
+    const ptr = { toonHandle: "98-S2-1-25175", race: "Terran" };
+    const own = { playerId: "98-S2-1-30230", myToonHandle: "98-S2-1-30230" };
+    const result = analyzeSummary("rematches", [
+      game("first", { date: "2026-10-01T12:00:00Z", ...own, opponent: ptr, matches: false }),
+      game("second", { date: "2026-10-02T12:00:00Z", ...own, opponent: ptr }),
+    ]);
+    expect(row(result, "second").gameKeys).toEqual(["u1|second"]);
+    // A legacy pulseId that holds the PTR toon handle joins the same identity.
+    const viaPulseId = analyzeSummary("rematches", [
+      game("first", { date: "2026-10-01T12:00:00Z", ...own, opponent: { pulseId: "98-S2-1-25175", race: "Terran" }, matches: false }),
+      game("second", { date: "2026-10-02T12:00:00Z", ...own, opponent: ptr }),
+    ]);
+    expect(row(viaPulseId, "second").gameKeys).toEqual(["u1|second"]);
+    for (const toonHandle of ["9-S2-1-25175", "981-S2-1-25175"]) {
+      const unknown = { toonHandle, race: "Terran" };
+      const none = analyzeSummary("rematches", [
+        game("first", { date: "2026-10-01T12:00:00Z", opponent: unknown, matches: false }),
+        game("second", { date: "2026-10-02T12:00:00Z", opponent: unknown }),
+      ]);
+      expect(none.eligibleGames).toBe(0);
+    }
+  });
+
   test("rematch prior-result filter refers to the prior meeting, not the previous game", () => {
     const records = [game("first", { date: "2026-09-01T12:00:00Z", result: "Defeat", matches: false }),
       game("unrelated", { date: "2026-09-02T12:00:00Z", opponent: { toonHandle: "1-S2-1-33", race: "Terran" }, matches: false }),

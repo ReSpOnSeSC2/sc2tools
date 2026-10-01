@@ -9,13 +9,17 @@
  */
 
 const { PATCH_ERA_AFTER, PATCH_ERA_BEFORE, buildEraMatch } = require("./patchEra");
+const {
+  REGION_HANDLE_PREFIX,
+  REGION_LABELS,
+} = require("./regionFromToonHandle");
 
 const RACE_LETTERS = new Set(["P", "T", "Z", "R"]);
 const RESULT_BUCKETS = new Set(["win", "loss"]);
 // Battle.net region labels we accept on the ``regions`` filter.
-// Mirrors regionFromToonHandle's output set so values produced at
-// ingest time round-trip through the URL unchanged.
-const REGION_CODES = new Set(["NA", "EU", "KR", "CN", "SEA"]);
+// Derived from regionFromToonHandle's output set (PTR included) so
+// values produced at ingest time round-trip through the URL unchanged.
+const REGION_CODES = new Set(REGION_LABELS);
 
 /**
  * @typedef {{
@@ -322,8 +326,11 @@ function gamesMatchStage(userId, filters) {
   // Two-tier match because not every games row has been re-ingested
   // since ``opponent.region`` became a stored field: trust the
   // stored value when present, otherwise derive from the
-  // ``opponent.toonHandle`` leading byte at filter time (cheap
+  // ``opponent.toonHandle`` region segment at filter time (cheap
   // regex). This means old data still matches without a backfill.
+  // The regex is anchored on both sides of the segment (``^(1|98)-``)
+  // so NA's "1" can never match a PTR "98-" handle and PTR's "98"
+  // can never match a "9-" or "981-" handle.
   if (Array.isArray(f.regions) && f.regions.length > 0) {
     const prefixes = regionLabelsToHandlePrefixes(f.regions);
     if (prefixes.length > 0) {
@@ -384,19 +391,20 @@ function addAndClause(match, clause) {
 /**
  * Inverse of regionFromToonHandle. Used by the region filter so old
  * games rows that pre-date the stored ``opponent.region`` field still
- * match via a regex on the toon_handle's leading byte. Kept local
- * (instead of imported) to keep parseQuery.js dependency-free.
+ * match via a regex on the toon_handle's region segment (``1`` for NA,
+ * ``98`` for PTR, ...). Reads the shared REGION_HANDLE_PREFIX table so
+ * the filter and the ingest-time label can never drift apart.
  *
  * @param {string[]} labels
  * @returns {string[]}
  */
 function regionLabelsToHandlePrefixes(labels) {
-  /** @type {Record<string, string>} */
-  const map = { NA: "1", EU: "2", KR: "3", CN: "5", SEA: "6" };
   /** @type {string[]} */
   const out = [];
   for (const r of labels) {
-    const code = map[r];
+    const code = Object.prototype.hasOwnProperty.call(REGION_HANDLE_PREFIX, r)
+      ? REGION_HANDLE_PREFIX[r]
+      : undefined;
     if (code) out.push(code);
   }
   return out;

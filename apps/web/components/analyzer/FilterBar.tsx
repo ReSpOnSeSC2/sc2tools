@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarRange, ChevronDown, X } from "lucide-react";
-import { useFilters } from "@/lib/filterContext";
+import { ANALYZER_REGIONS, PTR_REGION, useFilters } from "@/lib/filterContext";
 import { PillButton } from "./FilterPill";
 import { GameLengthFilter } from "./GameLengthFilter";
 import {
@@ -102,6 +102,9 @@ export function FilterBar() {
     () => longLabelFor(presetId, seasons),
     [presetId, seasons],
   );
+  // The 8-worker preset has no dates (each game's version decides, PTR
+  // games included), so its range reads by patch: "5.0.16 → 5.0.17".
+  const eightWorker = patchEraFor(presetId) === "before";
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -227,15 +230,17 @@ export function FilterBar() {
         ) : null}
       </div>
 
-      {filters.since || filters.until ? (
+      {filters.since || filters.until || eightWorker ? (
         <span className="text-xs text-text-dim">
           {filters.since
             ? new Date(filters.since).toLocaleDateString()
-            : "—"}{" "}
+            : eightWorker
+              ? "5.0.16"
+              : "—"}{" "}
           →{" "}
           {filters.until
             ? new Date(filters.until).toLocaleDateString()
-            : patchEraFor(presetId) === "before"
+            : eightWorker
               ? "5.0.17"
               : "now"}
         </span>
@@ -361,14 +366,20 @@ function GameSizeToggle() {
   );
 }
 
+/** Full region name for a pill's tooltip, where the code alone is opaque. */
+const REGION_NAMES: Partial<Record<string, string>> = {
+  [PTR_REGION]: "Public Test Realm (PTR)",
+};
+
 /**
- * Region multi-select. Renders five compact toggles (NA / EU / KR /
- * CN / SEA) matching Blizzard's battle.net regions; default state is
- * "all on" (no constraint) so a single-region streamer sees nothing
+ * Region multi-select. Renders six compact toggles: the five
+ * Battle.net ladder regions (NA / EU / KR / CN / SEA) plus PTR, the
+ * Public Test Realm, whose games upload like any other. Default state
+ * is "all on" (no constraint) so a single-region streamer sees nothing
  * unusual. Tapping a pill drops that region from the active set; only
  * sends a ``regions`` param to the API when the user has actively
- * deselected at least one — full set stays as the no-op zero-byte
- * URL.
+ * deselected at least one — full set (all six) stays as the no-op
+ * zero-byte URL.
  *
  * Drives every analyzer tab via ``useFilters``: the API's
  * ``gamesMatchStage`` applies the same set on Opponents, Strategies,
@@ -381,15 +392,14 @@ function GameSizeToggle() {
  */
 function RegionToggleRow() {
   const { filters, setFilters } = useFilters();
-  const ALL_REGIONS = ["NA", "EU", "KR", "CN", "SEA"] as const;
   const active = useMemo(() => {
     const raw = (filters.regions || "").trim();
-    if (!raw) return new Set<string>(ALL_REGIONS);
+    if (!raw) return new Set<string>(ANALYZER_REGIONS);
     const tokens = raw
       .split(",")
       .map((t) => t.trim().toUpperCase())
-      .filter((t) => (ALL_REGIONS as readonly string[]).includes(t));
-    return tokens.length > 0 ? new Set(tokens) : new Set<string>(ALL_REGIONS);
+      .filter((t) => (ANALYZER_REGIONS as readonly string[]).includes(t));
+    return tokens.length > 0 ? new Set(tokens) : new Set<string>(ANALYZER_REGIONS);
   }, [filters.regions]);
 
   const toggle = (code: string) => {
@@ -404,11 +414,11 @@ function RegionToggleRow() {
     }
     // All-on is the default; send no param so existing bookmarks
     // keep a clean URL.
-    if (next.size === ALL_REGIONS.length) {
+    if (next.size === ANALYZER_REGIONS.length) {
       setFilters({ ...filters, regions: undefined });
       return;
     }
-    const sorted = ALL_REGIONS.filter((r) => next.has(r));
+    const sorted = ANALYZER_REGIONS.filter((r) => next.has(r));
     setFilters({ ...filters, regions: sorted.join(",") });
   };
 
@@ -421,7 +431,7 @@ function RegionToggleRow() {
       <span className="text-xs uppercase tracking-wider text-text-dim">
         Region
       </span>
-      {ALL_REGIONS.map((code) => {
+      {ANALYZER_REGIONS.map((code) => {
         const on = active.has(code);
         return (
           <button
@@ -429,7 +439,7 @@ function RegionToggleRow() {
             type="button"
             onClick={() => toggle(code)}
             aria-pressed={on}
-            title={`${on ? "Hide" : "Show"} ${code} opponents`}
+            title={`${on ? "Hide" : "Show"} ${REGION_NAMES[code] ?? code} opponents`}
             className={[
               "inline-flex min-h-[28px] items-center rounded-full border px-2 py-0.5",
               "text-micro font-medium uppercase tracking-wider tabular-nums",

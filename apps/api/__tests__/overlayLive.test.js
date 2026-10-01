@@ -251,6 +251,23 @@ describe("services/overlayLive.buildFromGame", () => {
     );
   });
 
+  test("a PTR game's SC2Pulse rank lookup is not pinned to a PTR region", async () => {
+    // SC2Pulse has no PTR ladder, so the "PTR" label of a 98- handle is
+    // no region hint: the lookup stays region-blind and, missing, falls
+    // back to the MMR-threshold guess.
+    const pulseMmr = { getCurrentMmrForAny: jest.fn(async () => null) };
+    const rankedSvc = new OverlayLiveService(db, { pulseMmr });
+    const p = await rankedSvc.buildFromGame(
+      "u1",
+      game({ myMmr: 4310, myToonHandle: "98-S2-1-30230" }),
+    );
+    expect(pulseMmr.getCurrentMmrForAny).toHaveBeenCalledWith(
+      ["98-S2-1-30230"],
+      undefined,
+    );
+    expect(p.rank).toEqual({ league: "Diamond", tier: 1, mmr: 4310 });
+  });
+
   test("falls back to the MMR-threshold guess when SC2Pulse resolves nothing", async () => {
     const pulseMmr = { getCurrentMmrForAny: jest.fn(async () => null) };
     const rankedSvc = new OverlayLiveService(db, { pulseMmr });

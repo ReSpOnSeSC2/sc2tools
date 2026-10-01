@@ -18,7 +18,7 @@
 
 const { REVIEWS } = require("../config/constants");
 const { bandFromId, bandFromMmr, approximateMmr, isPlausibleMmr } = require("../util/leagueBands");
-const { regionFromToonHandle } = require("../util/regionFromToonHandle");
+const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { normalizeRace } = require("./reviewRedaction");
 
 /** Region order for display, and the only regions a payload may carry. */
@@ -38,7 +38,8 @@ const MAX_LADDER_ACCOUNTS = 6;
  * Group the window's ranked 1v1 rows by race (every region together) and
  * by region, counting the games played on each account (toon handle).
  * Random and implausible rows are skipped. A row without a readable toon
- * handle (older agents) still counts toward its race.
+ * handle (older agents) still counts toward its race, and so does a PTR
+ * row: the Public Test Realm has no ladder league, so it is no region.
  *
  * Example:
  *   groupLadderRows([{ myRace: "Protoss", myMmr: 5350, myToonHandle: "1-S2-1-267727" }])
@@ -58,7 +59,7 @@ function groupLadderRows(rows) {
     const mmr = Number(row.myMmr);
     pushTo(byRace, race, mmr);
     const toon = typeof row.myToonHandle === "string" ? row.myToonHandle.trim() : "";
-    const region = regionFromToonHandle(toon);
+    const region = ladderRegionFromToonHandle(toon);
     if (!region) continue;
     const slot = byRegion.get(region) || { byRace: new Map(), toons: new Map() };
     pushTo(slot.byRace, race, mmr);

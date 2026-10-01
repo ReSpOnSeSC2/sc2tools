@@ -8,15 +8,25 @@
  * than one reaching into the other.
  */
 
+const { REGION_HANDLE_PREFIX } = require("../util/regionFromToonHandle");
+
 /**
  * Aggregation-pipeline mirror of ``regionFromToonHandle``: maps the
- * leading byte of a toon handle to a Blizzard region label. Used so
- * pairs only chain within the same region — a region switch can't
- * fake a thousand-MMR loss anymore.
+ * region segment of a toon handle (everything before the first "-")
+ * to a Blizzard region label. Used so pairs only chain within the
+ * same region — a region switch can't fake a thousand-MMR loss
+ * anymore.
  *
- * Games whose ``myToonHandle`` is missing or starts with an unknown
- * byte fall into "U" so they still chain among themselves (better
- * than dropping every pre-myToonHandle game).
+ * The whole segment is compared, not its first character: the Public
+ * Test Realm's ``98-`` handles must land in their own "PTR" bucket
+ * instead of a "9" that falls into "U", and a stray ``12-`` handle
+ * must not pass for NA. Branches come from the same
+ * ``REGION_HANDLE_PREFIX`` table as the JS helper so the two can't
+ * disagree on a label.
+ *
+ * Games whose ``myToonHandle`` is missing, not a string or starts
+ * with an unknown segment fall into "U" so they still chain among
+ * themselves (better than dropping every pre-myToonHandle game).
  *
  * @param {string} field MongoDB field expression, e.g. ``"$myToonHandle"``.
  */
@@ -24,17 +34,26 @@ function regionFromToonHandleExpr(field) {
   return {
     $let: {
       vars: {
-        head: { $substrCP: [{ $ifNull: [field, ""] }, 0, 1] },
+        head: {
+          $arrayElemAt: [
+            {
+              $split: [
+                { $cond: [{ $eq: [{ $type: field }, "string"] }, field, ""] },
+                "-",
+              ],
+            },
+            0,
+          ],
+        },
       },
       in: {
         $switch: {
-          branches: [
-            { case: { $eq: ["$$head", "1"] }, then: "NA" },
-            { case: { $eq: ["$$head", "2"] }, then: "EU" },
-            { case: { $eq: ["$$head", "3"] }, then: "KR" },
-            { case: { $eq: ["$$head", "5"] }, then: "CN" },
-            { case: { $eq: ["$$head", "6"] }, then: "SEA" },
-          ],
+          branches: Object.entries(REGION_HANDLE_PREFIX).map(
+            ([label, prefix]) => ({
+              case: { $eq: ["$$head", prefix] },
+              then: label,
+            }),
+          ),
           default: "U",
         },
       },

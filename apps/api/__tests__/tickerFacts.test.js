@@ -147,6 +147,27 @@ describe("services/tickerFacts", () => {
     expect(peak.text).not.toContain("5,214");
   });
 
+  test("recent PTR games never take the MMR facts off the NA ladder", async () => {
+    // An NA ladder history, then three Public Test Realm games at a
+    // test-realm MMR: PTR has no ladder, so it never becomes the region.
+    const docs = Array.from({ length: 15 }, (_, i) => game(10 + i, {
+      myMmr: 4300 + i,
+      myToonHandle: "1-S2-1-222",
+      opponent: { displayName: `NA${i}`, race: "Zerg", toonHandle: "1-S2-1-6" },
+    }));
+    for (let i = 0; i < 3; i += 1) {
+      docs.push(game(1 + i, {
+        myMmr: 6000 + i,
+        myToonHandle: "98-S2-1-30230",
+        opponent: { displayName: `PTR${i}`, race: "Zerg", toonHandle: "98-S2-1-25175" },
+      }));
+    }
+    await db.games.insertMany(docs);
+    const peak = (await svc().factsFor("u1")).find((f) => f.id === "peak-mmr");
+    expect(peak.text).toContain("4,314 on NA");
+    expect(peak.text).not.toMatch(/PTR|6,00/);
+  });
+
   test("all-time facts carry the year — an old peak is never a bare month-day", async () => {
     const docs = [];
     // Current NA grind, well below the record…

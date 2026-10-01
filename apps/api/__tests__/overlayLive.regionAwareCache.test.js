@@ -282,4 +282,29 @@ describe("OverlayLiveService — region-aware enrichment cache", () => {
     const key = Array.from(svc._enrichmentCache.keys())[0];
     expect(key).toContain("region:NA");
   });
+
+  test("a PTR opponent keys under its own region, apart from a NA namesake", async () => {
+    // PTR (98-) toon handles carry their own "PTR" label, so a test-realm
+    // "Maru" never shares a slot with the ladder "Maru".
+    await db.opponents.insertOne({
+      userId: "u1",
+      pulseId: "p",
+      displayNameSample: "Maru",
+      gameCount: 3,
+      wins: 1,
+      losses: 2,
+      lastSeen: new Date(),
+      openings: {},
+    });
+    for (const toonHandle of ["1-S2-1-1111", "98-S2-1-25175"]) {
+      const env = envelope({ name: "Maru" });
+      env.opponent.toonHandle = toonHandle;
+      env.gameKey = `k-${toonHandle}`;
+      await svc.enrichEnvelope("u1", env);
+    }
+    const keys = Array.from(svc._enrichmentCache.keys());
+    expect(keys).toHaveLength(2);
+    expect(keys.some((k) => k.includes("region:NA|"))).toBe(true);
+    expect(keys.some((k) => k.includes("region:PTR|"))).toBe(true);
+  });
 });

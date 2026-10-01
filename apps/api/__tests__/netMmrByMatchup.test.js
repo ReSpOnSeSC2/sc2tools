@@ -1204,6 +1204,85 @@ describe("services/trendsInsights.netMmrByMatchup", () => {
     expect(out.dailySwings.biggestLoss.netMmr).toBe(-5);
   });
 
+  test("PTR games form their own regional series and never chain with NA", async () => {
+    const t0 = new Date("2026-10-01T12:00:00Z").getTime();
+    await db.games.insertMany([
+      makeGame({
+        gameId: "na1",
+        date: new Date(t0),
+        myToonHandle: "1-S2-1-100",
+        myMmr: 4000,
+        opponent: { race: "Zerg", toonHandle: "1-S2-1-101" },
+      }),
+      // Interleaved PTR games at a similar rating: one shared window would
+      // chain them into plausible-looking (sub-150) but wrong NA deltas.
+      makeGame({
+        gameId: "ptr1",
+        date: new Date(t0 + MIN_AGO),
+        myToonHandle: "98-S2-1-30230",
+        myMmr: 4010,
+        result: "Defeat",
+        opponent: { race: "Zerg", toonHandle: "98-S2-1-25175" },
+      }),
+      makeGame({
+        gameId: "na2",
+        date: new Date(t0 + 2 * MIN_AGO),
+        myToonHandle: "1-S2-1-100",
+        myMmr: 4020,
+        opponent: { race: "Zerg", toonHandle: "1-S2-1-102" },
+      }),
+      makeGame({
+        gameId: "ptr2",
+        date: new Date(t0 + 3 * MIN_AGO),
+        myToonHandle: "98-S2-1-30230",
+        myMmr: 3990,
+        opponent: { race: "Zerg", toonHandle: "98-S2-1-25176" },
+      }),
+      // A "9-" handle is not PTR: it stays in the Unknown bucket.
+      makeGame({
+        gameId: "unknown1",
+        date: new Date(t0 + 4 * MIN_AGO),
+        myToonHandle: "9-S2-1-306",
+        myMmr: 4700,
+      }),
+      makeGame({
+        gameId: "unknown2",
+        date: new Date(t0 + 5 * MIN_AGO),
+        myToonHandle: "9-S2-1-306",
+        myMmr: 4705,
+      }),
+    ]);
+
+    const out = await svc.netMmrByMatchup("u1", {}, { tz: "UTC" });
+    expect(findRow(out.matchups, "Z")).toMatchObject({ netMmr: 5, pairs: 3 });
+    expect(out.dailySwings.regions.map((row) => row.region)).toEqual([
+      "NA",
+      "PTR",
+      "U",
+    ]);
+    const [na, ptr, unknown] = out.dailySwings.regions;
+    expect(na).toMatchObject({
+      bestGain: { netMmr: 20 },
+      biggestLoss: null,
+      measuredGames: 1,
+    });
+    expect(ptr).toMatchObject({
+      bestGain: null,
+      biggestLoss: { netMmr: -20, wins: 0, losses: 1 },
+      measuredGames: 1,
+    });
+    expect(unknown).toMatchObject({ bestGain: { netMmr: 5 }, measuredGames: 1 });
+
+    // The global PTR region filter keeps exactly the PTR anchor.
+    const ptrOnly = await svc.netMmrByMatchup("u1", { regions: ["PTR"] });
+    expect(findRow(ptrOnly.matchups, "Z")).toMatchObject({
+      netMmr: -20,
+      pairs: 1,
+      wins: 0,
+      losses: 1,
+    });
+  });
+
   test("the global region filter scopes opponent region while records label own ladder region", async () => {
     const t0 = new Date("2026-05-09T12:00:00Z").getTime();
     await db.games.insertMany([

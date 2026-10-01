@@ -278,10 +278,11 @@ function breaks(records, options) {
 
 /** Never join on a display name (including barcode and anonymous names).
  * Older agents used pulseId for either a toon or numeric Pulse character ID.
+ * Toon handles start with a region segment: 1-6, or 98 for the PTR.
  * @param {Game} game */
 function opponentIdentityParts(game) {
   const opponent = game.opponent || {};
-  const handle = [nonempty(opponent.toonHandle), nonempty(opponent.pulseId)].find((value) => /^[1-6]-S2-\d+-\d+$/i.test(value));
+  const handle = [nonempty(opponent.toonHandle), nonempty(opponent.pulseId)].find((value) => /^(?:[1-6]|98)-S2-\d+-\d+$/i.test(value));
   const canonical = [nonempty(opponent.pulseCharacterId), nonempty(opponent.pulseId)].find((value) => /^\d+$/.test(value));
   return { toon: handle ? `toon:${handle.toUpperCase()}` : null, pulse: canonical ? `pulse:${canonical}` : null };
 }

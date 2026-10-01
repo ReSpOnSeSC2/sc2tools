@@ -7,7 +7,7 @@ const {
   invalidateEnrichmentForOpponent: invalidateEnrichmentForOpponentImpl,
 } = require("./overlayLiveEnrichment");
 const aggregations = require("./overlayLiveAggregations");
-const { regionFromToonHandle } = require("../util/regionFromToonHandle");
+const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 
 const { bucketResult } = aggregations;
 
@@ -532,7 +532,9 @@ class OverlayLiveService {
         : null;
     if (!toon) return null;
     try {
-      const region = regionFromToonHandle(toon);
+      // SC2Pulse has no PTR ladder, so a PTR (``98-``) handle pins no
+      // region: it keeps the region-blind lookup it has always had.
+      const region = ladderRegionFromToonHandle(toon);
       const pulse = await this.pulseMmr.getCurrentMmrForAny(
         [toon],
         region ? { preferredRegion: region } : undefined,

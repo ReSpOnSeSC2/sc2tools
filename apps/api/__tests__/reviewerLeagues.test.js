@@ -60,6 +60,18 @@ describe("groupLadderRows", () => {
     expect(byRace.has("Protoss")).toBe(false);
     expect(byRegion.size).toBe(0);
   });
+
+  test("PTR rows count toward their race but are never a region or a ladder account", () => {
+    const PTR = "98-S2-1-30230";
+    const { byRace, byRegion } = groupLadderRows([
+      ...rows(NA, 3, 5350),
+      ...rows(PTR, 12, 6500, "Zerg"),
+    ]);
+    expect(byRace.get("Zerg")).toHaveLength(12);
+    expect([...byRegion.keys()]).toEqual(["NA"]);
+    expect(ladderAccounts(byRegion)).toEqual([NA]);
+    expect([...gameLeaguesByRegion(byRegion).keys()]).not.toContain("PTR");
+  });
 });
 
 describe("bestBandFromGames", () => {

@@ -3,7 +3,7 @@
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
-const { regionFromToonHandle } = require("../util/regionFromToonHandle");
+const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 
 const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
 const REPLAY_SHARE_SLUG_SUFFIX_BYTES = 5;
@@ -1153,7 +1153,10 @@ class UsersService {
           lastKnownMmr: mmr,
           lastKnownMmrAt: latestAt.toISOString(),
         };
-        const region = regionFromToonHandle(latest.myToonHandle);
+        // Ladder regions only, like the agent's own sticky-MMR ping: the
+        // session widget reads this as the ladder of the sticky MMR, and
+        // PTR (``98-``) has none.
+        const region = ladderRegionFromToonHandle(latest.myToonHandle);
         if (region) replacement.lastKnownMmrRegion = region;
         stampVersion(replacement, COLLECTIONS.USERS);
         /** @type {Record<string, any>} */

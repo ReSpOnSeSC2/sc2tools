@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-// The Coaching Locker's replay picker keeps each game's own patch under the
-// patch filters: 5.0.16 games are still played after the 5.0.17 notes.
+// The Coaching Locker's replay pickers keep each game's own patch under the
+// patch filters: 5.0.16 games are still played after the 5.0.17 notes, and
+// its PTR games before the live release.
 const template = readFileSync(
   resolve(process.cwd(), "../../coaching/locker_app_template.html"),
   "utf8",
@@ -16,6 +17,12 @@ const generated = readFileSync(
 function block(source: string): string {
   const start = source.indexOf("function presetRange(");
   const end = source.indexOf("let S;", start);
+  return source.slice(start, end);
+}
+
+function fn(source: string, name: string): string {
+  const start = source.indexOf(`function ${name}(`);
+  const end = source.indexOf("\nfunction ", start);
   return source.slice(start, end);
 }
 
@@ -42,13 +49,24 @@ describe("Coaching Locker patch filters", () => {
     expect(block(generated)).toBe(block(template));
   });
 
-  it("bounds the patch presets by day and leaves the split to each game's patch", () => {
+  it("bounds the 12-worker presets by day and leaves the split to each game's patch", () => {
     expect(picker.presetRange("after_5_0_17")).toEqual(["2026-09-30", null]);
-    expect(picker.presetRange("patch_5_0_16")).toEqual(["2026-06-22", null]);
+    expect(picker.presetRange("before_5_0_16")).toEqual([null, "2026-06-22"]);
+    // The June 5.0.16 PTR games predate the live release: no dates, the
+    // era decides.
+    expect(picker.presetRange("patch_5_0_16")).toEqual([null, null]);
     expect(picker.presetEra("after_5_0_17")).toBe("after");
     expect(picker.presetEra("patch_5_0_16")).toBe("before");
-    expect(picker.presetEra("before_5_0_16")).toBe("");
+    // Else those 8-worker PTR games would count as 12-worker by day.
+    expect(picker.presetEra("before_5_0_16")).toBe("after");
     expect(picker.presetEra("last_7d")).toBe("");
+  });
+
+  it("applies the era in both replay pickers", () => {
+    for (const name of ["pkUpdate", "spkUpdate"]) {
+      expect(fn(template, name)).toContain("gameEra(g)===era");
+      expect(fn(generated, name)).toBe(fn(template, name));
+    }
   });
 
   it("uses the era the site sends, else the game's day", () => {

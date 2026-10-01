@@ -174,6 +174,22 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **PTR games show up on the site** — games played on the Public Test
+  Realm (toon handles starting `98-`) uploaded and were stored, but the
+  analyzer had no region for them. Any saved Region selection hid every
+  PTR game and PTR opponent on every tab, with no way to turn them back
+  on. The Region row now has a PTR pill, and selections saved before it
+  existed gain PTR on the next visit. PTR games also get their own "PTR"
+  line in the MMR, net-MMR and season-recap views instead of "Unknown" or
+  "??". They never pick the ladder region for SC2Pulse lookups, the
+  session widget, ticker facts or reviewer leagues, since SC2Pulse has no
+  PTR ladder.
+- **The patch filters place 5.0.16 PTR games by version** — the
+  "5.0.16 · 8 workers" filter started at the live release (22 June), so
+  the 5.0.16 PTR games played before it were missing, and "Before 5.0.16 ·
+  12 workers" listed those 8-worker games as 12-worker. The 8-worker
+  filter now goes by each game's version alone, and the 12-worker one
+  excludes 5.0.16 games. The Coaching Locker's patch filters match.
 - **Unit costs follow each game's patch** — the replay's units-lost panels
   and kill counts, the macro chart's army value for older uploads, and the
   roster's "Cost each" / "Total" priced every game at patch 5.0.16b, so

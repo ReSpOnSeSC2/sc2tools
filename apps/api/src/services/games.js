@@ -6,7 +6,7 @@ const { ObjectId } = require("mongodb");
 const { LIMITS, COLLECTIONS, INGEST_PROVENANCE } = require("../config/constants");
 const { expectedVersion, stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
-const { regionFromToonHandle } = require("../util/regionFromToonHandle");
+const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { opponentBuildOrderBusyError } = require("./opponentBuildOrderFence");
 const { SessionResolutionGate } = require("./sessionResolutionGate");
 
@@ -1019,8 +1019,9 @@ class GamesService {
      * ``region`` is the ladder the game was played on, inferred from the
      * streamer's own toon handle (falling back to the opponent's — both
      * players sit on the same regional ladder in matchmade games), or
-     * ``null`` for legacy rows that carry neither handle. It feeds the
-     * cross-region MMR guard below.
+     * ``null`` for legacy rows that carry neither handle and for PTR
+     * games (no SC2Pulse ladder). It feeds the cross-region MMR guard
+     * below.
      *
      * @type {Array<{ ts: Date, result: string, myMmr: number, region: string|null }>}
      */
@@ -1055,8 +1056,8 @@ class GamesService {
         result: String(row.result || ""),
         myMmr: my,
         region:
-          (typeof myToon === "string" ? regionFromToonHandle(myToon) : null) ||
-          (typeof toon === "string" ? regionFromToonHandle(toon) : null) ||
+          (typeof myToon === "string" ? ladderRegionFromToonHandle(myToon) : null) ||
+          (typeof toon === "string" ? ladderRegionFromToonHandle(toon) : null) ||
           null,
       });
     }
@@ -1272,11 +1273,13 @@ class GamesService {
     // the user's pulseIds union for any toon-handle entry — that gives
     // a cold-start lookup (right after API restart, no recent game seen
     // yet) a region anchor instead of letting a long-stale KR account
-    // win on raw timestamp.
+    // win on raw timestamp. A PTR handle (``98-``) is never an anchor:
+    // SC2Pulse has no PTR ladder, so a PTR game falls through to the
+    // next signal instead of pulling the pin off the streamer's ladder.
     /** @type {string|undefined} */
     let preferredRegion;
     if (lastKnownMyToonHandle) {
-      const inferred = regionFromToonHandle(lastKnownMyToonHandle);
+      const inferred = ladderRegionFromToonHandle(lastKnownMyToonHandle);
       if (inferred) preferredRegion = inferred;
     }
     if (!preferredRegion && typeof profile.region === "string" && profile.region) {
@@ -1284,7 +1287,7 @@ class GamesService {
     }
     if (!preferredRegion) {
       for (const candidate of pulseIdsUnion) {
-        const inferred = regionFromToonHandle(candidate);
+        const inferred = ladderRegionFromToonHandle(candidate);
         if (inferred) {
           preferredRegion = inferred;
           break;
@@ -1476,11 +1479,14 @@ class GamesService {
     //   6. lastKnownToonHandle — opponent's toon handle. Last resort,
     //      since the opponent and streamer aren't always on the same
     //      ladder (cross-region matchmaking, custom games).
+    //
+    // The widget labels ladder MMR, so a PTR handle never names the
+    // region: it falls through to the next tier, as it always has.
     if (pulseRegion) {
       out.region = pulseRegion;
     }
     if (out.region === undefined && lastKnownMmrToonHandle) {
-      const inferred = regionFromToonHandle(lastKnownMmrToonHandle);
+      const inferred = ladderRegionFromToonHandle(lastKnownMmrToonHandle);
       if (inferred) out.region = inferred;
     }
     if (
@@ -1491,14 +1497,14 @@ class GamesService {
       out.region = normaliseRegionLabel(profile.lastKnownMmrRegion);
     }
     if (out.region === undefined && lastKnownMyToonHandle) {
-      const inferred = regionFromToonHandle(lastKnownMyToonHandle);
+      const inferred = ladderRegionFromToonHandle(lastKnownMyToonHandle);
       if (inferred) out.region = inferred;
     }
     if (out.region === undefined && typeof profile.region === "string" && profile.region) {
       out.region = normaliseRegionLabel(profile.region);
     }
     if (out.region === undefined && lastKnownToonHandle) {
-      const inferred = regionFromToonHandle(lastKnownToonHandle);
+      const inferred = ladderRegionFromToonHandle(lastKnownToonHandle);
       if (inferred) out.region = inferred;
     }
     return out;

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildSeriesColors,
   mmrCoverageNotice,
   computeYDomain,
   mmrCalendarTime,
   formatMmrDate,
+  regionLabel,
   type MmrCoverage,
 } from "../MmrProgressionChart";
 
@@ -71,5 +73,26 @@ describe("MMR progression scale", () => {
     expect(domain[0]).toBeLessThan(2900);
     expect(domain[1]).toBeGreaterThan(4800);
     expect(computeYDomain([])).toBeUndefined();
+  });
+});
+
+describe("MMR progression regions", () => {
+  it("labels the PTR and unknown regions", () => {
+    expect(regionLabel("PTR")).toBe("PTR");
+    expect(regionLabel("SEA")).toBe("SEA");
+    expect(regionLabel("U")).toBe("Unknown");
+  });
+
+  it("gives a PTR line its own hue rather than the unknown-region grey", () => {
+    const colors = buildSeriesColors([
+      { seriesKey: "na", region: "NA" },
+      { seriesKey: "ptr", region: "PTR" },
+      { seriesKey: "ptr-2", region: "PTR" },
+      { seriesKey: "unknown", region: "U" },
+    ]);
+    expect(colors.ptr).toMatch(/^#[0-9a-f]{6}$/);
+    expect(new Set(Object.values(colors)).size).toBe(4);
+    expect(colors.ptr).not.toBe(colors.unknown);
+    expect(colors.ptr).not.toBe(colors.na);
   });
 });

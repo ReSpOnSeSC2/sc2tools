@@ -8,6 +8,7 @@ const {
   ReplayLibraryService,
   REPLAY_LIBRARY_LIST_DEFAULT,
   REPLAY_LIBRARY_LIST_LIMIT,
+  _internals: { sanitizeGlobalFilters },
 } = require("../src/services/replayLibrary");
 
 // eslint-disable-next-line max-lines-per-function
@@ -175,6 +176,64 @@ describe("ReplayLibraryService", () => {
     });
 
     expect(page.items.map((item) => item.gameId)).toEqual(["match"]);
+  });
+
+  test("keeps PTR on the region allow-list", () => {
+    expect(
+      sanitizeGlobalFilters({ regions: ["ptr", "NA", "PTR", "XX"] }).regions,
+    ).toEqual(["PTR", "NA"]);
+    expect(sanitizeGlobalFilters({ regions: ["98"] }).regions).toBeUndefined();
+  });
+
+  test("PTR region filter lists 98- games and never mixes them with NA", async () => {
+    const opp = (toonHandle, extra = {}) => ({
+      displayName: "Rival",
+      race: "Terran",
+      toonHandle,
+      ...extra,
+    });
+    await db.games.insertMany([
+      game("na", new Date("2026-08-20T12:00:00Z"), {
+        opponent: opp("1-S2-1-200"),
+      }),
+      game("ptr-stored", new Date("2026-08-19T12:00:00Z"), {
+        myToonHandle: "98-S2-1-30230",
+        opponent: opp("98-S2-1-25175", { region: "PTR" }),
+      }),
+      game("ptr-null-region", new Date("2026-08-18T12:00:00Z"), {
+        myToonHandle: "98-S2-1-30230",
+        opponent: opp("98-S2-1-25176", { region: null }),
+      }),
+      // Pre-region rows carry only the toon handle.
+      game("ptr-legacy", new Date("2026-08-17T12:00:00Z"), {
+        myToonHandle: "98-S2-1-30230",
+        opponent: opp("98-S2-1-25177"),
+      }),
+      game("nine", new Date("2026-08-16T12:00:00Z"), {
+        opponent: opp("9-S2-1-1"),
+      }),
+      game("nine-eighty-one", new Date("2026-08-15T12:00:00Z"), {
+        opponent: opp("981-S2-1-1"),
+      }),
+    ]);
+
+    const ids = async (regions) =>
+      (await service.list("owner", { filters: { regions } })).items.map(
+        (item) => item.gameId,
+      );
+
+    expect(await ids(["PTR"])).toEqual([
+      "ptr-stored",
+      "ptr-null-region",
+      "ptr-legacy",
+    ]);
+    expect(await ids(["NA"])).toEqual(["na"]);
+    expect(await ids(["NA", "PTR"])).toEqual([
+      "na",
+      "ptr-stored",
+      "ptr-null-region",
+      "ptr-legacy",
+    ]);
   });
 
   test("defaults to 50 rows and hard-caps a crafted limit at 100", async () => {
