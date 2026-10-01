@@ -396,6 +396,12 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **Trends win rates get an "All" sample and sit together** — the Win rate
+  card's game-sample switch adds All beside 30 / 60 / 100, drawing the
+  win rate over every game in the date range up to each point. Win rate
+  by matchup over time now has the same four-option switch in its own
+  card (it starts at 30 games, up from a fixed 20) and moves from Time &
+  activity to directly beneath the Win rate card.
 - **StarCraft II is back to 12 starting workers (5.0.17)** — build orders
   follow the 12-worker game again from 30 September 2026:
   - The four pool-first openers are named "12 Pool" again ("Zerg - 12

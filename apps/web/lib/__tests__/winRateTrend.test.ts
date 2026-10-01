@@ -134,6 +134,23 @@ describe("buildWinRateTrend", () => {
     }
     expect(buildWinRateTrend(input, 2.1)).toMatchObject({ targetGames: 3, readyPoints: 0 });
   });
+
+  test("keeps every played period from the start when the target is all games", () => {
+    const trend = buildWinRateTrend([
+      period("2026-09-01", 1, 0),
+      period("2026-09-02", 0, 0),
+      period("2026-09-03", 2, 3),
+      period("2026-09-04", 40, 40),
+    ], "all");
+
+    expect(trend).toMatchObject({ cumulative: true, readyPoints: 3 });
+    expect(trend.points[0]).toMatchObject({ sampleGames: 1, sampleWins: 1, sampleStart: "2026-09-01", rate: 100, ready: true });
+    expect(trend.points[1]).toMatchObject({ rate: null, ready: false });
+    expect(trend.points[2]).toMatchObject({ sampleGames: 6, sampleWins: 3, sampleLosses: 3, sampleStart: "2026-09-01", rate: 50 });
+    expect(trend.latest).toMatchObject({ sampleGames: 86, sampleStart: "2026-09-01" });
+    expect(trend.latest?.rate).toBeCloseTo(trend.overall.rate!);
+    expect(buildWinRateTrend([period("2026-09-01", 1, 0)], 20).cumulative).toBe(false);
+  });
 });
 
 describe("formatTrendDate", () => {

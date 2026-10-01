@@ -137,6 +137,10 @@ export function TrendsTab() {
             ))
           ) : <ActivityVolumeChart periods={series} interval={effectiveBucket} isGlobal={isGlobal} />}
           <WinRateTrendCard />
+          {/* Matchup win rates read as a breakdown of the headline win rate. */}
+          <div className="md:col-span-2">
+            <MatchupOverTimeChart bucket={bucket as "day" | "week" | "month"} />
+          </div>
 
           {/*
            * Keep the outcome and rating views together directly beneath the
@@ -166,9 +170,6 @@ export function TrendsTab() {
             title="Time & activity"
             subtitle={isGlobal ? "When players play, how long games run, and how activity changes over time." : "When you play, how long games run, and how activity changes over time."}
           />
-          <div className="md:col-span-2">
-            <MatchupOverTimeChart bucket={bucket as "day" | "week" | "month"} />
-          </div>
           <div className="md:col-span-2">
             <MatchupGameLengthCard />
           </div>

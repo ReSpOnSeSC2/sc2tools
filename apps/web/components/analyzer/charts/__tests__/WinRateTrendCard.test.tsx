@@ -64,6 +64,20 @@ describe("WinRateTrendCard", () => {
     expect(screen.getByText(/Windows can contain more than 100 games/)).toBeTruthy();
   });
 
+  it("switches to the cumulative rate over every game with the All control", () => {
+    mount();
+    fireEvent.click(screen.getByRole("button", { name: "Include all games" }));
+    expect(screen.getByRole("button", { name: "Include all games" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Target at least 30 games" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getAllByText("All games").length).toBeGreaterThan(0);
+    expect(screen.getByText(/120 games · 60W · 60L/)).toBeTruthy();
+    expect(screen.getByText("Sep 1, 2026 – Sep 4, 2026")).toBeTruthy();
+    expect(screen.getByText(/Every game in the date range, up to each point/)).toBeTruthy();
+    expect(screen.getByText(/Each point counts every game from the start of the date range/)).toBeTruthy();
+    expect(screen.getByText(/Cumulative win rate over every game/)).toBeTruthy();
+    expect(screen.queryByText("Building a sample")).toBeNull();
+  });
+
   it("removes the trace and explains the shortfall when a larger sample exceeds history", () => {
     useApiMock.mockReturnValue({ data: response([10, 20]), isLoading: false });
     const { container } = mount();

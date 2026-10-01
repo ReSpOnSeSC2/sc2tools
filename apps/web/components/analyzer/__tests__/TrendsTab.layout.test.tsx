@@ -163,11 +163,12 @@ describe("TrendsTab layout", () => {
     render(<TrendsTab />);
 
     const orderedLabels = [
+      "Win rate",
+      "Matchup over time",
       "MMR progression",
       "Net MMR by matchup",
       "Opponent MMR buckets",
       "Momentum",
-      "Matchup over time",
       "Matchup game length",
       "Time of day",
       "Game length",
@@ -177,7 +178,7 @@ describe("TrendsTab layout", () => {
       "Skill fingerprint",
     ];
     const positions = orderedLabels.map((label) => {
-      const element = screen.getByText(label);
+      const element = screen.getByText(label).closest("section")!;
       const position = Array.from(document.body.querySelectorAll("section"))
         .indexOf(element);
       expect(position, label).toBeGreaterThanOrEqual(0);
@@ -185,6 +186,9 @@ describe("TrendsTab layout", () => {
     });
 
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    // Matchup win rates sit directly beneath the headline win-rate card.
+    const winRateCard = screen.getByText("Win rate").closest("section");
+    expect(winRateCard?.nextElementSibling).toBe(screen.getByText("Matchup over time").parentElement);
     expect(screen.getByText("Performance & MMR")).toBeTruthy();
     expect(screen.getByText("Time & activity")).toBeTruthy();
     expect(screen.queryByText("Macro score over time")).toBeNull();
