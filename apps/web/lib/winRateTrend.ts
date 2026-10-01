@@ -16,8 +16,13 @@ export type WinRateTrendPoint = WinRatePeriod & {
   ready: boolean;
 };
 
+/** A minimum game count per sample, or "all" for every game so far. */
+export type WinRateSampleTarget = number | "all";
+
 export type WinRateTrend = {
   targetGames: number;
+  /** Each sample starts at the first played period instead of trailing a target. */
+  cumulative: boolean;
   points: WinRateTrendPoint[];
   overall: { wins: number; losses: number; games: number; rate: number | null };
   /** The last period with games, including when its sample is still too small. */
@@ -46,17 +51,23 @@ function calendarDate(value: string): Date | null {
  * aggregate data cannot reveal which games were played first inside a period.
  * Consequently samples can exceed the target. Empty days never extend the trace.
  *
+ * A target of "all" never drops old periods: each point is the cumulative
+ * rate from the first played period, ready as soon as that period has games.
+ *
  * Invalid dates are omitted. Counts are made non-negative whole numbers and
  * impossible outcome counts are capped to the period's declared total. Unknown
  * outcomes remain in the API denominator; losses are never inferred from wins.
  */
 export function buildWinRateTrend(
   periods: readonly WinRatePeriod[],
-  targetGames: number,
+  targetGames: WinRateSampleTarget,
 ): WinRateTrend {
-  const target = Number.isFinite(targetGames) && targetGames > 0
-    ? Math.min(Math.ceil(targetGames), Number.MAX_SAFE_INTEGER)
-    : 20;
+  const cumulative = targetGames === "all";
+  const target = cumulative
+    ? 1
+    : Number.isFinite(targetGames) && targetGames > 0
+      ? Math.min(Math.ceil(targetGames), Number.MAX_SAFE_INTEGER)
+      : 20;
   const byDate = new Map<string, WinRatePeriod>();
   for (const period of periods) {
     if (!calendarDate(period.date)) continue;
@@ -92,7 +103,7 @@ export function buildWinRateTrend(
       sampleWins += period.wins;
       sampleLosses += period.losses;
       sampleGames += period.games;
-      while (start < played.length && sampleGames - played[start].games >= target) {
+      while (!cumulative && start < played.length && sampleGames - played[start].games >= target) {
         const oldest = played[start++];
         sampleWins -= oldest.wins;
         sampleLosses -= oldest.losses;
@@ -116,7 +127,7 @@ export function buildWinRateTrend(
   }
 
   overall.rate = overall.games > 0 ? (overall.wins / overall.games) * 100 : null;
-  return { targetGames: target, points, overall, latest, readyPoints };
+  return { targetGames: target, cumulative, points, overall, latest, readyPoints };
 }
 
 const compactDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" });

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TrendsDataProvider } from "@/lib/trendsDataContext";
 import { MatchupOverTimeChart } from "../MatchupOverTimeChart";
@@ -137,9 +137,9 @@ describe("MatchupOverTimeChart played matchups", () => {
           point("2026-01-01T00:00:00Z", "PvT", 9, 1, 12),
           point("2026-01-01T00:00:00Z", "ZvT", 0, 3),
           point("2026-02-01T00:00:00Z", "ZvT", 1, 0),
-          point("2026-03-01T00:00:00Z", "PvT", 0, 10),
+          point("2026-03-01T00:00:00Z", "PvT", 0, 20),
           point("2026-04-01T00:00:00Z", "PvT", 1, 1),
-          point("2026-05-01T00:00:00Z", "ZvT", 10, 10),
+          point("2026-05-01T00:00:00Z", "ZvT", 15, 15),
         ],
       },
       isLoading: false,
@@ -149,19 +149,19 @@ describe("MatchupOverTimeChart played matchups", () => {
 
     const protoss = screen.getByRole("region", { name: "PvT win rate over time" });
     const zerg = screen.getByRole("region", { name: "ZvT win rate over time" });
-    expect(within(protoss).getByText("24 games")).toBeTruthy();
-    expect(within(protoss).getByText("Overall 41.7%")).toBeTruthy();
-    expect(within(zerg).getByText("24 games")).toBeTruthy();
-    expect(within(zerg).getByText("Overall 45.8%")).toBeTruthy();
+    expect(within(protoss).getByText("34 games")).toBeTruthy();
+    expect(within(protoss).getByText("Overall 29.4%")).toBeTruthy();
+    expect(within(zerg).getByText("34 games")).toBeTruthy();
+    expect(within(zerg).getByText("Overall 47.1%")).toBeTruthy();
     expect(within(protoss).getByText(/2 other/)).toBeTruthy();
 
     const protossSeries = JSON.parse(within(protoss).getByTestId("matchup-series").getAttribute("data-series")!);
     expect(protossSeries).toHaveLength(2);
-    expect(protossSeries[0]).toMatchObject({ date: "2026-03-01", sampleGames: 22, sampleWins: 9, sampleLosses: 11, rate: 9 / 22 * 100 });
-    expect(protossSeries[1]).toMatchObject({ date: "2026-04-01", sampleGames: 24, sampleWins: 10, sampleLosses: 12, rate: 10 / 24 * 100 });
+    expect(protossSeries[0]).toMatchObject({ date: "2026-03-01", sampleGames: 32, sampleWins: 9, sampleLosses: 21, rate: 9 / 32 * 100 });
+    expect(protossSeries[1]).toMatchObject({ date: "2026-04-01", sampleGames: 34, sampleWins: 10, sampleLosses: 22, rate: 10 / 34 * 100 });
     const zergSeries = JSON.parse(within(zerg).getByTestId("matchup-series").getAttribute("data-series")!);
     expect(zergSeries).toHaveLength(1);
-    expect(zergSeries[0]).toMatchObject({ date: "2026-05-01", sampleGames: 20, sampleWins: 10, sampleLosses: 10, rate: 50 });
+    expect(zergSeries[0]).toMatchObject({ date: "2026-05-01", sampleGames: 30, sampleWins: 15, sampleLosses: 15, rate: 50 });
     expect(within(protoss).getAllByTestId("matchup-line").map((line) => line.getAttribute("data-key"))).toEqual(["rate"]);
     expect(within(protoss).getByTestId("date-axis").getAttribute("data-domain")).toBe(within(zerg).getByTestId("date-axis").getAttribute("data-domain"));
   });
@@ -170,7 +170,48 @@ describe("MatchupOverTimeChart played matchups", () => {
     useApiMock.mockReturnValue({ data: { interval: "day", points: [point("2026-07-05T00:00:00Z", "PvT", 1, 0)] }, isLoading: false });
     render(<MatchupOverTimeChart bucket="day" />);
     expect(screen.getByText("Building a sample")).toBeTruthy();
+    expect(screen.getByText("1 / 30 games")).toBeTruthy();
     expect(screen.getByText(/Recorded so far:.*1W/)).toBeTruthy();
     expect(screen.queryByTestId("matchup-series")).toBeNull();
+  });
+
+  it("offers the same 30, 60, 100, and All sample controls as the win-rate card", () => {
+    useApiMock.mockReturnValue({
+      data: {
+        interval: "day",
+        points: [
+          point("2026-07-01T00:00:00Z", "PvZ", 20, 20),
+          point("2026-07-02T00:00:00Z", "PvZ", 15, 5),
+          point("2026-07-02T00:00:00Z", "PvT", 1, 0),
+        ],
+      },
+      isLoading: false,
+    });
+    render(<MatchupOverTimeChart bucket="day" />);
+    const controls = screen.getByRole("group", { name: "Recent-form game sample" });
+    expect(within(controls).getAllByRole("button").map((button) => button.textContent)).toEqual(["30", "60", "100", "All"]);
+    expect(screen.getByRole("button", { name: "Target at least 30 games" }).getAttribute("aria-pressed")).toBe("true");
+    const series = (region: string) => {
+      const chart = within(screen.getByRole("region", { name: region })).queryByTestId("matchup-series");
+      return chart ? JSON.parse(chart.getAttribute("data-series")!) : null;
+    };
+    expect(series("PvZ win rate over time")).toHaveLength(2);
+    expect(series("PvT win rate over time")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Target at least 60 games" }));
+    expect(series("PvZ win rate over time")).toEqual([expect.objectContaining({ date: "2026-07-02", sampleGames: 60, rate: 35 / 60 * 100 })]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Target at least 100 games" }));
+    expect(series("PvZ win rate over time")).toBeNull();
+    expect(screen.getByText("60 / 100 games")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Include all games" }));
+    expect(series("PvZ win rate over time")).toEqual([
+      expect.objectContaining({ date: "2026-07-01", sampleGames: 40, rate: 50 }),
+      expect.objectContaining({ date: "2026-07-02", sampleGames: 60, rate: 35 / 60 * 100 }),
+    ]);
+    expect(series("PvT win rate over time")).toEqual([expect.objectContaining({ sampleGames: 1, rate: 100 })]);
+    expect(screen.queryByText("Building a sample")).toBeNull();
+    expect(screen.getByText(/Win rate over all games to date per matchup/)).toBeTruthy();
   });
 });

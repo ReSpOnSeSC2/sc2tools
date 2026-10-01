@@ -3,10 +3,25 @@
 import { useId, useMemo } from "react";
 import { CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { useChartTheme } from "@/lib/useChartTheme";
-import { formatTrendDate, type WinRateTrend, type WinRateTrendPoint } from "@/lib/winRateTrend";
+import { formatTrendDate, type WinRateSampleTarget, type WinRateTrend, type WinRateTrendPoint } from "@/lib/winRateTrend";
 
 const percent = (value: number) => `${value.toFixed(1)}%`;
 const timestamp = (date: string) => Date.parse(`${date}T00:00:00Z`);
+const lineLabel = (trend: WinRateTrend) => trend.cumulative ? "All games to date" : "Recent form";
+
+export const WIN_RATE_SAMPLE_TARGETS: readonly WinRateSampleTarget[] = [30, 60, 100, "all"];
+
+/** Shared sample-size switch so every win-rate trend offers the same choices. */
+export function WinRateSampleToggle({ value, onChange }: { value: WinRateSampleTarget; onChange: (target: WinRateSampleTarget) => void }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+      <span className="text-caption text-text-muted">Game-sample target</span>
+      <div className="inline-flex rounded-lg border border-border bg-bg-elevated p-0.5" role="group" aria-label="Recent-form game sample">
+        {WIN_RATE_SAMPLE_TARGETS.map((size) => <button key={size} type="button" aria-pressed={value === size} aria-label={size === "all" ? "Include all games" : `Target at least ${size} games`} onClick={() => onChange(size)} className={`min-h-11 min-w-11 rounded-md px-3 text-caption font-semibold tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${value === size ? "bg-accent text-white shadow-sm" : "text-text-muted hover:bg-bg-surface hover:text-text"}`}>{size === "all" ? "All" : size}</button>)}
+      </div>
+    </div>
+  );
+}
 
 function RecordCount({ wins, losses, games }: { wins: number; losses: number; games: number }) {
   const other = Math.max(0, games - wins - losses);
@@ -46,7 +61,7 @@ export function WinRateSampleSummary({ trend, targetGames, compact = false, reco
   return (
     <div className={`flex flex-wrap items-end justify-between gap-x-4 gap-y-2 ${compact ? "mb-2" : "mb-4"}`}>
       <div>
-        <div className="text-micro font-semibold uppercase tracking-wider text-text-muted">Recent form</div>
+        <div className="text-micro font-semibold uppercase tracking-wider text-text-muted">{trend.cumulative ? "All games" : "Recent form"}</div>
         <div className={`${compact ? "text-2xl" : "text-4xl"} font-display font-bold leading-tight tabular-nums text-text`}>
           {percent(latest.rate!)}
         </div>
@@ -84,10 +99,10 @@ export function WinRateTrendPlot({ trend, compact = false, label = "Recent win r
   return (
     <div className="min-w-0">
       <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-micro text-text-muted ${compact ? "mb-1" : "mb-3"}`} aria-hidden="true">
-        <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-4 rounded bg-accent-cyan" />Recent form</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-4 rounded bg-accent-cyan" />{lineLabel(trend)}</span>
         <span className="inline-flex items-center gap-1.5"><span className="w-4 border-t border-dashed border-text-muted" />Overall {percent(trend.overall.rate!)}</span>
       </div>
-      <p id={descriptionId} className="sr-only">{label}. Game-weighted windows of at least {trend.targetGames} {recordLabel}. The dashed line is the overall win rate in the selected date range. The scale is zero to one hundred percent. Use the left and right arrow keys to explore samples.</p>
+      <p id={descriptionId} className="sr-only">{label}. {trend.cumulative ? `Cumulative win rate over every ${recordLabel.replace(/s$/, "")} from the start of the selected date range.` : `Game-weighted windows of at least ${trend.targetGames} ${recordLabel}.`} The dashed line is the overall win rate in the selected date range. The scale is zero to one hundred percent. Use the left and right arrow keys to explore samples.</p>
       <div className={compact ? "h-36 min-w-0" : "h-56 min-w-0 sm:h-64"}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart accessibilityLayer data={points} margin={{ top: 10, right: 10, bottom: 0, left: 0 }} aria-label={label} aria-describedby={descriptionId}>
@@ -102,12 +117,12 @@ export function WinRateTrendPlot({ trend, compact = false, label = "Recent win r
               return (
                 <div role="status" aria-live="polite" aria-atomic="true" className="max-w-[240px] rounded-lg border border-border-strong bg-bg-surface p-3 text-caption text-text shadow-lg">
                   <div className="mb-1 font-semibold">{interval !== "day" ? `${interval === "week" ? "Weeks" : "Months"} starting ` : ""}{formatTrendDate(point.sampleStart, true)} – {formatTrendDate(point.date, true)}</div>
-                  <div className="flex items-baseline justify-between gap-4"><span>Recent form</span><strong className="text-lg tabular-nums">{percent(point.rate)}</strong></div>
+                  <div className="flex items-baseline justify-between gap-4"><span>{lineLabel(trend)}</span><strong className="text-lg tabular-nums">{percent(point.rate)}</strong></div>
                   <div className="tabular-nums text-text-muted">{point.sampleGames.toLocaleString()} {recordLabel} · <RecordCount wins={point.sampleWins} losses={point.sampleLosses} games={point.sampleGames} /></div>
                 </div>
               );
             }} />
-            <Line type="monotone" dataKey="rate" name="Recent form" stroke={theme.accentCyan} strokeWidth={compact ? 2.5 : 3} dot={trend.readyPoints <= 2 ? { r: 3, strokeWidth: 0, fill: theme.accentCyan } : false} activeDot={{ r: 5, stroke: theme.bgSurface, strokeWidth: 2, fill: theme.accentCyan }} connectNulls={false} isAnimationActive={false} />
+            <Line type="monotone" dataKey="rate" name={lineLabel(trend)} stroke={theme.accentCyan} strokeWidth={compact ? 2.5 : 3} dot={trend.readyPoints <= 2 ? { r: 3, strokeWidth: 0, fill: theme.accentCyan } : false} activeDot={{ r: 5, stroke: theme.bgSurface, strokeWidth: 2, fill: theme.accentCyan }} connectNulls={false} isAnimationActive={false} />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
