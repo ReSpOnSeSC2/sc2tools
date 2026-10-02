@@ -11,8 +11,10 @@
  * comes from `key`, the stable identifier in
  * apps/api/src/config/guideMilestones.js: repeated buildings carry an
  * occurrence suffix ("Nexus#2", "Hatchery#3"), stripped to the base wire
- * name. For every catalog entry that normalises to the same name as the
- * API's canonical `names[0]` (pinned by lib/guides/__tests__/ghost.test.ts).
+ * name, and `WIRE_NAME_BY_KEY` maps the one key that is not its wire name
+ * ("LurkerDenMP"). For every catalog entry that normalises to the same
+ * name as the API's canonical `names[0]` (pinned by
+ * lib/guides/__tests__/ghost.test.ts).
  * Steps are ordered by median.
  *
  * Times are the RECORDED build-log medians (buildings at start,
@@ -53,12 +55,21 @@ interface OrderedMilestone {
 }
 
 /**
+ * Milestone keys that are not their own wire name. The Lurker Den's key is
+ * sc2reader's raw unit type; build logs carry "LurkerDen".
+ */
+const WIRE_NAME_BY_KEY: Readonly<Record<string, string>> = {
+  LurkerDenMP: "LurkerDen",
+};
+
+/**
  * Base wire name of a milestone key.
  *
  * Example: `ghostStepName("Nexus#2")` → "Nexus"; `ghostStepName("BlinkTech")` → "BlinkTech".
  */
 export function ghostStepName(key: string): string {
-  return key.replace(OCCURRENCE_SUFFIX_RE, "").trim();
+  const base = key.replace(OCCURRENCE_SUFFIX_RE, "").trim();
+  return WIRE_NAME_BY_KEY[base] ?? base;
 }
 
 function hasOccurrenceSuffix(key: string): boolean {

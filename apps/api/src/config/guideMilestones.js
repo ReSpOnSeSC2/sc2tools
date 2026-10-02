@@ -120,7 +120,9 @@ const ZERG_MILESTONES = Object.freeze([
   milestone("Spire", "Spire", ["Spire"], START),
   milestone("GlialReconstitution", "Glial Reconstitution", ["GlialReconstitution"], FINISH),
   milestone("NydusNetwork", "Nydus Network", ["NydusNetwork"], START),
-  milestone("LurkerDenMP", "Lurker Den", ["LurkerDenMP", "LurkerDen"], START),
+  // The key is sc2reader's raw unit type and stays (stable storage key);
+  // the replay engine logs the den as "LurkerDen".
+  milestone("LurkerDenMP", "Lurker Den", ["LurkerDen", "LurkerDenMP"], START),
 ]);
 
 /** Race letter → ordered milestone list (display order). */

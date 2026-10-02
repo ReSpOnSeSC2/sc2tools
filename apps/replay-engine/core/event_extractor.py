@@ -90,6 +90,27 @@ MORPH_BUILDINGS: Set[str] = {
     "WarpGate", "LurkerDen",
 }
 
+# sc2reader's LotV unit tables keep Blizzard's multiplayer "MP" suffix on
+# the Lurker line: the den's UnitInitEvent is typed "LurkerDenMP"
+# ("LurkerDen" exists only as ``unit.name``). KNOWN_BUILDINGS, the
+# tech-prerequisite tables, the build-duration tables, the built-in Lurker
+# Contain rules and the cloud's timing catalog all say "LurkerDen", so
+# ``extract_events`` maps the raw type to it. Until it did, the init was
+# dropped as an unknown name and the UnitDoneEvent (which resolves to
+# "LurkerDen" through ``unit.name``) was skipped as a known building: no
+# replay ever recorded a Lurker Den.
+EVENT_NAME_ALIASES: Dict[str, str] = {"LurkerDenMP": "LurkerDen"}
+
+# Raw types of units that morph in place from another unit and so never
+# fire a UnitBornEvent / UnitDoneEvent: the only tracker signal is a
+# UnitTypeChangeEvent to that type (Hydralisk -> LurkerMPEgg -> LurkerMP).
+# ``extract_events`` emits one ``type: "unit"`` event, under the raw name
+# like every other unit, the first time a unit takes the type -- the
+# morph's FINISH. Later changes back to it (a Lurker unburrowing:
+# LurkerMPBurrowed -> LurkerMP) are the same unit and are not emitted
+# again.
+UNIT_MORPH_COMPLETIONS: Set[str] = {"LurkerMP"}
+
 # Workers never enter the build log or the unit timeline, but the build
 # classifiers count them (12 Pool vs 14 Pool, "2 Base Roach/Ravager All-in
 # on < 40 Drones", "Standard Macro (CIA) on > 40 Probes", ...). They are
@@ -266,6 +287,19 @@ def _clean_building_name(raw_name: str) -> str:
     return raw_name.strip()
 
 
+def _event_name(raw_name: str) -> str:
+    """Name ``extract_events`` records for a raw tracker unit type.
+
+    Example:
+        >>> _event_name("LurkerDenMP")
+        'LurkerDen'
+        >>> _event_name("ZergHatchery")
+        'Hatchery'
+    """
+    clean = _clean_building_name(raw_name)
+    return EVENT_NAME_ALIASES.get(clean, clean)
+
+
 def _get_owner_pid(event) -> Optional[int]:
     for attr in ('control_pid', 'pid'):
         pid = getattr(event, attr, None)
@@ -343,6 +377,11 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
     sub-50 s Pool, every Spire by 7:00 was a "2 Base Muta Rush" and
     "Hatch First Macro" / "Standard Macro (CIA)" could never fire.
     ``build_log_lines`` and the playback / heatmap paths skip them.
+
+    Names are sc2reader's raw unit types ("VikingFighter", "SwarmHostMP",
+    "LurkerMP") except the Lurker Den, recorded as "LurkerDen": see
+    ``EVENT_NAME_ALIASES``. Lurkers morph in place and are read from
+    type-change events: see ``UNIT_MORPH_COMPLETIONS``.
     """
     my_events: List[Dict] = []
     opp_events: List[Dict] = []
@@ -362,6 +401,8 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
         # which counts build-log events).
         'workers': 0,
     }
+    # Unit ids already emitted through UNIT_MORPH_COMPLETIONS.
+    morphed_unit_ids: Set[Any] = set()
     event_source = getattr(replay, 'tracker_events', None) or replay.events
 
     try:
@@ -374,7 +415,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     stats['pid_failed'] += 1
                     stats['proxy_errors'] += 1
                     continue
-                clean = _clean_building_name(raw)
+                clean = _event_name(raw)
                 if pid is None:
                     stats['pid_failed'] += 1
                     if clean in PROXY_ELIGIBLE_BUILDINGS:
@@ -397,7 +438,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     stats['pid_failed'] += 1
                     stats['proxy_errors'] += 1
                     continue
-                clean = _clean_building_name(raw)
+                clean = _event_name(raw)
                 if pid is None:
                     stats['pid_failed'] += 1
                     if clean in PROXY_ELIGIBLE_BUILDINGS:
@@ -437,7 +478,7 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                 if raw is None:
                     stats['proxy_errors'] += 1
                     continue
-                clean = _clean_building_name(raw)
+                clean = _event_name(raw)
                 if pid is None:
                     if clean in PROXY_ELIGIBLE_BUILDINGS:
                         stats['proxy_errors'] += 1
@@ -455,13 +496,24 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     evt = {'type': 'building', 'subtype': 'morph', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
+                elif clean in UNIT_MORPH_COMPLETIONS:
+                    uid = _resolve_unit_id(event)
+                    if uid in morphed_unit_ids:
+                        continue
+                    morphed_unit_ids.add(uid)
+                    # No position: the event has none and the shared
+                    # Unit's location is wherever it was last seen, not
+                    # where the morph finished.
+                    evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'x': 0, 'y': 0}
+                    (my_events if pid == my_pid else opp_events).append(evt)
+                    stats['processed'] += 1
 
             elif isinstance(event, UnitDoneEvent):
                 pid = _get_owner_pid(event)
                 raw = _get_unit_type_name(event)
                 if pid is None or raw is None:
                     continue
-                clean = _clean_building_name(raw)
+                clean = _event_name(raw)
                 x = getattr(event.unit, 'x', 0) if getattr(event, 'unit', None) else 0
                 y = getattr(event.unit, 'y', 0) if getattr(event, 'unit', None) else 0
 
