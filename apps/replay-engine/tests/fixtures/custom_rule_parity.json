@@ -2207,6 +2207,196 @@
     "[5:00] Phoenix"
    ],
    "proxies": []
+  },
+  {
+   "name": "Viking under its replay name is compared at its start",
+   "why": "The replay calls a Viking VikingFighter. It finishes at 5:10 (30 s, started 4:40); the rule says before 5:00.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildVikingFighter",
+     "time_lt": 300
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "CommandCenter",
+     "time": 0,
+     "x": 139,
+     "y": 163
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SupplyDepot",
+     "time": 18,
+     "x": 143,
+     "y": 157
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Barracks",
+     "time": 41,
+     "x": 141,
+     "y": 150
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Refinery",
+     "time": 45,
+     "x": 146,
+     "y": 160
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Factory",
+     "time": 110,
+     "x": 136,
+     "y": 152
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Starport",
+     "time": 180,
+     "x": 133,
+     "y": 157
+    },
+    {
+     "type": "unit",
+     "name": "VikingFighter",
+     "time": 310,
+     "x": 134,
+     "y": 158
+    }
+   ],
+   "build_log": [
+    "[0:00] CommandCenter",
+    "[0:18] SupplyDepot",
+    "[0:41] Barracks",
+    "[0:45] Refinery",
+    "[1:50] Factory",
+    "[3:00] Starport",
+    "[5:10] VikingFighter"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Swarm Host and Lurker under their replay names are compared at their starts",
+   "why": "The replay calls them SwarmHostMP and LurkerMP. The Swarm Host finishes at 7:20 (29 s, started 6:51) and the Lurker at 8:10 (18 s morph, started 7:52); the rules say before 7:00 and before 8:00.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildSwarmHostMP",
+     "time_lt": 420
+    },
+    {
+     "type": "before",
+     "name": "BuildLurkerMP",
+     "time_lt": 480
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "HydraliskDen",
+     "time": 250,
+     "x": 55,
+     "y": 42
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "InfestationPit",
+     "time": 300,
+     "x": 57,
+     "y": 54
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "LurkerDen",
+     "time": 330,
+     "x": 52,
+     "y": 50
+    },
+    {
+     "type": "unit",
+     "name": "SwarmHostMP",
+     "time": 440,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "LurkerMP",
+     "time": 490,
+     "x": 58,
+     "y": 46
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[4:10] HydraliskDen",
+    "[5:00] InfestationPit",
+    "[5:30] LurkerDen",
+    "[7:20] SwarmHostMP",
+    "[8:10] LurkerMP"
+   ],
+   "proxies": []
   }
  ]
 }

@@ -170,12 +170,16 @@ def test_build_duration_tables_match_the_shared_snapshot():
         ("Lair", 300, {"is_building": True}, 243),
         ("OrbitalCommand", 330, {"is_building": True}, 305),
         ("Stalker", 180, {}, 150),
+        # The replay's own names for Viking, Swarm Host and Lurker.
+        ("VikingFighter", 300, {}, 270),
+        ("SwarmHostMP", 400, {}, 371),
+        ("LurkerMP", 500, {}, 482),
         ("WarpGateResearch", 420, {"is_upgrade": True}, 320),
         # sc2reader's lower-case upgrade names resolve to the same row.
         ("zerglingmovementspeed", 301, {"is_upgrade": True}, 201),
         ("Spawning Pool", 75, {}, 75),
         # Unknown names and unknown upgrades are left alone.
-        ("VikingFighter", 300, {}, 300),
+        ("FlibbertyGibbet", 300, {}, 300),
         ("AdeptPiercingAttack", 400, {"is_upgrade": True}, 400),
         # 8-worker patch 5.0.16 overrides.
         ("Adept", 150, {"eight_worker": True}, 117),

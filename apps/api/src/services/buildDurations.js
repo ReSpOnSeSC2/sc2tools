@@ -142,6 +142,10 @@ const STRUCTURE_BUILD_SECONDS = Object.freeze({
  * time the player issued the train command (or larva inject /
  * warp-in trigger).
  *
+ * The replay names three units differently from their display name
+ * (``VikingFighter``, ``LurkerMP``, ``SwarmHostMP``) and the build log
+ * carries the replay name, so those are listed under both spellings.
+ *
  * @type {Record<string, number>}
  */
 const UNIT_BUILD_SECONDS = Object.freeze({
@@ -177,6 +181,7 @@ const UNIT_BUILD_SECONDS = Object.freeze({
   Cyclone: 32,
   SiegeTank: 32,
   Thor: 43,
+  VikingFighter: 30,
   Viking: 30,
   Medivac: 30,
   Liberator: 43,
@@ -192,11 +197,13 @@ const UNIT_BUILD_SECONDS = Object.freeze({
   Roach: 19,
   Ravager: 9,
   Hydralisk: 24,
+  LurkerMP: 18,
   Lurker: 18,
   Mutalisk: 24,
   Corruptor: 29,
   BroodLord: 24,
   Infestor: 36,
+  SwarmHostMP: 29,
   SwarmHost: 29,
   Viper: 29,
   Ultralisk: 39,
