@@ -20,6 +20,13 @@ const { isProxyEligibleBuilding } = require("./knownBuildings");
  *   - `proxy: true`  : optional modifier; count only structures classified
  *                      as proxied by the replay agent's canonical geometry
  *
+ * Events must be at construction-START time (`eventsToStartTime`): the SPA
+ * saves `time_lt` off the start-time timeline. The desktop evaluator
+ * (apps/replay-engine/core/strategy_detector_base.py, `check_custom_rules`)
+ * applies the same rewind and the same proxy geometry;
+ * __tests__/customRuleParity.test.js and the engine's
+ * tests/test_custom_rule_parity.py run one fixture through both.
+ *
  * Event matching uses the SPA token map: an event matches a rule when
  * its computed token (Build/Train/Research/Morph prefix) equals
  * `rule.name`. Bare nouns default to "Build" + noun.
@@ -314,6 +321,23 @@ function evaluateRule(rule, events, earliestBuilds) {
       ))
     )
   ) {
+    return {
+      pass: false,
+      unavailable: true,
+      reason: `Proxy classification unavailable for ${name}`,
+    };
+  }
+  if (
+    proxyOnly
+    && events.some((event) => (
+      event?.is_building === true
+      && typeof event.is_proxy !== "boolean"
+      && Number(event.time) < limit
+      && eventToken(event) === name
+    ))
+  ) {
+    // A structure this rule would count that an older agent's stamp cannot
+    // settle (see proxyClassification.js): unknown, not a guess.
     return {
       pass: false,
       unavailable: true,

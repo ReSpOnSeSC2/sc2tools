@@ -251,6 +251,45 @@ describe("custom-build rule scan memory safety", () => {
     expect(oversized.spatial.my_proxies).toHaveLength(2_000);
   });
 
+  test("GamesService keeps the proxy stamp's version", async () => {
+    const games = db.collection("games");
+    const service = new GamesService({ games });
+    const base = {
+      date: new Date("2026-10-02T14:00:00.000Z"),
+      myRace: "Zerg",
+      opponent: { race: "Terran" },
+    };
+    const proxies = [{ name: "Hatchery", time: 150, x: 141, y: 48 }];
+    for (const [gameId, version] of [
+      ["proxy-v1", 1], ["proxy-v2", 2], ["proxy-v3", 3], ["proxy-v-string", "2"],
+    ]) {
+      await service.upsert("u-proxy-version", {
+        ...base,
+        gameId,
+        spatial: {
+          my_proxy_classification_v: version,
+          opp_proxy_classification_v: version,
+          my_proxies: proxies,
+        },
+      });
+    }
+
+    const stamp = async (gameId) => {
+      const row = await games.findOne({ gameId });
+      return [
+        row.spatial.my_proxy_classification_v,
+        row.spatial.opp_proxy_classification_v,
+      ];
+    };
+    // 1 is the flat 50-unit geometry, 2 the per-structure radius; the
+    // reader (proxyClassification.js) needs to know which one it has.
+    expect(await stamp("proxy-v1")).toEqual([1, 1]);
+    expect(await stamp("proxy-v2")).toEqual([2, 2]);
+    // A version this build does not understand is not evidence.
+    expect(await stamp("proxy-v3")).toEqual([undefined, undefined]);
+    expect(await stamp("proxy-v-string")).toEqual([undefined, undefined]);
+  });
+
   test("the Mongo detail store projects away unrequested heavy fields", async () => {
     const collection = db.collection("game_details_projection");
     const store = new MongoDetailsStore({ gameDetails: collection });

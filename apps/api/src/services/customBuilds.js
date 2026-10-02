@@ -20,7 +20,10 @@ const {
   listBuildPage,
   invalidPage,
 } = require("./customBuildPages");
-const { parseBuildLogLines, eventsToStartTime } = require("./perGameCompute");
+const {
+  parseBuildLogWithProxies,
+  eventsToStartTime,
+} = require("./perGameCompute");
 const {
   assertNoActiveOpponentBuildOrderWrites,
   assertStableOpponentBuildOrderPage,
@@ -2178,6 +2181,7 @@ class CustomBuildsService {
    *   buildLog?: string[],
    *   oppBuildLog?: string[],
    *   spatial?: {
+   *     buildings?: object[],
    *     my_proxies?: object[], opp_proxies?: object[],
    *     my_proxy_classification_v?: number,
    *     opp_proxy_classification_v?: number,
@@ -2218,20 +2222,20 @@ class CustomBuildsService {
     // duration catalog for this game's patch era; non-morph structures
     // pass through unchanged.
     const events = eventsToStartTime(
-      parseBuildLogLines(
+      parseBuildLogWithProxies(
         Array.isArray(game.buildLog) ? game.buildLog : [],
         catalog,
-        game.spatial?.my_proxies,
-        game.spatial?.my_proxy_classification_v === 1,
+        game.spatial,
+        "my",
       ),
       game,
     );
     const oppEvents = eventsToStartTime(
-      parseBuildLogLines(
+      parseBuildLogWithProxies(
         Array.isArray(game.oppBuildLog) ? game.oppBuildLog : [],
         catalog,
-        game.spatial?.opp_proxies,
-        game.spatial?.opp_proxy_classification_v === 1,
+        game.spatial,
+        "opp",
       ),
       game,
     );

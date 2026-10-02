@@ -78,7 +78,8 @@ const PATCH_5_0_17_RELEASE = new Date("2026-09-30T04:00:00.000Z");
  * open, since live games stay on 5.0.16 while 5.0.17 is on the PTR. (A
  * PTR game carries its "5.0.17." release string, so it never needs this.)
  * Set it, and PATCH_5_0_17_BUILD, when the patch ships, and mirror both in
- * apps/web/lib/ladderPulse.ts.
+ * apps/web/lib/ladderPulse.ts (and the build in
+ * apps/replay-engine/core/build_definitions.py, ``is_eight_worker_game``).
  * @type {Date | null}
  */
 const PATCH_5_0_17_LIVE = null;

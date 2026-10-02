@@ -37,7 +37,12 @@ class OpponentStrategyDetector(BaseStrategyDetector):
         matchup: str = "vs Any",
         game_length_seconds: float = None,
         my_race: str = None,
+        eight_worker: bool = False,
     ) -> str:
+        # ``eight_worker`` (the replay was played on the 8-worker patch
+        # 5.0.16) only picks the build durations custom v3 rules rewind
+        # by; see BaseStrategyDetector.check_custom_rules.
+
         # Short-circuit: a replay that ended before 30 seconds has no
         # build order to classify. Emit the matchup-prefixed
         # "Game Too Short" bucket so the dashboard groups these
@@ -79,6 +84,7 @@ class OpponentStrategyDetector(BaseStrategyDetector):
                 rules = cb.get("rules", [])
                 if rules and self.check_custom_rules(
                     rules, buildings, units, upgrades, main_loc,
+                    eight_worker=eight_worker,
                 ):
                     return cb["name"]
 

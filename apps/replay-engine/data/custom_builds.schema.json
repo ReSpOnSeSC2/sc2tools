@@ -250,7 +250,7 @@
         },
         "proxy": {
           "type": "boolean",
-          "description": "When true, only structures more than 50 world units from their owner's main satisfy this rule."
+          "description": "When true, only proxied structures satisfy this rule: more than 50 world units from their owner's main, or 80 for town halls, gas and Spine / Spore Crawlers."
         },
         "tol": {
           "type": "integer",
@@ -297,7 +297,7 @@
         },
         "proxy": {
           "type": "boolean",
-          "description": "When true, only structures more than 50 world units from their owner's main satisfy this rule."
+          "description": "When true, only proxied structures satisfy this rule: more than 50 world units from their owner's main, or 80 for town halls, gas and Spine / Spore Crawlers."
         }
       }
     },
@@ -344,7 +344,7 @@
         },
         "proxy": {
           "type": "boolean",
-          "description": "When true, count only structures more than 50 world units from their owner's main."
+          "description": "When true, count only proxied structures: more than 50 world units from their owner's main, or 80 for town halls, gas and Spine / Spore Crawlers."
         }
       }
     },
@@ -391,7 +391,7 @@
         },
         "proxy": {
           "type": "boolean",
-          "description": "When true, count only structures more than 50 world units from their owner's main."
+          "description": "When true, count only proxied structures: more than 50 world units from their owner's main, or 80 for town halls, gas and Spine / Spore Crawlers."
         }
       }
     },
@@ -438,7 +438,7 @@
         },
         "proxy": {
           "type": "boolean",
-          "description": "When true, count only structures more than 50 world units from their owner's main."
+          "description": "When true, count only proxied structures: more than 50 world units from their owner's main, or 80 for town halls, gas and Spine / Spore Crawlers."
         }
       }
     }

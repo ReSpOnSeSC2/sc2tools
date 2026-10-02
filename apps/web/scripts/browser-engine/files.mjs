@@ -37,7 +37,8 @@ const AGENT_MODULES = [
 ];
 
 const CORE_MODULES = [
-  "__init__", "ability_casts", "atomic_io", "build_definitions", "custom_builds", "event_extractor",
+  "__init__", "ability_casts", "atomic_io", "build_definitions", "build_durations", "custom_builds",
+  "event_extractor",
   "file_lock", "map_playback_data", "paths", "replay_errors", "replay_loader", "sc2_catalog",
   "sc2_observation_export", "sc2_replay_parser", "strategy_detector", "strategy_detector_base",
   "strategy_detector_helpers", "strategy_detector_matchups", "strategy_detector_opponent",
@@ -73,7 +74,7 @@ function normalizeNewlines(buffer) {
  * Read every allowlisted file; fails loudly when one is missing.
  *
  * Example:
- *   (await readBundleFiles()).length; // -> 37
+ *   (await readBundleFiles()).length; // -> 38
  */
 export async function readBundleFiles() {
   return Promise.all(BUNDLE_FILES.map(async (relative) => {

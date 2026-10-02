@@ -650,6 +650,7 @@ export interface CustomBuildsService {
       buildLog?: string[];
       oppBuildLog?: string[];
       spatial?: {
+        buildings?: object[];
         my_proxies?: object[];
         opp_proxies?: object[];
         my_proxy_classification_v?: number;

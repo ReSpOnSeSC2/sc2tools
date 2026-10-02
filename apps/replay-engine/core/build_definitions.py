@@ -311,6 +311,40 @@ def name_for_game_version(name: Optional[str], game_version: Optional[str]) -> O
     return name
 
 
+# First live 5.0.16 build and first 5.0.17 build (None until it ships),
+# mirroring PATCH_5_0_16_BUILD / PATCH_5_0_17_BUILD in the API's
+# util/patchEra.js.
+PATCH_5_0_16_BUILD = 97364
+PATCH_5_0_17_BUILD: Optional[int] = None
+
+
+def is_eight_worker_game(
+    game_version: Optional[str], game_build: Optional[int] = None,
+) -> bool:
+    """True for a replay played on the 8-worker patch 5.0.16.
+
+    Same precedence as ``isEightWorkerGame`` in the API's util/patchEra.js:
+    the release string when the replay has one, else the numeric build.
+    The API's last fallback, the game date, is for stored rows that
+    predate version metadata; a replay file always carries its version.
+
+    Example:
+        >>> is_eight_worker_game("5.0.16.97425")
+        True
+        >>> is_eight_worker_game("5.0.17.98000", 98000)
+        False
+        >>> is_eight_worker_game(None, 97364)
+        True
+    """
+    if isinstance(game_version, str):
+        return game_version.startswith(EIGHT_WORKER_VERSION_PREFIX)
+    if isinstance(game_build, int) and not isinstance(game_build, bool):
+        return game_build >= PATCH_5_0_16_BUILD and (
+            PATCH_5_0_17_BUILD is None or game_build < PATCH_5_0_17_BUILD
+        )
+    return False
+
+
 def candidate_signatures_for(
     race: str, vs_race: str
 ) -> Dict[str, Dict[str, object]]:
@@ -383,6 +417,48 @@ PROXY_ELIGIBLE_BUILDINGS: Set[str] = (
     - NON_BUILD_EVENT_STRUCTURES
     - MORPH_BUILDINGS
 )
+
+# The canonical proxy test: a structure is proxied when it stands farther
+# from its owner's main (their first town hall) than its radius below.
+# Custom ``proxy: true`` rules on the desktop, the agent's
+# ``spatial.*_proxies`` stamp (which the cloud evaluator trusts) and the
+# offline proxy heatmap all share it.
+#
+# 50 world units clears the main and the natural. A standard third base
+# sits 50-80 units out on most ladder maps (51.9 on Ever Dream), so the
+# structures a macro game places there -- town halls, their gas, and Zerg
+# static defence -- need the wider 80-unit test the built-in
+# "Zerg - Proxy Hatch" rule already uses. Without it "proxied Hatchery
+# before 4:00" matches every three-base game.
+#
+# Keep the two radii and the set in sync with
+# apps/api/src/services/proxyClassification.js, which re-tests rows that
+# older agents stamped with a flat 50 units.
+PROXY_DISTANCE_DEFAULT: float = 50.0
+PROXY_DISTANCE_EXPANSION: float = 80.0
+EXPANSION_PROXY_BUILDINGS: Set[str] = {
+    "Nexus", "CommandCenter", "Hatchery",
+    # Morphed town halls cannot carry a proxy rule (see MORPH_BUILDINGS)
+    # but the offline heatmap reads lifecycle rows that are renamed by
+    # the morph, so they take the town-hall radius too.
+    "OrbitalCommand", "PlanetaryFortress", "Lair", "Hive",
+    "Assimilator", "Refinery", "Extractor",
+    "SpineCrawler", "SporeCrawler",
+}
+
+
+def proxy_distance_for(name: object) -> float:
+    """Distance from the owner's main beyond which ``name`` is a proxy.
+
+    Example:
+        >>> proxy_distance_for("Barracks")
+        50.0
+        >>> proxy_distance_for("Hatchery")
+        80.0
+    """
+    if name in EXPANSION_PROXY_BUILDINGS:
+        return PROXY_DISTANCE_EXPANSION
+    return PROXY_DISTANCE_DEFAULT
 
 # Sorted list of named builds (excluding catch-alls), suitable for seeding the DB.
 KNOWN_BUILDS: List[str] = sorted(list(set([

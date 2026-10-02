@@ -63,6 +63,15 @@ export const PROXY_ELIGIBLE_BUILDINGS: ReadonlySet<string> = new Set([
   "NydusNetwork", "NydusCanal", "UltraliskCavern",
 ]);
 
+/**
+ * What "proxied" means, for the editor's tooltips. The test itself runs in
+ * the replay engine (core/build_definitions.py, ``proxy_distance_for``):
+ * a third base is 50-80 units from the main on most maps, so town halls,
+ * gas and Zerg static defence only count past 80.
+ */
+export const PROXY_RULE_DISTANCE_HINT =
+  "more than 50 world units from its owner's main (80 for town halls, gas and Spine or Spore Crawlers)";
+
 const PROXY_BUILDING_BY_NORMALIZED: ReadonlyMap<string, string> = new Map(
   Array.from(PROXY_ELIGIBLE_BUILDINGS, (name) => [name.toLowerCase(), name]),
 );

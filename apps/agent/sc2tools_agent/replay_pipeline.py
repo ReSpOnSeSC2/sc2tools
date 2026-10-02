@@ -1575,6 +1575,15 @@ def _death_zone_sample(
     }
 
 
+# Version of the geometry behind ``spatial.{my,opp}_proxy_classification_v``.
+# 1 (from agent 0.16.0) tested every structure at a flat 50 units, which
+# counted a standard third base (and its gas / crawlers) as a proxy. 2 is
+# the engine's per-structure radius (``_is_canonical_proxy``). The cloud
+# reads the version to decide whether a stored row needs the wide-radius
+# structures re-tested (apps/api/src/services/proxyClassification.js).
+PROXY_CLASSIFICATION_VERSION = 2
+
+
 def _compute_spatial_extract(ctx: Any) -> Optional[Dict[str, Any]]:
     """Extract per-replay spatial events for the cloud Map Intel heatmaps.
 
@@ -1682,9 +1691,11 @@ def _compute_spatial_extract(ctx: Any) -> Optional[Dict[str, Any]]:
     # They are the exact events that produced buildLog, so name/time pairs
     # still correlate after lifecycle morph renames such as CC -> Orbital.
     # Proxy detection deliberately calls the replay engine's canonical
-    # BaseStrategyDetector helper. Built-in strategy rules and custom-build
-    # rules therefore share the exact same meaning: a structure more than
-    # 50 world units from its owner's first town hall is proxied.
+    # BaseStrategyDetector helper, so the desktop's custom-build rules and
+    # the cloud evaluator (which trusts this list) share one meaning: a
+    # structure is proxied when it stands farther from its owner's first
+    # town hall than its radius -- 80 world units for town halls, gas and
+    # Spine / Spore Crawlers, 50 for everything else.
     if BaseStrategyDetector is not None and (my_buildings or opp_buildings):
         detector = BaseStrategyDetector(custom_builds=[])
         for prefix, rows, source_complete in (
@@ -1701,13 +1712,15 @@ def _compute_spatial_extract(ctx: Any) -> Optional[Dict[str, Any]]:
                     row
                     for row in rows
                     if row.get("name") in proxy_eligible_buildings
-                    if detector._is_proxy(row, main_xy, 50.0)
+                    if detector._is_canonical_proxy(row, main_xy)
                 ]
                 # The stamp is emitted only after every source building event
                 # had finite x/y/time and a canonical name. It therefore means
                 # complete classifiability for this side, not merely that one
                 # positive proxy was found.
-                out[f"{prefix}_proxy_classification_v"] = 1
+                out[f"{prefix}_proxy_classification_v"] = (
+                    PROXY_CLASSIFICATION_VERSION
+                )
                 if proxies:
                     out[f"{prefix}_proxies"] = proxies
             except Exception as exc:  # noqa: BLE001
@@ -1786,9 +1799,9 @@ def _proxy_event_side_complete(
     proxy_eligible_buildings: set,
     extraction_complete: bool,
 ) -> bool:
-    """Whether one playback side can safely carry proxy-classifier v1.
+    """Whether one playback side can safely carry the proxy-classifier stamp.
 
-    Version 1 is a completeness assertion used by negative and count-zero
+    The stamp is a completeness assertion used by negative and count-zero
     custom rules. It is deliberately stricter than the heatmap normalizer:
     every canonical building event must retain name, time and finite geometry.
     Lifecycle fallbacks are not stamped because morph renames no longer

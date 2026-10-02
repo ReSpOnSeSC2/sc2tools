@@ -1,0 +1,2212 @@
+{
+ "_about": "Custom-rule parity cases shared by the desktop evaluator (apps/replay-engine/tests/test_custom_rule_parity.py feeds `events` to check_custom_rules) and the cloud evaluator (apps/api/__tests__/customRuleParity.test.js feeds `build_log` and `proxies` through parseBuildLogLines, eventsToStartTime and evaluateRules). Both must return `expected`. `build_log` and `proxies` are what the agent uploads for `events`; the engine suite and apps/agent/tests re-derive them, so they cannot drift. `proxy` pins the shared proxy geometry.",
+ "proxy": {
+  "classification_version": 2,
+  "default_distance": 50.0,
+  "expansion_distance": 80.0,
+  "expansion_buildings": [
+   "Assimilator",
+   "CommandCenter",
+   "Extractor",
+   "Hatchery",
+   "Hive",
+   "Lair",
+   "Nexus",
+   "OrbitalCommand",
+   "PlanetaryFortress",
+   "Refinery",
+   "SpineCrawler",
+   "SporeCrawler"
+  ]
+ },
+ "cases": [
+  {
+   "name": "third Hatchery 51.9 units out is not a proxy",
+   "why": "The reported false positive: a standard third base is past the old flat 50 units but inside the 80-unit town-hall radius.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildHatchery",
+     "time_lt": 240,
+     "proxy": true
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "unit",
+     "name": "Zergling",
+     "time": 148,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Queen",
+     "time": 160,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 178,
+     "x": 46,
+     "y": 98
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[2:28] Zergling",
+    "[2:40] Queen",
+    "[2:58] Hatchery"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Hatchery 81 units out is a proxy",
+   "why": "Past the 80-unit town-hall radius (the built-in Proxy Hatch test).",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildHatchery",
+     "time_lt": 240,
+     "proxy": true
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 150,
+     "x": 141,
+     "y": 48
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[2:30] Hatchery"
+   ],
+   "proxies": [
+    {
+     "name": "Hatchery",
+     "time": 150,
+     "x": 141,
+     "y": 48
+    }
+   ]
+  },
+  {
+   "name": "Hatchery exactly 80 units out is not a proxy",
+   "why": "The radius test is strict (> 80), like the 50-unit one.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildHatchery",
+     "time_lt": 240,
+     "proxy": true
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 150,
+     "x": 140,
+     "y": 48
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[2:30] Hatchery"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "third-base gas and crawlers are not proxies",
+   "why": "Extractor 59.2, Spore Crawler 59.5 and Spine Crawler 57.3 units out belong to the third base; negative and count-zero rules must pass.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "count_max",
+     "name": "BuildExtractor",
+     "time_lt": 480,
+     "count": 0,
+     "proxy": true
+    },
+    {
+     "type": "not_before",
+     "name": "BuildSporeCrawler",
+     "time_lt": 480,
+     "proxy": true
+    },
+    {
+     "type": "count_exact",
+     "name": "BuildSpineCrawler",
+     "time_lt": 480,
+     "count": 0,
+     "proxy": true
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 178,
+     "x": 46,
+     "y": 98
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 396,
+     "x": 39.5,
+     "y": 103.5
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SporeCrawler",
+     "time": 440,
+     "x": 43,
+     "y": 105
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpineCrawler",
+     "time": 441,
+     "x": 48,
+     "y": 104
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[2:58] Hatchery",
+    "[6:36] Extractor",
+    "[7:20] SporeCrawler",
+    "[7:21] SpineCrawler"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Terran third Command Center is not a proxy",
+   "why": "52.0 units out: a negative proxy rule passes.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "not_before",
+     "name": "BuildCommandCenter",
+     "time_lt": 600,
+     "proxy": true
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "CommandCenter",
+     "time": 0,
+     "x": 139,
+     "y": 163
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Barracks",
+     "time": 41,
+     "x": 141,
+     "y": 150
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Refinery",
+     "time": 45,
+     "x": 146,
+     "y": 160
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CommandCenter",
+     "time": 106,
+     "x": 154,
+     "y": 147
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CommandCenter",
+     "time": 234,
+     "x": 87.5,
+     "y": 170.5
+    }
+   ],
+   "build_log": [
+    "[0:00] CommandCenter",
+    "[0:41] Barracks",
+    "[0:45] Refinery",
+    "[1:46] CommandCenter",
+    "[3:54] CommandCenter"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Nexus at the third is not a proxied Nexus",
+   "why": "62.0 units out.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildNexus",
+     "time_lt": 300,
+     "proxy": true
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 40,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Nexus",
+     "time": 75,
+     "x": 150,
+     "y": 115
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Nexus",
+     "time": 240,
+     "x": 135,
+     "y": 71
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:40] Gateway",
+    "[1:15] Nexus",
+    "[4:00] Nexus"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Barracks 51 units out is a proxy",
+   "why": "Production keeps the 50-unit radius.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildBarracks",
+     "time_lt": 180,
+     "proxy": true
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "CommandCenter",
+     "time": 0,
+     "x": 10,
+     "y": 10
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Barracks",
+     "time": 70,
+     "x": 61,
+     "y": 10
+    }
+   ],
+   "build_log": [
+    "[0:00] CommandCenter",
+    "[1:10] Barracks"
+   ],
+   "proxies": [
+    {
+     "name": "Barracks",
+     "time": 70,
+     "x": 61,
+     "y": 10
+    }
+   ]
+  },
+  {
+   "name": "Barracks exactly 50 units out is not a proxy",
+   "why": "Strict > 50.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildBarracks",
+     "time_lt": 180,
+     "proxy": true
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "CommandCenter",
+     "time": 0,
+     "x": 10,
+     "y": 10
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Barracks",
+     "time": 70,
+     "x": 60,
+     "y": 10
+    }
+   ],
+   "build_log": [
+    "[0:00] CommandCenter",
+    "[1:10] Barracks"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "cannon rush",
+   "why": "Pylon and Photon Cannon across the map are proxies; the home Gateway is not.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildPylon",
+     "time_lt": 120,
+     "proxy": true
+    },
+    {
+     "type": "count_min",
+     "name": "BuildPhotonCannon",
+     "time_lt": 180,
+     "count": 1,
+     "proxy": true
+    },
+    {
+     "type": "not_before",
+     "name": "BuildGateway",
+     "time_lt": 300,
+     "proxy": true
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Forge",
+     "time": 30,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 60,
+     "x": 40,
+     "y": 30
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "PhotonCannon",
+     "time": 95,
+     "x": 38,
+     "y": 28
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 110,
+     "x": 127,
+     "y": 127
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:30] Forge",
+    "[1:00] Pylon",
+    "[1:35] PhotonCannon",
+    "[1:50] Gateway"
+   ],
+   "proxies": [
+    {
+     "name": "Pylon",
+     "time": 60,
+     "x": 40,
+     "y": 30
+    },
+    {
+     "name": "PhotonCannon",
+     "time": 95,
+     "x": 38,
+     "y": 28
+    }
+   ]
+  },
+  {
+   "name": "two of three Gateways proxied",
+   "why": "count_exact counts only the proxied ones.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "count_exact",
+     "name": "BuildGateway",
+     "time_lt": 240,
+     "count": 2,
+     "proxy": true
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 40,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 45,
+     "x": 60,
+     "y": 80
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 70,
+     "x": 62,
+     "y": 82
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 72,
+     "x": 58,
+     "y": 82
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:40] Gateway",
+    "[0:45] Pylon",
+    "[1:10] Gateway",
+    "[1:12] Gateway"
+   ],
+   "proxies": [
+    {
+     "name": "Pylon",
+     "time": 45,
+     "x": 60,
+     "y": 80
+    },
+    {
+     "name": "Gateway",
+     "time": 70,
+     "x": 62,
+     "y": 82
+    },
+    {
+     "name": "Gateway",
+     "time": 72,
+     "x": 58,
+     "y": 82
+    }
+   ]
+  },
+  {
+   "name": "unit that finishes after the threshold but started before it",
+   "why": "Stalker finishes at 4:10 (30 s train, started 3:40). The rule says before 4:00 on the start-time timeline.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildStalker",
+     "time_lt": 240
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 40,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CyberneticsCore",
+     "time": 90,
+     "x": 126,
+     "y": 128
+    },
+    {
+     "type": "unit",
+     "name": "Stalker",
+     "time": 250,
+     "x": 128,
+     "y": 130
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:40] Gateway",
+    "[1:30] CyberneticsCore",
+    "[4:10] Stalker"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "not_before fails once the unit's start is inside the window",
+   "why": "Oracle finishes at 3:50 (37 s, started 3:13); not before 3:20 fails.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "not_before",
+     "name": "BuildOracle",
+     "time_lt": 200
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 40,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CyberneticsCore",
+     "time": 90,
+     "x": 126,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Stargate",
+     "time": 150,
+     "x": 124,
+     "y": 131
+    },
+    {
+     "type": "unit",
+     "name": "Oracle",
+     "time": 230,
+     "x": 124,
+     "y": 130
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:40] Gateway",
+    "[1:30] CyberneticsCore",
+    "[2:30] Stargate",
+    "[3:50] Oracle"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Lair morph is compared at its start",
+   "why": "Lair finishes at 5:30 (57 s morph, started 4:33).",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildLair",
+     "time_lt": 300
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "morph",
+     "name": "Lair",
+     "time": 330,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[5:30] Lair"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Orbital Command morphs counted at their start",
+   "why": "Finishes at 1:54 and 3:24 (25 s morph): starts 1:29 and 2:59.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "count_min",
+     "name": "BuildOrbitalCommand",
+     "time_lt": 100,
+     "count": 1
+    },
+    {
+     "type": "count_exact",
+     "name": "BuildOrbitalCommand",
+     "time_lt": 120,
+     "count": 1
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "CommandCenter",
+     "time": 0,
+     "x": 139,
+     "y": 163
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Barracks",
+     "time": 41,
+     "x": 141,
+     "y": 150
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CommandCenter",
+     "time": 106,
+     "x": 154,
+     "y": 147
+    },
+    {
+     "type": "building",
+     "subtype": "morph",
+     "name": "OrbitalCommand",
+     "time": 114,
+     "x": 0,
+     "y": 0
+    },
+    {
+     "type": "building",
+     "subtype": "morph",
+     "name": "OrbitalCommand",
+     "time": 204,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] CommandCenter",
+    "[0:41] Barracks",
+    "[1:46] CommandCenter",
+    "[1:54] OrbitalCommand",
+    "[3:24] OrbitalCommand"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "upgrade with a lower-case sc2reader name",
+   "why": "Metabolic Boost is logged as zerglingmovementspeed when it finishes at 5:01 (100 s research, started 3:21). The cloud does not class that name as an upgrade, so the token the build editor saves is Buildzerglingmovementspeed.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "Buildzerglingmovementspeed",
+     "time_lt": 240
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "upgrade",
+     "name": "zerglingmovementspeed",
+     "time": 301
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[5:01] zerglingmovementspeed"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "lower-case upgrade the cloud does class as an upgrade",
+   "why": "Adrenal Glands (zerglingattackspeed) finishes at 10:00 (100 s research, started 8:20); its saved token is Researchzerglingattackspeed.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "Researchzerglingattackspeed",
+     "time_lt": 540
+    },
+    {
+     "type": "not_before",
+     "name": "Researchzerglingattackspeed",
+     "time_lt": 500
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "upgrade",
+     "name": "zerglingattackspeed",
+     "time": 600
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[10:00] zerglingattackspeed"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Warp Gate research is compared at its start",
+   "why": "Finishes at 4:50 (100 s, started 3:10); not before 3:20 fails.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "not_before",
+     "name": "ResearchWarpGateResearch",
+     "time_lt": 200
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 40,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CyberneticsCore",
+     "time": 90,
+     "x": 126,
+     "y": 128
+    },
+    {
+     "type": "upgrade",
+     "name": "WarpGateResearch",
+     "time": 290
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:40] Gateway",
+    "[1:30] CyberneticsCore",
+    "[4:50] WarpGateResearch"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "plain structure is not rewound",
+   "why": "A Gateway is recorded when it is placed; before 1:40 is strict.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildGateway",
+     "time_lt": 100
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 100,
+     "x": 128,
+     "y": 131
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[1:40] Gateway"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "start time clamps at zero",
+   "why": "The starting Overlord is born at 0:00; 18 s earlier clamps to 0.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "count_min",
+     "name": "BuildOverlord",
+     "time_lt": 1,
+     "count": 1
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "unit counts near the threshold",
+   "why": "Zerglings born at 1:53 and 2:10 started 17 s earlier (1:36, 1:53).",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "count_max",
+     "name": "BuildZergling",
+     "time_lt": 100,
+     "count": 2
+    },
+    {
+     "type": "count_min",
+     "name": "BuildZergling",
+     "time_lt": 120,
+     "count": 4
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "unit",
+     "name": "Zergling",
+     "time": 113,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Zergling",
+     "time": 113,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Zergling",
+     "time": 130,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Zergling",
+     "time": 130,
+     "x": 60,
+     "y": 45
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[1:53] Zergling",
+    "[1:53] Zergling",
+    "[2:10] Zergling",
+    "[2:10] Zergling"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Baneling morph is compared at its start",
+   "why": "Morph finishes at 3:20 (14 s, started 3:06).",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildBaneling",
+     "time_lt": 190
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "BanelingNest",
+     "time": 150,
+     "x": 50,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Baneling",
+     "time": 200,
+     "x": 60,
+     "y": 45
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[2:30] BanelingNest",
+    "[3:20] Baneling"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Adept on the 8-worker patch (33 s)",
+   "why": "Finishes at 2:30; 5.0.16 trains it in 33 s, so it started at 1:57.",
+   "game_version": "5.0.16.97425",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildAdept",
+     "time_lt": 120
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 40,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CyberneticsCore",
+     "time": 90,
+     "x": 126,
+     "y": 128
+    },
+    {
+     "type": "unit",
+     "name": "Adept",
+     "time": 150,
+     "x": 128,
+     "y": 130
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:40] Gateway",
+    "[1:30] CyberneticsCore",
+    "[2:30] Adept"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Adept on the 12-worker game (27 s)",
+   "why": "The same events on 5.0.15: 27 s, started 2:03, not before 2:00.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildAdept",
+     "time_lt": 120
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 40,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CyberneticsCore",
+     "time": 90,
+     "x": 126,
+     "y": 128
+    },
+    {
+     "type": "unit",
+     "name": "Adept",
+     "time": 150,
+     "x": 128,
+     "y": 130
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:40] Gateway",
+    "[1:30] CyberneticsCore",
+    "[2:30] Adept"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Warp Gate morph on the 8-worker patch (4 s)",
+   "why": "Finishes at 4:10, started 4:06: not before 4:05.",
+   "game_version": "5.0.16.97425",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildWarpGate",
+     "time_lt": 245
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 40,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CyberneticsCore",
+     "time": 90,
+     "x": 126,
+     "y": 128
+    },
+    {
+     "type": "upgrade",
+     "name": "WarpGateResearch",
+     "time": 240
+    },
+    {
+     "type": "building",
+     "subtype": "morph",
+     "name": "WarpGate",
+     "time": 250,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:40] Gateway",
+    "[1:30] CyberneticsCore",
+    "[4:00] WarpGateResearch",
+    "[4:10] WarpGate"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Warp Gate morph on the 12-worker game (7 s)",
+   "why": "Finishes at 4:10, started 4:03.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildWarpGate",
+     "time_lt": 245
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 40,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CyberneticsCore",
+     "time": 90,
+     "x": 126,
+     "y": 128
+    },
+    {
+     "type": "upgrade",
+     "name": "WarpGateResearch",
+     "time": 240
+    },
+    {
+     "type": "building",
+     "subtype": "morph",
+     "name": "WarpGate",
+     "time": 250,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:40] Gateway",
+    "[1:30] CyberneticsCore",
+    "[4:00] WarpGateResearch",
+    "[4:10] WarpGate"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "worker births are invisible to custom rules",
+   "why": "Probe / SCV / Drone births are never written to the build log, so the cloud counts none; the desktop's detectors receive them (for the built-in worker-count rules) and must not count them for a v3 rule.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "count_max",
+     "name": "BuildDrone",
+     "time_lt": 120,
+     "count": 0
+    },
+    {
+     "type": "not_before",
+     "name": "BuildDrone",
+     "time_lt": 120
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "worker",
+     "name": "Drone",
+     "time": 12,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "worker",
+     "name": "Drone",
+     "time": 24,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "worker",
+     "name": "Drone",
+     "time": 36,
+     "x": 60,
+     "y": 45
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "a rule that requires a worker cannot match",
+   "why": "The same Drones: 'Drone before 2:00' has nothing to match on either side.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildDrone",
+     "time_lt": 120
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "worker",
+     "name": "Drone",
+     "time": 12,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "worker",
+     "name": "Drone",
+     "time": 24,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "worker",
+     "name": "Drone",
+     "time": 36,
+     "x": 60,
+     "y": 45
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Phoenix whose start predates the Stargate is a hallucination",
+   "why": "Phoenix appears at 5:00 (25 s train, would have started 4:35) but the Stargate only starts at 4:40.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildPhoenix",
+     "time_lt": 400
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 40,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CyberneticsCore",
+     "time": 90,
+     "x": 126,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Stargate",
+     "time": 280,
+     "x": 124,
+     "y": 131
+    },
+    {
+     "type": "unit",
+     "name": "Phoenix",
+     "time": 300,
+     "x": 60,
+     "y": 45
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:40] Gateway",
+    "[1:30] CyberneticsCore",
+    "[4:40] Stargate",
+    "[5:00] Phoenix"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Phoenix from a standing Stargate counts",
+   "why": "Stargate at 3:20, Phoenix finishes at 5:00.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildPhoenix",
+     "time_lt": 280
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Nexus",
+     "time": 0,
+     "x": 135,
+     "y": 133
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Pylon",
+     "time": 18,
+     "x": 131,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Gateway",
+     "time": 40,
+     "x": 128,
+     "y": 131
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "CyberneticsCore",
+     "time": 90,
+     "x": 126,
+     "y": 128
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Stargate",
+     "time": 200,
+     "x": 124,
+     "y": 131
+    },
+    {
+     "type": "unit",
+     "name": "Phoenix",
+     "time": 300,
+     "x": 60,
+     "y": 45
+    }
+   ],
+   "build_log": [
+    "[0:00] Nexus",
+    "[0:18] Pylon",
+    "[0:40] Gateway",
+    "[1:30] CyberneticsCore",
+    "[3:20] Stargate",
+    "[5:00] Phoenix"
+   ],
+   "proxies": []
+  }
+ ]
+}

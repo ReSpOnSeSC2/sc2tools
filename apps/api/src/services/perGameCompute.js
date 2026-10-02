@@ -15,6 +15,7 @@ const {
   opponentBuildOrderClassificationQueueError,
 } = require("./opponentBuildOrderFence");
 const { toStartSeconds, isFinishTimeEvent } = require("./buildDurations");
+const { proxyEvidence } = require("./proxyClassification");
 const { gamesMatchStage } = require("../util/parseQuery");
 
 const {
@@ -271,24 +272,22 @@ class PerGameComputeService {
       && merged.buildLog.length > 0;
     const oppBuildLogPresent = Array.isArray(merged.oppBuildLog)
       && merged.oppBuildLog.length > 0;
-    const myProxies = merged.spatial?.my_proxies;
-    const oppProxies = merged.spatial?.opp_proxies;
-    const myProxyCoverage = merged.spatial?.my_proxy_classification_v === 1;
-    const oppProxyCoverage = merged.spatial?.opp_proxy_classification_v === 1;
+    const myProxy = proxyEvidence(merged.spatial, "my");
+    const oppProxy = proxyEvidence(merged.spatial, "opp");
     const rawEvents = parseBuildLogLines(
-      merged.buildLog || [], this.catalog, myProxies, myProxyCoverage,
+      merged.buildLog || [], this.catalog, myProxy.rows, myProxy.known,
     );
     const rawEarly = parseBuildLogLines(
-      readEarlyBuildLog(merged), this.catalog, myProxies, myProxyCoverage,
+      readEarlyBuildLog(merged), this.catalog, myProxy.rows, myProxy.known,
     );
     const rawOpp = parseBuildLogLines(
-      merged.oppBuildLog || [], this.catalog, oppProxies, oppProxyCoverage,
+      merged.oppBuildLog || [], this.catalog, oppProxy.rows, oppProxy.known,
     );
     const rawOppEarly = parseBuildLogLines(
       readOppEarlyBuildLog(merged),
       this.catalog,
-      oppProxies,
-      oppProxyCoverage,
+      oppProxy.rows,
+      oppProxy.known,
     );
     // Diagnostic reason codes for the UI's empty state. ``not_extracted``
     // = the agent hasn't uploaded a build log for this side yet (the
@@ -881,19 +880,12 @@ class PerGameComputeService {
           // apply ``eventsToStartTime`` here (the single rule-eval
           // event source) so every downstream caller automatically
           // sees the right semantic.
-          events: eventsToStartTime(parseBuildLogLines(
-            buildLog,
-            this.catalog,
-            g.spatial?.my_proxies,
-            g.spatial?.my_proxy_classification_v === 1,
-          ), g),
+          events: eventsToStartTime(
+            parseBuildLogWithProxies(buildLog, this.catalog, g.spatial, "my"),
+            g,
+          ),
           oppEvents: eventsToStartTime(
-            parseBuildLogLines(
-              oppBuildLog,
-              this.catalog,
-              g.spatial?.opp_proxies,
-              g.spatial?.opp_proxy_classification_v === 1,
-            ),
+            parseBuildLogWithProxies(oppBuildLog, this.catalog, g.spatial, "opp"),
             g,
           ),
           result: g.result || null,
@@ -1099,19 +1091,15 @@ class PerGameComputeService {
           buildLog,
           oppBuildLog,
           events: perspective === "opponent" ? []
-            : eventsToStartTime(parseBuildLogLines(
-              buildLog,
-              this.catalog,
-              g.spatial?.my_proxies,
-              g.spatial?.my_proxy_classification_v === 1,
-            ), g),
+            : eventsToStartTime(
+              parseBuildLogWithProxies(buildLog, this.catalog, g.spatial, "my"),
+              g,
+            ),
           oppEvents: perspective === "you" ? []
-            : eventsToStartTime(parseBuildLogLines(
-              oppBuildLog,
-              this.catalog,
-              g.spatial?.opp_proxies,
-              g.spatial?.opp_proxy_classification_v === 1,
-            ), g),
+            : eventsToStartTime(
+              parseBuildLogWithProxies(oppBuildLog, this.catalog, g.spatial, "opp"),
+              g,
+            ),
           result: g.result || null,
           date: g.date || null,
           map: g.map || null,
@@ -1334,7 +1322,8 @@ class MacroBackfillService {
  * @param {string[]} lines
  * @param {{ lookup: (name: string) => object | null } | null} [catalog]
  * @param {unknown} [proxyBuildings] Named/timed entries from the agent's
- *   canonical spatial.my_proxies or spatial.opp_proxies list.
+ *   canonical spatial.my_proxies or spatial.opp_proxies list, as resolved by
+ *   ``proxyEvidence`` (which understands the stamp's version).
  * @param {boolean} [proxyClassificationKnown]
  */
 function parseBuildLogLines(
@@ -1409,6 +1398,11 @@ function parseBuildLogLines(
  * a single forward Barracks from marking every Barracks in the replay. Older
  * spatial rows without either field remain unclassified instead of guessed.
  *
+ * A row ``proxyEvidence`` marked ``ambiguous`` (a town hall, gas or crawler
+ * a version-1 stamp listed, on a side whose main is not stored) leaves its
+ * event without ``is_proxy``; the rule evaluator treats a proxy rule that
+ * needs that event as unavailable.
+ *
  * @param {ReadonlyArray<any>} events
  * @param {unknown} proxyBuildings
  * @param {boolean} [proxyClassificationKnown]
@@ -1420,16 +1414,16 @@ function annotateProxyBuildings(
   proxyClassificationKnown = false,
 ) {
   if (!Array.isArray(events) || events.length === 0) return [];
-  // The v1 stamp is the sole proof that this side was classified with the
-  // canonical owner-main >50 predicate. Pre-0.16 spatial rows can already
-  // contain names/times, but were generated with a different heuristic and
-  // must remain unknown (especially for negative/count-zero rules).
+  // The agent's stamp is the sole proof that this side was classified with
+  // the owner-main distance test. Pre-0.16 spatial rows can already contain
+  // names/times, but were generated with a different heuristic and must
+  // remain unknown (especially for negative/count-zero rules).
   if (proxyClassificationKnown !== true) return [...events];
   if (proxyBuildings != null && !Array.isArray(proxyBuildings)) {
     return [...events];
   }
   const rawCandidates = Array.isArray(proxyBuildings) ? proxyBuildings : [];
-  const candidates = /** @type {Array<{name:string,time:number,x:number,y:number}>} */ (rawCandidates
+  const candidates = /** @type {Array<{name:string,time:number,x:number,y:number,ambiguous:boolean}>} */ (rawCandidates
     .map((row) => {
       if (!row || typeof row !== "object") return null;
       const name = typeof row.name === "string" ? row.name.trim() : "";
@@ -1441,7 +1435,7 @@ function annotateProxyBuildings(
         || typeof x !== "number" || !Number.isFinite(x)
         || typeof y !== "number" || !Number.isFinite(y)
       ) return null;
-      return { name, time, x, y };
+      return { name, time, x, y, ambiguous: row.ambiguous === true };
     })
     .filter(Boolean));
   // A stamped side is only complete when every positive proxy row survived
@@ -1450,6 +1444,7 @@ function annotateProxyBuildings(
   if (candidates.length !== rawCandidates.length) return [...events];
 
   const matchedEvents = new Set();
+  const ambiguousEvents = new Set();
   const matchedCandidates = new Set();
   const candidatesByName = new Map();
   candidates.forEach((candidate, candidateIndex) => {
@@ -1473,6 +1468,9 @@ function annotateProxyBuildings(
     for (const pair of optimalProxyPairs(eventGroup, candidateGroup)) {
       matchedEvents.add(pair.eventIndex);
       matchedCandidates.add(pair.candidateIndex);
+      if (candidates[pair.candidateIndex].ambiguous) {
+        ambiguousEvents.add(pair.eventIndex);
+      }
     }
   }
 
@@ -1482,9 +1480,30 @@ function annotateProxyBuildings(
     proxy_classification_known: true,
     ...(event?.is_building ? { is_proxy: false } : {}),
   }));
-  return classifiedEvents.map((event, index) => (
-    matchedEvents.has(index) ? { ...event, is_proxy: true } : event
-  ));
+  return classifiedEvents.map((event, index) => {
+    if (ambiguousEvents.has(index)) {
+      const undecided = { ...event };
+      delete undecided.is_proxy;
+      return undecided;
+    }
+    return matchedEvents.has(index) ? { ...event, is_proxy: true } : event;
+  });
+}
+
+/**
+ * ``parseBuildLogLines`` for one side of a stored game, with that side's
+ * proxy evidence resolved from the game's ``spatial`` block.
+ *
+ * Example: parseBuildLogWithProxies(g.buildLog, catalog, g.spatial, "my")
+ *
+ * @param {string[]} lines
+ * @param {{ lookup: (name: string) => object | null } | null | undefined} catalog
+ * @param {Record<string, any> | null | undefined} spatial
+ * @param {"my" | "opp"} side
+ */
+function parseBuildLogWithProxies(lines, catalog, spatial, side) {
+  const evidence = proxyEvidence(spatial, side);
+  return parseBuildLogLines(lines, catalog, evidence.rows, evidence.known);
 }
 
 /**
@@ -1660,6 +1679,7 @@ module.exports = {
   PerGameComputeService,
   MacroBackfillService,
   parseBuildLogLines,
+  parseBuildLogWithProxies,
   annotateProxyBuildings,
   eventsToStartTime,
   // Exported so other services (dnaTimings, ml) consume the same

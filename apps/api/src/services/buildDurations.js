@@ -39,6 +39,12 @@
  * those apply when ``util/patchEra.isEightWorkerGame(game)`` is true;
  * without a game the live 12-worker values apply.
  *
+ * The desktop evaluator ports this module as
+ * apps/replay-engine/core/build_durations.py so a custom rule gets the same
+ * start times on both sides. Change a table here and
+ * apps/replay-engine/tests/fixtures/build_durations.json (the snapshot both
+ * test suites compare against) and the Python tables must follow.
+ *
  * Time-base note: as of the 2026-05-17 timebase migration (PR #309 +
  * the 2026-05-17-rescale-timebase migration), ``recordedSec`` is in
  * real LotV game-seconds (frame / 22.4). Previously every
