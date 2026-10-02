@@ -4,6 +4,13 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## 0.17.6
 
+### Fixed - PTR games no longer replace your ladder MMR
+
+- A Public Test Realm game (a `98-S2-1-<id>` account) no longer becomes the
+  MMR the overlay and session widget fall back to. The PTR rating used to
+  overwrite your ladder MMR whenever the PTR game was your newest. If a PTR
+  game already replaced it, your next ladder game puts it back.
+
 ### Fixed - replay folders created while the agent runs are synced
 
 - StarCraft II creates a new replay folder the first time you save a replay

@@ -22,12 +22,16 @@ from __future__ import annotations
 from typing import Optional
 
 
+#: Label of the Public Test Realm (toon handles starting ``98-``).
+PTR_REGION = "PTR"
+
 _TOON_HANDLE_REGION_BYTE = {
     "1": "NA",
     "2": "EU",
     "3": "KR",
     "5": "CN",
     "6": "SEA",
+    "98": PTR_REGION,
 }
 
 
@@ -43,6 +47,8 @@ def region_from_toon_handle(handle: Optional[str]) -> Optional[str]:
     'EU'
     >>> region_from_toon_handle("3-S2-1-12345")
     'KR'
+    >>> region_from_toon_handle("98-S2-1-30230")
+    'PTR'
     >>> region_from_toon_handle(None) is None
     True
     >>> region_from_toon_handle("99-S2-1-12345") is None
@@ -54,4 +60,25 @@ def region_from_toon_handle(handle: Optional[str]) -> Optional[str]:
     return _TOON_HANDLE_REGION_BYTE.get(head)
 
 
-__all__ = ["region_from_toon_handle"]
+def is_ladder_region(region: Optional[str]) -> bool:
+    """True for a region with an SC2Pulse ladder (every label but PTR).
+
+    PTR is a real server, so a NA → PTR switch is still a transition,
+    but SC2Pulse has no PTR ladder: a PTR label must never reach a
+    Pulse lookup as a region hint.
+
+    >>> is_ladder_region("NA")
+    True
+    >>> is_ladder_region("PTR")
+    False
+    >>> is_ladder_region(None)
+    False
+    """
+    return (
+        isinstance(region, str)
+        and region != PTR_REGION
+        and region in _TOON_HANDLE_REGION_BYTE.values()
+    )
+
+
+__all__ = ["PTR_REGION", "is_ladder_region", "region_from_toon_handle"]

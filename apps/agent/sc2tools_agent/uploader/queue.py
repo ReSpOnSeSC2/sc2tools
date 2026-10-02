@@ -1757,6 +1757,8 @@ class UploadQueue:
             # an older caller, but it must never update the user's sticky MMR.
             if getattr(job.game, "is_resumed_from_replay", False) is True:
                 continue
+            if _is_ptr_game(job.game):
+                continue
             my_mmr = getattr(job.game, "my_mmr", None)
             if not isinstance(my_mmr, int) or not (500 <= my_mmr <= 9999):
                 continue
@@ -1895,6 +1897,10 @@ class UploadQueue:
         # Resumed sessions are synthetic and cannot establish ladder rating.
         if getattr(job.game, "is_resumed_from_replay", False) is True:
             return
+        # A Public Test Realm rating is not the streamer's ladder MMR, and
+        # SC2Pulse has no PTR ladder to correct it from.
+        if _is_ptr_game(job.game):
+            return
         my_mmr = getattr(job.game, "my_mmr", None)
         if not isinstance(my_mmr, int) or not (500 <= my_mmr <= 9999):
             return
@@ -1971,14 +1977,16 @@ def _playback_failure_is_permanent(exc: Exception) -> bool:
 
 # Map the leading region byte of an SC2 toon handle to a short
 # Blizzard-region label. Mirrors ``regionFromToonHandle`` in
-# ``apps/api/src/services/games.js`` so the agent and cloud agree on
-# which label belongs to which numeric prefix.
+# ``apps/api/src/util/regionFromToonHandle.js`` so the agent and cloud
+# agree on which label belongs to which numeric prefix.
+_PTR_REGION = "PTR"
 _TOON_HANDLE_REGION_BYTE = {
     "1": "NA",
     "2": "EU",
     "3": "KR",
     "5": "CN",
     "6": "SEA",
+    "98": _PTR_REGION,
 }
 
 
@@ -1987,3 +1995,9 @@ def _region_from_toon_handle(handle: Optional[str]) -> Optional[str]:
         return None
     head = handle.split("-", 1)[0]
     return _TOON_HANDLE_REGION_BYTE.get(head)
+
+
+def _is_ptr_game(game: object) -> bool:
+    """Whether ``game`` was played on the Public Test Realm (``98-`` handle)."""
+    handle = getattr(game, "my_toon_handle", None)
+    return _region_from_toon_handle(handle) == _PTR_REGION

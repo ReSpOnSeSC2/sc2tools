@@ -34,7 +34,7 @@ from typing import Any, Callable, Dict, List, Optional
 from .event_bus import EventBus
 from .metrics import METRICS
 from .pulse_lookup import PulseClient
-from .region import region_from_toon_handle
+from .region import is_ladder_region, region_from_toon_handle
 from .types import (
     LiveGameState,
     LiveLifecycleEvent,
@@ -356,12 +356,17 @@ class LiveBridge:
                     # same-name accounts across regions and lifts the
                     # candidate score. The local SC2 ``/game`` API never
                     # exposes the opponent's region, so this is the only
-                    # region signal available at game start.
+                    # region signal available at game start. PTR has no
+                    # SC2Pulse ladder, so it searches every region.
                     self._dispatch_pulse_lookup(
                         game_key=event.game_key,
                         name=ctx.opponent_name,
                         race=ctx.opponent_race,
-                        region=self._user_region,
+                        region=(
+                            self._user_region
+                            if is_ladder_region(self._user_region)
+                            else None
+                        ),
                     )
             else:
                 # Same match — just refresh per-event fields.
