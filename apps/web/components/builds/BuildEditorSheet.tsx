@@ -13,7 +13,10 @@ import { apiCall } from "@/lib/clientApi";
 import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import { useToast } from "@/components/ui/Toast";
 import { slugifyBuildName, type BuildSignatureItem } from "@/lib/build-events";
-import { isProxyStructureLabel } from "@/lib/build-rules";
+import {
+  PROXY_RULE_DISTANCE_HINT,
+  isProxyStructureLabel,
+} from "@/lib/build-rules";
 import {
   RACES,
   VS_RACES,
@@ -724,7 +727,7 @@ function SignatureRow({
       </button>
       <label
         className={[
-          "col-span-12 inline-flex min-h-[36px] items-center gap-2 rounded-md border px-3 py-2",
+          "col-span-12 inline-flex min-h-[36px] flex-wrap items-center gap-x-2 gap-y-1 rounded-md border px-3 py-2",
           "sm:col-start-3 sm:col-span-9",
           proxyEligible || row.proxy === true
             ? "cursor-pointer"
@@ -735,7 +738,7 @@ function SignatureRow({
         ].join(" ")}
         title={
           proxyEligible
-            ? "Require this structure to be more than 50 world units from its owner's main."
+            ? `Require this structure to be ${PROXY_RULE_DISTANCE_HINT}.`
             : row.proxy === true
               ? "Enter a known building or turn this requirement off before saving."
               : "Enter a known building to enable the proxy requirement."
@@ -751,7 +754,8 @@ function SignatureRow({
         />
         <span className="text-caption font-semibold">Must be proxied</span>
         <span className="text-micro text-text-dim">
-          More than 50 world units from its owner&apos;s main.
+          {PROXY_RULE_DISTANCE_HINT.charAt(0).toUpperCase()}
+          {PROXY_RULE_DISTANCE_HINT.slice(1)}.
         </span>
       </label>
     </li>

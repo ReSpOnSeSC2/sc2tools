@@ -180,7 +180,9 @@ def test_v3_proxy_modifier_uses_strict_canonical_owner_main_distance():
     detector = UserBuildDetector([proxy_build])
     main = _building("CommandCenter", 0, 10.0, 10.0)
 
-    # At home and exactly 50 units away do not satisfy `_is_proxy`.
+    # At home and exactly 50 units away are not proxies (a Barracks takes
+    # the default 50-unit radius; test_custom_rule_parity.py covers the
+    # 80-unit one for town halls, gas and crawlers).
     assert detector.detect_my_build(
         "vs Terran", [main, _building("Barracks", 70, 40.0, 10.0)], "Terran",
     ) != "My Proxy Rax"

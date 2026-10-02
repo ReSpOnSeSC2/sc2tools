@@ -4,7 +4,8 @@ Both :class:`OpponentStrategyDetector` and :class:`UserBuildDetector`
 inherit from this class. The base layer owns:
 
   * proxy-distance geometry helpers (``_get_main_base_loc`` /
-    ``_is_proxy`` / ``_is_far_proxy``)
+    ``_is_proxy`` / ``_is_far_proxy``) and the canonical per-structure
+    proxy test (``_is_canonical_proxy``) the agent's spatial stamp shares
   * the schema-aware custom-rule evaluator (:meth:`check_custom_rules`)
     that accepts both the legacy v1 and the rules-engine v3 schemas
 
@@ -19,7 +20,8 @@ from __future__ import annotations
 import math
 from typing import Dict, List, Tuple
 
-from .build_definitions import PROXY_ELIGIBLE_BUILDINGS
+from .build_definitions import PROXY_ELIGIBLE_BUILDINGS, proxy_distance_for
+from .build_durations import to_start_seconds
 from .strategy_detector_helpers import (
     UNIT_TECH_PREREQUISITES,
     count_real_units,
@@ -77,14 +79,63 @@ class BaseStrategyDetector:
         dist = math.sqrt((x - main_loc[0]) ** 2 + (y - main_loc[1]) ** 2)
         return dist > threshold
 
+    def _is_canonical_proxy(self, building: Dict, main_loc: Tuple[float, float]) -> bool:
+        """The one proxy test custom rules and the agent's spatial stamp share.
+
+        The radius depends on the structure: 80 units for town halls, gas
+        and Spine / Spore Crawlers (a standard third base is 50-80 units
+        from the main), 50 for everything else. See
+        ``build_definitions.proxy_distance_for``.
+        """
+        return self._is_proxy(
+            building, main_loc, proxy_distance_for(building.get("name")),
+        )
+
+    # ---------- start-time view for v3 rules ----------
+    @staticmethod
+    def _at_start_times(
+        events: List[Dict], kind: str, eight_worker: bool,
+    ) -> List[Dict]:
+        """Copy ``events`` with finish times rewound to start times.
+
+        ``kind`` is the list's event type: "building", "unit" or "upgrade".
+        Events whose time is missing or not a finite number are passed
+        through untouched so the callers' own malformed-time handling
+        still sees them.
+        """
+        out: List[Dict] = []
+        for ev in events:
+            recorded = ev.get("time")
+            if (
+                isinstance(recorded, (int, float))
+                and not isinstance(recorded, bool)
+                and math.isfinite(recorded)
+            ):
+                start = to_start_seconds(
+                    ev.get("name"),
+                    recorded,
+                    is_building=kind == "building",
+                    is_upgrade=kind == "upgrade",
+                    eight_worker=eight_worker,
+                )
+                if start != recorded:
+                    ev = {**ev, "time": start}
+            out.append(ev)
+        return out
+
     # ---------- custom rules ----------
     # Module-level: v3 rule.name format prepends the source verb to the
     # bare unit/building/upgrade name (e.g. 'BuildStargate', 'TrainPhoenix',
     # 'ResearchBlink', 'MorphLair'). Live event_extractor emits the bare
     # name ('Stargate', 'Phoenix', 'Blink', 'Lair'). To match v3 rules
-    # against live events we strip a recognised verb prefix when the
-    # following character is uppercase (so 'Build' inside 'Builder' is
-    # NOT stripped -- the name must look like 'Build<Capital>...').
+    # against live events we strip a recognised verb prefix.
+    #
+    # The noun is the event's own name and need not start with a capital:
+    # sc2reader reports a few upgrades in lower case, and the cloud's token
+    # for them is verb + raw name ('Buildzerglingmovementspeed',
+    # 'Buildoverlordspeed', 'Researchzerglingattackspeed'), which is what
+    # the SPA saves. Requiring 'Build<Capital>' here made those rules
+    # unmatchable on the desktop.
     _V3_NAME_PREFIXES = ("Build", "Train", "Research", "Morph")
 
     @staticmethod
@@ -96,15 +147,13 @@ class BaseStrategyDetector:
             'Stargate'
             >>> BaseStrategyDetector._normalize_rule_name('Stargate')
             'Stargate'
+            >>> BaseStrategyDetector._normalize_rule_name('Buildoverlordspeed')
+            'overlordspeed'
         """
         if not isinstance(name, str):
             return name
         for prefix in BaseStrategyDetector._V3_NAME_PREFIXES:
-            if (
-                name.startswith(prefix)
-                and len(name) > len(prefix)
-                and name[len(prefix)].isupper()
-            ):
+            if name.startswith(prefix) and len(name) > len(prefix):
                 return name[len(prefix):]
         return name
 
@@ -115,22 +164,36 @@ class BaseStrategyDetector:
         units: List[Dict],
         upgrades: List[Dict],
         main_loc: Tuple[float, float],
+        eight_worker: bool = False,
     ) -> bool:
         """Return True if every rule passes.
 
         Supports both schemas:
           v1: ``building`` / ``unit`` / ``unit_max`` / ``upgrade`` / ``proxy``
               (legacy Spawning-Tool style). Names are bare ('Stargate'),
-              cutoff is inclusive (``time <= time_lt``).
+              cutoff is inclusive (``time <= time_lt``) and compared with
+              the RECORDED event time, as those rules were authored.
+              ``proxy`` honours an explicit ``dist`` and otherwise uses the
+              canonical per-structure radius.
           v3: ``before`` / ``not_before`` / ``count_max`` / ``count_exact``
               / ``count_min`` (rule-engine schema written by the SPA).
               Names are prefixed ('BuildStargate'); we strip the verb so
               the live ``event_extractor`` events match. Cutoff is strict
               (``time < time_lt``) per the v3 contract in
               ``stream-overlay-backend/routes/custom_builds_helpers.js``.
-              ``proxy: true`` restricts the rule to structures for which the
-              canonical :meth:`_is_proxy` test passes at 50 world units from
-              the structure owner's main.
+              ``proxy: true`` restricts the rule to structures that pass
+              the canonical :meth:`_is_canonical_proxy` test.
+
+        v3 thresholds are saved off the website's START-time timeline, and
+        the cloud evaluator (``apps/api/src/services/buildRulesEvaluator.js``
+        fed by ``eventsToStartTime``) compares start times. The extractor
+        records units, structure morphs and upgrades when they FINISH, so
+        v3 rules are evaluated here against the same start-time view:
+        ``build_durations.to_start_seconds`` rewinds those events, with the
+        8-worker patch 5.0.16's durations when ``eight_worker`` is set.
+        Keep the two evaluators in agreement --
+        ``tests/test_custom_rule_parity.py`` and the API's
+        ``customRuleParity.test.js`` run the same cases through both.
 
         Unknown rule types are treated as failures (NOT silently passed).
         Previously, an unknown type caused the for-loop to no-op and the
@@ -148,6 +211,10 @@ class BaseStrategyDetector:
                 1 for u in units
                 if u.get("name") == name and u.get("time", 9999) <= time_lt
             )
+
+        # Start-time copies of the three event lists, built on the first
+        # v3 rule so v1-only rule sets never pay for them.
+        v3_view = None
 
         for rule in rules:
             rtype = rule.get("type")
@@ -177,7 +244,9 @@ class BaseStrategyDetector:
                 ):
                     return False
             elif rtype == "proxy":
-                dist = rule.get("dist", 50)
+                dist = rule.get("dist")
+                if dist is None:
+                    dist = proxy_distance_for(raw_name)
                 if not any(
                     b["name"] == raw_name
                     and b["time"] <= time_lt
@@ -194,6 +263,22 @@ class BaseStrategyDetector:
                 "count_exact",
                 "count_min",
             ):
+                if v3_view is None:
+                    v3_view = (
+                        self._at_start_times(buildings, "building", eight_worker),
+                        # Worker births reach ``units`` for the built-in
+                        # trees' Drone / Probe / SCV counts, but they are
+                        # never written to the build log, so the cloud
+                        # cannot count them. v3 rules do not see them here
+                        # either.
+                        self._at_start_times(
+                            [u for u in units if u.get("type") != "worker"],
+                            "unit",
+                            eight_worker,
+                        ),
+                        self._at_start_times(upgrades, "upgrade", eight_worker),
+                    )
+                s_buildings, s_units, s_upgrades = v3_view
                 norm_name = self._normalize_rule_name(raw_name)
                 proxy_only = rule.get("proxy") is True
                 if proxy_only and not (
@@ -218,7 +303,7 @@ class BaseStrategyDetector:
                     return False
                 if proxy_only:
                     tol = rule.get("tol") if rtype == "before" else None
-                    for building in buildings:
+                    for building in s_buildings:
                         if building.get("name") != norm_name:
                             continue
                         event_time = building.get("time")
@@ -250,7 +335,7 @@ class BaseStrategyDetector:
                 # stream. For unit events whose tech prerequisite is
                 # known, drop hallucinated occurrences (events whose
                 # prerequisite structure was never started by the
-                # event's own time).
+                # event's own start time).
                 is_unit_with_prereq = norm_name in UNIT_TECH_PREREQUISITES
 
                 def _v3_event_passes(ev) -> bool:
@@ -258,20 +343,20 @@ class BaseStrategyDetector:
                     if not name_ok:
                         return False
                     if proxy_only:
-                        if ev not in buildings:
+                        if ev not in s_buildings:
                             return False
-                        if not self._is_proxy(ev, main_loc, 50.0):
+                        if not self._is_canonical_proxy(ev, main_loc):
                             return False
-                    if is_unit_with_prereq and ev in units:
+                    if is_unit_with_prereq and ev in s_units:
                         if ev.get("hallucinated") is True:
                             return False
                         if not unit_prereq_met(
-                            norm_name, ev.get("time", 9999), buildings,
+                            norm_name, ev.get("time", 9999), s_buildings,
                         ):
                             return False
                     return True
 
-                merged_events = buildings + units + upgrades
+                merged_events = s_buildings + s_units + s_upgrades
                 count = sum(
                     1 for ev in merged_events
                     if _v3_event_passes(ev)

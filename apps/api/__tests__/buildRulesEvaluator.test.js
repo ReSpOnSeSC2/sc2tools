@@ -128,6 +128,33 @@ describe("proxy-only rule modifier", () => {
     }, [building("Barracks", 70)]).pass).toBe(false);
   });
 
+  test("a structure the stamp cannot settle makes only its own rule unavailable", () => {
+    // annotateProxyBuildings leaves is_proxy off a town hall that an older
+    // agent listed at a flat 50 units when the owner's main is not stored.
+    const classified = { proxy_classification_known: true };
+    const events = [
+      building("SpawningPool", 75, { ...classified, is_proxy: false }),
+      building("Hatchery", 178, classified),
+    ];
+    const hatchery = (type, time_lt) => evaluateRule(
+      { type, name: "BuildHatchery", time_lt, proxy: true }, events,
+    );
+    for (const type of ["before", "not_before"]) {
+      expect(hatchery(type, 240)).toEqual(
+        expect.objectContaining({ pass: false, unavailable: true }),
+      );
+    }
+    // Outside the rule's window, or another structure: decided as usual.
+    expect(hatchery("not_before", 178)).toEqual({ pass: true });
+    expect(evaluateRule({
+      type: "not_before", name: "BuildSpawningPool", time_lt: 240, proxy: true,
+    }, events)).toEqual({ pass: true });
+    // Without the proxy modifier the event counts like any other.
+    expect(evaluateRule(
+      { type: "before", name: "BuildHatchery", time_lt: 240 }, events,
+    )).toEqual({ pass: true });
+  });
+
   test("evaluateRules propagates unavailable unless another rule definitively fails", () => {
     const unavailableProxy = {
       type: "not_before", name: "BuildBarracks", time_lt: 120, proxy: true,

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MapPin, Plus, Star, X } from "lucide-react";
 import { Icon } from "@/components/ui/Icon";
 import {
+  PROXY_RULE_DISTANCE_HINT,
   RULE_TYPES,
   RULE_TYPE_ICON,
   RULE_TYPE_LABEL,
@@ -132,7 +133,7 @@ export function BuildEditorRules({
           type="button"
           onClick={() => addCustomRule("before", { proxyOnly: true })}
           disabled={ruleCap}
-          title="Add a building rule that only matches when the structure is more than 50 world units from its owner's main."
+          title={`Add a building rule that only matches when the structure is ${PROXY_RULE_DISTANCE_HINT}.`}
           className={[
             "inline-flex min-h-[32px] items-center gap-1 rounded-md border border-warning/50",
             "bg-warning/15 px-2 py-1 text-caption font-medium text-warning transition-colors",
@@ -370,7 +371,7 @@ function RuleRow({ rule, onUpdate, onCycle, onRemove }: RuleRowProps) {
           ].join(" ")}
           title={
             proxyEligible
-              ? "Require this structure to be more than 50 world units from its owner's main."
+              ? `Require this structure to be ${PROXY_RULE_DISTANCE_HINT}.`
               : rule.proxy === true
                 ? "Enter a known building token such as BuildPylon or turn this requirement off before saving."
                 : "Proxy requirements are available only for known building tokens such as BuildPylon or BuildBarracks."

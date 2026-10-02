@@ -183,7 +183,7 @@ copy at `reveal-sc2-opponent-main/core/strategy_detector.py:113-150`.
 | `unit`      | `name` | `count` (default `1`), `time_lt` (default `9999`) | Same, for units |
 | `unit_max`  | `name` | `count` (default `999`), `time_lt` (default `9999`) | **Inverted**: at most `count` units of `name` by `time_lt` (used to exclude econ-heavy variants) |
 | `upgrade`   | `name` | `time_lt` (default `9999`) | Substring match: any upgrade event whose `name` *contains* the rule `name` and whose `time <= time_lt` |
-| `proxy`     | `name` | `dist` (default `50`), `time_lt` (default `9999`) | At least one building of `name` with `time <= time_lt` AND distance from main base `> dist` |
+| `proxy`     | `name` | `dist` (default: `80` for town halls, gas and Spine / Spore Crawlers, else `50`), `time_lt` (default `9999`) | At least one building of `name` with `time <= time_lt` AND distance from main base `> dist` |
 
 Quirks worth flagging now (because the SPA editor will surface them):
 

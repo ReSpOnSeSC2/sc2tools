@@ -81,7 +81,6 @@ from detectors.base import BaseStrategyDetector
 # ---------------------------------------------------------------- constants
 DENSITY_RES: int = 100             # building/proxy/battle heatmap grid side
 DEATH_ZONE_RES: int = 20           # death-zone grid side
-PROXY_DISTANCE_DEFAULT: float = 50.0  # matches BaseStrategyDetector._is_proxy
 MIN_GAMES_FOR_MAP: int = 3         # the dropdown filter
 
 # Spatial cache lives next to the existing map-bounds file so all
@@ -399,9 +398,10 @@ class SpatialAggregator:
                 bx, by = ev.get("x"), ev.get("y")
                 if bx is None or by is None:
                     continue
-                if not self._proxy_helper._is_proxy(
-                    {"x": bx, "y": by}, opp_main,
-                    threshold=PROXY_DISTANCE_DEFAULT,
+                # Same per-structure radius custom proxy rules use, so a
+                # third base is not plotted as a proxy.
+                if not self._proxy_helper._is_canonical_proxy(
+                    {"x": bx, "y": by, "name": ev.get("name")}, opp_main,
                 ):
                     continue
                 points.append({
@@ -463,9 +463,8 @@ class SpatialAggregator:
                 bx, by = ev.get("x"), ev.get("y")
                 if bx is None or by is None:
                     continue
-                if proxy_only and not self._proxy_helper._is_proxy(
-                    {"x": bx, "y": by}, main_loc,
-                    threshold=PROXY_DISTANCE_DEFAULT,
+                if proxy_only and not self._proxy_helper._is_canonical_proxy(
+                    {"x": bx, "y": by, "name": ev.get("name")}, main_loc,
                 ):
                     continue
                 xs.append(float(bx))

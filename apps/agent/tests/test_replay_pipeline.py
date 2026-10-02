@@ -12,6 +12,7 @@ that decide what the cloud receives in the opponent block:
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -106,6 +107,10 @@ def test_spatial_proxy_extract_uses_two_arg_perspective_and_shared_playback(
             # Exactly 50 is not a proxy; the canonical predicate is strict >.
             {"type": "building", "name": "Factory", "time": 90, "x": 60, "y": 10},
             {"type": "building", "name": "Starport", "time": 120, "x": 61, "y": 10},
+            # A third base 70 units out: town halls and their gas take the
+            # 80-unit radius, so neither is proxy evidence.
+            {"type": "building", "name": "CommandCenter", "time": 125, "x": 80, "y": 10},
+            {"type": "building", "name": "Refinery", "time": 128, "x": 80, "y": 16},
             # Spatial playback may retain structures intentionally omitted
             # from buildLog. They stay in the heatmap but cannot become proxy
             # rule evidence because no local/cloud evaluator can match them.
@@ -143,7 +148,7 @@ def test_spatial_proxy_extract_uses_two_arg_perspective_and_shared_playback(
             return []
 
     # Use the real replay-engine BaseStrategyDetector implementation so this
-    # locks the same >50 geometry as live classification.
+    # locks the same per-structure geometry as live classification.
     real_detector_mod = pipeline._load_sc2ra_package_module(
         "strategy_detector_base",
     )
@@ -168,12 +173,13 @@ def test_spatial_proxy_extract_uses_two_arg_perspective_and_shared_playback(
     assert spatial["map_bounds"] == {
         "minX": 0.0, "minY": 0.0, "maxX": 200.0, "maxY": 200.0,
     }
-    assert spatial["my_proxy_classification_v"] == 1
-    assert spatial["opp_proxy_classification_v"] == 1
+    assert spatial["my_proxy_classification_v"] == 2
+    assert spatial["opp_proxy_classification_v"] == 2
     assert [row["name"] for row in spatial["my_proxies"]] == ["Starport"]
     assert [row["name"] for row in spatial["opp_proxies"]] == ["Barracks"]
     assert [row["name"] for row in spatial["buildings"]] == [
-        "CommandCenter", "Barracks", "Factory", "Starport", "SupplyDepot",
+        "CommandCenter", "Barracks", "Factory", "Starport",
+        "CommandCenter", "Refinery", "SupplyDepot",
     ]
 
     # The map payload consumes the same cached raw playback; enabling spatial
@@ -182,7 +188,7 @@ def test_spatial_proxy_extract_uses_two_arg_perspective_and_shared_playback(
     assert calls == [(str(ctx.file_path), "SelectedPlayerTwo")]
 
     # A single malformed tracked building makes this side incomplete. It may
-    # still render in other playback surfaces, but no v1 coverage stamp can be
+    # still render in other playback surfaces, but no coverage stamp can be
     # emitted because negative/count-zero rules must fail closed.
     playback["my_events"].append({
         "type": "building", "name": "Gateway", "time": 140, "x": 80,
@@ -196,10 +202,10 @@ def test_spatial_proxy_extract_uses_two_arg_perspective_and_shared_playback(
     assert malformed is not None
     assert "my_proxy_classification_v" not in malformed
     assert "my_proxies" not in malformed
-    assert malformed["opp_proxy_classification_v"] == 1
+    assert malformed["opp_proxy_classification_v"] == 2
 
     # Partial tracker extraction can hide an unseen proxy. Iterator errors or
-    # owner/name resolution failures therefore invalidate both v1 stamps even
+    # owner/name resolution failures therefore invalidate both stamps even
     # when the partial lists still contain otherwise valid buildings.
     playback["my_events"].pop()
     playback["my_events"].append({
@@ -232,6 +238,90 @@ def test_spatial_proxy_extract_uses_two_arg_perspective_and_shared_playback(
         assert unhealthy is not None
         assert "my_proxy_classification_v" not in unhealthy
         assert "opp_proxy_classification_v" not in unhealthy
+
+
+_PARITY_FIXTURE = (
+    HERE.parents[0] / "replay-engine" / "tests" / "fixtures"
+    / "custom_rule_parity.json"
+)
+_PARITY = json.loads(_PARITY_FIXTURE.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    "case", _PARITY["cases"], ids=[c["name"] for c in _PARITY["cases"]],
+)
+def test_spatial_proxy_stamp_is_what_the_cloud_parity_cases_consume(
+    monkeypatch, case,
+):
+    """The upload for each shared custom-rule case is the fixture's.
+
+    The API's customRuleParity test evaluates each case from its
+    ``proxies`` list; the replay-engine suite proves that list is the
+    engine's canonical proxy test over the case's ``events``. This closes
+    the loop: the agent uploads exactly that list, stamped with the
+    version the cloud trusts without re-testing, for either side.
+    """
+    import sc2tools_agent.replay_pipeline as pipeline
+
+    playback = {
+        "map_name": "Parity",
+        "game_length": 1200.0,
+        "bounds": {"x_min": 0, "x_max": 200, "y_min": 0, "y_max": 200},
+        "spawn_locations": [],
+        "extract_stats": {"errors": 0, "pid_failed": 0, "proxy_errors": 0},
+        "my_events": case["events"],
+        "opp_events": case["events"],
+        "my_buildings": [],
+        "opp_buildings": [],
+        "my_stats": [],
+        "opp_stats": [],
+        "my_units": [],
+        "opp_units": [],
+        "resources": [],
+        "ability_casts": [],
+    }
+
+    class PlaybackModule:
+        DEFAULT_BOUNDS = playback["bounds"]
+
+        @staticmethod
+        def build_playback_data(_file_path: str, _player_name: str):
+            return playback
+
+        @staticmethod
+        def detect_battle_markers(*_args):
+            return []
+
+    real_detector_mod = pipeline._load_sc2ra_package_module(
+        "strategy_detector_base",
+    )
+    monkeypatch.setattr(
+        pipeline,
+        "_load_sc2ra_package_module",
+        lambda name: (
+            PlaybackModule if name == "map_playback_data" else real_detector_mod
+        ),
+    )
+    ctx = SimpleNamespace(
+        file_path=Path("C:/replays/parity.SC2Replay"),
+        me=SimpleNamespace(name="Me", pid=1),
+        opponent=SimpleNamespace(name="Them", pid=2),
+    )
+
+    spatial = pipeline._compute_spatial_extract(ctx)
+
+    assert spatial is not None
+    version = _PARITY["proxy"]["classification_version"]
+    assert pipeline.PROXY_CLASSIFICATION_VERSION == version
+    for side in ("my", "opp"):
+        assert spatial[f"{side}_proxy_classification_v"] == version
+        uploaded = [
+            {key: row[key] for key in ("name", "time", "x", "y")}
+            for row in spatial.get(f"{side}_proxies", [])
+        ]
+        assert uploaded == case["proxies"]
+        # The agent omits the list rather than sending an empty one.
+        assert (f"{side}_proxies" in spatial) is bool(case["proxies"])
 
 
 def test_swallows_resolver_exceptions(_stub_pulse_resolver):

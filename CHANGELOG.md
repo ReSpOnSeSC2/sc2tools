@@ -174,6 +174,39 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **A custom build matches the same games on the desktop and on the
+  website (agent 0.17.7, engine 1.6.6)** — the replay engine in the Windows
+  agent and the website's reclassifier evaluated a saved build's rules
+  differently, so one build could be tagged by one and not the other. Three
+  differences are gone:
+  - *"Proxied" no longer means a third base.* A proxy rule counted any
+    structure more than 50 units from its owner's main, and a standard third
+    Hatchery, Nexus or Command Center (and its gas, Spine and Spore
+    Crawlers) sits 50-80 units out on most maps: "proxied Hatchery before
+    4:00" matched ordinary macro games, and saving a build from such a game
+    marked its third base as a proxy. Town halls, gas and Spine / Spore
+    Crawlers now need more than 80 units, the test the built-in "Zerg -
+    Proxy Hatch" label already used; every other structure keeps 50. The
+    agent's proxy list, the desktop classifier, the website and the offline
+    proxy heatmap share the one rule.
+  - *Rule times are start times on both sides.* The build editor saves "by
+    4:00" off the timeline of when things were started, and the website
+    compared starts, but the desktop compared when units, upgrades and
+    morphs (Lair, Orbital Command, Warp Gate) finished. A Stalker started at
+    3:40 and finished at 4:10 passed "Stalker before 4:00" on the website
+    only. The desktop now rewinds by the same build times, including the
+    8-worker patch 5.0.16's for games played on it.
+  - *Zergling speed and Overlord speed rules work on the desktop.* The
+    replay names those two upgrades in lower case, which the desktop's rule
+    matcher refused, so a rule on either never matched there.
+
+  Games an older agent already uploaded are re-checked on the website: your
+  own third bases are dropped from the proxy list using your main's stored
+  position. An opponent's main isn't stored, so a proxy rule about their
+  town hall, gas or crawlers reads "unknown" for those games (their current
+  label is kept) until the replay is re-synced with the new agent. Both
+  evaluators now run one shared set of cases in their test suites, along
+  with a shared copy of the build-time table.
 - **Build detection: a proxy Robo is no longer called "Proxy 2 Gate", and
   openers that take an early natural keep their tech label (agent 0.17.7,
   engine 1.6.6)** — a review of the build classifier for the 12-worker game

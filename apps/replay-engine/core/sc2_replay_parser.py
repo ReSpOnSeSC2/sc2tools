@@ -39,7 +39,11 @@ except (ImportError, ModuleNotFoundError):
     class CorruptTrackerFileError(Exception):
         pass
 
-from .build_definitions import BUILD_DEFINITIONS, name_for_game_version
+from .build_definitions import (
+    BUILD_DEFINITIONS,
+    is_eight_worker_game,
+    name_for_game_version,
+)
 from .custom_builds import load_custom_builds
 from .event_extractor import build_log_lines, extract_events
 from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
@@ -487,6 +491,9 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     my_detector = UserBuildDetector(custom["Self"])
 
     matchup = f"vs {ctx.opponent.race}"
+    # Custom v3 rules rewind finish-time events by the replay's own patch
+    # balance (8-worker 5.0.16 or the 12-worker game), as the cloud does.
+    eight_worker = is_eight_worker_game(ctx.game_version, ctx.game_build)
     # Pass the parsed game length so both detectors can short-circuit
     # to the matchup-prefixed "<X>vY - Game Too Short" bucket on
     # replays that ended before any build order developed (< 30 s).
@@ -499,12 +506,14 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
         matchup,
         game_length_seconds=ctx.length_seconds,
         my_race=ctx.me.race,
+        eight_worker=eight_worker,
     )
     ctx.my_build = my_detector.detect_my_build(
         matchup,
         my_events,
         ctx.me.race,
         game_length_seconds=ctx.length_seconds,
+        eight_worker=eight_worker,
     )
     # "8 Pool" on the 8-worker patch 5.0.16, "12 Pool" on every other patch.
     ctx.opp_strategy = name_for_game_version(ctx.opp_strategy, ctx.game_version)

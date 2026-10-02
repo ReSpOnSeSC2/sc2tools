@@ -31,6 +31,24 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 - Ships bundled replay engine 1.6.6. Stored games keep their labels until
   re-synced or reprocessed.
 
+### Fixed - custom builds match the same games as the website
+
+- A "proxied" rule no longer counts a third base. Town halls, gas and Spine /
+  Spore Crawlers are proxies only when more than 80 units from your main;
+  every other structure keeps the 50-unit test. A standard third Hatchery,
+  Nexus or Command Center sits 50-80 units out on most maps, so "proxied
+  Hatchery before 4:00" used to match ordinary macro games.
+- The proxy list the agent uploads uses the same test and is marked as
+  version 2, so the website can tell it from the older 50-unit list.
+- Custom rules compare when a unit, upgrade or morph (Lair, Orbital Command,
+  Warp Gate) was started, as the website does, instead of when it finished.
+  The start is worked out from the build time, using the 8-worker patch
+  5.0.16's times for games played on it.
+- Rules on Zergling speed and Overlord speed now match. The replay names
+  those upgrades in lower case, which the rule matcher refused.
+- Built-in build labels are unchanged. Re-sync a replay to refresh the proxy
+  list of a game uploaded by an older agent.
+
 ## 0.17.6
 
 ### Fixed - PTR games no longer replace your ladder MMR

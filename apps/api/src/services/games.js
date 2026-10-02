@@ -8,6 +8,7 @@ const { expectedVersion, stampVersion } = require("../db/schemaVersioning");
 const { HEAVY_FIELDS } = require("./gameDetails");
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { opponentBuildOrderBusyError } = require("./opponentBuildOrderFence");
+const { PROXY_CLASSIFICATION_VERSION } = require("./proxyClassification");
 const { SessionResolutionGate } = require("./sessionResolutionGate");
 
 /** @param {number} ms */
@@ -2021,17 +2022,17 @@ function sanitizeSpatial(value) {
     }
     out[field] = rows;
   }
-  if (
-    raw.my_proxy_classification_v === 1
-    && !invalidProxyEvidence.my
-  ) {
-    out.my_proxy_classification_v = 1;
-  }
-  if (
-    raw.opp_proxy_classification_v === 1
-    && !invalidProxyEvidence.opp
-  ) {
-    out.opp_proxy_classification_v = 1;
+  // Keep the stamp's version: 2 is the per-structure radius, 1 the flat
+  // 50 units older agents used (services/proxyClassification.js re-tests
+  // those rows when they are read).
+  for (const side of /** @type {const} */ (["my", "opp"])) {
+    const version = raw[`${side}_proxy_classification_v`];
+    if (
+      (version === 1 || version === PROXY_CLASSIFICATION_VERSION)
+      && !invalidProxyEvidence[side]
+    ) {
+      out[`${side}_proxy_classification_v`] = version;
+    }
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }

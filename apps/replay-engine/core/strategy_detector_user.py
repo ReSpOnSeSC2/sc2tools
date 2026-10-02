@@ -34,7 +34,12 @@ class UserBuildDetector(BaseStrategyDetector):
         my_events: List[Dict],
         my_race: str = "Protoss",
         game_length_seconds: float = None,
+        eight_worker: bool = False,
     ) -> str:
+        # ``eight_worker`` (the replay was played on the 8-worker patch
+        # 5.0.16) only picks the build durations custom v3 rules rewind
+        # by; see BaseStrategyDetector.check_custom_rules.
+
         # Short-circuit: a replay that ended before 30 seconds has no
         # build order to classify. Emit the matchup-prefixed
         # "Game Too Short" bucket so it groups with the opponent-side
@@ -79,7 +84,10 @@ class UserBuildDetector(BaseStrategyDetector):
             rules = cb.get("rules", [])
             if not rules:
                 continue  # an empty rule list cannot deterministically match
-            if self.check_custom_rules(rules, buildings, units, upgrades, main_loc):
+            if self.check_custom_rules(
+                rules, buildings, units, upgrades, main_loc,
+                eight_worker=eight_worker,
+            ):
                 return cb["name"]
 
         # 2. Zerg / Terran: delegate to the shared race classifier so the

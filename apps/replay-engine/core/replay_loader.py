@@ -37,7 +37,7 @@ from analytics.macro_score import compute_macro_score
 # matches the agent deep-parse path
 # (core/sc2_replay_parser.py) so a bulk-imported replay classifies
 # identically to a live-parsed one.
-from .build_definitions import name_for_game_version
+from .build_definitions import is_eight_worker_game, name_for_game_version
 from .custom_builds import load_custom_builds
 from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
 
@@ -122,24 +122,28 @@ def process_replay_task(file_path: str, player_name: str) -> dict:
         my_detector = UserBuildDetector(custom_data["Self"])
 
         matchup = f"vs {opponent.play_race}"
+        release = getattr(replay, 'release_string', None)
+        eight_worker = is_eight_worker_game(release, getattr(replay, 'build', None))
         # Same kwargs as the agent deep-parse path: the game length
         # enables the "<XvY> - Game Too Short" bucket, my_race gives
-        # the opponent bucket its user-perspective matchup prefix.
+        # the opponent bucket its user-perspective matchup prefix, and
+        # eight_worker picks the durations custom v3 rules rewind by.
         opp_strat = opp_detector.get_strategy_name(
             opponent.play_race,
             opp_events,
             matchup,
             game_length_seconds=length_sec,
             my_race=me.play_race,
+            eight_worker=eight_worker,
         )
         my_build = my_detector.detect_my_build(
             matchup,
             my_events,
             me.play_race,
             game_length_seconds=length_sec,
+            eight_worker=eight_worker,
         )
         # "8 Pool" on the 8-worker patch 5.0.16, "12 Pool" on every other patch.
-        release = getattr(replay, 'release_string', None)
         opp_strat = name_for_game_version(opp_strat, release)
         my_build = name_for_game_version(my_build, release)
 
@@ -243,13 +247,19 @@ def debug_analyze_replay(file_path: str, player_name: str) -> str:
     my_detector = UserBuildDetector(custom_data["Self"])
 
     matchup = f"vs {opponent.play_race}"
+    eight_worker = is_eight_worker_game(
+        getattr(replay, 'release_string', None), getattr(replay, 'build', None),
+    )
     opp_result = opp_detector.get_strategy_name(
         opponent.play_race,
         opp_events,
         matchup,
         my_race=me.play_race,
+        eight_worker=eight_worker,
     )
-    my_result = my_detector.detect_my_build(matchup, my_events, me.play_race)
+    my_result = my_detector.detect_my_build(
+        matchup, my_events, me.play_race, eight_worker=eight_worker,
+    )
 
     lines.append(f"\n  [OK] DETECTED MY BUILD: {my_result}")
     lines.append(f"  [OK] DETECTED OPP STRAT: {opp_result}")
