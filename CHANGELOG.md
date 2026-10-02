@@ -189,7 +189,7 @@ corresponding GitHub Release.
   Ghost Build step for the Lurker Den read the same name. Games already
   uploaded gain these lines once the replay is re-synced with the new agent.
 - **Banelings, Ravagers, Brood Lords, Overseers and Transport Overlords are
-  recorded (agent 0.17.8, engine 1.6.7)** — these units morph from another
+  recorded (agent 0.17.9, engine 1.6.8)** — these units morph from another
   unit, which the replay reports as a change of type rather than a birth, and
   the engine read that only for structures and Lurkers. Ravagers, Brood Lords,
   Overseers and Transport Overlords were never logged on any patch; Banelings
