@@ -49,10 +49,17 @@
     "opener": true
   },
   {
+    "name": "Protoss - Proxy 2 Gate",
+    "race": "Protoss",
+    "matchup": null,
+    "description": "Detected if a Gateway is started by 1:45 more than 50 units from the opponent's own main (a proxy) and no natural Nexus is started before 4:30 -- a proxied 2-Gate / 3-Gate aggression. Timing separates it from a proxy Robo / Stargate (proxied at ~2:00-3:00); 3+ proxied Gateways before 4:30 are the Proxy 4 Gate.",
+    "opener": true
+  },
+  {
     "name": "Protoss - Proxy 4 Gate",
     "race": "Protoss",
     "matchup": null,
-    "description": "Detected if 3+ Gateways are built far from the main base before 4:30.",
+    "description": "Detected if 3+ Gateways are started before 4:30 more than 50 units from the opponent's own main (a proxy) and no natural Nexus is started before 4:30.",
     "opener": true
   },
   {
@@ -122,21 +129,21 @@
     "name": "PvP - 1 Gate Expand",
     "race": "Protoss",
     "matchup": "PvP",
-    "description": "PvP standard 1-gate expand: exactly 1 Gateway finished before the natural Nexus (which goes down before 5:00) and the first warp-in is a Stalker / Adept / Zealot.",
+    "description": "PvP standard 1-gate expand: exactly 1 Gateway started before the natural Nexus (which goes down before 5:00), the first warp-in is a Stalker / Adept / Zealot, and no Stargate / Robotics Facility / Twilight Council was started before the natural. Tech before the natural makes it a tech-first opener (Standard Stargate Opener, Robo Opener, Rail's Blink Stalker, ...); the 1 Gate Expand label is kept only when no tech rule recognises the game.",
     "opener": true
   },
   {
     "name": "PvP - 1 Gate Nexus into 4 Gate",
     "race": "Protoss",
     "matchup": "PvP",
-    "description": "Detected if exactly 1 Gateway is started before the natural Nexus (which goes down before 5:00), 4+ Gateways exist by 6:00, the first warp-in is a Stalker / Adept / Zealot (NOT Sentry), no tech building (Stargate / Robotics Facility / Twilight Council / Templar Archive / Dark Shrine) is started before the 4th Gateway, and Warp Gate research begins by 5:30 -- the 1 Gate Nexus into 4 Gate Stalker timing.",
+    "description": "Detected if exactly 1 Gateway is started before the natural Nexus (which goes down before 5:00), 4+ Gateways exist by 6:00, the first warp-in is a Stalker / Adept / Zealot (NOT Sentry), no tech building (Stargate / Robotics Facility / Twilight Council / Templar Archive / Dark Shrine) is started before the 4th Gateway, and Warp Gate research finishes by 5:30 -- the 1 Gate Nexus into 4 Gate Stalker timing.",
     "opener": true
   },
   {
     "name": "PvP - 2 Gate Expand",
     "race": "Protoss",
     "matchup": "PvP",
-    "description": "PvP safer 2-gate expand: 2 (or more) Gateways are started before the natural Nexus (which goes down before 5:00) AND no tech building (Stargate, Robotics Facility, or Twilight Council) is started before the natural. A Stargate / Robo / Twilight before the natural means it is a tech-first opener, not a pure 2-gate expand. Trades a few seconds of economy for protection vs proxy 2-gate / early aggression.",
+    "description": "PvP safer 2-gate expand: 2 (or more) Gateways are started before the natural Nexus (which goes down before 5:00) AND no tech building (Stargate, Robotics Facility, or Twilight Council) is started before the natural. A Stargate / Robo / Twilight before the natural means it is a tech-first opener (Standard Stargate Opener, Robo Opener, ...); the 2 Gate Expand label is kept only when no tech rule recognises the game. Trades a few seconds of economy for protection vs proxy 2-gate / early aggression.",
     "opener": true
   },
   {
@@ -192,21 +199,35 @@
     "name": "PvP - Proxy 2 Gate",
     "race": "Protoss",
     "matchup": "PvP",
-    "description": "Detected if a Gateway is built before 4:30 within 50 units of the OPPONENT's main base -- a proxied 2-Gate aggression.",
+    "description": "Detected if a Gateway is started by 1:45 more than 50 units from the player's own main (a proxy) and no natural Nexus is started before 4:30 -- a proxied 2-Gate / 3-Gate aggression. Timing is what separates it from the other forward builds: a true proxy 2-Gate's Gateways go down between ~0:30 and ~1:15 (1:45 leaves a margin), while a proxy Robo proxies at ~2:00-3:00 and a 3-4 Gate (Warp Gate) build with a forward Gateway places it in that same band -- neither counts.",
     "opener": true
   },
   {
     "name": "PvP - Proxy Robo Opener",
     "race": "Protoss",
     "matchup": "PvP",
-    "description": "Detected if a Robotics Facility is built before 6:30 within 50 units of the OPPONENT's main base -- a proxied Robo (Immortal / Warp Prism) opener.",
+    "description": "Detected if a Robotics Facility is started before 6:30 more than 50 units from the player's own main (a proxy) -- a proxied Robo (Immortal / Warp Prism) opener. The forward Gateway dropped beside the Robo (~2:00-3:00) is far later than a proxy 2-Gate's Gateways (~0:30-1:15), so it no longer tags the game as Proxy 2 Gate.",
+    "opener": true
+  },
+  {
+    "name": "PvP - Proxy Stargate Opener",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if a Stargate is started before 6:30 more than 50 units from the player's own main (a proxy) -- a proxied Stargate (Void Ray / Oracle) PvP opener, the PvP counterpart of PvT - Proxy Void Ray/Stargate.",
     "opener": true
   },
   {
     "name": "PvP - Rail's Blink Stalker (Robo 1st)",
     "race": "Protoss",
     "matchup": "PvP",
-    "description": "Detected if Robotics Facility goes down BEFORE Twilight Council and BOTH go down before the natural Nexus -- a Robo-first Blink Stalker style. A Robo-first build whose FIRST Twilight upgrade is Glaives tags as PvP - Robo into Glaives instead.",
+    "description": "Detected if Robotics Facility goes down BEFORE Twilight Council, BOTH go down before the natural Nexus, and Blink is researched by 9:00 -- a Robo-first Blink Stalker style. A Robo-first build whose FIRST Twilight upgrade is Glaives tags as PvP - Robo into Glaives instead; a Robo-first build without Blink is the PvP - Robo Opener.",
+    "opener": true
+  },
+  {
+    "name": "PvP - Robo Opener",
+    "race": "Protoss",
+    "matchup": "PvP",
+    "description": "Detected if a Robotics Facility in the player's own base is the FIRST tech building (before any Stargate and Twilight Council -- pure ordering, no time threshold) and no more specific Robo label applies (Proxy Robo Opener, Robo into Glaives, Rail's Blink Stalker) -- the standard Robo-first (Immortal / Observer) PvP opener.",
     "opener": true
   },
   {
@@ -220,28 +241,28 @@
     "name": "PvP - Standard Stargate Opener",
     "race": "Protoss",
     "matchup": "PvP",
-    "description": "Detected if a Stargate is built before 6:30 in the player's own base (not proxied) -- the standard Stargate (Oracle / Phoenix) PvP opener.",
+    "description": "Detected if a Stargate is built before 6:30 in the player's own base (not proxied) and is the FIRST tech building (before any Robotics Facility / Twilight Council) -- the standard Stargate (Oracle / Phoenix) PvP opener.",
     "opener": true
   },
   {
     "name": "PvP - Strange's 1 Gate Expand",
     "race": "Protoss",
     "matchup": "PvP",
-    "description": "PvP 1-gate expand variant where exactly 1 Gateway is built before the natural Nexus and the first warp-in is a Sentry.",
+    "description": "PvP 1-gate expand variant where exactly 1 Gateway is started before the natural Nexus (which goes down before 5:00), the first warp-in is a Sentry, and no Stargate / Robotics Facility / Twilight Council was started before the natural (tech before the natural is a tech-first opener; this label is kept only when no tech rule recognises the game).",
     "opener": true
   },
   {
     "name": "PvT - 2 Base Templar (Reactive/Delayed 3rd)",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if Twilight Council is the FIRST tech building (before any Robotics Facility AND before any Stargate), a Templar Archives finishes BEFORE the third Nexus is taken, AND the player has 4-6 Gateways by 7:30 -- a reactive 2-base High Templar / Storm timing with a delayed 3rd. The Twilight-first ordering guard keeps Robo-first openers that add a late TA for Storm support off this label (those fall through to Robo First). A hallucinated High Templar is NOT enough; the Templar Archives must actually exist.",
+    "description": "Detected if Twilight Council is the FIRST tech building (before any Robotics Facility AND before any Stargate), a Templar Archives is started by 9:00 and BEFORE the third Nexus, the third Nexus (if any) is delayed to 6:00 or later, the player has 4-6 Gateways by 7:30, AND Blink was not the first Twilight upgrade researched before the Archives (that is a Blink build with a Storm follow-up) -- a reactive 2-base High Templar / Storm timing with a delayed 3rd. The Twilight-first ordering guard keeps Robo-first openers that add a late TA for Storm support off this label (those fall through to Robo First). A hallucinated High Templar is NOT enough; the Templar Archives must actually exist.",
     "opener": true
   },
   {
     "name": "PvT - 2 Gate Blink (Fast 3rd Nexus)",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is researched by 8:00, the player has taken 3+ Nexuses, exactly 2 Gateways were STARTED before the 3rd Nexus, AND a Robotics Facility is up by 8:00 -- a fast-3rd 2-Gate Blink style with Robo follow-up for Observer / Immortal support. The Twilight-first ordering keeps Robo-first openers with a midgame Blink tech-switch off this label. The gate count is measured against the 3rd Nexus's start time, not a fixed 7:30 cutoff, so a player can add more Gateways after taking the 3rd Nexus without flipping the label to 3 or 4 Gate Blink.",
+    "description": "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is researched by 8:00, the player has taken 3+ Nexuses, AND exactly 2 Gateways were STARTED before the 3rd Nexus -- a fast-3rd 2-Gate Blink style, with or without a Robotics Facility follow-up for Observer / Immortal support. The Twilight-first ordering keeps Robo-first openers with a midgame Blink tech-switch off this label. The gate count is measured against the 3rd Nexus's start time, not a fixed 7:30 cutoff, so a player can add more Gateways after taking the 3rd Nexus without flipping the label to 3 or 4 Gate Blink.",
     "opener": true
   },
   {
@@ -315,10 +336,17 @@
     "opener": true
   },
   {
+    "name": "PvT - Proxy 2 Gate",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if a Gateway is started by 1:45 more than 50 units from the player's own main (a proxy) and no natural Nexus is started before 4:30 -- a proxied 2-Gate / 3-Gate aggression vs Terran. Same timing rule as PvP - Proxy 2 Gate: a true proxy 2-Gate's Gateways go down between ~0:30 and ~1:15; a forward Gateway in the 2:00-3:00 band (proxy Stargate, 3-4 Gate with a proxy Gateway) is not one.",
+    "opener": true
+  },
+  {
     "name": "PvT - Proxy Void Ray/Stargate",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if a Stargate is built before the natural Nexus within 50 units of the OPPONENT's main -- a proxied Stargate (Void Ray) timing.",
+    "description": "Detected if a Stargate is started more than 50 units from the player's own main (a proxy) before the natural Nexus, or before 4:30 when the natural came first -- a proxied Stargate (Void Ray) timing.",
     "opener": true
   },
   {
@@ -395,14 +423,14 @@
     "name": "PvZ - Adept Glaives (No Robo)",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold, so a slow Twilight with nothing else committed first still qualifies), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 6:00, AND no Robotics Facility is built -- a pure Gateway Adept Glaive Timing without Robo support.",
+    "description": "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), AND no Robotics Facility is built by 10:00 -- a pure Gateway Adept Glaive Timing without Robo support. Order-based with no Gateway-count window, like Stargate into Glaives.",
     "opener": true
   },
   {
     "name": "PvZ - Adept Glaives (Robo)",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 6:00, AND a Robotics Facility is built (after Twilight, as Observer / Immortal support) -- the Robo variant of Adept Glaive Timing.",
+    "description": "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), AND a Robotics Facility is built by 10:00 (after Twilight, as Observer / Immortal support) -- the Robo variant of Adept Glaive Timing. Order-based with no Gateway-count window, like Stargate into Glaives.",
     "opener": true
   },
   {
@@ -416,14 +444,21 @@
     "name": "PvZ - Archon Drop",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if Stargate goes down before Twilight Council, a Templar Archives is up by 9:00, and 2+ Archons have been produced by 9:00 -- Stargate opener transitioning into Archon drops. Requires Templar Archives (or Dark Shrine for DT-Archon morph).",
+    "description": "Detected if Stargate goes down before Twilight Council, a Templar Archives is up by 9:00, and 2+ Archons have been produced by 9:00 -- Stargate opener transitioning into Archon drops. Requires Templar Archives (or Dark Shrine for DT-Archon morph). Checked before Stargate into Robo, so the drop's Warp Prism (Robotics Facility) never hides it.",
     "opener": true
   },
   {
     "name": "PvZ - Blink Stalker All-in (2 Base)",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if Blink is researched by 8:00, 5+ Gateways exist by 8:00, and the player has NOT built a Stargate or Dark Shrine by 8:00 -- a 2-base Blink all-in.",
+    "description": "Detected if Blink is researched by 8:00, 5+ Gateways exist by 8:00, the player has at most 2 Nexuses by 8:00, and has NOT built a Stargate or Dark Shrine by 8:00 -- a 2-base Blink all-in. A third Nexus by 8:00 is a Twilight-first Blink macro game, not the all-in.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Cannon Rush",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if a Photon Cannon is started before 4:30 more than 50 units from the player's own main (a proxy) -- a cannon rush vs Zerg.",
     "opener": true
   },
   {
@@ -462,6 +497,20 @@
     "opener": false
   },
   {
+    "name": "PvZ - Proxy 2 Gate",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if a Gateway is started by 1:45 more than 50 units from the player's own main (a proxy) and no natural Nexus is started before 4:30 -- a proxied 2-Gate / 3-Gate aggression vs Zerg. Same timing rule as PvP - Proxy 2 Gate: a true proxy 2-Gate's Gateways go down between ~0:30 and ~1:15; a forward Gateway in the 2:00-3:00 band (proxy Stargate, 3-4 Gate with a proxy Gateway) is not one.",
+    "opener": true
+  },
+  {
+    "name": "PvZ - Proxy Stargate Opener",
+    "race": "Protoss",
+    "matchup": "PvZ",
+    "description": "Detected if a Stargate is started before 6:30 more than 50 units from the player's own main (a proxy) -- a proxied Stargate (Void Ray / Oracle) opener vs Zerg, the counterpart of PvT - Proxy Void Ray/Stargate.",
+    "opener": true
+  },
+  {
     "name": "PvZ - Rail's Disruptor Drop",
     "race": "Protoss",
     "matchup": "PvZ",
@@ -486,7 +535,7 @@
     "name": "PvZ - Standard charge Macro",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Charge is the FIRST Twilight upgrade and completes by 9:00, and any Robotics Facility follows the Twilight -- standard 3-base Chargelot macro rather than AlphaStar.",
+    "description": "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Charge is the FIRST Twilight upgrade and completes by 10:00, and any Robotics Facility follows the Twilight -- standard 3-base Chargelot macro rather than AlphaStar.",
     "opener": true
   },
   {

@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Dict, List
 
 from .strategy_detector_helpers import (
+    PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS,
     DetectionContext,
     _composition_fallback_name,
     _is_start_event,
@@ -58,7 +59,10 @@ def classify_by_race(race, events: List[Dict], detector, opp_race=None) -> str:
     takes precedence over the generic race tree.
     """
     buildings = [e for e in events if e["type"] == "building"]
-    units = [e for e in events if e["type"] == "unit"]
+    # Worker births (type "worker") count as units here so the Drone /
+    # Probe / SCV predicates below see real numbers. Until the extractor
+    # emitted them, every worker count read 0 on real replays.
+    units = [e for e in events if e["type"] in ("unit", "worker")]
     upgrades = [e for e in events if e["type"] == "upgrade"]
     main_loc = detector._get_main_base_loc(buildings)
 
@@ -203,15 +207,30 @@ def classify_by_race(race, events: List[Dict], detector, opp_race=None) -> str:
 
         if has_proxy_building("PhotonCannon", 270):
             return "Protoss - Cannon Rush"
+        # Proxied Gateways use the shared 50-unit proxy test (the old
+        # 40-unit radius tagged a 3-Gateway natural wall as a proxy)
+        # and, like the PvP user tree, require that no natural was
+        # started before 4:30.
         proxied_gates_3m = sum(
             1 for b in buildings
             if b["name"] == "Gateway"
             and _is_start_event(b)
             and b["time"] < 270
-            and detector._is_proxy(b, main_loc, 40)
+            and detector._is_proxy(b, main_loc, 50)
         )
-        if proxied_gates_3m >= 3:
+        if proxied_gates_3m >= 3 and second_nexus_time > 270:
             return "Protoss - Proxy 4 Gate"
+        # Proxy 2 Gate: the opponent-side twin of "PvP - Proxy 2 Gate",
+        # with the same timing rule -- a true proxy 2-Gate's Gateways
+        # are down by ~1:15 (1:45 with margin); a forward Gateway in the
+        # 2:00-3:00 band belongs to a proxy Robo / Stargate (caught
+        # further down) and is not one. Without this rule an opponent's
+        # proxy 2-Gate was labelled by unit composition.
+        if (
+            has_proxy_building("Gateway", PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS, 50)
+            and second_nexus_time > 270
+        ):
+            return "Protoss - Proxy 2 Gate"
         # DT Rush: a real DT rush has the Dark Shrine going down by
         # ~4:30-5:00 and at least one DT on the field by ~6:00 for
         # the harass. The old "Dark Shrine by 7:30" check fired on
@@ -356,7 +375,12 @@ def classify_by_race(race, events: List[Dict], detector, opp_race=None) -> str:
 
         rax_count = count_buildings("Barracks", 390)
         if rax_count >= 3:
-            cc_count = count_buildings("CommandCenter", 390)
+            # base_count_at adds the pre-placed main (a born-only event
+            # on real replays, never a construction start). The raw
+            # start-event count read 0 on one base and 1 on two, so
+            # "3-4 Rax Marine rush" / "3 Rax" could never fire and
+            # "2-3 Rax Reaper rush" fired on two-base games.
+            cc_count = base_count_at(buildings, "CommandCenter", 390)
             refinery_count = count_buildings("Refinery", 390)
             if cc_count == 1 and refinery_count == 0:
                 return "Terran - 3-4 Rax Marine rush"

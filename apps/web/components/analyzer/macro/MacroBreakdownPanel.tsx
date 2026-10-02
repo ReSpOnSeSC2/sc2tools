@@ -442,9 +442,13 @@ function BreakdownBody({
     { revalidateOnFocus: false, shouldRetryOnError: false },
   );
   const gameApm = useMemo(() => readGameApm(apmReq.data), [apmReq.data]);
-  // The calling rows carry the replay's date but no version, so the
-  // era prices units by patchEraForGame's date rule.
-  const patchEra = patchEraForGame({ date: headerMeta?.dateIso });
+  // The calling row's version decides the era that prices units; a row
+  // without one falls back to patchEraForGame's date rule.
+  const patchEra = patchEraForGame({
+    gameVersion: headerMeta?.gameVersion,
+    gameBuild: headerMeta?.gameBuild,
+    date: headerMeta?.dateIso,
+  });
 
   return (
     <div className="space-y-5 sm:space-y-6">

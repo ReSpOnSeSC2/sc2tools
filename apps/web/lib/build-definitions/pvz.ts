@@ -41,14 +41,14 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Archon Drop",
     description:
-      "Detected if Stargate goes down before Twilight Council, a Templar Archives is up by 9:00, and 2+ Archons have been produced by 9:00 -- Stargate opener transitioning into Archon drops. Requires Templar Archives (or Dark Shrine for DT-Archon morph).",
+      "Detected if Stargate goes down before Twilight Council, a Templar Archives is up by 9:00, and 2+ Archons have been produced by 9:00 -- Stargate opener transitioning into Archon drops. Requires Templar Archives (or Dark Shrine for DT-Archon morph). Checked before Stargate into Robo, so the drop's Warp Prism (Robotics Facility) never hides it.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - Blink Stalker All-in (2 Base)",
     description:
-      "Detected if Blink is researched by 8:00, 5+ Gateways exist by 8:00, and the player has NOT built a Stargate or Dark Shrine by 8:00 -- a 2-base Blink all-in.",
+      "Detected if Blink is researched by 8:00, 5+ Gateways exist by 8:00, the player has at most 2 Nexuses by 8:00, and has NOT built a Stargate or Dark Shrine by 8:00 -- a 2-base Blink all-in. A third Nexus by 8:00 is a Twilight-first Blink macro game, not the all-in.",
   },
   {
     race: "Protoss",
@@ -97,7 +97,7 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Standard charge Macro",
     description:
-      "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Charge is the FIRST Twilight upgrade and completes by 9:00, and any Robotics Facility follows the Twilight -- standard 3-base Chargelot macro rather than AlphaStar.",
+      "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Charge is the FIRST Twilight upgrade and completes by 10:00, and any Robotics Facility follows the Twilight -- standard 3-base Chargelot macro rather than AlphaStar.",
   },
   {
     race: "Protoss",
@@ -111,14 +111,14 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvZ",
     name: "PvZ - Adept Glaives (No Robo)",
     description:
-      "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold, so a slow Twilight with nothing else committed first still qualifies), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 6:00, AND no Robotics Facility is built -- a pure Gateway Adept Glaive Timing without Robo support.",
+      "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), AND no Robotics Facility is built by 10:00 -- a pure Gateway Adept Glaive Timing without Robo support. Order-based with no Gateway-count window, like Stargate into Glaives.",
   },
   {
     race: "Protoss",
     matchup: "PvZ",
     name: "PvZ - Adept Glaives (Robo)",
     description:
-      "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), 4-8 Gateways exist by 6:00, AND a Robotics Facility is built (after Twilight, as Observer / Immortal support) -- the Robo variant of Adept Glaive Timing.",
+      "Detected if the Twilight Council is the FIRST tech building after the Cybernetics Core (no Stargate, Robotics Facility, or Dark Shrine is started before Twilight -- pure ordering, no time threshold), the FIRST upgrade researched out of the Twilight Council is Resonating Glaives (Glaives starts BEFORE Blink and BEFORE Charge), AND a Robotics Facility is built by 10:00 (after Twilight, as Observer / Immortal support) -- the Robo variant of Adept Glaive Timing. Order-based with no Gateway-count window, like Stargate into Glaives.",
   },
   {
     race: "Protoss",
@@ -147,5 +147,26 @@ export const PVZ_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     name: "PvZ - Stargate Opener",
     description:
       "Catch-all for any Stargate-first opener (Stargate built BEFORE any Twilight Council / Dark Shrine / Robotics Facility) that didn't match a more specific Stargate-prefixed PvZ rule -- Carrier Rush, Tempest Rush, 2/3 Stargate Phoenix, 2 Stargate Void Ray, AlphaStar Style, Stargate into Robo, Stargate into Glaives, Standard Blink Macro, Standard charge Macro, Archon Drop. Examples that land here: a Stargate that got harassed off before producing a real unit, a Stargate-into-Templar build without 2 Archons by 9:00, or any Stargate opener with an unusual midgame composition the analyzer doesn't have a named bucket for. Mirror of PvT - Stargate Opener.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvZ",
+    name: "PvZ - Proxy 2 Gate",
+    description:
+      "Detected if a Gateway is started by 1:45 more than 50 units from the player's own main (a proxy) and no natural Nexus is started before 4:30 -- a proxied 2-Gate / 3-Gate aggression vs Zerg. Same timing rule as PvP - Proxy 2 Gate: a true proxy 2-Gate's Gateways go down between ~0:30 and ~1:15; a forward Gateway in the 2:00-3:00 band (proxy Stargate, 3-4 Gate with a proxy Gateway) is not one.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvZ",
+    name: "PvZ - Cannon Rush",
+    description:
+      "Detected if a Photon Cannon is started before 4:30 more than 50 units from the player's own main (a proxy) -- a cannon rush vs Zerg.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvZ",
+    name: "PvZ - Proxy Stargate Opener",
+    description:
+      "Detected if a Stargate is started before 6:30 more than 50 units from the player's own main (a proxy) -- a proxied Stargate (Void Ray / Oracle) opener vs Zerg, the counterpart of PvT - Proxy Void Ray/Stargate.",
   },
 ];

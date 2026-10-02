@@ -56,7 +56,9 @@ class OpponentStrategyDetector(BaseStrategyDetector):
             return f"{race} - Game Too Short"
 
         buildings = [e for e in enemy_events if e["type"] == "building"]
-        units = [e for e in enemy_events if e["type"] == "unit"]
+        # Worker births (type "worker") count as units here so the
+        # Drone / Probe / SCV predicates in the trees see real numbers.
+        units = [e for e in enemy_events if e["type"] in ("unit", "worker")]
         upgrades = [e for e in enemy_events if e["type"] == "upgrade"]
         main_loc = self._get_main_base_loc(buildings)
 

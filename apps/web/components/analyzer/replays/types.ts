@@ -26,6 +26,10 @@ export interface ReplayLibraryItem {
   durationSec?: number | null;
   playerCount?: number | null;
   matchFormat?: "1v1" | "team" | "ffa" | "other" | null;
+  /** Client release / numeric build from the replay header; with ``date``
+   *  they give the patch era (``patchEraForGame``). Owner rows only. */
+  gameVersion?: string | null;
+  gameBuild?: number | null;
   myRace?: string | null;
   myBuild?: string | null;
   myMmr?: number | null;

@@ -6,14 +6,14 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - 2 Base Templar (Reactive/Delayed 3rd)",
     description:
-      "Detected if Twilight Council is the FIRST tech building (before any Robotics Facility AND before any Stargate), a Templar Archives finishes BEFORE the third Nexus is taken, AND the player has 4-6 Gateways by 7:30 -- a reactive 2-base High Templar / Storm timing with a delayed 3rd. The Twilight-first ordering guard keeps Robo-first openers that add a late TA for Storm support off this label (those fall through to Robo First). A hallucinated High Templar is NOT enough; the Templar Archives must actually exist.",
+      "Detected if Twilight Council is the FIRST tech building (before any Robotics Facility AND before any Stargate), a Templar Archives is started by 9:00 and BEFORE the third Nexus, the third Nexus (if any) is delayed to 6:00 or later, the player has 4-6 Gateways by 7:30, AND Blink was not the first Twilight upgrade researched before the Archives (that is a Blink build with a Storm follow-up) -- a reactive 2-base High Templar / Storm timing with a delayed 3rd. The Twilight-first ordering guard keeps Robo-first openers that add a late TA for Storm support off this label (those fall through to Robo First). A hallucinated High Templar is NOT enough; the Templar Archives must actually exist.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - 2 Gate Blink (Fast 3rd Nexus)",
     description:
-      "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is researched by 8:00, the player has taken 3+ Nexuses, exactly 2 Gateways were STARTED before the 3rd Nexus, AND a Robotics Facility is up by 8:00 -- a fast-3rd 2-Gate Blink style with Robo follow-up for Observer / Immortal support. The Twilight-first ordering keeps Robo-first openers with a midgame Blink tech-switch off this label. The gate count is measured against the 3rd Nexus's start time, not a fixed 7:30 cutoff, so a player can add more Gateways after taking the 3rd Nexus without flipping the label to 3 or 4 Gate Blink.",
+      "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is researched by 8:00, the player has taken 3+ Nexuses, AND exactly 2 Gateways were STARTED before the 3rd Nexus -- a fast-3rd 2-Gate Blink style, with or without a Robotics Facility follow-up for Observer / Immortal support. The Twilight-first ordering keeps Robo-first openers with a midgame Blink tech-switch off this label. The gate count is measured against the 3rd Nexus's start time, not a fixed 7:30 cutoff, so a player can add more Gateways after taking the 3rd Nexus without flipping the label to 3 or 4 Gate Blink.",
   },
   {
     race: "Protoss",
@@ -83,7 +83,7 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - Proxy Void Ray/Stargate",
     description:
-      "Detected if a Stargate is built before the natural Nexus within 50 units of the OPPONENT's main -- a proxied Stargate (Void Ray) timing.",
+      "Detected if a Stargate is started more than 50 units from the player's own main (a proxy) before the natural Nexus, or before 4:30 when the natural came first -- a proxied Stargate (Void Ray) timing.",
   },
   {
     race: "Protoss",
@@ -126,5 +126,12 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     name: "PvT - Standard Charge Macro",
     description:
       "Detected if Charge is researched by 9:00, the player has taken 3+ Nexuses, AND Twilight Council is the FIRST tech building — Twilight goes down before any Robotics Facility AND before any Stargate. The label describes the OPENER, not the entire composition: a Twilight-first Charge macro that later adds Robo (Observer / Immortal support) or transitions into Stargate tech in the midgame (Skytoss tech-switch, end-game Tempests, late Phoenix harass) still classifies as Standard Charge Macro because the opening was Twilight + Charge. Robo-first openers (Robo before Twilight) are caught by Robo First instead; Stargate-led openers are caught earlier by Stargate into Charge / Phoenix into Robo.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvT",
+    name: "PvT - Proxy 2 Gate",
+    description:
+      "Detected if a Gateway is started by 1:45 more than 50 units from the player's own main (a proxy) and no natural Nexus is started before 4:30 -- a proxied 2-Gate / 3-Gate aggression vs Terran. Same timing rule as PvP - Proxy 2 Gate: a true proxy 2-Gate's Gateways go down between ~0:30 and ~1:15; a forward Gateway in the 2:00-3:00 band (proxy Stargate, 3-4 Gate with a proxy Gateway) is not one.",
   },
 ];

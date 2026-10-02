@@ -65,6 +65,19 @@ def _matchup_to_vs_race(matchup: str) -> str:
 # attempt to differentiate further.
 GAME_TOO_SHORT_THRESHOLD_SECONDS = 45
 
+# =========================================================
+# PROXY 2 GATE TIMING
+# =========================================================
+# A true proxy 2-Gate / 3-Gate starts its Gateways between ~0:30 and
+# ~1:15 in the 12-worker game (the probe leaves at 12-13 supply, the
+# proxy Pylon lands ~0:40-0:55, the Gateways follow). A proxy Robo /
+# Stargate proxies at ~2:00-3:00, and a 3-4 Gate (Warp Gate) build that
+# uses a forward Gateway places it in that same 2:00-3:00 band -- neither
+# is a proxy 2-Gate, and the timing is what tells them apart. 1:45 leaves
+# a margin for a slow walk while staying clear of that band. Shared by
+# the PvP / PvT / PvZ user trees and the generic Protoss opponent tree.
+PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS = 105
+
 # Race -> one-letter prefix used to build matchup labels like "PvT".
 # "Random" / unknown stays as "?" so the rule never crashes; the
 # label that comes out ("?v?-Game Too Short") is still a valid

@@ -403,6 +403,8 @@ describe("/v1/admin", () => {
       gameId: "2026-05-08T11:00:00|GoMeZ|Map|700",
       date: "2026-05-08T11:00:00.000Z",
       result: "Defeat",
+      gameVersion: "5.0.17.98100",
+      gameBuild: 98100,
       opponent: { pulseId, toonHandle: pulseId, displayName: "GoMeZ", race: "Zerg" },
     });
     for (const g of [g1, g2]) {
@@ -425,6 +427,10 @@ describe("/v1/admin", () => {
     expect(list.body.items[0].gameId).toBe(g2.gameId); // newest first
     expect(list.body.items[0].opponent.displayName).toBe("GoMeZ");
     expect(list.body.items[1].result).toBe("Victory");
+    // The client version rides the row so the detail view prices units by
+    // the replay's own patch; a row without one reads null.
+    expect(list.body.items[0]).toMatchObject({ gameVersion: "5.0.17.98100", gameBuild: 98100 });
+    expect(list.body.items[1]).toMatchObject({ gameVersion: null, gameBuild: null });
 
     // Per-game build order for an arbitrary user's game.
     const bo = await asAdmin(

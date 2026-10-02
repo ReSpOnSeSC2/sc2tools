@@ -204,6 +204,9 @@ const PROFILE_GAME_ROW_PROJECTION = {
   _id: 1,
   gameId: 1,
   date: 1,
+  // Patch era, with ``date``: the row's macro panel prices units by it.
+  gameVersion: 1,
+  gameBuild: 1,
   result: 1,
   map: 1,
   myRace: 1,
@@ -3775,6 +3778,8 @@ function serializeCompactProfileGame(g) {
   return {
     id: g?.gameId || null,
     date: g?.date instanceof Date ? g.date.toISOString() : g?.date || null,
+    gameVersion: typeof g?.gameVersion === "string" ? g.gameVersion : null,
+    gameBuild: typeof g?.gameBuild === "number" ? g.gameBuild : null,
     result: g?.result || "",
     map: g?.map || "",
     opponent: opp.displayName || "",

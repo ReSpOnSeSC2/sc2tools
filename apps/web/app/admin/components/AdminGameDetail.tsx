@@ -48,6 +48,9 @@ type BuildOrderResp = {
 export type AdminGameDetailGame = {
   gameId: string;
   date: string | null;
+  /** Client release / numeric build; with ``date`` they give the patch era. */
+  gameVersion?: string | null;
+  gameBuild?: number | null;
   result: string | null;
   myRace: string | null;
   map: string | null;
@@ -170,7 +173,7 @@ export function AdminGameDetail({
         retrying={macro.isValidating}
         onRetry={() => { void macro.mutate().catch(() => {}); }}
         myRace={myRace}
-        patchEra={patchEraForGame({ date: game.date })}
+        patchEra={patchEraForGame(game)}
       />
     </div>
   );
@@ -223,7 +226,7 @@ function MacroPanel({
   retrying: boolean;
   onRetry: () => void;
   myRace: Race;
-  /** Prices the derived army value; the admin row has only the date. */
+  /** Prices the derived army value, from the admin row's version and date. */
   patchEra: PatchEra;
 }) {
   if (isLoading && !data) {

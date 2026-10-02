@@ -33,6 +33,16 @@ from .strategy_detector_helpers import (
 
 # --------------------------------------------------------------------------
 # Terran matchups
+def _has_proxied_factory_or_starport(ctx: DetectionContext) -> bool:
+    """A proxied Factory / Starport is the generic Terran tree's
+    "Terran - Proxy 1-1-1" / "Terran - Proxy Starport Hellion Drop";
+    the matchup trees let those games through (return ``None``) instead
+    of claiming them as a two-base timing. The two-base labels also
+    require exactly two Command Centers by 7:30 (``cc450 == 2``) -- the
+    old ``<= 2`` let one-base games take "2-1-1" / "2 Base" names."""
+    return ctx.has_proxy("Factory", 390) or ctx.has_proxy("Starport", 490)
+
+
 # --------------------------------------------------------------------------
 def detect_tvt(ctx: DetectionContext) -> Optional[str]:
     """Terran-vs-Terran: recognizable openings, specific -> general.
@@ -40,6 +50,8 @@ def detect_tvt(ctx: DetectionContext) -> Optional[str]:
     Returns ``None`` when none match so the generic Terran race tree in
     ``classify_by_race`` provides the fallback label.
     """
+    if _has_proxied_factory_or_starport(ctx):
+        return None
     cc_at_6 = base_count_at(ctx.buildings, "CommandCenter", 360)
     cc450 = base_count_at(ctx.buildings, "CommandCenter", 450)
 
@@ -112,7 +124,7 @@ def detect_tvt(ctx: DetectionContext) -> Optional[str]:
         ctx.has_building("Starport", 420)
         and ctx.count_units("SiegeTank", 540) >= 1
         and ctx.count_units("Marine", 480) >= 8
-        and cc450 <= 2
+        and cc450 == 2
     ):
         return "TvT - 2-1-1 Marine Tank"
 
@@ -139,6 +151,8 @@ def detect_tvz(ctx: DetectionContext) -> Optional[str]:
     Returns ``None`` when none match so the generic Terran race tree in
     ``classify_by_race`` provides the fallback label.
     """
+    if _has_proxied_factory_or_starport(ctx):
+        return None
     cc2 = base_count_at(ctx.buildings, "CommandCenter", 360)
     cc450 = base_count_at(ctx.buildings, "CommandCenter", 450)
 
@@ -189,7 +203,7 @@ def detect_tvz(ctx: DetectionContext) -> Optional[str]:
         and count_started_before(ctx.buildings, "Factory", 450) >= 2
         and ctx.count_units("Thor", 540) >= 1
         and ctx.count_units("Hellion", 450) >= 4
-        and cc450 <= 2
+        and cc450 == 2
     ):
         return "TvZ - 2 Base Hellbat Thor"
 
@@ -199,7 +213,7 @@ def detect_tvz(ctx: DetectionContext) -> Optional[str]:
         ctx.has_building("Armory", 480)
         and ctx.count_units("Hellion", 480) >= 4
         and ctx.count_units("Marine", 480) >= 8
-        and cc450 <= 2
+        and cc450 == 2
     ):
         return "TvZ - 2-1-1 Marine Hellbat Timing"
 
@@ -236,7 +250,7 @@ def detect_tvz(ctx: DetectionContext) -> Optional[str]:
         ctx.has_building("Starport", 420)
         and ctx.count_units("Medivac", 480) >= 1
         and ctx.count_units("Marine", 480) >= 8
-        and cc450 <= 2
+        and cc450 == 2
     ):
         return "TvZ - 2-1-1 Marine Drop"
 
@@ -264,6 +278,8 @@ def detect_tvp(ctx: DetectionContext) -> Optional[str]:
     label prefix differs. Returns ``None`` when none match so the
     generic Terran race tree provides the fallback label.
     """
+    if _has_proxied_factory_or_starport(ctx):
+        return None
     cc_at_6 = base_count_at(ctx.buildings, "CommandCenter", 360)
     cc450 = base_count_at(ctx.buildings, "CommandCenter", 450)
 
@@ -360,7 +376,7 @@ def detect_tvp(ctx: DetectionContext) -> Optional[str]:
         ctx.has_building("Starport", 420)
         and ctx.count_units("SiegeTank", 540) >= 1
         and ctx.count_units("Marine", 480) >= 8
-        and cc450 <= 2
+        and cc450 == 2
     ):
         return "TvP - 2 Base Tank Push"
 
