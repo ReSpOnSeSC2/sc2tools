@@ -460,6 +460,8 @@ function headerMeta(game: ReplayLibraryItem, playerName: string): PanelHeaderMet
     map: game.map,
     result: game.result,
     dateIso: game.date,
+    gameVersion: game.gameVersion,
+    gameBuild: game.gameBuild,
   };
 }
 

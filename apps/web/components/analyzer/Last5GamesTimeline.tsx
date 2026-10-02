@@ -7,6 +7,10 @@ import { fmtDate, fmtMinutes } from "@/lib/format";
 export type ProfileGame = {
   id?: string | null;
   date?: string | null;
+  /** Client release / numeric build from the replay header. With ``date``
+   *  they give the patch era the row's macro panel prices units by. */
+  gameVersion?: string | null;
+  gameBuild?: number | null;
   result?: string | null;
   map?: string | null;
   opp_strategy?: string | null;

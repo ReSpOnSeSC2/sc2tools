@@ -47,6 +47,8 @@ type GamesListResp = {
   games: Array<{
     id?: string;
     date?: string;
+    gameVersion?: string | null;
+    gameBuild?: number | null;
     map?: string;
     opponent?: string;
     opp_race?: string;
@@ -315,6 +317,8 @@ function StrategyGamesView({
     return filteredRaw.map((g) => ({
       id: g.id || null,
       date: g.date || null,
+      gameVersion: g.gameVersion ?? null,
+      gameBuild: g.gameBuild ?? null,
       result: g.result || null,
       map: g.map || null,
       opp_strategy: g.opp_strategy || null,

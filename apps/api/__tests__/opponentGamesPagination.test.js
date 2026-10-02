@@ -101,6 +101,10 @@ describe("opponent replay-history cursor pages", () => {
       game({ id: "g4", date: new Date("2026-08-09T12:00:00Z") }),
       game({ userId: "u2", id: "other-user", date: sharedDate }),
     ]);
+    await db.games.updateOne(
+      { userId: "u1", gameId: "g4" },
+      { $set: { gameVersion: "5.0.17.98100", gameBuild: 98100 } },
+    );
     const gameDetails = { findMany: jest.fn() };
     const service = new OpponentsService(db, Buffer.alloc(32, 1), {
       gameDetails,
@@ -132,6 +136,17 @@ describe("opponent replay-history cursor pages", () => {
         replaySizeBytes: 123456,
       }),
     );
+    // The client version rides each row so its macro panel prices units by
+    // the replay's own patch; rows without one say so explicitly.
+    const rows = [...first.items, ...second.items];
+    expect(rows.find((row) => row.id === "g4")).toMatchObject({
+      gameVersion: "5.0.17.98100",
+      gameBuild: 98100,
+    });
+    expect(rows.find((row) => row.id === "g1")).toMatchObject({
+      gameVersion: null,
+      gameBuild: null,
+    });
     expect(first.items[0]).not.toHaveProperty("_id");
     expect(first.items[0]).not.toHaveProperty("buildLog");
     expect(first.items[0]).not.toHaveProperty("macroBreakdown");

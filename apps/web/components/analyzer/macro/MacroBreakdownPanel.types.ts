@@ -220,6 +220,11 @@ export interface PanelHeaderMeta {
   map?: string | null;
   result?: string | null;
   dateIso?: string | null;
+  /** The replay's client release ("5.0.16.97425") and numeric build. With
+   *  ``dateIso`` they give the patch era that prices units
+   *  (``patchEraForGame``); the date alone decides when both are absent. */
+  gameVersion?: string | null;
+  gameBuild?: number | null;
 }
 
 export interface MacroBreakdownPanelProps {

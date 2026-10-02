@@ -264,6 +264,13 @@ corresponding GitHub Release.
   pages, which don't carry the game's version or date, use the 12-worker
   costs. The roster now shows a Ravager, Lurker and Brood Lord at their
   full 3, 3 and 4 supply.
+- **The macro breakdown prices units by the game's own patch** — the macro
+  breakdown opened from a games table or the replay library, and the admin
+  game view, picked the patch from the replay's date alone, so a 5.0.17
+  game played while 5.0.16 is still the live ladder patch was priced at
+  the 8-worker 5.0.16b costs. They now go by the replay's version first,
+  like the game page, and fall back to the date only when the version
+  isn't known.
 - **Replay reviews show your real league in each region** — a reviewer's
   league was guessed from the MMR in their synced games, and only 6,500 MMR
   and up counted as Grandmaster. A 5,350 NA Grandmaster therefore showed as

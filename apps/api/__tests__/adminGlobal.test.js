@@ -68,6 +68,8 @@ describe("AdminGlobalService", () => {
         userId: "userB",
         gameId: "p1g2",
         date: new Date("2026-06-01"),
+        gameVersion: "5.0.17.98100",
+        gameBuild: 98100,
         result: "Defeat",
         myRace: "T",
         map: "Ladder B",
@@ -244,6 +246,10 @@ describe("AdminGlobalService", () => {
     expect(res.items[0].userId).toBe("userB");
     expect(res.items[0].userEmail).toBe("b@example.com");
     expect(res.items[0].opponent.strategy).toBe("2-base roach");
+    // The client version rides the row so the detail view prices units by
+    // the replay's own patch; a row without one reads null.
+    expect(res.items[0]).toMatchObject({ gameVersion: "5.0.17.98100", gameBuild: 98100 });
+    expect(res.items[1]).toMatchObject({ gameVersion: null, gameBuild: null });
     // P2's game must not leak into a P1 query.
     expect(res.items.some((g) => g.gameId === "p2g1")).toBe(false);
   });

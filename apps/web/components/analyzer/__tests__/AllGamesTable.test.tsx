@@ -13,6 +13,7 @@ import { AllGamesTable } from "../AllGamesTable";
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
 const getTokenMock = vi.fn(async () => "test-token");
+const macroPanelMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({
@@ -33,11 +34,14 @@ vi.mock("@/components/analyzer/charts/BuildOrderDualTimeline", () => ({
 
 vi.mock("@/components/analyzer/macro/MacroBreakdownPanel", () => ({
   // A stand-in with something to click (the real panel is portalled).
-  MacroBreakdownPanel: () => (
-    <div role="dialog" aria-label="Macro breakdown">
-      <button type="button">Inside the macro panel</button>
-    </div>
-  ),
+  MacroBreakdownPanel: (props: Record<string, unknown>) => {
+    macroPanelMock(props);
+    return (
+      <div role="dialog" aria-label="Macro breakdown">
+        <button type="button">Inside the macro panel</button>
+      </div>
+    );
+  },
 }));
 
 vi.mock("next/navigation", () => ({
@@ -61,6 +65,7 @@ afterEach(() => {
   useApiMock.mockReset();
   apiCallMock.mockReset();
   getTokenMock.mockClear();
+  macroPanelMock.mockClear();
 });
 
 describe("AllGamesTable: Ask for a review", () => {
@@ -125,6 +130,21 @@ describe("AllGamesTable: Ask for a review", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /Open macro breakdown/ })[0]);
     fireEvent.click(screen.getByRole("button", { name: "Inside the macro panel" }));
     expect(screen.queryByText("▾")).toBeNull();
+  });
+
+  it("hands the row's client version to the macro breakdown for its patch era", () => {
+    useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: null });
+    const game = { ...GAME, gameVersion: "5.0.17.98100", gameBuild: 98_100 };
+    render(<AllGamesTable games={[game]} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /Open macro breakdown/ })[0]);
+    expect(macroPanelMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      gameId: "game/77",
+      headerMeta: expect.objectContaining({
+        dateIso: GAME.date,
+        gameVersion: "5.0.17.98100",
+        gameBuild: 98_100,
+      }),
+    }));
   });
 
   it("stays out of other tables and hides while the rollout is off", () => {

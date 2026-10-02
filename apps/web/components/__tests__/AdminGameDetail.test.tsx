@@ -15,6 +15,10 @@ vi.mock("@/components/analyzer/charts/ChronoAllocationChart", () => ({
 vi.mock("@/components/analyzer/macro/ActiveArmyChart", () => ({
   ActiveArmyChart: () => <div>Army chart</div>,
 }));
+const buildSeriesMock = vi.hoisted(() => vi.fn((..._args: unknown[]) => []));
+vi.mock("@/components/analyzer/macro/activeArmyLayout", () => ({
+  buildSeries: buildSeriesMock,
+}));
 
 const game: AdminGameDetailGame = {
   gameId: "2025-11-25|opponent|Tourmaline LE|548",
@@ -108,6 +112,23 @@ describe("AdminGameDetail replay availability", () => {
     expect(screen.getByText("Resource chart")).toBeTruthy();
     expect(screen.getByText("Army chart")).toBeTruthy();
     expect(screen.queryByText("Build steps unavailable")).toBeNull();
+  });
+
+  it("prices the army chart by the row's client version, falling back to its date", () => {
+    macro = resource({ data: { ok: true, game_length_sec: 548, stats_events: [] } });
+    // 2026-10-01 is inside the date rule's 8-worker window.
+    const dated = { ...game, date: "2026-10-01T20:00:00Z" };
+    const view = render(<AdminGameDetail userId="owner/test" game={dated} onBack={vi.fn()} />);
+    expect(buildSeriesMock.mock.calls.map((call) => call[4])).toEqual(["before", "before"]);
+    buildSeriesMock.mockClear();
+    view.rerender(
+      <AdminGameDetail
+        userId="owner/test"
+        game={{ ...dated, gameVersion: "5.0.17.98100", gameBuild: 98_100 }}
+        onBack={vi.fn()}
+      />,
+    );
+    expect(buildSeriesMock.mock.calls.map((call) => call[4])).toEqual(["after", "after"]);
   });
 
   it("prevents duplicate retry clicks while the request is pending", () => {

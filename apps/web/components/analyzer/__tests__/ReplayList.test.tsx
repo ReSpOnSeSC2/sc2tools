@@ -90,6 +90,8 @@ const REPLAY: ReplayLibraryItem = {
   result: "Victory",
   map: "Crimson Court LE",
   durationSec: 845,
+  gameVersion: "5.0.17.98100",
+  gameBuild: 98_100,
   myRace: "Protoss",
   myBuild: "Oracle into Blink",
   myMmr: 4321,
@@ -168,6 +170,10 @@ describe("ReplayList", () => {
       headerMeta: expect.objectContaining({
         playerName: "Reaver",
         opponentName: "Rival",
+        // The row's client version picks the panel's patch era.
+        dateIso: "2026-08-28T21:04:00.000Z",
+        gameVersion: "5.0.17.98100",
+        gameBuild: 98_100,
       }),
     }));
   });

@@ -31,6 +31,10 @@ const REPLAY_LIBRARY_PROJECTION = Object.freeze({
   durationSec: 1,
   playerCount: 1,
   matchFormat: 1,
+  // Patch era, with ``date`` (util/patchEra): the macro panel prices units
+  // by the replay's own client version, not the date it was played.
+  gameVersion: 1,
+  gameBuild: 1,
   myRace: 1,
   myMmr: 1,
   myBuild: 1,
@@ -324,6 +328,8 @@ function serializeReplayLibraryGame(row) {
     durationSec: safeBoundedNumber(row?.durationSec, 0, 24 * 60 * 60, true),
     playerCount: safeBoundedNumber(row?.playerCount, 1, 16, true),
     matchFormat: replayMatchFormat(row?.matchFormat),
+    gameVersion: replayGameVersion(row?.gameVersion),
+    gameBuild: safePositiveInteger(row?.gameBuild),
     myRace,
     myMmr: safeBoundedNumber(row?.myMmr, 0, 9_999, true),
     myBuild: boundedOutputString(row?.myBuild, 200),
@@ -344,6 +350,18 @@ function serializeReplayLibraryGame(row) {
 /** @param {unknown} raw */
 function replayMatchFormat(raw) {
   return raw === "1v1" || raw === "team" || raw === "ffa" || raw === "other"
+    ? raw
+    : null;
+}
+
+/**
+ * The replay's four-part release string ("5.0.16.97425"), in the shape the
+ * ingest schema accepts; anything else on a legacy row reads as absent.
+ *
+ * @param {unknown} raw
+ */
+function replayGameVersion(raw) {
+  return typeof raw === "string" && raw.length <= 40 && /^\d+(?:\.\d+){3}$/.test(raw)
     ? raw
     : null;
 }
