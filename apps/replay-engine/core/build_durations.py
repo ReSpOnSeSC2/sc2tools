@@ -72,6 +72,9 @@ STRUCTURE_BUILD_SECONDS: Dict[str, int] = {
     "Armory": 46, "FusionCore": 46, "TechLab": 18, "Reactor": 36,
 }
 
+# The replay names three units differently from their display name
+# (VikingFighter, LurkerMP, SwarmHostMP) and events carry the replay name,
+# so those are listed under both spellings.
 UNIT_BUILD_SECONDS: Dict[str, int] = {
     # Protoss
     "Probe": 12, "Zealot": 27, "Stalker": 30, "Sentry": 26, "Adept": 27,
@@ -82,14 +85,15 @@ UNIT_BUILD_SECONDS: Dict[str, int] = {
     # Terran
     "SCV": 12, "Marine": 18, "Marauder": 21, "Reaper": 32, "Ghost": 29,
     "Hellion": 21, "Hellbat": 21, "WidowMine": 21, "Cyclone": 32,
-    "SiegeTank": 32, "Thor": 43, "Viking": 30, "Medivac": 30,
+    "SiegeTank": 32, "Thor": 43, "VikingFighter": 30, "Viking": 30,
+    "Medivac": 30,
     "Liberator": 43, "Banshee": 43, "Raven": 34, "Battlecruiser": 64,
     # Zerg (most are larva-morphs — duration is the morph)
     "Drone": 12, "Overlord": 18, "Queen": 36, "Zergling": 17,
     "Baneling": 14, "Roach": 19, "Ravager": 9, "Hydralisk": 24,
-    "Lurker": 18, "Mutalisk": 24, "Corruptor": 29, "BroodLord": 24,
-    "Infestor": 36, "SwarmHost": 29, "Viper": 29, "Ultralisk": 39,
-    "Overseer": 12,
+    "LurkerMP": 18, "Lurker": 18, "Mutalisk": 24, "Corruptor": 29,
+    "BroodLord": 24, "Infestor": 36, "SwarmHostMP": 29, "SwarmHost": 29,
+    "Viper": 29, "Ultralisk": 39, "Overseer": 12,
     # Spawned / morphed mid-fight: too short / situational to subtract
     # anything sensible, treat as instant.
     "Locust": 0, "Interceptor": 9, "Changeling": 0, "Broodling": 0,

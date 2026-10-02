@@ -7,6 +7,7 @@ const {
   buildSecondsFor,
   EIGHT_WORKER_BUILD_SECONDS,
 } = require("../src/services/buildDurations");
+const { UNIT_TECH_PREREQUISITES } = require("../src/services/buildRulesEvaluator");
 
 // Patch 5.0.16 (the 8-worker game) and the 12-worker games around it.
 const EIGHT_WORKER_GAME = { gameVersion: "5.0.16.97425" };
@@ -79,6 +80,26 @@ describe("services/buildDurations", () => {
       expect(buildSecondsFor("Spawning Pool")).toBe(46);
       expect(buildSecondsFor("spawningpool")).toBe(46);
       expect(buildSecondsFor("spawning_pool")).toBe(46);
+    });
+  });
+
+  describe("units the replay names differently", () => {
+    test("they rewind like their display name", () => {
+      // The build log carries the replay's name for these three.
+      expect(toStartSeconds("VikingFighter", 300)).toBe(270);
+      expect(toStartSeconds("SwarmHostMP", 400)).toBe(371);
+      expect(toStartSeconds("LurkerMP", 500)).toBe(482);
+      expect(buildSecondsFor("VikingFighter")).toBe(buildSecondsFor("Viking"));
+      expect(buildSecondsFor("SwarmHostMP")).toBe(buildSecondsFor("SwarmHost"));
+      expect(buildSecondsFor("LurkerMP")).toBe(buildSecondsFor("Lurker"));
+    });
+
+    test("every unit the rule evaluator knows by replay name has a duration", () => {
+      // A missing row leaves that unit at its finish time, so "X before
+      // 5:00" would compare a different moment than for every other unit.
+      const missing = Object.keys(UNIT_TECH_PREREQUISITES)
+        .filter((name) => buildSecondsFor(name) == null);
+      expect(missing).toEqual([]);
     });
   });
 

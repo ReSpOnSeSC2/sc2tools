@@ -174,6 +174,19 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Vikings, Swarm Hosts and Lurkers are timed from when they were started,
+  like every other unit** — the build-order timeline rewinds a unit from the
+  moment it finished to the moment it was queued, but the build-time table
+  listed these three under their display names while replays call them
+  `VikingFighter`, `SwarmHostMP` and `LurkerMP`, so they stayed at their
+  finish time: a Viking queued at 4:40 showed at 5:10, and a custom-build
+  rule such as "Viking before 5:00" was checked against 5:10. They now
+  rewind by 30 s (Viking), 29 s (Swarm Host) and 18 s (Lurker). This applies
+  to games already synced too: those units move earlier on existing build
+  orders, and a custom build with a timed rule on one of them can match (or
+  stop matching) games it didn't before. Trends Explorer also starts
+  offering the first Viking, Swarm Host and Lurker as milestones, for games
+  synced from now on.
 - **A custom build matches the same games on the desktop and on the
   website (agent 0.17.7, engine 1.6.6)** — the replay engine in the Windows
   agent and the website's reclassifier evaluated a saved build's rules
