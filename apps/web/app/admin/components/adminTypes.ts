@@ -132,6 +132,8 @@ export type OpponentsListResp = {
 export type AdminGameVsOpponentRow = {
   gameId: string;
   date: string | null;
+  gameVersion?: string | null;
+  gameBuild?: number | null;
   result: string | null;
   myRace: string | null;
   map: string | null;
@@ -510,6 +512,8 @@ export type GlobalPlayerGameRow = {
   userId: string;
   userEmail: string | null;
   date: string | null;
+  gameVersion?: string | null;
+  gameBuild?: number | null;
   result: string | null;
   myRace: string | null;
   map: string | null;

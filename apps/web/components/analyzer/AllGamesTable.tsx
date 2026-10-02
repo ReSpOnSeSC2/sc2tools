@@ -545,6 +545,8 @@ function panelHeaderMetaFromGame(game: GameRowData): PanelHeaderMeta {
     map: game.map ?? null,
     result: game.result ?? null,
     dateIso: game.date ?? null,
+    gameVersion: game.gameVersion ?? null,
+    gameBuild: game.gameBuild ?? null,
   };
 }
 function GameMobileCard({

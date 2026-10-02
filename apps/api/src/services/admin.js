@@ -622,6 +622,8 @@ class AdminService {
    *   items: Array<{
    *     gameId: string,
    *     date: Date | null,
+   *     gameVersion: string | null,
+   *     gameBuild: number | null,
    *     result: string | null,
    *     myRace: string | null,
    *     map: string | null,
@@ -651,6 +653,8 @@ class AdminService {
           _id: 0,
           gameId: 1,
           date: 1,
+          gameVersion: 1,
+          gameBuild: 1,
           result: 1,
           myRace: 1,
           map: 1,
@@ -670,6 +674,9 @@ class AdminService {
       return {
         gameId: String(g.gameId || ""),
         date: g.date instanceof Date ? g.date : null,
+        // Patch era, with ``date``: the detail view prices units by it.
+        gameVersion: typeof g.gameVersion === "string" ? g.gameVersion : null,
+        gameBuild: typeof g.gameBuild === "number" ? g.gameBuild : null,
         result: g.result || null,
         myRace: g.myRace || null,
         map: g.map || null,

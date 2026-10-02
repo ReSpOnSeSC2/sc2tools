@@ -73,7 +73,10 @@ describe("ReplayLibraryService", () => {
   }
 
   test("returns strict public rows and separate bounded VOD sources", async () => {
-    await db.games.insertOne(game("g-safe", new Date("2026-08-20T12:00:00Z")));
+    await db.games.insertOne(game("g-safe", new Date("2026-08-20T12:00:00Z"), {
+      gameVersion: "5.0.16.97425",
+      gameBuild: 97_425,
+    }));
 
     const page = await service.list("owner");
 
@@ -88,6 +91,8 @@ describe("ReplayLibraryService", () => {
       durationSec: 600,
       playerCount: 2,
       matchFormat: "1v1",
+      gameVersion: "5.0.16.97425",
+      gameBuild: 97_425,
       myRace: "Protoss",
       myMmr: 4_200,
       myBuild: "Blink pressure",
@@ -118,6 +123,30 @@ describe("ReplayLibraryService", () => {
     expect(publicJson).not.toContain("private-object-key");
     expect(publicJson).not.toContain("private-heavy-detail");
     expect(publicJson).not.toContain("userId");
+  });
+
+  test("emits only well-formed client versions, null on rows without one", async () => {
+    await db.games.insertMany([
+      game("no-version", new Date("2026-08-20T12:00:00Z")),
+      game("bad-version", new Date("2026-08-19T12:00:00Z"), {
+        gameVersion: "5.0.17 <script>",
+        gameBuild: -4,
+      }),
+      game("v17", new Date("2026-08-18T12:00:00Z"), {
+        gameVersion: "5.0.17.98100",
+        gameBuild: 98_100,
+      }),
+    ]);
+
+    const { items } = await service.list("owner");
+
+    expect(items.map((item) => [item.gameId, item.gameVersion, item.gameBuild])).toEqual([
+      ["no-version", null, null],
+      ["bad-version", null, null],
+      ["v17", "5.0.17.98100", 98_100],
+    ]);
+    const detail = await service.getDetail("owner", "v17");
+    expect(detail.game).toMatchObject({ gameVersion: "5.0.17.98100", gameBuild: 98_100 });
   });
 
   test("paginates equal and mixed-type dates exactly once in both directions", async () => {

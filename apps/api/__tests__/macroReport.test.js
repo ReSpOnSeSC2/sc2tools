@@ -217,9 +217,11 @@ describe("macro report aggregation", () => {
   });
 
   test("games-list click-through filters: leak + macro score bounds", async () => {
-    await games.upsert("u1", game("g1", {
-      score: 62, leaks: [supplyLeak(400)],
-    }));
+    await games.upsert("u1", {
+      ...game("g1", { score: 62, leaks: [supplyLeak(400)] }),
+      gameVersion: "5.0.17.98100",
+      gameBuild: 98100,
+    });
     await games.upsert("u1", game("g2", {
       score: 71, leaks: [floatLeak(200)],
     }));
@@ -247,6 +249,12 @@ describe("macro report aggregation", () => {
     );
     expect(list.total).toBe(1);
     expect(list.games[0].id).toBe("g1");
+    // The row carries its client version, so the macro panel it opens
+    // prices units by the replay's own patch; a row without one omits it.
+    expect(list.games[0]).toMatchObject({ gameVersion: "5.0.17.98100", gameBuild: 98100 });
+    const scored = await aggregations.gamesList("u1", bucketFilters, {});
+    expect(scored.games).toHaveLength(2);
+    for (const row of scored.games) expect(row.gameVersion).toBeUndefined();
   });
 
   test("each game-length segment drills to exactly the games it counted", async () => {

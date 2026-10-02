@@ -74,6 +74,7 @@ describe("opponent MMR fallback lookup", () => {
       game("tie", "Tie", { mmr: 1000 }),
       game("other-uploader", "Victory", { pulseId: "p1" }, { userId: "u2" }),
     ]);
+    await db.collection("games").updateOne({ gameId: "low-0" }, { $set: { gameVersion: "5.0.17.98100", gameBuild: 98100 } });
     const deps = { games: db.collection("games"), gamesMatchStage: (userId) => ({ userId }), bucketSwitch };
     const histogram = await oppMmrBuckets(deps, "u1", {}, { bucketWidth: 500 });
     expect(histogram.buckets).toHaveLength(1);
@@ -83,6 +84,9 @@ describe("opponent MMR fallback lookup", () => {
     expect(drilldown.total).toBe(histogram.buckets[0].total);
     expect(drilldown.games).toHaveLength(9);
     expect(drilldown.games.every((row) => row.opp_mmr >= 2500 && row.opp_mmr < 3000)).toBe(true);
+    // Rows carry the client version for the macro panel's patch era.
+    expect(drilldown.games.find((row) => row.id === "low-0")).toMatchObject({ gameVersion: "5.0.17.98100", gameBuild: 98100 });
+    expect(drilldown.games.find((row) => row.id === "low-1").gameVersion).toBeUndefined();
     expect((await oppMmrBuckets(deps, "u2", {}, { bucketWidth: 500 })).buckets[0]).toMatchObject({ lo: 6000, total: 1 });
     // Automatic width historically includes numeric ratings from undecided
     // results in its spread, while the histogram itself shows decided games.

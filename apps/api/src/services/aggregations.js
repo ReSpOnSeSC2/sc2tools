@@ -773,6 +773,9 @@ class AggregationsService {
         _id: 0,
         id: "$gameId",
         date: 1,
+        // Patch era, with ``date``: the row's macro panel prices units by it.
+        gameVersion: 1,
+        gameBuild: 1,
         map: { $ifNull: ["$map", ""] },
         opponent: { $ifNull: ["$opponent.displayName", ""] },
         opp_race: { $ifNull: ["$opponent.race", ""] },
