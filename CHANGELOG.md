@@ -220,6 +220,15 @@ corresponding GitHub Release.
   label is kept) until the replay is re-synced with the new agent. Both
   evaluators now run one shared set of cases in their test suites, along
   with a shared copy of the build-time table.
+- **Map Intel proxy heatmaps no longer show third bases** — for games
+  uploaded by agents 0.16.0 to 0.17.6, the "My proxies" and "Opponent
+  proxies" heatmaps plotted a standard third base and its gas, Spine and
+  Spore Crawlers as proxies. Both heatmaps now use the 80-unit rule above
+  for those games. Your own third bases are dropped using your main's stored
+  position. An opponent's main isn't stored, so their town halls, gas and
+  crawlers are left off the heatmap for those games: this hides the rare
+  real proxy Hatchery until the replay is re-synced with the new agent, and
+  their proxy Barracks, Gateways, Pylons and cannons still show.
 - **Build detection: a proxy Robo is no longer called "Proxy 2 Gate", and
   openers that take an early natural keep their tech label (agent 0.17.7,
   engine 1.6.6)** — a review of the build classifier for the 12-worker game
