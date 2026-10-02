@@ -2397,6 +2397,314 @@
     "[8:10] LurkerMP"
    ],
    "proxies": []
+  },
+  {
+   "name": "Lurker inside a not_before window fails the rule",
+   "why": "Morph finishes at 9:29 (18 s, started 9:11). Before the extractor recorded the Lurker Den and Lurkers, this rule passed on every game.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "not_before",
+     "name": "BuildLurkerMP",
+     "time_lt": 600
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "HydraliskDen",
+     "time": 357,
+     "x": 55,
+     "y": 42
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "LurkerDen",
+     "time": 430,
+     "x": 52,
+     "y": 40
+    },
+    {
+     "type": "unit",
+     "name": "Hydralisk",
+     "time": 500,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "LurkerMP",
+     "time": 569,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[5:57] HydraliskDen",
+    "[7:10] LurkerDen",
+    "[8:20] Hydralisk",
+    "[9:29] LurkerMP"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Lurker Den is compared at its start",
+   "why": "Started at 7:10 (finishes 8:07); a plain structure is not rewound.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildLurkerDen",
+     "time_lt": 440
+    },
+    {
+     "type": "not_before",
+     "name": "BuildLurkerDen",
+     "time_lt": 430
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "HydraliskDen",
+     "time": 357,
+     "x": 55,
+     "y": 42
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "LurkerDen",
+     "time": 430,
+     "x": 52,
+     "y": 40
+    },
+    {
+     "type": "unit",
+     "name": "Hydralisk",
+     "time": 500,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "LurkerMP",
+     "time": 569,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[5:57] HydraliskDen",
+    "[7:10] LurkerDen",
+    "[8:20] Hydralisk",
+    "[9:29] LurkerMP"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Lurker with no Lurker Den on record is not counted",
+   "why": "The prerequisite both evaluators look for is the name the extractor records: LurkerDen.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildLurkerMP",
+     "time_lt": 600
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 31,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "HydraliskDen",
+     "time": 357,
+     "x": 55,
+     "y": 42
+    },
+    {
+     "type": "unit",
+     "name": "Hydralisk",
+     "time": 500,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "LurkerMP",
+     "time": 569,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:31] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[5:57] HydraliskDen",
+    "[8:20] Hydralisk",
+    "[9:29] LurkerMP"
+   ],
+   "proxies": []
   }
  ]
 }

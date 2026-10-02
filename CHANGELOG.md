@@ -174,6 +174,20 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Lurker Dens and Lurkers are recorded, so rules about them can match
+  (agent 0.17.8, engine 1.6.7)** — no replay ever logged a Lurker Den or a
+  Lurker. The replay types the den `LurkerDenMP`, a name the engine did not
+  know, and a Lurker is a Hydralisk that changes type in place rather than a
+  unit that is born, which the engine read only for structures. A custom
+  rule such as "Lurker before 10:00" or "Lurker Den before 8:00" therefore
+  never matched and "no Lurker before 10:00" matched every game, on the
+  desktop and on the website alike, and the built-in "ZvT / ZvP - Lurker
+  Contain" labels could not fire. The den is now logged as `LurkerDen` when
+  it is started and each Lurker as `LurkerMP` (the replay's name for it)
+  when its morph finishes; rules compare its start, 18 s earlier, and
+  burrowing and unburrowing do not log it again. The guide milestone and the
+  Ghost Build step for the Lurker Den read the same name. Games already
+  uploaded gain these lines once the replay is re-synced with the new agent.
 - **Vikings, Swarm Hosts and Lurkers are timed from when they were started,
   like every other unit** — the build-order timeline rewinds a unit from the
   moment it finished to the moment it was queued, but the build-time table

@@ -80,6 +80,10 @@ describe("ghostStepName", () => {
     expect(ghostStepName("BlinkTech")).toBe("BlinkTech");
     expect(ghostStepName("AdeptPiercingAttack")).toBe("AdeptPiercingAttack");
   });
+
+  test("the Lurker Den key maps to the name build logs carry", () => {
+    expect(ghostStepName("LurkerDenMP")).toBe("LurkerDen");
+  });
 });
 
 describe("buildGhostTargetFromGuide", () => {
@@ -148,6 +152,28 @@ describe("buildGhostTargetFromGuide", () => {
     ]);
     expect(grade.maxDriftSec).toBe(0);
     expect(grade.grade).toBe("S");
+  });
+
+  test("a Lurker Den step is graded against the LurkerDen build-log line", () => {
+    const payload = withMilestones([
+      zergMilestone("SpawningPool", 62),
+      zergMilestone("HydraliskDen", 357),
+      zergMilestone("LurkerDenMP", 430),
+    ]);
+    const target = buildGhostTargetFromGuide(payload)!;
+    expect(target.steps.map((step) => step.name)).toEqual([
+      "SpawningPool",
+      "HydraliskDen",
+      "LurkerDen",
+    ]);
+    const grade = gradeExecution(target, [
+      "[0:00] Hatchery",
+      "[1:02] SpawningPool",
+      "[5:57] HydraliskDen",
+      "[7:10] LurkerDen",
+    ]);
+    expect(grade.matchedSteps).toBe(target.steps.length);
+    expect(grade.maxDriftSec).toBe(0);
   });
 
   test("no anchor when the earliest step is not a later town hall", () => {
