@@ -417,10 +417,13 @@ def detect_zvt(ctx: DetectionContext) -> Optional[str]:
         return "ZvT - Ling Bane Bust"
 
     # 2. 2-base Roach/Ravager timing: a Roach Warren with a wall of
-    # Roaches and Ravagers off two bases on a low drone count.
+    # Roaches and Ravagers off two bases on a low drone count. Every
+    # Ravager was born a Roach, so the Roach births alone are the
+    # Roach + Ravager total; adding the Ravager events would count
+    # each one twice.
     if (
         ctx.has_building("RoachWarren", 240)
-        and (ctx.count_units("Roach", 450) + ctx.count_units("Ravager", 450)) >= 8
+        and ctx.count_units("Roach", 450) >= 8
         and ctx.count_units("Drone", 450) < 42
         and base_count_at(ctx.buildings, "Hatchery", 450) <= 2
     ):
@@ -531,10 +534,11 @@ def detect_zvp(ctx: DetectionContext) -> Optional[str]:
         return "ZvP - Ling Bane Bust"
 
     # 3. 2-base Roach/Ravager all-in: a Roach Warren with a wall of
-    # Roaches and Ravagers off two bases on a low drone count.
+    # Roaches and Ravagers off two bases on a low drone count. Roach
+    # births already include every Ravager (see detect_zvt).
     if (
         ctx.has_building("RoachWarren", 240)
-        and (ctx.count_units("Roach", 450) + ctx.count_units("Ravager", 450)) >= 8
+        and ctx.count_units("Roach", 450) >= 8
         and ctx.count_units("Drone", 450) < 42
         and base_count_at(ctx.buildings, "Hatchery", 450) <= 2
     ):

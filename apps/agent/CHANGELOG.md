@@ -15,6 +15,16 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 - Ships bundled replay engine 1.6.7. Stored games gain these lines when
   re-synced.
 
+### Fixed - Banelings, Ravagers, Brood Lords, Overseers and Transport Overlords are recorded
+
+- They change type in place like Lurkers (Banelings since patch 5.0.11 at the
+  latest), so no build log had them, the Ling/Bane labels and "ZvZ - Roach
+  Ravager" never fired and a custom rule about any of them could not match.
+  Each is logged once, when its morph finishes; unburrowing and Oversight mode
+  do not log it again.
+- The "2 Base Roach/Ravager" labels count Roach births only, so a Roach that
+  becomes a Ravager is counted once.
+
 ## 0.17.7
 
 ### Fixed - build detection for the 12-worker game

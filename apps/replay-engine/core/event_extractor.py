@@ -103,13 +103,27 @@ EVENT_NAME_ALIASES: Dict[str, str] = {"LurkerDenMP": "LurkerDen"}
 
 # Raw types of units that morph in place from another unit and so never
 # fire a UnitBornEvent / UnitDoneEvent: the only tracker signal is a
-# UnitTypeChangeEvent to that type (Hydralisk -> LurkerMPEgg -> LurkerMP).
-# ``extract_events`` emits one ``type: "unit"`` event, under the raw name
-# like every other unit, the first time a unit takes the type -- the
-# morph's FINISH. Later changes back to it (a Lurker unburrowing:
-# LurkerMPBurrowed -> LurkerMP) are the same unit and are not emitted
-# again.
-UNIT_MORPH_COMPLETIONS: Set[str] = {"LurkerMP"}
+# UnitTypeChangeEvent to that type (Hydralisk -> LurkerMPEgg -> LurkerMP,
+# Roach -> RavagerCocoon -> Ravager, Corruptor -> BroodLordCocoon ->
+# BroodLord, Overlord -> OverlordCocoon -> Overseer, Overlord ->
+# TransportOverlordCocoon -> OverlordTransport, Zergling -> BanelingCocoon
+# -> Baneling). ``extract_events`` emits one ``type: "unit"`` event, under
+# the raw name like every other unit, the first time a unit takes the
+# type -- the morph's FINISH. Later changes back to it (unburrowing:
+# LurkerMPBurrowed -> LurkerMP, BanelingBurrowed -> Baneling; an Overseer
+# leaving Oversight mode: OverseerSiegeMode -> Overseer) are the same unit
+# and are not emitted again.
+#
+# Banelings are the one type the game has reported both ways: up to 5.0.5
+# (build 82893) the Zergling's cocoon was replaced by a NEW unit, a
+# UnitBornEvent typed "Baneling"; from 5.0.11 (build 90136) the cocoon
+# changes type in place like the others. A born Baneling that later
+# unburrows fires the same type change, so units emitted from a born /
+# done event are remembered too and never emitted a second time.
+UNIT_MORPH_COMPLETIONS: Set[str] = {
+    "LurkerMP", "Baneling", "Ravager", "BroodLord", "Overseer",
+    "OverlordTransport",
+}
 
 # Workers never enter the build log or the unit timeline, but the build
 # classifiers count them (12 Pool vs 14 Pool, "2 Base Roach/Ravager All-in
@@ -380,7 +394,8 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
 
     Names are sc2reader's raw unit types ("VikingFighter", "SwarmHostMP",
     "LurkerMP") except the Lurker Den, recorded as "LurkerDen": see
-    ``EVENT_NAME_ALIASES``. Lurkers morph in place and are read from
+    ``EVENT_NAME_ALIASES``. Units that morph in place (Lurker, Baneling,
+    Ravager, Brood Lord, Overseer, Transport Overlord) are read from
     type-change events: see ``UNIT_MORPH_COMPLETIONS``.
     """
     my_events: List[Dict] = []
@@ -401,8 +416,11 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
         # which counts build-log events).
         'workers': 0,
     }
-    # Unit ids already emitted through UNIT_MORPH_COMPLETIONS.
-    morphed_unit_ids: Set[Any] = set()
+    # (unit id, name) pairs already emitted for a UNIT_MORPH_COMPLETIONS
+    # name, from a type change or from a born / done event. Keyed on the
+    # name as well so a unit that takes two listed types in turn (an
+    # Overlord made a Transport and later an Overseer) is logged as each.
+    morphed_unit_ids: Set[Tuple[Any, str]] = set()
     event_source = getattr(replay, 'tracker_events', None) or replay.events
 
     try:
@@ -468,6 +486,8 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     # ``opponent.py`` / ``user.py`` are calibrated against
                     # this value — see ``_start_time`` for the start-time
                     # mapping the cloud applies on display.
+                    if clean in UNIT_MORPH_COMPLETIONS:
+                        morphed_unit_ids.add((_resolve_unit_id(event), clean))
                     evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
                 (my_events if pid == my_pid else opp_events).append(evt)
                 stats['processed'] += 1
@@ -497,10 +517,10 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1
                 elif clean in UNIT_MORPH_COMPLETIONS:
-                    uid = _resolve_unit_id(event)
-                    if uid in morphed_unit_ids:
+                    key = (_resolve_unit_id(event), clean)
+                    if key in morphed_unit_ids:
                         continue
-                    morphed_unit_ids.add(uid)
+                    morphed_unit_ids.add(key)
                     # No position: the event has none and the shared
                     # Unit's location is wherever it was last seen, not
                     # where the morph finished.
@@ -523,6 +543,8 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     if _is_explicit_hallucination(event):
                         stats['hallucinated_units'] += 1
                         continue
+                    if clean in UNIT_MORPH_COMPLETIONS:
+                        morphed_unit_ids.add((_resolve_unit_id(event), clean))
                     evt = {'type': 'unit', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
                     (my_events if pid == my_pid else opp_events).append(evt)
                     stats['processed'] += 1

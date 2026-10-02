@@ -188,6 +188,27 @@ corresponding GitHub Release.
   burrowing and unburrowing do not log it again. The guide milestone and the
   Ghost Build step for the Lurker Den read the same name. Games already
   uploaded gain these lines once the replay is re-synced with the new agent.
+- **Banelings, Ravagers, Brood Lords, Overseers and Transport Overlords are
+  recorded (agent 0.17.8, engine 1.6.7)** — these units morph from another
+  unit, which the replay reports as a change of type rather than a birth, and
+  the engine read that only for structures and Lurkers. Ravagers, Brood Lords,
+  Overseers and Transport Overlords were never logged on any patch; Banelings
+  were logged up to patch 5.0.5 and have not been since 5.0.11 at the latest,
+  when the game began reporting them the same way. A custom rule about any of
+  them could not match on the desktop or the website ("no Baneling before
+  5:00" matched every game), and the built-in Ling Bane Bust, Ling Bane Muta,
+  12 Pool into Baneling, Ling Bane All-in and "ZvZ - Roach Ravager" labels
+  could not fire. Each unit is now logged once, when its morph finishes:
+  burrowing, unburrowing and Oversight mode do not log it again, and on
+  patches up to 5.0.5, where a Baneling is logged when it is born, it is not
+  logged a second time. Rules compare the morph's start. The Ravager's morph
+  is 12 s (the table still had the 9 s it took up to 5.0.5) and the Transport
+  Overlord's 15 s was missing. The "2 Base Roach/Ravager" labels count Roaches
+  as they are born, so a Roach that becomes a Ravager is counted once. On
+  1,390 real Zerg games the labels of 30 changed: 10 of 1,229 ZvP games (9 to
+  Ling Bane Muta, 1 to Ling Bane Bust), 1 of 87 ZvT and 19 of 74 ZvZ, all 19
+  to "ZvZ - Roach Ravager". Games already uploaded gain the lines once the
+  replay is re-synced with the new agent.
 - **Vikings, Swarm Hosts and Lurkers are timed from when they were started,
   like every other unit** — the build-order timeline rewinds a unit from the
   moment it finished to the moment it was queued, but the build-time table

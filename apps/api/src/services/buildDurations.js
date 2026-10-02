@@ -188,14 +188,18 @@ const UNIT_BUILD_SECONDS = Object.freeze({
   Banshee: 43,
   Raven: 34,
   Battlecruiser: 64,
-  // Zerg (most morph from larva — duration is the larva morph)
+  // Zerg (most morph from larva — duration is the larva morph). The
+  // in-place morphs (Baneling, Ravager, LurkerMP, BroodLord, Overseer,
+  // OverlordTransport) are the cocoon-to-finish time measured on real
+  // replays: Ravager is 12 s on every build from 5.0.11 (9 s through
+  // 5.0.5), OverlordTransport 15 s from 5.0.15 (12 s through 5.0.11).
   Drone: 12,
   Overlord: 18,
   Queen: 36,
   Zergling: 17,
   Baneling: 14,
   Roach: 19,
-  Ravager: 9,
+  Ravager: 12,
   Hydralisk: 24,
   LurkerMP: 18,
   Lurker: 18,
@@ -208,6 +212,7 @@ const UNIT_BUILD_SECONDS = Object.freeze({
   Viper: 29,
   Ultralisk: 39,
   Overseer: 12,
+  OverlordTransport: 15,
   // Spawned / morphed mid-fight: too short / situational to subtract
   // anything sensible, treat as instant.
   Locust: 0,

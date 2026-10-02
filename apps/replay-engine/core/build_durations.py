@@ -88,12 +88,16 @@ UNIT_BUILD_SECONDS: Dict[str, int] = {
     "SiegeTank": 32, "Thor": 43, "VikingFighter": 30, "Viking": 30,
     "Medivac": 30,
     "Liberator": 43, "Banshee": 43, "Raven": 34, "Battlecruiser": 64,
-    # Zerg (most are larva-morphs — duration is the morph)
+    # Zerg (most are larva-morphs — duration is the morph). The in-place
+    # morphs (Baneling, Ravager, LurkerMP, BroodLord, Overseer,
+    # OverlordTransport) are the cocoon-to-finish time measured on real
+    # replays: Ravager is 12 s on every build from 5.0.11 (9 s through
+    # 5.0.5), OverlordTransport 15 s from 5.0.15 (12 s through 5.0.11).
     "Drone": 12, "Overlord": 18, "Queen": 36, "Zergling": 17,
-    "Baneling": 14, "Roach": 19, "Ravager": 9, "Hydralisk": 24,
+    "Baneling": 14, "Roach": 19, "Ravager": 12, "Hydralisk": 24,
     "LurkerMP": 18, "Lurker": 18, "Mutalisk": 24, "Corruptor": 29,
     "BroodLord": 24, "Infestor": 36, "SwarmHostMP": 29, "SwarmHost": 29,
-    "Viper": 29, "Ultralisk": 39, "Overseer": 12,
+    "Viper": 29, "Ultralisk": 39, "Overseer": 12, "OverlordTransport": 15,
     # Spawned / morphed mid-fight: too short / situational to subtract
     # anything sensible, treat as instant.
     "Locust": 0, "Interceptor": 9, "Changeling": 0, "Broodling": 0,
