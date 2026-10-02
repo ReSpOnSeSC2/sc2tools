@@ -90,6 +90,14 @@ MORPH_BUILDINGS: Set[str] = {
     "WarpGate", "LurkerDen",
 }
 
+# Workers never enter the build log or the unit timeline, but the build
+# classifiers count them (12 Pool vs 14 Pool, "2 Base Roach/Ravager All-in
+# on < 40 Drones", "Standard Macro (CIA) on > 40 Probes", ...). They are
+# emitted as ``type: "worker"`` events (see extract_events) so every
+# consumer that walks the event list for display can skip them in one
+# place while the detectors still see every worker born.
+WORKER_UNITS: Set[str] = {"Probe", "SCV", "Drone"}
+
 SKIP_UNITS: Set[str] = {
     "MULE", "Larva", "LocustMP", "Probe", "SCV", "Drone", "Egg", "BroodlingEscort",
     "Broodling", "Changeling", "ChangelingMarine", "ChangelingMarineShield",
@@ -366,6 +374,21 @@ def _get_unit_type_name(event) -> Optional[str]:
     return None
 
 
+def _unit_position(unit) -> Tuple[float, float]:
+    """Return a unit's ``(x, y)`` from its ``location`` (sc2reader keeps the
+    birth / last-known position there) or its ``x`` / ``y`` attributes,
+    ``(0, 0)`` when neither exists."""
+    if unit is None:
+        return 0, 0
+    loc = getattr(unit, 'location', None)
+    if isinstance(loc, (tuple, list)) and len(loc) >= 2:
+        try:
+            return float(loc[0]), float(loc[1])
+        except (TypeError, ValueError):
+            pass
+    return getattr(unit, 'x', 0) or 0, getattr(unit, 'y', 0) or 0
+
+
 def _is_explicit_hallucination(event) -> bool:
     """Return whether sc2reader positively identified ``event`` as an illusion.
 
@@ -391,9 +414,17 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
     """Walk a replay's tracker events and split them by player.
 
     Returns `(my_events, opp_events, stats)`. Each event is a dict with `type`
-    in {"building", "unit", "upgrade"} plus a `time` (game seconds) and
-    optional `x`/`y` for spatial events. Iteration is wrapped in try/except so
-    a corrupt tracker stream still yields whatever it managed to read.
+    in {"building", "unit", "upgrade", "worker"} plus a `time` (game seconds)
+    and optional `x`/`y` for spatial events. Iteration is wrapped in try/except
+    so a corrupt tracker stream still yields whatever it managed to read.
+
+    ``worker`` events (Probe / SCV / Drone births, the starting workers
+    included) exist only for the build classifiers' worker counts. Until
+    they were emitted, every ``count_units("Drone", t)`` in the Zerg and
+    Protoss trees read 0 on real replays, so "12 Pool" fired on every
+    sub-50 s Pool, every Spire by 7:00 was a "2 Base Muta Rush" and
+    "Hatch First Macro" / "Standard Macro (CIA)" could never fire.
+    ``build_log_lines`` and the playback / heatmap paths skip them.
     """
     my_events: List[Dict] = []
     opp_events: List[Dict] = []
@@ -409,6 +440,9 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
         # Completeness-specific failures for negative proxy assertions.
         # Generic pid_failed includes neutral resources and cannot gate v1.
         'proxy_errors': 0,
+        # Worker births emitted as ``type: "worker"`` (not in ``processed``,
+        # which counts build-log events).
+        'workers': 0,
     }
     event_source = getattr(replay, 'tracker_events', None) or replay.events
 
@@ -460,6 +494,11 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                         continue
                     evt = {'type': 'building', 'subtype': 'born', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
                 else:
+                    if clean in WORKER_UNITS:
+                        evt = {'type': 'worker', 'name': clean, 'time': event_seconds(event, replay), 'x': x, 'y': y}
+                        (my_events if pid == my_pid else opp_events).append(evt)
+                        stats['workers'] += 1
+                        continue
                     if clean in SKIP_UNITS:
                         continue
                     if _is_explicit_hallucination(event):
@@ -485,8 +524,12 @@ def extract_events(replay, my_pid: int) -> Tuple[List[Dict], List[Dict], Dict]:
                     if clean in PROXY_ELIGIBLE_BUILDINGS:
                         stats['proxy_errors'] += 1
                     continue
-                x = getattr(event.unit, 'x', 0) if getattr(event, 'unit', None) else 0
-                y = getattr(event.unit, 'y', 0) if getattr(event, 'unit', None) else 0
+                # UnitTypeChangeEvent carries no coordinates of its own;
+                # the morphing structure's position is the unit's. Without
+                # it every Lair / Orbital / Warp Gate sat at (0, 0) and so
+                # read as "more than 50 units from the main" to any custom
+                # proxy rule naming it.
+                x, y = _unit_position(getattr(event, 'unit', None))
 
                 if clean in KNOWN_BUILDINGS and clean in MORPH_BUILDINGS:
                     if clean in SKIP_BUILDINGS:
@@ -2172,6 +2215,9 @@ def build_log_lines(
     lines: List[str] = []
     seen_units: set = set()
     for e in sorted(my_events, key=lambda x: x.get("time", 0)):
+        if e.get("type") == "worker":
+            # Classifier-only events; never a build-order step.
+            continue
         t = e.get("time", 0)
         if cutoff_seconds is not None and t > cutoff_seconds:
             break

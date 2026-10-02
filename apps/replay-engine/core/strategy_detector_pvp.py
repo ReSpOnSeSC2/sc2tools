@@ -4,6 +4,22 @@ Pure function: given a :class:`DetectionContext` for a Protoss player in
 a PvP matchup, return the build-label string. The caller
 (``UserBuildDetector.detect_my_build``) decides when to dispatch here
 based on the matchup string.
+
+Ordering principle (shared with the PvZ / PvT trees): an opener is
+defined by the tech the player committed to first.
+
+  1. A proxy 2-Gate -- told apart from the other proxies by TIMING:
+     its Gateways go down around 1:00-1:30, long before the forward
+     Gateway a proxy Robo drops beside its Robotics Facility (~2:20).
+  2. Expand openers -- but only when NO tech building was started
+     before the natural. A Stargate / Robo / Twilight before the
+     natural makes the game a tech-first opener, so the tech rules
+     below get first claim; the expand label is kept as the fallback
+     when none of them recognises the game, so it never degrades to
+     "Macro Transition (Unclassified)".
+  3. Tech / style rules, most specific first; the proxied Robotics
+     Facility / Stargate openers sit here, in their original place,
+     ahead of the Standard Stargate Opener and Robo Opener catch-alls.
 """
 
 from __future__ import annotations
@@ -11,12 +27,22 @@ from __future__ import annotations
 from typing import Optional
 
 from .strategy_detector_helpers import (
+    PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS,
     DetectionContext,
     base_count_at,
     count_started_before,
     nth_base_start,
     start_times,
 )
+
+
+# Tech buildings that turn an expand into a tech-first opener when they
+# are started before the natural Nexus.
+_PVP_EXPAND_TECH = ("Stargate", "RoboticsFacility", "TwilightCouncil")
+
+# The proxy 2-Gate Gateway deadline (PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS,
+# 1:45) is shared with the PvT / PvZ trees and the opponent tree; see
+# strategy_detector_helpers for the timing rationale.
 
 
 def detect_pvp(ctx: DetectionContext) -> Optional[str]:
@@ -56,16 +82,63 @@ def detect_pvp(ctx: DetectionContext) -> Optional[str]:
         and glaive_time < charge_time
     )
 
+    # ------------------------------------------------------------------
+    # 1. Proxy 2 Gate
+    # ------------------------------------------------------------------
+    # A proxy is a structure more than 50 world units from the player's
+    # OWN main (see BaseStrategyDetector._is_proxy); every proxy rule in
+    # this tree shares that test.
+    #
+    # Timing is what separates a proxy 2-Gate from a proxy Robo. The
+    # rule used to accept ANY proxied Gateway started before 4:30, so
+    # the forward Gateway a proxy Robo drops beside its Robotics
+    # Facility at ~2:20 (the Gateways at home went down at the normal
+    # 0:40 / 1:10) labelled every proxy Robo "PvP - Proxy 2 Gate", and
+    # the Proxy Robo rule further down never saw those games. A real
+    # proxy 2-Gate / 3-Gate has its Gateways down by ~1:15, so the
+    # Gateway must start by PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS (1:45,
+    # with margin); a forward Gateway in the 2:00-3:00 band (proxy Robo,
+    # 3-4 Gate with a proxy Gateway) is not one.
+    #
     # Tightened: a real proxy 2-Gate is committed -- no early
     # natural. Without this guard, ANY gateway that registers
-    # near the opponent's main before 4:30 (forward gate during
-    # a 4-Gate timing, mis-tagged distance, etc.) was being
-    # mis-classified as "Proxy 2 Gate" even on FE-into-X games.
-    if has_proxy("Gateway", 270, 50) and not (sec_nexus_time < 270):
+    # far from the player's own main (forward gate during a 4-Gate
+    # timing, mis-tagged distance, etc.) was being mis-classified as
+    # "Proxy 2 Gate" even on FE-into-X games.
+    if (
+        has_proxy("Gateway", PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS, 50)
+        and not (sec_nexus_time < 270)
+    ):
         return "PvP - Proxy 2 Gate"
 
+    # Proxied tech, used by the proxy openers below and as guards on
+    # the home-Stargate / home-Robo catch-alls.
+    proxy_robo = has_proxy("RoboticsFacility", 390)
+    proxy_stargate = has_proxy("Stargate", 390)
+
+    # ------------------------------------------------------------------
+    # 2. Expand openers
+    # ------------------------------------------------------------------
+    # A tech building STARTED before the natural makes the game a
+    # tech-first opener: the 2 Gate Expand rule always said so, but the
+    # 1 Gate Expand / Strange's rules returned unconditionally, so in
+    # the 12-worker game -- where a 1-gate Stargate / Robo / Twilight
+    # opener routinely takes its natural before 5:00 -- "PvP - 1 Gate
+    # Expand" swallowed the Standard Stargate Opener, Phoenix Style,
+    # Blink Stalker Style, AlphaStar, 4 Stalker Oracle into DT and
+    # Rail's Blink Stalker games (and the Robo-first games that had no
+    # label at all). The expand label is now only returned outright
+    # when nothing was tech'd before the natural; otherwise it is kept
+    # as ``expand_fallback`` and returned only when no tech rule below
+    # recognises the game.
+    tech_before_natural = any(
+        b["name"] in _PVP_EXPAND_TECH and b["time"] < sec_nexus_time
+        for b in buildings
+    )
+    expand_fallback: Optional[str] = None
+
     gate_times = start_times(buildings, "Gateway")
-    # Count gateways that were finished BEFORE the second Nexus
+    # Count gateways that were started BEFORE the second Nexus
     # started warping in. This is what distinguishes the
     # 1-gate expand (Strange's / standard) from the 2-gate expand
     # (which is a separate, well-known PvP opener). Previously we
@@ -82,79 +155,69 @@ def detect_pvp(ctx: DetectionContext) -> Optional[str]:
             None,
         )
 
-        # 2 Gate Expand: 2 (or more) gateways finished before the
-        # natural goes down AND no tech building (Stargate, Robo,
-        # or Twilight Council) is started before the natural Nexus.
-        # If tech is dropped before the natural, it is a tech-first
-        # opener (Stargate / Robo / Twilight expand), not a pure
-        # 2-gate expand. This is the "safe" PvP opener that protects
-        # against proxy 2-gate / early aggression while still taking
-        # the natural early.
-        _PURE_2GATE_TECH_DISQUALIFIERS = (
-            "Stargate",
-            "RoboticsFacility",
-            "TwilightCouncil",
-        )
-        tech_before_expand = any(
-            b["name"] in _PURE_2GATE_TECH_DISQUALIFIERS
-            and b["time"] < second_nexus
-            for b in buildings
-        )
-        if (
-            gates_before_expand >= 2
-            and not tech_before_expand
-            and not glaive_first_off_twilight
-        ):
-            return "PvP - 2 Gate Expand"
+        # 2 Gate Expand: 2 (or more) gateways started before the
+        # natural goes down. This is the "safe" PvP opener that
+        # protects against proxy 2-gate / early aggression while still
+        # taking the natural early. Falls through on a Glaives-first
+        # transition so the Glaive labels below can claim it.
+        if gates_before_expand >= 2 and not glaive_first_off_twilight:
+            if not tech_before_natural:
+                return "PvP - 2 Gate Expand"
+            expand_fallback = "PvP - 2 Gate Expand"
 
         # Strange's 1 Gate Expand: exactly 1 gateway before the
         # natural, AND the first warp-in is a Sentry (the
         # signature of the build).
-        if gates_before_expand == 1 and first_unit == "Sentry":
-            return "PvP - Strange's 1 Gate Expand"
+        elif gates_before_expand == 1 and first_unit == "Sentry":
+            if not tech_before_natural:
+                return "PvP - Strange's 1 Gate Expand"
+            expand_fallback = "PvP - Strange's 1 Gate Expand"
 
-        # 1 Gate Nexus into 4 Gate: standard 1-gate FE that
-        # transitions into a 4-Gate Stalker timing. Must be
-        # checked BEFORE the generic "1 Gate Expand" so the
-        # 4-Gate signal upgrades the classification.
-        _gate_count_6min = count_started_before(buildings, "Gateway", 360)
-        _fourth_gate_time = (
-            gate_times[3] if len(gate_times) >= 4 else 9999
-        )
-        _PVP_4G_TECH = (
-            "Stargate", "RoboticsFacility",
-            "TwilightCouncil", "TemplarArchive", "DarkShrine",
-        )
-        _tech_before_4th_gate = any(
-            b["name"] in _PVP_4G_TECH and b["time"] < _fourth_gate_time
-            for b in buildings
-        )
-        _warpgate_research_time = next(
-            (u["time"] for u in upgrades if "WarpGate" in u["name"]),
-            9999,
-        )
-        if (
-            gates_before_expand == 1
-            and first_unit in ("Stalker", "Adept", "Zealot")
-            and _gate_count_6min >= 4
-            and not _tech_before_4th_gate
-            and _warpgate_research_time <= 330
-        ):
-            return "PvP - 1 Gate Nexus into 4 Gate"
+        elif gates_before_expand == 1 and first_unit in ("Stalker", "Adept", "Zealot"):
+            # 1 Gate Nexus into 4 Gate: standard 1-gate FE that
+            # transitions into a 4-Gate Stalker timing. Checked BEFORE
+            # the generic "1 Gate Expand" so the 4-Gate signal upgrades
+            # the classification. Its own guard (no tech before the 4th
+            # Gateway) already rules out tech-first games.
+            _gate_count_6min = count_started_before(buildings, "Gateway", 360)
+            _fourth_gate_time = (
+                gate_times[3] if len(gate_times) >= 4 else 9999
+            )
+            _PVP_4G_TECH = (
+                "Stargate", "RoboticsFacility",
+                "TwilightCouncil", "TemplarArchive", "DarkShrine",
+            )
+            _tech_before_4th_gate = any(
+                b["name"] in _PVP_4G_TECH and b["time"] < _fourth_gate_time
+                for b in buildings
+            )
+            # Upgrade events carry the research COMPLETION time, so this
+            # is "Warp Gate finishes by 5:30".
+            _warpgate_research_time = next(
+                (u["time"] for u in upgrades if "WarpGate" in u["name"]),
+                9999,
+            )
+            if (
+                _gate_count_6min >= 4
+                and not _tech_before_4th_gate
+                and _warpgate_research_time <= 330
+            ):
+                return "PvP - 1 Gate Nexus into 4 Gate"
 
-        # Standard 1 Gate Expand: exactly 1 gateway before the
-        # natural, first unit is something other than a Sentry.
-        # Falls through on a Glaives-first transition so the Robo into
-        # Glaives / Adept Glaives labels below can claim it -- a
-        # Glaive Adept build that opened 1-gate-expand is still a
-        # Glaive build, not a generic expand.
-        if (
-            gates_before_expand == 1
-            and first_unit in ("Stalker", "Adept", "Zealot")
-            and not glaive_first_off_twilight
-        ):
-            return "PvP - 1 Gate Expand"
+            # Standard 1 Gate Expand: exactly 1 gateway before the
+            # natural, first unit is something other than a Sentry.
+            # Falls through on a Glaives-first transition so the Robo
+            # into Glaives / Adept Glaives labels below can claim it --
+            # a Glaive Adept build that opened 1-gate-expand is still a
+            # Glaive build, not a generic expand.
+            if not glaive_first_off_twilight:
+                if not tech_before_natural:
+                    return "PvP - 1 Gate Expand"
+                expand_fallback = "PvP - 1 Gate Expand"
 
+    # ------------------------------------------------------------------
+    # 3. Tech / style rules
+    # ------------------------------------------------------------------
     # AlphaStar 4 Adept / Oracle requires both a Cyber Core path
     # and a Stargate. The Oracle prereq is enforced by count_units
     # but the explicit has_building guard documents the intent.
@@ -199,7 +262,18 @@ def detect_pvp(ctx: DetectionContext) -> Optional[str]:
         and glaive_first_off_twilight
     ):
         return "PvP - Adept Glaives"
-    if robo_time < twilight_time and twilight_time < sec_nexus_time:
+    # Rail's Blink Stalker (Robo 1st): Robo, then Twilight, BOTH before
+    # the natural, and Blink actually researched (by 9:00, the Blink
+    # Stalker Style window). The rule used to compare the three times
+    # alone, so a Robo-first game that never took a natural
+    # (``sec_nexus_time`` = 9999) and never researched Blink -- a
+    # Robo -> Twilight -> Charge game, or a 1-base Immortal push --
+    # was still called a Blink Stalker style.
+    if (
+        robo_time < twilight_time
+        and twilight_time < sec_nexus_time < 9999
+        and has_upgrade_substr("Blink", 540)
+    ):
         return "PvP - Rail's Blink Stalker (Robo 1st)"
     if has_building("Stargate", 510) and count_units("Phoenix", 510) >= 3:
         return "PvP - Phoenix Style"
@@ -209,8 +283,39 @@ def detect_pvp(ctx: DetectionContext) -> Optional[str]:
         and (2 <= gate_count_6min <= 4)
     ):
         return "PvP - Blink Stalker Style"
-    if has_proxy("RoboticsFacility", 390):
+    # Proxied tech openers (their original place in the tree): a
+    # Robotics Facility / Stargate started before 6:30 far from the
+    # player's own main.
+    if proxy_robo:
         return "PvP - Proxy Robo Opener"
-    if has_building("Stargate", 390) and not has_proxy("Stargate", 390):
+    if proxy_stargate:
+        return "PvP - Proxy Stargate Opener"
+    # Standard Stargate Opener: a home Stargate that is the FIRST tech
+    # building -- a Robo- or Twilight-first game that adds a Stargate
+    # later is that opener, not a Stargate opener.
+    if (
+        has_building("Stargate", 390)
+        and not proxy_stargate
+        and sg_time < robo_time
+        and sg_time < twilight_time
+    ):
         return "PvP - Standard Stargate Opener"
+    # Robo Opener: a home Robotics Facility is the FIRST tech building
+    # (before any Stargate and Twilight Council) and no more specific
+    # Robo label applied above (Proxy Robo Opener, Robo into Glaives,
+    # Rail's Blink Stalker). Pure ordering, no time threshold, like the
+    # PvZ Robo Opener. This is the standard Robo-first (Immortal /
+    # Observer) PvP opener -- the most common tech-first PvP opening --
+    # which previously had no label of its own: it was "1 Gate Expand"
+    # when the natural came before 5:00 and "Macro Transition
+    # (Unclassified)" otherwise.
+    if (
+        robo_time < 9999
+        and robo_time < sg_time
+        and robo_time < twilight_time
+        and not proxy_robo
+    ):
+        return "PvP - Robo Opener"
+    if expand_fallback is not None:
+        return expand_fallback
     return "PvP - Macro Transition (Unclassified)"

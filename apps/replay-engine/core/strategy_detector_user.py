@@ -50,7 +50,9 @@ class UserBuildDetector(BaseStrategyDetector):
             return too_short_label(my_race, vs_race)
 
         buildings = [e for e in my_events if e["type"] == "building"]
-        units = [e for e in my_events if e["type"] == "unit"]
+        # Worker births (type "worker") count as units here so the
+        # Drone / Probe / SCV predicates in the trees see real numbers.
+        units = [e for e in my_events if e["type"] in ("unit", "worker")]
         upgrades = [e for e in my_events if e["type"] == "upgrade"]
         main_loc = self._get_main_base_loc(buildings)
 

@@ -323,6 +323,11 @@ def build_playback_data(file_path: str, player_name: str) -> Optional[Dict]:
         return None
 
     my_events, opp_events, extract_stats = extract_events(replay, me.pid)
+    # Worker births exist for the build classifiers only; they would
+    # drag battle centroids towards the mineral lines and they are not
+    # build-log events, so the playback payload never carries them.
+    my_events = [e for e in my_events if e.get("type") != "worker"]
+    opp_events = [e for e in opp_events if e.get("type") != "worker"]
 
     stats_by_pid: Dict[int, List[Dict]] = {me.pid: [], opp.pid: []}
     try:

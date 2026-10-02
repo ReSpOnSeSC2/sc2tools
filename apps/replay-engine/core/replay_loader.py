@@ -145,6 +145,8 @@ def process_replay_task(file_path: str, player_name: str) -> dict:
 
         build_log = []
         for e in sorted(my_events, key=lambda x: x['time']):
+            if e.get('type') == 'worker':
+                continue  # classifier-only worker births
             m, s = int(e['time'] // 60), int(e['time'] % 60)
             build_log.append(f"[{m}:{s:02d}] {e['name']}")
 

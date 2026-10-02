@@ -174,6 +174,68 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Build detection: a proxy Robo is no longer called "Proxy 2 Gate", and
+  openers that take an early natural keep their tech label (agent 0.17.7,
+  engine 1.6.6)** — a review of the build classifier for the 12-worker game
+  found several rules that have mislabelled games since well before patch
+  5.0.16, so none of this was caused by the 8-pool / 12-pool revert:
+  - *PvP proxy builds are told apart by timing.* "PvP - Proxy 2 Gate" fired
+    on ANY forward Gateway started before 4:30, so a proxy Robo (home
+    Gateways at 0:38 and 1:11, a proxy Pylon with the Robotics Facility at
+    2:16 and a third Gateway beside it) was labelled Proxy 2 Gate on every
+    game. A true proxy 2 or 3 Gate has its Gateways down between ~0:30 and
+    ~1:15; the rule now requires a forward Gateway started by 1:45, and a
+    forward Gateway in the 2:00-3:00 band (proxy Robo, proxy Stargate, a 3-4
+    Gate with a proxy Gateway) is not one. The same timing rule now labels
+    an opponent's proxy 2 Gate ("Protoss - Proxy 2 Gate", previously named
+    by unit composition) and the new "PvT - Proxy 2 Gate" / "PvZ - Proxy 2
+    Gate", and "Protoss - Proxy 4 Gate" uses the shared 50-unit proxy test
+    (a 3-Gateway natural wall is no longer a proxy).
+  - *A tech building before the natural makes it a tech opener.* "PvP - 1
+    Gate Expand" (and Strange's) returned before any tech rule ran, so with
+    the natural down before 5:00 — routine with 12 workers — Stargate,
+    Phoenix, AlphaStar, Blink Stalker and Rail's games were all "1 Gate
+    Expand", exactly what "2 Gate Expand" already guarded against. The
+    expand labels now yield to the tech rules and are kept only when no
+    tech rule recognises the game, so nothing falls to "Macro Transition
+    (Unclassified)" that didn't before. New "PvP - Robo Opener" (a home
+    Robotics Facility as the first tech, the most common PvP opening, which
+    had no label) and "PvP - Proxy Stargate Opener"; "PvP - Standard
+    Stargate Opener" requires the Stargate to be the first tech; "PvP -
+    Rail's Blink Stalker (Robo 1st)" requires Blink and a natural (it fired
+    on a 1-base Robo into Charge).
+  - *Worker counts were always 0.* The replay extractor skipped Probe / SCV
+    / Drone births, so every "Drone < 40" / "Probe > 40" rule read 0: a 14
+    Pool was "Zerg - 12 Pool", any Spire by 7:00 was "2 Base Muta Rush",
+    20 Zerglings were a "Ling Flood", and "Hatch First Macro", "Drone Macro"
+    and "Protoss - Standard Macro (CIA)" could never fire. Workers are now
+    counted (they stay out of build orders, timelines and heatmaps).
+  - *PvT / PvZ.* "PvZ - Archon Drop" is checked before "Stargate into Robo"
+    (the drop's Warp Prism used to hide it); "PvT - 2 Base Templar" no
+    longer claims a 4 Gate Blink with a late Templar Archives or a 3 Gate
+    Blink with a 5:30 third; "PvT - 2 Gate Blink (Fast 3rd Nexus)" no
+    longer requires a Robo by 8:00; a Sentry-hallucinated Immortal no
+    longer blocks "Stargate into Charge / Blink / Glaives"; a Nexus-first
+    proxy Stargate is still "PvT - Proxy Void Ray/Stargate"; "PvZ - Blink
+    Stalker All-in (2 Base)" needs at most two bases; the PvZ Adept Glaives
+    labels drop their 4-8 Gateway cap; "PvZ - Standard charge Macro" allows
+    Charge until 10:00 like the Blink macro; new "PvZ - Cannon Rush" and
+    "PvZ - Proxy Stargate Opener".
+  - *Terran.* "3-4 Rax Marine rush" and "3 Rax" could never fire and "2-3
+    Rax Reaper rush" fired on two bases because the pre-placed Command
+    Center was not counted; the "2-1-1" / "2 Base" matchup labels now need
+    exactly two bases, and a proxied Factory / Starport reaches "Terran -
+    Proxy 1-1-1" instead of a two-base label.
+  - Morphed structures (Lair, Orbital, Warp Gate) carry their position
+    instead of (0, 0), so a custom proxy rule naming one no longer matches
+    every game.
+  - The engine catalog gains the labels the detectors emitted without a
+    description (PvP Robo into Glaives / Adept Glaives, the PvT and PvZ
+    Stargate-into-X and Stargate / DT / Robo openers, Proxy Starport
+    Hellion Drop, Hatch First), the /definitions page and the guide
+    catalog carry the new and reworded rules, and every emitted label is
+    now checked against the catalog by tests. Stored games keep their
+    labels until they are re-synced or reprocessed.
 - **PTR games show up on the site** — games played on the Public Test
   Realm (toon handles starting `98-`) uploaded and were stored, but the
   analyzer had no region for them. Any saved Region selection hid every
