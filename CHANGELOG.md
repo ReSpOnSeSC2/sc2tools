@@ -175,7 +175,7 @@ corresponding GitHub Release.
 ### Fixed
 
 - **Lurker Dens and Lurkers are recorded, so rules about them can match
-  (agent 0.17.7, engine 1.6.6)** — no replay ever logged a Lurker Den or a
+  (agent 0.17.8, engine 1.6.7)** — no replay ever logged a Lurker Den or a
   Lurker. The replay types the den `LurkerDenMP`, a name the engine did not
   know, and a Lurker is a Hydralisk that changes type in place rather than a
   unit that is born, which the engine read only for structures. A custom

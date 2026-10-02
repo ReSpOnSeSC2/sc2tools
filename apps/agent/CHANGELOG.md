@@ -2,6 +2,19 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.17.8
+
+### Fixed - Lurker Dens and Lurkers are recorded
+
+- The replay types the Lurker Den `LurkerDenMP` and a Lurker is a Hydralisk
+  changing type in place, and the engine read neither, so no build log had
+  them, "ZvT / ZvP - Lurker Contain" never fired and a custom rule about
+  either could not match. The den is logged as `LurkerDen` at its start,
+  each Lurker as `LurkerMP` when its morph finishes; burrowing and
+  unburrowing do not log it again.
+- Ships bundled replay engine 1.6.7. Stored games gain these lines when
+  re-synced.
+
 ## 0.17.7
 
 ### Fixed - build detection for the 12-worker game
@@ -28,12 +41,6 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   Marine rush can fire and 2-3 Rax Reaper rush stops firing on two bases;
   two-base labels need two bases; a proxied Factory / Starport is Proxy
   1-1-1.
-- Lurker Dens and Lurkers are recorded: the replay types the den
-  `LurkerDenMP` and a Lurker is a Hydralisk changing type in place, and the
-  engine read neither, so no build log had them, "ZvT / ZvP - Lurker
-  Contain" never fired and a custom rule about either could not match. The
-  den is logged as `LurkerDen` at its start, each Lurker as `LurkerMP` when
-  its morph finishes.
 - Ships bundled replay engine 1.6.6. Stored games keep their labels until
   re-synced or reprocessed.
 
