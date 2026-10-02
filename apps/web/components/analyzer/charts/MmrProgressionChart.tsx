@@ -103,6 +103,9 @@ const REGION_COLORS: Record<string, string[]> = {
   KR: ["#ff6b6b", "#c94545", "#ff9e9e", "#902e2e"],
   CN: ["#f5b942", "#c08a1c", "#ffd887", "#8a610f"],
   SEA: ["#b385ff", "#8758d6", "#d4b8ff", "#5d3aa3"],
+  // PTR (Public Test Realm, toon handles "98-"): its own hue, so a PTR
+  // line is never mistaken for a ladder one.
+  PTR: ["#3fc6d6", "#1f8f9c", "#86e3ec", "#156069"],
   U: ["#9aa3b2", "#6b7280", "#c5cdd9", "#4a5260"],
 };
 
@@ -112,10 +115,12 @@ const REGION_LABELS: Record<string, string> = {
   KR: "KR",
   CN: "CN",
   SEA: "SEA",
+  PTR: "PTR",
   U: "Unknown",
 };
 
-function regionLabel(region: string): string {
+/** Legend label for a region series ("NA", "PTR", "Unknown"). */
+export function regionLabel(region: string): string {
   return REGION_LABELS[region] || region;
 }
 
@@ -135,8 +140,8 @@ export function formatMmrDate(value: string | number | Date, includeYear = false
  * cycle through shades of the base hue so the legend still groups
  * visually by ladder.
  */
-function buildSeriesColors(
-  series: LadderSeries[],
+export function buildSeriesColors(
+  series: Pick<LadderSeries, "seriesKey" | "region">[],
 ): Record<string, string> {
   const seen: Record<string, number> = {};
   const out: Record<string, string> = {};

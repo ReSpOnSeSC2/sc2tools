@@ -39,7 +39,8 @@ export type DailyMmrSwings = {
 };
 
 export type DailyMmrRegionSwings = {
-  region: "NA" | "EU" | "KR" | "CN" | "SEA" | "U";
+  /** "PTR" is the Public Test Realm; "U" an unknown or missing handle. */
+  region: "NA" | "EU" | "KR" | "CN" | "SEA" | "PTR" | "U";
   bestGain: DailyMmrSwing | null;
   biggestLoss: DailyMmrSwing | null;
   measuredDays: number;

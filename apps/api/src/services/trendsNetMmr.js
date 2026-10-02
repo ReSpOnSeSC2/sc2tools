@@ -24,8 +24,11 @@ const {
 /** A single ranked 1v1 result cannot credibly move more than this. */
 const NET_MMR_MAX_DELTA = 150;
 
-/** Stable Battle.net region order shared with the MMR progression chart. */
-const REGION_PRIORITY = ["NA", "EU", "KR", "CN", "SEA", "U"];
+/**
+ * Stable Battle.net region order shared with the MMR progression chart.
+ * PTR (Public Test Realm) gets its own row before Unknown.
+ */
+const REGION_PRIORITY = ["NA", "EU", "KR", "CN", "SEA", "PTR", "U"];
 
 const DROP_REASON_KEYS = [
   "excludedNonRanked1v1",

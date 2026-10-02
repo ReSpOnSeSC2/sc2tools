@@ -7,7 +7,12 @@ const { expectedVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { eraForGame } = require("../util/patchEra");
 const { opponentGamesFilter } = require("../util/opponentIdentity");
-const { regionFromToonHandle } = require("../util/regionFromToonHandle");
+const {
+  regionFromToonHandle,
+  isLadderRegion,
+  PTR_REGION,
+  REGION_HANDLE_PREFIX,
+} = require("../util/regionFromToonHandle");
 const { canonicalRaceLetter } = require("./oppMmrStamp");
 const TimingCatalog = require("./timingCatalog");
 const Dna = require("./dnaTimings");
@@ -33,13 +38,12 @@ const MMR_PULSE_FRESH_MS = (() => {
   return 60 * 60 * 1000;
 })();
 
-// Inverse of regionFromToonHandle. Used by the region filter so old
-// opponents rows (created before ``region`` was a stored field) still
-// match via their toonHandle prefix.
-/** @type {Record<string, string>} */
-const REGION_TO_HANDLE_PREFIX = { NA: "1", EU: "2", KR: "3", CN: "5", SEA: "6" };
-
 /**
+ * Inverse of regionFromToonHandle (the shared REGION_HANDLE_PREFIX
+ * table, PTR's "98" included). Used by the region filter so old
+ * opponents rows (created before ``region`` was a stored field) still
+ * match via their toonHandle prefix.
+ *
  * @param {string[]} labels
  * @returns {string[]}
  */
@@ -47,7 +51,9 @@ function regionLabelsToHandlePrefixes(labels) {
   /** @type {string[]} */
   const out = [];
   for (const l of labels) {
-    const code = REGION_TO_HANDLE_PREFIX[l];
+    const code = Object.prototype.hasOwnProperty.call(REGION_HANDLE_PREFIX, l)
+      ? REGION_HANDLE_PREFIX[l]
+      : undefined;
     if (code) out.push(code);
   }
   return out;
@@ -1815,10 +1821,11 @@ class OpponentsService {
       if (typeof game.mmr === "number") set.mmr = game.mmr;
       if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
     }
-    // Region: derived from the toon_handle's leading byte (always
-    // present from sc2reader). Cheap, no network. Pulse fetch below
-    // may overwrite with the authoritative region from SC2Pulse's
-    // team membership when reachable.
+    // Region: derived from the toon_handle's region segment (everything
+    // before the first "-"; always present from sc2reader). Cheap, no
+    // network. Pulse fetch below may overwrite with the authoritative
+    // region from SC2Pulse's team membership when reachable (never for
+    // a PTR opponent, which has no SC2Pulse ladder).
     const derivedRegion = regionFromToonHandle(
       game.toonHandle || (prior && prior.toonHandle) || null,
     );
@@ -2257,7 +2264,7 @@ class OpponentsService {
       if (typeof game.leagueId === "number") set.leagueId = game.leagueId;
     }
     // Region + Pulse-current MMR. Same contract as recordGame: derive
-    // region cheaply from the toon_handle leading byte and try one
+    // region cheaply from the toon_handle's region segment and try one
     // rate-limited SC2Pulse fetch for the up-to-date MMR.
     const refreshDerivedRegion = regionFromToonHandle(
       game.toonHandle || (prior && prior.toonHandle) || null,
@@ -2428,12 +2435,15 @@ class OpponentsService {
    *   * the SC2Pulse call returns null (no team in any region) or
    *     throws (rate-limited / network error / timeout).
    *
-   * Region-aware: when ``preferredRegion`` is set (the opponent's
-   * derived region from toon_handle) and pulseMmr exposes the
+   * Region-aware: when ``preferredRegion`` is a ladder region (the
+   * opponent's derived region from toon_handle; PTR, which has no
+   * SC2Pulse ladder, counts as unset) and pulseMmr exposes the
    * multi-id ``getCurrentMmrForAny`` shape, we prefer the team that
    * matches the game's server. Falls back to the legacy single-id
    * ``getCurrentMmr`` (which picks the most-recently-played team
-   * across regions) when only that method is available.
+   * across regions) when only that method is available. For a PTR
+   * opponent the result carries no region, so callers keep the
+   * derived "PTR" instead of a ladder account's region.
    *
    * @private
    * @param {string|null} pulseCharacterId
@@ -2467,6 +2477,10 @@ class OpponentsService {
     // toon-only opponent (pulseCharacterId never resolved) still gets a
     // number instead of a permanent "—".
     if (!charId && !toon) return null;
+    // SC2Pulse has no PTR ladder, so any region it reports for a PTR
+    // opponent is a ladder account's; stamped on the row and its games,
+    // it would hide the PTR game behind the PTR region filter.
+    const keepPtrRegion = preferredRegion === PTR_REGION;
     // Shared cross-user cache FIRST — a cheap local Mongo read that
     // costs no SC2Pulse round-trip. If another platform user pulled
     // this opponent's MMR within the directory's freshness window we
@@ -2477,7 +2491,10 @@ class OpponentsService {
     if (this.pulseDirectory && !forceFresh) {
       const shared = await this._directoryGetMmr(charId, toon);
       if (shared && typeof shared.mmr === "number" && shared.mmr > 0) {
-        return { mmr: Math.round(shared.mmr), region: shared.region || null };
+        return {
+          mmr: Math.round(shared.mmr),
+          region: keepPtrRegion ? null : shared.region || null,
+        };
       }
     }
     if (!this.pulseMmr) return null;
@@ -2487,16 +2504,20 @@ class OpponentsService {
     if (lastFetched && Date.now() - lastFetched < MMR_PULSE_FRESH_MS) {
       return null;
     }
+    // SC2Pulse has no PTR ladder, so a PTR region (``98-`` handle) is no
+    // hint at all: take the region-blind path exactly as an unlabelled
+    // handle always did.
+    const pulseRegion = isLadderRegion(preferredRegion) ? preferredRegion : null;
     try {
       let result = null;
       if (charId) {
         if (
           typeof this.pulseMmr.getCurrentMmrForAny === "function"
-          && preferredRegion
+          && pulseRegion
         ) {
           result = await this.pulseMmr.getCurrentMmrForAny(
             [charId],
-            { preferredRegion },
+            { preferredRegion: pulseRegion },
           );
         } else {
           result = await this.pulseMmr.getCurrentMmr(charId);
@@ -2528,7 +2549,11 @@ class OpponentsService {
           region,
         });
       }
-      return { mmr: Math.round(mmr), region, revealedName };
+      return {
+        mmr: Math.round(mmr),
+        region: keepPtrRegion ? null : region,
+        revealedName,
+      };
     } catch {
       return null;
     }
@@ -3237,11 +3262,15 @@ class OpponentsService {
     if (!pulseCharacterId && toonHandle && typeof this.pulseDirectory?.getFreshResolution === "function") {
       pulseCharacterId = await this.pulseDirectory.getFreshResolution(toonHandle);
     }
+    // The SC2Pulse region hint: the handle's region, else the stored one.
+    // PTR has no SC2Pulse ladder, so a PTR region is no hint at all.
+    const region = [regionFromToonHandle(toonHandle), target.region]
+      .find((r) => isLadderRegion(r));
     return {
       pulseCharacterId,
       toonHandle,
       displayName: row.globalIdentity?.displayName || row.revealedName || row.displayNameSample || null,
-      region: regionFromToonHandle(toonHandle) || (typeof target.region === "string" ? target.region : null),
+      region: typeof region === "string" ? region : null,
       confirmed: Boolean(row.globalIdentity),
     };
   }

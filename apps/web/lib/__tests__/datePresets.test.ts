@@ -22,27 +22,31 @@ describe("patch era date presets", () => {
     expect(PATCH_5_0_17_RELEASE.toISOString()).toBe("2026-09-30T04:00:00.000Z");
   });
 
-  it("bounds each patch preset by date, leaving the 5.0.16/5.0.17 split to the game's version", () => {
+  it("bounds the 12-worker presets by date, leaving the 5.0.16/5.0.17 split to the game's version", () => {
     const before = resolvePreset("before_5_0_16");
-    const eightWorker = resolvePreset("patch_5_0_16");
     const after = resolvePreset("after_5_0_17");
 
     expect(before.since).toBeUndefined();
     expect(before.until?.getTime()).toBe(PATCH_5_0_16_RELEASE.getTime() - 1);
 
-    // 5.0.16 games played after the 5.0.17 notes stay in the 8-worker
-    // preset: no end date, the patch filter decides.
-    expect(eightWorker.since).toEqual(PATCH_5_0_16_RELEASE);
-    expect(eightWorker.until).toBeUndefined();
-
     expect(after.since).toEqual(PATCH_5_0_17_RELEASE);
     expect(after.until).toBeUndefined();
   });
 
-  it("keeps the 12-worker and 8-worker presets to their patch by version", () => {
+  it("selects the 8-worker patch by version alone, with no dates", () => {
+    // The 5.0.16 PTR games (June, before the live release) and the 5.0.16
+    // games played after the 5.0.17 notes both belong here: no start or
+    // end date, the patch filter decides.
+    expect(resolvePreset("patch_5_0_16")).toEqual({});
+  });
+
+  it("keeps every patch preset to its patch by version", () => {
     expect(patchEraFor("after_5_0_17")).toBe("after");
     expect(patchEraFor("patch_5_0_16")).toBe("before");
-    for (const id of ["before_5_0_16", "all", "last_7d", "custom", "season:67", undefined] as const) {
+    // The 8-worker 5.0.16 PTR games predate the live release, so the date
+    // alone would list them as 12-worker.
+    expect(patchEraFor("before_5_0_16")).toBe("after");
+    for (const id of ["all", "last_7d", "custom", "season:67", "current_season", undefined] as const) {
       expect(patchEraFor(id)).toBeUndefined();
     }
   });

@@ -286,6 +286,30 @@ describe("GET /v1/coaching/students/:studentId/performance", () => {
     );
   });
 
+  test("a PTR MMR series keeps its PTR label; an unrecognised region still reads U", async () => {
+    const harness = performanceHarness({
+      auth: { userId: "coach-user", clerkUserId: "clerk-coach", source: "clerk" },
+      role: { role: "coach", coachId: "coach-1" },
+    });
+    const raw = await harness.aggregations.mmrProgression();
+    harness.aggregations.mmrProgression.mockResolvedValueOnce({
+      ...raw,
+      series: [
+        { ...raw.series[0], region: "PTR" },
+        { ...raw.series[1], region: "ZZ" },
+      ],
+    });
+
+    const response = await request(harness.app)
+      .get("/v1/coaching/students/student-1/performance");
+
+    expect(response.status).toBe(200);
+    expect(response.body.mmr.series.map((s) => [s.label, s.region])).toEqual([
+      ["PTR · Protoss", "PTR"],
+      ["U · Protoss", "U"],
+    ]);
+  });
+
   test("denies an attached coach before approval and immediately after revocation", async () => {
     for (const sharingStatus of ["pending", "revoked"]) {
       const harness = performanceHarness({

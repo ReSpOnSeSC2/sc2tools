@@ -4,9 +4,13 @@ import {
   PATCH_5_0_17_RELEASE,
   type PresetId,
 } from "@/lib/datePresets";
+import { filtersToQuery } from "@/lib/filterContext";
 import {
+  REGIONS_REV,
   hydrateStoredFilters,
+  migrateStoredRegions,
   pickPersisted,
+  toStoredFilters,
 } from "../AnalyzerProvider";
 
 /**
@@ -167,5 +171,79 @@ describe("hydrateStoredFilters", () => {
     expect(
       hydrateStoredFilters({ preset: "all", min_minutes: 30, max_minutes: 5 }),
     ).toMatchObject({ min_minutes: 5, max_minutes: 30 });
+  });
+});
+
+/**
+ * PTR (Public Test Realm) games have their own region, "PTR". Region
+ * selections saved before the PTR pill existed could not have meant to
+ * hide them, so they gain PTR once; a selection saved since keeps the
+ * user's choice, PTR off included.
+ */
+describe("stored region selections and PTR", () => {
+  it("adds PTR to a selection saved before PTR could be picked", () => {
+    const out = hydrateStoredFilters({ preset: "all", regions: "NA,EU" });
+    expect(out.regions).toBe("NA,EU,PTR");
+    // The revision is storage bookkeeping: never a filter, never sent.
+    expect(out).not.toHaveProperty("regions_rev");
+    expect(new URLSearchParams(filtersToQuery(out).slice(1)).get("regions"))
+      .toBe("NA,EU,PTR");
+    expect(filtersToQuery(out)).not.toContain("regions_rev");
+  });
+
+  it("stamps every write with the region revision", () => {
+    expect(REGIONS_REV).toBe(1);
+    expect(toStoredFilters({ preset: "all", regions: "NA,EU,PTR" })).toEqual({
+      preset: "all",
+      regions: "NA,EU,PTR",
+      regions_rev: REGIONS_REV,
+    });
+    expect(toStoredFilters({ preset: "all" })).toEqual({
+      preset: "all",
+      regions_rev: REGIONS_REV,
+    });
+  });
+
+  it("leaves an already-migrated selection without PTR alone", () => {
+    // Legacy NA,EU → NA,EU,PTR; the user then turns PTR off, which is
+    // written with the revision and survives the next load.
+    const migrated = hydrateStoredFilters({ preset: "all", regions: "NA,EU" });
+    const ptrOff = toStoredFilters({ ...migrated, regions: "NA,EU" });
+    expect(ptrOff.regions_rev).toBe(REGIONS_REV);
+    const reloaded = hydrateStoredFilters(pickPersisted(ptrOff));
+    expect(reloaded.regions).toBe("NA,EU");
+    expect(reloaded).not.toHaveProperty("regions_rev");
+  });
+
+  it("has no region selection for fresh storage or storage without one", () => {
+    expect(hydrateStoredFilters(null).regions).toBeUndefined();
+    expect(hydrateStoredFilters({ preset: "all" }).regions).toBeUndefined();
+    expect(hydrateStoredFilters({ preset: "all", regions_rev: REGIONS_REV }).regions)
+      .toBeUndefined();
+  });
+
+  it("collapses a legacy selection that becomes every region to no filter", () => {
+    // All five ladder regions plus PTR is all six: the FilterBar's
+    // "no region filter", which also keeps games with no region.
+    expect(migrateStoredRegions("NA,EU,KR,CN,SEA", undefined)).toBeUndefined();
+  });
+
+  it("orders, de-duplicates and keeps known regions only when migrating", () => {
+    expect(migrateStoredRegions(" eu , NA,eu ", undefined)).toBe("NA,EU,PTR");
+    expect(migrateStoredRegions("KR,XX", 0)).toBe("KR,PTR");
+    // No known region: the old FilterBar showed every region on.
+    expect(migrateStoredRegions("XX", undefined)).toBeUndefined();
+    expect(migrateStoredRegions("", undefined)).toBeUndefined();
+    expect(migrateStoredRegions(42, undefined)).toBeUndefined();
+    // A revision written by this build is trusted as chosen.
+    expect(migrateStoredRegions("SEA", REGIONS_REV)).toBe("SEA");
+    expect(migrateStoredRegions("PTR", REGIONS_REV)).toBe("PTR");
+  });
+
+  it("keeps the region revision through the storage read path", () => {
+    expect(pickPersisted({ regions: "NA", regions_rev: REGIONS_REV })).toEqual({
+      regions: "NA",
+      regions_rev: REGIONS_REV,
+    });
   });
 });

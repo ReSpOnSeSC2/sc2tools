@@ -2,6 +2,7 @@
 
 const { ObjectId } = require("mongodb");
 const { gamesMatchStage } = require("../util/parseQuery");
+const { REGION_LABELS } = require("../util/regionFromToonHandle");
 
 // A replay-library page is a human-facing table, not an analysis corpus.
 // A modest default keeps first paint quick; the hard ceiling prevents a
@@ -12,7 +13,9 @@ const REPLAY_LIBRARY_CURSOR_MAX_CHARS = 512;
 const REPLAY_LIBRARY_SEARCH_MAX_CHARS = 100;
 
 const RACE_LETTERS = new Set(["P", "T", "Z", "R"]);
-const REGION_CODES = new Set(["NA", "EU", "KR", "CN", "SEA"]);
+// Every region label the global filter accepts, PTR included, so a
+// saved PTR selection reaches gamesMatchStage instead of being dropped.
+const REGION_CODES = new Set(REGION_LABELS);
 
 // Inclusion-only projection for both list and detail reads. Dotted opponent
 // and replay-file paths are deliberate: old rows can contain arbitrary large

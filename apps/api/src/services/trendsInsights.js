@@ -56,7 +56,7 @@ const MAX_SESSION_POSITIONS = 12;
  *
  *   - ``accounts``: one series per ``myToonHandle`` the user has
  *     played on. Each account carries its own region label (derived
- *     from the leading byte of the handle) and a friendly short
+ *     from the handle's region segment) and a friendly short
  *     label like "EU 267727" so the chart can paint one line per
  *     ladder account — a streamer with a main + smurf on the same
  *     region gets two NA lines instead of a misleading single line
@@ -266,8 +266,8 @@ async function mmrProgression(deps, userId, opts, filters) {
               },
             },
             // Cap with the same single-region budget × the five real
-            // regions + one "U" bin; for a single-region account this
-            // is identical to the overall cap.
+            // regions + PTR + one "U" bin; for a single-region account
+            // this is identical to the overall cap.
             {
               $setWindowFields: {
                 partitionBy: "$_id.region",
@@ -553,9 +553,10 @@ function shortAccountLabel(handle, region) {
 /**
  * Ordering used for the per-region series. Matches the FilterBar
  * toggle order so the chart legend reads in the same direction the
- * user picks regions in the filter row.
+ * user picks regions in the filter row. PTR (Public Test Realm) is
+ * its own series, after the ladder regions and before Unknown.
  */
-const REGION_PRIORITY = ["NA", "EU", "KR", "CN", "SEA", "U"];
+const REGION_PRIORITY = ["NA", "EU", "KR", "CN", "SEA", "PTR", "U"];
 
 /** @param {Array<{closeMmr: number, minMmr: number, maxMmr: number, bucket: Date}>} rows */
 function summarize(rows) {

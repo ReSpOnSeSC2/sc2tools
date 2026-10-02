@@ -37,13 +37,15 @@ export type AnalyzerFilters = {
   exclude_too_short?: boolean;
   /**
    * Battle.net regions to include. Comma-separated label list (e.g.
-   * "NA,EU,KR"). Empty / undefined means "all regions" (the default).
+   * "NA,EU,KR") drawn from `ANALYZER_REGIONS`, PTR (the Public Test
+   * Realm) included. Empty / undefined means "all regions" (the default).
    * Drives a region-bucket filter on every analyzer tab — Opponents,
    * Strategies, Trends, Maps, Builds — so a multi-region streamer
    * can isolate, say, their EU ladder grind from their NA grind in
    * one click. The API derives an opponent's region from
    * ``opponent.region`` (stored at ingest) with a fallback to the
-   * toon_handle's leading byte for rows that pre-date the field.
+   * toon_handle's region prefix ("1-" NA … "98-" PTR) for rows that
+   * pre-date the field.
    */
   regions?: string;
   /**
@@ -88,6 +90,17 @@ export type AnalyzerFilters = {
    */
   preset?: PresetId;
 };
+
+/** Label of the Public Test Realm (toon handles starting "98-"). */
+export const PTR_REGION = "PTR";
+
+/**
+ * Every region the `regions` filter can pick, in pill order: the five
+ * Battle.net ladder regions plus the PTR, whose games are uploaded like
+ * any other and would otherwise sit behind every region selection.
+ * Mirrors REGION_LABELS in apps/api/src/util/regionFromToonHandle.js.
+ */
+export const ANALYZER_REGIONS = ["NA", "EU", "KR", "CN", "SEA", PTR_REGION] as const;
 
 /**
  * Product defaults shared by the context fallback and AnalyzerProvider.
@@ -160,13 +173,18 @@ function coerceMinutes(raw: unknown): number | undefined {
   return Math.min(Math.floor(n), MAX_GAME_LENGTH_MINUTES);
 }
 
-/** Keys we never send to the API — UI-only state. */
-const UI_ONLY_KEYS = new Set(["preset"]);
+/**
+ * Keys we never send to the API — UI-only state. `regions_rev` is the
+ * stored region selection's revision (AnalyzerProvider); hydration keeps it
+ * out of the filters, and this keeps it off the wire regardless.
+ */
+const UI_ONLY_KEYS = new Set(["preset", "regions_rev"]);
 
 /**
  * Build a query string from filter object — empty values dropped. A patch
- * preset ("After 5.0.17", "5.0.16") also sends `patch_era`, so the API
- * keeps games by their own version and not only their date.
+ * preset ("After 5.0.17", "5.0.16", "Before 5.0.16") also sends
+ * `patch_era`, so the API keeps games by their own version and not only
+ * their date.
  */
 export function filtersToQuery(p: Record<string, unknown>): string {
   const usp = new URLSearchParams();

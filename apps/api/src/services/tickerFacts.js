@@ -1,6 +1,6 @@
 "use strict";
 
-const { regionFromToonHandle } = require("../util/regionFromToonHandle");
+const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 
 /**
  * TickerFactsService — computes the stats-ticker's "fun facts" pool:
@@ -21,7 +21,8 @@ const { regionFromToonHandle } = require("../util/regionFromToonHandle");
  *   * MMR facts are region-aware, matching the session widget's
  *     cross-region guard: peak/30-day-MMR facts only read games on
  *     the ladder the user played most recently, so an EU⇄NA switcher
- *     never sees a "peak" that mixes two independent ratings.
+ *     never sees a "peak" that mixes two independent ratings. PTR
+ *     games have no ladder and never pick the region.
  */
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -156,10 +157,10 @@ class TickerFactsService {
         myMmr: Number.isFinite(Number(row.myMmr)) ? Number(row.myMmr) : null,
         region:
           (typeof row.myToonHandle === "string"
-            ? regionFromToonHandle(row.myToonHandle)
+            ? ladderRegionFromToonHandle(row.myToonHandle)
             : null) ||
           (typeof opp.toonHandle === "string"
-            ? regionFromToonHandle(opp.toonHandle)
+            ? ladderRegionFromToonHandle(opp.toonHandle)
             : null) ||
           null,
         oppName: String(opp.displayName || ""),

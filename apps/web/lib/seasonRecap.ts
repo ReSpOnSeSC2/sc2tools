@@ -50,7 +50,7 @@ export interface SeasonRecapTotals {
 export interface RecapMmrJourney {
   /** Exact replay-authored Battle.net character identity. */
   toonHandle: string;
-  /** Blizzard ladder region derived from the toon-handle prefix. */
+  /** Blizzard ladder region (or "PTR") derived from the toon-handle prefix. */
   region: string | null;
   /** Compact display label, e.g. "NA 267727". */
   accountLabel: string;
@@ -277,7 +277,8 @@ function computeMmrJourneys(rows: ArcadeGame[]): RecapMmrJourney[] {
   return journeys.sort(compareMmrJourneys);
 }
 
-const REGION_PRIORITY = ["NA", "EU", "KR", "CN", "SEA"] as const;
+// The PTR (Public Test Realm) sorts after the ladder regions.
+const REGION_PRIORITY = ["NA", "EU", "KR", "CN", "SEA", "PTR"] as const;
 
 function cleanToonHandle(raw: string | null | undefined): string | null {
   if (typeof raw !== "string") return null;
@@ -292,6 +293,7 @@ function regionFromToonHandle(toonHandle: string): string | null {
   if (region === "3") return "KR";
   if (region === "5") return "CN";
   if (region === "6") return "SEA";
+  if (region === "98") return "PTR";
   return null;
 }
 

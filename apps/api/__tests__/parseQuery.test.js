@@ -173,6 +173,42 @@ describe("util/parseQuery", () => {
       expect(bMissing["opponent.toonHandle"].$regex).toBe("^(1|2)-");
     });
 
+    test("PTR region filter matches stored PTR or a 98- toon handle", () => {
+      const stage = gamesMatchStage("u1", { regions: ["PTR"] });
+      expect(stage.$or).toHaveLength(3);
+      expect(stage.$or[0]).toEqual({ "opponent.region": { $in: ["PTR"] } });
+      const [, bNullEmpty, bMissing] = stage.$or;
+      expect(bNullEmpty["opponent.toonHandle"].$regex).toBe("^(98)-");
+      expect(bMissing["opponent.toonHandle"].$regex).toBe("^(98)-");
+      const ptr = new RegExp(bNullEmpty["opponent.toonHandle"].$regex);
+      expect(ptr.test("98-S2-1-25175")).toBe(true);
+      // Anchored on both sides: no neighbouring segment slips through.
+      expect(ptr.test("9-S2-1-25175")).toBe(false);
+      expect(ptr.test("981-S2-1-25175")).toBe(false);
+      expect(ptr.test("1-S2-1-25175")).toBe(false);
+      expect(ptr.test("198-S2-1-25175")).toBe(false);
+    });
+
+    test("NA + PTR regex keeps NA's 1 from matching a PTR 98- handle", () => {
+      const both = gamesMatchStage("u1", { regions: ["NA", "PTR"] });
+      expect(both.$or[0]).toEqual({
+        "opponent.region": { $in: ["NA", "PTR"] },
+      });
+      expect(both.$or[1]["opponent.toonHandle"].$regex).toBe("^(1|98)-");
+      const bothRe = new RegExp(both.$or[1]["opponent.toonHandle"].$regex);
+      expect(bothRe.test("1-S2-1-1")).toBe(true);
+      expect(bothRe.test("98-S2-1-1")).toBe(true);
+      expect(bothRe.test("9-S2-1-1")).toBe(false);
+      expect(bothRe.test("981-S2-1-1")).toBe(false);
+      expect(bothRe.test("2-S2-1-1")).toBe(false);
+
+      const naOnly = gamesMatchStage("u1", { regions: ["NA"] });
+      const naRe = new RegExp(naOnly.$or[1]["opponent.toonHandle"].$regex);
+      expect(naRe.test("1-S2-1-1")).toBe(true);
+      expect(naRe.test("98-S2-1-1")).toBe(false);
+      expect(naRe.test("12-S2-1-1")).toBe(false);
+    });
+
     test("parseFilters surfaces exclude_too_short=1 as excludeTooShort:true", () => {
       const out = parseFilters({ exclude_too_short: "1" });
       expect(out.excludeTooShort).toBe(true);
@@ -250,6 +286,19 @@ describe("util/parseQuery", () => {
       expect(parseFilters({ regions: "" }).regions).toBeUndefined();
       expect(parseFilters({ regions: "XX,YY" }).regions).toBeUndefined();
       expect(parseFilters({}).regions).toBeUndefined();
+    });
+
+    test("regions filter accepts PTR alongside the ladder regions", () => {
+      expect(parseFilters({ regions: "PTR" }).regions).toEqual(["PTR"]);
+      expect(parseFilters({ regions: "na, ptr,PTR" }).regions).toEqual([
+        "NA",
+        "PTR",
+      ]);
+      expect(
+        parseFilters({ regions: ["NA,EU", "KR", "CN,SEA,PTR"] }).regions,
+      ).toEqual(["NA", "EU", "KR", "CN", "SEA", "PTR"]);
+      // Prototype keys are not region labels.
+      expect(parseFilters({ regions: "constructor,98" }).regions).toBeUndefined();
     });
   });
 

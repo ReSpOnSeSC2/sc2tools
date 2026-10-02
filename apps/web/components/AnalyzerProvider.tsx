@@ -2,8 +2,10 @@
 
 import { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
 import {
+  ANALYZER_REGIONS,
   DEFAULT_ANALYZER_FILTERS,
   FiltersContext,
+  PTR_REGION,
   normalizeGameLengthBounds,
   type AnalyzerFilters,
 } from "@/lib/filterContext";
@@ -23,11 +25,22 @@ import { AnalysisGamesProvider } from "@/components/analyzer/arcade/hooks/useAna
 
 const LS_KEY = "analyzer.filters";
 
+/**
+ * Revision of the stored region selection. Selections saved before
+ * revision 1 were made when PTR (the Public Test Realm) had no pill, so
+ * none of them meant to hide PTR games: `hydrateStoredFilters` adds PTR to
+ * them on every load until the next write. Every write stamps the current
+ * revision, so a user who then turns PTR off keeps that choice.
+ */
+export const REGIONS_REV = 1;
+
 export type StoredFilters = {
   preset?: PresetId;
   since?: string;
   until?: string;
   regions?: string;
+  /** `REGIONS_REV` when written; storage-only, never part of the filters. */
+  regions_rev?: number;
   exclude_too_short?: boolean;
   map_pool?: "ladder" | "nonladder" | "all";
   game_size?: "1v1" | "team" | "all";
@@ -54,6 +67,7 @@ const PERSISTED_KEYS = [
   "since",
   "until",
   "regions",
+  "regions_rev",
   "exclude_too_short",
   "map_pool",
   "game_size",
@@ -61,13 +75,27 @@ const PERSISTED_KEYS = [
   "max_minutes",
 ] as const;
 
-export function pickPersisted(f: Partial<AnalyzerFilters>): StoredFilters {
+export function pickPersisted(
+  f: Partial<AnalyzerFilters> & Pick<StoredFilters, "regions_rev">,
+): StoredFilters {
   const out: Record<string, unknown> = {};
   for (const k of PERSISTED_KEYS) {
     const v = (f as Record<string, unknown>)[k];
     if (v !== undefined) out[k] = v;
   }
   return out as StoredFilters;
+}
+
+/**
+ * The blob this build writes: the persisted controls, stamped with the
+ * current `REGIONS_REV` (the region selection was made with every pill on
+ * offer).
+ *
+ * Example: `toStoredFilters({ regions: "NA,EU" })` →
+ * `{ regions: "NA,EU", regions_rev: 1 }`.
+ */
+export function toStoredFilters(f: Partial<AnalyzerFilters>): StoredFilters {
+  return { ...pickPersisted(f), regions_rev: REGIONS_REV };
 }
 
 function readStored(): StoredFilters | null {
@@ -84,7 +112,7 @@ function readStored(): StoredFilters | null {
 function writeStored(value: Partial<AnalyzerFilters>): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(LS_KEY, JSON.stringify(pickPersisted(value)));
+    window.localStorage.setItem(LS_KEY, JSON.stringify(toStoredFilters(value)));
   } catch {
     /* non-fatal */
   }
@@ -105,6 +133,38 @@ function initialFilters(): AnalyzerFilters {
   };
 }
 
+/** True when a stored blob was written at the current `REGIONS_REV` or later. */
+function isCurrentRegionsRev(regionsRev: unknown): boolean {
+  return typeof regionsRev === "number" && regionsRev >= REGIONS_REV;
+}
+
+/**
+ * A stored region selection brought up to `REGIONS_REV`. One saved before
+ * the PTR pill existed gains PTR, since it could not have meant to hide PTR
+ * games; if that leaves every region on, it becomes "no filter", as the
+ * FilterBar writes it. A current selection is left exactly as chosen.
+ *
+ * Example: `migrateStoredRegions("NA,EU", undefined)` → "NA,EU,PTR";
+ * `migrateStoredRegions("NA,EU", 1)` → "NA,EU".
+ */
+export function migrateStoredRegions(
+  regions: unknown,
+  regionsRev: unknown,
+): string | undefined {
+  if (typeof regions !== "string" || !regions.trim()) return undefined;
+  if (isCurrentRegionsRev(regionsRev)) return regions;
+  const tokens = regions.split(",").map((t) => t.trim().toUpperCase());
+  const picked = new Set<string>(
+    ANALYZER_REGIONS.filter((r) => tokens.includes(r)),
+  );
+  // No known region: the FilterBar already showed (and the API applied)
+  // every region, so there is nothing to keep.
+  if (picked.size === 0) return undefined;
+  picked.add(PTR_REGION);
+  if (picked.size === ANALYZER_REGIONS.length) return undefined;
+  return ANALYZER_REGIONS.filter((r) => picked.has(r)).join(",");
+}
+
 /**
  * Merge persisted FilterBar state with current product defaults.
  * Missing mode keys identify first-time or legacy storage and inherit
@@ -114,13 +174,18 @@ export function hydrateStoredFilters(
   stored: StoredFilters | null,
   logicalSeasons: LogicalSeason[] = [],
 ): AnalyzerFilters {
+  // The region revision is storage bookkeeping, not a filter: it stays out
+  // of the in-memory filters (and so out of every API query).
+  const { regions_rev: regionsRev, ...storedFilters } = stored || {};
   const next: AnalyzerFilters = {
     ...DEFAULT_ANALYZER_FILTERS,
-    ...(stored || {}),
+    ...storedFilters,
   };
   // A legacy id ("after_5_0_16", the old live patch) moves to its
   // replacement; a missing or unknown one falls back to the default.
   next.preset = normalizePresetId(next.preset);
+  // A selection saved before PTR could be picked gains PTR.
+  next.regions = migrateStoredRegions(next.regions, regionsRev);
   if (next.preset !== "custom") {
     const range = resolvePreset(next.preset, undefined, logicalSeasons);
     next.since = range.since ? range.since.toISOString() : undefined;

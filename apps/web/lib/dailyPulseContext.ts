@@ -231,13 +231,18 @@ function raceLetter(v: unknown): "P" | "T" | "Z" | null {
   return c === "P" || c === "T" || c === "Z" ? c : null;
 }
 
-/** Leading toon-handle byte → Blizzard region (mirrors trendsRegionExpr). */
+/**
+ * Toon-handle region prefix (the segment before the first "-") →
+ * Blizzard region (mirrors regionFromToonHandle). "98" is the PTR, the
+ * Public Test Realm, so it needs the whole segment, not the first byte.
+ */
 const REGION_BY_HEAD: Record<string, string> = {
   "1": "NA",
   "2": "EU",
   "3": "KR",
   "5": "CN",
   "6": "SEA",
+  "98": "PTR",
 };
 
 /**
@@ -251,7 +256,9 @@ export function shortAccountLabel(handle: string): string {
   const segments = trimmed.split("-");
   const bnid =
     segments.length >= 4 ? segments[3] : segments[segments.length - 1];
-  const region = REGION_BY_HEAD[trimmed.charAt(0)] || "??";
+  const region = Object.prototype.hasOwnProperty.call(REGION_BY_HEAD, segments[0])
+    ? REGION_BY_HEAD[segments[0]]
+    : "??";
   return `${region} ${bnid}`;
 }
 

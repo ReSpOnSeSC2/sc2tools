@@ -2,6 +2,7 @@
 
 const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
+const { REGION_LABELS } = require("../util/regionFromToonHandle");
 
 // Whole-state payloads carry embedded media (voice memos, images,
 // small replays) as base64. Body parsing is owned by the app-level
@@ -1104,10 +1105,14 @@ function coachingRace(value, allowUnknown) {
   return allowUnknown ? "U" : null;
 }
 
-/** @param {unknown} value */
+/**
+ * A display label only (series names, daily swings), so PTR keeps its
+ * own label instead of folding into "U".
+ * @param {unknown} value
+ */
 function coachingRegion(value) {
   const region = String(value || "").trim().toUpperCase();
-  return ["NA", "EU", "KR", "CN", "SEA"].includes(region) ? region : "U";
+  return REGION_LABELS.includes(region) ? region : "U";
 }
 
 /** @param {string} race */

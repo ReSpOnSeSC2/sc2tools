@@ -1538,6 +1538,23 @@ describe("GET /v1/me/fingerprint replay-derived contract", () => {
     expect(early.windowMode).toBe("range");
   });
 
+  test("a patch filter with no dates is a range, not the latest 50 games", async () => {
+    // The "5.0.16 · 8 workers" preset sends only patch_era=before, so the
+    // June 5.0.16 PTR games (before the live release) are not dropped.
+    await seedRows("PvZ", 12, {
+      overrides: {
+        gameVersion: "5.0.16.97337",
+        date: new Date(Date.UTC(2026, 5, 1)),
+      },
+    });
+    await seedRows("PvZ", 12, { overrides: { gameVersion: "5.0.15.96883" } });
+    const eightWorker = (await getFingerprint("PvZ", "&patch_era=before"))
+      .body.fingerprint;
+    expect(eightWorker.windowMode).toBe("range");
+    expect(eightWorker.windowGames).toBe(RANGE_ROW_CAP);
+    expect(eightWorker.games).toBe(12);
+  });
+
   // --- Reported bug #2: every matchup showed the same archetype -------------
 
   test("the three matchups of one race produce different matchup traits", async () => {

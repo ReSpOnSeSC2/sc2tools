@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  ANALYZER_REGIONS,
   DEFAULT_ANALYZER_FILTERS,
   MAX_GAME_LENGTH_MINUTES,
+  PTR_REGION,
   filtersToQuery,
   normalizeGameLengthBounds,
 } from "../filterContext";
@@ -23,11 +25,18 @@ describe("filtersToQuery", () => {
     // Default: "After 5.0.17 · 12 workers" keeps 12-worker games only, so a
     // game still played on 5.0.16 after the 5.0.17 notes stays out.
     expect(params(filtersToQuery(DEFAULT_ANALYZER_FILTERS)).get("patch_era")).toBe("after");
-    const eightWorker = params(filtersToQuery({ preset: "patch_5_0_16", since: "2026-06-22T19:15:00.000Z" }));
+    // "5.0.16 · 8 workers" has no dates: the version alone selects it, so
+    // the 5.0.16 PTR games played before the live release are kept.
+    const eightWorker = params(filtersToQuery({ preset: "patch_5_0_16" }));
     expect(eightWorker.get("patch_era")).toBe("before");
+    expect(eightWorker.has("since")).toBe(false);
     expect(eightWorker.has("until")).toBe(false);
     expect(eightWorker.has("preset")).toBe(false);
-    for (const preset of ["before_5_0_16", "all", "last_7d", "custom", "season:67"]) {
+    // "Before 5.0.16 · 12 workers" keeps its date and drops those PTR games.
+    const before = params(filtersToQuery({ preset: "before_5_0_16", until: "2026-06-22T19:14:59.999Z" }));
+    expect(before.get("patch_era")).toBe("after");
+    expect(before.get("until")).toBe("2026-06-22T19:14:59.999Z");
+    for (const preset of ["all", "last_7d", "custom", "season:67"]) {
       expect(params(filtersToQuery({ preset })).has("patch_era")).toBe(false);
     }
     // An explicit value wins over the preset's.
@@ -46,6 +55,14 @@ describe("filtersToQuery", () => {
     expect(query.has("map_pool")).toBe(false);
     expect(query.has("game_size")).toBe(false);
     expect(query.get("regions")).toBe("NA,EU");
+  });
+
+  it("sends a region selection that includes PTR, and never the stored region revision", () => {
+    expect(ANALYZER_REGIONS).toEqual(["NA", "EU", "KR", "CN", "SEA", PTR_REGION]);
+    expect(PTR_REGION).toBe("PTR");
+    const query = params(filtersToQuery({ regions: "NA,PTR", regions_rev: 1 }));
+    expect(query.get("regions")).toBe("NA,PTR");
+    expect(query.has("regions_rev")).toBe(false);
   });
 
   it("sends game-length bounds and omits the unset ones", () => {

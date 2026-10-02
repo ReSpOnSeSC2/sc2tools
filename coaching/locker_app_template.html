@@ -268,7 +268,7 @@ function presetRange(p,cA,cB){
  const back=n=>{const d=new Date(now);d.setDate(d.getDate()-n);return isoD(d)};
  if(p==="all")return[null,null];
  if(p==="after_5_0_17")return["2026-09-30",null];
- if(p==="patch_5_0_16")return["2026-06-22",null];
+ if(p==="patch_5_0_16")return[null,null];
  if(p==="before_5_0_16")return[null,"2026-06-22"];
  if(p==="today")return[isoD(now),isoD(now)];
  if(p==="last_7d")return[back(6),isoD(now)];
@@ -279,10 +279,11 @@ function presetRange(p,cA,cB){
  return seasonRangeJS(CUR_SEASON)}
 function pkRange(){return presetRange(PK.preset,PK.cA,PK.cB)}
 // The patch filters keep each game's own patch, since 5.0.16 games are still
-// played after the 5.0.17 notes: the era the site sends ("after" = 12
+// played after the 5.0.17 notes and its PTR games before the live release (so
+// the 8-worker filter has no dates): the era the site sends ("after" = 12
 // workers, "before" = the 8-worker patch 5.0.16), else the game's day (from
 // 5.0.16 on is 8 workers until 5.0.17 reaches the live ladder).
-function presetEra(p){return p==="after_5_0_17"?"after":p==="patch_5_0_16"?"before":""}
+function presetEra(p){return p==="after_5_0_17"||p==="before_5_0_16"?"after":p==="patch_5_0_16"?"before":""}
 function gameEra(g){return g.e||(g.d>="2026-06-22"?"before":"after")}
 let S; try{S=JSON.parse(document.getElementById("state0").textContent)}catch(e){S={v:1,setup:false,pin:null,coach:"ReSpOnSe",students:[],assets:{}}}
 if(!S.customBuilds)S.customBuilds=[];
@@ -1847,8 +1848,8 @@ function subSynced(sid){
 function spkUpdate(){
  const st=byId(role==="student"?meId:curStudent);
  const q=SPK.q.trim().toLowerCase();
- const [since,until]=presetRange(SPK.preset,SPK.cA,SPK.cB);
- window._spkRes=(st.games||[]).filter(g=>(!q||g.o.toLowerCase().includes(q)||g.m.toLowerCase().includes(q))&&(!since||g.d>=since)&&(!until||g.d<=until)).slice(0,30);
+ const [since,until]=presetRange(SPK.preset,SPK.cA,SPK.cB),era=presetEra(SPK.preset);
+ window._spkRes=(st.games||[]).filter(g=>(!q||g.o.toLowerCase().includes(q)||g.m.toLowerCase().includes(q))&&(!since||g.d>=since)&&(!until||g.d<=until)&&(!era||gameEra(g)===era)).slice(0,30);
  const key=g=>g.d+"|"+g.m+"|"+g.o;
  const el=$("spkList");if(!el)return;
  el.innerHTML=window._spkRes.map((g,i)=>{const on=SPK.picks.some(p=>key(p)===key(g));

@@ -43,19 +43,21 @@ export type Preset = {
   /**
    * The patch a patch preset keeps, by each game's own version: "after"
    * is the 12-worker game, "before" the 8-worker patch 5.0.16. A patch
-   * reaches the ladder later than its announced date, so the dates alone
-   * would count the last 5.0.16 games as 5.0.17. Sent as `patch_era`
-   * (see `filtersToQuery`); the API falls back to the date for a game
-   * with no version.
+   * reaches the ladder later than its announced date, and reaches the PTR
+   * (Public Test Realm) before it, so the dates alone would count the last
+   * 5.0.16 games as 5.0.17 and the 5.0.16 PTR games as 12-worker. Sent as
+   * `patch_era` (see `filtersToQuery`); the API falls back to the date for
+   * a game with no version.
    */
   patchEra?: PatchEra;
 };
 
 /**
  * Patch 5.0.16 went live on 22 June 2026 and cut the starting worker
- * count from 12 to 8: the start of the 8-worker window. Keep this as an
- * instant (rather than a calendar-day calculation) so every browser and
- * API request splits the same games.
+ * count from 12 to 8: the start of the 8-worker window on the live ladder
+ * (its PTR games came earlier, so the 8-worker preset goes by version
+ * only). Keep this as an instant (rather than a calendar-day calculation)
+ * so every browser and API request splits the same games.
  */
 export const PATCH_5_0_16_RELEASE = new Date("2026-06-22T19:15:00.000Z");
 
@@ -113,8 +115,10 @@ export const PRESETS: ReadonlyArray<Preset> = [
     id: "patch_5_0_16",
     label: "5.0.16 · 8 workers",
     shortLabel: "8-worker patch",
-    // No end date: the window ends when each game's version says 5.0.17.
-    resolve: () => ({ since: new Date(PATCH_5_0_16_RELEASE) }),
+    // No dates at all: each game's version decides. The 5.0.16 PTR games
+    // were played weeks before the live release, and the window ends when
+    // a game's version says 5.0.17.
+    resolve: () => ({}),
     patchEra: "before",
   },
   {
@@ -124,6 +128,9 @@ export const PRESETS: ReadonlyArray<Preset> = [
     resolve: () => ({
       until: new Date(PATCH_5_0_16_RELEASE.getTime() - 1),
     }),
+    // The date alone would list the 8-worker 5.0.16 PTR games played
+    // before the live release as 12-worker.
+    patchEra: "after",
   },
   {
     id: "all",
@@ -264,7 +271,8 @@ export function resolvePreset(
  * The patch a preset keeps, sent to the API as `patch_era`; undefined for
  * presets that are dates only.
  *
- * Example: `patchEraFor("patch_5_0_16")` → "before".
+ * Example: `patchEraFor("patch_5_0_16")` → "before";
+ * `patchEraFor("before_5_0_16")` → "after".
  */
 export function patchEraFor(id: PresetId | undefined): PatchEra | undefined {
   return PRESETS.find((p) => p.id === id)?.patchEra;

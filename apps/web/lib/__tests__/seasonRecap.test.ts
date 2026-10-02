@@ -195,6 +195,31 @@ describe("computeSeasonRecap", () => {
     });
   });
 
+  it("labels a PTR account as PTR and lists it after the ladder accounts", () => {
+    // PTR (Public Test Realm) handles start "98-": the whole first
+    // segment is the region, so this is neither "??" nor a 9-something.
+    const PTR = "98-S2-1-30230";
+    const recap = computeSeasonRecap(
+      [
+        game({ date: "2026-02-01T10:00:00Z", myToonHandle: PTR, myMmr: 3900 }),
+        game({ date: "2026-02-02T10:00:00Z", myToonHandle: NA_MAIN, myMmr: 5000 }),
+        game({ date: "2026-02-03T10:00:00Z", myToonHandle: PTR, myMmr: 3950 }),
+        game({ date: "2026-02-04T10:00:00Z", myToonHandle: NA_MAIN, myMmr: 5010 }),
+      ],
+      { since: SINCE },
+    );
+
+    expect(recap.mmrJourneys.map((journey) => journey.accountLabel)).toEqual([
+      "NA 267727",
+      "PTR 30230",
+    ]);
+    expect(recap.mmrJourneys[1]).toMatchObject({
+      toonHandle: PTR,
+      region: "PTR",
+      delta: 50,
+    });
+  });
+
   it("picks nemesis by losses and best victim by wins", () => {
     const games: ArcadeGame[] = [];
     // Nemesis: lose 3 to Foe.
