@@ -8,9 +8,20 @@ const {
   writeTempFile,
   PythonError,
 } = require("../util/pythonRunner");
+const { proxyEvidence } = require("./proxyClassification");
 
 const SPATIAL_DEFAULT_GRID = 64;
 const SPATIAL_MAX_GAMES = 5000;
+
+/**
+ * The town halls ``ownerMain`` (services/proxyClassification.js) reads to
+ * find a player's main. The own-side proxy heatmap projects only these rows
+ * of ``spatial.buildings`` — the full list is up to 2000 rows a game, times
+ * SPATIAL_MAX_GAMES. spatial.test.js checks the list against ``ownerMain``.
+ */
+const MAIN_TOWN_HALL_NAMES = [
+  "Nexus", "Hatchery", "CommandCenter", "OrbitalCommand", "PlanetaryFortress",
+];
 
 /**
  * SpatialService — heatmap and per-map aggregates.
@@ -171,7 +182,7 @@ class SpatialService {
    * @param {{ grid?: number }} [opts]
    */
   async proxy(userId, map, filters, opts = {}) {
-    return this._heatmap(userId, map, filters, "spatial.my_proxies", "proxy", opts);
+    return this._heatmap(userId, map, filters, "spatial.my_proxies", "proxy", opts, "my");
   }
 
   /**
@@ -208,7 +219,7 @@ class SpatialService {
    * @param {{ grid?: number }} [opts]
    */
   async opponentProxies(userId, map, filters, opts = {}) {
-    return this._heatmap(userId, map, filters, "spatial.opp_proxies", "opp_proxy", opts);
+    return this._heatmap(userId, map, filters, "spatial.opp_proxies", "opp_proxy", opts, "opp");
   }
 
   /**
@@ -219,8 +230,10 @@ class SpatialService {
    * @param {string} field   dotted path on the game doc
    * @param {string} kind    label echoed in the response
    * @param {{ grid?: number }} opts
+   * @param {"my" | "opp"} [proxySide] set by the two proxy heatmaps, whose
+   *   stored rows are resolved to the canonical proxy test before plotting
    */
-  async _heatmap(userId, map, filters, field, kind, opts) {
+  async _heatmap(userId, map, filters, field, kind, opts, proxySide) {
     if (!map || typeof map !== "string") throw httpError(400, "map_required");
     const grid = clampGrid(opts.grid);
     const baseMatch = {
@@ -239,10 +252,14 @@ class SpatialService {
             gameId: 1,
             mapBounds: "$spatial.map_bounds",
             points: `$${field}`,
+            ...(proxySide ? proxyStampProjection(proxySide) : {}),
           },
         },
       ])
       .toArray();
+    if (proxySide) {
+      for (const doc of docs) doc.points = canonicalProxyPoints(doc, proxySide);
+    }
     if (docs.length === 0) {
       return {
         ok: true,
@@ -256,7 +273,9 @@ class SpatialService {
     }
     const bounds = docs[0].mapBounds || inferBoundsFromPoints(docs);
     const points = flattenPoints(docs);
-    if (pythonAvailable()) {
+    // The canonical test can leave nothing to plot (every stored row was a
+    // third base); the JS path answers that without spawning python.
+    if (points.length > 0 && pythonAvailable()) {
       try {
         return await this._runPythonHeatmap({ kind, map, grid, bounds, points });
       } catch (err) {
@@ -356,6 +375,80 @@ function jsHeatmap({ kind, map, grid, bounds, points }) {
     points: points.length,
     cells,
   };
+}
+
+/**
+ * Extra ``$project`` fields a proxy heatmap needs to resolve its stored rows
+ * (see ``canonicalProxyPoints``).
+ *
+ * @param {"my" | "opp"} side
+ * @returns {Record<string, any>}
+ */
+function proxyStampProjection(side) {
+  const version = `$spatial.${side}_proxy_classification_v`;
+  /** @type {Record<string, any>} */
+  const fields = { proxyVersion: version };
+  // Only the user's own buildings are stored, and only a version-1 row is
+  // re-tested against its main, so Mongo returns the town halls of those
+  // games and nothing of ``spatial.buildings`` for the rest.
+  if (side === "my") {
+    fields.townHalls = {
+      $cond: [
+        { $and: [{ $eq: [version, 1] }, { $isArray: "$spatial.buildings" }] },
+        {
+          $filter: {
+            input: "$spatial.buildings",
+            as: "building",
+            cond: { $in: ["$$building.name", MAIN_TOWN_HALL_NAMES] },
+          },
+        },
+        "$$REMOVE",
+      ],
+    };
+  }
+  return fields;
+}
+
+/**
+ * One game's stored proxy rows, resolved to the canonical proxy test
+ * (services/proxyClassification.js): farther from the owner's main than 80
+ * world units for town halls, gas and Spine / Spore Crawlers, 50 for every
+ * other structure.
+ *
+ * A version-2 stamp already used that test and is plotted as stored. A
+ * version-1 stamp (agents from 0.16.0) tested every structure at 50 units,
+ * so it lists a standard third base and its gas / crawlers, 50-80 units out:
+ *   - Own side: those rows are re-tested at 80 units against the main found
+ *     in the projected town halls, and the third base is dropped.
+ *   - Opponent side: their main is not stored, so ``proxyEvidence`` can only
+ *     mark those rows ``ambiguous``. They are dropped, not plotted. A third
+ *     base is in almost every macro game and a proxy Hatchery is rare, so
+ *     keeping them would paint the opponent's third base on every map; the
+ *     cost is that a real proxy Hatchery or Spine Crawler rush from a
+ *     version-1 game is missing. Their 50-unit structures (Barracks,
+ *     Gateway, Pylon, Photon Cannon...) are unaffected.
+ * An own-side row whose main cannot be established is ``ambiguous`` too and
+ * is dropped for the same reason.
+ *
+ * Rows with no stamp are plotted as stored: agents before 0.16.0 listed
+ * structures within 50 units of the other player's main, a test that never
+ * included a third base.
+ *
+ * @param {{points?: any, proxyVersion?: any, townHalls?: any}} doc
+ * @param {"my" | "opp"} side
+ * @returns {any[]}
+ */
+function canonicalProxyPoints(doc, side) {
+  const { rows } = proxyEvidence(
+    {
+      [`${side}_proxies`]: doc.points,
+      [`${side}_proxy_classification_v`]: doc.proxyVersion,
+      buildings: doc.townHalls,
+    },
+    side,
+  );
+  if (!Array.isArray(rows)) return [];
+  return rows.filter((row) => !(row && row.ambiguous === true));
 }
 
 /** @param {Array<{points?: any[]}>} docs */
