@@ -99,6 +99,10 @@ const UNIT_TECH_PREREQUISITES = {
   SwarmHostMP: [["InfestationPit"]],
   Viper: [["Hive"]],
   Ultralisk: [["UltraliskCavern"]],
+  // Both Overlord morphs need a Lair; the Lair's own event stays in the
+  // log after it becomes a Hive.
+  Overseer: [["Lair"]],
+  OverlordTransport: [["Lair"]],
   // Terran
   Marine: [["Barracks"]],
   Reaper: [["Barracks"]],

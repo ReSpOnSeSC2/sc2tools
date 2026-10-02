@@ -2705,6 +2705,805 @@
     "[9:29] LurkerMP"
    ],
    "proxies": []
+  },
+  {
+   "name": "Late Banelings are counted and compared at their start",
+   "why": "Two morphs finish at 12:29 (14 s, started 12:15). From 5.0.11 a Baneling is a type change, which the extractor did not record.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildBaneling",
+     "time_lt": 736
+    },
+    {
+     "type": "not_before",
+     "name": "BuildBaneling",
+     "time_lt": 735
+    },
+    {
+     "type": "count_exact",
+     "name": "BuildBaneling",
+     "time_lt": 900,
+     "count": 2
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 46,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "BanelingNest",
+     "time": 150,
+     "x": 62,
+     "y": 44
+    },
+    {
+     "type": "unit",
+     "name": "Zergling",
+     "time": 365,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Zergling",
+     "time": 365,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Baneling",
+     "time": 749,
+     "x": 0,
+     "y": 0
+    },
+    {
+     "type": "unit",
+     "name": "Baneling",
+     "time": 749,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:46] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[2:30] BanelingNest",
+    "[6:05] Zergling",
+    "[6:05] Zergling",
+    "[12:29] Baneling",
+    "[12:29] Baneling"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Baneling inside a not_before window fails the rule",
+   "why": "Until Banelings were recorded this rule passed on every 5.0.11+ game.",
+   "game_version": "5.0.16.97425",
+   "rules": [
+    {
+     "type": "not_before",
+     "name": "BuildBaneling",
+     "time_lt": 800
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 46,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "BanelingNest",
+     "time": 150,
+     "x": 62,
+     "y": 44
+    },
+    {
+     "type": "unit",
+     "name": "Zergling",
+     "time": 365,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Zergling",
+     "time": 365,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Baneling",
+     "time": 749,
+     "x": 0,
+     "y": 0
+    },
+    {
+     "type": "unit",
+     "name": "Baneling",
+     "time": 749,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:46] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[2:30] BanelingNest",
+    "[6:05] Zergling",
+    "[6:05] Zergling",
+    "[12:29] Baneling",
+    "[12:29] Baneling"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Ravager is rewound by its 12 s morph",
+   "why": "Morph finishes at 7:58 and started at 7:46: 12 s on every build from 5.0.11 (the table said 9).",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildRavager",
+     "time_lt": 467
+    },
+    {
+     "type": "not_before",
+     "name": "BuildRavager",
+     "time_lt": 466
+    },
+    {
+     "type": "count_max",
+     "name": "BuildRavager",
+     "time_lt": 900,
+     "count": 1
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 46,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "RoachWarren",
+     "time": 200,
+     "x": 62,
+     "y": 44
+    },
+    {
+     "type": "unit",
+     "name": "Roach",
+     "time": 411,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Roach",
+     "time": 444,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Ravager",
+     "time": 478,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:46] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[3:20] RoachWarren",
+    "[6:51] Roach",
+    "[7:24] Roach",
+    "[7:58] Ravager"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Overseer and Transport Overlord are compared at their starts",
+   "why": "Overseer 7:08 less 12 s; Transport Overlord 11:58 less 15 s. Both need the Lair, which is on record.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildOverseer",
+     "time_lt": 417
+    },
+    {
+     "type": "not_before",
+     "name": "BuildOverseer",
+     "time_lt": 416
+    },
+    {
+     "type": "before",
+     "name": "BuildOverlordTransport",
+     "time_lt": 704
+    },
+    {
+     "type": "not_before",
+     "name": "BuildOverlordTransport",
+     "time_lt": 703
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 46,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 270,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "morph",
+     "name": "Lair",
+     "time": 330,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overseer",
+     "time": 428,
+     "x": 0,
+     "y": 0
+    },
+    {
+     "type": "unit",
+     "name": "OverlordTransport",
+     "time": 718,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:46] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[4:30] Overlord",
+    "[5:30] Lair",
+    "[7:08] Overseer",
+    "[11:58] OverlordTransport"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Overseer with no Lair on record is not counted",
+   "why": "Both evaluators require a Lair started by the Overseer's own time.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildOverseer",
+     "time_lt": 900
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 46,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 270,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "unit",
+     "name": "Overseer",
+     "time": 428,
+     "x": 0,
+     "y": 0
+    },
+    {
+     "type": "unit",
+     "name": "OverlordTransport",
+     "time": 718,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:46] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[4:30] Overlord",
+    "[7:08] Overseer",
+    "[11:58] OverlordTransport"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Brood Lord morph is compared at its start",
+   "why": "Morph finishes at 21:26 (24 s, started 21:02), after the Greater Spire.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildBroodLord",
+     "time_lt": 1263
+    },
+    {
+     "type": "not_before",
+     "name": "BuildBroodLord",
+     "time_lt": 1262
+    }
+   ],
+   "expected": true,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 46,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "morph",
+     "name": "Lair",
+     "time": 330,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Spire",
+     "time": 480,
+     "x": 58,
+     "y": 42
+    },
+    {
+     "type": "unit",
+     "name": "Corruptor",
+     "time": 539,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "morph",
+     "name": "Hive",
+     "time": 900,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "building",
+     "subtype": "morph",
+     "name": "GreaterSpire",
+     "time": 1100,
+     "x": 58,
+     "y": 42
+    },
+    {
+     "type": "unit",
+     "name": "BroodLord",
+     "time": 1286,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:46] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[5:30] Lair",
+    "[8:00] Spire",
+    "[8:59] Corruptor",
+    "[15:00] Hive",
+    "[18:20] GreaterSpire",
+    "[21:26] BroodLord"
+   ],
+   "proxies": []
+  },
+  {
+   "name": "Brood Lord with no Greater Spire on record is not counted",
+   "why": "A Spire alone does not satisfy the Brood Lord's prerequisite.",
+   "game_version": "5.0.15.96883",
+   "rules": [
+    {
+     "type": "before",
+     "name": "BuildBroodLord",
+     "time_lt": 1400
+    }
+   ],
+   "expected": false,
+   "events": [
+    {
+     "type": "building",
+     "subtype": "born",
+     "name": "Hatchery",
+     "time": 0,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 0,
+     "x": 63,
+     "y": 51
+    },
+    {
+     "type": "unit",
+     "name": "Overlord",
+     "time": 46,
+     "x": 61,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Hatchery",
+     "time": 57,
+     "x": 45,
+     "y": 64
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "SpawningPool",
+     "time": 75,
+     "x": 66,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Extractor",
+     "time": 97,
+     "x": 64,
+     "y": 41
+    },
+    {
+     "type": "building",
+     "subtype": "morph",
+     "name": "Lair",
+     "time": 330,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "building",
+     "subtype": "init",
+     "name": "Spire",
+     "time": 480,
+     "x": 58,
+     "y": 42
+    },
+    {
+     "type": "unit",
+     "name": "Corruptor",
+     "time": 539,
+     "x": 60,
+     "y": 45
+    },
+    {
+     "type": "building",
+     "subtype": "morph",
+     "name": "Hive",
+     "time": 900,
+     "x": 60,
+     "y": 48
+    },
+    {
+     "type": "unit",
+     "name": "BroodLord",
+     "time": 1286,
+     "x": 0,
+     "y": 0
+    }
+   ],
+   "build_log": [
+    "[0:00] Hatchery",
+    "[0:00] Overlord",
+    "[0:46] Overlord",
+    "[0:57] Hatchery",
+    "[1:15] SpawningPool",
+    "[1:37] Extractor",
+    "[5:30] Lair",
+    "[8:00] Spire",
+    "[8:59] Corruptor",
+    "[15:00] Hive",
+    "[21:26] BroodLord"
+   ],
+   "proxies": []
   }
  ]
 }

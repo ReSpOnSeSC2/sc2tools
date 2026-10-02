@@ -274,7 +274,9 @@ def test_zvt_2_base_roach_ravager_timing():
     events = [
         _b("Hatchery", 0), _b("Hatchery", 180),
         _b("SpawningPool", 40), _b("RoachWarren", 200),
-        *_n("Drone", 60, 10), *_n("Roach", 350, 5), *_n("Ravager", 420, 4),
+        # Nine Roaches born, four of them morphed: the Roach births are
+        # the Roach + Ravager total.
+        *_n("Drone", 60, 10), *_n("Roach", 350, 9), *_n("Ravager", 420, 4),
     ]
     assert _classify("Zerg", "Terran", events) == "ZvT - 2 Base Roach Ravager Timing"
 
@@ -309,7 +311,9 @@ def test_zvp_2_base_roach_ravager_all_in():
     events = [
         _b("Hatchery", 0), _b("Hatchery", 180),
         _b("SpawningPool", 40), _b("RoachWarren", 200),
-        *_n("Drone", 60, 10), *_n("Roach", 350, 5), *_n("Ravager", 420, 4),
+        # Nine Roaches born, four of them morphed: the Roach births are
+        # the Roach + Ravager total.
+        *_n("Drone", 60, 10), *_n("Roach", 350, 9), *_n("Ravager", 420, 4),
     ]
     assert _classify("Zerg", "Protoss", events) == "ZvP - 2 Base Roach Ravager All-in"
 

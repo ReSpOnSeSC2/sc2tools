@@ -148,10 +148,13 @@ def classify_by_race(race, events: List[Dict], detector, opp_race=None) -> str:
             if nth_base_start(buildings, "Hatchery", 3) < pool_time:
                 return "Zerg - 3 Hatch Before Pool"
 
+            # Every Ravager was born a Roach, so the Roach births alone
+            # are the Roach + Ravager total; adding the Ravager events
+            # would count each one twice.
             if (
                 has_building("RoachWarren", 300)
                 and count_units("Drone", 360) < 40
-                and (count_units("Roach", 360) + count_units("Ravager", 360) > 8)
+                and count_units("Roach", 360) > 8
             ):
                 return "Zerg - 2 Base Roach/Ravager All-in"
             # Nydus check comes BEFORE the Muta-rush check: a Nydus
@@ -174,10 +177,12 @@ def classify_by_race(race, events: List[Dict], detector, opp_race=None) -> str:
         else:
             # Pool First macro trees
             base_name = "Zerg - Pool First Opener"
+            # Roach births already include every Ravager (see the
+            # Hatch First branch).
             if (
                 has_building("RoachWarren", 300)
                 and count_units("Drone", 360) < 40
-                and (count_units("Roach", 360) + count_units("Ravager", 360) > 8)
+                and count_units("Roach", 360) > 8
             ):
                 return "Zerg - 2 Base Roach/Ravager All-in"
             # Nydus check comes BEFORE Muta -- same reasoning as the
