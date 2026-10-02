@@ -28,6 +28,8 @@ export { FIXTURE_INDEX } from "@/lib/guides/__fixtures__/hub";
 export { FIXTURE_MATCHUP, FIXTURE_MATCHUP_BAND } from "@/lib/guides/__fixtures__/matchup";
 export {
   FIXTURE_CHANNEL,
+  FIXTURE_PLAYLISTS,
+  asEightWorkerPatch,
   VIDEO_PVT_STARGATE_CHARGE,
   VIDEO_PVZ_CARRIER_RUSH,
   VIDEO_PVZ_CRACKING_8_POOLS,

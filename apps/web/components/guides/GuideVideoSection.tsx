@@ -9,8 +9,10 @@ import type { GuideVideo } from "@/lib/guides/types";
  * "Video guide" block for build and counter pages: the first matched
  * channel video as a click-to-load player, with the description's own
  * excerpt and checklist quoted verbatim under the author credit. Further
- * matches are plain links. Renders nothing without videos.
+ * matches are plain links. A video from the 8-worker patch (shown here
+ * only when an admin pinned it) says so. Renders nothing without videos.
  */
+const EIGHT_WORKER_NOTE = "Recorded on the 8-worker patch 5.0.16";
 export function GuideVideoSection({
   videos,
   title = "Video guide",
@@ -47,6 +49,9 @@ function VideoNotes({ video }: { video: GuideVideo }) {
         <h3 className="font-display text-h4 font-bold text-text">{video.title}</h3>
         {video.publishedAt ? (
           <p className="text-caption text-text-dim">Published {fmtGuideDate(video.publishedAt)}</p>
+        ) : null}
+        {video.eightWorkerPatch ? (
+          <p className="text-caption text-text-dim">{EIGHT_WORKER_NOTE}</p>
         ) : null}
       </div>
       {video.excerpt || checklist.length > 0 ? (
@@ -89,6 +94,7 @@ function MoreVideos({ videos }: { videos: ReadonlyArray<GuideVideo> }) {
             {video.publishedAt ? (
               <span className="text-text-dim">· {fmtGuideDate(video.publishedAt)}</span>
             ) : null}
+            {video.eightWorkerPatch ? <span className="text-text-dim"> · 8-worker patch</span> : null}
           </li>
         ))}
       </ul>

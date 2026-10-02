@@ -231,7 +231,11 @@ function indexMatchup(matchup, doc) {
  * `GET /v1/guides`.
  *
  * @param {{ era: string, computedAt: Date|null, matchupDocs: Doc[], mapDocs: Doc[],
- *   videos: object[], channel: { url: string, name: string }|null }} input
+ *   videos: object[], eightWorkerVideos?: object[],
+ *   channel: { url: string, name: string }|null,
+ *   playlists?: { twelveWorker: string|null, eightWorker: string|null } }} input
+ *   `videos`: the 12-worker build order videos; `eightWorkerVideos`: the
+ *   8-worker patch ones; `playlists`: the channel's playlist of each
  */
 function shapeIndexPayload(input) {
   const byMatchup = new Map(input.matchupDocs.map((doc) => [doc.matchup, doc]));
@@ -247,7 +251,9 @@ function shapeIndexPayload(input) {
     matchups: MATCHUPS.map((matchup) => indexMatchup(matchup, byMatchup.get(matchup))),
     maps,
     videos: input.videos,
+    eightWorkerVideos: input.eightWorkerVideos || [],
     channel: input.channel,
+    playlists: input.playlists || { twelveWorker: null, eightWorker: null },
   };
 }
 
@@ -336,7 +342,9 @@ function bandOpeners(buildDocs, band) {
  * `GET /v1/guides/:matchup`.
  *
  * @param {{ matchup: string, era: string, band: GuideBand|null, doc: Doc|null,
- *   buildDocs: Doc[], videos: object[] }} input
+ *   buildDocs: Doc[], videos: object[], eightWorkerVideos?: object[] }} input
+ *   `videos`: the era's own videos; `eightWorkerVideos`: the matchup's
+ *   8-worker patch videos, listed apart on the 12-worker view
  */
 function shapeMatchupPayload(input) {
   const { matchup, doc } = input;
@@ -351,6 +359,7 @@ function shapeMatchupPayload(input) {
     openers: input.band ? bandOpeners(input.buildDocs, input.band) : openerRows(doc),
     counters: counterLinks(matchup, doc),
     videos: input.videos,
+    eightWorkerVideos: input.eightWorkerVideos || [],
   };
 }
 

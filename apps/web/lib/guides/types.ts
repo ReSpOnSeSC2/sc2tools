@@ -84,11 +84,24 @@ export interface GuideVideo {
   excerpt: string | null;
   /** Verbatim checklist lines from the description, or null. */
   checklist: string[] | null;
+  /**
+   * Published during the 8-worker patch 5.0.16, so it shows an 8-worker
+   * build order. Absent from API builds that predate the field.
+   */
+  eightWorkerPatch?: boolean;
 }
 
 export interface GuideChannel {
   url: string;
   name: string;
+}
+
+/** The channel's YouTube playlist of each kind (null = not configured). */
+export interface GuidePlaylists {
+  /** 12-worker build order guides. */
+  twelveWorker: string | null;
+  /** 8-worker patch (5.0.16) build order guides. */
+  eightWorker: string | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -131,9 +144,13 @@ export interface GuideIndexPayload {
   matchups: GuideIndexMatchup[];
   /** Published maps only, games desc. */
   maps: GuideIndexMap[];
-  /** ≤ 4 latest build-order videos. */
+  /** ≤ 4 latest 12-worker build-order videos. */
   videos: GuideVideo[];
+  /** ≤ 12 latest 8-worker patch build-order videos (absent on older API builds). */
+  eightWorkerVideos?: GuideVideo[];
   channel: GuideChannel | null;
+  /** Absent on older API builds. */
+  playlists?: GuidePlaylists | null;
 }
 
 /* ------------------------------------------------------------------ */
@@ -190,8 +207,13 @@ export interface GuideMatchupPayload {
   /** ci.low desc; with a band, the band cell per build (builds without one omitted). */
   openers: GuideOpenerRow[];
   counters: GuideCounterLink[];
-  /** ≤ 4 latest videos for the matchup. */
+  /** ≤ 4 latest videos for the matchup, of the era the payload shows. */
   videos: GuideVideo[];
+  /**
+   * ≤ 12 latest 8-worker patch videos of the matchup; [] on the 8-worker
+   * view, whose `videos` are those already (absent on older API builds).
+   */
+  eightWorkerVideos?: GuideVideo[];
 }
 
 /* ------------------------------------------------------------------ */
@@ -347,6 +369,8 @@ interface GuideBuildBase {
   computedAt: string | null;
   /** The owner's videos are real content, so they ship even unpublished. */
   videos: GuideVideo[];
+  /** ≤ 3 unpinned 8-worker patch videos of the build (absent on older API builds). */
+  eightWorkerVideos?: GuideVideo[];
 }
 
 /** Below the page floor: no numbers at all. */
@@ -408,6 +432,8 @@ interface GuideCounterBase {
   patch: string;
   computedAt: string | null;
   videos: GuideVideo[];
+  /** ≤ 3 8-worker patch videos against the strategy (absent on older API builds). */
+  eightWorkerVideos?: GuideVideo[];
 }
 
 export interface GuideCounterUnpublished extends GuideCounterBase {

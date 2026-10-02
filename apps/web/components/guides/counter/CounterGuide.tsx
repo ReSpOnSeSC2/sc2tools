@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
 import { GuideCopyText } from "@/components/guides/GuideCopyText";
+import { GuideEightWorkerVideos } from "@/components/guides/GuideEightWorkerVideos";
 import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
 import { GuideNotEnoughGames } from "@/components/guides/GuideStates";
 import { GuideVideoSection } from "@/components/guides/GuideVideoSection";
@@ -19,8 +20,11 @@ import type { GuideCounterOpener, GuideCounterPayload, GuideCounterPublished } f
  * Body of /guides/[matchup]/counter/[strategy] — how to beat one
  * opponent opener: the viewer race's overall record against it, the
  * openers ranked by the low end of their likely win rate (each with its
- * catalog description), and the channel video when one matches.
+ * catalog description), the channel video when one matches and, collapsed
+ * at the foot, matching videos from the 8-worker patch.
  */
+
+const EIGHT_WORKER_TITLE = "Videos against this opener from the 8-worker patch";
 
 const CATALOG_DESCRIPTIONS: ReadonlyMap<string, string> = new Map(
   BUILD_DEFINITIONS.map((definition) => [definition.name, definition.description]),
@@ -90,6 +94,7 @@ function PublishedCounter({ payload }: { payload: GuideCounterPublished }) {
           </ol>
         </Section>
       ) : null}
+      <GuideEightWorkerVideos title={EIGHT_WORKER_TITLE} videos={payload.eightWorkerVideos} />
     </>
   );
 }
@@ -112,6 +117,7 @@ export function CounterGuide({ payload }: { payload: GuideCounterPayload }) {
           backLabel={`All ${oppRaceWord(payload.matchup)} openers`}
         >
           <GuideVideoSection videos={payload.videos} />
+          <GuideEightWorkerVideos title={EIGHT_WORKER_TITLE} videos={payload.eightWorkerVideos} />
         </GuideNotEnoughGames>
       )}
     </article>

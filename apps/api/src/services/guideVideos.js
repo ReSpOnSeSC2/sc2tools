@@ -23,9 +23,13 @@
  * over an in-memory copy of the (small) collection refreshed every
  * CACHE_TTL_MS. Videos published during the 8-worker patch 5.0.16
  * (``eightWorkerPatch``) teach a build order the 12-worker guides no
- * longer cover: guides and matchup pages show them only where an admin
- * pins them. Guide reads are fail-soft: a Mongo error yields [] so a
- * guide page never fails because its video block could not load.
+ * longer cover. Every page therefore gets two lists: the 12-worker videos
+ * (its main, prominent list; an 8-worker video joins it only where an
+ * admin pins it) and the 8-worker patch videos (the ``eightWorker…``
+ * reads, shown in a separate secondary section). ``playlists()`` links
+ * each list to the channel's YouTube playlist for it. Guide reads are
+ * fail-soft: a Mongo error yields [] so a guide page never fails because
+ * its video block could not load.
  *
  * Helpers: guideVideoFeed.js (Atom parser), guideVideoMatch.js (catalog
  * matching), guideVideoText.js (excerpt, checklist, public shape),
@@ -53,10 +57,13 @@ const {
 } = require("./guideVideoText");
 const {
   VIDEO_LIST_DEFAULT,
+  EIGHT_WORKERS,
+  TWELVE_WORKERS,
   isVideoId,
   compareRows,
   adminItem,
   selectForGuide,
+  selectEightWorkerForGuide,
   selectLatest,
 } = require("./guideVideoSelect");
 const {
@@ -67,6 +74,7 @@ const {
   videoError,
   validChannelId,
   validChannelUrl,
+  validPlaylistUrl,
   fetchChannelFeed,
   lookupOembed,
 } = require("./guideVideoHttp");
@@ -78,7 +86,11 @@ const {
   PATCH_5_0_17_RELEASE,
 } = require("../util/patchEra");
 
-/** Publish dates of videos recorded on the 8-worker patch 5.0.16. */
+/**
+ * Publish dates of videos recorded on the 8-worker patch 5.0.16. The
+ * window ends with the 5.0.17 notes, not with 5.0.17 reaching the live
+ * ladder: from the notes on, the channel only records 12-worker videos.
+ */
 const EIGHT_WORKER_VIDEO_WINDOW = Object.freeze({ from: PATCH_5_0_16_RELEASE, until: PATCH_5_0_17_RELEASE });
 /** How long guide reads reuse the in-memory copy of guide_videos. */
 const CACHE_TTL_MS = 5 * 60 * 1000;
@@ -99,6 +111,12 @@ const CHANNEL_HANDLE_RE = /^https:\/\/www\.youtube\.com\/@([^/]+)(?:\/|$)/;
  * @typedef {import('./guideVideoSelect').VideoRow} VideoRow
  * @typedef {import('./guideVideoSelect').VideoOverrides} VideoOverrides
  * @typedef {import('./guideVideoSelect').AdminVideo} AdminVideo
+ */
+
+/**
+ * @typedef {object} VideoPlaylists the channel's YouTube playlists
+ * @property {string|null} twelveWorker 12-worker build order guides
+ * @property {string|null} eightWorker  8-worker patch build order guides
  */
 
 /**
@@ -219,8 +237,10 @@ class GuideVideosService {
    *   now?: () => number,
    *   snapshot?: VideoSnapshot,
    *   eightWorkerWindow?: { from: Date, until: Date } | null,
+   *   playlists?: { twelveWorker?: string|null, eightWorker?: string|null } | null,
    * }} [opts] ``eightWorkerWindow``: publish dates of 8-worker patch videos
-   *   (default: the 5.0.16 release until the 5.0.17 revert; null: none)
+   *   (default: the 5.0.16 release until the 5.0.17 revert; null: none).
+   *   ``playlists``: the channel's playlist of each kind (URL or id)
    */
   constructor(db, opts = {}) {
     this.db = db;
@@ -237,6 +257,12 @@ class GuideVideosService {
     this.eightWorkerWindow = opts.eightWorkerWindow === undefined
       ? EIGHT_WORKER_VIDEO_WINDOW
       : opts.eightWorkerWindow;
+    const playlists = opts.playlists || {};
+    /** @type {Readonly<VideoPlaylists>} */
+    this.playlistUrls = Object.freeze({
+      twelveWorker: validPlaylistUrl(playlists.twelveWorker),
+      eightWorker: validPlaylistUrl(playlists.eightWorker),
+    });
     /** @type {{ at: number, rows: VideoRow[] } | null} */
     this.cache = null;
     /** @type {Promise<VideoRow[]> | null} */
@@ -263,6 +289,17 @@ class GuideVideosService {
     return name ? { url: this.channelUrl, name } : null;
   }
 
+  /**
+   * The channel's YouTube playlists of 12-worker and 8-worker patch build
+   * order guides; a kind that is not configured (or not a YouTube
+   * playlist) is null.
+   *
+   * @returns {VideoPlaylists}
+   */
+  playlists() {
+    return { ...this.playlistUrls };
+  }
+
   /** Drop the in-memory copy (after writes). */
   invalidate() {
     this.cache = null;
@@ -280,12 +317,13 @@ class GuideVideosService {
    */
   decorate(doc) {
     const match = applyCuratedLinks(doc.youtubeId, matchVideo(doc), this.curatedLinks);
+    const eightWorkerPatch = this.isEightWorkerVideo(doc);
     return {
       doc,
       match,
       buildOrder: match.matchup !== null,
-      eightWorkerPatch: this.isEightWorkerVideo(doc),
-      video: toPublicVideo(doc),
+      eightWorkerPatch,
+      video: { ...toPublicVideo(doc), eightWorkerPatch },
     };
   }
 
@@ -372,6 +410,24 @@ class GuideVideosService {
   }
 
   /**
+   * 8-worker patch videos of a build guide, for its secondary list:
+   * matches from the 8-worker patch that are neither pinned (those already
+   * show in videosForBuild) nor hidden, newest first; ≤ 3.
+   *
+   * @param {string} matchup "PvZ" form
+   * @param {string} buildKey exact catalog name
+   * @param {VideoOverrides|null} [overrides]
+   * @returns {Promise<PublicVideo[]>}
+   */
+  async eightWorkerVideosForBuild(matchup, buildKey, overrides = null) {
+    if (!isGuideBuildName(matchup, buildKey)) return [];
+    const rows = await this.cachedRows();
+    return selectEightWorkerForGuide(
+      rows, (m) => m.matchup === matchup && m.builds.includes(buildKey), overrides,
+    );
+  }
+
+  /**
    * Videos for a counter guide (opponent strategy); same rules as
    * videosForBuild.
    *
@@ -387,9 +443,26 @@ class GuideVideosService {
   }
 
   /**
-   * Latest build-order videos of one matchup, newest first. The current
-   * (12-worker) view leaves out 8-worker patch videos; the 8-worker view
-   * (era "before") keeps them.
+   * 8-worker patch videos of a counter guide; same rules as
+   * eightWorkerVideosForBuild.
+   *
+   * @param {string} matchup "PvZ" form (the viewer's matchup)
+   * @param {string} strategyKey exact catalog name
+   * @param {VideoOverrides|null} [overrides]
+   * @returns {Promise<PublicVideo[]>}
+   */
+  async eightWorkerVideosForCounter(matchup, strategyKey, overrides = null) {
+    if (!isGuideStrategyName(matchup, strategyKey)) return [];
+    const rows = await this.cachedRows();
+    return selectEightWorkerForGuide(
+      rows, (m) => m.matchup === matchup && m.counters.includes(strategyKey), overrides,
+    );
+  }
+
+  /**
+   * Latest build-order videos of one matchup for one era's view, newest
+   * first: the current (12-worker) view gets the 12-worker videos and the
+   * 8-worker view (era "before") the 8-worker patch videos.
    *
    * @param {string} matchup "PvZ" form
    * @param {number} [n] 1..12, default 4
@@ -398,7 +471,8 @@ class GuideVideosService {
    */
   async videosForMatchup(matchup, n = VIDEO_LIST_DEFAULT, era = PATCH_ERA_AFTER) {
     if (!MATCHUPS.includes(matchup)) return [];
-    return selectLatest(await this.cachedRows(), n, matchup, era !== PATCH_ERA_BEFORE);
+    const workers = era === PATCH_ERA_BEFORE ? EIGHT_WORKERS : TWELVE_WORKERS;
+    return selectLatest(await this.cachedRows(), n, matchup, workers);
   }
 
   /**
@@ -406,10 +480,12 @@ class GuideVideosService {
    * matchup detected), newest first.
    *
    * @param {number} [n] 1..12, default 4
+   * @param {8|12|null} [workers] only videos recorded with that many
+   *   starting workers (EIGHT_WORKERS / TWELVE_WORKERS); default both
    * @returns {Promise<PublicVideo[]>}
    */
-  async latest(n = VIDEO_LIST_DEFAULT) {
-    return selectLatest(await this.cachedRows(), n, null);
+  async latest(n = VIDEO_LIST_DEFAULT, workers = null) {
+    return selectLatest(await this.cachedRows(), n, null, workers);
   }
 
   /**
@@ -546,6 +622,8 @@ class GuideVideosService {
 
 module.exports = {
   GuideVideosService,
+  EIGHT_WORKERS,
+  TWELVE_WORKERS,
   parseChannelFeed,
   matchVideo,
   extractChecklist,

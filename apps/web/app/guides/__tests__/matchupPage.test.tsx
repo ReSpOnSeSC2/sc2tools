@@ -107,6 +107,26 @@ describe("/guides/[matchup] filters", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Latest PvZ videos" })).toBeTruthy();
   });
 
+  it("lists the matchup's 8-worker patch videos apart, collapsed at the foot of the page", async () => {
+    mocks.fetchGuideMatchup.mockResolvedValue(ok(FIXTURE_MATCHUP));
+    const { container } = render(await MatchupGuidePage(props()));
+    const row = screen.getByRole("heading", { level: 2, name: "Latest PvZ videos" }).closest("section") as HTMLElement;
+    expect(within(row).queryByRole("link", { name: /PvZ Cracking 8 Pools/ })).toBeNull();
+    const details = container.querySelector("#eight-worker-videos details") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(details.querySelector("summary")?.textContent).toBe("PvZ videos from the 8-worker patch (1)");
+    expect(details.querySelector("a")?.getAttribute("href")).toBe("https://www.youtube.com/watch?v=A4x6gR7J-AY");
+  });
+
+  it("titles the 8-worker view's row as 8-worker patch videos, with no separate list", async () => {
+    const before: GuideMatchupPayload = { ...FIXTURE_MATCHUP, era: "before", eightWorkerVideos: [] };
+    mocks.fetchGuideMatchup.mockResolvedValue(ok(before));
+    const { container } = render(await MatchupGuidePage(props({ era: "before" })));
+    expect(screen.getByRole("heading", { level: 2, name: "PvZ videos from the 8-worker patch" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { level: 2, name: "Latest PvZ videos" })).toBeNull();
+    expect(container.querySelector("#eight-worker-videos")).toBeNull();
+  });
+
   it("never links an 8-worker ranking to the current (12-worker) guide pages", async () => {
     const before: GuideMatchupPayload = { ...FIXTURE_MATCHUP, era: "before" };
     mocks.fetchGuideMatchup.mockResolvedValue(ok(before));

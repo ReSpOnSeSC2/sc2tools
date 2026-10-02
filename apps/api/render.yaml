@@ -244,3 +244,10 @@ services:
         value: "UCZS3YP1mvpqyuU5vPvHVG7g"
       - key: GUIDES_YOUTUBE_CHANNEL_URL
         value: "https://www.youtube.com/@ReSpOnSeSC2"
+      # The channel's YouTube playlists of 12-worker and 8-worker patch
+      # build order guides (playlist URL or id), linked from the /guides
+      # video sections. Set in the dashboard; unset = no playlist link.
+      - key: GUIDES_YOUTUBE_PLAYLIST_12_WORKER
+        sync: false
+      - key: GUIDES_YOUTUBE_PLAYLIST_8_WORKER
+        sync: false

@@ -25,11 +25,11 @@ export const GUIDE_VIDEO_PINNED_MAX = 3;
 export const GUIDE_VIDEO_HIDDEN_MAX = 20;
 
 /**
- * Badge on a video from the 8-worker patch 5.0.16. Build guides show it
- * only when pinned, and counter guides and 12-worker matchup lists never
- * do; the hub's channel row and the matchup pages' 8-worker view still do.
+ * Badge on a video from the 8-worker patch 5.0.16. A build guide shows it
+ * as a video guide only when pinned; otherwise it sits in the collapsed
+ * 8-worker patch list of the hub, its matchup and the guides it matches.
  */
-export const EIGHT_WORKER_BADGE = "8-worker patch · build guides show it only if pinned";
+export const EIGHT_WORKER_BADGE = "8-worker patch · in the 8-worker list unless pinned";
 
 /** Backfill window in days (jobs/guideSamplesBackfillJob.js). */
 export const BACKFILL_DAYS_MIN = 1;

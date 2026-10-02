@@ -18,8 +18,8 @@ const {
 jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 
 const IDENTITY_BUILD_KEYS = [
-  "buildKey", "buildSlug", "computedAt", "description", "era", "matchup", "matchupSlug", "name", "patch",
-  "published", "videos",
+  "buildKey", "buildSlug", "computedAt", "description", "eightWorkerVideos", "era", "matchup", "matchupSlug",
+  "name", "patch", "published", "videos",
 ];
 
 /** Every numeric leaf of a JSON value (deep). */
@@ -107,6 +107,9 @@ describe("guide pages", () => {
     }]);
     expect(b.notes).toEqual({ body: "### Plan\nHide the **Twilight**.", updatedAt: "2026-09-20T10:00:00.000Z" });
     expect(b.videos.map((v) => v.youtubeId)).toEqual(["YcTMc_Ee11w"]);
+    expect(b.videos[0].eightWorkerPatch).toBe(true);
+    // The pinned video is not repeated in the 8-worker list.
+    expect(b.eightWorkerVideos).toEqual([]);
     const keys = deepKeys(b);
     for (const banned of ["baseline", "baselineCandidate", "_schemaVersion", "updatedBy", "userId", "gameId", "opponent"]) {
       expect(keys.has(banned)).toBe(false);
@@ -152,17 +155,19 @@ describe("guide pages", () => {
   });
 
   test.each([
-    ["/v1/guides/pvz/robo-opener", []],
-    // "PvZ Carrier Rush: Can Zerg Stop It?" is an 8-worker patch video and is not pinned.
-    ["/v1/guides/pvz/carrier-rush", []],
-  ])("unpublished build %s: identity only, no numbers (videos still ship)", async (path, videoIds) => {
+    ["/v1/guides/pvz/robo-opener", [], []],
+    // "PvZ Carrier Rush: Can Zerg Stop It?" is an 8-worker patch video and
+    // is not pinned: it is listed apart from the guide's videos.
+    ["/v1/guides/pvz/carrier-rush", [], ["RYjRs_no8t4"]],
+  ])("unpublished build %s: identity only, no numbers (videos still ship)", async (path, videoIds, eightWorkerIds) => {
     const res = await get(path);
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe(GUIDE_CACHE_CONTROL);
     expect(Object.keys(res.body).sort()).toEqual(IDENTITY_BUILD_KEYS);
     expect(res.body.published).toBe(false);
     expect(res.body.videos.map((v) => v.youtubeId)).toEqual(videoIds);
-    expect(deepNumbers({ ...res.body, videos: [] })).toEqual([]);
+    expect(res.body.eightWorkerVideos.map((v) => v.youtubeId)).toEqual(eightWorkerIds);
+    expect(deepNumbers({ ...res.body, videos: [], eightWorkerVideos: [] })).toEqual([]);
   });
 
   test("published counter: overall + openers with their page flags", async () => {
@@ -178,14 +183,15 @@ describe("guide pages", () => {
     // "PvZ Cracking 8 Pools" is about the 8-worker patch's 8 Pool; it no
     // longer matches the 12 Pool counter.
     expect(res.body.videos.map((v) => v.youtubeId)).not.toContain("A4x6gR7J-AY");
+    expect(res.body.eightWorkerVideos.map((v) => v.youtubeId)).not.toContain("A4x6gR7J-AY");
   });
 
   test("unpublished counter: identity + videos only", async () => {
     const res = await get("/v1/guides/pvz/counter/ling-bane-bust");
     expect(res.status).toBe(200);
     expect(Object.keys(res.body).sort()).toEqual([
-      "computedAt", "description", "era", "matchup", "matchupSlug", "myRace", "name", "oppRace", "patch",
-      "published", "strategyKey", "strategySlug", "videos",
+      "computedAt", "description", "eightWorkerVideos", "era", "matchup", "matchupSlug", "myRace", "name", "oppRace",
+      "patch", "published", "strategyKey", "strategySlug", "videos",
     ]);
     expect(res.body.published).toBe(false);
   });

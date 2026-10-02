@@ -248,6 +248,8 @@ describe("config loader - SC2 Tools Guides", () => {
       guidesRevalidateSecret: null,
       guidesYoutubeChannelId: null,
       guidesYoutubeChannelUrl: null,
+      guidesYoutubePlaylist12Worker: null,
+      guidesYoutubePlaylist8Worker: null,
     });
   });
 
@@ -259,6 +261,8 @@ describe("config loader - SC2 Tools Guides", () => {
       GUIDES_REVALIDATE_SECRET: "revalidate-secret",
       GUIDES_YOUTUBE_CHANNEL_ID: "UCZS3YP1mvpqyuU5vPvHVG7g",
       GUIDES_YOUTUBE_CHANNEL_URL: "https://www.youtube.com/@ReSpOnSeSC2",
+      GUIDES_YOUTUBE_PLAYLIST_12_WORKER: "PLAAAAAAAAAAAAAAAA",
+      GUIDES_YOUTUBE_PLAYLIST_8_WORKER: "PLBBBBBBBBBBBBBBBB",
     });
     expect(cfg).toMatchObject({
       guidesEnabled: true,
@@ -266,6 +270,8 @@ describe("config loader - SC2 Tools Guides", () => {
       guidesRevalidateSecret: "revalidate-secret",
       guidesYoutubeChannelId: "UCZS3YP1mvpqyuU5vPvHVG7g",
       guidesYoutubeChannelUrl: "https://www.youtube.com/@ReSpOnSeSC2",
+      guidesYoutubePlaylist12Worker: "PLAAAAAAAAAAAAAAAA",
+      guidesYoutubePlaylist8Worker: "PLBBBBBBBBBBBBBBBB",
     });
   });
 

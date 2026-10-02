@@ -4,7 +4,7 @@
  * titles, dates, excerpts and checklists are the author's own words,
  * verbatim.
  */
-import type { GuideChannel, GuideVideo } from "@/lib/guides/types";
+import type { GuideChannel, GuidePlaylists, GuideVideo } from "@/lib/guides/types";
 
 function video(
   youtubeId: string,
@@ -29,6 +29,20 @@ export const FIXTURE_CHANNEL: GuideChannel = {
   url: "https://www.youtube.com/@ReSpOnSeSC2",
   name: "ReSpOnSe",
 };
+
+/** Placeholder playlist ids in the canonical URL shape the API ships. */
+export const FIXTURE_PLAYLISTS: GuidePlaylists = {
+  twelveWorker: "https://www.youtube.com/playlist?list=PLAAAAAAAAAAAAAAAA",
+  eightWorker: "https://www.youtube.com/playlist?list=PLBBBBBBBBBBBBBBBB",
+};
+
+/**
+ * The video as the API ships it in an 8-worker patch list. Every fixture
+ * video was published during patch 5.0.16.
+ */
+export function asEightWorkerPatch(source: GuideVideo): GuideVideo {
+  return { ...source, eightWorkerPatch: true };
+}
 
 export const VIDEO_PVZ_STARGATE_GLAIVES = video(
   "YcTMc_Ee11w",

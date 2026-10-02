@@ -88,6 +88,20 @@ describe("/guides/[matchup]/counter/[strategy]", () => {
     const script = container.querySelector('script[type="application/ld+json"]');
     const types = (JSON.parse(script?.innerHTML ?? "[]") as Array<{ "@type": string }>).map((i) => i["@type"]);
     expect(types).toEqual(["BreadcrumbList", "VideoObject"]);
+    expect(container.querySelector("#eight-worker-videos")).toBeNull();
+  });
+
+  it("lists 8-worker patch videos against the opener collapsed at the foot", async () => {
+    const [video] = FIXTURE_COUNTER_PUBLISHED.videos;
+    mocks.fetchGuideCounter.mockResolvedValue(ok({
+      ...FIXTURE_COUNTER_PUBLISHED, videos: [], eightWorkerVideos: [{ ...video, eightWorkerPatch: true }],
+    }));
+    const { container } = render(await CounterGuidePage(COUNTER_PARAMS));
+    const details = container.querySelector("#eight-worker-videos details") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    expect(details.querySelector("summary")?.textContent).toBe("Videos against this opener from the 8-worker patch (1)");
+    expect(details.querySelector("a")?.getAttribute("href")).toBe(video.url);
+    expect(screen.queryByText("From the video by ReSpOnSe")).toBeNull();
   });
 
   it("renders an unpublished counter as noindex 'Not enough games yet'", async () => {

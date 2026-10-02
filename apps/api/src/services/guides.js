@@ -4,7 +4,10 @@
  * SC2 Tools Guides — the public read layer over the nightly guide_stats
  * docs (services/guideStats.js), the build catalog (config/guideSlugs.js),
  * coach's notes (services/guideNotes.js) and the owner's build-order
- * videos (services/guideVideos.js). routes/guides.js serves it.
+ * videos (services/guideVideos.js). routes/guides.js serves it. Every
+ * page payload carries two video lists: `videos` (the 12-worker game, the
+ * prominent one) and `eightWorkerVideos` (the 8-worker patch 5.0.16, a
+ * secondary section).
  *
  * Reads are indexed point/range lookups on guide_stats ({key} unique,
  * {kind, era, matchup}); the heavy lifting happened in the nightly run.
@@ -22,6 +25,8 @@
  */
 
 const { GUIDE_CURRENT_ERA } = require("../config/guides");
+const { PATCH_ERA_BEFORE } = require("../util/patchEra");
+const { EIGHT_WORKERS, TWELVE_WORKERS, VIDEO_LIST_MAX } = require("./guideVideoSelect");
 const { shapeIndexPayload, shapeMatchupPayload } = require("./guidesPayloads");
 const {
   shapeBuildPayload,
@@ -34,6 +39,10 @@ const { personalGuideStats } = require("./guidesPersonal");
 
 /** Hub / matchup video rows. */
 const GUIDE_VIDEOS_LATEST = 4;
+/** Hub / matchup lists of 8-worker patch videos (plain links, so longer). */
+const GUIDE_EIGHT_WORKER_VIDEOS = VIDEO_LIST_MAX;
+/** Playlist links of a deployment without the videos service. */
+const NO_PLAYLISTS = Object.freeze({ twelveWorker: null, eightWorker: null });
 /** Published maps listed on the hub (games desc). */
 const INDEX_MAPS_MAX = 200;
 /** Bound on the sitemap read (every published page of one era). */
@@ -56,7 +65,8 @@ const SITEMAP_PROJECTION = Object.freeze({
  * @typedef {object} GuidesServiceDeps
  * @property {Pick<import('./guideNotes').GuideNotesService, "find">} [guideNotes]
  * @property {Pick<import('./guideVideos').GuideVideosService,
- *   "latest"|"videosForMatchup"|"videosForBuild"|"videosForCounter"|"channel">} [guideVideos]
+ *   "latest"|"videosForMatchup"|"videosForBuild"|"videosForCounter"|"channel"|"playlists"|
+ *   "eightWorkerVideosForBuild"|"eightWorkerVideosForCounter">} [guideVideos]
  * @property {import('pino').Logger|null} [logger]
  */
 
@@ -94,7 +104,7 @@ class GuidesService {
    */
   async index() {
     const era = GUIDE_CURRENT_ERA;
-    const [computedAt, matchupDocs, mapDocs, videos] = await Promise.all([
+    const [computedAt, matchupDocs, mapDocs, videos, eightWorkerVideos] = await Promise.all([
       this._runComputedAt(),
       this.coll.find({ kind: "matchup", era }, { projection: DOC_PROJECTION }).toArray(),
       this.coll
@@ -102,10 +112,14 @@ class GuidesService {
         .sort({ games: -1 })
         .limit(INDEX_MAPS_MAX)
         .toArray(),
-      this.guideVideos ? this.guideVideos.latest(GUIDE_VIDEOS_LATEST) : [],
+      this.guideVideos ? this.guideVideos.latest(GUIDE_VIDEOS_LATEST, TWELVE_WORKERS) : [],
+      this.guideVideos ? this.guideVideos.latest(GUIDE_EIGHT_WORKER_VIDEOS, EIGHT_WORKERS) : [],
     ]);
     const channel = this.guideVideos ? this.guideVideos.channel() : null;
-    return shapeIndexPayload({ era, computedAt, matchupDocs, mapDocs, videos, channel });
+    const playlists = this.guideVideos ? this.guideVideos.playlists() : { ...NO_PLAYLISTS };
+    return shapeIndexPayload({
+      era, computedAt, matchupDocs, mapDocs, videos, eightWorkerVideos, channel, playlists,
+    });
   }
 
   /**
@@ -118,12 +132,16 @@ class GuidesService {
    */
   async matchup(matchup, opts) {
     const { era, band } = opts;
-    const [doc, buildDocs, videos] = await Promise.all([
+    const [doc, buildDocs, videos, eightWorkerVideos] = await Promise.all([
       this._doc(`matchup:${era}:${matchup}`),
       this.coll.find({ kind: "build", era, matchup }, { projection: BUILD_BAND_PROJECTION }).toArray(),
       this.guideVideos ? this.guideVideos.videosForMatchup(matchup, GUIDE_VIDEOS_LATEST, era) : [],
+      // The 8-worker view's own videos are the 8-worker patch ones already.
+      this.guideVideos && era !== PATCH_ERA_BEFORE
+        ? this.guideVideos.videosForMatchup(matchup, GUIDE_EIGHT_WORKER_VIDEOS, PATCH_ERA_BEFORE)
+        : [],
     ]);
-    return shapeMatchupPayload({ matchup, era, band, doc, buildDocs, videos });
+    return shapeMatchupPayload({ matchup, era, band, doc, buildDocs, videos, eightWorkerVideos });
   }
 
   /**
@@ -140,8 +158,10 @@ class GuidesService {
       this._note(matchup, buildKey),
     ]);
     const published = Boolean(doc && doc.published === true);
-    const [videos, communityBuilds, examples] = await Promise.all([
-      this.guideVideos ? this.guideVideos.videosForBuild(matchup, buildKey, note ? note.videos : null) : [],
+    const overrides = note ? note.videos : null;
+    const [videos, eightWorkerVideos, communityBuilds, examples] = await Promise.all([
+      this.guideVideos ? this.guideVideos.videosForBuild(matchup, buildKey, overrides) : [],
+      this.guideVideos ? this.guideVideos.eightWorkerVideosForBuild(matchup, buildKey, overrides) : [],
       published
         ? this._softList(communityBuildLinks(this.db.communityBuilds, matchup, buildKey), "guide_community_links_failed")
         : [],
@@ -151,7 +171,8 @@ class GuidesService {
     ]);
     const notes = note && note.body.trim() ? { body: note.body, updatedAt: note.updatedAt } : null;
     return shapeBuildPayload({
-      matchup, buildKey, buildSlug: build.slug, era, doc, matchupDoc, videos, communityBuilds, examples, notes,
+      matchup, buildKey, buildSlug: build.slug, era, doc, matchupDoc, videos, eightWorkerVideos,
+      communityBuilds, examples, notes,
     });
   }
 
@@ -163,12 +184,15 @@ class GuidesService {
   async counter(strategy) {
     const era = GUIDE_CURRENT_ERA;
     const { matchup, name: strategyKey } = strategy;
-    const [doc, matchupDoc, videos] = await Promise.all([
+    const [doc, matchupDoc, videos, eightWorkerVideos] = await Promise.all([
       this._doc(`counter:${era}:${matchup}:${strategy.slug}`),
       this._doc(`matchup:${era}:${matchup}`),
       this.guideVideos ? this.guideVideos.videosForCounter(matchup, strategyKey, null) : [],
+      this.guideVideos ? this.guideVideos.eightWorkerVideosForCounter(matchup, strategyKey, null) : [],
     ]);
-    return shapeCounterPayload({ matchup, strategyKey, strategySlug: strategy.slug, era, doc, matchupDoc, videos });
+    return shapeCounterPayload({
+      matchup, strategyKey, strategySlug: strategy.slug, era, doc, matchupDoc, videos, eightWorkerVideos,
+    });
   }
 
   /**

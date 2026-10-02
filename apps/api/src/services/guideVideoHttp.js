@@ -33,6 +33,9 @@ const REQUEST_HEADERS = Object.freeze({
 const TOO_LARGE_MESSAGE = "provider page too large";
 const YOUTUBE_HOSTS = new Set(["www.youtube.com", "youtube.com", "m.youtube.com"]);
 const CANONICAL_YOUTUBE_ORIGIN = "https://www.youtube.com";
+/** A YouTube playlist id ("PL…" plus 16 or 32 characters, and the other list kinds). */
+const PLAYLIST_ID_RE = /^[A-Za-z0-9_-]{13,64}$/;
+const PLAYLIST_ID_PARAM = "list";
 
 const HTTP_BAD_REQUEST = 400;
 const HTTP_UNPROCESSABLE = 422;
@@ -81,6 +84,38 @@ function validChannelUrl(value) {
     const path = url.pathname.replace(/\/+$/, "");
     if (url.protocol !== "https:" || !YOUTUBE_HOSTS.has(url.hostname) || !path) return null;
     return `${CANONICAL_YOUTUBE_ORIGIN}${path}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A YouTube playlist URL in canonical form
+ * (`https://www.youtube.com/playlist?list=<id>`), or null. Takes a
+ * playlist URL, any YouTube URL carrying `list=`, or a bare playlist id.
+ *
+ * Example: `validPlaylistUrl("https://youtube.com/watch?v=…&list=PLAAAAAAAAAAAAAAAA")` →
+ * "https://www.youtube.com/playlist?list=PLAAAAAAAAAAAAAAAA".
+ *
+ * @param {unknown} value
+ * @returns {string|null}
+ */
+function validPlaylistUrl(value) {
+  if (typeof value !== "string" || !value) return null;
+  const id = PLAYLIST_ID_RE.test(value) ? value : playlistIdOfUrl(value);
+  return id ? `${CANONICAL_YOUTUBE_ORIGIN}/playlist?${PLAYLIST_ID_PARAM}=${id}` : null;
+}
+
+/**
+ * @param {string} value
+ * @returns {string|null} the `list=` id of an https YouTube URL
+ */
+function playlistIdOfUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || !YOUTUBE_HOSTS.has(url.hostname)) return null;
+    const id = url.searchParams.get(PLAYLIST_ID_PARAM) || "";
+    return PLAYLIST_ID_RE.test(id) ? id : null;
   } catch {
     return null;
   }
@@ -205,6 +240,7 @@ module.exports = {
   videoError,
   validChannelId,
   validChannelUrl,
+  validPlaylistUrl,
   fetchChannelFeed,
   lookupOembed,
 };

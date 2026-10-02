@@ -257,6 +257,7 @@ function buildSections(doc, publishedCounters) {
  * @property {Doc|null} doc          the build doc
  * @property {Doc|null} matchupDoc   same-era matchup doc (related, counter flags)
  * @property {object[]} videos
+ * @property {object[]} [eightWorkerVideos] the build's 8-worker patch videos
  * @property {Array<{ slug: string, title: string }>} communityBuilds
  * @property {object[]} examples     re-verified examples
  * @property {{ body: string, updatedAt: Date }|null} notes
@@ -280,6 +281,7 @@ function shapeBuildPayload(input) {
     description: entry ? entry.description : "",
     ...eraFields(input.era, doc),
     videos: input.videos,
+    eightWorkerVideos: input.eightWorkerVideos || [],
   };
   if (!doc || !servesPublishedCell(doc)) return identity;
   return {
@@ -297,7 +299,7 @@ function shapeBuildPayload(input) {
  * `GET /v1/guides/:matchup/counter/:strategy`.
  *
  * @param {{ matchup: string, strategyKey: string, strategySlug: string, era: string,
- *   doc: Doc|null, matchupDoc: Doc|null, videos: object[] }} input
+ *   doc: Doc|null, matchupDoc: Doc|null, videos: object[], eightWorkerVideos?: object[] }} input
  */
 function shapeCounterPayload(input) {
   const { matchup, strategyKey, doc } = input;
@@ -314,6 +316,7 @@ function shapeCounterPayload(input) {
     oppRace: RACE_WORDS[matchup[OPP_RACE_INDEX]],
     ...eraFields(input.era, doc),
     videos: input.videos,
+    eightWorkerVideos: input.eightWorkerVideos || [],
   };
   const overall = doc && servesPublishedCell(doc) ? pickCell(doc.overall) : null;
   if (!doc || !overall) return identity;
