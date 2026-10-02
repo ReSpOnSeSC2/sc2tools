@@ -49,9 +49,14 @@ describe("public /v1/guides", () => {
       matchup: "TvZ", slug: "tvz", published: false, games: null, users: null, top: [], publishedBuilds: 0,
     });
     expect(body.maps).toEqual([{ map: "Site Delta LE", slug: "site-delta-le", games: 161 }]);
-    expect(body.videos.length).toBeGreaterThan(0);
-    expect(body.videos.length).toBeLessThanOrEqual(4);
+    // Every channel video so far is from the 8-worker patch: the 12-worker
+    // list is empty and they are listed apart.
+    expect(body.videos).toEqual([]);
+    expect(body.eightWorkerVideos.length).toBeGreaterThan(4);
+    expect(body.eightWorkerVideos.length).toBeLessThanOrEqual(12);
+    expect(body.eightWorkerVideos.every((v) => v.eightWorkerPatch === true)).toBe(true);
     expect(body.channel).toEqual({ url: "https://www.youtube.com/@ReSpOnSeSC2", name: "ReSpOnSeSC2" });
+    expect(body.playlists).toEqual({ twelveWorker: null, eightWorker: null });
   });
 
   test("matchup: openers by Wilson lower bound, counters, videos, band options", async () => {
@@ -107,10 +112,15 @@ describe("public /v1/guides", () => {
     expect(before.body).toMatchObject({
       era: "before", published: false, openers: [], games: null, computedAt: run.computedAt.toISOString(),
     });
-    // The 8-worker view keeps the channel's 8-worker patch videos; the
-    // 12-worker view leaves them off.
+    // The 8-worker view's videos are the channel's 8-worker patch videos;
+    // the 12-worker view lists them apart from its own.
     expect(before.body.videos.length).toBeGreaterThan(0);
-    expect((await get("/v1/guides/pvz")).body.videos).toEqual([]);
+    expect(before.body.videos.length).toBeLessThanOrEqual(4);
+    expect(before.body.eightWorkerVideos).toEqual([]);
+    const current = (await get("/v1/guides/pvz")).body;
+    expect(current.videos).toEqual([]);
+    expect(current.eightWorkerVideos.length).toBeGreaterThan(4);
+    expect(current.eightWorkerVideos.slice(0, 4)).toEqual(before.body.videos);
     const junk = await get("/v1/guides/pvz?era=yesterday&era=before");
     expect(junk.body.era).toBe("after");
     const repeated = await get("/v1/guides/pvz?band=league:4&band=mmr:4000");

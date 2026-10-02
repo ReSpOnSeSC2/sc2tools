@@ -75,7 +75,9 @@ const INDEX = {
   ),
   maps: [{ map: MAP, slug: MAP_SLUG, games: 640 }],
   videos: [],
+  eightWorkerVideos: [],
   channel: null,
+  playlists: { twelveWorker: null, eightWorker: null },
 };
 
 const MATCHUP = {
@@ -95,6 +97,7 @@ const MATCHUP = {
     { strategyKey: "ZvP - 2 Base Nydus", strategySlug: "2-base-nydus", name: "2 Base Nydus", published: false, games: null },
   ],
   videos: [],
+  eightWorkerVideos: [],
 };
 
 const SG = PVZ_OPENERS.find((row) => row.buildSlug === "stargate-into-glaives");

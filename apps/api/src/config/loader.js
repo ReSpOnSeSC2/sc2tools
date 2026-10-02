@@ -87,6 +87,8 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *   guidesRevalidateSecret: string|null,
  *   guidesYoutubeChannelId: string|null,
  *   guidesYoutubeChannelUrl: string|null,
+ *   guidesYoutubePlaylist12Worker: string|null,
+ *   guidesYoutubePlaylist8Worker: string|null,
  * }}
  *
  * Example:
@@ -213,7 +215,11 @@ function parseIngestConfig(env) {
  *   - ``guidesYoutubeChannelId`` / ``guidesYoutubeChannelUrl``: the site
  *     owner's build-order channel (the id feeds the RSS sync, the URL is
  *     the public "Subscribe" link). Validated by services/guideVideos.js;
- *     unset = no video sync.
+ *     unset = no video sync;
+ *   - ``guidesYoutubePlaylist12Worker`` / ``guidesYoutubePlaylist8Worker``:
+ *     the channel's YouTube playlists of 12-worker and 8-worker patch build
+ *     order guides (a playlist URL or id), linked from the guide pages'
+ *     video sections. Validated by services/guideVideos.js; unset = no link.
  *
  * Example:
  *   parseGuidesConfig({ GUIDES_ENABLED: "true" }).guidesEnabled // -> true
@@ -225,6 +231,8 @@ function parseIngestConfig(env) {
  *   guidesRevalidateSecret: string|null,
  *   guidesYoutubeChannelId: string|null,
  *   guidesYoutubeChannelUrl: string|null,
+ *   guidesYoutubePlaylist12Worker: string|null,
+ *   guidesYoutubePlaylist8Worker: string|null,
  * }}
  */
 function parseGuidesConfig(env) {
@@ -234,6 +242,8 @@ function parseGuidesConfig(env) {
     guidesRevalidateSecret: env.GUIDES_REVALIDATE_SECRET || null,
     guidesYoutubeChannelId: env.GUIDES_YOUTUBE_CHANNEL_ID || null,
     guidesYoutubeChannelUrl: env.GUIDES_YOUTUBE_CHANNEL_URL || null,
+    guidesYoutubePlaylist12Worker: env.GUIDES_YOUTUBE_PLAYLIST_12_WORKER || null,
+    guidesYoutubePlaylist8Worker: env.GUIDES_YOUTUBE_PLAYLIST_8_WORKER || null,
   };
 }
 

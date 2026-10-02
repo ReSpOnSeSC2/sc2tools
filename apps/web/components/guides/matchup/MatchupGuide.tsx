@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
 import { GuideCopyText } from "@/components/guides/GuideCopyText";
+import { GuideEightWorkerVideos } from "@/components/guides/GuideEightWorkerVideos";
 import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
 import { GuideNotEnoughGames } from "@/components/guides/GuideStates";
 import { GuideVideoRow } from "@/components/guides/GuideVideoRow";
@@ -19,8 +20,10 @@ import type { GuideMatchupPayload } from "@/lib/guides/types";
 
 /**
  * Body of /guides/[matchup]: intro, filters, the ranked openers table,
- * "How to beat …" counter links and the latest channel videos for the
- * matchup. Unpublished matchups get the "not enough games yet" page.
+ * "How to beat …" counter links, the latest channel videos for the
+ * matchup and, collapsed at the foot of the 12-worker view, its videos
+ * from the 8-worker patch. Unpublished matchups get the "not enough games
+ * yet" page.
  */
 
 /**
@@ -33,6 +36,17 @@ import type { GuideMatchupPayload } from "@/lib/guides/types";
  */
 function linksGuides(payload: Pick<GuideMatchupPayload, "era">): boolean {
   return payload.era === GUIDE_DEFAULT_ERA;
+}
+
+/**
+ * The 8-worker view's row holds the 8-worker patch videos, so it says so.
+ *
+ * Example: `videoRowTitle({ matchup: "PvZ", era: "after" })` → "Latest PvZ videos".
+ */
+function videoRowTitle(payload: Pick<GuideMatchupPayload, "matchup" | "era">): string {
+  return linksGuides(payload)
+    ? `Latest ${payload.matchup} videos`
+    : `${payload.matchup} videos from the 8-worker patch`;
 }
 
 export function matchupCrumbs(payload: Pick<GuideMatchupPayload, "matchup" | "slug">): GuideCrumb[] {
@@ -134,7 +148,11 @@ export function MatchupGuide({ payload }: { payload: GuideMatchupPayload }) {
           backLabel="All matchups"
         />
       )}
-      <GuideVideoRow title={`Latest ${payload.matchup} videos`} videos={payload.videos} id="videos" />
+      <GuideVideoRow title={videoRowTitle(payload)} videos={payload.videos} id="videos" />
+      <GuideEightWorkerVideos
+        title={`${payload.matchup} videos from the 8-worker patch`}
+        videos={payload.eightWorkerVideos}
+      />
     </div>
   );
 }

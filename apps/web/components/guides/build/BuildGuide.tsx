@@ -1,4 +1,5 @@
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
+import { GuideEightWorkerVideos } from "@/components/guides/GuideEightWorkerVideos";
 import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
 import { GuideNotEnoughGames } from "@/components/guides/GuideStates";
 import { GuideVideoSection } from "@/components/guides/GuideVideoSection";
@@ -25,10 +26,13 @@ import type { GuideBuildPayload, GuideBuildPublished, GuideBuildUnpublished } fr
 
 /**
  * Body of /guides/[matchup]/[build]: the published guide (sections in
- * the brief's order) or the number-free "not enough games yet" page.
+ * the brief's order) or the number-free "not enough games yet" page, each
+ * ending with the build's collapsed 8-worker patch videos.
  * Server component; the only client islands are the CTAs, the personal
  * comparison, the charts and the video facade.
  */
+
+const EIGHT_WORKER_TITLE = "Videos of this build from the 8-worker patch";
 
 export function buildCrumbs(payload: GuideBuildPayload): GuideCrumb[] {
   return [
@@ -78,6 +82,7 @@ function PublishedBuild({
         matchupSlug={payload.matchupSlug}
       />
       <BuildNotesSection notes={payload.notes} />
+      <GuideEightWorkerVideos title={EIGHT_WORKER_TITLE} videos={payload.eightWorkerVideos} />
     </>
   );
 }
@@ -92,6 +97,7 @@ function UnpublishedBuild({ payload }: { payload: GuideBuildUnpublished }) {
       backLabel={`What's winning in ${payload.matchup}`}
     >
       <GuideVideoSection videos={payload.videos} />
+      <GuideEightWorkerVideos title={EIGHT_WORKER_TITLE} videos={payload.eightWorkerVideos} />
     </GuideNotEnoughGames>
   );
 }

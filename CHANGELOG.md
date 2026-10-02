@@ -526,6 +526,21 @@ corresponding GitHub Release.
     High and Dark Templar 39 s, Reaper 32 s, Warp Gate morph 7 s). Games
     played on 5.0.16 keep that patch's times.
 
+- **Guide videos are split by starting workers** — the 12-worker build order
+  videos are the prominent section on /guides, and the videos recorded on the
+  8-worker patch 5.0.16 move to their own collapsed "8-worker patch videos"
+  list at the foot of the hub, each matchup page and the build and counter
+  guides they match.
+  - The hub's video row is now **12-worker build order videos**. Until the
+    first one is published it says they are on the way and keeps the
+    Subscribe link.
+  - A build guide still embeds an 8-worker video only when it is pinned under
+    /admin/guides, and now labels it "Recorded on the 8-worker patch 5.0.16".
+  - The hub links the channel's YouTube playlist for each kind once
+    `GUIDES_YOUTUBE_PLAYLIST_12_WORKER` and `GUIDES_YOUTUBE_PLAYLIST_8_WORKER`
+    are set on the API.
+  - A video counts as 8-worker when it was published between the 5.0.16
+    release and the 5.0.17 notes on 30 September 2026.
 - **Cleaner Google Analytics data** — page views report the page URL with
   IDs collapsed (for example `/app/game/:gameId`) and only campaign
   parameters kept, so `/?source=pwa` no longer doubles up; admin, overlay,

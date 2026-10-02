@@ -1,6 +1,7 @@
 /**
  * TEST FIXTURES ONLY — `GET /v1/guides` (hub) payload: all nine
- * matchups (three still unpublished), top builds, maps, channel videos.
+ * matchups (three still unpublished), top builds, maps, channel videos
+ * (the main list and the 8-worker patch list) and the playlist links.
  */
 import {
   FIXTURE_BASELINE_AT,
@@ -11,6 +12,8 @@ import {
 import { FIXTURE_MATCHUP } from "@/lib/guides/__fixtures__/matchup";
 import {
   FIXTURE_CHANNEL,
+  FIXTURE_PLAYLISTS,
+  asEightWorkerPatch,
   VIDEO_PVT_STARGATE_CHARGE,
   VIDEO_PVZ_CARRIER_RUSH,
   VIDEO_PVZ_CRACKING_8_POOLS,
@@ -130,11 +133,11 @@ export const FIXTURE_INDEX: GuideIndexPayload = {
     { map: "Rainfall", slug: "rainfall", games: 2107 },
     { map: "Lockdown", slug: "lockdown", games: 1876 },
   ],
-  videos: [
-    VIDEO_PVZ_CARRIER_RUSH,
-    VIDEO_PVT_STARGATE_CHARGE,
-    VIDEO_PVZ_STARGATE_GLAIVES,
-    VIDEO_PVZ_CRACKING_8_POOLS,
+  videos: [VIDEO_PVZ_CARRIER_RUSH, VIDEO_PVT_STARGATE_CHARGE],
+  eightWorkerVideos: [
+    asEightWorkerPatch(VIDEO_PVZ_STARGATE_GLAIVES),
+    asEightWorkerPatch(VIDEO_PVZ_CRACKING_8_POOLS),
   ],
   channel: FIXTURE_CHANNEL,
+  playlists: FIXTURE_PLAYLISTS,
 };

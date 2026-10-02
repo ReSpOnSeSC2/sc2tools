@@ -55,6 +55,8 @@ const EMBED_URL = "https://www.youtube-nocookie.com/embed/";
  * @property {string} embedUrl      youtube-nocookie embed (no query)
  * @property {string} excerpt       first paragraph ("" when none)
  * @property {string[]|null} checklist the author's build steps, verbatim
+ * @property {boolean} [eightWorkerPatch] published during the 8-worker
+ *   patch 5.0.16 (set by services/guideVideos.js, which knows the window)
  */
 
 /**

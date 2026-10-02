@@ -267,11 +267,29 @@ not announced as new again.
   - Shorts and stream recordings never match.
 - **Curated links:** two videos whose titles don't name the build are
   linked from their descriptions.
-- **8-worker patch videos:** a video published from the 5.0.16 release until
-  the 5.0.17 revert shows an 8-worker build order. Build, counter and matchup
-  pages never show one automatically; a build page shows it only when an
-  admin pins it. The hub's channel row still lists them. The admin page marks
-  them "8-worker patch".
+- **12-worker and 8-worker videos:** a video published from the 5.0.16
+  release until the 5.0.17 notes (30 September 2026) shows an 8-worker build
+  order; every other video is a 12-worker one. The cut-off is the notes date,
+  not the day 5.0.17 reaches the live ladder, because the channel only
+  records 12-worker videos from the notes on. Each page keeps the two apart:
+  - The **12-worker videos** are the prominent section: the hub's "12-worker
+    build order videos" row, a matchup's "Latest … videos" row and a build or
+    counter page's "Video guide". While the channel has no 12-worker video
+    yet, the hub row says they are on the way and keeps its links.
+  - The **8-worker patch videos** sit in a collapsed list of plain links at
+    the foot of the hub, the matchup page and each build or counter page they
+    match. A build page shows one as its video guide only when an admin pins
+    it, and then labels it "Recorded on the 8-worker patch 5.0.16". The
+    matchup page's 8-worker view (`?era=before`) shows them in its video row.
+  - The admin page marks them "8-worker patch".
+  - Payloads: `videos` is the prominent list and `eightWorkerVideos` the
+    8-worker one; each video carries `eightWorkerPatch`.
+- **Playlists:** the channel keeps one YouTube playlist for each kind. Set
+  `GUIDES_YOUTUBE_PLAYLIST_12_WORKER` and `GUIDES_YOUTUBE_PLAYLIST_8_WORKER`
+  (playlist URL or id) and the hub links them: "Watch the playlist" beside
+  Subscribe, and a link inside the 8-worker list. The playlists are links
+  only; a video's list follows its publish date, so adding a video to a
+  playlist on YouTube does not move it on the site.
 - **Admin page:** you can pin or hide videos per guide, hide a video
   everywhere, add a video by URL (it must be on the configured channel),
   or sync now.
@@ -299,6 +317,7 @@ API (`apps/api`, see `render.yaml` and `.env.example`):
 | `GUIDES_REVALIDATE_URL` | unset | `https://<web>/api/revalidate-guides`, pinged after each successful stats run. |
 | `GUIDES_REVALIDATE_SECRET` | unset | Shared HMAC secret. Must match the web's value. |
 | `GUIDES_YOUTUBE_CHANNEL_ID` / `GUIDES_YOUTUBE_CHANNEL_URL` | unset (`render.yaml` sets ReSpOnSe's channel) | Video sync source and the "Subscribe" link. Unset = no video sync, no Subscribe link, and admin Add video / Sync now answer 503. |
+| `GUIDES_YOUTUBE_PLAYLIST_12_WORKER` / `GUIDES_YOUTUBE_PLAYLIST_8_WORKER` | unset | The channel's YouTube playlists of 12-worker and 8-worker patch build order guides (URL or id), linked from the hub's video sections. Unset = no playlist link. |
 | `SC2TOOLS_GUIDE_SAMPLES_DISABLED=1` | — | Stops ingest-time sample capture. Capture is ON by default, so data accumulates before launch. |
 | `SC2TOOLS_GUIDE_BACKFILL_DISABLED=1` | — | Blocks the admin-triggered backfill. |
 | `SC2TOOLS_GUIDE_STATS_DISABLED=1`, `…_INTERVAL_SEC`, `…_START_DELAY_SEC` | —, 86400, 900 | Nightly stats job. |

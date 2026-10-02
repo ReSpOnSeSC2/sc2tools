@@ -38,6 +38,8 @@ import {
   FIXTURE_BUILD_PUBLISHED,
   FIXTURE_BUILD_UNPUBLISHED,
   FIXTURE_SITEMAP,
+  VIDEO_PVZ_CARRIER_RUSH,
+  asEightWorkerPatch,
   fixtureCell,
 } from "@/lib/guides/__fixtures__";
 
@@ -317,5 +319,33 @@ describe("/guides/[matchup]/[build] page numbers", () => {
     expect(container.textContent ?? "").not.toMatch(/\d+(\.\d+)?%/);
     const types = jsonLd(container).map((item) => item["@type"]);
     expect(types).toEqual(["BreadcrumbList", "VideoObject"]);
+  });
+
+  it("lists the build's 8-worker patch videos last and collapsed, on published and unpublished guides", async () => {
+    const eightWorkerVideos = [asEightWorkerPatch(VIDEO_PVZ_CARRIER_RUSH)];
+    for (const payload of [FIXTURE_BUILD_PUBLISHED, { ...FIXTURE_BUILD_UNPUBLISHED, videos: [] }]) {
+      mocks.fetchGuideBuild.mockResolvedValue(ok({ ...payload, eightWorkerVideos }));
+      const { container, unmount } = await renderPage();
+      const details = container.querySelector("#eight-worker-videos details") as HTMLDetailsElement;
+      expect(details.open).toBe(false);
+      expect(details.querySelector("summary")?.textContent).toBe("Videos of this build from the 8-worker patch (1)");
+      expect(details.querySelector("a")?.getAttribute("href")).toBe("https://www.youtube.com/watch?v=RYjRs_no8t4");
+      // A plain link: it adds no player and no VideoObject.
+      expect(details.querySelector("button")).toBeNull();
+      expect(jsonLd(container).filter((item) => item["@type"] === "VideoObject"))
+        .toHaveLength(payload.videos.length > 0 ? 1 : 0);
+      unmount();
+    }
+  });
+
+  it("says so when the embedded (pinned) video is from the 8-worker patch", async () => {
+    const [pinned] = FIXTURE_BUILD_PUBLISHED.videos;
+    mocks.fetchGuideBuild.mockResolvedValue(ok({ ...FIXTURE_BUILD_PUBLISHED, videos: [asEightWorkerPatch(pinned)] }));
+    const first = await renderPage();
+    expect(screen.getByText("Recorded on the 8-worker patch 5.0.16")).toBeTruthy();
+    first.unmount();
+    mocks.fetchGuideBuild.mockResolvedValue(ok(FIXTURE_BUILD_PUBLISHED));
+    await renderPage();
+    expect(screen.queryByText("Recorded on the 8-worker patch 5.0.16")).toBeNull();
   });
 });

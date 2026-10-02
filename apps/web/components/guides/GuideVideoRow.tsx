@@ -8,9 +8,11 @@ import { fmtGuideDate } from "@/lib/guides/format";
 import type { GuideVideo } from "@/lib/guides/types";
 
 /**
- * A row of channel videos (hub "From the channel", matchup "Latest …
- * videos"): lazy thumbnails linking out to YouTube. Links only, no
- * player, so nothing loads from YouTube except the thumbnails.
+ * A row of channel videos (hub "12-worker build order videos", matchup
+ * "Latest … videos"): lazy thumbnails linking out to YouTube. Links only,
+ * no player, so nothing loads from YouTube except the thumbnails. Without
+ * videos it renders nothing, or just the header and `emptyText` when the
+ * caller passes one (the hub keeps its Subscribe and playlist links).
  */
 const THUMB_WIDTH = 480;
 const THUMB_HEIGHT = 360;
@@ -35,14 +37,24 @@ export function GuideVideoRow({
   videos,
   actions,
   id,
+  emptyText,
 }: {
   title: string;
   videos: ReadonlyArray<GuideVideo>;
   actions?: ReactNode;
   id?: string;
+  /** Shown instead of the row when there are no videos. */
+  emptyText?: string;
 }) {
   const links = toLinks(videos);
-  if (links.length === 0) return null;
+  if (links.length === 0) {
+    if (!emptyText) return null;
+    return (
+      <Section title={title} actions={actions} id={id}>
+        <p className="text-body text-text-muted">{emptyText}</p>
+      </Section>
+    );
+  }
   return (
     <Section title={title} actions={actions} id={id}>
       <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

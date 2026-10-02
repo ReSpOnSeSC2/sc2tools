@@ -3,7 +3,8 @@
 /**
  * Guide videos — pure selection over decorated `guide_videos` rows
  * (services/guideVideos.js): which videos a build / counter guide, a
- * matchup page and the hub show, in which order, and the admin row shape.
+ * matchup page and the hub show, in which order, split by the starting
+ * workers they were recorded on, and the admin row shape.
  *
  * Pure and synchronous: no I/O, no logging.
  */
@@ -18,6 +19,9 @@ const GUIDE_VIDEOS_HIDDEN_MAX = 20;
 /** Matchup / hub rows: default and maximum length. */
 const VIDEO_LIST_DEFAULT = 4;
 const VIDEO_LIST_MAX = 12;
+/** Starting workers a video list is about: the 8-worker patch 5.0.16 or the 12-worker game. */
+const EIGHT_WORKERS = 8;
+const TWELVE_WORKERS = 12;
 
 /**
  * @typedef {import('./guideVideoMatch').VideoMatch} VideoMatch
@@ -46,7 +50,8 @@ const VIDEO_LIST_MAX = 12;
  *   never a Short or a stream VOD)
  * @property {boolean} eightWorkerPatch published during the 8-worker patch
  *   5.0.16, so it shows a build order the 12-worker guides no longer
- *   teach: never matched automatically, shown only where an admin pins it
+ *   teach: it stays out of a guide's main videos unless an admin pins it,
+ *   and is listed in the separate 8-worker section instead
  * @property {PublicVideo} video
  */
 
@@ -171,22 +176,47 @@ function selectForGuide(rows, matches, overrides) {
 }
 
 /**
- * Latest visible build-order videos, optionally of one matchup. A
- * matchup page showing the 12-worker openers leaves out 8-worker patch
- * videos (``skipEightWorker``); its 8-worker view and the channel-wide
- * list keep them.
+ * 8-worker patch videos of one guide for its separate, secondary list:
+ * automatic + curated matches from the 8-worker patch, newest first, at
+ * most GUIDE_VIDEOS_PER_GUIDE. Pinned videos are left out (they already
+ * show in the guide's main list), as are globally and per-guide hidden
+ * ones.
+ *
+ * Example: 8-worker matches [A, B], pinned ["A"] → [B].
+ *
+ * @param {ReadonlyArray<VideoRow>} rows sorted newest first
+ * @param {(match: VideoMatch) => boolean} matches
+ * @param {VideoOverrides|null|undefined} overrides
+ * @returns {PublicVideo[]}
+ */
+function selectEightWorkerForGuide(rows, matches, overrides) {
+  const skip = new Set([
+    ...idList(overrides ? overrides.pinned : undefined, GUIDE_VIDEOS_PINNED_MAX),
+    ...idList(overrides ? overrides.hidden : undefined, GUIDE_VIDEOS_HIDDEN_MAX),
+  ]);
+  return rows
+    .filter((row) => !row.doc.hidden && row.eightWorkerPatch
+      && !skip.has(row.doc.youtubeId) && matches(row.match))
+    .slice(0, GUIDE_VIDEOS_PER_GUIDE)
+    .map((row) => copyVideo(row.video));
+}
+
+/**
+ * Latest visible build-order videos, optionally of one matchup and of one
+ * starting-worker count: ``TWELVE_WORKERS`` leaves out 8-worker patch
+ * videos, ``EIGHT_WORKERS`` keeps only them, and null keeps both.
  *
  * @param {ReadonlyArray<VideoRow>} rows sorted newest first
  * @param {unknown} n requested length (clamped by listCount)
  * @param {string|null} matchup "PvZ" form, or null for every matchup
- * @param {boolean} [skipEightWorker] leave out 8-worker patch videos
+ * @param {8|12|null} [workers] starting workers, or null for both
  * @returns {PublicVideo[]}
  */
-function selectLatest(rows, n, matchup, skipEightWorker = false) {
+function selectLatest(rows, n, matchup, workers = null) {
   return rows
     .filter((row) => !row.doc.hidden && row.buildOrder
       && (matchup === null || row.match.matchup === matchup)
-      && !(skipEightWorker && row.eightWorkerPatch))
+      && (workers === null || row.eightWorkerPatch === (workers === EIGHT_WORKERS)))
     .slice(0, listCount(n))
     .map((row) => copyVideo(row.video));
 }
@@ -197,11 +227,14 @@ module.exports = {
   GUIDE_VIDEOS_HIDDEN_MAX,
   VIDEO_LIST_DEFAULT,
   VIDEO_LIST_MAX,
+  EIGHT_WORKERS,
+  TWELVE_WORKERS,
   isVideoId,
   idList,
   listCount,
   compareRows,
   adminItem,
   selectForGuide,
+  selectEightWorkerForGuide,
   selectLatest,
 };

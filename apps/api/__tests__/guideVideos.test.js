@@ -4,8 +4,9 @@
 /**
  * services/guideVideos.js against mongod: snapshot seeding (insert-only),
  * RSS sync through an injected fetch (real feed fixture), guide selection
- * with per-guide overrides, admin add/hide, fail-soft reads, and the
- * makeServices / loadConfig wiring. No network: every fetch is a stub.
+ * with per-guide overrides, the 12-worker / 8-worker patch split and the
+ * playlist links, admin add/hide, fail-soft reads, and the makeServices /
+ * loadConfig wiring. No network: every fetch is a stub.
  */
 
 const fs = require("fs");
@@ -13,7 +14,7 @@ const path = require("path");
 const pino = require("pino");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 const { connect } = require("../src/db/connect");
-const { GuideVideosService } = require("../src/services/guideVideos");
+const { GuideVideosService, EIGHT_WORKERS, TWELVE_WORKERS } = require("../src/services/guideVideos");
 const { PATCH_5_0_16_RELEASE, PATCH_5_0_17_RELEASE } = require("../src/util/patchEra");
 const { FEED_URL, OEMBED_URL, FEED_TIMEOUT_MS } = require("../src/services/guideVideoHttp");
 const { loadConfig } = require("../src/config/loader");
@@ -22,6 +23,9 @@ const SNAPSHOT = require("../src/config/guideVideosSnapshot.json");
 const FEED = fs.readFileSync(path.join(__dirname, "fixtures", "guides", "youtube-channel-feed.xml"), "utf8");
 const CHANNEL_ID = "UCZS3YP1mvpqyuU5vPvHVG7g";
 const CHANNEL_URL = "https://www.youtube.com/@ReSpOnSeSC2";
+const PLAYLIST_12 = "PLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+const PLAYLIST_8 = "PLBBBBBBBBBBBBBBBB";
+const PLAYLIST_URL = "https://www.youtube.com/playlist?list=";
 const NOW = Date.parse("2026-09-28T12:00:00.000Z");
 const MINUTE_MS = 60 * 1000;
 
@@ -219,6 +223,28 @@ describe("GuideVideosService", () => {
         .toEqual(["_U1MPQB_Q90", "AnmLN-xFtAc", "guRK0SIbM8Y", "RYjRs_no8t4"]);
     });
 
+    test("they get their own lists, apart from the 12-worker videos", async () => {
+      const ids = (videos) => videos.map((v) => v.youtubeId);
+      // Every channel video so far is from the 8-worker patch.
+      expect(await svc.latest(4, TWELVE_WORKERS)).toEqual([]);
+      const eight = await svc.latest(4, EIGHT_WORKERS);
+      expect(ids(eight)).toEqual(["_U1MPQB_Q90", "AnmLN-xFtAc", "guRK0SIbM8Y", "RYjRs_no8t4"]);
+      expect(eight.every((v) => v.eightWorkerPatch === true)).toBe(true);
+      expect(ids(await svc.eightWorkerVideosForBuild("PvZ", "PvZ - Stargate into Glaives"))).toEqual(["YcTMc_Ee11w"]);
+      expect(ids(await svc.eightWorkerVideosForBuild("PvZ", "PvZ - Rail's Disruptor Drop"))).toEqual(["dA9V95oeeto"]);
+      expect(ids(await svc.eightWorkerVideosForCounter("PvT", "Terran - 3 Rax"))).toEqual(["_EZbooc6wLM"]);
+      // A pinned video already shows in the guide's main list; a hidden one shows nowhere.
+      expect(await svc.eightWorkerVideosForBuild("PvZ", "PvZ - Stargate into Glaives", { pinned: ["YcTMc_Ee11w"] }))
+        .toEqual([]);
+      expect(await svc.eightWorkerVideosForBuild("PvZ", "PvZ - Stargate into Glaives", { hidden: ["YcTMc_Ee11w"] }))
+        .toEqual([]);
+      await svc.setHidden("YcTMc_Ee11w", true);
+      expect(await svc.eightWorkerVideosForBuild("PvZ", "PvZ - Stargate into Glaives")).toEqual([]);
+      // Unknown names and wrong matchups have no list.
+      expect(await svc.eightWorkerVideosForBuild("PvZ", "PvZ - Not A Build")).toEqual([]);
+      expect(await svc.eightWorkerVideosForCounter("PvZ", "PvZ - Carrier Rush")).toEqual([]);
+    });
+
     test("the window runs from the 5.0.16 release until the 5.0.17 revert; undated videos show", async () => {
       await insertGlaivesVideo("AAAAAAAAAAA", new Date(PATCH_5_0_17_RELEASE.getTime()));
       await insertGlaivesVideo("BBBBBBBBBBB", new Date(PATCH_5_0_17_RELEASE.getTime() - 1));
@@ -229,6 +255,12 @@ describe("GuideVideosService", () => {
         .toEqual(["AAAAAAAAAAA", "DDDDDDDDDDD", "EEEEEEEEEEE"]);
       expect((await svc.videosForMatchup("PvZ", 12)).map((v) => v.youtubeId))
         .toEqual(["AAAAAAAAAAA", "DDDDDDDDDDD", "EEEEEEEEEEE"]);
+      // The 8-worker lists hold exactly the videos inside the window (≤ 3 per guide, newest first).
+      expect((await svc.eightWorkerVideosForBuild("PvZ", "PvZ - Stargate into Glaives")).map((v) => v.youtubeId))
+        .toEqual(["BBBBBBBBBBB", "YcTMc_Ee11w", "CCCCCCCCCCC"]);
+      const eightWorkerPvz = (await svc.videosForMatchup("PvZ", 12, "before")).map((v) => v.youtubeId);
+      expect(eightWorkerPvz[0]).toBe("BBBBBBBBBBB");
+      for (const id of ["AAAAAAAAAAA", "DDDDDDDDDDD", "EEEEEEEEEEE"]) expect(eightWorkerPvz).not.toContain(id);
     });
 
     test("a globally hidden 8-worker video stays hidden even when pinned", async () => {
@@ -269,6 +301,7 @@ describe("GuideVideosService", () => {
         embedUrl: "https://www.youtube-nocookie.com/embed/YcTMc_Ee11w",
         excerpt: "This PvZ build hides an 18-Glaive-Adept timing behind what looks like a normal Stargate opener—and punishes Zerg players who drone too hard.",
         checklist: expect.arrayContaining(["Stargate at 150 gas", "Move before Glaives completes"]),
+        eightWorkerPatch: false,
       });
       expect(videos[0].checklist).toHaveLength(10);
     });
@@ -327,6 +360,11 @@ describe("GuideVideosService", () => {
       expect((await svc.latest(1)).map((v) => v.youtubeId)).toEqual(["AnmLN-xFtAc"]);
       expect((await svc.latest(0))).toHaveLength(1);
       expect((await svc.latest(Number.NaN))).toHaveLength(4);
+      // Without an 8-worker window every video is a 12-worker one.
+      expect((await svc.latest(1, TWELVE_WORKERS)).map((v) => v.youtubeId)).toEqual(["AnmLN-xFtAc"]);
+      expect(await svc.latest(4, EIGHT_WORKERS)).toEqual([]);
+      expect(await svc.eightWorkerVideosForBuild("PvZ", "PvZ - Carrier Rush")).toEqual([]);
+      expect(await svc.videosForMatchup("PvZ", 4, "before")).toEqual([]);
     });
 
     test("returned videos are copies (callers cannot poison the cache)", async () => {
@@ -473,7 +511,21 @@ describe("GuideVideosService", () => {
       expect(services.guideVideos).toBeInstanceOf(GuideVideosService);
       expect(services.guideVideos.isConfigured()).toBe(true);
       expect(services.guideVideos.channel()).toEqual({ url: CHANNEL_URL, name: "ReSpOnSeSC2" });
+      expect(services.guideVideos.playlists()).toEqual({ twelveWorker: null, eightWorker: null });
       expect(services.guideVideosJob.isRunning()).toBe(false);
+    });
+
+    test("carries the playlist links from config", () => {
+      const { buildApp } = require("../src/app");
+      const { PulseMmrService } = require("../src/services/pulseMmr");
+      const { services } = buildApp({
+        db, logger: pino({ level: "silent" }),
+        config: { ...baseConfig, guidesYoutubePlaylist12Worker: PLAYLIST_12, guidesYoutubePlaylist8Worker: PLAYLIST_8 },
+        pulseMmr: new PulseMmrService({ fetchImpl: noNetwork }),
+      });
+      expect(services.guideVideos.playlists()).toEqual({
+        twelveWorker: `${PLAYLIST_URL}${PLAYLIST_12}`, eightWorker: `${PLAYLIST_URL}${PLAYLIST_8}`,
+      });
     });
 
     test("a hand-built config without the channel fields leaves videos unconfigured", () => {
@@ -518,6 +570,38 @@ describe("GuideVideosService", () => {
       expect(service({ channelUrl: null }).channel()).toBeNull();
     });
   });
+
+  describe("playlist links", () => {
+    /** @param {unknown} twelveWorker @param {unknown} [eightWorker] */
+    const playlists = (twelveWorker, eightWorker) => service({ playlists: { twelveWorker, eightWorker } }).playlists();
+
+    test("a playlist id, a playlist URL or a watch URL carrying the list all give the canonical URL", () => {
+      expect(playlists(PLAYLIST_12, `https://youtube.com/playlist?list=${PLAYLIST_8}`)).toEqual({
+        twelveWorker: `${PLAYLIST_URL}${PLAYLIST_12}`, eightWorker: `${PLAYLIST_URL}${PLAYLIST_8}`,
+      });
+      expect(playlists(`https://www.youtube.com/watch?v=YcTMc_Ee11w&list=${PLAYLIST_12}&index=2`).twelveWorker)
+        .toBe(`${PLAYLIST_URL}${PLAYLIST_12}`);
+    });
+
+    test("unset or not a YouTube playlist is no link", () => {
+      expect(service().playlists()).toEqual({ twelveWorker: null, eightWorker: null });
+      expect(service({ playlists: null }).playlists()).toEqual({ twelveWorker: null, eightWorker: null });
+      for (const bad of [
+        "", null, 42, "not a playlist", "short", CHANNEL_URL,
+        `http://www.youtube.com/playlist?list=${PLAYLIST_12}`,
+        `https://evil.example/playlist?list=${PLAYLIST_12}`,
+        "https://www.youtube.com/playlist?list=<script>",
+      ]) {
+        expect(playlists(bad, bad)).toEqual({ twelveWorker: null, eightWorker: null });
+      }
+    });
+
+    test("the returned object is a copy", () => {
+      const svc = service({ playlists: { twelveWorker: PLAYLIST_12 } });
+      svc.playlists().twelveWorker = "mutated";
+      expect(svc.playlists().twelveWorker).toBe(`${PLAYLIST_URL}${PLAYLIST_12}`);
+    });
+  });
 });
 
 describe("guide videos config", () => {
@@ -538,5 +622,18 @@ describe("guide videos config", () => {
     const off = loadConfig(BASE_ENV);
     expect(off.guidesYoutubeChannelId).toBeNull();
     expect(off.guidesYoutubeChannelUrl).toBeNull();
+  });
+
+  test("reads the 12-worker and 8-worker playlists, null when unset", () => {
+    const on = loadConfig({
+      ...BASE_ENV,
+      GUIDES_YOUTUBE_PLAYLIST_12_WORKER: PLAYLIST_12,
+      GUIDES_YOUTUBE_PLAYLIST_8_WORKER: `${PLAYLIST_URL}${PLAYLIST_8}`,
+    });
+    expect(on.guidesYoutubePlaylist12Worker).toBe(PLAYLIST_12);
+    expect(on.guidesYoutubePlaylist8Worker).toBe(`${PLAYLIST_URL}${PLAYLIST_8}`);
+    const off = loadConfig(BASE_ENV);
+    expect(off.guidesYoutubePlaylist12Worker).toBeNull();
+    expect(off.guidesYoutubePlaylist8Worker).toBeNull();
   });
 });

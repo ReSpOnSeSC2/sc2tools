@@ -115,8 +115,8 @@ describe("shapeBuildPayload", () => {
     const out = shapeBuildPayload(buildInput(doc));
     expect(out.published).toBe(false);
     expect(Object.keys(out).sort()).toEqual([
-      "buildKey", "buildSlug", "computedAt", "description", "era", "matchup", "matchupSlug", "name", "patch",
-      "published", "videos",
+      "buildKey", "buildSlug", "computedAt", "description", "eightWorkerVideos", "era", "matchup", "matchupSlug",
+      "name", "patch", "published", "videos",
     ]);
     expect(deepNumbers(out)).toEqual([]);
   });
@@ -241,6 +241,28 @@ describe("shapeMatchupPayload / shapeIndexPayload", () => {
     expect(pvz.top.map((t) => t.buildKey)).toEqual([GLAIVES]);
     expect(pvz.publishedBuilds).toBe(1);
     expect(out.maps).toEqual([{ map: "Site Delta LE", slug: "site-delta-le", games: 150 }]);
+  });
+
+  test("every page carries its 8-worker patch videos apart from its videos; the hub adds the playlists", () => {
+    const twelve = [{ youtubeId: "AAAAAAAAAAA", eightWorkerPatch: false }];
+    const eight = [{ youtubeId: "YcTMc_Ee11w", eightWorkerPatch: true }];
+    const playlists = { twelveWorker: "https://www.youtube.com/playlist?list=PLAAAAAAAAAAAAAAAA", eightWorker: null };
+    const lists = { videos: twelve, eightWorkerVideos: eight };
+    const hub = shapeIndexPayload({
+      era: "after", computedAt: AT, matchupDocs: [], mapDocs: [], channel: null, playlists, ...lists,
+    });
+    expect(hub).toMatchObject({ ...lists, playlists });
+    expect(shapeMatchupPayload({ matchup: "PvZ", era: "after", band: null, doc: null, buildDocs: [], ...lists }))
+      .toMatchObject(lists);
+    expect(shapeBuildPayload({ ...buildInput(null), ...lists })).toMatchObject(lists);
+    expect(shapeCounterPayload({
+      matchup: "PvZ", strategyKey: TWELVE_POOL, strategySlug: "12-pool", era: "after", doc: null, matchupDoc: null, ...lists,
+    })).toMatchObject(lists);
+    // Callers that pass no 8-worker list or playlists get empty ones, never undefined.
+    const bare = shapeIndexPayload({ era: "after", computedAt: AT, matchupDocs: [], mapDocs: [], videos: [], channel: null });
+    expect(bare.eightWorkerVideos).toEqual([]);
+    expect(bare.playlists).toEqual({ twelveWorker: null, eightWorker: null });
+    expect(shapeBuildPayload(buildInput(null)).eightWorkerVideos).toEqual([]);
   });
 });
 

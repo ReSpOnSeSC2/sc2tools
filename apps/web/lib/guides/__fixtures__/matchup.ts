@@ -10,6 +10,7 @@ import {
   fixtureShare,
 } from "@/lib/guides/__fixtures__/cells";
 import {
+  asEightWorkerPatch,
   VIDEO_PVZ_CARRIER_RUSH,
   VIDEO_PVZ_CRACKING_8_POOLS,
   VIDEO_PVZ_STARGATE_GLAIVES,
@@ -148,7 +149,8 @@ const PVZ_BASE: Omit<GuideMatchupPayload, "band" | "openers"> = {
       games: null,
     },
   ],
-  videos: [VIDEO_PVZ_CARRIER_RUSH, VIDEO_PVZ_STARGATE_GLAIVES, VIDEO_PVZ_CRACKING_8_POOLS],
+  videos: [VIDEO_PVZ_CARRIER_RUSH, VIDEO_PVZ_STARGATE_GLAIVES],
+  eightWorkerVideos: [asEightWorkerPatch(VIDEO_PVZ_CRACKING_8_POOLS)],
 };
 
 export const FIXTURE_MATCHUP: GuideMatchupPayload = {

@@ -675,6 +675,10 @@ function makeServices(deps) {
   const guideVideos = deps.guideVideos || new GuideVideosService(deps.db, {
     channelId: deps.config.guidesYoutubeChannelId || null,
     channelUrl: deps.config.guidesYoutubeChannelUrl || null,
+    playlists: {
+      twelveWorker: deps.config.guidesYoutubePlaylist12Worker || null,
+      eightWorker: deps.config.guidesYoutubePlaylist8Worker || null,
+    },
     logger: deps.logger,
   });
   const guideVideosJob = buildGuideVideosSyncJob({ guideVideos, logger: deps.logger });
