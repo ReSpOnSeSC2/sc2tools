@@ -17,11 +17,13 @@ from __future__ import annotations
 from typing import Optional
 
 from .strategy_detector_helpers import (
+    PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS,
     DetectionContext,
     base_count_at,
     count_started_before,
     nth_base_start,
     start_times,
+    unit_prereq_met,
 )
 
 
@@ -47,7 +49,20 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     ta_time = building_time("TemplarArchive")
     gate_count_730 = count_started_before(buildings, "Gateway", 450)
 
-    if has_proxy("Stargate", sec_nexus_time, 50):
+    # Proxy 2 Gate: same timing rule as the PvP tree -- a true proxy
+    # 2-Gate's Gateways are down by ~1:15 (1:45 with margin), a forward
+    # Gateway in the 2:00-3:00 band belongs to a proxy Stargate / Robo
+    # or a 3-4 Gate and is not one. No natural before 4:30.
+    if (
+        has_proxy("Gateway", PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS, 50)
+        and not (sec_nexus_time < 270)
+    ):
+        return "PvT - Proxy 2 Gate"
+    # Proxy Stargate: a Stargate more than 50 units from the player's
+    # OWN main (the shared proxy test) before the natural Nexus -- or
+    # before 4:30 when the natural came first (Nexus-first proxy
+    # Stargates used to fall through to "Stargate Opener").
+    if has_proxy("Stargate", max(sec_nexus_time, 270), 50):
         return "PvT - Proxy Void Ray/Stargate"
 
     # Stargate-into-X variants: a Stargate goes down first as
@@ -72,8 +87,16 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # presence of EITHER signal before Twilight is enough; we
     # check all three explicitly so the rule is self-documenting
     # and future event-extractor changes can't silently break it.
+    # Real Immortals only: a Sentry-hallucinated Immortal (flagged, or
+    # born before any Robotics Facility started) must not turn a
+    # Stargate-into-Charge / Blink / Glaives game into a Robo-tech one.
     pvt_first_immortal_time = min(
-        (u["time"] for u in units if u["name"] == "Immortal"),
+        (
+            u["time"] for u in units
+            if u["name"] == "Immortal"
+            and u.get("hallucinated") is not True
+            and unit_prereq_met("Immortal", u.get("time", 9999), buildings)
+        ),
         default=9999,
     )
     pvt_robobay_time = building_time("RoboticsBay")
@@ -260,12 +283,28 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # ordering guards keeps Robo-first openers that add a late TA
     # for storm support off this rule -- they correctly fall
     # through to Robo First instead.
+    #
+    # Three more guards keep Blink games out of this bucket (the rule
+    # used to accept a Templar Archives at ANY time, so a 4 Gate Blink
+    # that added Storm at 12:00 with no 3rd ever, or a 3 Gate Blink
+    # (Macro) with a 5:30 3rd and a support TA, was relabelled):
+    #   * the Archives is started by 9:00;
+    #   * the 3rd Nexus, if taken, is DELAYED (6:00 or later -- the
+    #     same macro line the 7 Gate Blink All-in draws);
+    #   * Blink was not the first Twilight upgrade, researched before
+    #     the Archives -- that is a Blink build with a Storm follow-up.
     if (
-        has_building("TemplarArchive", 9999)
+        ta_time <= 540
         and ta_time < third_nexus_time
+        and (total_nexuses < 3 or third_nexus_time >= 360)
         and (4 <= gate_count_730 <= 6)
         and twilight_time < robo_time
         and twilight_time < sg_time
+        and not (
+            pvt_blink_time < 9999
+            and pvt_blink_time == pvt_first_twilight_upgrade
+            and pvt_blink_time < ta_time
+        )
     ):
         return "PvT - 2 Base Templar (Reactive/Delayed 3rd)"
     # Standard Charge Macro is a Twilight-OPENER 3-base Charge
@@ -361,22 +400,19 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         if gates_before_third_nexus == 3:
             return "PvT - 3 Gate Blink (Macro)"
 
-    # 2 Gate Blink (Fast 3rd Nexus) is a TWILIGHT-FIRST opener
-    # with a Robo follow-up (for Observer / Immortal support).
-    # The Robo presence is REQUIRED by ``has_building("RoboticsFacility",
-    # 480)`` below, so the opener-ordering check is what keeps a
-    # Robo-first opener that researched Blink later from
-    # mis-firing this label -- the OPENER is the first tech
-    # building, and for this rule that must be the Twilight
-    # Council (with Robo arriving second as a follow-up tech).
-    # Mirror of the OPENER guards on 4 / 3 Gate Blink Macro
-    # above (they already have ``twilight_time < robo_time`` AND
-    # ``twilight_time < sg_time``).
+    # 2 Gate Blink (Fast 3rd Nexus) is a TWILIGHT-FIRST opener, usually
+    # with a Robo follow-up (Observer / Immortal support). The Robo is
+    # NOT required: the rule used to demand a Robotics Facility by 8:00,
+    # so the same build without one (or with a later Robo) fell to
+    # "Macro Transition (Unclassified)". The opener-ordering check keeps
+    # a Robo-first opener that researched Blink later off this label --
+    # the OPENER is the first tech building, and for this rule that must
+    # be the Twilight Council. Mirror of the OPENER guards on 4 / 3 Gate
+    # Blink Macro above.
     if (
         has_upgrade_substr("Blink", 480)
         and total_nexuses >= 3
         and gates_before_third_nexus == 2
-        and has_building("RoboticsFacility", 480)
         and twilight_time < robo_time
         and twilight_time < sg_time
     ):

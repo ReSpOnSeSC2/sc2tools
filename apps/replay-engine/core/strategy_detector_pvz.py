@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Optional
 
 from .strategy_detector_helpers import (
+    PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS,
     DetectionContext,
     base_count_at,
     count_started_before,
@@ -25,6 +26,7 @@ STANDARD_MACRO_THIRD_FOLLOW_WINDOW_SECONDS = 4 * 60
 def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     """Return the PvZ user-build label, or ``None`` if no rule matched."""
     has_building = ctx.has_building
+    has_proxy = ctx.has_proxy
     count_units = ctx.count_units
     has_upgrade_substr = ctx.has_upgrade_substr
     building_time = ctx.building_time
@@ -35,6 +37,24 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
 
     sg_count_10min = count_started_before(buildings, "Stargate", 600)
     nexus_count_10min = base_count_at(buildings, "Nexus", 600)
+    sec_nexus_time = nth_base_start(buildings, "Nexus", 2)
+
+    # Proxies first (the PvZ tree had no proxy rules at all, so a cannon
+    # rush or proxy 2-Gate vs Zerg was "Macro Transition (Unclassified)"
+    # and a proxied Stargate was a plain "Stargate Opener"). A proxy is
+    # a structure more than 50 world units from the player's OWN main.
+    if has_proxy("PhotonCannon", 270):
+        return "PvZ - Cannon Rush"
+    # Same timing rule as the PvP tree: a true proxy 2-Gate's Gateways
+    # are down by ~1:15 (1:45 with margin); a forward Gateway in the
+    # 2:00-3:00 band belongs to a proxy Stargate / Robo and is not one.
+    if (
+        has_proxy("Gateway", PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS, 50)
+        and not (sec_nexus_time < 270)
+    ):
+        return "PvZ - Proxy 2 Gate"
+    if has_proxy("Stargate", 390):
+        return "PvZ - Proxy Stargate Opener"
 
     # OPENER ordering used by every Stargate-rush label below. A build
     # only counts as a "Stargate opener" when the Stargate is the
@@ -117,7 +137,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         stargate_first_tech
         and sg_time < twilight_time < robo_time
         and third_nexus_supports_macro
-        and charge_time <= 540
+        and charge_time <= 600
         and charge_first_off_twilight
     )
 
@@ -213,6 +233,17 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvZ - AlphaStar Style (Oracle/Robo)"
 
+    # Archon Drop: a Stargate opener into Templar Archives and 2+
+    # Archons by 9:00. Checked BEFORE Stargate into Robo: the drop's
+    # Warp Prism needs a Robotics Facility, which used to let the
+    # Stargate-into-Robo rule claim every Archon drop.
+    if (
+        sg_time < twilight_time
+        and has_building("TemplarArchive", 540)
+        and count_units("Archon", 540) >= 2
+    ):
+        return "PvZ - Archon Drop"
+
     # Stargate into Robo: Stargate-first opener (Phoenix / Oracle / VR
     # harass) that adds a Robotics Facility for Immortal / Observer /
     # Disruptor support. The classic Stargate-into-Robo transition
@@ -264,7 +295,13 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvZ - 7 Gate Glaive/Immortal All-in"
 
-    if has_upgrade_substr("Blink", 480) and gate_count_530 >= 5:
+    # "(2 Base)" means it: a third Nexus by 8:00 is a Twilight-first
+    # Blink macro game, never the all-in.
+    if (
+        has_upgrade_substr("Blink", 480)
+        and gate_count_530 >= 5
+        and base_count_at(buildings, "Nexus", 480) <= 2
+    ):
         if not has_building("Stargate", 480) and not has_building("DarkShrine", 480):
             return "PvZ - Blink Stalker All-in (2 Base)"
 
@@ -317,12 +354,14 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
 
     # Adept Glaives (Twilight First + Robo): Twilight is the
     # FIRST tech, Glaives is the FIRST upgrade out of Twilight,
-    # 4-8 Gateways by 9:00, AND a Robotics Facility is in place
-    # (Observer detection / Immortal armor support).
+    # AND a Robotics Facility is in place (Observer detection /
+    # Immortal armor support). Order-based with no Gateway-count
+    # window, like Stargate into Glaives: the old 4-8 Gateways-by-9:00
+    # cap dropped mass-Adept timings (9+ Gateways ARE the build) and
+    # slower 3-Gateway Glaive expands into "Macro Transition".
     if (
         twilight_first_tech
         and glaive_first_off_twilight
-        and (4 <= gate_count_6min <= 8)
         and has_building("RoboticsFacility", 600)
     ):
         return "PvZ - Adept Glaives (Robo)"
@@ -333,16 +372,9 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     if (
         twilight_first_tech
         and glaive_first_off_twilight
-        and (4 <= gate_count_6min <= 8)
         and not has_building("RoboticsFacility", 600)
     ):
         return "PvZ - Adept Glaives (No Robo)"
-    if (
-        sg_time < twilight_time
-        and has_building("TemplarArchive", 540)
-        and count_units("Archon", 540) >= 2
-    ):
-        return "PvZ - Archon Drop"
     # DT drop into Archon: needs Dark Shrine for the DTs and a
     # Robotics Facility for the Warp Prism.
     if (

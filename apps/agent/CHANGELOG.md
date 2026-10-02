@@ -2,6 +2,35 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.17.7
+
+### Fixed - build detection for the 12-worker game
+
+- A proxy Robo (home Gateways, then a proxy Pylon with a Robotics Facility
+  at ~2:15 and a Gateway beside it) is no longer labelled "PvP - Proxy 2
+  Gate". A true proxy 2 or 3 Gate has its Gateways down between ~0:30 and
+  ~1:15, so the rule now wants a forward Gateway started by 1:45; a forward
+  Gateway at 2:00-3:00 (proxy Robo / Stargate, a 3-4 Gate with a proxy
+  Gateway) is not one. The same rule labels an opponent's proxy 2 Gate and
+  the new PvT / PvZ Proxy 2 Gate.
+- A Stargate, Robo or Twilight started before the natural makes the game a
+  tech opener: "PvP - 1 Gate Expand" used to swallow Stargate, Phoenix,
+  AlphaStar, Blink Stalker and Rail's games whenever the natural came down
+  before 5:00. New "PvP - Robo Opener" and "PvP - Proxy Stargate Opener".
+- Worker births are counted: every Drone / Probe rule read 0, so a 14 Pool
+  was "12 Pool", any Spire by 7:00 was a "2 Base Muta Rush" and the macro
+  labels gated on worker counts never fired.
+- PvT / PvZ: Archon Drop before Stargate into Robo; 2 Base Templar no longer
+  takes Blink games; 2 Gate Blink (Fast 3rd) without a Robo; hallucinated
+  Immortals ignored; Blink All-in (2 Base) needs two bases; Adept Glaives
+  without the 4-8 Gateway cap; new PvZ Cannon Rush / Proxy Stargate Opener.
+- Terran: the pre-placed Command Center is counted, so 3 Rax / 3-4 Rax
+  Marine rush can fire and 2-3 Rax Reaper rush stops firing on two bases;
+  two-base labels need two bases; a proxied Factory / Starport is Proxy
+  1-1-1.
+- Ships bundled replay engine 1.6.6. Stored games keep their labels until
+  re-synced or reprocessed.
+
 ## 0.17.6
 
 ### Fixed - PTR games no longer replace your ladder MMR

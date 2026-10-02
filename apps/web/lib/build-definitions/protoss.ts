@@ -54,7 +54,7 @@ export const PROTOSS_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: null,
     name: "Protoss - Proxy 4 Gate",
     description:
-      "Detected if 3+ Gateways are built far from the main base before 4:30.",
+      "Detected if 3+ Gateways are started before 4:30 more than 50 units from the opponent's own main (a proxy) and no natural Nexus is started before 4:30.",
   },
   {
     race: "Protoss",
@@ -115,5 +115,12 @@ export const PROTOSS_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: null,
     name: "Protoss - Stargate Opener",
     description: "Detected if a Stargate is built before 6:30.",
+  },
+  {
+    race: "Protoss",
+    matchup: null,
+    name: "Protoss - Proxy 2 Gate",
+    description:
+      "Detected if a Gateway is started by 1:45 more than 50 units from the opponent's own main (a proxy) and no natural Nexus is started before 4:30 -- a proxied 2-Gate / 3-Gate aggression. Timing separates it from a proxy Robo / Stargate (proxied at ~2:00-3:00); 3+ proxied Gateways before 4:30 are the Proxy 4 Gate.",
   },
 ];
