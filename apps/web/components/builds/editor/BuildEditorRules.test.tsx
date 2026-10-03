@@ -403,8 +403,67 @@ describe("BuildEditorRules repeated source rows", () => {
       time: 230,
     }));
 
+    // The callout unmounts with the clicked button; focus lands on the rules.
+    expect(document.activeElement).toBe(
+      screen.getByRole("region", { name: "Your rules" }),
+    );
+
     fireEvent.click(screen.getByRole("button", { name: "Dismiss this name check" }));
     expect(screen.queryByText(/The build name says/)).toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("region", { name: "Your rules" }),
+    );
+  });
+
+  it("re-announces the same sentence and titles rows only as present", () => {
+    const setRuleQuantity = vi.fn();
+    renderRules({
+      draft: makeDraft([{ type: "before", name: "BuildStargate", time_lt: 200 }]),
+      sourceRows: [stargate(170)],
+      setRuleQuantity,
+    });
+    const picker = screen.getByRole("combobox", { name: "How many" });
+    fireEvent.change(picker, { target: { value: "exactly" } });
+    const first = liveRegion()?.textContent;
+    fireEvent.change(picker, { target: { value: "exactly" } });
+    expect(liveRegion()?.textContent).not.toBe(first);
+    expect(liveRegion()?.textContent?.trim()).toBe(first);
+    expect(screen.getByTitle("Already in your rules")).toBeTruthy();
+  });
+
+  it("a rule that shifts into a row after a remove starts back at 1", () => {
+    function StatefulRules() {
+      const [draft, setDraft] = useState(makeDraft([
+        { type: "count_max", name: "TrainPhoenix", count: 5, time_lt: 300 },
+        { type: "not_before", name: "BuildRoboticsFacility", time_lt: 240 },
+      ]));
+      return (
+        <BuildEditorRules
+          draft={draft}
+          errors={{}}
+          sourceRows={[]}
+          updateRule={vi.fn()}
+          removeRule={(idx) => setDraft((d) => ({
+            ...d,
+            rules: d.rules.filter((_, i) => i !== idx),
+          }))}
+          setRuleQuantity={setRuleQuantitySpy}
+          setRuleCount={vi.fn()}
+          addRuleFromEvent={vi.fn()}
+          addCustomRule={vi.fn()}
+        />
+      );
+    }
+    const setRuleQuantitySpy = vi.fn();
+    render(<StatefulRules />);
+
+    fireEvent.click(screen.getByRole("button", {
+      name: "Remove rule 1: at most 5 Phoenixes before 5:00",
+    }));
+    fireEvent.change(screen.getByRole("combobox", { name: "How many" }), {
+      target: { value: "exactly" },
+    });
+    expect(setRuleQuantitySpy).toHaveBeenCalledWith(0, "exactly", 1);
   });
 
   it("name check asks for a manual raise in edit mode", () => {

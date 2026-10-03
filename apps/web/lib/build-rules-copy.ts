@@ -24,8 +24,11 @@ import {
 
 /** Same token shape sanitiseRule keeps; anything else is dropped on save. */
 const RULE_TOKEN_RE = /^[A-Za-z][A-Za-z0-9]*$/;
-const VERB_PREFIX_RE = /^(Build|Train|Research|Morph)(?=[A-Z])/;
-const RESEARCH_RE = /^Research[A-Z]/;
+// The verb may be followed by a lower-case name: the timeline saves some
+// upgrades sc2reader reports in lower case as "Researchzerglingattackspeed"
+// or "Buildzerglingmovementspeed".
+const VERB_PREFIX_RE = /^(Build|Train|Research|Morph)(?=[A-Za-z])/;
+const RESEARCH_RE = /^Research[A-Za-z]/;
 
 /* ------------------------------------------------------------------ */
 /* Entity names                                                       */
@@ -38,14 +41,36 @@ const ENTITY_OVERRIDES: Readonly<Record<string, string>> = {
   lurkermp: "Lurker",
   swarmhostmp: "Swarm Host",
   vikingfighter: "Viking",
+  helliontank: "Hellbat",
+  blinktech: "Blink",
+  warpgateresearch: "Warp Gate",
+  zerglingmovementspeed: "Metabolic Boost",
+  zerglingattackspeed: "Adrenal Glands",
+  overlordspeed: "Pneumatized Carapace",
 };
+
+/** Upgrades the replay names without a Research verb ("Buildoverlordspeed"). */
+const VERBLESS_UPGRADES: ReadonlySet<string> = new Set([
+  "zerglingmovementspeed",
+  "zerglingattackspeed",
+  "overlordspeed",
+]);
+
+/** True when a token names research ("ResearchBlink", "Buildoverlordspeed"). */
+function isResearchToken(name: string): boolean {
+  if (RESEARCH_RE.test(name)) return true;
+  const stripped = name.replace(VERB_PREFIX_RE, "");
+  return VERBLESS_UPGRADES.has(stripped.replace(/[^A-Za-z0-9]/g, "").toLowerCase());
+}
 
 /**
  * Display name for a rule token: strips the Build/Train/Research/Morph
  * verb, applies the in-game overrides (Glaives, LurkerMP, SwarmHostMP,
- * VikingFighter) and spaces camelCase and trailing digits.
+ * VikingFighter, HellionTank, the lower-case Zerg upgrades) and spaces
+ * camelCase and trailing digits.
  *   "BuildVoidRay" → "Void Ray"; "ResearchProtossGroundWeaponsLevel1"
- *   → "Protoss Ground Weapons Level 1"; "" → "".
+ *   → "Protoss Ground Weapons Level 1";
+ *   "Researchzerglingmovementspeed" → "Metabolic Boost"; "" → "".
  * Never changes the stored token.
  */
 export function humanizeRuleEntity(name: string): string {
@@ -55,7 +80,7 @@ export function humanizeRuleEntity(name: string): string {
   const normalized = stripped.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
   const override = ENTITY_OVERRIDES[normalized];
   if (override) return override;
-  return stripped
+  return (stripped.charAt(0).toUpperCase() + stripped.slice(1))
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
     .replace(/([a-z])(\d)/g, "$1 $2");
 }
@@ -108,7 +133,7 @@ export function ruleEntity(
     return n === 1 ? "unit, building or upgrade" : "units, buildings or upgrades";
   }
   const base = humanizeRuleEntity(name);
-  if (RESEARCH_RE.test(name)) return `${proxied}${base} research`;
+  if (isResearchToken(name)) return `${proxied}${base} research`;
   return proxied + (n === 1 ? base : pluralizeEntity(base));
 }
 
@@ -121,9 +146,10 @@ export interface RuleContext {
   /** Another named rule uses the same token ("in total" on count phrases). */
   sameTokenElsewhere: boolean;
   /**
-   * Another At least / Exactly rule of the same token asks for more
-   * than this rule's number, so an "At least 1" rule here only sets the
-   * first one's deadline.
+   * Another At least / Exactly rule of the same token (same proxy scope)
+   * asks for more than this rule's number by a LATER time, so an
+   * "At least 1" rule here sets the first one's deadline. A higher count
+   * due earlier already covers this rule and earns no such note.
    */
   higherFloorElsewhere: boolean;
 }
@@ -150,7 +176,13 @@ export function ruleContexts(rules: ReadonlyArray<BuildRule>): RuleContext[] {
     return {
       sameTokenElsewhere: others.length > 0,
       higherFloorElsewhere:
-        own !== null && others.some((r) => requiredCount(r) > own),
+        own !== null
+        && others.some(
+          (r) =>
+            requiredCount(r) > own
+            && r.time_lt > rule.time_lt
+            && (r.proxy === true) === (rule.proxy === true),
+        ),
     };
   });
 }
@@ -276,7 +308,7 @@ function countReadout(rule: BuildRule, ctx: RuleContext): RuleReadout {
   const q = ruleQuantifier(rule);
   const n = ruleCountValue(rule) ?? 1;
   const time = formatTime(rule.time_lt);
-  const research = RESEARCH_RE.test(rule.name);
+  const research = isResearchToken(rule.name);
   if (research && q === "at_least" && n === 1) {
     const strong = ruleEntity(rule, 1);
     return { lead: "Passes when ", strong, rest: " starts before ", time, note: "." };
@@ -370,7 +402,7 @@ export const RULES_LEGEND: ReadonlyArray<RulesLegendEntry> = [
 
 /** The legend's closing line, under the <dl>. */
 export const RULES_LEGEND_FOOTER =
-  "A game matches only when every rule passes. The number counts every one started before the time, not extra ones.";
+  "A game matches only when every rule passes. Each number counts everything of that kind started before its time.";
 
 /**
  * Toast when a timeline "+" names a token that already has a rule:

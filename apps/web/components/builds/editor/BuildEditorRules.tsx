@@ -1,9 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { Check, MapPin, Plus, Star } from "lucide-react";
 import { Icon } from "@/components/ui/Icon";
 import {
+  AUTO_PICK_TIME_BUFFER_SEC,
   PROXY_RULE_DISTANCE_HINT,
   RULES_MAX_PER_BUILD,
   formatTime,
@@ -91,6 +99,9 @@ export function BuildEditorRules({
   const rules = draft.rules;
   const ruleCap = rules.length >= RULES_MAX_PER_BUILD;
   const [announcement, announce] = useLiveAnnouncement();
+  // "Require N" and "Dismiss" unmount their own callout; focus moves to the
+  // rules list so keyboard and screen-reader users keep their place.
+  const rulesPanelRef = useRef<HTMLDivElement>(null);
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -164,10 +175,12 @@ export function BuildEditorRules({
           warning={warning}
           onRequire={() => {
             if (warning.nthRow) addFromRow(warning.nthRow);
+            rulesPanelRef.current?.focus();
           }}
-          onDismiss={() =>
-            setDismissed((prev) => new Set(prev).add(nameCountKey(warning)))
-          }
+          onDismiss={() => {
+            setDismissed((prev) => new Set(prev).add(nameCountKey(warning)));
+            rulesPanelRef.current?.focus();
+          }}
         />
       ) : null}
 
@@ -180,6 +193,7 @@ export function BuildEditorRules({
           onAdd={addFromRow}
         />
         <RulesListPanel
+          panelRef={rulesPanelRef}
           rules={rules}
           focusIndex={focusIndex}
           onUpdate={updateRule}
@@ -199,7 +213,9 @@ export function BuildEditorRules({
 
 /**
  * One polite live-region message at a time, cleared after
- * ANNOUNCE_TTL_MS so a stale sentence is not re-read later.
+ * ANNOUNCE_TTL_MS so a stale sentence is not re-read later. The same
+ * sentence twice in a row gets a trailing no-break space, so the DOM
+ * changes and screen readers announce it again.
  */
 function useLiveAnnouncement(): [string, (text: string) => void] {
   const [text, setText] = useState("");
@@ -210,7 +226,7 @@ function useLiveAnnouncement(): [string, (text: string) => void] {
   }, []);
   const announce = useCallback((next: string) => {
     window.clearTimeout(timerRef.current);
-    setText(next);
+    setText((prev) => (prev === next ? `${next}\u00a0` : next));
     timerRef.current = window.setTimeout(() => setText(""), ANNOUNCE_TTL_MS);
   }, []);
   return [text, announce];
@@ -416,7 +432,7 @@ function SourceRowAction({
     return (
       <span
         className="inline-flex items-center gap-1 text-micro font-semibold text-accent-cyan"
-        title="Already counted by your rules"
+        title="Already in your rules"
       >
         <Check className="h-3 w-3" aria-hidden />
         In rules
@@ -477,6 +493,7 @@ function RepeatChip({
 /* ------------------------------------------------------------------ */
 
 interface RulesListPanelProps {
+  panelRef: RefObject<HTMLDivElement | null>;
   rules: ReadonlyArray<BuildRule>;
   focusIndex: number | null;
   onUpdate: BuildEditorRulesProps["updateRule"];
@@ -486,6 +503,7 @@ interface RulesListPanelProps {
 }
 
 function RulesListPanel({
+  panelRef,
   rules,
   focusIndex,
   onUpdate,
@@ -495,7 +513,13 @@ function RulesListPanel({
 }: RulesListPanelProps) {
   const contexts = ruleContexts(rules);
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-bg-subtle/50">
+    <div
+      ref={panelRef}
+      role="region"
+      aria-label="Your rules"
+      tabIndex={-1}
+      className="overflow-hidden rounded-lg border border-border bg-bg-subtle/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+    >
       <div className="sticky top-0 border-b border-border bg-bg-subtle/90 px-3 py-1.5 text-micro font-semibold uppercase tracking-wider text-text-muted backdrop-blur">
         Your rules ({rules.length})
         <span className="ml-2 font-normal normal-case text-text-dim">
@@ -506,8 +530,9 @@ function RulesListPanel({
         {rules.length === 0 ? (
           <p className="px-3 py-6 text-caption text-text-dim">
             No rules yet. Click + on a starred event in the timeline: it adds
-            “At least 1” of that event before its time. Raise the number if
-            the build needs more, or add a rule below.
+            “At least 1” of that event, due {AUTO_PICK_TIME_BUFFER_SEC} s after
+            the time shown so this game still matches. Raise the number if the
+            build needs more, or add a rule below.
           </p>
         ) : (
           <ul role="list">

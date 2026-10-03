@@ -84,11 +84,15 @@ export function RuleRow({
   const readoutId = `${id}-readout`;
   const quantifier = ruleQuantifier(rule);
   const count = ruleCountValue(rule);
-  // None has no number; picking a count again brings the last one back.
-  const lastCountRef = useRef(1);
+  // None has no number; picking a count again brings this rule's last one
+  // back. Rows are keyed by index, so the memory is tied to the rule's name:
+  // a rule that shifts into this row after a remove or insert starts at 1.
+  const lastCountRef = useRef<{ name: string; count: number } | null>(null);
   useEffect(() => {
-    if (count !== null) lastCountRef.current = count;
-  }, [count]);
+    if (count !== null) lastCountRef.current = { name: rule.name, count };
+  }, [count, rule.name]);
+  const carry = () =>
+    lastCountRef.current?.name === rule.name ? lastCountRef.current.count : 1;
 
   return (
     // Row separators sit on the <li> (not the list's divide-*), because a
@@ -113,7 +117,7 @@ export function RuleRow({
           <QuantityPicker
             value={quantifier}
             describedBy={readoutId}
-            onChange={(q) => onQuantity(q, lastCountRef.current)}
+            onChange={(q) => onQuantity(q, carry())}
           />
           {count !== null ? (
             <CountField
@@ -269,7 +273,12 @@ function CountField({
       onChange={(e) => {
         const raw = e.target.value.trim();
         setText(raw);
-        if (/^\d+$/.test(raw)) onCommit(Number(raw));
+        if (!/^\d+$/.test(raw)) return;
+        // Below the minimum ("0" on At least) commits the minimum and shows
+        // it, so the box never disagrees with the sentence under it.
+        const n = Math.max(min, Number(raw));
+        if (n !== Number(raw)) setText(String(n));
+        onCommit(n);
       }}
       onBlur={() => setText(String(value))}
       className="h-8 w-12 rounded-md border-2 border-line bg-bg-surface px-1 text-center font-mono text-caption tabular-nums text-text focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"

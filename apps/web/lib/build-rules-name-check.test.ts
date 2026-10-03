@@ -128,10 +128,17 @@ describe("nameCountWarning", () => {
     const rules: BuildRule[] = [{ type: "not_before", name: "BuildStargate", time_lt: 120 }];
     expect(nameCountWarning(NAME, rules, rows, true)).toEqual({
       kind: "manual",
-      text: "The build name says “2 Stargate”, but your rules pass with no Stargate. Raise the number on that rule and check its time.",
+      text: "The build name says “2 Stargate”, but your rules pass with no Stargate. Change that rule to “At least 2”, or add an “At least 2” rule.",
       n: 2,
       token: "BuildStargate",
     });
+    // Raising an At most cap still passes with none, so the advice is the same.
+    const capped: BuildRule[] = [
+      { type: "count_max", name: "BuildStargate", count: 1, time_lt: 360 },
+    ];
+    expect(nameCountWarning(NAME, capped, rows, false)?.text).toBe(
+      "The build name says “2 Stargate”, but your rules pass with no Stargate. Change that rule to “At least 2”, or add an “At least 2” rule.",
+    );
     const three = [row("BuildGateway", 20), row("BuildGateway", 40), ...rows];
     const gates: BuildRule[] = [
       { type: "count_min", name: "BuildGateway", count: 2, time_lt: 300 },
@@ -139,6 +146,13 @@ describe("nameCountWarning", () => {
     expect(nameCountWarning("4 Gate", gates, three, false)?.text).toBe(
       "The build name says “4 Gate”, but your rules pass with 2 Gateways. Raise the number on that rule and check its time.",
     );
+  });
+
+  test("skips upgrade notation and the opponent's build", () => {
+    for (const name of ["PvT 2/2 Robo", "ZvP vs 4 Gate", "TvP vs. 2 Stargate", "Anti 2-Rax", "PvZ versus 3 Rax"]) {
+      expect(parseNameCounts(name)).toEqual([]);
+    }
+    expect(parseNameCounts("vs Zerg 2 Stargate").map((c) => c.n)).toEqual([2]);
   });
 
   test("'missing' when no rule exists", () => {

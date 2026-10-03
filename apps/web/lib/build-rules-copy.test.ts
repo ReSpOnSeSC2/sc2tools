@@ -310,3 +310,40 @@ describe("legend, toasts and glyphs", () => {
     for (const text of outputs) expect(text).not.toMatch(GLYPHS);
   });
 });
+
+describe("review follow-ups", () => {
+  test("names lower-case and engine-only tokens the way the game does", () => {
+    expect(humanizeRuleEntity("Researchzerglingmovementspeed")).toBe("Metabolic Boost");
+    expect(humanizeRuleEntity("Buildzerglingmovementspeed")).toBe("Metabolic Boost");
+    expect(humanizeRuleEntity("Buildoverlordspeed")).toBe("Pneumatized Carapace");
+    expect(humanizeRuleEntity("Researchzerglingattackspeed")).toBe("Adrenal Glands");
+    expect(humanizeRuleEntity("ResearchWarpGateResearch")).toBe("Warp Gate");
+    expect(humanizeRuleEntity("ResearchBlinkTech")).toBe("Blink");
+    expect(humanizeRuleEntity("BuildHellionTank")).toBe("Hellbat");
+    expect(humanizeRuleEntity("Buildsomethingnew")).toBe("Somethingnew");
+  });
+
+  test("treats verb-less upgrades as research", () => {
+    const boost = rule("before", "Buildzerglingmovementspeed", 170);
+    expect(describeRule(boost)).toBe("at least 1 Metabolic Boost research before 2:50");
+    expect(ruleReadoutText(boost)).toBe(
+      "Passes when Metabolic Boost research starts before 2:50.",
+    );
+  });
+
+  test("a higher count due EARLIER covers the 'At least 1' rule, so no deadline note", () => {
+    const rules = [
+      rule("before", "BuildStargate", 300),
+      rule("count_min", "BuildStargate", 240, 2),
+    ];
+    const [first] = ruleContexts(rules);
+    expect(first.higherFloorElsewhere).toBe(false);
+    expect(ruleReadoutText(rules[0], first)).not.toContain("first one's deadline");
+    // Different proxy scope: a proxied count says nothing about all Barracks.
+    const rax = [
+      rule("before", "BuildBarracks", 60),
+      rule("count_min", "BuildBarracks", 120, 2, true),
+    ];
+    expect(ruleContexts(rax)[0].higherFloorElsewhere).toBe(false);
+  });
+});

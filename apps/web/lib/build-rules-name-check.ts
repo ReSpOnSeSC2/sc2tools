@@ -7,8 +7,9 @@
  *     ingest tagger then relabels those games with its name. The check
  *     reads "{2-9} {structure}" out of the name and compares it with the
  *     rules. Only production structures are read (no town halls, Pool or
- *     Base), and the 2–9 range skips supply notation ("12 Pool",
- *     "17 Hatch 18 Gas").
+ *     Base), the 2–9 range skips supply notation ("12 Pool",
+ *     "17 Hatch 18 Gas"), upgrade notation ("2/2 Robo") is skipped, and so
+ *     is a count that names the opponent's build ("vs 4 Gate", "Anti 2-Rax").
  *   - Requires nothing: every named rule only caps or forbids, so a game
  *     with none of it built passes.
  *
@@ -28,7 +29,10 @@ import {
 import { raiseRuleForRepeatRow } from "@/lib/build-rules-repeat";
 
 const NAME_COUNT_RE =
-  /(?:^|[^A-Za-z0-9.])([2-9])\s*-?\s*(gates?|gateways?|stargates?|sg|robos?|robotics|rax|barracks|facts?|factory|factories|ports?|starports?)(?![A-Za-z])/gi;
+  /(?:^|[^A-Za-z0-9./])([2-9])\s*-?\s*(gates?|gateways?|stargates?|sg|robos?|robotics|rax|barracks|facts?|factory|factories|ports?|starports?)(?![A-Za-z])/gi;
+
+/** Words before a count that make it the opponent's build, not this one. */
+const OPPONENT_LEAD_RE = /\b(?:vs\.?|versus|anti)[\s-]*$/i;
 
 /** Lower-case name alias → rule token. */
 const ALIAS_TOKEN: ReadonlyMap<string, string> = new Map(
@@ -57,13 +61,16 @@ export interface NameCount {
 /**
  * Every "{2-9} {structure}" in a build name, in order:
  *   "PvZ - 2 Stargate Void Ray" → [{n: 2, token: "BuildStargate", text: "2 Stargate"}]
- *   "12 Pool", "1-1-1", "2 Base Colossus" → []
+ *   "12 Pool", "1-1-1", "2 Base Colossus", "2/2 Robo", "vs 4 Gate" → []
  */
 export function parseNameCounts(name: string): NameCount[] {
   const out: NameCount[] = [];
-  for (const m of String(name || "").matchAll(NAME_COUNT_RE)) {
+  const source = String(name || "");
+  for (const m of source.matchAll(NAME_COUNT_RE)) {
     const token = ALIAS_TOKEN.get(m[2].toLowerCase());
     if (!token) continue;
+    const start = (m.index ?? 0) + m[0].indexOf(m[1]);
+    if (OPPONENT_LEAD_RE.test(source.slice(0, start))) continue;
     out.push({ n: Number(m[1]), token, text: m[0].slice(m[0].indexOf(m[1])) });
   }
   return out;
@@ -80,7 +87,10 @@ export function nameCountKey(count: Pick<NameCount, "token" | "n">): string {
  *     calling addRuleFromEvent(nthRow), the same raise and deadline as
  *     the timeline's "At least {n}" chip.
  *   - "manual": a rule exists but the raise is not offered (edit mode,
- *     no {n}th source row, a cap blocks it, or the 30-rule limit).
+ *     no {n}th source row, a cap blocks it, or the 30-rule limit). The
+ *     advice says to raise the number when an At least / Exactly rule of
+ *     the token exists, and to switch to At least when only None / At most
+ *     rules do (raising a cap still passes with none).
  *   - "missing": no rule names the token.
  * `text` is the full sentence, without the button.
  */
@@ -133,12 +143,14 @@ function warningFor(
   const sentence = `${says} your rules pass with ${has}.`;
   const nthRow = countRepeats ? raisingRow(count, rules, rows) : undefined;
   if (nthRow) return { kind: "raise", text: sentence, n, token, nthRow };
-  return {
-    kind: "manual",
-    text: `${sentence} Raise the number on that rule and check its time.`,
-    n,
-    token,
-  };
+  const raisable = own.some((r) => {
+    const q = ruleQuantifier(r);
+    return q === "at_least" || q === "exactly";
+  });
+  const advice = raisable
+    ? "Raise the number on that rule and check its time."
+    : `Change that rule to “At least ${n}”, or add an “At least ${n}” rule.`;
+  return { kind: "manual", text: `${sentence} ${advice}`, n, token };
 }
 
 const NOTHING_DISMISSED: ReadonlySet<string> = new Set();

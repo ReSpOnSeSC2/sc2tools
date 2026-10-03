@@ -47,6 +47,14 @@ describe("RuleRow", () => {
     expect(props.onCount).toHaveBeenCalledWith(2);
   });
 
+  it("typing 0 into an At least box commits and shows 1", () => {
+    const { props } = renderRow({ type: "before", name: "BuildVoidRay", time_lt: 400 });
+
+    fireEvent.change(countBox()!, { target: { value: "0" } });
+    expect(props.onCount).toHaveBeenCalledWith(1);
+    expect(countBox()?.value).toBe("1");
+  });
+
   it("choosing Exactly calls onQuantity('exactly', 1)", () => {
     const { props } = renderRow({ type: "before", name: "BuildVoidRay", time_lt: 400 });
 

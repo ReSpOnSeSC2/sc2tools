@@ -216,7 +216,7 @@ export function BuildEditorModal({
             <>
               Add rules below to capture the signature of this build.
               Click <span className="font-semibold">+</span> on a starred
-              event to start, or use Add a rule.
+              event to start, or use the “Add a rule” buttons.
             </>
           ) : (
             <>
