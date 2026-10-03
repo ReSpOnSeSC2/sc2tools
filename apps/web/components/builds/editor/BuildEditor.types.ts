@@ -44,6 +44,12 @@ export interface BuildEditorContext {
   sourceEvents: ReadonlyArray<BuildOrderEvent>;
   /** Pre-computed source rows. Memoised by parent. */
   sourceRows: ReadonlyArray<SourceTimelineRow>;
+  /**
+   * Whether a later row of a token already in the rules can raise it to
+   * "≥ N" (default true). False when the rows are not a replay's events
+   * but are rebuilt from a saved build's rule deadlines (edit mode).
+   */
+  countRepeats?: boolean;
   /** Default name to seed the form with. */
   defaultName: string;
   /** Initial perspective (informational — surfaces in the header). */
@@ -149,6 +155,8 @@ export interface BuildEditorRulesProps {
   draft: BuildEditorDraft;
   errors: BuildEditorErrors;
   sourceRows: ReadonlyArray<SourceTimelineRow>;
+  /** See BuildEditorContext.countRepeats. */
+  countRepeats?: boolean;
   updateRule: BuildEditorState["updateRule"];
   removeRule: BuildEditorState["removeRule"];
   cycleRule: BuildEditorState["cycleRule"];

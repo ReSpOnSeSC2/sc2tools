@@ -15,7 +15,10 @@ import {
   type BuildEditorErrors,
   type BuildRule,
 } from "@/lib/build-rules";
-import { raiseRuleForRepeatRow } from "@/lib/build-rules-repeat";
+import {
+  applyRepeatRowRaise,
+  raiseRuleForRepeatRow,
+} from "@/lib/build-rules-repeat";
 import type { BuildOrderEvent } from "@/lib/build-events";
 import type {
   BuildEditorContext,
@@ -94,7 +97,7 @@ export function useBuildEditorState(
   opts: UseBuildEditorStateOptions,
 ): BuildEditorState {
   const { open, context, initialDraft, lockedSlug, onSaved, demoMode } = opts;
-  const { sourceRows } = context;
+  const { sourceRows, countRepeats = true } = context;
   const { getToken } = useAuth();
 
   const [draft, setDraft] = useState<BuildEditorDraft>(initialDraft);
@@ -310,30 +313,31 @@ export function useBuildEditorState(
         const r = ruleFromEvent(ev);
         if (!r) return d;
         // A later row of a token already in the rules asks for that many
-        // (the 2nd Stargate -> "≥ 2 Stargate"); it replaces the rule, so
-        // it is allowed at the rule cap.
-        const raised = raiseRuleForRepeatRow(d.rules, sourceRows, {
-          what: r.name,
-          t: ev.time,
-          isProxy: ev.is_proxy === true,
-        });
-        if (raised) {
-          const next = d.rules.slice();
-          next[raised.index] = raised.rule;
-          return { ...d, rules: next };
+        // (the 2nd Stargate -> "≥ 2 Stargate"). Raising a count rule adds
+        // none, so it is allowed at the rule cap.
+        const raise = countRepeats
+          ? raiseRuleForRepeatRow(d.rules, sourceRows, {
+              what: r.name,
+              t: ev.time,
+              isProxy: ev.is_proxy === true,
+            })
+          : null;
+        const atCap = d.rules.length >= RULES_MAX_PER_BUILD;
+        if (raise && !(raise.insert && atCap)) {
+          return { ...d, rules: applyRepeatRowRaise(d.rules, raise) };
         }
-        if (d.rules.some((existing) => existing.name === r.name)) {
+        if (!raise && d.rules.some((existing) => existing.name === r.name)) {
           pushToast("warn", `${r.name} is already in your rules.`);
           return d;
         }
-        if (d.rules.length >= RULES_MAX_PER_BUILD) {
+        if (atCap) {
           pushToast("warn", `Rule cap reached (${RULES_MAX_PER_BUILD}).`);
           return d;
         }
         return { ...d, rules: [...d.rules, r] };
       });
     },
-    [pushToast, sourceRows],
+    [countRepeats, pushToast, sourceRows],
   );
 
   const addCustomRule = useCallback(

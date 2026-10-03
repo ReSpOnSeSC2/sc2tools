@@ -92,6 +92,10 @@ export function BuildEditorModal({
 }: BuildEditorModalProps) {
   const { toast } = useToast();
   const sourceRows = useMemo(() => eventsToSourceRows(events), [events]);
+  // Edit mode rebuilds the timeline from the saved rules' deadlines
+  // (EditCustomBuildLauncher.docToEvents), so two rows of a token are two
+  // rules, not two Stargates, and must not be counted.
+  const countRepeats = mode !== "edit";
 
   const computedDefaultName = useMemo(
     () =>
@@ -143,6 +147,7 @@ export function BuildEditorModal({
       gameId,
       sourceEvents: events,
       sourceRows,
+      countRepeats,
       defaultName: computedDefaultName,
       perspective,
       surface: "buildEditor",
@@ -273,6 +278,7 @@ export function BuildEditorModal({
               draft={editor.draft}
               errors={editor.errors}
               sourceRows={sourceRows}
+              countRepeats={countRepeats}
               updateRule={editor.updateRule}
               removeRule={editor.removeRule}
               cycleRule={editor.cycleRule}

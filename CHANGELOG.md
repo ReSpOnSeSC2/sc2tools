@@ -182,9 +182,12 @@ corresponding GitHub Release.
   saved builds relabel games ahead of the built-in classifier, a Carrier
   rush with one Void Ray showed that name instead of "PvZ - Carrier Rush".
   A later row of something already in the rules now shows "≥ N"; clicking
-  it changes the rule to "at least N by then" (the 2nd Stargate asks for 2,
-  the 4th Void Ray for 4). Builds saved before this keep their rules; in
-  the editor, click ⚙ on a rule to change it to "≥ count".
+  it adds "at least N by then" next to the first one's deadline (the 2nd
+  Stargate asks for 2, the 4th Void Ray for 4), or raises that count if it
+  is already there. It is not offered when another rule caps the count
+  lower, or when editing a saved build, whose timeline is rebuilt from its
+  rules. Builds saved before this keep their rules; in the editor, click ⚙
+  on a rule to change it to "≥ count".
 - **Lurker Dens and Lurkers are recorded, so rules about them can match
   (agent 0.17.8, engine 1.6.7)** — no replay ever logged a Lurker Den or a
   Lurker. The replay types the den `LurkerDenMP`, a name the engine did not

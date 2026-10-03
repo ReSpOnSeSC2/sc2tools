@@ -19,7 +19,10 @@ import {
   type BuildRule,
   type RuleType,
 } from "@/lib/build-rules";
-import { raiseRuleForRepeatRow } from "@/lib/build-rules-repeat";
+import {
+  raiseRuleForRepeatRow,
+  type RepeatRowRaise,
+} from "@/lib/build-rules-repeat";
 import type { BuildEditorRulesProps } from "./BuildEditor.types";
 
 const TONE_BTN_CLASSES: Record<"win" | "loss" | "neutral", string> = {
@@ -67,6 +70,7 @@ export function BuildEditorRules({
   draft,
   errors,
   sourceRows,
+  countRepeats = true,
   updateRule,
   removeRule,
   cycleRule,
@@ -96,6 +100,7 @@ export function BuildEditorRules({
         <SourceTimelinePanel
           rows={sourceRows}
           rules={draft.rules}
+          countRepeats={countRepeats}
           inUseNames={inUseNames}
           onAdd={addRuleFromEvent}
           ruleCap={ruleCap}
@@ -157,6 +162,7 @@ export function BuildEditorRules({
 interface SourceTimelinePanelProps {
   rows: BuildEditorRulesProps["sourceRows"];
   rules: ReadonlyArray<BuildRule>;
+  countRepeats: boolean;
   inUseNames: ReadonlySet<string>;
   onAdd: BuildEditorRulesProps["addRuleFromEvent"];
   ruleCap: boolean;
@@ -165,6 +171,7 @@ interface SourceTimelinePanelProps {
 function SourceTimelinePanel({
   rows,
   rules,
+  countRepeats,
   inUseNames,
   onAdd,
   ruleCap,
@@ -197,18 +204,10 @@ function SourceTimelinePanel({
               const inRules = inUseNames.has(r.what);
               // A later row of a token already in the rules can raise it
               // to "≥ N by then" (the 2nd Stargate asks for 2).
-              const raise = inRules ? raiseRuleForRepeatRow(rules, rows, r) : null;
-              const raiseCount =
-                raise && isCountRule(raise.rule) ? raise.rule.count : null;
-              const add = () =>
-                onAdd({
-                  time: r.t,
-                  name: r.what,
-                  is_building: r.isBuilding,
-                  is_proxy: r.isProxy,
-                  race: r.race,
-                  category: r.category,
-                });
+              const raise =
+                inRules && countRepeats
+                  ? raiseRuleForRepeatRow(rules, rows, r)
+                  : null;
               const rowAccent = r.isTech
                 ? "bg-accent-cyan/10 border-l-2 border-accent-cyan"
                 : "border-l-2 border-transparent opacity-80 hover:opacity-100";
@@ -248,32 +247,13 @@ function SourceTimelinePanel({
                       Proxy
                     </span>
                   ) : null}
-                  {raiseCount !== null ? (
-                    <button
-                      type="button"
-                      onClick={add}
-                      title={`Require at least ${raiseCount} by ${formatTime(raise?.rule.time_lt ?? r.t)}`}
-                      aria-label={`Require at least ${raiseCount} ${r.what}`}
-                      className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-md border border-accent-cyan/50 bg-accent-cyan/10 px-2 font-mono text-micro font-semibold tabular-nums text-accent-cyan transition-colors hover:bg-accent-cyan/20"
-                    >
-                      ≥ {raiseCount}
-                    </button>
-                  ) : inRules ? (
-                    <span className="text-micro font-semibold text-accent-cyan">
-                      ✓ in rules
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={add}
-                      disabled={ruleCap}
-                      title="Add as a rule"
-                      aria-label={`Add ${r.what} as a rule`}
-                      className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-md bg-accent px-2 text-micro font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Plus className="h-3 w-3" aria-hidden />
-                    </button>
-                  )}
+                  <SourceRowAction
+                    row={r}
+                    inRules={inRules}
+                    raise={raise}
+                    ruleCap={ruleCap}
+                    onAdd={onAdd}
+                  />
                 </li>
               );
             })}
@@ -281,6 +261,67 @@ function SourceTimelinePanel({
         )}
       </div>
     </div>
+  );
+}
+
+interface SourceRowActionProps {
+  row: BuildEditorRulesProps["sourceRows"][number];
+  inRules: boolean;
+  raise: RepeatRowRaise | null;
+  ruleCap: boolean;
+  onAdd: BuildEditorRulesProps["addRuleFromEvent"];
+}
+
+/** A row's "+", "≥ N" (raise a count) or "✓ in rules" marker. */
+function SourceRowAction({
+  row,
+  inRules,
+  raise,
+  ruleCap,
+  onAdd,
+}: SourceRowActionProps) {
+  const add = () =>
+    onAdd({
+      time: row.t,
+      name: row.what,
+      is_building: row.isBuilding,
+      is_proxy: row.isProxy,
+      race: row.race,
+      category: row.category,
+    });
+  if (raise) {
+    const { count, time_lt: timeLt } = raise.rule;
+    return (
+      <button
+        type="button"
+        onClick={add}
+        disabled={raise.insert && ruleCap}
+        title={`Require at least ${count} by ${formatTime(timeLt)}`}
+        aria-label={`Require at least ${count} ${row.what}`}
+        className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-md border border-accent-cyan/50 bg-accent-cyan/10 px-2 font-mono text-micro font-semibold tabular-nums text-accent-cyan transition-colors hover:bg-accent-cyan/20 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        ≥ {count}
+      </button>
+    );
+  }
+  if (inRules) {
+    return (
+      <span className="text-micro font-semibold text-accent-cyan">
+        ✓ in rules
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={add}
+      disabled={ruleCap}
+      title="Add as a rule"
+      aria-label={`Add ${row.what} as a rule`}
+      className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-md bg-accent px-2 text-micro font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <Plus className="h-3 w-3" aria-hidden />
+    </button>
   );
 }
 

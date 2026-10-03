@@ -261,5 +261,25 @@ describe("BuildEditorRules repeated source rows", () => {
       name: "BuildStargate",
       time: 230,
     }));
+
+    // Edit mode: the rows are the saved rules' deadlines, not Stargates.
+    cleanup();
+    render(
+      <BuildEditorRules
+        draft={draft}
+        errors={{}}
+        sourceRows={[stargate(170), stargate(230)]}
+        countRepeats={false}
+        updateRule={vi.fn()}
+        removeRule={vi.fn()}
+        cycleRule={vi.fn()}
+        addRuleFromEvent={addRuleFromEvent}
+        addCustomRule={vi.fn()}
+      />,
+    );
+    expect(screen.getAllByText("✓ in rules")).toHaveLength(2);
+    expect(screen.queryByRole("button", {
+      name: "Require at least 2 BuildStargate",
+    })).toBeNull();
   });
 });
