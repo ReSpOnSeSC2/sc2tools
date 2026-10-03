@@ -212,3 +212,54 @@ describe("BuildEditorRules wording", () => {
     }) as HTMLInputElement).checked).toBe(true);
   });
 });
+
+describe("BuildEditorRules repeated source rows", () => {
+  it("offers the 2nd Stargate as '≥ 2' instead of another '✓ in rules'", () => {
+    const addRuleFromEvent = vi.fn();
+    const stargate = (t: number) => ({
+      key: `t${t}:BuildStargate`,
+      t,
+      what: "BuildStargate",
+      display: "Stargate",
+      timeDisplay: `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`,
+      race: "Protoss",
+      category: "building",
+      isBuilding: true,
+      isProxy: false,
+      isTech: true,
+    });
+    const draft: BuildEditorDraft = {
+      name: "PvZ - 2 Stargate Void Ray",
+      description: "",
+      race: "Protoss",
+      vsRace: "Zerg",
+      skillLevel: null,
+      shareWithCommunity: false,
+      winConditions: [],
+      losesTo: [],
+      transitionsInto: [],
+      rules: [{ type: "before", name: "BuildStargate", time_lt: 200 }],
+    };
+    render(
+      <BuildEditorRules
+        draft={draft}
+        errors={{}}
+        sourceRows={[stargate(170), stargate(230)]}
+        updateRule={vi.fn()}
+        removeRule={vi.fn()}
+        cycleRule={vi.fn()}
+        addRuleFromEvent={addRuleFromEvent}
+        addCustomRule={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText("✓ in rules")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", {
+      name: "Require at least 2 BuildStargate",
+    }));
+    expect(addRuleFromEvent).toHaveBeenCalledWith(expect.objectContaining({
+      name: "BuildStargate",
+      time: 230,
+    }));
+  });
+});

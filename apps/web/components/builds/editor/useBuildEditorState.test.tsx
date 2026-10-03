@@ -1,7 +1,11 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { PREVIEW_DEBOUNCE_MS, type BuildEditorDraft } from "@/lib/build-rules";
+import {
+  PREVIEW_DEBOUNCE_MS,
+  RULES_MAX_PER_BUILD,
+  type BuildEditorDraft,
+} from "@/lib/build-rules";
 import type {
   BuildEditorContext,
   BuildEditorPreviewResult,
@@ -324,5 +328,90 @@ describe("useBuildEditorState save", () => {
     expect(result.current.toasts.map((toast) => toast.text)).not.toContain(
       expect.stringContaining("still public"),
     );
+  });
+});
+
+describe("useBuildEditorState rules from the source timeline", () => {
+  const row = (what: string, t: number) => ({
+    key: `t${t}:${what}`,
+    t,
+    what,
+    display: what.replace(/^Build/, ""),
+    timeDisplay: `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`,
+    race: "Protoss",
+    category: what === "BuildVoidRay" ? "unit" : "building",
+    isBuilding: what !== "BuildVoidRay",
+    isProxy: false,
+    isTech: false,
+  });
+  const sourceRows = [
+    row("BuildStargate", 170),
+    row("BuildStargate", 230),
+    row("BuildVoidRay", 290),
+  ];
+  const timelineContext: BuildEditorContext = { ...context, sourceRows };
+  const click = (r: (typeof sourceRows)[number]) => ({
+    time: r.t,
+    name: r.what,
+    is_building: r.isBuilding,
+    is_proxy: r.isProxy,
+    race: r.race,
+    category: r.category,
+  });
+
+  it("saves the 2nd Stargate as a count, not a refused duplicate", () => {
+    const { result } = renderHook(() =>
+      useBuildEditorState({
+        open: true,
+        context: timelineContext,
+        initialDraft: { ...initialDraft, rules: [] },
+      }),
+    );
+
+    act(() => result.current.addRuleFromEvent(click(sourceRows[0])));
+    act(() => result.current.addRuleFromEvent(click(sourceRows[1])));
+    act(() => result.current.addRuleFromEvent(click(sourceRows[2])));
+
+    expect(result.current.draft.rules).toEqual([
+      { type: "count_min", name: "BuildStargate", count: 2, time_lt: 260 },
+      { type: "before", name: "BuildVoidRay", time_lt: 320 },
+    ]);
+    expect(result.current.toasts).toEqual([]);
+
+    // The one Void Ray cannot ask for a second.
+    act(() => result.current.addRuleFromEvent(click(sourceRows[2])));
+    expect(result.current.draft.rules).toHaveLength(2);
+    expect(result.current.toasts.map((toast) => toast.text)).toEqual([
+      "BuildVoidRay is already in your rules.",
+    ]);
+  });
+
+  it("raises a count at the rule cap because it adds no rule", () => {
+    const filler = Array.from({ length: RULES_MAX_PER_BUILD - 1 }, (_, i) => ({
+      type: "before" as const,
+      name: `BuildFiller${i}`,
+      time_lt: 60,
+    }));
+    const { result } = renderHook(() =>
+      useBuildEditorState({
+        open: true,
+        context: timelineContext,
+        initialDraft: {
+          ...initialDraft,
+          rules: [...filler, { type: "before", name: "BuildStargate", time_lt: 200 }],
+        },
+      }),
+    );
+
+    act(() => result.current.addRuleFromEvent(click(sourceRows[1])));
+
+    expect(result.current.draft.rules).toHaveLength(RULES_MAX_PER_BUILD);
+    expect(result.current.draft.rules.at(-1)).toEqual({
+      type: "count_min",
+      name: "BuildStargate",
+      count: 2,
+      time_lt: 260,
+    });
+    expect(result.current.toasts).toEqual([]);
   });
 });

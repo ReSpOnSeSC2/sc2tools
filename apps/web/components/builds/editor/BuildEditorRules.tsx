@@ -19,6 +19,7 @@ import {
   type BuildRule,
   type RuleType,
 } from "@/lib/build-rules";
+import { raiseRuleForRepeatRow } from "@/lib/build-rules-repeat";
 import type { BuildEditorRulesProps } from "./BuildEditor.types";
 
 const TONE_BTN_CLASSES: Record<"win" | "loss" | "neutral", string> = {
@@ -94,6 +95,7 @@ export function BuildEditorRules({
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <SourceTimelinePanel
           rows={sourceRows}
+          rules={draft.rules}
           inUseNames={inUseNames}
           onAdd={addRuleFromEvent}
           ruleCap={ruleCap}
@@ -154,6 +156,7 @@ export function BuildEditorRules({
 
 interface SourceTimelinePanelProps {
   rows: BuildEditorRulesProps["sourceRows"];
+  rules: ReadonlyArray<BuildRule>;
   inUseNames: ReadonlySet<string>;
   onAdd: BuildEditorRulesProps["addRuleFromEvent"];
   ruleCap: boolean;
@@ -161,6 +164,7 @@ interface SourceTimelinePanelProps {
 
 function SourceTimelinePanel({
   rows,
+  rules,
   inUseNames,
   onAdd,
   ruleCap,
@@ -191,6 +195,20 @@ function SourceTimelinePanel({
           <ul role="list" className="divide-y divide-border">
             {rows.map((r) => {
               const inRules = inUseNames.has(r.what);
+              // A later row of a token already in the rules can raise it
+              // to "≥ N by then" (the 2nd Stargate asks for 2).
+              const raise = inRules ? raiseRuleForRepeatRow(rules, rows, r) : null;
+              const raiseCount =
+                raise && isCountRule(raise.rule) ? raise.rule.count : null;
+              const add = () =>
+                onAdd({
+                  time: r.t,
+                  name: r.what,
+                  is_building: r.isBuilding,
+                  is_proxy: r.isProxy,
+                  race: r.race,
+                  category: r.category,
+                });
               const rowAccent = r.isTech
                 ? "bg-accent-cyan/10 border-l-2 border-accent-cyan"
                 : "border-l-2 border-transparent opacity-80 hover:opacity-100";
@@ -230,23 +248,24 @@ function SourceTimelinePanel({
                       Proxy
                     </span>
                   ) : null}
-                  {inRules ? (
+                  {raiseCount !== null ? (
+                    <button
+                      type="button"
+                      onClick={add}
+                      title={`Require at least ${raiseCount} by ${formatTime(raise?.rule.time_lt ?? r.t)}`}
+                      aria-label={`Require at least ${raiseCount} ${r.what}`}
+                      className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-md border border-accent-cyan/50 bg-accent-cyan/10 px-2 font-mono text-micro font-semibold tabular-nums text-accent-cyan transition-colors hover:bg-accent-cyan/20"
+                    >
+                      ≥ {raiseCount}
+                    </button>
+                  ) : inRules ? (
                     <span className="text-micro font-semibold text-accent-cyan">
                       ✓ in rules
                     </span>
                   ) : (
                     <button
                       type="button"
-                      onClick={() =>
-                        onAdd({
-                          time: r.t,
-                          name: r.what,
-                          is_building: r.isBuilding,
-                          is_proxy: r.isProxy,
-                          race: r.race,
-                          category: r.category,
-                        })
-                      }
+                      onClick={add}
                       disabled={ruleCap}
                       title="Add as a rule"
                       aria-label={`Add ${r.what} as a rule`}
