@@ -5,10 +5,16 @@
  * Exposes:
  *   - SPA event → server-canonical token (`spaEventToWhat`)
  *   - Pure-row construction for the source-replay column
- *   - Rule constructors, type cycler, time/count clamps + parsers
+ *   - Rule constructors, time/count clamps + parsers
  *   - Default-name + slug helpers
  *   - Draft sanitiser ({ ok, errors, payload })
  *   - Tech-token highlighter
+ *
+ * The editor's plain-words vocabulary lives beside it: the quantity
+ * model (At least / Exactly / At most / None over the five stored
+ * types) in build-rules-quantity.ts, and the display copy (entity
+ * names, short phrases, read-backs, failure reasons) in
+ * build-rules-copy.ts.
  *
  * NOTE: This module is framework-agnostic — no React imports — so the
  * same helpers can be reused by the (future) backend rules evaluator
@@ -118,33 +124,6 @@ export const RULE_TYPES: ReadonlyArray<RuleType> = [
   "count_exact",
   "count_min",
 ];
-
-export const RULE_TYPE_ICON: Record<RuleType, string> = {
-  before: "✓",
-  not_before: "✗",
-  count_max: "≤",
-  count_exact: "=",
-  count_min: "≥",
-};
-
-export const RULE_TYPE_LABEL: Record<RuleType, string> = {
-  before: "Must be built by",
-  not_before: "Must not be built before",
-  count_max: "",
-  count_exact: "",
-  count_min: "",
-};
-
-/** Tone hint for renderers (drives badge color in BuildEditorRules). */
-export type RuleTypeTone = "win" | "loss" | "neutral";
-
-export const RULE_TYPE_TONE: Record<RuleType, RuleTypeTone> = {
-  before: "win",
-  not_before: "loss",
-  count_max: "neutral",
-  count_exact: "neutral",
-  count_min: "neutral",
-};
 
 export interface BuildRuleBase {
   name: string;
@@ -322,18 +301,6 @@ export function defaultRuleFor(
   return { type: "before", name, time_lt: t, ...proxy };
 }
 
-export function cycleRuleType(rule: BuildRule): BuildRule {
-  const idx = RULE_TYPES.indexOf(rule.type);
-  const next = RULE_TYPES[(idx + 1) % RULE_TYPES.length];
-  return defaultRuleFor(
-    next,
-    rule.name,
-    rule.time_lt,
-    isCountRule(rule) ? rule.count : 1,
-    rule.proxy === true,
-  );
-}
-
 export function ruleFromEvent(ev: EventLike): BuildRule | null {
   const what = spaEventToWhat(ev);
   if (!what) return null;
@@ -407,87 +374,6 @@ export function formatTime(t: number): string {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${s < 10 ? "0" + s : "" + s}`;
-}
-
-/**
- * Plain-English breakdown of a v3 rule. Split into parts so the
- * renderer can apply JetBrains Mono / tabular numerals to the time
- * portion without re-parsing.
- *
- * Examples:
- *   { type: "before", name: "BuildStargate", time_lt: 210 }
- *     → { prefix: "",        entity: "Stargate",   connector: "before", time: "3:30" }
- *   { type: "not_before", name: "BuildRoboticsFacility", time_lt: 240 }
- *     → { prefix: "no ",     entity: "Robotics Facility", connector: "before", time: "4:00" }
- *   { type: "count_max", name: "TrainPhoenix", time_lt: 300, count: 2 }
- *     → { prefix: "≤ 2 ",    entity: "Phoenix",    connector: "by",     time: "5:00" }
- */
-export interface FormattedRule {
-  /** Lead-in phrase: "", "≤ 2 ", "= 1 ", "≥ 3 ". */
-  prefix: string;
-  /** Humanised entity name, "Stargate" / "Robotics Facility". */
-  entity: string;
-  /** Connector phrase describing the rule's time gate. */
-  connector: string;
-  /** Pre-formatted `m:ss` — render with `font-mono tabular-nums`. */
-  time: string;
-}
-
-export function formatRule(rule: BuildRule): FormattedRule {
-  const entity = `${rule.proxy === true ? "Proxy " : ""}${humanizeRuleEntity(rule.name)}`;
-  const time = formatTime(rule.time_lt);
-  switch (rule.type) {
-    case "before":
-      return { prefix: "", entity, connector: "before", time };
-    case "not_before":
-      return {
-        prefix: "",
-        entity,
-        connector: "must not be built before",
-        time,
-      };
-    case "count_max":
-      return {
-        prefix: `≤ ${rule.count} `,
-        entity,
-        connector: "by",
-        time,
-      };
-    case "count_exact":
-      return {
-        prefix: `= ${rule.count} `,
-        entity,
-        connector: "by",
-        time,
-      };
-    case "count_min":
-      return {
-        prefix: `≥ ${rule.count} `,
-        entity,
-        connector: "by",
-        time,
-      };
-  }
-}
-
-/**
- * Strip the canonical action verb (Build/Train/Research/Morph) from a
- * rule token and turn the rest into a spaced display name. Tokens that
- * don't carry a verb prefix (rare — only happens when the user typed a
- * raw entity name) are humanised as-is.
- */
-function humanizeRuleEntity(name: string): string {
-  const raw = String(name || "").trim();
-  if (!raw) return "";
-  const stripped = raw.replace(
-    /^(Build|Train|Research|Morph)(?=[A-Z])/,
-    "",
-  );
-  const normalized = stripped.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
-  if (normalized === "adeptpiercingattack" || normalized === "resonatingglaives") {
-    return "Resonating Glaives";
-  }
-  return stripped.replace(/([a-z0-9])([A-Z])/g, "$1 $2");
 }
 
 /**
@@ -574,7 +460,7 @@ export function sanitiseDraft(draft: BuildEditorDraft): SanitisedDraft {
     .map(sanitiseRule)
     .filter((r): r is BuildRule => r !== null);
   if (invalidProxyRule) {
-    errors.rules = `Proxy requirement needs a known building token (for example BuildPylon or BuildBarracks).`;
+    errors.rules = "“Only count proxied” needs a building token, for example BuildPylon or BuildBarracks.";
   } else if (rules.length === 0) {
     errors.rules = "Need at least one rule.";
   } else if (rules.length > RULES_MAX_PER_BUILD) {

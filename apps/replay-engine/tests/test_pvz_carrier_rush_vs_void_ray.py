@@ -51,7 +51,10 @@ def _unit(name: str, time: int) -> Dict[str, Any]:
 
 
 def _carrier_rush(void_rays: int = 1) -> List[Dict[str, Any]]:
-    """Stargate-first, 2 Stargates, Fleet Beacon, one Carrier by 6:20."""
+    """Stargate-first, 2 Stargates, Fleet Beacon, one Carrier by 6:40.
+
+    Fleet Beacon 4:40 + 43 s, then a 64 s Carrier: 6:27 at the earliest.
+    """
     events = [
         _building("Nexus", 0),
         _building("Pylon", 18),
@@ -64,7 +67,7 @@ def _carrier_rush(void_rays: int = 1) -> List[Dict[str, Any]]:
         _building("FleetBeacon", 280),
         _building("Nexus", 330),
         _unit("Oracle", 240),
-        _unit("Carrier", 380),
+        _unit("Carrier", 400),
     ]
     events += [_unit("VoidRay", 290 + 40 * i) for i in range(void_rays)]
     return events
@@ -114,12 +117,16 @@ def test_timeline_style_custom_build_still_steals_the_carrier_rush():
 
 
 def test_count_rules_leave_the_carrier_rush_alone():
-    """The editor's repeated-row counts: >= 2 Stargates, >= 4 Void Rays."""
+    """What the editor now saves from a 2-Stargate, 4-Void-Ray timeline:
+    each first row's ``before`` plus a ``count_min`` from the repeated row
+    (unit rows are start times, as the editor's timeline shows them)."""
     counted = _custom([
+        {"type": "before", "name": "BuildStargate", "time_lt": 200},
         {"type": "count_min", "name": "BuildStargate", "count": 2,
          "time_lt": 260},
+        {"type": "before", "name": "BuildVoidRay", "time_lt": 277},
         {"type": "count_min", "name": "BuildVoidRay", "count": 4,
-         "time_lt": 600},
+         "time_lt": 397},
     ])
     assert _labels(_carrier_rush(), counted) == ["PvZ - Carrier Rush"] * 2
     # A real 2-Stargate Void Ray game (no Carrier) still matches it.

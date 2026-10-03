@@ -56,7 +56,7 @@ export interface BuildEditorModalProps {
   /**
    * Demo mode (landing-page replay preview). The editor stays fully
    * interactive — name, race/vsRace, source-timeline rule promotion,
-   * custom rule pickers, strategy notes — but the preview-matches
+   * "Add a rule" bar, strategy notes — but the preview-matches
    * fetch is suppressed and Save is replaced with a sign-up CTA.
    */
   demoMode?: boolean;
@@ -67,7 +67,7 @@ export interface BuildEditorModalProps {
  *
  * Wraps:
  *   1. Basics (name, race, vs, skill level, description, share, strategy notes)
- *   2. Match rules (source timeline + rules list + custom rule pickers)
+ *   2. Match rules (source timeline + rules list + "Add a rule" bar)
  *   3. Match preview (live debounced /preview-matches against user's games)
  *   4. Sticky save bar (Save build / Save & Reclassify)
  *
@@ -92,6 +92,10 @@ export function BuildEditorModal({
 }: BuildEditorModalProps) {
   const { toast } = useToast();
   const sourceRows = useMemo(() => eventsToSourceRows(events), [events]);
+  // Edit mode rebuilds the timeline from the saved rules' deadlines
+  // (EditCustomBuildLauncher.docToEvents), so two rows of a token are two
+  // rules, not two Stargates, and must not be counted.
+  const countRepeats = mode !== "edit";
 
   const computedDefaultName = useMemo(
     () =>
@@ -143,6 +147,7 @@ export function BuildEditorModal({
       gameId,
       sourceEvents: events,
       sourceRows,
+      countRepeats,
       defaultName: computedDefaultName,
       perspective,
       surface: "buildEditor",
@@ -211,7 +216,7 @@ export function BuildEditorModal({
             <>
               Add rules below to capture the signature of this build.
               Click <span className="font-semibold">+</span> on a starred
-              event to start, or pick a custom rule type.
+              event to start, or use the “Add a rule” buttons.
             </>
           ) : (
             <>
@@ -255,6 +260,7 @@ export function BuildEditorModal({
               loading={editor.previewLoading}
               error={editor.previewError}
               rules={editor.draft.rules}
+              previewRules={editor.previewRules}
               expandedMatchId={editor.expandedMatchId}
               toggleInspect={editor.toggleInspect}
               hiddenMatchIds={editor.hiddenMatchIds}
@@ -273,9 +279,11 @@ export function BuildEditorModal({
               draft={editor.draft}
               errors={editor.errors}
               sourceRows={sourceRows}
+              countRepeats={countRepeats}
               updateRule={editor.updateRule}
               removeRule={editor.removeRule}
-              cycleRule={editor.cycleRule}
+              setRuleQuantity={editor.setRuleQuantity}
+              setRuleCount={editor.setRuleCount}
               addRuleFromEvent={editor.addRuleFromEvent}
               addCustomRule={editor.addCustomRule}
             />

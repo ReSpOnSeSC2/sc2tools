@@ -61,7 +61,7 @@ describe("BuildEditorSheet proxy requirements", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add step" }));
 
     const emptyProxy = screen.getByRole("checkbox", {
-      name: "Require this building to be proxied",
+      name: "Only count proxied buildings",
     }) as HTMLInputElement;
     expect(emptyProxy.disabled).toBe(true);
 
@@ -69,9 +69,12 @@ describe("BuildEditorSheet proxy requirements", () => {
       target: { value: "Barracks" },
     });
     const proxy = screen.getByRole("checkbox", {
-      name: "Require Barracks to be proxied",
+      name: "Only count proxied Barracks",
     }) as HTMLInputElement;
     expect(proxy.disabled).toBe(false);
+    expect(proxy.closest("label")?.getAttribute("title")).toMatch(
+      /^Only count this structure when placed more than 50 world units/,
+    );
     fireEvent.click(proxy);
 
     fireEvent.click(screen.getByRole("button", { name: "Create build" }));
@@ -112,7 +115,7 @@ describe("BuildEditorSheet proxy requirements", () => {
     );
 
     expect((screen.getByRole("checkbox", {
-      name: "Require Gateway to be proxied",
+      name: "Only count proxied Gateway",
     }) as HTMLInputElement).checked).toBe(true);
   });
 
@@ -133,7 +136,7 @@ describe("BuildEditorSheet proxy requirements", () => {
       target: { value: "Barracks" },
     });
     fireEvent.click(screen.getByRole("checkbox", {
-      name: "Require Barracks to be proxied",
+      name: "Only count proxied Barracks",
     }));
     fireEvent.change(screen.getByLabelText("Step unit"), {
       target: { value: "Marine" },
@@ -143,8 +146,38 @@ describe("BuildEditorSheet proxy requirements", () => {
     fireEvent.submit(form as HTMLFormElement);
 
     expect((await screen.findByRole("alert")).textContent).toMatch(
-      /proxy requirement must use a known building/i,
+      /Only count proxied” needs a known building/,
     );
     expect(harness.apiCall).not.toHaveBeenCalled();
+  });
+});
+
+describe("BuildEditorSheet step wording", () => {
+  it("reads each step as at least that many started before its time", () => {
+    render(
+      <BuildEditorSheet
+        open
+        onClose={vi.fn()}
+        build={null}
+        onSaved={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(
+      "Each step means at least that many started before its time.",
+    )).toBeTruthy();
+    expect(screen.getByText(/No steps yet\./).textContent).toContain(
+      "2:30 Stargate means at least 1 Stargate started before 2:30",
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add step" }));
+    expect(screen.getByRole("textbox", {
+      name: "Started before (game time)",
+    })).toBeTruthy();
+    expect(screen.getByRole("spinbutton", {
+      name: "At least how many",
+    })).toBeTruthy();
+    expect(screen.getByLabelText("Step unit")).toBeTruthy();
+    expect(screen.getByText("Only count proxied")).toBeTruthy();
   });
 });
