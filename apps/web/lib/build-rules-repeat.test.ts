@@ -18,7 +18,7 @@ const firstStargate: BuildRule = {
 };
 
 describe("raiseRuleForRepeatRow", () => {
-  test("the 2nd Stargate adds '≥ 2 by then' and keeps 'first by 3:20'", () => {
+  test("the 2nd Stargate adds 'at least 2 before then' and keeps 'first before 3:20'", () => {
     const rules: BuildRule[] = [
       { type: "before", name: "BuildGateway", time_lt: 90 },
       firstStargate,
@@ -72,7 +72,7 @@ describe("raiseRuleForRepeatRow", () => {
     ]);
   });
 
-  test("a cap below the row's count is never turned into '≥ N'", () => {
+  test("a cap below the row's count is never turned into 'at least N'", () => {
     for (const type of ["count_max", "count_exact"] as const) {
       const rules: BuildRule[] = [
         firstStargate,

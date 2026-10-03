@@ -193,6 +193,7 @@ describe("evaluateRule prereq filter — Phoenix needs Stargate", () => {
     const out = evaluateRule(rule, events);
     expect(out.pass).toBe(false);
     expect(out.reason).toMatch(/BuildPhoenix/);
+    expect(out.got).toBe(0);
   });
 
   test("real Phoenix with Stargate passes count_min", () => {
@@ -479,6 +480,109 @@ describe("evaluateRules end-to-end", () => {
       { type: "count_min", name: "BuildPhoenix", time_lt: 420, count: 1 },
     ];
     expect(evaluateRules(rules, events).pass).toBe(true);
+  });
+});
+
+describe("failure reasons and counts", () => {
+  // Three Stargates (3:00, 4:00, 5:00) and one Barracks, all at home.
+  const home = { is_proxy: false, proxy_classification_known: true };
+  const events = [
+    building("Stargate", 180, home),
+    building("Stargate", 240, home),
+    building("Stargate", 300, home),
+    building("Barracks", 70, home),
+  ];
+
+  test.each([
+    [
+      { type: "before", name: "BuildVoidRay", time_lt: 400 },
+      "BuildVoidRay: needs at least 1 before 6:40, had 0", 0,
+    ],
+    [
+      { type: "not_before", name: "BuildStargate", time_lt: 240 },
+      "BuildStargate: needs none before 4:00, had 1", 1,
+    ],
+    [
+      { type: "count_max", name: "BuildStargate", time_lt: 360, count: 1 },
+      "BuildStargate: needs at most 1 before 6:00, had 3", 3,
+    ],
+    [
+      { type: "count_exact", name: "BuildStargate", time_lt: 360, count: 2 },
+      "BuildStargate: needs exactly 2 before 6:00, had 3", 3,
+    ],
+    [
+      { type: "count_min", name: "BuildStargate", time_lt: 360, count: 4 },
+      "BuildStargate: needs at least 4 before 6:00, had 3", 3,
+    ],
+    [
+      { type: "before", name: "BuildBarracks", time_lt: 120, proxy: true },
+      "BuildBarracks (proxied): needs at least 1 before 2:00, had 0", 0,
+    ],
+  ])("reason and got per rule type: %o", (rule, reason, got) => {
+    const out = evaluateRule(rule, events);
+    expect(out).toStrictEqual({ pass: false, reason, got });
+    expect(out.reason).not.toMatch(/[≥≤=]/);
+  });
+
+  test("pass results stay exactly {pass:true}", () => {
+    const passing = [
+      { type: "before", name: "BuildStargate", time_lt: 200 },
+      { type: "not_before", name: "BuildStargate", time_lt: 180 },
+      { type: "count_max", name: "BuildStargate", time_lt: 360, count: 3 },
+      { type: "count_exact", name: "BuildStargate", time_lt: 300, count: 2 },
+      { type: "count_min", name: "BuildStargate", time_lt: 360, count: 3 },
+    ];
+    for (const rule of passing) {
+      expect(evaluateRule(rule, events)).toStrictEqual({ pass: true });
+    }
+  });
+
+  test("invalid and unavailable results carry no got", () => {
+    expect(evaluateRule(
+      { type: "before", name: "Build Stargate", time_lt: 200 }, events,
+    )).not.toHaveProperty("got");
+    expect(evaluateRule(
+      { type: "before", name: "BuildMarine", time_lt: 200, proxy: true }, events,
+    )).not.toHaveProperty("got");
+    const unknown = evaluateRule(
+      { type: "not_before", name: "BuildBarracks", time_lt: 120, proxy: true },
+      [building("Barracks", 70)],
+    );
+    expect(unknown.unavailable).toBe(true);
+    expect(unknown).not.toHaveProperty("got");
+  });
+
+  test("evaluateRules reports failedGot for the single failing rule", () => {
+    const rules = [
+      { type: "before", name: "BuildStargate", time_lt: 400 },
+      { type: "count_min", name: "BuildStargate", time_lt: 200, count: 2 },
+    ];
+    const out = evaluateRules(rules, events);
+    expect(out).toStrictEqual({
+      pass: false,
+      almost: true,
+      failedRule: rules[1],
+      failedReason: "BuildStargate: needs at least 2 before 3:20, had 1",
+      failedGot: 1,
+    });
+    expect(out.failedRule).toBe(rules[1]);
+  });
+
+  test("evaluateRules takes failedGot from the first failure only", () => {
+    const twoFail = evaluateRules([
+      { type: "count_max", name: "BuildStargate", time_lt: 360, count: 1 },
+      { type: "before", name: "BuildVoidRay", time_lt: 400 },
+    ], events);
+    expect(twoFail.almost).toBe(false);
+    expect(twoFail.failedGot).toBe(3);
+    const badName = evaluateRules(
+      [{ type: "before", name: "Build Stargate", time_lt: 400 }], events,
+    );
+    expect(badName.almost).toBe(true);
+    expect(badName).not.toHaveProperty("failedGot");
+    expect(evaluateRules(
+      [{ type: "before", name: "BuildStargate", time_lt: 400 }], events,
+    )).toStrictEqual({ pass: true, almost: false });
   });
 });
 

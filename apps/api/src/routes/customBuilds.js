@@ -534,7 +534,10 @@ function buildCustomBuildsRouter(deps) {
       let release = null;
       /** @type {Array<{game_id: string, build_name: string, map: string|null, result: string|null, date: Date|null}>} */
       const matches = [];
-      /** @type {Array<{game_id: string, build_name: string, failed_rule_name?: string, failed_reason: string, map: string|null, result: string|null, date: Date|null}>} */
+      // failed_rule_index is the failing rule's index in the request's
+      // `rules` (blank placeholders included) and failed_count is how many
+      // the game had before its time, so the SPA can word the reason.
+      /** @type {Array<{game_id: string, build_name: string, failed_rule_name?: string, failed_reason: string, failed_rule_index?: number, failed_count?: number, map: string|null, result: string|null, date: Date|null}>} */
       const almostMatches = [];
       let evalErrors = 0;
       let scanned = 0;
@@ -618,12 +621,18 @@ function buildCustomBuildsRouter(deps) {
           evalRes.almost &&
           almostMatches.length < PREVIEW_TRUNCATION_LIMIT
         ) {
+          // `rules` keeps rawRules' objects, so indexOf finds the draft index.
+          const failedIndex = evalRes.failedRule
+            ? rawRules.indexOf(evalRes.failedRule)
+            : -1;
           almostMatches.push({
             ...summary,
             failed_rule_name: evalRes.failedRule
               ? evalRes.failedRule.name
               : undefined,
             failed_reason: evalRes.failedReason || "rule failed",
+            failed_rule_index: failedIndex >= 0 ? failedIndex : undefined,
+            failed_count: evalRes.failedGot,
           });
         }
       }

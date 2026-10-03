@@ -15,6 +15,7 @@ import type {
   SourceTimelineRow,
   VsRaceLite,
 } from "@/lib/build-rules";
+import type { RuleQuantifier } from "@/lib/build-rules-quantity";
 import type { BuildOrderEvent } from "@/lib/build-events";
 
 export interface BuildEditorPreviewMatch {
@@ -28,6 +29,13 @@ export interface BuildEditorPreviewMatch {
 export interface BuildEditorPreviewAlmost extends BuildEditorPreviewMatch {
   failed_rule_name?: string;
   failed_reason: string;
+  /**
+   * Index of the failed rule in the rules array the preview was
+   * requested with (BuildEditorState.previewRules). Absent on older APIs.
+   */
+  failed_rule_index?: number;
+  /** How many the game had before the failed rule's time. */
+  failed_count?: number;
 }
 
 export interface BuildEditorPreviewResult {
@@ -46,7 +54,7 @@ export interface BuildEditorContext {
   sourceRows: ReadonlyArray<SourceTimelineRow>;
   /**
    * Whether a later row of a token already in the rules can raise it to
-   * "≥ N" (default true). False when the rows are not a replay's events
+   * "at least N" (default true). False when the rows are not a replay's events
    * but are rebuilt from a saved build's rule deadlines (edit mode).
    */
   countRepeats?: boolean;
@@ -66,6 +74,12 @@ export interface BuildEditorState {
   errors: BuildEditorErrors;
 
   preview: BuildEditorPreviewResult | null;
+  /**
+   * The exact `draft.rules` array sent with the request whose result
+   * is in `preview` (so almost-match indexes resolve against it); []
+   * in demo mode and when there are no rules.
+   */
+  previewRules: ReadonlyArray<BuildRule>;
   previewLoading: boolean;
   previewError: string | null;
   previewPage: number;
@@ -86,12 +100,17 @@ export interface BuildEditorState {
   saveError: string | null;
   savedOk: boolean;
 
-  /** Update one rule by index. */
+  /** Update one rule's name, time or proxy flag by index. */
   updateRule: (idx: number, patch: Partial<BuildRule>) => void;
   /** Remove one rule. */
   removeRule: (idx: number) => void;
-  /** Cycle one rule's type. */
-  cycleRule: (idx: number) => void;
+  /**
+   * Re-express one rule under a quantifier (withQuantifier). `carry` is
+   * the number a None rule takes when it gains one (default 1).
+   */
+  setRuleQuantity: (idx: number, q: RuleQuantifier, carry?: number) => void;
+  /** Set one rule's number (withCount); `before` becomes count_min at 2+. */
+  setRuleCount: (idx: number, n: number) => void;
   /** Add a rule from an SPA event. */
   addRuleFromEvent: (ev: {
     time: number;
@@ -159,7 +178,8 @@ export interface BuildEditorRulesProps {
   countRepeats?: boolean;
   updateRule: BuildEditorState["updateRule"];
   removeRule: BuildEditorState["removeRule"];
-  cycleRule: BuildEditorState["cycleRule"];
+  setRuleQuantity: BuildEditorState["setRuleQuantity"];
+  setRuleCount: BuildEditorState["setRuleCount"];
   addRuleFromEvent: BuildEditorState["addRuleFromEvent"];
   addCustomRule: BuildEditorState["addCustomRule"];
 }
@@ -169,6 +189,8 @@ export interface BuildEditorPreviewProps {
   loading: boolean;
   error: string | null;
   rules: ReadonlyArray<BuildRule>;
+  /** See BuildEditorState.previewRules. */
+  previewRules: ReadonlyArray<BuildRule>;
   expandedMatchId: string | null;
   toggleInspect: (gameId: string) => void;
   hiddenMatchIds: ReadonlySet<string>;

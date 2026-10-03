@@ -8,7 +8,8 @@
  * timeline really meant "1+ Stargate, 1+ Void Ray" -- it matched any
  * Stargate game with a single Void Ray, Carrier rushes included, and the
  * cloud's ingest tagger then relabelled those games with its name.
- * Clicking the 2nd Stargate row now asks for "≥ 2 Stargate by then".
+ * Clicking the 2nd Stargate row now asks for "at least 2 Stargates
+ * before then".
  *
  * Framework-agnostic (no React) so the editor hook and the timeline
  * panel share one definition of when a row can raise a rule.
@@ -58,12 +59,12 @@ function covers(rule: BuildRule, row: RepeatRow): boolean {
  *   - no `before` / `count_min` rule of the token counts the row
  *     (`not_before` / `count_max` / `count_exact` stay as the user set them);
  *   - a rule of the token already requires the row's count, or caps the
- *     count below it ("≤ 1 Stargate" never turns into "≥ 2");
+ *     count below it ("at most 1 Stargate" never turns into "at least 2");
  *   - the row is at the 30:00 rule ceiling, where rows share one clamped
  *     time and their count is not the row's own.
  *
  * An existing `count_min` is raised in place. A lone `before` keeps its
- * own deadline ("first Stargate by 3:20") and gets a count rule after it.
+ * own deadline ("first Stargate before 3:20") and gets a count rule after it.
  * The new deadline is row + 30 s, never earlier than the rule's own.
  */
 export function raiseRuleForRepeatRow(

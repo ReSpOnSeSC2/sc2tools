@@ -141,6 +141,34 @@ describe("useBuildEditorState preview requests", () => {
     expect(result.current.previewError).toBeNull();
   });
 
+  it("previewRules is the rules array the preview was requested with", async () => {
+    const pending = deferred<BuildEditorPreviewResult>();
+    harness.apiCall.mockImplementationOnce(() => pending.promise);
+    const { result } = renderHook(() =>
+      useBuildEditorState({ open: true, context, initialDraft }),
+    );
+    expect(result.current.previewRules).toEqual([]);
+
+    await startDebouncedPreview();
+    const requested = result.current.draft.rules;
+    const body = JSON.parse(String(
+      (harness.apiCall.mock.calls[0]?.[2] as RequestInit).body,
+    ));
+    expect(body.rules).toEqual(requested);
+    // Not yet answered: no result, so nothing to resolve indexes against.
+    expect(result.current.previewRules).toEqual([]);
+
+    await act(async () => {
+      pending.resolve(preview("g1"));
+      await Promise.resolve();
+    });
+    expect(result.current.previewRules).toBe(requested);
+
+    // Clearing every rule empties the snapshot with the preview.
+    act(() => result.current.removeRule(0));
+    expect(result.current.previewRules).toEqual([]);
+  });
+
   it("aborts the active preview when the editor unmounts", async () => {
     const pending = deferred<BuildEditorPreviewResult>();
     harness.apiCall.mockImplementationOnce(() => pending.promise);
@@ -399,7 +427,7 @@ describe("useBuildEditorState rules from the source timeline", () => {
     act(() => result.current.addRuleFromEvent(click(sourceRows[3])));
     expect(result.current.draft.rules).toHaveLength(3);
     expect(result.current.toasts.map((toast) => toast.text)).toEqual([
-      "BuildVoidRay is already in your rules.",
+      "Void Ray is already in your rules. Change its number there to require more.",
     ]);
   });
 
@@ -447,7 +475,73 @@ describe("useBuildEditorState rules from the source timeline", () => {
 
     expect(result.current.draft.rules).toHaveLength(1);
     expect(result.current.toasts.map((toast) => toast.text)).toEqual([
-      "BuildStargate is already in your rules.",
+      "Stargate is already in your rules. Change its number there to require more.",
     ]);
+  });
+});
+
+describe("useBuildEditorState quantity and count", () => {
+  const render = (rules: BuildEditorDraft["rules"]) =>
+    renderHook(() =>
+      useBuildEditorState({
+        open: true,
+        context,
+        initialDraft: { ...initialDraft, rules },
+      }),
+    );
+
+  it("setRuleCount(0, 2) turns before into count_min 2 at the same time and proxy", () => {
+    const { result } = render([
+      { type: "before", name: "BuildBarracks", time_lt: 120, proxy: true },
+    ]);
+
+    act(() => result.current.setRuleCount(0, 1));
+    expect(result.current.isDirty).toBe(false);
+
+    act(() => result.current.setRuleCount(0, 2));
+    expect(result.current.draft.rules).toEqual([
+      { type: "count_min", name: "BuildBarracks", count: 2, time_lt: 120, proxy: true },
+    ]);
+    expect(result.current.isDirty).toBe(true);
+  });
+
+  it("setRuleQuantity: at_least with 1 stores before, none stores not_before, proxy kept", () => {
+    const { result } = render([
+      { type: "count_max", name: "BuildBarracks", count: 1, time_lt: 120, proxy: true },
+      { type: "count_exact", name: "BuildStargate", count: 3, time_lt: 300 },
+    ]);
+
+    act(() => result.current.setRuleQuantity(0, "at_least"));
+    act(() => result.current.setRuleQuantity(1, "none"));
+    expect(result.current.draft.rules).toEqual([
+      { type: "before", name: "BuildBarracks", time_lt: 120, proxy: true },
+      { type: "not_before", name: "BuildStargate", time_lt: 300 },
+    ]);
+
+    // None has no number, so the row's remembered count comes back.
+    act(() => result.current.setRuleQuantity(1, "exactly", 3));
+    expect(result.current.draft.rules[1]).toEqual({
+      type: "count_exact",
+      name: "BuildStargate",
+      count: 3,
+      time_lt: 300,
+    });
+  });
+
+  it("opening a build with count_max 0 and count_min 1 leaves isDirty false", () => {
+    const { result } = render([
+      { type: "count_max", name: "BuildStargate", count: 0, time_lt: 300 },
+      { type: "count_min", name: "BuildVoidRay", count: 1, time_lt: 400 },
+    ]);
+    const opened = result.current.draft;
+
+    // Re-choosing what each row already shows is a no-op.
+    act(() => result.current.setRuleQuantity(0, "at_most"));
+    act(() => result.current.setRuleQuantity(1, "at_least"));
+    act(() => result.current.setRuleCount(0, 0));
+    act(() => result.current.setRuleCount(1, 1));
+
+    expect(result.current.draft).toBe(opened);
+    expect(result.current.isDirty).toBe(false);
   });
 });

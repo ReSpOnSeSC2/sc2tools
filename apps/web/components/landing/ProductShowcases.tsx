@@ -314,9 +314,9 @@ export function PracticePreview() {
               <span className="text-micro text-text-dim">BACKGROUND MATCHING</span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <span className="rounded-sm border border-success/30 bg-success/10 px-2 py-1 text-micro text-success">✓ Twilight by 3:50</span>
-              <span className="rounded-sm border border-success/30 bg-success/10 px-2 py-1 text-micro text-success">✓ 4+ Gateways by 5:30</span>
-              <span className="rounded-sm border border-danger/30 bg-danger/10 px-2 py-1 text-micro text-danger">× Stargate before 6:00</span>
+              <span className="rounded-sm border border-success/30 bg-success/10 px-2 py-1 text-micro text-success">At least 1 Twilight Council before 3:50</span>
+              <span className="rounded-sm border border-success/30 bg-success/10 px-2 py-1 text-micro text-success">At least 4 Gateways before 5:30</span>
+              <span className="rounded-sm border border-danger/30 bg-danger/10 px-2 py-1 text-micro text-danger">No Stargate before 6:00</span>
             </div>
           </div>
           <p className="mt-4 text-caption text-text-muted">Save any replay as a build, publish it by name or anonymously, then let your full history reclassify safely in the background.</p>

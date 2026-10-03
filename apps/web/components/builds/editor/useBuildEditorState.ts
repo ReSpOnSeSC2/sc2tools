@@ -6,7 +6,6 @@ import { apiCall } from "@/lib/clientApi";
 import {
   PREVIEW_DEBOUNCE_MS,
   RULES_MAX_PER_BUILD,
-  cycleRuleType,
   defaultRuleFor,
   ruleFromEvent,
   sanitiseDraft,
@@ -19,6 +18,12 @@ import {
   applyRepeatRowRaise,
   raiseRuleForRepeatRow,
 } from "@/lib/build-rules-repeat";
+import { duplicateRuleToast } from "@/lib/build-rules-copy";
+import {
+  withCount,
+  withQuantifier,
+  type RuleQuantifier,
+} from "@/lib/build-rules-quantity";
 import type { BuildOrderEvent } from "@/lib/build-events";
 import type {
   BuildEditorContext,
@@ -30,6 +35,8 @@ import type {
 } from "./BuildEditor.types";
 
 const TOAST_TTL_MS = 6000;
+/** Stable "no rules" value for previewRules, so resets don't re-render. */
+const NO_RULES: ReadonlyArray<BuildRule> = [];
 
 export interface UseBuildEditorStateOptions {
   open: boolean;
@@ -103,6 +110,8 @@ export function useBuildEditorState(
   const [draft, setDraft] = useState<BuildEditorDraft>(initialDraft);
   const [errors, setErrors] = useState<BuildEditorErrors>({});
   const [preview, setPreview] = useState<BuildEditorPreviewResult | null>(null);
+  const [previewRules, setPreviewRules] =
+    useState<ReadonlyArray<BuildRule>>(NO_RULES);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewPage, setPreviewPage] = useState(0);
@@ -134,6 +143,7 @@ export function useBuildEditorState(
     setDraft(initialDraft);
     setErrors({});
     setPreview(null);
+    setPreviewRules(NO_RULES);
     setPreviewLoading(false);
     setPreviewError(null);
     setPreviewPage(0);
@@ -165,6 +175,7 @@ export function useBuildEditorState(
         scanned_games: 0,
         truncated: false,
       });
+      setPreviewRules(NO_RULES);
       setPreviewError(null);
       setPreviewLoading(false);
       return;
@@ -176,12 +187,15 @@ export function useBuildEditorState(
         scanned_games: 0,
         truncated: false,
       });
+      setPreviewRules(NO_RULES);
       setPreviewError(null);
       setPreviewLoading(false);
       return;
     }
     let disposed = false;
     let activeController: AbortController | null = null;
+    // The almost-match indexes in the response point into this array.
+    const requestRules = draft.rules;
     setPreviewError(null);
     setPreviewLoading(true);
     const handle = window.setTimeout(async () => {
@@ -195,7 +209,7 @@ export function useBuildEditorState(
           {
             method: "POST",
             body: JSON.stringify({
-              rules: draft.rules,
+              rules: requestRules,
               race: draft.race,
               vsRace: draft.vsRace,
               perspective: context.perspective === "opponent" ? "opponent" : "you",
@@ -211,6 +225,7 @@ export function useBuildEditorState(
           return;
         }
         setPreview(result);
+        setPreviewRules(requestRules);
       } catch (err: unknown) {
         if (
           disposed ||
@@ -290,15 +305,36 @@ export function useBuildEditorState(
     }));
   }, []);
 
-  const cycleRule = useCallback((idx: number) => {
-    setDraft((d) => {
-      const next = d.rules.slice();
-      const cur = next[idx];
-      if (!cur) return d;
-      next[idx] = cycleRuleType(cur);
-      return { ...d, rules: next };
-    });
-  }, []);
+  /**
+   * Replace rule `idx` with `change(rule)`. Unlike updateRule this swaps
+   * the whole rule (no stale `count` survives a type change) and keeps
+   * the draft untouched when `change` returns the same object, so an
+   * unchanged picker or number never dirties a saved build.
+   */
+  const replaceRule = useCallback(
+    (idx: number, change: (rule: BuildRule) => BuildRule) => {
+      setDraft((d) => {
+        const cur = d.rules[idx];
+        const next = cur ? change(cur) : cur;
+        if (!cur || next === cur) return d;
+        const rules = d.rules.slice();
+        rules[idx] = next;
+        return { ...d, rules };
+      });
+    },
+    [],
+  );
+
+  const setRuleQuantity = useCallback(
+    (idx: number, q: RuleQuantifier, carry?: number) =>
+      replaceRule(idx, (rule) => withQuantifier(rule, q, carry)),
+    [replaceRule],
+  );
+
+  const setRuleCount = useCallback(
+    (idx: number, n: number) => replaceRule(idx, (rule) => withCount(rule, n)),
+    [replaceRule],
+  );
 
   const addRuleFromEvent = useCallback(
     (ev: {
@@ -313,7 +349,7 @@ export function useBuildEditorState(
         const r = ruleFromEvent(ev);
         if (!r) return d;
         // A later row of a token already in the rules asks for that many
-        // (the 2nd Stargate -> "≥ 2 Stargate"). Raising a count rule adds
+        // (the 2nd Stargate -> "at least 2 Stargates"). Raising a count rule adds
         // none, so it is allowed at the rule cap.
         const raise = countRepeats
           ? raiseRuleForRepeatRow(d.rules, sourceRows, {
@@ -327,7 +363,7 @@ export function useBuildEditorState(
           return { ...d, rules: applyRepeatRowRaise(d.rules, raise) };
         }
         if (!raise && d.rules.some((existing) => existing.name === r.name)) {
-          pushToast("warn", `${r.name} is already in your rules.`);
+          pushToast("warn", duplicateRuleToast(r.name));
           return d;
         }
         if (atCap) {
@@ -578,6 +614,7 @@ export function useBuildEditorState(
     setDraft,
     errors,
     preview,
+    previewRules,
     previewLoading,
     previewError,
     previewPage,
@@ -596,7 +633,8 @@ export function useBuildEditorState(
     savedOk,
     updateRule,
     removeRule,
-    cycleRule,
+    setRuleQuantity,
+    setRuleCount,
     addRuleFromEvent,
     addCustomRule,
     isDirty,

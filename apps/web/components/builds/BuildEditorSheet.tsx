@@ -270,7 +270,7 @@ export function BuildEditorSheet({
     );
     if (invalidProxyRow) {
       setError(
-        "A proxy requirement must use a known building, such as Pylon, Gateway, Barracks, or Hatchery.",
+        "“Only count proxied” needs a known building, such as Pylon, Gateway, Barracks, or Hatchery.",
       );
       return;
     }
@@ -635,10 +635,14 @@ function SignatureEditor({
           Add step
         </Button>
       </header>
+      <p className="text-micro text-text-dim">
+        Each step means at least that many started before its time.
+      </p>
       {rows.length === 0 ? (
         <p className="rounded-md border border-dashed border-border p-4 text-center text-caption text-text-muted">
-          No steps yet. Add timings (e.g. <code>2:30 Stargate</code>) so the
-          classifier can recognise this build.
+          No steps yet. Add timings (e.g. <code>2:30 Stargate</code> means at
+          least 1 Stargate started before 2:30) so the classifier can
+          recognise this build.
         </p>
       ) : (
         <ul className="space-y-2">
@@ -675,7 +679,7 @@ function SignatureRow({
   return (
     <li className="grid grid-cols-12 items-center gap-2 rounded-md border border-border bg-bg-surface p-2">
       <label className="col-span-3 sm:col-span-2 text-caption text-text-muted">
-        <span className="sr-only">Time</span>
+        <span className="sr-only">Started before (game time)</span>
         <Input
           inputSize="sm"
           value={timeText}
@@ -687,7 +691,7 @@ function SignatureRow({
           }}
           className="font-mono tabular-nums"
           inputMode="numeric"
-          aria-label="Step time"
+          aria-label="Started before (game time)"
           placeholder="0:00"
         />
       </label>
@@ -702,7 +706,7 @@ function SignatureRow({
         />
       </label>
       <label className="col-span-2 sm:col-span-2 text-caption text-text-muted">
-        <span className="sr-only">Count</span>
+        <span className="sr-only">At least how many</span>
         <Input
           inputSize="sm"
           type="number"
@@ -714,7 +718,7 @@ function SignatureRow({
             if (Number.isFinite(n)) onChange({ count: Math.max(1, Math.min(200, n)) });
           }}
           className="text-right font-mono tabular-nums"
-          aria-label="Step count"
+          aria-label="At least how many"
         />
       </label>
       <button
@@ -738,10 +742,10 @@ function SignatureRow({
         ].join(" ")}
         title={
           proxyEligible
-            ? `Require this structure to be ${PROXY_RULE_DISTANCE_HINT}.`
+            ? `Only count this structure when placed ${PROXY_RULE_DISTANCE_HINT}.`
             : row.proxy === true
-              ? "Enter a known building or turn this requirement off before saving."
-              : "Enter a known building to enable the proxy requirement."
+              ? "Only works for buildings. Enter one, such as Pylon, or untick this before saving."
+              : "Only works for buildings. Enter one, such as Barracks, to turn this on."
         }
       >
         <input
@@ -749,10 +753,10 @@ function SignatureRow({
           checked={row.proxy === true}
           disabled={!proxyEligible && row.proxy !== true}
           onChange={(e) => onChange({ proxy: e.target.checked })}
-          aria-label={`Require ${row.unit || "this building"} to be proxied`}
+          aria-label={`Only count proxied ${row.unit.trim() || "buildings"}`}
           className="h-4 w-4 accent-accent-cyan"
         />
-        <span className="text-caption font-semibold">Must be proxied</span>
+        <span className="text-caption font-semibold">Only count proxied</span>
         <span className="text-micro text-text-dim">
           {PROXY_RULE_DISTANCE_HINT.charAt(0).toUpperCase()}
           {PROXY_RULE_DISTANCE_HINT.slice(1)}.

@@ -1,8 +1,15 @@
 "use client";
 
-import { AlertTriangle, ChevronDown, ChevronRight, X } from "lucide-react";
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  CircleX,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { formatTime, PREVIEW_PAGE_SIZE } from "@/lib/build-rules";
+import { describeRuleFailure } from "@/lib/build-rules-copy";
 import type { BuildOrderEvent } from "@/lib/build-events";
 import type {
   BuildEditorPreviewAlmost,
@@ -21,8 +28,10 @@ import type { BuildRule } from "@/lib/build-rules";
  *   - Optionally a "Hidden N · show all" link when the user has
  *     dismissed false-positive matches.
  *   - The matches list (paginated, 5/page).
- *   - The almost-matches list (one rule failed, with the failure
- *     reason inline).
+ *   - The almost-matches list (one rule failed). The missed rule reads
+ *     as a second line under the game, worded from `previewRules` (the
+ *     rules this preview was requested with) when the API's index,
+ *     name and count agree with them, else the API's failed_reason.
  *
  * Each row supports inline inspect — clicking expands the row to show
  * the underlying parsed events from /v1/games/:id/build-order. Events
@@ -34,6 +43,7 @@ export function BuildEditorPreview({
   loading,
   error,
   rules,
+  previewRules,
   expandedMatchId,
   toggleInspect,
   hiddenMatchIds,
@@ -104,6 +114,7 @@ export function BuildEditorPreview({
           ruleCount={rules.length}
           isAlmost={false}
           rules={rules}
+          previewRules={previewRules}
           expandedMatchId={expandedMatchId}
           toggleInspect={toggleInspect}
           hideMatch={hideMatch}
@@ -114,13 +125,14 @@ export function BuildEditorPreview({
 
       {almost.length > 0 ? (
         <PreviewList
-          label="Almost matches — failed exactly 1 rule (click ▶ to inspect)"
+          label="Almost matches — missed one rule · click a game to inspect"
           items={almost}
           page={almostPage}
           setPage={setAlmostPage}
           ruleCount={0}
           isAlmost
           rules={rules}
+          previewRules={previewRules}
           expandedMatchId={expandedMatchId}
           toggleInspect={toggleInspect}
           hideMatch={hideMatch}
@@ -186,6 +198,7 @@ interface PreviewListProps {
   ruleCount: number;
   isAlmost: boolean;
   rules: ReadonlyArray<BuildRule>;
+  previewRules: ReadonlyArray<BuildRule>;
   expandedMatchId: string | null;
   toggleInspect: (gameId: string) => void;
   hideMatch: (gameId: string) => void;
@@ -201,6 +214,7 @@ function PreviewList({
   ruleCount,
   isAlmost,
   rules,
+  previewRules,
   expandedMatchId,
   toggleInspect,
   hideMatch,
@@ -227,6 +241,11 @@ function PreviewList({
             indexLabel={start + i + 1}
             ruleCount={ruleCount}
             isAlmost={isAlmost}
+            reason={
+              isAlmost
+                ? almostReasonText(m as BuildEditorPreviewAlmost, previewRules)
+                : ""
+            }
             rules={rules}
             expanded={!!m.game_id && expandedMatchId === m.game_id}
             toggleInspect={toggleInspect}
@@ -252,11 +271,40 @@ function PreviewList({
 /* PreviewRow                                                         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * The reason an almost-match missed. Worded by describeRuleFailure from
+ * the rule the preview was requested with, but only when the API's
+ * index is in range, that rule's name is the API's failed_rule_name and
+ * a count came back. Otherwise (an older API, or a newer one this web
+ * cannot read) the API's own failed_reason is shown verbatim.
+ */
+function almostReasonText(
+  row: BuildEditorPreviewAlmost,
+  previewRules: ReadonlyArray<BuildRule>,
+): string {
+  const i = row.failed_rule_index;
+  const rule =
+    typeof i === "number" && Number.isInteger(i) && i >= 0
+      ? previewRules[i]
+      : undefined;
+  if (
+    rule &&
+    rule.name === row.failed_rule_name &&
+    typeof row.failed_count === "number" &&
+    Number.isFinite(row.failed_count)
+  ) {
+    return describeRuleFailure(rule, row.failed_count);
+  }
+  return row.failed_reason;
+}
+
 interface PreviewRowProps {
   row: BuildEditorPreviewMatch | BuildEditorPreviewAlmost;
   indexLabel: number;
   ruleCount: number;
   isAlmost: boolean;
+  /** Almost rows: the missed-rule line (see almostReasonText). */
+  reason: string;
   rules: ReadonlyArray<BuildRule>;
   expanded: boolean;
   toggleInspect: (gameId: string) => void;
@@ -270,6 +318,7 @@ function PreviewRow({
   indexLabel,
   ruleCount,
   isAlmost,
+  reason,
   rules,
   expanded,
   toggleInspect,
@@ -320,22 +369,21 @@ function PreviewRow({
         ) : (
           <span className="w-5" />
         )}
-        <span
-          className={[
-            "flex-1 truncate",
-            canInspect ? "text-accent-cyan" : "text-text",
-          ].join(" ")}
-        >
-          {row.build_name}
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span
+            className={[
+              "truncate",
+              canInspect ? "text-accent-cyan" : "text-text",
+            ].join(" ")}
+          >
+            {row.build_name}
+          </span>
+          {isAlmost ? <MissedRuleLine text={reason} /> : null}
         </span>
         <span className="hidden max-w-[140px] truncate font-mono text-micro tabular-nums text-text-dim sm:inline">
           {row.game_id || "—"}
         </span>
-        {isAlmost ? (
-          <span className="max-w-[200px] truncate text-danger">
-            ✗ {(row as BuildEditorPreviewAlmost).failed_reason}
-          </span>
-        ) : (
+        {isAlmost ? null : (
           <Badge variant="success" size="sm">
             ✓ {ruleCount}/{ruleCount}
           </Badge>
@@ -368,6 +416,17 @@ function PreviewRow({
         </li>
       ) : null}
     </>
+  );
+}
+
+/** Line 2 of an almost-match row: the rule the game missed. Wraps. */
+function MissedRuleLine({ text }: { text: string }) {
+  return (
+    <span className="flex items-start gap-1 text-micro text-danger" title={text}>
+      <CircleX className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+      <span className="sr-only">Missed rule: </span>
+      <span className="min-w-0">{text}</span>
+    </span>
   );
 }
 
