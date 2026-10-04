@@ -467,6 +467,16 @@ class DetectionContext:
         # WarpPrism) that would otherwise flag the wrong build.
         return count_real_units(name, time_limit, self.units, self.buildings)
 
+    def unit_time(self, name: str) -> float:
+        """First real unit appearance, ignoring illusions and missing tech."""
+        times = [
+            u.get("time", 9999) for u in self.units
+            if u.get("name") == name
+            and u.get("hallucinated") is not True
+            and unit_prereq_met(name, u.get("time", 9999), self.buildings)
+        ]
+        return min(times) if times else 9999
+
     def has_upgrade_substr(
         self, sub_name: str, time_limit: float = 9999,
     ) -> bool:

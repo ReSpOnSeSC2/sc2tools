@@ -174,6 +174,14 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Agent 0.17.10 / replay engine 1.6.9 build classification** — preserve
+  PvZ two-Stargate Void Ray and Phoenix openings through later Carrier or
+  Tempest transitions. Capital rushes use the first real capital unit and
+  respect earlier Robo/Twilight transitions. Hatch First labels now require
+  the natural Hatchery before the Pool. Regression tests also cover the
+  existing Terran starting-base and two-base timing rules. Re-sync or
+  Recompute refreshes previously uploaded games.
+
 - **Clicking a second Stargate in the build editor asks for two** — a rule
   added from the source replay timeline passes on one Stargate or one Void
   Ray, and a second click on the same unit or building was refused as

@@ -373,7 +373,7 @@ def test_zvp_speedling_flood():
 def test_zvp_hatch_first_macro():
     events = [
         _b("Hatchery", 0), _b("Hatchery", 150), _b("Hatchery", 250),
-        _b("SpawningPool", 40), *_n("Drone", 60, 40, step=4),
+        _b("SpawningPool", 160), *_n("Drone", 60, 40, step=4),
     ]
     assert _classify("Zerg", "Protoss", events) == "ZvP - Hatch First Macro"
 
@@ -596,7 +596,7 @@ def test_zvt_3_base_ling_flood():
 def test_zvt_hatch_first_macro():
     events = [
         _b("Hatchery", 0), _b("Hatchery", 150), _b("Hatchery", 250),
-        _b("SpawningPool", 40), *_n("Drone", 60, 40, step=4),
+        _b("SpawningPool", 160), *_n("Drone", 60, 40, step=4),
     ]
     assert _classify("Zerg", "Terran", events) == "ZvT - Hatch First Macro"
 
@@ -647,7 +647,7 @@ def test_zvz_mutalisk_vs_mutalisk():
 
 def test_zvz_hatch_first_muta():
     events = [
-        _b("Hatchery", 0), _b("Hatchery", 150), _b("SpawningPool", 70),
+        _b("Hatchery", 0), _b("Hatchery", 150), _b("SpawningPool", 160),
         _b("Spire", 450),
     ]
     assert _classify("Zerg", "Zerg", events) == "ZvZ - Hatch First Muta"
@@ -663,7 +663,7 @@ def test_zvz_zergling_flood():
 
 def test_zvz_drone_macro_hatch_first():
     events = [
-        _b("Hatchery", 0), _b("Hatchery", 150), _b("SpawningPool", 70),
+        _b("Hatchery", 0), _b("Hatchery", 150), _b("SpawningPool", 160),
         *_n("Drone", 60, 30, step=4),
     ]
     assert _classify("Zerg", "Zerg", events) == "ZvZ - Drone Macro (Hatch First)"

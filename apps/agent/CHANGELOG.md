@@ -2,6 +2,25 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.17.10
+
+### Fixed - air openings keep their build labels
+
+- Two-Stargate Void Ray and Phoenix openings keep their labels when they
+  later add Carriers or Tempests. A Carrier produced before 10:00 used to
+  override the opening even after a committed Void Ray army. The reported
+  Rorschach LE replay now reads **PvZ - 2 Stargate Void Ray**.
+- Carrier and Tempest rushes follow the first real capital unit and respect
+  earlier Robo or Twilight transitions. Hallucinated units do not decide
+  the opening.
+- Hatch First labels require the natural Hatchery to start before the Pool.
+  Pool-first macro games no longer receive a Hatch First label.
+- Adds regression coverage for air transitions, Hatch/Pool ordering, and
+  the previously fixed Terran starting-base and two-base timing rules.
+- Ships bundled replay engine 1.6.9.
+
+Use **Re-sync** (or **Recompute** on a game) to refresh games already uploaded.
+
 ## 0.17.9
 
 ### Fixed - Banelings, Ravagers, Brood Lords, Overseers and Transport Overlords are recorded

@@ -35,8 +35,6 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     gate_count_530 = ctx.gate_count_530
     buildings = ctx.buildings
 
-    sg_count_10min = count_started_before(buildings, "Stargate", 600)
-    nexus_count_10min = base_count_at(buildings, "Nexus", 600)
     sec_nexus_time = nth_base_start(buildings, "Nexus", 2)
 
     # Proxies first (the PvZ tree had no proxy rules at all, so a cannon
@@ -141,20 +139,49 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and charge_first_off_twilight
     )
 
-    # Carrier / Tempest both require Stargate + Fleet Beacon.
-    # count_units already filters hallucinations, but document
-    # the prerequisite so a future refactor can't drop it.
-    if (
+    # Classify the air force established by the first capital ship.
+    # A Fleet Beacon alone is not the switch: Void Rays / Phoenix can
+    # still be the opening army while the Beacon is under construction.
+    # In particular, the reported 2-SG replay has its fourth Void Ray
+    # just after the Beacon starts, six before its first Tempest, then
+    # adds Carriers at 9:13. Looking at any Carrier by 10:00 stole that
+    # opening. Conversely, air produced AFTER a genuine capital rush
+    # must not retroactively turn it into a Void Ray / Phoenix opening.
+    carrier_time = ctx.unit_time("Carrier")
+    tempest_time = ctx.unit_time("Tempest")
+    first_capital_time = min(carrier_time, tempest_time)
+    air_window = min(600, first_capital_time)
+    # Extracted times are whole seconds. Air units appearing in the same
+    # second count toward the existing opening; no finer ordering is known.
+    sg_count_air_window = count_started_before(buildings, "Stargate", air_window)
+    nexus_count_air_window = base_count_at(buildings, "Nexus", air_window)
+    void_ray_opening = (
+        sg_count_air_window >= 2
+        and nexus_count_air_window >= 2
+        and count_units("VoidRay", air_window) >= 4
+    )
+    phoenix_opening = (
+        sg_count_air_window >= 2
+        and nexus_count_air_window >= 2
+        and count_units("Phoenix", air_window) >= 4
+    )
+    fleet_beacon_time = building_time("FleetBeacon")
+    capital_rush = (
         stargate_first_tech
-        and has_building("FleetBeacon", 600)
-        and count_units("Carrier", 600) >= 1
+        and first_capital_time <= 600
+        and fleet_beacon_time < min(twilight_time, robo_time, dark_shrine_time)
+        and not void_ray_opening
+        and not phoenix_opening
+    )
+    # If both capital types exist, the first real one defines the rush.
+    # unit_time applies the same prerequisite / hallucination guards as
+    # count_units, so an illusion cannot win the ordering comparison.
+    if (
+        capital_rush
+        and carrier_time <= tempest_time
     ):
         return "PvZ - Carrier Rush"
-    if (
-        stargate_first_tech
-        and has_building("FleetBeacon", 600)
-        and count_units("Tempest", 600) >= 1
-    ):
+    if capital_rush:
         return "PvZ - Tempest Rush"
     # Pure-Phoenix / pure-VR disqualifiers: a Stargate opener that
     # ALSO commits to a tech-switch (Glaives off Twilight, or an
@@ -176,18 +203,15 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # Stargate-into-Robo transition.
     if (
         stargate_first_tech
-        and sg_count_10min >= 2
-        and nexus_count_10min >= 2
-        and count_units("VoidRay", 600) >= 4
+        and void_ray_opening
         and not glaive_first_off_twilight
         and not has_building("RoboticsFacility", 360)
     ):
         return "PvZ - 2 Stargate Void Ray"
     if (
         stargate_first_tech
-        and sg_count_10min >= 3
-        and nexus_count_10min >= 2
-        and count_units("Phoenix", 600) >= 4
+        and phoenix_opening
+        and sg_count_air_window >= 3
         and not glaive_first_off_twilight
         and not has_building("RoboticsFacility", 600)
     ):
@@ -199,9 +223,8 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # 3-Stargate replays fall through to the 2-Stargate label.
     if (
         stargate_first_tech
-        and sg_count_10min == 2
-        and nexus_count_10min >= 2
-        and count_units("Phoenix", 600) >= 4
+        and phoenix_opening
+        and sg_count_air_window == 2
         and not glaive_first_off_twilight
         and not has_building("RoboticsFacility", 600)
     ):

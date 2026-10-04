@@ -28,7 +28,17 @@ from .strategy_detector_helpers import (
     DetectionContext,
     base_count_at,
     count_started_before,
+    nth_base_start,
 )
+
+
+def _hatch_before_pool(ctx: DetectionContext) -> bool:
+    """Hatch First requires the natural to start before an observed Pool."""
+    return (
+        nth_base_start(ctx.buildings, "Hatchery", 2)
+        < ctx.building_time("SpawningPool")
+        < 9999
+    )
 
 
 # --------------------------------------------------------------------------
@@ -494,6 +504,7 @@ def detect_zvt(ctx: DetectionContext) -> Optional[str]:
     if (
         base_count_at(ctx.buildings, "Hatchery", 420) >= 3
         and ctx.count_units("Drone", 420) >= 40
+        and _hatch_before_pool(ctx)
     ):
         return "ZvT - Hatch First Macro"
 
@@ -602,6 +613,7 @@ def detect_zvp(ctx: DetectionContext) -> Optional[str]:
     if (
         base_count_at(ctx.buildings, "Hatchery", 420) >= 3
         and ctx.count_units("Drone", 420) >= 40
+        and _hatch_before_pool(ctx)
     ):
         return "ZvP - Hatch First Macro"
 
@@ -679,6 +691,7 @@ def detect_zvz(ctx: DetectionContext) -> Optional[str]:
         ctx.has_building("Spire", 480)
         and base_count_at(ctx.buildings, "Hatchery", 300) >= 2
         and pool > 60
+        and _hatch_before_pool(ctx)
     ):
         return "ZvZ - Hatch First Muta"
 
@@ -692,6 +705,7 @@ def detect_zvz(ctx: DetectionContext) -> Optional[str]:
         base_count_at(ctx.buildings, "Hatchery", 360) >= 2
         and ctx.count_units("Drone", 360) >= 30
         and pool > 60
+        and _hatch_before_pool(ctx)
     ):
         return "ZvZ - Drone Macro (Hatch First)"
 
