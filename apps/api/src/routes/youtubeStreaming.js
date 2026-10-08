@@ -43,6 +43,7 @@ function buildYoutubeStreamingRouter(deps) {
   }));
   /** @type {Array<[string,string[],string]>} */
   const writes = [
+    ["obs-connection", ["expected_channel_id", "stream_id"], "obsConnection"],
     ["create", ["operation_id", "expected_channel_id", "body"], "create"],
     ["bind", ["broadcast_id", "stream_id", "expected_channel_id"], "bind"],
     ["metadata", ["broadcast_id", "title", "description", "expected_channel_id"], "updateMetadata"],

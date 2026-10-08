@@ -87,3 +87,52 @@ def test_recovery_is_read_only_and_does_not_repeat_creation():
     assert len(calls) == 1
     assert calls[0][0] == "GET"
     assert calls[0][2]["params"] == {"operation": "recover_create", "operation_id": "durable-id"}
+
+
+def test_obs_connection_is_one_explicit_selected_request_without_retaining_key(caplog):
+    calls = []
+    private_key = "fake-private-obs-key"
+
+    def transport(method, path, **kwargs):
+        calls.append((method, path, kwargs))
+        return response({"stream_id": "saved-horizontal", "server_url": "rtmps://a.rtmps.youtube.com:443/live2",
+                         "stream_key": private_key, "access_token": "must-never-return"})
+
+    api = CloudGoogleAPI(client(transport), lambda: "saved-channel")
+    assert calls == []
+    result = api.obs_connection("saved-channel", "saved-horizontal")
+    assert set(result) == {"stream_id", "server_url", "stream_key"}
+    assert result["stream_key"] == private_key
+    assert len(calls) == 1
+    assert calls[0][0] == "POST"
+    assert calls[0][1].endswith("/v1/streaming/youtube/obs-connection")
+    assert calls[0][2]["json"] == {"expected_channel_id": "saved-channel", "stream_id": "saved-horizontal"}
+    assert calls[0][2]["allow_redirects"] is False
+    assert private_key not in str(vars(api))
+    assert private_key not in caplog.text
+
+
+@pytest.mark.parametrize("changes", [
+    {"stream_id": "different-stream"}, {"server_url": "rtmp://a.rtmp.youtube.com/live2"},
+    {"server_url": "rtmps://evil.example/live2"}, {"server_url": "rtmps://a.rtmps.youtube.com/live2?secret=value"},
+    {"server_url": "rtmps://user:private@a.rtmps.youtube.com/live2"},
+    {"server_url": "rtmps://a.rtmps.youtube.com:8443/live2"},
+    {"server_url": "rtmps://a.rtmps.youtube.com/live2\n"},
+    {"stream_key": "fake-key\n"}, {"stream_key": "x" * 257}, {"stream_key": ""},
+])
+def test_obs_connection_rejects_mismatches_and_private_errors(changes):
+    value = {"stream_id": "saved-horizontal", "server_url": "rtmps://a.rtmps.youtube.com/live2", "stream_key": "fake-private-key"}
+    value.update(changes)
+    api = CloudGoogleAPI(client(lambda *args, **kwargs: response(value)), lambda: "saved-channel")
+    with pytest.raises(CloudStreamError, match="could not be verified") as failure:
+        api.obs_connection("saved-channel", "saved-horizontal")
+    assert "fake-private" not in str(failure.value)
+    assert "secret=value" not in str(failure.value)
+
+
+def test_obs_connection_refuses_changed_channel_before_request():
+    calls = []
+    api = CloudGoogleAPI(client(lambda *args, **kwargs: calls.append(args)), lambda: "saved-channel")
+    with pytest.raises(CloudStreamError, match="Save the selected"):
+        api.obs_connection("other-channel", "saved-horizontal")
+    assert calls == []

@@ -2,6 +2,28 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.1
+
+### Added - YouTube connection details for OBS
+
+- **OBS connection details** fetches the saved horizontal or vertical
+  destination's YouTube server URL and stream key on request. The key starts
+  masked, with explicit Reveal and Copy controls, and the panel identifies the
+  matching Aitum output. Details clear when the selection or account changes
+  or the panel closes; keys are never saved in agent settings or status.
+
+### Fixed - stream setup and installer checks
+
+- The Connect YouTube controls inside the horizontal and vertical cards are
+  now real buttons. Connected cards show **Setup needed** or **Prepare session**
+  so authorization and broadcast readiness are clear.
+- Isolates the Windows packaging environment from unrelated native libraries.
+  This prevents a local build from collecting an incompatible ICU DLL and
+  starting without its window.
+- Requires the frozen agent to construct and render its Streams workspace in
+  an isolated offscreen check before an installer can be produced. The check
+  does not load saved settings or connect to OBS or streaming accounts.
+
 ## 0.18.0
 
 ### Added - stream titles and paired YouTube sessions

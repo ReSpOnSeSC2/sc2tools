@@ -58,6 +58,27 @@ function safeStream(row, channel) {
   return { id: identifier(row.id), snippet: { channelId: channel, title: typeof row.snippet.title === "string" ? row.snippet.title.slice(0, 200) : "" }, status: { streamStatus: row.status.streamStatus } };
 }
 
+/** @param {any} row @param {string} channel @param {string} streamId */
+function obsConnectionInfo(row, channel, streamId) {
+  safeStream(row, channel);
+  const server = row.cdn?.ingestionInfo?.rtmpsIngestionAddress;
+  const key = row.cdn?.ingestionInfo?.streamName;
+  if (row.id !== streamId || row.cdn?.ingestionType !== "rtmp"
+    || typeof server !== "string" || server.length > 200 || /[\s\p{Cc}]/u.test(server)
+    || typeof key !== "string" || !/^[A-Za-z0-9_-]{1,256}$/.test(key)) {
+    throw fail(502, "youtube_obs_connection_unavailable");
+  }
+  let target;
+  try { target = new URL(server); }
+  catch { throw fail(502, "youtube_obs_connection_unavailable"); }
+  if (target.protocol !== "rtmps:" || !["a.rtmps.youtube.com", "b.rtmps.youtube.com"].includes(target.hostname.toLowerCase())
+    || target.username || target.password || target.search || target.hash
+    || !["", "443"].includes(target.port) || target.pathname !== "/live2") {
+    throw fail(502, "youtube_obs_connection_unavailable");
+  }
+  return { stream_id: streamId, server_url: server, stream_key: key };
+}
+
 /** @param {any} row @param {string} channel */
 function safeBroadcast(row, channel) {
   if (row?.snippet?.channelId !== channel) throw fail(409, "youtube_ownership_changed");
@@ -204,6 +225,26 @@ class YoutubeStreamingService {
       channel: { id: identifier(grant.platformUserId), title: String(grant.platformUserName || "YouTube") },
       streams: (await this._reusable(userId, grant)).map((row) => ({ id: row.id, title: row.snippet.title, channel: row.snippet.channelId })),
     }));
+  }
+
+  /** @param {string} userId @param {any} payload */
+  async obsConnection(userId, payload) {
+    const expected = identifier(payload?.expected_channel_id), streamId = identifier(payload?.stream_id);
+    return this._grant(userId, async (grant) => {
+      const channel = this._channel(grant, expected);
+      // mine=true excludes non-reusable streams. Read this fresh without CDN
+      // data, then request ingestion information for this one selected ID only.
+      // Neither raw provider rows nor connection information enter the cache.
+      const reusable = await this._list(grant, "liveStreams", { part: "id,snippet,status", mine: "true" });
+      const selected = reusable.filter((row) => row.id === streamId);
+      if (selected.length !== 1 || selected[0].contentDetails?.isReusable === false) throw fail(409, "youtube_stream_not_reusable");
+      safeStream(selected[0], channel);
+      const rows = await this._list(grant, "liveStreams", { part: "id,snippet,cdn,status", id: streamId });
+      if (rows.length !== 1 || rows[0].id !== streamId || rows[0].contentDetails?.isReusable === false) throw fail(409, "youtube_ownership_changed");
+      const connection = obsConnectionInfo(rows[0], channel, streamId);
+      await grant.assertCurrent();
+      return connection;
+    });
   }
 
   /** @param {string} userId @param {any} grant @param {string[]} values @returns {Promise<any[]>} */

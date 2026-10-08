@@ -123,6 +123,18 @@ Select visibility, audience and the exact OBS output names before saving setup.
 The server must provide the streaming API before these controls can connect.
 SC2Tools never imports OBS login tokens or creates stream keys.
 
+After saving YouTube setup, open **OBS connection details** and choose
+**Horizontal** or **Vertical**. **Fetch connection details** reads only that
+selected reusable key. Copy its server URL and key into the Aitum output named
+in the panel. The key stays masked until **Reveal key** or **Copy key** is used;
+the agent keeps these details only in the open panel. Repeat for the other
+format. This provides connection information; it does not write OBS settings.
+
+Website account badges distinguish **Notifications ready** from **Stream
+controls authorized**. A desktop agent paired to the same SC2Tools account
+uses those stream-control permissions. **Ready** on a YouTube destination
+means its session has also been prepared and bound to the saved key.
+
 Click **Prepare YouTube session** once while both outputs are stopped. When
 both show **Ready**, start their existing Aitum broadcaster buttons. If enabled,
 SC2Tools prepares the next pair after both broadcasts have ended and both

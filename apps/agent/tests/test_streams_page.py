@@ -1,10 +1,11 @@
 import os
+from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 
 pytest.importorskip("PySide6")
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtTest, QtWidgets
 
 from sc2tools_agent.ui.streams_page import build_streams_page
 
@@ -181,3 +182,299 @@ def test_connection_setup_button_supports_return_to_sc2tools(page, monkeypatch):
     assert widget.local_setup_button.text() == "Use SC2Tools connections"
     widget.local_setup_button.click()
     assert calls[-1] == {"action": "use_sc2tools_connections"}
+
+
+@pytest.mark.parametrize("scope", ["horizontal", "portrait"])
+def test_destination_connect_button_dispatches_connection_once(page, scope):
+    _, _, app = page
+    state = {"account_mode": "sc2tools", "youtube": {
+        "connected": False, "phase": "authorization_required",
+    }}
+    calls = []
+
+    def handle(payload):
+        calls.append(payload)
+        return state
+
+    widget = build_streams_page(None, provider=lambda: state, handler=handle,
+                               QtCore=QtCore, QtWidgets=QtWidgets)
+    try:
+        widget.timer.stop()
+        button = widget.format_connect_buttons[scope]
+        assert isinstance(button, QtWidgets.QPushButton)
+        assert not button.isHidden()
+        assert button.isEnabled()
+        assert widget.format_labels[scope].isHidden()
+        completed = QtTest.QSignalSpy(widget.completed)
+        button.click()
+        button.click()
+        assert widget.busy
+        assert not any(item.isEnabled() for item in widget.format_connect_buttons.values())
+        assert completed.count() or completed.wait(2000)
+        app.processEvents()
+        assert not widget.busy
+        assert calls == [{"action": "connect_youtube"}]
+    finally:
+        widget.deleteLater()
+        app.processEvents()
+
+
+@pytest.mark.parametrize("phase", ["bound", "ready", "starting", "live", "complete", "blocked"])
+def test_destination_session_status_cannot_trigger_connection(page, monkeypatch, phase):
+    widget, state, app = page
+    state["youtube"] = {"connected": True, "phase": phase, "channels": {
+        scope: {"phase": phase} for scope in ("horizontal", "portrait")
+    }}
+    widget.render(state)
+    calls = []
+    monkeypatch.setattr(widget, "job", calls.append)
+    for scope, button in widget.format_connect_buttons.items():
+        assert button.isHidden()
+        assert not button.isEnabled()
+        assert not widget.format_labels[scope].isHidden()
+        button.click()
+        widget.connect_youtube(scope)
+    assert calls == []
+
+
+@pytest.mark.parametrize("configured,expected", [(False, "Setup needed"), (True, "Prepare session")])
+def test_connected_idle_destinations_explain_next_step(page, configured, expected):
+    widget, state, app = page
+    state.update(configured=configured, youtube={"connected": True, "phase": "idle"})
+    widget.render(state)
+    assert {label.text() for label in widget.format_labels.values()} == {expected}
+    assert all(button.isHidden() and not button.isEnabled()
+               for button in widget.format_connect_buttons.values())
+
+
+def configured_obs_state(state):
+    state.update(account_mode="sc2tools", configured=True,
+                 youtube={"connected": True, "phase": "idle"},
+                 configuration={"channel_id": "saved-channel", "horizontal_id": "saved-horizontal",
+                                "portrait_id": "saved-portrait", "privacy": "unlisted", "made_for_kids": False},
+                 catalog={"channels": [{"id": "saved-channel", "title": "My channel"}],
+                          "streams": [{"id": "saved-horizontal", "title": "Horizontal key"},
+                                      {"id": "saved-portrait", "title": "Vertical key"}]})
+
+
+def complete_obs_details(widget, *, generation=None, changes=None):
+    selection = widget._obs_selection()
+    result = {"action": "fetch_obs_connection", "obs_generation": widget._obs_generation if generation is None else generation,
+              "obs_connection": {**selection, "server_url": "rtmps://a.rtmps.youtube.com:443/live2",
+                                 "stream_key": "fake-private-" + selection["stream_id"], **(changes or {})}}
+    widget._completed(result)
+
+
+def test_obs_details_never_fetch_on_render_and_explicit_button_uses_selected_id(page, monkeypatch):
+    widget, state, app = page
+    calls = []
+    monkeypatch.setattr(widget, "job", calls.append)
+    configured_obs_state(state)
+    widget.render(state)
+    widget.refresh()
+    assert calls == []
+    assert widget.obs_key.text() == ""
+    widget.obs_toggle.setChecked(True)
+    widget.obs_fetch_button.click()
+    assert calls == [{"action": "fetch_obs_connection", "scope": "horizontal",
+                      "expected_channel_id": "saved-channel", "stream_id": "saved-horizontal"}]
+    widget.obs_destination.setCurrentIndex(1)
+    widget.obs_fetch_button.click()
+    assert calls[-1]["scope"] == "portrait"
+    assert calls[-1]["stream_id"] == "saved-portrait"
+
+
+def test_obs_details_mask_and_explicit_reveal_copy_never_enter_state(page, monkeypatch):
+    widget, state, app = page
+    configured_obs_state(state)
+    widget.render(state)
+    widget.obs_toggle.setChecked(True)
+    clipboard = []
+    monkeypatch.setattr(QtWidgets.QApplication, "clipboard", lambda: SimpleNamespace(setText=clipboard.append))
+    complete_obs_details(widget)
+    private_key = widget.obs_key.text()
+    assert private_key == "fake-private-saved-horizontal"
+    assert widget.obs_key.echoMode() == QtWidgets.QLineEdit.Password
+    assert private_key not in widget.obs_key.displayText()
+    assert private_key not in str(widget.state)
+    assert private_key not in widget.notice.text()
+    assert clipboard == []
+    widget.obs_reveal.setChecked(True)
+    assert widget.obs_key.echoMode() == QtWidgets.QLineEdit.Normal
+    widget.obs_reveal.setChecked(False)
+    widget.obs_copy_key.click()
+    assert clipboard == [private_key]
+    assert private_key not in widget.notice.text()
+    widget.obs_copy_server.click()
+    assert clipboard[-1] == "rtmps://a.rtmps.youtube.com:443/live2"
+
+
+@pytest.mark.parametrize("change", ["destination", "channel", "key", "disconnect", "account_mode", "collapse", "close"])
+def test_obs_details_clear_on_selection_disconnect_and_close(page, change):
+    widget, state, app = page
+    configured_obs_state(state)
+    widget.render(state)
+    widget.obs_toggle.setChecked(True)
+    complete_obs_details(widget)
+    widget.obs_reveal.setChecked(True)
+    if change == "destination":
+        widget.obs_destination.setCurrentIndex(1)
+    elif change == "channel":
+        widget.channel_combo.setCurrentIndex(0)
+    elif change == "key":
+        widget.horizontal_combo.setCurrentIndex(widget.horizontal_combo.findData("saved-portrait"))
+    elif change == "disconnect":
+        state["youtube"]["connected"] = False
+        widget.render(state)
+    elif change == "account_mode":
+        state["account_mode"] = "local"
+        widget.render(state)
+    elif change == "collapse":
+        widget.obs_toggle.setChecked(False)
+    else:
+        widget.close()
+    assert widget.obs_key.text() == ""
+    assert widget.obs_server.text() == ""
+    assert widget.obs_key.echoMode() == QtWidgets.QLineEdit.Password
+    assert not widget.obs_reveal.isChecked()
+    assert not widget.obs_copy_key.isEnabled()
+
+
+def test_obs_details_late_response_cannot_reappear_after_panel_was_closed(page):
+    widget, state, app = page
+    configured_obs_state(state)
+    widget.render(state)
+    widget.obs_toggle.setChecked(True)
+    generation = widget._obs_generation
+    widget.obs_toggle.setChecked(False)
+    widget.obs_toggle.setChecked(True)
+    complete_obs_details(widget, generation=generation)
+    assert widget.obs_key.text() == ""
+    assert not widget.obs_copy_key.isEnabled()
+
+
+def test_obs_details_wrong_destination_response_is_rejected(page):
+    widget, state, app = page
+    configured_obs_state(state)
+    widget.render(state)
+    widget.obs_toggle.setChecked(True)
+    complete_obs_details(widget, changes={"stream_id": "saved-portrait"})
+    assert widget.obs_key.text() == ""
+    assert "fake-private" not in widget.notice.text()
+
+
+def test_masked_obs_key_cannot_copy_through_keyboard_or_line_edit(page):
+    widget, state, app = page
+    configured_obs_state(state)
+    widget.render(state)
+    widget.obs_toggle.setChecked(True)
+    complete_obs_details(widget)
+    clipboard = app.clipboard()
+    clipboard.setText("unchanged-copy-marker")
+    widget.obs_key.selectAll()
+    widget.obs_key.copy()
+    assert clipboard.text() == "unchanged-copy-marker"
+    QtTest.QTest.keyClick(widget.obs_key, QtCore.Qt.Key_C, QtCore.Qt.ControlModifier)
+    assert clipboard.text() == "unchanged-copy-marker"
+    assert widget.obs_key.echoMode() == QtWidgets.QLineEdit.Password
+
+
+def test_obs_details_hide_clears_key_and_rejects_late_fetch(page):
+    widget, state, app = page
+    configured_obs_state(state)
+    widget.render(state)
+    widget.obs_toggle.setChecked(True)
+    widget.show()
+    app.processEvents()
+    complete_obs_details(widget)
+    generation = widget._obs_generation
+    widget.hide()
+    assert widget.obs_key.text() == ""
+    complete_obs_details(widget, generation=generation)
+    assert widget.obs_key.text() == ""
+
+
+def test_obs_details_fetch_error_hides_private_exception_text(page):
+    _, _, app = page
+    state = {}
+    configured_obs_state(state)
+
+    def handle(payload):
+        raise ValueError("fake-private-provider-key-and-token")
+
+    widget = build_streams_page(None, provider=lambda: state, handler=handle,
+                               QtCore=QtCore, QtWidgets=QtWidgets)
+    try:
+        widget.timer.stop()
+        widget.obs_toggle.setChecked(True)
+        completed = QtTest.QSignalSpy(widget.completed)
+        widget.obs_fetch_button.click()
+        assert completed.count() or completed.wait(2000)
+        app.processEvents()
+        assert "fake-private" not in widget.notice.text()
+        assert widget.obs_key.text() == ""
+    finally:
+        widget.close()
+        widget.deleteLater()
+        app.processEvents()
+
+
+def test_obs_details_status_failure_clears_key_and_rejects_pending_response(page):
+    _, _, app = page
+    state = {}
+    configured_obs_state(state)
+    unavailable = False
+
+    def provider():
+        if unavailable:
+            raise RuntimeError("fake-private-status-error")
+        return state
+
+    widget = build_streams_page(None, provider=provider, handler=lambda payload: state,
+                               QtCore=QtCore, QtWidgets=QtWidgets)
+    try:
+        widget.timer.stop()
+        widget.obs_toggle.setChecked(True)
+        complete_obs_details(widget)
+        generation = widget._obs_generation
+        unavailable = True
+        widget.refresh()
+        assert widget.obs_key.text() == ""
+        complete_obs_details(widget, generation=generation)
+        assert widget.obs_key.text() == ""
+        assert "fake-private" not in widget.notice.text()
+    finally:
+        widget.close()
+        widget.deleteLater()
+        app.processEvents()
+
+
+def test_obs_details_fetch_worker_returns_secret_only_to_masked_controls(page):
+    _, _, app = page
+    state = {}
+    configured_obs_state(state)
+    calls = []
+
+    def handle(payload):
+        calls.append(payload)
+        return {"obs_connection": {**{key: payload[key] for key in ("scope", "expected_channel_id", "stream_id")},
+                                   "server_url": "rtmps://a.rtmps.youtube.com/live2", "stream_key": "fake-private-key"}}
+
+    widget = build_streams_page(None, provider=lambda: state, handler=handle,
+                               QtCore=QtCore, QtWidgets=QtWidgets)
+    try:
+        widget.timer.stop()
+        widget.obs_toggle.setChecked(True)
+        completed = QtTest.QSignalSpy(widget.completed)
+        assert calls == []
+        widget.obs_fetch_button.click()
+        assert completed.count() or completed.wait(2000)
+        app.processEvents()
+        assert len(calls) == 1
+        assert widget.obs_key.text() == "fake-private-key"
+        assert widget.obs_key.echoMode() == QtWidgets.QLineEdit.Password
+        assert "fake-private" not in str(widget.state)
+    finally:
+        widget.close()
+        widget.deleteLater()
+        app.processEvents()

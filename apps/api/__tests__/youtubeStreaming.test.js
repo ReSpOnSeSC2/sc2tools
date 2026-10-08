@@ -14,7 +14,7 @@ function intent() {
   return { snippet: { title: "Pair test", description: "Saved description", categoryId: "20", scheduledStartTime: new Date(NOW + 60_000).toISOString() }, status: { privacyStatus: "unlisted", selfDeclaredMadeForKids: false }, contentDetails: { enableAutoStart: true, enableAutoStop: true, monitorStream: { enableMonitorStream: false } } };
 }
 function stream(id) {
-  return { id, snippet: { channelId: CHANNEL, title: id }, status: { streamStatus: "inactive" }, cdn: { ingestionInfo: { streamName: "MOCK_SECRET_KEY" } } };
+  return { id, snippet: { channelId: CHANNEL, title: id }, status: { streamStatus: "inactive" }, cdn: { ingestionType: "rtmp", ingestionInfo: { streamName: "MOCK_SECRET_KEY", rtmpsIngestionAddress: "rtmps://a.rtmps.youtube.com:443/live2" } } };
 }
 
 class MockLedger {
@@ -141,6 +141,130 @@ test("catalog redacts ingestion credentials and cache is isolated by user/revisi
   await s.service.catalog("user-two"); expect(s.calls.length).toBe(2);
   s.state.revision = "revision-two";
   await s.service.catalog("user-one"); expect(s.calls.length).toBe(3);
+});
+
+test("OBS connection returns only the selected owner's reusable stream on explicit POST", async () => {
+  const s = setup(), streamId = s.streams[0].id;
+  s.streams[1].cdn.ingestionInfo.streamName = "MOCK_OTHER_STREAM_SECRET";
+  const response = await request(s.app).post("/v1/streaming/youtube/obs-connection")
+    .send({ expected_channel_id: CHANNEL, stream_id: streamId });
+  expect(response.status).toBe(200);
+  expect(response.headers["cache-control"]).toBe("no-store");
+  expect(response.body).toEqual({ stream_id: streamId, server_url: "rtmps://a.rtmps.youtube.com:443/live2", stream_key: "MOCK_SECRET_KEY" });
+  expect(s.calls.map((call) => call.params)).toEqual([
+    { part: "id,snippet,status", mine: "true", maxResults: "50" },
+    { part: "id,snippet,cdn,status", id: streamId, maxResults: "50" },
+  ]);
+  expect(s.calls.every((call) => call.method === "GET")).toBe(true);
+  expect(s.service.cache.size).toBe(0);
+  expect(JSON.stringify(response.body)).not.toContain("MOCK_OAUTH");
+  expect(JSON.stringify(response.body)).not.toContain("MOCK_OTHER_STREAM_SECRET");
+  const catalog = await s.service.catalog("user-one");
+  const read = await s.service.read("user-one", "streams_by_ids", { ids: [streamId] });
+  expect(JSON.stringify({ catalog, read, cached: Array.from(s.service.cache.values()) })).not.toMatch(/MOCK_SECRET|rtmpsIngestionAddress|ingestionInfo/);
+});
+
+test("OBS connection rejects cross-account expected channel before provider reads", async () => {
+  const s = setup();
+  s.service.integrations.withStreamingGrant = async (user, platform, action) => {
+    expect(user).toBe("user-two"); expect(platform).toBe("youtube");
+    return action({ platformUserId: "another-channel", assertCurrent: async () => {}, boundedFetch: async () => { throw new Error("Unexpected provider read"); } });
+  };
+  const response = await request(s.app).post("/v1/streaming/youtube/obs-connection").set("x-owner", "user-two")
+    .send({ expected_channel_id: CHANNEL, stream_id: s.streams[0].id });
+  expect(response.status).toBe(409);
+  expect(response.body).toEqual({ error: "youtube_ownership_changed" });
+  expect(s.calls).toHaveLength(0);
+});
+
+test("OBS connection refuses a foreign stream row, unknown key, or non-reusable stream", async () => {
+  const s = setup();
+  await expect(s.service.obsConnection("user-one", { expected_channel_id: CHANNEL, stream_id: "unowned-key" })).rejects.toMatchObject({ code: "youtube_stream_not_reusable" });
+  s.streams[0].snippet.channelId = "another-channel";
+  await expect(s.service.obsConnection("user-one", { expected_channel_id: CHANNEL, stream_id: s.streams[0].id })).rejects.toMatchObject({ code: "youtube_ownership_changed" });
+  s.streams[0].snippet.channelId = CHANNEL;
+  s.streams[0].contentDetails = { isReusable: false };
+  await expect(s.service.obsConnection("user-one", { expected_channel_id: CHANNEL, stream_id: s.streams[0].id })).rejects.toMatchObject({ code: "youtube_stream_not_reusable" });
+  expect(s.calls.some((call) => call.params.id)).toBe(false);
+});
+
+test("OBS connection rechecks selected stream ownership before exposing its key", async () => {
+  const s = setup(), getGrant = s.service.integrations.withStreamingGrant;
+  s.service.integrations.withStreamingGrant = (user, platform, action) => getGrant(user, platform, (grant) => action({
+    ...grant,
+    boundedFetch: async (raw, options) => {
+      if (new URL(raw).searchParams.has("id")) s.streams[0].snippet.channelId = "another-channel";
+      return grant.boundedFetch(raw, options);
+    },
+  }));
+  const response = await request(s.app).post("/v1/streaming/youtube/obs-connection")
+    .send({ expected_channel_id: CHANNEL, stream_id: s.streams[0].id });
+  expect(response.status).toBe(409);
+  expect(response.body).toEqual({ error: "youtube_ownership_changed" });
+  expect(s.service.cache.size).toBe(0);
+});
+
+test("OBS connection withholds a key if its account lease expires after the final provider read", async () => {
+  const s = setup(), getGrant = s.service.integrations.withStreamingGrant;
+  let expired = false;
+  s.service.integrations.withStreamingGrant = (user, platform, action) => getGrant(user, platform, (grant) => action({
+    ...grant,
+    assertCurrent: async () => { if (expired) throw error("streaming_connection_changed"); },
+    boundedFetch: async (raw, options) => {
+      const response = await grant.boundedFetch(raw, options);
+      if (!new URL(raw).searchParams.has("id")) return response;
+      return { ...response, text: async () => { const body = await response.text(); expired = true; return body; } };
+    },
+  }));
+  const response = await request(s.app).post("/v1/streaming/youtube/obs-connection")
+    .send({ expected_channel_id: CHANNEL, stream_id: s.streams[0].id });
+  expect(response.status).toBe(409);
+  expect(response.body).toEqual({ error: "streaming_connection_changed" });
+  expect(s.service.cache.size).toBe(0);
+});
+
+test.each([
+  "rtmp://a.rtmp.youtube.com/live2", "rtmps://a.rtmp.youtube.com/live2",
+  "rtmps://attacker.example/live2", "rtmps://a.rtmps.youtube.com.attacker.example/live2",
+  "rtmps://MOCK_SECRET_TOKEN@a.rtmps.youtube.com/live2", "rtmps://a.rtmps.youtube.com:444/live2",
+  "rtmps://a.rtmps.youtube.com/other", "rtmps://a.rtmps.youtube.com/live2?MOCK_SECRET_TOKEN=1",
+  "rtmps://a.rtmps.youtube.com/live2#MOCK_SECRET_TOKEN", " rtmps://a.rtmps.youtube.com/live2",
+])("OBS connection rejects foreign/unsafe ingestion URL without leaking it: %s", async (server) => {
+  const s = setup(); s.streams[0].cdn.ingestionInfo.rtmpsIngestionAddress = server;
+  const response = await request(s.app).post("/v1/streaming/youtube/obs-connection")
+    .send({ expected_channel_id: CHANNEL, stream_id: s.streams[0].id });
+  expect(response.status).toBe(502);
+  expect(response.body).toEqual({ error: "youtube_obs_connection_unavailable" });
+  expect(JSON.stringify(response.body)).not.toMatch(/MOCK_SECRET|attacker|rtmps?:/);
+});
+
+test.each([undefined, "", "key\nMOCK_SECRET_TOKEN", "https://private.example/MOCK_SECRET_TOKEN", "x".repeat(257)])("OBS connection rejects invalid keys without fallback: %j", async (key) => {
+  const s = setup(); s.streams[0].cdn.ingestionInfo.streamName = key;
+  s.streams[0].cdn.ingestionInfo.ingestionAddress = "rtmp://a.rtmp.youtube.com/live2";
+  const response = await request(s.app).post("/v1/streaming/youtube/obs-connection")
+    .send({ expected_channel_id: CHANNEL, stream_id: s.streams[0].id });
+  expect(response.body).toEqual({ error: "youtube_obs_connection_unavailable" });
+});
+
+test("OBS connection requires the primary RTMPS address without falling back to RTMP or backup data", async () => {
+  const s = setup(), info = s.streams[0].cdn.ingestionInfo;
+  delete info.rtmpsIngestionAddress;
+  info.ingestionAddress = "rtmp://a.rtmp.youtube.com/live2";
+  info.rtmpsBackupIngestionAddress = "rtmps://b.rtmps.youtube.com/live2?backup=1";
+  const response = await request(s.app).post("/v1/streaming/youtube/obs-connection")
+    .send({ expected_channel_id: CHANNEL, stream_id: s.streams[0].id });
+  expect(response.status).toBe(502);
+  expect(response.body).toEqual({ error: "youtube_obs_connection_unavailable" });
+});
+
+test("OBS connection route rejects identity/proxy fields and keeps failure responses secret-free", async () => {
+  const s = setup(), payload = { expected_channel_id: CHANNEL, stream_id: s.streams[0].id };
+  const invalid = await request(s.app).post("/v1/streaming/youtube/obs-connection").send({ ...payload, userId: "other", url: "https://private.example" });
+  expect(invalid.status).toBe(400); expect(s.calls).toHaveLength(0);
+  s.state.providerError = { status: 400, reason: "MOCK_PRIVATE_REASON" };
+  const failure = await request(s.app).post("/v1/streaming/youtube/obs-connection").send(payload);
+  expect(failure.headers["cache-control"]).toBe("no-store");
+  expect(failure.body).toEqual({ error: "youtube_provider_unavailable", providerHttpStatus: 400 });
 });
 
 test("create UUID replay returns same owned ID and inserts once", async () => {

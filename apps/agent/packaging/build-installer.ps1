@@ -117,10 +117,27 @@ Invoke-Step "Installing PyInstaller" {
 }
 
 Invoke-Step "Running PyInstaller" {
+    $basePythonDir = (& $VenvPython -c "import sys; print(sys.base_prefix)").Trim()
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $basePythonDir -PathType Container)) {
+        throw "Could not resolve the build Python's base runtime directory."
+    }
+    $windowsDir = [System.Environment]::GetEnvironmentVariable("SystemRoot")
+    if (-not $windowsDir) { throw "Windows SystemRoot is unavailable." }
+    $callerBuildPath = [System.Environment]::GetEnvironmentVariable("PATH")
     Push-Location $AgentRoot
     try {
+        # PyInstaller resolves dependent native DLLs using PATH. Desktop tools
+        # can add incompatible ICU/CRT DLLs (for example Poppler's) ahead of Qt.
+        # Keep dependency collection inside the build runtime and Windows only.
+        $env:PATH = @(
+            [System.IO.Path]::GetFullPath((Join-Path $VenvDir "Scripts")),
+            [System.IO.Path]::GetFullPath($basePythonDir),
+            [System.IO.Path]::GetFullPath((Join-Path $windowsDir "System32")),
+            [System.IO.Path]::GetFullPath($windowsDir)
+        ) -join [System.IO.Path]::PathSeparator
         & $VenvPython -m PyInstaller --noconfirm --clean $Spec
     } finally {
+        $env:PATH = $callerBuildPath
         Pop-Location
     }
 }
@@ -143,6 +160,41 @@ if (Test-Path $ExePathFolder) {
     throw "PyInstaller did not produce sc2tools-agent.exe in either layout (looked at $ExePathFolder and $ExePathSingle) - check the build log."
 }
 Write-Host "Build layout: $BuildLayout (exe at $ExePath)" -ForegroundColor DarkGray
+
+Invoke-Step "Checking the packaged GUI offline" {
+    $guiSmokeDir = Join-Path $BuildDir ("gui-smoke-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $guiSmokeDir -Force | Out-Null
+    $guiSmokeReport = Join-Path $guiSmokeDir "report.json"
+    $previousSmokeReport = [System.Environment]::GetEnvironmentVariable("SC2TOOLS_GUI_SMOKE_REPORT")
+    $previousQtPlatform = [System.Environment]::GetEnvironmentVariable("QT_QPA_PLATFORM")
+    try {
+        $env:SC2TOOLS_GUI_SMOKE_REPORT = $guiSmokeReport
+        $env:QT_QPA_PLATFORM = "offscreen"
+        $guiSmokeProcess = Start-Process -FilePath $ExePath -WorkingDirectory $guiSmokeDir -WindowStyle Hidden -PassThru
+        if (-not $guiSmokeProcess.WaitForExit(15000)) {
+            Stop-Process -Id $guiSmokeProcess.Id -Force -ErrorAction SilentlyContinue
+            throw "The packaged GUI smoke check timed out. Report: $guiSmokeReport"
+        }
+        $guiSmokeProcess.Refresh()
+        if ($guiSmokeProcess.ExitCode -ne 0) {
+            throw "The packaged GUI smoke check failed (exit $($guiSmokeProcess.ExitCode)). Report: $guiSmokeReport"
+        }
+        if (-not (Test-Path -LiteralPath $guiSmokeReport -PathType Leaf)) {
+            throw "The packaged GUI smoke check did not produce its report."
+        }
+        $guiSmokeResult = Get-Content -LiteralPath $guiSmokeReport -Raw | ConvertFrom-Json
+        if ($guiSmokeResult.schema -ne 1 -or $guiSmokeResult.ok -ne $true `
+            -or $guiSmokeResult.agent_version -ne $AgentVersion `
+            -or $guiSmokeResult.qt_platform -ne "offscreen" `
+            -or $guiSmokeResult.streams_painted -ne $true) {
+            throw "The packaged GUI smoke report did not confirm the expected window/version. Report: $guiSmokeReport"
+        }
+        Write-Host "Packaged Qt $($guiSmokeResult.qt_version): window and Streams page painted." -ForegroundColor Green
+    } finally {
+        $env:SC2TOOLS_GUI_SMOKE_REPORT = $previousSmokeReport
+        $env:QT_QPA_PLATFORM = $previousQtPlatform
+    }
+}
 
 if ($Installer) {
     Invoke-Step "Locating makensis" {
