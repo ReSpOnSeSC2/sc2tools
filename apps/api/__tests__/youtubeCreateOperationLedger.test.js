@@ -7,6 +7,7 @@ const testCase = globalThis.test || require("node:test").test;
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
 const { buildYoutubeCreateLedger } = require("../src/services/youtubeCreateOperationLedger");
+const { YoutubeStreamingService } = require("../src/services/youtubeStreaming");
 const { COLLECTIONS } = require("../src/config/constants");
 const { expectedVersion, VERSION_KEY } = require("../src/db/schemaVersioning");
 
@@ -388,6 +389,93 @@ testCase("Google timestamp normalization remains the same scheduled instant", as
     const row = candidate(context); row.snippet.scheduledStartTime = "2026-10-08T20:00:00.000Z"; return row;
   });
   assert.equal(result.phase, "succeeded");
+});
+
+testCase("existing fractional intent recovers Google's whole second without changing its hash or reinserting", async () => {
+  const { collection, ledger } = setup(), request = args();
+  request.intent.snippet.scheduledStartTime = "2026-10-08T20:00:00.961Z";
+  let inserts = 0;
+  await ledger.execute(request, async () => { inserts++; throw Error("lost provider response"); });
+  const stored = [...collection.rows.values()].find((row) => row.kind === "operation");
+  const hash = stored.intentHash;
+  const result = await ledger.reconcile(request, async (context) => {
+    const row = candidate(context); row.snippet.scheduledStartTime = "2026-10-08T20:00:00Z"; return [row];
+  });
+  assert.equal(result.phase, "succeeded");
+  assert.equal(result.broadcast.snippet.scheduledStartTime, "2026-10-08T20:00:00Z");
+  assert.equal(stored.intentHash, hash);
+  assert.equal(stored.intent.snippet.scheduledStartTime, request.intent.snippet.scheduledStartTime);
+  assert.equal((await ledger.execute(request, async () => { inserts++; })).phase, "succeeded");
+  assert.equal(inserts, 1);
+});
+
+testCase("second precision cannot reconcile a different UTC second or replace the reserved operation", async () => {
+  const { ledger } = setup(), request = args();
+  request.intent.snippet.scheduledStartTime = "2026-10-08T20:00:00.961Z";
+  let inserts = 0;
+  await ledger.execute(request, async () => { inserts++; throw Error("lost provider response"); });
+  const result = await ledger.reconcile(request, async (context) => {
+    const row = candidate(context); row.snippet.scheduledStartTime = "2026-10-08T20:00:01Z"; return [row];
+  });
+  assert.equal(result.phase, "uncertain");
+  assert.equal((await ledger.execute(request, async () => { inserts++; })).phase, "uncertain");
+  assert.equal(inserts, 1);
+});
+
+testCase("service recovery scans complete unfinished inventories then verifies the exact nonce with the real ledger", async () => {
+  const { ledger } = setup(), request = args(), inventory = [], calls = [];
+  let own, inserts = 0;
+  await ledger.execute(request, async (context) => {
+    own = candidate(context); inserts++; throw Error("lost provider response");
+  });
+  for (let n = 0; n < 250; n++) inventory.push({ ...clone(own), id: "archive_" + n,
+    snippet: { ...own.snippet, description: "Historical event" }, status: { ...own.status, lifeCycleStatus: "complete" } });
+  for (let n = 0; n < 120; n++) inventory.push({ ...clone(own), id: "active_" + n,
+    snippet: { ...own.snippet, description: "Another live event" }, status: { ...own.status, lifeCycleStatus: "live" } });
+  for (let n = 0; n < 90; n++) inventory.push({ ...clone(own), id: "upcoming_" + n,
+    snippet: { ...own.snippet, description: "Another upcoming event" } });
+  inventory.push(own);
+  const integrations = { withStreamingGrant: async (_user, _platform, action) => action({
+    platformUserId: request.expectedChannelId, accessToken: "synthetic-token", assertCurrent: async () => {},
+    boundedFetch: async (raw, options) => {
+      const url = new URL(raw), status = url.searchParams.get("broadcastStatus");
+      assert.equal(options.method, "GET"); assert.equal(url.searchParams.has("mine"), false);
+      calls.push(status);
+      const matches = inventory.filter((row) => status === "active" ? row.status.lifeCycleStatus === "live" : row.status.lifeCycleStatus === "created");
+      const start = Number(url.searchParams.get("pageToken") || 0);
+      const result = { items: matches.slice(start, start + 50), ...(start + 50 < matches.length ? { nextPageToken: String(start + 50) } : {}) };
+      return { ok: true, text: async () => JSON.stringify(result) };
+    },
+  }) };
+  const service = new YoutubeStreamingService({ integrations, ledger });
+  const result = await service.read(request.userId, "recover_create", { operation_id: request.operationId });
+  assert.equal(result.id, own.id);
+  assert.deepEqual(calls, ["active", "active", "active", "upcoming", "upcoming"]);
+  assert.equal(result.snippet.description, request.intent.snippet.description);
+  assert.equal(JSON.stringify(result).includes("SC2Tools:"), false);
+  assert.equal(inserts, 1);
+});
+
+testCase("service recovery keeps distinct nonce matches and conflicting cross-filter duplicates uncertain", async () => {
+  for (const sameId of [false, true]) {
+    const { ledger } = setup(), request = args();
+    let own, inserts = 0;
+    await ledger.execute(request, async (context) => { own = candidate(context); inserts++; throw Error("lost response"); });
+    const integrations = { withStreamingGrant: async (_user, _platform, action) => action({
+      platformUserId: request.expectedChannelId, accessToken: "synthetic-token", assertCurrent: async () => {},
+      boundedFetch: async (raw) => {
+        const active = new URL(raw).searchParams.get("broadcastStatus") === "active";
+        const row = { ...clone(own), id: active || sameId ? "first_match" : "second_match",
+          status: { ...own.status, lifeCycleStatus: active ? "live" : "created" } };
+        return { ok: true, text: async () => JSON.stringify({ items: [row] }) };
+      },
+    }) };
+    const service = new YoutubeStreamingService({ integrations, ledger });
+    await assert.rejects(service.read(request.userId, "recover_create", { operation_id: request.operationId }),
+      { code: sameId ? "youtube_inventory_unknown" : "creation_uncertain" });
+    assert.equal((await ledger.execute(request, async () => { inserts++; })).phase, "uncertain");
+    assert.equal(inserts, 1);
+  }
 });
 
 testCase("bind selection persists before provider call, without fabricating a completed binding", async () => {

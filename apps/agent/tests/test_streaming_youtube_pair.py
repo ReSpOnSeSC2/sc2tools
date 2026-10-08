@@ -1,6 +1,7 @@
 """Network-free paired backend tests. All IDs, credentials and API rows are fake."""
 
 import copy
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import tempfile
@@ -380,6 +381,86 @@ class PairTests(unittest.TestCase):
         self.api.recover_create = lambda operation_id: self.fail("An old unsafe intent must not invoke remote recovery.")
         self.assertEqual(self.backend.recover_pair(STOPPED)["code"], "creation_uncertain")
         self.assertEqual(self.api.calls.count("create"), 1)
+
+    def test_new_creation_schedule_uses_utc_whole_seconds(self):
+        self.clock.now += 0.961381
+        scheduled = self.backend._body("horizontal")["snippet"]["scheduledStartTime"]
+        expected = (datetime.fromtimestamp(self.clock.now, timezone.utc) + timedelta(seconds=60)).replace(microsecond=0)
+        self.assertEqual(scheduled, expected.isoformat(timespec="seconds").replace("+00:00", "Z"))
+        self.assertNotIn(".", scheduled)
+        self.assertEqual(self.api.calls, [])
+
+    def test_persisted_fractional_intent_recovers_same_remote_id_without_reinsert(self):
+        class Remote(FakeGoogle):
+            requires_operation_id = True
+
+            def __init__(self):
+                super().__init__()
+                self.operations = {}
+
+            def create_broadcast(self, body, *, operation_id):
+                row = super().create_broadcast(body)
+                self.operations[operation_id] = row["id"]
+                start = datetime.fromisoformat(row["snippet"]["scheduledStartTime"].replace("Z", "+00:00"))
+                self.rows[row["id"]]["snippet"]["scheduledStartTime"] = start.isoformat(timespec="seconds").replace("+00:00", "Z")
+                if len(self.operations) == 1:
+                    raise TimeoutError("Mock facade response lost after insertion.")
+                return copy.deepcopy(self.rows[row["id"]])
+
+            def recover_create(self, operation_id):
+                self.calls.append("recover-create")
+                return copy.deepcopy(self.rows[self.operations[operation_id]])
+
+        with tempfile.TemporaryDirectory(prefix="pair-second-recovery-", dir=Path(__file__).resolve().parent) as directory:
+            api, clock = Remote(), Clock()
+            clock.now += 0.961381
+            backend = PairBackend(Path(directory), api=api, config=configuration(), writes_enabled=True, clock=clock)
+            current_body = backend._body
+
+            def old_fractional_body(scope):
+                body = current_body(scope)
+                body["snippet"]["scheduledStartTime"] = (datetime.fromtimestamp(clock.now, timezone.utc) + timedelta(seconds=60)).isoformat().replace("+00:00", "Z")
+                return body
+
+            backend._body = old_fractional_body
+            try:
+                self.assertEqual(backend.prepare_pair(STOPPED)["code"], "creation_uncertain")
+                entry = copy.deepcopy(backend._entries()["horizontal"])
+                operation_id = entry["operation_id"]
+                own_id = api.operations[operation_id]
+                self.assertIn(".961381", entry["create_body"]["snippet"]["scheduledStartTime"])
+            finally:
+                backend.close()
+            resumed = PairBackend(Path(directory), api=api, config=configuration(), writes_enabled=True, clock=clock)
+            try:
+                self.assertTrue(resumed.recover_pair(STOPPED)["pair_ready"])
+                recovered = resumed._entries()["horizontal"]
+                self.assertEqual(recovered["broadcast_id"], own_id)
+                self.assertEqual(recovered["operation_id"], operation_id)
+                self.assertEqual(recovered["create_body"]["snippet"]["scheduledStartTime"], entry["create_body"]["snippet"]["scheduledStartTime"])
+                self.assertEqual(api.calls.count("recover-create"), 1)
+                self.assertEqual(api.calls.count("create"), 2)  # Original H, then first V.
+            finally:
+                resumed.close()
+
+    def test_remote_recovery_rejects_different_second_and_changed_metadata(self):
+        for change in ("different-second", "description"):
+            with self.subTest(change=change):
+                api = FakeGoogle()
+                api.fail_create = True
+                backend = PairBackend(Path("."), api=api, config=configuration(), writes_enabled=True, memory=True, clock=self.clock)
+                self.assertEqual(backend.prepare_pair(STOPPED)["code"], "creation_uncertain")
+                row = copy.deepcopy(next(iter(api.rows.values())))
+                if change == "different-second":
+                    start = datetime.fromisoformat(row["snippet"]["scheduledStartTime"].replace("Z", "+00:00"))
+                    row["snippet"]["scheduledStartTime"] = (start + timedelta(seconds=1)).isoformat(timespec="seconds").replace("+00:00", "Z")
+                else:
+                    row["snippet"]["description"] += " changed"
+                api.requires_operation_id = True
+                api.recover_create = lambda operation_id: copy.deepcopy(row)
+                self.assertEqual(backend.recover_pair(STOPPED)["code"], "ownership_changed")
+                self.assertNotIn("broadcast_id", backend._entries()["horizontal"])
+                self.assertEqual(api.calls.count("create"), 1)
 
     def test_starting_and_stopping_are_not_advertised_as_ready(self):
         self.assertTrue(self.prepare()["pair_ready"])

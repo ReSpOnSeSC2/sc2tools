@@ -347,7 +347,7 @@ class PairBackend:
         desired = self._desired_metadata(scope)
         scheduled = datetime.fromtimestamp(self.clock(), timezone.utc) + timedelta(seconds=60)
         return {
-            "snippet": {**desired, "categoryId": "20", "scheduledStartTime": scheduled.isoformat().replace("+00:00", "Z")},
+            "snippet": {**desired, "categoryId": "20", "scheduledStartTime": scheduled.isoformat(timespec="seconds").replace("+00:00", "Z")},
             "status": {"privacyStatus": setting["privacy"], "selfDeclaredMadeForKids": setting["made_for_kids"]},
             "contentDetails": {"enableAutoStart": True, "enableAutoStop": True, "monitorStream": {"enableMonitorStream": False}},
         }
@@ -419,7 +419,10 @@ class PairBackend:
         status = row.get("status", {}) if isinstance(row, dict) else {}
         try:
             dates = [datetime.fromisoformat(value.replace("Z", "+00:00")) for value in (snippet.get("scheduledStartTime", ""), expected.get("scheduledStartTime", ""))]
-            same_time = all(value.tzinfo is not None for value in dates) and dates[0] == dates[1]
+            # Google returns whole seconds even for an older fractional intent.
+            # Compare the same UTC second, without rewriting the durable intent
+            # or accepting a different second as a tolerance window.
+            same_time = all(value.tzinfo is not None for value in dates) and dates[0].astimezone(timezone.utc).replace(microsecond=0) == dates[1].astimezone(timezone.utc).replace(microsecond=0)
         except (TypeError, ValueError):
             same_time = False
         if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"] or snippet.get("channelId") != self.config["expected_channel_id"] or not same_time or any(snippet.get(key, "") != expected.get(key, "") for key in ("title", "description")) or "categoryId" in expected and snippet.get("categoryId") != expected["categoryId"] or any(status.get(key) != body.get("status", {}).get(key) for key in ("privacyStatus", "selfDeclaredMadeForKids")) or details.get("enableAutoStart") is not True or details.get("enableAutoStop") is not True or details.get("monitorStream", {}).get("enableMonitorStream") is not False:

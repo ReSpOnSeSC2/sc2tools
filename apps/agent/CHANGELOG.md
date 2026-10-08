@@ -2,6 +2,18 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.4
+
+### Fixed - YouTube session recovery
+
+- YouTube returns scheduled broadcast times at whole-second precision. New
+  sessions use that precision, and a saved fractional-second creation request
+  can recover its original owned event without creating a replacement. Exact
+  operation, channel, title, description, audience and auto-start checks remain.
+- The server recovers from complete active and upcoming event inventories,
+  so a channel's archive of more than 200 past broadcasts no longer blocks
+  recovery. An uncertain event that has already ended still requires review.
+
 ## 0.18.3
 
 ### Fixed - YouTube discovery during consent
