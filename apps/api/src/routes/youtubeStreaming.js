@@ -22,8 +22,12 @@ function buildYoutubeStreamingRouter(deps) {
         const error = /** @type {any} */ (caught);
         const status = Number.isInteger(error?.status) && error.status >= 400 && error.status <= 599 ? error.status : 502;
         const code = typeof error?.code === "string" && /^(youtube_[a-z_]+|creation_uncertain|binding_uncertain|cloud_ingest_active|auth_required|streaming_[a-z_]+|platform_[a-z_]+)$/.test(error.code) ? error.code : "youtube_streaming_unavailable";
+        const providerHttpStatus = error?.providerHttpStatus;
+        const diagnostic = ["youtube_provider_unavailable", "youtube_quota_limited"].includes(code)
+          && Number.isInteger(providerHttpStatus) && typeof providerHttpStatus === "number"
+          && providerHttpStatus >= 400 && providerHttpStatus <= 599 ? { providerHttpStatus } : {};
         // Never return provider bodies, URLs, auth headers, tokens or stack.
-        res.status(status).json({ error: code });
+        res.status(status).json({ error: code, ...diagnostic });
       }
     };
     return handler;

@@ -174,6 +174,10 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- YouTube stream setup reports the provider's HTTP status when its catalog
+  cannot be loaded, so support can distinguish a rejected request from a
+  provider outage. Provider bodies and credentials remain private.
+
 - **Agent 0.17.10 / replay engine 1.6.9 build classification** — preserve
   PvZ two-Stargate Void Ray and Phoenix openings through later Carrier or
   Tempest transitions. Capital rushes use the first real capital unit and
