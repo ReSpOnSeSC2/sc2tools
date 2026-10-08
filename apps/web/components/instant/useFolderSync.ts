@@ -18,7 +18,7 @@
  *   const folder = useFolderSync();
  *   <Button onClick={folder.pickFolder}>Choose your StarCraft II folder</Button>
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { API_BASE, apiCall } from "@/lib/clientApi";
 import { trackInstantError, trackInstantFolderSyncResume } from "@/lib/instant/analytics";
@@ -283,9 +283,10 @@ export function useFolderSync(): FolderSyncController {
   const { userId } = useAuth();
   const [state, setState] = useState<FolderSyncState>(INITIAL);
   const stateRef = useRef(state);
-  useEffect(() => {
+  // Actions must read the state already committed to the UI.
+  useLayoutEffect(() => {
     stateRef.current = state;
-  });
+  }, [state]);
   const patch = useCallback<Patch>((next) => setState((prev) => ({ ...prev, ...next })), []);
   useEffect(() => {
     let alive = true;

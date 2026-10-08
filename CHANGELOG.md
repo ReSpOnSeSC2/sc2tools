@@ -13,6 +13,10 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Folder Sync's first action after a remembered folder becomes ready now uses
+  the committed folder and permission state, so an immediate **Sync now** click
+  starts the sync instead of reading an earlier loading snapshot.
+
 - **Agent 0.18.5: Kick titles work before going live.** A successful title
   write remains accepted when Kick's public API omits the title while offline.
   The agent distinguishes accepted writes from verified readback and keeps a

@@ -237,7 +237,12 @@ describe("FolderSyncCard: last result", () => {
       });
     render(<FolderSyncCard />);
     fireEvent.click(await screen.findByRole("button", { name: "Sync now" }));
+    expect(mocks.runs).toHaveLength(1);
+    const signal = mocks.runs[0].signal;
+    expect(signal?.aborted).toBe(false);
     fireEvent.click(await screen.findByRole("button", { name: "Stop this sync" }));
+    expect(signal?.aborted).toBe(true);
     expect(await screen.findByRole("heading", { name: "Upload cancelled" })).toBeTruthy();
+    expect(mocks.runs).toHaveLength(1);
   });
 });
