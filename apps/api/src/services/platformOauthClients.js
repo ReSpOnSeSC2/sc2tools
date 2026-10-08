@@ -31,6 +31,26 @@ const KICK_SCOPES = Object.freeze([
 const YOUTUBE_SCOPES = Object.freeze([
   "https://www.googleapis.com/auth/youtube.readonly",
 ]);
+const STREAMING_SCOPES = Object.freeze({
+  twitch: Object.freeze([...TWITCH_SCOPES, "channel:manage:broadcast"]),
+  kick: Object.freeze([...KICK_SCOPES, "channel:write"]),
+  youtube: Object.freeze(["https://www.googleapis.com/auth/youtube.force-ssl"]),
+});
+
+/** Explicit streaming consent; notification defaults remain unchanged.
+ * @param {'twitch'|'kick'|'youtube'} platform
+ * @param {'alerts'|'streaming'} [purpose]
+ */
+function scopesForPurpose(platform, purpose = "alerts") {
+  if (purpose !== "alerts" && purpose !== "streaming") {
+    throw new PlatformOauthError("oauth_purpose_invalid", "Unsupported account connection purpose", 400);
+  }
+  const defaults = { twitch: TWITCH_SCOPES, kick: KICK_SCOPES, youtube: YOUTUBE_SCOPES };
+  if (!Object.hasOwn(defaults, platform)) {
+    throw new PlatformOauthError("oauth_platform_invalid", "Unsupported account platform", 400);
+  }
+  return [...(purpose === "streaming" ? STREAMING_SCOPES[platform] : defaults[platform])];
+}
 const YOUTUBE_UPLOAD_PAGE_LIMIT = 3;
 const YOUTUBE_UPLOAD_PAGE_SIZE = 50;
 const YOUTUBE_VIDEO_BATCH_SIZE = 50;
@@ -62,37 +82,37 @@ function setQuery(url, params) {
   return url;
 }
 
-/** @param {ProviderConfig} config @param {string} state */
-function buildTwitchAuthorizeUrl(config, state) {
+/** @param {ProviderConfig} config @param {string} state @param {'alerts'|'streaming'} [purpose] */
+function buildTwitchAuthorizeUrl(config, state, purpose = "alerts") {
   return setQuery(new URL("https://id.twitch.tv/oauth2/authorize"), {
     response_type: "code",
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
-    scope: TWITCH_SCOPES,
+    scope: scopesForPurpose("twitch", purpose),
     state,
   }).toString();
 }
 
-/** @param {ProviderConfig} config @param {string} state @param {string} challenge */
-function buildKickAuthorizeUrl(config, state, challenge) {
+/** @param {ProviderConfig} config @param {string} state @param {string} challenge @param {'alerts'|'streaming'} [purpose] */
+function buildKickAuthorizeUrl(config, state, challenge, purpose = "alerts") {
   return setQuery(new URL("https://id.kick.com/oauth/authorize"), {
     response_type: "code",
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
-    scope: KICK_SCOPES,
+    scope: scopesForPurpose("kick", purpose),
     state,
     code_challenge: challenge,
     code_challenge_method: "S256",
   }).toString();
 }
 
-/** @param {ProviderConfig} config @param {string} state */
-function buildYoutubeAuthorizeUrl(config, state) {
+/** @param {ProviderConfig} config @param {string} state @param {'alerts'|'streaming'} [purpose] */
+function buildYoutubeAuthorizeUrl(config, state, purpose = "alerts") {
   return setQuery(new URL("https://accounts.google.com/o/oauth2/v2/auth"), {
     response_type: "code",
     client_id: config.clientId,
     redirect_uri: config.redirectUri,
-    scope: YOUTUBE_SCOPES,
+    scope: scopesForPurpose("youtube", purpose),
     state,
     access_type: "offline",
     include_granted_scopes: "true",
@@ -149,6 +169,7 @@ async function validateTwitchUserToken(accessToken, fetchImpl = fetch) {
   return {
     userId: String(json.user_id),
     userName: String(json.login || ""),
+    clientId: String(json.client_id || ""),
     scopes: Array.isArray(json.scopes) ? json.scopes.map(String) : [],
     expiresInSeconds: Number.isFinite(Number(json.expires_in))
       ? Math.max(0, Number(json.expires_in))
@@ -225,6 +246,22 @@ async function getKickCurrentUser(accessToken, fetchImpl = fetch) {
     userId: String(user.user_id),
     userName: String(user.name || user.username || ""),
   };
+}
+
+/** Official own-client/scope validation for opt-in channel writes.
+ * @param {string} accessToken @param {typeof fetch} [fetchImpl]
+ */
+async function getKickTokenInfo(accessToken, fetchImpl = fetch) {
+  const json = await fetchJson(fetchImpl, "https://id.kick.com/oauth/token/introspect", {
+    method: "POST", headers: { Authorization: `Bearer ${accessToken}` },
+  }, "kick_token_introspect");
+  const data = json?.data;
+  if (!data || data.active !== true || data.token_type !== "user") {
+    throw new PlatformOauthError("kick_user_authorization_required", "Reconnect the Kick account for stream control", 403);
+  }
+  return { clientId: String(data.client_id || ""),
+    scopes: Array.isArray(data.scope) ? data.scope.map(String)
+      : typeof data.scope === "string" ? data.scope.split(/\s+/).filter(Boolean) : [] };
 }
 
 /** @param {string} accessToken @param {typeof fetch} [fetchImpl] */
@@ -794,6 +831,8 @@ module.exports = {
   TWITCH_SCOPES,
   KICK_SCOPES,
   YOUTUBE_SCOPES,
+  STREAMING_SCOPES,
+  scopesForPurpose,
   TWITCH_EVENT_TYPES,
   KICK_EVENT_TYPES,
   createPkcePair,
@@ -808,6 +847,7 @@ module.exports = {
   exchangeKickCode,
   refreshKickToken,
   getKickCurrentUser,
+  getKickTokenInfo,
   listKickEventSubscriptions,
   subscribeKickEvents,
   revokeTwitchToken,

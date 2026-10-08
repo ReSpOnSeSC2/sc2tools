@@ -48,6 +48,11 @@ const { CustomBuildsService } = require("./services/customBuilds");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { PlatformIntegrationsService } = require("./services/platformIntegrations");
+const { StreamingTitlesService } = require("./services/streamingTitles");
+const { buildAgentStreamingRouter } = require("./routes/agentStreaming");
+const { YoutubeStreamingService } = require("./services/youtubeStreaming");
+const { buildYoutubeCreateLedger } = require("./services/youtubeCreateOperationLedger");
+const { buildYoutubeStreamingRouter } = require("./routes/youtubeStreaming");
 const { TikTokChatRelay } = require("./services/tiktokChatRelay");
 const { MultichatStudioService } = require("./services/multichatStudio");
 const { MultichatSoundsService } = require("./services/multichatSounds");
@@ -1120,6 +1125,19 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       returnUrl: deps.config.platformIntegrations?.returnUrl,
     }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildAgentStreamingRouter({
+    auth,
+    integrations: services.platformIntegrations,
+    streamingTitles: new StreamingTitlesService({ integrations: services.platformIntegrations }),
+  }));
+  const youtubeLedgerCollection = deps.db.youtubeCreateOperations;
+  app.use(SERVICE.ROUTE_PREFIX, buildYoutubeStreamingRouter({
+    auth,
+    youtubeStreaming: new YoutubeStreamingService({
+      integrations: services.platformIntegrations,
+      ledger: youtubeLedgerCollection ? buildYoutubeCreateLedger({ collection: youtubeLedgerCollection }) : null,
+    }),
+  }));
   // SC2TOOLS_ADMIN_USER_IDS is a CSV of *Clerk* user IDs (the
   // `user_xxx` strings from the Clerk dashboard), so the gate compares
   // against `req.auth.clerkUserId`. Device-auth requests don't carry

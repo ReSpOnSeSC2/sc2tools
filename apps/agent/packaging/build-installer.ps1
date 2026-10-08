@@ -28,6 +28,10 @@
     release builds; skip it when you're iterating on the spec file and
     want to keep PyInstaller's incremental cache.
 
+.PARAMETER BuildVenvPath
+    Optional build virtualenv directory, useful for avoiding Windows path-length
+    limits. A supplied directory is reused and is never removed by -Clean.
+
 .EXAMPLE
     pwsh packaging/build-installer.ps1 -Version 0.2.0 -Installer
 #>
@@ -35,6 +39,7 @@
 [CmdletBinding()]
 param(
     [string]$Version,
+    [string]$BuildVenvPath,
     [switch]$Installer,
     [string]$SigningCert,
     [string]$SigningCertPasswordEnv = "SC2TOOLS_SIGNING_PASSWORD",
@@ -45,7 +50,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $AgentRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$VenvDir   = Join-Path $AgentRoot ".build-venv"
+$VenvDir   = if ($BuildVenvPath) { [System.IO.Path]::GetFullPath($BuildVenvPath) } else { Join-Path $AgentRoot ".build-venv" }
 $DistDir   = Join-Path $AgentRoot "dist"
 $BuildDir  = Join-Path $AgentRoot "build"
 $Spec      = Join-Path $PSScriptRoot "sc2tools_agent.spec"
@@ -74,8 +79,15 @@ function Invoke-Step($Label, [scriptblock]$Body) {
 
 if ($Clean) {
     Invoke-Step "Cleaning build artefacts" {
-        foreach ($p in @($DistDir, $BuildDir, $VenvDir)) {
-            if (Test-Path $p) { Remove-Item -Recurse -Force $p }
+        $cleanPaths = @($DistDir, $BuildDir)
+        if (-not $BuildVenvPath) { $cleanPaths += $VenvDir }
+        $cleanRoot = [System.IO.Path]::GetFullPath([string]$AgentRoot).TrimEnd('\') + '\'
+        foreach ($p in $cleanPaths) {
+            $cleanTarget = [System.IO.Path]::GetFullPath([string]$p)
+            if (-not $cleanTarget.StartsWith($cleanRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "Refusing to clean a path outside the agent workspace."
+            }
+            if (Test-Path -LiteralPath $cleanTarget) { Remove-Item -LiteralPath $cleanTarget -Recurse -Force }
         }
     }
 }

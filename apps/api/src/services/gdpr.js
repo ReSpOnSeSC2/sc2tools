@@ -66,6 +66,8 @@ const PURGE_ONLY_COLLECTIONS = [
   // account deletion still removes them and all short-lived event rows.
   ["platformConnections", "userId"],
   ["platformOauthStates", "userId"],
+  // Stream operation tombstones must not be restored or replayed from exports.
+  ["youtubeCreateOperations", "userId"],
   ["platformEvents", "userId"],
   // Public self-submitted links are deleted with their owner; never restore public claims from a backup.
   ["playerChannels", "ownerUserId"],
