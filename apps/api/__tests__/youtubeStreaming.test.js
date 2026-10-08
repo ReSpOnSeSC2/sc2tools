@@ -270,5 +270,26 @@ test.each([[403, "quotaExceeded", 429], [403, "dailyLimitExceeded", 429], [403, 
   await expect(s.service.catalog("user-one")).rejects.toMatchObject({ status: translated });
   const response = await request(s.app).get("/v1/streaming/youtube/catalog");
   expect(response.status).toBe(translated);
+  expect(response.body.providerHttpStatus).toBe(status);
   expect(JSON.stringify(response.body)).not.toContain("MOCK_PRIVATE");
+});
+
+test.each([400, 404, 405, 500, 503, 599])("catalog preserves only safe provider HTTP status %s for diagnosis", async (providerHttpStatus) => {
+  const s = setup(); s.state.providerError = { status: providerHttpStatus, reason: "MOCK_PRIVATE_REASON" };
+  const response = await request(s.app).get("/v1/streaming/youtube/catalog");
+  expect(response.status).toBe(502);
+  expect(response.body).toEqual({ error: "youtube_provider_unavailable", providerHttpStatus });
+  expect(JSON.stringify(response.body)).not.toMatch(/MOCK_PRIVATE|MOCK_OAUTH|https?:/);
+});
+
+test.each([399, 600, 400.5, "400", null, {}, true])("route omits invalid provider HTTP diagnostics: %j", async (providerHttpStatus) => {
+  const s = setup();
+  s.service.catalog = async () => {
+    throw Object.assign(new Error("MOCK_PRIVATE_TOKEN at https://private.example"), {
+      code: "youtube_provider_unavailable", status: 502, providerHttpStatus,
+      body: "MOCK_PRIVATE_BODY", url: "https://private.example",
+    });
+  };
+  const response = await request(s.app).get("/v1/streaming/youtube/catalog");
+  expect(response.body).toEqual({ error: "youtube_provider_unavailable" });
 });

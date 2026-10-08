@@ -8,9 +8,11 @@ const TERMINAL = new Set(["complete", "revoked"]);
 const ORIGIN = "https://www.googleapis.com/youtube/v3/";
 const PARTS = "id,snippet,status,contentDetails";
 
-/** @param {number} status @param {string} code */
-function fail(status, code) {
-  return Object.assign(new Error(code), { status, code });
+/** @param {number} status @param {string} code @param {unknown} [providerHttpStatus] */
+function fail(status, code, providerHttpStatus) {
+  const diagnostic = Number.isInteger(providerHttpStatus) && typeof providerHttpStatus === "number"
+    && providerHttpStatus >= 400 && providerHttpStatus <= 599 ? { providerHttpStatus } : {};
+  return Object.assign(new Error(code), { status, code }, diagnostic);
 }
 
 /** @param {any} value @param {number} [limit] */
@@ -140,7 +142,7 @@ class YoutubeStreamingService {
           } catch { /* malformed private error remains a generic rejection */ }
         }
       }
-      throw fail(quota ? 429 : response.status === 401 || response.status === 403 ? 403 : 502, quota ? "youtube_quota_limited" : "youtube_provider_unavailable");
+      throw fail(quota ? 429 : response.status === 401 || response.status === 403 ? 403 : 502, quota ? "youtube_quota_limited" : "youtube_provider_unavailable", response.status);
     }
     const text = await response.text();
     if (text.length > 1024 * 1024) throw fail(502, "youtube_response_invalid");
