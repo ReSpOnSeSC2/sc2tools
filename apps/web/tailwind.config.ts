@@ -16,6 +16,8 @@ const config: Config = {
   content: [
     "./app/**/*.{ts,tsx,js,jsx}",
     "./components/**/*.{ts,tsx,js,jsx}",
+    // RULE_TONE_STRIPE (lib/build-rules-quantity.ts) holds class names.
+    "./lib/build-rules*.ts",
   ],
   theme: {
     extend: {

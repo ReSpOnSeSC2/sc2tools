@@ -204,10 +204,13 @@ corresponding GitHub Release.
   therefore matched any Stargate game with a single Void Ray, and because
   saved builds relabel games ahead of the built-in classifier, a Carrier
   rush with one Void Ray showed that name instead of "PvZ - Carrier Rush".
-  A later row of something already in the rules now shows "≥ N"; clicking
-  it changes the rule to "at least N by then" (the 2nd Stargate asks for 2,
-  the 4th Void Ray for 4). Builds saved before this keep their rules; in
-  the editor, click ⚙ on a rule to change it to "≥ count".
+  A later row of something already in the rules now shows "At least N";
+  clicking it adds "at least N before then" next to the first one's
+  deadline (the 2nd Stargate asks for 2, the 4th Void Ray for 4), or raises
+  that count if it is already there. It is not offered when another rule
+  caps the count lower, or when editing a saved build, whose timeline is
+  rebuilt from its rules. Builds saved before this keep their rules; in the
+  editor, raise the number on a rule to require more.
 - **Lurker Dens and Lurkers are recorded, so rules about them can match
   (agent 0.17.8, engine 1.6.7)** — no replay ever logged a Lurker Den or a
   Lurker. The replay types the den `LurkerDenMP`, a name the engine did not
@@ -605,6 +608,22 @@ corresponding GitHub Release.
 
 ### Changed
 
+- **Custom build rules read in plain words** — each rule in the build
+  editor says how many it needs with one word and a visible number (At
+  least, Exactly, At most or None), then "before" and its time, picked from
+  a menu instead of clicking ⚙ to cycle a ✓ ✗ ≤ = ≥ badge. A sentence under
+  each rule says what passes, such as "Passes with 0 or 1 Stargate started
+  before 6:00 — games with none pass too.", and typing 2 into an "At least
+  1" rule asks for two. The add buttons, the timeline's "At least 2" chip
+  and a collapsed "How rules count" guide use the same words, and "Must be
+  proxied" is now "Only count proxied", shown only for buildings. The editor
+  warns when the build's name says "2 Stargate" but its rules pass with one
+  (with a Require 2 button), or when every rule would also pass a game that
+  has none of it. Almost-matches in the preview say what was missed, for
+  example "Needs at least 4 Void Rays before 10:00 — this game had 1.", and
+  the older step editor reads each step as at least that many started
+  before its time. Saved builds keep their rules exactly as they are, and
+  opening one changes nothing.
 - **Trends win rates get an "All" sample and sit together** — the Win rate
   card's game-sample switch adds All beside 30 / 60 / 100, drawing the
   win rate over every game in the date range up to each point. Win rate

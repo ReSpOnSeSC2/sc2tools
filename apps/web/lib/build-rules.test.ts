@@ -2,9 +2,7 @@ import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  cycleRuleType,
   eventsToSourceRows,
-  formatRule,
   ruleFromEvent,
   sanitiseDraft,
   sanitiseRule,
@@ -13,125 +11,9 @@ import {
   PROXY_ELIGIBLE_BUILDINGS,
   type BuildRule,
 } from "./build-rules";
+import { ruleEntity } from "./build-rules-copy";
+import { withQuantifier } from "./build-rules-quantity";
 import { rulesToSignature, signatureToRows } from "./build-events";
-
-describe("formatRule", () => {
-  test("renders a before-rule with verb-prefix stripped and m:ss time", () => {
-    const r: BuildRule = {
-      type: "before",
-      name: "BuildStargate",
-      time_lt: 210,
-    };
-    expect(formatRule(r)).toEqual({
-      prefix: "",
-      entity: "Stargate",
-      connector: "before",
-      time: "3:30",
-    });
-  });
-
-  test("describes not_before rules without the ambiguous 'NOT by' wording", () => {
-    const r: BuildRule = {
-      type: "not_before",
-      name: "BuildRoboticsFacility",
-      time_lt: 240,
-    };
-    expect(formatRule(r)).toEqual({
-      prefix: "",
-      entity: "Robotics Facility",
-      connector: "must not be built before",
-      time: "4:00",
-    });
-  });
-
-  test("renders count_max with ≤ and 'by' connector", () => {
-    const r: BuildRule = {
-      type: "count_max",
-      name: "TrainPhoenix",
-      time_lt: 300,
-      count: 2,
-    };
-    expect(formatRule(r)).toEqual({
-      prefix: "≤ 2 ",
-      entity: "Phoenix",
-      connector: "by",
-      time: "5:00",
-    });
-  });
-
-  test("renders count_exact with = and 'by' connector", () => {
-    const r: BuildRule = {
-      type: "count_exact",
-      name: "BuildStargate",
-      time_lt: 210,
-      count: 1,
-    };
-    expect(formatRule(r)).toEqual({
-      prefix: "= 1 ",
-      entity: "Stargate",
-      connector: "by",
-      time: "3:30",
-    });
-  });
-
-  test("renders count_min with ≥ and 'by' connector", () => {
-    const r: BuildRule = {
-      type: "count_min",
-      name: "BuildStalker",
-      time_lt: 240,
-      count: 3,
-    };
-    expect(formatRule(r)).toEqual({
-      prefix: "≥ 3 ",
-      entity: "Stalker",
-      connector: "by",
-      time: "4:00",
-    });
-  });
-
-  test("handles Research/Morph verbs and zero-padded seconds", () => {
-    expect(formatRule({ type: "before", name: "ResearchBlink", time_lt: 425 })).toEqual({
-      prefix: "",
-      entity: "Blink",
-      connector: "before",
-      time: "7:05",
-    });
-    expect(
-      formatRule({ type: "before", name: "MorphBaneling", time_lt: 180 }),
-    ).toEqual({
-      prefix: "",
-      entity: "Baneling",
-      connector: "before",
-      time: "3:00",
-    });
-  });
-
-  test("falls back to humanised camelCase when no verb prefix is present", () => {
-    expect(
-      formatRule({ type: "before", name: "Stargate", time_lt: 210 }),
-    ).toEqual({
-      prefix: "",
-      entity: "Stargate",
-      connector: "before",
-      time: "3:30",
-    });
-  });
-
-  test("uses the in-game Glaives label without changing the canonical rule token", () => {
-    const rule: BuildRule = {
-      type: "before",
-      name: "ResearchAdeptPiercingAttack",
-      time_lt: 330,
-    };
-    expect(formatRule(rule)).toEqual({
-      prefix: "",
-      entity: "Resonating Glaives",
-      connector: "before",
-      time: "5:30",
-    });
-    expect(rule.name).toBe("ResearchAdeptPiercingAttack");
-  });
-});
 
 describe("proxy build rules", () => {
   test("manual signature labels use the same proxy structure eligibility", () => {
@@ -168,16 +50,16 @@ describe("proxy build rules", () => {
     });
   });
 
-  test("cycling and sanitising preserve valid proxy requirements", () => {
+  test("quantity changes and sanitising preserve valid proxy requirements", () => {
     const rule: BuildRule = {
       type: "before",
       name: "BuildBarracks",
       time_lt: 120,
       proxy: true,
     };
-    expect(cycleRuleType(rule).proxy).toBe(true);
+    expect(withQuantifier(rule, "exactly").proxy).toBe(true);
     expect(sanitiseRule(rule)).toEqual(rule);
-    expect(formatRule(rule).entity).toBe("Proxy Barracks");
+    expect(ruleEntity(rule, 1)).toBe("proxied Barracks");
   });
 
   test("sanitising drops proxy from non-structure tokens", () => {
@@ -227,7 +109,9 @@ describe("proxy build rules", () => {
     });
 
     expect(result.ok).toBe(false);
-    expect(result.errors.rules).toMatch(/known building token/i);
+    expect(result.errors.rules).toBe(
+      "“Only count proxied” needs a building token, for example BuildPylon or BuildBarracks.",
+    );
   });
 
   test("web proxy eligibility exactly matches the local JSON schema", () => {

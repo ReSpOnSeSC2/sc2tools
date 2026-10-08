@@ -595,3 +595,24 @@ server-issued pepper). Rate limits: 30 writes/hour per client_id,
   `meta_database.json`. A full end-to-end re-run on the original
   `.SC2Replay` is recommended as a follow-up to confirm the
   `unit_max` Drone-count rule under the full event train.
+
+---
+
+## Addendum (October 2026): how the web editor words v3 rules
+
+The website's rule editor (schema v3, `lib/build-rules-quantity.ts` and
+`lib/build-rules-copy.ts`) no longer shows the symbols ✓ ✗ ≤ = ≥ or a ⚙
+badge that cycles the type. Each rule reads as a quantity word, a number
+and "before {time}", counting events that start strictly before `time_lt`.
+The stored types are unchanged:
+
+| Stored `type` | Editor reads | Passes when (n started before the time) |
+|---------------|--------------|------------------------------------------|
+| `before` | At least 1 | n ≥ 1 (same verdict as `count_min` 1) |
+| `count_min` | At least {count} | n ≥ count |
+| `count_exact` | Exactly {count} | n = count |
+| `count_max` | At most {count} | n ≤ count, so games with none pass too |
+| `not_before` | None | n = 0; at the time or later, or never, is fine |
+
+Exactly 0 and At most 0 behave like None. "Only count proxied" limits a
+building rule to proxied structures.

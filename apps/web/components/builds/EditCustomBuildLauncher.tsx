@@ -137,7 +137,7 @@ function toInitialDraft(
  * from what the doc carries:
  *   1. v3 `rules` — preferred: rule names ARE the canonical tokens
  *      (BuildStargate, ResearchBlink), so the timeline rows map back
- *      to rules exactly and render as "✓ in rules".
+ *      to rules exactly and render as "In rules".
  *   2. legacy `signature` — fallback for older docs / community forks
  *      saved before rules were copied. Unit names are icon-ish
  *      (lowercase) so we re-derive display + category via

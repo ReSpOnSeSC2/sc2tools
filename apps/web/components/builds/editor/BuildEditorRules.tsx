@@ -1,26 +1,51 @@
 "use client";
 
-import { useState } from "react";
-import { MapPin, Plus, Star, X } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
+import { Check, MapPin, Plus, Star } from "lucide-react";
 import { Icon } from "@/components/ui/Icon";
 import {
+  AUTO_PICK_TIME_BUFFER_SEC,
   PROXY_RULE_DISTANCE_HINT,
-  RULE_TYPES,
-  RULE_TYPE_ICON,
-  RULE_TYPE_LABEL,
-  RULE_TYPE_TONE,
   RULES_MAX_PER_BUILD,
-  clampCount,
-  clampRuleTime,
   formatTime,
-  isProxyStructureToken,
-  isCountRule,
-  parseTimeInput,
+  ruleFromEvent,
   type BuildRule,
   type RuleType,
+  type SourceTimelineRow,
 } from "@/lib/build-rules";
-import { raiseRuleForRepeatRow } from "@/lib/build-rules-repeat";
+import {
+  raiseRuleForRepeatRow,
+  type RepeatRowRaise,
+} from "@/lib/build-rules-repeat";
+import {
+  describeRule,
+  ruleContexts,
+  ruleEntity,
+} from "@/lib/build-rules-copy";
+import {
+  RULE_QUANTIFIERS,
+  withQuantifier,
+  type RuleQuantifier,
+} from "@/lib/build-rules-quantity";
+import {
+  nameCountKey,
+  nameCountWarning,
+  rulesRequireNothing,
+} from "@/lib/build-rules-name-check";
 import type { BuildEditorRulesProps } from "./BuildEditor.types";
+import { RuleRow } from "./BuildEditorRuleRow";
+import {
+  NameCountCallout,
+  RequireNothingCallout,
+  RulesLegend,
+} from "./BuildEditorRulesHelp";
 
 const TONE_BTN_CLASSES: Record<"win" | "loss" | "neutral", string> = {
   win:
@@ -31,58 +56,111 @@ const TONE_BTN_CLASSES: Record<"win" | "loss" | "neutral", string> = {
     "bg-bg-subtle text-text border border-border hover:bg-bg-elevated",
 };
 
-const TONE_BADGE_CLASSES: Record<"win" | "loss" | "neutral", string> = {
-  win: "bg-success/15 text-success border-success/40",
-  loss: "bg-danger/15 text-danger border-danger/40",
-  neutral: "bg-bg-subtle text-text border-border-strong",
-};
+const ADD_BUTTON_CLASSES =
+  "inline-flex min-h-[32px] items-center gap-1 rounded-md px-2 py-1 text-caption font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50";
 
-const CUSTOM_RULE_BUTTONS: Array<{
-  type: RuleType;
-  label: string;
-}> = [
-  { type: "before", label: "✓ built by" },
-  { type: "not_before", label: "✗ Not built before" },
-  { type: "count_max", label: "≤ count" },
-  { type: "count_exact", label: "= count" },
-  { type: "count_min", label: "≥ count" },
-];
+/** How long a live-region announcement stays before it is cleared. */
+const ANNOUNCE_TTL_MS = 5000;
 
 /**
  * BuildEditorRules — Section 2 of the BuildEditor.
  *
+ * Top: the "How rules count" legend and the advisory build-level
+ * callouts (rules that require nothing; a build name that asks for more
+ * than the rules do). Neither blocks saving.
+ *
  * Left column: source replay timeline (one row per parseable event)
- * with a [+] button to promote the event to a rule. Tech-defining
- * tokens get a star + accent background to nudge the user toward the
- * events worth tracking.
+ * with a [+] button to promote the event to an "At least 1" rule, or an
+ * "At least N" chip on a later row of a token already in the rules.
+ * Tech-defining tokens get a star + accent background.
  *
- * Right column: the user's rule list with cycle-type, edit-time, edit-
- * count, remove. The save bar in the parent shows whether any rules
- * have been added (no rules → save disabled).
+ * Right column: the user's rules, each in plain words (quantity, number,
+ * "before" time, proxy chip) with a read-back sentence. The save bar in
+ * the parent shows whether any rules have been added.
  *
- * Below: custom rule pickers — one button per rule type so the user
- * can add a rule even when the source timeline is empty.
+ * Below: the "Add a rule:" bar, one button per quantity word, so the
+ * user can add a rule even when the source timeline is empty.
+ *
+ * Discrete actions (adds, picker changes, removals) are said back once
+ * through a polite live region; typing never is.
  */
 export function BuildEditorRules({
   draft,
   errors,
   sourceRows,
+  countRepeats = true,
   updateRule,
   removeRule,
-  cycleRule,
+  setRuleQuantity,
+  setRuleCount,
   addRuleFromEvent,
   addCustomRule,
 }: BuildEditorRulesProps) {
-  const inUseNames = new Set(draft.rules.map((r) => r.name));
-  const ruleCap = draft.rules.length >= RULES_MAX_PER_BUILD;
+  const rules = draft.rules;
+  const ruleCap = rules.length >= RULES_MAX_PER_BUILD;
+  const [announcement, announce] = useLiveAnnouncement();
+  // "Require N" and "Dismiss" unmount their own callout; focus moves to the
+  // rules list so keyboard and screen-reader users keep their place.
+  const rulesPanelRef = useRef<HTMLDivElement>(null);
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  // Index of a rule just added from the add bar; its token input takes focus.
+  const [focusIndex, setFocusIndex] = useState<number | null>(null);
+  useEffect(() => {
+    // The new row focused itself on mount (child effects run first).
+    if (focusIndex !== null && focusIndex < rules.length) setFocusIndex(null);
+  }, [focusIndex, rules.length]);
+
+  const addFromRow = (row: SourceTimelineRow) => {
+    const raise = countRepeats
+      ? raiseRuleForRepeatRow(rules, sourceRows, row)
+      : null;
+    const ev = rowEvent(row);
+    const text = rowAddAnnouncement(rules, raise, ruleFromEvent(ev));
+    addRuleFromEvent(ev);
+    if (text) announce(text);
+  };
+
+  const addBlank = (type: RuleType, text: string, proxyOnly = false) => {
+    if (proxyOnly) addCustomRule(type, { proxyOnly: true });
+    else addCustomRule(type);
+    setFocusIndex(rules.length);
+    announce(text);
+  };
+
+  const changeQuantity = (idx: number, q: RuleQuantifier, carry: number) => {
+    const rule = rules[idx];
+    setRuleQuantity(idx, q, carry);
+    const next = rule ? withQuantifier(rule, q, carry) : rule;
+    if (next && next !== rule) {
+      announce(`Rule ${idx + 1} now: ${describeRule(next)}.`);
+    }
+  };
+
+  const remove = (idx: number) => {
+    const rule = rules[idx];
+    removeRule(idx);
+    if (rule) announce(`Removed rule ${idx + 1}: ${describeRule(rule)}.`);
+  };
+
+  const warning = nameCountWarning(
+    draft.name,
+    rules,
+    sourceRows,
+    countRepeats,
+    dismissed,
+  );
+
   return (
     <section aria-label="Match rules" className="space-y-2">
       <h3 className="text-caption font-semibold uppercase tracking-wider text-text-muted">
         2 · Match rules{" "}
         <span className="font-normal normal-case text-text-dim">
-          ({draft.rules.length}/{RULES_MAX_PER_BUILD} · ALL must pass)
+          ({rules.length}/{RULES_MAX_PER_BUILD} · every rule must pass)
         </span>
       </h3>
+      <RulesLegend />
       {errors.rules ? (
         <p
           role="alert"
@@ -91,63 +169,102 @@ export function BuildEditorRules({
           {errors.rules}
         </p>
       ) : null}
+      {rulesRequireNothing(rules) ? <RequireNothingCallout /> : null}
+      {warning ? (
+        <NameCountCallout
+          warning={warning}
+          onRequire={() => {
+            if (warning.nthRow) addFromRow(warning.nthRow);
+            rulesPanelRef.current?.focus();
+          }}
+          onDismiss={() => {
+            setDismissed((prev) => new Set(prev).add(nameCountKey(warning)));
+            rulesPanelRef.current?.focus();
+          }}
+        />
+      ) : null}
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <SourceTimelinePanel
           rows={sourceRows}
-          rules={draft.rules}
-          inUseNames={inUseNames}
-          onAdd={addRuleFromEvent}
+          rules={rules}
+          countRepeats={countRepeats}
           ruleCap={ruleCap}
+          onAdd={addFromRow}
         />
         <RulesListPanel
-          rules={draft.rules}
-          updateRule={updateRule}
-          removeRule={removeRule}
-          cycleRule={cycleRule}
+          panelRef={rulesPanelRef}
+          rules={rules}
+          focusIndex={focusIndex}
+          onUpdate={updateRule}
+          onQuantity={changeQuantity}
+          onCount={setRuleCount}
+          onRemove={remove}
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 text-caption text-text-muted">
-        <span>Add custom rule:</span>
-        {CUSTOM_RULE_BUTTONS.map((b) => (
-          <button
-            key={b.type}
-            type="button"
-            onClick={() => addCustomRule(b.type)}
-            disabled={ruleCap}
-            title={
-              b.type === "not_before"
-                ? "Match only replays where this event does not happen before the selected time."
-                : undefined
-            }
-            className={[
-              "rounded-md px-2 py-1 text-caption font-medium transition-colors",
-              "disabled:cursor-not-allowed disabled:opacity-50",
-              "min-h-[32px]",
-              TONE_BTN_CLASSES[RULE_TYPE_TONE[b.type]],
-            ].join(" ")}
-          >
-            {b.label}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => addCustomRule("before", { proxyOnly: true })}
-          disabled={ruleCap}
-          title={`Add a building rule that only matches when the structure is ${PROXY_RULE_DISTANCE_HINT}.`}
-          className={[
-            "inline-flex min-h-[32px] items-center gap-1 rounded-md border border-warning/50",
-            "bg-warning/15 px-2 py-1 text-caption font-medium text-warning transition-colors",
-            "hover:bg-warning/25 disabled:cursor-not-allowed disabled:opacity-50",
-          ].join(" ")}
-        >
-          <MapPin className="h-3.5 w-3.5" aria-hidden />
-          Proxy building
-        </button>
-      </div>
+      <AddRuleBar ruleCap={ruleCap} onAdd={addBlank} />
+      <p className="sr-only" role="status" aria-live="polite">
+        {announcement}
+      </p>
     </section>
   );
+}
+
+/**
+ * One polite live-region message at a time, cleared after
+ * ANNOUNCE_TTL_MS so a stale sentence is not re-read later. The same
+ * sentence twice in a row gets a trailing no-break space, so the DOM
+ * changes and screen readers announce it again.
+ */
+function useLiveAnnouncement(): [string, (text: string) => void] {
+  const [text, setText] = useState("");
+  const timerRef = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    const timer = timerRef;
+    return () => window.clearTimeout(timer.current);
+  }, []);
+  const announce = useCallback((next: string) => {
+    window.clearTimeout(timerRef.current);
+    setText((prev) => (prev === next ? `${next}\u00a0` : next));
+    timerRef.current = window.setTimeout(() => setText(""), ANNOUNCE_TTL_MS);
+  }, []);
+  return [text, announce];
+}
+
+/** The SPA-event shape addRuleFromEvent takes, for a timeline row. */
+function rowEvent(row: SourceTimelineRow) {
+  return {
+    time: row.t,
+    name: row.what,
+    is_building: row.isBuilding,
+    is_proxy: row.isProxy,
+    race: row.race,
+    category: row.category,
+  };
+}
+
+/**
+ * What a timeline click does, said back for the live region; null when
+ * addRuleFromEvent refuses it (its toast speaks instead). Mirrors the
+ * hook: a raise applies unless it inserts at the cap, a duplicate token
+ * or the cap refuses a plain add.
+ */
+function rowAddAnnouncement(
+  rules: ReadonlyArray<BuildRule>,
+  raise: RepeatRowRaise | null,
+  rule: BuildRule | null,
+): string | null {
+  const atCap = rules.length >= RULES_MAX_PER_BUILD;
+  if (raise && !(raise.insert && atCap)) {
+    const phrase = describeRule(raise.rule);
+    return raise.insert
+      ? `Added: ${phrase}.`
+      : `Changed rule ${raise.index + 1}: ${phrase}.`;
+  }
+  if (!rule || atCap) return null;
+  if (!raise && rules.some((r) => r.name === rule.name)) return null;
+  return `Added: ${describeRule(rule)}.`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -157,23 +274,38 @@ export function BuildEditorRules({
 interface SourceTimelinePanelProps {
   rows: BuildEditorRulesProps["sourceRows"];
   rules: ReadonlyArray<BuildRule>;
-  inUseNames: ReadonlySet<string>;
-  onAdd: BuildEditorRulesProps["addRuleFromEvent"];
+  countRepeats: boolean;
   ruleCap: boolean;
+  onAdd: (row: SourceTimelineRow) => void;
 }
 
 function SourceTimelinePanel({
   rows,
   rules,
-  inUseNames,
-  onAdd,
+  countRepeats,
   ruleCap,
+  onAdd,
 }: SourceTimelinePanelProps) {
+  const inUseNames = new Set(rules.map((r) => r.name));
+  // Edit mode rebuilds the rows from the saved rules' deadlines.
+  const heading = countRepeats
+    ? {
+        label: "Source replay timeline",
+        title: "Times are when each building, unit or upgrade started.",
+      }
+    : {
+        label: "Saved rule times",
+        title:
+          "Rebuilt from this build's saved rules: each row is a rule's time, not a replay event.",
+      };
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-bg-subtle/50">
       <div className="sticky top-0 flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-bg-subtle/90 px-3 py-1.5 backdrop-blur">
-        <span className="text-micro font-semibold uppercase tracking-wider text-text-muted">
-          Source replay timeline ({rows.length})
+        <span
+          className="text-micro font-semibold uppercase tracking-wider text-text-muted"
+          title={heading.title}
+        >
+          {heading.label} ({rows.length})
         </span>
         <span
           className="inline-flex items-center gap-1 rounded-full border border-accent-cyan/40 bg-accent-cyan/10 px-2 py-0.5 text-micro font-semibold text-accent-cyan"
@@ -193,94 +325,166 @@ function SourceTimelinePanel({
           </p>
         ) : (
           <ul role="list" className="divide-y divide-border">
-            {rows.map((r) => {
-              const inRules = inUseNames.has(r.what);
-              // A later row of a token already in the rules can raise it
-              // to "≥ N by then" (the 2nd Stargate asks for 2).
-              const raise = inRules ? raiseRuleForRepeatRow(rules, rows, r) : null;
-              const raiseCount =
-                raise && isCountRule(raise.rule) ? raise.rule.count : null;
-              const add = () =>
-                onAdd({
-                  time: r.t,
-                  name: r.what,
-                  is_building: r.isBuilding,
-                  is_proxy: r.isProxy,
-                  race: r.race,
-                  category: r.category,
-                });
-              const rowAccent = r.isTech
-                ? "bg-accent-cyan/10 border-l-2 border-accent-cyan"
-                : "border-l-2 border-transparent opacity-80 hover:opacity-100";
-              return (
-                <li
-                  key={r.key}
-                  className={`flex items-center gap-2 px-3 py-1.5 text-caption ${rowAccent}`}
-                >
-                  <span className="w-10 font-mono tabular-nums text-text-dim">
-                    {r.timeDisplay}
-                  </span>
-                  <span className="flex w-4 items-center justify-center">
-                    {r.isTech ? (
-                      <Star
-                        className="h-3.5 w-3.5 fill-accent-cyan text-accent-cyan drop-shadow-[0_0_4px_rgba(62,192,199,0.55)]"
-                        aria-label="Tech-defining event"
-                      />
-                    ) : null}
-                  </span>
-                  <Icon
-                    name={r.what.replace(/^(Build|Train|Research|Morph)/, "")}
-                    decorative
-                    size="sm"
-                    className="flex-shrink-0"
-                  />
-                  <span
-                    className={`flex-1 truncate ${r.isTech ? "font-semibold text-text" : "text-text"}`}
-                    title={r.what}
-                  >
-                    {r.display}
-                  </span>
-                  <span className="hidden text-micro text-text-dim sm:inline">
-                    {r.what}
-                  </span>
-                  {r.isProxy ? (
-                    <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide text-warning">
-                      Proxy
-                    </span>
-                  ) : null}
-                  {raiseCount !== null ? (
-                    <button
-                      type="button"
-                      onClick={add}
-                      title={`Require at least ${raiseCount} by ${formatTime(raise?.rule.time_lt ?? r.t)}`}
-                      aria-label={`Require at least ${raiseCount} ${r.what}`}
-                      className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-md border border-accent-cyan/50 bg-accent-cyan/10 px-2 font-mono text-micro font-semibold tabular-nums text-accent-cyan transition-colors hover:bg-accent-cyan/20"
-                    >
-                      ≥ {raiseCount}
-                    </button>
-                  ) : inRules ? (
-                    <span className="text-micro font-semibold text-accent-cyan">
-                      ✓ in rules
-                    </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={add}
-                      disabled={ruleCap}
-                      title="Add as a rule"
-                      aria-label={`Add ${r.what} as a rule`}
-                      className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-md bg-accent px-2 text-micro font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Plus className="h-3 w-3" aria-hidden />
-                    </button>
-                  )}
-                </li>
-              );
-            })}
+            {rows.map((r) => (
+              <SourceRow
+                key={r.key}
+                row={r}
+                rows={rows}
+                rules={rules}
+                inRules={inUseNames.has(r.what)}
+                countRepeats={countRepeats}
+                ruleCap={ruleCap}
+                onAdd={onAdd}
+              />
+            ))}
           </ul>
         )}
       </div>
     </div>
+  );
+}
+
+interface SourceRowProps extends Omit<SourceTimelinePanelProps, "rows"> {
+  row: SourceTimelineRow;
+  rows: SourceTimelinePanelProps["rows"];
+  inRules: boolean;
+}
+
+function SourceRow({
+  row,
+  rows,
+  rules,
+  inRules,
+  countRepeats,
+  ruleCap,
+  onAdd,
+}: SourceRowProps) {
+  // A later row of a token already in the rules can raise it to
+  // "at least N before then" (the 2nd Stargate asks for 2).
+  const raise =
+    inRules && countRepeats ? raiseRuleForRepeatRow(rules, rows, row) : null;
+  const rowAccent = row.isTech
+    ? "bg-accent-cyan/10 border-l-2 border-accent-cyan"
+    : "border-l-2 border-transparent opacity-80 hover:opacity-100";
+  return (
+    <li className={`flex items-center gap-2 px-3 py-1.5 text-caption ${rowAccent}`}>
+      <span className="w-10 font-mono tabular-nums text-text-dim">
+        {row.timeDisplay}
+      </span>
+      <span className="flex w-4 items-center justify-center">
+        {row.isTech ? (
+          <Star
+            className="h-3.5 w-3.5 fill-accent-cyan text-accent-cyan drop-shadow-[0_0_4px_rgba(62,192,199,0.55)]"
+            aria-label="Tech-defining event"
+          />
+        ) : null}
+      </span>
+      <Icon
+        name={row.what.replace(/^(Build|Train|Research|Morph)/, "")}
+        decorative
+        size="sm"
+        className="flex-shrink-0"
+      />
+      <span
+        className={`flex-1 truncate ${row.isTech ? "font-semibold text-text" : "text-text"}`}
+        title={row.what}
+      >
+        {row.display}
+      </span>
+      {row.isProxy ? (
+        <span className="rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 text-micro font-semibold uppercase tracking-wide text-warning">
+          Proxy
+        </span>
+      ) : null}
+      <SourceRowAction
+        row={row}
+        inRules={inRules}
+        raise={raise}
+        ruleCap={ruleCap}
+        onAdd={() => onAdd(row)}
+      />
+    </li>
+  );
+}
+
+interface SourceRowActionProps {
+  row: SourceTimelineRow;
+  inRules: boolean;
+  raise: RepeatRowRaise | null;
+  ruleCap: boolean;
+  onAdd: () => void;
+}
+
+/** A row's "+", "At least N" (count this one too) or "In rules" marker. */
+function SourceRowAction({
+  row,
+  inRules,
+  raise,
+  ruleCap,
+  onAdd,
+}: SourceRowActionProps) {
+  if (raise) {
+    return (
+      <RepeatChip raise={raise} disabled={raise.insert && ruleCap} onClick={onAdd} />
+    );
+  }
+  if (inRules) {
+    return (
+      <span
+        className="inline-flex items-center gap-1 text-micro font-semibold text-accent-cyan"
+        title="Already in your rules"
+      >
+        <Check className="h-3 w-3" aria-hidden />
+        In rules
+      </span>
+    );
+  }
+  const rule = ruleFromEvent(rowEvent(row));
+  const label = rule ? `Add rule: ${describeRule(rule)}` : "Add as a rule";
+  return (
+    <button
+      type="button"
+      onClick={onAdd}
+      disabled={ruleCap}
+      title={label}
+      aria-label={label}
+      className="inline-flex h-6 min-w-[44px] items-center justify-center rounded-md bg-accent px-2 text-micro font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <Plus className="h-3 w-3" aria-hidden />
+    </button>
+  );
+}
+
+/** "At least N" on a repeated row: inserts a count rule or raises one. */
+function RepeatChip({
+  raise,
+  disabled,
+  onClick,
+}: {
+  raise: RepeatRowRaise;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  const { rule, index, insert } = raise;
+  const phrase = describeRule(rule);
+  const time = formatTime(rule.time_lt);
+  const label = insert
+    ? `Add rule: ${phrase}`
+    : `Change rule ${index + 1} to ${phrase}`;
+  const title = insert
+    ? `Count this one too. Adds “At least ${rule.count}” before ${time}; the first ${ruleEntity(rule, 1)} rule stays.`
+    : `Count this one too. Changes rule ${index + 1} to “At least ${rule.count}” before ${time}.`;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={title}
+      className="inline-flex h-6 items-center whitespace-nowrap rounded-md border border-accent-cyan/50 bg-accent-cyan/10 px-2 text-micro font-semibold text-accent-cyan transition-colors hover:bg-accent-cyan/20 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      At least {rule.count}
+    </button>
   );
 }
 
@@ -289,43 +493,60 @@ function SourceTimelinePanel({
 /* ------------------------------------------------------------------ */
 
 interface RulesListPanelProps {
+  panelRef: RefObject<HTMLDivElement | null>;
   rules: ReadonlyArray<BuildRule>;
-  updateRule: BuildEditorRulesProps["updateRule"];
-  removeRule: BuildEditorRulesProps["removeRule"];
-  cycleRule: BuildEditorRulesProps["cycleRule"];
+  focusIndex: number | null;
+  onUpdate: BuildEditorRulesProps["updateRule"];
+  onQuantity: (idx: number, q: RuleQuantifier, carry: number) => void;
+  onCount: BuildEditorRulesProps["setRuleCount"];
+  onRemove: (idx: number) => void;
 }
 
 function RulesListPanel({
+  panelRef,
   rules,
-  updateRule,
-  removeRule,
-  cycleRule,
+  focusIndex,
+  onUpdate,
+  onQuantity,
+  onCount,
+  onRemove,
 }: RulesListPanelProps) {
+  const contexts = ruleContexts(rules);
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-bg-subtle/50">
+    <div
+      ref={panelRef}
+      role="region"
+      aria-label="Your rules"
+      tabIndex={-1}
+      className="overflow-hidden rounded-lg border border-border bg-bg-subtle/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+    >
       <div className="sticky top-0 border-b border-border bg-bg-subtle/90 px-3 py-1.5 text-micro font-semibold uppercase tracking-wider text-text-muted backdrop-blur">
         Your rules ({rules.length})
         <span className="ml-2 font-normal normal-case text-text-dim">
-          · click ⚙ to cycle type · click time to edit
+          · start times, not finish times
         </span>
       </div>
       <div className="max-h-[260px] overflow-y-auto sm:max-h-[420px] lg:max-h-[60vh]">
         {rules.length === 0 ? (
           <p className="px-3 py-6 text-caption text-text-dim">
-            No rules yet. Click + on a ★ tech-defining event in the left
-            column, or add a custom rule below. “Not built before” means the
-            event must not happen earlier than the selected time; it may happen
-            at or after that time.
+            No rules yet. Click + on a starred event in the timeline: it adds
+            “At least 1” of that event, due {AUTO_PICK_TIME_BUFFER_SEC} s after
+            the time shown so this game still matches. Raise the number if the
+            build needs more, or add a rule below.
           </p>
         ) : (
-          <ul role="list" className="divide-y divide-border">
-            {rules.map((r, idx) => (
+          <ul role="list">
+            {rules.map((rule, idx) => (
               <RuleRow
                 key={idx}
-                rule={r}
-                onUpdate={(patch) => updateRule(idx, patch)}
-                onCycle={() => cycleRule(idx)}
-                onRemove={() => removeRule(idx)}
+                rule={rule}
+                index={idx}
+                ctx={contexts[idx]}
+                autoFocusName={idx === focusIndex}
+                onUpdate={(patch) => onUpdate(idx, patch)}
+                onQuantity={(q, carry) => onQuantity(idx, q, carry)}
+                onCount={(n) => onCount(idx, n)}
+                onRemove={() => onRemove(idx)}
               />
             ))}
           </ul>
@@ -336,248 +557,63 @@ function RulesListPanel({
 }
 
 /* ------------------------------------------------------------------ */
-/* RuleRow — one row in the rules-list column                         */
+/* Add-rule bar                                                       */
 /* ------------------------------------------------------------------ */
 
-interface RuleRowProps {
-  rule: BuildRule;
-  onUpdate: (patch: Partial<BuildRule>) => void;
-  onCycle: () => void;
-  onRemove: () => void;
-}
-
-function RuleRow({ rule, onUpdate, onCycle, onRemove }: RuleRowProps) {
-  const tone = RULE_TYPE_TONE[rule.type];
-  const isCount = isCountRule(rule);
-  const proxyEligible = isProxyStructureToken(rule.name);
-  return (
-    <li className="space-y-1.5 px-3 py-2 text-caption">
-      <div className="flex min-w-0 items-center gap-2">
-        <CycleBadge
-          rule={rule}
-          tone={tone}
-          isCount={isCount}
-          onCycle={onCycle}
-          onCountChange={(next) => onUpdate({ count: next })}
-        />
-        <input
-          type="text"
-          value={rule.name}
-          placeholder="BuildStargate"
-          title="Event token (e.g. BuildStargate, ResearchBlink)"
-          onChange={(e) => onUpdate({ name: e.target.value.trim() })}
-          className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-caption text-text placeholder:text-text-dim focus:border-border-strong focus:outline-none"
-        />
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label={`Remove ${rule.name}`}
-          className="px-1 text-text-dim hover:text-danger"
-        >
-          <X className="h-3.5 w-3.5" aria-hidden />
-        </button>
-      </div>
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
-        <label
-          className={[
-            "inline-flex min-h-[28px] shrink-0 items-center gap-1.5 rounded-md border px-2 py-1",
-            proxyEligible || rule.proxy === true
-              ? "cursor-pointer"
-              : "cursor-not-allowed opacity-55",
-            rule.proxy === true
-              ? "border-warning/50 bg-warning/15 text-warning"
-              : "border-border bg-bg-elevated text-text-muted",
-          ].join(" ")}
-          title={
-            proxyEligible
-              ? `Require this structure to be ${PROXY_RULE_DISTANCE_HINT}.`
-              : rule.proxy === true
-                ? "Enter a known building token such as BuildPylon or turn this requirement off before saving."
-                : "Proxy requirements are available only for known building tokens such as BuildPylon or BuildBarracks."
-          }
-        >
-          <input
-            type="checkbox"
-            checked={rule.proxy === true}
-            disabled={!proxyEligible && rule.proxy !== true}
-            onChange={(e) => onUpdate({ proxy: e.target.checked })}
-            aria-label={`Require ${rule.name || "this structure"} to be proxied`}
-            className="h-3.5 w-3.5 accent-[var(--accent)]"
-          />
-          <MapPin className="h-3.5 w-3.5" aria-hidden />
-          <span className="font-medium">Must be proxied</span>
-        </label>
-        {isCount ? (
-          <span className="text-micro text-text-dim">by</span>
-        ) : rule.type === "not_before" ? (
-          <span className="text-micro text-text-dim">
-            <span className="sm:hidden">not before</span>
-            <span className="hidden sm:inline">must not be built before</span>
-          </span>
-        ) : (
-          <span className="text-micro text-text-dim">
-            <span className="sm:hidden">by</span>
-            <span className="hidden sm:inline">must be built by</span>
-          </span>
-        )}
-        <TimeField
-          valueSec={rule.time_lt}
-          onChange={(next) => onUpdate({ time_lt: next })}
-          notBefore={rule.type === "not_before"}
-        />
-      </div>
-    </li>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* CycleBadge / TimeField                                             */
-/* ------------------------------------------------------------------ */
-
-function CycleBadge({
-  rule,
-  tone,
-  isCount,
-  onCycle,
-  onCountChange,
+function AddRuleBar({
+  ruleCap,
+  onAdd,
 }: {
-  rule: BuildRule;
-  tone: "win" | "loss" | "neutral";
-  isCount: boolean;
-  onCycle: () => void;
-  onCountChange: (next: number) => void;
+  ruleCap: boolean;
+  onAdd: (type: RuleType, announcement: string, proxyOnly?: boolean) => void;
 }) {
-  const icon = RULE_TYPE_ICON[rule.type];
-  const label = RULE_TYPE_LABEL[rule.type];
-  const tooltip = `Click to change rule type. Current rule: ${label || rule.type}.`;
-  if (isCount) {
-    const minCount = rule.type === "count_min" ? 1 : 0;
-    return (
-      <span
-        title={tooltip}
-        className={[
-          "inline-flex items-center gap-1 rounded border px-1.5 py-0.5",
-          TONE_BADGE_CLASSES[tone],
-        ].join(" ")}
-      >
-        <button
-          type="button"
-          onClick={onCycle}
-          aria-label={`Cycle rule type from ${rule.type}`}
-          className="font-semibold leading-none"
-        >
-          {icon}
-        </button>
-        <input
-          type="number"
-          min={minCount}
-          max={200}
-          step={1}
-          value={isCount ? (rule as { count: number }).count : 0}
-          onChange={(e) => {
-            const n = Number.parseInt(e.target.value, 10);
-            if (!Number.isNaN(n)) {
-              onCountChange(Math.max(minCount, clampCount(n)));
-            }
-          }}
-          onWheel={(e) => {
-            e.preventDefault();
-            const delta = e.deltaY < 0 ? 1 : -1;
-            const cur = isCount ? (rule as { count: number }).count : 0;
-            onCountChange(Math.max(minCount, clampCount(cur + delta)));
-          }}
-          aria-label={`Count for ${rule.name}`}
-          className="w-12 rounded border border-accent-cyan/50 bg-bg-elevated/50 px-1 text-center font-mono text-caption tabular-nums text-text focus:border-accent-cyan focus:outline-none"
-        />
-      </span>
-    );
-  }
+  const labelId = useId();
   return (
-    <button
-      type="button"
-      onClick={onCycle}
-      title={tooltip}
-      aria-label={`Change rule type. Current rule: ${label}`}
-      className={[
-        "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 font-medium",
-        TONE_BADGE_CLASSES[tone],
-      ].join(" ")}
+    <div
+      role="group"
+      aria-labelledby={labelId}
+      className="flex flex-wrap items-center gap-1.5 text-caption text-text-muted"
     >
-      <span className="font-semibold leading-none">{icon}</span>
-      <span className="sr-only">{label}</span>
-    </button>
-  );
-}
-
-function TimeField({
-  valueSec,
-  onChange,
-  notBefore = false,
-}: {
-  valueSec: number;
-  onChange: (nextSec: number) => void;
-  notBefore?: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(formatTime(valueSec));
-
-  if (!editing) {
-    return (
+      <span id={labelId}>Add a rule:</span>
+      {RULE_QUANTIFIERS.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          onClick={() =>
+            onAdd(
+              option.addType,
+              `Added a blank “${option.label}” rule. Enter a unit, building or upgrade.`,
+            )
+          }
+          disabled={ruleCap}
+          title={option.addTitle}
+          className={`${ADD_BUTTON_CLASSES} ${TONE_BTN_CLASSES[option.tone]}`}
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
+          {option.addLabel}
+        </button>
+      ))}
       <button
         type="button"
-        onClick={() => {
-          setDraft(formatTime(valueSec));
-          setEditing(true);
-        }}
-        className="font-mono text-caption tabular-nums text-accent-cyan underline decoration-dotted underline-offset-2 hover:text-accent"
-        title={
-          notBefore
-            ? "Earliest allowed time. Click to edit (type 3:30 or 210)."
-            : "Deadline. Click to edit (type 3:30 or 210)."
+        onClick={() =>
+          onAdd(
+            "before",
+            "Added a blank proxy building rule. Enter a building, like BuildPylon.",
+            true,
+          )
         }
+        disabled={ruleCap}
+        title={`Add a building rule that only counts structures placed ${PROXY_RULE_DISTANCE_HINT}.`}
+        className={`${ADD_BUTTON_CLASSES} border border-warning/50 bg-warning/15 text-warning hover:bg-warning/25`}
       >
-        {formatTime(valueSec)}
+        <MapPin className="h-3.5 w-3.5" aria-hidden />
+        Proxy building
       </button>
-    );
-  }
-
-  function commit() {
-    const parsed = parseTimeInput(draft);
-    if (parsed != null) onChange(clampRuleTime(parsed));
-    setEditing(false);
-  }
-
-  return (
-    <input
-      type="text"
-      autoFocus
-      value={draft}
-      aria-label={notBefore ? "Earliest allowed time" : "Rule deadline"}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault();
-          commit();
-        } else if (e.key === "Escape") {
-          setEditing(false);
-        }
-      }}
-      onWheel={(e) => {
-        e.preventDefault();
-        const cur = parseTimeInput(draft);
-        if (cur != null) {
-          const next = clampRuleTime(cur + (e.deltaY < 0 ? 5 : -5));
-          setDraft(formatTime(next));
-          onChange(next);
-        }
-      }}
-      className="w-16 rounded border border-accent-cyan bg-bg-elevated px-1 font-mono text-caption tabular-nums text-text focus:outline-none"
-    />
+      {ruleCap ? (
+        <span className="text-micro text-text-dim">
+          {RULES_MAX_PER_BUILD}-rule limit reached.
+        </span>
+      ) : null}
+    </div>
   );
 }
-
-// `RULE_TYPES` is exported from build-rules but not used directly in
-// this file; importing it here keeps the type narrowing live for the
-// CUSTOM_RULE_BUTTONS array literal type.
-void RULE_TYPES;

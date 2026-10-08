@@ -198,6 +198,38 @@ describe("POST /v1/custom-builds/preview-matches", () => {
       .not.toContain("g-legacy-unknown-matchup");
   });
 
+  test("almost match reports the raw rule index and count", async () => {
+    const userId = await bootstrap();
+    await seedGame(userId, { gameId: "g-almost-index" });
+
+    // A blank placeholder first, so the failing rule's index in the
+    // request (2) differs from its index after the blank filter (1).
+    const res = await withAuth(
+      request(app)
+        .post("/v1/custom-builds/preview-matches")
+        .send({
+          rules: [
+            { type: "before", name: "", time_lt: 60 },
+            { type: "before", name: "BuildStargate", time_lt: 400 },
+            { type: "count_min", name: "BuildStargate", time_lt: 400, count: 2 },
+          ],
+          race: "Protoss",
+          vsRace: "Terran",
+          perspective: "you",
+        }),
+    );
+    expect(res.status).toBe(200);
+    const almost = res.body.almost_matches.find(
+      (m) => m.game_id === "g-almost-index",
+    );
+    expect(almost).toEqual(expect.objectContaining({
+      failed_rule_name: "BuildStargate",
+      failed_reason: "BuildStargate: needs at least 2 before 6:40, had 1",
+      failed_rule_index: 2,
+      failed_count: 1,
+    }));
+  });
+
   test("returns 200 with 0 matches when no rules are supplied", async () => {
     await bootstrap();
     const res = await withAuth(

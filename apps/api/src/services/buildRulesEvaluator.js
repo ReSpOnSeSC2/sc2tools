@@ -8,15 +8,17 @@ const { isProxyEligibleBuilding } = require("./knownBuildings");
  * Mirrors the SPA's preview-matches semantics. Given an array of parsed
  * events (the same shape `parseBuildLogLines` emits) and a list of
  * rules, returns whether all rules pass — and, if not, which one
- * failed and why. Used by the /v1/custom-builds/preview-matches and
+ * failed, why, and how many matching events the game had before the
+ * rule's time (`got` / `failedGot`, so the SPA can word the reason
+ * itself). Used by the /v1/custom-builds/preview-matches and
  * /v1/custom-builds/reclassify endpoints.
  *
- * Rule types (schema v3):
- *   - "before"      : `name` must occur with time < `time_lt`
- *   - "not_before"  : `name` must NOT occur with time < `time_lt`
- *   - "count_max"   : count of `name` events with time < `time_lt` ≤ `count`
- *   - "count_exact" : count of `name` events with time < `time_lt` === `count`
- *   - "count_min"   : count of `name` events with time < `time_lt` ≥ `count`
+ * Rule types (schema v3), counting `name` events with time < `time_lt`:
+ *   - "before"      : at least 1 (the same verdict as count_min 1)
+ *   - "not_before"  : none
+ *   - "count_max"   : at most `count`
+ *   - "count_exact" : exactly `count`
+ *   - "count_min"   : at least `count`
  *   - `proxy: true`  : optional modifier; count only structures classified
  *                      as proxied by the replay agent's canonical geometry
  *
@@ -276,6 +278,25 @@ function _countMatches(
 }
 
 /**
+ * A counted rule's failure: a symbol-free fallback reason for clients
+ * that cannot word it themselves, plus the count the game had (`got`).
+ *   "BuildVoidRay: needs at least 4 before 10:00, had 1"
+ *
+ * @param {string} subject Raw token, or "{token} (proxied)".
+ * @param {string} need "at least 4", "exactly 2", "at most 1", "none".
+ * @param {number} limit The rule's `time_lt` in seconds.
+ * @param {number} got Matching events before `limit`.
+ * @returns {{ pass: false, reason: string, got: number }}
+ */
+function _countFailure(subject, need, limit, got) {
+  return {
+    pass: false,
+    reason: `${subject}: needs ${need} before ${formatTime(limit)}, had ${got}`,
+    got,
+  };
+}
+
+/**
  * Evaluate a single rule against an event list.
  *
  * @param {BuildRule} rule
@@ -285,7 +306,10 @@ function _countMatches(
  *   tech prerequisite isn't satisfied at the event's own time are
  *   skipped (anti-hallucination filter). When absent, the index is
  *   built lazily here so direct callers still get the same behaviour.
- * @returns {{ pass: boolean, unavailable?: boolean, reason?: string }}
+ * @returns {{ pass: boolean, unavailable?: boolean, reason?: string, got?: number }}
+ *   A pass is exactly `{ pass: true }`. `got` is set only when one of the
+ *   five rule types fails on its count, never for invalid or unavailable
+ *   rules.
  */
 function evaluateRule(rule, events, earliestBuilds) {
   if (!rule || typeof rule !== "object") {
@@ -356,43 +380,30 @@ function evaluateRule(rule, events, earliestBuilds) {
     needsPrereq,
     proxyOnly,
   );
-  const subject = proxyOnly ? `proxied ${name}` : name;
+  const subject = proxyOnly ? `${name} (proxied)` : name;
+  /** @param {string} need */
+  const fail = (need) => _countFailure(subject, need, limit, occurrencesBefore);
   switch (rule.type) {
     case "before":
       if (occurrencesBefore >= 1) return { pass: true };
-      return {
-        pass: false,
-        reason: `${subject} not built by ${formatTime(limit)}`,
-      };
+      return fail("at least 1");
     case "not_before":
       if (occurrencesBefore === 0) return { pass: true };
-      return {
-        pass: false,
-        reason: `${subject} built before ${formatTime(limit)}`,
-      };
+      return fail("none");
     case "count_max": {
       const cap = Number(rule.count);
       if (occurrencesBefore <= cap) return { pass: true };
-      return {
-        pass: false,
-        reason: `${subject} ≤ ${cap} (got ${occurrencesBefore}) by ${formatTime(limit)}`,
-      };
+      return fail(`at most ${cap}`);
     }
     case "count_exact": {
       const target = Number(rule.count);
       if (occurrencesBefore === target) return { pass: true };
-      return {
-        pass: false,
-        reason: `${subject} = ${target} (got ${occurrencesBefore}) by ${formatTime(limit)}`,
-      };
+      return fail(`exactly ${target}`);
     }
     case "count_min": {
       const floor = Number(rule.count);
       if (occurrencesBefore >= floor) return { pass: true };
-      return {
-        pass: false,
-        reason: `${subject} ≥ ${floor} (got ${occurrencesBefore}) by ${formatTime(limit)}`,
-      };
+      return fail(`at least ${floor}`);
     }
     default:
       return { pass: false, reason: `unknown rule type: ${rule.type}` };
@@ -402,11 +413,13 @@ function evaluateRule(rule, events, earliestBuilds) {
 /**
  * Evaluate a list of rules against an event list. All rules must pass
  * for the build to "match". When exactly one rule fails the result is
- * an "almost match" with the failing rule surfaced.
+ * an "almost match" with the failing rule surfaced. `failedRule` is the
+ * same object as the entry in `rules`, so callers can find its index;
+ * `failedGot` is that rule's `got` when it failed on its count.
  *
  * @param {ReadonlyArray<BuildRule>} rules
  * @param {ReadonlyArray<ParsedEvent>} events
- * @returns {{ pass: boolean, almost: boolean, unavailable?: boolean, failedRule?: BuildRule, failedReason?: string }}
+ * @returns {{ pass: boolean, almost: boolean, unavailable?: boolean, failedRule?: BuildRule, failedReason?: string, failedGot?: number }}
  */
 function evaluateRules(rules, events) {
   if (!Array.isArray(rules) || rules.length === 0) {
@@ -416,6 +429,8 @@ function evaluateRules(rules, events) {
   const failures = [];
   /** @type {BuildRule|undefined} */
   let firstFailRule;
+  /** @type {number|undefined} */
+  let firstFailGot;
   /** @type {BuildRule|undefined} */
   let firstUnavailableRule;
   let firstUnavailableReason;
@@ -431,7 +446,10 @@ function evaluateRules(rules, events) {
         }
         continue;
       }
-      if (failures.length === 0) firstFailRule = rule;
+      if (failures.length === 0) {
+        firstFailRule = rule;
+        firstFailGot = r.got;
+      }
       failures.push(r.reason || "unknown");
     }
   }
@@ -445,19 +463,12 @@ function evaluateRules(rules, events) {
     };
   }
   if (failures.length === 0) return { pass: true, almost: false };
-  if (failures.length === 1) {
-    return {
-      pass: false,
-      almost: true,
-      failedRule: firstFailRule,
-      failedReason: failures[0],
-    };
-  }
   return {
     pass: false,
-    almost: false,
+    almost: failures.length === 1,
     failedRule: firstFailRule,
     failedReason: failures[0],
+    ...(typeof firstFailGot === "number" ? { failedGot: firstFailGot } : {}),
   };
 }
 
