@@ -45,7 +45,7 @@ class MockLedger {
     const row = this.rows.get(this.key(args));
     if (!row || row.expectedChannelId !== args.expectedChannelId) return null;
     if (!row.broadcast) {
-      const matches = (await lookup()).filter((item) => item.snippet.channelId === row.expectedChannelId && item.snippet.description === row.intent.snippet.description + row.marker && item.snippet.title === row.intent.snippet.title);
+      const matches = (await lookup({ marker: row.marker })).filter((item) => item.snippet.channelId === row.expectedChannelId && item.snippet.description === row.intent.snippet.description + row.marker && item.snippet.title === row.intent.snippet.title);
       if (matches.length === 1) {
         row.broadcast = clone(matches[0]);
         row.broadcast.snippet.description = row.intent.snippet.description;
@@ -103,6 +103,9 @@ function setup() {
       } else if (resource === "liveBroadcasts") {
         const filter = url.searchParams.get("broadcastStatus");
         payload = { items: Array.from(rows.values()).filter((row) => url.searchParams.has("id") ? url.searchParams.get("id").split(",").includes(row.id) : filter === "active" ? row.status.lifeCycleStatus === "live" : filter === "upcoming" ? !["live", "complete", "revoked"].includes(row.status.lifeCycleStatus) : true) };
+        const offset = Number(url.searchParams.get("pageToken") || 0), total = payload.items.length;
+        payload.items = payload.items.slice(offset, offset + 50);
+        if (offset + 50 < total) payload.nextPageToken = String(offset + 50);
         if (state.laggingOccupied && filter) payload.items = [];
         if (state.paginateForever) payload = { items: [], nextPageToken: "more-pages" };
       } else if (resource === "liveBroadcasts/bind") {
@@ -290,6 +293,56 @@ test("ambiguous creation cannot insert again; explicit nonce recovery returns ow
   expect(recovered.snippet.description).toBe(s.payload.body.snippet.description);
   expect(s.calls.filter((call) => call.method !== "GET")).toHaveLength(1);
   await expect(s.service.read("user-two", "recover_create", { operation_id: s.payload.operation_id })).rejects.toMatchObject({ code: "creation_uncertain" });
+});
+
+test("create sends whole seconds while preserving fractional intent identity for UUID replay", async () => {
+  const s = setup();
+  s.payload.body.snippet.scheduledStartTime = new Date(NOW + 60_961).toISOString();
+  await s.service.create("user-one", s.payload);
+  const stored = s.ledger.rows.get("user-one:" + s.payload.operation_id);
+  expect(stored.intent.snippet.scheduledStartTime).toBe(new Date(NOW + 60_961).toISOString());
+  const insert = s.calls.find((call) => call.resource === "liveBroadcasts" && call.method === "POST");
+  expect(insert.body.snippet.scheduledStartTime).toBe(new Date(NOW + 60_000).toISOString().replace(".000Z", "Z"));
+  await s.service.create("user-one", s.payload);
+  expect(s.calls.filter((call) => call.method === "POST")).toHaveLength(1);
+});
+
+test("recovery ignores a lifetime archive larger than the bounded inventory", async () => {
+  const s = setup(); s.state.lostInsert = true;
+  await expect(s.service.create("user-one", s.payload)).rejects.toMatchObject({ code: "creation_uncertain" });
+  const own = s.rows.get("owned-event-1");
+  for (let n = 0; n < 250; n++) s.rows.set("archived-" + n, { ...clone(own), id: "archived-" + n,
+    snippet: { ...own.snippet, description: "Historical event" }, status: { ...own.status, lifeCycleStatus: "complete" } });
+  // Put the exact owned candidate on a later upcoming page.
+  s.rows.delete(own.id);
+  for (let n = 0; n < 55; n++) s.rows.set("upcoming-" + n, { ...clone(own), id: "upcoming-" + n,
+    snippet: { ...own.snippet, description: "Another upcoming event" } });
+  s.rows.set(own.id, own);
+  const firstRead = s.calls.length;
+  const recovered = await s.service.read("user-one", "recover_create", { operation_id: s.payload.operation_id });
+  expect(recovered.id).toBe(own.id);
+  expect(s.calls.slice(firstRead).map((call) => call.params)).toEqual([
+    { part: "id,snippet,status,contentDetails", broadcastStatus: "active", maxResults: "50" },
+    { part: "id,snippet,status,contentDetails", broadcastStatus: "upcoming", maxResults: "50" },
+    { part: "id,snippet,status,contentDetails", broadcastStatus: "upcoming", maxResults: "50", pageToken: "50" },
+  ]);
+  expect(s.calls.filter((call) => call.method !== "GET")).toHaveLength(1);
+});
+
+test("recovery does not adopt a partial inventory or replace an already-ended uncertain event", async () => {
+  const s = setup(); s.state.lostInsert = true;
+  await expect(s.service.create("user-one", s.payload)).rejects.toMatchObject({ code: "creation_uncertain" });
+  s.state.paginateForever = true;
+  await expect(s.service.read("user-one", "recover_create", { operation_id: s.payload.operation_id }))
+    .rejects.toMatchObject({ code: "youtube_inventory_unknown" });
+  expect(s.ledger.rows.get("user-one:" + s.payload.operation_id).broadcast).toBeUndefined();
+  s.state.paginateForever = false;
+  s.rows.get("owned-event-1").status.lifeCycleStatus = "complete";
+  await expect(s.service.read("user-one", "recover_create", { operation_id: s.payload.operation_id }))
+    .rejects.toMatchObject({ code: "creation_uncertain" });
+  s.state.lostInsert = false;
+  await expect(s.service.create("user-one", s.payload)).rejects.toMatchObject({ code: "creation_uncertain" });
+  expect(s.calls.filter((call) => call.method !== "GET")).toHaveLength(1);
 });
 
 test("nonce cleanup failure reports pending and read strips only ledger-owned marker", async () => {

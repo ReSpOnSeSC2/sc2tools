@@ -126,12 +126,16 @@ function ownedCandidate(candidate, row) {
       || candidate.snippet?.channelId !== row.expectedChannelId) return null;
   const expected = structuredClone(row.intent);
   expected.snippet.description += privateContext(row).marker;
-  // Google may normalize an equivalent RFC3339 timestamp (offset, fractional
-  // seconds) in its response. Ownership still requires the same instant.
+  // Google returns scheduled times at whole-second precision. Preserve the
+  // stored intent/hash, but compare its RFC3339 instant at that precision.
+  // The nonce and every other intended field still require exact equality.
   const requestedStart = expected.snippet.scheduledStartTime;
   const returnedStart = candidate.snippet?.scheduledStartTime;
+  const timestamp = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
   if (typeof requestedStart === "string" && typeof returnedStart === "string"
-      && Number.isFinite(Date.parse(requestedStart)) && Date.parse(requestedStart) === Date.parse(returnedStart)) {
+      && timestamp.test(requestedStart) && timestamp.test(returnedStart)
+      && Number.isFinite(Date.parse(requestedStart)) && Number.isFinite(Date.parse(returnedStart))
+      && Math.floor(Date.parse(requestedStart) / 1000) === Math.floor(Date.parse(returnedStart) / 1000)) {
     expected.snippet.scheduledStartTime = returnedStart;
   }
   if (Buffer.byteLength(expected.snippet.description, "utf8") > 5000

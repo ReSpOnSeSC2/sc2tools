@@ -11,6 +11,13 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- YouTube session creation and exact-operation recovery accept the provider's
+  whole-second scheduled times. Recovery checks the active and upcoming
+  inventory instead of traversing a channel's entire historical archive;
+  saved creation requests remain durable and are never inserted again.
+
 ### Added
 
 - YouTube OBS connection details in Agent 0.18.1 provide a selected reusable

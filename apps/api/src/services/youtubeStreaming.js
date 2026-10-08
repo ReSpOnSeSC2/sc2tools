@@ -295,8 +295,13 @@ class YoutubeStreamingService {
   /** @param {string} userId @param {any} grant @param {string} operationId */
   async _recover(userId, grant, operationId) {
     if (!this.ledger) throw fail(503, "youtube_ledger_unavailable");
-    const result = await this.ledger.reconcile({ userId, operationId, expectedChannelId: grant.platformUserId }, async () => {
-      return (await this._list(grant, "liveBroadcasts", { part: PARTS, mine: "true" })).map((row) => safeBroadcast(row, grant.platformUserId));
+    const result = await this.ledger.reconcile({ userId, operationId, expectedChannelId: grant.platformUserId }, /** @param {{marker:string}} context */ async (context) => {
+      // Complete both unfinished inventories before looking for this operation's
+      // private nonce. A lifetime archive can exceed the bounded page limit.
+      // An uncertain event that already ended requires manual review; its UUID
+      // remains reserved and this read never inserts a replacement event.
+      const rows = await this._occupied(userId, grant);
+      return rows.filter((row) => row.snippet.description.includes(context.marker));
     });
     if (!result || result.phase !== "succeeded" || !result.broadcast) throw fail(409, "creation_uncertain");
     // Ledger proof permits removing its own exact marker from this response.
@@ -315,6 +320,9 @@ class YoutubeStreamingService {
       const result = await this.ledger.execute(args, /** @param {any} context */ async (context) => {
         const body = structuredClone(intent);
         body.snippet.description += context.marker;
+        // Keep the stored intent/hash compatible with existing UUID replays;
+        // Google returns scheduled times at whole-second precision.
+        body.snippet.scheduledStartTime = new Date(body.snippet.scheduledStartTime).toISOString().replace(/\.\d{3}Z$/, "Z");
         metadata(body.snippet.title, body.snippet.description);
         const row = safeBroadcast(await this._request(grant, "liveBroadcasts", { part: PARTS }, body, "POST"), channel);
         await grant.assertCurrent();
