@@ -95,19 +95,25 @@ def test_saved_visibility_is_shown_and_unsaved_setup_survives_polling(page):
     assert widget.privacy.currentData() == "private"
 
 
-def test_first_setup_requires_visibility_and_does_not_enable_auto(page, monkeypatch):
+def test_first_setup_defaults_are_form_only_and_saved_by_explicit_action(page, monkeypatch):
     widget, state, app = page
     calls = []
     monkeypatch.setattr(widget, "job", calls.append)
-    widget.audience.setCurrentIndex(widget.audience.findData(False))
-    widget.configure()
+    state["catalog"] = {"channels": [{"id": "channel", "title": "My channel"}],
+                        "streams": [{"id": "h", "title": "SC2ToolsHorizontal"},
+                                    {"id": "v", "title": "VerticalStream"}]}
+    widget.render(state)
     assert calls == []
-    assert "Choose visibility" in widget.notice.text()
-    assert not widget.auto_check.isChecked()
-    widget.privacy.setCurrentIndex(widget.privacy.findData("unlisted"))
+    assert widget.privacy.currentData() == "public"
+    assert widget.audience.currentData() is False
+    assert widget.auto_check.isChecked()
+    assert not widget.setup_dirty
+    assert not widget.prepare_button.isEnabled()
     widget.configure()
-    assert calls[0]["privacy"] == "unlisted"
-    assert calls[0]["auto_rearm"] is False
+    assert calls[0]["privacy"] == "public"
+    assert calls[0]["made_for_kids"] is False
+    assert calls[0]["auto_rearm"] is True
+    assert (calls[0]["channel_id"], calls[0]["horizontal_id"], calls[0]["portrait_id"]) == ("channel", "h", "v")
 
 
 def test_tiktok_buttons_dispatch_explicit_setup_actions(page, monkeypatch):
@@ -136,15 +142,33 @@ def test_tiktok_unknown_setup_is_not_reported_as_connected(page):
     assert not widget.virtual_camera_stop_button.isEnabled()
 
 
-def test_advanced_sections_collapse_without_discarding_edits(page):
+def test_setup_disclosure_keeps_session_description_visible_and_preserves_edits(page):
     widget, state, app = page
     assert widget.setup_box.isHidden()
-    assert widget.description_box.isHidden()
-    widget.description_toggle.setChecked(True)
+    assert not widget.description_input.isHidden()
+    assert widget.description_input.parentWidget() == widget.title_input.parentWidget()
+    layout = widget.title_input.parentWidget().layout()
+    assert layout.indexOf(widget.description_input) == layout.indexOf(widget.title_input) + 2
+    assert widget.description_scope.text() == "Applies to both YouTube formats"
+    assert "link is added automatically" in widget.description_link_note.text()
+    widget.setup_toggle.setChecked(True)
     widget.description_input.setPlainText("My unsaved description")
-    widget.description_toggle.setChecked(False)
+    widget.setup_toggle.setChecked(False)
     widget.refresh()
     assert widget.description_input.toPlainText() == "My unsaved description"
+
+
+def test_session_title_and_description_use_one_explicit_save_action(page, monkeypatch):
+    widget, state, app = page
+    calls = []
+    monkeypatch.setattr(widget, "job", calls.append)
+    widget.title_input.setText("New session title")
+    widget._title_edited()
+    widget.description_input.setPlainText("Shared YouTube description")
+    widget.refresh()
+    assert calls == []
+    widget.save_button.click()
+    assert calls == [{"action": "set_metadata", "title": "New session title", "description": "Shared YouTube description"}]
 
 
 def test_tiktok_copy_title_remains_manual_and_makes_no_service_request(page, monkeypatch):

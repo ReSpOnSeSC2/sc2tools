@@ -12,9 +12,10 @@ import requests
 
 
 class CloudStreamError(ValueError):
-    def __init__(self, message, *, http_status=None):
+    def __init__(self, message, *, http_status=None, connection_invalid=False):
         super().__init__(message)
         self.http_status = http_status if type(http_status) is int and 100 <= http_status <= 599 else None
+        self.connection_invalid = connection_invalid is True
 
 
 def validated_obs_connection(value, stream_id):
@@ -58,7 +59,7 @@ class CloudStreamingClient:
             if response.status_code == 404:
                 raise CloudStreamError("Stream controls are not available on this SC2Tools server yet.", http_status=404)
             if response.status_code in {401, 403}:
-                raise CloudStreamError("Connect your streaming account and approve stream-control permission in your browser.", http_status=response.status_code)
+                raise CloudStreamError("Connect your streaming account and approve stream-control permission in your browser.", http_status=response.status_code, connection_invalid=True)
             if response.status_code == 409:
                 raise CloudStreamError("This session needs recovery or another stream request is still running. Existing broadcasts are preserved.", http_status=409)
             if response.status_code == 429:
@@ -102,9 +103,36 @@ class CloudStreamingClient:
         result = self._request("POST", "/v1/agent/streaming/title", body={"title": title, "platforms": [platform]})
         rows = result.get("platforms", []) if isinstance(result, dict) else []
         matches = [row for row in rows if isinstance(row, dict) and row.get("platform") == platform]
-        if len(matches) != 1 or matches[0].get("streamingReady") is not True or matches[0].get("title") != title:
+        if len(matches) != 1:
             raise CloudStreamError("The platform title was not verified. Check its connection.")
-        return {**matches[0], "connected": matches[0].get("streamingReady") is True}
+        row = matches[0]
+        if row.get("streamingReady") is not True:
+            raise CloudStreamError("The platform title was not verified. Check its connection.",
+                connection_invalid=row.get("connectionInvalid") is True)
+        title_status = row.get("titleStatus")
+        # Older servers return only a matching readback. New servers distinguish
+        # a verified title from Kick's accepted write with unavailable offline
+        # readback; a requested title alone never proves either result.
+        verified = row.get("title") == title and (
+            title_status is None and row.get("titleVerified") is not False
+            or title_status == "verified" and row.get("titleVerified") is True
+                and row.get("accepted") is True and row.get("connected") is True
+                and row.get("requestedTitle") == title)
+        accepted_offline = (platform == "kick" and title_status == "accepted_offline"
+            and row.get("connected") is True and row.get("accepted") is True
+            and row.get("titleVerified") is False and row.get("title") == title
+            and row.get("requestedTitle") == title and row.get("isLive") is False)
+        explicit_outcome = (title_status in {"pending", "rejected", "unverified"}
+            and row.get("connected") is True and row.get("titleVerified") is False
+            and row.get("requestedTitle") == title
+            and row.get("accepted") is (title_status == "pending"))
+        if not (verified or accepted_offline or explicit_outcome):
+            raise CloudStreamError("The platform title was not verified. Check its connection.")
+        public_fields = {"platform", "streamingReady", "title", "account", "platformUserId", "updated",
+            "accepted", "titleVerified", "titleStatus", "requestedTitle", "observedTitle", "isLive"}
+        return {**{key: value for key, value in row.items() if key in public_fields},
+            "connected": True, "titleVerified": bool(verified),
+            "titleStatus": "verified" if verified else title_status}
 
 
 class CloudTitleAdapter:

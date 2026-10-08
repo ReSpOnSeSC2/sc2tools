@@ -102,8 +102,17 @@ Closing the window minimises it to the tray (the agent keeps running).
 ### Streams
 
 The **Streams** page saves one title for your connected YouTube, Twitch and
-Kick accounts and reports whether each current title was verified. TikTok
+Kick accounts and reports whether each title was verified or accepted. Kick's
+public API can omit its title while offline, so an accepted offline save does
+not claim verified readback or disconnect the account. TikTok
 LIVE Studio uses **Copy title**; its title and Go LIVE remain in Studio.
+
+Edit the **YouTube description** directly below the shared title, then click
+**Save title & description**. The description applies to both YouTube formats
+and is saved for future sessions. A current unfinished pair is updated when
+its ownership can be verified; the vertical description automatically includes
+the horizontal partner's watch link. Unsaved edits survive page refreshes,
+and saved templates preserve deliberately empty descriptions.
 
 The TikTok setup card detects LIVE Studio and checks OBS's main canvas and
 virtual camera. **Open LIVE Studio**, **Start virtual camera**, **Stop camera**
@@ -118,10 +127,20 @@ platform. Authorize stream-control permission in your system browser once;
 SC2Tools keeps provider credentials encrypted on its server. Existing alert
 connections need this explicit permission upgrade before they can manage
 streams. The agent never asks normal users to register developer apps.
-Choose the authorized YouTube channel and two different existing reusable stream keys.
-Select visibility, audience and the exact OBS output names before saving setup.
+The only available YouTube channel is selected automatically. Two different
+existing reusable keys are suggested when their horizontal and vertical roles
+are clear; ambiguous keys still need your choice. Fresh setup defaults to Public,
+Not made for kids, automatic next-session preparation and an editable description.
+Review these choices and the exact OBS output names, then save setup. Existing
+saved preferences and custom descriptions are preserved. Suggestions never
+save settings or prepare broadcasts by themselves.
 The server must provide the streaming API before these controls can connect.
 SC2Tools never imports OBS login tokens or creates stream keys.
+
+Deployment operators must enable **Update channel information** (`channel:write`)
+in the registered SC2Tools Kick app before users connect stream controls. A URL
+requesting that scope cannot grant it when the developer app has it disabled.
+Normal users only complete the official consent screen.
 
 After saving YouTube setup, open **OBS connection details** and choose
 **Horizontal** or **Vertical**. **Fetch connection details** reads only that

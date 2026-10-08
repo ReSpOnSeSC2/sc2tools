@@ -2,6 +2,33 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.5
+
+### Added - YouTube setup defaults
+
+- Places the YouTube description directly below the shared stream title with
+  one **Save title & description** action. The description applies to both
+  YouTube formats and future sessions; the vertical partner link is added
+  automatically.
+- Fresh setup selects the only authorized channel and suggests two distinct
+  reusable keys when their horizontal and vertical roles are unambiguous.
+  Public visibility, Not made for kids and automatic next-session preparation
+  are shown as defaults. **Save setup** is still required before broadcasts
+  can be prepared; displaying these suggestions makes no account changes.
+- Adds an editable StarCraft II description for new setups. Saved descriptions,
+  including deliberately empty ones, saved key mappings and unsaved edits are
+  preserved. Unavailable saved channels and keys remain visible instead of
+  being silently replaced by suggestions.
+
+### Fixed - Kick titles while offline
+
+- A title update accepted by Kick remains accepted when its API returns an
+  empty title while offline. The Streams page distinguishes accepted updates
+  from verified readback instead of reporting a failed connection.
+- Inconclusive title checks preserve a valid account connection. Proven
+  permission or identity loss still requires reconnection, and failed or
+  ambiguous writes are never reported as accepted or retried automatically.
+
 ## 0.18.4
 
 ### Fixed - YouTube session recovery
