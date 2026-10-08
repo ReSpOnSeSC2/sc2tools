@@ -107,6 +107,13 @@ public API can omit its title while offline, so an accepted offline save does
 not claim verified readback or disconnect the account. TikTok
 LIVE Studio uses **Copy title**; its title and Go LIVE remain in Studio.
 
+Edit the **YouTube description** directly below the shared title, then click
+**Save title & description**. The description applies to both YouTube formats
+and is saved for future sessions. A current unfinished pair is updated when
+its ownership can be verified; the vertical description automatically includes
+the horizontal partner's watch link. Unsaved edits survive page refreshes,
+and saved templates preserve deliberately empty descriptions.
+
 The TikTok setup card detects LIVE Studio and checks OBS's main canvas and
 virtual camera. **Open LIVE Studio**, **Start virtual camera**, **Stop camera**
 and **Check setup** are explicit controls. Select **Main Output** in OBS's

@@ -142,15 +142,33 @@ def test_tiktok_unknown_setup_is_not_reported_as_connected(page):
     assert not widget.virtual_camera_stop_button.isEnabled()
 
 
-def test_advanced_sections_collapse_without_discarding_edits(page):
+def test_setup_disclosure_keeps_session_description_visible_and_preserves_edits(page):
     widget, state, app = page
     assert widget.setup_box.isHidden()
-    assert widget.description_box.isHidden()
-    widget.description_toggle.setChecked(True)
+    assert not widget.description_input.isHidden()
+    assert widget.description_input.parentWidget() == widget.title_input.parentWidget()
+    layout = widget.title_input.parentWidget().layout()
+    assert layout.indexOf(widget.description_input) == layout.indexOf(widget.title_input) + 2
+    assert widget.description_scope.text() == "Applies to both YouTube formats"
+    assert "link is added automatically" in widget.description_link_note.text()
+    widget.setup_toggle.setChecked(True)
     widget.description_input.setPlainText("My unsaved description")
-    widget.description_toggle.setChecked(False)
+    widget.setup_toggle.setChecked(False)
     widget.refresh()
     assert widget.description_input.toPlainText() == "My unsaved description"
+
+
+def test_session_title_and_description_use_one_explicit_save_action(page, monkeypatch):
+    widget, state, app = page
+    calls = []
+    monkeypatch.setattr(widget, "job", calls.append)
+    widget.title_input.setText("New session title")
+    widget._title_edited()
+    widget.description_input.setPlainText("Shared YouTube description")
+    widget.refresh()
+    assert calls == []
+    widget.save_button.click()
+    assert calls == [{"action": "set_metadata", "title": "New session title", "description": "Shared YouTube description"}]
 
 
 def test_tiktok_copy_title_remains_manual_and_makes_no_service_request(page, monkeypatch):

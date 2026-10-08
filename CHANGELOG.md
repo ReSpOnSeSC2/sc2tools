@@ -35,6 +35,12 @@ corresponding GitHub Release.
   descriptions are preserved; setup still requires Save before it can prepare
   any broadcasts.
 
+- **Title and description together in Agent 0.18.5.** The YouTube description
+  sits below the shared stream title with one **Save title & description**
+  action. It applies to both YouTube formats and future sessions, with the
+  vertical partner link added automatically. Unsaved edits and deliberately
+  empty saved descriptions are preserved.
+
 - YouTube OBS connection details in Agent 0.18.1 provide a selected reusable
   key's server address and masked stream key with explicit copy controls for
   the horizontal and vertical Aitum outputs. Account settings distinguish
