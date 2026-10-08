@@ -431,6 +431,100 @@ def test_match_end_takes_priority_over_loading() -> None:
     assert [e.phase for e in seen] == [LiveLifecyclePhase.MATCH_ENDED]
 
 
+@pytest.mark.parametrize("menu_screen", ["ScreenHome", "ScreenMenu"])
+def test_first_decided_snapshot_on_menu_emits_result_before_retiring(
+    menu_screen: str,
+) -> None:
+    """Leaving the score screen before a poll must not lose the final result."""
+    session = _StubSession()
+    active = _live_game("Opponent", display_time=5.0)
+    decided = _live_game("Opponent", display_time=600.0)
+    decided["players"][0]["result"] = "Victory"
+    decided["players"][1]["result"] = "Defeat"
+    for screens, game in [([], active), ([menu_screen], decided), ([menu_screen], decided)]:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(game))
+
+    poller, seen = _make_poller(session)
+    for expected in (
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MATCH_ENDED,
+        LiveLifecyclePhase.MENU,
+    ):
+        phase, _ = poller._tick_once()
+        assert phase == expected
+        poller._last_phase = phase
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MATCH_ENDED,
+        LiveLifecyclePhase.MENU,
+    ]
+    assert seen[1].game_state is not None and seen[1].game_state.is_decided
+
+
+@pytest.mark.parametrize("menu_screen", ["ScreenHome", "ScreenMenu"])
+def test_cached_decided_game_retires_on_menu_without_resurrecting_during_loading(
+    menu_screen: str,
+) -> None:
+    """Preserve the score result, then trust a definite menu over cached /game."""
+    session = _StubSession()
+    first_game = _live_game("OldOpponent", display_time=4.0)
+    decided_game = _live_game("OldOpponent", display_time=600.0)
+    decided_game["players"][0]["result"] = "Victory"
+    decided_game["players"][1]["result"] = "Defeat"
+    next_game = _live_game("NewOpponent", display_time=0.0)
+    observations = [
+        ([], first_game),
+        (["ScreenScore"], decided_game),
+        (["ScreenScore"], decided_game),
+        ([menu_screen], decided_game),
+        ([menu_screen], decided_game),
+        # SC2's next loading/UI snapshots can precede fresh /game data.
+        (["ScreenLoading"], decided_game),
+        ([], decided_game),
+        (["ScreenLoading"], next_game),
+        ([], {**next_game, "displayTime": 2.0}),
+    ]
+    for screens, game in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(game))
+
+    poller, seen = _make_poller(session, user_name_hint="Streamer#1")
+    expected_phases = [
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MATCH_ENDED,
+        LiveLifecyclePhase.MATCH_ENDED,
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MATCH_LOADING,
+        LiveLifecyclePhase.MATCH_STARTED,
+    ]
+    for index, expected in enumerate(expected_phases):
+        phase, sleep_for = poller._tick_once()
+        assert phase == expected
+        if index in {3, 4, 5, 6}:
+            assert poller._current_game_key is None
+            assert poller._match_started_at_ms is None
+        if index == 5:
+            assert sleep_for == poller._cfg.fast_interval_sec
+        poller._last_phase = phase
+
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MATCH_ENDED,
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MATCH_LOADING,
+        LiveLifecyclePhase.MATCH_STARTED,
+    ]
+    assert seen[1].game_state is not None and seen[1].game_state.is_decided
+    assert seen[2].game_state is None
+    assert seen[3].game_key != seen[0].game_key
+    assert seen[3].game_key == seen[4].game_key
+    assert "NewOpponent" in seen[3].game_key
+
+
 def test_loading_phase_returns_fast_interval() -> None:
     """During MATCH_LOADING we want the next poll to fire ~250 ms later
     so we catch the loading→in-game transition quickly."""

@@ -83,6 +83,12 @@ screen is worth showing; the cut to the downtime layout happens when
 the phase drops to `menu`, which is when the streamer actually leaves
 the match.
 
+SC2 can keep the completed match in `/game` after `/ui` shows a menu.
+After reporting the result once, the poller treats that definite menu as
+leaving the match. It ignores the cached result until fresh, undecided
+telemetry arrives, so the previous result cannot restore the gameplay scene.
+`ScreenScore` continues to hold the configured `match_ended` scene.
+
 ### Behaviours that matter on air
 
 **Edge-triggered on the resolved scene, not the phase.** The bridge

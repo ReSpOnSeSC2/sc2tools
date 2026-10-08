@@ -249,6 +249,27 @@ class LiveClientPoller:
         # user player has a decided result, that's the final state for
         # this match.
         if game.is_decided:
+            # /game can retain the completed match after /ui leaves the
+            # score screen. Once retired to MENU, wait for fresh undecided
+            # telemetry instead of resurrecting that result during loading.
+            if self._last_phase == LiveLifecyclePhase.MENU:
+                return (
+                    LiveLifecyclePhase.MENU,
+                    self._cfg.fast_interval_sec if ui.is_loading else self._cfg.interval_sec,
+                )
+            if (
+                self._last_phase == LiveLifecyclePhase.MATCH_ENDED
+                and not ui.is_loading
+                and not ui.is_in_match
+                and "ScreenScore" not in ui.active_screens
+            ):
+                self._emit(
+                    LiveLifecyclePhase.MENU,
+                    ui_state=ui,
+                    game_state=None,
+                )
+                self._reset_match_state()
+                return LiveLifecyclePhase.MENU, self._cfg.interval_sec
             if self._last_phase != LiveLifecyclePhase.MATCH_ENDED:
                 self._emit(
                     LiveLifecyclePhase.MATCH_ENDED,

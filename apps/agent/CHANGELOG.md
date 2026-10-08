@@ -2,6 +2,17 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.6
+
+### Fixed - Returning to the between-games scene
+
+- Returning to a definite SC2 menu retires the finished match even when
+  the local game API still reports its cached result. The results screen
+  continues to use the configured match-ended scene; the menu uses the
+  configured between-games scene and its existing debounce.
+- A delayed opponent-profile lookup cannot publish an older active phase
+  after the bridge has moved to the menu or a newer match.
+
 ## 0.18.5
 
 ### Added - YouTube setup defaults

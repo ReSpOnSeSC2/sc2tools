@@ -28,6 +28,7 @@ import dataclasses
 import logging
 import threading
 import time
+from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional
 
@@ -128,6 +129,12 @@ class LiveBridge:
             thread_name_prefix="sc2tools-bridge",
         )
         self._lock = threading.RLock()
+        # Enqueue under the context lock, then deliver without it. A single
+        # drain owner preserves lifecycle order even when a Pulse callback
+        # and the poller publish concurrently; other producers never wait
+        # for that owner's subscriber callbacks.
+        self._pending_publications: deque[Dict[str, Any]] = deque()
+        self._publishing = False
         self._current: Optional[_GameContext] = None
         # Streamer's own toon handle (``<region>-S2-<realm>-<bnid>``)
         # and the region byte derived from it. Used to detect server
@@ -246,7 +253,8 @@ class LiveBridge:
                 # switch and the synthetic prelude isn't needed
                 # because the real MENU already cleared the client.
                 self._pending_server_transition = False
-            self._publish(envelope_for(event))
+                self._pending_publications.append(envelope_for(event))
+            self._drain_publications()
             return
 
         # MATCH_LOADING / MATCH_STARTED / MATCH_IN_PROGRESS share the
@@ -285,29 +293,27 @@ class LiveBridge:
                 return
             self._pending_server_transition = False
             game_key = event.game_key
-        # Synthetic MENU — clears any liveGame state on the clients
-        # without going through the IDLE branch (which would drop the
-        # capturedAt continuity the clients use for staleness checks).
-        menu_event = LiveLifecycleEvent(
-            phase=LiveLifecyclePhase.MENU,
-            ui_state=LiveUIState(active_screens=["ScreenHome"]),
-        )
-        menu_payload = envelope_for(menu_event)
-        menu_payload["synthetic"] = True
-        self._publish(menu_payload)
-        if event.phase == LiveLifecyclePhase.MATCH_LOADING:
-            # The inbound event itself is already MATCH_LOADING — no
-            # need to inject a duplicate prelude on top.
-            return
-        loading_event = LiveLifecycleEvent(
-            phase=LiveLifecyclePhase.MATCH_LOADING,
-            ui_state=LiveUIState(active_screens=["ScreenLoading"]),
-            game_state=event.game_state,
-            game_key=game_key,
-        )
-        loading_payload = envelope_for(loading_event)
-        loading_payload["synthetic"] = True
-        self._publish(loading_payload)
+            # Synthetic MENU clears the prior server's live state before
+            # the next match is delivered to subscribers.
+            menu_event = LiveLifecycleEvent(
+                phase=LiveLifecyclePhase.MENU,
+                ui_state=LiveUIState(active_screens=["ScreenHome"]),
+            )
+            menu_payload = envelope_for(menu_event)
+            menu_payload["synthetic"] = True
+            self._pending_publications.append(menu_payload)
+            if event.phase != LiveLifecyclePhase.MATCH_LOADING:
+                # An inbound MATCH_LOADING already supplies this prelude.
+                loading_event = LiveLifecycleEvent(
+                    phase=LiveLifecyclePhase.MATCH_LOADING,
+                    ui_state=LiveUIState(active_screens=["ScreenLoading"]),
+                    game_state=event.game_state,
+                    game_key=game_key,
+                )
+                loading_payload = envelope_for(loading_event)
+                loading_payload["synthetic"] = True
+                self._pending_publications.append(loading_payload)
+        self._drain_publications()
 
     def _update_context_players(
         self,
@@ -335,6 +341,7 @@ class LiveBridge:
     def _on_match_active(self, event: LiveLifecycleEvent) -> None:
         if event.game_state is None or not event.game_key:
             return
+        lookup: Optional[Dict[str, Any]] = None
         with self._lock:
             ctx = self._current
             if ctx is None or ctx.game_key != event.game_key:
@@ -358,7 +365,7 @@ class LiveBridge:
                     # exposes the opponent's region, so this is the only
                     # region signal available at game start. PTR has no
                     # SC2Pulse ladder, so it searches every region.
-                    self._dispatch_pulse_lookup(
+                    lookup = dict(
                         game_key=event.game_key,
                         name=ctx.opponent_name,
                         race=ctx.opponent_race,
@@ -374,7 +381,13 @@ class LiveBridge:
                 self._update_context_players(ctx, event.game_state)
             ctx.last_emitted_at = time.time()
             payload = self._envelope_with_profile(event, ctx)
-        self._publish(payload)
+            self._pending_publications.append(payload)
+        # Submit outside the context lock: an already-completed Future can
+        # call its callback inline, which must not deliver subscribers while
+        # the outer active-event handler still holds that lock.
+        if lookup is not None:
+            self._dispatch_pulse_lookup(**lookup)
+        self._drain_publications()
 
     def _on_match_ended(self, event: LiveLifecycleEvent) -> None:
         with self._lock:
@@ -390,11 +403,12 @@ class LiveBridge:
                 ctx.last_lifecycle_phase = event.phase
                 self._update_context_players(ctx, event.game_state)
             payload = self._envelope_with_profile(event, ctx)
+            self._pending_publications.append(payload)
         # Don't clear `_current` here — we may still need to fold in a
         # late Pulse response (e.g. if the lookup's still in flight at
         # game-end, the result envelope it produces is useful).
         # The next IDLE/MENU event will clear state.
-        self._publish(payload)
+        self._drain_publications()
 
     # ------------------------------------------------------------------
     # Pulse async lookup
@@ -443,11 +457,38 @@ class LiveBridge:
                 _synthetic_event_for_phase(ctx),
                 ctx,
             )
-        self._publish(payload)
+            # The validity check, snapshot, and queue insertion are atomic
+            # with MENU/IDLE clearing the context. A subsequent clear is
+            # delivered after this callback, never overwritten by it.
+            self._pending_publications.append(payload)
+        self._drain_publications()
 
     # ------------------------------------------------------------------
     # Envelope assembly + publish
     # ------------------------------------------------------------------
+
+    def _drain_publications(self) -> None:
+        with self._lock:
+            if self._publishing:
+                return
+            self._publishing = True
+        while True:
+            with self._lock:
+                if not self._pending_publications:
+                    # Release ownership atomically with the empty check so
+                    # a concurrent enqueue cannot lose its wake-up.
+                    self._publishing = False
+                    return
+                payload = self._pending_publications.popleft()
+            try:
+                self._publish(payload)
+            except Exception:  # noqa: BLE001
+                # Don't strand subsequent lifecycle envelopes if one
+                # publication fails; subscriber callbacks are already
+                # isolated by EventBus and run without the context lock.
+                _log.exception(
+                    "live_bridge_publish_failed phase=%s", payload.get("phase"),
+                )
 
     def _envelope_with_profile(
         self,
