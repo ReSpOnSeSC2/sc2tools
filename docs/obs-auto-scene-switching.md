@@ -88,6 +88,9 @@ After reporting the result once, the poller treats that definite menu as
 leaving the match. It ignores the cached result until fresh, undecided
 telemetry arrives, so the previous result cannot restore the gameplay scene.
 `ScreenScore` continues to hold the configured `match_ended` scene.
+Both short UI names and slash-qualified paths such as
+`ScreenLoading/ScreenLoading` are recognized. Raw screen paths remain in
+the lifecycle payload for diagnostics.
 
 ### Behaviours that matter on air
 

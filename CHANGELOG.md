@@ -14,7 +14,8 @@ corresponding GitHub Release.
 ### Fixed
 
 - **Agent 0.18.6: post-game scene recovery.** A definite SC2 menu takes
-  precedence over a cached result from the finished match, and a delayed
+  precedence over a cached result from the finished match. Slash-qualified
+  SC2 screen names are recognized, and a delayed
   opponent-profile response cannot restore an older game phase after leaving
   the match. The configured results-screen scene and leave debounce remain.
 

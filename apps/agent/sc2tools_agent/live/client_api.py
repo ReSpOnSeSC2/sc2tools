@@ -261,7 +261,7 @@ class LiveClientPoller:
                 self._last_phase == LiveLifecyclePhase.MATCH_ENDED
                 and not ui.is_loading
                 and not ui.is_in_match
-                and "ScreenScore" not in ui.active_screens
+                and not ui.is_score_screen
             ):
                 self._emit(
                     LiveLifecyclePhase.MENU,
