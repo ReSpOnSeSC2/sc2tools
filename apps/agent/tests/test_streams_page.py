@@ -1,4 +1,5 @@
 import os
+import time
 from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -8,6 +9,15 @@ pytest.importorskip("PySide6")
 from PySide6 import QtCore, QtTest, QtWidgets
 
 from sc2tools_agent.ui.streams_page import build_streams_page
+
+
+def wait_for_worker_completion(app, completed, timeout_ms=2000):
+    # QSignalSpy.wait can hold the GIL while a Python worker needs it to emit.
+    deadline = time.monotonic() + timeout_ms / 1000
+    while not completed.count() and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(0.01)
+    assert completed.count(), "The stream worker did not signal completion before the deadline."
 
 
 @pytest.fixture
@@ -209,7 +219,8 @@ def test_connection_setup_button_supports_return_to_sc2tools(page, monkeypatch):
 
 
 @pytest.mark.parametrize("scope", ["horizontal", "portrait"])
-def test_destination_connect_button_dispatches_connection_once(page, scope):
+@pytest.mark.parametrize("worker_delay", [0, 0.02])
+def test_destination_connect_button_dispatches_connection_once(page, scope, worker_delay):
     _, _, app = page
     state = {"account_mode": "sc2tools", "youtube": {
         "connected": False, "phase": "authorization_required",
@@ -217,6 +228,9 @@ def test_destination_connect_button_dispatches_connection_once(page, scope):
     calls = []
 
     def handle(payload):
+        # Delay only this synthetic handler so completion also arrives during the wait.
+        if worker_delay:
+            time.sleep(worker_delay)
         calls.append(payload)
         return state
 
@@ -234,7 +248,7 @@ def test_destination_connect_button_dispatches_connection_once(page, scope):
         button.click()
         assert widget.busy
         assert not any(item.isEnabled() for item in widget.format_connect_buttons.values())
-        assert completed.count() or completed.wait(2000)
+        wait_for_worker_completion(app, completed)
         app.processEvents()
         assert not widget.busy
         assert calls == [{"action": "connect_youtube"}]
@@ -433,7 +447,7 @@ def test_obs_details_fetch_error_hides_private_exception_text(page):
         widget.obs_toggle.setChecked(True)
         completed = QtTest.QSignalSpy(widget.completed)
         widget.obs_fetch_button.click()
-        assert completed.count() or completed.wait(2000)
+        wait_for_worker_completion(app, completed)
         app.processEvents()
         assert "fake-private" not in widget.notice.text()
         assert widget.obs_key.text() == ""
@@ -492,7 +506,7 @@ def test_obs_details_fetch_worker_returns_secret_only_to_masked_controls(page):
         completed = QtTest.QSignalSpy(widget.completed)
         assert calls == []
         widget.obs_fetch_button.click()
-        assert completed.count() or completed.wait(2000)
+        wait_for_worker_completion(app, completed)
         app.processEvents()
         assert len(calls) == 1
         assert widget.obs_key.text() == "fake-private-key"
