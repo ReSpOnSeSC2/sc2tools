@@ -25,7 +25,12 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.platform_labels = {}
             self.platform_badges = {}
             self.format_labels = {}
+            self.format_connect_buttons = {}
+            self.format_phases = {}
             self.format_links = {}
+            self._obs_identity = None
+            self._obs_generation = 0
+            self._obs_account_mode = None
             self.setWidget(self._content())
             self.completed.connect(self._completed)
             self.timer = QtCore.QTimer(self)
@@ -182,8 +187,17 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 names.addWidget(self._label(title, name="studioDestinationTitle"))
                 names.addWidget(self._label(canvas, True))
                 row.addLayout(names, 1)
-                self.format_labels[scope] = self._badge("Connect YouTube")
+                self.format_labels[scope] = self._badge("Setup needed")
                 row.addWidget(self.format_labels[scope], 0, QtCore.Qt.AlignTop)
+                connect = self._button(
+                    "Connect YouTube",
+                    lambda _checked=False, key=scope: self.connect_youtube(key),
+                    quiet=True,
+                )
+                connect.setToolTip("Connect your YouTube account in your browser.")
+                connect.setVisible(False)
+                self.format_connect_buttons[scope] = connect
+                row.addWidget(connect, 0, QtCore.Qt.AlignTop)
                 card_layout.addLayout(row)
                 footer = QtWidgets.QHBoxLayout()
                 footer.addWidget(self._label("Reusable key · separate link & chat", True), 1)
@@ -305,6 +319,48 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             setup_layout.addLayout(account_actions)
             layout.addWidget(setup_section)
 
+            obs_section, self.obs_toggle, self.obs_box, obs_layout = self._disclosure("OBS connection details", "Server & key for the selected YouTube destination")
+            obs_layout.addWidget(self._label("Save your channel and both reusable keys with Save YouTube setup first. Then choose a destination and Fetch its server and key for the matching Aitum output in OBS.", True))
+            obs_form = QtWidgets.QFormLayout()
+            self.obs_destination = QtWidgets.QComboBox()
+            self.obs_destination.addItem("Horizontal", "horizontal")
+            self.obs_destination.addItem("Vertical", "portrait")
+            obs_form.addRow("Destination", self.obs_destination)
+            self.obs_selected_key = self._label("Save your YouTube setup first.", True)
+            obs_form.addRow("Reusable key", self.obs_selected_key)
+            self.obs_output_name = self._label("", True)
+            obs_form.addRow("OBS / Aitum output", self.obs_output_name)
+            self.obs_server = QtWidgets.QLineEdit()
+            self.obs_server.setReadOnly(True)
+            obs_form.addRow("Server URL", self.obs_server)
+            self.obs_key = QtWidgets.QLineEdit()
+            self.obs_key.setReadOnly(True)
+            self.obs_key.setEchoMode(QtWidgets.QLineEdit.Password)
+            obs_form.addRow("Stream key", self.obs_key)
+            obs_layout.addLayout(obs_form)
+            obs_actions = QtWidgets.QHBoxLayout()
+            self.obs_fetch_button = self._button("Fetch connection details", self.fetch_obs_connection)
+            self.obs_copy_server = QtWidgets.QPushButton("Copy server")
+            self.obs_copy_key = QtWidgets.QPushButton("Copy key")
+            for button, field, message in (
+                (self.obs_copy_server, self.obs_server, "Server URL copied."),
+                (self.obs_copy_key, self.obs_key, "Stream key copied. Paste it into the selected OBS output."),
+            ):
+                button.setObjectName("quietButton")
+                button.setCursor(QtCore.Qt.PointingHandCursor)
+                button.clicked.connect(lambda _checked=False, item=field, text=message: self.copy_obs_detail(item, text))
+            self.obs_reveal = QtWidgets.QCheckBox("Reveal key")
+            self.obs_reveal.toggled.connect(lambda checked: self.obs_key.setEchoMode(QtWidgets.QLineEdit.Normal if checked else QtWidgets.QLineEdit.Password))
+            for control in (self.obs_fetch_button, self.obs_copy_server, self.obs_copy_key, self.obs_reveal):
+                obs_actions.addWidget(control)
+            obs_actions.addStretch()
+            obs_layout.addLayout(obs_actions)
+            self.obs_note = self._label("Connection details appear only after Fetch; the key stays hidden until you reveal or copy it.", True)
+            obs_layout.addWidget(self.obs_note)
+            self.obs_destination.currentIndexChanged.connect(self._obs_selection_changed)
+            self.obs_toggle.toggled.connect(lambda opened: None if opened else self._clear_obs_connection())
+            layout.addWidget(obs_section)
+
             description_section, self.description_toggle, self.description_box, desc = self._disclosure("Description & links", "Shared across both YouTube formats")
             desc.addWidget(self._label("The vertical description also links to its current horizontal partner.", True))
             self.description_input = QtWidgets.QPlainTextEdit()
@@ -327,6 +383,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
 
         def _setup_edited(self):
             self.setup_dirty = True
+            self._clear_obs_connection()
             self._buttons()
 
         def open_setup(self):
@@ -350,6 +407,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 field.setEnabled(not self.busy)
             self.save_button.setEnabled(enabled and bool(self.title_input.text().strip()))
             youtube = self.state.get("youtube", {})
+            for scope, button in self.format_connect_buttons.items():
+                button.setEnabled(enabled and self.format_phases.get(scope) == "authorization_required")
             self.prepare_button.setEnabled(enabled and not self.title_dirty and not self.description_dirty and not self.setup_dirty and youtube.get("connected", False) and self.state.get("configured", False))
             tiktok = self.state.get("tiktok", {})
             camera = tiktok.get("virtual_camera_active")
@@ -357,9 +416,16 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.virtual_camera_stop_button.setEnabled(enabled and camera is True)
             self.tiktok_launch_button.setEnabled(enabled and tiktok.get("installed") is not False)
             self.tiktok_copy_button.setEnabled(not self.busy and self.loaded and bool(self.title_input.text().strip()))
+            self.obs_fetch_button.setEnabled(enabled and self._obs_selection() is not None)
+            details_available = not self.busy and self._obs_identity == self._obs_selection() and bool(self.obs_key.text())
+            self.obs_copy_server.setEnabled(details_available)
+            self.obs_copy_key.setEnabled(details_available)
+            self.obs_reveal.setEnabled(details_available)
+            self.obs_destination.setEnabled(not self.busy)
 
         def refresh(self):
             if provider is None:
+                self._clear_obs_connection()
                 self.notice.setText("Stream controls are unavailable in this session. Restart SC2Tools to reconnect.")
                 self._buttons()
                 return
@@ -371,9 +437,13 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                     return
                 self.render(state)
             except Exception:
+                self._clear_obs_connection()
                 self.notice.setText("Stream controls are unavailable. Restart SC2Tools to reconnect.")
 
         def render(self, state):
+            if state.get("account_mode") != self._obs_account_mode:
+                self._clear_obs_connection()
+            self._obs_account_mode = state.get("account_mode")
             self.state = state
             metadata = state.get("metadata", {})
             if not self.title_dirty:
@@ -406,8 +476,15 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                     phase = "authorization_required"
                 if youtube.get("code") not in {None, "ok", "template_saved"} and youtube.get("phase") not in {"authorization_required", "disabled", "idle"}:
                     phase = "blocked"
+                self.format_phases[scope] = phase
+                connection_required = phase == "authorization_required"
+                self.format_labels[scope].setVisible(not connection_required)
+                self.format_connect_buttons[scope].setVisible(connection_required)
                 tone = "live" if phase == "live" else "good" if phase in {"ready", "bound"} else "warning" if phase in {"starting", "stopping", "blocked"} else "neutral"
-                self._set_badge(self.format_labels[scope], labels.get(phase, phase.replace("_", " ").title()), tone)
+                text = labels.get(phase, phase.replace("_", " ").title())
+                if phase in {"idle", "disabled"}:
+                    text = "Prepare session" if state.get("configured") else "Setup needed"
+                self._set_badge(self.format_labels[scope], text, tone)
                 self.format_links[scope].setEnabled(bool(row.get("url")))
             auto = state.get("configuration", {}).get("auto_rearm") is True
             auto_text = "automatic · armed" if youtube.get("auto_rearm_enabled") else "automatic · prepare the first pair" if auto else "manual"
@@ -450,6 +527,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 self.auto_check.blockSignals(blocked)
                 for scope, field in self.output_inputs.items():
                     field.setText(config.get("output_names", {}).get(scope, field.text()))
+            self._sync_obs_details()
             self._buttons()
 
         def _render_tiktok(self, status):
@@ -470,6 +548,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
         def job(self, payload):
             if self.busy or handler is None:
                 return
+            if payload["action"] in {"connect_youtube", "refresh_keys", "refresh_accounts", "use_local_connections", "use_sc2tools_connections"}:
+                self._clear_obs_connection()
             self.busy = True
             message = "Connecting in your browser…" if payload["action"].startswith("connect_") else "Saving / checking stream settings…"
             if payload["action"] == "prepare":
@@ -478,11 +558,17 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 message = "Checking TikTok and OBS camera setup…"
             self.notice.setText(message)
             self._buttons()
+            obs_generation = self._obs_generation
             def work():
                 try:
-                    result = {"state": handler(payload), "action": payload["action"]}
+                    value = handler(payload)
+                    if payload["action"] == "fetch_obs_connection":
+                        result = {"obs_connection": value.get("obs_connection"), "action": payload["action"], "obs_generation": obs_generation}
+                    else:
+                        result = {"state": value, "action": payload["action"]}
                 except ValueError as error:
-                    result = {"error": str(error), "action": payload["action"]}
+                    message = "OBS connection details could not be verified. Refresh connections and fetch the selected destination again." if payload["action"] == "fetch_obs_connection" else str(error)
+                    result = {"error": message, "action": payload["action"]}
                 except Exception:
                     result = {"error": "The action did not complete. Check your connection and setup, then try again.", "action": payload["action"]}
                 self.completed.emit(result)
@@ -490,7 +576,10 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
 
         def _completed(self, result):
             self.busy = False
-            if "state" in result:
+            if result.get("action") == "fetch_obs_connection" and "obs_connection" in result:
+                self.refresh()
+                self._accept_obs_connection(result)
+            elif "state" in result:
                 if result["action"] == "set_metadata":
                     self.title_dirty = self.description_dirty = False
                 if result["action"] == "configure_youtube":
@@ -508,6 +597,92 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
         def copy_title(self):
             QtWidgets.QApplication.clipboard().setText(self.title_input.text())
             self.notice.setText("Title copied. Paste it into TikTok LIVE Studio before Go LIVE.")
+
+        def connect_youtube(self, scope):
+            if self.loaded and not self.busy and self.format_phases.get(scope) == "authorization_required":
+                self.job({"action": "connect_youtube"})
+
+        def _obs_selection(self):
+            config = self.state.get("configuration", {})
+            scope = self.obs_destination.currentData()
+            stream_id = config.get("horizontal_id" if scope == "horizontal" else "portrait_id")
+            channel = config.get("channel_id")
+            if not self.state.get("configured") or not self.state.get("youtube", {}).get("connected") or scope not in {"horizontal", "portrait"} or not channel or not stream_id:
+                return None
+            combo = self.horizontal_combo if scope == "horizontal" else self.portrait_combo
+            if self.channel_combo.currentData() != channel or combo.currentData() != stream_id:
+                return None
+            return {"scope": scope, "expected_channel_id": channel, "stream_id": stream_id}
+
+        def _clear_obs_connection(self):
+            self._obs_identity = None
+            self._obs_generation += 1
+            self.obs_key.clear()
+            self.obs_server.clear()
+            self.obs_key.setEchoMode(QtWidgets.QLineEdit.Password)
+            blocked = self.obs_reveal.blockSignals(True)
+            self.obs_reveal.setChecked(False)
+            self.obs_reveal.blockSignals(blocked)
+            for control in (self.obs_copy_server, self.obs_copy_key, self.obs_reveal):
+                control.setEnabled(False)
+
+        def _obs_selection_changed(self):
+            self._clear_obs_connection()
+            self._sync_obs_details()
+            self._buttons()
+
+        def _sync_obs_details(self):
+            selection = self._obs_selection()
+            if self._obs_identity is not None and selection != self._obs_identity:
+                self._clear_obs_connection()
+            combo = self.horizontal_combo if self.obs_destination.currentData() == "horizontal" else self.portrait_combo
+            self.obs_selected_key.setText(combo.currentText() if selection else "Save this destination's channel and reusable key first.")
+            from ..streaming.obs_reader import DEFAULT_OUTPUTS
+            scope = self.obs_destination.currentData()
+            name = self.state.get("configuration", {}).get("output_names", DEFAULT_OUTPUTS).get(scope, DEFAULT_OUTPUTS.get(scope, ""))
+            if name.startswith("aitum_multi_output_"):
+                name = "Aitum Multistream · " + name.removeprefix("aitum_multi_output_")
+            elif name.startswith("vertical_canvas_stream_"):
+                name = "Aitum Vertical · " + name.removeprefix("vertical_canvas_stream_")
+            self.obs_output_name.setText(name)
+
+        def fetch_obs_connection(self):
+            selection = self._obs_selection()
+            if not self.busy and selection is not None:
+                self._clear_obs_connection()
+                self.job({"action": "fetch_obs_connection", **selection})
+
+        def _accept_obs_connection(self, result):
+            value = result.get("obs_connection")
+            selection = self._obs_selection()
+            if result.get("obs_generation") != self._obs_generation or not self.obs_toggle.isChecked() or not isinstance(value, dict) or selection is None or any(value.get(key) != expected for key, expected in selection.items()):
+                self._clear_obs_connection()
+                self.notice.setText("Connection details cleared because the selected destination changed or the panel closed.")
+                return
+            try:
+                from ..streaming.cloud_client import validated_obs_connection
+                details = validated_obs_connection(value, selection["stream_id"])
+            except Exception:
+                self._clear_obs_connection()
+                self.notice.setText("OBS connection details could not be verified. Fetch the selected destination again.")
+                return
+            self._obs_identity = selection
+            self.obs_server.setText(details["server_url"])
+            self.obs_key.setText(details["stream_key"])
+            self.notice.setText("Connection details fetched for " + self.obs_destination.currentText() + ". The key is hidden.")
+
+        def copy_obs_detail(self, field, message):
+            if not self.busy and self._obs_identity == self._obs_selection() and field.text():
+                QtWidgets.QApplication.clipboard().setText(field.text())
+                self.notice.setText(message)
+
+        def hideEvent(self, event):
+            self._clear_obs_connection()
+            super().hideEvent(event)
+
+        def closeEvent(self, event):
+            self._clear_obs_connection()
+            super().closeEvent(event)
 
         def view_stream(self, scope):
             url = self.state.get("youtube", {}).get("channels", {}).get(scope, {}).get("url", "")

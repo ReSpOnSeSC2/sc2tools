@@ -212,7 +212,14 @@ class PlatformIntegrationsService {
     const refresh = platform === "twitch" ? this.oauth.refreshTwitchToken
       : platform === "kick" ? this.oauth.refreshKickToken : this.oauth.refreshYoutubeToken;
     const tokens = await refresh(this.config[platform], row.refreshToken, fetchImpl);
-    const scopes = Array.isArray(tokens.scopes) && tokens.scopes.length ? tokens.scopes : row.scopes;
+    let scopes = Array.isArray(tokens.scopes) && tokens.scopes.length ? tokens.scopes : row.scopes;
+    if (platform === "kick") {
+      const info = await this.oauth.getKickTokenInfo(tokens.accessToken, fetchImpl);
+      if (info.clientId !== this.config.kick.clientId) {
+        throw integrationError(403, "streaming_client_mismatch", "Reconnect Kick stream controls using the SC2Tools app.");
+      }
+      scopes = info.scopes;
+    }
     if (oauthDefault.STREAMING_SCOPES[platform].some((scope) => !scopes.includes(scope))) {
       throw integrationError(403, "streaming_scopes_missing", "Stream control permission is missing. Reconnect this account.");
     }
@@ -596,6 +603,16 @@ class PlatformIntegrationsService {
 
     if (pending.purpose === "streaming") {
       const required = oauthDefault.scopesForPurpose(platform, "streaming");
+      if (platform === "kick") {
+        // Verify the active user grant and actual scopes even when the token
+        // exchange does not report scopes. Introspection is authoritative.
+        // Never substitute the requested scopes for permission evidence.
+        const info = await this.oauth.getKickTokenInfo(token.accessToken, this.fetchImpl);
+        if (info.clientId !== provider.clientId) {
+          throw integrationError(403, "streaming_client_mismatch", "The authorization does not belong to the SC2Tools app.");
+        }
+        token.scopes = info.scopes;
+      }
       if (!Array.isArray(pending.requiredScopes)
         || required.some((scope) => !pending.requiredScopes.includes(scope))
         || required.some((scope) => !token.scopes.includes(scope))) {
@@ -603,12 +620,6 @@ class PlatformIntegrationsService {
       }
       if (platform === "twitch" && identity.clientId !== provider.clientId) {
         throw integrationError(403, "streaming_client_mismatch", "The authorization does not belong to the SC2Tools app.");
-      }
-      if (platform === "kick") {
-        const info = await this.oauth.getKickTokenInfo(token.accessToken, this.fetchImpl);
-        if (info.clientId !== provider.clientId || required.some((scope) => !info.scopes.includes(scope))) {
-          throw integrationError(403, "streaming_client_mismatch", "The authorization does not belong to the SC2Tools app and stream control permissions.");
-        }
       }
     }
 
@@ -1086,18 +1097,15 @@ class PlatformIntegrationsService {
               if (!current.refreshToken) {
                 throw new Error("Kick authorization expired; reconnect Kick");
               }
-              const refreshed = await this.oauth.refreshKickToken(
-                this.config.kick,
-                current.refreshToken,
-                fetchImpl,
-              );
-              const updated = await vault.updateTokens(
-                row.userId,
-                "kick",
-                refreshed,
-                row.connectionRevision,
-              );
-              if (!updated) return;
+              const refreshed = current.metadata?.streamingConsent === true
+                ? await this._refreshStreamingConnection(row.userId, "kick", current, fetchImpl)
+                : await this.oauth.refreshKickToken(this.config.kick, current.refreshToken, fetchImpl);
+              if (current.metadata?.streamingConsent !== true) {
+                const updated = await vault.updateTokens(
+                  row.userId, "kick", refreshed, row.connectionRevision,
+                );
+                if (!updated) return;
+              }
               accessToken = refreshed.accessToken;
             }
             await this.oauth.subscribeKickEvents(accessToken, fetchImpl);

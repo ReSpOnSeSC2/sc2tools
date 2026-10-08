@@ -216,6 +216,10 @@ class StreamService:
                     self._attach_youtube()
                 self._youtube_catalog()
                 self.message = "Reusable keys refreshed. Keys stay private; this page shows their names."
+            elif kind == "fetch_obs_connection":
+                # This secret response goes directly to the requesting control.
+                # It must never enter a status snapshot, config, or service cache.
+                return {"obs_connection": self._obs_connection(payload)}
             elif kind == "configure_youtube":
                 self._configure(payload)
             elif kind in {"pause_auto", "resume_auto"}:
@@ -236,6 +240,39 @@ class StreamService:
             else:
                 raise ValueError("This stream action is unavailable.")
             return self._publish()
+
+    def _obs_connection(self, payload):
+        scope = payload.get("scope")
+        if not isinstance(scope, str) or scope not in DEFAULT_OUTPUTS:
+            raise ValueError("Choose the horizontal or vertical YouTube destination.")
+        channel = self.backend.config.get("expected_channel_id")
+        stream_id = self.backend.config.get("streams", {}).get(scope, {}).get("reusable_stream_id")
+        if scope not in DEFAULT_OUTPUTS or not self.backend.connected or not self.backend.config.get("runtime_enabled"):
+            raise ValueError("Connect YouTube and save the selected reusable keys before fetching OBS connection details.")
+        if not isinstance(channel, str) or not channel or not isinstance(stream_id, str) or not stream_id or payload.get("expected_channel_id") != channel or payload.get("stream_id") != stream_id:
+            raise ValueError("The selected destination changed. Save its channel and key, then fetch again.")
+        try:
+            from .cloud_client import validated_obs_connection
+            api = self.backend.api
+            if self.account_mode == "sc2tools":
+                details = api.obs_connection(channel, stream_id)
+            else:
+                if api.owned_channel()["id"] != channel:
+                    raise ValueError("Selected stream ownership changed.")
+                # mine=true excludes non-reusable streams. Omit CDN here so
+                # only the exact ID read below obtains any ingestion secret.
+                choices = api.paginated("liveStreams", {"part": "id,snippet,status", "mine": "true", "maxResults": 50})
+                if len([row for row in choices if row.get("id") == stream_id and row.get("snippet", {}).get("channelId") == channel]) != 1:
+                    raise ValueError("Selected stream ownership changed.")
+                rows = api.streams_by_ids([stream_id])
+                if len(rows) != 1 or rows[0].get("id") != stream_id or rows[0].get("snippet", {}).get("channelId") != channel:
+                    raise ValueError("Selected stream ownership changed.")
+                info = rows[0].get("cdn", {}).get("ingestionInfo", {})
+                details = {"stream_id": stream_id, "server_url": info.get("rtmpsIngestionAddress"), "stream_key": info.get("streamName")}
+            details = validated_obs_connection(details, stream_id)
+            return {"scope": scope, "expected_channel_id": channel, **details}
+        except Exception:
+            raise ValueError("YouTube OBS connection details could not be verified. Refresh connections and the selected key, then fetch again.") from None
 
     def _change_account_mode(self, mode):
         if mode == "sc2tools" and not self.cloud_client:

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { OfficialPlatformConnections } from "@/components/analyzer/settings/OfficialPlatformConnections";
 
 const apiCallMock = vi.fn();
@@ -37,6 +37,44 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("explicit stream control permission upgrade", () => {
+  it("labels notification readiness separately from stream-control authorization", () => {
+    const data = response();
+    data.platforms = data.platforms.map((row) => ({ ...row, connected: true, ready: true,
+      streamingConsent: row.platform !== "kick" }));
+    useApiMock.mockReturnValue({ data, isLoading: false, mutate: mutateMock });
+    render(<OfficialPlatformConnections />);
+    const kick = within(screen.getByRole("group", { name: "Kick account permissions" }));
+    expect(kick.getByText("Notifications ready")).toBeTruthy();
+    expect(kick.getByText("Stream controls need permission")).toBeTruthy();
+    expect(kick.getByRole("button", { name: "Connect stream controls" })).toHaveProperty("disabled", false);
+    for (const platform of ["Twitch", "YouTube"]) {
+      const account = within(screen.getByRole("group", { name: `${platform} account permissions` }));
+      expect(account.getByText("Stream controls authorized")).toBeTruthy();
+      expect(account.queryByRole("button", { name: "Connect stream controls" })).toBeNull();
+    }
+    expect(screen.queryByText(/^Connected$/)).toBeNull();
+  });
+  it("keeps authorized controls visible when notification setup needs a retry", () => {
+    useApiMock.mockReturnValue({ data: response({ connected: true, ready: false, streamingConsent: true }),
+      isLoading: false, mutate: mutateMock });
+    render(<OfficialPlatformConnections />);
+    const twitch = within(screen.getByRole("group", { name: "Twitch account permissions" }));
+    expect(twitch.getByText("Notifications need retry")).toBeTruthy();
+    expect(twitch.getByText("Stream controls authorized")).toBeTruthy();
+  });
+  it("requires a current connection before displaying old consent as authorized", () => {
+    useApiMock.mockReturnValue({ data: response({ connected: false, streamingConsent: true }),
+      isLoading: false, mutate: mutateMock });
+    render(<OfficialPlatformConnections />);
+    const twitch = within(screen.getByRole("group", { name: "Twitch account permissions" }));
+    expect(twitch.queryByText("Stream controls authorized")).toBeNull();
+    expect(twitch.getByRole("button", { name: "Connect stream controls" })).toHaveProperty("disabled", false);
+  });
+  it("explains that the same SC2Tools account shares permissions while pairing and OBS setup are separate", () => {
+    render(<OfficialPlatformConnections />);
+    expect(screen.getByText(/desktop agent paired to this same SC2Tools account/)).toBeTruthy();
+    expect(screen.getByText(/Agent pairing and OBS output setup are separate steps/)).toBeTruthy();
+  });
   it("preserves the normal notification-only connection request", async () => {
     render(<OfficialPlatformConnections />);
     fireEvent.click(screen.getAllByRole("button", { name: /^Connect$/ })[0]);

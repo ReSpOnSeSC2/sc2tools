@@ -6,6 +6,7 @@ ID durably saved by PairBackend before any cloud request.
 from __future__ import annotations
 
 from urllib.parse import urlparse
+import re
 
 import requests
 
@@ -14,6 +15,26 @@ class CloudStreamError(ValueError):
     def __init__(self, message, *, http_status=None):
         super().__init__(message)
         self.http_status = http_status if type(http_status) is int and 100 <= http_status <= 599 else None
+
+
+def validated_obs_connection(value, stream_id):
+    """Validate an explicitly requested secret response without retaining it."""
+    valid = isinstance(value, dict) and value.get("stream_id") == stream_id
+    server = value.get("server_url") if valid else None
+    key = value.get("stream_key") if valid else None
+    try:
+        parsed = urlparse(server) if isinstance(server, str) else None
+        valid = bool(parsed and parsed.scheme == "rtmps" and not any(c.isspace() or ord(c) < 33 for c in server)
+            and parsed.hostname in {"a.rtmps.youtube.com", "b.rtmps.youtube.com"}
+            and parsed.path == "/live2" and not parsed.username and not parsed.password
+            and not parsed.query and not parsed.fragment
+            and parsed.port in {None, 443}
+            and isinstance(key, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,256}", key))
+    except Exception:
+        valid = False
+    if not valid:
+        raise CloudStreamError("YouTube OBS connection details could not be verified. Refresh the selected key and try again.")
+    return {"stream_id": stream_id, "server_url": server, "stream_key": key}
 
 
 class CloudStreamingClient:
@@ -122,6 +143,14 @@ class CloudGoogleAPI:
         if value["channel"].get("id") != expected_channel_id:
             raise CloudStreamError("The connected YouTube channel changed. Recheck your channel and keys.")
         return value["streams"]
+
+    def obs_connection(self, expected_channel_id, stream_id):
+        if expected_channel_id != self._expected_channel() or not isinstance(stream_id, str) or not stream_id:
+            raise CloudStreamError("Save the selected YouTube channel and reusable keys first.")
+        value = self.client._request("POST", "/v1/streaming/youtube/obs-connection", body={
+            "expected_channel_id": expected_channel_id, "stream_id": stream_id,
+        })
+        return validated_obs_connection(value, stream_id)
 
     def _read(self, operation, ids=None):
         params = {"operation": operation}

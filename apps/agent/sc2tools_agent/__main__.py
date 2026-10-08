@@ -13,12 +13,20 @@ time the module loader gets here.
 from __future__ import annotations
 
 import multiprocessing
+import os
 import sys
 
 from sc2tools_agent.runner import run_agent
 
 
 def main() -> int:
+    # Packaging-only diagnostic: exercise the frozen Qt window without ever
+    # bootstrapping user state, pairing, replay services, OBS or crash reporting.
+    smoke_report = os.environ.get("SC2TOOLS_GUI_SMOKE_REPORT")
+    if smoke_report:
+        from sc2tools_agent.packaging_smoke import run_gui_smoke
+
+        return run_gui_smoke(smoke_report)
     return run_agent()
 
 

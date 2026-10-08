@@ -174,16 +174,20 @@ export function OfficialPlatformConnections() {
       <div>
         <div className="text-body font-medium text-text">Connected accounts</div>
         <p className="mt-1 text-caption text-text-dim">
-          Connect your accounts for notifications. Choose Connect stream controls to
-          let SC2Tools update stream titles and prepare your YouTube broadcasts.
-          You can remove a connection here at any time.
+          Notifications and stream controls have separate permissions. Stream controls
+          let SC2Tools update titles and prepare YouTube broadcasts.
         </p>
       </div>
+      <p className="rounded-md border border-border bg-bg/40 px-3 py-2 text-caption text-text-muted">
+        A desktop agent paired to this same SC2Tools account can use its authorized
+        stream controls. Agent pairing and OBS output setup are separate steps in
+        the desktop app.
+      </p>
       {isLoading ? (
         <div className="text-caption text-text-muted">Checking connections…</div>
       ) : error && !data ? (
         <div className="flex items-center gap-2 text-caption text-danger">
-          Couldn&apos;t check notification accounts.
+          Couldn&apos;t check account permissions.
           <Button size="sm" variant="secondary" onClick={() => void mutate()}>
             Retry
           </Button>
@@ -194,28 +198,34 @@ export function OfficialPlatformConnections() {
             const row = data?.platforms.find((item) => item.platform === platform);
             const configured = row?.configured === true;
             const connected = row?.connected === true;
+            const streamControlsAuthorized = connected && row?.streamingConsent === true;
             return (
-              <div key={platform} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+              <div key={platform} role="group" aria-label={`${COPY[platform].label} account permissions`}
+                className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-body font-medium text-text">{COPY[platform].label}</span>
-                    {connected && row?.ready ? (
-                      <Badge variant="success" size="sm">Connected</Badge>
-                    ) : connected ? (
-                      <Badge variant="warning" size="sm">Needs retry</Badge>
-                    ) : configured ? (
-                      <Badge variant="neutral" size="sm">Not connected</Badge>
-                    ) : (
-                      <Badge variant="neutral" size="sm">Not available</Badge>
-                    )}
                     {connected && row?.platformUserName ? (
                       <span className="text-caption text-text-muted">{row.platformUserName}</span>
                     ) : null}
                   </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                    {connected && row?.ready ? (
+                      <Badge variant="success" size="sm">Notifications ready</Badge>
+                    ) : connected ? (
+                      <Badge variant="warning" size="sm">Notifications need retry</Badge>
+                    ) : (
+                      <Badge variant="neutral" size="sm">
+                        {configured ? "Notifications not connected" : "Notifications unavailable"}
+                      </Badge>
+                    )}
+                    <Badge variant={streamControlsAuthorized ? "success" : "neutral"} size="sm">
+                      {streamControlsAuthorized ? "Stream controls authorized"
+                        : configured && row?.streamingAvailable === true
+                          ? "Stream controls need permission" : "Stream controls unavailable"}
+                    </Badge>
+                  </div>
                   <p className="mt-1 text-caption text-text-dim">{COPY[platform].coverage}</p>
-                  {row?.streamingConsent ? (
-                    <p className="mt-1 text-caption text-success">Stream control permissions connected.</p>
-                  ) : null}
                   {row?.lastError ? (
                     <p className="mt-1 text-caption text-danger">{row.lastError}</p>
                   ) : null}
@@ -250,7 +260,7 @@ export function OfficialPlatformConnections() {
                     {busy === platform ? "Connecting…" : "Connect"}
                   </Button>
                 )}
-                {!row?.streamingConsent ? (
+                {!streamControlsAuthorized ? (
                   <Button size="sm" variant="secondary"
                     disabled={!configured || row?.streamingAvailable !== true || busy !== null}
                     onClick={() => void connect(platform, "streaming")}

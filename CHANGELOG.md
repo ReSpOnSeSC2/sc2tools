@@ -13,6 +13,11 @@ corresponding GitHub Release.
 
 ### Added
 
+- YouTube OBS connection details in Agent 0.18.1 provide a selected reusable
+  key's server address and masked stream key with explicit copy controls for
+  the horizontal and vertical Aitum outputs. Account settings distinguish
+  notification readiness from stream-control authorization.
+
 - **Stream Studio page** — `/stream-studio` walks through every StarCraft II
   overlay and scene SC2 Tools gives OBS: what each widget shows, how to add
   the Browser Sources, and answers to common questions. The home page's
@@ -173,6 +178,12 @@ corresponding GitHub Release.
   guide. `GET /v1/meta/ladder` is unchanged.
 
 ### Fixed
+
+- Kick stream-control consent and refresh verify the active user grant's
+  actual permissions through token introspection before accepting them. A
+  rejected permission upgrade preserves the existing notification connection.
+- Connected-account badges distinguish notifications from stream controls;
+  paired desktop agents share controls through the same SC2Tools account.
 
 - YouTube stream setup reports the provider's HTTP status when its catalog
   cannot be loaded, so support can distinguish a rejected request from a

@@ -168,3 +168,106 @@ def test_account_mode_change_preserves_config_when_pair_cannot_be_verified(tmp_p
     assert "private provider" not in str(failure.value)
     assert service.account_mode == "sc2tools"
     assert not service.config_path.exists()
+
+
+def obs_details_service(tmp_path):
+    service = make_service(tmp_path, cloud_client=object())
+    service.backend.connected = True
+    service.backend.config.update(runtime_enabled=True, expected_channel_id="saved-channel", streams={
+        "horizontal": {"reusable_stream_id": "saved-horizontal"},
+        "portrait": {"reusable_stream_id": "saved-portrait"},
+    })
+    calls = []
+
+    def connection(channel, stream_id):
+        calls.append((channel, stream_id))
+        return {"stream_id": stream_id, "server_url": "rtmps://a.rtmps.youtube.com/live2",
+                "stream_key": "fake-private-" + stream_id}
+
+    service.backend.api = SimpleNamespace(obs_connection=connection)
+    service._publish()
+    return service, calls
+
+
+@pytest.mark.parametrize("scope", ["horizontal", "portrait"])
+def test_obs_details_are_explicit_ephemeral_and_never_status_or_disk(tmp_path, caplog, scope):
+    service, calls = obs_details_service(tmp_path)
+    before = service.status()
+    assert calls == []
+    stream_id = "saved-" + scope
+    result = service.action({"action": "fetch_obs_connection", "scope": scope,
+                             "expected_channel_id": "saved-channel", "stream_id": stream_id})
+    assert calls == [("saved-channel", stream_id)]
+    assert set(result) == {"obs_connection"}
+    private_key = result["obs_connection"]["stream_key"]
+    assert result["obs_connection"]["scope"] == scope
+    assert service.status() == before
+    assert private_key not in str(service.status())
+    assert private_key not in str(service.backend.config)
+    assert private_key not in str(service.backend.state)
+    assert private_key not in caplog.text
+    assert not any(private_key.encode() in file.read_bytes() for file in tmp_path.rglob("*") if file.is_file())
+    assert service.reader.calls == 0
+
+
+@pytest.mark.parametrize("changes", [
+    {"scope": "unknown"}, {"scope": {}}, {"expected_channel_id": "other-channel"},
+    {"stream_id": "saved-portrait"}, {"stream_id": "foreign-id"},
+])
+def test_obs_details_reject_wrong_destination_before_request(tmp_path, changes):
+    service, calls = obs_details_service(tmp_path)
+    payload = {"action": "fetch_obs_connection", "scope": "horizontal",
+               "expected_channel_id": "saved-channel", "stream_id": "saved-horizontal", **changes}
+    with pytest.raises(ValueError):
+        service.action(payload)
+    assert calls == []
+
+
+def test_obs_details_disconnected_or_unconfigured_never_fetch(tmp_path):
+    service, calls = obs_details_service(tmp_path)
+    payload = {"action": "fetch_obs_connection", "scope": "horizontal",
+               "expected_channel_id": "saved-channel", "stream_id": "saved-horizontal"}
+    service.backend.connected = False
+    with pytest.raises(ValueError):
+        service.action(payload)
+    service.backend.connected = True
+    service.backend.config["runtime_enabled"] = False
+    with pytest.raises(ValueError):
+        service.action(payload)
+    assert calls == []
+
+
+def test_obs_details_errors_never_expose_or_publish_secret(tmp_path, caplog):
+    service, calls = obs_details_service(tmp_path)
+    before = service.status()
+
+    def fail(*args):
+        raise ValueError("fake-private-stream-key-provider-response")
+
+    service.backend.api.obs_connection = fail
+    with pytest.raises(ValueError, match="could not be verified") as error:
+        service.action({"action": "fetch_obs_connection", "scope": "horizontal",
+                        "expected_channel_id": "saved-channel", "stream_id": "saved-horizontal"})
+    assert "fake-private" not in str(error.value)
+    assert "fake-private" not in caplog.text
+    assert service.status() == before
+
+
+def test_local_obs_details_verify_channel_and_reusable_stream_before_cdn_read(tmp_path):
+    service, calls = obs_details_service(tmp_path)
+    service.account_mode = "local"
+    service.backend.api = SimpleNamespace(
+        owned_channel=lambda: {"id": "saved-channel"},
+        paginated=lambda resource, params: [{"id": "saved-horizontal", "snippet": {"channelId": "saved-channel"}}],
+        streams_by_ids=lambda ids: [{"id": ids[0], "snippet": {"channelId": "saved-channel"},
+                                    "cdn": {"ingestionInfo": {"rtmpsIngestionAddress": "rtmps://a.rtmps.youtube.com/live2", "streamName": "fake-private-local-key"}}}],
+    )
+    result = service.action({"action": "fetch_obs_connection", "scope": "horizontal",
+                             "expected_channel_id": "saved-channel", "stream_id": "saved-horizontal"})
+    assert result["obs_connection"]["stream_key"] == "fake-private-local-key"
+    assert "fake-private" not in str(service.status())
+    service.backend.api.owned_channel = lambda: {"id": "different-channel"}
+    service.backend.api.streams_by_ids = lambda ids: pytest.fail("foreign channel must never read ingestion details")
+    with pytest.raises(ValueError, match="could not be verified"):
+        service.action({"action": "fetch_obs_connection", "scope": "horizontal",
+                        "expected_channel_id": "saved-channel", "stream_id": "saved-horizontal"})

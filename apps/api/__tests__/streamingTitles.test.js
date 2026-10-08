@@ -56,7 +56,7 @@ function fakeDb() {
         rows.set(key(filter), next);
         return next;
       },
-      find(filter) { return { project() { return this; }, async toArray() {
+      find(filter) { return { project() { return this; }, limit() { return this; }, async toArray() {
         return [...rows.values()].filter((row) => matches(row, filter));
       } }; },
       async deleteOne(filter) { const row = rows.get(key(filter));
@@ -217,6 +217,46 @@ describe("central user-owned stream titles", () => {
     expect((await f.integrations.vault.getConnection("user-1", "kick")).refreshToken).toBe("fixture-rotated-refresh");
     expect(JSON.stringify(f.db.rows.get("user-1:kick"))).not.toContain("fixture-rotated");
   });
+  test("Kick refresh stores introspected scopes when the token response omits them", async () => {
+    const f = fixture(); await f.connect("kick", {}, undefined, new Date(NOW));
+    f.integrations.oauth = { ...oauth, refreshKickToken: async () => ({
+      accessToken: "fixture-rotated-access", refreshToken: "fixture-rotated-refresh",
+      expiresAt: new Date(NOW + 4_000_000), scopes: [],
+    }) };
+    await expect(f.integrations.withStreamingGrant("user-1", "kick", async () => "verified"))
+      .resolves.toBe("verified");
+    const row = await f.integrations.vault.getConnection("user-1", "kick");
+    expect(row.scopes).toEqual(oauth.STREAMING_SCOPES.kick);
+    expect(row.accessToken).toBe("fixture-rotated-access");
+  });
+  test("Kick refresh rejects a reduced introspected grant before token storage or channel work", async () => {
+    const f = fixture(); await f.connect("kick", {}, undefined, new Date(NOW));
+    const providerFetch = f.fetchImpl.getMockImplementation();
+    f.fetchImpl.mockImplementation((url, init) => String(url).includes("oauth/token/introspect")
+      ? Response.json({ data: { active: true, token_type: "user", client_id: "own-kick", scope: oauth.KICK_SCOPES.join(" ") } })
+      : providerFetch(url, init));
+    const callback = jest.fn();
+    await expect(f.integrations.withStreamingGrant("user-1", "kick", callback))
+      .rejects.toMatchObject({ code: "streaming_scopes_missing" });
+    expect(callback).not.toHaveBeenCalled();
+    expect((await f.integrations.vault.getConnection("user-1", "kick")).accessToken).toBe("fixture-access");
+    expect(f.calls.some((call) => call.url.includes("/channels"))).toBe(false);
+  });
+  test.each([true, false])("Kick background health preserves explicit consent on refresh: %j", async (streamingConsent) => {
+    const f = fixture();
+    await f.connect("kick", { streamingConsent }, streamingConsent ? oauth.STREAMING_SCOPES.kick : oauth.KICK_SCOPES, new Date(NOW));
+    f.integrations.oauth = { ...oauth,
+      refreshKickToken: async () => ({ accessToken: "fixture-health-access", refreshToken: "fixture-health-refresh",
+        expiresAt: new Date(NOW + 4_000_000), scopes: [] }),
+      subscribeKickEvents: jest.fn(async () => ({ existing: [], created: [] })),
+    };
+    await expect(f.integrations.reconcileProviderHealthOnce()).resolves.toEqual({ checked: 1 });
+    const row = await f.integrations.vault.getConnection("user-1", "kick");
+    expect(row.accessToken).toBe("fixture-health-access");
+    expect(row.scopes).toEqual(streamingConsent ? oauth.STREAMING_SCOPES.kick : oauth.KICK_SCOPES);
+    expect(row.metadata.streamingConsent).toBe(streamingConsent);
+    expect(f.fetchImpl.mock.calls.some(([url]) => String(url).includes("token/introspect"))).toBe(streamingConsent);
+  });
   test("unleased/stale legacy worker cannot replace a streaming grant token", async () => {
     const f = fixture(); await f.connect("kick");
     const row = await f.integrations.vault.getConnection("user-1", "kick");
@@ -235,6 +275,50 @@ describe("central user-owned stream titles", () => {
 });
 
 describe("explicit streaming OAuth purpose", () => {
+  function kickGrant(f, data, scopes = []) {
+    const providerFetch = f.fetchImpl.getMockImplementation();
+    f.fetchImpl.mockImplementation((url, init) => String(url).includes("oauth/token/introspect")
+      ? Response.json({ data }) : providerFetch(url, init));
+    f.integrations.oauth = { ...oauth,
+      exchangeKickCode: async () => ({ accessToken: "fixture-new-access", refreshToken: "fixture-new-refresh",
+        expiresAt: new Date(NOW + 4_000_000), scopes }),
+      subscribeKickEvents: jest.fn(async () => ({ existing: [], created: [] })),
+    };
+  }
+  test.each([[], oauth.KICK_SCOPES, oauth.STREAMING_SCOPES.kick].map((scopes) => [scopes]))(
+    "Kick consent uses the verified introspected grant rather than exchange scopes %j", async (scopes) => {
+      const f = fixture();
+      kickGrant(f, { active: true, token_type: "user", client_id: "own-kick",
+        scope: oauth.STREAMING_SCOPES.kick.join(" ") }, scopes);
+      const begun = await f.integrations.begin("user-1", "kick", { purpose: "streaming" });
+      await expect(f.integrations.complete("kick", { code: "fixture-code",
+        state: new URL(begun.authorizeUrl).searchParams.get("state") }))
+        .resolves.toEqual({ userId: "user-1", platform: "kick" });
+      const row = await f.integrations.vault.getConnection("user-1", "kick");
+      expect(row.scopes).toEqual(oauth.STREAMING_SCOPES.kick);
+      expect(row.metadata.streamingConsent).toBe(true);
+      expect((await f.service.status("user-1")).platforms.find((row) => row.platform === "kick").streamingReady).toBe(true);
+    },
+  );
+  test.each([
+    [{ active: true, token_type: "user", client_id: "own-kick", scope: oauth.KICK_SCOPES.join(" ") }, "streaming_scopes_missing"],
+    [{ active: true, token_type: "user", client_id: "other-client", scope: oauth.STREAMING_SCOPES.kick.join(" ") }, "streaming_client_mismatch"],
+    [{ active: false, token_type: "user", client_id: "own-kick", scope: oauth.STREAMING_SCOPES.kick.join(" ") }, "kick_user_authorization_required"],
+    [{ active: true, token_type: "app", client_id: "own-kick", scope: oauth.STREAMING_SCOPES.kick.join(" ") }, "kick_user_authorization_required"],
+    [{ active: true, token_type: "user", client_id: "own-kick" }, "streaming_scopes_missing"],
+    [null, "kick_user_authorization_required"],
+  ])("a rejected Kick introspection preserves the existing alerts connection %j", async (data, code) => {
+    const f = fixture();
+    await f.connect("kick", { streamingConsent: false }, oauth.KICK_SCOPES);
+    const original = JSON.stringify(f.db.rows.get("user-1:kick"));
+    kickGrant(f, data, oauth.STREAMING_SCOPES.kick);
+    const begun = await f.integrations.begin("user-1", "kick", { purpose: "streaming" });
+    await expect(f.integrations.complete("kick", { code: "fixture-code",
+      state: new URL(begun.authorizeUrl).searchParams.get("state") })).rejects.toMatchObject({ code });
+    expect(JSON.stringify(f.db.rows.get("user-1:kick"))).toBe(original);
+    expect(f.integrations.oauth.subscribeKickEvents).not.toHaveBeenCalled();
+    expect(f.calls.some((call) => call.url.includes("revoke"))).toBe(false);
+  });
   test("default scopes stay unchanged while streaming requests the opt-in additions", async () => {
     const f = fixture();
     for (const platform of ["twitch", "kick", "youtube"]) {
