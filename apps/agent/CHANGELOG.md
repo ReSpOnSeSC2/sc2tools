@@ -2,6 +2,24 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.3
+
+### Fixed - YouTube discovery during consent
+
+- While a YouTube consent you just started is still open in the browser,
+  channel and key discovery keeps trying at a steady pace without using up
+  its automatic retries, so the first attempt after you approve loads the
+  keys. Connecting Twitch or Kick no longer restarts YouTube's retries, and
+  **Refresh connections** reloads the list even when names are already shown.
+- The Streams headline now reports a completed consent, a lost connection or
+  a successful background load instead of asking you to keep waiting.
+- Discovery messages match the connection mode (SC2Tools account or your own
+  Google client), a loading state no longer shows a previous failure's status,
+  a server without stream controls is not retried automatically, and a
+  channel with a single reusable key is told that two are needed. The
+  dropdowns distinguish an automatic retry from an exhausted one, and the
+  zero-key wording no longer appears on the Channel dropdown.
+
 ## 0.18.2
 
 ### Fixed - YouTube channel and key discovery

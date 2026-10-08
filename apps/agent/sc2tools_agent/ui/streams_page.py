@@ -6,7 +6,8 @@ import webbrowser
 
 CATALOG_PLACEHOLDERS = {
     "idle": "Connect YouTube first", "loading": "Loading…",
-    "failed": "Not loaded — press Refresh keys", "ready": "Choose…",
+    "failed": "Not loaded — press Refresh keys", "retrying": "Not loaded yet — retrying…",
+    "ready": "Choose…",
 }
 
 
@@ -562,14 +563,15 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             connected = youtube.get("connected") is True
             catalog = state.get("catalog", {})
             phase = status.get("state") if connected else "idle"
+            if phase == "failed" and status.get("retry_pending") is True:
+                phase = "retrying"
             if phase not in CATALOG_PLACEHOLDERS:
                 phase = "ready" if catalog.get("channels") else "idle"
             placeholder = CATALOG_PLACEHOLDERS[phase]
-            if phase == "ready" and not catalog.get("streams"):
-                placeholder = "No reusable keys found"
-            for combo in (self.channel_combo, self.horizontal_combo, self.portrait_combo):
-                if combo.count() and combo.itemText(0) != placeholder:
-                    combo.setItemText(0, placeholder)
+            key_placeholder = "No reusable keys found" if phase == "ready" and not catalog.get("streams") else placeholder
+            for combo, text in ((self.channel_combo, placeholder), (self.horizontal_combo, key_placeholder), (self.portrait_combo, key_placeholder)):
+                if combo.count() and combo.itemText(0) != text:
+                    combo.setItemText(0, text)
             if not connected:
                 note = "Connect YouTube to load your channel and reusable keys."
             else:

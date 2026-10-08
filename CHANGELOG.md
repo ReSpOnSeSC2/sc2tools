@@ -184,6 +184,16 @@ corresponding GitHub Release.
   rejected permission upgrade preserves the existing notification connection.
 - Connected-account badges distinguish notifications from stream controls;
   paired desktop agents share controls through the same SC2Tools account.
+- **Agent 0.18.3: YouTube discovery stays responsive through consent.** While
+  a YouTube consent just started in the browser is still open, the agent keeps
+  trying to load the channel and keys at a steady pace without spending its
+  bounded retries, so the first attempt after approval loads them; Twitch and
+  Kick consents no longer restart YouTube's retries. The Streams headline
+  reports a completed consent, a lost connection or a successful background
+  load instead of asking the user to keep waiting. Discovery wording matches
+  the connection mode, a loading state no longer carries a previous failure's
+  status, a server without stream controls is not retried automatically, and
+  a channel with one reusable key is told that two are needed.
 - **Agent 0.18.2: YouTube setup dropdowns load on their own.** An account that
   had already approved YouTube stream control showed empty Channel and
   reusable-key dropdowns until Refresh keys was pressed, because the agent
