@@ -13,12 +13,27 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Agent 0.18.5: Kick titles work before going live.** A successful title
+  write remains accepted when Kick's public API omits the title while offline.
+  The agent distinguishes accepted writes from verified readback and keeps a
+  valid account connected when a title check is inconclusive. Permission loss
+  still requires reconnection; failed or ambiguous writes are never reported
+  as accepted. The registered Kick app must enable `channel:write` before
+  that permission can appear on the user's consent screen.
+
 - YouTube session creation and exact-operation recovery accept the provider's
   whole-second scheduled times. Recovery checks the active and upcoming
   inventory instead of traversing a channel's entire historical archive;
   saved creation requests remain durable and are never inserted again.
 
 ### Added
+
+- **YouTube setup defaults in Agent 0.18.5** select the only available channel
+  and suggest distinct reusable keys when their roles are unambiguous. Fresh
+  setup starts with Public visibility, Not made for kids, automatic next-session
+  preparation, and an editable StarCraft II description. Saved choices and
+  descriptions are preserved; setup still requires Save before it can prepare
+  any broadcasts.
 
 - YouTube OBS connection details in Agent 0.18.1 provide a selected reusable
   key's server address and masked stream key with explicit copy controls for

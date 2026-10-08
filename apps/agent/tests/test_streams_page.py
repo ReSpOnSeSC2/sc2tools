@@ -95,19 +95,25 @@ def test_saved_visibility_is_shown_and_unsaved_setup_survives_polling(page):
     assert widget.privacy.currentData() == "private"
 
 
-def test_first_setup_requires_visibility_and_does_not_enable_auto(page, monkeypatch):
+def test_first_setup_defaults_are_form_only_and_saved_by_explicit_action(page, monkeypatch):
     widget, state, app = page
     calls = []
     monkeypatch.setattr(widget, "job", calls.append)
-    widget.audience.setCurrentIndex(widget.audience.findData(False))
-    widget.configure()
+    state["catalog"] = {"channels": [{"id": "channel", "title": "My channel"}],
+                        "streams": [{"id": "h", "title": "SC2ToolsHorizontal"},
+                                    {"id": "v", "title": "VerticalStream"}]}
+    widget.render(state)
     assert calls == []
-    assert "Choose visibility" in widget.notice.text()
-    assert not widget.auto_check.isChecked()
-    widget.privacy.setCurrentIndex(widget.privacy.findData("unlisted"))
+    assert widget.privacy.currentData() == "public"
+    assert widget.audience.currentData() is False
+    assert widget.auto_check.isChecked()
+    assert not widget.setup_dirty
+    assert not widget.prepare_button.isEnabled()
     widget.configure()
-    assert calls[0]["privacy"] == "unlisted"
-    assert calls[0]["auto_rearm"] is False
+    assert calls[0]["privacy"] == "public"
+    assert calls[0]["made_for_kids"] is False
+    assert calls[0]["auto_rearm"] is True
+    assert (calls[0]["channel_id"], calls[0]["horizontal_id"], calls[0]["portrait_id"]) == ("channel", "h", "v")
 
 
 def test_tiktok_buttons_dispatch_explicit_setup_actions(page, monkeypatch):

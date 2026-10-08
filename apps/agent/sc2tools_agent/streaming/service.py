@@ -16,11 +16,13 @@ from .obs_reader import OutputReader, DEFAULT_OUTPUTS
 from .youtube_pair_backend import PairBackend, atomic_json
 from .tiktok_studio import TikTokStudio
 
+DEFAULT_DESCRIPTION = "Live StarCraft II games, ranked matches, and practice.\n\nThanks for watching! Join the chat and enjoy the stream."
+
 DEFAULT_CONFIG = {
     "mode": "separate-events", "runtime_enabled": False, "auto_rearm": False,
     "user_approved_separate_events": False, "existing_reusable_keys_confirmed": False,
     "expected_channel_id": "", "streams": {}, "output_names": DEFAULT_OUTPUTS,
-    "metadata": {"title": "StarCraft II live", "description": "", "vertical_suffix": " | Vertical"},
+    "metadata": {"title": "StarCraft II live", "description": DEFAULT_DESCRIPTION, "vertical_suffix": " | Vertical"},
 }
 # Automatic channel/key discovery retries after a failure are bounded. After
 # the last delay the worker stops retrying until the user refreshes explicitly.
@@ -67,8 +69,16 @@ class StreamService:
         self.directory = Path(state_dir) / "streaming"
         self.directory.mkdir(parents=True, exist_ok=True)
         self.config_path = self.directory / "youtube-button-helper.config.private.json"
-        config = json.loads(self.config_path.read_text(encoding="utf-8")) if self.config_path.exists() else copy.deepcopy(DEFAULT_CONFIG)
+        saved_config = self.config_path.exists()
+        config = json.loads(self.config_path.read_text(encoding="utf-8")) if saved_config else copy.deepcopy(DEFAULT_CONFIG)
         self.backend = backend or PairBackend(self.directory, config=config)
+        self.setup_saved = saved_config or backend is not None
+        self.metadata_saved = bool((saved_config and "metadata" in config)
+            or self.backend.template_path.exists()
+            or self.backend.state.get("metadata_revision", 0) > 0
+            or self.backend.state.get("pair")
+            or self.backend.metadata.get("description") not in {"", DEFAULT_DESCRIPTION}
+            or backend is not None)
         self.reader = output_reader or OutputReader(settings_provider, disabled=no_obs)
         self.backend.output_reader = self._outputs
         self.cloud_client = cloud_client
@@ -111,7 +121,7 @@ class StreamService:
             "reason": "Set title and Go LIVE in LIVE Studio using your horizontal OBS feed."}
         snapshot = {
             "youtube": youtube, "platforms": platforms, "platform_results": copy.deepcopy(self.platform_results),
-            "metadata": copy.deepcopy(self.backend.metadata), "message": self.message,
+            "metadata": copy.deepcopy(self.backend.metadata), "metadata_saved": self.metadata_saved, "message": self.message,
             "catalog": copy.deepcopy(self.catalog), "configured": bool(self.backend.config.get("runtime_enabled")),
             "catalog_status": copy.deepcopy(self.catalog_status),
             "account_mode": self.account_mode,
@@ -121,7 +131,7 @@ class StreamService:
                 "horizontal_id": self.backend.config.get("streams", {}).get("horizontal", {}).get("reusable_stream_id"),
                 "portrait_id": self.backend.config.get("streams", {}).get("portrait", {}).get("reusable_stream_id"),
                 "made_for_kids": self.backend.config.get("streams", {}).get("horizontal", {}).get("made_for_kids"),
-                "auto_rearm": self.backend.config.get("auto_rearm", False),
+                "auto_rearm": self.backend.config.get("auto_rearm", False) if self.setup_saved else None,
                 "output_names": copy.deepcopy(self.backend.config.get("output_names", DEFAULT_OUTPUTS))},
         }
         with self.snapshot_lock:
@@ -186,7 +196,13 @@ class StreamService:
             if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
                 raise invalid
             title = row.get("title") if isinstance(row.get("title"), str) and row.get("title").strip() else "Untitled key"
-            rows.append({"id": row["id"], "title": title, "channel_id": row.get("channel")})
+            public = {"id": row["id"], "title": title, "channel_id": row.get("channel")}
+            for field in ("eligible", "selectable", "available", "bound_elsewhere", "bound_broadcast_id", "stream_status"):
+                if field in row:
+                    public[field] = copy.deepcopy(row[field])
+            if isinstance(row.get("status"), dict) and "streamStatus" in row["status"]:
+                public["status"] = {"streamStatus": row["status"]["streamStatus"]}
+            rows.append(public)
         self.catalog = {
             "channels": [{"id": channel["id"], "title": channel.get("title") if isinstance(channel.get("title"), str) else "YouTube"}],
             "streams": rows,
@@ -282,6 +298,7 @@ class StreamService:
                     raise ValueError("Use a description within 4,808 UTF-8 bytes without angle brackets; space is reserved for the horizontal stream link.")
                 if result.get("future_template_saved") is False:
                     raise ValueError("The title could not be saved locally. Check free disk space, then try again. Platform titles were not changed.")
+                self.metadata_saved = True
                 self.platform_results = {"youtube": {"ok": result.get("ok", False), "message": " ".join(result.get("messages", []))}}
                 for name in ("twitch", "kick"):
                     adapter = self.adapters.get(name)
@@ -291,10 +308,25 @@ class StreamService:
                         try:
                             status = adapter.update_title(title)
                             self.platform_status[name] = status
-                            self.platform_results[name] = {"ok": status.get("title") == title, "message": "Title verified." if status.get("title") == title else "Title has not been verified."}
-                        except Exception:
-                            self.platform_status[name] = {"platform": name, "connected": False, "reason": "Connection could not be verified."}
-                            self.platform_results[name] = {"ok": False, "message": "Title was not verified. Check this platform connection."}
+                            verified = status.get("title") == title and status.get("titleVerified") is not False
+                            offline = (name == "kick" and status.get("titleStatus") == "accepted_offline"
+                                and status.get("accepted") is True and status.get("titleVerified") is False
+                                and status.get("title") == title and status.get("connected") is True)
+                            messages = {"pending": "Title accepted; confirmation is pending.",
+                                "rejected": "Title was rejected. Your account remains connected.",
+                                "unverified": "Title request could not be verified. Check the platform before trying again."}
+                            message = ("Title verified." if verified else
+                                "Title accepted by Kick. Its API hides the title while offline." if offline else
+                                messages.get(status.get("titleStatus"), "Title has not been verified."))
+                            self.platform_results[name] = {"ok": verified or offline, "message": message,
+                                "title_verified": verified, "title_status": status.get("titleStatus", "verified" if verified else "unverified")}
+                        except Exception as error:
+                            # An inconclusive write/readback is not evidence that
+                            # OAuth was revoked. Only explicit authorization loss
+                            # clears a previously verified connection.
+                            if getattr(error, "connection_invalid", False) is True:
+                                self.platform_status[name] = {"platform": name, "connected": False, "reason": "Stream-control permission must be reconnected."}
+                            self.platform_results[name] = {"ok": False, "message": "Title request could not be verified. Check the platform before trying again."}
                 self.platform_results["tiktok"] = {"ok": False, "message": "Copy the title into LIVE Studio."}
                 self.message = "Title saved for future YouTube sessions. See each platform below for the current save result."
             elif kind in {"prepare", "recover"}:
@@ -356,6 +388,7 @@ class StreamService:
                 config["auto_rearm"] = kind == "resume_auto"
                 atomic_json(self.config_path, config)
                 self.backend.config = config
+                self.setup_saved = True
                 self.message = "Automatic next-session preparation is " + ("enabled. Prepare the first session if it is not already armed." if config["auto_rearm"] else "paused.")
             elif kind in {"connect_twitch", "connect_kick"}:
                 try:
@@ -415,6 +448,7 @@ class StreamService:
         config["account_mode"] = mode
         atomic_json(self.config_path, config)
         self.backend.config = config
+        self.setup_saved = True
         self.account_mode = mode
         self.backend.connected = self.backend.writes_enabled = False
         self.backend.api = None
@@ -477,6 +511,7 @@ class StreamService:
                 raise ValueError("Finish both YouTube broadcasts and stop both outputs before changing future visibility. The current channel and keys are preserved.") from None
         atomic_json(self.config_path, config)
         self.backend.config = config
+        self.setup_saved = True
         self.message = "YouTube configured. Prepare session before starting the two Aitum YouTube outputs."
 
     def _connect_cloud(self, platform):

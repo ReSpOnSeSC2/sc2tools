@@ -55,7 +55,7 @@ def test_loading_and_failure_states_are_visible_and_actionable(page):
     assert widget.channel_combo.count() == 1
 
 
-def test_ready_catalog_lists_names_without_preselecting(page):
+def test_ready_catalog_suggests_one_channel_and_unique_named_roles(page):
     widget, state, app = page
     state["youtube"] = {"connected": True}
     state["catalog"] = CATALOG
@@ -64,11 +64,11 @@ def test_ready_catalog_lists_names_without_preselecting(page):
     assert placeholders(widget) == {"Choose…"}
     assert [widget.channel_combo.itemText(i) for i in range(widget.channel_combo.count())] == ["Choose…", "Owned channel"]
     assert [widget.horizontal_combo.itemText(i) for i in range(widget.horizontal_combo.count())] == ["Choose…", "Horizontal key", "Vertical key"]
-    assert widget.channel_combo.currentData() is None
-    assert widget.horizontal_combo.currentData() is None
-    assert widget.portrait_combo.currentData() is None
-    assert widget.privacy.currentData() is None
-    assert widget.audience.currentData() is None
+    assert widget.channel_combo.currentData() == "UCowned"
+    assert widget.horizontal_combo.currentData() == "stream-h"
+    assert widget.portrait_combo.currentData() == "stream-v"
+    assert widget.privacy.currentData() == "public"
+    assert widget.audience.currentData() is False
     assert widget.catalog_note.text() == "Loaded 2 reusable keys for Owned channel."
     assert not widget.prepare_button.isEnabled()
 
@@ -90,7 +90,8 @@ def test_saved_setup_is_shown_once_catalog_loads(page):
     state.update(configured=True, configuration={"channel_id": "UCowned", "horizontal_id": "stream-h", "portrait_id": "stream-v",
                                                  "privacy": "unlisted", "made_for_kids": False, "auto_rearm": False})
     widget.render(state)
-    assert widget.horizontal_combo.currentData() is None, "names are unknown until discovery completes"
+    assert widget.horizontal_combo.currentData() == "stream-h"
+    assert "Unavailable saved key" in widget.horizontal_combo.currentText()
     state["catalog"] = CATALOG
     state["catalog_status"] = {"state": "ready", "message": "Loaded 2 reusable keys for Owned channel.", "attempts": 0, "http_status": None}
     widget.render(state)

@@ -70,6 +70,67 @@ def test_title_save_requires_matching_platform_and_readback():
         cloud.update_title("kick", "New")
 
 
+def kick_title_result(**changes):
+    return {"platform": "kick", "connected": True, "streamingReady": True,
+        "title": "New", "requestedTitle": "New", "observedTitle": "",
+        "accepted": True, "titleVerified": False, "titleStatus": "accepted_offline", "isLive": False, **changes}
+
+
+def test_offline_kick_acceptance_is_explicit_and_does_not_claim_verified_readback():
+    calls = []
+    def transport(method, url, **kwargs):
+        calls.append((method, kwargs["json"]))
+        return response({"platforms": [kick_title_result(access_token="never-return")]})
+    result = client(transport).update_title("kick", "New")
+    assert result["connected"] is True
+    assert result["titleVerified"] is False
+    assert result["titleStatus"] == "accepted_offline"
+    assert "never-return" not in str(result)
+    assert calls == [("POST", {"title": "New", "platforms": ["kick"]})]
+
+
+@pytest.mark.parametrize("changes", [
+    {"accepted": False}, {"isLive": True}, {"isLive": None},
+    {"requestedTitle": "Other"}, {"streamingReady": False},
+])
+def test_offline_exception_does_not_accept_unproven_or_live_title_changes(changes):
+    cloud = client(lambda *args, **kwargs: response({"platforms": [kick_title_result(**changes)]}))
+    with pytest.raises(CloudStreamError, match="title was not verified"):
+        cloud.update_title("kick", "New")
+
+
+def test_stale_online_readback_preserves_readiness_but_is_not_success():
+    cloud = client(lambda *args, **kwargs: response({"platforms": [kick_title_result(
+        title="Old", observedTitle="Old", titleStatus="pending", isLive=True)]}))
+    result = cloud.update_title("kick", "New")
+    assert result["connected"] is True and result["streamingReady"] is True
+    assert result["title"] == "Old" and result["titleVerified"] is False
+    assert result["titleStatus"] == "pending"
+
+
+def test_offline_exception_is_not_used_for_twitch():
+    row = {**kick_title_result(), "platform": "twitch"}
+    cloud = client(lambda *args, **kwargs: response({"platforms": [row]}))
+    with pytest.raises(CloudStreamError):
+        cloud.update_title("twitch", "New")
+
+
+def test_matching_legacy_readback_remains_verified():
+    cloud = client(lambda *args, **kwargs: response({"platforms": [{
+        "platform": "twitch", "title": "New", "streamingReady": True, "updated": True}]}))
+    assert cloud.update_title("twitch", "New")["titleVerified"] is True
+
+
+@pytest.mark.parametrize("invalid", [False, True])
+def test_temporarily_unavailable_title_service_does_not_imply_revoked_oauth(invalid):
+    cloud = client(lambda *args, **kwargs: response({"platforms": [{
+        "platform": "kick", "streamingReady": False, "connected": False,
+        "connectionInvalid": invalid, "title": None}]}))
+    with pytest.raises(CloudStreamError) as failure:
+        cloud.update_title("kick", "New")
+    assert failure.value.connection_invalid is invalid
+
+
 def test_catalog_cannot_change_the_pinned_channel():
     cloud = client(lambda *args, **kwargs: response({"channel": {"id": "other"}, "streams": []}))
     api = CloudGoogleAPI(cloud, lambda: "owned")

@@ -76,6 +76,7 @@ function fixture(db = fakeDb()) {
   const calls = [];
   const other = { category_id: 20, tags: ["Protoss"], channel_description: "Keep this" };
   let wrongIdentity = false, ignoreWrite = false, rejectedWrite = false;
+  let kickIsLive = true, hideKickTitle = false, delayedKickReads = 0, previousKickTitle = null;
   const fetchImpl = jest.fn(async (url, init = {}) => {
     url = String(url); calls.push({ url, init });
     const platform = url.includes("twitch") ? "twitch" : "kick";
@@ -86,12 +87,19 @@ function fixture(db = fakeDb()) {
     if (url.includes("/channels")) {
       if (init.method === "PATCH") {
         if (rejectedWrite) return Response.json({ message: "fixture-private-token-url-title" }, { status: 403 });
+        if (platform === "kick") previousKickTitle = titles.kick;
         if (!ignoreWrite) titles[platform] = JSON.parse(init.body)[platform === "twitch" ? "title" : "stream_title"];
         return new Response(null, { status: 204 });
       }
+      let kickReadback = hideKickTitle ? "" : titles.kick;
+      if (platform === "kick" && previousKickTitle !== null && delayedKickReads > 0) {
+        kickReadback = previousKickTitle;
+        delayedKickReads -= 1;
+      }
       return Response.json({ data: [{ ...other,
         ...(platform === "twitch" ? { broadcaster_id: wrongIdentity ? "999" : "42", title: titles.twitch }
-          : { broadcaster_user_id: wrongIdentity ? 999 : 42, stream_title: titles.kick }) }] });
+          : { broadcaster_user_id: wrongIdentity ? 999 : 42, stream_title: kickReadback,
+            stream: { is_live: kickIsLive, key: "fixture-private-stream-key", url: "fixture-private-ingest" } }) }] });
     }
     throw new Error("Unexpected mock provider URL; no outbound network exists in this suite.");
   });
@@ -100,8 +108,11 @@ function fixture(db = fakeDb()) {
     kick: { clientId: "own-kick", clientSecret: "fixture-secret", redirectUri: "https://api.sc2tools.com/v1/integrations/kick/callback" },
     youtube: { clientId: "own-youtube", clientSecret: "fixture-secret", redirectUri: "https://api.sc2tools.com/v1/integrations/youtube/callback" },
   }, overlayTokens: { list: async () => [] }, fetchImpl, now: () => NOW });
-  const service = new StreamingTitlesService({ integrations });
+  const wait = jest.fn(async () => {});
+  const service = new StreamingTitlesService({ integrations, wait });
   return { db, integrations, service, calls, titles, other, fetchImpl,
+    wait, kickLive(value, hideTitle = false) { kickIsLive = value; hideKickTitle = hideTitle; },
+    delayKickReads(count) { delayedKickReads = count; },
     rejectIdentity() { wrongIdentity = true; }, ignoreWrite() { ignoreWrite = true; }, rejectWrite() { rejectedWrite = true; },
     async connect(platform, metadata = {}, scopes = oauth.STREAMING_SCOPES[platform], expiresAt = new Date(NOW + 4_000_000)) {
       return integrations.vault.saveConnection("user-1", platform, { accessToken: "fixture-access", refreshToken: "fixture-refresh",
@@ -119,6 +130,7 @@ describe("central user-owned stream titles", () => {
     const before = { ...f.other };
     const result = await f.service.updateTitle("user-1", " Shared title 🎮 ");
     expect(result.platforms.every((row) => row.streamingReady && row.title === "Shared title 🎮")).toBe(true);
+    expect(result.platforms.every((row) => row.accepted && row.titleVerified && row.titleStatus === "verified")).toBe(true);
     const writes = f.calls.filter((call) => call.init.method === "PATCH");
     expect(writes.map((call) => JSON.parse(call.init.body))).toEqual(expect.arrayContaining([{ title: "Shared title 🎮" }, { stream_title: "Shared title 🎮" }]));
     expect(f.other).toEqual(before);
@@ -132,6 +144,7 @@ describe("central user-owned stream titles", () => {
       await f.connect("twitch", denied === "consent" ? { streamingConsent: false } : {}, denied === "scope" ? oauth.TWITCH_SCOPES : oauth.STREAMING_SCOPES.twitch);
       const result = await f.service.updateTitle("user-1", "New title", ["twitch"]);
       expect(result.platforms[0].streamingReady).toBe(false);
+      expect(result.platforms[0].connectionInvalid).toBe(true);
       expect(f.calls).toHaveLength(0);
     }
   });
@@ -169,15 +182,141 @@ describe("central user-owned stream titles", () => {
       .toMatchObject({ connected: true, streamingReady: false });
     expect(f.calls).toHaveLength(0);
   });
-  test("write error or stale readback is not retried and private provider detail is suppressed", async () => {
-    for (const failure of ["http", "readback"]) {
+  test("rejected title request retains a verified connection without claiming success or replaying PATCH", async () => {
+    const f = fixture(); await f.connect("kick"); f.rejectWrite();
+    const result = await f.service.updateTitle("user-1", "New", ["kick"]);
+    expect(result.platforms[0]).toMatchObject({ connected: true, streamingReady: true,
+      connectionInvalid: false, accepted: false, updated: false, titleVerified: false, titleStatus: "rejected", title: "Old Kick" });
+    expect(f.calls.filter((call) => call.init.method === "PATCH")).toHaveLength(1);
+    expect(f.wait).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("fixture-private");
+  });
+  test("offline blank readback reports acceptance honestly and keeps Kick ready", async () => {
+    const f = fixture(); await f.connect("kick"); f.kickLive(false, true);
+    const result = await f.service.updateTitle("user-1", "New", ["kick"]);
+    expect(result.platforms[0]).toMatchObject({ connected: true, streamingReady: true,
+      connectionInvalid: false, accepted: true, updated: true, title: "New", requestedTitle: "New", observedTitle: "",
+      isLive: false, titleVerified: false, titleStatus: "accepted_offline" });
+    expect(result.platforms[0].reason).toContain("offline readback is empty");
+    expect(f.titles.kick).toBe("New");
+    expect(f.calls.filter((call) => call.init.method === "PATCH")).toHaveLength(1);
+    expect(f.wait).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain("fixture-private");
+    const status = (await f.service.status("user-1")).platforms.find((row) => row.platform === "kick");
+    expect(status).toMatchObject({ connected: true, streamingReady: true, title: "",
+      isLive: false, titleVerified: false, titleStatus: "unavailable_offline" });
+  });
+  test("offline title is verified only if Kick actually returns the requested title", async () => {
+    const f = fixture(); await f.connect("kick"); f.kickLive(false);
+    const result = await f.service.updateTitle("user-1", "New", ["kick"]);
+    expect(result.platforms[0]).toMatchObject({ accepted: true, titleVerified: true,
+      titleStatus: "verified", title: "New", observedTitle: "New", isLive: false });
+  });
+  test("online stale reads can become verified with bounded GET retries and exactly one PATCH", async () => {
+    const f = fixture(); await f.connect("kick"); f.delayKickReads(2);
+    const result = await f.service.updateTitle("user-1", "New", ["kick"]);
+    expect(result.platforms[0]).toMatchObject({ connected: true, streamingReady: true,
+      accepted: true, titleVerified: true, titleStatus: "verified", title: "New" });
+    expect(f.wait.mock.calls).toEqual([[350], [900]]);
+    expect(f.calls.filter((call) => call.init.method === "PATCH")).toHaveLength(1);
+    expect(f.calls.filter((call) => call.url.includes("/channels") && call.init.method !== "PATCH")).toHaveLength(4);
+  });
+  test("persistent stale readback stays pending with the observed title and a ready connection", async () => {
+    const f = fixture(); await f.connect("kick"); f.ignoreWrite();
+    const result = await f.service.updateTitle("user-1", "New", ["kick"]);
+    expect(result.platforms[0]).toMatchObject({ connected: true, streamingReady: true,
+      accepted: true, updated: true, titleVerified: false, titleStatus: "pending",
+      title: "Old Kick", observedTitle: "Old Kick", requestedTitle: "New" });
+    expect(f.wait).toHaveBeenCalledTimes(2);
+    expect(f.calls.filter((call) => call.init.method === "PATCH")).toHaveLength(1);
+  });
+  test("blank title without an explicit offline flag never claims accepted_offline", async () => {
+    const f = fixture(); await f.connect("kick"); f.kickLive(null, true);
+    const result = await f.service.updateTitle("user-1", "New", ["kick"]);
+    expect(result.platforms[0]).toMatchObject({ connected: true, streamingReady: true,
+      accepted: true, titleVerified: false, titleStatus: "pending", title: "", isLive: null });
+    expect(f.wait).toHaveBeenCalledTimes(2);
+  });
+  test("ambiguous PATCH transport failure never reports acceptance or retries the write", async () => {
+    const f = fixture(); await f.connect("kick");
+    const providerFetch = f.fetchImpl.getMockImplementation();
+    f.fetchImpl.mockImplementation(async (url, init = {}) => {
+      const response = await providerFetch(url, init);
+      if (init.method === "PATCH") throw new Error("fixture-private request failed after provider application");
+      return response;
+    });
+    const result = await f.service.updateTitle("user-1", "New", ["kick"]);
+    expect(result.platforms[0]).toMatchObject({ connected: true, streamingReady: true,
+      accepted: false, updated: false, titleVerified: false, titleStatus: "unverified" });
+    expect(f.titles.kick).toBe("New");
+    expect(f.calls.filter((call) => call.init.method === "PATCH")).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain("fixture-private");
+  });
+  test("unexpected Kick 2xx response cannot stand in for its documented 204 write receipt", async () => {
+    const f = fixture(); await f.connect("kick");
+    const providerFetch = f.fetchImpl.getMockImplementation();
+    f.fetchImpl.mockImplementation(async (url, init = {}) => {
+      const response = await providerFetch(url, init);
+      return init.method === "PATCH" ? Response.json({ message: "fixture-private ambiguous receipt" }) : response;
+    });
+    const result = await f.service.updateTitle("user-1", "New", ["kick"]);
+    expect(result.platforms[0]).toMatchObject({ connected: true, streamingReady: true,
+      accepted: false, updated: false, titleVerified: false, titleStatus: "unverified" });
+    expect(f.calls.filter((call) => call.init.method === "PATCH")).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain("fixture-private");
+  });
+  test("post-PATCH read transport failure stays accepted but unconfirmed without disconnecting", async () => {
+    const f = fixture(); await f.connect("kick");
+    const providerFetch = f.fetchImpl.getMockImplementation();
+    let patched = false;
+    f.fetchImpl.mockImplementation(async (url, init = {}) => {
+      if (String(url).includes("/channels") && init.method !== "PATCH" && patched) throw new Error("fixture-private read timeout");
+      const response = await providerFetch(url, init);
+      if (init.method === "PATCH") patched = true;
+      return response;
+    });
+    const result = await f.service.updateTitle("user-1", "New", ["kick"]);
+    expect(result.platforms[0]).toMatchObject({ connected: true, streamingReady: true,
+      accepted: true, updated: true, titleVerified: false, titleStatus: "pending", title: null,
+      observedTitle: null, requestedTitle: "New" });
+    expect(f.calls.filter((call) => call.init.method === "PATCH")).toHaveLength(1);
+    expect(JSON.stringify(result)).not.toContain("fixture-private");
+  });
+  test.each([{}, { data: [] }, { data: [{ broadcaster_user_id: 42 }] },
+    { data: [{ broadcaster_user_id: 42, stream_title: null }] }])(
+    "incomplete channel observations preserve the verified grant and cannot authorize a write: %j", async (body) => {
       const f = fixture(); await f.connect("kick");
-      if (failure === "http") f.rejectWrite(); else f.ignoreWrite();
+      const providerFetch = f.fetchImpl.getMockImplementation();
+      f.fetchImpl.mockImplementation((url, init = {}) => String(url).includes("/channels")
+        ? Response.json(body) : providerFetch(url, init));
       const result = await f.service.updateTitle("user-1", "New", ["kick"]);
-      expect(result.platforms[0].streamingReady).toBe(false);
-      expect(f.calls.filter((call) => call.init.method === "PATCH")).toHaveLength(1);
-      expect(JSON.stringify(result)).not.toContain("fixture-private");
-    }
+      expect(result.platforms[0]).toMatchObject({ connected: true, streamingReady: true,
+        connectionInvalid: false, accepted: false, updated: false, titleVerified: false,
+        titleStatus: "unverified", title: null });
+      expect(f.fetchImpl.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(false);
+      const status = (await f.service.status("user-1")).platforms.find((row) => row.platform === "kick");
+      expect(status).toMatchObject({ connected: true, streamingReady: true,
+        connectionInvalid: false, title: null, titleVerified: false, titleStatus: "unavailable" });
+    },
+  );
+  test("an actually foreign channel readback invalidates control and cannot authorize a write", async () => {
+    const f = fixture(); await f.connect("kick");
+    const providerFetch = f.fetchImpl.getMockImplementation();
+    f.fetchImpl.mockImplementation((url, init = {}) => String(url).includes("/channels")
+      ? Response.json({ data: [{ broadcaster_user_id: 999, stream_title: "Foreign" }] }) : providerFetch(url, init));
+    const result = await f.service.updateTitle("user-1", "New", ["kick"]);
+    expect(result.platforms[0]).toMatchObject({ connected: false, streamingReady: false,
+      connectionInvalid: true, accepted: false, updated: false, title: null });
+    expect(f.fetchImpl.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(false);
+  });
+  test("lease replacement during delayed verification cannot report the title accepted or ready", async () => {
+    const f = fixture(); await f.connect("kick"); f.ignoreWrite();
+    f.wait.mockImplementation(async () => { f.db.rows.get("user-1:kick").connectionRevision = "replacement"; });
+    const result = await f.service.updateTitle("user-1", "New", ["kick"]);
+    expect(result.platforms[0]).toMatchObject({ connected: false, streamingReady: false,
+      connectionInvalid: false, accepted: false, updated: false, titleVerified: false, title: null });
+    expect(f.calls.filter((call) => call.init.method === "PATCH")).toHaveLength(1);
+    expect(f.wait).toHaveBeenCalledTimes(1);
   });
   test("grant callback executes once even for 401 and does not replay writes", async () => {
     const f = fixture(); await f.connect("kick");
@@ -197,6 +336,8 @@ describe("central user-owned stream titles", () => {
     await expect(second.integrations.withStreamingGrant("user-1", "kick", callback)).rejects.toMatchObject({ code: "streaming_account_busy" });
     await expect(second.integrations._withConnectionLock("user-1", "kick", callback)).rejects.toMatchObject({ code: "streaming_account_busy" });
     expect(callback).not.toHaveBeenCalled();
+    expect((await second.service.updateTitle("user-1", "Title", ["kick"])).platforms[0])
+      .toMatchObject({ streamingReady: false, connectionInvalid: false, accepted: false, titleVerified: false });
     release(); await expect(active).resolves.toBe("ok");
     expect(second.calls).toHaveLength(0);
   });

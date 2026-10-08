@@ -5,6 +5,7 @@ import pytest
 from sc2tools_agent.streaming.obs_reader import OutputReader, DEFAULT_OUTPUTS
 from sc2tools_agent.streaming.service import StreamService
 from sc2tools_agent.streaming.youtube_pair_backend import PairBackend
+from sc2tools_agent.streaming.cloud_client import CloudStreamError, CloudStreamingClient, CloudTitleAdapter
 
 
 class Reader:
@@ -58,6 +59,72 @@ def test_platform_save_reports_partial_failure_and_redacts_error(tmp_path):
     assert result["platform_results"]["twitch"]["ok"] is True
     assert result["platform_results"]["kick"]["ok"] is False
     assert "secret token" not in str(result)
+
+
+@pytest.mark.parametrize("phase, observed, accepted, expected_ok", [
+    ("accepted_offline", "New title", True, True),
+    ("pending", "Old title", True, False),
+    ("unverified", None, False, False),
+])
+def test_cloud_title_outcome_does_not_disconnect_valid_kick(tmp_path, phase, observed, accepted, expected_ok):
+    cloud = CloudStreamingClient(lambda: ("https://api.sc2tools.com", "paired-token"),
+        transport=lambda *args, **kwargs: SimpleNamespace(status_code=200, json=lambda: {"platforms": [{
+            "platform": "kick", "connected": True, "streamingReady": True,
+            "title": observed, "requestedTitle": "New title", "accepted": accepted,
+            "titleVerified": False, "titleStatus": phase, "isLive": False}]}))
+    service = make_service(tmp_path, adapters={"kick": CloudTitleAdapter(cloud, "kick")})
+    service.platform_status["kick"] = {"connected": True, "account": "My channel"}
+    result = service.action({"action": "set_metadata", "title": "New title"})
+    assert result["platforms"]["kick"]["connected"] is True
+    assert result["platform_results"]["kick"]["ok"] is expected_ok
+    assert result["platform_results"]["kick"]["title_verified"] is False
+    assert "Title verified." not in result["platform_results"]["kick"]["message"]
+    assert result["metadata"]["title"] == "New title"
+
+
+@pytest.mark.parametrize("authorization_lost", [False, True])
+def test_title_transport_failure_only_disconnects_on_explicit_authorization_loss(tmp_path, authorization_lost):
+    def fail(title):
+        raise CloudStreamError("private provider error", connection_invalid=authorization_lost)
+    service = make_service(tmp_path, adapters={"kick": SimpleNamespace(update_title=fail)})
+    service.platform_status["kick"] = {"connected": True, "account": "My channel"}
+    result = service.action({"action": "set_metadata", "title": "New title"})
+    assert result["platforms"]["kick"]["connected"] is (not authorization_lost)
+    assert result["platform_results"]["kick"]["ok"] is False
+    assert "private provider" not in str(result)
+
+
+def test_new_setup_has_editable_description_without_persisting_or_preparing(tmp_path):
+    from sc2tools_agent.streaming.service import DEFAULT_DESCRIPTION
+    service = StreamService(tmp_path, lambda: {}, output_reader=Reader())
+    try:
+        status = service.status()
+        assert status["metadata"]["description"] == DEFAULT_DESCRIPTION
+        assert status["metadata_saved"] is False
+        assert status["configuration"]["auto_rearm"] is None
+        assert status["configured"] is False
+        assert service.reader.calls == 0
+        assert not service.config_path.exists()
+        assert not service.backend.template_path.exists()
+    finally:
+        service.close()
+
+
+def test_saved_empty_description_and_manual_next_session_survive_restart(tmp_path):
+    from sc2tools_agent.streaming.youtube_pair_backend import atomic_json
+    directory = tmp_path / "streaming"
+    directory.mkdir()
+    atomic_json(directory / "youtube-button-helper.config.private.json", {
+        "metadata": {"title": "My title", "description": "", "vertical_suffix": " | Vertical"},
+        "auto_rearm": False,
+    })
+    service = StreamService(tmp_path, lambda: {}, output_reader=Reader())
+    try:
+        assert service.status()["metadata_saved"] is True
+        assert service.status()["metadata"]["description"] == ""
+        assert service.status()["configuration"]["auto_rearm"] is False
+    finally:
+        service.close()
 
 
 @pytest.mark.parametrize("title", ["", "x" * 71, "Line\nbreak", "<script>"])

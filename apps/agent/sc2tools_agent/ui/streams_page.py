@@ -3,12 +3,16 @@ from __future__ import annotations
 
 import threading
 import webbrowser
+import re
+import copy
+from collections import Counter
 
 CATALOG_PLACEHOLDERS = {
     "idle": "Connect YouTube first", "loading": "Loading…",
     "failed": "Not loaded — press Refresh keys", "retrying": "Not loaded yet — retrying…",
     "ready": "Choose…",
 }
+DEFAULT_STREAM_DESCRIPTION = "Live StarCraft II games, ranked matches, and practice.\n\nThanks for watching! Join the chat and enjoy the stream."
 
 
 def _WheelGuard(QtCore, parent):
@@ -35,7 +39,9 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.busy = False
             self.title_dirty = False
             self.description_dirty = False
+            self.description_draft = False
             self.setup_dirty = False
+            self.setup_edits = set()
             self.loaded = False
             self.state = {}
             self.action_buttons = []
@@ -401,15 +407,20 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             for combo in (self.channel_combo, self.horizontal_combo, self.portrait_combo, self.privacy, self.audience, self.obs_destination):
                 combo.setFocusPolicy(QtCore.Qt.StrongFocus)
                 combo.installEventFilter(self._wheel_guard)
-            for combo in (self.channel_combo, self.horizontal_combo, self.portrait_combo, self.privacy, self.audience):
-                combo.currentIndexChanged.connect(self._setup_edited)
-            self.auto_check.toggled.connect(self._setup_edited)
-            for field in self.output_inputs.values():
-                field.textEdited.connect(self._setup_edited)
+            for combo, key in ((self.channel_combo, "channel_id"), (self.horizontal_combo, "horizontal_id"), (self.portrait_combo, "portrait_id"), (self.privacy, "privacy"), (self.audience, "made_for_kids")):
+                combo.currentIndexChanged.connect(lambda _index, name=key: self._setup_edited(name))
+            self.auto_check.toggled.connect(lambda _checked: self._setup_edited("auto_rearm"))
+            for scope, field in self.output_inputs.items():
+                field.textEdited.connect(lambda _text, name=scope: self._setup_edited("output_" + name))
             return content
 
-        def _setup_edited(self):
+        def _setup_edited(self, field=None):
             self.setup_dirty = True
+            if field:
+                self.setup_edits.add(field)
+            else:
+                self.setup_edits.update(("channel_id", "horizontal_id", "portrait_id", "privacy", "made_for_kids", "auto_rearm"))
+            self._suggest_catalog_choices()
             self._clear_obs_connection()
             self._buttons()
 
@@ -424,6 +435,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
 
         def _description_edited(self):
             self.description_dirty = True
+            self.description_draft = False
             self._buttons()
 
         def _buttons(self):
@@ -476,10 +488,15 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             if not self.title_dirty:
                 self.title_input.setText(metadata.get("title", ""))
                 self.counter.setText(f"{len(self.title_input.text())} / 70")
-            if not self.description_dirty:
+            saved_description = "description" in metadata and state.get("metadata_saved") is not False
+            if not self.description_dirty or self.description_draft and saved_description:
                 blocked = self.description_input.blockSignals(True)
-                self.description_input.setPlainText(metadata.get("description", ""))
+                description = metadata.get("description")
+                draft = not description and (state.get("metadata_saved") is False or "description" not in metadata)
+                self.description_input.setPlainText(DEFAULT_STREAM_DESCRIPTION if draft else description or "")
                 self.description_input.blockSignals(blocked)
+                self.description_dirty = draft
+                self.description_draft = draft
             self.loaded = True
             self.notice.setText(state.get("message", "Check your stream connections."))
             youtube = state.get("youtube", {})
@@ -529,34 +546,102 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self._render_tiktok(state.get("tiktok", {}))
             catalog = state.get("catalog", {})
             if catalog != getattr(self, "last_catalog", None):
-                self.last_catalog = catalog
+                self.last_catalog = copy.deepcopy(catalog)
                 for combo, rows in ((self.channel_combo, catalog.get("channels", [])), (self.horizontal_combo, catalog.get("streams", [])), (self.portrait_combo, catalog.get("streams", []))):
                     selected = combo.currentData()
+                    selected_text = combo.currentText()
                     blocked = combo.blockSignals(True)
                     combo.clear()
                     combo.addItem("Choose…", None)
                     for row in rows:
                         combo.addItem(row["title"], row["id"])
                     index = combo.findData(selected)
+                    if index < 0 and selected is not None and self.setup_dirty:
+                        combo.addItem(selected_text, selected)
+                        index = combo.findData(selected)
                     if index >= 0:
                         combo.setCurrentIndex(index)
                     combo.blockSignals(blocked)
             self._render_catalog_status(state, youtube)
-            if not self.setup_dirty and state.get("configured"):
+            if not self.setup_dirty:
                 config = state.get("configuration", {})
                 for combo, key in ((self.channel_combo, "channel_id"), (self.horizontal_combo, "horizontal_id"), (self.portrait_combo, "portrait_id"), (self.privacy, "privacy"), (self.audience, "made_for_kids")):
                     blocked = combo.blockSignals(True)
-                    index = combo.findData(config.get(key))
+                    value = config.get(key)
+                    if value is None and key in {"privacy", "made_for_kids"}:
+                        value = "public" if key == "privacy" else False
+                    index = combo.findData(value)
+                    if index < 0 and isinstance(value, str) and value and key in {"channel_id", "horizontal_id", "portrait_id"}:
+                        label = "Unavailable saved channel" if key == "channel_id" else "Unavailable saved key"
+                        combo.addItem(label + " · " + value, value)
+                        index = combo.findData(value)
                     if index >= 0:
                         combo.setCurrentIndex(index)
                     combo.blockSignals(blocked)
                 blocked = self.auto_check.blockSignals(True)
-                self.auto_check.setChecked(config.get("auto_rearm") is True)
+                self.auto_check.setChecked(True if config.get("auto_rearm") is None else config.get("auto_rearm") is True)
                 self.auto_check.blockSignals(blocked)
                 for scope, field in self.output_inputs.items():
                     field.setText(config.get("output_names", {}).get(scope, field.text()))
+            self._suggest_catalog_choices()
             self._sync_obs_details()
             self._buttons()
+
+        def _suggest_catalog_choices(self):
+            """Fill unambiguous form choices without saving or replacing edits."""
+            state = self.state
+            catalog = state.get("catalog", {})
+            config = state.get("configuration", {})
+
+            def choose(combo, value):
+                index = combo.findData(value)
+                if index >= 0:
+                    blocked = combo.blockSignals(True)
+                    combo.setCurrentIndex(index)
+                    combo.blockSignals(blocked)
+
+            channels = {row.get("id") for row in catalog.get("channels", []) if row.get("id")}
+            if self.channel_combo.currentData() is None and "channel_id" not in self.setup_edits and not config.get("channel_id") and len(channels) == 1:
+                choose(self.channel_combo, next(iter(channels)))
+            channel = self.channel_combo.currentData()
+            if not channel or channel not in channels:
+                return
+
+            def eligible(row):
+                status = row.get("status") or {}
+                return (row.get("channel_id") in {None, channel}
+                    and not any(row.get(key) is False for key in ("eligible", "selectable", "available"))
+                    and row.get("bound_elsewhere") is not True and not row.get("bound_broadcast_id")
+                    and row.get("stream_status", status.get("streamStatus") if isinstance(status, dict) else None) != "active")
+
+            inventory = catalog.get("streams", [])
+            counts = Counter(row.get("id") for row in inventory)
+            rows = [row for row in inventory if row.get("id") and counts[row["id"]] == 1 and eligible(row)]
+            roles = {}
+            for row in rows:
+                title = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", row.get("title", "")).lower()
+                horizontal = bool(re.search(r"\b(horizontal|landscape)\b", title))
+                portrait = bool(re.search(r"\b(vertical|portrait)\b", title))
+                roles[row["id"]] = "horizontal_id" if horizontal and not portrait else "portrait_id" if portrait and not horizontal else None
+            combos = {"horizontal_id": self.horizontal_combo, "portrait_id": self.portrait_combo}
+            for key in ("horizontal_id", "portrait_id") * 2:
+                combo = combos[key]
+                other = combos["portrait_id" if key == "horizontal_id" else "horizontal_id"].currentData()
+                if key in self.setup_edits or config.get(key):
+                    continue
+                eligible_ids = {row["id"] for row in rows}
+                if combo.currentData() is not None and (combo.currentData() == other or combo.currentData() not in eligible_ids):
+                    choose(combo, None)
+                if combo.currentData() is not None:
+                    continue
+                candidates = {row["id"] for row in rows if row["id"] != other}
+                named = {identity for identity in candidates if roles.get(identity) == key}
+                if len(named) == 1:
+                    choose(combo, next(iter(named)))
+                elif other is not None and len(candidates) == 1:
+                    identity = next(iter(candidates))
+                    if roles.get(identity) in {None, key}:
+                        choose(combo, identity)
 
         def _render_catalog_status(self, state, youtube):
             status = state.get("catalog_status") or {}
@@ -631,8 +716,10 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             elif "state" in result:
                 if result["action"] == "set_metadata":
                     self.title_dirty = self.description_dirty = False
+                    self.description_draft = False
                 if result["action"] == "configure_youtube":
                     self.setup_dirty = False
+                    self.setup_edits.clear()
                 self.render(result["state"])
             else:
                 self.notice.setText(result.get("error", "Could not verify the operation."))
