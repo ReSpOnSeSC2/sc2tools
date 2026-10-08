@@ -12,8 +12,13 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   after startup, after **Refresh connections**, and within seconds of a
   completed YouTube consent. A failed load is retried three times with
   growing delays and explained in plain words under the dropdowns; after
-  that, **Refresh keys** starts the retries again. Discovery never selects a
-  channel, key, visibility or audience and never marks a destination Ready.
+  that, **Refresh keys** or **Refresh connections** starts the retries
+  again. While a YouTube consent you just started is still open in the
+  browser, attempts stay evenly spaced and never use up those retries, so the
+  first attempt after you approve loads the keys. The headline reports a
+  completed consent or a lost connection instead of asking you to keep
+  waiting. Discovery never selects a channel, key, visibility or audience and
+  never marks a destination Ready.
 - A restarted agent with a saved YouTube setup shows its saved channel and
   keys again, so **OBS connection details** can be fetched without first
   pressing **Refresh keys**.
