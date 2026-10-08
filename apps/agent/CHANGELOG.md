@@ -2,6 +2,24 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.2
+
+### Fixed - YouTube channel and key discovery
+
+- An account already authorized for YouTube stream control showed empty
+  **Channel** and **reusable key** dropdowns until **Refresh keys** was
+  pressed. The Streams page now loads the channel and key names on its own
+  after startup, after **Refresh connections**, and within seconds of a
+  completed YouTube consent. A failed load is retried three times with
+  growing delays and explained in plain words under the dropdowns; after
+  that, **Refresh keys** starts the retries again. Discovery never selects a
+  channel, key, visibility or audience and never marks a destination Ready.
+- A restarted agent with a saved YouTube setup shows its saved channel and
+  keys again, so **OBS connection details** can be fetched without first
+  pressing **Refresh keys**.
+- Scrolling the page with the mouse over an unfocused dropdown no longer
+  changes the channel, key, visibility, audience or OBS destination choice.
+
 ## 0.18.1
 
 ### Added - YouTube connection details for OBS

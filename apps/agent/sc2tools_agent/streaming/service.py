@@ -22,12 +22,33 @@ DEFAULT_CONFIG = {
     "expected_channel_id": "", "streams": {}, "output_names": DEFAULT_OUTPUTS,
     "metadata": {"title": "StarCraft II live", "description": "", "vertical_suffix": " | Vertical"},
 }
+# Automatic channel/key discovery retries after a failure are bounded. After
+# the last delay the worker stops retrying until the user refreshes explicitly.
+CATALOG_RETRY_DELAYS = (15, 60, 180)
+CONSENT_POLL_SECONDS = 5
+CONSENT_POLL_WINDOW = 180
+PLATFORM_CHECK_SECONDS = 60
+CATALOG_IDLE_MESSAGE = "Connect YouTube to load your channel and reusable keys."
+CATALOG_LOADING_MESSAGE = "Loading your YouTube channel and reusable keys…"
 
 
 def shared_title(value):
     if not isinstance(value, str) or not 1 <= len(value.strip()) <= 70 or any(ord(c) < 32 or c in "<>" for c in value):
         raise ValueError("Use a stream title of 1–70 characters without line breaks or angle brackets.")
     return value.strip()
+
+
+def discovery_failure_message(http_status):
+    """Actionable, provider-free explanation for a failed channel/key discovery."""
+    if http_status in {401, 403}:
+        return "YouTube stream-control permission is missing or expired. Connect YouTube again in your browser, then refresh connections."
+    if http_status == 404:
+        return "This SC2Tools server does not provide YouTube stream controls yet."
+    if http_status == 409:
+        return "Another YouTube request for this account is still running. Your channel and keys were not loaded yet."
+    if http_status == 429:
+        return "YouTube request limit reached. Your channel and keys were not loaded yet."
+    return "Your YouTube channel and reusable keys could not be loaded through SC2Tools. Existing selections are unchanged."
 
 
 class StreamService:
@@ -48,6 +69,9 @@ class StreamService:
         self.stop_event = threading.Event()
         self.thread = None
         self.catalog = {"channels": [], "streams": []}
+        self.catalog_status = {"state": "idle", "message": CATALOG_IDLE_MESSAGE, "attempts": 0, "http_status": None}
+        self.next_catalog_attempt = 0
+        self.consent_poll_until = 0
         self.message = "Connect YouTube once, choose your two reusable keys, then prepare a session."
         self.platform_results = {}
         self.platform_status = {}
@@ -77,6 +101,7 @@ class StreamService:
             "youtube": youtube, "platforms": platforms, "platform_results": copy.deepcopy(self.platform_results),
             "metadata": copy.deepcopy(self.backend.metadata), "message": self.message,
             "catalog": copy.deepcopy(self.catalog), "configured": bool(self.backend.config.get("runtime_enabled")),
+            "catalog_status": copy.deepcopy(self.catalog_status),
             "account_mode": self.account_mode,
             "tiktok": copy.deepcopy(self.tiktok_status),
             "configuration": {"privacy": self.backend.config.get("streams", {}).get("horizontal", {}).get("privacy", "public"),
@@ -130,15 +155,84 @@ class StreamService:
         self.backend.connected = True
         self.backend.reset_poll_backoff()
 
-    def _youtube_catalog(self):
+    def _catalog_rows(self):
         api = self.backend.api
+        read = getattr(api, "catalog", None)
+        if callable(read):
+            value = read()
+            return value.get("channel"), value.get("streams")
         channel = api.owned_channel()
-        streams = api.discover_reusable_streams_for_channel(channel["id"])
+        return channel, api.discover_reusable_streams_for_channel(channel["id"])
+
+    def _youtube_catalog(self):
+        channel, streams = self._catalog_rows()
+        invalid = ValueError("YouTube channel and reusable keys could not be verified. Refresh keys to try again.")
+        if not isinstance(channel, dict) or not isinstance(channel.get("id"), str) or not channel["id"] or not isinstance(streams, list):
+            raise invalid
+        rows = []
+        for row in streams:
+            if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not row["id"]:
+                raise invalid
+            title = row.get("title") if isinstance(row.get("title"), str) and row.get("title").strip() else "Untitled key"
+            rows.append({"id": row["id"], "title": title, "channel_id": row.get("channel")})
         self.catalog = {
-            "channels": [{"id": channel["id"], "title": channel["title"]}],
-            "streams": [{"id": row["id"], "title": row["title"], "channel_id": row["channel"]}
-                        for row in streams],
+            "channels": [{"id": channel["id"], "title": channel.get("title") if isinstance(channel.get("title"), str) else "YouTube"}],
+            "streams": rows,
         }
+        self.catalog_status = {"state": "ready", "attempts": 0, "http_status": None,
+            "message": ("Loaded " + str(len(rows)) + " reusable key" + ("" if len(rows) == 1 else "s") + " for " + self.catalog["channels"][0]["title"] + "."
+                        if rows else "No reusable stream keys were found on this channel. Create two in YouTube Studio, then refresh keys.")}
+        self.next_catalog_attempt = 0
+
+    def _reset_catalog(self, message=CATALOG_IDLE_MESSAGE):
+        self.catalog = {"channels": [], "streams": []}
+        self.catalog_status = {"state": "idle", "message": message, "attempts": 0, "http_status": None}
+        self.next_catalog_attempt = 0
+
+    def _discover_youtube(self, *, explicit=False):
+        """Load the authorized channel and its reusable keys; never choose any of them.
+
+        Background callers get bounded retries and an actionable status instead
+        of an exception. Explicit callers (Refresh keys, Save setup) restart the
+        retry budget and receive the same actionable message as a ValueError.
+        """
+        if not self.backend.connected or self.backend.api is None:
+            self._reset_catalog()
+            if explicit:
+                raise ValueError("Connect YouTube and approve stream-control permission first.")
+            return False
+        attempts = 0 if explicit else self.catalog_status.get("attempts", 0)
+        self.catalog_status = {**self.catalog_status, "state": "loading", "message": CATALOG_LOADING_MESSAGE, "attempts": attempts}
+        self._publish()
+        try:
+            self._youtube_catalog()
+            self._publish()
+            return True
+        except Exception as error:
+            attempts += 1
+            status = getattr(error, "http_status", None)
+            status = status if type(status) is int and 100 <= status <= 599 else None
+            message = discovery_failure_message(status)
+            delay = CATALOG_RETRY_DELAYS[attempts - 1] if attempts <= len(CATALOG_RETRY_DELAYS) else None
+            self.next_catalog_attempt = time.monotonic() + delay if delay else float("inf")
+            # Earlier names stay visible for a configured account; a never-loaded catalog stays empty.
+            self.catalog_status = {"state": "failed", "attempts": attempts, "http_status": status,
+                "message": message + (" Retrying automatically." if delay else " Press Refresh keys to try again.")}
+            self._publish()
+            if explicit:
+                raise ValueError(message) from None
+            return False
+
+    def _discovery_due(self, youtube_status):
+        """True when the connected account has no loaded catalog or its channel changed."""
+        if not self.backend.connected or time.monotonic() < self.next_catalog_attempt:
+            return False
+        if self.catalog_status.get("state") == "loading":
+            return False
+        if not self.catalog["channels"]:
+            return True
+        account = youtube_status.get("platformUserId") if isinstance(youtube_status, dict) else None
+        return isinstance(account, str) and bool(account) and self.catalog["channels"][0]["id"] != account
 
     def action(self, payload):
         with self.operations:
@@ -190,10 +284,13 @@ class StreamService:
             elif kind in {"use_local_connections", "use_sc2tools_connections"}:
                 self._change_account_mode("local" if kind == "use_local_connections" else "sc2tools")
             elif kind == "refresh_accounts":
+                # An explicit check restarts the bounded discovery budget.
+                self.next_catalog_attempt = 0
+                self.catalog_status["attempts"] = 0
                 self._refresh_cloud_connections()
                 if self.backend.connected:
                     self.backend.reset_poll_backoff()
-                self.message = "SC2Tools account connections checked."
+                self.message = self._connections_message("SC2Tools account connections checked.")
             elif kind == "import_youtube_client":
                 if self.account_mode != "local":
                     raise ValueError("Choose advanced local account setup first.")
@@ -209,12 +306,12 @@ class StreamService:
                     raise ValueError("Import your own Google Desktop OAuth client JSON first.")
                 authorize_desktop(self.directory, explicit=True)
                 self._attach_youtube()
-                self._youtube_catalog()
+                self._discover_youtube(explicit=True)
                 self.message = "YouTube connected. Choose the channel and distinct horizontal and vertical keys."
             elif kind == "refresh_keys":
                 if not self.backend.connected:
                     self._attach_youtube()
-                self._youtube_catalog()
+                self._discover_youtube(explicit=True)
                 self.message = "Reusable keys refreshed. Keys stay private; this page shows their names."
             elif kind == "fetch_obs_connection":
                 # This secret response goes directly to the requesting control.
@@ -292,7 +389,7 @@ class StreamService:
         self.adapters = {}
         self.platform_status = {}
         self.platform_results = {}
-        self.catalog = {"channels": [], "streams": []}
+        self._reset_catalog()
         self.next_platform_check = 0
         self.message = ("Advanced local account setup enabled. Import an OAuth client you own." if mode == "local"
                         else "SC2Tools account setup enabled. Refresh connections or connect your streaming accounts.")
@@ -320,7 +417,7 @@ class StreamService:
             raise ValueError("Connect YouTube first.")
         if any(value is not False for value in self._outputs().values()):
             raise ValueError("Connect OBS and stop both YouTube outputs before changing keys.")
-        self._youtube_catalog()
+        self._discover_youtube(explicit=True)
         channel = payload.get("channel_id")
         selected = [payload.get("horizontal_id"), payload.get("portrait_id")]
         if channel not in {row["id"] for row in self.catalog["channels"]} or not all(selected) or selected[0] == selected[1]:
@@ -357,8 +454,14 @@ class StreamService:
         url = self.cloud_client.connect(platform)
         if not webbrowser.open(url, new=1):
             raise ValueError("The browser could not open. Try connecting again.")
-        self.next_platform_check = time.monotonic() + 5
-        self.message = "Complete " + platform.title() + " authorization in your browser, then refresh connections."
+        # Poll quickly for a bounded window so the page picks up the consent
+        # result (and, for YouTube, loads the channel and keys) without a click.
+        now = time.monotonic()
+        self.next_platform_check = now + CONSENT_POLL_SECONDS
+        self.consent_poll_until = now + CONSENT_POLL_WINDOW
+        self.next_catalog_attempt = 0
+        self.catalog_status["attempts"] = 0
+        self.message = "Complete " + platform.title() + " authorization in your browser. This page updates automatically once SC2Tools confirms it."
 
     def _refresh_cloud_connections(self):
         if self.account_mode != "sc2tools" or not self.cloud_client:
@@ -375,10 +478,26 @@ class StreamService:
             row = statuses.get(platform, {})
             self.platform_status[platform] = {**row, "connected": row.get("streamingReady") is True}
             self.adapters[platform] = CloudTitleAdapter(self.cloud_client, platform)
-        self.backend.connected = statuses.get("youtube", {}).get("streamingReady") is True
+        youtube = statuses.get("youtube", {})
+        self.backend.connected = youtube.get("streamingReady") is True
         if self.backend.connected:
             self.backend.api = CloudGoogleAPI(self.cloud_client, lambda: self.backend.config.get("expected_channel_id"))
             self.backend.writes_enabled = True
+            # Authorization alone leaves the setup dropdowns empty. Load the
+            # channel and key names here so a restarted or newly consented
+            # account gets an actionable setup screen without an extra click.
+            if self._discovery_due(youtube):
+                self._discover_youtube()
+        elif self.catalog["channels"] or self.catalog_status.get("state") != "idle":
+            self._reset_catalog()
+        self._publish()
+
+    def _connections_message(self, default):
+        if self.backend.connected and self.catalog_status.get("state") == "failed":
+            return self.catalog_status["message"]
+        if self.backend.connected and self.catalog_status.get("state") == "ready" and not self.backend.config.get("runtime_enabled"):
+            return default + " Choose your channel and both reusable keys in YouTube setup, then save."
+        return default
 
     def _connect_title_platform(self, platform, payload):
         from .title_platforms import connect_twitch, connect_kick, load_adapter
@@ -418,10 +537,10 @@ class StreamService:
             if self.account_mode == "sc2tools":
                 try:
                     self._refresh_cloud_connections()
-                    self.message = "SC2Tools streaming connections restored."
+                    self.message = self._connections_message("SC2Tools streaming connections restored.")
                 except Exception as error:
                     self.message = str(error) if isinstance(error, ValueError) else "Reconnect SC2Tools before preparing streams."
-                self.next_platform_check = time.monotonic() + 60
+                self.next_platform_check = time.monotonic() + PLATFORM_CHECK_SECONDS
                 self._publish()
             else:
                 self._restore_local_connections()
@@ -441,7 +560,14 @@ class StreamService:
                     else:
                         for platform, adapter in self.adapters.items():
                             self.platform_status[platform] = adapter.public_status()
-                    self.next_platform_check = time.monotonic() + 60
+                    now = time.monotonic()
+                    self.next_platform_check = now + (CONSENT_POLL_SECONDS if now < self.consent_poll_until else PLATFORM_CHECK_SECONDS)
+                elif (self.backend.connected and self.catalog_status.get("state") == "failed"
+                        and time.monotonic() >= self.next_catalog_attempt):
+                    # Bounded automatic retry of a failed discovery; the UI
+                    # shows the actionable message until it succeeds.
+                    if self._discover_youtube():
+                        self.message = self._connections_message("SC2Tools streaming connections restored.")
                 self._publish()
             except Exception:
                 self.message = "Stream status could not be verified. Existing sessions are preserved."
@@ -467,6 +593,8 @@ class StreamService:
                 self.message = "YouTube session automation restored."
             except Exception:
                 self.message = "Reconnect YouTube before preparing another session."
+            else:
+                self._discover_youtube()
         self._publish()
 
     def close(self):

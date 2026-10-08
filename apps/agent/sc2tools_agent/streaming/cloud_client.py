@@ -135,6 +135,11 @@ class CloudGoogleAPI:
             raise CloudStreamError("YouTube channel and reusable keys could not be verified.")
         return value
 
+    def catalog(self):
+        """One request returning the owned channel and its reusable keys (names only)."""
+        value = self._catalog()
+        return {"channel": value["channel"], "streams": value["streams"]}
+
     def owned_channel(self):
         return self._catalog()["channel"]
 

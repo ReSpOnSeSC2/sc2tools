@@ -184,6 +184,16 @@ corresponding GitHub Release.
   rejected permission upgrade preserves the existing notification connection.
 - Connected-account badges distinguish notifications from stream controls;
   paired desktop agents share controls through the same SC2Tools account.
+- **Agent 0.18.2: YouTube setup dropdowns load on their own.** An account that
+  had already approved YouTube stream control showed empty Channel and
+  reusable-key dropdowns until Refresh keys was pressed, because the agent
+  recognized the authorization without loading the channel catalog. The
+  Streams page now loads the channel and key names after startup, after
+  Refresh connections, and shortly after a completed consent, retries a
+  failed load three times with growing delays, and shows what went wrong in
+  plain words. Nothing is chosen automatically: channel, keys, visibility and
+  audience still require the user's explicit selection and Save. Scrolling
+  the page over an unfocused dropdown no longer changes a saved choice.
 
 - YouTube stream setup reports the provider's HTTP status when its catalog
   cannot be loaded, so support can distinguish a rejected request from a
