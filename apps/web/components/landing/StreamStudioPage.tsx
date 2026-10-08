@@ -17,6 +17,7 @@ import Link from "next/link";
 import { ArrowRight, Download, MessagesSquare, MonitorPlay, Swords, Trophy } from "lucide-react";
 import { PRODUCT_FACTS } from "@/lib/productFacts";
 import { OVERLAY_CREDIT_TEXT } from "@/lib/overlayCredit";
+import { StreamManagerShowcase } from "@/components/landing/StreamManagerShowcase";
 
 interface FeatureGroup {
   title: string;
@@ -296,6 +297,7 @@ export function StreamStudioPage({ tryEnabled }: { tryEnabled: boolean }) {
   return (
     <article className="mx-auto max-w-6xl">
       <Hero />
+      <StreamManagerShowcase className="mt-16 md:mt-20" />
       <Features />
       <Setup />
       <Questions />

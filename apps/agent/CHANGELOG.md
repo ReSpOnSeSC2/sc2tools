@@ -2,6 +2,32 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.0
+
+### Added - stream titles and paired YouTube sessions
+
+- Adds **Streams** to the desktop app. A shared title updates connected
+  YouTube, Twitch and Kick accounts with a separate verified result for each.
+- Prepares independent horizontal and vertical YouTube broadcasts on two
+  existing reusable stream keys. Both are bound before the broadcaster starts;
+  each has its own viewing link and chat. The vertical description links to
+  its horizontal partner.
+- Optional automatic preparation arms after the first successful Prepare.
+  It creates the next pair only after both broadcasts finish and both OBS
+  outputs are confirmed stopped. Unknown or failed creation is preserved for
+  recovery rather than creating duplicate events.
+- Connects through the paired SC2Tools account with an explicit stream-control
+  consent upgrade. Provider credentials stay encrypted on the server; an
+  advanced local OAuth setup uses Windows DPAPI. Linking and initial
+  preparation are explicit.
+- Adds a redesigned stream studio with destination cards, session badges and
+  collapsible YouTube setup. Visibility and audience require explicit selection.
+- Adds TikTok LIVE Studio discovery, explicit launch and OBS virtual-camera
+  controls for the horizontal feed, plus title copying and audio guidance.
+  TikTok title changes and Go LIVE remain in LIVE Studio.
+- Stream monitoring runs on its own worker and OBS connection, independently
+  of the replay pipeline and scene switcher.
+
 ## 0.17.10
 
 ### Fixed - air openings keep their build labels

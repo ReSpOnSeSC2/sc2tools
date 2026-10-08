@@ -37,7 +37,11 @@ function buildPlatformIntegrationsRouter(deps) {
       const session = requireClerk(req);
       const platform = parsePlatform(req.params.platform);
       res.set("Cache-Control", "no-store");
-      res.json(await deps.integrations.begin(session.userId, platform));
+      const purpose = req.body?.purpose === undefined ? "alerts" : req.body.purpose;
+      if (purpose !== "alerts" && purpose !== "streaming") {
+        throw new PlatformIntegrationError(400, "oauth_purpose_invalid", "Unsupported account connection purpose.");
+      }
+      res.json(await deps.integrations.begin(session.userId, platform, { purpose }));
     } catch (err) {
       next(err);
     }

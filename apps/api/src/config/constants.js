@@ -67,6 +67,7 @@ const COLLECTIONS = Object.freeze({
   PLATFORM_CONNECTIONS: "platform_connections",
   PUBLIC_YOUTUBE_ARCHIVES: "public_youtube_archives",
   PLATFORM_OAUTH_STATES: "platform_oauth_states",
+  YOUTUBE_CREATE_OPERATIONS: "youtube_create_operations",
   PLATFORM_WEBHOOK_RECEIPTS: "platform_webhook_receipts",
   PLATFORM_EVENTS: "platform_events",
   ML_MODELS: "ml_models",

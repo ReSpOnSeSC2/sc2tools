@@ -522,8 +522,11 @@ def _run_headless(
     obs_client, obs_scene = _build_obs_switcher(
         state=state, bridge=live_bridge, log=log, no_obs=no_obs,
     )
+    stream_service = _build_stream_service(cfg, state, no_obs=no_obs)
 
     try:
+        if stream_service:
+            stream_service.start()
         upload.start()
         watcher.start()
         # Register the startup sweep as a visible import job when the
@@ -570,6 +573,8 @@ def _run_headless(
         return 1
     finally:
         log.info("agent_stopping")
+        if stream_service:
+            stream_service.close()
         if obs_scene:
             obs_scene.shutdown()
         if obs_client:
@@ -613,6 +618,7 @@ def _run_with_gui(
     # ``--no-obs`` is an authoritative runtime prohibition, including GUI
     # settings changes that arrive after the boot worker has started.
     cell.no_obs = bool(no_obs)
+    stream_service = _build_stream_service(cfg, state, no_obs=no_obs)
     stop_event = threading.Event()
     request_stop_lock = threading.Lock()
     stop_called = {"value": False}
@@ -695,6 +701,8 @@ def _run_with_gui(
         on_obs_build=lambda request: _handle_obs_build(
             cfg=cfg, state=state, request=request, log=log,
         ),
+        stream_status_provider=stream_service.status if stream_service else None,
+        on_stream_action=stream_service.action if stream_service else None,
         on_save_settings=lambda payload: _handle_save_settings(
             cfg, state, payload, cell, log,
         ),
@@ -753,11 +761,15 @@ def _run_with_gui(
         daemon=True,
     )
     worker.start()
+    if stream_service:
+        stream_service.start()
 
     rc = gui.run()
 
     log.info("agent_stopping rc=%s", rc)
     request_stop()
+    if stream_service:
+        stream_service.close()
     if getattr(cell, "obs_scene", None):
         cell.obs_scene.shutdown()
     if getattr(cell, "obs_client", None):
@@ -2716,6 +2728,29 @@ def _build_obs_switcher(
         state.obs_switch_debounce_sec,
     )
     return client, controller
+
+
+def _build_stream_service(cfg, state, *, no_obs=False):
+    """Independent lifecycle worker; never subscribes to scene/game events."""
+    try:
+        from .streaming.service import StreamService
+
+        def obs_settings():
+            port = os.environ.get("SC2TOOLS_OBS_PORT", "").strip()
+            return {
+                "host": os.environ.get("SC2TOOLS_OBS_HOST", "").strip() or state.obs_host,
+                "port": int(port) if port else int(state.obs_port),
+                "password": os.environ.get("SC2TOOLS_OBS_PASSWORD") or state.obs_password or None,
+            }
+
+        from .streaming.cloud_client import CloudStreamingClient
+        cloud = CloudStreamingClient(lambda: (cfg.api_base, state.device_token))
+        return StreamService(cfg.state_dir, obs_settings, no_obs=no_obs, cloud_client=cloud)
+    except Exception:
+        # Do not put credentials, callback URLs or platform responses in the
+        # agent logger / crash reporter. Replay sync and switching continue.
+        logging.getLogger("sc2tools_agent").warning("stream_controls_unavailable")
+        return None
 
 
 class _RuntimeCell:

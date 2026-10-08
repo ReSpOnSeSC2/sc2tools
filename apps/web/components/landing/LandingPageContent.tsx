@@ -23,6 +23,7 @@ import {
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { RealGameShowcase } from "@/components/landing/RealGameShowcase";
 import { GuidesStrip } from "@/components/landing/GuidesStrip";
+import { StreamManagerShowcase } from "@/components/landing/StreamManagerShowcase";
 import { ReplayDemo } from "@/components/landing/ReplayDemo";
 import {
   PracticePreview,
@@ -94,6 +95,14 @@ function LandingHero() {
           </p>
           <HeroCtas />
           <LandingTrustStrip />
+          <Link
+            href="#stream-sessions"
+            className="mt-5 inline-flex min-h-11 items-center gap-2 text-caption font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          >
+            <span className="rounded border border-accent-cyan/30 bg-accent-cyan/5 px-2 py-1 text-micro">Preview</span>
+            Shared titles. Two YouTube formats.
+            <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+          </Link>
         </div>
         <div className="lg:col-span-7">
           <LandingCarousel />
@@ -404,6 +413,7 @@ function StreamChapter() {
       <div className="mt-10">
         <StreamStudioPreview />
       </div>
+      <StreamManagerShowcase className="mt-10" />
       <div className="mt-8">
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>

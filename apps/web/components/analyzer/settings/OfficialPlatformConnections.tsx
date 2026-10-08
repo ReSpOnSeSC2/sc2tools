@@ -12,6 +12,8 @@ type OfficialPlatform = "twitch" | "kick" | "youtube";
 type ConnectionStatus = {
   platform: OfficialPlatform;
   configured: boolean;
+  streamingAvailable?: boolean;
+  streamingConsent?: boolean;
   connected: boolean;
   ready: boolean;
   platformUserName: string;
@@ -54,7 +56,7 @@ export function OfficialPlatformConnections() {
     };
   }, []);
 
-  const connect = async (platform: OfficialPlatform) => {
+  const connect = async (platform: OfficialPlatform, purpose: "alerts" | "streaming" = "alerts") => {
     const baselineConnectedAt = data?.platforms.find(
       (item) => item.platform === platform,
     )?.connectedAt || null;
@@ -74,7 +76,7 @@ export function OfficialPlatformConnections() {
       const result = await apiCall<{ authorizeUrl: string }>(
         getToken,
         `/v1/me/integrations/${platform}/connect`,
-        { method: "POST", body: "{}" },
+        { method: "POST", body: purpose === "streaming" ? JSON.stringify({ purpose }) : "{}" },
       );
       popup.location.replace(result.authorizeUrl);
       let lastPollError: unknown = null;
@@ -103,6 +105,13 @@ export function OfficialPlatformConnections() {
         const completedThisFlow = Boolean(
           row?.connectedAt && row.connectedAt !== baselineConnectedAt,
         );
+        if (purpose === "streaming" && completedThisFlow && row?.connected && row.streamingConsent) {
+          popup.close();
+          toast.success(`${COPY[platform].label} stream controls connected`, {
+            description: "Return to the SC2Tools agent to set your stream title and prepare supported sessions.",
+          });
+          return;
+        }
         if (completedThisFlow && row?.connected && row.ready) {
           popup.close();
           if (row.lastError) {
@@ -143,7 +152,7 @@ export function OfficialPlatformConnections() {
   };
 
   const disconnect = async (platform: OfficialPlatform) => {
-    if (!window.confirm(`Disconnect ${COPY[platform].label} notifications?`)) return;
+    if (!window.confirm(`Disconnect your ${COPY[platform].label} account? This stops its notifications and stream controls.`)) return;
     setBusy(platform);
     try {
       await apiCall(getToken, `/v1/me/integrations/${platform}`, {
@@ -163,10 +172,11 @@ export function OfficialPlatformConnections() {
   return (
     <div className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-3">
       <div>
-        <div className="text-body font-medium text-text">Notification accounts</div>
+        <div className="text-body font-medium text-text">Connected accounts</div>
         <p className="mt-1 text-caption text-text-dim">
-          Connect your own accounts for complete, signed notification coverage.
-          Connections can be removed here; login tokens are encrypted and never sent to OBS.
+          Connect your accounts for notifications. Choose Connect stream controls to
+          let SC2Tools update stream titles and prepare your YouTube broadcasts.
+          You can remove a connection here at any time.
         </p>
       </div>
       {isLoading ? (
@@ -196,24 +206,28 @@ export function OfficialPlatformConnections() {
                     ) : configured ? (
                       <Badge variant="neutral" size="sm">Not connected</Badge>
                     ) : (
-                      <Badge variant="neutral" size="sm">App setup needed</Badge>
+                      <Badge variant="neutral" size="sm">Not available</Badge>
                     )}
                     {connected && row?.platformUserName ? (
                       <span className="text-caption text-text-muted">{row.platformUserName}</span>
                     ) : null}
                   </div>
                   <p className="mt-1 text-caption text-text-dim">{COPY[platform].coverage}</p>
+                  {row?.streamingConsent ? (
+                    <p className="mt-1 text-caption text-success">Stream control permissions connected.</p>
+                  ) : null}
                   {row?.lastError ? (
                     <p className="mt-1 text-caption text-danger">{row.lastError}</p>
                   ) : null}
                 </div>
+                <div className="flex flex-wrap gap-2">
                 {connected ? (
-                  <div className="flex gap-2">
+                  <>
                     <Button
                       size="sm"
                       variant="secondary"
                       disabled={busy !== null}
-                      onClick={() => void connect(platform)}
+                      onClick={() => void connect(platform, row?.streamingConsent ? "streaming" : "alerts")}
                     >
                       Reconnect
                     </Button>
@@ -225,7 +239,7 @@ export function OfficialPlatformConnections() {
                     >
                       Disconnect
                     </Button>
-                  </div>
+                  </>
                 ) : (
                   <Button
                     size="sm"
@@ -236,6 +250,15 @@ export function OfficialPlatformConnections() {
                     {busy === platform ? "Connecting…" : "Connect"}
                   </Button>
                 )}
+                {!row?.streamingConsent ? (
+                  <Button size="sm" variant="secondary"
+                    disabled={!configured || row?.streamingAvailable !== true || busy !== null}
+                    onClick={() => void connect(platform, "streaming")}
+                  >
+                    Connect stream controls
+                  </Button>
+                ) : null}
+                </div>
               </div>
             );
           })}

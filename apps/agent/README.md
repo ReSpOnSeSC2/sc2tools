@@ -99,6 +99,54 @@ agent falls back gracefully to tray+console.
 Closing the window minimises it to the tray (the agent keeps running).
 **Quit** lives on the tray menu - that fully exits the process.
 
+### Streams
+
+The **Streams** page saves one title for your connected YouTube, Twitch and
+Kick accounts and reports whether each current title was verified. TikTok
+LIVE Studio uses **Copy title**; its title and Go LIVE remain in Studio.
+
+The TikTok setup card detects LIVE Studio and checks OBS's main canvas and
+virtual camera. **Open LIVE Studio**, **Start virtual camera**, **Stop camera**
+and **Check setup** are explicit controls. Select **Main Output** in OBS's
+virtual-camera settings and **OBS Virtual Camera** in LIVE Studio's Landscape
+layout. Configure microphone and game audio directly in Studio: the virtual
+camera carries video only. A running camera does not verify the selected
+Studio input or TikTok account, so check the preview and meters before Go LIVE.
+
+Pair the agent with your SC2Tools account, then use **Connect** for each
+platform. Authorize stream-control permission in your system browser once;
+SC2Tools keeps provider credentials encrypted on its server. Existing alert
+connections need this explicit permission upgrade before they can manage
+streams. The agent never asks normal users to register developer apps.
+Choose the authorized YouTube channel and two different existing reusable stream keys.
+Select visibility, audience and the exact OBS output names before saving setup.
+The server must provide the streaming API before these controls can connect.
+SC2Tools never imports OBS login tokens or creates stream keys.
+
+Click **Prepare YouTube session** once while both outputs are stopped. When
+both show **Ready**, start their existing Aitum broadcaster buttons. If enabled,
+SC2Tools prepares the next pair after both broadcasts have ended and both
+outputs have stopped. Keep the agent running in the tray for this feature.
+Each session has separate horizontal and vertical viewing links and chats;
+the vertical description automatically links to its horizontal partner.
+
+An existing pending broadcast on either selected key blocks preparation and
+is preserved. Review that event in YouTube Studio before trying again. An
+uncertain create response also blocks replacement; **Check / recover session**
+can recover a known owned broadcast without inserting another.
+
+**Advanced local setup** remains available for owners using their own OAuth
+apps. Import a Google Desktop client with YouTube Data API v3 enabled. Twitch
+requires a public OAuth client; Kick requires a client with the redirect
+`http://localhost:8768/oauth/kickcallback`. Local connections use Windows DPAPI
+under the agent's `streaming/` directory. Google's external Testing mode can
+expire a local refresh token after seven days; use production consent for
+ongoing use. Public rollout requires Google verification of the added sensitive
+scope and enough shared project quota; packaging alone does not deploy the API.
+
+The controller prepares metadata and sessions; OBS/Aitum sends the video.
+It never starts a stream when the agent launches or when a game changes scenes.
+
 ## Tray menu (right-click the indicator)
 
 | Item | What it does |

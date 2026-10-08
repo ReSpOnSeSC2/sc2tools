@@ -136,12 +136,12 @@ QCheckBox {{
 QFrame#card {{
     background-color: {_SURFACE};
     border: 1px solid {_BORDER};
-    border-radius: 10px;
+    border-radius: 14px;
 }}
 QFrame#cardElevated {{
     background-color: {_ELEVATED};
     border: 1px solid {_BORDER_STRONG};
-    border-radius: 10px;
+    border-radius: 14px;
 }}
 QFrame#cardArchive {{
     background-color: rgba(124, 140, 255, 0.10);
@@ -153,12 +153,12 @@ QFrame#sidebar {{
     border-right: 1px solid {_BORDER};
 }}
 QLabel#h1 {{
-    font-size: 22px;
+    font-size: 26px;
     font-weight: 600;
     color: {_TEXT};
 }}
 QLabel#h2 {{
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 600;
     color: {_TEXT};
 }}
@@ -216,10 +216,10 @@ QPushButton {{
     background-color: {_ELEVATED};
     color: {_TEXT};
     border: 1px solid {_BORDER_STRONG};
-    border-radius: 6px;
-    padding: 7px 14px;
+    border-radius: 8px;
+    padding: 8px 14px;
     font-weight: 500;
-    min-height: 18px;
+    min-height: 20px;
     text-align: center;
 }}
 QPushButton:hover {{
@@ -230,14 +230,14 @@ QPushButton:pressed {{
     background-color: {_BORDER_STRONG};
 }}
 QPushButton#primary {{
-    background-color: {_ACCENT};
+    background-color: {_ACCENT_CYAN};
     color: #0b0d12;
-    border: 1px solid {_ACCENT};
+    border: 1px solid {_ACCENT_CYAN};
     font-weight: 600;
 }}
 QPushButton#primary:hover {{
-    background-color: {_ACCENT_HOVER};
-    border-color: {_ACCENT_HOVER};
+    background-color: #72d8d8;
+    border-color: #72d8d8;
 }}
 QPushButton#danger {{
     border-color: rgba(255, 107, 107, 0.4);
@@ -263,19 +263,19 @@ QPushButton#navItem:hover {{
 QPushButton#navItem:checked {{
     background-color: {_ELEVATED};
     color: {_TEXT};
-    border-left: 3px solid {_ACCENT};
+    border-left: 3px solid {_ACCENT_CYAN};
 }}
 QLineEdit, QComboBox, QPlainTextEdit {{
     background-color: {_ELEVATED};
     color: {_TEXT};
     border: 1px solid {_BORDER_STRONG};
-    border-radius: 6px;
-    padding: 6px 10px;
+    border-radius: 8px;
+    padding: 8px 10px;
     selection-background-color: {_ACCENT};
     selection-color: #0b0d12;
 }}
 QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {{
-    border-color: {_ACCENT};
+    border-color: {_ACCENT_CYAN};
 }}
 QComboBox::drop-down {{
     border: none;
@@ -338,6 +338,125 @@ QScrollBar::handle:vertical:hover {{
 }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
     height: 0;
+}}
+QPushButton:disabled, QPushButton#primary:disabled {{
+    background-color: #141924;
+    color: #606d80;
+    border-color: #202938;
+}}
+QPushButton#quietButton {{
+    background-color: transparent;
+    border: 1px solid transparent;
+    color: #b4c0d0;
+    padding: 6px 10px;
+}}
+QPushButton#quietButton:hover {{
+    background-color: #1d2635;
+    border-color: #334053;
+    color: #edf2f8;
+}}
+QPushButton#quietButton:disabled {{
+    background-color: transparent;
+    color: #596577;
+    border-color: transparent;
+}}
+QWidget#studioContent, QScrollArea#streamStudio {{
+    background-color: #0e131d;
+}}
+QWidget#studioTransparent {{
+    background: transparent;
+}}
+QFrame#studioCard, QFrame#studioDestination {{
+    background-color: #151d2a;
+    border: 1px solid #293548;
+    border-radius: 14px;
+}}
+QFrame#studioCommand {{
+    background-color: #172131;
+    border: 1px solid #344459;
+    border-radius: 16px;
+}}
+QLineEdit#streamTitle {{
+    font-size: 19px;
+    font-weight: 600;
+    background-color: #0e1724;
+    border-color: #35465e;
+    padding: 8px 14px;
+}}
+QLineEdit#streamTitle:focus {{
+    border-color: {_ACCENT_CYAN};
+}}
+QLabel#studioEyebrow {{
+    color: #9dabbf;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+}}
+QLabel#studioCounter {{
+    color: #96a7bb;
+    font-size: 12px;
+}}
+QLabel#studioNotice {{
+    color: #b8c8dc;
+    font-size: 12px;
+}}
+QLabel#studioDestinationTitle {{
+    font-size: 16px;
+    font-weight: 600;
+    color: #f0f4fa;
+}}
+QLabel#canvasLandscape, QLabel#canvasPortrait {{
+    background-color: #1c2c40;
+    border: 1px solid #4b6380;
+    border-radius: 5px;
+    color: #9cbbd6;
+    font-size: 10px;
+    font-weight: 600;
+}}
+QLabel#studioBadge {{
+    background-color: #242e3e;
+    border: 1px solid #344154;
+    border-radius: 8px;
+    padding: 4px 9px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #bcc9da;
+}}
+QLabel#studioBadge[tone="good"] {{
+    background-color: #143b33;
+    border-color: #285b4e;
+    color: #8be5bd;
+}}
+QLabel#studioBadge[tone="live"] {{
+    background-color: #442831;
+    border-color: #78404e;
+    color: #ffabba;
+}}
+QLabel#studioBadge[tone="warning"] {{
+    background-color: #3e3321;
+    border-color: #665132;
+    color: #f3cf8b;
+}}
+QToolButton#studioDisclosureToggle {{
+    background-color: #151d2a;
+    border: 1px solid #293548;
+    border-radius: 10px;
+    color: #aebcd0;
+    text-align: left;
+    padding: 11px 14px;
+    font-weight: 500;
+}}
+QToolButton#studioDisclosureToggle:hover, QToolButton#studioDisclosureToggle:checked {{
+    background-color: #1a2636;
+    border-color: #3a4a60;
+    color: #edf3fa;
+}}
+QComboBox QAbstractItemView {{
+    background-color: #172131;
+    color: {_TEXT};
+    border: 1px solid #344459;
+    selection-background-color: #284b58;
+    selection-color: #ffffff;
 }}
 """
 
@@ -516,6 +635,8 @@ class GuiUI:
         on_quit: Callable[[], None],
         on_obs_probe: Optional[Callable[[str, int, str], dict]] = None,
         on_obs_build: Optional[Callable[[dict], dict]] = None,
+        stream_status_provider: Optional[Callable[[], dict]] = None,
+        on_stream_action: Optional[Callable[[dict], dict]] = None,
         start_minimized: bool = False,
     ) -> None:
         self._version = version
@@ -550,6 +671,8 @@ class GuiUI:
         # the panel degrades to "unavailable".
         self._on_obs_probe = on_obs_probe
         self._on_obs_build = on_obs_build
+        self._stream_status_provider = stream_status_provider
+        self._on_stream_action = on_stream_action
 
         # Lazily populated at start()
         self._app = None
@@ -979,6 +1102,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._stack.addWidget(self._build_recent_tab())
             self._stack.addWidget(self._build_logs_tab())
             self._stack.addWidget(self._build_settings_tab())
+            from .streams_page import build_streams_page
+            self._stack.addWidget(build_streams_page(
+                self, provider=ui._stream_status_provider,
+                handler=ui._on_stream_action, QtCore=QtCore,
+                QtWidgets=QtWidgets,
+            ))
 
         def _build_sidebar(self) -> QtWidgets.QWidget:
             frame = QtWidgets.QFrame()
@@ -993,7 +1122,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             brand.setObjectName("h2")
             layout.addWidget(brand)
 
-            tagline = QtWidgets.QLabel("Local replay sync")
+            tagline = QtWidgets.QLabel("Replays & streaming")
             tagline.setObjectName("dim")
             layout.addWidget(tagline)
 
@@ -1003,7 +1132,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._nav_group.setExclusive(True)
 
             for index, label in enumerate(
-                ["Dashboard", "Recent uploads", "Activity log", "Settings"],
+                ["Dashboard", "Recent uploads", "Activity log", "Settings", "Streams"],
             ):
                 btn = QtWidgets.QPushButton(label)
                 btn.setObjectName("navItem")

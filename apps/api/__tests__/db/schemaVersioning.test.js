@@ -34,6 +34,17 @@ describe("db/schemaVersioning", () => {
     }
   });
 
+  test("initial YouTube ledger records are v1 without changing durable operation identity", () => {
+    const collection = COLLECTIONS.YOUTUBE_CREATE_OPERATIONS;
+    expect(expectedVersion(collection)).toBe(1);
+    for (const kind of ["operation", "quota", "daily_quota", "stream_claim"]) {
+      const legacy = { _id: `legacy-${kind}`, kind, userId: "fixture-owner",
+        operationId: "retained-request-id", nonce: "retained-private-marker", phase: "uncertain" };
+      const expected = { ...legacy, [VERSION_KEY]: 1 };
+      expect(migrateDoc(legacy, collection)).toEqual(expected);
+    }
+  });
+
   test("stampVersion writes _schemaVersion in place", () => {
     const doc = { foo: "bar" };
     stampVersion(doc, TEST);

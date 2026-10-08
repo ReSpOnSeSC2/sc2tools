@@ -183,6 +183,16 @@ describe("public metadata OAuth grant lifecycle", () => {
     expect(narrowed.service.vault.updateTokens).not.toHaveBeenCalled();
   });
 
+  test("force-ssl grants and refreshes retain existing authorized public catalog reads", async () => {
+    const forceSsl = "https://www.googleapis.com/auth/youtube.force-ssl";
+    const fixture = serviceFixture({}, connectedRow({ scopes: [forceSsl], expiresAt: new Date(NOW - 1) }));
+    fixture.refreshYoutubeToken.mockResolvedValue({ accessToken: "refreshed-secret", scopes: [forceSsl] });
+    await expect(fixture.service.resolvePublicYoutubeBroadcasts("user-1", [VIDEO])).resolves.toEqual([metadata()]);
+    expect(fixture.refreshYoutubeToken).toHaveBeenCalledTimes(1);
+    expect(fixture.listPublicYoutubeBroadcasts.mock.calls[0][0]).toBe("refreshed-secret");
+    expect(fixture.current().scopes).toEqual([forceSsl]);
+  });
+
   test("retries an unexpected 401 once using a refresh, then surfaces another failure", async () => {
     const fixture = serviceFixture();
     fixture.listPublicYoutubeBroadcasts.mockRejectedValue(new oauth.PlatformOauthError("youtube_public_broadcasts", "expired", 401));

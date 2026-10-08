@@ -116,7 +116,8 @@ class PlatformCredentialVault {
    *   platformOauthStates: import('mongodb').Collection,
    *   platformWebhookReceipts: import('mongodb').Collection,
    * }} db
-   * @param {{encryptionKey: string|Buffer, now?: () => number}} opts
+   * @param {{encryptionKey: string|Buffer, now?: () => number,
+   * leaseContext?:()=>Record<string,any>|undefined}} opts
    */
   constructor(db, opts) {
     this.connections = db.platformConnections;
@@ -124,6 +125,7 @@ class PlatformCredentialVault {
     this.receipts = db.platformWebhookReceipts;
     this.key = parseTokenEncryptionKey(opts.encryptionKey);
     this.now = opts.now || Date.now;
+    this.leaseContext = opts.leaseContext;
   }
 
   /**
@@ -170,11 +172,25 @@ class PlatformCredentialVault {
       connectedAt: now,
       updatedAt: now,
     }, COLLECTIONS.PLATFORM_CONNECTIONS);
-    await this.connections.updateOne(
-      { userId, platform },
-      { $set: set, $setOnInsert: { createdAt: now } },
-      { upsert: true },
-    );
+    const lease = this.leaseContext?.();
+    try {
+      await this.connections.updateOne(
+        { userId, platform, $or: [
+          { streamingLease: { $exists: false } },
+          { "streamingLease.expiresAt": { $lte: now } },
+          ...(lease?.userId === userId && lease?.platform === platform
+            ? [{ "streamingLease.owner": lease.owner }] : []),
+        ] },
+        { $set: set, $setOnInsert: { createdAt: now } },
+        { upsert: true },
+      );
+    } catch (error) {
+      if (/** @type {any} */ (error)?.code === 11000) {
+        throw Object.assign(new Error("Another stream control operation is using this account. Retry its connection afterward."),
+          { status: 409, code: "streaming_account_busy" });
+      }
+      throw error;
+    }
     return this.statusFromRow(set);
   }
 
@@ -197,6 +213,67 @@ class PlatformCredentialVault {
       metadata:
         row.metadata && typeof row.metadata === "object" ? row.metadata : {},
     };
+  }
+
+  supportsStreamingLeases() {
+    return typeof this.connections.findOneAndUpdate === "function"
+      && typeof this.connections.findOne === "function"
+      && typeof this.connections.updateOne === "function";
+  }
+
+  /** Read coordination metadata only, never decrypt OAuth credentials.
+   * @param {string} userId @param {'twitch'|'kick'|'youtube'} platform
+   */
+  async getStreamingLeaseInfo(userId, platform) {
+    assertPlatform(platform);
+    const row = await this.connections.findOne({ userId, platform, connected: true },
+      { projection: { connectionRevision: 1, "metadata.streamingConsent": 1 } });
+    return row ? { revision: String(row.connectionRevision || ""),
+      streamingConsent: row.metadata?.streamingConsent === true } : null;
+  }
+
+  /** Mongo's atomic row update is the cross-process provider-operation lease.
+   * @param {string} userId @param {'twitch'|'kick'|'youtube'} platform
+   * @param {string} revision @param {number} [durationMs]
+   */
+  async acquireStreamingLease(userId, platform, revision, durationMs = 180_000) {
+    assertPlatform(platform);
+    if (!this.supportsStreamingLeases() || !revision || durationMs !== 180_000) {
+      throw new Error("Streaming coordination is unavailable");
+    }
+    const owner = randomBytes(24).toString("base64url");
+    const now = new Date(this.now());
+    const result = await this.connections.findOneAndUpdate({
+      userId, platform, connected: true, connectionRevision: revision,
+      $or: [{ streamingLease: { $exists: false } },
+        { "streamingLease.expiresAt": { $lte: now } }],
+    }, { $set: { streamingLease: {
+      owner, revision, expiresAt: new Date(now.getTime() + durationMs),
+    } } }, { returnDocument: "after", projection: { _id: 0, streamingLease: 1 } });
+    const row = result && Object.hasOwn(result, "value") ? result.value : result;
+    return row?.streamingLease?.owner === owner ? owner : null;
+  }
+
+  /** @param {string} userId @param {'twitch'|'kick'|'youtube'} platform @param {string} revision @param {string} owner */
+  async streamingLeaseCurrent(userId, platform, revision, owner) {
+    assertPlatform(platform);
+    if (!owner || !revision) return false;
+    const row = await this.connections.findOne({
+      userId, platform, connected: true, connectionRevision: revision,
+      "streamingLease.owner": owner, "streamingLease.revision": revision,
+      "streamingLease.expiresAt": { $gt: new Date(this.now()) },
+    }, { projection: { _id: 1 } });
+    return Boolean(row);
+  }
+
+  /** @param {string} userId @param {'twitch'|'kick'|'youtube'} platform @param {string} owner */
+  async releaseStreamingLease(userId, platform, owner) {
+    assertPlatform(platform);
+    if (!owner) return;
+    // Owner-fenced even if this lease's authorized reconnect replaced the
+    // connection revision. Never remove a subsequent worker's lease.
+    await this.connections.updateOne({ userId, platform, "streamingLease.owner": owner },
+      { $unset: { streamingLease: "" } });
   }
 
   /**
@@ -226,6 +303,7 @@ class PlatformCredentialVault {
       platformUserId: String(row.platformUserId || ""),
       platformUserName: String(row.platformUserName || ""),
       scopes: Array.isArray(row.scopes) ? row.scopes.map(String) : [],
+      streamingConsent: row.metadata?.streamingConsent === true,
       expiresAt: row.expiresAt instanceof Date ? row.expiresAt : null,
       connectedAt: row.connectedAt instanceof Date ? row.connectedAt : null,
       lastSyncedAt: row.metadata?.lastSyncedAt instanceof Date
@@ -329,6 +407,15 @@ class PlatformCredentialVault {
     /** @type {Record<string, any>} */
     const filter = { userId, platform, connected: true };
     if (expectedRevision) filter.connectionRevision = expectedRevision;
+    const lease = this.leaseContext?.();
+    if (lease?.userId === userId && lease?.platform === platform) {
+      filter["streamingLease.owner"] = lease.owner;
+      filter["streamingLease.expiresAt"] = { $gt: new Date(this.now()) };
+    } else {
+      // An unleased legacy worker must not overwrite a newly enabled
+      // streaming grant's rotating refresh token, even after lease expiry.
+      filter["metadata.streamingConsent"] = { $ne: true };
+    }
     const out = await this.connections.updateOne(
       filter,
       { $set: set },
@@ -384,6 +471,8 @@ class PlatformCredentialVault {
    *   userId: string,
    *   platform: 'twitch'|'kick'|'youtube',
    *   redirectUri: string,
+   *   purpose?: 'alerts'|'streaming',
+   *   requiredScopes?: string[],
    *   codeVerifier?: string|null,
    * }} input
    */
@@ -398,6 +487,9 @@ class PlatformCredentialVault {
       userId: input.userId,
       platform: input.platform,
       redirectUri: input.redirectUri,
+      purpose: input.purpose === "streaming" ? "streaming" : "alerts",
+      requiredScopes: Array.isArray(input.requiredScopes)
+        ? input.requiredScopes.filter((scope) => typeof scope === "string").slice(0, 32) : [],
       codeVerifier: input.codeVerifier
         ? encryptSecret(
           input.codeVerifier,
@@ -436,6 +528,8 @@ class PlatformCredentialVault {
     return {
       userId: String(row.userId),
       redirectUri: String(row.redirectUri || ""),
+      purpose: /** @type {'alerts'|'streaming'} */ (row.purpose === "streaming" ? "streaming" : "alerts"),
+      requiredScopes: Array.isArray(row.requiredScopes) ? row.requiredScopes.map(String) : [],
       codeVerifier: row.codeVerifier
         ? decryptSecret(
           row.codeVerifier,

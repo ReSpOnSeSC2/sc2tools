@@ -39,6 +39,36 @@ All routes are mounted under `/v1`.
 | GET    | /v1/overlay-tokens                | clerk        | List overlay tokens           |
 | POST   | /v1/overlay-tokens                | clerk        | Create one                    |
 | DELETE | /v1/overlay-tokens/:token         | clerk        | Revoke                        |
+| GET    | /v1/agent/streaming/status        | clerk/device | Stream-control consent and account status |
+| POST   | /v1/agent/streaming/:platform/connect | clerk/device | Explicit YouTube, Twitch or Kick stream-control consent |
+| POST   | /v1/agent/streaming/title         | clerk/device | Update and verify Twitch/Kick titles |
+| GET    | /v1/streaming/youtube/catalog    | clerk/device | Owned channel and reusable key names; no ingestion credentials |
+| GET    | /v1/streaming/youtube/read        | clerk/device | Owned session status or read-only recovery |
+| POST   | /v1/streaming/youtube/create      | clerk/device | Create once using a durable operation UUID |
+| POST   | /v1/streaming/youtube/bind        | clerk/device | Bind a helper-owned broadcast to an inactive owned key |
+| POST   | /v1/streaming/youtube/metadata    | clerk/device | Update metadata on a helper-owned broadcast |
+
+### Desktop stream controls
+
+Deploy the API and web consent controls before distributing agent 0.18.0.
+These use the existing official OAuth clients and encrypted platform vault.
+Normal notification Connect requests keep their existing scopes; the user
+must separately approve `purpose: "streaming"` to grant YouTube
+`youtube.force-ssl`, Twitch `channel:manage:broadcast` or Kick `channel:write`.
+Ownership always comes from the authenticated user, never a request-body user ID.
+
+Atomic MongoDB coordination is required. The `youtube_create_operations`
+collection retains creation UUIDs and uncertain outcomes; only daily quota
+counters expire. Each user is limited to 20 new creation operations per UTC day
+and 4,096 lifetime UUIDs. Unknown insertion is recovered by its marker rather
+than repeated. Google project quota is shared across users: these per-user
+limits do not replace project quota planning and monitoring.
+
+Google must verify the sensitive YouTube permissions for broad public rollout.
+Keep OAuth consent branding, privacy/data-use disclosures and scope justification
+consistent with the live-broadcast feature. Publishing status **In production**
+does not mean the requested sensitive scopes are verified. A local installer
+does not deploy this server or complete Google's review.
 
 ### Analytics surface (Stage C bucket 1)
 

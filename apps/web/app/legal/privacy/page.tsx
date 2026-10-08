@@ -14,10 +14,10 @@ export const metadata = {
   alternates: { canonical: "/legal/privacy" },
   title: "Privacy Policy — SC2 Tools",
   description:
-    "How SC2 Tools processes replay data and stores private StarCraft II replay files.",
+    "How SC2 Tools processes replay data, connected streaming accounts, and private StarCraft II replay files.",
 };
 
-const LAST_UPDATED = "September 28, 2026";
+const LAST_UPDATED = "2026-10-08";
 const ISSUES_URL = "https://github.com/ReSpOnSeSC2/sc2tools/issues";
 /** Settings tab with export, history deletion and account deletion. */
 const DATA_SETTINGS_HREF = "/settings?tab=backups";
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
       </header>
 
       <p>
-        SC2 Tools is a free, donation-supported analytics tool for StarCraft II
+        SC2 Tools is a free, donation-supported analytics and streaming tool for StarCraft II
         players. This policy explains what data we collect, why, and how you
         can exercise your rights over it.
       </p>
@@ -46,6 +46,7 @@ export default function PrivacyPage() {
       <WhatWeCollect />
       <WhatWeDoNotCollect />
       <WhereDataLives />
+      <ConnectedStreamAccounts />
       <BrowserStoredData />
       <Sharing />
       <CommunityPublishing />
@@ -93,6 +94,7 @@ function WhatWeCollect() {
     <PolicySection title="What we collect">
       <ul className={LIST_CLASS}>
         <AccountAndReplayItems />
+        <ConnectedAccountItem />
         <InstantAnalysisItem />
         <BuildsDeviceAndTelemetryItems />
         <PresenceAndAnalyticsItems />
@@ -139,6 +141,19 @@ function InstantAnalysisItem() {
       usage analytics, Instant Analysis reports only counts, timings, error
       types, and how files were added (for example, drag and drop), never
       file names, player names, or replay contents.
+    </li>
+  );
+}
+
+function ConnectedAccountItem() {
+  return (
+    <li>
+      <strong>Connected streaming accounts.</strong> If you connect YouTube,
+      Twitch, or Kick, we receive the provider account or channel ID, displayed
+      name, approved permissions, and authorization tokens. Enabled features
+      read notification events and stream metadata. If you separately connect
+      stream controls, we process the titles, descriptions, broadcast settings,
+      and stream identifiers needed for the controls you use.
     </li>
   );
 }
@@ -200,7 +215,7 @@ function WhatWeDoNotCollect() {
   return (
     <PolicySection title="What we do NOT collect">
       <ul className={LIST_CLASS}>
-        <li>Anything from outside your Replays folder.</li>
+        <li>Unrelated files on your computer.</li>
         <li>Voice or video.</li>
         <li>Payment information (we don&apos;t take payments).</li>
       </ul>
@@ -224,6 +239,56 @@ function WhereDataLives() {
         and do not make the bucket public. Incomplete temporary uploads are
         not exposed in your library and are covered by a one-day automatic
         expiration rule.
+      </p>
+    </PolicySection>
+  );
+}
+
+function ConnectedStreamAccounts() {
+  return (
+    <PolicySection title="Connected accounts and stream controls">
+      <p>
+        Account connections are optional. Notification connections keep their
+        existing permissions; stream controls require separate approval.
+        YouTube stream controls read your channel and reusable stream names and
+        IDs, prepare horizontal and vertical broadcasts, bind them to your
+        selected streams, and update their titles, descriptions, and settings.
+        Twitch and Kick controls update and verify stream titles. The YouTube
+        permission has a broad provider description, but these controls do not
+        delete your videos or past broadcasts.
+      </p>
+      <p>
+        For the normal SC2Tools account connection, access and refresh tokens
+        are encrypted in the server&apos;s account vault in MongoDB Atlas.
+        The desktop agent uses its paired SC2Tools account to request controls;
+        these provider tokens and the server&apos;s application secrets are
+        not sent to the agent or OBS. We do not receive your provider password
+        or livestream audio or video through these controls. OBS passwords and
+        stream keys remain in OBS or your local configuration. The advanced
+        local OAuth setup uses your own application credentials instead;
+        credentials saved by that Windows agent are protected with Windows
+        per-user encryption and remain on your computer.
+      </p>
+      <p>
+        To avoid creating duplicate YouTube broadcasts after a timeout or
+        restart, we store creation request IDs, requested titles, descriptions
+        and settings, channel and broadcast identifiers, selected stream IDs,
+        operation outcomes, and quota records. Daily quota counters expire
+        automatically. Creation and request-ID records remain until you delete
+        your SC2Tools account and its data; they are not included in account
+        export or restore because restoring them could repeat an operation.
+      </p>
+      <p>
+        Disconnecting an account in Settings removes its saved server
+        authorization and stops future controls through that connection. We
+        also attempt to revoke authorization with the provider; if that
+        provider is unavailable, you can remove access in its account settings.
+        Disconnecting keeps the creation records described above and does not
+        delete or undo anything already published on YouTube, Twitch, or Kick.
+        Local credentials from the advanced setup must be removed from that
+        agent separately. Deleting your SC2Tools account through{" "}
+        <DataSettingsLink /> removes its server connections and creation
+        records. Deleting only replay history does not remove them.
       </p>
     </PolicySection>
   );
@@ -292,11 +357,15 @@ function Sharing() {
   return (
     <PolicySection title="Sharing">
       <p>
-        We do not sell or rent your data. We share it only with the
-        subprocessors above (Clerk for auth, MongoDB Atlas for database
+        We do not sell or rent your data. Services that operate SC2 Tools
+        process it as described above (Clerk for auth, MongoDB Atlas for database
         hosting, Cloudflare R2 for private replay-file storage, Render for
         API hosting, Vercel for the website, Sentry for opt-in crash
-        reporting, and Google Analytics for opt-in usage analytics).
+        reporting, and Google Analytics for opt-in usage analytics). If you
+        connect stream controls, we also send the metadata and control requests
+        you choose to the connected provider. Stream titles, descriptions,
+        and broadcasts may appear on that service according to the visibility
+        and streaming settings you choose.
       </p>
     </PolicySection>
   );
