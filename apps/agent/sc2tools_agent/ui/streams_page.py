@@ -4,6 +4,22 @@ from __future__ import annotations
 import threading
 import webbrowser
 
+CATALOG_PLACEHOLDERS = {
+    "idle": "Connect YouTube first", "loading": "Loading…",
+    "failed": "Not loaded — press Refresh keys", "ready": "Choose…",
+}
+
+
+def _WheelGuard(QtCore, parent):
+    class WheelGuard(QtCore.QObject):
+        """Ignore wheel events on unfocused dropdowns so page scrolling never edits a choice."""
+        def eventFilter(self, watched, event):
+            if event.type() == QtCore.QEvent.Wheel and not watched.hasFocus():
+                event.ignore()
+                return True
+            return False
+    return WheelGuard(parent)
+
 
 def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
     class StreamsPage(QtWidgets.QScrollArea):
@@ -283,9 +299,13 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.channel_combo = QtWidgets.QComboBox()
             self.horizontal_combo = QtWidgets.QComboBox()
             self.portrait_combo = QtWidgets.QComboBox()
+            for combo in (self.channel_combo, self.horizontal_combo, self.portrait_combo):
+                combo.addItem("Choose…", None)
             setup.addRow("Channel", self.channel_combo)
             setup.addRow("Horizontal reusable key", self.horizontal_combo)
             setup.addRow("Vertical reusable key", self.portrait_combo)
+            self.catalog_note = self._label("Connect YouTube to load your channel and reusable keys.", True)
+            setup.addRow("", self.catalog_note)
             self.privacy = QtWidgets.QComboBox()
             for text, data in (("Choose visibility…", None), ("Unlisted (for testing)", "unlisted"), ("Private", "private"), ("Public", "public")):
                 self.privacy.addItem(text, data)
@@ -374,6 +394,12 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             desc.addLayout(description_actions)
             layout.addWidget(description_section)
             layout.addStretch()
+            # Scrolling the page over an unfocused dropdown must never change a
+            # saved choice (channel, key, visibility, audience, destination).
+            self._wheel_guard = _WheelGuard(QtCore, self)
+            for combo in (self.channel_combo, self.horizontal_combo, self.portrait_combo, self.privacy, self.audience, self.obs_destination):
+                combo.setFocusPolicy(QtCore.Qt.StrongFocus)
+                combo.installEventFilter(self._wheel_guard)
             for combo in (self.channel_combo, self.horizontal_combo, self.portrait_combo, self.privacy, self.audience):
                 combo.currentIndexChanged.connect(self._setup_edited)
             self.auto_check.toggled.connect(self._setup_edited)
@@ -514,6 +540,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                     if index >= 0:
                         combo.setCurrentIndex(index)
                     combo.blockSignals(blocked)
+            self._render_catalog_status(state, youtube)
             if not self.setup_dirty and state.get("configured"):
                 config = state.get("configuration", {})
                 for combo, key in ((self.channel_combo, "channel_id"), (self.horizontal_combo, "horizontal_id"), (self.portrait_combo, "portrait_id"), (self.privacy, "privacy"), (self.audience, "made_for_kids")):
@@ -529,6 +556,26 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                     field.setText(config.get("output_names", {}).get(scope, field.text()))
             self._sync_obs_details()
             self._buttons()
+
+        def _render_catalog_status(self, state, youtube):
+            status = state.get("catalog_status") or {}
+            connected = youtube.get("connected") is True
+            catalog = state.get("catalog", {})
+            phase = status.get("state") if connected else "idle"
+            if phase not in CATALOG_PLACEHOLDERS:
+                phase = "ready" if catalog.get("channels") else "idle"
+            placeholder = CATALOG_PLACEHOLDERS[phase]
+            if phase == "ready" and not catalog.get("streams"):
+                placeholder = "No reusable keys found"
+            for combo in (self.channel_combo, self.horizontal_combo, self.portrait_combo):
+                if combo.count() and combo.itemText(0) != placeholder:
+                    combo.setItemText(0, placeholder)
+            if not connected:
+                note = "Connect YouTube to load your channel and reusable keys."
+            else:
+                note = status.get("message") if isinstance(status.get("message"), str) else ""
+            self.catalog_note.setText(note)
+            self.catalog_note.setVisible(bool(note))
 
         def _render_tiktok(self, status):
             installed, running = status.get("installed"), status.get("running")
