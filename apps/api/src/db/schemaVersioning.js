@@ -189,6 +189,13 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.YOUTUBE_CREATE_OPERATIONS]: {
+    collection: COLLECTIONS.YOUTUBE_CREATE_OPERATIONS,
+    // Initial durable operation, quota and reusable-stream claim records.
+    // Unstamped records from the initial writer are already the same v1 shape.
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   [COLLECTIONS.PLATFORM_WEBHOOK_RECEIPTS]: {
     collection: COLLECTIONS.PLATFORM_WEBHOOK_RECEIPTS,
     currentVersion: 1,

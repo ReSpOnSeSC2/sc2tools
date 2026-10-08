@@ -54,6 +54,7 @@ suite("actual MongoDB ledger operator contracts (cached local binary only)", () 
     expect(calls).toBe(1);
     expect(results.some((result) => result.phase === "succeeded")).toBe(true);
     expect(await collection.countDocuments({ kind: "operation" })).toBe(1);
+    expect(await collection.countDocuments({ _schemaVersion: 1 })).toBe(3);
     expect((await ledger.execute(args, async () => { throw Error("No replay insert"); })).broadcast.id).toBe("owned-one");
     const indexes = await collection.indexes();
     expect(indexes.find((index) => index.name === "youtube_create_user_operation").unique).toBe(true);
@@ -83,6 +84,7 @@ suite("actual MongoDB ledger operator contracts (cached local binary only)", () 
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
     const reservation = await collection.findOne({ kind: "stream_claim" });
+    expect(reservation._schemaVersion).toBe(1);
     const nextId = reservation.broadcastId === "owned-one" ? "owned-two" : "owned-one";
     await expect(ledger.claimStream({ ...base, broadcastId: nextId }, async () => false)).rejects.toMatchObject({ code: "youtube_stream_reserved" });
     await expect(ledger.claimStream({ ...base, broadcastId: nextId }, async (previousId) => previousId === reservation.broadcastId)).resolves.toBe(true);

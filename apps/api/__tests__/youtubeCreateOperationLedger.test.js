@@ -7,6 +7,8 @@ const testCase = globalThis.test || require("node:test").test;
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
 const { buildYoutubeCreateLedger } = require("../src/services/youtubeCreateOperationLedger");
+const { COLLECTIONS } = require("../src/config/constants");
+const { expectedVersion, VERSION_KEY } = require("../src/db/schemaVersioning");
 
 // JSON fixtures stay in the Jest VM realm; structuredClone returns host-realm
 // prototypes and would exercise class rejection instead of intent identity.
@@ -96,6 +98,49 @@ function setup(options = {}) {
   const collection = new AtomicMemoryCollection();
   return { collection, ledger: buildYoutubeCreateLedger({ collection, ...options }) };
 }
+
+testCase("fresh ledger kinds carry schema metadata without changing provider payload or request identity", async () => {
+  const { collection, ledger } = setup();
+  const request = args(), originalIntent = clone(request.intent);
+  let providerContext;
+  const result = await ledger.execute(request, async (context) => {
+    providerContext = context; return candidate(context);
+  });
+  await ledger.claimStream({ userId: request.userId, expectedChannelId: request.expectedChannelId,
+    broadcastId: result.broadcast.id, streamId: "reusable-stream" }, async () => false);
+  const rows = [...collection.rows.values()];
+  assert.deepEqual(rows.map((row) => row.kind).sort(), ["daily_quota", "operation", "quota", "stream_claim"]);
+  for (const row of rows) assert.equal(row[VERSION_KEY], expectedVersion(COLLECTIONS.YOUTUBE_CREATE_OPERATIONS));
+  assert.deepEqual(request.intent, originalIntent);
+  assert.deepEqual(clone(providerContext.intent), originalIntent);
+  assert.equal(providerContext[VERSION_KEY], undefined);
+  assert.equal(result[VERSION_KEY], undefined);
+  const operation = rows.find((row) => row.kind === "operation");
+  const permanentQuota = rows.find((row) => row.kind === "quota");
+  assert.equal(permanentQuota.intentHashes[request.operationId], operation.intentHash);
+  assert.equal((await ledger.execute(request, async () => { throw Error("No repeated provider insert"); })).broadcast.id, result.broadcast.id);
+});
+
+testCase("unstamped initial v1 operations retain uncertainty, recover by marker, and never reinsert", async () => {
+  const { collection, ledger } = setup();
+  const request = args(); let providerContext, inserts = 0;
+  const first = await ledger.execute(request, async (context) => {
+    inserts++; providerContext = context; throw Error("Unknown provider outcome");
+  });
+  assert.equal(first.phase, "uncertain");
+  for (const row of collection.rows.values()) delete row[VERSION_KEY];
+  const originalRows = clone([...collection.rows.values()]);
+  const restarted = buildYoutubeCreateLedger({ collection });
+  assert.equal((await restarted.execute(request, async () => { inserts++; })).phase, "uncertain");
+  assert.deepEqual(clone([...collection.rows.values()]), originalRows);
+  const recovered = await restarted.reconcile(request, async (context) => {
+    assert.deepEqual(context, providerContext); return [candidate(context)];
+  });
+  assert.equal(recovered.phase, "succeeded");
+  assert.equal((await restarted.execute(request, async () => { inserts++; })).broadcast.id, recovered.broadcast.id);
+  assert.equal(inserts, 1);
+  assert.equal([...collection.rows.values()].find((row) => row.kind === "quota").count, 1);
+});
 
 testCase("atomic daily admission caps new operations, replays count once and next day opens new slots", async () => {
   let now = Date.parse("2026-10-08T00:00:00Z");

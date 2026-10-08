@@ -1,6 +1,8 @@
 "use strict";
 
 const { createHash, randomBytes, randomUUID } = require("crypto");
+const { COLLECTIONS } = require("../config/constants");
+const { stampVersion } = require("../db/schemaVersioning");
 
 const DEFAULT_MAX_OPERATIONS = 4096;
 const DEFAULT_MAX_DAILY_OPERATIONS = 20;
@@ -205,9 +207,9 @@ function buildYoutubeCreateLedger(deps) {
   /** @param {ReturnType<typeof normalizeArgs>} args */
   async function admit(args) {
     try {
-      await collection.updateOne({ _id: args.quotaId }, { $setOnInsert: {
+      await collection.updateOne({ _id: args.quotaId }, { $setOnInsert: stampVersion({
         kind: "quota", userId: args.userId, operationIds: [], intentHashes: {}, count: 0,
-      } }, { ...WRITE_OPTIONS, upsert: true });
+      }, COLLECTIONS.YOUTUBE_CREATE_OPERATIONS) }, { ...WRITE_OPTIONS, upsert: true });
     } catch (error) {
       if (/** @type {any} */ (error)?.code !== 11000) throw error;
     }
@@ -236,10 +238,10 @@ function buildYoutubeCreateLedger(deps) {
     const day = new Date(now()).toISOString().slice(0, 10);
     const quotaId = `yt-create-day:${digest(args.userId)}:${day}`;
     try {
-      await collection.updateOne({ _id: quotaId }, { $setOnInsert: {
+      await collection.updateOne({ _id: quotaId }, { $setOnInsert: stampVersion({
         kind: "daily_quota", userId: args.userId, day, count: 0, operationIds: [], intentHashes: {},
         dailyExpiresAt: new Date(now() + 32 * 24 * 60 * 60_000),
-      } }, { ...WRITE_OPTIONS, upsert: true });
+      }, COLLECTIONS.YOUTUBE_CREATE_OPERATIONS) }, { ...WRITE_OPTIONS, upsert: true });
     } catch (error) { if (/** @type {any} */ (error)?.code !== 11000) throw error; }
     const admitted = await collection.updateOne({
       _id: quotaId, kind: "daily_quota", userId: args.userId,
@@ -285,10 +287,10 @@ function buildYoutubeCreateLedger(deps) {
     if (existing) { assertSameIntent(existing, args); return publicResult(existing); }
     await admitDaily(args);
     await admit(args);
-    const row = {
+    const row = stampVersion({
       ...args, kind: "operation", phase: "creating", owner: randomUUID(),
       nonce: randomBytes(16).toString("hex"), createdAt: new Date(now()), updatedAt: new Date(now()),
-    };
+    }, COLLECTIONS.YOUTUBE_CREATE_OPERATIONS);
     if (Buffer.byteLength(row.intent.snippet.description + privateContext(row).marker, "utf8") > 5000) {
       throw new YoutubeCreateOperationError("youtube_description_marker_too_large", 400);
     }
@@ -409,7 +411,7 @@ function buildYoutubeCreateLedger(deps) {
     const owned = await getOwnedBroadcast(args);
     if (!owned || typeof args.streamId !== "string" || !PROVIDER_ID.test(args.streamId)) throw new YoutubeCreateOperationError("youtube_broadcast_not_owned", 403);
     const _id = `yt-stream-claim:${digest(`${args.userId}\0${args.expectedChannelId}\0${args.streamId}`)}`;
-    const fresh = { _id, kind: "stream_claim", userId: args.userId, expectedChannelId: args.expectedChannelId, streamId: args.streamId, broadcastId: args.broadcastId, updatedAt: new Date(now()) };
+    const fresh = stampVersion({ _id, kind: "stream_claim", userId: args.userId, expectedChannelId: args.expectedChannelId, streamId: args.streamId, broadcastId: args.broadcastId, updatedAt: new Date(now()) }, COLLECTIONS.YOUTUBE_CREATE_OPERATIONS);
     try { await collection.insertOne(fresh, WRITE_OPTIONS); return true; } catch (error) {
       if (/** @type {any} */ (error)?.code !== 11000) throw error;
     }
