@@ -117,6 +117,17 @@ describe("services/overlayLive — sample payloads", () => {
     expect(p.headToHead).toBeDefined();
   });
 
+  test("multichat sample includes its session score without other widget fields", () => {
+    const p = OverlayLiveService.buildSamplePayload("multichat");
+    expect(p.session).toMatchObject({
+      wins: expect.any(Number),
+      losses: expect.any(Number),
+    });
+    expect(p.streak).toBeUndefined();
+    expect(p.topBuilds).toBeUndefined();
+    expect(p.scouting).toBeUndefined();
+  });
+
   test("buildSamplePayload('ghost-build') does not fall back to Test all", () => {
     const p = OverlayLiveService.buildSamplePayload("ghost-build");
     // The coach target lives in the Browser Source's ?ghost= param; it

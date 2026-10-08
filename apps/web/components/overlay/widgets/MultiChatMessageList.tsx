@@ -12,6 +12,7 @@
  *   rows      — single line: chip · badges · name · text
  *   two-line  — name line above the message text (Twitch-app style)
  *   bubbles   — one rounded card per message
+ *   framed    — full-width square cards for the classic broadcast look
  *
  * All styling derives from the sanitized ChatAppearance; entry
  * animations are injected once per list (not per row) and respect
@@ -187,6 +188,7 @@ function EventRow({
       data-testid="mc-event-row"
       aria-label={accessibleDetail}
       style={{
+        flexShrink: 0,
         alignSelf,
         width: appearance.align === "right" ? "min(92%, 520px)" : undefined,
         maxWidth: "100%",
@@ -364,7 +366,7 @@ function MessageRow({
   ) : null;
 
   const name = (
-    <span style={{ color: nameColor, fontWeight: 700, textShadow }}>
+    <span style={{ color: nameColor, fontWeight: 700, textShadow, minWidth: 0, overflowWrap: "anywhere" }}>
       {message.user}
     </span>
   );
@@ -397,7 +399,7 @@ function MessageRow({
   const text = (
     <span
       style={{
-        color: "var(--ov-text, rgba(255,255,255,0.92))",
+        color: appearance.messageColor,
         overflowWrap: "anywhere",
         fontWeight,
         textShadow,
@@ -423,6 +425,7 @@ function MessageRow({
       <div
         className="mc-msg"
         style={{
+          flexShrink: 0,
           display: "flex",
           alignItems: "baseline",
           gap: 6,
@@ -468,11 +471,31 @@ function MessageRow({
     </div>
   );
 
+  if (appearance.layout === "framed") {
+    return (
+      <div
+        className="mc-msg"
+        style={{
+          flexShrink: 0,
+          alignSelf,
+          width: "100%",
+          boxSizing: "border-box",
+          border: "1px solid #314328",
+          borderRadius: 0,
+          padding: "8px 10px",
+        }}
+      >
+        {twoLine}
+      </div>
+    );
+  }
+
   if (appearance.layout === "bubbles") {
     return (
       <div
         className="mc-msg"
         style={{
+          flexShrink: 0,
           alignSelf: alignSelf ?? "flex-start",
           maxWidth: "92%",
           background: "rgba(255,255,255,0.07)",
@@ -488,7 +511,7 @@ function MessageRow({
 
   // two-line
   return (
-    <div className="mc-msg" style={{ alignSelf }}>
+    <div className="mc-msg" style={{ alignSelf, flexShrink: 0 }}>
       {twoLine}
     </div>
   );

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
+import type { ComponentProps } from "react";
 import {
   MultiChatWidget,
   useMultichatConfig,
@@ -7,6 +8,7 @@ import {
 } from "../MultiChatWidget";
 import { DEFAULT_APPEARANCE } from "@/lib/multichat/appearance";
 import { DEFAULT_ALERTS } from "@/lib/multichat/alerts";
+import { TEST_DURATION_MS } from "@/components/overlay/widgetLifecycle";
 import type { MultichatConfig } from "@/lib/multichat/types";
 import type { MultiChatState } from "@/lib/multichat/useMultiChat";
 
@@ -97,8 +99,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function renderWidget() {
-  const view = render(<MultiChatWidget token="tok_test" />);
+async function renderWidget(props: Partial<ComponentProps<typeof MultiChatWidget>> = {}) {
+  const view = render(<MultiChatWidget token="tok_test" {...props} />);
   // Let the config fetch promise chain settle.
   await act(async () => {
     await Promise.resolve();
@@ -132,6 +134,140 @@ function requireLoadedConfig(config: LoadedConfig | null): LoadedConfig {
 }
 
 describe("MultiChatWidget", () => {
+  it("updates the optional score from the authoritative cloud session", async () => {
+    mockConfig.config = {
+      twitch: { enabled: true, channel: "me" },
+      appearance: { ...DEFAULT_APPEARANCE, showSessionScore: true },
+    };
+    const view = await renderWidget({
+      session: { wins: 3, losses: 2, games: 5 },
+      live: { session: { wins: 99, losses: 99, games: 198 } },
+    });
+    expect(screen.getByLabelText("Session record: 3 wins, 2 losses")).toBeTruthy();
+
+    view.rerender(
+      <MultiChatWidget
+        token="tok_test"
+        session={{ wins: 4, losses: 2, games: 6 }}
+        live={{ session: { wins: 99, losses: 99, games: 198 } }}
+      />,
+    );
+    expect(screen.getByLabelText("Session record: 4 wins, 2 losses")).toBeTruthy();
+  });
+
+  it("keeps normal chat without a score and shows a neutral value when enabled without session data", async () => {
+    mockConfig.config = { twitch: { enabled: true, channel: "me" } };
+    const normal = await renderWidget({ session: { wins: 0, losses: 0, games: 0 } });
+    expect(screen.queryByTestId("mc-session-score")).toBeNull();
+    normal.unmount();
+
+    mockConfig.config = {
+      twitch: { enabled: true, channel: "me" },
+      appearance: { ...DEFAULT_APPEARANCE, showSessionScore: true },
+    };
+    const scoreView = await renderWidget({
+      live: { session: { wins: 99, losses: 99, games: 198 } },
+    });
+    expect(screen.getByLabelText("Session record unavailable")).toBeTruthy();
+    scoreView.rerender(
+      <MultiChatWidget token="tok_test" session={{ wins: 0, losses: 0, games: 0 }} />,
+    );
+    expect(screen.getByLabelText("Session record: 0 wins, 0 losses")).toBeTruthy();
+  });
+
+  it("does not adopt demo scores or chat targeted at another widget", async () => {
+    mockConfig.config = {
+      twitch: { enabled: true, channel: "me" },
+      appearance: { ...DEFAULT_APPEARANCE, showSessionScore: true },
+    };
+    await renderWidget({
+      session: { wins: 3, losses: 2, games: 5 },
+      live: {
+        isTest: true,
+        testWidget: "session",
+        session: { wins: 99, losses: 99, games: 198 },
+      },
+    });
+    expect(screen.getByLabelText("Session record: 3 wins, 2 losses")).toBeTruthy();
+    expect(screen.queryByText("TestViewer")).toBeNull();
+  });
+
+  it("restores the real session immediately after stopping a score and chat demo", async () => {
+    vi.useFakeTimers();
+    mockConfig.config = {
+      twitch: { enabled: true, channel: "me" },
+      appearance: { ...DEFAULT_APPEARANCE, showSessionScore: true },
+    };
+    const view = await renderWidget({
+      session: { wins: 3, losses: 2, games: 5 },
+      live: {
+        isTest: true,
+        testWidget: "multichat",
+        session: { wins: 0, losses: 4, games: 4 },
+      },
+    });
+    expect(screen.getByLabelText("Session record: 0 wins, 4 losses")).toBeTruthy();
+    expect(screen.getByText("TestViewer")).toBeTruthy();
+
+    // A real delivery while the demo runs leaves its sample score latched.
+    view.rerender(
+      <MultiChatWidget
+        token="tok_test"
+        session={{ wins: 4, losses: 2, games: 6 }}
+        live={{ session: { wins: 100, losses: 100, games: 200 } }}
+      />,
+    );
+    expect(screen.getByLabelText("Session record: 0 wins, 4 losses")).toBeTruthy();
+
+    view.rerender(
+      <MultiChatWidget
+        token="tok_test"
+        session={{ wins: 4, losses: 2, games: 6 }}
+        live={null}
+      />,
+    );
+    expect(screen.getByLabelText("Session record: 4 wins, 2 losses")).toBeTruthy();
+    expect(screen.queryByText("TestViewer")).toBeNull();
+  });
+
+  it("restores the latest real score after the demo expires", async () => {
+    vi.useFakeTimers();
+    mockConfig.config = {
+      twitch: { enabled: true, channel: "me" },
+      appearance: { ...DEFAULT_APPEARANCE, showSessionScore: true },
+    };
+    const view = await renderWidget({
+      session: { wins: 3, losses: 2, games: 5 },
+      live: {
+        isTest: true,
+        testWidget: "multichat",
+        session: { wins: 0, losses: 4, games: 4 },
+      },
+    });
+    expect(screen.getByLabelText("Session record: 0 wins, 4 losses")).toBeTruthy();
+    view.rerender(
+      <MultiChatWidget
+        token="tok_test"
+        session={{ wins: 4, losses: 2, games: 6 }}
+        live={{ session: { wins: 100, losses: 100, games: 200 } }}
+      />,
+    );
+
+    act(() => vi.advanceTimersByTime(TEST_DURATION_MS));
+    expect(screen.getByLabelText("Session record: 4 wins, 2 losses")).toBeTruthy();
+    expect(screen.queryByText("TestViewer")).toBeNull();
+  });
+
+  it("keeps large chat text in BRB mode", async () => {
+    window.history.replaceState({}, "", "/?mode=brb");
+    mockConfig.config = {
+      twitch: { enabled: true, channel: "me" },
+      appearance: { ...DEFAULT_APPEARANCE, fontSize: 48 },
+    };
+    await renderWidget();
+    expect(screen.getByTestId("mc-list").style.fontSize).toBe("48px");
+  });
+
   it("loads and sanitizes the alerts section outside platform config", async () => {
     let latestConfig: LoadedConfig | null = null;
     fetchMock.mockResolvedValueOnce({

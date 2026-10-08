@@ -1054,6 +1054,39 @@ describe("routes/multichat", () => {
     });
   });
 
+  test.each([40, 48])(
+    "persists %ipx framed chat and score settings through the token config route",
+    async (fontSize) => {
+      await users.updatePreferences(userId, "multichat", {
+        appearance: {
+          fontSize,
+          fontWeight: "bold",
+          layout: "framed",
+          messageColor: "#A7F05D",
+          showSessionScore: true,
+        },
+      });
+
+      const res = await request(app).get(`/v1/multichat/${token}/config`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.config.appearance).toMatchObject({
+        fontSize,
+        fontWeight: "bold",
+        layout: "framed",
+        messageColor: "#a7f05d",
+        showSessionScore: true,
+      });
+
+      await users.updatePreferences(userId, "multichat", {
+        appearance: { showSessionScore: false },
+      });
+      const hidden = await request(app).get(`/v1/multichat/${token}/config`);
+      expect(hidden.status).toBe(200);
+      expect(hidden.body.config.appearance.showSessionScore).toBe(false);
+    },
+  );
+
   test("persists every 3D StarCraft alert preset through the token config route", async () => {
     const eventVisuals = {
       sub: "zealot-dance-3d",
@@ -1634,7 +1667,7 @@ describe("sanitizeMultichatConfig", () => {
         evil: "<script>",
       },
     });
-    expect(out.appearance.fontSize).toBe(32);
+    expect(out.appearance.fontSize).toBe(48);
     expect(out.appearance.layout).toBe("bubbles");
     expect(out.appearance.entryAnimation).toBe("fade");
     expect(out.appearance.bgColor).toBe("#abcdef");
@@ -1649,6 +1682,43 @@ describe("sanitizeMultichatConfig", () => {
       appearance: { messageTtlSec: 0 },
     });
     expect(explicitNever.appearance.messageTtlSec).toBe(0);
+  });
+
+  test("chat readability defaults and invalid fields remain render-safe", () => {
+    const defaults = sanitizeMultichatConfig({ appearance: {} }).appearance;
+    expect(defaults).toMatchObject({
+      fontSize: 24,
+      fontWeight: "medium",
+      messageColor: "#ffffff",
+      layout: "rows",
+      showSessionScore: false,
+    });
+
+    const invalid = sanitizeMultichatConfig({
+      appearance: {
+        fontSize: "not-a-number",
+        fontWeight: "heavy",
+        messageColor: "var(--injected-color)",
+        layout: "unknown",
+        showSessionScore: "true",
+      },
+    }).appearance;
+    expect(invalid).toEqual(defaults);
+
+    for (const messageColor of ["#abc", "#12345678", "#gggggg", 123456, null]) {
+      expect(
+        sanitizeMultichatConfig({ appearance: { messageColor } }).appearance
+          .messageColor,
+      ).toBe("#ffffff");
+    }
+    expect(
+      sanitizeMultichatConfig({ appearance: { fontSize: -20 } }).appearance
+        .fontSize,
+    ).toBe(10);
+    expect(
+      sanitizeMultichatConfig({ appearance: { showSessionScore: false } })
+        .appearance.showSessionScore,
+    ).toBe(false);
   });
 
   test("tts passes through strict-sanitized", () => {

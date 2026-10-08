@@ -39,7 +39,7 @@ export type ChatFontWeight = (typeof FONT_WEIGHTS)[number];
 export const DENSITIES = ["compact", "cozy", "comfortable"] as const;
 export type ChatDensity = (typeof DENSITIES)[number];
 
-export const LAYOUTS = ["rows", "two-line", "bubbles"] as const;
+export const LAYOUTS = ["rows", "two-line", "bubbles", "framed"] as const;
 export type ChatLayout = (typeof LAYOUTS)[number];
 
 export const NEWEST_AT = ["bottom", "top"] as const;
@@ -68,11 +68,13 @@ export interface ChatAppearance {
   fontFamily: ChatFontFamily;
   /** Weight of the message text (usernames are always bold). */
   fontWeight: ChatFontWeight;
+  /** Message body colour; usernames have their own colour treatment. */
+  messageColor: string;
   /** Soft dark halo behind text — for low/zero background opacity. */
   textShadow: boolean;
   /** Row spacing + line-height preset. */
   density: ChatDensity;
-  /** rows = single line · two-line = name above text · bubbles = card per message. */
+  /** rows = inline · two-line = stacked · bubbles / framed = message cards. */
   layout: ChatLayout;
   /** Where new messages appear. */
   newestAt: ChatNewestAt;
@@ -95,6 +97,8 @@ export interface ChatAppearance {
   bgOpacity: number;
   cornerRadius: number;
   panelBorder: boolean;
+  /** Show the live session W:L score above chat, independently of layout. */
+  showSessionScore: boolean;
   /** Hide "!command" lines. */
   hideCommands: boolean;
   /** Hide well-known chat bots (Nightbot, StreamElements, …). */
@@ -104,9 +108,10 @@ export interface ChatAppearance {
 }
 
 export const DEFAULT_APPEARANCE: ChatAppearance = {
-  fontSize: 14,
+  fontSize: 24,
   fontFamily: "inter",
-  fontWeight: "normal",
+  fontWeight: "medium",
+  messageColor: "#ffffff",
   textShadow: false,
   density: "cozy",
   layout: "rows",
@@ -124,6 +129,7 @@ export const DEFAULT_APPEARANCE: ChatAppearance = {
   bgOpacity: 88,
   cornerRadius: 12,
   panelBorder: true,
+  showSessionScore: false,
   hideCommands: false,
   hideBots: false,
   blockedUsers: "",
@@ -131,12 +137,49 @@ export const DEFAULT_APPEARANCE: ChatAppearance = {
 
 /** Clamp bounds — mirrored by the API's sanitizer. */
 export const FONT_SIZE_MIN = 10;
-export const FONT_SIZE_MAX = 32;
+export const FONT_SIZE_MAX = 48;
 export const MAX_VISIBLE_MIN = 5;
 export const MAX_VISIBLE_MAX = 50;
 export const TTL_MAX_SEC = 600;
 export const RADIUS_MAX = 24;
 export const BLOCKED_USERS_MAX_CHARS = 500;
+
+/** Presentation-only presets leave moderation and message lifetime intact. */
+export const CHAT_APPEARANCE_PRESETS = [
+  {
+    id: "readable",
+    label: "Readable chat",
+    description: "Large white text with names above each message.",
+    appearance: {
+      fontSize: 24, fontFamily: "system", fontWeight: "medium",
+      messageColor: "#ffffff", density: "comfortable", layout: "two-line",
+      usernameStyle: "platform", newestAt: "bottom", align: "left",
+      bgColor: "#11141b", bgOpacity: 94, cornerRadius: 12,
+      panelBorder: true, textShadow: false, showSessionScore: false,
+      showPlatformChips: true, showBadges: true, showTimestamps: false,
+      entryAnimation: "fade",
+    },
+  },
+  {
+    id: "classic",
+    label: "Classic chat + score",
+    description: "Black broadcast frame, white names, green messages and a W:L score.",
+    appearance: {
+      fontSize: 28, fontFamily: "system", fontWeight: "bold",
+      messageColor: "#a6e879", density: "cozy", layout: "framed",
+      usernameStyle: "white", newestAt: "bottom", align: "left",
+      bgColor: "#000000", bgOpacity: 100, cornerRadius: 0,
+      panelBorder: true, textShadow: false, showSessionScore: true,
+      showPlatformChips: true, showBadges: false, showTimestamps: false,
+      entryAnimation: "none",
+    },
+  },
+] as const satisfies ReadonlyArray<{
+  id: string;
+  label: string;
+  description: string;
+  appearance: Partial<ChatAppearance>;
+}>;
 
 /**
  * Chat bots hidden by the "hide bots" toggle. Matched case-insensitively
@@ -196,6 +239,10 @@ export function sanitizeAppearance(
     fontSize: clampInt(a.fontSize, FONT_SIZE_MIN, FONT_SIZE_MAX, d.fontSize),
     fontFamily: pick(a.fontFamily, FONT_FAMILIES, d.fontFamily),
     fontWeight: pick(a.fontWeight, FONT_WEIGHTS, d.fontWeight),
+    messageColor:
+      typeof a.messageColor === "string" && /^#[0-9a-fA-F]{6}$/.test(a.messageColor)
+        ? a.messageColor.toLowerCase()
+        : d.messageColor,
     textShadow: bool(a.textShadow, d.textShadow),
     density: pick(a.density, DENSITIES, d.density),
     layout: pick(a.layout, LAYOUTS, d.layout),
@@ -213,6 +260,7 @@ export function sanitizeAppearance(
     bgOpacity: clampInt(a.bgOpacity, 0, 100, d.bgOpacity),
     cornerRadius: clampInt(a.cornerRadius, 0, RADIUS_MAX, d.cornerRadius),
     panelBorder: bool(a.panelBorder, d.panelBorder),
+    showSessionScore: bool(a.showSessionScore, d.showSessionScore),
     hideCommands: bool(a.hideCommands, d.hideCommands),
     hideBots: bool(a.hideBots, d.hideBots),
     blockedUsers:

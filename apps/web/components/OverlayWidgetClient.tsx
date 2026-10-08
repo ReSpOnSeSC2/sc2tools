@@ -407,6 +407,7 @@ function WidgetRenderer({
         <MultiChatWidget
           token={token}
           live={live}
+          session={session}
           studioEvent={studioEvent}
         />
       );
@@ -617,6 +618,10 @@ function useOverlayWidgetSocket(
       },
     );
     socket.on("overlay:session", (msg: SessionSummary) => {
+      // The chat score header keeps its real session while another
+      // Browser Source tests the session card. Chat demos use their
+      // own targeted live payload and timer.
+      if (widget === "multichat" && msg?.isTest) return;
       if (msg && typeof msg === "object") setSession(msg);
     });
     // Stream Studio state (highlight / poll / goals / recap trigger) —

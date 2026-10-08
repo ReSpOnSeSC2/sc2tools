@@ -24,6 +24,9 @@
  * the standard test window so the streamer can place and style the
  * source without waiting for real chat.
  *
+ * The optional score header uses the authoritative cloud session
+ * snapshot. Sample scores share the demo chat's visibility timer.
+ *
  * Appearance (font, layout, animation, background, filters …) comes
  * from the same server-stored config blob as the channels and is
  * re-read every minute — Settings changes land in OBS untouched.
@@ -35,6 +38,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { API_BASE } from "@/lib/clientApi";
 import {
   DEFAULT_APPEARANCE,
+  FONT_SIZE_MAX,
   appearanceStyles,
   blockedUserSet,
   excludeBlockedUsers,
@@ -68,6 +72,8 @@ import { useCommandAnswers } from "@/lib/multichat/useCommandAnswers";
 import { sanitizeRankRace } from "@/lib/multichat/rankLadders";
 import { useTranslation } from "@/lib/multichat/useTranslation";
 import { MultiChatMessageList, PLATFORM_META } from "./MultiChatMessageList";
+import { MultiChatPanel } from "./MultiChatPanel";
+import type { SessionSummary } from "./SessionWidget";
 import type {
   ChatMessage,
   ChatPlatform,
@@ -223,8 +229,16 @@ export function useMultichatConfig(token: string): LoadedConfig {
  * can end mid-test) — only ``overlay:clear`` (live → null, the
  * Settings Stop button) or the window expiring stops it early.
  */
-function useTestFire(live: LiveGamePayload | null | undefined): ChatMessage[] {
-  const [testMessages, setTestMessages] = useState<ChatMessage[]>([]);
+type TestChatState = {
+  messages: ChatMessage[];
+  score: Pick<SessionSummary, "wins" | "losses"> | null;
+};
+
+function useTestFire(live: LiveGamePayload | null | undefined): TestChatState {
+  const [testState, setTestState] = useState<TestChatState>({
+    messages: [],
+    score: null,
+  });
   const timersRef = useRef<{
     feed: ReturnType<typeof setInterval> | null;
     stop: ReturnType<typeof setTimeout> | null;
@@ -241,7 +255,7 @@ function useTestFire(live: LiveGamePayload | null | undefined): ChatMessage[] {
     if (live === null) {
       // overlay:clear — the Stop button. End the demo immediately.
       clearTimers();
-      setTestMessages([]);
+      setTestState({ messages: [], score: null });
       return;
     }
     const isTestPayload = Boolean(
@@ -253,12 +267,22 @@ function useTestFire(live: LiveGamePayload | null | undefined): ChatMessage[] {
 
     clearTimers();
     const first = testChatMessage(0, Date.now());
-    setTestMessages(first ? [first] : []);
+    setTestState({
+      messages: first ? [first] : [],
+      score: live?.session
+        ? { wins: live.session.wins, losses: live.session.losses }
+        : null,
+    });
     let index = 1;
     timersRef.current.feed = setInterval(() => {
       const message = testChatMessage(index, Date.now());
       index += 1;
-      if (message) setTestMessages((prev) => [...prev, message]);
+      if (message) {
+        setTestState((prev) => ({
+          ...prev,
+          messages: [...prev.messages, message],
+        }));
+      }
       if (!message || index >= TEST_SEQUENCE_LENGTH) {
         // Sequence done — stop feeding, but leave the stop timer to
         // clear the demo at the standard test window.
@@ -268,24 +292,27 @@ function useTestFire(live: LiveGamePayload | null | undefined): ChatMessage[] {
     }, TEST_MESSAGE_INTERVAL_MS);
     timersRef.current.stop = setTimeout(() => {
       clearTimers();
-      setTestMessages([]);
+      setTestState({ messages: [], score: null });
     }, TEST_DURATION_MS);
   }, [live]);
 
   // Unmount-only cleanup — per-dep cleanup would defeat the latch.
   useEffect(() => clearTimers, []);
 
-  return testMessages;
+  return testState;
 }
 
 export function MultiChatWidget({
   token,
   live,
+  session,
   studioEvent,
 }: {
   token: string;
-  /** Shared overlay payload — read ONLY for the Test-fire flag. */
+  /** Shared overlay payload — supplies Test-fire flag and sample score. */
   live?: LiveGamePayload | null;
+  /** Authoritative cloud session aggregate for the optional score header. */
+  session?: SessionSummary | null;
   /** Shared Stream Dock state, including its moderation blocklist. */
   studioEvent?: unknown;
 }) {
@@ -311,8 +338,12 @@ export function MultiChatWidget({
     [blockedUsers, feedEvents, moderationReady],
   );
   useEngagementReporter(token, moderatedMessages, moderatedEvents);
-  const testMessages = useTestFire(live);
+  const { messages: testMessages, score: testScore } = useTestFire(live);
   const testActive = testMessages.length > 0;
+  // Demo data is owned by the same timer as demo chat. A regular game
+  // payload cannot replace the session snapshot or leave a test score
+  // pinned after Stop or expiry.
+  const score = testActive ? testScore : session?.isTest ? null : session;
   const latestFeedAtMs = Math.max(
     moderatedMessages.at(-1)?.atMs ?? 0,
     moderatedEvents.at(-1)?.atMs ?? 0,
@@ -510,7 +541,10 @@ export function MultiChatWidget({
       brbMode
         ? {
             ...appearance,
-            fontSize: Math.min(40, Math.round(appearance.fontSize * 1.5)),
+            fontSize: Math.min(
+              FONT_SIZE_MAX,
+              Math.max(appearance.fontSize, Math.round(appearance.fontSize * 1.5)),
+            ),
             align: "left" as const,
           }
         : appearance,
@@ -520,28 +554,16 @@ export function MultiChatWidget({
     () => appearanceStyles(effectiveAppearance),
     [effectiveAppearance],
   );
-  const shell: CSSProperties = {
-    width: "100%",
-    minWidth: 240,
-    display: "flex",
-    flexDirection: "column",
-    height: "100%",
-    background: styles.panelBackground,
-    border: appearance.panelBorder
-      ? "var(--ov-shell-border, 1px solid rgba(255,255,255,0.10))"
-      : "none",
-    borderRadius: appearance.cornerRadius,
-    boxShadow:
-      appearance.bgOpacity > 5 ? "0 6px 20px rgba(0,0,0,0.45)" : "none",
-    overflow: "hidden",
-  };
-
   if (!loaded) return <div style={{ background: "transparent" }} />;
 
   if (platforms && configuredPlatforms.length === 0 && !testActive) {
     return (
       <div style={frameStyle}>
-        <div style={{ ...shell, height: "auto" }}>
+        <MultiChatPanel
+          appearance={effectiveAppearance}
+          score={score}
+          style={{ height: "auto" }}
+        >
           <div style={{ padding: "14px 16px" }}>
             <div style={titleStyle}>MULTI-CHAT</div>
             <div
@@ -558,7 +580,7 @@ export function MultiChatWidget({
               add your channels, and this source lights up automatically.
             </div>
           </div>
-        </div>
+        </MultiChatPanel>
       </div>
     );
   }
@@ -571,7 +593,11 @@ export function MultiChatWidget({
           : frameStyle
       }
     >
-      <div style={brbMode ? { ...shell, maxWidth: 900, margin: "0 auto" } : shell}>
+      <MultiChatPanel
+        appearance={effectiveAppearance}
+        score={score}
+        style={brbMode ? { maxWidth: 900, margin: "0 auto" } : undefined}
+      >
         {testActive || (!allConnected && active) ? (
           <div style={statusRowStyle}>
             {testActive ? (
@@ -635,7 +661,7 @@ export function MultiChatWidget({
               : undefined
           }
         />
-      </div>
+      </MultiChatPanel>
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
       ) : null}

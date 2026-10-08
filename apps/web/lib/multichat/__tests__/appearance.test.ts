@@ -4,6 +4,7 @@
 import { describe, expect, test } from "vitest";
 import {
   DEFAULT_APPEARANCE,
+  CHAT_APPEARANCE_PRESETS,
   FONT_SIZE_MAX,
   FONT_SIZE_MIN,
   appearanceStyles,
@@ -79,6 +80,25 @@ describe("sanitizeAppearance", () => {
       blockedUsers: "botOne, botTwo",
     };
     expect(sanitizeAppearance(custom)).toEqual(custom);
+  });
+
+  test("saves large chat and framed score styling without losing preferences", () => {
+    const custom = {
+      ...DEFAULT_APPEARANCE,
+      fontSize: 48,
+      layout: "framed",
+      messageColor: "#A6E879",
+      showSessionScore: true,
+      hideBots: true,
+      blockedUsers: "streambot",
+    };
+    expect(sanitizeAppearance(custom)).toEqual({ ...custom, messageColor: "#a6e879" });
+    expect(sanitizeAppearance({ messageColor: "url(bad)", showSessionScore: "true" }))
+      .toMatchObject({ messageColor: "#ffffff", showSessionScore: false });
+    for (const preset of CHAT_APPEARANCE_PRESETS) {
+      const appearance = { ...DEFAULT_APPEARANCE, ...preset.appearance };
+      expect(sanitizeAppearance(appearance)).toEqual(appearance);
+    }
   });
 });
 

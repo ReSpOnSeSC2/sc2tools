@@ -219,7 +219,7 @@ const PER_WIDGET_KEYS = {
   // carry ``isTest`` + ``testWidget``. Registering the id keeps the
   // per-widget Test from falling back to FULL and lighting up every
   // neighbouring panel.
-  "multichat": [],
+  "multichat": ["session"],
   // Stream Studio widgets — driven off the multichat studio state
   // (Stream Dock) in production. Each generates its own clearly-
   // labelled demo content client-side when the test-stamped payload

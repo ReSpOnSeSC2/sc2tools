@@ -17,14 +17,14 @@
 const FONT_FAMILIES = ["inter", "system", "rounded", "mono", "serif"];
 const FONT_WEIGHTS = ["normal", "medium", "bold"];
 const DENSITIES = ["compact", "cozy", "comfortable"];
-const LAYOUTS = ["rows", "two-line", "bubbles"];
+const LAYOUTS = ["rows", "two-line", "bubbles", "framed"];
 const NEWEST_AT = ["bottom", "top"];
 const ALIGNMENTS = ["left", "right"];
 const USERNAME_STYLES = ["platform", "uniform", "white"];
 const ENTRY_ANIMATIONS = ["fade", "slide-up", "slide-left", "pop", "none"];
 
 const FONT_SIZE_MIN = 10;
-const FONT_SIZE_MAX = 32;
+const FONT_SIZE_MAX = 48;
 const MAX_VISIBLE_MIN = 5;
 const MAX_VISIBLE_MAX = 50;
 const TTL_MAX_SEC = 600;
@@ -32,9 +32,10 @@ const RADIUS_MAX = 24;
 const BLOCKED_USERS_MAX_CHARS = 500;
 
 const DEFAULT_APPEARANCE = Object.freeze({
-  fontSize: 14,
+  fontSize: 24,
   fontFamily: "inter",
-  fontWeight: "normal",
+  fontWeight: "medium",
+  messageColor: "#ffffff",
   textShadow: false,
   density: "cozy",
   layout: "rows",
@@ -44,6 +45,7 @@ const DEFAULT_APPEARANCE = Object.freeze({
   showPlatformChips: true,
   showBadges: true,
   showTimestamps: false,
+  showSessionScore: false,
   emoteImages: true,
   maxVisible: 30,
   messageTtlSec: 30,
@@ -96,10 +98,15 @@ function sanitizeChatAppearance(raw) {
     typeof a.bgColor === "string" && /^#[0-9a-fA-F]{6}$/.test(a.bgColor)
       ? a.bgColor.toLowerCase()
       : d.bgColor;
+  const messageColor =
+    typeof a.messageColor === "string" && /^#[0-9a-fA-F]{6}$/.test(a.messageColor)
+      ? a.messageColor.toLowerCase()
+      : d.messageColor;
   return {
     fontSize: clampInt(a.fontSize, FONT_SIZE_MIN, FONT_SIZE_MAX, d.fontSize),
     fontFamily: pick(a.fontFamily, FONT_FAMILIES, d.fontFamily),
     fontWeight: pick(a.fontWeight, FONT_WEIGHTS, d.fontWeight),
+    messageColor,
     textShadow: bool(a.textShadow, d.textShadow),
     density: pick(a.density, DENSITIES, d.density),
     layout: pick(a.layout, LAYOUTS, d.layout),
@@ -109,6 +116,7 @@ function sanitizeChatAppearance(raw) {
     showPlatformChips: bool(a.showPlatformChips, d.showPlatformChips),
     showBadges: bool(a.showBadges, d.showBadges),
     showTimestamps: bool(a.showTimestamps, d.showTimestamps),
+    showSessionScore: bool(a.showSessionScore, d.showSessionScore),
     emoteImages: bool(a.emoteImages, d.emoteImages),
     maxVisible: clampInt(a.maxVisible, MAX_VISIBLE_MIN, MAX_VISIBLE_MAX, d.maxVisible),
     messageTtlSec: clampInt(a.messageTtlSec, 0, TTL_MAX_SEC, d.messageTtlSec),

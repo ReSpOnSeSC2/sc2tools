@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/Button";
 import { Toggle } from "@/components/ui/Toggle";
 import {
   ALIGNMENTS,
+  CHAT_APPEARANCE_PRESETS,
   DEFAULT_APPEARANCE,
   DENSITIES,
   ENTRY_ANIMATIONS,
@@ -34,12 +35,12 @@ import {
   RADIUS_MAX,
   TTL_MAX_SEC,
   USERNAME_STYLES,
-  appearanceStyles,
   visibleMessages,
   type ChatAppearance,
 } from "@/lib/multichat/appearance";
 import type { ChatMessage } from "@/lib/multichat/types";
 import { MultiChatMessageList } from "@/components/overlay/widgets/MultiChatMessageList";
+import { MultiChatPanel } from "@/components/overlay/widgets/MultiChatPanel";
 
 const LABELS: Record<string, string> = {
   // fonts
@@ -60,6 +61,7 @@ const LABELS: Record<string, string> = {
   rows: "Single line",
   "two-line": "Name above message",
   bubbles: "Bubbles",
+  framed: "Classic framed cards",
   // newestAt
   bottom: "Bottom (classic chat)",
   top: "Top (news ticker)",
@@ -149,7 +151,6 @@ export function SettingsMultiChatAppearance({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [value],
   );
-  const previewStyles = appearanceStyles(value);
 
   return (
     <div className="min-w-0 space-y-4">
@@ -165,9 +166,40 @@ export function SettingsMultiChatAppearance({
         </Button>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2" aria-label="Chat style presets">
+        {CHAT_APPEARANCE_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            onClick={() => set(preset.appearance)}
+            className="rounded-lg border border-border bg-bg-elevated p-3 text-left transition-colors hover:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            <span className="block text-body font-semibold text-text">{preset.label}</span>
+            <span className="mt-1 block text-caption text-text-dim">{preset.description}</span>
+          </button>
+        ))}
+      </div>
+
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-5">
           <ControlGroup title="Text">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {[
+                { size: 14, label: "Compact text" },
+                { size: 24, label: "Large text" },
+                { size: 32, label: "Extra large text" },
+              ].map(({ size, label }) => (
+                <Button
+                  key={size}
+                  size="sm"
+                  variant="secondary"
+                  aria-pressed={value.fontSize === size}
+                  onClick={() => set({ fontSize: size })}
+                >
+                  {label} · {size}px
+                </Button>
+              ))}
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <SelectField
                 label="Font"
@@ -201,7 +233,22 @@ export function SettingsMultiChatAppearance({
                 options={USERNAME_STYLES}
                 onChange={(v) => set({ usernameStyle: v })}
               />
+              <label className="block min-w-0">
+                <FieldLabel>Message colour</FieldLabel>
+                <input
+                  type="color"
+                  value={value.messageColor}
+                  onChange={(e) => set({ messageColor: e.target.value })}
+                  className="h-9 w-16 cursor-pointer rounded border border-border bg-bg-elevated p-1"
+                  aria-label="Message colour"
+                />
+              </label>
             </div>
+            <p className="mt-2 text-caption text-text-dim">
+              Text size applies to every chat style, with or without a score.
+              Choose Compact text to keep the original 14px size; saved sizes are kept.
+              In OBS, set the Browser Source to 420 × 640, then resize its width and height in source properties to keep the text sharp.
+            </p>
             <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
               <ToggleField
                 label="Text shadow"
@@ -307,11 +354,17 @@ export function SettingsMultiChatAppearance({
                 onChange={(v) => set({ cornerRadius: v })}
               />
             </div>
-            <div className="mt-3">
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
               <ToggleField
                 label="Panel border"
                 checked={value.panelBorder}
                 onChange={(on) => set({ panelBorder: on })}
+              />
+              <ToggleField
+                label="Session score above chat"
+                hint="live wins : losses; works with any chat style"
+                checked={value.showSessionScore}
+                onChange={(on) => set({ showSessionScore: on })}
               />
             </div>
           </ControlGroup>
@@ -354,33 +407,18 @@ export function SettingsMultiChatAppearance({
                 "repeating-conic-gradient(#2a2f3a 0% 25%, #1c212b 0% 50%) 0 0 / 18px 18px",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                height: 320,
-                background: previewStyles.panelBackground,
-                border: value.panelBorder
-                  ? "1px solid rgba(255,255,255,0.10)"
-                  : "none",
-                borderRadius: value.cornerRadius,
-                // Same shadow rule the OBS shell applies — the preview
-                // must stay pixel-honest.
-                boxShadow:
-                  value.bgOpacity > 5 ? "0 6px 20px rgba(0,0,0,0.45)" : "none",
-                margin: 10,
-                overflow: "hidden",
-              }}
-            >
+            <div style={{ height: 440, padding: 10 }}>
+              <MultiChatPanel appearance={value} score={{ wins: 0, losses: 4 }}>
               <MultiChatMessageList
                 messages={preview}
                 appearance={value}
                 emptyText="Every sample line is filtered out — relax a filter to see the preview."
               />
+              </MultiChatPanel>
             </div>
           </div>
           <p className="mt-1.5 text-micro text-text-dim">
-            Sample lines for styling only — your OBS source shows real chat.
+            Sample lines{value.showSessionScore ? " and sample 0:4 score" : ""} for styling only — your OBS source shows real chat{value.showSessionScore ? " and your live session record" : ""}.
             The checkerboard shows through wherever the background is
             transparent.
           </p>
