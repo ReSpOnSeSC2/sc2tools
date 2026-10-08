@@ -431,13 +431,116 @@ def test_match_end_takes_priority_over_loading() -> None:
     assert [e.phase for e in seen] == [LiveLifecyclePhase.MATCH_ENDED]
 
 
-def test_loading_phase_returns_fast_interval() -> None:
+@pytest.mark.parametrize("menu_screen", ["ScreenHome", "ScreenMenu", "ScreenHome/ScreenHome", "ScreenMenu/ScreenMenu"])
+def test_first_decided_snapshot_on_menu_emits_result_before_retiring(
+    menu_screen: str,
+) -> None:
+    """Leaving the score screen before a poll must not lose the final result."""
+    session = _StubSession()
+    active = _live_game("Opponent", display_time=5.0)
+    decided = _live_game("Opponent", display_time=600.0)
+    decided["players"][0]["result"] = "Victory"
+    decided["players"][1]["result"] = "Defeat"
+    for screens, game in [([], active), ([menu_screen], decided), ([menu_screen], decided)]:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(game))
+
+    poller, seen = _make_poller(session)
+    for expected in (
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MATCH_ENDED,
+        LiveLifecyclePhase.MENU,
+    ):
+        phase, _ = poller._tick_once()
+        assert phase == expected
+        poller._last_phase = phase
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MATCH_ENDED,
+        LiveLifecyclePhase.MENU,
+    ]
+    assert seen[1].game_state is not None and seen[1].game_state.is_decided
+
+
+@pytest.mark.parametrize("menu_screen", ["ScreenHome", "ScreenMenu", "ScreenHome/ScreenHome", "ScreenMenu/ScreenMenu"])
+def test_cached_decided_game_retires_on_menu_without_resurrecting_during_loading(
+    menu_screen: str,
+) -> None:
+    """Preserve the score result, then trust a definite menu over cached /game."""
+    session = _StubSession()
+    first_game = _live_game("OldOpponent", display_time=4.0)
+    decided_game = _live_game("OldOpponent", display_time=600.0)
+    decided_game["players"][0]["result"] = "Victory"
+    decided_game["players"][1]["result"] = "Defeat"
+    next_game = _live_game("NewOpponent", display_time=0.0)
+    score_screens = ([
+        "ScreenBackgroundSC2/ScreenBackgroundSC2",
+        "ScreenNavigationSC2/ScreenNavigationSC2",
+        "ScreenForegroundSC2/ScreenForegroundSC2",
+        "ScreenScore/ScreenScore",
+    ] if "/" in menu_screen else ["ScreenScore"])
+    loading_screen = "ScreenLoading/ScreenLoading" if "/" in menu_screen else "ScreenLoading"
+    observations = [
+        ([], first_game),
+        (score_screens, decided_game),
+        (score_screens, decided_game),
+        ([menu_screen], decided_game),
+        ([menu_screen], decided_game),
+        # SC2's next loading/UI snapshots can precede fresh /game data.
+        ([loading_screen], decided_game),
+        ([], decided_game),
+        ([loading_screen], next_game),
+        ([], {**next_game, "displayTime": 2.0}),
+    ]
+    for screens, game in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(game))
+
+    poller, seen = _make_poller(session, user_name_hint="Streamer#1")
+    expected_phases = [
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MATCH_ENDED,
+        LiveLifecyclePhase.MATCH_ENDED,
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MATCH_LOADING,
+        LiveLifecyclePhase.MATCH_STARTED,
+    ]
+    for index, expected in enumerate(expected_phases):
+        phase, sleep_for = poller._tick_once()
+        assert phase == expected
+        if index in {3, 4, 5, 6}:
+            assert poller._current_game_key is None
+            assert poller._match_started_at_ms is None
+        if index == 5:
+            assert sleep_for == poller._cfg.fast_interval_sec
+        poller._last_phase = phase
+
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MATCH_ENDED,
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MATCH_LOADING,
+        LiveLifecyclePhase.MATCH_STARTED,
+    ]
+    assert seen[1].game_state is not None and seen[1].game_state.is_decided
+    assert seen[1].ui_state.active_screens == score_screens
+    assert seen[2].game_state is None
+    assert seen[3].game_key != seen[0].game_key
+    assert seen[3].game_key == seen[4].game_key
+    assert "NewOpponent" in seen[3].game_key
+
+
+@pytest.mark.parametrize("loading_screen", ["ScreenLoading", "ScreenLoading/ScreenLoading"])
+def test_loading_phase_returns_fast_interval(loading_screen: str) -> None:
     """During MATCH_LOADING we want the next poll to fire ~250 ms later
     so we catch the loading→in-game transition quickly."""
     session = _StubSession()
     session.queue(
         "http://localhost:6119/ui",
-        _ok({"activeScreens": ["ScreenLoading"]}),
+        _ok({"activeScreens": [loading_screen]}),
     )
     session.queue(
         "http://localhost:6119/game",
@@ -462,6 +565,45 @@ def test_loading_phase_returns_fast_interval() -> None:
     # And the production default (in DEFAULT_FAST_INTERVAL_SEC) is the
     # 250 ms the prompt calls for.
     assert DEFAULT_FAST_INTERVAL_SEC == pytest.approx(0.25)
+
+
+def test_qualified_loading_starts_new_match_after_cached_replay_data() -> None:
+    """The observed qualified loading panel must prepopulate at displayTime zero."""
+    session = _StubSession()
+    old_game = _live_game("PreviousReplayOpponent", display_time=600.0, is_replay=True)
+    old_game["players"][0]["result"] = "Victory"
+    old_game["players"][1]["result"] = "Defeat"
+    new_game = _live_game("NextLiveOpponent", display_time=0.0)
+    score_screens = [
+        "ScreenBackgroundSC2/ScreenBackgroundSC2",
+        "ScreenNavigationSC2/ScreenNavigationSC2",
+        "ScreenForegroundSC2/ScreenForegroundSC2",
+        "ScreenScore/ScreenScore",
+    ]
+    observations = [
+        (score_screens, old_game),
+        (["ScreenLoading/ScreenLoading"], old_game),
+        (["ScreenLoading/ScreenLoading"], new_game),
+        ([], {**new_game, "displayTime": 3.0}),
+    ]
+    for screens, game in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(game))
+    poller, seen = _make_poller(session)
+    for expected in (LiveLifecyclePhase.MENU, LiveLifecyclePhase.MENU,
+                     LiveLifecyclePhase.MATCH_LOADING, LiveLifecyclePhase.MATCH_STARTED):
+        phase, _ = poller._tick_once()
+        assert phase == expected
+        poller._last_phase = phase
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MATCH_LOADING,
+        LiveLifecyclePhase.MATCH_STARTED,
+    ]
+    assert seen[1].game_state.display_time == 0.0
+    assert seen[1].ui_state.active_screens == ["ScreenLoading/ScreenLoading"]
+    assert "NextLiveOpponent" in seen[1].game_key
+    assert "PreviousReplayOpponent" not in seen[1].game_key
 
 
 def test_malformed_json_treated_as_unreachable() -> None:

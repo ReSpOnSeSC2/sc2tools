@@ -2,6 +2,21 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.6
+
+### Fixed - Returning to the between-games scene
+
+- Recognizes SC2's slash-qualified UI names, including
+  `ScreenLoading/ScreenLoading` and `ScreenScore/ScreenScore`, while retaining
+  the raw screen paths for diagnostics. Loading switches early and score
+  screens keep their configured post-game scene.
+- Returning to a definite SC2 menu retires the finished match even when
+  the local game API still reports its cached result. The results screen
+  continues to use the configured match-ended scene; the menu uses the
+  configured between-games scene and its existing debounce.
+- A delayed opponent-profile lookup cannot publish an older active phase
+  after the bridge has moved to the menu or a newer match.
+
 ## 0.18.5
 
 ### Added - YouTube setup defaults

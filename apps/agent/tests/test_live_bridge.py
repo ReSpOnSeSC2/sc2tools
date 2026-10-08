@@ -15,7 +15,10 @@ from __future__ import annotations
 
 import threading
 import time
+from concurrent.futures import Future
 from typing import Any, Dict, List, Optional
+
+import pytest
 
 from sc2tools_agent.live.bridge import LiveBridge
 from sc2tools_agent.live.event_bus import EventBus
@@ -511,6 +514,155 @@ def test_late_pulse_response_for_old_game_is_dropped() -> None:
         # The whole point of the test: zero late-merge pollution.
         assert publications_after_game2 == []
     finally:
+        bridge.stop()
+
+
+@pytest.mark.parametrize("clear_phase", [
+    LiveLifecyclePhase.MENU,
+    LiveLifecyclePhase.IDLE,
+])
+@pytest.mark.parametrize("prior_phase", [
+    LiveLifecyclePhase.MATCH_IN_PROGRESS,
+    LiveLifecyclePhase.MATCH_ENDED,
+])
+def test_pulse_publication_started_before_clear_cannot_overwrite_clear(
+    monkeypatch,
+    clear_phase: LiveLifecyclePhase,
+    prior_phase: LiveLifecyclePhase,
+) -> None:
+    """A validated Pulse response must stay before the later clear even
+    if its delivery pauses while the poller observes MENU or IDLE."""
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle, pulse=_StubPulseClient(profile=None),
+    )
+    seen: List[Dict[str, Any]] = []
+    bridge.bus.subscribe(seen.append)
+    bridge.start()
+    publication_started = threading.Event()
+    release_publication = threading.Event()
+    transition_finished = threading.Event()
+    errors: list[BaseException] = []
+    original_publish = bridge.bus.publish
+
+    def pause_enriched_publication(payload: Dict[str, Any]) -> None:
+        if payload.get("opponent", {}).get("profile"):
+            publication_started.set()
+            if not release_publication.wait(timeout=2.0):
+                raise AssertionError("Pulse publication was never released")
+        original_publish(payload)
+
+    monkeypatch.setattr(bridge.bus, "publish", pause_enriched_publication)
+    lifecycle.publish(_build_loading_event(game_key="game-clearing"))
+    if prior_phase == LiveLifecyclePhase.MATCH_ENDED:
+        lifecycle.publish(_build_ended_event(game_key="game-clearing"))
+    else:
+        lifecycle.publish(_build_in_progress_event(game_key="game-clearing"))
+    future: Future = Future()
+    future.set_result(OpponentProfile(name="OppPlayer", mmr=4000))
+
+    def publish_pulse() -> None:
+        try:
+            bridge._on_pulse_done(game_key="game-clearing", future=future)
+        except BaseException as exc:
+            errors.append(exc)
+
+    def clear_match() -> None:
+        try:
+            lifecycle.publish(LiveLifecycleEvent(phase=clear_phase))
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            transition_finished.set()
+
+    callback = threading.Thread(target=publish_pulse, daemon=True)
+    transition = threading.Thread(target=clear_match, daemon=True)
+    try:
+        callback.start()
+        assert publication_started.wait(timeout=1.0)
+        transition.start()
+        # The poller must not wait for the callback's subscriber delivery.
+        assert transition_finished.wait(timeout=1.0)
+        assert bridge.current_game_key() is None
+        release_publication.set()
+        callback.join(timeout=1.0)
+        transition.join(timeout=1.0)
+        assert not callback.is_alive()
+        assert not transition.is_alive()
+        assert errors == []
+        assert seen[-1]["phase"] == clear_phase.value
+        clear_index = next(
+            i for i, payload in enumerate(seen)
+            if payload["phase"] == clear_phase.value
+        )
+        assert all(
+            payload.get("gameKey") != "game-clearing"
+            for payload in seen[clear_index + 1:]
+        )
+    finally:
+        release_publication.set()
+        if callback.ident is not None:
+            callback.join(timeout=1.0)
+        if transition.ident is not None:
+            transition.join(timeout=1.0)
+        bridge.stop()
+
+
+def test_reentrant_lifecycle_subscriber_preserves_publication_order() -> None:
+    """A subscriber may trigger a clear without another subscriber
+    receiving that clear before the active envelope being delivered."""
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle, pulse=_StubPulseClient(profile=None),
+    )
+
+    def clear_on_loading(payload: Dict[str, Any]) -> None:
+        if payload["phase"] == "match_loading":
+            lifecycle.publish(LiveLifecycleEvent(phase=LiveLifecyclePhase.MENU))
+
+    seen: List[Dict[str, Any]] = []
+    bridge.bus.subscribe(clear_on_loading)
+    bridge.bus.subscribe(seen.append)
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event())
+        assert [payload["phase"] for payload in seen] == ["match_loading", "menu"]
+        assert bridge.current_game_key() is None
+    finally:
+        bridge.stop()
+
+
+def test_completed_pulse_callback_delivers_without_context_lock(monkeypatch) -> None:
+    """An inline Future callback cannot hold the game-state lock while
+    subscribers wait for another thread to read bridge diagnostics."""
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    bridge = LiveBridge(lifecycle_bus=lifecycle, pulse=_StubPulseClient())
+    future: Future = Future()
+    future.set_result(OpponentProfile(name="OppPlayer", mmr=4000))
+    monkeypatch.setattr(bridge._executor, "submit", lambda *args, **kwargs: future)
+    accessible: list[bool] = []
+    readers: list[threading.Thread] = []
+
+    def read_context_from_another_thread(payload: Dict[str, Any]) -> None:
+        read_finished = threading.Event()
+
+        def read_context() -> None:
+            bridge.current_game_key()
+            read_finished.set()
+
+        reader = threading.Thread(target=read_context, daemon=True)
+        readers.append(reader)
+        reader.start()
+        accessible.append(read_finished.wait(timeout=0.5))
+
+    bridge.bus.subscribe(read_context_from_another_thread)
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event())
+        assert accessible == [True, True]
+    finally:
+        for reader in readers:
+            reader.join(timeout=1.0)
         bridge.stop()
 
 

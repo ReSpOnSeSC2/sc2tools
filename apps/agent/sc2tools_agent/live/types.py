@@ -140,17 +140,25 @@ class LiveUIState:
     """Snapshot of ``GET /ui`` from the SC2 client.
 
     Blizzard's localhost API exposes a list of activeScreens, e.g.
-    ``["ScreenLoading"]`` or ``["ScreenScore"]`` or ``[]`` (in-game).
-    We model the raw screens for diagnostics + a derived
-    ``is_in_match`` flag so callers don't have to re-parse.
+    ``["ScreenLoading"]`` or ``["ScreenScore/ScreenScore"]`` or ``[]``
+    (in-game). Raw paths remain available for diagnostics; derived flags
+    classify the root screen name before its slash-qualified instance.
     """
 
     active_screens: List[str] = field(default_factory=list)
     captured_at: float = field(default_factory=time.time)
 
     @property
+    def _screen_names(self) -> List[str]:
+        return [screen.partition("/")[0] for screen in self.active_screens]
+
+    @property
     def is_loading(self) -> bool:
-        return any(s == "ScreenLoading" for s in self.active_screens)
+        return "ScreenLoading" in self._screen_names
+
+    @property
+    def is_score_screen(self) -> bool:
+        return "ScreenScore" in self._screen_names
 
     @property
     def is_in_match(self) -> bool:
@@ -174,7 +182,7 @@ class LiveUIState:
             "ScreenMultiplayer",
             "ScreenLogin",
         }
-        return not any(s in non_match_screens for s in self.active_screens)
+        return not any(s in non_match_screens for s in self._screen_names)
 
 
 @dataclass(frozen=True)
