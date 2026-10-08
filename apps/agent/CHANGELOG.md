@@ -2,6 +2,24 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.3
+
+### Fixed - YouTube discovery during consent
+
+- While a YouTube consent you just started is still open in the browser,
+  channel and key discovery keeps trying at a steady pace without using up
+  its automatic retries, so the first attempt after you approve loads the
+  keys. Connecting Twitch or Kick no longer restarts YouTube's retries, and
+  **Refresh connections** reloads the list even when names are already shown.
+- The Streams headline now reports a completed consent, a lost connection or
+  a successful background load instead of asking you to keep waiting.
+- Discovery messages match the connection mode (SC2Tools account or your own
+  Google client), a loading state no longer shows a previous failure's status,
+  a server without stream controls is not retried automatically, and a
+  channel with a single reusable key is told that two are needed. The
+  dropdowns distinguish an automatic retry from an exhausted one, and the
+  zero-key wording no longer appears on the Channel dropdown.
+
 ## 0.18.2
 
 ### Fixed - YouTube channel and key discovery
@@ -12,13 +30,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   after startup, after **Refresh connections**, and within seconds of a
   completed YouTube consent. A failed load is retried three times with
   growing delays and explained in plain words under the dropdowns; after
-  that, **Refresh keys** or **Refresh connections** starts the retries
-  again. While a YouTube consent you just started is still open in the
-  browser, attempts stay evenly spaced and never use up those retries, so the
-  first attempt after you approve loads the keys. The headline reports a
-  completed consent or a lost connection instead of asking you to keep
-  waiting. Discovery never selects a channel, key, visibility or audience and
-  never marks a destination Ready.
+  that, **Refresh keys** starts the retries again. Discovery never selects a
+  channel, key, visibility or audience and never marks a destination Ready.
 - A restarted agent with a saved YouTube setup shows its saved channel and
   keys again, so **OBS connection details** can be fetched without first
   pressing **Refresh keys**.
