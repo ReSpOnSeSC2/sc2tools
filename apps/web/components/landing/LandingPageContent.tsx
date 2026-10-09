@@ -104,7 +104,7 @@ function LandingHero() {
             <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
           </Link>
         </div>
-        <div className="lg:col-span-7">
+        <div className="order-first lg:order-none lg:col-span-7">
           <LandingCarousel />
         </div>
       </div>
