@@ -281,36 +281,6 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 accounts.addWidget(card, 1)
             layout.addLayout(accounts)
 
-            tiktok, tiktok_layout = self._card()
-            tiktok_header = QtWidgets.QHBoxLayout()
-            tiktok_header.addWidget(self._label("TikTok LIVE Studio", name="h2"))
-            tiktok_header.addWidget(self._label("HORIZONTAL · OBS MAIN CANVAS", name="studioEyebrow"), 1)
-            self.tiktok_camera_badge = self._badge("Camera unchecked")
-            tiktok_header.addWidget(self.tiktok_camera_badge)
-            tiktok_layout.addLayout(tiktok_header)
-            self.platform_labels["tiktok"] = self._label("Check setup to detect LIVE Studio and the OBS virtual camera.", True)
-            tiktok_layout.addWidget(self.platform_labels["tiktok"])
-            tiktok_actions = QtWidgets.QHBoxLayout()
-            tiktok_actions.setSpacing(8)
-            self.tiktok_launch_button = self._button("Open LIVE Studio", lambda: self.job({"action": "launch_tiktok"}))
-            self.virtual_camera_start_button = self._button("Start virtual camera", lambda: self.job({"action": "start_virtual_camera"}))
-            self.virtual_camera_stop_button = self._button("Stop camera", lambda: self.job({"action": "stop_virtual_camera"}), quiet=True)
-            self.tiktok_check_button = self._button("Check setup", lambda: self.job({"action": "check_tiktok"}), quiet=True)
-            self.tiktok_copy_button = QtWidgets.QPushButton("Copy title")
-            self.tiktok_copy_button.setObjectName("quietButton")
-            self.tiktok_copy_button.setCursor(QtCore.Qt.PointingHandCursor)
-            self.tiktok_copy_button.clicked.connect(self.copy_title)
-            for button in (self.tiktok_launch_button, self.virtual_camera_start_button, self.virtual_camera_stop_button, self.tiktok_check_button):
-                tiktok_actions.addWidget(button)
-            tiktok_actions.addStretch()
-            tiktok_actions.addWidget(self.tiktok_copy_button)
-            tiktok_layout.addLayout(tiktok_actions)
-            self.tiktok_reason = self._label("", True)
-            tiktok_layout.addWidget(self.tiktok_reason)
-            tiktok_layout.addWidget(self._label("Select Main Output in OBS virtual camera settings, then add OBS Virtual Camera in LIVE Studio’s Landscape layout.", True))
-            tiktok_layout.addWidget(self._label("Paste the title and use Go LIVE in Studio. Add your mic and game audio directly in Studio; the virtual camera carries video only.", True))
-            layout.addWidget(tiktok)
-
             setup_section, self.setup_toggle, self.setup_box, setup_layout = self._disclosure("YouTube setup", "Channel, keys & session options")
             setup = QtWidgets.QFormLayout()
             setup.setHorizontalSpacing(18)
@@ -450,12 +420,6 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             for scope, button in self.format_connect_buttons.items():
                 button.setEnabled(enabled and self.format_phases.get(scope) == "authorization_required")
             self.prepare_button.setEnabled(enabled and not self.title_dirty and not self.description_dirty and not self.setup_dirty and youtube.get("connected", False) and self.state.get("configured", False))
-            tiktok = self.state.get("tiktok", {})
-            camera = tiktok.get("virtual_camera_active")
-            self.virtual_camera_start_button.setEnabled(enabled and camera is not True)
-            self.virtual_camera_stop_button.setEnabled(enabled and camera is True)
-            self.tiktok_launch_button.setEnabled(enabled and tiktok.get("installed") is not False)
-            self.tiktok_copy_button.setEnabled(not self.busy and self.loaded and bool(self.title_input.text().strip()))
             self.obs_fetch_button.setEnabled(enabled and self._obs_selection() is not None)
             details_available = not self.busy and self._obs_identity == self._obs_selection() and bool(self.obs_key.text())
             self.obs_copy_server.setEnabled(details_available)
@@ -544,7 +508,6 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 if name in results:
                     text += " · " + results[name].get("message", "Not verified")
                 self.platform_labels[name].setText(text)
-            self._render_tiktok(state.get("tiktok", {}))
             catalog = state.get("catalog", {})
             if catalog != getattr(self, "last_catalog", None):
                 self.last_catalog = copy.deepcopy(catalog)
@@ -665,21 +628,6 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.catalog_note.setText(note)
             self.catalog_note.setVisible(bool(note))
 
-        def _render_tiktok(self, status):
-            installed, running = status.get("installed"), status.get("running")
-            studio = "LIVE Studio running" if running is True else "LIVE Studio installed" if installed is True else "LIVE Studio not detected" if installed is False else "LIVE Studio unchecked"
-            if installed is True and status.get("version"):
-                studio += " · " + str(status["version"])
-            width, height = status.get("main_width"), status.get("main_height")
-            if isinstance(width, int) and isinstance(height, int) and width > 0 and height > 0:
-                studio += f" · {width} × {height} main canvas"
-            else:
-                studio += " · horizontal main canvas preferred"
-            self.platform_labels["tiktok"].setText(studio)
-            camera = status.get("virtual_camera_active")
-            self._set_badge(self.tiktok_camera_badge, "Camera on" if camera is True else "Camera off" if camera is False else "Camera unchecked", "good" if camera is True else "neutral")
-            self.tiktok_reason.setText(status.get("reason") or "Title and Go LIVE stay in Studio.")
-
         def job(self, payload):
             if self.busy or handler is None:
                 return
@@ -689,8 +637,6 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             message = "Connecting in your browser…" if payload["action"].startswith("connect_") else "Saving / checking stream settings…"
             if payload["action"] == "prepare":
                 message = "Preparing both YouTube formats… Wait until both show Ready before starting the Aitum outputs."
-            elif payload["action"] in {"launch_tiktok", "start_virtual_camera", "stop_virtual_camera", "check_tiktok"}:
-                message = "Checking TikTok and OBS camera setup…"
             self.notice.setText(message)
             self._buttons()
             obs_generation = self._obs_generation
@@ -730,10 +676,6 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             if not self.save_button.isEnabled():
                 return
             self.job({"action": "set_metadata", "title": self.title_input.text(), "description": self.description_input.toPlainText()})
-
-        def copy_title(self):
-            QtWidgets.QApplication.clipboard().setText(self.title_input.text())
-            self.notice.setText("Title copied. Paste it into TikTok LIVE Studio before Go LIVE.")
 
         def connect_youtube(self, scope):
             if self.loaded and not self.busy and self.format_phases.get(scope) == "authorization_required":

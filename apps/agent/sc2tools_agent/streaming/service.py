@@ -14,7 +14,6 @@ import time
 
 from .obs_reader import OutputReader, DEFAULT_OUTPUTS
 from .youtube_pair_backend import PairBackend, atomic_json
-from .tiktok_studio import TikTokStudio
 
 DEFAULT_DESCRIPTION = "Live StarCraft II games, ranked matches, and practice.\n\nThanks for watching! Join the chat and enjoy the stream."
 
@@ -65,7 +64,7 @@ def discovery_failure_message(http_status, account_mode="sc2tools"):
 
 class StreamService:
     def __init__(self, state_dir, settings_provider, *, no_obs=False, backend=None,
-                 output_reader=None, adapters=None, cloud_client=None, tiktok_studio=None):
+                 output_reader=None, adapters=None, cloud_client=None):
         self.directory = Path(state_dir) / "streaming"
         self.directory.mkdir(parents=True, exist_ok=True)
         self.config_path = self.directory / "youtube-button-helper.config.private.json"
@@ -98,11 +97,6 @@ class StreamService:
         self.platform_results = {}
         self.platform_status = {}
         self.next_platform_check = 0
-        self.tiktok_studio = tiktok_studio or TikTokStudio()
-        self.next_tiktok_check = 0
-        self.tiktok_status = {"installed": None, "running": None, "version": None,
-            "virtual_camera_active": None, "main_width": None, "main_height": None,
-            "reason": "Check setup to inspect LIVE Studio and your horizontal OBS feed."}
         self.prompt = ""
         self._cached = {}
         self._publish()
@@ -117,15 +111,12 @@ class StreamService:
             platforms[name] = copy.deepcopy(self.platform_status.get(name)) if name in self.platform_status else {
                 "platform": name, "connected": False, "reason": "Connect your streaming account.",
             }
-        platforms["tiktok"] = {"platform": "tiktok", "connected": False,
-            "reason": "Set title and Go LIVE in LIVE Studio using your horizontal OBS feed."}
         snapshot = {
             "youtube": youtube, "platforms": platforms, "platform_results": copy.deepcopy(self.platform_results),
             "metadata": copy.deepcopy(self.backend.metadata), "metadata_saved": self.metadata_saved, "message": self.message,
             "catalog": copy.deepcopy(self.catalog), "configured": bool(self.backend.config.get("runtime_enabled")),
             "catalog_status": copy.deepcopy(self.catalog_status),
             "account_mode": self.account_mode,
-            "tiktok": copy.deepcopy(self.tiktok_status),
             "configuration": {"privacy": self.backend.config.get("streams", {}).get("horizontal", {}).get("privacy", "public"),
                 "channel_id": self.backend.config.get("expected_channel_id"),
                 "horizontal_id": self.backend.config.get("streams", {}).get("horizontal", {}).get("reusable_stream_id"),
@@ -327,25 +318,10 @@ class StreamService:
                             if getattr(error, "connection_invalid", False) is True:
                                 self.platform_status[name] = {"platform": name, "connected": False, "reason": "Stream-control permission must be reconnected."}
                             self.platform_results[name] = {"ok": False, "message": "Title request could not be verified. Check the platform before trying again."}
-                self.platform_results["tiktok"] = {"ok": False, "message": "Copy the title into LIVE Studio."}
                 self.message = "Title saved for future YouTube sessions. See each platform below for the current save result."
             elif kind in {"prepare", "recover"}:
                 result = self.backend.dispatch({"action": kind}, outputs=self._outputs())
                 self.message = " ".join(result.get("messages", []))
-            elif kind == "check_tiktok":
-                self._check_tiktok()
-                self.message = "TikTok setup checked. Verify the camera preview and audio meters in LIVE Studio before Go LIVE."
-            elif kind == "launch_tiktok":
-                self.tiktok_studio.launch()
-                self._check_tiktok()
-                self.message = "LIVE Studio launch requested. Select Landscape and OBS Virtual Camera, then verify audio."
-            elif kind in {"start_virtual_camera", "stop_virtual_camera"}:
-                camera_action = getattr(self.reader, "set_virtual_camera", None)
-                if camera_action is None:
-                    raise ValueError("OBS virtual-camera controls are unavailable. Check the OBS connection.")
-                camera_action(kind == "start_virtual_camera")
-                self._check_tiktok()
-                self.message = "OBS virtual camera " + ("started. Select Main Output in OBS and check LIVE Studio's landscape preview." if kind == "start_virtual_camera" else "stopped.")
             elif kind in {"use_local_connections", "use_sc2tools_connections"}:
                 self._change_account_mode("local" if kind == "use_local_connections" else "sc2tools")
             elif kind == "refresh_accounts":
@@ -459,24 +435,6 @@ class StreamService:
         self.next_platform_check = 0
         self.message = ("Advanced local account setup enabled. Import an OAuth client you own." if mode == "local"
                         else "SC2Tools account setup enabled. Refresh connections or connect your streaming accounts.")
-
-    def _check_tiktok(self):
-        try:
-            local = self.tiktok_studio.status()
-        except Exception:
-            local = {"installed": None, "running": None, "version": None}
-        camera_reader = getattr(self.reader, "virtual_camera_status", None)
-        try:
-            camera = camera_reader() if camera_reader else {}
-        except Exception:
-            camera = {}
-        self.tiktok_status = {**local,
-            "virtual_camera_active": camera.get("virtual_camera_active"),
-            "main_width": camera.get("main_width"), "main_height": camera.get("main_height"),
-            "reason": camera.get("reason", "Check the agent's OBS connection settings.")}
-        if local.get("installed") is False:
-            self.tiktok_status["reason"] = "Install TikTok LIVE Studio from TikTok, then check setup again."
-        self.next_tiktok_check = time.monotonic() + 30
 
     def _configure(self, payload):
         if not self.backend.connected:
@@ -624,7 +582,6 @@ class StreamService:
         # or OAuth client discovery occurs automatically on app startup; once
         # credentials are attached, read-only channel/key discovery may run.
         with self.operations:
-            self._check_tiktok()
             self._publish()
             if self.account_mode == "sc2tools":
                 try:
@@ -640,8 +597,6 @@ class StreamService:
             if not self.operations.acquire(blocking=False):
                 continue
             try:
-                if time.monotonic() >= self.next_tiktok_check:
-                    self._check_tiktok()
                 if self.backend.connected and self.backend.config.get("runtime_enabled"):
                     result = self.backend.runtime_tick(self._outputs())
                     if not result.get("ok", False):

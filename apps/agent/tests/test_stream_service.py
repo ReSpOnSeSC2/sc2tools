@@ -50,7 +50,6 @@ def test_construct_status_and_local_title_never_contact_obs_or_auth(tmp_path):
     assert result["metadata"]["title"] == "New title"
     assert service.reader.calls == 0
     assert result["platform_results"]["twitch"]["ok"] is False
-    assert result["platform_results"]["tiktok"]["ok"] is False
 
 
 def test_platform_save_reports_partial_failure_and_redacts_error(tmp_path):

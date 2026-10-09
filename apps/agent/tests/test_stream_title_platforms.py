@@ -213,15 +213,6 @@ class TitleOperationTests(NetworkFreeTest):
         with self.assertRaises(subject.TitleAdapterError):
             subject.KickTitleAdapter(credentials, "123")
 
-    def test_tiktok_has_no_automatic_title_or_start_api(self):
-        adapter = subject.TikTokManualTitleAdapter()
-        status = adapter.public_status()
-        self.assertFalse(status["connected"])
-        self.assertIn("LIVE Studio", status["reason"])
-        self.assertIn("Stream Deck", status["reason"])
-        with self.assertRaises(subject.TitleAdapterError):
-            adapter.update_title("New title")
-
 
 class CredentialTests(NetworkFreeTest):
     def test_private_record_provenance_pin_and_scope_are_enforced_before_network(self):

@@ -126,32 +126,6 @@ def test_first_setup_defaults_are_form_only_and_saved_by_explicit_action(page, m
     assert (calls[0]["channel_id"], calls[0]["horizontal_id"], calls[0]["portrait_id"]) == ("channel", "h", "v")
 
 
-def test_tiktok_buttons_dispatch_explicit_setup_actions(page, monkeypatch):
-    widget, state, app = page
-    state["tiktok"] = {"installed": True, "running": False, "virtual_camera_active": False}
-    widget.render(state)
-    calls = []
-    monkeypatch.setattr(widget, "job", calls.append)
-    widget.tiktok_launch_button.click()
-    widget.virtual_camera_start_button.click()
-    widget.tiktok_check_button.click()
-    assert calls == [{"action": "launch_tiktok"}, {"action": "start_virtual_camera"}, {"action": "check_tiktok"}]
-    assert not widget.virtual_camera_stop_button.isEnabled()
-    state["tiktok"]["virtual_camera_active"] = True
-    widget.render(state)
-    assert not widget.virtual_camera_start_button.isEnabled()
-    widget.virtual_camera_stop_button.click()
-    assert calls[-1] == {"action": "stop_virtual_camera"}
-
-
-def test_tiktok_unknown_setup_is_not_reported_as_connected(page):
-    widget, state, app = page
-    widget.render(state)
-    assert "unchecked" in widget.platform_labels["tiktok"].text()
-    assert widget.tiktok_camera_badge.text() == "Camera unchecked"
-    assert not widget.virtual_camera_stop_button.isEnabled()
-
-
 def test_setup_disclosure_keeps_session_description_visible_and_preserves_edits(page):
     widget, state, app = page
     assert widget.setup_box.isHidden()
@@ -179,16 +153,6 @@ def test_session_title_and_description_use_one_explicit_save_action(page, monkey
     assert calls == []
     widget.save_button.click()
     assert calls == [{"action": "set_metadata", "title": "New session title", "description": "Shared YouTube description"}]
-
-
-def test_tiktok_copy_title_remains_manual_and_makes_no_service_request(page, monkeypatch):
-    widget, state, app = page
-    calls = []
-    monkeypatch.setattr(widget, "job", calls.append)
-    widget.tiktok_copy_button.click()
-    assert calls == []
-    assert app.clipboard().text() == "Saved title"
-    assert "Paste it into TikTok LIVE Studio" in widget.notice.text()
 
 
 def test_unsaved_visibility_cannot_prepare_with_previous_visibility(page):

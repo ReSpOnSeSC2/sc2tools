@@ -26,7 +26,7 @@ def _exercise_gui(report):
         "account_mode": "sc2tools", "configured": False,
         "metadata": {"title": "Packaged GUI smoke check", "description": ""},
         "youtube": {"connected": False}, "platforms": {}, "catalog": {},
-        "tiktok": {}, "message": "Offline packaging check",
+        "message": "Offline packaging check",
     }
 
     def inert(*_args):

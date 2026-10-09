@@ -8,7 +8,6 @@ import {
   Repeat2,
   Smartphone,
   Type,
-  Video,
   Youtube,
 } from "lucide-react";
 
@@ -110,12 +109,12 @@ export function StreamManagerShowcase({
           </div>
         </div>
         <div className="flex min-w-0 gap-3">
-          <Video className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" aria-hidden />
+          <Check className="mt-0.5 h-5 w-5 shrink-0 text-text-muted" aria-hidden />
           <div>
-            <h3 className="text-body font-semibold text-text">TikTok, in landscape too</h3>
+            <h3 className="text-body font-semibold text-text">Verified before you go live</h3>
             <p className="mt-1 text-caption text-text-muted">
-              Send OBS's main virtual camera to TikTok LIVE Studio for horizontal
-              video. Add your mic and game audio in Studio, then go live there.
+              Each platform reports back whether it verified or accepted the title,
+              so you know where it landed before the stream starts.
             </p>
           </div>
         </div>

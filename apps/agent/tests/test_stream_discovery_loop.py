@@ -63,16 +63,6 @@ class Reader:
         pass
 
 
-class QuietStudio:
-    """Keeps the worker away from the host's real TikTok LIVE Studio probe."""
-
-    def status(self):
-        return {"installed": None, "running": None, "version": None}
-
-    def launch(self):
-        raise AssertionError("never launched by tests")
-
-
 class Script:
     """Stop-event stand-in: one loop iteration per step; each step runs just before its iteration."""
 
@@ -122,8 +112,7 @@ def browser(monkeypatch):
 def make_service(tmp_path, cloud, config=None):
     backend = PairBackend(tmp_path, memory=True, config={"metadata": {
         "title": "Title", "description": "", "vertical_suffix": " | Vertical"}, **(config or {})})
-    return StreamService(tmp_path, lambda: {}, backend=backend, output_reader=Reader(), cloud_client=cloud,
-                         tiktok_studio=QuietStudio())
+    return StreamService(tmp_path, lambda: {}, backend=backend, output_reader=Reader(), cloud_client=cloud)
 
 
 def run_scripted(service, *steps):
