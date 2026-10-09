@@ -38,7 +38,7 @@ corresponding GitHub Release.
 
 ### Removed
 
-- **Agent 0.18.6: the TikTok LIVE Studio card is gone from Streams.** Its
+- **Agent 0.18.7: the TikTok LIVE Studio card is gone from Streams.** Its
   Open LIVE Studio, virtual-camera, Check setup and Copy title controls, the
   OBS virtual-camera actions and the LIVE Studio detection behind them are
   removed. TikTok broadcasting stays in LIVE Studio itself; YouTube, Twitch
