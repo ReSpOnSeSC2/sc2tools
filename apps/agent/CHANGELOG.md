@@ -17,6 +17,14 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 - A delayed opponent-profile lookup cannot publish an older active phase
   after the bridge has moved to the menu or a newer match.
 
+### Removed - TikTok LIVE Studio card
+
+- The Streams page no longer shows the TikTok LIVE Studio card. **Open LIVE
+  Studio**, **Start virtual camera**, **Stop camera**, **Check setup** and
+  **Copy title** are gone, together with the OBS virtual-camera actions and
+  the LIVE Studio detection that backed them. TikTok broadcasting stays in
+  LIVE Studio itself; YouTube, Twitch and Kick titles are unchanged.
+
 ## 0.18.5
 
 ### Added - YouTube setup defaults

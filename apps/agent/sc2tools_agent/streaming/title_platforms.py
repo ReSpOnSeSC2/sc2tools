@@ -11,11 +11,6 @@ https://dev.twitch.tv/docs/authentication/getting-tokens-oauth/
 https://dev.twitch.tv/docs/authentication/validate-tokens/
 https://docs.kick.com/apis/channels
 https://docs.kick.com/getting-started/generating-tokens-oauth2-flow
-
-TikTok public scopes do not provide a LIVE title/start API. LIVE Studio's
-supported Start/End LIVE hotkey or Stream Deck action remains user-triggered.
-https://developers.tiktok.com/docs/en/tiktok-api-scopes
-https://www.tiktok.com/live/studio/help/article/Best-practice/Use-a-Stream-Deck-to-trigger-commands-quickly
 """
 from contextlib import contextmanager
 import base64
@@ -428,16 +423,6 @@ class KickTitleAdapter(_TitleAdapter):
         _call(self.transport, "PATCH", "https://api.kick.com/public/v1/channels", headers=headers, body={"stream_title": title})
 
 
-class TikTokManualTitleAdapter:
-    def public_status(self):
-        return {"platform": "tiktok", "connected": False, "title": None,
-                "reason": "Set the title in TikTok LIVE Studio. Its supported Start/End LIVE hotkey or Stream Deck action can start the existing horizontal virtual-camera stream."}
-
-    def update_title(self, title):
-        validate_title(title)
-        raise TitleAdapterError("TikTok's public API does not expose LIVE title control; use LIVE Studio.")
-
-
 def authorize_twitch(client, token_store, expected_user_id=None, *, expected_login=None, explicit=False, transport=None,
                      opener=webbrowser.open, on_prompt=None, clock=time.time, monotonic=time.monotonic, sleep=time.sleep):
     """Own public-client DCF; only explicit user-driven calls open a browser."""
@@ -653,10 +638,8 @@ def load_adapter(platform, directory, *, write_enabled=False, transport=None):
     public_status() performs the subsequent supported identity/title checks.
     write_enabled remains a caller-controlled explicit gate after reloading.
     Missing or invalid connections return a disconnected adapter, not a
-    fallback to OBS credentials or cookies. TikTok remains manual title entry.
+    fallback to OBS credentials or cookies.
     """
-    if platform == "tiktok":
-        return TikTokManualTitleAdapter()
     config_path, token_path = _paths(platform, directory)
     cls = TwitchTitleAdapter if platform == "twitch" else KickTitleAdapter
     try:

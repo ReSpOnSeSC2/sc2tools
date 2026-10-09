@@ -36,6 +36,14 @@ corresponding GitHub Release.
   inventory instead of traversing a channel's entire historical archive;
   saved creation requests remain durable and are never inserted again.
 
+### Removed
+
+- **Agent 0.18.6: the TikTok LIVE Studio card is gone from Streams.** Its
+  Open LIVE Studio, virtual-camera, Check setup and Copy title controls, the
+  OBS virtual-camera actions and the LIVE Studio detection behind them are
+  removed. TikTok broadcasting stays in LIVE Studio itself; YouTube, Twitch
+  and Kick titles are unchanged.
+
 ### Added
 
 - **YouTube setup defaults in Agent 0.18.5** select the only available channel

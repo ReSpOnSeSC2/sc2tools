@@ -104,8 +104,7 @@ Closing the window minimises it to the tray (the agent keeps running).
 The **Streams** page saves one title for your connected YouTube, Twitch and
 Kick accounts and reports whether each title was verified or accepted. Kick's
 public API can omit its title while offline, so an accepted offline save does
-not claim verified readback or disconnect the account. TikTok
-LIVE Studio uses **Copy title**; its title and Go LIVE remain in Studio.
+not claim verified readback or disconnect the account.
 
 Edit the **YouTube description** directly below the shared title, then click
 **Save title & description**. The description applies to both YouTube formats
@@ -113,14 +112,6 @@ and is saved for future sessions. A current unfinished pair is updated when
 its ownership can be verified; the vertical description automatically includes
 the horizontal partner's watch link. Unsaved edits survive page refreshes,
 and saved templates preserve deliberately empty descriptions.
-
-The TikTok setup card detects LIVE Studio and checks OBS's main canvas and
-virtual camera. **Open LIVE Studio**, **Start virtual camera**, **Stop camera**
-and **Check setup** are explicit controls. Select **Main Output** in OBS's
-virtual-camera settings and **OBS Virtual Camera** in LIVE Studio's Landscape
-layout. Configure microphone and game audio directly in Studio: the virtual
-camera carries video only. A running camera does not verify the selected
-Studio input or TikTok account, so check the preview and meters before Go LIVE.
 
 Pair the agent with your SC2Tools account, then use **Connect** for each
 platform. Authorize stream-control permission in your system browser once;
