@@ -4,7 +4,7 @@ Date: 2026-10-08
 
 Status: Accepted for the Stream Studio preview. Amended 2026-10-08: the TikTok
 LIVE Studio virtual-camera hand-off described under Decision was removed in
-agent 0.18.6; TikTok broadcasting is outside the agent's scope.
+agent 0.18.7; TikTok broadcasting is outside the agent's scope.
 
 ## Context
 
