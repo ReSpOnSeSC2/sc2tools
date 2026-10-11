@@ -106,7 +106,12 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         or pvt_robobay_time < twilight_time
     )
     pvt_glaive_time = upgrade_time("AdeptPiercing", "Glaive")
-    pvt_blink_time = upgrade_time("Blink")
+    # DarkTemplarBlinkUpgrade is Shadow Stride, researched at the Dark
+    # Shrine. It must not count as the Twilight's Stalker Blink upgrade.
+    pvt_blink_time = min(
+        (u["time"] for u in ctx.upgrades if u["name"] in ("Blink", "BlinkTech")),
+        default=9999,
+    )
     pvt_charge_time = upgrade_time("Charge")
     pvt_first_twilight_upgrade = min(
         pvt_glaive_time, pvt_blink_time, pvt_charge_time,
@@ -242,7 +247,7 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # (>= 6:00) added after a 2-base Gateway commitment still classifies
     # as the all-in.
     if (
-        has_upgrade_substr("Blink", 540)
+        pvt_blink_time <= 540
         and gate_count_6min >= 6
         and fifth_gateway_started < third_nexus_time
         and (total_nexuses < 3 or third_nexus_time >= 360)
@@ -346,6 +351,8 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # Blink (Macro) game that happened to research Charge
     # second. Mirror the same first-upgrade pattern the
     # Stargate-into-X and 3 Gate Charge Opener rules use.
+    # A third Nexus started before 6:00 gets the more specific fast-third
+    # Charge-first label; the cutoff matches the Blink macro/all-in split.
     if (
         has_upgrade_substr("Charge", 540)
         and total_nexuses >= 3
@@ -353,6 +360,8 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         and twilight_time < robo_time
         and pvt_charge_time == pvt_first_twilight_upgrade
     ):
+        if third_nexus_time < 360:
+            return "PvT - Charge First (Fast 3rd Nexus)"
         return "PvT - Standard Charge Macro"
     # Charge must be the FIRST Twilight upgrade for this label. Without
     # the ordering guard, a Blink-first / Charge-after build with
@@ -386,6 +395,8 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # 5th gate before 3rd Nexus, so it fires first for mass-gate
     # aggression and the 4 Gate Blink branch only sees 4-5 gate
     # builds.
+    # Blink must be the first completed Twilight upgrade. Later Blink
+    # support does not turn a Charge / Glaives opener into a Blink build.
     gates_before_third_nexus = count_started_before(
         buildings, "Gateway", third_nexus_time,
     )
@@ -393,7 +404,8 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     if (
         twilight_time < robo_time
         and twilight_time < sg_time
-        and has_upgrade_substr("Blink", 540)
+        and pvt_blink_time <= 540
+        and pvt_blink_time == pvt_first_twilight_upgrade
     ):
         if gates_before_third_nexus >= 4:
             return "PvT - 4 Gate Blink"
@@ -410,7 +422,8 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     # be the Twilight Council. Mirror of the OPENER guards on 4 / 3 Gate
     # Blink Macro above.
     if (
-        has_upgrade_substr("Blink", 480)
+        pvt_blink_time <= 480
+        and pvt_blink_time == pvt_first_twilight_upgrade
         and total_nexuses >= 3
         and gates_before_third_nexus == 2
         and twilight_time < robo_time

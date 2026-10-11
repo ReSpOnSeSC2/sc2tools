@@ -2,6 +2,19 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.8
+
+### Fixed - Charge-first PvT build classification
+
+- PvT Blink labels require Stalker Blink to be the first completed Twilight
+  upgrade. Later Blink support no longer changes a Charge or Glaives opening
+  into a Blink build, and Dark Templar's Shadow Stride no longer counts as
+  Stalker Blink.
+- Twilight-first Charge openings that start their third Nexus before 6:00
+  use **PvT - Charge First (Fast 3rd Nexus)**. Later thirds retain the
+  Standard Charge Macro label. Reanalyze saved games to update old labels.
+- Includes replay engine 1.6.10, shared with browser Instant Analysis.
+
 ## 0.18.7
 
 ### Removed - TikTok LIVE Studio card

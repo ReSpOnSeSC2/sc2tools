@@ -79,6 +79,112 @@ def test_pvt_two_gate_blink_fast_third_with_a_late_robo():
     assert _classify(PVT, ev) == "PvT - 2 Gate Blink (Fast 3rd Nexus)"
 
 
+@pytest.mark.parametrize("third_start", [270, 359])
+@pytest.mark.parametrize("later_blink", [False, True])
+def test_pvt_charge_first_fast_third_keeps_its_opening(third_start, later_blink):
+    ev = _opener(gates=(40, 190)) + [
+        _b("TwilightCouncil", 170), _b("Nexus", third_start, THIRD),
+        _b("RoboticsFacility", 280), _up("Charge", 403),
+        _b("Gateway", 410), _b("Gateway", 420),
+    ]
+    if later_blink:
+        ev.append(_up("BlinkTech", 470))
+    assert _classify(PVT, ev) == "PvT - Charge First (Fast 3rd Nexus)"
+
+
+@pytest.mark.parametrize("third_start", [360, 480])
+def test_pvt_charge_first_later_third_is_standard_macro(third_start):
+    ev = _opener(gates=(40, 190)) + [
+        _b("TwilightCouncil", 170), _b("Nexus", third_start, THIRD),
+        _up("Charge", 403), _up("BlinkTech", 470),
+    ]
+    assert _classify(PVT, ev) == "PvT - Standard Charge Macro"
+
+
+@pytest.mark.parametrize("blink_name", [None, "Blink", "BlinkTech"])
+def test_pvt_shadow_stride_does_not_turn_charge_first_into_blink(blink_name):
+    ev = _opener(gates=(40, 190)) + [
+        _b("TwilightCouncil", 170), _b("DarkShrine", 220),
+        _b("Nexus", 270, THIRD), _up("DarkTemplarBlinkUpgrade", 330),
+        _up("Charge", 403),
+    ]
+    if blink_name:
+        ev.append(_up(blink_name, 470))
+    assert _classify(PVT, ev) == "PvT - Charge First (Fast 3rd Nexus)"
+
+
+@pytest.mark.parametrize("gates", [
+    (40, 190), (40, 190, 200), (40, 190, 200, 210),
+    (40, 190, 200, 210, 220, 230),
+])
+def test_pvt_shadow_stride_alone_is_not_a_blink_build(gates):
+    ev = _opener(gates=gates) + [
+        _b("TwilightCouncil", 170), _b("DarkShrine", 220),
+        _up("DarkTemplarBlinkUpgrade", 330),
+    ]
+    if len(gates) == 2:
+        ev.append(_b("Nexus", 270, THIRD))
+    assert _classify(PVT, ev) == "PvT - Macro Transition (Unclassified)"
+
+
+@pytest.mark.parametrize("gates", [(40, 190), (40, 190, 200), (40, 190, 200, 210)])
+def test_pvt_glaives_first_with_later_blink_is_not_a_blink_opener(gates):
+    ev = _opener(gates=gates) + [
+        _b("TwilightCouncil", 170), _b("Nexus", 270, THIRD),
+        _up("AdeptPiercingAttack", 300), _up("BlinkTech", 470),
+    ]
+    assert _classify(PVT, ev) == "PvT - Macro Transition (Unclassified)"
+
+
+@pytest.mark.parametrize("blink_name", ["Blink", "BlinkTech"])
+@pytest.mark.parametrize("gates,expected", [
+    ((40, 190), "PvT - 2 Gate Blink (Fast 3rd Nexus)"),
+    ((40, 190, 200), "PvT - 3 Gate Blink (Macro)"),
+    ((40, 190, 200, 210), "PvT - 4 Gate Blink"),
+])
+def test_pvt_blink_first_with_later_charge_stays_blink(blink_name, gates, expected):
+    ev = _opener(gates=gates) + [
+        _b("TwilightCouncil", 170), _b("Nexus", 270, THIRD),
+        _up(blink_name, 310), _up("Charge", 403),
+        _b("Gateway", 380), _b("Gateway", 390),
+    ]
+    assert _classify(PVT, ev) == expected
+
+
+@pytest.mark.parametrize("blink_name", ["Blink", "BlinkTech"])
+def test_pvt_genuine_blink_all_in_still_matches(blink_name):
+    ev = _opener(gates=(40, 190, 200, 210, 220, 230)) + [
+        _b("TwilightCouncil", 170), _up(blink_name, 310), _up("Charge", 403),
+    ]
+    assert _classify(PVT, ev) == "PvT - 7 Gate Blink All-in"
+
+
+@pytest.mark.parametrize("tech,expected", [
+    ("RoboticsFacility", "PvT - Robo First"),
+    ("Stargate", "PvT - Stargate into Charge"),
+])
+def test_pvt_charge_first_fast_third_preserves_the_first_tech(tech, expected):
+    ev = _opener(gates=(40, 190)) + [
+        _b(tech, 160), _b("TwilightCouncil", 210),
+        _b("Nexus", 270, THIRD), _up("Charge", 403),
+    ]
+    assert _classify(PVT, ev) == expected
+
+
+def test_pvt_charge_first_on_two_bases_stays_a_charge_opener():
+    ev = _opener(gates=(40, 190, 200)) + [
+        _b("TwilightCouncil", 170), _up("Charge", 403), _up("BlinkTech", 470),
+    ]
+    assert _classify(PVT, ev) == "PvT - 3 Gate Charge Opener"
+
+
+def test_pvt_charge_first_on_two_bases_with_mass_gates_stays_charge_all_in():
+    ev = _opener(gates=(40, 190, 200, 210, 220, 230, 240)) + [
+        _b("TwilightCouncil", 170), _up("Charge", 403), _up("BlinkTech", 470),
+    ]
+    assert _classify(PVT, ev) == "PvT - 8 Gate Charge All-in"
+
+
 def test_pvt_hallucinated_immortal_does_not_block_stargate_into_charge():
     ev = _opener() + [
         _b("Stargate", 160), _u("Sentry", 200), _u("Oracle", 230),

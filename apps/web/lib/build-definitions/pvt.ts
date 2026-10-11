@@ -13,14 +13,14 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - 2 Gate Blink (Fast 3rd Nexus)",
     description:
-      "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is researched by 8:00, the player has taken 3+ Nexuses, AND exactly 2 Gateways were STARTED before the 3rd Nexus -- a fast-3rd 2-Gate Blink style, with or without a Robotics Facility follow-up for Observer / Immortal support. The Twilight-first ordering keeps Robo-first openers with a midgame Blink tech-switch off this label. The gate count is measured against the 3rd Nexus's start time, not a fixed 7:30 cutoff, so a player can add more Gateways after taking the 3rd Nexus without flipping the label to 3 or 4 Gate Blink.",
+      "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is the first completed Twilight upgrade and finishes by 8:00, the player has taken 3+ Nexuses, AND exactly 2 Gateways were STARTED before the 3rd Nexus -- a fast-3rd 2-Gate Blink style, with or without a Robotics Facility follow-up for Observer / Immortal support. The Twilight-first ordering keeps Robo-first openers with a midgame Blink tech-switch off this label. The gate count is measured against the 3rd Nexus's start time, not a fixed 7:30 cutoff, so a player can add more Gateways after taking the 3rd Nexus without flipping the label to 3 or 4 Gate Blink.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - 3 Gate Blink (Macro)",
     description:
-      "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is researched by 9:00, AND exactly 3 Gateways were STARTED before the 3rd Nexus -- a macro 3-Gate Blink style. Counting gates before the 3rd Nexus (not a fixed 7:30 cutoff) means a player who takes the 3rd Nexus fast and then adds more Gateways still classifies as 3 Gate Blink, while a player who delays the 3rd Nexus to push out 4+ Gateways gets labelled 4 Gate Blink.",
+      "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is the first completed Twilight upgrade and finishes by 9:00, AND exactly 3 Gateways were STARTED before the 3rd Nexus -- a macro 3-Gate Blink style. Counting gates before the 3rd Nexus (not a fixed 7:30 cutoff) means a player who takes the 3rd Nexus fast and then adds more Gateways still classifies as 3 Gate Blink, while a player who delays the 3rd Nexus to push out 4+ Gateways gets labelled 4 Gate Blink.",
   },
   {
     race: "Protoss",
@@ -34,14 +34,14 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - 4 Gate Blink",
     description:
-      "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is researched by 9:00, AND 4+ Gateways were STARTED before the 3rd Nexus -- a 4-Gate Blink Stalker timing. The gate count is measured against the 3rd Nexus's start time, so a player who delays the 3rd Nexus while adding Gateways gets this label, while a player who takes the 3rd Nexus fast and then adds Gateways gets the lower-count Blink label that matches what was committed pre-expansion.",
+      "Detected if Twilight Council goes BEFORE Robo and Stargate, Blink is the first completed Twilight upgrade and finishes by 9:00, AND 4+ Gateways were STARTED before the 3rd Nexus -- a 4-Gate Blink Stalker timing. The gate count is measured against the 3rd Nexus's start time, so a player who delays the 3rd Nexus while adding Gateways gets this label, while a player who takes the 3rd Nexus fast and then adds Gateways gets the lower-count Blink label that matches what was committed pre-expansion.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - 7 Gate Blink All-in",
     description:
-      "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is researched by 9:00, 6+ Gateways exist by 9:00, the 5th Gateway was STARTED before the 3rd Nexus was STARTED, AND no 3rd Nexus was STARTED before 6:00 -- a heavy Twilight-first multi-Gate Blink all-in. The Twilight-first guard keeps Robo-first openers with 6+ Gateways + late Blink off this label (those fall through to Robo First). \"Taken\" the 3rd Nexus means construction was initiated, not finished: a player can drop a LATE 3rd Nexus (6:00 or later) and add Gateways while it is still building and those Gateways are still macro reinforcement, not all-in production. The build is excluded if the 3rd Nexus broke ground before the 5th Gateway, OR if any 3rd Nexus was taken before 6:00 (a fast 3rd Nexus is a macro commitment, so those builds fall through to the 3/4 Gate Blink (Macro) labels). A DT Drop opener that later macros into a multi-Gate Blink composition is also excluded -- the DT Drop signature is checked first.",
+      "Detected if Twilight Council is the FIRST tech building (before Robo AND Stargate), Blink is the first completed Twilight upgrade and finishes by 9:00, 6+ Gateways exist by 9:00, the 5th Gateway was STARTED before the 3rd Nexus was STARTED, AND no 3rd Nexus was STARTED before 6:00 -- a heavy Twilight-first multi-Gate Blink all-in. The Twilight-first guard keeps Robo-first openers with 6+ Gateways + late Blink off this label (those fall through to Robo First). \"Taken\" the 3rd Nexus means construction was initiated, not finished: a player can drop a LATE 3rd Nexus (6:00 or later) and add Gateways while it is still building and those Gateways are still macro reinforcement, not all-in production. The build is excluded if the 3rd Nexus broke ground before the 5th Gateway, OR if any 3rd Nexus was taken before 6:00 (a fast 3rd Nexus is a macro commitment, so those builds fall through to the 3/4 Gate Blink (Macro) labels). A DT Drop opener that later macros into a multi-Gate Blink composition is also excluded -- the DT Drop signature is checked first.",
   },
   {
     race: "Protoss",
@@ -123,9 +123,16 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   {
     race: "Protoss",
     matchup: "PvT",
+    name: "PvT - Charge First (Fast 3rd Nexus)",
+    description:
+      "Detected if Twilight Council is the FIRST tech building (started before any Robotics Facility AND before any Stargate), Charge is the first completed Twilight upgrade and finishes by 9:00, AND the third Nexus is STARTED before 6:00 -- a Charge-first fast-third macro opener. Nexus timing measures the start of construction, not completion. Later Blink, Robo support, or Stargate transitions do not change the opening label. More-specific proxy, DT, all-in, and Templar rules take precedence.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvT",
     name: "PvT - Standard Charge Macro",
     description:
-      "Detected if Charge is researched by 9:00, the player has taken 3+ Nexuses, AND Twilight Council is the FIRST tech building — Twilight goes down before any Robotics Facility AND before any Stargate. The label describes the OPENER, not the entire composition: a Twilight-first Charge macro that later adds Robo (Observer / Immortal support) or transitions into Stargate tech in the midgame (Skytoss tech-switch, end-game Tempests, late Phoenix harass) still classifies as Standard Charge Macro because the opening was Twilight + Charge. Robo-first openers (Robo before Twilight) are caught by Robo First instead; Stargate-led openers are caught earlier by Stargate into Charge / Phoenix into Robo.",
+      "Detected if Charge is the first completed Twilight upgrade and finishes by 9:00, the player has taken 3+ Nexuses, the third Nexus is started at 6:00 or later, AND Twilight Council is the FIRST tech building — Twilight goes down before any Robotics Facility AND before any Stargate. The label describes the OPENER, not the entire composition: a Twilight-first Charge macro that later adds Robo (Observer / Immortal support) or transitions into Stargate tech in the midgame (Skytoss tech-switch, end-game Tempests, late Phoenix harass) still classifies as Standard Charge Macro because the opening was Twilight + Charge. A third Nexus started before 6:00 uses Charge First (Fast 3rd Nexus); later Blink does not turn either Charge-first opening into a Blink build. Robo-first openers (Robo before Twilight) are caught by Robo First instead; Stargate-led openers are caught earlier by Stargate into Charge / Phoenix into Robo.",
   },
   {
     race: "Protoss",

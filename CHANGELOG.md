@@ -13,6 +13,12 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Agent 0.18.8 / replay engine 1.6.10:** PvT Blink builds require Stalker
+  Blink to be the first completed Twilight
+  upgrade. Dark Templar's Shadow Stride no longer counts as Blink. Charge-first
+  macro openings that start their third Nexus before 6:00 are labeled
+  **Charge First (Fast 3rd Nexus)**, including later Blink transitions.
+
 - **Agent 0.18.6: post-game scene recovery.** A definite SC2 menu takes
   precedence over a cached result from the finished match. Slash-qualified
   SC2 screen names are recognized, and a delayed
