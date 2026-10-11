@@ -156,6 +156,163 @@ describe("useVoiceReadout — live envelope path", () => {
     });
   }
 
+  it.each(["null", "menu", "other-key"] as const)(
+    "does not repeat a consumed match after %s and same-key recovery",
+    (interruption) => {
+      window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+      const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+      const prefs = { enabled: true, delayMs: 0 };
+      const ready = envelope({
+        opponent: { name: "Maru", race: "Terran", profile: { mmr: 6720 } },
+        streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } },
+      });
+      const { rerender } = render(
+        <Harness live={null} liveGame={ready} prefs={prefs} refOut={ref} />,
+      );
+      expect(cap.speak).toHaveBeenCalledTimes(1);
+
+      const gap = interruption === "null" ? null : envelope({
+        phase: interruption === "menu" ? "menu" : "match_loading",
+        gameKey: interruption === "menu" ? undefined : "another-match",
+      });
+      rerender(<Harness live={null} liveGame={gap} prefs={prefs} refOut={ref} />);
+      rerender(
+        <Harness live={null} liveGame={{ ...ready }} prefs={prefs} refOut={ref} />,
+      );
+      flushEnrichmentFallback();
+
+      expect(cap.speak).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("cancels pending enrichment while absent and reads fresh same-key history on recovery", () => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, delayMs: 0 };
+    const partial = envelope({ opponent: { name: "Maru", race: "Terran" } });
+    const { rerender } = render(
+      <Harness live={null} liveGame={partial} prefs={prefs} refOut={ref} />,
+    );
+    rerender(<Harness live={null} liveGame={null} prefs={prefs} refOut={ref} />);
+    flushEnrichmentFallback();
+    expect(cap.speak).not.toHaveBeenCalled();
+
+    rerender(
+      <Harness
+        live={null}
+        liveGame={envelope({
+          opponent: { name: "Maru", race: "Terran", profile: { mmr: 6720 } },
+          streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } },
+        })}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[0].text).toContain("You're 3 and 1 against them");
+  });
+
+  it.each([false, true])(
+    "does not repeat a keyed match on an identified keyless partial (null gap: %s)",
+    (nullGap) => {
+      window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+      const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+      const prefs = { enabled: true, delayMs: 0 };
+      const ready = envelope({
+        gameKey: "identified-match",
+        opponent: { name: "Maru", race: "Terran", profile: { mmr: 6720 } },
+        streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } },
+      });
+      const { rerender } = render(
+        <Harness live={null} liveGame={ready} prefs={prefs} refOut={ref} />,
+      );
+      expect(cap.speak).toHaveBeenCalledTimes(1);
+      if (nullGap) {
+        rerender(<Harness live={null} liveGame={null} prefs={prefs} refOut={ref} />);
+      }
+      rerender(
+        <Harness
+          live={null}
+          liveGame={{ ...ready, gameKey: undefined, phase: "match_in_progress" }}
+          prefs={prefs}
+          refOut={ref}
+        />,
+      );
+      flushEnrichmentFallback();
+      expect(cap.speak).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it("cancels a pending start readout when the match ends before enrichment", () => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, delayMs: 0 };
+    const partial = envelope({ opponent: { name: "Maru", race: "Terran" } });
+    const { rerender } = render(
+      <Harness live={null} liveGame={partial} prefs={prefs} refOut={ref} />,
+    );
+    rerender(
+      <Harness
+        live={null}
+        liveGame={{ ...partial, phase: "match_ended" }}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    flushEnrichmentFallback();
+    expect(cap.speak).not.toHaveBeenCalled();
+  });
+
+  it("replays a gesture-queued line once after same-key recovery", () => {
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, delayMs: 0 };
+    const ready = envelope({
+      opponent: { name: "Maru", race: "Terran", profile: { mmr: 6720 } },
+      streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } },
+    });
+    const { rerender } = render(
+      <Harness live={null} liveGame={ready} prefs={prefs} refOut={ref} />,
+    );
+    expect(cap.speak).not.toHaveBeenCalled();
+    rerender(<Harness live={null} liveGame={null} prefs={prefs} refOut={ref} />);
+    rerender(<Harness live={null} liveGame={ready} prefs={prefs} refOut={ref} />);
+    act(() => ref.onUserGesture());
+    flush();
+    rerender(
+      <Harness live={null} liveGame={{ ...ready }} prefs={prefs} refOut={ref} />,
+    );
+    flush();
+
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[0].text).toContain("Facing Maru, Terran.");
+  });
+
+  it("keeps an explicit Test readout independent of a consumed real match", () => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, delayMs: 0 };
+    const ready = envelope({
+      opponent: { name: "Maru", race: "Terran", profile: { mmr: 6720 } },
+      streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } },
+    });
+    const { rerender } = render(
+      <Harness live={null} liveGame={ready} prefs={prefs} refOut={ref} />,
+    );
+    rerender(
+      <Harness
+        live={{ isTest: true, testNonce: "click", oppName: "TestOpponent" }}
+        liveGame={ready}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    expect(cap.speak).toHaveBeenCalledTimes(2);
+    expect(cap.utterances[1].text).toContain("Facing TestOpponent");
+    rerender(<Harness live={null} liveGame={ready} prefs={prefs} refOut={ref} />);
+    flushEnrichmentFallback();
+    expect(cap.speak).toHaveBeenCalledTimes(2);
+  });
+
   it("speaks once per gameKey AFTER enrichment lands when partial arrives first", () => {
     // The broker's partial-then-enriched fan-out: a partial envelope
     // arrives without ``streamerHistory``, then ~50–300 ms later an

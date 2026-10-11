@@ -2,6 +2,22 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.9
+
+### Fixed - Duplicate game-start widget triggers
+
+- Brief loading-screen changes and temporary zero-clock snapshots retain
+  the current match identity, preventing repeated randomizer and scouting
+  triggers as an opponent loads. Missing telemetry still uses bounded grace;
+  confirmed menu, replay, and match-end transitions retire the old identity.
+- Healthy gameplay anchors a complete player roster. A different complete
+  roster on the next loading screen starts a new match even when the agent
+  missed the intervening end/menu snapshots. Partial player data and cosmetic
+  clan, casing, or roster-order changes keep the existing match identity.
+- The matching overlay update retains one reveal and scouting voice readout
+  per match across reconnects and partial updates. Randomizer draws use the
+  current matchup instead of the previous game's cached data.
+
 ## 0.18.8
 
 ### Fixed - Charge-first PvT build classification

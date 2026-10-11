@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import type { LiveGameEnvelope, LiveGamePayload } from "./types";
+import { useGameStartTriggerKey } from "./gameStartTrigger";
 import {
   buildScoutingLine,
   buildMatchEndLine,
@@ -249,6 +250,12 @@ export function useVoiceReadout(
   // AFTER enrichment lands (or after a short timeout, whichever fires
   // first).
   const liveGameStates = useRef<LiveGameStates>(new Map());
+  // A transient menu/null tick cancels readiness timers, but must not let
+  // recovery of the same real match queue its scouting readout again.
+  // Keep consumed identities separate from the current match's timer state;
+  // keyless legacy envelopes still reset between matches below.
+  const consumedLiveGameKeys = useRef(new Set<string>());
+  const liveGameStartKey = useGameStartTriggerKey(null, liveGame ?? null);
   // Most recent ``gameKey`` we processed in the live-envelope effect.
   // Used to detect match transitions so we can clear stale per-gameKey
   // state AND the post-game fingerprint refs — without this, an old
@@ -607,9 +614,8 @@ export function useVoiceReadout(
     if (live) return; // post-game path owns the readout when present
     const states = liveGameStates.current;
     if (!liveGame) return;
-    if (liveGame.phase === "idle" || liveGame.phase === "menu") {
-      // Bridge cleared back to menu — drop all per-gameKey state so
-      // the next match-loading envelope starts fresh.
+    if (liveGameStartKey === null) {
+      // A start-only readout cannot outlive the active match phase.
       clearAllLiveGameTimers(states);
       return;
     }
@@ -620,7 +626,13 @@ export function useVoiceReadout(
     const wantsMatchStart = !!events.matchStart;
     if (!wantsScouting && !wantsMatchStart) return;
 
-    const gameKey = liveGame.gameKey || `live:${oppName}`;
+    const realGameKey = liveGameStartKey !== "game:unkeyed"
+      ? liveGameStartKey
+      : null;
+    const gameKey = realGameKey || `live:${oppName}`;
+    if (realGameKey && consumedLiveGameKeys.current.has(realGameKey)) {
+      return;
+    }
     let entry = states.get(gameKey);
     if (!entry) {
       // First envelope for this gameKey. Any OTHER entries in the map
@@ -655,6 +667,7 @@ export function useVoiceReadout(
       const slot = states.get(gameKey);
       if (!slot || slot.spoken) return;
       slot.spoken = true;
+      if (realGameKey) consumedLiveGameKeys.current.add(realGameKey);
       if (slot.timer !== null) {
         window.clearTimeout(slot.timer);
         slot.timer = null;
@@ -703,7 +716,7 @@ export function useVoiceReadout(
         fireUtterance();
       }, waitMs);
     }
-  }, [liveGame, live, enabled, prefs, enqueueOrSpeak, log]);
+  }, [liveGame, liveGameStartKey, live, enabled, prefs, enqueueOrSpeak, log]);
 
   // Drain pending live-game timers on unmount so a Browser Source
   // refresh doesn't leave orphaned setTimeouts attached to a torn-down

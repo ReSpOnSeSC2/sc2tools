@@ -128,7 +128,7 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
     expect(out.value).toBe(true);
   });
 
-  it("scouting widget AUTO-HIDES after match_ended (the streamer sits on the score screen)", () => {
+  it("scouting does not open a new pre-game window from match_ended", () => {
     const out = { value: false };
     render(
       <VisibilityProbe
@@ -138,8 +138,7 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
         visibleOut={out}
       />,
     );
-    expect(out.value).toBe(true);
-    // The natural scouting timer is 22 s — push past it.
+    expect(out.value).toBe(false);
     act(() => {
       vi.advanceTimersByTime(23_000);
     });
@@ -261,9 +260,8 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
           visibleOut={out}
         />,
       );
-      expect(out.value).toBe(true);
-      // 15 s scouting natural timer expires — widget hides while live
-      // is still set.
+      expect(out.value).toBe(false);
+      // The finished game's cached payload must stay hidden.
       act(() => {
         vi.advanceTimersByTime(20_000);
       });

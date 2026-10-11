@@ -26,6 +26,7 @@ import {
   type VoicePrefs,
 } from "@/components/overlay/useVoiceReadout";
 import { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
+import { useGameStartTriggerKey } from "@/components/overlay/gameStartTrigger";
 import {
   attachOverlayResilience,
   type OverlayConnectionStatus,
@@ -230,8 +231,17 @@ export function OverlayClient({
       {shouldShow("session") && (
         <SessionWidget live={live} session={session} />
       )}
-      {shouldShow("randomizer") && (
-        <RandomizerWidget live={live} liveGame={liveGame} config={randomizer} />
+      {/* Preserve the spin ledger through timed hides and brief bridge
+          interruptions, so recovering the same match cannot replay it. */}
+      {enabled.has("randomizer") && (!singleWidget || singleWidget === "randomizer") && (
+        <div style={{ display: shouldShow("randomizer") ? "block" : "none" }}>
+          <RandomizerWidget
+            live={payloadTargetsWidget(live, "randomizer") ? live : null}
+            liveGame={payloadTargetsWidget(live, "randomizer") ? liveGame : null}
+            config={randomizer}
+            visible={shouldShow("randomizer")}
+          />
+        </div>
       )}
       {/* Broadcast-safe degraded-connection dot: only while at least
           one widget is on screen — a transparent between-games scene
@@ -447,11 +457,40 @@ function useWidgetTimers({
   // one fire mid-game.
   const liveTimers = useRef(new Map<WidgetId, number>());
   const sessionTimer = useRef<number | null>(null);
+  // Keep consumed starts on the overlay host, which outlives the timed
+  // widgets. The bridge can briefly return to menu and resync the same
+  // game after a card has hidden; that is still the original start.
+  const consumedStarts = useRef(new Map<WidgetId, Set<string>>());
+  const startTriggerKey = useGameStartTriggerKey(live, liveGame);
+  const consumeStart = useCallback((id: WidgetId, key: string): boolean => {
+    let keys = consumedStarts.current.get(id);
+    if (!keys) {
+      keys = new Set<string>();
+      consumedStarts.current.set(id, keys);
+    }
+    if (keys.has(key)) return false;
+    keys.add(key);
+    return true;
+  }, []);
+  const armTimer = useCallback((id: WidgetId, isTest: boolean) => {
+    const existing = liveTimers.current.get(id);
+    if (existing !== undefined) window.clearTimeout(existing);
+    liveTimers.current.delete(id);
+    const duration = resolveWidgetDurationMs(id, isTest);
+    if (duration === null) return;
+    const handle = window.setTimeout(() => {
+      setVisibleLive((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      liveTimers.current.delete(id);
+    }, duration);
+    liveTimers.current.set(id, handle);
+  }, [setVisibleLive]);
 
-  // Identity of the live-envelope match. Used as an effect dep so a
-  // back-to-back queue (game N → game N+1 with no idle/menu between)
-  // re-arms the opponent + scouting widgets when the gameKey rotates,
-  // even when ``liveGame.phase`` happens to land on the same string.
+  // Back-to-back queues can rotate keys without passing through menu.
   const liveGameKey =
     liveGame && typeof liveGame.gameKey === "string"
       ? liveGame.gameKey
@@ -474,50 +513,53 @@ function useWidgetTimers({
     // which is driven off its own socket event.
     const liveWidgets: ReadonlyArray<WidgetId> = ALL_WIDGETS.filter((id) => {
       if (id === "session") return false;
-      // The randomizer is a game-START reveal driven by the agent's
-      // active-phase envelope (see the liveGame effect below). A real
-      // post-game payload — one carrying a ``result`` — must NOT re-show
-      // it: the mid-match visibility timer already unmounted the widget,
-      // and re-showing it here remounts it with a fresh spin-dedupe ref,
-      // producing a second spin at game END. Test fires and the agent-
-      // offline pre-game path (a ``live`` with no result) still drive it.
-      if (id === "randomizer" && !isTest && Boolean(live.result)) return false;
+      // Start widgets have their own persistent dedupe ledger. Replayed
+      // payload objects and phase changes must not restart their timers.
+      if (id === "randomizer" || id === "scouting") return false;
       return true;
     });
-    setVisibleLive(() => new Set(liveWidgets));
+    const freshStarts = new Set<WidgetId>();
+    for (const id of ["scouting", "randomizer"] as const) {
+      if (startTriggerKey && payloadTargetsWidget(live, id)
+        && consumeStart(id, startTriggerKey)) {
+        freshStarts.add(id);
+        armTimer(id, isTest);
+      }
+    }
+    setVisibleLive((prev) => {
+      const next = new Set(liveWidgets);
+      for (const id of ["scouting", "randomizer"] as const) {
+        // Preserve an already-running start window on a duplicate, with
+        // its original deadline. A real result closes the pre-game wave.
+        if (freshStarts.has(id) || (prev.has(id) && (!live.result || isTest))) next.add(id);
+      }
+      return next;
+    });
     for (const id of liveWidgets) {
-      const existing = liveTimers.current.get(id);
-      if (existing !== undefined) window.clearTimeout(existing);
       // While the bridge reports an active match phase, the opponent
       // widget pins through gameplay (see the liveGame effect below).
       // Skip arming a natural timer that would race the pin and hide
       // the widget mid-game — the pin is the source of truth until
       // ``match_ended`` clears it.
-      if (id === "opponent" && isActivePhase) continue;
-      const duration = resolveWidgetDurationMs(id, isTest);
-      if (duration === null) continue;
-      const handle = window.setTimeout(() => {
-        setVisibleLive((prev) => {
-          if (!prev.has(id)) return prev;
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
+      if (id === "opponent" && isActivePhase) {
+        const existing = liveTimers.current.get(id);
+        if (existing !== undefined) window.clearTimeout(existing);
         liveTimers.current.delete(id);
-      }, duration);
-      liveTimers.current.set(id, handle);
+        continue;
+      }
+      armTimer(id, isTest);
     }
-  }, [live, isActivePhase, setVisibleLive]);
+  }, [live, isActivePhase, startTriggerKey, consumeStart, armTimer, setVisibleLive]);
 
-  // Mirror the per-widget client's ``useWidgetVisibility`` for the two
+  // Mirror the per-widget client's ``useWidgetVisibility`` for the
   // widgets that consume the agent's pre/in-game envelope. Without
   // this effect the all-in-one client would only ever render the
   // opponent + scouting cards in the 15s post-game window after a
   // ``live`` payload landed — the entire active phase of the *next*
   // match would render nothing because ``live`` is cleared by the
   // gameKey-change effect the moment the new loading screen arrives.
-  // Pinning here keeps the opponent identity chip on screen through
-  // gameplay AND re-arms scouting for each fresh loading screen.
+  // Pinning keeps the opponent identity chip on screen through gameplay.
+  // Scouting and randomizer get one timed window per actual match key.
   useEffect(() => {
     if (!isActivePhase) return;
     // Opponent pins for the whole active phase — no natural timer.
@@ -526,54 +568,21 @@ function useWidgetTimers({
       window.clearTimeout(oppTimer);
       liveTimers.current.delete("opponent");
     }
-    // Scouting still uses its natural 15s timer (the dossier is large
-    // and the streamer feedback was to not pin it through gameplay) —
-    // but we re-arm it here so each new loading screen relights the
-    // card even when no fresh ``live`` payload has arrived yet.
-    const scoutingTimer = liveTimers.current.get("scouting");
-    if (scoutingTimer !== undefined) {
-      window.clearTimeout(scoutingTimer);
-      liveTimers.current.delete("scouting");
-    }
-    const randomizerTimer = liveTimers.current.get("randomizer");
-    if (randomizerTimer !== undefined) {
-      window.clearTimeout(randomizerTimer);
-      liveTimers.current.delete("randomizer");
+    const freshStarts = new Set<WidgetId>();
+    for (const id of ["scouting", "randomizer"] as const) {
+      if (startTriggerKey && payloadTargetsWidget(live, id)
+        && consumeStart(id, startTriggerKey)) {
+        freshStarts.add(id);
+        armTimer(id, Boolean(live?.isTest));
+      }
     }
     setVisibleLive((prev) => {
       const next = new Set(prev);
       next.add("opponent");
-      next.add("scouting");
-      next.add("randomizer");
+      for (const id of freshStarts) next.add(id);
       return next;
     });
-    const scoutingDuration = resolveWidgetDurationMs("scouting", false);
-    if (scoutingDuration !== null) {
-      const handle = window.setTimeout(() => {
-        setVisibleLive((prev) => {
-          if (!prev.has("scouting")) return prev;
-          const next = new Set(prev);
-          next.delete("scouting");
-          return next;
-        });
-        liveTimers.current.delete("scouting");
-      }, scoutingDuration);
-      liveTimers.current.set("scouting", handle);
-    }
-    const randomizerDuration = resolveWidgetDurationMs("randomizer", false);
-    if (randomizerDuration !== null) {
-      const handle = window.setTimeout(() => {
-        setVisibleLive((prev) => {
-          if (!prev.has("randomizer")) return prev;
-          const next = new Set(prev);
-          next.delete("randomizer");
-          return next;
-        });
-        liveTimers.current.delete("randomizer");
-      }, randomizerDuration);
-      liveTimers.current.set("randomizer", handle);
-    }
-  }, [isActivePhase, liveGameKey, setVisibleLive]);
+  }, [isActivePhase, liveGameKey, startTriggerKey, live, consumeStart, armTimer, setVisibleLive]);
 
   useEffect(() => {
     if (!session) return;

@@ -27,6 +27,7 @@ import type {
 import { isMatchupKey } from "@/lib/randomizer/types";
 import { mulberry32, seedFromString, spinResult } from "@/lib/randomizer/engine";
 import { RandomizerSequence } from "@/components/randomizer/RandomizerSequence";
+import { useGameStartTriggerKey } from "../gameStartTrigger";
 import {
   setRevealSoundEnabled,
   setRevealSoundVolume,
@@ -35,21 +36,25 @@ import {
 interface SpinState {
   outcome: SpinOutcome;
   spinId: number;
+  triggerKey: string;
 }
 
 export function RandomizerWidget({
   live,
   liveGame,
   config,
+  visible = true,
 }: {
   live: LiveGamePayload | null;
   liveGame: LiveGameEnvelope | null;
   config: RandomizerConfig | null;
+  visible?: boolean;
 }) {
   const matchup = deriveMatchup(live, liveGame);
   const spinKey = deriveSpinKey(matchup, live, liveGame);
+  const triggerKey = useGameStartTriggerKey(live, liveGame);
   const [spin, setSpin] = useState<SpinState | null>(null);
-  const lastSpinKeyRef = useRef<string | null>(null);
+  const consumedStarts = useRef(new Set<string>());
   const spinIdRef = useRef(0);
 
   // Mirror the streamer's sound preference into the audio engine.
@@ -60,8 +65,8 @@ export function RandomizerWidget({
   }, [config]);
 
   useEffect(() => {
-    if (!matchup || !config || !spinKey) return;
-    if (lastSpinKeyRef.current === spinKey) return;
+    if (!visible || !matchup || !config || !spinKey || !triggerKey) return;
+    if (consumedStarts.current.has(triggerKey)) return;
     const mc = config.matchups[matchup];
     if (!mc || !mc.enabled || mc.builds.length === 0) return;
     // Game-key seeding keeps the build and unit pair identical if the same
@@ -70,12 +75,14 @@ export function RandomizerWidget({
     // produces a fresh outcome.
     const outcome = spinResult(matchup, mc, mulberry32(seedFromString(spinKey)));
     if (!outcome) return;
-    lastSpinKeyRef.current = spinKey;
+    consumedStarts.current.add(triggerKey);
     spinIdRef.current += 1;
-    setSpin({ outcome, spinId: spinIdRef.current });
-  }, [matchup, spinKey, config]);
+    setSpin({ outcome, spinId: spinIdRef.current, triggerKey });
+  }, [visible, matchup, spinKey, triggerKey, config]);
 
-  if (!spin) return null;
+  // Keep the reveal mounted through transient phase gaps; the clients hide
+  // its frame. A genuinely different match must wait for its own outcome.
+  if (!spin || (triggerKey !== null && spin.triggerKey !== triggerKey)) return null;
 
   return (
     <div
@@ -97,18 +104,17 @@ export function RandomizerWidget({
   );
 }
 
-/** Pull the matchup label from whichever source has it first. */
+/** Use the current envelope; a cached live payload may belong to the last game. */
 function deriveMatchup(
   live: LiveGamePayload | null,
   liveGame: LiveGameEnvelope | null,
 ): MatchupKey | null {
-  const direct = live?.matchup || liveGame?.streamerHistory?.matchup;
+  const fromEnvelope = !!liveGame && !live?.isTest;
+  const payload = fromEnvelope ? liveGame.streamerHistory : live;
+  const direct = payload?.matchup;
   if (isMatchupKey(direct)) return direct;
-  const myRace = live?.myRace || liveGame?.streamerHistory?.myRace;
-  const oppRace =
-    live?.oppRace ||
-    liveGame?.streamerHistory?.oppRace ||
-    liveGame?.opponent?.race;
+  const myRace = fromEnvelope ? liveGame.user?.race || payload?.myRace : payload?.myRace;
+  const oppRace = fromEnvelope ? liveGame.opponent?.race || payload?.oppRace : payload?.oppRace;
   const my = coerceRace(myRace);
   const vs = coerceRace(oppRace);
   if (my === "Random" || vs === "Random") return null;
@@ -152,6 +158,7 @@ export function deriveSpinKey(
   if (envLive && typeof envKey === "string" && envKey.length > 0) {
     return `${matchup}:${envKey}`;
   }
+  if (liveGame) return null;
   // No agent envelope (agent offline / replay-only). Only a ``live``
   // payload WITHOUT a result may start a spin: a post-game card always
   // carries a ``result``, and firing off it is the same game-END

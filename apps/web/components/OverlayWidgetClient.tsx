@@ -24,6 +24,7 @@ import {
   type VoicePrefs,
 } from "@/components/overlay/useVoiceReadout";
 import { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
+import { useGameStartTriggerKey } from "@/components/overlay/gameStartTrigger";
 import {
   mergeLiveGameStreamerHistory,
   type StickyStreamerHistory,
@@ -241,7 +242,10 @@ export function OverlayWidgetClient({
     enableVoiceHere ? liveGame : null,
   );
 
-  if (!effectiveEnabled || (!visible && !ghostArmed && !alwaysVisible)) {
+  // Hiding the randomizer must retain its consumed match identities and
+  // running sequence through a brief loading/menu/reconnect transition.
+  const retainRandomizer = widget === "randomizer";
+  if (!effectiveEnabled || (!visible && !ghostArmed && !alwaysVisible && !retainRandomizer)) {
     return (
       <>
         <div style={{ background: "transparent" }} />
@@ -264,6 +268,7 @@ export function OverlayWidgetClient({
           minHeight: "100vh",
           width: "100%",
           background: "transparent",
+          display: retainRandomizer && !visible ? "none" : undefined,
           ...themeVars,
         } as CSSProperties
       }
@@ -285,6 +290,7 @@ export function OverlayWidgetClient({
         liveGame={liveGame}
         session={session}
         randomizer={randomizer}
+        visible={visible}
         ghostParam={effectiveGhostParam}
         studioEvent={studioEvent}
         engagementEvent={engagementEvent}
@@ -327,6 +333,7 @@ function WidgetRenderer({
   liveGame,
   session,
   randomizer,
+  visible,
   ghostParam,
   studioEvent,
   engagementEvent,
@@ -338,6 +345,7 @@ function WidgetRenderer({
   liveGame: LiveGameEnvelope | null;
   session: SessionSummary | null;
   randomizer: RandomizerConfig | null;
+  visible: boolean;
   ghostParam: string | null;
   studioEvent: unknown;
   engagementEvent: unknown;
@@ -386,7 +394,7 @@ function WidgetRenderer({
       return <SessionWidget live={live} session={session} />;
     case "randomizer":
       return (
-        <RandomizerWidget live={live} liveGame={liveGame} config={randomizer} />
+        <RandomizerWidget live={live} liveGame={liveGame} config={randomizer} visible={visible} />
       );
     case "ghost-build":
       // Practice coach — the target build rides in this Browser
@@ -690,33 +698,10 @@ function useOverlayWidgetSocket(
 export { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
 
 /**
- * Re-arm the widget's auto-hide timer every time a fresh payload
- * arrives. The payload feed differs per widget — `session` reads from
- * the dedicated `overlay:session` event, every other widget reads
- * from the merged `overlay:live` payload — and each payload's
- * `isTest` flag picks production vs. test durations.
- *
- * Pre/in-game envelope handling (``liveGame``):
- *   The opponent and scouting widgets get a second source of
- *   visibility — the agent's pre-game ``overlay:liveGame`` envelope.
- *   While the bridge is reporting an ACTIVE match phase
- *   (``match_loading`` / ``match_started`` / ``match_in_progress``),
- *   the widget stays pinned and the auto-hide timer is suppressed —
- *   that's how the opponent dossier survives a 20-minute match instead
- *   of timing out at the per-widget natural duration.
- *
- *   Once the bridge flips to ``match_ended`` (SC2 reported a result)
- *   we DROP the suppression and let the natural per-widget timer run.
- *   Real-stream repro: a streamer can sit on the SC2 score screen for
- *   30 s – several minutes after a game; under the prior "any non-idle
- *   phase suppresses the timer" rule, the scouting widget would stay
- *   pinned that whole time. Letting ``match_ended`` use the natural
- *   22 s scouting timer lines up with the post-game card the cloud
- *   ships when the replay parses (typically within ~30 s of game end).
- *
- *   ``idle`` / ``menu`` envelopes are also handled by the socket layer
- *   clearing ``liveGame`` to null entirely, so the widget falls through
- *   to whatever ``live`` has cached and uses its natural timer.
+ * Scouting and randomizer get one visibility window per match or Test nonce.
+ * Their original deadlines survive phase gaps and reconnect snapshots.
+ * Opponent stays pinned through active gameplay; other widgets use their
+ * payload's normal production or Test duration.
  */
 export function useWidgetVisibility(
   widget: WidgetId,
@@ -726,13 +711,14 @@ export function useWidgetVisibility(
   setVisible: (visible: boolean) => void,
 ) {
   const timerRef = useRef<number | null>(null);
+  // Keep the original deadline after a transient idle/menu tick unmounts
+  // the widget. Recovering the same match can resume that window, but
+  // must never restart a reveal or show an already-expired scouting card.
+  const startDeadlines = useRef(new Map<string, number>());
+  const startOnly = widget === "scouting" || widget === "randomizer";
+  const startKey = useGameStartTriggerKey(live, liveGame);
 
-  // Widgets that participate in the agent's pre-game flow get a
-  // second source of visibility ("the bridge says we're in a match").
-  // Other widgets continue to derive visibility purely from the
-  // post-game ``overlay:live`` payload.
-  const consumesLiveGame =
-    widget === "opponent" || widget === "scouting" || widget === "randomizer";
+  const consumesLiveGame = widget === "opponent";
   // Active match phases — used to count the live envelope as a
   // render source. ``match_ended`` deliberately drops out so the
   // widget falls through to the post-game ``live`` payload (or hides
@@ -755,44 +741,38 @@ export function useWidgetVisibility(
   const isTest = Boolean(
     widget === "session" ? session?.isTest : live?.isTest,
   );
-  // The randomizer is a game-START reveal driven by the agent's active-
-  // phase envelope (and test fires). A real post-game ``live`` payload —
-  // one carrying a ``result`` — must NOT count as a visibility source for
-  // it: the mid-match timer already unmounted the widget, and re-showing
-  // it on the post-game payload remounts it with a fresh spin-dedupe ref,
-  // producing a duplicate spin at game END. The agent-offline pre-game
-  // path (a ``live`` with no result) still shows it.
-  const liveCountsAsSource =
-    widget !== "randomizer" || isTest || !live?.result;
   const hasAnySource =
-    (Boolean(sourceForWidget) && liveCountsAsSource) || Boolean(liveGameActive);
-  // Identity of the current match. When this changes between renders
-  // we MUST re-arm the visibility timer even if ``hasAnySource`` is
-  // unchanged: the scouting widget's natural 15 s timer expires
-  // mid-match and leaves ``visible=false``; on the next match's
-  // ``match_loading`` envelope the boolean ``hasAnySource`` stays
-  // ``true`` (post-game ``live`` and the new ``liveGame`` overlap for
-  // a moment around the gameKey-clear effect) so without a fresh
-  // identity dependency the effect would never re-fire and the
-  // streamer's scouting card would stay hidden until they refresh
-  // the OBS Browser Source — exactly the bug we hit.
-  //
-  // Prefer the live envelope's gameKey because it's the freshest signal
-  // mid-match; fall back to the post-game payload's gameKey when we
-  // only have the latter (replay-only path). ``null`` covers the brief
-  // window between page boot and the first envelope where neither
-  // identity is known.
+    Boolean(sourceForWidget) || liveGameActive;
+  // A new match still re-arms the payload-driven widgets even if a source
+  // remained present between games. Start-only widgets use startKey below.
   const currentGameKey = liveGame?.gameKey ?? live?.gameKey ?? null;
-  // Test payloads deliberately have no gameKey. The API stamps every Test
-  // click with a nonce so the dedicated randomizer source can distinguish a
-  // fresh replay from the still-cached payload whose timer already expired.
-  // Keep this randomizer-only: other widgets retain their established
-  // visibility identity, while the composite client already re-arms from the
-  // complete `live` object.
-  const randomizerTestNonce =
-    widget === "randomizer" && isTest ? (live?.testNonce ?? null) : null;
 
   useEffect(() => {
+    if (startOnly) {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      if (startKey === null) {
+        setVisible(false);
+        return;
+      }
+      const identity = `${widget}:${startKey}`;
+      let deadline = startDeadlines.current.get(identity);
+      if (deadline === undefined) {
+        deadline = Date.now() + (resolveWidgetDurationMs(widget, isTest) ?? 0);
+        startDeadlines.current.set(identity, deadline);
+      }
+      const remaining = deadline - Date.now();
+      setVisible(remaining > 0);
+      if (remaining > 0) {
+        timerRef.current = window.setTimeout(() => {
+          setVisible(false);
+          timerRef.current = null;
+        }, remaining);
+      }
+      return;
+    }
     // No source at all (e.g. after the streamer cancelled a Test fire
     // AND the bridge has cleared back to idle) — hide immediately and
     // drop the pending visibility timer so a stale tick can't flip the
@@ -828,7 +808,8 @@ export function useWidgetVisibility(
     pinThroughMatch,
     isTest,
     currentGameKey,
-    randomizerTestNonce,
+    startOnly,
+    startKey,
     setVisible,
   ]);
 

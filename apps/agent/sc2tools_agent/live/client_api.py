@@ -43,6 +43,7 @@ import requests
 from .event_bus import EventBus
 from .metrics import METRICS
 from .types import (
+    _normalise_player_name,
     LiveGameState,
     LiveLifecycleEvent,
     LiveLifecyclePhase,
@@ -138,6 +139,9 @@ class LiveClientPoller:
         self._last_phase: Optional[LiveLifecyclePhase] = None
         self._current_game_key: Optional[str] = None
         self._match_started_at_ms: Optional[int] = None
+        # Anchor a complete roster only once gameplay supplies healthy
+        # telemetry. Loading can initially have no players or partial names.
+        self._current_player_roster: Optional[tuple[str, ...]] = None
         # The last MATCH_IN_PROGRESS displayTime we emitted, so we can
         # de-duplicate identical ticks (the client API sometimes
         # repeats the same value within sub-second polls).
@@ -230,8 +234,6 @@ class LiveClientPoller:
             self._reset_match_state()
             return LiveLifecyclePhase.MENU, self._cfg.interval_sec
 
-        self._active_poll_misses = 0
-
         # Replay sessions: explicitly do NOT push to the bridge. The
         # streamer reviewing a vod doesn't want fake "scouting" widgets
         # appearing for the in-replay opponent.
@@ -295,8 +297,7 @@ class LiveClientPoller:
                 # ``live.result`` is still set from game N's post-game
                 # payload). Clearing here makes the synthesis branches
                 # see a clean slate for any subsequent active-phase
-                # event — MATCH_LOADING already unconditionally
-                # synthesises on transition-in; MATCH_STARTED /
+                # event — MATCH_LOADING / MATCH_STARTED /
                 # MATCH_IN_PROGRESS take the ``is None`` branch which
                 # now flips back into "true" the moment a match ends.
                 self._reset_match_state()
@@ -307,16 +308,29 @@ class LiveClientPoller:
             # earliest moment widgets can pre-populate. Use the fast
             # interval so we catch the loading→in-game flip within
             # ~250 ms of it happening.
-            if self._last_phase != LiveLifecyclePhase.MATCH_LOADING:
-                # New game starting — synthesise its game_key now so
-                # subsequent in-progress / ended events carry the same
-                # identifier.
+            self._active_poll_misses = 0
+            roster = _fully_known_player_roster(game.players)
+            if (
+                self._current_player_roster is not None
+                and roster is not None
+                and len(roster) == len(self._current_player_roster)
+                and roster != self._current_player_roster
+            ):
+                # A changed complete roster recovers a real next match
+                # even when every end/menu snapshot fell between polls.
+                self._reset_match_state()
+            new_identity = self._current_game_key is None
+            if new_identity:
+                # /ui and /game are separate snapshots, so loading can
+                # briefly reappear without a new match. Retain the key
+                # unless a boundary or a changed known roster retired it.
                 self._match_started_at_ms = int(time.time() * 1000)
                 self._current_game_key = _synthesise_game_key(
                     players=game.players,
                     started_at_ms=self._match_started_at_ms,
                 )
                 self._last_in_progress_display_time = -1.0
+            if new_identity or self._last_phase != LiveLifecyclePhase.MATCH_LOADING:
                 self._emit(
                     LiveLifecyclePhase.MATCH_LOADING,
                     ui_state=ui,
@@ -328,6 +342,9 @@ class LiveClientPoller:
             # First poll inside the match → MATCH_STARTED. Subsequent
             # polls → MATCH_IN_PROGRESS so consumers can distinguish
             # "just transitioned" from "still going".
+            self._active_poll_misses = 0
+            if self._current_player_roster is None:
+                self._current_player_roster = _fully_known_player_roster(game.players)
             if self._last_phase != LiveLifecyclePhase.MATCH_STARTED \
                     and self._last_phase != LiveLifecyclePhase.MATCH_IN_PROGRESS:
                 # We came from MENU/IDLE/LOADING — seed the game_key
@@ -364,6 +381,14 @@ class LiveClientPoller:
                 self._cfg.interval_sec,
             )
 
+        if ui.is_in_match:
+            # During a loading/UI flip the game endpoint can still have
+            # its zero-clock snapshot. Apply the same bounded grace as
+            # missing telemetry instead of clearing and restarting widgets.
+            preserved = self._preserve_active_on_transient_miss()
+            if preserved is not None:
+                return preserved
+
         # Fall-through: SC2 running, on a menu screen.
         if self._last_phase != LiveLifecyclePhase.MENU:
             self._emit(
@@ -391,6 +416,7 @@ class LiveClientPoller:
     def _reset_match_state(self) -> None:
         self._current_game_key = None
         self._match_started_at_ms = None
+        self._current_player_roster = None
         self._last_in_progress_display_time = -1.0
         self._active_poll_misses = 0
 
@@ -484,6 +510,15 @@ class LiveClientPoller:
                 game_key=self._current_game_key,
             )
         )
+
+
+def _fully_known_player_roster(
+    players: List[LivePlayer],
+) -> Optional[tuple[str, ...]]:
+    """Only complete, normalized names can prove a changed game roster."""
+    if len(players) < 2 or any(not player.name.strip() for player in players):
+        return None
+    return tuple(sorted(_normalise_player_name(player.name) for player in players))
 
 
 def _player_from_dict(raw: Dict[str, Any]) -> LivePlayer:

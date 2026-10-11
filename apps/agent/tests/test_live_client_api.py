@@ -10,6 +10,7 @@ the full loop with a stubbed session.
 from __future__ import annotations
 
 import json
+from itertools import count
 from typing import Any, List, Optional
 from unittest.mock import MagicMock
 
@@ -17,6 +18,7 @@ import pytest
 import requests
 
 from sc2tools_agent.live.client_api import (
+    ACTIVE_POLL_MISS_GRACE,
     DEFAULT_FAST_INTERVAL_SEC,
     DEFAULT_IDLE_BACKOFF_SEC,
     LiveClientPoller,
@@ -785,6 +787,227 @@ def test_transient_game_failure_during_match_preserves_identity() -> None:
     ]
     assert seen[-1].game_key == first_key
     assert LiveLifecyclePhase.MENU not in [event.phase for event in seen]
+
+
+@pytest.mark.parametrize("loading_screen", ["ScreenLoading", "ScreenLoading/ScreenLoading"])
+def test_loading_screen_reappearing_during_match_keeps_game_key(
+    monkeypatch, loading_screen: str,
+) -> None:
+    """Out-of-sync UI snapshots must not turn one game into several starts."""
+    from sc2tools_agent.live import client_api
+
+    # Force different timestamps if the poller incorrectly reseeds the key.
+    timestamps = count(10.0, 10.0)
+    monkeypatch.setattr(client_api.time, "time", lambda: next(timestamps))
+    session = _StubSession()
+    observations = [
+        ([loading_screen], 0.0),
+        ([], 2.0),
+        ([], 3.0),
+        ([loading_screen], 3.0),
+        ([], 4.0),
+        ([loading_screen], 0.0),
+        ([], 5.0),
+    ]
+    for screens, display_time in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(_live_game(
+            "Opponent", display_time=display_time,
+        )))
+    poller, seen = _make_poller(session)
+    for _ in observations:
+        phase, _ = poller._tick_once()
+        poller._last_phase = phase
+
+    assert len({event.game_key for event in seen}) == 1
+    assert seen[0].game_key is not None
+    assert all(event.phase != LiveLifecyclePhase.MENU for event in seen)
+
+
+@pytest.mark.parametrize("stale_loading_seen", [False, True])
+def test_new_roster_loading_recovers_missed_match_boundary(
+    stale_loading_seen: bool,
+) -> None:
+    """A different fully known opponent proves loading belongs to a new game."""
+    previous = _live_game("OldOpponent", display_time=10.0)
+    next_game = _live_game("NewOpponent", display_time=0.0)
+    observations = [
+        ([], previous),
+        ([], {**previous, "displayTime": 11.0}),
+        *([(["ScreenLoading"], previous)] if stale_loading_seen else []),
+        (["ScreenLoading"], next_game),
+        ([], {**next_game, "displayTime": 2.0}),
+    ]
+    session = _StubSession()
+    for screens, game in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(game))
+    poller, seen = _make_poller(session)
+    for _ in observations:
+        phase, _ = poller._tick_once()
+        poller._last_phase = phase
+
+    assert seen[1].phase == LiveLifecyclePhase.MATCH_IN_PROGRESS
+    assert seen[-2].phase == LiveLifecyclePhase.MATCH_LOADING
+    assert seen[-2].game_state.opponent_for("Streamer#1").name == "NewOpponent"
+    assert seen[-2].game_key != seen[0].game_key
+    assert seen[-1].game_key == seen[-2].game_key
+    assert "NewOpponent" in seen[-1].game_key
+
+
+@pytest.mark.parametrize("initial_roster", [[], ["Streamer#1"], ["Streamer#1", ""]])
+def test_loading_roster_filling_in_keeps_initial_identity(
+    initial_roster: list[str],
+) -> None:
+    """Discovering missing player names is enrichment of the first match."""
+    complete = _live_game("Opponent", display_time=0.0)
+    incomplete = {
+        **complete,
+        "players": [
+            {**complete["players"][index], "name": name}
+            for index, name in enumerate(initial_roster)
+        ],
+    }
+    observations = [
+        (["ScreenLoading"], incomplete),
+        (["ScreenLoading"], complete),
+        ([], {**complete, "displayTime": 2.0}),
+    ]
+    session = _StubSession()
+    for screens, game in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(game))
+    poller, seen = _make_poller(session)
+    for _ in observations:
+        phase, _ = poller._tick_once()
+        poller._last_phase = phase
+
+    assert len({event.game_key for event in seen}) == 1
+    assert seen[-1].game_state.opponent_for("Streamer#1").name == "Opponent"
+
+
+def test_loading_roster_normalizes_clan_case_and_order() -> None:
+    """Cosmetic name changes cannot establish a new opponent or new match."""
+    original = _live_game("[Clan] Opponent", display_time=10.0)
+    cosmetic = {
+        **original,
+        "players": [
+            {**original["players"][1], "name": "  opponent  "},
+            {**original["players"][0], "name": "[OtherClan] STREAMER#1"},
+        ],
+    }
+    observations = [
+        ([], original),
+        (["ScreenLoading"], cosmetic),
+        ([], {**cosmetic, "displayTime": 11.0}),
+    ]
+    session = _StubSession()
+    for screens, game in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(game))
+    poller, seen = _make_poller(session)
+    for _ in observations:
+        phase, _ = poller._tick_once()
+        poller._last_phase = phase
+
+    assert len({event.game_key for event in seen}) == 1
+
+
+@pytest.mark.parametrize("screens", [[], ["ForegroundScreen"], ["ScreenUnknown/ScreenUnknown"]])
+@pytest.mark.parametrize("started", [False, True])
+def test_transient_zero_clock_preserves_active_match(
+    screens: list[str], started: bool,
+) -> None:
+    """A loading/UI flip can arrive before /game has a usable clock."""
+    session = _StubSession()
+    observations = [
+        (["ScreenLoading"], 0.0),
+        *([([], 2.0)] if started else []),
+        *[(screens, 0.0)] * ACTIVE_POLL_MISS_GRACE,
+        ([], 4.0),
+    ]
+    for active_screens, display_time in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": active_screens}))
+        session.queue("http://localhost:6119/game", _ok(_live_game(
+            "Opponent", display_time=display_time,
+        )))
+    poller, seen = _make_poller(session)
+    phases = []
+    for _ in observations:
+        phase, _ = poller._tick_once()
+        phases.append(phase)
+        poller._last_phase = phase
+
+    assert LiveLifecyclePhase.MENU not in phases
+    assert len({event.game_key for event in seen}) == 1
+    assert seen[0].game_key is not None
+    assert seen[-1].game_state.display_time == 4.0
+    assert poller._active_poll_misses == 0
+
+
+def test_zero_clock_grace_remains_bounded() -> None:
+    """Persistently incomplete telemetry must still retire the active game."""
+    session = _StubSession()
+    observations = [
+        ([], 2.0),
+        *[([], 0.0)] * (ACTIVE_POLL_MISS_GRACE + 1),
+    ]
+    for screens, display_time in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(_live_game(
+            "Opponent", display_time=display_time,
+        )))
+    poller, seen = _make_poller(session)
+    phases = []
+    for _ in observations:
+        phase, _ = poller._tick_once()
+        phases.append(phase)
+        poller._last_phase = phase
+
+    assert phases == [LiveLifecyclePhase.MATCH_STARTED] * (
+        ACTIVE_POLL_MISS_GRACE + 1
+    ) + [LiveLifecyclePhase.MENU]
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MENU,
+    ]
+    assert poller._current_game_key is None
+
+
+@pytest.mark.parametrize("loading_seen", [False, True])
+def test_confirmed_end_gives_fast_same_opponent_rematch_a_fresh_key(
+    monkeypatch, loading_seen: bool,
+) -> None:
+    """A real end boundary rotates identity even when both names repeat."""
+    from sc2tools_agent.live import client_api
+
+    timestamps = count(10.0, 10.0)
+    monkeypatch.setattr(client_api.time, "time", lambda: next(timestamps))
+    decided = _live_game("Opponent", display_time=600.0)
+    decided["players"][0]["result"] = "Victory"
+    decided["players"][1]["result"] = "Defeat"
+    observations = [
+        ([], _live_game("Opponent", display_time=2.0)),
+        (["ScreenScore"], decided),
+        *([(["ScreenLoading"], _live_game("Opponent", display_time=0.0))]
+          if loading_seen else []),
+        ([], _live_game("Opponent", display_time=2.0)),
+    ]
+    session = _StubSession()
+    for screens, game in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(game))
+    poller, seen = _make_poller(session)
+    for _ in observations:
+        phase, _ = poller._tick_once()
+        poller._last_phase = phase
+
+    assert seen[1].phase == LiveLifecyclePhase.MATCH_ENDED
+    assert seen[1].game_key == seen[0].game_key
+    assert seen[-1].phase == LiveLifecyclePhase.MATCH_STARTED
+    assert seen[-1].game_key != seen[0].game_key
+    if loading_seen:
+        assert seen[-2].game_key == seen[-1].game_key
 
 
 @pytest.mark.parametrize("menu_screen", ["ScreenScore", "ScreenMenu"])

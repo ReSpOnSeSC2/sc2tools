@@ -13,6 +13,12 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Agent 0.18.9:** game-start randomizer and scouting widgets no longer
+  restart on brief loading/UI changes or reconnects. The agent preserves the match identity,
+  overlays retain each start's original visibility window, and scouting voice
+  reads once per match. Randomizer draws wait for the current matchup instead
+  of using the previous game's cached data.
+
 - **Agent 0.18.8 / replay engine 1.6.10:** PvT Blink builds require Stalker
   Blink to be the first completed Twilight
   upgrade. Dark Templar's Shadow Stride no longer counts as Blink. Charge-first
