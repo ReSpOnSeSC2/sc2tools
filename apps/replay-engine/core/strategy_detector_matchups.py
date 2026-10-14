@@ -354,14 +354,20 @@ def detect_tvp(ctx: DetectionContext) -> Optional[str]:
     ):
         return "TvP - Tank/Thor Mech"
 
-    # 8. Widow Mine Drop: 2+ Widow Mines with a Medivac behind a Marine
-    # ball -- the mine-drop harass opening. Checked before the 2-1-1
-    # Reaper Expand so the mine signature wins over the generic
-    # Medivac-timing shape.
+    # 8. Widow Mine Drop: an opening mine/Medivac commitment. Mines and
+    # Medivacs added by 8:00 to a Viking-first, fast-3-CC bio game are
+    # support units, not evidence of the initial harass build. Require
+    # both by 6:30 (the generic Terran mine-drop window) and a Medivac
+    # as the first Starport unit. Checked before the 2-1-1 Reaper Expand
+    # so a genuine mine signature wins over the generic timing shape.
     if (
-        ctx.count_units("WidowMine", 480) >= 2
+        ctx.count_units("WidowMine", 390) >= 2
         and ctx.count_units("Marine", 480) >= 8
-        and ctx.count_units("Medivac", 480) >= 1
+        and ctx.count_units("Medivac", 390) >= 1
+        and ctx.unit_time("Medivac") <= min(
+            ctx.unit_time(name)
+            for name in ("VikingFighter", "Banshee", "Liberator", "Raven", "Battlecruiser")
+        )
     ):
         return "TvP - Widow Mine Drop"
 

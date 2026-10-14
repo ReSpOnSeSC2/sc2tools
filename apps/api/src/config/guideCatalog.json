@@ -301,6 +301,13 @@
     "opener": true
   },
   {
+    "name": "PvT - AlphaStar Style (Oracle/Robo)",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Stargate is the first tech building and Oracle is its first real unit, produced before Robo and the third Nexus. The second Gateway starts after Stargate, exactly two Gateways start before the third Nexus, the third starts before 6:00, and Robo starts by 5:30, at most 30 seconds before the third. Both the third and Robo precede Twilight, which starts by 8:00. This identifies the two-Gate Oracle / fast-third / Robo-then-Twilight macro opening, including near-simultaneous Robo and third placement. Later Phoenix do not change the opener.",
+    "opener": true
+  },
+  {
     "name": "PvT - Charge First (Fast 3rd Nexus)",
     "race": "Protoss",
     "matchup": "PvT",
@@ -329,17 +336,24 @@
     "opener": false
   },
   {
+    "name": "PvT - Oracle Opener",
+    "race": "Protoss",
+    "matchup": "PvT",
+    "description": "Detected if Stargate is the first tech building and Oracle is its first real unit, on the field by 7:00, without matching the more specific AlphaStar or Stargate-into-Twilight-upgrade rules. Flagged hallucinations and units missing tech prerequisites do not count. Later Phoenix do not change an Oracle-first opener into Phoenix play.",
+    "opener": true
+  },
+  {
     "name": "PvT - Phoenix Opener",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if Stargate is the FIRST tech building (before Robo AND Twilight), 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND the player's second Gateway was built BEFORE the Robotics Facility -- a pure Stargate-first Phoenix opener. The Stargate-first ordering keeps Robo-first openers with a midgame Stargate + Phoenix harass off this label (those fall through to Robo First). Hallucinated Phoenix from Sentries do NOT count.",
+    "description": "Detected if Stargate is the first tech building, Phoenix is its first real unit and is on the field by 7:00, and the second Gateway starts before Robotics Facility. Earlier Oracle, Void Ray, Carrier or Tempest production prevents later Phoenix from changing the opener. Flagged hallucinations and units missing tech prerequisites do not count.",
     "opener": true
   },
   {
     "name": "PvT - Phoenix into Robo",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if Stargate is the FIRST tech building (before Robo AND Twilight), 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND a Robotics Facility is up by 8:00 -- a Stargate-first Phoenix opener that transitions into Robo tech. The Stargate-first ordering keeps Robo-first openers that ADD a midgame Stargate + real Phoenix off this label (those fall through to Robo First, since the OPENER was Robo). A Sentry's hallucinated Phoenix does NOT trigger this build.",
+    "description": "Detected if Stargate is the first tech building, Phoenix is its first real unit and is on the field by 7:00, and a Robotics Facility starts by 8:00. Earlier Oracle, Void Ray, Carrier or Tempest production prevents later Phoenix from changing the opener. Flagged hallucinations and units missing tech prerequisites do not count.",
     "opener": true
   },
   {
@@ -374,7 +388,7 @@
     "name": "PvT - Stargate Opener",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Catch-all: detected when a Stargate is the FIRST tech building after the Cybernetics Core (before Twilight Council and before Robotics Facility) AND the build did NOT match any more specific Stargate-prefixed PvT rule (Proxy Void Ray / Stargate into Charge / Glaives / Blink / Phoenix into Robo / Phoenix Opener). A custom build rule can refine this further.",
+    "description": "Catch-all: detected when a Stargate is the FIRST tech building after the Cybernetics Core (before Twilight Council and before Robotics Facility) AND the build did NOT match any more specific Stargate-prefixed PvT rule (Proxy Void Ray / Stargate into Charge / Glaives / Blink / AlphaStar Style / Oracle Opener / Phoenix into Robo / Phoenix Opener). A custom build rule can refine this further.",
     "opener": true
   },
   {
@@ -717,21 +731,21 @@
     "name": "Terran - Widow Mine Drop",
     "race": "Terran",
     "matchup": null,
-    "description": "Detected if Medivac and multiple widow mines are built after second CC within the first 6:30.",
+    "description": "Detected if Medivac and multiple widow mines are built after second CC within the first 6:30. Against Protoss, Medivac must be the first or co-first real Starport unit; earlier Vikings or other Starport units prevent this opening label.",
     "opener": true
   },
   {
     "name": "Terran - Widow Mine Drop into Thor Rush",
     "race": "Terran",
     "matchup": null,
-    "description": "Detected if a Medivac and 2+ Widow Mines are built AFTER the second Command Center (within ~6:30), and a Thor has been produced before ~8:10 -- a Mine drop transitioning into Thor pressure.",
+    "description": "Detected if a Medivac and 2+ Widow Mines are built AFTER the second Command Center (within ~6:30), and a Thor has been produced before ~8:10 -- a Mine drop transitioning into Thor pressure. Against Protoss, Medivac must be the first or co-first real Starport unit; earlier Vikings or other Starport units prevent this opening label.",
     "opener": true
   },
   {
     "name": "Terran - Widow Upgraded Mine Cheese",
     "race": "Terran",
     "matchup": null,
-    "description": "Detected if a Medivac and 2+ Widow Mines are built BEFORE the second Command Center -- a 1-base Widow Mine drop cheese.",
+    "description": "Detected if a Medivac and 2+ Widow Mines are built BEFORE the second Command Center -- a 1-base Widow Mine drop cheese. Against Protoss, Medivac must be the first or co-first real Starport unit; earlier Vikings or other Starport units prevent this opening label.",
     "opener": true
   },
   {
@@ -815,7 +829,7 @@
     "name": "TvP - Widow Mine Drop",
     "race": "Terran",
     "matchup": "TvP",
-    "description": "Detected when a Marine ball with 2+ Widow Mines and a Medivac runs mobile mine drops into the Protoss mineral lines.",
+    "description": "Detected if 2+ real Widow Mines and a real Medivac are produced by 6:30, Medivac is the first or co-first real Starport unit (no later than Viking, Liberator, Banshee, Raven or Battlecruiser), and 8+ Marines are produced by 8:00. Later support mines or a Medivac added after a Viking opener do not classify as a mine-drop opening.",
     "opener": true
   },
   {

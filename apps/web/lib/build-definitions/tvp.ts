@@ -63,7 +63,7 @@ export const TVP_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "TvP",
     name: "TvP - Widow Mine Drop",
     description:
-      "Detected when a Marine ball with 2+ Widow Mines and a Medivac runs mobile mine drops into the Protoss mineral lines.",
+      "Detected if 2+ real Widow Mines and a real Medivac are produced by 6:30, Medivac is the first or co-first real Starport unit (no later than Viking, Liberator, Banshee, Raven or Battlecruiser), and 8+ Marines are produced by 8:00. Later support mines or a Medivac added after a Viking opener do not classify as a mine-drop opening.",
   },
   {
     race: "Terran",

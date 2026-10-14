@@ -230,8 +230,8 @@ def test_tvp_tank_thor_mech():
 def test_tvp_widow_mine_drop():
     events = [
         _b("CommandCenter", 0),
-        _b("Barracks", 80), _b("Factory", 200), _b("Starport", 300),
-        *_n("WidowMine", 400, 2), *_n("Marine", 250, 8), _u("Medivac", 450),
+        _b("Barracks", 80), _b("Factory", 200), _b("Starport", 280),
+        *_n("WidowMine", 310, 2), *_n("Marine", 250, 8), _u("Medivac", 360),
     ]
     assert _classify("Terran", "Protoss", events) == "TvP - Widow Mine Drop"
 
@@ -242,11 +242,84 @@ def test_tvp_widow_mine_drop_wins_over_reaper_expand():
     # signature is checked first by design.
     events = [
         _b("CommandCenter", 0), _b("CommandCenter", 180),
-        _b("Barracks", 60), _b("Factory", 300), _b("Starport", 380),
-        _u("Reaper", 150), *_n("WidowMine", 420, 2), *_n("Marine", 250, 8),
-        _u("Medivac", 460),
+        _b("Barracks", 60), _b("Factory", 200), _b("Starport", 280),
+        _u("Reaper", 150), *_n("WidowMine", 310, 2), *_n("Marine", 250, 8),
+        _u("Medivac", 360),
     ]
     assert _classify("Terran", "Protoss", events) == "TvP - Widow Mine Drop"
+
+
+def test_tvp_viking_bio_without_mines_is_not_a_mine_drop():
+    # Vikings answer a Stargate opener. A later Medivac and Marine
+    # production do not prove a mine drop when no mines were produced.
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Barracks", 60), _b("Factory", 200), _b("Starport", 280),
+        _u("Reaper", 150), _u("VikingFighter", 340),
+        _u("Medivac", 440), *_n("Marine", 250, 8),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - 2-1-1 Reaper Expand"
+
+
+def test_tvp_mines_without_transport_are_not_a_mine_drop():
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Barracks", 60), _b("Factory", 200), _b("Starport", 280),
+        *_n("WidowMine", 310, 2), *_n("Marine", 250, 8),
+        _u("VikingFighter", 340),
+    ]
+    assert "Mine Drop" not in _classify("Terran", "Protoss", events)
+
+
+def test_tvp_viking_first_with_early_support_mines_is_not_a_mine_opener():
+    # Even early defensive mines plus a subsequent Medivac must not
+    # overwrite a Viking-first Starport opening.
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Barracks", 60), _b("Factory", 200), _b("Starport", 280),
+        _u("Reaper", 150), _u("VikingFighter", 310),
+        *_n("WidowMine", 320, 2), _u("Medivac", 360), *_n("Marine", 250, 8),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - 2-1-1 Reaper Expand"
+
+
+def test_tvp_viking_after_mine_drop_preserves_the_mine_opener():
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Barracks", 60), _b("Factory", 200), _b("Starport", 280),
+        _u("Reaper", 150), *_n("WidowMine", 310, 2),
+        _u("Medivac", 360), _u("VikingFighter", 375), *_n("Marine", 250, 8),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - Widow Mine Drop"
+
+
+def test_tvp_later_mines_do_not_replace_the_bio_opening():
+    events = [
+        _b("CommandCenter", 0), _b("CommandCenter", 180),
+        _b("Barracks", 60), _b("Factory", 200), _b("Starport", 280),
+        _u("Reaper", 150), _u("Medivac", 360),
+        *_n("Marine", 250, 8), *_n("WidowMine", 420, 2),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - 2-1-1 Reaper Expand"
+
+
+def test_tvp_rainfall_viking_fast_3cc_with_late_mines():
+    # Production timings from Rainfall LE, 2026-10-14 15:46:11 UTC:
+    # the Starport opened Vikings, the third CC started at 4:33, and
+    # the first mines/Medivac appeared at 6:51 / 7:04. Those support
+    # units must not turn this macro opening into Widow Mine Drop.
+    events = [
+        {**_b("CommandCenter", 0), "subtype": "born"},
+        _b("Barracks", 40), _b("CommandCenter", 100), _u("Reaper", 119),
+        _b("Factory", 131), _b("Starport", 179),
+        _u("VikingFighter", 259), _u("VikingFighter", 259),
+        _b("CommandCenter", 273), _b("Barracks", 305), _b("Barracks", 305),
+        _u("VikingFighter", 314), _u("VikingFighter", 314),
+        *[_u("Marine", t) for t in (137, 157, 215, 215, 248, 285, 402, 402)],
+        _u("WidowMine", 411), _u("WidowMine", 412), _u("Medivac", 424),
+        _u("WidowMine", 439), _u("WidowMine", 439), _u("Medivac", 440),
+    ]
+    assert _classify("Terran", "Protoss", events) == "TvP - Fast 3 CC Bio"
 
 
 def test_tvp_2_base_tank_push():

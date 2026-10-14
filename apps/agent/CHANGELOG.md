@@ -2,6 +2,23 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.10
+
+### Fixed - OBS port scrolling and PvT opening labels
+
+- Scrolling over the OBS port no longer changes it, even when the field has
+  focus. Typing and deliberate arrow controls still work. Settings show the
+  default **4455** and where to check the matching port in OBS.
+- PvT Oracle-first openings keep their Oracle identity when Phoenix are added
+  later. The two-Gate, fast-third Oracle into Robo and Twilight variant is
+  recognized as **PvT - AlphaStar Style (Oracle/Robo)**; other Oracle-first
+  openings use **PvT - Oracle Opener**.
+- TvP Widow Mine Drop requires early mines and Medivac-first Starport production.
+  Viking-first openings with later support mines keep their actual opening label,
+  including **TvP - Fast 3 CC Bio**. The generic PvT mine-drop fallback follows
+  the same Starport ordering rule.
+- Includes replay engine **1.6.11**, shared with browser Instant Analysis.
+
 ## 0.18.9
 
 ### Fixed - Duplicate game-start widget triggers

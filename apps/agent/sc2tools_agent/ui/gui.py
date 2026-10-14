@@ -1004,6 +1004,14 @@ def _ObsBuildDialog(
 def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
     """Build and return the main window."""
 
+    class ObsPortSpinBox(QtWidgets.QSpinBox):
+        """Keep scrolling the settings page from editing the connection."""
+
+        def wheelEvent(self, event) -> None:
+            # Ignore even while focused, so the enclosing scroll area can
+            # handle the wheel. Typing, arrow keys and buttons remain usable.
+            event.ignore()
+
     class MainWindow(QtWidgets.QMainWindow):
         """Top-level window — sidebar nav + stacked content area."""
 
@@ -2178,14 +2186,25 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             conn.addRow("OBS host", self._obs_host_input)
 
-            self._obs_port_input = QtWidgets.QSpinBox()
+            port_block = QtWidgets.QWidget()
+            port_v = QtWidgets.QVBoxLayout(port_block)
+            port_v.setContentsMargins(0, 0, 0, 0)
+            port_v.setSpacing(6)
+            self._obs_port_input = ObsPortSpinBox()
             self._obs_port_input.setRange(1, 65535)
             self._obs_port_input.setValue(4455)
             self._obs_port_input.setToolTip(
                 "obs-websocket v5 listens on 4455 by default. The old "
                 "v4 plugin's 4444 is not supported.",
             )
-            conn.addRow("Port", self._obs_port_input)
+            port_v.addWidget(self._obs_port_input)
+            port_help = QtWidgets.QLabel(
+                "Default: 4455. Match OBS → Tools → WebSocket Server Settings."
+            )
+            port_help.setObjectName("muted")
+            port_help.setWordWrap(True)
+            port_v.addWidget(port_help)
+            conn.addRow("Port", port_block)
 
             self._obs_password_input = QtWidgets.QLineEdit()
             self._obs_password_input.setEchoMode(QtWidgets.QLineEdit.Password)

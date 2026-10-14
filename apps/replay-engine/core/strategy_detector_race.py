@@ -350,11 +350,23 @@ def classify_by_race(race, events: List[Dict], detector, opp_race=None) -> str:
         medivac_5m = count_units("Medivac", 390)
         if medivac_5m >= 1 and mines_5m >= 2:
             first_medivac_time = next((u["time"] for u in units if u["name"] == "Medivac"), 9999)
-            if first_medivac_time > second_cc_time:
-                if count_units("Thor", 490) > 0:
-                    return "Terran - Widow Mine Drop into Thor Rush"
-                return "Terran - Widow Mine Drop"
-            return "Terran - Widow Upgraded Mine Cheese"
+            mine_drop_opener = True
+            if opp_race == "Protoss":
+                # The TvP detector may decline a Viking-first opening
+                # that adds defensive mines and a Medivac. Its generic
+                # fallback must preserve that opening evidence too.
+                opening_ctx = DetectionContext(buildings, units, upgrades, main_loc, detector)
+                first_medivac_time = opening_ctx.unit_time("Medivac")
+                mine_drop_opener = first_medivac_time <= min(
+                    opening_ctx.unit_time(name)
+                    for name in ("VikingFighter", "Banshee", "Liberator", "Raven", "Battlecruiser")
+                )
+            if mine_drop_opener:
+                if first_medivac_time > second_cc_time:
+                    if count_units("Thor", 490) > 0:
+                        return "Terran - Widow Mine Drop into Thor Rush"
+                    return "Terran - Widow Mine Drop"
+                return "Terran - Widow Upgraded Mine Cheese"
 
         # BC Rush: requires an actual Battlecruiser on the field
         # within the rush window. A Fusion Core alone fires for any

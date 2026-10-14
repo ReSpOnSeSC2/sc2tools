@@ -4,6 +4,20 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
   {
     race: "Protoss",
     matchup: "PvT",
+    name: "PvT - Oracle Opener",
+    description:
+      "Detected if Stargate is the first tech building and Oracle is its first real unit, on the field by 7:00, without matching the more specific AlphaStar or Stargate-into-Twilight-upgrade rules. Flagged hallucinations and units missing tech prerequisites do not count. Later Phoenix do not change an Oracle-first opener into Phoenix play.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvT",
+    name: "PvT - AlphaStar Style (Oracle/Robo)",
+    description:
+      "Detected if Stargate is the first tech building and Oracle is its first real unit, produced before Robo and the third Nexus. The second Gateway starts after Stargate, exactly two Gateways start before the third Nexus, the third starts before 6:00, and Robo starts by 5:30, at most 30 seconds before the third. Both the third and Robo precede Twilight, which starts by 8:00. This identifies the two-Gate Oracle / fast-third / Robo-then-Twilight macro opening, including near-simultaneous Robo and third placement. Later Phoenix do not change the opener.",
+  },
+  {
+    race: "Protoss",
+    matchup: "PvT",
     name: "PvT - 2 Base Templar (Reactive/Delayed 3rd)",
     description:
       "Detected if Twilight Council is the FIRST tech building (before any Robotics Facility AND before any Stargate), a Templar Archives is started by 9:00 and BEFORE the third Nexus, the third Nexus (if any) is delayed to 6:00 or later, the player has 4-6 Gateways by 7:30, AND Blink was not the first Twilight upgrade researched before the Archives (that is a Blink build with a Storm follow-up) -- a reactive 2-base High Templar / Storm timing with a delayed 3rd. The Twilight-first ordering guard keeps Robo-first openers that add a late TA for Storm support off this label (those fall through to Robo First). A hallucinated High Templar is NOT enough; the Templar Archives must actually exist.",
@@ -69,14 +83,14 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - Phoenix Opener",
     description:
-      "Detected if Stargate is the FIRST tech building (before Robo AND Twilight), 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND the player's second Gateway was built BEFORE the Robotics Facility -- a pure Stargate-first Phoenix opener. The Stargate-first ordering keeps Robo-first openers with a midgame Stargate + Phoenix harass off this label (those fall through to Robo First). Hallucinated Phoenix from Sentries do NOT count.",
+      "Detected if Stargate is the first tech building, Phoenix is its first real unit and is on the field by 7:00, and the second Gateway starts before Robotics Facility. Earlier Oracle, Void Ray, Carrier or Tempest production prevents later Phoenix from changing the opener. Flagged hallucinations and units missing tech prerequisites do not count.",
   },
   {
     race: "Protoss",
     matchup: "PvT",
     name: "PvT - Phoenix into Robo",
     description:
-      "Detected if Stargate is the FIRST tech building (before Robo AND Twilight), 1+ real (non-hallucinated) Phoenix is on the field by 7:00, AND a Robotics Facility is up by 8:00 -- a Stargate-first Phoenix opener that transitions into Robo tech. The Stargate-first ordering keeps Robo-first openers that ADD a midgame Stargate + real Phoenix off this label (those fall through to Robo First, since the OPENER was Robo). A Sentry's hallucinated Phoenix does NOT trigger this build.",
+      "Detected if Stargate is the first tech building, Phoenix is its first real unit and is on the field by 7:00, and a Robotics Facility starts by 8:00. Earlier Oracle, Void Ray, Carrier or Tempest production prevents later Phoenix from changing the opener. Flagged hallucinations and units missing tech prerequisites do not count.",
   },
   {
     race: "Protoss",
@@ -111,7 +125,7 @@ export const PVT_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: "PvT",
     name: "PvT - Stargate Opener",
     description:
-      "Catch-all: detected when a Stargate is the FIRST tech building after the Cybernetics Core (before Twilight Council and before Robotics Facility) AND the build did NOT match any more specific Stargate-prefixed PvT rule (Proxy Void Ray / Stargate into Charge / Glaives / Blink / Phoenix into Robo / Phoenix Opener). A custom build rule can refine this further.",
+      "Catch-all: detected when a Stargate is the FIRST tech building after the Cybernetics Core (before Twilight Council and before Robotics Facility) AND the build did NOT match any more specific Stargate-prefixed PvT rule (Proxy Void Ray / Stargate into Charge / Glaives / Blink / AlphaStar Style / Oracle Opener / Phoenix into Robo / Phoenix Opener). A custom build rule can refine this further.",
   },
   {
     race: "Protoss",

@@ -13,6 +13,14 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Agent 0.18.10 / replay engine 1.6.11:** scrolling over the OBS port
+  no longer changes it, including when the field has focus. Settings show
+  the default port, **4455**, and where to verify it in OBS. PvT Oracle-first
+  openings keep an Oracle label when Phoenix are added later; the two-Gate,
+  fast-third Oracle/Robo/Twilight variant uses **AlphaStar Style (Oracle/Robo)**.
+  TvP Widow Mine Drop requires early mines and Medivac-first Starport production,
+  so Vikings into fast-three-CC bio with later support mines keep their bio label.
+
 - **Agent 0.18.9:** game-start randomizer and scouting widgets no longer
   restart on brief loading/UI changes or reconnects. The agent preserves the match identity,
   overlays retain each start's original visibility window, and scouting voice

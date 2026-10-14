@@ -48,6 +48,7 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     twilight_time = building_time("TwilightCouncil")
     ta_time = building_time("TemplarArchive")
     gate_count_730 = count_started_before(buildings, "Gateway", 450)
+    gate_starts = start_times(buildings, "Gateway")
 
     # Proxy 2 Gate: same timing rule as the PvP tree -- a true proxy
     # 2-Gate's Gateways are down by ~1:15 (1:45 with margin), a forward
@@ -130,6 +131,48 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
         if pvt_blink_time == pvt_first_twilight_upgrade:
             return "PvT - Stargate into Blink"
 
+    # The first real Stargate unit identifies the opener. A Phoenix added
+    # after an Oracle (including a scouting hallucination) does not turn the
+    # opening into Phoenix play. unit_time filters flagged hallucinations and
+    # units born before their required tech, just like count_units.
+    oracle_time = ctx.unit_time("Oracle")
+    phoenix_time = ctx.unit_time("Phoenix")
+    other_air_time = min(
+        ctx.unit_time(name) for name in ("VoidRay", "Carrier", "Tempest")
+    )
+    oracle_first = oracle_time < min(phoenix_time, other_air_time)
+    phoenix_first = phoenix_time < min(oracle_time, other_air_time)
+    stargate_first = sg_time < min(robo_time, twilight_time)
+
+    # AlphaStar's PvT variant secures a fast third on two Gateways alongside
+    # Robo, followed by Twilight. Allow Robo up to 30 seconds before the
+    # third: these investments can be placed together (the Rainfall replay
+    # starts Robo at 4:32 and the third at 4:39). Count starts, so Gateway
+    # completion events and production added after the third cannot change
+    # that economic commitment. The second Gateway follows the Stargate;
+    # it can start while the first Oracle is still in production.
+    if (
+        has_building("Stargate", 420)
+        and stargate_first
+        and oracle_first
+        and oracle_time < min(third_nexus_time, robo_time)
+        and len(gate_starts) >= 2
+        and sg_time < gate_starts[1] < third_nexus_time
+        and count_started_before(buildings, "Gateway", third_nexus_time) == 2
+        and third_nexus_time < 360
+        and third_nexus_time - 30 <= robo_time <= 330
+        and third_nexus_time < twilight_time
+        and robo_time < twilight_time <= 480
+    ):
+        return "PvT - AlphaStar Style (Oracle/Robo)"
+    if (
+        has_building("Stargate", 420)
+        and stargate_first
+        and oracle_first
+        and oracle_time <= 420
+    ):
+        return "PvT - Oracle Opener"
+
     # Phoenix builds: require an actual Stargate. Sentry can
     # hallucinate Phoenix off Cyber + Twilight tech, so a
     # 2-base Charge / Templar build can register a "Phoenix"
@@ -154,6 +197,7 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     if (
         has_building("Stargate", 420)
         and count_units("Phoenix", 420) >= 1
+        and phoenix_first
         and has_building("RoboticsFacility", 480)
         and sg_time < robo_time
         and sg_time < twilight_time
@@ -162,10 +206,10 @@ def detect_pvt(ctx: DetectionContext) -> Optional[str]:
     if (
         has_building("Stargate", 420)
         and count_units("Phoenix", 420) >= 1
+        and phoenix_first
         and sg_time < robo_time
         and sg_time < twilight_time
     ):
-        gate_starts = start_times(buildings, "Gateway")
         if len(gate_starts) >= 2 and gate_starts[1] < robo_time:
             return "PvT - Phoenix Opener"
 

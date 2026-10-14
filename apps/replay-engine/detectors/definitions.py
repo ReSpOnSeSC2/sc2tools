@@ -92,19 +92,24 @@ BUILD_DEFINITIONS = {
 
 }
 
-# ----- Matchup-prefixed Zerg & Terran builds -----
+# ----- Canonical PvT, Zerg and Terran matchup definitions -----
 # Mirrored from the engine catalog (``core.build_definitions``) so the
 # Definitions tab and the KNOWN_BUILDS seed list cover the real matchup
-# labels the shared classifier emits. The old "Stub - TODO Stage 8"
+# labels the shared classifier emits, including the Oracle-first PvT
+# branches. The old "Stub - TODO Stage 8"
 # placeholders are gone: detection for these builds runs in the
 # decision trees in ``core.strategy_detector_matchups`` (which
-# ``detectors.user`` delegates to for Zerg/Terran), not via signature
+# ``detectors.user`` delegates to), not via signature
 # rule lists here.
-_MATCHUP_PREFIXES = ("TvT - ", "TvZ - ", "TvP - ", "ZvT - ", "ZvP - ", "ZvZ - ")
+_MATCHUP_PREFIXES = ("PvT - ", "TvT - ", "TvZ - ", "TvP - ", "ZvT - ", "ZvP - ", "ZvZ - ")
 BUILD_DEFINITIONS.update({
     name: desc
     for name, desc in _CORE_BUILD_DEFINITIONS.items()
-    if name.startswith(_MATCHUP_PREFIXES)
+    if name.startswith(_MATCHUP_PREFIXES) or name in (
+        "Terran - Widow Mine Drop",
+        "Terran - Widow Mine Drop into Thor Rush",
+        "Terran - Widow Upgraded Mine Cheese",
+    )
 })
 
 

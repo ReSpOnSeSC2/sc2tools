@@ -142,20 +142,20 @@ export const TERRAN_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
     matchup: null,
     name: "Terran - Widow Mine Drop",
     description:
-      "Detected if Medivac and multiple widow mines are built after second CC within the first 6:30.",
+      "Detected if Medivac and multiple widow mines are built after second CC within the first 6:30. Against Protoss, Medivac must be the first or co-first real Starport unit; earlier Vikings or other Starport units prevent this opening label.",
   },
   {
     race: "Terran",
     matchup: null,
     name: "Terran - Widow Mine Drop into Thor Rush",
     description:
-      "Detected if a Medivac and 2+ Widow Mines are built AFTER the second Command Center (within ~6:30), and a Thor has been produced before ~8:10 -- a Mine drop transitioning into Thor pressure.",
+      "Detected if a Medivac and 2+ Widow Mines are built AFTER the second Command Center (within ~6:30), and a Thor has been produced before ~8:10 -- a Mine drop transitioning into Thor pressure. Against Protoss, Medivac must be the first or co-first real Starport unit; earlier Vikings or other Starport units prevent this opening label.",
   },
   {
     race: "Terran",
     matchup: null,
     name: "Terran - Widow Upgraded Mine Cheese",
     description:
-      "Detected if a Medivac and 2+ Widow Mines are built BEFORE the second Command Center -- a 1-base Widow Mine drop cheese.",
+      "Detected if a Medivac and 2+ Widow Mines are built BEFORE the second Command Center -- a 1-base Widow Mine drop cheese. Against Protoss, Medivac must be the first or co-first real Starport unit; earlier Vikings or other Starport units prevent this opening label.",
   },
 ];
