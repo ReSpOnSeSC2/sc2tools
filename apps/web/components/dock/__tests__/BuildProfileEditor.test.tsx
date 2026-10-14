@@ -85,6 +85,51 @@ describe("BuildProfileEditor", () => {
     expect((screen.getByRole("button", { name: "Show widget" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("saves an unrated hidden partial profile while keeping Show disabled", async () => {
+    const partial = { ...TEST_PROFILE, title: "", ratings: { ...TEST_PROFILE.ratings, micro: null } };
+    const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<StudioState | null>>(async () => state(partial));
+    const { rerender } = render(<BuildProfileEditor profile={TEST_PROFILE} busy={false} onPost={onPost} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Build title" }), { target: { value: "" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Micro required" }), { target: { value: "" } });
+    expect((screen.getByRole("button", { name: "Save ratings" }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Save ratings" }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { title: "", ratings: partial.ratings, labels: partial.labels } }));
+    rerender(<BuildProfileEditor profile={partial} busy={false} onPost={onPost} />);
+    expect((screen.getByRole("button", { name: "Show widget" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("combobox", { name: "Micro required" }) as HTMLSelectElement).value).toBe("");
+  });
+
+  it("can persist a cleared hidden graph with all five ratings unset", async () => {
+    const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<StudioState | null>>(async () => state(DEFAULT_BUILD_PROFILE));
+    const { rerender } = render(<BuildProfileEditor profile={TEST_PROFILE} busy={false} onPost={onPost} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Build title" }), { target: { value: "" } });
+    for (const select of screen.getAllByRole("combobox")) fireEvent.change(select, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save ratings" }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: {
+      title: "", labels: DEFAULT_BUILD_PROFILE.labels, ratings: DEFAULT_BUILD_PROFILE.ratings,
+    } }));
+    rerender(<BuildProfileEditor profile={DEFAULT_BUILD_PROFILE} busy={false} onPost={onPost} />);
+    expect(screen.getAllByRole("combobox").every((element) => (element as HTMLSelectElement).value === "")).toBe(true);
+    expect((screen.getByRole("button", { name: "Show widget" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("blocks incomplete saves while visible, then allows the same draft after Hide", async () => {
+    const visible = { ...TEST_PROFILE, visible: true };
+    const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<StudioState | null>>(async () => state(TEST_PROFILE));
+    const { rerender } = render(<BuildProfileEditor profile={visible} busy={false} onPost={onPost} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Aggressiveness" }), { target: { value: "" } });
+    expect((screen.getByRole("button", { name: "Save ratings" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Save ratings" }));
+    expect(onPost).not.toHaveBeenCalled();
+    expect(screen.getByText("Hide the widget before saving an empty title or an unset rating.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Hide widget" }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { visible: false } }));
+    rerender(<BuildProfileEditor profile={TEST_PROFILE} busy={false} onPost={onPost} />);
+    expect((screen.getByRole("combobox", { name: "Aggressiveness" }) as HTMLSelectElement).value).toBe("");
+    expect((screen.getByRole("button", { name: "Save ratings" }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "Show widget" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("can hide a saved visible profile while protecting unrelated draft edits", async () => {
     const visible = { ...TEST_PROFILE, visible: true };
     const onPost = vi.fn(async () => state({ ...visible, visible: false }));

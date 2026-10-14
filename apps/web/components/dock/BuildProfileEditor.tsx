@@ -51,9 +51,18 @@ export function BuildProfileEditor({
   const disabled = busy || saving || !ready;
   const draftComplete = isBuildProfileComplete(draft);
   const savedComplete = isBuildProfileComplete(profile);
+  const draftValid = draft.title.trim().length <= 80 && BUILD_PROFILE_AXES.every(({ key }) => {
+    const label = draft.labels[key].trim();
+    const rating = draft.ratings[key];
+    return label.length > 0 && label.length <= 32
+      && (rating === null || (Number.isInteger(rating) && rating >= 1 && rating <= 5));
+  });
+  // Hidden profiles can be saved in progress or cleared. A visible graph
+  // must remain complete; Hide first before removing its title or a score.
+  const canSave = draftValid && (!profile.visible || draftComplete);
 
   const save = async () => {
-    if (disabled || !draftComplete) return;
+    if (disabled || !canSave) return;
     setSaving(true);
     setNotice(null);
     try {
@@ -159,7 +168,7 @@ export function BuildProfileEditor({
         </div>
       </details>
       <div className="flex flex-wrap gap-2">
-        <EditorButton disabled={disabled || !dirty || !draftComplete} onClick={() => void save()}>Save ratings</EditorButton>
+        <EditorButton disabled={disabled || !dirty || !canSave} onClick={() => void save()}>Save ratings</EditorButton>
         {dirty ? <EditorButton disabled={disabled} onClick={discard}>Discard edits</EditorButton> : null}
       </div>
       <div className="flex flex-wrap gap-2">
@@ -167,8 +176,12 @@ export function BuildProfileEditor({
         <EditorButton disabled={disabled || !profile.visible} onClick={() => void setVisible(false)}>Hide widget</EditorButton>
       </div>
       <p className="text-micro text-text-dim">
-        {dirty && !draftComplete
-          ? "Enter a build title, five labels and all five ratings before saving."
+        {dirty && !draftValid
+          ? "Use labels of 1–32 characters and ratings of 1–5 or Not set."
+          : dirty && !draftComplete && profile.visible
+            ? "Hide the widget before saving an empty title or an unset rating."
+          : dirty && !draftComplete
+            ? "You can save partial or cleared ratings while hidden. Add a build title and all five ratings before showing the widget."
           : dirty
             ? "Save these edits before showing the widget. Saving updates a widget that is already shown."
             : "Show and hide use your saved ratings. The widget stays as you leave it until you change it here."}
