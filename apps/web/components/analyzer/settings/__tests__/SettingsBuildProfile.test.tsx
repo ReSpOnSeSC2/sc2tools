@@ -3,6 +3,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { SWRConfig } from "swr";
 import { DEFAULT_BUILD_PROFILE, DEFAULT_STUDIO_STATE } from "@/lib/multichat/useStudioState";
 import { SettingsBuildProfile } from "../SettingsBuildProfile";
+vi.mock("@/lib/multichat/useStudioUpdates", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/multichat/useStudioUpdates")>(),
+  useStudioUpdates: () => undefined,
+}));
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "test-session", isLoaded: true, isSignedIn: true, userId: "test-user" }) }));
 const TEST_PROFILE = {

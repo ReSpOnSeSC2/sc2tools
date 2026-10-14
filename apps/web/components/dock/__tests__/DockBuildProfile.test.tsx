@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { DEFAULT_BUILD_PROFILE, DEFAULT_STUDIO_STATE } from "@/lib/multichat/useStudioState";
 import { DockClient } from "../DockClient";
+vi.mock("@/lib/multichat/useStudioUpdates", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/multichat/useStudioUpdates")>(),
+  useStudioUpdates: () => undefined,
+}));
 
 vi.mock("@/lib/multichat/useMultiChat", () => ({ useMultiChat: () => ({ messages: [], events: [], statuses: {}, active: false }) }));
 vi.mock("@/lib/multichat/useEngagementReporter", () => ({ useEngagementReporter: () => undefined }));

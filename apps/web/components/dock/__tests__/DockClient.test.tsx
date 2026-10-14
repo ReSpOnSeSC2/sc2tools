@@ -3,6 +3,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { DockClient } from "../DockClient";
 import type { MultichatConfig } from "@/lib/multichat/types";
 import type { MultiChatState } from "@/lib/multichat/useMultiChat";
+vi.mock("@/lib/multichat/useStudioUpdates", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/multichat/useStudioUpdates")>(),
+  useStudioUpdates: () => undefined,
+}));
 
 let mockChat: MultiChatState = {
   messages: [],
