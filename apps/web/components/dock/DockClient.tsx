@@ -53,6 +53,7 @@ import { DockScenes, DockTimer } from "./DockScenes";
 import { DockClips } from "./DockClips";
 import { BuildProfileEditor } from "./BuildProfileEditor";
 import { useEngagementState } from "@/lib/multichat/useEngagementState";
+import { newestStudioSnapshot, useStudioUpdates } from "@/lib/multichat/useStudioUpdates";
 
 /** Platform config re-read cadence — same as the OBS widget. */
 const CONFIG_REFRESH_MS = 60_000;
@@ -182,9 +183,8 @@ export function DockClient({ token }: { token: string }) {
   // Live audience size per platform + combined, read from the
   // platforms server-side (they send no CORS headers).
   const viewers = useViewerCounts(token, events);
-  // Clip-moment log — boot summary + the hook's 60s refetch (the
-  // dock has no overlay socket; a fresh spike shows on the next
-  // refetch, which is fine for a post-stream shortlist).
+  // Clip-moment log keeps its own boot fetch + 60s fallback. The lightweight
+  // studio subscription below listens only for control-state updates.
   const { summary: engagement } = useEngagementState(token, null);
 
   // Keep readiness tied to the token as part of the snapshot itself. That
@@ -202,7 +202,7 @@ export function DockClient({ token }: { token: string }) {
   const [error, setError] = useState<string | null>(null);
   const studioMutationRef = useRef(0);
   const studioFetchRef = useRef(0);
-  const studioUpdatedAtRef = useRef<{ token: string; atMs: number } | null>(null);
+  const latestStudioRef = useRef<{ token: string; state: StudioState } | null>(null);
   const postingRef = useRef(false);
   const currentTokenRef = useRef(token);
   currentTokenRef.current = token;
@@ -210,14 +210,18 @@ export function DockClient({ token }: { token: string }) {
   const studioUrl = `${API_BASE}/v1/multichat/${encodeURIComponent(token)}/studio`;
 
   const adoptStudioSnapshot = useCallback((next: StudioState) => {
-    const parsed = next.updatedAt ? Date.parse(next.updatedAt) : NaN;
-    const atMs = Number.isFinite(parsed) ? parsed : null;
-    const latest = studioUpdatedAtRef.current?.token === token ? studioUpdatedAtRef.current.atMs : null;
-    if (latest !== null && (atMs === null || atMs < latest)) return false;
-    if (atMs !== null) studioUpdatedAtRef.current = { token, atMs };
-    setStudioSnapshot({ token, state: next });
-    return true;
+    const latest = latestStudioRef.current?.token === token ? latestStudioRef.current.state : null;
+    const selected = newestStudioSnapshot(latest, next);
+    latestStudioRef.current = { token, state: selected };
+    if (selected === next) setStudioSnapshot({ token, state: selected });
+    return selected;
   }, [token]);
+
+  useStudioUpdates(token, (next) => {
+    // Invalidate any GET that began before this authoritative live update.
+    studioMutationRef.current += 1;
+    adoptStudioSnapshot(next);
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -279,6 +283,7 @@ export function DockClient({ token }: { token: string }) {
       if (postingRef.current) return null;
       postingRef.current = true;
       studioMutationRef.current += 1;
+      const mutationSequence = studioMutationRef.current;
       setBusy(true);
       setError(null);
       try {
@@ -299,8 +304,12 @@ export function DockClient({ token }: { token: string }) {
         }
         const saved = sanitizeStudioState(body);
         if (currentTokenRef.current !== token) return null;
-        adoptStudioSnapshot(saved);
-        return saved;
+        const latest = latestStudioRef.current?.token === token ? latestStudioRef.current.state : null;
+        // Two distinct writes can share one millisecond. A live event that
+        // arrived during this request wins a timestamp tie with its response.
+        if (latest && studioMutationRef.current !== mutationSequence && latest.updatedAt && saved.updatedAt
+          && Date.parse(latest.updatedAt) === Date.parse(saved.updatedAt)) return latest;
+        return adoptStudioSnapshot(saved);
       } catch {
         if (currentTokenRef.current === token) setError("Save failed — check the connection and try again.");
         return null;
