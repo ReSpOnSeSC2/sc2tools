@@ -51,6 +51,7 @@ import { DockPoll } from "./DockPoll";
 import { DockGoals } from "./DockGoals";
 import { DockScenes, DockTimer } from "./DockScenes";
 import { DockClips } from "./DockClips";
+import { BuildProfileEditor } from "./BuildProfileEditor";
 import { useEngagementState } from "@/lib/multichat/useEngagementState";
 
 /** Platform config re-read cadence — same as the OBS widget. */
@@ -162,6 +163,7 @@ const SECTIONS = [
   { id: "dock-chat", label: "Chat" },
   { id: "dock-highlight", label: "Highlight" },
   { id: "dock-scenes", label: "Scenes" },
+  { id: "dock-build-profile", label: "Build profile" },
   { id: "dock-timer", label: "Timer" },
   { id: "dock-poll", label: "Poll" },
   { id: "dock-goals", label: "Goals" },
@@ -198,23 +200,44 @@ export function DockClient({ token }: { token: string }) {
   const studioSnapshotReady = studioSnapshot.token === token;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const studioMutationRef = useRef(0);
+  const studioFetchRef = useRef(0);
+  const studioUpdatedAtRef = useRef<{ token: string; atMs: number } | null>(null);
+  const postingRef = useRef(false);
+  const currentTokenRef = useRef(token);
+  currentTokenRef.current = token;
 
   const studioUrl = `${API_BASE}/v1/multichat/${encodeURIComponent(token)}/studio`;
+
+  const adoptStudioSnapshot = useCallback((next: StudioState) => {
+    const parsed = next.updatedAt ? Date.parse(next.updatedAt) : NaN;
+    const atMs = Number.isFinite(parsed) ? parsed : null;
+    const latest = studioUpdatedAtRef.current?.token === token ? studioUpdatedAtRef.current.atMs : null;
+    if (latest !== null && (atMs === null || atMs < latest)) return false;
+    if (atMs !== null) studioUpdatedAtRef.current = { token, atMs };
+    setStudioSnapshot({ token, state: next });
+    return true;
+  }, [token]);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
+      const mutationSequence = studioMutationRef.current;
+      const fetchSequence = ++studioFetchRef.current;
       try {
         const res = await fetch(studioUrl, { cache: "no-store" });
         if (!res.ok) return;
         const body: unknown = await res.json();
         if (
           cancelled
+          || mutationSequence !== studioMutationRef.current
+          || fetchSequence !== studioFetchRef.current
+          || postingRef.current
           || !body
           || typeof body !== "object"
           || Array.isArray(body)
         ) return;
-        setStudioSnapshot({ token, state: sanitizeStudioState(body) });
+        adoptStudioSnapshot(sanitizeStudioState(body));
       } catch {
         /* transient — the interval or first action response re-syncs */
       }
@@ -225,7 +248,7 @@ export function DockClient({ token }: { token: string }) {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [studioUrl, token]);
+  }, [studioUrl, token, adoptStudioSnapshot]);
 
   const blockedUsers = useMemo(
     () => blockedUserSet(
@@ -252,7 +275,10 @@ export function DockClient({ token }: { token: string }) {
   // sanitized full state the server returns. Disabled-while-in-flight
   // beats optimistic guessing inside OBS — round trips are local-fast.
   const postStudio = useCallback(
-    async (patch: Record<string, unknown>) => {
+    async (patch: Record<string, unknown>): Promise<StudioState | null> => {
+      if (postingRef.current) return null;
+      postingRef.current = true;
+      studioMutationRef.current += 1;
       setBusy(true);
       setError(null);
       try {
@@ -263,23 +289,34 @@ export function DockClient({ token }: { token: string }) {
           cache: "no-store",
         });
         if (!res.ok) {
-          setError(`Save failed (${res.status}) — try again.`);
-          return;
+          if (currentTokenRef.current === token) setError(`Save failed (${res.status}) — try again.`);
+          return null;
         }
         const body: unknown = await res.json();
         if (!body || typeof body !== "object" || Array.isArray(body)) {
-          setError("Save failed — the server returned an invalid response.");
-          return;
+          if (currentTokenRef.current === token) setError("Save failed — the server returned an invalid response.");
+          return null;
         }
-        setStudioSnapshot({ token, state: sanitizeStudioState(body) });
+        const saved = sanitizeStudioState(body);
+        if (currentTokenRef.current !== token) return null;
+        adoptStudioSnapshot(saved);
+        return saved;
       } catch {
-        setError("Save failed — check the connection and try again.");
+        if (currentTokenRef.current === token) setError("Save failed — check the connection and try again.");
+        return null;
       } finally {
+        postingRef.current = false;
         setBusy(false);
       }
     },
-    [studioUrl, token],
+    [studioUrl, token, adoptStudioSnapshot],
   );
+
+  // Existing controls retain their Promise<void> action contract; the build
+  // editor also needs the returned snapshot to preserve a draft on failures.
+  const postStudioAction = useCallback(async (patch: Record<string, unknown>) => {
+    await postStudio(patch);
+  }, [postStudio]);
 
   const highlightMessage = useCallback(
     (m: ChatMessage) =>
@@ -463,6 +500,18 @@ export function DockClient({ token }: { token: string }) {
                 broll={studio.broll}
                 busy={busy}
                 streamStartMs={studio.streamStartMs}
+                onPost={postStudioAction}
+              />
+            </SectionCard>
+          </section>
+
+          <section id="dock-build-profile" className="scroll-mt-12">
+            <SectionCard title="Build profile">
+              <BuildProfileEditor
+                key={token}
+                profile={studio.buildProfile}
+                busy={busy}
+                ready={studioSnapshotReady}
                 onPost={postStudio}
               />
             </SectionCard>
@@ -473,7 +522,7 @@ export function DockClient({ token }: { token: string }) {
               <DockTimer
                 timer={studio.timer}
                 busy={busy}
-                onPost={postStudio}
+                onPost={postStudioAction}
               />
             </SectionCard>
           </section>
@@ -484,7 +533,7 @@ export function DockClient({ token }: { token: string }) {
                 poll={studio.poll}
                 messages={messages}
                 busy={busy}
-                onPost={postStudio}
+                onPost={postStudioAction}
               />
             </SectionCard>
           </section>
@@ -494,7 +543,7 @@ export function DockClient({ token }: { token: string }) {
               <DockGoals
                 goals={studio.goals}
                 busy={busy}
-                onPost={postStudio}
+                onPost={postStudioAction}
               />
             </SectionCard>
           </section>
@@ -506,7 +555,7 @@ export function DockClient({ token }: { token: string }) {
                 streamStartMs={studio.streamStartMs}
                 vodUrl={studio.vodUrl}
                 busy={busy}
-                onPost={postStudio}
+                onPost={postStudioAction}
               />
             </SectionCard>
           </section>

@@ -3,6 +3,8 @@ import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 
 import {
   DEFAULT_BROLL_CONFIG,
+  DEFAULT_BUILD_PROFILE,
+  isBuildProfileComplete,
   sanitizeStudioState,
   useStudioState,
 } from "../useStudioState";
@@ -49,6 +51,51 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+describe("manual build-profile sanitization", () => {
+  it("keeps legacy state unrated and hidden", () => {
+    expect(sanitizeStudioState({}).buildProfile).toEqual(DEFAULT_BUILD_PROFILE);
+    expect(isBuildProfileComplete(DEFAULT_BUILD_PROFILE)).toBe(false);
+  });
+
+  it("accepts five integer ratings and bounded text while discarding unknown fields", () => {
+    const profile = sanitizeStudioState({ buildProfile: {
+      title: `  ${"T".repeat(100)}  `,
+      ratings: { aggressiveness: 1, defensiveness: 5, executionDifficulty: 3, popularity: 2, micro: 4, script: "alert(1)" },
+      visible: true,
+      html: "<img src=x>",
+    } }).buildProfile;
+    expect(profile.title).toHaveLength(80);
+    expect(profile.visible).toBe(true);
+    expect(isBuildProfileComplete(profile)).toBe(true);
+    expect(profile).not.toHaveProperty("html");
+    expect(profile.ratings).not.toHaveProperty("script");
+  });
+
+  it("rejects coerced, fractional and out-of-range scores and forces hidden", () => {
+    const profile = sanitizeStudioState({ buildProfile: {
+      title: "Test build",
+      ratings: { aggressiveness: "3", defensiveness: 0, executionDifficulty: 2.5, popularity: 6, micro: null },
+      visible: true,
+    } }).buildProfile;
+    expect(profile.ratings).toEqual(DEFAULT_BUILD_PROFILE.ratings);
+    expect(profile.visible).toBe(false);
+  });
+
+  it("will not display an unnamed graph or treat a truthy nonboolean as visible", () => {
+    const ratings = { aggressiveness: 1, defensiveness: 2, executionDifficulty: 3, popularity: 4, micro: 5 };
+    expect(sanitizeStudioState({ buildProfile: { title: " ", ratings, visible: true } }).buildProfile.visible).toBe(false);
+    expect(sanitizeStudioState({ buildProfile: { title: "Test build", ratings, visible: "true" } }).buildProfile.visible).toBe(false);
+  });
+
+  it("defaults missing labels and only accepts bounded nonblank custom wording", () => {
+    const profile = sanitizeStudioState({ buildProfile: {
+      labels: { aggressiveness: "  Attack potential  ", defensiveness: " ", executionDifficulty: 42, popularity: "p".repeat(50), micro: null, script: "alert(1)" },
+    } }).buildProfile;
+    expect(profile.labels).toEqual({ ...DEFAULT_BUILD_PROFILE.labels, aggressiveness: "Attack potential" });
+    expect(profile.labels).not.toHaveProperty("script");
+  });
 });
 
 describe("useStudioState authoritative readiness", () => {

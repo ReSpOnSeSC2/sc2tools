@@ -1,5 +1,7 @@
 "use strict";
 
+const { sanitizeBuildProfile, prepareBuildProfileUpdate } = require("./buildProfile");
+
 /**
  * MultichatStudioService — live "stream studio" state for the
  * multichat overlay family: the pinned chat highlight, the active
@@ -96,6 +98,7 @@ class MultichatStudioService {
       recapSeq: Number(doc?.recapSeq) || 0,
       scene: doc?.scene ?? null,
       timer: doc?.timer ?? null,
+      buildProfile: sanitizeBuildProfile(doc?.buildProfile),
       // Sanitize on read as well as write. This gives documents created
       // before b-roll existed stable defaults and prevents a hand-edited or
       // legacy Mongo row from reaching an OBS Browser Source unsanitized.
@@ -173,6 +176,15 @@ class MultichatStudioService {
     if ("timer" in patch) {
       set.timer = sanitizeTimer(patch.timer);
     }
+    if ("buildProfile" in patch) {
+      set.buildProfile = prepareBuildProfileUpdate(
+        patch.buildProfile,
+        previousDocument?.buildProfile,
+      );
+      set.buildProfileWriteRevision = nextBrollWriteRevision(
+        sanitizeBrollWriteRevision(previousDocument?.buildProfileWriteRevision),
+      );
+    }
     if ("broll" in patch) {
       set.broll = prepareBrollUpdate(
         patch.broll,
@@ -193,18 +205,29 @@ class MultichatStudioService {
     /** @type {Record<string, any>} */
     const updateDoc = { $set: set, $setOnInsert: { token } };
     if (Object.keys(inc).length > 0) updateDoc.$inc = inc;
-    if ("broll" in patch) {
-      const written = await this._writeBrollCompareAndSwap(
+    if ("broll" in patch || "buildProfile" in patch) {
+      const revisions = [];
+      if ("broll" in patch) {
+        revisions.push({ field: "brollWriteRevision", previous: previousWriteRevision });
+      }
+      if ("buildProfile" in patch) {
+        revisions.push({
+          field: "buildProfileWriteRevision",
+          previous: sanitizeBrollWriteRevision(previousDocument?.buildProfileWriteRevision),
+        });
+      }
+      const written = await this._writeStudioCompareAndSwap(
         token,
         updateDoc,
-        previousWriteRevision,
+        revisions,
         studioDocumentFilter(token, previousDocument),
       );
       if (!written) {
         if (attempt + 1 >= BROLL_WRITE_MAX_ATTEMPTS) {
-          const error = new Error("Concurrent b-roll update did not settle");
-          // @ts-ignore structured code for route/error logging.
-          error.code = "broll_conflict";
+          const error = Object.assign(new Error("Concurrent studio update did not settle"), {
+            status: 409,
+            code: "buildProfile" in patch ? "build_profile_conflict" : "broll_conflict",
+          });
           throw error;
         }
         return this._updateUnlocked(token, patch, attempt + 1);
@@ -243,24 +266,21 @@ class MultichatStudioService {
    *
    * @param {string} token
    * @param {Record<string, any>} updateDoc
-   * @param {number} previousWriteRevision
+   * @param {Array<{field: string, previous: number}>} revisions
    * @param {Record<string, any>} identityFilter
    */
-  async _writeBrollCompareAndSwap(
+  async _writeStudioCompareAndSwap(
     token,
     updateDoc,
-    previousWriteRevision,
+    revisions,
     identityFilter,
   ) {
-    const filter = previousWriteRevision === 0
-      ? {
-          ...identityFilter,
-          $or: [
-            { brollWriteRevision: 0 },
-            { brollWriteRevision: { $exists: false } },
-          ],
-        }
-      : { ...identityFilter, brollWriteRevision: previousWriteRevision };
+    const guards = revisions.map(({ field, previous }) => previous === 0
+      ? { $or: [{ [field]: 0 }, { [field]: { $exists: false } }] }
+      : { [field]: previous });
+    const filter = guards.length === 1
+      ? { ...identityFilter, ...guards[0] }
+      : { ...identityFilter, $and: guards };
     let result;
     try {
       result = await this.col.updateOne(filter, updateDoc, { upsert: false });
@@ -288,7 +308,7 @@ class MultichatStudioService {
           // guard that does not require deleting duplicate legacy rows:
           // if another worker created any b-roll state after our read,
           // this filter cannot match it and the attempted upsert raises 11000.
-          brollWriteRevision: { $exists: false },
+          ...Object.fromEntries(revisions.map(({ field }) => [field, { $exists: false }])),
         },
         updateDoc,
         { upsert: true },

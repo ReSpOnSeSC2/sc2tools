@@ -39,3 +39,4 @@ export { ClipFlagWidget } from "./ClipFlagWidget";
 export { LowerThirdWidget } from "./LowerThirdWidget";
 export { StatsTickerWidget } from "./StatsTickerWidget";
 export { CountdownTimerWidget } from "./CountdownTimerWidget";
+export { BuildProfileWidget } from "./BuildProfileWidget";
