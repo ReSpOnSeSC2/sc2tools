@@ -56,6 +56,7 @@ import {
 } from "@/lib/ghostBuild";
 import { AgentStatusIndicator } from "./AgentStatusIndicator";
 import { SettingsMultiChat } from "./SettingsMultiChat";
+import { SettingsBuildProfile } from "./SettingsBuildProfile";
 import { UrlRow } from "./OverlayUrlRow";
 import { GhostLegacyMigration } from "./GhostLegacyMigration";
 import { GhostMatchupManager } from "./GhostMatchupManager";
@@ -151,6 +152,12 @@ const WIDGETS: ReadonlyArray<WidgetMeta> = [
     id: "stream-goals",
     label: "Stream goals",
     hint: "Animated goal progress bars — set and update goals from the Stream Dock. Test shows sample goals.",
+  },
+  {
+    id: "build-profile",
+    label: "Build profile",
+    hint: "Five-point build ratings, edited and shown/hidden from the Stream Dock or Build profile section below. Enable here, then add its dedicated Browser Source at 720 × 900.",
+    noTest: true,
   },
   {
     id: "session-recap",
@@ -594,6 +601,8 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         origin={origin}
         theme={theme}
       />
+
+      <SettingsBuildProfile key={activeToken.token} token={activeToken.token} />
 
       <SettingsMultiChat token={activeToken.token} />
 

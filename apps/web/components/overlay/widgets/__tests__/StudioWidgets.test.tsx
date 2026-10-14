@@ -13,6 +13,7 @@ import { DEFAULT_APPEARANCE } from "@/lib/multichat/appearance";
 import { DEFAULT_ALERTS, type AlertConfig } from "@/lib/multichat/alerts";
 import {
   DEFAULT_BROLL_CONFIG,
+  DEFAULT_BUILD_PROFILE,
   type StudioState,
 } from "@/lib/multichat/useStudioState";
 import type { LiveGamePayload } from "@/components/overlay/types";
@@ -136,6 +137,7 @@ const EMPTY_STUDIO: StudioState & {
   scene: null,
   timer: null,
   broll: DEFAULT_BROLL_CONFIG,
+  buildProfile: DEFAULT_BUILD_PROFILE,
   streamStartMs: null,
   vodUrl: null,
   updatedAt: null,

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -63,6 +64,7 @@ import {
   LowerThirdWidget,
   StatsTickerWidget,
   CountdownTimerWidget,
+  BuildProfileWidget,
   SessionRecapWidget,
   StreamSceneWidget,
   SupporterWallWidget,
@@ -129,12 +131,21 @@ export function OverlayWidgetClient({
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [enabled, setEnabled] = useState<boolean>(true);
+  const [widgetConfig, setWidgetConfig] = useState<{ token: string; widget: string; enabled: boolean } | null>(null);
+  const applyWidgetEnabled = useCallback((on: boolean) => {
+    setEnabled(on);
+    setWidgetConfig({ token, widget, enabled: on });
+  }, [token, widget]);
   const [visible, setVisible] = useState<boolean>(false);
   const [voicePrefs, setVoicePrefs] = useState<VoicePrefs | null>(null);
   const [randomizer, setRandomizer] = useState<RandomizerConfig | null>(null);
   // Latest raw ``overlay:multichat`` studio payload — validated by the
   // studio widgets themselves (useStudioState re-sanitizes it).
-  const [studioEvent, setStudioEvent] = useState<unknown>(null);
+  const [studioEventSnapshot, setStudioEventSnapshot] = useState<{ token: string; payload: unknown } | null>(null);
+  const studioEvent = studioEventSnapshot?.token === token ? studioEventSnapshot.payload : null;
+  const setStudioEvent = useCallback((payload: unknown) => {
+    setStudioEventSnapshot({ token, payload });
+  }, [token]);
   // Latest raw ``overlay:engagement`` payload — re-sanitized by the
   // engagement widgets themselves (useEngagementState).
   const [engagementEvent, setEngagementEvent] = useState<unknown>(null);
@@ -150,7 +161,7 @@ export function OverlayWidgetClient({
     setLive,
     setLiveGame,
     setSession,
-    setEnabled,
+    applyWidgetEnabled,
     setVoicePrefs,
     setRandomizer,
     setStudioEvent,
@@ -214,7 +225,10 @@ export function OverlayWidgetClient({
       ),
     [widget, effectiveGhostParam],
   );
-  const effectiveEnabled = widget === "ghost-build" ? true : enabled;
+  const effectiveEnabled = widget === "ghost-build" ? true
+    : widget === "build-profile"
+      ? widgetConfig?.token === token && widgetConfig.widget === widget && widgetConfig.enabled
+      : enabled;
 
   // Multichat and the Stream Studio widgets are persistent, fully
   // self-driven HUDs: multichat opens its own chat connections
@@ -299,7 +313,7 @@ export function OverlayWidgetClient({
       {/* Only mounted while widget content is on screen (this branch)
           — a transparent between-games scene stays fully transparent
           even when the socket is down. */}
-      {connectionStatus === "reconnecting" ? <ReconnectDot /> : null}
+      {widget !== "build-profile" && connectionStatus === "reconnecting" ? <ReconnectDot /> : null}
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
       ) : null}
@@ -324,6 +338,7 @@ const SELF_DRIVEN_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>([
   "clip-flag",
   "stats-ticker",
   "countdown-timer",
+  "build-profile",
 ]);
 
 function WidgetRenderer({
@@ -470,6 +485,8 @@ function WidgetRenderer({
       // Broadcast-style post-game bar — payload-driven, standard
       // visibility timer slides it away between games.
       return <LowerThirdWidget live={live} />;
+    case "build-profile":
+      return <BuildProfileWidget token={token} studioEvent={studioEvent} />;
     case "countdown-timer":
       // Standalone dock-set countdown — studio-driven, show anytime.
       return (

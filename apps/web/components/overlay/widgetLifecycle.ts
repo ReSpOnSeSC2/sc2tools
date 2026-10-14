@@ -52,7 +52,8 @@ export type WidgetId =
   | "clip-flag"
   | "lower-third"
   | "stats-ticker"
-  | "countdown-timer";
+  | "countdown-timer"
+  | "build-profile";
 
 export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "opponent",
@@ -85,6 +86,7 @@ export const ALL_WIDGETS: ReadonlyArray<WidgetId> = [
   "lower-third",
   "stats-ticker",
   "countdown-timer",
+  "build-profile",
 ];
 
 /**
@@ -160,6 +162,7 @@ export const WIDGET_DURATION_MS: Record<WidgetId, number | null> = {
   "lower-third": 14 * 1000,
   "stats-ticker": null,
   "countdown-timer": null,
+  "build-profile": null,
 };
 
 /**

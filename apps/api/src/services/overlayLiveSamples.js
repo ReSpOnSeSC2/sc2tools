@@ -243,6 +243,7 @@ const PER_WIDGET_KEYS = {
   "lower-third": ["result", "map", "matchup", "mmrDelta", "headToHead", "session", "oppName"],
   "stats-ticker": [],
   "countdown-timer": [],
+  "build-profile": [],
 };
 
 module.exports = { buildSamplePayload, PER_WIDGET_KEYS, SHARED_KEYS };

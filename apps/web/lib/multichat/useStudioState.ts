@@ -113,6 +113,115 @@ export const DEFAULT_BROLL_CONFIG: StudioBrollConfig = {
   skipNonce: 0,
 };
 
+/** Manual editorial ratings, independent of replay-derived player style. */
+export interface StudioBuildProfileRatings {
+  aggressiveness: number | null;
+  defensiveness: number | null;
+  executionDifficulty: number | null;
+  popularity: number | null;
+  micro: number | null;
+}
+
+export interface StudioBuildProfile {
+  title: string;
+  ratings: StudioBuildProfileRatings;
+  labels: Record<keyof StudioBuildProfileRatings, string>;
+  visible: boolean;
+}
+
+export const BUILD_PROFILE_AXES = [
+  {
+    key: "aggressiveness",
+    label: "Aggressiveness",
+    description: "1: little early pressure · 5: commits heavily to attacking",
+  },
+  {
+    key: "defensiveness",
+    label: "Defensiveness",
+    description: "1: limited defensive focus · 5: strongly focused on holding attacks",
+  },
+  {
+    key: "executionDifficulty",
+    label: "Execution difficulty",
+    description: "1: forgiving production and timings · 5: precise, demanding execution",
+  },
+  {
+    key: "popularity",
+    label: "Build popularity",
+    description: "1: rarely encountered · 5: commonly encountered in the games you follow",
+  },
+  {
+    key: "micro",
+    label: "Micro required",
+    description: "1: little active unit control · 5: intensive unit control to make it work",
+  },
+] as const satisfies ReadonlyArray<{
+  key: keyof StudioBuildProfileRatings;
+  label: string;
+  description: string;
+}>;
+
+export const DEFAULT_BUILD_PROFILE: StudioBuildProfile = {
+  title: "",
+  labels: {
+    aggressiveness: "Aggressiveness",
+    defensiveness: "Defensiveness",
+    executionDifficulty: "Execution difficulty",
+    popularity: "Build popularity",
+    micro: "Micro required",
+  },
+  ratings: {
+    aggressiveness: null,
+    defensiveness: null,
+    executionDifficulty: null,
+    popularity: null,
+    micro: null,
+  },
+  visible: false,
+};
+
+function isBuildRating(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 5;
+}
+
+export function isBuildProfileComplete(profile: StudioBuildProfile): boolean {
+  return Boolean(profile.title.trim()) && BUILD_PROFILE_AXES.every(
+    ({ key }) => isBuildRating(profile.ratings[key]) && Boolean(profile.labels[key].trim()),
+  );
+}
+
+/** Reject incomplete/invalid visible profiles rather than inventing scores. */
+export function sanitizeBuildProfile(raw: unknown): StudioBuildProfile {
+  const profile = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+  const ratings = profile.ratings && typeof profile.ratings === "object" && !Array.isArray(profile.ratings)
+    ? profile.ratings as Record<string, unknown>
+    : {};
+  const rawLabels = profile.labels && typeof profile.labels === "object" && !Array.isArray(profile.labels)
+    ? profile.labels as Record<string, unknown>
+    : {};
+  const labels = { ...DEFAULT_BUILD_PROFILE.labels };
+  for (const { key } of BUILD_PROFILE_AXES) {
+    const label = rawLabels[key];
+    if (typeof label === "string" && label.trim() && label.trim().length <= 32) labels[key] = label.trim();
+  }
+  const next: StudioBuildProfile = {
+    title: typeof profile.title === "string" ? profile.title.trim().slice(0, 80) : "",
+    labels,
+    ratings: {
+      aggressiveness: isBuildRating(ratings.aggressiveness) ? ratings.aggressiveness : null,
+      defensiveness: isBuildRating(ratings.defensiveness) ? ratings.defensiveness : null,
+      executionDifficulty: isBuildRating(ratings.executionDifficulty) ? ratings.executionDifficulty : null,
+      popularity: isBuildRating(ratings.popularity) ? ratings.popularity : null,
+      micro: isBuildRating(ratings.micro) ? ratings.micro : null,
+    },
+    visible: false,
+  };
+  next.visible = profile.visible === true && isBuildProfileComplete(next);
+  return next;
+}
+
 export interface StudioState {
   highlight: StudioHighlight | null;
   poll: StudioPoll | null;
@@ -122,6 +231,7 @@ export interface StudioState {
   scene: StudioScene | null;
   timer: StudioTimer | null;
   broll: StudioBrollConfig;
+  buildProfile: StudioBuildProfile;
   /** Epoch ms the streamer marked as go-live — clip-log VOD offsets. */
   streamStartMs: number | null;
   /** VOD URL for clickable clip-moment timestamps (https, validated). */
@@ -138,6 +248,7 @@ export const DEFAULT_STUDIO_STATE: StudioState = {
   scene: null,
   timer: null,
   broll: DEFAULT_BROLL_CONFIG,
+  buildProfile: DEFAULT_BUILD_PROFILE,
   streamStartMs: null,
   vodUrl: null,
   updatedAt: null,
@@ -388,6 +499,7 @@ export function sanitizeStudioState(raw: unknown): StudioState {
     scene: sanitizeScene(s.scene),
     timer: sanitizeTimer(s.timer),
     broll: sanitizeBroll(s.broll),
+    buildProfile: sanitizeBuildProfile(s.buildProfile),
     streamStartMs:
       Number.isFinite(Number(s.streamStartMs)) && Number(s.streamStartMs) > 0
         ? Number(s.streamStartMs)
