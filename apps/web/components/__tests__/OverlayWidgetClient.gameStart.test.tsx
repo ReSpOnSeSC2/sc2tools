@@ -63,6 +63,41 @@ describe("dedicated game-start widgets", () => {
   beforeEach(() => { vi.useFakeTimers(); reveals.length = 0; });
   afterEach(() => { cleanup(); vi.useRealTimers(); });
 
+  it("waits through loading and gives scouting its full window at match start", () => {
+    const view = render(<OverlayWidgetClient token="token" widget="scouting" />);
+    fireEnvelope({ streamerHistory: { oppName: "Opponent", headToHead: { wins: 2, losses: 1 } } });
+    expect(view.container.textContent).not.toContain("Opponent");
+    act(() => vi.advanceTimersByTime(25_000));
+    fireEnvelope({ phase: "match_started", capturedAt: 26 });
+    expect(view.container.textContent).toContain("Opponent");
+    act(() => vi.advanceTimersByTime(14_999));
+    expect(view.container.textContent).toContain("Opponent");
+    act(() => vi.advanceTimersByTime(1));
+    expect(view.container.textContent).not.toContain("Opponent");
+  });
+
+  it("ignores a finished game's synthetic loading prelude", () => {
+    const view = render(<OverlayWidgetClient token="token" widget="scouting" />);
+    fireEnvelope({ synthetic: true });
+    expect(view.container.textContent).not.toContain("Opponent");
+    fireEnvelope({ phase: "match_ended" });
+    expect(view.container.textContent).not.toContain("Opponent");
+  });
+
+  it.each([false, true])("does not extend scouting when its key arrives (menu gap: %s)", (menuGap) => {
+    const view = render(<OverlayWidgetClient token="token" widget="scouting" />);
+    fireEnvelope({ gameKey: undefined, phase: "match_started" });
+    expect(view.container.textContent).toContain("Opponent");
+    act(() => vi.advanceTimersByTime(5_000));
+    if (menuGap) fireEnvelope({ phase: "menu" });
+    fireEnvelope({ phase: "match_in_progress", capturedAt: 6 });
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(view.container.textContent).not.toContain("Opponent");
+    fireEnvelope({ phase: "menu" });
+    fireEnvelope({ phase: "match_in_progress", capturedAt: 17 });
+    expect(view.container.textContent).not.toContain("Opponent");
+  });
+
   it("does not restart the randomizer during loading/menu/reconnect oscillation", () => {
     const view = render(<OverlayWidgetClient token="token" widget="randomizer" />);
     configure();
@@ -89,7 +124,7 @@ describe("dedicated game-start widgets", () => {
 
   it("keeps the scouting deadline across a brief start-state gap", () => {
     const view = render(<OverlayWidgetClient token="token" widget="scouting" />);
-    fireEnvelope();
+    fireEnvelope({ phase: "match_started" });
     expect(view.container.textContent).toContain("Opponent");
     act(() => vi.advanceTimersByTime(5_000));
     fireEnvelope({ phase: "menu" });
@@ -100,7 +135,7 @@ describe("dedicated game-start widgets", () => {
     fireEnvelope({ phase: "menu" });
     fireEnvelope({ phase: "match_loading", capturedAt: 16 });
     expect(view.container.textContent).not.toContain("Opponent");
-    fireEnvelope({ gameKey: "game-2", capturedAt: 17 });
+    fireEnvelope({ gameKey: "game-2", phase: "match_started", capturedAt: 17 });
     expect(view.container.textContent).toContain("Opponent");
   });
 

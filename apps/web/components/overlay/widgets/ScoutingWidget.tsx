@@ -7,11 +7,12 @@ import type {
   LiveGamePayload,
 } from "../types";
 import { Dim, RevealedTag, WidgetShell } from "../WidgetShell";
+import { scoutingStartTriggerKey } from "../gameStartTrigger";
 
 /**
  * Scouting Report card — visual rebuild matching the legacy SPA's
  * `scouting.html`. The card is the streamer's pre-game dossier on the
- * current opponent and shows, in order:
+ * current opponent at match start and shows, in order:
  *
  *   1. Header: large opponent name + small W-L H2H record / win-rate.
  *   2. Familiar / Rival label (gold) — only when this is a repeat
@@ -51,6 +52,10 @@ export function ScoutingWidget({
   live: LiveGamePayload | null;
   liveGame?: LiveGameEnvelope | null;
 }) {
+  // Loading snapshots can contain the previous roster, and reconnects
+  // synthesize loading even for finished games. Wait for gameplay.
+  if (!scoutingStartTriggerKey(live, liveGame ?? null)) return null;
+
   // Scouting is a PRE-GAME widget. Once the just-finished match's
   // post-game payload arrives (``live.result`` set), we suppress the
   // card entirely — the match-result / post-game / mmr-delta widgets
@@ -510,13 +515,10 @@ function chooseScoutingPayload(
  * data than the post-game card (no recent games, no best-answer; the
  * cloud's ``OverlayLiveService`` doesn't run pre-game) but enough that
  * the streamer's OBS scene shows the opponent's identity and Pulse
- * info from the loading screen onward.
+ * info when gameplay starts.
  *
  * Rendering rules:
- *   * No envelope or ``idle``/``menu`` phase → render nothing.
- *   * Envelope without an ``opponent.name`` (very brief gap between
- *     MATCH_LOADING and the first /game response) → render a slim
- *     skeleton placeholder so the panel reserves its slot in OBS.
+ *   * Loading, ended, replay, or unidentified opponent → render nothing.
  *   * Envelope with name, no profile yet → name + race only.
  *   * Envelope with profile → name + race + MMR + league (when set).
  */

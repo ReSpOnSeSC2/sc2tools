@@ -35,3 +35,62 @@ export function useGameStartTriggerKey(
   }, [key]);
   return key === "game:unkeyed" ? lastKnownGame.current ?? key : key;
 }
+
+/** Scouting waits for gameplay and an identified opponent, including on resync. */
+export function scoutingStartTriggerKey(
+  live: LiveGamePayload | null,
+  liveGame: LiveGameEnvelope | null,
+): string | null {
+  if (live?.isTest) return gameStartTriggerKey(live, liveGame);
+  if (liveGame) {
+    if (liveGame.isReplay
+      || (liveGame.phase !== "match_started" && liveGame.phase !== "match_in_progress")
+      || !liveGame.opponent?.name?.trim()) return null;
+  } else if (!live?.oppName?.trim()) {
+    return null;
+  }
+  return gameStartTriggerKey(live, liveGame);
+}
+
+/** Keep a legacy keyless start's identity when its real key arrives later. */
+export function useScoutingStartTriggerKey(
+  live: LiveGamePayload | null,
+  liveGame: LiveGameEnvelope | null,
+): string | null {
+  const previous = useRef<{ identity: string; gameKey: string | null; opponent: string } | null>(null);
+  const aliases = useRef(new Map<string, string>());
+  const legacySequence = useRef(0);
+  const key = scoutingStartTriggerKey(live, liveGame);
+  const opponent = (liveGame?.opponent?.name ?? live?.oppName ?? "").trim().toLowerCase();
+  const realKey = key?.startsWith("game:") && key !== "game:unkeyed" ? key : null;
+  let identity = key;
+  let sequence = legacySequence.current;
+  if (key?.startsWith("game:")) {
+    const last = previous.current;
+    if (realKey && aliases.current.has(realKey)) {
+      identity = aliases.current.get(realKey)!;
+    } else if (last && last.opponent === opponent && (!realKey || !last.gameKey)) {
+      identity = last.identity;
+    } else if (!realKey) {
+      sequence += 1;
+      identity = `game:legacy:${sequence}`;
+    }
+  }
+  useEffect(() => {
+    if (identity?.startsWith("game:")) {
+      const last = previous.current;
+      previous.current = {
+        identity,
+        gameKey: realKey ?? (last?.identity === identity ? last.gameKey : null),
+        opponent,
+      };
+      legacySequence.current = sequence;
+      if (realKey) aliases.current.set(realKey, identity);
+    } else if (liveGame?.phase === "match_ended") {
+      // A null/menu snapshot can be a transient gap before the real key
+      // arrives. Only a confirmed end retires the legacy match identity.
+      previous.current = null;
+    }
+  }, [identity, realKey, opponent, sequence, liveGame]);
+  return identity;
+}

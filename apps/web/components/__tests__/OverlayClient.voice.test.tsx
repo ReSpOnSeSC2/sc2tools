@@ -136,7 +136,7 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
     vi.useRealTimers();
   });
 
-  it("speaks the spec-shaped scouting line when an enriched liveGame envelope arrives", () => {
+  it("speaks the scouting line once the enriched loading envelope confirms match start", () => {
     render(<OverlayClient token="tok-1" />);
     expect(activeSocket).not.toBeNull();
     const socket = activeSocket as FakeSocket;
@@ -151,25 +151,27 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
 
     // Enriched envelope: name, race, Pulse MMR, and the cloud's
     // streamerHistory.headToHead populated.
-    act(() => {
-      socket.fire("overlay:liveGame", {
-        type: "liveGameState",
-        phase: "match_loading",
-        capturedAt: 1,
-        gameKey: "key-1",
-        opponent: {
-          name: "Maru",
-          race: "Terran",
-          profile: { mmr: 6720 },
-        },
-        streamerHistory: {
-          oppName: "Maru",
-          oppRace: "Terran",
-          matchup: "PvT",
-          headToHead: { wins: 3, losses: 1 },
-        },
-      });
-    });
+    const match = {
+      type: "liveGameState",
+      phase: "match_loading",
+      capturedAt: 1,
+      gameKey: "key-1",
+      opponent: {
+        name: "Maru",
+        race: "Terran",
+        profile: { mmr: 6720 },
+      },
+      streamerHistory: {
+        oppName: "Maru",
+        oppRace: "Terran",
+        matchup: "PvT",
+        headToHead: { wins: 3, losses: 1 },
+      },
+    };
+    act(() => socket.fire("overlay:liveGame", match));
+    act(() => vi.advanceTimersByTime(20_000));
+    expect(cap.speak).not.toHaveBeenCalled();
+    act(() => socket.fire("overlay:liveGame", { ...match, phase: "match_started" }));
 
     // Flush the hook's delay timer so synth.speak actually fires.
     // Both readiness signals (streamerHistory + MMR) are already
@@ -201,7 +203,7 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
     act(() => {
       socket.fire("overlay:liveGame", {
         type: "liveGameState",
-        phase: "match_loading",
+        phase: "match_started",
         capturedAt: 1,
         gameKey: "fresh-1",
         opponent: {

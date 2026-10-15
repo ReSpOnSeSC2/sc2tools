@@ -2,6 +2,20 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.11
+
+### Fixed - Scouting timing and repeated activations
+
+- Healthy zero-clock snapshots with the same established player roster retain
+  the current match identity, even when the clock reset outlasts the normal
+  telemetry grace period. Recovering gameplay no longer activates scouting
+  or the randomizer a second time. Incomplete telemetry still expires, and
+  confirmed menu and match-end transitions allow the next match to start.
+- The matching overlay update waits until the match starts before displaying
+  scouting for its full 15-second window. Reconnect preludes, delayed match
+  keys, enrichment updates, and stale voice fallbacks cannot announce the
+  same match again or announce the previous opponent.
+
 ## 0.18.10
 
 ### Fixed - OBS port scrolling and PvT opening labels

@@ -383,8 +383,22 @@ class LiveClientPoller:
 
         if ui.is_in_match:
             # During a loading/UI flip the game endpoint can still have
-            # its zero-clock snapshot. Apply the same bounded grace as
-            # missing telemetry instead of clearing and restarting widgets.
+            # its zero-clock snapshot. A healthy, unchanged roster from
+            # known gameplay proves this is still the same match, even
+            # when the clock stays at zero longer than the outage grace.
+            # Keep its phase/key without emitting another activation.
+            if (
+                game.display_time == 0
+                and self._last_phase in _ACTIVE_PHASES
+                and self._current_game_key is not None
+                and self._current_player_roster is not None
+                and _fully_known_player_roster(game.players)
+                == self._current_player_roster
+            ):
+                self._active_poll_misses = 0
+                return self._last_phase, self._cfg.interval_sec
+            # Missing or unrecognized identity still needs bounded grace
+            # so genuinely incomplete telemetry can retire stale widgets.
             preserved = self._preserve_active_on_transient_miss()
             if preserved is not None:
                 return preserved

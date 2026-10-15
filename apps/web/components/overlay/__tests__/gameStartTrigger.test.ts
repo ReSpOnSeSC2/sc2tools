@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { gameStartTriggerKey } from "../gameStartTrigger";
+import { gameStartTriggerKey, scoutingStartTriggerKey } from "../gameStartTrigger";
 import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 
 function envelope(
@@ -97,5 +97,29 @@ describe("gameStartTriggerKey", () => {
       { gameKey: "previous-match", matchup: "PvT", result: "loss" },
       envelope(),
     )).toBe("game:match-one");
+  });
+});
+
+describe("scoutingStartTriggerKey", () => {
+  it.each(["match_loading", "match_ended", "menu", "idle"] as const)(
+    "waits during %s even with enriched or resultless payloads", (phase) => {
+      expect(scoutingStartTriggerKey({ oppName: "Opponent" }, envelope({
+        phase, opponent: { name: "Opponent" }, streamerHistory: { oppName: "Opponent" },
+      }))).toBeNull();
+    },
+  );
+
+  it("starts once gameplay identifies an opponent and ignores replays", () => {
+    const match = envelope({ phase: "match_started", opponent: { name: "Opponent" } });
+    expect(scoutingStartTriggerKey(null, match)).toBe("game:match-one");
+    expect(scoutingStartTriggerKey(null, { ...match, phase: "match_in_progress" }))
+      .toBe("game:match-one");
+    expect(scoutingStartTriggerKey(null, { ...match, opponent: undefined })).toBeNull();
+    expect(scoutingStartTriggerKey(null, { ...match, isReplay: true })).toBeNull();
+  });
+
+  it("keeps settings previews available during loading", () => {
+    expect(scoutingStartTriggerKey({ isTest: true, testNonce: "preview" }, envelope()))
+      .toBe("test:preview");
   });
 });

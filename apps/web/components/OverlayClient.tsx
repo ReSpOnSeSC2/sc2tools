@@ -26,7 +26,10 @@ import {
   type VoicePrefs,
 } from "@/components/overlay/useVoiceReadout";
 import { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
-import { useGameStartTriggerKey } from "@/components/overlay/gameStartTrigger";
+import {
+  useGameStartTriggerKey,
+  useScoutingStartTriggerKey,
+} from "@/components/overlay/gameStartTrigger";
 import {
   attachOverlayResilience,
   type OverlayConnectionStatus,
@@ -179,10 +182,9 @@ export function OverlayClient({
   const voice = useVoiceReadout(
     enableVoiceHere ? live : null,
     enableVoiceHere ? voicePrefs : null,
-    // Plumb the agent's pre-game envelope so the voice line fires the
-    // moment the SC2 loading screen lands, not minutes later when the
-    // replay-derived ``live`` payload finally arrives. Mirrors the
-    // per-widget ``OverlayWidgetClient`` so the streamer gets the same
+    // Plumb the agent's envelope so the voice line fires when the match
+    // starts, without waiting for the replay-derived ``live`` payload.
+    // Mirrors the per-widget ``OverlayWidgetClient`` for the same
     // readout whether they wired the all-in-one URL or the dedicated
     // scouting Browser Source.
     enableVoiceHere ? liveGame : null,
@@ -303,9 +305,8 @@ const COMPOSITE_WIDGETS: ReadonlyArray<WidgetId> = [
  *     freshly-uploaded replay (``LiveGamePayload``).
  *   * ``overlay:liveGame`` — pre/in-game envelope fanned out by the
  *     cloud's ``LiveGameBroker`` (``LiveGameEnvelope``). Plumbed
- *     through so the voice readout + scouting widget can fire on the
- *     loading screen instead of waiting for the replay parse minutes
- *     later.
+ *     through so the voice readout + scouting widget can fire at match
+ *     start instead of waiting for the replay parse minutes later.
  *   * ``overlay:session`` — today's session aggregate.
  *   * ``overlay:config`` — enabled widgets + voice prefs snapshot.
  */
@@ -461,7 +462,8 @@ function useWidgetTimers({
   // widgets. The bridge can briefly return to menu and resync the same
   // game after a card has hidden; that is still the original start.
   const consumedStarts = useRef(new Map<WidgetId, Set<string>>());
-  const startTriggerKey = useGameStartTriggerKey(live, liveGame);
+  const randomizerStartKey = useGameStartTriggerKey(live, liveGame);
+  const scoutingStartKey = useScoutingStartTriggerKey(live, liveGame);
   const consumeStart = useCallback((id: WidgetId, key: string): boolean => {
     let keys = consumedStarts.current.get(id);
     if (!keys) {
@@ -495,11 +497,8 @@ function useWidgetTimers({
     liveGame && typeof liveGame.gameKey === "string"
       ? liveGame.gameKey
       : null;
-  // Active match phases — opponent + scouting consume the live envelope
-  // here and the all-in-one client must surface them through gameplay,
-  // not just for the 15s post-game window. ``match_ended`` drops out so
-  // the natural per-widget timer takes over and the scene clears after
-  // the result.
+  // Opponent and randomizer can appear during loading. Scouting uses
+  // its own confirmed-start key so loading cannot consume its window.
   const isActivePhase =
     !!liveGame
     && (liveGame.phase === "match_loading"
@@ -519,9 +518,12 @@ function useWidgetTimers({
       return true;
     });
     const freshStarts = new Set<WidgetId>();
-    for (const id of ["scouting", "randomizer"] as const) {
-      if (startTriggerKey && payloadTargetsWidget(live, id)
-        && consumeStart(id, startTriggerKey)) {
+    for (const [id, key] of [
+      ["scouting", scoutingStartKey],
+      ["randomizer", randomizerStartKey],
+    ] as const) {
+      if (key && payloadTargetsWidget(live, id)
+        && consumeStart(id, key)) {
         freshStarts.add(id);
         armTimer(id, isTest);
       }
@@ -549,7 +551,7 @@ function useWidgetTimers({
       }
       armTimer(id, isTest);
     }
-  }, [live, isActivePhase, startTriggerKey, consumeStart, armTimer, setVisibleLive]);
+  }, [live, isActivePhase, scoutingStartKey, randomizerStartKey, consumeStart, armTimer, setVisibleLive]);
 
   // Mirror the per-widget client's ``useWidgetVisibility`` for the
   // widgets that consume the agent's pre/in-game envelope. Without
@@ -569,9 +571,12 @@ function useWidgetTimers({
       liveTimers.current.delete("opponent");
     }
     const freshStarts = new Set<WidgetId>();
-    for (const id of ["scouting", "randomizer"] as const) {
-      if (startTriggerKey && payloadTargetsWidget(live, id)
-        && consumeStart(id, startTriggerKey)) {
+    for (const [id, key] of [
+      ["scouting", scoutingStartKey],
+      ["randomizer", randomizerStartKey],
+    ] as const) {
+      if (key && payloadTargetsWidget(live, id)
+        && consumeStart(id, key)) {
         freshStarts.add(id);
         armTimer(id, Boolean(live?.isTest));
       }
@@ -582,7 +587,7 @@ function useWidgetTimers({
       for (const id of freshStarts) next.add(id);
       return next;
     });
-  }, [isActivePhase, liveGameKey, startTriggerKey, live, consumeStart, armTimer, setVisibleLive]);
+  }, [isActivePhase, liveGameKey, scoutingStartKey, randomizerStartKey, live, consumeStart, armTimer, setVisibleLive]);
 
   useEffect(() => {
     if (!session) return;

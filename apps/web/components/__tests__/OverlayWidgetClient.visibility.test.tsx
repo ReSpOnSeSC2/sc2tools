@@ -84,7 +84,7 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
       <VisibilityProbe
         widget="scouting"
         live={null}
-        liveGame={envelope({ phase: "match_started" })}
+        liveGame={envelope({ phase: "match_started", opponent: { name: "Opponent" } })}
         visibleOut={out}
       />,
     );
@@ -276,7 +276,7 @@ describe("useWidgetVisibility — match_ended natural-timer behaviour", () => {
           // ``live`` cleared by useClearStalePostGameOnGameKeyChange.
           live={null}
           liveGame={envelope({
-            phase: "match_loading",
+            phase: "match_started",
             gameKey: "game-N+1",
             opponent: { name: "FreshOpponent" },
           })}

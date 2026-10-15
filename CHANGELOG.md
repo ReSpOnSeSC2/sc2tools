@@ -13,6 +13,12 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Agent 0.18.11:** scouting now appears when the match starts, with its full 15-second
+  display window. Loading and reconnect snapshots no longer trigger it;
+  delayed match keys, enrichment updates, and voice fallbacks cannot
+  repeat the same scouting announcement. The agent also retains the
+  match identity through a temporary zero-clock snapshot with the same players.
+
 - **Agent 0.18.10 / replay engine 1.6.11:** scrolling over the OBS port
   no longer changes it, including when the field has focus. Settings show
   the default port, **4455**, and where to verify it in OBS. PvT Oracle-first

@@ -18,7 +18,7 @@ import type {
 function envelope(extra: Partial<LiveGameEnvelope> = {}): LiveGameEnvelope {
   return {
     type: "liveGameState",
-    phase: "match_loading",
+    phase: "match_started",
     capturedAt: 0,
     ...extra,
   };
@@ -43,6 +43,23 @@ function historyWithNotes(
 }
 
 describe("ScoutingWidget — live envelope path", () => {
+  it.each([false, true])("stays transparent during loading, including synthetic=%s", (synthetic) => {
+    const { container } = render(<ScoutingWidget live={null} liveGame={envelope({
+      phase: "match_loading", synthetic,
+      opponent: { name: "Opponent", race: "Terran" },
+      streamerHistory: { oppName: "Opponent", headToHead: { wins: 2, losses: 1 } },
+    })} />);
+    expect(container.textContent).toBe("");
+  });
+
+  it("stays transparent after match end before replay results arrive", () => {
+    const { container } = render(<ScoutingWidget live={null} liveGame={envelope({
+      phase: "match_ended", opponent: { name: "Opponent" },
+      streamerHistory: { oppName: "Opponent" },
+    })} />);
+    expect(container.textContent).toBe("");
+  });
+
   it("renders nothing when there's no payload at all", () => {
     const { container } = render(
       <ScoutingWidget live={null} liveGame={null} />,
@@ -62,7 +79,7 @@ describe("ScoutingWidget — live envelope path", () => {
 
   it("renders 'Looking up opponent…' before Pulse responds", () => {
     const env = envelope({
-      phase: "match_loading",
+      phase: "match_started",
       opponent: { name: "Reynor", race: "Zerg" },
     });
     const { container } = render(
@@ -110,12 +127,12 @@ describe("ScoutingWidget — live envelope path", () => {
     expect(container.textContent).toContain("Profile lookup unavailable");
   });
 
-  it("renders an 'Opponent loading…' placeholder when no name is set yet", () => {
-    const env = envelope({ phase: "match_loading" });
+  it("stays transparent until the started match identifies its opponent", () => {
+    const env = envelope({ phase: "match_started" });
     const { container } = render(
       <ScoutingWidget live={null} liveGame={env} />,
     );
-    expect(container.textContent).toContain("Opponent loading…");
+    expect(container.textContent).toBe("");
   });
 
   it("hides itself when the bridge moves back to idle", () => {
@@ -136,7 +153,7 @@ describe("ScoutingWidget — live envelope path", () => {
     expect(container.textContent || "").toBe("");
   });
 
-  it("post-game payload wins — pre-game card is replaced by the full LAST GAMES card", () => {
+  it("uses a resultless live payload for the full card during a confirmed match", () => {
     const post: LiveGamePayload = {
       oppName: "Serral",
       oppRace: "Zerg",
@@ -152,7 +169,7 @@ describe("ScoutingWidget — live envelope path", () => {
       ],
     };
     const env = envelope({
-      phase: "match_ended",
+      phase: "match_started",
       opponent: {
         name: "Serral",
         race: "Zerg",
@@ -535,7 +552,7 @@ describe("ScoutingWidget — live envelope path", () => {
     // enrichment completing — render the placeholder so the panel
     // reserves its slot.
     const env = envelope({
-      phase: "match_loading",
+      phase: "match_started",
       opponent: { name: "Reynor", race: "Zerg" },
     });
     const { container } = render(

@@ -110,7 +110,7 @@ function Harness({
 function envelope(extra: Partial<LiveGameEnvelope> = {}): LiveGameEnvelope {
   return {
     type: "liveGameState",
-    phase: "match_loading",
+    phase: "match_started",
     capturedAt: 0,
     gameKey: "k1",
     ...extra,
@@ -155,6 +155,246 @@ describe("useVoiceReadout — live envelope path", () => {
       vi.advanceTimersByTime(6000);
     });
   }
+
+  it("waits for match start even when loading has a fully enriched opponent", () => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, delayMs: 0 };
+    const loading = envelope({
+      phase: "match_loading",
+      gameKey: "loading-identity",
+      opponent: { name: "Maru", race: "Terran", profile: { mmr: 6720 } },
+      streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } },
+    });
+    const { rerender } = render(
+      <Harness live={null} liveGame={loading} prefs={prefs} refOut={ref} />,
+    );
+    flushEnrichmentFallback();
+    expect(cap.speak).not.toHaveBeenCalled();
+
+    const started = { ...loading, gameKey: "confirmed-match", phase: "match_started" as const };
+    rerender(<Harness live={null} liveGame={started} prefs={prefs} refOut={ref} />);
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    rerender(
+      <Harness
+        live={null}
+        liveGame={{ ...started, phase: "match_in_progress" }}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    flushEnrichmentFallback();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not queue scouting from a synthetic loading snapshot of an ended match", () => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, delayMs: 0 };
+    const cached = envelope({
+      phase: "match_loading",
+      synthetic: true,
+      opponent: { name: "Maru", race: "Terran", profile: { mmr: 6720 } },
+      streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } },
+    });
+    const { rerender } = render(
+      <Harness live={null} liveGame={cached} prefs={prefs} refOut={ref} />,
+    );
+    rerender(
+      <Harness
+        live={null}
+        liveGame={{ ...cached, phase: "match_ended", synthetic: false }}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    flushEnrichmentFallback();
+    expect(cap.speak).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("does not repeat a keyless start when its key arrives (gap: %s)", (gap) => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, delayMs: 0 };
+    const ready = envelope({
+      gameKey: undefined,
+      opponent: { name: "Maru", race: "Terran", profile: { mmr: 6720 } },
+      streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } },
+    });
+    const { rerender } = render(
+      <Harness live={null} liveGame={ready} prefs={prefs} refOut={ref} />,
+    );
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    if (gap) rerender(<Harness live={null} liveGame={null} prefs={prefs} refOut={ref} />);
+    const identified = { ...ready, gameKey: "confirmed-match", phase: "match_in_progress" as const };
+    rerender(<Harness live={null} liveGame={identified} prefs={prefs} refOut={ref} />);
+    rerender(<Harness live={null} liveGame={null} prefs={prefs} refOut={ref} />);
+    rerender(<Harness live={null} liveGame={identified} prefs={prefs} refOut={ref} />);
+    flushEnrichmentFallback();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it("gates a legacy scouting payload on match start and consumes it across source changes", () => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, delayMs: 0 };
+    const payload = { gameKey: "k1", oppName: "Maru", oppRace: "Terran" };
+    const loading = envelope({
+      phase: "match_loading",
+      opponent: { name: "Maru", race: "Terran", profile: { mmr: 6720 } },
+      streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } },
+    });
+    const { rerender } = render(
+      <Harness live={payload} liveGame={loading} prefs={prefs} refOut={ref} />,
+    );
+    flushEnrichmentFallback();
+    expect(cap.speak).not.toHaveBeenCalled();
+
+    const started = { ...loading, phase: "match_started" as const };
+    rerender(<Harness live={payload} liveGame={started} prefs={prefs} refOut={ref} />);
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    rerender(<Harness live={null} liveGame={started} prefs={prefs} refOut={ref} />);
+    flushEnrichmentFallback();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not repeat an envelope readout when the same match gets a legacy payload", () => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, delayMs: 0 };
+    const ready = envelope({
+      opponent: { name: "Maru", race: "Terran", profile: { mmr: 6720 } },
+      streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } },
+    });
+    const { rerender } = render(
+      <Harness live={null} liveGame={ready} prefs={prefs} refOut={ref} />,
+    );
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    rerender(
+      <Harness
+        live={{ gameKey: "k1", oppName: "Maru", oppRace: "Terran" }}
+        liveGame={ready}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    flushEnrichmentFallback();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["keys", "opponents", "keys and opponents"] as const)(
+    "ignores a previous match's payload when %s disagree with the started envelope",
+    (mismatch) => {
+      window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+      const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+      const prefs = { enabled: true, delayMs: 0, events: { cheese: true } };
+      const oldPayload = {
+        gameKey: "previous-match",
+        oppName: "Maru",
+        oppRace: "Terran",
+        oppMmr: 6720,
+        headToHead: { wins: 3, losses: 1 },
+        cheeseProbability: 0.8,
+      };
+      const previous = envelope({
+        gameKey: "previous-match",
+        opponent: { name: "Maru", race: "Terran", profile: { mmr: 6720 } },
+        streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } },
+      });
+      const { rerender } = render(
+        <Harness live={oldPayload} liveGame={previous} prefs={prefs} refOut={ref} />,
+      );
+      expect(cap.speak).toHaveBeenCalledTimes(1);
+
+      // The bridge briefly clears its envelope while the previous
+      // resultless payload remains mounted in OverlayClient.
+      rerender(<Harness live={oldPayload} liveGame={null} prefs={prefs} refOut={ref} />);
+      const beforeStart = cap.utterances.length;
+      const nextName = mismatch === "keys" ? "Maru" : "Reynor";
+      const next = envelope({
+        gameKey: mismatch === "opponents" ? undefined : "next-match",
+        opponent: { name: nextName, race: "Zerg", profile: { mmr: 6900 } },
+        streamerHistory: { oppName: nextName, headToHead: { wins: 9, losses: 1 } },
+      });
+      // The new envelope renders before the stale-clear effect's live
+      // update. It must speak the new opponent and consume that match.
+      rerender(<Harness live={oldPayload} liveGame={next} prefs={prefs} refOut={ref} />);
+      expect(cap.utterances).toHaveLength(beforeStart + 1);
+      const startedText = cap.utterances.at(-1)?.text;
+      expect(startedText).toContain(`Facing ${nextName}, Zerg.`);
+      expect(startedText).toContain("6900 MMR.");
+      expect(startedText).toContain("You're 9 and 1 against them");
+      expect(startedText).not.toContain("Cheese warning");
+
+      rerender(<Harness live={null} liveGame={next} prefs={prefs} refOut={ref} />);
+      flushEnrichmentFallback();
+      expect(cap.utterances).toHaveLength(beforeStart + 1);
+    },
+  );
+
+  it("cancels an envelope fallback when a legacy payload owns the readout", () => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, delayMs: 0 };
+    const partial = envelope({ opponent: { name: "Maru", race: "Terran" } });
+    const { rerender } = render(
+      <Harness live={null} liveGame={partial} prefs={prefs} refOut={ref} />,
+    );
+    act(() => vi.advanceTimersByTime(1000));
+    rerender(
+      <Harness
+        live={{ gameKey: "k1", oppName: "Maru", oppRace: "Terran" }}
+        liveGame={partial}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    flushEnrichmentFallback();
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the latest partial enrichment when the original fallback deadline arrives", () => {
+    window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+    const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+    const prefs = { enabled: true, delayMs: 0 };
+    const partial = envelope({ opponent: { name: "Maru", race: "Terran" } });
+    const { rerender } = render(
+      <Harness live={null} liveGame={partial} prefs={prefs} refOut={ref} />,
+    );
+    act(() => vi.advanceTimersByTime(1000));
+    rerender(
+      <Harness
+        live={null}
+        liveGame={{ ...partial, streamerHistory: { oppName: "Maru", headToHead: { wins: 3, losses: 1 } } }}
+        prefs={prefs}
+        refOut={ref}
+      />,
+    );
+    act(() => vi.advanceTimersByTime(3999));
+    expect(cap.speak).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(1));
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    expect(cap.utterances[0].text).toContain("You're 3 and 1 against them");
+  });
+
+  it.each(["voice", "events"] as const)(
+    "cancels a pending fallback when %s is disabled",
+    (disabled) => {
+      window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
+      const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
+      const partial = envelope({ opponent: { name: "Maru", race: "Terran" } });
+      const { rerender } = render(
+        <Harness live={null} liveGame={partial} prefs={{ enabled: true, delayMs: 0 }} refOut={ref} />,
+      );
+      const prefs = disabled === "voice"
+        ? { enabled: false, delayMs: 0 }
+        : { enabled: true, delayMs: 0, events: { scouting: false, matchStart: false } };
+      rerender(<Harness live={null} liveGame={partial} prefs={prefs} refOut={ref} />);
+      flushEnrichmentFallback();
+      expect(cap.speak).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(["null", "menu", "other-key"] as const)(
     "does not repeat a consumed match after %s and same-key recovery",
@@ -1001,9 +1241,8 @@ describe("useVoiceReadout — live envelope path", () => {
     // falls back to ``live:${oppName}``. Two consecutive matches
     // against the same opponent would collide on that key, marking
     // the second match's entry as already-spoken. The transition
-    // watcher AND the in-effect "new gameKey → wipe stale entries"
-    // guard fix this by treating any liveGame=null in between (or a
-    // gameKey change) as a state reset.
+    // A confirmed match end retires that fallback identity so the next
+    // match gets its own readout, while transient null gaps stay deduped.
     window.localStorage.setItem("sc2tools.voiceUnlocked", "1");
     const ref: HarnessRef = { needsGesture: false, onUserGesture: () => {} };
     const matchOne = envelope({
@@ -1037,7 +1276,15 @@ describe("useVoiceReadout — live envelope path", () => {
     );
     flush();
     expect(cap.speak).toHaveBeenCalledTimes(1);
-    // Bridge clears between matches (production: idle/menu → null).
+    // Confirm the match ended before clearing between games.
+    rerender(
+      <Harness
+        live={null}
+        liveGame={{ ...matchOne, phase: "match_ended" }}
+        prefs={{ enabled: true, events: { scouting: true } }}
+        refOut={ref}
+      />,
+    );
     rerender(
       <Harness
         live={null}

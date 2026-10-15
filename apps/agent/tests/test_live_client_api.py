@@ -945,18 +945,67 @@ def test_transient_zero_clock_preserves_active_match(
     assert poller._active_poll_misses == 0
 
 
-def test_zero_clock_grace_remains_bounded() -> None:
-    """Persistently incomplete telemetry must still retire the active game."""
+@pytest.mark.parametrize("screens", [[], ["ForegroundScreen"], ["ScreenUnknown/ScreenUnknown"]])
+def test_prolonged_zero_clock_with_known_roster_keeps_match_identity(
+    monkeypatch, screens: list[str],
+) -> None:
+    """A healthy same-roster clock reset cannot activate one match twice."""
+    from sc2tools_agent.live import client_api
+
+    timestamps = count(10.0, 10.0)
+    monkeypatch.setattr(client_api.time, "time", lambda: next(timestamps))
     session = _StubSession()
     observations = [
+        (["ScreenLoading"], 0.0),
         ([], 2.0),
-        *[([], 0.0)] * (ACTIVE_POLL_MISS_GRACE + 1),
+        *[(screens, 0.0)] * (ACTIVE_POLL_MISS_GRACE + 3),
+        ([], 4.0),
     ]
-    for screens, display_time in observations:
-        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+    for active_screens, display_time in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": active_screens}))
         session.queue("http://localhost:6119/game", _ok(_live_game(
             "Opponent", display_time=display_time,
         )))
+    poller, seen = _make_poller(session)
+    for _ in observations:
+        phase, _ = poller._tick_once()
+        poller._last_phase = phase
+
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_LOADING,
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MATCH_IN_PROGRESS,
+    ]
+    assert len({event.game_key for event in seen}) == 1
+    assert seen[0].game_key is not None
+    assert poller._current_game_key == seen[0].game_key
+    assert poller._active_poll_misses == 0
+
+
+@pytest.mark.parametrize("zero_roster", [
+    [], ["Streamer#1"], ["Streamer#1", ""], ["Streamer#1", "OtherOpponent"],
+])
+def test_zero_clock_without_known_roster_grace_remains_bounded(
+    zero_roster: list[str],
+) -> None:
+    """Missing or changed player identity cannot indefinitely preserve a match."""
+    session = _StubSession()
+    complete = _live_game("Opponent", display_time=2.0)
+    zero_clock = {
+        **complete,
+        "displayTime": 0.0,
+        "players": [
+            {**complete["players"][index], "name": name}
+            for index, name in enumerate(zero_roster)
+        ],
+    }
+    observations = [
+        complete,
+        *[zero_clock] * (ACTIVE_POLL_MISS_GRACE + 1),
+    ]
+    for game in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": []}))
+        session.queue("http://localhost:6119/game", _ok(game))
     poller, seen = _make_poller(session)
     phases = []
     for _ in observations:
@@ -974,6 +1023,65 @@ def test_zero_clock_grace_remains_bounded() -> None:
     assert poller._current_game_key is None
 
 
+def test_zero_clock_before_healthy_gameplay_grace_remains_bounded() -> None:
+    """A loading-only roster has not yet established healthy gameplay."""
+    session = _StubSession()
+    observations = [
+        ["ScreenLoading"],
+        *[[]] * (ACTIVE_POLL_MISS_GRACE + 1),
+    ]
+    for screens in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(_live_game(
+            "Opponent", display_time=0.0,
+        )))
+    poller, seen = _make_poller(session)
+    for _ in observations:
+        phase, _ = poller._tick_once()
+        poller._last_phase = phase
+
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_LOADING,
+        LiveLifecyclePhase.MENU,
+    ]
+    assert poller._current_game_key is None
+
+
+def test_definite_menu_after_zero_clock_gives_same_opponent_rematch_a_fresh_key(
+    monkeypatch,
+) -> None:
+    """Known zero-clock data must not mask an explicit menu boundary."""
+    from sc2tools_agent.live import client_api
+
+    timestamps = count(10.0, 10.0)
+    monkeypatch.setattr(client_api.time, "time", lambda: next(timestamps))
+    session = _StubSession()
+    observations = [
+        ([], 2.0),
+        *[([], 0.0)] * (ACTIVE_POLL_MISS_GRACE + 3),
+        (["ScreenMenu"], 0.0),
+        ([], 2.0),
+    ]
+    for screens, display_time in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(_live_game(
+            "Opponent", display_time=display_time,
+        )))
+    poller, seen = _make_poller(session)
+    for _ in observations:
+        phase, _ = poller._tick_once()
+        poller._last_phase = phase
+
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_STARTED,
+        LiveLifecyclePhase.MENU,
+        LiveLifecyclePhase.MATCH_STARTED,
+    ]
+    assert seen[0].game_key is not None
+    assert seen[1].game_key == seen[0].game_key
+    assert seen[2].game_key != seen[0].game_key
+
+
 @pytest.mark.parametrize("loading_seen", [False, True])
 def test_confirmed_end_gives_fast_same_opponent_rematch_a_fresh_key(
     monkeypatch, loading_seen: bool,
@@ -988,6 +1096,8 @@ def test_confirmed_end_gives_fast_same_opponent_rematch_a_fresh_key(
     decided["players"][1]["result"] = "Defeat"
     observations = [
         ([], _live_game("Opponent", display_time=2.0)),
+        *[([], _live_game("Opponent", display_time=0.0))]
+        * (ACTIVE_POLL_MISS_GRACE + 3),
         (["ScreenScore"], decided),
         *([(["ScreenLoading"], _live_game("Opponent", display_time=0.0))]
           if loading_seen else []),

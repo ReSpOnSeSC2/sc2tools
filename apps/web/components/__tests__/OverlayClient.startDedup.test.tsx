@@ -74,22 +74,28 @@ describe("OverlayClient game-start deduplication", () => {
   });
   afterEach(() => { cleanup(); vi.useRealTimers(); });
 
-  it("uses the original deadlines through loading/start ticks and enrichment", () => {
+  it("starts scouting at match start and preserves its deadline through enrichment", () => {
     const socket = setup();
     envelope(socket);
-    expect(screen.queryByTestId("scouting-start")).not.toBeNull();
+    expect(screen.queryByTestId("scouting-start")).toBeNull();
     expect(randomizerVisible()).toBe(true);
     advance(10_000);
+    payload(socket);
+    expect(screen.queryByTestId("scouting-start")).toBeNull();
     envelope(socket, { phase: "match_started", capturedAt: 2 });
+    expect(screen.queryByTestId("scouting-start")).not.toBeNull();
     payload(socket);
     advance(5_000);
-    expect(screen.queryByTestId("scouting-start")).toBeNull();
+    expect(screen.queryByTestId("scouting-start")).not.toBeNull();
     expect(randomizerVisible()).toBe(true);
     envelope(socket, {
       phase: "match_in_progress", capturedAt: 3,
       streamerHistory: { oppName: "Maru", matchup: "PvT" },
     });
-    advance(17_000);
+    advance(10_000);
+    expect(screen.queryByTestId("scouting-start")).toBeNull();
+    expect(randomizerVisible()).toBe(true);
+    advance(7_000);
     expectStartHidden();
     payload(socket);
     envelope(socket, { phase: "match_in_progress", capturedAt: 4 });
@@ -100,7 +106,7 @@ describe("OverlayClient game-start deduplication", () => {
 
   it("does not restart or remount the reveal on a same-key menu interruption", () => {
     const socket = setup();
-    envelope(socket);
+    envelope(socket, { phase: "match_started" });
     advance(10_000);
     envelope(socket, { phase: "menu", capturedAt: 2 });
     advance(3_000);
@@ -118,7 +124,7 @@ describe("OverlayClient game-start deduplication", () => {
 
   it("ignores same-key reconnect preludes after the start windows expired", () => {
     const socket = setup();
-    envelope(socket);
+    envelope(socket, { phase: "match_started" });
     advance(33_000);
     envelope(socket, { phase: "match_ended", capturedAt: 2 });
     envelope(socket, { synthetic: true, opponent: undefined, capturedAt: 2 });
@@ -130,7 +136,7 @@ describe("OverlayClient game-start deduplication", () => {
 
   it("keeps the original start deadlines through a keyless active partial", () => {
     const socket = setup();
-    envelope(socket);
+    envelope(socket, { phase: "match_started" });
     advance(10_000);
     envelope(socket, { gameKey: undefined, synthetic: true, opponent: undefined });
     envelope(socket, { phase: "match_started", capturedAt: 2 });
@@ -145,7 +151,7 @@ describe("OverlayClient game-start deduplication", () => {
 
   it("does not rearm an expired start when recovery briefly lacks a key", () => {
     const socket = setup();
-    envelope(socket);
+    envelope(socket, { phase: "match_started" });
     advance(33_000);
     envelope(socket, { gameKey: undefined, synthetic: true, opponent: undefined });
     expectStartHidden();
@@ -166,15 +172,57 @@ describe("OverlayClient game-start deduplication", () => {
 
   it("rearms both start windows for the next game without a menu phase", () => {
     const socket = setup();
-    envelope(socket);
+    envelope(socket, { phase: "match_started" });
     advance(33_000);
     envelope(socket, { gameKey: "game-2", capturedAt: 2 });
+    expect(screen.queryByTestId("scouting-start")).toBeNull();
+    expect(randomizerVisible()).toBe(true);
+    envelope(socket, { gameKey: "game-2", phase: "match_started", capturedAt: 3 });
     expect(screen.queryByTestId("scouting-start")).not.toBeNull();
     expect(randomizerVisible()).toBe(true);
     expect(mounts.scouting).toHaveBeenCalledTimes(2);
     expect(mounts.randomizer).toHaveBeenCalledTimes(1);
     advance(32_000);
     expectStartHidden();
+  });
+
+  it("ignores synthetic loading and ended reconnect snapshots until a confirmed start", () => {
+    const socket = setup();
+    envelope(socket, { synthetic: true, opponent: undefined });
+    expect(screen.queryByTestId("scouting-start")).toBeNull();
+    envelope(socket, { phase: "match_ended", capturedAt: 2 });
+    expect(screen.queryByTestId("scouting-start")).toBeNull();
+    advance(5_000);
+    envelope(socket, { phase: "match_in_progress", capturedAt: 3 });
+    expect(screen.queryByTestId("scouting-start")).not.toBeNull();
+    advance(15_000);
+    expect(screen.queryByTestId("scouting-start")).toBeNull();
+    expect(mounts.scouting).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for a named opponent and ignores replay starts", () => {
+    const socket = setup();
+    envelope(socket, { phase: "match_started", opponent: undefined });
+    expect(screen.queryByTestId("scouting-start")).toBeNull();
+    envelope(socket, { phase: "match_in_progress", isReplay: true, capturedAt: 2 });
+    expect(screen.queryByTestId("scouting-start")).toBeNull();
+    envelope(socket, { phase: "match_in_progress", capturedAt: 3 });
+    expect(screen.queryByTestId("scouting-start")).not.toBeNull();
+    expect(mounts.scouting).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the scouting deadline when a keyless confirmed start gains its match key", () => {
+    const socket = setup();
+    envelope(socket, { phase: "match_started", gameKey: undefined });
+    expect(screen.queryByTestId("scouting-start")).not.toBeNull();
+    advance(10_000);
+    envelope(socket, { phase: "match_in_progress", capturedAt: 2 });
+    advance(5_000);
+    expect(screen.queryByTestId("scouting-start")).toBeNull();
+    envelope(socket, { phase: "menu", capturedAt: 3 });
+    envelope(socket, { phase: "match_in_progress", capturedAt: 4 });
+    expect(screen.queryByTestId("scouting-start")).toBeNull();
+    expect(mounts.scouting).toHaveBeenCalledTimes(1);
   });
 
   it("allows each explicit Test nonce once and keeps duplicate Test deadlines", () => {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import type { LiveGameEnvelope, LiveGamePayload } from "./types";
-import { useGameStartTriggerKey } from "./gameStartTrigger";
+import { useScoutingStartTriggerKey } from "./gameStartTrigger";
 import {
   buildScoutingLine,
   buildMatchEndLine,
@@ -183,6 +183,7 @@ export interface VoiceReadout {
 interface LiveGameUtterState {
   spoken: boolean;
   timer: number | null;
+  fire: (() => void) | null;
 }
 
 type LiveGameStates = Map<string, LiveGameUtterState>;
@@ -197,6 +198,14 @@ function clearAllLiveGameTimers(states: LiveGameStates): void {
     if (entry.timer !== null) window.clearTimeout(entry.timer);
   }
   states.clear();
+}
+
+function cancelPendingLiveGameTimers(states: LiveGameStates): void {
+  for (const entry of states.values()) {
+    if (entry.timer !== null) window.clearTimeout(entry.timer);
+    entry.timer = null;
+    entry.fire = null;
+  }
 }
 
 /**
@@ -255,7 +264,15 @@ export function useVoiceReadout(
   // Keep consumed identities separate from the current match's timer state;
   // keyless legacy envelopes still reset between matches below.
   const consumedLiveGameKeys = useRef(new Set<string>());
-  const liveGameStartKey = useGameStartTriggerKey(null, liveGame ?? null);
+  const liveGameStartKey = useScoutingStartTriggerKey(live, liveGame ?? null);
+  const payloadGameKey = live?.gameKey?.trim();
+  const envelopeGameKey = liveGame?.gameKey?.trim();
+  const payloadOpponent = live?.oppName?.trim().toLowerCase();
+  const envelopeOpponent = liveGame?.opponent?.name?.trim().toLowerCase();
+  const staleScoutingPayload = !!live && !live.result && !live.isTest && !!liveGame && (
+    (!!payloadGameKey && !!envelopeGameKey && payloadGameKey !== envelopeGameKey)
+    || (!!payloadOpponent && !!envelopeOpponent && payloadOpponent !== envelopeOpponent)
+  );
   // Most recent ``gameKey`` we processed in the live-envelope effect.
   // Used to detect match transitions so we can clear stale per-gameKey
   // state AND the post-game fingerprint refs — without this, an old
@@ -505,17 +522,25 @@ export function useVoiceReadout(
     const wantsScouting = events.scouting !== false; // default-on
     const lines: string[] = [];
 
-    // Pre-game scouting card fires whenever an opponent name is
-    // present without a result — that's the "match starting / about
-    // to start" window in the live payload.
-    const hasOpp = !!live.oppName && !live.result;
-    if (hasOpp) {
+    // A known live envelope must confirm the match has started before
+    // a legacy payload can trigger scouting. Both sources share match
+    // consumption so switching sources cannot repeat the readout.
+    const hasOpp = !!live.oppName && !live.result
+      && liveGameStartKey !== null && !staleScoutingPayload;
+    const realGameKey = liveGameStartKey?.startsWith("game:")
+      && liveGameStartKey !== "game:unkeyed" ? liveGameStartKey : null;
+    const matchConsumed = realGameKey !== null
+      && consumedLiveGameKeys.current.has(realGameKey);
+    if (hasOpp && !matchConsumed) {
       if (wantsScouting && consumeFingerprint(fingerprints.scouting, scoutingFingerprint(live))) {
         const line = buildScoutingLine(live);
         if (line) lines.push(line);
       }
       if (events.matchStart && consumeFingerprint(fingerprints.matchStart, matchStartFingerprint(live))) {
         lines.push("Match starting.");
+      }
+      if (lines.length > 0 && realGameKey !== null) {
+        consumedLiveGameKeys.current.add(realGameKey);
       }
     }
 
@@ -529,6 +554,7 @@ export function useVoiceReadout(
 
     if (
       events.cheese
+      && !staleScoutingPayload
       && typeof live.cheeseProbability === "number"
       && live.cheeseProbability >= 0.4
       && consumeFingerprint(fingerprints.cheese, cheeseFingerprint(live))
@@ -543,7 +569,7 @@ export function useVoiceReadout(
     } else {
       log("payload produced no readout", { hasOpp, result: live.result });
     }
-  }, [live, enabled, prefs, enqueueOrSpeak, log]);
+  }, [live, liveGameStartKey, staleScoutingPayload, enabled, prefs, enqueueOrSpeak, log]);
 
   // Live-envelope match transitions: wipe per-gameKey state AND the
   // post-game fingerprint refs whenever the bridge clears a previously-
@@ -604,15 +630,17 @@ export function useVoiceReadout(
   // ``MMR_FALLBACK_WAIT_MS``) cap that wait so the readout still fires
   // with whatever data we have instead of going silent.
   //
-  // Why we don't fire from this path when ``live`` is set: the post-
-  // game payload has identical or stricter information, and letting
-  // both fire would speak twice for the same match. The ScoutingWidget
-  // consumes ``liveGame`` exclusively when ``live`` is null; voice
-  // mirrors that priority.
+  // A current legacy or post-game payload owns the readout to prevent
+  // duplicate speech. A resultless payload from a previous match must
+  // not block the new envelope while the stale-clear state update lands.
   useEffect(() => {
-    if (!enabled) return;
-    if (live) return; // post-game path owns the readout when present
     const states = liveGameStates.current;
+    if (!enabled || (live && !staleScoutingPayload)) {
+      // A pending envelope fallback must not fire behind the payload
+      // path (or after voice was disabled).
+      cancelPendingLiveGameTimers(states);
+      return;
+    }
     if (!liveGame) return;
     if (liveGameStartKey === null) {
       // A start-only readout cannot outlive the active match phase.
@@ -620,11 +648,17 @@ export function useVoiceReadout(
       return;
     }
     const oppName = liveGame.opponent?.name?.trim();
-    if (!oppName) return;
+    if (!oppName) {
+      cancelPendingLiveGameTimers(states);
+      return;
+    }
     const events = prefs?.events || {};
     const wantsScouting = events.scouting !== false;
     const wantsMatchStart = !!events.matchStart;
-    if (!wantsScouting && !wantsMatchStart) return;
+    if (!wantsScouting && !wantsMatchStart) {
+      cancelPendingLiveGameTimers(states);
+      return;
+    }
 
     const realGameKey = liveGameStartKey !== "game:unkeyed"
       ? liveGameStartKey
@@ -641,7 +675,7 @@ export function useVoiceReadout(
       // envelope) — wipe them so they can't somehow shadow this one
       // and so the map stays bounded across a long stream session.
       if (states.size > 0) clearAllLiveGameTimers(states);
-      entry = { spoken: false, timer: null };
+      entry = { spoken: false, timer: null, fire: null };
       states.set(gameKey, entry);
     }
     if (entry.spoken) return;
@@ -657,13 +691,6 @@ export function useVoiceReadout(
     const hasMmr = isLiveGameMmrReady(liveGame);
 
     const fireUtterance = () => {
-      // The latest envelope captured in the closure may be stale by
-      // the time the timer fires, but the hook's render cycle keeps
-      // the latest envelope reachable through ``liveGameStates``; we
-      // re-read ``liveGame`` via the closure here intentionally —
-      // it's the snapshot at the moment we decided to speak. The next
-      // render will recompute and either match (no-op, already
-      // spoken) or detect a new gameKey.
       const slot = states.get(gameKey);
       if (!slot || slot.spoken) return;
       slot.spoken = true;
@@ -684,6 +711,9 @@ export function useVoiceReadout(
         enqueueOrSpeak(text);
       }
     };
+    // Keep the fallback deadline fixed while letting newer partials
+    // update the spoken content, preferences, and gesture state.
+    entry.fire = fireUtterance;
 
     if (hasEnrichment && hasMmr) {
       // Both readiness signals landed — speak now and cancel the
@@ -712,11 +742,13 @@ export function useVoiceReadout(
     if (entry.timer === null) {
       entry.timer = window.setTimeout(() => {
         const slot = states.get(gameKey);
-        if (slot) slot.timer = null;
-        fireUtterance();
+        if (slot) {
+          slot.timer = null;
+          slot.fire?.();
+        }
       }, waitMs);
     }
-  }, [liveGame, liveGameStartKey, live, enabled, prefs, enqueueOrSpeak, log]);
+  }, [liveGame, liveGameStartKey, live, staleScoutingPayload, enabled, prefs, enqueueOrSpeak, log]);
 
   // Drain pending live-game timers on unmount so a Browser Source
   // refresh doesn't leave orphaned setTimeouts attached to a torn-down

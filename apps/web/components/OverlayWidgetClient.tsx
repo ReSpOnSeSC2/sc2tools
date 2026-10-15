@@ -25,7 +25,7 @@ import {
   type VoicePrefs,
 } from "@/components/overlay/useVoiceReadout";
 import { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
-import { useGameStartTriggerKey } from "@/components/overlay/gameStartTrigger";
+import { useGameStartTriggerKey, useScoutingStartTriggerKey } from "@/components/overlay/gameStartTrigger";
 import {
   mergeLiveGameStreamerHistory,
   type StickyStreamerHistory,
@@ -250,7 +250,7 @@ export function OverlayWidgetClient({
     enableVoiceHere ? live : null,
     enableVoiceHere ? voicePrefs : null,
     // Pass the agent's pre-game envelope as a secondary trigger so the
-    // scouting readout fires the moment the loading screen lands —
+    // scouting readout waits for confirmed gameplay and opponent identity —
     // before the post-game replay-derived ``LiveGamePayload`` would
     // have been able to fire it minutes later.
     enableVoiceHere ? liveGame : null,
@@ -733,7 +733,9 @@ export function useWidgetVisibility(
   // must never restart a reveal or show an already-expired scouting card.
   const startDeadlines = useRef(new Map<string, number>());
   const startOnly = widget === "scouting" || widget === "randomizer";
-  const startKey = useGameStartTriggerKey(live, liveGame);
+  const gameStartKey = useGameStartTriggerKey(live, liveGame);
+  const scoutingStartKey = useScoutingStartTriggerKey(live, liveGame);
+  const startKey = widget === "scouting" ? scoutingStartKey : gameStartKey;
 
   const consumesLiveGame = widget === "opponent";
   // Active match phases — used to count the live envelope as a
@@ -748,8 +750,8 @@ export function useWidgetVisibility(
   const liveGameActive = consumesLiveGame && isActivePhase;
   // Pin only the OPPONENT widget through gameplay so viewers see who
   // their streamer's playing for the whole match. Scouting deliberately
-  // is NOT pinned — it's a giant intel dossier meant for the loading
-  // screen + first 20s of the match; pinning it for 15 minutes of
+  // is NOT pinned — it's a giant intel dossier meant for the first
+  // 15s of the match; pinning it for 15 minutes of
   // gameplay would dominate the OBS scene. Streamer feedback after the
   // first ladder test: "scouting stays on the screen way too long."
   const pinThroughMatch = widget === "opponent" && isActivePhase;
