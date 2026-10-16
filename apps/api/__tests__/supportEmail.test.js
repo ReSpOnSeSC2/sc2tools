@@ -69,6 +69,7 @@ describe("support Gmail delivery", () => {
       ? json({ messages: [{ id: "abc123" }] }) : json(mail("abc123"));
     const first = service(responder);
     await first.worker.sync();
+    expect(await db.supportEmailSync.findOne({})).toMatchObject({ _schemaVersion: 1 });
     await service(responder).worker.sync();
     const rows = await events.list({ type: "user_message" });
     expect(rows.items).toHaveLength(1);

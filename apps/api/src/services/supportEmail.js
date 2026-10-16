@@ -1,6 +1,8 @@
 "use strict";
 
 const crypto = require("crypto");
+const { COLLECTIONS } = require("../config/constants");
+const { stampVersion } = require("../db/schemaVersioning");
 const { EVENT_TYPES, MESSAGE_BODY_MAX } = require("./adminEvents");
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
@@ -47,7 +49,9 @@ class SupportEmailService {
       { _id: this.stateId },
       {
         $setOnInsert: { afterSec: initialAfter, revision: 0 },
-        $set: { lastAttemptAt: new Date(this.now()) },
+        $set: stampVersion(
+          { lastAttemptAt: new Date(this.now()) }, COLLECTIONS.SUPPORT_EMAIL_SYNC,
+        ),
       },
       { upsert: true },
     );

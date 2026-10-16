@@ -34,6 +34,16 @@ describe("db/schemaVersioning", () => {
     }
   });
 
+  test("support email v1 registration preserves existing delivery checkpoints", () => {
+    const collection = COLLECTIONS.SUPPORT_EMAIL_SYNC;
+    const checkpoint = {
+      _id: "mailbox-hash", afterSec: 1791000000, revision: 7,
+      pageToken: "next-page", windowEndSec: 1791100000,
+    };
+    expect(expectedVersion(collection)).toBe(1);
+    expect(migrateDoc(checkpoint, collection)).toEqual({ ...checkpoint, [VERSION_KEY]: 1 });
+  });
+
   test("initial YouTube ledger records are v1 without changing durable operation identity", () => {
     const collection = COLLECTIONS.YOUTUBE_CREATE_OPERATIONS;
     expect(expectedVersion(collection)).toBe(1);
