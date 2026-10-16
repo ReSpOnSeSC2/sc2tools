@@ -37,7 +37,9 @@ const {
 const { communityBuildLinks, verifyExamples } = require("./guidesRelated");
 const { personalGuideStats } = require("./guidesPersonal");
 
-/** Hub / matchup video rows. */
+/** Hub videos fill up to two rows of four. */
+const GUIDE_HUB_VIDEOS_LATEST = 8;
+/** Matchup video rows. */
 const GUIDE_VIDEOS_LATEST = 4;
 /** Hub / matchup lists of 8-worker patch videos (plain links, so longer). */
 const GUIDE_EIGHT_WORKER_VIDEOS = VIDEO_LIST_MAX;
@@ -65,7 +67,7 @@ const SITEMAP_PROJECTION = Object.freeze({
  * @typedef {object} GuidesServiceDeps
  * @property {Pick<import('./guideNotes').GuideNotesService, "find">} [guideNotes]
  * @property {Pick<import('./guideVideos').GuideVideosService,
- *   "latest"|"videosForMatchup"|"videosForBuild"|"videosForCounter"|"channel"|"playlists"|
+ *   "latest"|"all"|"videosForMatchup"|"videosForBuild"|"videosForCounter"|"channel"|"playlists"|
  *   "eightWorkerVideosForBuild"|"eightWorkerVideosForCounter">} [guideVideos]
  * @property {import('pino').Logger|null} [logger]
  */
@@ -112,7 +114,7 @@ class GuidesService {
         .sort({ games: -1 })
         .limit(INDEX_MAPS_MAX)
         .toArray(),
-      this.guideVideos ? this.guideVideos.latest(GUIDE_VIDEOS_LATEST, TWELVE_WORKERS) : [],
+      this.guideVideos ? this.guideVideos.latest(GUIDE_HUB_VIDEOS_LATEST, TWELVE_WORKERS) : [],
       this.guideVideos ? this.guideVideos.latest(GUIDE_EIGHT_WORKER_VIDEOS, EIGHT_WORKERS) : [],
     ]);
     const channel = this.guideVideos ? this.guideVideos.channel() : null;
@@ -120,6 +122,20 @@ class GuidesService {
     return shapeIndexPayload({
       era, computedAt, matchupDocs, mapDocs, videos, eightWorkerVideos, channel, playlists,
     });
+  }
+
+  /** Full public video collection (`GET /v1/guides/videos`). */
+  async videos() {
+    const [videos, eightWorkerVideos] = await Promise.all([
+      this.guideVideos ? this.guideVideos.all(TWELVE_WORKERS) : [],
+      this.guideVideos ? this.guideVideos.all(EIGHT_WORKERS) : [],
+    ]);
+    return {
+      videos,
+      eightWorkerVideos,
+      channel: this.guideVideos ? this.guideVideos.channel() : null,
+      playlists: this.guideVideos ? this.guideVideos.playlists() : { ...NO_PLAYLISTS },
+    };
   }
 
   /**

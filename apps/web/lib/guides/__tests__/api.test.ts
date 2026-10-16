@@ -6,6 +6,7 @@ import {
   fetchGuideMap,
   fetchGuideMatchup,
   fetchGuideSitemap,
+  fetchGuideVideos,
   fetchPublishedGuidePaths,
   GUIDE_CACHE_TAG,
   GUIDE_REVALIDATE_SEC,
@@ -15,7 +16,10 @@ import {
   FIXTURE_BUILD_PUBLISHED,
   FIXTURE_INDEX,
   FIXTURE_SITEMAP,
+  asEightWorkerPatch,
+  VIDEO_PVZ_STARGATE_GLAIVES,
 } from "@/lib/guides/__fixtures__";
+import type { GuideVideosPayload } from "@/lib/guides/types";
 
 // Global fetch is mocked (labelled): these tests pin the fetcher's
 // request options and its status → union mapping, not the network.
@@ -66,6 +70,22 @@ describe("guide fetchers", () => {
     expect(lastUrl()).toMatch(/\/v1\/guides\/maps\/old-sun-temple$/);
     await fetchGuideSitemap();
     expect(lastUrl()).toMatch(/\/v1\/guides\/sitemap$/);
+  });
+
+  test("video library preserves every video beyond the hub preview and both eras", async () => {
+    const payload: GuideVideosPayload = {
+      videos: Array.from({ length: 10 }, (_, index) => ({
+        ...VIDEO_PVZ_STARGATE_GLAIVES,
+        youtubeId: `library-${index}`,
+      })),
+      eightWorkerVideos: [asEightWorkerPatch(VIDEO_PVZ_STARGATE_GLAIVES)],
+      channel: FIXTURE_INDEX.channel,
+      playlists: FIXTURE_INDEX.playlists ?? null,
+    };
+    fetchMock.mockResolvedValue(jsonResponse(200, payload));
+
+    expect(await fetchGuideVideos()).toEqual({ kind: "ok", data: payload });
+    expect(lastUrl()).toMatch(/\/v1\/guides\/videos$/);
   });
 
   test("matchup query carries band and a non-default era only", async () => {

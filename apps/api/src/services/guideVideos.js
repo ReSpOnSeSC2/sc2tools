@@ -65,6 +65,7 @@ const {
   selectForGuide,
   selectEightWorkerForGuide,
   selectLatest,
+  selectAll,
 } = require("./guideVideoSelect");
 const {
   HTTP_BAD_REQUEST,
@@ -486,6 +487,17 @@ class GuideVideosService {
    */
   async latest(n = VIDEO_LIST_DEFAULT, workers = null) {
     return selectLatest(await this.cachedRows(), n, null, workers);
+  }
+
+  /**
+   * Full visible build-order collection, newest first, without the
+   * preview-list cap. Uses the same cached rows and visibility rules.
+   *
+   * @param {8|12|null} [workers] starting workers; default both
+   * @returns {Promise<PublicVideo[]>}
+   */
+  async all(workers = null) {
+    return selectAll(await this.cachedRows(), workers);
   }
 
   /**

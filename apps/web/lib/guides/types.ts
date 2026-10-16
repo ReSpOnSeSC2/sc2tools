@@ -144,13 +144,26 @@ export interface GuideIndexPayload {
   matchups: GuideIndexMatchup[];
   /** Published maps only, games desc. */
   maps: GuideIndexMap[];
-  /** ≤ 4 latest 12-worker build-order videos. */
+  /** ≤ 8 latest 12-worker build-order videos for the hub preview. */
   videos: GuideVideo[];
   /** ≤ 12 latest 8-worker patch build-order videos (absent on older API builds). */
   eightWorkerVideos?: GuideVideo[];
   channel: GuideChannel | null;
   /** Absent on older API builds. */
   playlists?: GuidePlaylists | null;
+}
+
+/* ------------------------------------------------------------------ */
+/* GET /v1/guides/videos                                              */
+/* ------------------------------------------------------------------ */
+
+export interface GuideVideosPayload {
+  /** All visible 12-worker build-order videos, newest first. */
+  videos: GuideVideo[];
+  /** All visible 8-worker patch build-order videos, newest first. */
+  eightWorkerVideos: GuideVideo[];
+  channel: GuideChannel | null;
+  playlists: GuidePlaylists | null;
 }
 
 /* ------------------------------------------------------------------ */

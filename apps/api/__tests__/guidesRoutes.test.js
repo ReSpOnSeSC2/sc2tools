@@ -186,7 +186,7 @@ describe("public /v1/guides", () => {
   });
 
   test("public routes never demand a token, and a bad token is not a 401", async () => {
-    for (const path of ["/v1/guides", "/v1/guides/pvz", "/v1/guides/pvz/stargate-into-glaives", "/v1/guides/sitemap"]) {
+    for (const path of ["/v1/guides", "/v1/guides/videos", "/v1/guides/pvz", "/v1/guides/pvz/stargate-into-glaives", "/v1/guides/sitemap"]) {
       const anon = await get(path);
       expect(anon.status).toBe(200);
       const bad = await get(path).set("authorization", "Bearer garbage");
@@ -207,7 +207,7 @@ describe("GUIDES_ENABLED off", () => {
   });
 
   test.each([
-    ["/v1/guides"], ["/v1/guides/pvz"], ["/v1/guides/pvz/stargate-into-glaives"], ["/v1/guides/sitemap"],
+    ["/v1/guides"], ["/v1/guides/videos"], ["/v1/guides/pvz"], ["/v1/guides/pvz/stargate-into-glaives"], ["/v1/guides/sitemap"],
     ["/v1/guides/maps/site-delta-le"], ["/v1/guides/me/pvz/stargate-into-glaives"],
   ])("%s → 404 (never 401), not cached", async (path) => {
     const res = await request(h.app).get(path);

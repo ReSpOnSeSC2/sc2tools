@@ -37,6 +37,7 @@ import type {
   GuideMapPayload,
   GuideMatchupPayload,
   GuideSitemapPayload,
+  GuideVideosPayload,
 } from "@/lib/guides/types";
 
 /** Same resolution order as lib/serverApi.ts. */
@@ -172,6 +173,11 @@ const fetchGuide = cache(fetchGuideUncached);
  */
 export function fetchGuideIndex(): Promise<GuideFetchResult<GuideIndexPayload>> {
   return fetchGuide<GuideIndexPayload>(API_GUIDES_PREFIX);
+}
+
+/** Complete build-order video library (`GET /v1/guides/videos`). */
+export function fetchGuideVideos(): Promise<GuideFetchResult<GuideVideosPayload>> {
+  return fetchGuide<GuideVideosPayload>(`${API_GUIDES_PREFIX}/videos`);
 }
 
 /**

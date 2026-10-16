@@ -1,17 +1,17 @@
 import Link from "next/link";
-import { ArrowRight, Youtube } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { GuideEightWorkerVideos } from "@/components/guides/GuideEightWorkerVideos";
 import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
 import { GuideVideoRow } from "@/components/guides/GuideVideoRow";
+import { GuideVideoActions } from "@/components/guides/GuideVideoActions";
 import { MatchupGrid } from "@/components/guides/hub/MatchupGrid";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { breadcrumbJsonLd } from "@/components/guides/guideSeo";
 import { GUIDE_SECONDARY_ACTION_CLASS, eraLabel } from "@/components/guides/guideUi";
-import { safeChannelUrl, safePlaylistUrl } from "@/components/guides/youtubeUrls";
 import { fmtCount, fmtGuideDate } from "@/lib/guides/format";
-import type { GuideChannel, GuideIndexPayload } from "@/lib/guides/types";
+import type { GuideIndexPayload } from "@/lib/guides/types";
 
 /**
  * Body of /guides: the 3×3 matchup grid with each matchup's top openers
@@ -24,29 +24,7 @@ import type { GuideChannel, GuideIndexPayload } from "@/lib/guides/types";
 /** Shown while the channel has no 12-worker build-order video yet. */
 const NO_TWELVE_WORKER_VIDEOS =
   "Build order videos for the 12-worker game are on the way. Subscribe to catch the first ones.";
-
-function PlaylistLink({ url }: { url: string | null | undefined }) {
-  const href = safePlaylistUrl(url);
-  if (!href) return null;
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={GUIDE_SECONDARY_ACTION_CLASS}>
-      Watch the playlist
-      <span className="sr-only"> (opens in a new tab)</span>
-    </a>
-  );
-}
-
-function SubscribeLink({ channel }: { channel: GuideChannel | null }) {
-  const href = safeChannelUrl(channel?.url);
-  if (!href) return null;
-  return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={GUIDE_SECONDARY_ACTION_CLASS}>
-      <Youtube className="h-4 w-4" aria-hidden />
-      Subscribe on YouTube
-      <span className="sr-only"> (opens in a new tab)</span>
-    </a>
-  );
-}
+const VIDEO_PREVIEW_LIMIT = 8;
 
 function MapsTeaser({ count }: { count: number }) {
   if (count === 0) return null;
@@ -84,13 +62,10 @@ export function GuideHub({ payload }: { payload: GuideIndexPayload }) {
       <GuideVideoRow
         id="channel"
         title="12-worker build order videos"
-        videos={payload.videos}
+        videos={payload.videos.slice(0, VIDEO_PREVIEW_LIMIT)}
         emptyText={payload.channel ? NO_TWELVE_WORKER_VIDEOS : undefined}
         actions={
-          <>
-            <PlaylistLink url={payload.playlists?.twelveWorker} />
-            <SubscribeLink channel={payload.channel} />
-          </>
+          <GuideVideoActions channel={payload.channel} playlists={payload.playlists} showAll />
         }
       />
       <MapsTeaser count={payload.maps.length} />

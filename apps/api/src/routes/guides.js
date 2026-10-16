@@ -51,6 +51,7 @@ const BAND_LEAGUE = "league";
  * /v1/guides — the public SC2 Tools Guides API (docs: contract §6).
  *
  *   GET /guides                              hub: matchups, what's winning, maps, videos
+ *   GET /guides/videos                       full build-order video collection
  *   GET /guides/sitemap                      published guide paths
  *   GET /guides/maps/:map                    map guide
  *   GET /guides/:matchup[?band=&era=]        openers of a matchup
@@ -127,8 +128,8 @@ function buildGuidesRouter(deps) {
 }
 
 /**
- * Hub, sitemap and map routes (declared before the ``:matchup`` patterns
- * so "sitemap" / "maps" are never read as matchup slugs).
+ * Hub, video collection, sitemap and map routes (declared before the
+ * ``:matchup`` patterns so static paths are never read as matchup slugs).
  *
  * @param {import('express').Router} router
  * @param {{ guides: import('../services/guides').GuidesService }} deps
@@ -136,6 +137,9 @@ function buildGuidesRouter(deps) {
 function mountPublicRoutes(router, deps) {
   router.get("/guides", handle(async (_req, res) => {
     sendPublic(res, await deps.guides.index());
+  }));
+  router.get("/guides/videos", handle(async (_req, res) => {
+    sendPublic(res, await deps.guides.videos());
   }));
   router.get("/guides/sitemap", handle(async (_req, res) => {
     sendPublic(res, await deps.guides.sitemap());

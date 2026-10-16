@@ -27,6 +27,7 @@ const SUFFIX = ` | ${GUIDE_SITE_NAME}`;
 /** Site paths of the guide pages. */
 export const guidePaths = {
   hub: (): string => "/guides",
+  videos: (): string => "/guides/videos",
   maps: (): string => "/guides/maps",
   matchup: (matchupSlug: string): string => `/guides/${matchupSlug}`,
   counters: (matchupSlug: string): string => `/guides/${matchupSlug}/counter`,

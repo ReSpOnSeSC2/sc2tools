@@ -213,12 +213,32 @@ function selectEightWorkerForGuide(rows, matches, overrides) {
  * @returns {PublicVideo[]}
  */
 function selectLatest(rows, n, matchup, workers = null) {
-  return rows
-    .filter((row) => !row.doc.hidden && row.buildOrder
-      && (matchup === null || row.match.matchup === matchup)
-      && (workers === null || row.eightWorkerPatch === (workers === EIGHT_WORKERS)))
+  return visibleBuildOrderRows(rows, matchup, workers)
     .slice(0, listCount(n))
     .map((row) => copyVideo(row.video));
+}
+
+/**
+ * Every visible build-order video for the full video collection.
+ *
+ * @param {ReadonlyArray<VideoRow>} rows sorted newest first
+ * @param {8|12|null} [workers] starting workers, or null for both
+ * @returns {PublicVideo[]}
+ */
+function selectAll(rows, workers = null) {
+  return visibleBuildOrderRows(rows, null, workers).map((row) => copyVideo(row.video));
+}
+
+/**
+ * @param {ReadonlyArray<VideoRow>} rows
+ * @param {string|null} matchup
+ * @param {8|12|null} workers
+ * @returns {VideoRow[]}
+ */
+function visibleBuildOrderRows(rows, matchup, workers) {
+  return rows.filter((row) => !row.doc.hidden && row.buildOrder
+    && (matchup === null || row.match.matchup === matchup)
+    && (workers === null || row.eightWorkerPatch === (workers === EIGHT_WORKERS)));
 }
 
 module.exports = {
@@ -237,4 +257,5 @@ module.exports = {
   selectForGuide,
   selectEightWorkerForGuide,
   selectLatest,
+  selectAll,
 };

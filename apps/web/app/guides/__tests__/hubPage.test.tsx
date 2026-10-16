@@ -16,7 +16,21 @@ vi.mock("next/navigation", () => ({
 import GuidesHubPage, { dynamic as hubDynamic, generateMetadata as hubMetadata } from "@/app/guides/page";
 import MapGuidesPage, { dynamic as mapsDynamic, generateMetadata as mapsMetadata } from "@/app/guides/maps/page";
 import { FIXTURE_INDEX } from "@/lib/guides/__fixtures__";
-import type { GuideIndexPayload } from "@/lib/guides/types";
+import type { GuideIndexPayload, GuideVideo } from "@/lib/guides/types";
+
+function previewVideos(count: number): GuideVideo[] {
+  return Array.from({ length: count }, (_, index) => {
+    const youtubeId = `preview-${String(index).padStart(3, "0")}`;
+    return {
+      ...FIXTURE_INDEX.videos[0],
+      youtubeId,
+      title: `Preview build order ${index + 1}`,
+      url: `https://www.youtube.com/watch?v=${youtubeId}`,
+      thumbnailUrl: `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg`,
+      embedUrl: `https://www.youtube-nocookie.com/embed/${youtubeId}`,
+    };
+  });
+}
 
 function ok(data: GuideIndexPayload) {
   return { kind: "ok" as const, data };
@@ -90,6 +104,38 @@ describe("/guides hub", () => {
     expect(within(row).queryByRole("link", { name: /PvZ Cracking 8 Pools/ })).toBeNull();
     expect(container.querySelector("iframe")).toBeNull();
     expect(screen.getByRole("link", { name: /Browse map guides/ }).getAttribute("href")).toBe("/guides/maps");
+  });
+
+  it.each([5, 8])("keeps all %i videos in a four-column grid as new videos arrive", async (count) => {
+    const videos = previewVideos(count);
+    mocks.fetchGuideIndex.mockResolvedValue(ok({ ...FIXTURE_INDEX, videos }));
+    render(await GuidesHubPage());
+
+    const section = screen.getByRole("heading", { name: "12-worker build order videos" })
+      .closest("section") as HTMLElement;
+    const grid = within(section).getByRole("list");
+    expect(within(grid).getAllByRole("listitem")).toHaveLength(count);
+    expect(grid.classList.contains("lg:grid-cols-4")).toBe(true);
+    expect(within(grid).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(
+      videos.map((video) => video.url),
+    );
+  });
+
+  it("caps the hub at eight videos and opens the full library in a new tab", async () => {
+    const videos = previewVideos(10);
+    mocks.fetchGuideIndex.mockResolvedValue(ok({ ...FIXTURE_INDEX, videos }));
+    render(await GuidesHubPage());
+
+    const section = screen.getByRole("heading", { name: "12-worker build order videos" })
+      .closest("section") as HTMLElement;
+    expect(within(section).getAllByRole("listitem")).toHaveLength(8);
+    expect(within(section).getByRole("link", { name: /Preview build order 8 / })).toBeTruthy();
+    expect(within(section).queryByText(videos[8].title)).toBeNull();
+    expect(within(section).queryByText(videos[9].title)).toBeNull();
+    const allVideos = within(section).getByRole("link", { name: /View all videos/ });
+    expect(allVideos.getAttribute("href")).toBe("/guides/videos");
+    expect(allVideos.getAttribute("target")).toBe("_blank");
+    expect(allVideos.getAttribute("rel")).toContain("noopener");
   });
 
   it("lists the 8-worker patch videos last, collapsed, as plain links to YouTube", async () => {
