@@ -127,6 +127,23 @@ describe("buildOrderUnitsAt — cumulative-built semantics", () => {
 });
 
 describe("canonicalizeName — sc2reader variant collapsing", () => {
+  it("combines cosmetic Ghost variants with the standard Ghost in the build order", () => {
+    expect(canonicalizeName("GhostAlternate")).toBe("Ghost");
+    expect(canonicalizeName("GhostNova")).toBe("Ghost");
+    const events: BuildEvent[] = [
+      { time: 240, name: "Ghost" },
+      ...Array.from({ length: 6 }, (_, i) => ({
+        time: 250 + i * 10,
+        name: "GhostAlternate",
+      })),
+      ...Array.from({ length: 4 }, (_, i) => ({
+        time: 310 + i * 10,
+        name: "GhostNova",
+      })),
+    ];
+    expect(buildOrderUnitsAt(events, 9999)).toEqual({ Ghost: 11 });
+  });
+
   it("strips well-known stance suffixes (legacy regex path)", () => {
     expect(canonicalizeName("BurrowedRoach")).toBe("Roach");
     expect(canonicalizeName("Stalker")).toBe("Stalker");
@@ -753,6 +770,25 @@ describe("deriveUnitComposition — chart's army-value fallback + roster source"
    * reads as 1 alive on both surfaces, and the chart line correctly
    * dips as the 10 die.
    */
+  it("combines Ghost skins in cached timelines and subtracts their deaths in the hybrid fallback", () => {
+    const timeline: UnitTimelineEntry[] = [
+      { time: 60, my: {}, opp: { Ghost: 1, GhostAlternate: 6, GhostNova: 4 } },
+      { time: 120, my: {}, opp: { Ghost: 1, GhostAlternate: 4, GhostNova: 4 } },
+      { time: 180, my: { Stalker: 1 }, opp: {} },
+    ];
+    const buildEvents: BuildEvent[] = [
+      { time: 10, name: "Ghost" },
+      ...Array.from({ length: 6 }, () => ({ time: 20, name: "GhostAlternate" })),
+      ...Array.from({ length: 4 }, () => ({ time: 30, name: "GhostNova" })),
+    ];
+    expect(deriveUnitComposition({ timeline, buildEvents, side: "opp", t: 60 }))
+      .toEqual({ units: { Ghost: 11 }, source: "timeline" });
+    expect(deriveUnitComposition({ timeline, buildEvents, side: "opp", t: 120 }))
+      .toEqual({ units: { Ghost: 9 }, source: "timeline" });
+    expect(deriveUnitComposition({ timeline, buildEvents, side: "opp", t: 180 }))
+      .toEqual({ units: {}, source: "hybrid" });
+  });
+
   it("prefers timeline when populated for the side under inspection", () => {
     const timeline: UnitTimelineEntry[] = [
       { time: 0, my: {}, opp: {} },

@@ -95,6 +95,8 @@ export function spriteUrl(
  * from the base model's sheet.
  */
 const SPRITE_ALIASES: Readonly<Record<string, string>> = {
+  GhostAlternate: "Ghost",
+  GhostNova: "Ghost",
   VikingFighter: "Viking",
   VikingAssault: "Viking",
   SiegeTankSieged: "SiegeTank",

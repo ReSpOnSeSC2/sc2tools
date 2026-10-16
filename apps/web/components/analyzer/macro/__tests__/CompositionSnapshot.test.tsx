@@ -18,7 +18,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 import { CompositionSnapshot } from "../CompositionSnapshot";
-import type { SeriesPoint } from "../activeArmyLayout";
+import { buildSeries, type SeriesPoint } from "../activeArmyLayout";
 
 afterEach(cleanup);
 
@@ -194,6 +194,61 @@ describe("CompositionSnapshot costs by patch era", () => {
 });
 
 describe("CompositionSnapshot chip art", () => {
+  it.each([
+    ["GhostAlternate", "Ghost Alternate"],
+    ["GhostNova", "Ghost Nova"],
+  ])(
+    "renders %s with Ghost artwork and retains its count when the primary image fails",
+    (name, label) => {
+      render(
+        <CompositionSnapshot
+          mySeries={[point({ Marine: 20 })]}
+          oppSeries={[point({ [name]: 11 })]}
+          hoveredTime={600}
+          myRace="Terran"
+          oppRace="Terran"
+        />,
+      );
+      const chip = screen.getByRole("button", {
+        name: `${label} — 11 on the field`,
+      });
+      expect(chip.textContent).toBe("11");
+      const image = chip.querySelector("img")!;
+      expect(image.getAttribute("src")).toBe("/icons/sc2/units/ghost.png");
+      fireEvent.error(image);
+      expect(chip.querySelector("img")?.getAttribute("src")).toBe(
+        "/sprites/icons/Ghost_red.webp",
+      );
+      expect(chip.textContent).toBe("11");
+    },
+  );
+
+  it("shows mixed Ghost variants as one correctly priced roster entry", () => {
+    const oppSeries = buildSeries(
+      [{ time: 600, food_workers: 68 }],
+      [{ time: 600, my: {}, opp: { Ghost: 1, GhostAlternate: 4, GhostNova: 6 } }],
+      "opp",
+    );
+    expect(oppSeries[0].army).toBe(3025);
+    render(
+      <CompositionSnapshot
+        mySeries={[]}
+        oppSeries={oppSeries}
+        hoveredTime={600}
+        oppRace="Terran"
+      />,
+    );
+    const chip = screen.getByRole("button", { name: "Ghost — 11 on the field" });
+    expect(chip.querySelector("img")?.getAttribute("src")).toBe(
+      "/icons/sc2/units/ghost.png",
+    );
+    expect(screen.queryByRole("button", { name: /Ghost (Alternate|Nova)/ })).toBeNull();
+    fireEvent.click(chip);
+    expect(screen.getByRole("dialog").textContent).toContain(
+      "150 minerals · 125 gas · 2 supply",
+    );
+  });
+
   it("draws a Broodling with the Brood Lord's 3D model, not a text badge", () => {
     render(
       <CompositionSnapshot

@@ -137,6 +137,10 @@ const ARCHON_PARENTS: ReadonlyArray<string> = ["DarkTemplar", "HighTemplar"];
  * separate chip on the macro-breakdown roster.
  */
 const UNIT_NAME_ALIASES: Record<string, string> = {
+  // Cosmetic Ghost skins use distinct tracker unit types.
+  GhostAlternate: "Ghost",
+  GhostNova: "Ghost",
+
   // Terran combat-posture / stance variants
   SiegeTankSieged: "SiegeTank",
   VikingFighter: "Viking",

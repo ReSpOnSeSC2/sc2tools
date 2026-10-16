@@ -1846,6 +1846,7 @@ except Exception:
 # frontend can find one PNG per unit type instead of failing on a dozen
 # variants per unit (sieged tank, burrowed roach, "MP" suffix, etc.).
 _UNIT_NAME_ALIASES = {
+    "GhostAlternate": "Ghost",        "GhostNova": "Ghost",
     "SiegeTank": "SiegeTank",          "SiegeTankSieged": "SiegeTank",
     "VikingFighter": "Viking",         "VikingAssault": "Viking",
     "HellionTank": "Hellbat",          "Hellion": "Hellion",

@@ -91,6 +91,9 @@ const EXTRA_COSTS: Readonly<Record<string, UnitCost>> = {
  * priced as that unit.
  */
 const ALIASES: Readonly<Record<string, string>> = {
+  // Tracker names for the alternate Ghost models keep the same unit costs.
+  GhostAlternate: "Ghost",
+  GhostNova: "Ghost",
   OverlordTransport: "Overlord",
   OverseerSiegeMode: "Overseer",
   LurkerMP: "Lurker",

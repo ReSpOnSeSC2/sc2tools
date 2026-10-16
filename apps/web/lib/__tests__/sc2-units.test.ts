@@ -65,6 +65,14 @@ describe("unit-cost catalog by patch era", () => {
     expect(getUnitCost("QueenBurrowed", "before")?.m).toBe(150);
   });
 
+  it.each(["GhostAlternate", "GhostNova"])("prices %s as a Ghost, including supply, in either era", (name) => {
+    for (const era of ["after", "before"] as const) {
+      expect(getUnitCost(name, era)).toBe(getUnitCost("Ghost", era));
+      expect(getUnitCost(name, era)).toMatchObject({ m: 150, g: 125, s: 2, race: "Terran" });
+      expect(unitMineralGasCost(name, era)).toBe(275);
+    }
+  });
+
   it("keeps the hand-priced names the dataset doesn't carry", () => {
     expect(getUnitCost("Archon", "before")).toMatchObject({ m: 100, g: 300, s: 4 });
     expect(getUnitCost("Mothership", "after")).toMatchObject({ m: 400, g: 400 });
@@ -95,5 +103,19 @@ describe("army value by patch era", () => {
       count: 2,
       cost: 150,
     });
+  });
+
+  it.each(["GhostAlternate", "GhostNova"])("includes %s in army value and sorts it at Ghost cost", (name) => {
+    const composition = { Marine: 8, Marauder: 6, [name]: 11, SCV: 40, Barracks: 3 };
+    const canonical = { Marine: 8, Marauder: 6, Ghost: 11, SCV: 40, Barracks: 3 };
+    for (const era of ["after", "before"] as const) {
+      expect(computeArmyValue(composition, era)).toBe(4175);
+      expect(computeArmyValue(composition, era)).toBe(computeArmyValue(canonical, era));
+      expect(sortedArmyComposition(composition, era)).toEqual([
+        { name, count: 11, cost: 275 },
+        { name: "Marauder", count: 6, cost: 125 },
+        { name: "Marine", count: 8, cost: 50 },
+      ]);
+    }
   });
 });

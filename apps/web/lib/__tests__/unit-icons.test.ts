@@ -10,6 +10,13 @@ import { getIconPath } from "@/lib/sc2-icons";
  * the icon (visual regression caught in the field for Lurker).
  */
 describe("sc2-icons — sc2reader unit variants", () => {
+  it.each(["Ghost", "GhostAlternate", "GhostNova"])(
+    "resolves %s to the Ghost icon",
+    (name) => {
+      expect(getIconPath(name, "unit")).toBe("/icons/sc2/units/ghost.png");
+    },
+  );
+
   it("resolves Lurker variants to the same lurker PNG", () => {
     const expected = "/icons/sc2/units/lurker.png";
     expect(getIconPath("Lurker", "unit")).toBe(expected);

@@ -148,6 +148,9 @@ const SYNONYMS: Record<string, { kind: IconKind; key: string }> = {
   bc: { kind: "unit", key: "battlecruiser" },
   tank: { kind: "unit", key: "siegetank" },
   mine: { kind: "unit", key: "widowmine" },
+  // Cosmetic Ghost variants retain distinct names in replay tracker data.
+  ghostalternate: { kind: "unit", key: "ghost" },
+  ghostnova: { kind: "unit", key: "ghost" },
   // sc2reader internal unit names: Blizzard kept the original
   // multiplayer-variant suffix on Lurkers ("MP" — multiplayer) plus a
   // burrowed-state morph. Both surface in macroBreakdown unit_timeline

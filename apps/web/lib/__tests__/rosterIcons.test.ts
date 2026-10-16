@@ -49,6 +49,14 @@ describe("canonicalSpriteName", () => {
     expect(canonicalSpriteName("LurkerMPBurrowed")).toBe("Lurker");
   });
 
+  it.each(["GhostAlternate", "GhostNova"])(
+    "draws the cosmetic %s variant with the Ghost model",
+    (name) => {
+      expect(canonicalSpriteName(name)).toBe("Ghost");
+      expect(resolveSprite(name, "unit")?.name).toBe("Ghost");
+    },
+  );
+
   it("strips a bare state suffix that has no explicit alias", () => {
     expect(canonicalSpriteName("RoachBurrowed")).toBe("Roach");
     expect(canonicalSpriteName("ZerglingBurrowed")).toBe("Zergling");

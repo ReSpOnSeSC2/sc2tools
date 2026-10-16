@@ -163,6 +163,19 @@ def _make_replay(events: List[Any]) -> SimpleNamespace:
     )
 
 
+def test_cosmetic_ghost_variants_use_one_playback_name_and_keep_death_times():
+    ee, k = _import_extractor()
+    events = [
+        _born(k.UnitBornEvent, 10, pid=1, name="Ghost", uid=1001, index=1),
+        _born(k.UnitBornEvent, 10, pid=1, name="GhostAlternate", uid=1002, index=2),
+        _born(k.UnitBornEvent, 10, pid=1, name="GhostNova", uid=1003, index=3),
+        _died(k.UnitDiedEvent, 20, uid=1002, index=2),
+    ]
+    out = ee.extract_unit_tracks(_make_replay(events), my_pid=1)
+    assert [unit["name"] for unit in out["my_units"]] == ["Ghost"] * 3
+    assert [unit["died"] for unit in out["my_units"]] == [None, 20.0, None]
+
+
 def test_position_snapshots_resolve_by_unit_index_at_full_scale():
     ee, k = _import_extractor()
     # unit_id is (index << 18) | recycle — nothing like the raw index.
