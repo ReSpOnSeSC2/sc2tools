@@ -175,12 +175,18 @@ function parseSupportEmailConfig(env) {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mailbox)) {
     throw new Error("SUPPORT_GMAIL_MAILBOX must be an email address");
   }
+  const labelName = env.SUPPORT_GMAIL_LABEL === undefined
+    ? "SC2Tools Support" : env.SUPPORT_GMAIL_LABEL.trim();
+  if (!labelName || labelName.length > 225 || /[\r\n]/.test(labelName)) {
+    throw new Error("SUPPORT_GMAIL_LABEL must be a nonempty Gmail label name");
+  }
   const startAfter = requireEnv(env, "SUPPORT_GMAIL_START_AFTER").trim();
   if (!/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(startAfter) || !Number.isFinite(Date.parse(startAfter))) {
     throw new Error("SUPPORT_GMAIL_START_AFTER must be an ISO timestamp with a timezone");
   }
   return {
     mailbox,
+    labelName,
     clientId: requireEnv(env, "SUPPORT_GMAIL_CLIENT_ID").trim(),
     clientSecret: requireEnv(env, "SUPPORT_GMAIL_CLIENT_SECRET").trim(),
     refreshToken: requireEnv(env, "SUPPORT_GMAIL_REFRESH_TOKEN").trim(),

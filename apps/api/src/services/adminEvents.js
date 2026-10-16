@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { supportEmailStateId } = require("./supportEmailScope");
 
 const EVENT_TYPES = Object.freeze({
   USER_SIGNUP: "user_signup",
@@ -291,15 +292,22 @@ class AdminEventsService {
     };
   }
 
-  /** Read-only intake visibility for the admin inbox; never exposes credentials. */
+  /**
+   * Read-only intake visibility for the admin inbox; never exposes credentials.
+   * @returns {Promise<{
+   *   configured: boolean, labelName: string|null, lastSuccessAt: string|null,
+   *   lastAttemptAt: string|null, errorCode: string|null,
+   * }>}
+   */
   async supportEmailStatus() {
     const configured = Boolean(this.supportEmail);
     const stateId = this.supportEmail
-      ? crypto.createHash("sha256").update(this.supportEmail.mailbox).digest("hex") : null;
+      ? supportEmailStateId(this.supportEmail.mailbox, this.supportEmail.labelName) : null;
     const state = stateId
       ? await this.db.supportEmailSync.findOne({ _id: stateId }) : null;
     return {
       configured,
+      labelName: this.supportEmail?.labelName || null,
       lastSuccessAt: state?.lastSuccessAt?.toISOString() || null,
       lastAttemptAt: state?.lastAttemptAt?.toISOString() || null,
       errorCode: state?.lastErrorCode || null,
@@ -622,7 +630,7 @@ function clampLimit(raw, fallback) {
  *   unreadCount: number,
  *   agents: { total: number, active24h: number, active7d: number },
  *   supportEmail: {
- *     configured: boolean, lastSuccessAt: string | null,
+   *     configured: boolean, labelName: string | null, lastSuccessAt: string | null,
  *     lastAttemptAt: string | null, errorCode: string | null,
  *   },
  *   generatedAt: string,

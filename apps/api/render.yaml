@@ -255,6 +255,9 @@ services:
       # Set all credential/start fields together; see docs/cloud/SUPPORT_EMAIL.md.
       - key: SUPPORT_GMAIL_MAILBOX
         sync: false
+      # Defaults to SC2Tools Support; exact custom label required, no fallback.
+      - key: SUPPORT_GMAIL_LABEL
+        sync: false
       - key: SUPPORT_GMAIL_CLIENT_ID
         sync: false
       - key: SUPPORT_GMAIL_CLIENT_SECRET

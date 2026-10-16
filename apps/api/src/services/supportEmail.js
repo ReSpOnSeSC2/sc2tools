@@ -1,19 +1,18 @@
 "use strict";
 
-const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { EVENT_TYPES, MESSAGE_BODY_MAX } = require("./adminEvents");
+const { supportEmailMailboxId, supportEmailStateId } = require("./supportEmailScope");
 
 const GMAIL_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
-const OVERLAP_SEC = 5 * 60;
 const MAX_PAGES_PER_RUN = 5;
 const REQUEST_TIMEOUT_MS = 15000;
 
 /**
  * @typedef {{
  *   mailbox: string, clientId: string, clientSecret: string,
- *   refreshToken: string, startAfter: string, intervalMs: number,
+ *   refreshToken: string, startAfter: string, intervalMs: number, labelName: string,
  * }} SupportEmailConfig
  */
 
@@ -34,14 +33,16 @@ class SupportEmailService {
     this.config = deps.config;
     this.fetchImpl = deps.fetchImpl || globalThis.fetch;
     this.now = deps.now || Date.now;
-    this.stateId = crypto.createHash("sha256").update(deps.config.mailbox).digest("hex");
+    this.mailboxId = supportEmailMailboxId(deps.config.mailbox);
+    this.stateId = supportEmailStateId(deps.config.mailbox, deps.config.labelName);
   }
 
   /**
    * Per-page checkpoints survive restarts and failures. A compare-and-swap
    * revision lets multiple API instances safely replay work without moving
-   * another instance's checkpoint backwards. The event unique key is the
-   * final duplicate guard, including a crash between insert and checkpoint.
+   * another instance's checkpoint backwards. Every completed pass restarts
+   * from the configured historical cutoff, so newly labeled older mail is
+   * eligible. Event keys remain mailbox-wide across changes to the label.
    */
   async sync() {
     const initialAfter = Math.floor(Date.parse(this.config.startAfter) / 1000);
@@ -60,6 +61,7 @@ class SupportEmailService {
     if (profile.emailAddress?.toLowerCase() !== this.config.mailbox) {
       throw syncError("mailbox_mismatch");
     }
+    const labelId = await this.resolveLabelId(token);
     let state = await this.db.supportEmailSync.findOne({ _id: this.stateId });
     let processed = 0;
     for (let page = 0; page < MAX_PAGES_PER_RUN; page += 1) {
@@ -69,6 +71,7 @@ class SupportEmailService {
         q: `after:${state.afterSec - 1} before:${endSec} -in:sent -in:drafts -in:chats`,
         maxResults: "50",
         includeSpamTrash: "false",
+        labelIds: labelId,
       });
       if (state.pageToken) params.set("pageToken", state.pageToken);
       let result;
@@ -83,13 +86,12 @@ class SupportEmailService {
         throw err;
       }
       for (const row of result.messages || []) {
-        await this.importMessage(row.id, token);
+        await this.importMessage(row.id, token, labelId);
         processed += 1;
       }
       const next = result.nextPageToken
         ? { pageToken: result.nextPageToken, windowEndSec: endSec }
         : {
-          afterSec: Math.max(initialAfter, endSec - OVERLAP_SEC),
           pageToken: null,
           windowEndSec: null,
           lastSuccessAt: new Date(this.now()),
@@ -100,6 +102,19 @@ class SupportEmailService {
       state = { ...state, ...next, revision: state.revision + 1 };
     }
     return { processed };
+  }
+
+  /** Exact custom-label lookup; absence/errors never fall back to the mailbox. @param {string} token */
+  async resolveLabelId(token) {
+    const result = await this.getJson(`${GMAIL_BASE}/labels`, token);
+    if (!Array.isArray(result.labels)) throw syncError("gmail_labels_invalid");
+    const label = result.labels.find((/** @type {any} */ row) =>
+      row.name === this.config.labelName && row.type === "user");
+    if (!label) throw syncError("gmail_label_missing");
+    if (typeof label.id !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(label.id)) {
+      throw syncError("gmail_label_invalid");
+    }
+    return label.id;
   }
 
   /** @param {string} code */
@@ -119,11 +134,11 @@ class SupportEmailService {
     return result.modifiedCount === 1;
   }
 
-  /** @param {string} id @param {string} token */
-  async importMessage(id, token) {
+  /** @param {string} id @param {string} token @param {string} labelId */
+  async importMessage(id, token, labelId) {
     if (!/^[a-zA-Z0-9_-]{1,64}$/.test(id)) throw syncError("invalid_message_id");
-    const ingestionKey = `gmail:${this.stateId}:${id}`;
-    // Avoid downloading/rebroadcasting already imported mail every overlap.
+    const ingestionKey = `gmail:${this.mailboxId}:${id}`;
+    // Preserve mailbox-wide deduplication across old and label-scoped imports.
     if (await this.db.adminEvents.findOne({ ingestionKey }, { projection: { _id: 1 } })) return;
     let mail;
     try {
@@ -133,6 +148,9 @@ class SupportEmailService {
       if (/** @type {any} */ (err).code === "gmail_http_404") return;
       throw err;
     }
+    // Labels can change between list and get. Missing/removed approval means
+    // this message must not enter the admin inbox, even if the list included it.
+    if (!Array.isArray(mail.labelIds) || !mail.labelIds.includes(labelId)) return;
     if ((mail.labelIds || []).some((/** @type {string} */ label) =>
       ["SENT", "DRAFT", "SPAM", "TRASH", "CHAT"].includes(label))) return;
     const receivedAt = Number(mail.internalDate);

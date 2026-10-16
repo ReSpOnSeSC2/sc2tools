@@ -13,6 +13,10 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Support email imports now require the **SC2Tools Support** Gmail label, so
+  unrelated inbox mail stays out of admin Messages. Missing labels stop intake;
+  newly labeled older reports are picked up without duplicating existing copies.
+
 - **Agent 0.18.12:** live opponent identification requires a unique player-name
   match, follows replay and Settings corrections without restarting, and rejects
   outdated profile responses after an identity correction. Historical-intel

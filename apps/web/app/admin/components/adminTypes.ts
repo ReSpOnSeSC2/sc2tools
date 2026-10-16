@@ -597,6 +597,7 @@ export type AdminEventCountsResp = {
   unreadCount: number;
   supportEmail?: {
     configured: boolean;
+    labelName?: string | null;
     lastSuccessAt: string | null;
     lastAttemptAt: string | null;
     errorCode: string | null;

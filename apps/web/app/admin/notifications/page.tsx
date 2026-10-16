@@ -144,6 +144,9 @@ export default function AdminNotificationsPage() {
               : counts.data.supportEmail.lastSuccessAt
                 ? `Support email import is enabled. Last checked ${new Date(counts.data.supportEmail.lastSuccessAt).toLocaleString()}.`
                 : "Support email import is enabled. Waiting for the first successful check."}
+          {counts.data.supportEmail.configured ? (
+            <> Only email labeled <strong>{counts.data.supportEmail.labelName || "SC2Tools Support"}</strong> is imported.</>
+          ) : null}
         </p>
       ) : null}
 

@@ -10,6 +10,22 @@ const BASE_ENV = {
   SERVER_PEPPER_HEX: "a".repeat(64),
 };
 
+describe("config loader - label-only support Gmail", () => {
+  const supportEnv = { ...BASE_ENV, SUPPORT_GMAIL_CLIENT_ID: "id",
+    SUPPORT_GMAIL_CLIENT_SECRET: "secret", SUPPORT_GMAIL_REFRESH_TOKEN: "refresh",
+    SUPPORT_GMAIL_START_AFTER: "2026-09-01T00:00:00-04:00" };
+  test("requires the exact default support label even when the setting is omitted", () => {
+    expect(loadConfig(supportEnv).supportEmail?.labelName).toBe("SC2Tools Support");
+  });
+  test("accepts an explicitly selected nonblank label", () => {
+    expect(loadConfig({ ...supportEnv, SUPPORT_GMAIL_LABEL: "  Operator Support  " })
+      .supportEmail?.labelName).toBe("Operator Support");
+  });
+  test.each(["", "   ", "Support\nInbox"])("refuses an invalid label instead of importing all mail: %j", (label) => {
+    expect(() => loadConfig({ ...supportEnv, SUPPORT_GMAIL_LABEL: label })).toThrow(/SUPPORT_GMAIL_LABEL/);
+  });
+});
+
 describe("config loader — CORS allowlist fail-fast", () => {
   test("production boot refuses an empty CORS allowlist", () => {
     expect(() =>
