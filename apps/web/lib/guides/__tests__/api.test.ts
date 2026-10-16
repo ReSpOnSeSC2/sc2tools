@@ -53,7 +53,7 @@ describe("guide fetchers", () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toMatch(/\/v1\/guides$/);
     expect(init).toMatchObject({
-      headers: { accept: "application/json" },
+      headers: { accept: "application/json", "x-sc2tools-guide-index-version": "2" },
       next: { revalidate: GUIDE_REVALIDATE_SEC, tags: [GUIDE_CACHE_TAG] },
       redirect: "manual",
     });
@@ -70,6 +70,24 @@ describe("guide fetchers", () => {
     expect(lastUrl()).toMatch(/\/v1\/guides\/maps\/old-sun-temple$/);
     await fetchGuideSitemap();
     expect(lastUrl()).toMatch(/\/v1\/guides\/sitemap$/);
+  });
+
+  test("other guide endpoints omit the index cache contract version", async () => {
+    fetchMock.mockImplementation(async () => jsonResponse(200, { ok: true }));
+    await Promise.all([
+      fetchGuideVideos(),
+      fetchGuideMatchup("pvz"),
+      fetchGuideBuild("pvz", "stargate-into-glaives"),
+      fetchGuideCounter("pvz", "12-pool"),
+      fetchGuideMap("old-sun-temple"),
+      fetchGuideSitemap(),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    for (const [, init] of fetchMock.mock.calls) {
+      expect(init.headers).toEqual({ accept: "application/json" });
+      expect(init.next).toEqual({ revalidate: GUIDE_REVALIDATE_SEC, tags: [GUIDE_CACHE_TAG] });
+    }
   });
 
   test("video library preserves every video beyond the hub preview and both eras", async () => {

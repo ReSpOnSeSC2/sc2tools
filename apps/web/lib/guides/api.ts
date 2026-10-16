@@ -146,8 +146,12 @@ async function toResult<T>(res: Response): Promise<GuideFetchResult<T>> {
 
 async function fetchGuideUncached<T>(apiPath: string): Promise<GuideFetchResult<T>> {
   try {
+    const headers: Record<string, string> = { accept: "application/json" };
+    // Next's Data Cache survives deployments. Version the index's 4-to-8-video
+    // contract so the hub cannot keep serving the previous four-video payload.
+    if (apiPath === API_GUIDES_PREFIX) headers["x-sc2tools-guide-index-version"] = "2";
     const res = await fetch(`${API_BASE}${apiPath}`, {
-      headers: { accept: "application/json" },
+      headers,
       next: { revalidate: GUIDE_REVALIDATE_SEC, tags: [GUIDE_CACHE_TAG] },
       redirect: "manual",
       signal: timeoutSignal(),
