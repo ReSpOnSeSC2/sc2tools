@@ -13,8 +13,8 @@ import { GUIDE_REVALIDATE_SEC } from "@/lib/guides/api";
  *   `next build`). They must THROW on an API outage (GuideUnavailableError)
  *   rather than render the unavailable state, so an outage is never
  *   cached (the last good render keeps serving; else an uncached 5xx).
- * - /guides and /guides/maps have no params, so a static prerender would
- *   run at `next build` (where the API is often unreachable), and
+ * - /guides, /guides/maps, and /guides/videos have no params, so a static
+ *   prerender would run at `next build` (where the API is often unreachable), and
  *   /guides/[matchup] reads its band / era query: those render per
  *   request (their API reads stay cached by the fetch's own revalidate).
  */
@@ -26,7 +26,7 @@ const ISR_PAGES = [
   "[matchup]/counter/page.tsx",
   "maps/[map]/page.tsx",
 ];
-const PER_REQUEST_PAGES = ["[matchup]/page.tsx", "maps/page.tsx", "page.tsx"];
+const PER_REQUEST_PAGES = ["[matchup]/page.tsx", "maps/page.tsx", "videos/page.tsx", "page.tsx"];
 
 function pageFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((entry) => {
@@ -42,7 +42,9 @@ function source(relative: string): string {
 
 describe("guide route segment config", () => {
   it("classifies every guide page", () => {
-    const pages = pageFiles(GUIDES_DIR).map((file) => path.relative(GUIDES_DIR, file)).sort();
+    const pages = pageFiles(GUIDES_DIR)
+      .map((file) => path.relative(GUIDES_DIR, file).split(path.sep).join("/"))
+      .sort();
     expect(pages).toEqual([...ISR_PAGES, ...PER_REQUEST_PAGES].sort());
   });
 
