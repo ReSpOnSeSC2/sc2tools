@@ -535,6 +535,7 @@ def test_pulse_publication_started_before_clear_cannot_overwrite_clear(
     lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
     bridge = LiveBridge(
         lifecycle_bus=lifecycle, pulse=_StubPulseClient(profile=None),
+        user_name_hint="Streamer",
     )
     seen: List[Dict[str, Any]] = []
     bridge.bus.subscribe(seen.append)
@@ -563,7 +564,10 @@ def test_pulse_publication_started_before_clear_cannot_overwrite_clear(
 
     def publish_pulse() -> None:
         try:
-            bridge._on_pulse_done(game_key="game-clearing", future=future)
+            bridge._on_pulse_done(
+                game_key="game-clearing", future=future,
+                lookup_token=bridge._current.lookup_token,
+            )
         except BaseException as exc:
             errors.append(exc)
 
@@ -636,7 +640,9 @@ def test_completed_pulse_callback_delivers_without_context_lock(monkeypatch) -> 
     """An inline Future callback cannot hold the game-state lock while
     subscribers wait for another thread to read bridge diagnostics."""
     lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
-    bridge = LiveBridge(lifecycle_bus=lifecycle, pulse=_StubPulseClient())
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle, pulse=_StubPulseClient(), user_name_hint="Streamer",
+    )
     future: Future = Future()
     future.set_result(OpponentProfile(name="OppPlayer", mmr=4000))
     monkeypatch.setattr(bridge._executor, "submit", lambda *args, **kwargs: future)
@@ -692,7 +698,7 @@ def test_set_user_name_hint_updates_active_context() -> None:
     player_handle resolves) updates the in-flight context so the
     next emit carries the right user name."""
     lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
-    pulse = _StubPulseClient(profile=OpponentProfile(name="Opp", mmr=3000))
+    pulse = _StubPulseClient(profile=OpponentProfile(name="OppPlayer", mmr=3000))
     bridge = LiveBridge(lifecycle_bus=lifecycle, pulse=pulse)
     seen: List[Dict[str, Any]] = []
     bridge.bus.subscribe(seen.append)
@@ -700,10 +706,83 @@ def test_set_user_name_hint_updates_active_context() -> None:
     try:
         lifecycle.publish(_build_loading_event())
         assert _wait_for(lambda: len(seen) >= 1)
-        bridge.set_user_name_hint("LateHandle")
+        assert seen[-1]["opponent"]["name"] is None
+        assert pulse.calls == []
+        bridge.set_user_name_hint("Streamer")
         seen.clear()
         lifecycle.publish(_build_in_progress_event(display_time=15.0))
         assert seen
-        assert seen[-1].get("user", {}).get("name") == "LateHandle"
+        assert seen[-1].get("user", {}).get("name") == "Streamer"
+        assert seen[-1]["opponent"]["name"] == "OppPlayer"
+        assert _wait_for(lambda: len(pulse.calls) == 1)
+    finally:
+        bridge.stop()
+
+
+def test_partial_loading_roster_resolves_opponent_later_in_same_game(monkeypatch) -> None:
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle, pulse=_StubPulseClient(), user_name_hint="Streamer",
+    )
+    pending: list[Future] = []
+
+    def submit(*args, **kwargs):
+        future: Future = Future()
+        pending.append(future)
+        return future
+
+    monkeypatch.setattr(bridge._executor, "submit", submit)
+    seen: list[dict] = []
+    bridge.bus.subscribe(seen.append)
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event(opp_name="", game_key="partial"))
+        assert pending == []
+        assert seen[-1]["opponent"]["name"] is None
+        lifecycle.publish(_build_in_progress_event(game_key="partial"))
+        assert len(pending) == 1
+        assert seen[-1]["opponent"]["name"] == "OppPlayer"
+        pending[0].set_result(OpponentProfile(name="OppPlayer", mmr=4321))
+        assert seen[-1]["opponent"]["profile"]["mmr"] == 4321
+        lifecycle.publish(_build_in_progress_event(game_key="partial", display_time=45))
+        assert len(pending) == 1
+    finally:
+        bridge.stop()
+
+
+def test_corrected_identity_drops_old_same_game_profile_and_race(monkeypatch) -> None:
+    lifecycle: EventBus[LiveLifecycleEvent] = EventBus()
+    bridge = LiveBridge(
+        lifecycle_bus=lifecycle, pulse=_StubPulseClient(), user_name_hint="OppPlayer",
+    )
+    pending: list[tuple[str, Future]] = []
+
+    def submit(fn, **kwargs):
+        future: Future = Future()
+        pending.append((kwargs["name"], future))
+        return future
+
+    monkeypatch.setattr(bridge._executor, "submit", submit)
+    seen: list[dict] = []
+    bridge.bus.subscribe(seen.append)
+    bridge.start()
+    try:
+        lifecycle.publish(_build_loading_event(
+            game_key="corrected", user_name="karpidis", opp_race="Random",
+        ))
+        assert pending[0][0] == "karpidis"
+        bridge.set_user_name_hint("karpidis")
+        lifecycle.publish(_build_in_progress_event(
+            game_key="corrected", user_name="karpidis", opp_race="Random",
+        ))
+        assert pending[1][0] == "OppPlayer"
+        assert seen[-1]["user"] == {"name": "karpidis", "race": "Zerg"}
+        assert seen[-1]["opponent"] == {"name": "OppPlayer", "race": "Random"}
+        pending[1][1].set_result(OpponentProfile(name="OppPlayer", mmr=4500))
+        before = len(seen)
+        pending[0][1].set_result(OpponentProfile(name="karpidis", mmr=3000))
+        assert len(seen) == before
+        assert seen[-1]["opponent"]["profile"]["name"] == "OppPlayer"
+        assert seen[-1]["opponent"]["profile"]["mmr"] == 4500
     finally:
         bridge.stop()

@@ -64,6 +64,7 @@ import {
   mergeLiveGameStreamerHistory,
   type StickyStreamerHistory,
 } from "@/components/overlay/mergeLiveGameStreamerHistory";
+import { hasLiveIntel, LIVE_INTEL_WIDGETS, liveIntelPayload } from "@/components/overlay/liveIntelPayload";
 
 /**
  * Public OBS overlay (all-in-one). The token IS the auth — we trade
@@ -207,6 +208,8 @@ export function OverlayClient({
     return visibleLive.has(id);
   }
 
+  const intel = liveIntelPayload(live, liveGame);
+
   return (
     <div
       className="relative h-screen w-screen"
@@ -218,15 +221,15 @@ export function OverlayClient({
       {shouldShow("match-result") && <MatchResultWidget live={live} />}
       {shouldShow("post-game") && <PostGameWidget live={live} />}
       {shouldShow("mmr-delta") && <MmrDeltaWidget live={live} />}
-      {shouldShow("streak") && <StreakWidget live={live} />}
-      {shouldShow("cheese") && <CheeseWidget live={live} />}
-      {shouldShow("rematch") && <RematchWidget live={live} />}
-      {shouldShow("rival") && <RivalWidget live={live} />}
+      {shouldShow("streak") && <StreakWidget live={intel} />}
+      {shouldShow("cheese") && <CheeseWidget live={intel} />}
+      {shouldShow("rematch") && <RematchWidget live={intel} />}
+      {shouldShow("rival") && <RivalWidget live={intel} />}
       {shouldShow("rank") && <RankWidget live={live} />}
-      {shouldShow("meta") && <MetaWidget live={live} />}
-      {shouldShow("topbuilds") && <TopBuildsWidget live={live} />}
-      {shouldShow("fav-opening") && <FavOpeningWidget live={live} />}
-      {shouldShow("best-answer") && <BestAnswerWidget live={live} />}
+      {shouldShow("meta") && <MetaWidget live={intel} />}
+      {shouldShow("topbuilds") && <TopBuildsWidget live={intel} />}
+      {shouldShow("fav-opening") && <FavOpeningWidget live={intel} />}
+      {shouldShow("best-answer") && <BestAnswerWidget live={intel} />}
       {shouldShow("scouting") && (
         <ScoutingWidget live={live} liveGame={liveGame} />
       )}
@@ -464,6 +467,7 @@ function useWidgetTimers({
   const consumedStarts = useRef(new Map<WidgetId, Set<string>>());
   const randomizerStartKey = useGameStartTriggerKey(live, liveGame);
   const scoutingStartKey = useScoutingStartTriggerKey(live, liveGame);
+  const intel = liveIntelPayload(live, liveGame);
   const consumeStart = useCallback((id: WidgetId, key: string): boolean => {
     let keys = consumedStarts.current.get(id);
     if (!keys) {
@@ -588,6 +592,18 @@ function useWidgetTimers({
       return next;
     });
   }, [isActivePhase, liveGameKey, scoutingStartKey, randomizerStartKey, live, consumeStart, armTimer, setVisibleLive]);
+
+  // The cloud already enriches active envelopes with these cards' data.
+  // Open each card once when its content arrives, without restarting its
+  // deadline on the agent's subsequent 1 Hz updates or reconnect replay.
+  useEffect(() => {
+    if (!scoutingStartKey || !liveGame || live?.isTest || intel?.result) return;
+    const fresh = LIVE_INTEL_WIDGETS.filter((id) => hasLiveIntel(id, intel)
+      && consumeStart(id, scoutingStartKey));
+    if (!fresh.length) return;
+    for (const id of fresh) armTimer(id, false);
+    setVisibleLive((prev) => new Set([...prev, ...fresh]));
+  }, [scoutingStartKey, liveGame, live, intel, consumeStart, armTimer, setVisibleLive]);
 
   useEffect(() => {
     if (!session) return;

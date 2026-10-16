@@ -312,6 +312,7 @@ function makeServices(deps) {
     db: deps.db,
     io: deps.io,
     logger: deps.logger,
+    supportEmail: deps.config.supportEmail,
   });
   const users = new UsersService(deps.db, { adminEvents });
   // Pluggable backend for the per-game heavy blob. Defaults to

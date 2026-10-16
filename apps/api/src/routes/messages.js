@@ -115,8 +115,13 @@ function buildMessagesRouter(deps) {
         subject,
         message,
       });
+      if (!doc) {
+        const err = new Error("Your message could not be saved. Please try again.");
+        Object.assign(err, { status: 503, code: "message_not_saved" });
+        throw err;
+      }
 
-      res.status(201).json({ ok: true, eventId: doc ? doc.eventId : null });
+      res.status(201).json({ ok: true, eventId: doc.eventId });
     } catch (err) {
       next(err);
     }

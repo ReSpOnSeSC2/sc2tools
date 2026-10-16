@@ -170,6 +170,21 @@ describe("user -> admin messaging", () => {
     expect(count).toBe(0);
   });
 
+  test("a failed inbox write returns an error instead of confirming a lost report", async () => {
+    await services.users.ensureFromClerk("clerk_regular_user");
+    const save = jest.spyOn(services.adminEvents, "record").mockResolvedValueOnce(null);
+    try {
+      const res = await asUser(request(app).post("/v1/messages")).send({
+        subject: "Important report", message: "Please keep this message.",
+      });
+      expect(res.status).toBe(503);
+      expect(res.body.error.code).toBe("message_not_saved");
+      expect(await db.adminEvents.countDocuments({ type: "user_message" })).toBe(0);
+    } finally {
+      save.mockRestore();
+    }
+  });
+
   test("per-user rate limit returns 429 past the window cap", async () => {
     // Dedicated app instance with a tiny cap so the limit is
     // deterministic and isolated from the functional tests above.

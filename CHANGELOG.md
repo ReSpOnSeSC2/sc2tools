@@ -13,6 +13,14 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Agent 0.18.12:** live opponent identification requires a unique player-name
+  match, follows replay and Settings corrections without restarting, and rejects
+  outdated profile responses after an identity correction. Historical-intel
+  overlay cards now use current-match live data instead of waiting for a replay.
+- Direct support emails can now enter admin Messages and notifications through
+  a configured read-only Gmail importer, with persistent retry and duplicate
+  protection. In-app reports return an error if their message cannot be saved.
+
 - **Agent 0.18.11:** scouting now appears when the match starts, with its full 15-second
   display window. Loading and reconnect snapshots no longer trigger it;
   delayed match keys, enrichment updates, and voice fallbacks cannot

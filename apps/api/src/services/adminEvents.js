@@ -50,6 +50,7 @@ class AdminEventsService {
    *   db: import('../db/connect').DbContext,
    *   io?: import('socket.io').Server | null,
    *   logger?: import('pino').Logger | null,
+   *   supportEmail?: import('./supportEmail').SupportEmailConfig | null,
    * }} deps
    */
   constructor(deps) {
@@ -57,6 +58,7 @@ class AdminEventsService {
     this.db = deps.db;
     this.io = deps.io || null;
     this.logger = deps.logger || null;
+    this.supportEmail = deps.supportEmail || null;
   }
 
   /**
@@ -69,9 +71,10 @@ class AdminEventsService {
    *
    * @param {string} type
    * @param {Record<string, unknown>} payload
+   * @param {{ ingestionKey?: string }} [opts] Internal durable delivery key.
    * @returns {Promise<AdminEventDoc | null>}
    */
-  async record(type, payload) {
+  async record(type, payload, opts = {}) {
     if (!VALID_TYPES.has(type)) {
       throw new Error(`AdminEventsService.record: invalid type '${type}'`);
     }
@@ -83,6 +86,7 @@ class AdminEventsService {
         payload: safePayload,
         createdAt: new Date(),
         readAt: null,
+        ...(opts.ingestionKey ? { ingestionKey: opts.ingestionKey } : {}),
       },
       COLLECTIONS.ADMIN_EVENTS,
     );
@@ -90,6 +94,14 @@ class AdminEventsService {
       await this.db.adminEvents.insertOne(doc);
     } catch (err) {
       const code = /** @type {any} */ (err)?.code;
+      if (code === 11000 && opts.ingestionKey) {
+        return /** @type {AdminEventDoc | null} */ (
+          await this.db.adminEvents.findOne(
+            { ingestionKey: opts.ingestionKey },
+            { projection: { _id: 0 } },
+          )
+        );
+      }
       if (code === 11000 && type === EVENT_TYPES.USER_SIGNUP) {
         // Idempotent retry path — Clerk re-delivered a user.created
         // webhook the dedupe index already accepted. If this delivery
@@ -253,6 +265,7 @@ class AdminEventsService {
       downloadPlatforms,
       unreadCount,
       agents,
+      supportEmail,
     ] = await Promise.all([
       this.db.users.countDocuments({}),
       this._rangeCount(EVENT_TYPES.USER_SIGNUP, dayAgo, weekAgo),
@@ -260,6 +273,7 @@ class AdminEventsService {
       this._platformBreakdown(),
       this.db.adminEvents.countDocuments({ readAt: null }),
       this._agentCounts(dayAgo, weekAgo),
+      this.supportEmailStatus(),
     ]);
     return {
       totalUsers,
@@ -272,7 +286,23 @@ class AdminEventsService {
       downloadsByPlatform: downloadPlatforms,
       unreadCount,
       agents,
+      supportEmail,
       generatedAt: now.toISOString(),
+    };
+  }
+
+  /** Read-only intake visibility for the admin inbox; never exposes credentials. */
+  async supportEmailStatus() {
+    const configured = Boolean(this.supportEmail);
+    const stateId = this.supportEmail
+      ? crypto.createHash("sha256").update(this.supportEmail.mailbox).digest("hex") : null;
+    const state = stateId
+      ? await this.db.supportEmailSync.findOne({ _id: stateId }) : null;
+    return {
+      configured,
+      lastSuccessAt: state?.lastSuccessAt?.toISOString() || null,
+      lastAttemptAt: state?.lastAttemptAt?.toISOString() || null,
+      errorCode: state?.lastErrorCode || null,
     };
   }
 
@@ -515,6 +545,12 @@ function sanitisePayload(type, raw) {
       email: toCleanString(payload.email, 254) || null,
       subject: toCleanString(payload.subject, MESSAGE_SUBJECT_MAX),
       message: toCleanString(payload.message, MESSAGE_BODY_MAX),
+      ...(payload.source === "email" ? {
+        source: "email",
+        mailbox: toCleanString(payload.mailbox, 254),
+        gmailMessageId: toCleanString(payload.gmailMessageId, 64),
+        receivedAt: toCleanString(payload.receivedAt, 32),
+      } : {}),
     };
   }
   return payload;
@@ -585,6 +621,10 @@ function clampLimit(raw, fallback) {
  *   downloadsByPlatform: Record<string, number>,
  *   unreadCount: number,
  *   agents: { total: number, active24h: number, active7d: number },
+ *   supportEmail: {
+ *     configured: boolean, lastSuccessAt: string | null,
+ *     lastAttemptAt: string | null, errorCode: string | null,
+ *   },
  *   generatedAt: string,
  * }} EventCounts
  */

@@ -6,6 +6,19 @@ import type { AdminEvent } from "./adminTypes";
 
 afterEach(cleanup);
 
+it("identifies external email and links to the original Gmail message", () => {
+  const event: AdminEvent = {
+    eventId: "mail-1", type: "user_message", createdAt: new Date().toISOString(), readAt: null,
+    payload: { userId: null, clerkUserId: null, email: "reporter@example.com",
+      subject: "Live Overlay bug", message: "Wrong opponent", source: "email",
+      mailbox: "responsecoaching@gmail.com", gmailMessageId: "abc123" },
+  };
+  render(<ul><AdminEventRow event={event} unread /></ul>);
+  expect(screen.getByText("from reporter@example.com · via email")).toBeTruthy();
+  expect(screen.getByRole("link", { name: "Open original email in Gmail" }).getAttribute("href"))
+    .toBe("https://mail.google.com/mail/u/?authuser=responsecoaching%40gmail.com#all/abc123");
+});
+
 function signupEvent(
   email: string | null,
   clerkUserId: string | null = "user_clerk_id",

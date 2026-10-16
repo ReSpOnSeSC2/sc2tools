@@ -82,6 +82,7 @@ const COLLECTIONS = Object.freeze({
   // Admin notification feed — one row per signup/download event.
   // Drives the /admin Dashboard counters + /admin/notifications feed.
   ADMIN_EVENTS: "admin_events",
+  SUPPORT_EMAIL_SYNC: "support_email_sync",
   SITE_PRESENCE: "site_presence",
   COACHING: "coaching_locker",
   // Global, cross-user SC2Pulse cache. One row per real SC2 account

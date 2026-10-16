@@ -14,6 +14,7 @@ const { buildApp } = require("./app");
 const { attachSocketAuth } = require("./socket/auth");
 const { buildKeepaliveWorker } = require("./services/keepalive");
 const { buildSessionRefresher } = require("./services/sessionRefresher");
+const { SupportEmailService, buildSupportEmailJob } = require("./services/supportEmail");
 const {
   RuntimeCapacityRegistry,
   buildRuntimeCapacityMonitor,
@@ -214,6 +215,19 @@ async function main() {
   });
   keepalive.start();
 
+  // Direct support email shares the same durable Messages feed as in-app
+  // reports. Gmail access is read-only and disabled until configured.
+  const supportEmailJob = buildSupportEmailJob({
+    service: config.supportEmail ? new SupportEmailService({
+      db,
+      adminEvents: /** @type {import('./services/adminEvents').AdminEventsService} */ (services.adminEvents),
+      config: config.supportEmail,
+    }) : null,
+    intervalMs: config.supportEmail?.intervalMs,
+    logger,
+  });
+  supportEmailJob.start();
+
   // Pulse-character-id backfill cron. Heals opponents rows whose
   // first ingest happened during a transient SC2Pulse outage —
   // see jobs/pulseBackfillJob.js for the lock + cycle policy.
@@ -374,6 +388,7 @@ async function main() {
       await drained;
     }
     await keepalive.stop();
+    await supportEmailJob.stop();
     await pulseBackfill.stop();
     await opponentMmrEnrichment.stop();
     await sessionRefresher.stop();

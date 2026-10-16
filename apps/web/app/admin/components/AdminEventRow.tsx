@@ -58,6 +58,9 @@ export function AdminEventRow({
             {meta.body}
           </p>
         ) : null}
+        {event.type === "user_message" ? (
+          <EmailSource payload={event.payload as AdminEventUserMessagePayload} />
+        ) : null}
       </div>
       <span className="flex-none whitespace-nowrap text-caption text-text-dim">
         {timeSince(event.createdAt)}
@@ -97,7 +100,7 @@ function describe(event: AdminEvent): {
     const from = p.email || p.clerkUserId || "a signed-in user";
     return {
       title: p.subject || "User message",
-      subtitle: `from ${from}`,
+      subtitle: `from ${from}${p.source === "email" ? " · via email" : ""}`,
       body: p.message,
     };
   }
@@ -107,6 +110,18 @@ function describe(event: AdminEvent): {
     title: `Agent download · ${humanPlatform(p.platform)}${version}`,
     subtitle: p.ip ? `from ${p.ip}` : "",
   };
+}
+
+function EmailSource({ payload }: { payload: AdminEventUserMessagePayload }) {
+  if (payload.source !== "email" || !payload.mailbox ||
+      !/^[a-zA-Z0-9_-]{1,64}$/.test(payload.gmailMessageId || "")) return null;
+  const url = `https://mail.google.com/mail/u/?authuser=${encodeURIComponent(payload.mailbox)}#all/${payload.gmailMessageId}`;
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer"
+      className="mt-2 inline-block text-caption text-accent-cyan underline-offset-2 hover:underline">
+      Open original email in Gmail
+    </a>
+  );
 }
 
 function humanPlatform(p: AdminEventDownloadPayload["platform"]): string {

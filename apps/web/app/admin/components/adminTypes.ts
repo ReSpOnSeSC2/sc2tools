@@ -548,6 +548,10 @@ export type AdminEventUserMessagePayload = {
   email: string | null;
   subject: string;
   message: string;
+  source?: "email";
+  mailbox?: string;
+  gmailMessageId?: string;
+  receivedAt?: string;
 };
 
 export type AdminEventDownloadPayload = {
@@ -591,6 +595,12 @@ export type AdminEventCountsResp = {
     linux: number;
   };
   unreadCount: number;
+  supportEmail?: {
+    configured: boolean;
+    lastSuccessAt: string | null;
+    lastAttemptAt: string | null;
+    errorCode: string | null;
+  };
   /** Connected-agent counters from the deviceTokens collection. */
   agents: {
     total: number;

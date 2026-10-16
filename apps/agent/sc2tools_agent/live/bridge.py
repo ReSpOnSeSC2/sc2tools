@@ -37,6 +37,7 @@ from .metrics import METRICS
 from .pulse_lookup import PulseClient
 from .region import is_ladder_region, region_from_toon_handle
 from .types import (
+    _normalise_player_name,
     LiveGameState,
     LiveLifecycleEvent,
     LiveLifecyclePhase,
@@ -85,6 +86,7 @@ class _GameContext:
     user_name: Optional[str] = None
     user_race: Optional[str] = None
     profile: Optional[OpponentProfile] = None
+    lookup_token: Optional[object] = None
     last_lifecycle_phase: LiveLifecyclePhase = LiveLifecyclePhase.MATCH_LOADING
     last_emitted_at: float = 0.0
 
@@ -172,9 +174,19 @@ class LiveBridge:
 
     def set_user_name_hint(self, name: Optional[str]) -> None:
         with self._lock:
+            if name == self._user_name_hint:
+                return
             self._user_name_hint = name
             if self._current is not None:
-                self._current.user_name = name
+                # A repaired replay cache or a settings edit can change
+                # which roster row is ours. Reconcile on the next snapshot;
+                # the previous identity and its in-flight lookup are stale.
+                self._current.user_name = None
+                self._current.user_race = None
+                self._current.opponent_name = None
+                self._current.opponent_race = None
+                self._current.profile = None
+                self._current.lookup_token = None
 
     def set_user_toon_handle(self, handle: Optional[str]) -> None:
         """Update the streamer's toon handle and react to a server /
@@ -324,14 +336,25 @@ class LiveBridge:
         user = game_state.user_for(self._user_name_hint)
         opponent = game_state.opponent_for(self._user_name_hint)
 
-        if self._user_name_hint:
-            ctx.user_name = self._user_name_hint
-        elif user is not None and user.name:
-            ctx.user_name = user.name
         if user is not None:
+            if (
+                ctx.user_name
+                and _normalise_player_name(ctx.user_name)
+                != _normalise_player_name(user.name)
+            ):
+                ctx.user_race = None
+            ctx.user_name = user.name or ctx.user_name
             ctx.user_race = _merge_latched_race(ctx.user_race, user.race)
 
         if opponent is not None:
+            if (
+                ctx.opponent_name
+                and _normalise_player_name(ctx.opponent_name)
+                != _normalise_player_name(opponent.name)
+            ):
+                ctx.opponent_race = None
+                ctx.profile = None
+                ctx.lookup_token = None
             ctx.opponent_name = opponent.name or ctx.opponent_name
             ctx.opponent_race = _merge_latched_race(
                 ctx.opponent_race,
@@ -356,29 +379,26 @@ class LiveBridge:
                 )
                 self._update_context_players(ctx, event.game_state)
                 self._current = ctx
-                if ctx.opponent_name:
-                    # Region hint: in 1v1 the opponent shares the
-                    # streamer's server, so the streamer's own region
-                    # (derived from their toon handle) disambiguates
-                    # same-name accounts across regions and lifts the
-                    # candidate score. The local SC2 ``/game`` API never
-                    # exposes the opponent's region, so this is the only
-                    # region signal available at game start. PTR has no
-                    # SC2Pulse ladder, so it searches every region.
-                    lookup = dict(
-                        game_key=event.game_key,
-                        name=ctx.opponent_name,
-                        race=ctx.opponent_race,
-                        region=(
-                            self._user_region
-                            if is_ladder_region(self._user_region)
-                            else None
-                        ),
-                    )
             else:
                 # Same match — just refresh per-event fields.
                 ctx.last_lifecycle_phase = event.phase
                 self._update_context_players(ctx, event.game_state)
+            if ctx.opponent_name and ctx.lookup_token is None:
+                # Loading telemetry may be incomplete, or the player hint
+                # may be repaired mid-game. Resolve as soon as identity is
+                # known, and bind the response to this specific selection.
+                ctx.lookup_token = object()
+                lookup = dict(
+                    game_key=event.game_key,
+                    name=ctx.opponent_name,
+                    race=ctx.opponent_race,
+                    region=(
+                        self._user_region
+                        if is_ladder_region(self._user_region)
+                        else None
+                    ),
+                    lookup_token=ctx.lookup_token,
+                )
             ctx.last_emitted_at = time.time()
             payload = self._envelope_with_profile(event, ctx)
             self._pending_publications.append(payload)
@@ -420,13 +440,16 @@ class LiveBridge:
         game_key: str,
         name: str,
         race: Optional[str],
+        lookup_token: object,
         region: Optional[str] = None,
     ) -> Future:
         future = self._executor.submit(
             self._pulse.resolve, name=name, race=race, region=region,
         )
         future.add_done_callback(
-            lambda f: self._on_pulse_done(game_key=game_key, future=f),
+            lambda f: self._on_pulse_done(
+                game_key=game_key, lookup_token=lookup_token, future=f,
+            ),
         )
         return future
 
@@ -434,6 +457,7 @@ class LiveBridge:
         self,
         *,
         game_key: str,
+        lookup_token: object,
         future: Future,
     ) -> None:
         try:
@@ -447,7 +471,11 @@ class LiveBridge:
             return
         with self._lock:
             ctx = self._current
-            if ctx is None or ctx.game_key != game_key:
+            if (
+                ctx is None
+                or ctx.game_key != game_key
+                or ctx.lookup_token is not lookup_token
+            ):
                 # The match ended (and a new one started) while Pulse
                 # was in flight. Drop the late result rather than
                 # poisoning a different game's payload.

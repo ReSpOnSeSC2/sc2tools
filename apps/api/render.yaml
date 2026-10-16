@@ -251,3 +251,17 @@ services:
         sync: false
       - key: GUIDES_YOUTUBE_PLAYLIST_8_WORKER
         sync: false
+      # Read-only incoming support Gmail -> admin Notifications / Messages.
+      # Set all credential/start fields together; see docs/cloud/SUPPORT_EMAIL.md.
+      - key: SUPPORT_GMAIL_MAILBOX
+        sync: false
+      - key: SUPPORT_GMAIL_CLIENT_ID
+        sync: false
+      - key: SUPPORT_GMAIL_CLIENT_SECRET
+        sync: false
+      - key: SUPPORT_GMAIL_REFRESH_TOKEN
+        sync: false
+      - key: SUPPORT_GMAIL_START_AFTER
+        sync: false
+      - key: SUPPORT_GMAIL_INTERVAL_SEC
+        sync: false

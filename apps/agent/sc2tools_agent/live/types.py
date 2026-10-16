@@ -227,15 +227,15 @@ class LiveGameState:
     def user_for(self, user_name: Optional[str]) -> Optional[LivePlayer]:
         """Pick the local human player without guessing in team games.
 
-        Prefer a unique display-name or BattleTag-stem match. Blizzard
-        lists the local player first in 1v1 ``/game`` responses, so index
-        zero is a safe last resort only when at most two humans exist.
+        Require a unique display-name or BattleTag-stem match when more
+        than one human is present. The API's player order does not identify
+        the local player, so guessing from index zero can swap both sides.
         """
         humans = [player for player in self.players if player.is_user]
         matched = _unique_player_name_match(humans, user_name)
         if matched is not None:
             return matched
-        if 1 <= len(humans) <= 2:
+        if len(humans) == 1:
             return humans[0]
         return None
 

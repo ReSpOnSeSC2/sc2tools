@@ -54,6 +54,7 @@ export default function AdminNotificationsPage() {
   const counts = useSWR<AdminEventCountsResp>(
     "/v1/admin/events/counts",
     () => apiCall<AdminEventCountsResp>(getToken, "/v1/admin/events/counts"),
+    { refreshInterval: 60000 },
   );
 
   useAdminEventsSocket(
@@ -132,6 +133,19 @@ export default function AdminNotificationsPage() {
               : `Mark ${unread} as read`}
         </button>
       </header>
+
+      {counts.data?.supportEmail ? (
+        <p className="rounded-lg border border-border bg-bg-surface px-4 py-3 text-caption text-text-muted"
+          role={counts.data.supportEmail.errorCode ? "alert" : "status"}>
+          {!counts.data.supportEmail.configured
+            ? "Email import is not configured. Direct support email will appear in Messages once Gmail import is enabled."
+            : counts.data.supportEmail.errorCode
+              ? `Support email import failed (${counts.data.supportEmail.errorCode}). The next poll will retry.`
+              : counts.data.supportEmail.lastSuccessAt
+                ? `Support email import is enabled. Last checked ${new Date(counts.data.supportEmail.lastSuccessAt).toLocaleString()}.`
+                : "Support email import is enabled. Waiting for the first successful check."}
+        </p>
+      ) : null}
 
       <Card padded>
         <div className="flex flex-wrap items-center gap-2">

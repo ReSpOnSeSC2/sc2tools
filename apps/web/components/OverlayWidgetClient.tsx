@@ -26,6 +26,7 @@ import {
 } from "@/components/overlay/useVoiceReadout";
 import { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useClearStalePostGameOnGameKeyChange";
 import { useGameStartTriggerKey, useScoutingStartTriggerKey } from "@/components/overlay/gameStartTrigger";
+import { hasLiveIntel, isLiveIntelWidget, liveIntelPayload } from "@/components/overlay/liveIntelPayload";
 import {
   mergeLiveGameStreamerHistory,
   type StickyStreamerHistory,
@@ -369,6 +370,7 @@ function WidgetRenderer({
    *  Windows). */
   voicePrefs: VoicePrefs | null;
 }) {
+  const intel = liveIntelPayload(live, liveGame);
   switch (widget) {
     case "opponent":
       // Opponent widget is the primary surface for the agent's pre-game
@@ -384,23 +386,23 @@ function WidgetRenderer({
     case "mmr-delta":
       return <MmrDeltaWidget live={live} />;
     case "streak":
-      return <StreakWidget live={live} />;
+      return <StreakWidget live={intel} />;
     case "cheese":
-      return <CheeseWidget live={live} />;
+      return <CheeseWidget live={intel} />;
     case "rematch":
-      return <RematchWidget live={live} />;
+      return <RematchWidget live={intel} />;
     case "rival":
-      return <RivalWidget live={live} />;
+      return <RivalWidget live={intel} />;
     case "rank":
       return <RankWidget live={live} />;
     case "meta":
-      return <MetaWidget live={live} />;
+      return <MetaWidget live={intel} />;
     case "topbuilds":
-      return <TopBuildsWidget live={live} />;
+      return <TopBuildsWidget live={intel} />;
     case "fav-opening":
-      return <FavOpeningWidget live={live} />;
+      return <FavOpeningWidget live={intel} />;
     case "best-answer":
-      return <BestAnswerWidget live={live} />;
+      return <BestAnswerWidget live={intel} />;
     case "scouting":
       // Scouting widget — same priority rule as opponent: post-game
       // payload is authoritative, fall back to the agent's envelope.
@@ -732,10 +734,14 @@ export function useWidgetVisibility(
   // the widget. Recovering the same match can resume that window, but
   // must never restart a reveal or show an already-expired scouting card.
   const startDeadlines = useRef(new Map<string, number>());
-  const startOnly = widget === "scouting" || widget === "randomizer";
   const gameStartKey = useGameStartTriggerKey(live, liveGame);
   const scoutingStartKey = useScoutingStartTriggerKey(live, liveGame);
-  const startKey = widget === "scouting" ? scoutingStartKey : gameStartKey;
+  const intel = liveIntelPayload(live, liveGame);
+  const usesLiveIntel = isLiveIntelWidget(widget);
+  const intelStart = usesLiveIntel && !!scoutingStartKey && !live?.isTest && !intel?.result;
+  const startOnly = widget === "scouting" || widget === "randomizer" || intelStart;
+  const startKey = intelStart ? (hasLiveIntel(widget, intel) ? scoutingStartKey : null)
+    : widget === "scouting" ? scoutingStartKey : gameStartKey;
 
   const consumesLiveGame = widget === "opponent";
   // Active match phases — used to count the live envelope as a
@@ -756,7 +762,7 @@ export function useWidgetVisibility(
   // first ladder test: "scouting stays on the screen way too long."
   const pinThroughMatch = widget === "opponent" && isActivePhase;
 
-  const sourceForWidget = widget === "session" ? session : live;
+  const sourceForWidget = widget === "session" ? session : usesLiveIntel ? intel : live;
   const isTest = Boolean(
     widget === "session" ? session?.isTest : live?.isTest,
   );
@@ -779,12 +785,13 @@ export function useWidgetVisibility(
       const identity = `${widget}:${startKey}`;
       let deadline = startDeadlines.current.get(identity);
       if (deadline === undefined) {
-        deadline = Date.now() + (resolveWidgetDurationMs(widget, isTest) ?? 0);
+        const duration = resolveWidgetDurationMs(widget, isTest);
+        deadline = duration === null ? Infinity : Date.now() + duration;
         startDeadlines.current.set(identity, deadline);
       }
       const remaining = deadline - Date.now();
       setVisible(remaining > 0);
-      if (remaining > 0) {
+      if (remaining > 0 && Number.isFinite(remaining)) {
         timerRef.current = window.setTimeout(() => {
           setVisible(false);
           timerRef.current = null;

@@ -34,6 +34,7 @@ const VALID_REPLAY_FILES_STORES = new Set(["disabled", "r2"]);
  *   pythonAnalyzerDir: string|null,
  *   adminUserIds: string[],
  *   adminEmails: string[],
+ *   supportEmail: import('../services/supportEmail').SupportEmailConfig | null,
  *   keepaliveTargets: string[],
  *   keepaliveIntervalMs: number,
  *   slowQueryMs: number,
@@ -132,6 +133,7 @@ function loadConfig(env = process.env) {
     adminEmails: parseCsv(env.SC2TOOLS_ADMIN_EMAILS).map((e) =>
       e.toLowerCase(),
     ),
+    supportEmail: parseSupportEmailConfig(env),
     keepaliveTargets: parseCsv(env.KEEPALIVE_TARGETS),
     keepaliveIntervalMs: parseInteger(
       env.KEEPALIVE_INTERVAL_MS,
@@ -152,6 +154,39 @@ function loadConfig(env = process.env) {
     platformIntegrations: parsePlatformIntegrationsConfig(env),
     reviewsEnabled: parseReviewsRollout(env.REVIEWS_ENABLED),
     ...parseGuidesConfig(env),
+  };
+}
+
+/**
+ * A separate read-only operator credential; never reuses a site user's
+ * YouTube connection. Explicit import start prevents a historical inbox
+ * flood on first deployment. Incomplete configuration fails at boot.
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {import('../services/supportEmail').SupportEmailConfig | null}
+ */
+function parseSupportEmailConfig(env) {
+  const keys = ["SUPPORT_GMAIL_CLIENT_ID", "SUPPORT_GMAIL_CLIENT_SECRET",
+    "SUPPORT_GMAIL_REFRESH_TOKEN", "SUPPORT_GMAIL_START_AFTER"];
+  if (!keys.some((key) => env[key]?.trim())) return null;
+  for (const key of keys) {
+    if (!env[key]?.trim()) throw new Error(`${key} is required for support email import`);
+  }
+  const mailbox = (env.SUPPORT_GMAIL_MAILBOX || "responsecoaching@gmail.com").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mailbox)) {
+    throw new Error("SUPPORT_GMAIL_MAILBOX must be an email address");
+  }
+  const startAfter = requireEnv(env, "SUPPORT_GMAIL_START_AFTER").trim();
+  if (!/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(startAfter) || !Number.isFinite(Date.parse(startAfter))) {
+    throw new Error("SUPPORT_GMAIL_START_AFTER must be an ISO timestamp with a timezone");
+  }
+  return {
+    mailbox,
+    clientId: requireEnv(env, "SUPPORT_GMAIL_CLIENT_ID").trim(),
+    clientSecret: requireEnv(env, "SUPPORT_GMAIL_CLIENT_SECRET").trim(),
+    refreshToken: requireEnv(env, "SUPPORT_GMAIL_REFRESH_TOKEN").trim(),
+    startAfter,
+    intervalMs: Math.max(60, parsePositiveInteger(env.SUPPORT_GMAIL_INTERVAL_SEC, 60,
+      "SUPPORT_GMAIL_INTERVAL_SEC")) * 1000,
   };
 }
 
@@ -759,6 +794,7 @@ function parseCsv(raw) {
 }
 
 module.exports = {
+  parseSupportEmailConfig,
   loadConfig,
   parseGameDetailsStore,
   parseReplayFilesStore,

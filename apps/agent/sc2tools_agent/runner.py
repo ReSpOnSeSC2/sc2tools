@@ -49,6 +49,7 @@ from .instance_lock import AgentInstanceLock
 from .live import EventBus, LiveBridge, LiveLifecycleEvent, PulseClient
 from .live.client_api import LiveClientPoller
 from .live.metrics import PeriodicMetricsLogger
+from .live.types import _unique_player_name_match
 from .live.obs_client import ObsAuthFailed, ObsClient
 from .live.obs_scene import DEFAULT_SCENE_MAP, ObsSceneController
 from .live.transport import (
@@ -64,6 +65,7 @@ from .player_handle import (
     auto_detect_from_replays,
     read_cache as read_player_handle_cache,
     refresh_from_cloud as refresh_player_handle,
+    resolve as resolve_player_handle,
     write_cache as write_player_handle_cache,
 )
 from .replay_finder import (
@@ -511,7 +513,9 @@ def _run_headless(
             live_transport,
             live_metrics_logger,
         ) = _build_live_bridge(
-            user_name_hint=read_player_handle_cache(cfg.state_dir),
+            user_name_hint=resolve_player_handle(cfg.state_dir),
+            state_dir=cfg.state_dir,
+            replay_folders=initial_replay_folders,
             log=log,
             api=api,
             device_token=state.device_token,
@@ -951,7 +955,9 @@ def _gui_boot_worker(
                 live_transport,
                 live_metrics_logger,
             ) = _build_live_bridge(
-                user_name_hint=read_player_handle_cache(cfg.state_dir),
+                user_name_hint=resolve_player_handle(cfg.state_dir),
+                state_dir=cfg.state_dir,
+                replay_folders=folders_for_detect,
                 log=log,
                 api=api,
                 device_token=state.device_token,
@@ -1876,6 +1882,8 @@ def _build_live_bridge(
     api: Optional[ApiClient] = None,
     overlay_base_url: Optional[str] = None,
     device_token: Optional[str] = None,
+    state_dir: Optional[Path] = None,
+    replay_folders: Optional[List[Path]] = None,
 ) -> tuple[
     EventBus[LiveLifecycleEvent],
     LiveClientPoller,
@@ -1913,6 +1921,17 @@ def _build_live_bridge(
     operators see one grep-friendly line per emitted envelope (with
     Pulse enrichment) rather than per raw lifecycle event.
     """
+    if state_dir is not None:
+        user_name_hint = resolve_player_handle(state_dir)
+    replay_name_hint: Optional[str] = None
+    if replay_folders:
+        try:
+            # Cloud BattleTags can differ from the regional SC2 character
+            # name. Recover that local name once before polling starts;
+            # scanning/parsing a replay must not block each live event.
+            replay_name_hint = auto_detect_from_replays(replay_folders)
+        except Exception:  # noqa: BLE001
+            log.exception("live_player_name_auto_detect_failed")
     lifecycle_bus: EventBus[LiveLifecycleEvent] = EventBus()
     pulse = PulseClient()
     bridge = LiveBridge(
@@ -1973,6 +1992,31 @@ def _build_live_bridge(
     poller = LiveClientPoller(
         bus=lifecycle_bus, user_name_hint=user_name_hint,
     )
+    if state_dir is not None or replay_name_hint:
+        def _refresh_player_identity(event: LiveLifecycleEvent) -> None:
+            # Replay parsing can repair a stale profile name, and Settings
+            # can replace or clear it while this stack is running. Register
+            # before bridge.start() so this event uses the latest identity.
+            name = (
+                resolve_player_handle(state_dir)
+                if state_dir is not None else user_name_hint
+            )
+            if replay_name_hint and event.game_state is not None:
+                humans = [
+                    player for player in event.game_state.players
+                    if player.is_user
+                ]
+                if (
+                    len(humans) == 2
+                    and _unique_player_name_match(humans, name) is None
+                ):
+                    matched = _unique_player_name_match(humans, replay_name_hint)
+                    if matched is not None:
+                        name = matched.name
+            poller.set_user_name_hint(name)
+            bridge.set_user_name_hint(name)
+
+        lifecycle_bus.subscribe(_refresh_player_identity)
     metrics_logger = PeriodicMetricsLogger()
     return lifecycle_bus, poller, bridge, fanout, metrics_logger
 

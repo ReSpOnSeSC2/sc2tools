@@ -2,6 +2,22 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.12
+
+### Fixed - Live player identity and opponent intelligence
+
+- Live games identify the local player by a unique name match instead of
+  assuming player order. Missing, stale, or ambiguous names can no longer
+  identify your own account as the opponent.
+- The running overlay picks up player-name corrections from replay parsing
+  and Settings, and can recover the local character name from a toon-verified
+  recent replay when a cloud BattleTag does not match. Opponent lookups also
+  recover when loading telemetry arrives late, and outdated profile responses
+  cannot overwrite a corrected identity.
+- The matching website update displays streak, cheese, rematch, rival, meta,
+  top builds, favorite opening, and best-answer cards during the current
+  match when their historical data is available.
+
 ## 0.18.11
 
 ### Fixed - Scouting timing and repeated activations

@@ -43,6 +43,7 @@ const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndex
  *   userBackups: import('mongodb').Collection,
  *   arcadeLeaderboard: import('mongodb').Collection,
  *   adminEvents: import('mongodb').Collection,
+ *   supportEmailSync: import('mongodb').Collection<any>,
  *   sitePresence: import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>,
  *   pulseAccounts: import('mongodb').Collection,
  *   pulseCharacterLinks: import('mongodb').Collection,
@@ -132,6 +133,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
     adminEvents: db.collection(COLLECTIONS.ADMIN_EVENTS),
+    supportEmailSync: db.collection(COLLECTIONS.SUPPORT_EMAIL_SYNC),
     sitePresence: /** @type {import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>} */ (
       db.collection(COLLECTIONS.SITE_PRESENCE)
     ),
@@ -629,6 +631,14 @@ async function ensureIndexes(ctx, opts = {}) {
     }
   }
   await ctx.adminEvents.createIndex({ readAt: 1, createdAt: -1 });
+  await ctx.adminEvents.createIndex(
+    { ingestionKey: 1 },
+    {
+      unique: true,
+      partialFilterExpression: { ingestionKey: { $type: "string" } },
+      name: "admin_event_unique_ingestion",
+    },
+  );
 
   // Global, cross-user SC2Pulse cache (services/pulseDirectory.js).
   // ``toonHandle`` is the natural key — one row per real SC2 account,
