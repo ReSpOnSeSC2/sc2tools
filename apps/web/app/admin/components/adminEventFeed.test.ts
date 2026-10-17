@@ -36,13 +36,18 @@ describe("upsertLiveAdminEvent", () => {
   });
 
   it("replaces an enriched event in place without duplicating it", () => {
-    const current = [signup("a"), signup("b"), signup("c")];
+    const current = [signup("c"), signup("b"), signup("a")];
     const enriched = signup("b", "new-user@example.com");
 
     const next = upsertLiveAdminEvent(current, enriched, 3);
 
-    expect(next).toEqual([signup("a"), enriched, signup("c")]);
+    expect(next).toEqual([signup("c"), enriched, signup("a")]);
     expect(next.filter((event) => event.eventId === "b")).toHaveLength(1);
+  });
+
+  it("matches the API's event-id descending order for equal timestamps", () => {
+    expect(mergeAdminEventFeed([signup("a"), signup("c")], [signup("b")], 2)
+      .map((event) => event.eventId)).toEqual(["c", "b"]);
   });
 
   it("does not let an old enrichment evict a newer full-buffer event", () => {

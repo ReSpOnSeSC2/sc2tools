@@ -5,7 +5,7 @@ const express = require("express");
 /**
  * /v1/me/notifications — the signed-in user's in-app bell.
  *
- *   GET  /me/notifications               — newest first, ?limit=&before=
+ *   GET  /me/notifications               — newest first, ?limit=&before=&unread=true
  *   GET  /me/notifications/unread-count  — {count} (capped at 100)
  *   POST /me/notifications/read          — {ids: string[]} or {all: true}
  *
@@ -36,6 +36,7 @@ function buildNotificationsRouter(deps) {
       res.json(await deps.notifications.list(userId, {
         limit: req.query.limit,
         before: req.query.before,
+        unread: req.query.unread === "true",
       }));
     } catch (err) {
       next(err);

@@ -400,3 +400,8 @@ own synced games, and helpful reviewers earn karma.
   - `GET /v1/me/review-blocks`, `DELETE /v1/me/review-blocks/:id`
   - `GET /v1/me/notifications`, `GET /v1/me/notifications/unread-count`,
     `POST /v1/me/notifications/read`
+    (`unread=true` selects unread notifications before pagination; `before`
+    accepts the opaque `nextCursor` from the preceding page).
+    The bell opens unread activity when its badge is nonzero,
+    offers all history and more pages, and keeps the current page visible
+    after acknowledging it.

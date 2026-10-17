@@ -13,6 +13,11 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Notification badges now lead to an **Unread** view, including older recovered
+  installs and review activity that previously sat beyond the newest page.
+  Feeds catch up after reconnects, pagination keeps events with matching dates,
+  and opening the review bell keeps displayed items visible after marking them read.
+
 - **Ask for a review** now works across personal strategy, opponent-MMR and
   Macro Report game lists as well as replay history and game details, on
   desktop and mobile. Team and FFA games no longer offer the action.

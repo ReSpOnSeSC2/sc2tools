@@ -28,29 +28,24 @@ export function mergeAdminEventFeed(
   live: readonly AdminEvent[],
   limit: number,
 ): AdminEvent[] {
-  const byId = new Map<
-    string,
-    { event: AdminEvent; firstSeen: number }
-  >();
-  let firstSeen = 0;
+  const byId = new Map<string, AdminEvent>();
 
   for (const event of [...fetched, ...live]) {
     const existing = byId.get(event.eventId);
     if (!existing) {
-      byId.set(event.eventId, { event, firstSeen });
-      firstSeen += 1;
+      byId.set(event.eventId, event);
       continue;
     }
-    existing.event = reconcileAdminEvent(existing.event, event);
+    byId.set(event.eventId, reconcileAdminEvent(existing, event));
   }
 
   return [...byId.values()]
     .sort((a, b) => {
-      const byCreatedAt = eventTimestamp(b.event) - eventTimestamp(a.event);
-      return byCreatedAt || a.firstSeen - b.firstSeen;
+      const byCreatedAt = eventTimestamp(b) - eventTimestamp(a);
+      // Match the API's keyset order, including events sharing a timestamp.
+      return byCreatedAt || (a.eventId > b.eventId ? -1 : a.eventId < b.eventId ? 1 : 0);
     })
-    .slice(0, limit)
-    .map(({ event }) => event);
+    .slice(0, limit);
 }
 
 function reconcileAdminEvent(

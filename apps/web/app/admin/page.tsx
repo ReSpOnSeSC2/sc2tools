@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 
 import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
@@ -40,13 +41,16 @@ const RECENT_FEED_SIZE = 8;
  *      payload, useful for capacity triage.
  */
 export default function AdminDashboardPage() {
-  const counts = useApi<AdminEventCountsResp>("/v1/admin/events/counts");
+  const { userId } = useAuth();
+  const counts = useApi<AdminEventCountsResp>("/v1/admin/events/counts", { refreshInterval: 60000 });
   const recent = useApi<AdminEventsListResp>(
     `/v1/admin/events?limit=${RECENT_FEED_SIZE}`,
+    { refreshInterval: 60000 },
   );
   const storage = useApi<StorageStatsResp>("/v1/admin/storage-stats");
 
   const [liveEvents, setLiveEvents] = useState<AdminEvent[]>([]);
+  useEffect(() => { setLiveEvents([]); }, [userId]);
 
   useAdminEventsSocket(
     useCallback(
@@ -58,6 +62,10 @@ export default function AdminDashboardPage() {
       },
       [counts],
     ),
+    useCallback(() => {
+      void recent.mutate();
+      void counts.mutate();
+    }, [recent, counts]),
   );
 
   const merged = useMemo<AdminEvent[]>(() => {

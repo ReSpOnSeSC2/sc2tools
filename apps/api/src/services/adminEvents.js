@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { supportEmailStateId } = require("./supportEmailScope");
+const { adminEventCursor, adminEventPageFilter } = require("./adminEventCursor");
 
 const EVENT_TYPES = Object.freeze({
   USER_SIGNUP: "user_signup",
@@ -187,26 +188,25 @@ class AdminEventsService {
 
   /**
    * Reverse-chronological feed for the admin notifications page.
-   * Cursor pagination on ``createdAt`` so the URL is stable.
+   * Cursor pagination on ``createdAt`` + ``eventId`` keeps timestamp ties
+   * traversable. The unread filter shares counts()'s readAt predicate.
    *
-   * @param {{ limit?: number, before?: Date, type?: string }} [opts]
-   * @returns {Promise<{ items: AdminEventDoc[], nextBefore: Date | null }>}
+   * @param {{ limit?: number, before?: Date|string, type?: string, unread?: boolean }} [opts]
+   * @returns {Promise<{ items: AdminEventDoc[], nextBefore: string | null }>}
    */
   async list(opts = {}) {
     const limit = clampLimit(opts.limit, FEED_LIMIT_DEFAULT);
     /** @type {Record<string, any>} */
-    const query = {};
+    const query = adminEventPageFilter(opts.before);
     if (typeof opts.type === "string" && VALID_TYPES.has(opts.type)) {
       query.type = opts.type;
     }
-    if (opts.before instanceof Date && !Number.isNaN(opts.before.getTime())) {
-      query.createdAt = { $lt: opts.before };
-    }
+    if (opts.unread === true) query.readAt = null;
     const rows = /** @type {AdminEventDoc[]} */ (
       /** @type {unknown} */ (
         await this.db.adminEvents
           .find(query, { projection: { _id: 0 } })
-          .sort({ createdAt: -1 })
+          .sort({ createdAt: -1, eventId: -1 })
           .limit(limit + 1)
           .toArray()
       )
@@ -220,7 +220,7 @@ class AdminEventsService {
     // untouched.
     const items = await this._hydrateIdentityEmails(page);
     const nextBefore = hasMore && items.length > 0
-      ? items[items.length - 1].createdAt
+      ? adminEventCursor(items[items.length - 1])
       : null;
     return { items, nextBefore };
   }

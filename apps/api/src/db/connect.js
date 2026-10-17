@@ -598,8 +598,8 @@ async function ensureIndexes(ctx, opts = {}) {
   // produce two signup rows for the same Clerk user id. GDPR keeps an
   // anonymized event row for aggregate counts, so those rows (whose Clerk id
   // has been cleared) must not participate in uniqueness.
-  await ctx.adminEvents.createIndex({ createdAt: -1 });
-  await ctx.adminEvents.createIndex({ type: 1, createdAt: -1 });
+  await ctx.adminEvents.createIndex({ createdAt: -1, eventId: -1 });
+  await ctx.adminEvents.createIndex({ type: 1, createdAt: -1, eventId: -1 });
   // Build the corrected index under a new name before removing the legacy
   // one. This avoids both an IndexOptionsConflict on deployed databases and
   // a window without duplicate protection while instances roll forward.
@@ -630,7 +630,8 @@ async function ensureIndexes(ctx, opts = {}) {
       if (code !== 27 && codeName !== "IndexNotFound") throw err;
     }
   }
-  await ctx.adminEvents.createIndex({ readAt: 1, createdAt: -1 });
+  await ctx.adminEvents.createIndex({ readAt: 1, createdAt: -1, eventId: -1 });
+  await ctx.adminEvents.createIndex({ type: 1, readAt: 1, createdAt: -1, eventId: -1 });
   await ctx.adminEvents.createIndex(
     { ingestionKey: 1 },
     {

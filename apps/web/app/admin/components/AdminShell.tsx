@@ -3,10 +3,8 @@
 import { useCallback, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import useSWR from "swr";
-import { useAuth } from "@clerk/nextjs";
 
-import { apiCall, useApi } from "@/lib/clientApi";
+import { useApi } from "@/lib/clientApi";
 import { useAdminEventsSocket } from "./useAdminEventsSocket";
 import type {
   AdminEventCountsResp,
@@ -250,11 +248,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
  * page level so the nav never renders.
  */
 function useUnreadCount(): number {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const swr = useSWR<AdminEventCountsResp>(
-    isLoaded && isSignedIn ? "/v1/admin/events/counts" : null,
-    async () => apiCall(getToken, "/v1/admin/events/counts"),
+  const swr = useApi<AdminEventCountsResp>(
+    "/v1/admin/events/counts",
     {
+      refreshInterval: 60000,
       onErrorRetry: (error, _key, _config, revalidate, ctx) => {
         if (error?.status === 403 || error?.status === 401) return;
         if (ctx.retryCount >= 3) return;
@@ -266,6 +263,7 @@ function useUnreadCount(): number {
     useCallback(() => {
       swr.mutate();
     }, [swr]),
+    useCallback(() => { void swr.mutate(); }, [swr]),
   );
   return swr.data?.unreadCount ?? 0;
 }

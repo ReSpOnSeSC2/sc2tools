@@ -5,6 +5,10 @@ import AdminHealthPage from "@/app/admin/health/page";
 
 const useApiMock = vi.fn();
 
+vi.mock("@clerk/nextjs", () => ({
+  useAuth: () => ({ userId: "admin-fixture" }),
+}));
+
 vi.mock("@/lib/clientApi", () => ({
   useApi: (...args: unknown[]) => useApiMock(...args),
 }));

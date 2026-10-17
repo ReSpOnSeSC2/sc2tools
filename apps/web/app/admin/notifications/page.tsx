@@ -1,20 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import useSWR from "swr";
 
 import { Card } from "@/components/ui/Card";
 import { apiCall, useApi, API_BASE } from "@/lib/clientApi";
 import { ForbiddenCard, LoadingRows } from "../components/AdminFragments";
 import { AdminEventRow } from "../components/AdminEventRow";
-import {
-  mergeAdminEventFeed,
-  upsertLiveAdminEvent,
-} from "../components/adminEventFeed";
 import { useAdminEventsSocket } from "../components/useAdminEventsSocket";
 import type {
-  AdminEvent,
   AdminEventCountsResp,
   AdminEventsListResp,
   AdminEventType,
@@ -34,54 +28,49 @@ const FILTER_LABEL: Record<Filter, string> = {
 /**
  * /admin/notifications — full chronological feed of signup +
  * agent download and connection events with a filter toggle and a "mark all read"
- * action. Reuses the dashboard's Socket.io subscription to splice
- * brand-new events onto the top of the list the moment they land.
+ * action. Socket.io invalidations refresh durable rows when activity arrives
+ * or the socket reconnects; polling recovers updates missed while offline.
  */
 export default function AdminNotificationsPage() {
   const { getToken } = useAuth();
   const [filter, setFilter] = useState<Filter>("all");
+  const [unreadOnly, setUnreadOnly] = useState(true);
   const [before, setBefore] = useState<string | null>(null);
   const [pageHistory, setPageHistory] = useState<Array<string | null>>([null]);
-  const [liveEvents, setLiveEvents] = useState<AdminEvent[]>([]);
   const [markingRead, setMarkingRead] = useState(false);
 
   const params = new URLSearchParams();
   params.set("limit", String(PAGE_SIZE));
+  if (unreadOnly) params.set("unread", "true");
   if (filter !== "all") params.set("type", filter);
   if (before) params.set("before", before);
   const path = `/v1/admin/events?${params.toString()}`;
 
-  const { data, error, isLoading, mutate } = useApi<AdminEventsListResp>(path);
-  const counts = useSWR<AdminEventCountsResp>(
-    "/v1/admin/events/counts",
-    () => apiCall<AdminEventCountsResp>(getToken, "/v1/admin/events/counts"),
-    { refreshInterval: 60000 },
-  );
+  const { data, error, isLoading, isValidating, mutate } = useApi<AdminEventsListResp>(path, {
+    refreshInterval: 60000,
+  });
+  const counts = useApi<AdminEventCountsResp>("/v1/admin/events/counts", {
+    refreshInterval: 60000,
+  });
 
   useAdminEventsSocket(
     useCallback(
-      (event: AdminEvent) => {
-        // Only splice when we're on the first page and the filter
-        // matches; otherwise the cursor would jump unexpectedly.
-        if (before !== null) return;
-        if (filter !== "all" && event.type !== filter) return;
-        setLiveEvents((prev) =>
-          upsertLiveAdminEvent(prev, event, PAGE_SIZE),
-        );
+      () => {
         counts.mutate();
+        // REST rows and their cursor remain authoritative. Keeping a separate
+        // capped socket list could skip an evicted boundary row, or retain a
+        // now-read row after another admin's mark-all-read action.
+        void mutate();
       },
-      [before, filter, counts],
+      [counts, mutate],
     ),
+    useCallback(() => {
+      void mutate();
+      void counts.mutate();
+    }, [mutate, counts]),
   );
 
-  useEffect(() => {
-    setLiveEvents([]);
-  }, [filter, before]);
-
-  const merged = useMemo(() => {
-    if (!data) return null;
-    return mergeAdminEventFeed(data.items, liveEvents, PAGE_SIZE);
-  }, [data, liveEvents]);
+  const items = data?.items || [];
 
   async function markAllRead() {
     if (markingRead) return;
@@ -110,6 +99,12 @@ export default function AdminNotificationsPage() {
   if (error && error.status === 403) return <ForbiddenCard />;
 
   const unread = counts.data?.unreadCount ?? 0;
+  const emptyType = filter === "all" ? "notifications" : FILTER_LABEL[filter].toLowerCase();
+
+  function resetPage() {
+    setBefore(null);
+    setPageHistory([null]);
+  }
 
   return (
     <div className="space-y-6">
@@ -119,6 +114,9 @@ export default function AdminNotificationsPage() {
           <p className="text-text-muted">
             Live feed of new signups, agent downloads, confirmed installs, and user messages.
             Updates in real time while this page is open.
+          </p>
+          <p className="text-caption text-text-muted">
+            {unread} unread across all activity.
           </p>
         </div>
         <button
@@ -131,7 +129,7 @@ export default function AdminNotificationsPage() {
             ? "Working…"
             : unread === 0
               ? "All caught up"
-              : `Mark ${unread} as read`}
+              : `Mark all ${unread} unread as read`}
         </button>
       </header>
 
@@ -152,6 +150,20 @@ export default function AdminNotificationsPage() {
       ) : null}
 
       <Card padded>
+        <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="Notification view">
+          <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">View</span>
+          {[true, false].map((onlyUnread) => (
+            <button key={String(onlyUnread)} type="button" aria-pressed={unreadOnly === onlyUnread}
+              onClick={() => { setUnreadOnly(onlyUnread); resetPage(); }}
+              className={[
+                "rounded-full border px-3 py-1 text-caption transition-colors",
+                unreadOnly === onlyUnread ? "border-accent-cyan/60 bg-accent-cyan/15 text-text"
+                  : "border-border bg-bg-surface text-text-muted hover:bg-bg-elevated hover:text-text",
+              ].join(" ")}>
+              {onlyUnread ? "Unread" : "All activity"}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
             Filter
@@ -166,8 +178,7 @@ export default function AdminNotificationsPage() {
                 type="button"
                 onClick={() => {
                   setFilter(f);
-                  setBefore(null);
-                  setPageHistory([null]);
+                  resetPage();
                 }}
                 className={[
                   "rounded-full border px-3 py-1 text-caption transition-colors",
@@ -183,7 +194,7 @@ export default function AdminNotificationsPage() {
         </div>
       </Card>
 
-      {isLoading && !merged ? (
+      {isLoading && !data ? (
         <LoadingRows rows={8} />
       ) : error ? (
         <Card padded>
@@ -191,17 +202,28 @@ export default function AdminNotificationsPage() {
             Failed to load events: {error.message}
           </p>
         </Card>
-      ) : !merged || merged.length === 0 ? (
+      ) : items.length === 0 ? (
         <Card padded>
           <p className="text-text-muted">
-            No events yet. New signups, agent downloads, confirmed installs, and user messages
-            will appear here as they happen.
+            {unreadOnly ? `No unread ${emptyType}${filter !== "all" ? " in this filter" : before ? " on this page" : ""}.`
+              : `No ${emptyType} in this view.`}
           </p>
+          {unreadOnly && unread > 0 ? (
+            <button type="button" className="mt-3 text-caption text-accent-cyan underline-offset-2 hover:underline"
+              onClick={() => { setFilter("all"); resetPage(); void mutate(); }}>
+              View all {unread} unread notifications
+            </button>
+          ) : unreadOnly ? (
+            <button type="button" className="mt-3 text-caption text-accent-cyan underline-offset-2 hover:underline"
+              onClick={() => { setUnreadOnly(false); resetPage(); }}>
+              View all activity
+            </button>
+          ) : null}
         </Card>
       ) : (
         <Card padded={false}>
           <ul className="divide-y divide-border">
-            {merged.map((event) => (
+            {items.map((event) => (
               <AdminEventRow
                 key={event.eventId}
                 event={event}
@@ -222,12 +244,12 @@ export default function AdminNotificationsPage() {
           ← Newer
         </button>
         <span className="text-caption text-text-dim">
-          {merged?.length ?? 0} on this page
+          {items.length} on this page
         </span>
         <button
           type="button"
           className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!data?.nextBefore}
+          disabled={!data?.nextBefore || isValidating}
           onClick={nextPage}
         >
           Older →

@@ -12,6 +12,25 @@ const HREF_MAX = 300;
 const KIND_RE = /^[a-z][a-z0-9_.]{1,63}$/;
 const GROUP_KEY_MAX = 200;
 
+/** Compound cursors preserve rows sharing a millisecond; ISO-date cursors remain supported.
+ * @param {unknown} raw
+ * @returns {{createdAt: Date, id: string | null} | null}
+ */
+function parseNotificationCursor(raw) {
+  if (typeof raw !== "string" || !raw) return null;
+  if (raw.startsWith("n1.")) {
+    try {
+      const value = JSON.parse(Buffer.from(raw.slice(3), "base64url").toString("utf8"));
+      const createdAt = new Date(value.at);
+      if (!Number.isNaN(createdAt.getTime()) && typeof value.id === "string"
+        && value.id.length > 0 && value.id.length <= 64) return { createdAt, id: value.id };
+    } catch { /* Rejected below. */ }
+    throw Object.assign(new Error("Invalid notification cursor."), { status: 400, code: "bad_request" });
+  }
+  const createdAt = new Date(raw);
+  return Number.isNaN(createdAt.getTime()) ? null : { createdAt, id: null };
+}
+
 /**
  * NotificationsService — the per-user in-app bell.
  *
@@ -122,24 +141,32 @@ class NotificationsService {
 
   /**
    * @param {string} userId
-   * @param {{limit?: unknown, before?: unknown}} [opts]
+   * @param {{limit?: unknown, before?: unknown, unread?: boolean}} [opts]
    */
   async list(userId, opts = {}) {
     const limit = clampInt(opts.limit, 1, LIST_MAX, LIST_DEFAULT);
     /** @type {Record<string, any>} */
     const filter = { userId };
-    const before = opts.before ? new Date(String(opts.before)) : null;
-    if (before && !Number.isNaN(before.getTime())) filter.createdAt = { $lt: before };
+    if (opts.unread === true) filter.readAt = null;
+    const cursor = parseNotificationCursor(opts.before);
+    if (cursor) {
+      filter.$or = [
+        { createdAt: { $lt: cursor.createdAt } },
+        ...(cursor.id ? [{ createdAt: cursor.createdAt, _id: { $lt: cursor.id } }] : []),
+      ];
+    }
     const rows = await this.db.notifications
       .find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ createdAt: -1, _id: -1 })
       .limit(limit + 1)
       .toArray();
     const items = rows.slice(0, limit).map(serialize);
     const last = items[items.length - 1];
     return {
       items,
-      nextCursor: rows.length > limit && last ? last.createdAt : null,
+      nextCursor: rows.length > limit && last
+        ? `n1.${Buffer.from(JSON.stringify({ at: last.createdAt, id: last.id })).toString("base64url")}`
+        : null,
     };
   }
 

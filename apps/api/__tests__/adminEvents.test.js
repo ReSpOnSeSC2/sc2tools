@@ -415,6 +415,75 @@ describe("admin notification events", () => {
     expect(res.body.items[1].type).toBe("user_signup");
   });
 
+  test("unread view exposes nine recovered installs behind more than fifty newer read events", async () => {
+    const user = await db.users.findOne({ clerkUserId: "clerk_admin" });
+    const pairedAt = new Date("2026-09-01T12:00:00Z");
+    const recent = new Date("2026-10-17T12:00:00Z");
+    await db.adminEvents.insertMany(Array.from({ length: 55 }, (_, i) => ({
+      eventId: `read-download-${i}`, type: "agent_download", payload: { platform: "windows" },
+      createdAt: recent, readAt: recent,
+    })));
+    for (let i = 0; i < 9; i += 1) {
+      await services.adminEvents.recordAgentConnection({
+        _id: `recovered-${i}`, userId: user.userId, createdAt: pairedAt, agentOs: "Windows",
+      });
+    }
+    const counts = await asAdmin(request(app).get("/v1/admin/events/counts"));
+    const all = await asAdmin(request(app).get("/v1/admin/events?limit=50"));
+    const unread = await asAdmin(request(app).get("/v1/admin/events?unread=true&limit=50"));
+    expect(counts.body.unreadCount).toBe(9);
+    expect(all.body.items).toHaveLength(50);
+    expect(all.body.items.every((event) => event.readAt)).toBe(true);
+    expect(unread.status).toBe(200);
+    expect(unread.body.items).toHaveLength(counts.body.unreadCount);
+    expect(unread.body.items.every((event) => event.type === "agent_connected" && !event.readAt)).toBe(true);
+    expect(unread.body.items.every((event) => event.createdAt === pairedAt.toISOString())).toBe(true);
+    await asAdmin(request(app).post("/v1/admin/events/mark-read"));
+    const after = await asAdmin(request(app).get("/v1/admin/events?unread=true"));
+    expect(after.body.items).toEqual([]);
+    expect((await db.adminEvents.find({ type: "agent_connected" }).toArray())
+      .every((event) => event.createdAt.getTime() === pairedAt.getTime())).toBe(true);
+  });
+
+  test.each([false, true])("timestamp ties remain traversable with type filtering (unread: %s)", async (unread) => {
+    const createdAt = new Date("2026-10-17T12:00:00Z");
+    const events = Array.from({ length: 62 }, (_, i) => ({
+      eventId: `install-${String(i).padStart(3, "0")}`, type: "agent_connected", payload: {},
+      createdAt, readAt: i < 52 ? null : createdAt,
+    }));
+    await db.adminEvents.insertMany([...events, {
+      eventId: "different-type", type: "user_message", payload: {}, createdAt, readAt: null,
+    }]);
+    const suffix = `type=agent_connected&unread=${unread}&limit=50`;
+    const first = await asAdmin(request(app).get(`/v1/admin/events?${suffix}`));
+    expect(first.status).toBe(200);
+    expect(first.body.items).toHaveLength(50);
+    expect(first.body.nextBefore).toMatch(/^ae1\./);
+    const second = await asAdmin(request(app).get(`/v1/admin/events?${suffix}&before=${encodeURIComponent(first.body.nextBefore)}`));
+    expect(second.status).toBe(200);
+    expect(second.body.items).toHaveLength(unread ? 2 : 12);
+    expect(second.body.nextBefore).toBeNull();
+    const ids = [...first.body.items, ...second.body.items].map((event) => event.eventId);
+    const expected = events.filter((event) => !unread || !event.readAt)
+      .map((event) => event.eventId).sort().reverse();
+    expect(ids).toEqual(expected);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect((await asAdmin(request(app).get("/v1/admin/events/counts"))).body.unreadCount).toBe(53);
+  });
+
+  test("legacy ISO date cursors still work and malformed keyset cursors fail explicitly", async () => {
+    await db.adminEvents.insertMany([
+      { eventId: "older", type: "agent_download", payload: {}, createdAt: new Date("2026-10-16T12:00:00Z"), readAt: null },
+      { eventId: "boundary", type: "agent_download", payload: {}, createdAt: new Date("2026-10-17T12:00:00Z"), readAt: null },
+    ]);
+    const page = await asAdmin(request(app).get("/v1/admin/events?unread=true&before=2026-10-17T12%3A00%3A00Z"));
+    expect(page.status).toBe(200);
+    expect(page.body.items.map((event) => event.eventId)).toEqual(["older"]);
+    const invalid = await asAdmin(request(app).get("/v1/admin/events?before=ae1.invalid"));
+    expect(invalid.status).toBe(400);
+    expect(invalid.body.error.code).toBe("invalid_admin_events_cursor");
+  });
+
   test("admin list batch-hydrates legacy signup emails without rewriting events", async () => {
     await db.users.insertMany([
       {

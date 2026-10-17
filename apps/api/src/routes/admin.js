@@ -477,12 +477,13 @@ function buildAdminRouter(deps) {
   router.get("/admin/events", async (req, res, next) => {
     try {
       const limit = parseLimit(req.query.limit);
-      const before = parseDate(req.query.before);
+      // Keep new keyset cursors opaque; the service also accepts old ISO dates.
+      const before = typeof req.query.before === "string" ? req.query.before : undefined;
       const typeRaw = req.query.type;
       const type = typeof typeRaw === "string" && typeRaw.length > 0
         ? typeRaw
         : undefined;
-      res.json(await deps.adminEvents.list({ limit, before, type }));
+      res.json(await deps.adminEvents.list({ limit, before, type, unread: req.query.unread === "true" }));
     } catch (err) {
       next(err);
     }
