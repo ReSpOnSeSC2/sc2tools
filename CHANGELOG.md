@@ -13,6 +13,13 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Ask for a review** now works across personal strategy, opponent-MMR and
+  Macro Report game lists as well as replay history and game details, on
+  desktop and mobile. Team and FFA games no longer offer the action.
+  Review forms reset drafts and replay-sharing consent when switching games
+  or accounts, prevent duplicate submissions, and keep keyboard focus and
+  scrolling correct when opened inside another dialog.
+
 - Admin activity now records the first verified agent connection per paired
   device, with account identity, platform and version under **Installs**.
   Missing connection events recover on the next heartbeat without another

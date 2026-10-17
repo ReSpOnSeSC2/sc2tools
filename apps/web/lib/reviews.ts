@@ -301,12 +301,16 @@ export function formatClock(seconds: number | null | undefined): string {
 export function parseClock(raw: string): number | null {
   const value = raw.trim();
   if (!value) return null;
-  if (/^\d+$/.test(value)) return Number(value);
+  if (/^\d+$/.test(value)) {
+    const seconds = Number(value);
+    return Number.isFinite(seconds) ? seconds : null;
+  }
   const parts = value.split(":");
   if (parts.length < 2 || parts.length > 3 || parts.some((p) => !/^\d+$/.test(p))) return null;
   const nums = parts.map(Number);
   if (nums.slice(1).some((n) => n > 59)) return null;
-  return nums.reduce((acc, n) => acc * 60 + n, 0);
+  const seconds = nums.reduce((acc, n) => acc * 60 + n, 0);
+  return Number.isFinite(seconds) ? seconds : null;
 }
 
 /** "[PvZ] Why did my blink all-in fail?" */

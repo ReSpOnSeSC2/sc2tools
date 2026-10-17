@@ -147,12 +147,48 @@ describe("AllGamesTable: Ask for a review", () => {
     }));
   });
 
-  it("stays out of other tables and hides while the rollout is off", () => {
+  it("offers the same review actions in personal strategy, MMR and Macro Report tables", () => {
     vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
     useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: null });
-    const { unmount } = render(<AllGamesTable games={[GAME]} />);
+    render(<AllGamesTable games={[GAME]} />);
+    expect(screen.getAllByRole("button", { name: "Ask for a review of this game" })).toHaveLength(2);
+  });
+
+  it.each(["team", "ffa", "other"] as const)("hides review actions for %s games, including inside the macro panel", (matchFormat) => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: null });
+    render(<AllGamesTable games={[{ ...GAME, matchFormat, playerCount: 4 }]} opponentContext={{ pulseId: "1-S2-1-7" }} />);
     expect(screen.queryByRole("button", { name: "Ask for a review of this game" })).toBeNull();
-    unmount();
+    fireEvent.click(screen.getAllByRole("button", { name: /Open macro breakdown/ })[0]);
+    expect(macroPanelMock).toHaveBeenLastCalledWith(expect.objectContaining({ gameId: GAME.id, reviewable: false }));
+  });
+
+  it("hides review actions when legacy metadata identifies a multiplayer game", () => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    render(<AllGamesTable games={[{ ...GAME, playerCount: 4 }]} />);
+    expect(screen.queryByRole("button", { name: "Ask for a review of this game" })).toBeNull();
+  });
+
+  it.each([0, 1])("posts the chosen game id from review action %i without expanding its row", async (index) => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: null });
+    apiCallMock.mockImplementation((_getToken, path) => Promise.resolve(path === "/v1/reviews"
+      ? { id: "request1", url: "/reviews/request1" }
+      : { configuredPlatforms: [], linksByGameId: {} }));
+    render(<AllGamesTable games={[{ ...GAME, matchFormat: "1v1", playerCount: 2 }]} />);
+    fireEvent.click(screen.getAllByRole("button", { name: "Ask for a review of this game" })[index]);
+    fireEvent.change(screen.getByRole("textbox", { name: /question/i }), { target: { value: "How could I have defended this roach timing better?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post request" }));
+    await waitFor(() => expect(apiCallMock).toHaveBeenCalledWith(getTokenMock, "/v1/reviews", expect.objectContaining({
+      method: "POST",
+      body: expect.any(String),
+    })));
+    const request = apiCallMock.mock.calls.find((call) => call[1] === "/v1/reviews");
+    expect(JSON.parse(request![2].body)).toMatchObject({ gameId: "game/77", question: "How could I have defended this roach timing better?" });
+    expect(screen.queryByText("▾")).toBeNull();
+  });
+
+  it("hides review actions while the rollout is off", () => {
     vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "off");
     render(<AllGamesTable games={[GAME]} opponentContext={{ pulseId: "1-S2-1-7" }} />);
     expect(screen.queryByRole("button", { name: "Ask for a review of this game" })).toBeNull();
@@ -222,7 +258,7 @@ describe("AllGamesTable game analysis entry point", () => {
       once: true,
     });
     fireEvent.click(links[0]);
-    expect(useApiMock).not.toHaveBeenCalled();
+    expect(useApiMock.mock.calls.some(([path]) => path === "/v1/games/game%2F42/build-order")).toBe(false);
 
     const desktopRow = screen.getAllByText("Ancient Cistern")[0].closest("tr");
     expect(desktopRow).toBeTruthy();

@@ -13,7 +13,7 @@ import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import { MacroBreakdownPanel } from "./macro/MacroBreakdownPanel";
 import { AskForReviewButton, STOP_POINTER_EVENTS } from "@/components/reviews/AskForReviewButton";
-import { matchupFromRaces } from "@/lib/reviews";
+import { isReviewableGame, matchupFromRaces } from "@/lib/reviews";
 import type { PanelHeaderMeta } from "./macro/MacroBreakdownPanel.types";
 import { BuildOrderDualTimeline } from "./charts/BuildOrderDualTimeline";
 import {
@@ -56,8 +56,6 @@ type BuildOrderResp = {
 };
 
 type GameRowData = ProfileGame & {
-  opp_race?: string;
-  my_race?: string;
   macro_score?: number | null;
 };
 
@@ -120,11 +118,9 @@ export function AllGamesTable({
     (game) => (gameStreamLinks(linksByGameId, game.id)?.length ?? 0) > 0,
   );
   // Replay downloads belong to the opponent dossier's All-games surface.
-  // Other consumers reuse this table for strategy/MMR drilldowns and keep
-  // their existing analysis-only action cell. "Ask for a review" follows
-  // the same rule.
+  // All consumers list the signed-in user's own games. Review requests also
+  // belong in personal strategy, MMR and Macro Report drilldowns.
   const showReplayDownload = !!opponentContext;
-  const showReviewRequest = !!opponentContext;
 
   const sortedGames = useMemo(() => {
     return sort.sortRows(
@@ -213,7 +209,6 @@ export function AllGamesTable({
                 myName={myName}
                 opponentContext={opponentContext}
                 showReplayDownload={showReplayDownload}
-                showReviewRequest={showReviewRequest}
               />
             ))}
           </tbody>
@@ -232,7 +227,6 @@ export function AllGamesTable({
             myName={myName}
             opponentContext={opponentContext}
             showReplayDownload={showReplayDownload}
-            showReviewRequest={showReviewRequest}
           />
         ))}
       </ul>
@@ -261,7 +255,6 @@ function GameRow({
   myName,
   opponentContext,
   showReplayDownload,
-  showReviewRequest,
 }: {
   game: GameRowData;
   expanded: boolean;
@@ -274,7 +267,6 @@ function GameRow({
   myName?: string | null;
   opponentContext?: OpponentNavigationContext | null;
   showReplayDownload: boolean;
-  showReviewRequest: boolean;
 }) {
   const expandable = !!game.id;
   const { macro, macroColour, resultBadge } = useGameMeta(game);
@@ -374,7 +366,7 @@ function GameRow({
               gameId={game.id}
               opponentContext={opponentContext}
             />
-            {showReviewRequest && game.id ? (
+            {game.id && isReviewableGame(game) ? (
               <AskForReviewButton
                 gameId={game.id}
                 durationSec={game.game_length}
@@ -526,7 +518,7 @@ function MacroCell({
             initialScore={typeof macro === "number" ? macro : null}
             headerMeta={panelHeaderMetaFromGame(game)}
             onClose={onClose}
-            reviewable
+            reviewable={isReviewableGame(game)}
           />
         </span>
       ) : null}
@@ -558,7 +550,6 @@ function GameMobileCard({
   myName,
   opponentContext,
   showReplayDownload,
-  showReviewRequest,
 }: {
   game: GameRowData;
   expanded: boolean;
@@ -568,7 +559,6 @@ function GameMobileCard({
   myName?: string | null;
   opponentContext?: OpponentNavigationContext | null;
   showReplayDownload: boolean;
-  showReviewRequest: boolean;
 }) {
   const expandable = !!game.id;
   const { macro, macroColour, resultBadge } = useGameMeta(game);
@@ -673,7 +663,7 @@ function GameMobileCard({
               mobile
               opponentContext={opponentContext}
             />
-            {showReviewRequest ? (
+            {isReviewableGame(game) ? (
               <AskForReviewButton
                 gameId={game.id}
                 durationSec={game.game_length}

@@ -29,6 +29,8 @@ type GamesListResp = {
     game_length?: number;
     macro_score?: number | null;
     my_race?: string;
+    matchFormat?: ProfileGame["matchFormat"];
+    playerCount?: number | null;
   }>;
 };
 
@@ -77,6 +79,9 @@ export function ReportGamesModal({
         map: g.map ?? null,
         opp_strategy: g.opp_strategy ?? null,
         opp_race: g.opp_race ?? null,
+        my_race: g.my_race ?? null,
+        matchFormat: g.matchFormat ?? null,
+        playerCount: g.playerCount ?? null,
         opponent: g.opponent ?? null,
         my_build: g.build ?? null,
         game_length: g.game_length ?? null,

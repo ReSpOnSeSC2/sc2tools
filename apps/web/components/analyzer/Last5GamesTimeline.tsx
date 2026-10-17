@@ -11,6 +11,9 @@ export type ProfileGame = {
    *  they give the patch era the row's macro panel prices units by. */
   gameVersion?: string | null;
   gameBuild?: number | null;
+  /** Preserve format metadata so personal replay actions stay 1v1-only. */
+  matchFormat?: "1v1" | "team" | "ffa" | "other" | null;
+  playerCount?: number | null;
   result?: string | null;
   map?: string | null;
   opp_strategy?: string | null;
@@ -18,6 +21,7 @@ export type ProfileGame = {
    *  built ProfileGame lists before this field existed and dropped it,
    *  which is why the Race column rendered "?" everywhere. */
   opp_race?: string | null;
+  my_race?: string | null;
   /** Opponent's in-game display name. Lets the All-games list name
    *  who each game was actually against. Optional — older drilldowns
    *  didn't carry it. */

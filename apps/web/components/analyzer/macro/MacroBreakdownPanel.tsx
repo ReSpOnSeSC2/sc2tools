@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { matchupFromRaces } from "@/lib/reviews";
+import { lockBodyScroll } from "@/lib/bodyScrollLock";
 import { MapReplaySection } from "@/components/analyzer/game/MapReplaySection";
 import { MacroChartSection } from "./MacroChartSection";
 import { MacroLeaksList } from "./MacroLeaksList";
@@ -73,6 +74,8 @@ export function MacroBreakdownPanel({
   const dialogRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLElement>(null);
   const previouslyFocusedRef = useRef<Element | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const { data, error, isLoading, mutate, request } = useApi<MacroBreakdownData>(
     open ? `/v1/games/${encodeURIComponent(gameId)}/macro-breakdown` : null,
@@ -148,19 +151,18 @@ export function MacroBreakdownPanel({
   useEffect(() => {
     if (!open) return;
     previouslyFocusedRef.current = document.activeElement;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
 
     const onKey = (e: KeyboardEvent) => {
       // A dialog layered on top of the panel (e.g. "Ask for a review")
       // owns the keyboard while focus is inside it: don't close the panel
       // on its Esc or pull its Tab focus back here.
-      const target = e.target instanceof Element ? e.target : null;
+      const target = e.target instanceof Element ? e.target : document.activeElement;
       const layered = target?.closest('[role="dialog"]');
-      if (layered && dialogRef.current && !dialogRef.current.contains(layered)) return;
+      if (layered && layered !== dialogRef.current) return;
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
       } else if (e.key === "Tab") {
         trapTab(e, dialogRef.current);
       }
@@ -174,12 +176,12 @@ export function MacroBreakdownPanel({
 
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
       window.clearTimeout(initFocus);
       const prev = previouslyFocusedRef.current as HTMLElement | null;
-      prev?.focus?.();
+      if (prev?.isConnected) prev.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   if (typeof window === "undefined") return null;

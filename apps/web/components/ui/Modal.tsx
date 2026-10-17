@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { lockBodyScroll } from "@/lib/bodyScrollLock";
 
 /**
  * Modal — portal-based dialog with focus trap and Esc-close.
@@ -72,18 +73,23 @@ export function Modal({
   const descId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<Element | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   // Body scroll lock + Esc + focus management
   useEffect(() => {
     if (!open) return;
     previouslyFocusedRef.current = document.activeElement;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
 
     const onKey = (e: KeyboardEvent) => {
+      // Portalled child dialogs own Escape and Tab while they have focus.
+      const target = e.target instanceof Element ? e.target : document.activeElement;
+      const activeDialog = target?.closest('[role="dialog"]');
+      if (activeDialog && activeDialog !== dialogRef.current) return;
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
       } else if (e.key === "Tab") {
         trapTab(e, dialogRef.current);
       }
@@ -99,14 +105,14 @@ export function Modal({
 
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
+      unlockScroll();
       window.clearTimeout(initFocus);
       const prev = previouslyFocusedRef.current as HTMLElement | null;
-      if (prev && typeof prev.focus === "function") {
+      if (prev?.isConnected && typeof prev.focus === "function") {
         prev.focus();
       }
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   if (typeof window === "undefined") return null;

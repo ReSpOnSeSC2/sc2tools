@@ -10,7 +10,11 @@ const apiCallMock = vi.fn();
 const getTokenMock = vi.fn(async () => "test-token");
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: getTokenMock }),
+  useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true }),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
 }));
 
 vi.mock("@/lib/clientApi", () => ({
@@ -42,6 +46,7 @@ afterEach(() => {
   useApiMock.mockReset();
   apiCallMock.mockReset();
   getTokenMock.mockClear();
+  vi.unstubAllEnvs();
 });
 
 const SLIM: GameSummary = {
@@ -170,6 +175,30 @@ function mockEndpoints({
 }
 
 describe("GameDetailPage", () => {
+  it("opens a review request for the current owner's 1v1 game", () => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    mockEndpoints({ slim: { ...SLIM, matchFormat: "1v1", playerCount: 2 } });
+    render(<GameDetailPage gameId="g1" />);
+    const review = screen.getByRole("button", { name: "Ask for a review" });
+    expect(screen.getByRole("group", { name: "Game actions" }).contains(review)).toBe(true);
+    fireEvent.click(review);
+    expect(screen.getByRole("dialog", { name: "Ask for a replay review" })).toBeTruthy();
+    expect(screen.getByText("Game length 11:40")).toBeTruthy();
+  });
+
+  it.each([
+    { matchFormat: "team" as const, playerCount: 4 },
+    { matchFormat: "ffa" as const, playerCount: 4 },
+    { matchFormat: "other" as const, playerCount: 2 },
+    { playerCount: 4 },
+  ])("does not offer to post a multiplayer or unsupported-format game: %j", (format) => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    mockEndpoints({ slim: { ...SLIM, ...format } });
+    render(<GameDetailPage gameId="g1" />);
+    expect(screen.queryByRole("button", { name: "Ask for a review" })).toBeNull();
+    expect(screen.getByRole("group", { name: "Game actions" })).toBeTruthy();
+  });
+
   it("applies a deep-link time after async game data loads without resetting later scrubs", () => {
     useApiMock.mockReturnValue({ isLoading: true });
     const view = render(<GameDetailPage gameId="g1" initialTimeSec={360} />);

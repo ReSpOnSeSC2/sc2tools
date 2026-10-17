@@ -14,6 +14,7 @@ import { ReplayDownloadButton } from "@/components/analyzer/ReplayDownloadButton
 import { fmtDate, fmtMinutes, fmtMmr, raceColour } from "@/lib/format";
 import { ShareGameButton } from "./ShareGameButton";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
+import { isReviewableGame } from "@/lib/reviews";
 import { isLossResult, isWinResult, type GameSummary } from "./types";
 import {
   opponentProfileHref,
@@ -136,11 +137,13 @@ export function GameDetailShell({
                 sizeBytes={replaySizeBytes}
                 showLabel
               />
-              <AskForReviewButton
-                gameId={game.gameId}
-                durationSec={game.durationSec}
-                matchup={matchup}
-              />
+              {isReviewableGame(game) ? (
+                <AskForReviewButton
+                  gameId={game.gameId}
+                  durationSec={game.durationSec}
+                  matchup={matchup}
+                />
+              ) : null}
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-caption">

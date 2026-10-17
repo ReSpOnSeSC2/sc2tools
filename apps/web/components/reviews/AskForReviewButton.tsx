@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useState, type MouseEvent, type ReactNode, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type MouseEvent, type ReactNode, type SyntheticEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -15,6 +15,7 @@ import {
   REVIEW_TAGS,
   formatClock,
   parseClock,
+  reviewsRollout,
   reviewsVisible,
   validateQuestion,
   type DesiredLevel,
@@ -56,12 +57,14 @@ export function AskForReviewButton({
   iconClassName = "h-4 w-4",
   ...props
 }: ButtonProps) {
-  const { data: me } = useApi<{ isAdmin?: boolean }>("/v1/me");
+  const { isLoaded, isSignedIn, userId } = useAuth();
+  const { data: me } = useApi<{ isAdmin?: boolean }>(
+    isLoaded && isSignedIn && reviewsRollout() === "admins" ? "/v1/me" : null,
+  );
   const [open, setOpen] = useState(false);
-  // Stable: the Modal re-runs its focus setup whenever onClose changes, so
-  // a re-rendering host (e.g. a table row) must not yank focus from the form.
+  // Keep the close action stable across updates to its host game row.
   const close = useCallback(() => setOpen(false), []);
-  if (!reviewsVisible(me?.isAdmin)) return null;
+  if (!isLoaded || !isSignedIn || !reviewsVisible(me?.isAdmin)) return null;
   const onClick = (e: MouseEvent) => {
     // Rows in some tables expand on click; asking shouldn't toggle them.
     e.stopPropagation();
@@ -78,7 +81,7 @@ export function AskForReviewButton({
         // Keyboard events are left alone: the Modal handles Esc/Tab on the
         // document.
         <span className="contents" {...STOP_POINTER_EVENTS}>
-          <AskForReviewDialog {...props} onClose={close} />
+          <AskForReviewDialog key={userId} {...props} onClose={close} />
         </span>
       ) : null}
     </>
@@ -99,7 +102,13 @@ export const STOP_POINTER_EVENTS = {
   onTouchEnd: stopPropagation,
 } as const;
 
-export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Props & { onClose: () => void }) {
+export function AskForReviewDialog(props: Props & { onClose: () => void }) {
+  // Hosts can reuse the same dialog while selecting a different replay. A
+  // question and, especially, replay-sharing consent belong to one game.
+  return <AskForReviewForm key={props.gameId} {...props} />;
+}
+
+function AskForReviewForm({ gameId, durationSec, matchup, onClose }: Props & { onClose: () => void }) {
   const { getToken } = useAuth();
   const router = useRouter();
   const formId = useId();
@@ -114,16 +123,28 @@ export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Pr
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [existing, setExisting] = useState<string | null>(null);
+  const [existing, setExisting] = useState(false);
+  const submitting = useRef(false);
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   const questionProblem = validateQuestion(question);
   const range = parseRange(rangeStart, rangeEnd, durationSec ?? null);
 
   async function submit() {
+    // The submit event can fire again before React disables the button (or
+    // through Enter). Keep one mutation in flight for this dialog.
+    if (submitting.current) return;
     setTouched(true);
     if (questionProblem || range.error) return;
+    submitting.current = true;
     setBusy(true);
     setError(null);
+    setExisting(false);
     try {
       const res = await apiCall<{ id: string; url: string }>(getToken, "/v1/reviews", {
         method: "POST",
@@ -138,14 +159,20 @@ export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Pr
           shareReplay,
         }),
       });
+      // Closing the dialog or switching games must not let a late response
+      // unexpectedly navigate away from the user's current screen.
+      if (!mounted.current) return;
       gaEvent("review_requested", { matchup: matchup ?? "unknown", visibility, level });
+      onClose();
       router.push(res.url);
     } catch (err) {
+      if (!mounted.current) return;
+      submitting.current = false;
       const e = err as { message?: string; code?: string };
       setError(e?.message || "Couldn't post your request.");
-      if (e?.code === "review_exists") setExisting("existing");
+      setExisting(e?.code === "review_exists");
     } finally {
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   }
 
@@ -163,7 +190,7 @@ export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Pr
         </div>
       }
     >
-      <form id={formId} className="space-y-4" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
+      <form id={formId} className="space-y-4" aria-busy={busy} onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         <div>
           <label htmlFor={`${formId}-q`} className="text-caption font-semibold text-text">Your question</label>
           <textarea
@@ -206,12 +233,12 @@ export function AskForReviewDialog({ gameId, durationSec, matchup, onClose }: Pr
         <fieldset>
           <legend className="text-caption font-semibold text-text">Time range of interest (optional)</legend>
           <div className="mt-1 flex flex-wrap items-center gap-2">
-            <input aria-label="From (m:ss)" inputMode="numeric" placeholder="5:00" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="h-10 w-24 rounded-lg border-2 border-line bg-bg px-2 font-mono text-body" />
+            <input aria-label="From (m:ss)" aria-invalid={touched && Boolean(range.error)} aria-describedby={touched && range.error ? `${formId}-range-error` : undefined} inputMode="numeric" placeholder="5:00" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="h-10 w-24 rounded-lg border-2 border-line bg-bg px-2 font-mono text-body" />
             <span className="text-text-dim">to</span>
-            <input aria-label="To (m:ss)" inputMode="numeric" placeholder="6:30" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="h-10 w-24 rounded-lg border-2 border-line bg-bg px-2 font-mono text-body" />
+            <input aria-label="To (m:ss)" aria-invalid={touched && Boolean(range.error)} aria-describedby={touched && range.error ? `${formId}-range-error` : undefined} inputMode="numeric" placeholder="6:30" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="h-10 w-24 rounded-lg border-2 border-line bg-bg px-2 font-mono text-body" />
             {durationSec ? <span className="text-micro text-text-dim">Game length {formatClock(durationSec)}</span> : null}
           </div>
-          {touched && range.error ? <p className="mt-1 text-micro text-danger">{range.error}</p> : null}
+          {touched && range.error ? <p id={`${formId}-range-error`} role="alert" className="mt-1 text-micro text-danger">{range.error}</p> : null}
         </fieldset>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -276,6 +303,7 @@ export function parseRange(startRaw: string, endRaw: string, durationSec: number
   const end = parseClock(endRaw);
   if (start === null || end === null) return { value: null, error: "Use m:ss for both times, e.g. 5:00 to 6:30." };
   if (end <= start) return { value: null, error: "The range must end after it starts." };
+  if (start > 86_400 || end > 86_400) return { value: null, error: "Times must be within 24 hours." };
   if (durationSec !== null && end > durationSec + 1) return { value: null, error: "The range must sit inside the game." };
   return { value: { startSec: start, endSec: end }, error: null };
 }

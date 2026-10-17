@@ -125,6 +125,11 @@ own synced games, and helpful reviewers earn karma.
 
 ### Asking
 
+- **Where to ask.** Signed-in users can open **Ask for a review** from their
+  Replay Library, private game details, opponent history, personal strategy
+  and opponent-MMR drilldowns, Macro Report game lists, and those games' macro
+  panels. Desktop rows and mobile cards use the same form. Shared archives
+  and global drilldowns do not offer an owner-only action.
 - **Eligible games.** You can only post your own **1v1** game with a known
   matchup and a macro breakdown. Map playback is optional but boosts
   ranking.
