@@ -1,9 +1,10 @@
 "use client";
 
-import { Download, MessageSquareWarning, UserPlus } from "lucide-react";
+import { Download, MessageSquareWarning, MonitorCheck, UserPlus } from "lucide-react";
 import { timeSince } from "./format";
 import type {
   AdminEvent,
+  AdminEventAgentConnectedPayload,
   AdminEventDownloadPayload,
   AdminEventSignupPayload,
   AdminEventUserMessagePayload,
@@ -72,11 +73,13 @@ export function AdminEventRow({
 const ICON_CLASSES: Record<AdminEvent["type"], string> = {
   user_signup: "border-accent/40 bg-accent/10 text-accent",
   agent_download: "border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan",
+  agent_connected: "border-success/40 bg-success/10 text-success",
   user_message: "border-warning/40 bg-warning/10 text-warning",
 };
 
 function EventIcon({ type }: { type: AdminEvent["type"] }) {
   if (type === "user_signup") return <UserPlus className="h-4 w-4" />;
+  if (type === "agent_connected") return <MonitorCheck className="h-4 w-4" />;
   if (type === "user_message")
     return <MessageSquareWarning className="h-4 w-4" />;
   return <Download className="h-4 w-4" />;
@@ -102,6 +105,18 @@ function describe(event: AdminEvent): {
       title: p.subject || "User message",
       subtitle: `from ${from}${p.source === "email" ? " · via email" : ""}`,
       body: p.message,
+    };
+  }
+  if (event.type === "agent_connected") {
+    const p = event.payload as AdminEventAgentConnectedPayload;
+    const identity = p.email || p.clerkUserId || p.userId || "Account unavailable";
+    const platform = p.platform && p.platform !== "unknown"
+      ? ` · ${humanPlatform(p.platform)}`
+      : "";
+    const version = p.version ? ` v${p.version}` : "";
+    return {
+      title: `Agent connected${platform}${version}`,
+      subtitle: `${identity} · confirmed by agent`,
     };
   }
   const p = event.payload as AdminEventDownloadPayload;

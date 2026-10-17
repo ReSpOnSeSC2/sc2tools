@@ -104,4 +104,42 @@ describe("upsertLiveAdminEvent", () => {
 
     expect(mergeAdminEventFeed([scrubbed], [stale], 1)).toEqual([scrubbed]);
   });
+
+  it("keeps the hydrated install identity when a stale live copy arrives", () => {
+    const connected: AdminEvent = {
+      eventId: "connected",
+      type: "agent_connected",
+      payload: {
+        userId: "user-1", clerkUserId: "clerk-1", email: null,
+        deviceId: "device-1", platform: "windows", version: "0.18.9", source: "heartbeat",
+      },
+      createdAt: "2026-10-16T12:00:00.000Z",
+      readAt: null,
+    };
+    const hydrated = {
+      ...connected,
+      payload: { ...connected.payload, email: "installed@example.com" },
+    };
+
+    const [merged] = mergeAdminEventFeed([hydrated], [connected], 1);
+
+    expect(merged.payload).toMatchObject({ email: "installed@example.com", source: "heartbeat" });
+    expect(merged.createdAt).toBe(connected.createdAt);
+  });
+
+  it("keeps a resolved install account id before its email is available", () => {
+    const connected: AdminEvent = {
+      eventId: "connected-without-email", type: "agent_connected",
+      payload: {
+        userId: "user-1", clerkUserId: null, email: null,
+        deviceId: "device-1", platform: "windows", version: null, source: "heartbeat",
+      },
+      createdAt: "2026-10-16T12:00:00.000Z", readAt: null,
+    };
+    const hydrated = {
+      ...connected, payload: { ...connected.payload, clerkUserId: "clerk-1" },
+    };
+    expect(mergeAdminEventFeed([hydrated], [connected], 1)[0].payload)
+      .toMatchObject({ email: null, clerkUserId: "clerk-1" });
+  });
 });

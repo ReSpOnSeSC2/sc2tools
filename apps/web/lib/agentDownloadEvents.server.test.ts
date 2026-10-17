@@ -63,6 +63,7 @@ describe("forwardAgentDownloadEvent", () => {
       "x-geo-country": "US",
     });
     expect(JSON.parse(String(init.body))).toEqual({
+      downloadId: expect.stringMatching(UUID_PATTERN),
       platform: "windows",
       version: "0.15.20",
       channel: "stable",
@@ -71,8 +72,45 @@ describe("forwardAgentDownloadEvent", () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it("logs non-success responses and fails open", async () => {
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 503 }));
+  it.each([429, 503])("recovers from HTTP %s without changing the download ID", async (status) => {
+    fetchMock
+      .mockResolvedValueOnce(new Response(null, { status }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(forward()).resolves.toBe(true);
+
+    expectRetriedDownload(fetchMock);
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    new Error("connection reset after write"),
+    new DOMException("Request timed out", "TimeoutError"),
+  ])("recovers from %s without changing the download ID", async (error) => {
+    fetchMock
+      .mockRejectedValueOnce(error)
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(forward()).resolves.toBe(true);
+
+    expectRetriedDownload(fetchMock);
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+
+  it.each([400, 422])("does not retry permanent HTTP %s errors", async (status) => {
+    fetchMock.mockResolvedValue(new Response(null, { status }));
+
+    await expect(forward()).resolves.toBe(false);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(consoleError).toHaveBeenCalledOnce();
+    expect(consoleError).toHaveBeenCalledWith(
+      `[agent-download-event] forward failed with ${status}`,
+    );
+  });
+
+  it("logs the final non-success response after two attempts and fails open", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 503 }));
 
     await expect(
       forwardAgentDownloadEvent(
@@ -81,14 +119,16 @@ describe("forwardAgentDownloadEvent", () => {
       ),
     ).resolves.toBe(false);
 
+    expectRetriedDownload(fetchMock);
+    expect(consoleError).toHaveBeenCalledOnce();
     expect(consoleError).toHaveBeenCalledWith(
       "[agent-download-event] forward failed with 503",
     );
   });
 
-  it("logs network errors and fails open", async () => {
+  it("logs the final network error after two attempts and fails open", async () => {
     const error = new Error("network down");
-    fetchMock.mockRejectedValueOnce(error);
+    fetchMock.mockRejectedValue(error);
 
     await expect(
       forwardAgentDownloadEvent(
@@ -97,9 +137,39 @@ describe("forwardAgentDownloadEvent", () => {
       ),
     ).resolves.toBe(false);
 
+    expectRetriedDownload(fetchMock);
+    expect(consoleError).toHaveBeenCalledOnce();
     expect(consoleError).toHaveBeenCalledWith(
       "[agent-download-event] forward failed",
       error,
     );
   });
+
+  it("uses different download IDs for separate download requests", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await forward();
+    await forward();
+
+    const first = JSON.parse(fetchMock.mock.calls[0][1].body).downloadId;
+    const second = JSON.parse(fetchMock.mock.calls[1][1].body).downloadId;
+    expect(first).toMatch(UUID_PATTERN);
+    expect(second).toMatch(UUID_PATTERN);
+    expect(second).not.toBe(first);
+  });
 });
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function forward() {
+  return forwardAgentDownloadEvent({ headers: new Headers() }, { platform: "windows" });
+}
+
+function expectRetriedDownload(fetchMock: ReturnType<typeof vi.fn>) {
+  expect(fetchMock).toHaveBeenCalledTimes(2);
+  const first = fetchMock.mock.calls[0][1] as RequestInit;
+  const second = fetchMock.mock.calls[1][1] as RequestInit;
+  expect(JSON.parse(String(first.body)).downloadId).toMatch(UUID_PATTERN);
+  expect(second.body).toBe(first.body);
+  expect(second.signal).not.toBe(first.signal);
+}

@@ -19,7 +19,7 @@ const { compareVersions } = require("../services/agentVersion");
  *   agentVersion: import('../services/types').AgentVersionService,
  *   adminToken?: string | null,
  *   adminEvents?: {
- *     record: (type: string, payload: Record<string, unknown>) => Promise<unknown>,
+ *     record: (type: string, payload: Record<string, unknown>, opts?: {ingestionKey?: string}) => Promise<unknown>,
  *   } | null,
  * }} deps
  */
@@ -90,7 +90,13 @@ function buildAgentVersionRouter(deps) {
         const userAgent = headerStr(req, "user-agent");
         const referer = headerStr(req, "referer");
         const country = pickCountry(req);
-        const event = await adminEvents.record("agent_download", {
+        // The web hand-off reuses a UUID when retrying an uncertain write.
+        // Namespace it here so public input cannot collide with internal
+        // connection/support delivery keys. Legacy beacons remain supported.
+        const downloadId = typeof body.downloadId === "string" &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.downloadId)
+          ? body.downloadId.toLowerCase() : null;
+        const payload = {
           platform,
           version,
           channel,
@@ -98,7 +104,12 @@ function buildAgentVersionRouter(deps) {
           userAgent,
           referer,
           country,
-        });
+        };
+        const event = downloadId
+          ? await adminEvents.record("agent_download", payload, {
+            ingestionKey: `agent_download:${downloadId}`,
+          })
+          : await adminEvents.record("agent_download", payload);
         if (!event) {
           res.status(503).end();
           return;

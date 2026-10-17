@@ -191,6 +191,27 @@ and fall back to `date` only when neither source is available.
 | GET    | /v1/agent/releases                  | none         | Release history                  |
 | POST   | /v1/agent/releases                  | admin token  | Publish a new release            |
 
+### Admin download and install activity
+
+`POST /v1/agent/download-event` records a website installer hand-off. An
+optional UUID v4 `downloadId` deduplicates retries; the web server retries a
+transient failure once with the same ID without delaying the installer redirect.
+Legacy requests without this ID still record normally.
+
+The admin timeline also records `agent_connected` once per paired device after
+its first authenticated heartbeat. The **Installs** filter shows these confirmed
+connections with the account, platform and agent version. Downloads remain a
+separate count: a direct/shared installer or source install can connect without a
+website download event. Pairing intent or browser replay uploads alone do not
+produce an install notification.
+
+Deploy the API before the web retry change so download IDs are deduplicated
+before retries begin. Existing paired agents recover their missing connection
+event on their next heartbeat, dated to their original pairing time. Failed
+event writes retry on later heartbeats without disrupting the agent; no database
+backfill or new agent release is required. Unpaired installations cannot be
+associated with an account until pairing completes.
+
 ### Public site activity
 
 `GET /v1/site/stats` is public and returns only `agentDownloads`, `activeAgents`,

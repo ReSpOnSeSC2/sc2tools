@@ -8,6 +8,7 @@ const { supportEmailStateId } = require("./supportEmailScope");
 const EVENT_TYPES = Object.freeze({
   USER_SIGNUP: "user_signup",
   AGENT_DOWNLOAD: "agent_download",
+  AGENT_CONNECTED: "agent_connected",
   USER_MESSAGE: "user_message",
 });
 
@@ -28,7 +29,7 @@ const MESSAGE_BODY_MAX = 4000;
 
 /**
  * AdminEventsService — durable, queryable feed of admin-facing
- * notifications. Currently records two event types:
+ * notifications. Records signups, downloads, agent connections and messages:
  *
  *   - ``user_signup``     — fired when a Clerk webhook delivers a
  *                            ``user.created`` event OR a first-touch
@@ -39,6 +40,9 @@ const MESSAGE_BODY_MAX = 4000;
  *   - ``agent_download``  — fired when the public download endpoint
  *                            (`POST /v1/agent/download-event`) receives
  *                            a click beacon from the marketing page.
+ *   - ``agent_connected`` — confirmed by an authenticated agent heartbeat,
+ *                            once per paired device, including installs that
+ *                            bypassed the website download hand-off.
  *
  * Reads serve the admin dashboard's counters and notification feed.
  * Writes are real-time: when a Socket.io ``io`` is wired, each event
@@ -72,7 +76,7 @@ class AdminEventsService {
    *
    * @param {string} type
    * @param {Record<string, unknown>} payload
-   * @param {{ ingestionKey?: string }} [opts] Internal durable delivery key.
+   * @param {{ ingestionKey?: string, createdAt?: Date }} [opts] Internal delivery metadata.
    * @returns {Promise<AdminEventDoc | null>}
    */
   async record(type, payload, opts = {}) {
@@ -85,7 +89,8 @@ class AdminEventsService {
         eventId: crypto.randomUUID(),
         type,
         payload: safePayload,
-        createdAt: new Date(),
+        createdAt: opts.createdAt instanceof Date && Number.isFinite(opts.createdAt.getTime())
+          ? opts.createdAt : new Date(),
         readAt: null,
         ...(opts.ingestionKey ? { ingestionKey: opts.ingestionKey } : {}),
       },
@@ -133,8 +138,51 @@ class AdminEventsService {
       }
       return null;
     }
-    this._broadcast(doc);
+    // Connection rows intentionally store no email/Clerk id: even an agent
+    // insert racing account deletion cannot leave identity behind. Resolve
+    // account details only for the live response, just as list() does.
+    const [visible] = type === EVENT_TYPES.AGENT_CONNECTED
+      ? await this._hydrateIdentityEmails([doc]) : [doc];
+    this._broadcast(visible);
     return doc;
+  }
+
+  /**
+   * A heartbeat confirms that a paired agent is running. Keep this distinct
+   * from anonymous website download clicks. The device id is the delivery
+   * key, so concurrent heartbeats and retries never duplicate a notification.
+   * Recovering an older device preserves its pairing date in the timeline.
+   *
+   * @param {{ _id?: unknown, userId?: unknown, createdAt?: unknown,
+   *   agentOs?: unknown, agentVersion?: unknown }} device
+   * @returns {Promise<AdminEventDoc | null>}
+   */
+  async recordAgentConnection(device) {
+    const deviceId = device._id ? String(device._id) : "";
+    const userId = toCleanString(device.userId, 64);
+    if (!deviceId || !userId) return null;
+    try {
+      const user = await this.db.users.findOne(
+        { userId },
+        { projection: { _id: 1 } },
+      );
+      if (!user) return null;
+      return await this.record(EVENT_TYPES.AGENT_CONNECTED, {
+        deviceId,
+        userId,
+        platform: agentPlatform(device.agentOs),
+        version: device.agentVersion,
+        source: "heartbeat",
+      }, {
+        ingestionKey: `agent_connected:${deviceId}`,
+        ...(device.createdAt instanceof Date ? { createdAt: device.createdAt } : {}),
+      });
+    } catch (err) {
+      if (this.logger) {
+        this.logger.warn({ err, deviceId }, "admin_agent_connection_failed");
+      }
+      return null;
+    }
   }
 
   /**
@@ -170,7 +218,7 @@ class AdminEventsService {
     // query so existing notifications become useful without a migration.
     // This is response-only: event history and GDPR-anonymized rows remain
     // untouched.
-    const items = await this._hydrateSignupEmails(page);
+    const items = await this._hydrateIdentityEmails(page);
     const nextBefore = hasMore && items.length > 0
       ? items[items.length - 1].createdAt
       : null;
@@ -339,17 +387,17 @@ class AdminEventsService {
   }
 
   /**
-   * Batch-decorate legacy signup rows whose durable event payload has no
+   * Batch-decorate signup/connection rows whose durable event payload has no
    * email but whose user record now does. Returns new event objects only
    * for hydrated rows; never writes to either collection.
    *
    * @param {AdminEventDoc[]} items
    * @returns {Promise<AdminEventDoc[]>}
    */
-  async _hydrateSignupEmails(items) {
-    const targets = items.filter(signupNeedsEmail);
+  async _hydrateIdentityEmails(items) {
+    const targets = items.filter(identityNeedsEmail);
     if (targets.length === 0) return items;
-    const query = signupEmailUserQuery(targets);
+    const query = identityEmailUserQuery(targets);
     if (!query) return items;
     try {
       const users = await this.db.users
@@ -358,12 +406,12 @@ class AdminEventsService {
           { projection: { _id: 0, userId: 1, clerkUserId: 1, email: 1 } },
         )
         .toArray();
-      return hydrateSignupRows(items, users);
+      return hydrateIdentityRows(items, users);
     } catch (err) {
       // Email decoration is optional. A users-collection blip must not hide
       // the durable notification feed that was already read successfully.
       if (this.logger) {
-        this.logger.warn({ err }, "admin_signup_email_hydration_failed");
+        this.logger.warn({ err }, "admin_event_email_hydration_failed");
       }
       return items;
     }
@@ -453,10 +501,10 @@ class AdminEventsService {
 }
 
 /** @param {AdminEventDoc} item */
-function signupNeedsEmail(item) {
+function identityNeedsEmail(item) {
   return Boolean(
     item &&
-    item.type === EVENT_TYPES.USER_SIGNUP &&
+    (item.type === EVENT_TYPES.USER_SIGNUP || item.type === EVENT_TYPES.AGENT_CONNECTED) &&
     !item.anonymizedAt &&
     item.payload &&
     (item.payload.email == null || item.payload.email === ""),
@@ -467,7 +515,7 @@ function signupNeedsEmail(item) {
  * @param {AdminEventDoc[]} items
  * @returns {Record<string, unknown> | null}
  */
-function signupEmailUserQuery(items) {
+function identityEmailUserQuery(items) {
   const userIds = new Set();
   const clerkUserIds = new Set();
   for (const item of items) {
@@ -493,26 +541,32 @@ function signupEmailUserQuery(items) {
  * @param {Record<string, unknown>[]} users
  * @returns {AdminEventDoc[]}
  */
-function hydrateSignupRows(items, users) {
+function hydrateIdentityRows(items, users) {
   const byUserId = new Map();
   const byClerkUserId = new Map();
   for (const user of users) {
     const email = toCleanString(user.email, 254);
-    if (!email) continue;
     const userId = toCleanString(user.userId, 64);
     const clerkUserId = toCleanString(user.clerkUserId, 64);
-    if (userId) byUserId.set(userId, email);
-    if (clerkUserId) byClerkUserId.set(clerkUserId, email);
+    const identity = { email, clerkUserId };
+    if (userId) byUserId.set(userId, identity);
+    if (clerkUserId) byClerkUserId.set(clerkUserId, identity);
   }
   return items.map((item) => {
-    if (!signupNeedsEmail(item)) return item;
+    if (!identityNeedsEmail(item)) return item;
     const userId = toCleanString(item.payload.userId, 64);
     const clerkUserId = toCleanString(item.payload.clerkUserId, 64);
-    const email =
+    const identity =
       (userId ? byUserId.get(userId) : null) ||
       (clerkUserId ? byClerkUserId.get(clerkUserId) : null) ||
       null;
-    return email ? { ...item, payload: { ...item.payload, email } } : item;
+    if (!identity) return item;
+    if (item.type === EVENT_TYPES.AGENT_CONNECTED) {
+      return { ...item, payload: { ...item.payload,
+        email: identity.email || null, clerkUserId: identity.clerkUserId || null } };
+    }
+    return identity.email
+      ? { ...item, payload: { ...item.payload, email: identity.email } } : item;
   });
 }
 
@@ -543,6 +597,19 @@ function sanitisePayload(type, raw) {
       country: toCleanString(payload.country, 2) || null,
     };
   }
+  if (type === EVENT_TYPES.AGENT_CONNECTED) {
+    const platform = toCleanString(payload.platform, 16).toLowerCase();
+    return {
+      userId: toCleanString(payload.userId, 64) || null,
+      // Identity is response-only, resolved from the current users row.
+      clerkUserId: null,
+      email: null,
+      deviceId: toCleanString(payload.deviceId, 64) || null,
+      platform: VALID_PLATFORMS.has(platform) ? platform : "unknown",
+      version: toCleanString(payload.version, 32) || null,
+      source: "heartbeat",
+    };
+  }
   if (type === EVENT_TYPES.USER_MESSAGE) {
     // A logged-in user's bug report / message. Identity (userId,
     // clerkUserId, email) is attached server-side from the auth
@@ -562,6 +629,15 @@ function sanitisePayload(type, raw) {
     };
   }
   return payload;
+}
+
+/** @param {unknown} raw */
+function agentPlatform(raw) {
+  const os = toCleanString(raw, 32).toLowerCase();
+  if (os === "windows" || os === "win32") return "windows";
+  if (os === "darwin" || os === "macos") return "macos";
+  if (os === "linux") return "linux";
+  return "unknown";
 }
 
 /**

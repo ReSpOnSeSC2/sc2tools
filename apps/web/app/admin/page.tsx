@@ -79,7 +79,7 @@ export default function AdminDashboardPage() {
       <header className="space-y-2">
         <h1 className="text-3xl font-bold">Dashboard</h1>
         <p className="text-text-muted">
-          Live signup and download activity, plus per-collection
+          Live signup, download, and agent connection activity, plus per-collection
           storage breakdown for this MongoDB cluster.
         </p>
       </header>
@@ -208,7 +208,7 @@ function RecentActivityCard({
         <div className="px-4 py-6 text-caption text-danger">{error}</div>
       ) : events.length === 0 ? (
         <div className="px-4 py-6 text-caption text-text-muted">
-          No activity yet — new signups and agent downloads will appear here.
+          No activity yet — new signups, agent downloads, and confirmed installs will appear here.
         </div>
       ) : (
         <ul className="divide-y divide-border">

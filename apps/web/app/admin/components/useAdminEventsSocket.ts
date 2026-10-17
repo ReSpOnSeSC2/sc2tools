@@ -9,7 +9,7 @@ import type { AdminEvent } from "./adminTypes";
 /**
  * Subscribe the current admin session to the live ``admin:event``
  * fan-out so the dashboard counters and the notification feed
- * update the moment a signup or download lands — no polling. The
+ * update the moment a signup, download, or agent connection lands. The
  * server only joins the ``admin`` Socket.io room for sockets whose
  * Clerk user id is on the ``SC2TOOLS_ADMIN_USER_IDS`` allowlist, so
  * a non-admin's session is a no-op even if it called this hook.

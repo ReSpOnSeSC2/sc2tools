@@ -28,9 +28,13 @@ class DevicePairingsService {
    *   devicePairings: import('mongodb').Collection,
    *   deviceTokens: import('mongodb').Collection,
    * }} db
+   * @param {{ adminEvents?: import('./adminEvents').AdminEventsService,
+   *   logger?: import('pino').Logger }} [opts]
    */
-  constructor(db) {
+  constructor(db, opts = {}) {
     this.db = db;
+    this.adminEvents = opts.adminEvents || null;
+    this.logger = opts.logger || null;
   }
 
   /**
@@ -297,10 +301,32 @@ class DevicePairingsService {
       const trimmed = body.hostname.trim().slice(0, 64);
       if (trimmed) update.hostname = trimmed;
     }
-    await this.db.deviceTokens.updateOne(
-      { userId, tokenHash },
+    const device = await this.db.deviceTokens.findOneAndUpdate(
+      { userId, tokenHash, revokedAt: null },
       { $set: update },
+      {
+        returnDocument: "after",
+        projection: { _id: 1, userId: 1, createdAt: 1, agentVersion: 1,
+          agentOs: 1, connectedEventRecordedAt: 1 },
+      },
     );
+    if (device && !device.connectedEventRecordedAt && this.adminEvents) {
+      // A notification outage must not break the agent. Leave the marker
+      // unset until the durable write succeeds; its next heartbeat retries.
+      try {
+        const event = await this.adminEvents.recordAgentConnection(device);
+        if (event) {
+          await this.db.deviceTokens.updateOne(
+            { _id: device._id, userId, revokedAt: null },
+            { $set: { connectedEventRecordedAt: now } },
+          );
+        }
+      } catch (err) {
+        if (this.logger) {
+          this.logger.warn({ err, deviceId: String(device._id) }, "agent_connection_notification_failed");
+        }
+      }
+    }
     return { receivedAt: now };
   }
 }

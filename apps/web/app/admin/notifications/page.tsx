@@ -27,12 +27,13 @@ const FILTER_LABEL: Record<Filter, string> = {
   all: "All",
   user_signup: "Signups",
   agent_download: "Downloads",
+  agent_connected: "Installs",
   user_message: "Messages",
 };
 
 /**
  * /admin/notifications — full chronological feed of signup +
- * agent-download events with a filter toggle and a "mark all read"
+ * agent download and connection events with a filter toggle and a "mark all read"
  * action. Reuses the dashboard's Socket.io subscription to splice
  * brand-new events onto the top of the list the moment they land.
  */
@@ -116,7 +117,7 @@ export default function AdminNotificationsPage() {
         <div className="space-y-2">
           <h1 className="text-3xl font-bold">Notifications</h1>
           <p className="text-text-muted">
-            Live feed of new signups, agent downloads, and user messages.
+            Live feed of new signups, agent downloads, confirmed installs, and user messages.
             Updates in real time while this page is open.
           </p>
         </div>
@@ -156,7 +157,7 @@ export default function AdminNotificationsPage() {
             Filter
           </span>
           {(
-            ["all", "user_signup", "agent_download", "user_message"] as Filter[]
+            ["all", "user_signup", "agent_download", "agent_connected", "user_message"] as Filter[]
           ).map((f) => {
             const isActive = filter === f;
             return (
@@ -193,7 +194,7 @@ export default function AdminNotificationsPage() {
       ) : !merged || merged.length === 0 ? (
         <Card padded>
           <p className="text-text-muted">
-            No events yet. New signups, agent downloads, and user messages
+            No events yet. New signups, agent downloads, confirmed installs, and user messages
             will appear here as they happen.
           </p>
         </Card>

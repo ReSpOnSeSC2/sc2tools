@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 import { AdminEventRow } from "./AdminEventRow";
-import type { AdminEvent } from "./adminTypes";
+import type { AdminEvent, AdminEventAgentConnectedPayload } from "./adminTypes";
 
 afterEach(cleanup);
 
@@ -70,5 +70,54 @@ describe("AdminEventRow signup identity", () => {
     );
 
     expect(screen.getByText(/Email unavailable · via first sign-in/)).toBeTruthy();
+  });
+});
+
+function connectedEvent(payload: Partial<AdminEventAgentConnectedPayload> = {}): AdminEvent {
+  return {
+    eventId: "connected-1",
+    type: "agent_connected",
+    payload: {
+      userId: "internal-user-id",
+      clerkUserId: "user_clerk_id",
+      email: "installed@example.com",
+      deviceId: "device-1",
+      platform: "windows",
+      version: "0.18.9",
+      source: "heartbeat",
+      ...payload,
+    },
+    createdAt: new Date().toISOString(),
+    readAt: null,
+  };
+}
+
+describe("AdminEventRow confirmed installs", () => {
+  it("identifies the installed agent and account separately from download clicks", () => {
+    render(<ul><AdminEventRow event={connectedEvent()} unread /></ul>);
+
+    expect(screen.getByText("Agent connected · Windows v0.18.9")).toBeTruthy();
+    expect(screen.getByText("installed@example.com · confirmed by agent")).toBeTruthy();
+    expect(screen.queryByText(/Agent download/)).toBeNull();
+    expect(screen.queryByText(/user_clerk_id/)).toBeNull();
+  });
+
+  it.each([
+    [{ email: null }, "user_clerk_id"],
+    [{ email: null, clerkUserId: null }, "internal-user-id"],
+    [{ email: null, clerkUserId: null, userId: null }, "Account unavailable"],
+  ])("keeps a useful identity while email is unavailable", (payload, identity) => {
+    render(<ul><AdminEventRow event={connectedEvent(payload)} unread={false} /></ul>);
+
+    expect(screen.getByText(`${identity} · confirmed by agent`)).toBeTruthy();
+  });
+
+  it("omits unavailable platform and version for older agents", () => {
+    render(
+      <ul><AdminEventRow event={connectedEvent({ platform: "unknown", version: null })} unread /></ul>,
+    );
+
+    expect(screen.getByText("Agent connected")).toBeTruthy();
+    expect(screen.queryByText(/Unknown/)).toBeNull();
   });
 });

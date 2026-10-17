@@ -533,7 +533,7 @@ export type GlobalPlayerGamesResp = {
   nextBefore: string | null;
 };
 
-export type AdminEventType = "user_signup" | "agent_download" | "user_message";
+export type AdminEventType = "user_signup" | "agent_download" | "agent_connected" | "user_message";
 
 export type AdminEventSignupPayload = {
   clerkUserId: string | null;
@@ -564,12 +564,23 @@ export type AdminEventDownloadPayload = {
   country: string | null;
 };
 
+export type AdminEventAgentConnectedPayload = {
+  userId: string | null;
+  clerkUserId: string | null;
+  email: string | null;
+  deviceId: string | null;
+  platform: "windows" | "macos" | "linux" | "unknown";
+  version: string | null;
+  source: "heartbeat";
+};
+
 export type AdminEvent = {
   eventId: string;
   type: AdminEventType;
   payload:
     | AdminEventSignupPayload
     | AdminEventDownloadPayload
+    | AdminEventAgentConnectedPayload
     | AdminEventUserMessagePayload;
   createdAt: string;
   readAt: string | null;

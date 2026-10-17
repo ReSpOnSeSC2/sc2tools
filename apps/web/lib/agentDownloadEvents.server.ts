@@ -1,5 +1,8 @@
+import { randomUUID } from "node:crypto";
+
 const DEFAULT_API_BASE = "http://localhost:8080";
 const FORWARD_TIMEOUT_MS = 2_500;
+const MAX_DELIVERY_ATTEMPTS = 2;
 
 export type AgentDownloadEventPayload = {
   platform: string;
@@ -17,8 +20,9 @@ type RequestWithHeaders = {
  * This runs inside a Next.js route rather than in the browser so download
  * tracking does not depend on sendBeacon support, privacy extensions, or a
  * page remaining alive after the installer navigation starts. Failures are
- * logged and returned to the caller, but never prevent the installer itself
- * from being served.
+ * retried once for transient errors, then logged and returned to the caller,
+ * but never prevent the installer itself from being served. Both attempts
+ * carry one download ID so an uncertain first response cannot count twice.
  */
 export async function forwardAgentDownloadEvent(
   req: RequestWithHeaders,
@@ -38,30 +42,37 @@ export async function forwardAgentDownloadEvent(
   if (country) headers["x-geo-country"] = country;
 
   const body = JSON.stringify({
+    downloadId: randomUUID(),
     platform: typeof payload.platform === "string" ? payload.platform : "",
     version: typeof payload.version === "string" ? payload.version : "",
     channel: typeof payload.channel === "string" ? payload.channel : "stable",
   });
 
-  try {
-    const res = await fetch(`${apiBase()}/v1/agent/download-event`, {
-      method: "POST",
-      headers,
-      body,
-      cache: "no-store",
-      signal: AbortSignal.timeout(FORWARD_TIMEOUT_MS),
-    });
-    if (!res.ok) {
-      console.error(
-        `[agent-download-event] forward failed with ${res.status}`,
-      );
+  for (let attempt = 0; attempt < MAX_DELIVERY_ATTEMPTS; attempt += 1) {
+    const lastAttempt = attempt === MAX_DELIVERY_ATTEMPTS - 1;
+    try {
+      const res = await fetch(`${apiBase()}/v1/agent/download-event`, {
+        method: "POST",
+        headers,
+        body,
+        cache: "no-store",
+        signal: AbortSignal.timeout(FORWARD_TIMEOUT_MS),
+      });
+      if (res.ok) return true;
+      const retryable = res.status === 429 || (res.status >= 500 && res.status < 600);
+      if (lastAttempt || !retryable) {
+        console.error(
+          `[agent-download-event] forward failed with ${res.status}`,
+        );
+        return false;
+      }
+    } catch (err) {
+      if (!lastAttempt) continue;
+      console.error("[agent-download-event] forward failed", err);
       return false;
     }
-    return true;
-  } catch (err) {
-    console.error("[agent-download-event] forward failed", err);
-    return false;
   }
+  return false;
 }
 
 function apiBase(): string {

@@ -1,4 +1,8 @@
-import type { AdminEvent, AdminEventSignupPayload } from "./adminTypes";
+import type {
+  AdminEvent,
+  AdminEventAgentConnectedPayload,
+  AdminEventSignupPayload,
+} from "./adminTypes";
 
 /**
  * Add a new live event or replace an enriched copy of one already in the feed.
@@ -17,7 +21,7 @@ export function upsertLiveAdminEvent(
  * Reconcile fetched rows with socket updates without letting an enrichment
  * make an older event look new. The feed remains ordered by the event's
  * original creation time, while irreversible read/anonymization state and a
- * newly resolved signup email survive a stale copy of the same event.
+ * newly resolved account email survive a stale copy of the same event.
  */
 export function mergeAdminEventFeed(
   fetched: readonly AdminEvent[],
@@ -66,13 +70,17 @@ function reconcileAdminEvent(
     readAt: incoming.readAt || existing.readAt,
   };
 
-  if (existing.type === "user_signup" && incoming.type === "user_signup") {
-    const oldPayload = existing.payload as AdminEventSignupPayload;
-    const newPayload = incoming.payload as AdminEventSignupPayload;
+  if (
+    existing.type === incoming.type &&
+    (existing.type === "user_signup" || existing.type === "agent_connected")
+  ) {
+    const oldPayload = existing.payload as AdminEventSignupPayload | AdminEventAgentConnectedPayload;
+    const newPayload = incoming.payload as AdminEventSignupPayload | AdminEventAgentConnectedPayload;
     next.payload = {
       ...oldPayload,
       ...newPayload,
       email: newPayload.email || oldPayload.email,
+      clerkUserId: newPayload.clerkUserId || oldPayload.clerkUserId,
     };
   }
 

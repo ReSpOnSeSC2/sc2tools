@@ -13,6 +13,12 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Admin activity now records the first verified agent connection per paired
+  device, with account identity, platform and version under **Installs**.
+  Missing connection events recover on the next heartbeat without another
+  agent update. Website download tracking retries temporary failures without
+  double-counting; confirmed installs stay separate from download requests.
+
 - Support email imports now require the **SC2Tools Support** Gmail label, so
   unrelated inbox mail stays out of admin Messages. Missing labels stop intake;
   newly labeled older reports are picked up without duplicating existing copies.

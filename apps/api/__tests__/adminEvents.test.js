@@ -365,6 +365,38 @@ describe("admin notification events", () => {
     record.mockRestore();
   });
 
+  test("download delivery retries record and broadcast only once per download id", async () => {
+    const downloadId = crypto.randomUUID();
+    const emit = jest.fn();
+    const oldIo = services.adminEvents.io;
+    services.adminEvents.io = { to: jest.fn(() => ({ emit })) };
+    try {
+      const responses = await Promise.all(Array.from({ length: 3 }, () =>
+        request(app).post("/v1/agent/download-event").send({
+          downloadId, platform: "windows", version: "0.18.12",
+        }),
+      ));
+      expect(responses.every((res) => res.status === 204)).toBe(true);
+      expect(await db.adminEvents.countDocuments({ type: "agent_download" })).toBe(1);
+      expect(emit).toHaveBeenCalledTimes(1);
+
+      // Different requests are still separate downloads, even on the same
+      // platform/IP/version. An arbitrary caller key is never trusted.
+      await request(app).post("/v1/agent/download-event").send({
+        downloadId: crypto.randomUUID(), platform: "windows", version: "0.18.12",
+      });
+      await request(app).post("/v1/agent/download-event").send({
+        downloadId: "agent_connected:private-device", platform: "windows",
+      });
+      expect(await db.adminEvents.countDocuments({ type: "agent_download" })).toBe(3);
+      expect(await db.adminEvents.findOne({
+        ingestionKey: "agent_connected:private-device",
+      })).toBeNull();
+    } finally {
+      services.adminEvents.io = oldIo;
+    }
+  });
+
   test("admin events list returns newest first", async () => {
     await services.adminEvents.record("user_signup", {
       clerkUserId: "clerk_a",
@@ -475,7 +507,7 @@ describe("admin notification events", () => {
       expect(row.payload.email).toBeNull();
       expect(warn).toHaveBeenCalledWith(
         expect.objectContaining({ err: expect.any(Error) }),
-        "admin_signup_email_hydration_failed",
+        "admin_event_email_hydration_failed",
       );
     } finally {
       find.mockRestore();
