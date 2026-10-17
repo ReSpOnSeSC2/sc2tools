@@ -12,6 +12,7 @@ const harness = vi.hoisted(() => ({
     | { role: "admin" | "coach" | "student" | "none" }
     | undefined,
   signedIn: true,
+  getToken: vi.fn(async () => null),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -19,6 +20,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock("@clerk/nextjs", () => ({
+  useAuth: () => ({
+    getToken: harness.getToken,
+    userId: harness.signedIn ? "clerk_u1" : null,
+    isLoaded: true,
+    isSignedIn: harness.signedIn,
+  }),
   UserButton: () => <div data-testid="user-button" />,
   SignedIn: ({ children }: { children: ReactNode }) =>
     harness.signedIn ? <>{children}</> : null,
