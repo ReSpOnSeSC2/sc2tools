@@ -131,4 +131,36 @@ describe("shared verified public YouTube archive index", () => {
     expect(await service.resolveChannel("connected",INPUT)).toMatchObject({fresh:false,vods:[VOD]});
     expect(integration.resolvePublicYoutubeBroadcasts).toHaveBeenCalledTimes(1);
   });
+  test("does not rescan when a concurrent stale cache read finishes after a refresh", async () => {
+    let markSecondSnapshotReady, releaseSecondRead;
+    const secondSnapshotReady = new Promise(resolve => { markSecondSnapshotReady = resolve; });
+    const secondReadBlocked = new Promise(resolve => { releaseSecondRead = resolve; });
+    const originalFindOne = db.publicYoutubeArchives.findOne.bind(db.publicYoutubeArchives);
+    const findOne = jest.spyOn(db.publicYoutubeArchives, "findOne")
+      .mockImplementationOnce(originalFindOne)
+      .mockImplementationOnce(async (...args) => {
+        const snapshot = await originalFindOne(...args);
+        markSecondSnapshotReady();
+        await secondReadBlocked;
+        return snapshot;
+      });
+    fetchImpl.mockImplementation(async () => {
+      await secondSnapshotReady;
+      return new Response(PAGE, { status: 200 });
+    });
+    try {
+      const first = service.resolveChannel("connected", INPUT);
+      const second = service.resolveChannel("connected", INPUT);
+      await secondSnapshotReady;
+      const firstResult = await first;
+      expect(firstResult).toMatchObject({ fresh: true, vods: [VOD] });
+      releaseSecondRead();
+      expect(await second).toEqual(firstResult);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+      expect(integration.resolvePublicYoutubeBroadcasts).toHaveBeenCalledTimes(1);
+    } finally {
+      releaseSecondRead();
+      findOne.mockRestore();
+    }
+  });
 });

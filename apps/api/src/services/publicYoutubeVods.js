@@ -43,12 +43,8 @@ class PublicYoutubeVodsService {
     if (!normalized.streamsUrls.length) return { vods: [], fresh: false };
     const key = normalized.cacheKey;
     const stored = await this.collection.findOne({ _id: key });
-    const fetchedAt = stored?.fetchedAt instanceof Date ? stored.fetchedAt.getTime() : 0;
-    const age = this.now() - fetchedAt;
-    const vods = age >= 0 && age < MAX_AGE_MS ? validVods(stored?.vods, stored?.channelId, this.now()) : [];
-    const ttl = vods.some((vod) => vod.ongoing) ? 30_000 : REFRESH_MS;
-    if (fetchedAt && age >= 0 && age < ttl) return { vods, fresh: true };
-    const fallback = { vods, fresh: false };
+    const fallback = cachedResult(stored, this.now());
+    if (fallback.fresh) return fallback;
     if (!userId || typeof this.integrations?.resolvePublicYoutubeBroadcasts !== "function") return fallback;
     // A viewer without a YouTube connection still receives the shared cache.
     // Do not fetch channel pages when no official metadata lookup is possible.
@@ -57,7 +53,14 @@ class PublicYoutubeVodsService {
     if ((this.retryAfter.get(key) || 0) > this.now()) return fallback;
     const pending = this.inflight.get(key);
     if (pending) return pending;
-    const job = this.refresh(userId, normalized, stored)
+    const job = (async () => {
+      // A scan can finish while this request awaits Mongo or its grant.
+      // Re-read inside the reserved job before starting another provider scan.
+      const latest = await this.collection.findOne({ _id: key });
+      const cached = cachedResult(latest, this.now());
+      if (cached.fresh) return cached;
+      return this.refresh(userId, normalized, latest);
+    })()
       .catch((err) => {
         this.retryAfter.set(key, this.now() + RETRY_MS);
         while (this.retryAfter.size > 256) {
@@ -133,6 +136,15 @@ class PublicYoutubeVodsService {
     this.log?.info?.({ provider: "youtube", archiveCount: vods.length, videosScanned: videoIds.length }, "public_youtube_index_refreshed");
     return { vods, fresh: true };
   }
+}
+
+/** @param {any} stored @param {number} now @returns {{vods:any[],fresh:boolean}} */
+function cachedResult(stored, now) {
+  const fetchedAt = stored?.fetchedAt instanceof Date ? stored.fetchedAt.getTime() : 0;
+  const age = now - fetchedAt;
+  const vods = age >= 0 && age < MAX_AGE_MS ? validVods(stored?.vods, stored?.channelId, now) : [];
+  const ttl = vods.some((vod) => vod.ongoing) ? 30_000 : REFRESH_MS;
+  return { vods, fresh: !!fetchedAt && age >= 0 && age < ttl };
 }
 
 /** @param {any} rows @param {string} channelId @param {number} now @returns {any[]} */
