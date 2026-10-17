@@ -35,7 +35,8 @@ type Route = {
 const ROUTES: Route[] = [
   { path: "/", priority: 1.0, changeFrequency: "weekly", lastModified: "2026-09-29" },
   { path: "/download", priority: 0.9, changeFrequency: "weekly", lastModified: "2026-09-29" },
-  { path: "/stream-studio", priority: 0.9, changeFrequency: "monthly", lastModified: "2026-09-29" },
+  { path: "/stream-studio", priority: 0.9, changeFrequency: "monthly", lastModified: "2026-10-16" },
+  { path: "/stream-studio/learn", priority: 0.8, changeFrequency: "monthly", lastModified: "2026-10-16" },
   { path: "/community", priority: 0.8, changeFrequency: "daily" },
   { path: "/builds", priority: 0.7, changeFrequency: "daily", lastModified: "2026-06-01" },
   { path: "/definitions", priority: 0.5, changeFrequency: "monthly", lastModified: "2026-09-04" },

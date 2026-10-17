@@ -24,6 +24,8 @@ describe("/stream-studio", () => {
     expect(h1s[0].textContent).toContain("StarCraft II overlays for OBS");
     const downloads = screen.getAllByRole("link", { name: /Download the free agent/ });
     expect(downloads[0].getAttribute("href")).toBe("/download");
+    expect(screen.getByRole("link", { name: /New here\? Take the Stream Studio crash course/ }).getAttribute("href")).toBe("/stream-studio/learn");
+    expect(screen.getByRole("link", { name: /Learn the setup and explore every widget/ }).getAttribute("href")).toBe("/stream-studio/learn");
     expect(screen.queryByRole("link", { name: /analyze a replay in your browser/ })).toBeNull();
   });
 

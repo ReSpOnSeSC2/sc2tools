@@ -9,7 +9,8 @@
  */
 
 import type { ReactNode } from "react";
-import { LifeBuoy, Mail } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, BookOpen, LifeBuoy, Mail } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { ChatCommandsCard } from "./ChatCommandsCard";
 
@@ -104,6 +105,15 @@ export function SettingsHelp() {
         </HelpSection>
 
         <HelpSection title="OBS overlay setup">
+          <Link
+            href="/stream-studio/learn"
+            className="inline-flex min-h-11 items-center gap-2 rounded-sm font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <BookOpen className="h-4 w-4 shrink-0" aria-hidden />
+            Stream Studio crash course & widget guides
+            <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+          </Link>
+          <p>Learn what each widget does, choose a starting setup, and follow the steps to put it in OBS.</p>
           <Step n={1}>
             In <b className="text-text">Settings → Overlay</b>, create (or
             copy) an overlay token — the token IS the key, so treat the URLs

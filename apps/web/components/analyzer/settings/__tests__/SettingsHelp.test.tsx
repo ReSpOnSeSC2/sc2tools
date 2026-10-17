@@ -29,6 +29,9 @@ describe("SettingsHelp", () => {
     expect(
       screen.getByRole("link", { name: "responsecoaching@gmail.com" }),
     ).toBeTruthy();
+    expect(
+      screen.getByRole("link", { name: "Stream Studio crash course & widget guides" }).getAttribute("href"),
+    ).toBe("/stream-studio/learn");
     // The commands card is embedded with the full command list.
     expect(screen.getByText("!rank")).toBeTruthy();
     expect(screen.getByText("!opponent")).toBeTruthy();

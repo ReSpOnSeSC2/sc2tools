@@ -90,6 +90,13 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Stream Studio crash course and widget field guide** — five practical
+  lessons with saved progress, starter setups, and searchable explanations
+  for all 31 widgets. Each guide covers what viewers see, when the widget
+  appears, the source it needs, setup and testing, and troubleshooting.
+  Open it from Stream Studio, Help, the footer, or **How it works** beside
+  any widget in Overlay settings.
+
 - **YouTube setup defaults in Agent 0.18.5** select the only available channel
   and suggest distinct reusable keys when their roles are unambiguous. Fresh
   setup starts with Public visibility, Not made for kids, automatic next-session

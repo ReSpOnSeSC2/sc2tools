@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import {
   Plus,
@@ -11,6 +12,8 @@ import {
   Square,
   Sparkles,
   RefreshCw,
+  BookOpen,
+  ArrowUpRight,
 } from "lucide-react";
 import { io } from "socket.io-client";
 import { apiCall, useApi, API_BASE, type ClientApiError } from "@/lib/clientApi";
@@ -548,6 +551,28 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
     <div className="space-y-6">
       {/* Browser-import users without a paired agent: the overlay's live data needs it. */}
       <OverlayAgentUpsell />
+      <Card>
+        <div className="flex items-start gap-3">
+          <BookOpen className="mt-0.5 h-5 w-5 shrink-0 text-accent-cyan" aria-hidden />
+          <div className="min-w-0">
+            <h2 className="text-body-lg font-semibold text-text">Build your first stream setup</h2>
+            <p className="mt-1 text-body text-text-muted">
+              Follow the crash course from your first Browser Source to a complete scene.
+              Explore what each widget shows, when it appears, and how to set it up.
+            </p>
+            <Link
+              href="/stream-studio/learn"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-sm text-body font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              Open the Stream Studio crash course
+              <span className="sr-only">(opens in a new tab)</span>
+              <ArrowUpRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </div>
+        </div>
+      </Card>
       <Section
         title="OBS Browser Source URLs"
         description="Copy the URLs you want into OBS. Each widget is transparent and positioned independently. The URLs share the same socket connection so your overlay stays in sync."
@@ -796,7 +821,7 @@ function AllInOneRow({
           All-in-one URL
         </span>
         <span className="text-caption text-text-muted">
-          One Browser Source · all enabled widgets composited together
+          One Browser Source · core game widgets together; chat and studio widgets use their own URLs
         </span>
       </div>
       <UrlRow url={url} compact={false} />
@@ -905,6 +930,16 @@ function WidgetList({
                     {w.label}
                   </div>
                   <div className="break-words text-caption text-text-dim">{hint}</div>
+                  <Link
+                    href={`/stream-studio/learn?widget=${encodeURIComponent(w.id)}#widget-library`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${w.label}: how it works (opens in a new tab)`}
+                    className="mt-1 inline-flex min-h-11 items-center gap-1 rounded-sm text-caption font-medium text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    How it works
+                    <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
+                  </Link>
                 </div>
               </div>
               <div className="min-w-0 flex-1">

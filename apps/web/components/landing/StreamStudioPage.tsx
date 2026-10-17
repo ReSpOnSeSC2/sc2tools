@@ -14,7 +14,7 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, Download, MessagesSquare, MonitorPlay, Swords, Trophy } from "lucide-react";
+import { ArrowRight, BookOpen, Download, MessagesSquare, MonitorPlay, Swords, Trophy } from "lucide-react";
 import { PRODUCT_FACTS } from "@/lib/productFacts";
 import { OVERLAY_CREDIT_TEXT } from "@/lib/overlayCredit";
 import { StreamManagerShowcase } from "@/components/landing/StreamManagerShowcase";
@@ -167,6 +167,14 @@ function Hero() {
           <PageCta href="/sign-up">Create a free account</PageCta>
         </div>
         <p className="mt-4 text-caption text-text-dim">Free forever · OBS Studio and Streamlabs · The agent runs on Windows</p>
+        <Link
+          href="/stream-studio/learn"
+          className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-sm text-body font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <BookOpen className="h-5 w-5 shrink-0" aria-hidden />
+          New here? Take the Stream Studio crash course
+          <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
+        </Link>
       </div>
       <figure className="min-w-0 lg:col-span-7">
         <Image
@@ -240,6 +248,16 @@ function Setup() {
           </li>
         ))}
       </ol>
+      <p className="mt-6 text-body text-text-muted">
+        Want a walkthrough?{" "}
+        <Link
+          href="/stream-studio/learn"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-sm font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          Learn the setup and explore every widget
+          <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
+      </p>
     </section>
   );
 }

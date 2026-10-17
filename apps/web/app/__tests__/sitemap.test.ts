@@ -95,7 +95,8 @@ describe("sitemap", () => {
     const rows = await sitemap();
     const home = rows.find((row) => row.url === `${SITE}/`);
     expect(home?.lastModified).toEqual(new Date("2026-09-29"));
-    expect(rows.find((row) => row.url === `${SITE}/stream-studio`)?.lastModified).toEqual(new Date("2026-09-29"));
+    expect(rows.find((row) => row.url === `${SITE}/stream-studio`)?.lastModified).toEqual(new Date("2026-10-16"));
+    expect(rows.find((row) => row.url === `${SITE}/stream-studio/learn`)?.lastModified).toEqual(new Date("2026-10-16"));
     // A listing fed by the API carries no invented date.
     const community = rows.find((row) => row.url === `${SITE}/community`);
     expect(community).toBeTruthy();

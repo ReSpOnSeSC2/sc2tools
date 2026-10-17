@@ -38,6 +38,7 @@ export const YOUTUBE_CHANNEL_URL = "https://www.youtube.com/@ReSpOnSeSC2";
 const GUIDES_LINK: FooterLink = { href: "/guides", label: "Build guides" };
 
 const RESOURCES_LINKS: readonly FooterLink[] = [
+  { href: "/stream-studio/learn", label: "Stream Studio crash course" },
   { href: YOUTUBE_CHANNEL_URL, label: "YouTube build videos", external: true },
   { href: "/community", label: "Community" },
   { href: "/welcome", label: "Getting started" },

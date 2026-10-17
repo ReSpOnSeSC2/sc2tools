@@ -28,6 +28,7 @@ describe("Footer resources", () => {
     render(<Footer />);
     expect(screen.queryByRole("link", { name: "Build guides" })).toBeNull();
     expect(resourcesLinks(false).some((link) => link.href === "/guides")).toBe(false);
+    expect(screen.getByRole("link", { name: "Stream Studio crash course" }).getAttribute("href")).toBe("/stream-studio/learn");
   });
 
   it("always links the channel's build-order videos as an external link", () => {
