@@ -17,6 +17,10 @@ const {
   resolveKickChatroom,
 } = require("../services/kickChannel");
 const {
+  KickRealtimeError,
+  KickRealtimeService,
+} = require("../services/kickRealtime");
+const {
   sanitizeChatAppearance,
   sanitizeChatTts,
   sanitizeChatSound,
@@ -32,9 +36,9 @@ const {
  * session. Every route resolves the token first; a revoked/unknown
  * token 401s before any upstream traffic happens.
  *
- * Twitch and Kick chat connect straight from the browser (public
- * WebSocket endpoints) — no API involvement. These routes cover the
- * two platforms a browser cannot reach directly:
+ * Twitch and Kick chat messages arrive straight from their public browser
+ * WebSockets; Kick discovers its current transport through this relay.
+ * These routes also cover the two platforms a browser cannot reach directly:
  *   - YouTube (no CORS on the innertube chat endpoints): stateless
  *     resolve + poll relay; the widget owns the polling loop.
  *   - TikTok (signed webcast websocket): server-held connection fanned
@@ -44,6 +48,7 @@ const {
  *     (written by the Clerk-authed settings page via
  *     /v1/me/preferences/multichat).
  *   - kick/resolve: one-time slug → chatroom-id lookup at setup time.
+ *   - kick/connection: discovers Kick's current public chat transport.
  *   - viewers: live per-platform viewer counts + the combined total,
  *     read straight from the platforms (no CORS from the browser).
  *
@@ -66,12 +71,14 @@ const {
  *   tickerFacts?: import('../services/tickerFacts').TickerFactsService,
  *   fetchImpl?: typeof fetch,
  *   youtubePollCoordinator?: import('../services/youtubeLiveChat').YoutubePollCoordinator,
+ *   kickRealtime?: import('../services/kickRealtime').KickRealtimeService,
  *   runtimeCapacityRegistry?: import('../services/runtimeCapacity').RuntimeCapacityRegistry,
  * }} deps
  */
 function buildMultichatRouter(deps) {
   const router = express.Router();
   const fetchImpl = deps.fetchImpl || fetch;
+  const kickRealtime = deps.kickRealtime || new KickRealtimeService({ fetchImpl });
   // One coordinator per mounted production router means all OBS/dock surfaces
   // in this process share the same bounded YouTube response parse.
   const youtubePollCoordinator =
@@ -535,6 +542,33 @@ function buildMultichatRouter(deps) {
       } finally {
         req.off("aborted", abortRequest);
         res.off("close", abortOnClose);
+      }
+    },
+  );
+
+  router.get(
+    "/multichat/:token/kick/connection",
+    limiter,
+    tokenAuth,
+    async (req, res, next) => {
+      try {
+        // @ts-ignore stamped by tokenAuth
+        const prefs = await deps.users.getPreferences(String(req.overlayUserId), "multichat");
+        const kick = prefs?.kick;
+        if (kick?.enabled !== true || !Number.isInteger(kick.chatroomId) || kick.chatroomId <= 0) {
+          res.status(409).json({ error: {
+            code: "kick_not_configured",
+            message: "Kick chat is not configured",
+          } });
+          return;
+        }
+        res.set("Cache-Control", "private, no-store").json(await kickRealtime.getConnection());
+      } catch (err) {
+        if (err instanceof KickRealtimeError) {
+          res.status(502).json({ error: { code: err.code, message: err.message } });
+          return;
+        }
+        next(err);
       }
     },
   );

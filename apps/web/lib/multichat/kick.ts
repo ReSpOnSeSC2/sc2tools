@@ -3,22 +3,24 @@
 //
 // Public Kick chatrooms are readable with NO auth: subscribe to
 // `chatrooms.<id>.v2` on Kick's Pusher app and messages stream in.
-// (Verified live: handshake + anonymous subscribe both succeed.) The
-// only setup cost is knowing the numeric chatroom id — resolved once
-// in Settings (auto via the API relay, or the guided manual flow when
-// Cloudflare blocks the lookup).
+// (Verified live: handshake + anonymous subscribe both succeed.)
+// The numeric chatroom id is resolved in Settings. The API relay also
+// discovers Kick's current public Pusher credentials on connection,
+// because Kick can rotate its app key independently of this frontend.
 
 import { kickEmoteUrl, type ChatEmote } from "./emotes";
 import type { ChatEvent } from "./events";
 import type { ChatBadge, ChatEngine, EngineCallbacks } from "./types";
 
-// Kick's production Pusher app key + cluster — public constants baked
-// into kick.com's own web bundle.
+// Last verified public Pusher endpoint. Production discovers current
+// credentials through the API first; this also covers rolling deployments
+// and temporary discovery failures. Never put a private Pusher secret here.
 export const KICK_PUSHER_URL =
-  "wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0-rc2&flash=false";
+  "wss://ws-us2.pusher.com/app/34bf7a0ff419a2a775b9?protocol=7&client=js&version=8.4.0-rc2&flash=false";
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30000;
+const CONNECT_TIMEOUT_MS = 15000;
 const KICK_EVENT_PREFIX = "App\\Events\\";
 const KICK_LITERAL_EVENT_NAMES = new Set([
   "channel.followed",
@@ -248,7 +250,13 @@ function kickSupportShortHash(value: unknown): string {
 }
 
 export function createKickChat(
-  opts: { chatroomId: number; callbacks: EngineCallbacks; url?: string },
+  opts: {
+    chatroomId: number;
+    callbacks: EngineCallbacks;
+    apiBase?: string;
+    token?: string;
+    url?: string;
+  },
 ): ChatEngine {
   const { callbacks } = opts;
   if (!Number.isInteger(opts.chatroomId) || opts.chatroomId <= 0) {
@@ -260,13 +268,86 @@ export function createKickChat(
   let ws: WebSocket | null = null;
   let attempts = 0;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  let connectTimer: ReturnType<typeof setTimeout> | null = null;
+  let lookupAbort: AbortController | null = null;
+  let lookupTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const connect = () => {
+  const clearConnectTimer = () => {
+    if (connectTimer) clearTimeout(connectTimer);
+    connectTimer = null;
+  };
+
+  const retry = () => {
     if (closed) return;
+    const delay = Math.min(
+      RECONNECT_MAX_MS,
+      RECONNECT_BASE_MS * 2 ** Math.min(attempts, 5),
+    );
+    attempts += 1;
+    retryTimer = setTimeout(() => { void connect(); }, delay);
+  };
+
+  const connect = async () => {
+    if (closed) return;
+    retryTimer = null;
     callbacks.onStatus("connecting");
-    ws = new WebSocket(opts.url || KICK_PUSHER_URL);
-    ws.onmessage = (event) => {
-      let frame: { event?: string; data?: string };
+    let url = opts.url || KICK_PUSHER_URL;
+    if (!opts.url && opts.apiBase && opts.token) {
+      const controller = new AbortController();
+      lookupAbort = controller;
+      lookupTimer = setTimeout(() => controller.abort(), CONNECT_TIMEOUT_MS);
+      try {
+        const response = await fetch(
+          `${opts.apiBase.replace(/\/$/, "")}/v1/multichat/${encodeURIComponent(opts.token)}/kick/connection`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        if (!response.ok) throw new Error("Kick connection discovery unavailable");
+        const connection = await response.json();
+        const discovered = new URL(connection?.url);
+        if (
+          connection?.provider !== "pusher"
+          || discovered.protocol !== "wss:"
+          || !/^ws-[a-z0-9-]+\.pusher\.com$/.test(discovered.hostname)
+          || !/^\/app\/[a-z0-9]+$/i.test(discovered.pathname)
+          || discovered.username || discovered.password || discovered.port
+        ) throw new Error("Invalid Kick chat connection");
+        url = discovered.toString();
+      } catch {
+        if (!closed) callbacks.onStatus(
+          "connecting", "Kick connection discovery unavailable; trying last verified endpoint",
+        );
+      } finally {
+        if (lookupTimer) clearTimeout(lookupTimer);
+        lookupTimer = null;
+        lookupAbort = null;
+      }
+      if (closed) return;
+    }
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(url);
+    } catch {
+      callbacks.onStatus("error", "Kick chat connection could not start; retrying");
+      retry();
+      return;
+    }
+    ws = socket;
+    let failed = false;
+    let retryable = true;
+    connectTimer = setTimeout(() => {
+      if (closed || ws !== socket) return;
+      failed = true;
+      callbacks.onStatus("error", "Kick chat connection timed out; retrying");
+      // Detach before closing: stale close callbacks must not clear a newer
+      // socket or schedule a second retry if the browser closes it late.
+      ws = null;
+      clearConnectTimer();
+      socket.close();
+      retry();
+    }, CONNECT_TIMEOUT_MS);
+    socket.onmessage = (event) => {
+      if (closed || ws !== socket || failed) return;
+      let frame: { event?: string; data?: unknown };
       try {
         frame = JSON.parse(String(event.data));
       } catch {
@@ -274,7 +355,7 @@ export function createKickChat(
       }
       switch (frame.event) {
         case "pusher:connection_established":
-          ws?.send(
+          socket.send(
             JSON.stringify({
               event: "pusher:subscribe",
               data: { auth: "", channel: `chatrooms.${opts.chatroomId}.v2` },
@@ -282,11 +363,39 @@ export function createKickChat(
           );
           break;
         case "pusher_internal:subscription_succeeded":
+          clearConnectTimer();
           attempts = 0;
           callbacks.onStatus("connected");
           break;
+        case "pusher:error": {
+          let payload: { code?: unknown; message?: unknown } = {};
+          try {
+            const data = typeof frame.data === "string"
+              ? JSON.parse(frame.data)
+              : frame.data;
+            if (data && typeof data === "object") payload = data;
+          } catch {
+            // Even a malformed server error must not leave the dot yellow.
+          }
+          const code = Number(payload.code);
+          // Pusher 4000–4099 errors require a configuration change. Only
+          // retry these when discovery can supply a replacement app key.
+          retryable = Boolean(opts.apiBase && opts.token && !opts.url)
+            || !(code >= 4000 && code < 4100);
+          failed = true;
+          clearConnectTimer();
+          const message = typeof payload.message === "string"
+            ? payload.message.slice(0, 240)
+            : "connection rejected";
+          callbacks.onStatus(
+            "error",
+            `Kick chat${Number.isFinite(code) ? ` (${code})` : ""}: ${message}`,
+          );
+          socket.close();
+          break;
+        }
         case "pusher:ping":
-          ws?.send(JSON.stringify({ event: "pusher:pong", data: {} }));
+          socket.send(JSON.stringify({ event: "pusher:pong", data: {} }));
           break;
         case "App\\Events\\ChatMessageEvent": {
           let payload: Record<string, unknown>;
@@ -320,28 +429,34 @@ export function createKickChat(
         }
       }
     };
-    ws.onclose = () => {
+    socket.onclose = (event) => {
+      if (closed || ws !== socket) return;
       ws = null;
-      if (closed) return;
-      callbacks.onStatus("connecting", "reconnecting");
-      const delay = Math.min(
-        RECONNECT_MAX_MS,
-        RECONNECT_BASE_MS * 2 ** Math.min(attempts, 5),
-      );
-      attempts += 1;
-      retryTimer = setTimeout(connect, delay);
+      clearConnectTimer();
+      if (event.code >= 4000 && event.code < 4100) {
+        retryable = Boolean(opts.apiBase && opts.token && !opts.url);
+      }
+      if (!failed) {
+        callbacks.onStatus("error", retryable
+          ? "Kick chat disconnected; retrying"
+          : `Kick chat connection rejected (${event.code})`);
+      }
+      if (retryable) retry();
     };
-    ws.onerror = () => {
+    socket.onerror = () => {
       /* onclose follows */
     };
   };
 
-  connect();
+  void connect();
 
   return {
     close: () => {
       closed = true;
       if (retryTimer) clearTimeout(retryTimer);
+      clearConnectTimer();
+      if (lookupTimer) clearTimeout(lookupTimer);
+      lookupAbort?.abort();
       try {
         ws?.close();
       } catch {

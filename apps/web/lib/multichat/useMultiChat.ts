@@ -76,6 +76,8 @@ export function useMultiChat(args: {
       engines.push(
         createKickChat({
           chatroomId: config.kick.chatroomId,
+          apiBase,
+          token,
           callbacks: { onMessage, onEvent, onStatus: statusFor("kick") },
         }),
       );
