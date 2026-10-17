@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import sharp from "sharp";
 import { ALL_WIDGETS } from "@/components/overlay/widgetLifecycle";
 import { WIDGET_GROUPS, WIDGET_GUIDES } from "@/lib/streamStudioLearn";
 
@@ -13,6 +14,15 @@ describe("Stream Studio learning catalog", () => {
     const ids = WIDGET_GUIDES.map((guide) => guide.id);
     expect(new Set(ids).size).toBe(ids.length);
     expect([...ids].sort()).toEqual([...ALL_WIDGETS].sort());
+  });
+
+  it("ships a full-size visual example for every widget", async () => {
+    for (const guide of WIDGET_GUIDES) {
+      const image = await sharp(resolve(process.cwd(), "public/images/widget-examples", `${guide.id}.webp`)).metadata();
+      expect(image.format, guide.id).toBe("webp");
+      expect(image.width, guide.id).toBe(1400);
+      expect(image.height, guide.id).toBe(900);
+    }
   });
 
   it("uses the current Settings labels so instructions can be found", () => {

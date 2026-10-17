@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WidgetExplorer } from "./WidgetExplorer";
 import { WIDGET_GUIDES } from "@/lib/streamStudioLearn";
@@ -13,7 +13,11 @@ describe("widget learning explorer", () => {
     expect(within(navigation).getAllByRole("button")).toHaveLength(WIDGET_GUIDES.length);
     const guide = screen.getByRole("article", { name: "Opponent identity guide" });
     expect(within(guide).getByText("All-in-one or its own Browser Source")).toBeTruthy();
-    expect(within(guide).getByText("Illustrative data")).toBeTruthy();
+    expect(within(guide).getByText("Example preview · sample data")).toBeTruthy();
+    const preview = within(guide).getByRole("img", { name: "Opponent identity widget preview with sample data" });
+    expect(preview.getAttribute("src")).toContain("opponent.webp");
+    expect(preview.getAttribute("width")).toBe("1400");
+    expect(preview.getAttribute("height")).toBe("900");
     expect(within(guide).getByRole("link", { name: "Open the right settings" }).getAttribute("href")).toBe("/settings?tab=overlay");
   });
 
@@ -22,7 +26,50 @@ describe("widget learning explorer", () => {
     render(<WidgetExplorer />);
     const guide = screen.getByRole("article", { name: "Ghost Build coach guide" });
     expect(within(guide).getByText("Use its own Browser Source")).toBeTruthy();
+    expect(within(guide).getByRole("img", { name: "Ghost Build coach widget preview with sample data" }).getAttribute("src")).toContain("ghost-build.webp");
     expect((screen.getByRole("combobox", { name: "Choose a widget" }) as HTMLSelectElement).value).toBe("ghost-build");
+  });
+
+  it("enlarges the selected preview and returns keyboard focus when Escape closes it", async () => {
+    render(<WidgetExplorer />);
+    const enlarge = screen.getByRole("button", { name: "Enlarge preview" });
+    enlarge.focus();
+    fireEvent.click(enlarge);
+    const dialog = screen.getByRole("dialog", { name: "Opponent identity preview" });
+    expect(within(dialog).getByRole("img", { name: "Opponent identity widget preview with sample data" }).getAttribute("src")).toContain("opponent.webp");
+    const original = within(dialog).getByRole("link", { name: "Open full-size image" });
+    expect(original.getAttribute("href")).toBe("/images/widget-examples/opponent.webp");
+    expect(original.getAttribute("target")).toBe("_blank");
+    await waitFor(() => expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Close" })));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(enlarge);
+  });
+
+  it("loads the matching preview for every widget choice", () => {
+    render(<WidgetExplorer />);
+    const picker = screen.getByRole("combobox", { name: "Choose a widget" });
+    for (const guide of WIDGET_GUIDES) {
+      fireEvent.change(picker, { target: { value: guide.id } });
+      expect(screen.getByRole("img", { name: `${guide.name} widget preview with sample data` }).getAttribute("src")).toContain(`${guide.id}.webp`);
+    }
+  });
+
+  it("browses filtered thumbnails and focuses the chosen widget guide", () => {
+    render(<WidgetExplorer />);
+    const disclosure = screen.getByText("Browse widget previews").closest("details")!;
+    disclosure.open = true;
+    const gallery = screen.getByRole("list", { name: "Widget preview gallery" });
+    expect(within(gallery).getAllByRole("button")).toHaveLength(WIDGET_GUIDES.length);
+    fireEvent.click(within(gallery).getByRole("button", { name: "Ghost Build coach" }));
+    expect(within(gallery).getByRole("button", { name: "Ghost Build coach" }).getAttribute("aria-pressed")).toBe("true");
+    const guide = screen.getByRole("article", { name: "Ghost Build coach guide" });
+    expect(document.activeElement).toBe(guide);
+    expect(new URL(window.location.href).searchParams.get("widget")).toBe("ghost-build");
+
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Ghost Build coach" } });
+    expect(within(gallery).getAllByRole("button")).toHaveLength(1);
+    expect(within(disclosure).getByText("(1)")).toBeTruthy();
   });
 
   it("filters search results and recovers from an empty search", () => {

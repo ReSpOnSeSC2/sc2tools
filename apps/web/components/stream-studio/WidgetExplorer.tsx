@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Copy, Layers3, Search, SlidersHorizontal } from "lucide-react";
+import { ArrowRight, CheckCircle2, Copy, Expand, Layers3, Search, SlidersHorizontal } from "lucide-react";
+import { Modal } from "@/components/ui/Modal";
 import { WIDGET_GROUPS, WIDGET_GUIDES, type WidgetGuide } from "@/lib/streamStudioLearn";
 
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
@@ -113,6 +115,34 @@ export function WidgetExplorer() {
         <p role="status" className="mt-3 text-caption text-text-dim">{filtered.length} {filtered.length === 1 ? "widget" : "widgets"} found{group !== "all" ? ` · ${WIDGET_GROUPS.find((item) => item.id === group)?.description}` : ""}</p>
       </div>
 
+      {filtered.length > 0 ? (
+        <details className="mt-4 rounded-md border-2 border-line bg-bg-surface">
+          <summary className={`min-h-12 cursor-pointer rounded-md px-4 py-3 text-body font-semibold text-text ${FOCUS}`}>
+            Browse widget previews <span className="text-caption font-normal text-text-dim">({filtered.length})</span>
+          </summary>
+          <ul aria-label="Widget preview gallery" className="grid grid-cols-2 gap-3 border-t border-border p-4 sm:grid-cols-3 lg:grid-cols-4">
+            {filtered.map((guide) => (
+              <li key={guide.id} className="min-w-0">
+                <button type="button" aria-pressed={selected?.id === guide.id}
+                  onClick={() => {
+                    focusRelated.current = true;
+                    choose(guide.id);
+                    if (selected?.id === guide.id) {
+                      focusRelated.current = false;
+                      detailRef.current?.focus({ preventScroll: true });
+                      detailRef.current?.scrollIntoView?.({ block: "start" });
+                    }
+                  }}
+                  className={`h-full w-full overflow-hidden rounded-md border-2 text-left ${FOCUS} ${selected?.id === guide.id ? "border-accent bg-accent/10 text-accent" : "border-border text-text hover:border-accent"}`}>
+                  <Image src={`/images/widget-examples/${guide.id}.webp`} alt="" width={1400} height={900} sizes="(min-width: 1024px) 260px, (min-width: 640px) 30vw, 45vw" className="block h-auto w-full" />
+                  <span className="flex min-h-12 items-center px-3 py-2 text-caption font-semibold">{guide.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+
       {selected ? (
         <div className="mt-5 grid items-start gap-5 lg:grid-cols-[250px_minmax(0,1fr)]">
           <nav aria-label="Choose a widget" className="hidden max-h-[calc(100vh-11rem)] space-y-1 overflow-y-auto rounded-md border-2 border-line bg-bg-surface p-2 lg:sticky lg:top-36 lg:block">
@@ -161,7 +191,7 @@ function WidgetDetail({ guide, onRelated, detailRef }: { guide: WidgetGuide; onR
         </span>
       </header>
       <div className="space-y-7 p-5 sm:p-7">
-        <WidgetExample guide={guide} />
+        <WidgetExample key={guide.id} guide={guide} />
         <div>
           <h4 className="font-display text-h4 font-bold text-text">What you&apos;re looking at</h4>
           <p className="mt-2 text-body text-text-muted">{guide.explanation}</p>
@@ -209,18 +239,27 @@ function WidgetDetail({ guide, onRelated, detailRef }: { guide: WidgetGuide; onR
 }
 
 function WidgetExample({ guide }: { guide: WidgetGuide }) {
+  const [expanded, setExpanded] = useState(false);
+  const src = `/images/widget-examples/${guide.id}.webp`;
+  const alt = `${guide.name} widget preview with sample data`;
+
   return (
-    <figure className="overflow-hidden rounded-md border border-border bg-bg-elevated">
-      <div className="flex flex-wrap justify-between gap-2 border-b border-border px-4 py-2 text-micro font-semibold uppercase tracking-wider text-text-dim"><span>Example · {guide.name}</span><span>Illustrative data</span></div>
-      <div className="relative flex min-h-52 items-center justify-center overflow-hidden px-5 py-8 sm:min-h-60 sm:px-8">
-        <div aria-hidden className="pointer-events-none absolute inset-4 rounded border border-dashed border-border" />
-        <div className="relative w-full max-w-sm rounded-md border-2 border-accent/60 bg-bg-surface p-5 shadow-hard">
-          <p className="text-micro font-semibold uppercase tracking-wider text-accent">SC2 Tools</p>
-          <p className="mt-3 font-display text-xl font-bold text-text sm:text-2xl">{guide.example.headline}</p>
-          <div className="mt-3 space-y-2 text-body text-text-muted">{guide.example.lines.map((line) => <p key={line}>{line}</p>)}</div>
+    <>
+      <figure className="overflow-hidden rounded-md border border-border bg-bg-elevated">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border px-4 py-2">
+          <span className="text-micro font-semibold uppercase tracking-wider text-text-dim">Example preview · sample data</span>
+          <button type="button" onClick={() => setExpanded(true)} className={`inline-flex min-h-11 items-center gap-2 rounded-sm text-caption font-semibold text-accent hover:underline ${FOCUS}`}>
+            <Expand className="h-4 w-4" aria-hidden />
+            Enlarge preview
+          </button>
         </div>
-      </div>
-      <figcaption className="border-t border-border px-4 py-3 text-caption text-text-muted">A reading example, not a live preview. Use this widget&apos;s setup and test steps below to see its actual design in OBS.</figcaption>
-    </figure>
+        <Image src={src} alt={alt} width={1400} height={900} sizes="(min-width: 1024px) 780px, 100vw" className="block h-auto w-full" />
+        <figcaption className="border-t border-border px-4 py-3 text-caption text-text-muted">Actual widget design with sample data and default styling. Your theme and available data may change its appearance.</figcaption>
+      </figure>
+      <Modal open={expanded} onClose={() => setExpanded(false)} title={`${guide.name} preview`} description="Example preview · sample data. Your theme and available data may change its appearance." size="3xl" mobileLayout="center"
+        footer={<a href={src} target="_blank" rel="noopener noreferrer" className={`inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-4 py-2 text-caption font-semibold text-accent hover:bg-accent/10 ${FOCUS}`}><Expand className="h-4 w-4" aria-hidden />Open full-size image</a>}>
+        <Image src={src} alt={alt} width={1400} height={900} sizes="(min-width: 1400px) 1400px, 100vw" className="mx-auto block h-auto w-full" />
+      </Modal>
+    </>
   );
 }

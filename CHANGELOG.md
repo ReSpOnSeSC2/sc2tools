@@ -102,6 +102,11 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Visual examples for all 31 Stream Studio widgets** — each guide now
+  shows the actual widget design with sample data, with an enlarged view
+  for reading the details. A searchable visual gallery lets new users
+  browse by appearance and jump straight to setup instructions.
+
 - **Stream Studio crash course and widget field guide** — five practical
   lessons with saved progress, starter setups, and searchable explanations
   for all 31 widgets. Each guide covers what viewers see, when the widget
