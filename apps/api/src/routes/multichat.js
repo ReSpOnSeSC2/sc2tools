@@ -99,9 +99,8 @@ function buildMultichatRouter(deps) {
     store: new BoundedRateLimitStore({ maxEntries: 1 }),
   });
 
-  // Per-token limiter: the widget's steady state is one YouTube poll
-  // every ~2-8s plus rare resolves — 60/min leaves generous headroom
-  // while keeping a leaked token from turning the API into a proxy.
+  // Control/config traffic has its own budget so several chat readers cannot
+  // starve the Dock's studio/blocklist snapshot or platform configuration.
   const limiter = rateLimit({
     windowMs: 60 * 1000,
     max: 60,
@@ -109,6 +108,22 @@ function buildMultichatRouter(deps) {
     legacyHeaders: false,
     /** @param {import('express').Request} req */
     keyGenerator: (req) => `multichat:${hashLimiterCredential(
+      req.params.token || "anon",
+    )}`,
+    store: new BoundedRateLimitStore({ maxEntries: 1024 }),
+  });
+
+  // Two simultaneous YouTube broadcasts each poll every 5–10 seconds on the
+  // Dock and multiple OBS sources. Keep their budget separate and allow that
+  // ordinary fan-out; global admission and the bounded upstream coordinator
+  // still cap total traffic, concurrent fetches, and retained response bodies.
+  const youtubeLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 240,
+    standardHeaders: true,
+    legacyHeaders: false,
+    /** @param {import('express').Request} req */
+    keyGenerator: (req) => `multichat:youtube:${hashLimiterCredential(
       req.params.token || "anon",
     )}`,
     store: new BoundedRateLimitStore({ maxEntries: 1024 }),
@@ -451,7 +466,7 @@ function buildMultichatRouter(deps) {
 
   router.get(
     "/multichat/:token/youtube/resolve",
-    limiter,
+    youtubeLimiter,
     tokenAuth,
     async (req, res, next) => {
       const requestAbort = new AbortController();
@@ -498,7 +513,7 @@ function buildMultichatRouter(deps) {
 
   router.post(
     "/multichat/:token/youtube/poll",
-    limiter,
+    youtubeLimiter,
     tokenAuth,
     async (req, res, next) => {
       const requestAbort = new AbortController();
@@ -534,7 +549,7 @@ function buildMultichatRouter(deps) {
           const busy = err.code === "youtube_poll_busy";
           if (busy) res.setHeader("Retry-After", "2");
           res
-            .status(err.code === "bad_input" ? 400 : busy ? 503 : 502)
+            .status(["bad_input", "invalid_continuation"].includes(err.code) ? 400 : busy ? 503 : 502)
             .json({ error: { code: err.code, message: err.message } });
           return;
         }

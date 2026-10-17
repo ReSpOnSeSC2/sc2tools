@@ -80,6 +80,7 @@ function timeLabel(atMs: number): string {
 
 export function DockChat({
   loaded,
+  studioReady = true,
   platforms,
   messages,
   events = [],
@@ -91,6 +92,8 @@ export function DockChat({
   onBlock,
 }: {
   loaded: boolean;
+  /** The Dock withholds activity until its moderation snapshot is ready. */
+  studioReady?: boolean;
   platforms: MultichatConfig | null;
   messages: ReadonlyArray<ChatMessage>;
   /** Read-only platform events; blocked authors are filtered from the Dock. */
@@ -232,7 +235,9 @@ export function DockChat({
       >
         {displayRows.length === 0 ? (
           <div className="px-1 py-2 text-caption text-text-dim">
-            {enabled.length > 0
+            {!loaded || !studioReady
+              ? "Loading chat settings…"
+              : enabled.length > 0
               ? "Connected — waiting for chat…"
               : "Chat appears here once a platform is configured."}
           </div>

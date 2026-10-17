@@ -350,11 +350,11 @@ describe("services/youtubeLiveChat", () => {
 
   test("resolveLiveChat walks page → chat page → continuation", async () => {
     const pages = {
-      "https://www.youtube.com/@Some/live":
-        '{"videoId":"abcABC12345"} "isLive":true',
-      // Popout page: first continuation is Top chat, LAST is all-messages.
-      "https://www.youtube.com/live_chat?is_popout=1&v=abcABC12345":
-        '"clientVersion":"2.20260101.00.00" "continuation":"TOPCHAT_TOKEN_AAAAAAAAAAAA" "continuation":"ALLCHAT_TOKEN_BBBBBBBBBBBB"',
+      "https://www.youtube.com/@Some/streams":
+        '<script>var ytInitialData = {"contents":{"twoColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"selected":true,"endpoint":{"commandMetadata":{"webCommandMetadata":{"url":"/@Some/streams"}}},"content":{"richGridRenderer":{"contents":[{"videoRenderer":{"videoId":"abcABC12345","badges":[{"metadataBadgeRenderer":{"style":"BADGE_STYLE_TYPE_LIVE_NOW"}}]}}]}}}}]}}};</script>',
+      // The explicit all-messages submenu entry wins over other continuations.
+      "https://www.youtube.com/live_chat?is_popout=1&v=abcABC12345&hl=en":
+        '<script>var ytInitialData = {"contents":{"liveChatRenderer":{"header":{"liveChatHeaderRenderer":{"viewSelector":{"sortFilterSubMenuRenderer":{"subMenuItems":[{"title":"Live chat","continuation":"ALLCHAT_TOKEN_BBBBBBBBBBBB"},{"title":"Top chat","continuation":"TOPCHAT_TOKEN_AAAAAAAAAAAA"}]}}}}}}};</script> "clientVersion":"2.20260101.00.00"',
     };
     const fetchImpl = async (url) =>
       new Response(pages[url] ?? "", { status: 200 });
@@ -366,7 +366,7 @@ describe("services/youtubeLiveChat", () => {
 
   test("resolveLiveChat reports not_live for an offline channel", async () => {
     const fetchImpl = async () =>
-      new Response('{"videoId":"abcABC12345"}', { status: 200 });
+      new Response('<script>var ytInitialData = {"contents":{"twoColumnBrowseResultsRenderer":{"tabs":[{"tabRenderer":{"selected":true,"endpoint":{"commandMetadata":{"webCommandMetadata":{"url":"/@Offline/streams"}}},"content":{"richGridRenderer":{"contents":[]}}}}]}}};</script>', { status: 200 });
     await expect(
       yt.resolveLiveChat("@Offline", { fetchImpl }),
     ).rejects.toMatchObject({ code: "not_live" });

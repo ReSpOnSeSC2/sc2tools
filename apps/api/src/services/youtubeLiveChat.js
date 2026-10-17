@@ -1,6 +1,10 @@
 "use strict";
 
 const { createHash } = require("crypto");
+const {
+  parseEmbeddedJsonObject,
+  extractChannelLiveVideoIds,
+} = require("./youtubeViewerPages");
 
 /**
  * YouTube live-chat relay — resolve + poll helpers for the multichat
@@ -14,8 +18,9 @@ const { createHash } = require("crypto");
  *
  *   1. ``resolveLiveChat(input)`` — turn whatever the streamer pasted
  *      (@handle, channel URL, watch URL, or bare 11-char video id)
- *      into the currently-live video id + the "Live chat" (all
- *      messages) continuation token scraped from the popout page.
+ *      into its own active broadcasts + each "Live chat" (all
+ *      messages) continuation token from the popout page. Explicit video
+ *      inputs stay pinned to that one broadcast.
  *   2. ``pollLiveChat({continuation})`` — one stateless poll: POST the
  *      continuation, parse the actions into slim chat messages, hand
  *      back the NEXT continuation + the polling interval YouTube
@@ -68,6 +73,8 @@ const RESOLVE_RESULT_CACHE_MS = 5000;
 const YOUTUBE_RELAY_MAX_ACTIVE = 2;
 const YOUTUBE_RELAY_MAX_SUBSCRIBERS = 8;
 const YOUTUBE_RELAY_CACHE_MAX = 4;
+const MAX_YOUTUBE_LIVE_STREAMS = 10;
+const MAX_RESOLVE_FETCHES = 2;
 
 class YoutubeChatError extends Error {
   /**
@@ -461,8 +468,9 @@ function normalizeYoutubeInput(raw) {
         /^(\/(?:@[^/]+|(?:channel|c|user)\/[^/]+))\/(?:live|streams|featured|videos|shorts)$/,
         "$1",
       );
-      // Channel-ish URL — ask its /live page which video is on air.
-      if (path) {
+      // Retain /live for existing viewer/archive callers. Chat resolution
+      // below explicitly discovers this channel's own /streams live cards.
+      if (/^\/(?:@[^/]+|(?:channel|c|user)\/[^/]+)$/.test(channelPath)) {
         return {
           videoId: null,
           pageUrls: [`https://www.youtube.com${channelPath}/live`],
@@ -484,32 +492,67 @@ function normalizeYoutubeInput(raw) {
 }
 
 /**
- * Extract the live video id from a channel /live page (or verify a
- * watch page is live). Returns null when the page carries no live
- * video.
+ * Read the main watch player only. A live recommendation elsewhere in the
+ * page cannot establish the requested video's identity or live state.
  *
  * @param {string} html
  * @returns {string | null}
  */
 function extractLiveVideoId(html) {
-  if (!/"isLive"\s*:\s*true/.test(html)) return null;
-  const m = html.match(/"videoId"\s*:\s*"([A-Za-z0-9_-]{11})"/);
-  return m ? m[1] : null;
+  const state = extractPrimaryVideoState(html);
+  return state?.live === true ? state.videoId : null;
+}
+
+/** @param {string} html @returns {{videoId: string, live: boolean | null} | null} */
+function extractPrimaryVideoState(html) {
+  const player = extractPageObject(html, "ytInitialPlayerResponse");
+  const details = player?.videoDetails;
+  const videoId = details?.videoId;
+  if (typeof videoId !== "string" || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) return null;
+  if (details.isUpcoming === true) return { videoId, live: false };
+  const liveNow = player?.microformat?.playerMicroformatRenderer?.liveBroadcastDetails?.isLiveNow;
+  if (typeof liveNow === "boolean") return { videoId, live: liveNow };
+  if (typeof details.isLive === "boolean") return { videoId, live: details.isLive };
+  return { videoId, live: details.isLiveContent === false ? false : null };
 }
 
 /**
- * Extract the all-messages "Live chat" continuation from the popout
- * chat page. The page embeds several continuations; the LAST one is
- * the unfiltered "Live chat" feed (the first is "Top chat", which
- * hides most messages — verified against live streams).
+ * Select the explicit all-messages "Live chat" submenu entry from the
+ * primary chat renderer. The renderer's default continuation is Top chat;
+ * unrelated embedded continuations and menu order are not authoritative.
  *
  * @param {string} html
  * @returns {string | null}
  */
 function extractChatContinuation(html) {
-  const all = [...html.matchAll(/"continuation"\s*:\s*"([A-Za-z0-9_%-]+)"/g)];
-  if (all.length === 0) return null;
-  return all[all.length - 1][1];
+  const data = extractPageObject(html, "ytInitialData");
+  const renderer = data?.contents?.liveChatRenderer;
+  const items = renderer?.header?.liveChatHeaderRenderer?.viewSelector
+    ?.sortFilterSubMenuRenderer?.subMenuItems;
+  if (!Array.isArray(items)) return null;
+  const live = items.find((item) => item?.title === "Live chat");
+  const value = typeof live?.continuation === "string"
+    ? live.continuation
+    : live?.continuation?.reloadContinuationData?.continuation;
+  return typeof value === "string" && value.length > 0 && value.length <= 4096
+    ? value
+    : null;
+}
+
+/**
+ * Parse only a named YouTube page assignment, never a similarly named field
+ * inside recommendations. Page bodies are bounded before reaching this helper.
+ * @param {string} html
+ * @param {"ytInitialData" | "ytInitialPlayerResponse"} name
+ * @returns {Record<string, any> | null}
+ */
+function extractPageObject(html, name) {
+  const marker = new RegExp(
+    `(?:\\b(?:var\\s+)?${name}|window\\["${name}"\\])\\s*=\\s*\\{`,
+  ).exec(html);
+  return marker
+    ? parseEmbeddedJsonObject(html, html.indexOf("{", marker.index))
+    : null;
 }
 
 /** @param {string} html @returns {string} */
@@ -530,18 +573,45 @@ async function fetchPage(fetchImpl, url, opts = {}) {
     ? AbortSignal.any([opts.signal, timeoutSignal])
     : timeoutSignal;
   try {
-    const res = await fetchImpl(url, {
-      headers: PAGE_HEADERS,
-      redirect: "follow",
-      signal,
-    });
-    if (!res.ok) {
-      throw new YoutubeChatError("upstream", `youtube page ${res.status}`);
+    const requested = new URL(url);
+    let current = requested;
+    for (let redirects = 0; redirects <= 3; redirects += 1) {
+      const res = await fetchImpl(current.href, {
+        headers: PAGE_HEADERS,
+        redirect: "manual",
+        signal,
+      });
+      if ([301, 302, 303, 307, 308].includes(res.status)) {
+        const location = res.headers.get("location");
+        await res.body?.cancel?.().catch(() => {});
+        if (!location || redirects === 3) {
+          throw new YoutubeChatError("upstream", "youtube page redirect was not recognized");
+        }
+        const next = new URL(location, current);
+        const sameVideo = requested.searchParams.get("v");
+        if (
+          next.protocol !== "https:" ||
+          !["youtube.com", "www.youtube.com", "m.youtube.com"].includes(next.hostname) ||
+          next.username || next.password || next.port ||
+          (sameVideo && (
+            next.pathname !== requested.pathname || next.searchParams.get("v") !== sameVideo
+          )) ||
+          (!sameVideo && !/^\/(?:@[^/]+|(?:channel|c|user)\/[^/]+)\/streams\/?$/.test(next.pathname))
+        ) {
+          throw new YoutubeChatError("upstream", "youtube page redirected outside the selected stream");
+        }
+        current = next;
+        continue;
+      }
+      if (!res.ok) {
+        throw new YoutubeChatError("upstream", `youtube page ${res.status}`);
+      }
+      return await readBoundedTextResponse(
+        res,
+        opts.maxResponseBytes || PAGE_RESPONSE_MAX_BYTES,
+      );
     }
-    return await readBoundedTextResponse(
-      res,
-      opts.maxResponseBytes || PAGE_RESPONSE_MAX_BYTES,
-    );
+    throw new YoutubeChatError("upstream", "youtube page redirect limit exceeded");
   } catch (err) {
     if (err instanceof YoutubeChatError || opts.signal?.aborted) throw err;
     throw new YoutubeChatError("upstream", "youtube page request failed");
@@ -554,23 +624,35 @@ async function fetchPage(fetchImpl, url, opts = {}) {
  * @param {string} input
  * @param {{ fetchImpl?: typeof fetch, signal?: AbortSignal, maxPageBytes?: number }} [opts]
  * @returns {Promise<{ videoId: string, continuation: string,
- *   clientVersion: string }>}
+ *   clientVersion: string, sessions: Array<{videoId: string,
+ *   continuation: string, clientVersion: string}>, partial: boolean }>}
  */
 async function resolveLiveChat(input, opts = {}) {
   const fetchImpl = opts.fetchImpl || fetch;
   const { videoId: directId, pageUrls } = normalizeYoutubeInput(input);
 
-  let videoId = directId;
-  if (!videoId) {
+  let videoIds = directId ? [directId] : [];
+  if (!directId) {
     for (const url of pageUrls) {
-      const html = await fetchPage(fetchImpl, url, {
+      // Keep normalizeYoutubeInput's historical /live shape for its viewer
+      // and archive callers; chat discovery alone requires the Live tab.
+      const streamsUrl = url.replace(/\/live$/, "/streams");
+      const html = await fetchPage(fetchImpl, streamsUrl, {
         signal: opts.signal,
         maxResponseBytes: opts.maxPageBytes,
       });
-      videoId = extractLiveVideoId(html);
-      if (videoId) break;
+      const expectedChannelPath = new URL(streamsUrl).pathname.replace(/\/streams$/, "");
+      const discovered = extractChannelLiveVideoIds(html, { expectedChannelPath });
+      if (discovered === null) {
+        throw new YoutubeChatError(
+          "upstream",
+          "youtube channel live-stream page was not recognized",
+        );
+      }
+      videoIds = discovered.slice(0, MAX_YOUTUBE_LIVE_STREAMS);
+      if (videoIds.length) break;
     }
-    if (!videoId) {
+    if (!videoIds.length) {
       throw new YoutubeChatError(
         "not_live",
         "channel has no live stream right now",
@@ -578,7 +660,48 @@ async function resolveLiveChat(input, opts = {}) {
     }
   }
 
-  const chatHtml = await fetchPage(fetchImpl, LIVE_CHAT_URL + videoId, {
+  /** @type {Array<{videoId: string, continuation: string, clientVersion: string} | undefined>} */
+  const results = new Array(videoIds.length);
+  /** @type {unknown[]} */
+  const failures = new Array(videoIds.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(MAX_RESOLVE_FETCHES, videoIds.length) },
+    async () => {
+      while (nextIndex < videoIds.length) {
+        if (opts.signal?.aborted) throw opts.signal.reason || abortError();
+        const index = nextIndex++;
+        try {
+          results[index] = await resolveVideoChat(videoIds[index], { ...opts, fetchImpl });
+        } catch (err) {
+          if (opts.signal?.aborted) throw err;
+          failures[index] = err;
+        }
+      }
+    },
+  );
+  const settled = await Promise.allSettled(workers);
+  if (opts.signal?.aborted) throw opts.signal.reason || abortError();
+  for (const worker of settled) {
+    if (worker.status === "rejected") throw worker.reason;
+  }
+  const sessions = results.filter(
+    /** @returns {value is {videoId: string, continuation: string, clientVersion: string}} */
+    (value) => value !== undefined,
+  );
+  if (!sessions.length) {
+    throw failures.find(Boolean) || new YoutubeChatError("not_found", "live chat is unavailable");
+  }
+  return { ...sessions[0], sessions, partial: sessions.length !== videoIds.length };
+}
+
+/**
+ * Resolve a single, already selected broadcast without switching identities.
+ * @param {string} videoId
+ * @param {{ fetchImpl: typeof fetch, signal?: AbortSignal, maxPageBytes?: number }} opts
+ */
+async function resolveVideoChat(videoId, opts) {
+  const chatHtml = await fetchPage(opts.fetchImpl, LIVE_CHAT_URL + videoId + "&hl=en", {
     signal: opts.signal,
     maxResponseBytes: opts.maxPageBytes,
   });
@@ -586,11 +709,15 @@ async function resolveLiveChat(input, opts = {}) {
   if (!continuation) {
     // A watch page exists but its chat frame has no continuation —
     // either the video isn't live or chat is disabled.
-    const watchHtml = await fetchPage(fetchImpl, WATCH_URL + videoId, {
+    const watchHtml = await fetchPage(opts.fetchImpl, WATCH_URL + videoId, {
       signal: opts.signal,
       maxResponseBytes: opts.maxPageBytes,
     });
-    if (!extractLiveVideoId(watchHtml)) {
+    const state = extractPrimaryVideoState(watchHtml);
+    if (state?.videoId !== videoId || state.live === null) {
+      throw new YoutubeChatError("upstream", "selected youtube video watch page was not recognized");
+    }
+    if (!state.live) {
       throw new YoutubeChatError("not_live", "video is not live");
     }
     throw new YoutubeChatError("not_found", "live chat is unavailable");
@@ -905,6 +1032,12 @@ async function pollLiveChat(args, opts = {}) {
       signal,
     });
     if (!res.ok) {
+      if (res.status === 400) {
+        throw new YoutubeChatError(
+          "invalid_continuation",
+          "youtube chat continuation is no longer valid",
+        );
+      }
       throw new YoutubeChatError("upstream", `youtube chat ${res.status}`);
     }
     const json = await readBoundedJsonResponse(

@@ -154,7 +154,9 @@ export function SettingsHelp() {
             </li>
             <li>
               <b className="text-text">YouTube</b> — channel handle or URL; the
-              live stream is discovered automatically each time you go live.
+              chats from your public live broadcasts, including separate
+              landscape and vertical streams, are combined automatically.
+              Use a live-video URL to follow only that broadcast.
             </li>
             <li>
               <b className="text-text">TikTok</b> — @username only,{" "}

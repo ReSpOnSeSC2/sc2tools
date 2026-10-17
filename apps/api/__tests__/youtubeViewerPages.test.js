@@ -54,6 +54,19 @@ test("supports older grid/video renderers with explicit live badges", () => {
   expect(extractChannelLiveVideoIds(asPage(data))).toEqual(["First123456", "Second12345"]);
 });
 
+test("supports legacy channel grids without traversing unknown nested shelves", () => {
+  const data = initialData();
+  const tab = data.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer;
+  const liveVideo = (videoId) => ({ gridVideoRenderer: {
+    videoId, thumbnailOverlays: [{ thumbnailOverlayTimeStatusRenderer: { style: "LIVE" } }],
+  } });
+  tab.content = { sectionListRenderer: { contents: [{ itemSectionRenderer: { contents: [
+    { gridRenderer: { items: [liveVideo("First123456")] } },
+    { richSectionRenderer: { content: { richShelfRenderer: { contents: [liveVideo("Wrong123456")] } } } },
+  ] } }] } };
+  expect(extractChannelLiveVideoIds(asPage(data))).toEqual(["First123456"]);
+});
+
 test("distinguishes a recognized empty Live tab from consent, Home redirects, and schema errors", () => {
   const data = initialData();
   const tab = data.contents.twoColumnBrowseResultsRenderer.tabs[0].tabRenderer;

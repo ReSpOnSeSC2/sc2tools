@@ -2,6 +2,20 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.13
+
+### Fixed - YouTube chat identity and Stream Dock recovery
+
+- The matching cloud update discovers live broadcasts from your channel's
+  structured live listings. Recommended videos can no longer connect your
+  widget or Stream Dock to another channel's chat.
+- Separate landscape and vertical YouTube broadcasts appear together in chat.
+  A direct live-video URL stays pinned to that broadcast. Temporary polling
+  failures retain each chat's position, and restored history stays silent.
+- YouTube readers have a separate bounded request budget so multiple OBS
+  sources cannot delay the Dock's settings. The Dock retries unavailable chat
+  settings promptly and shows its loading state instead of claiming it is ready.
+
 ## 0.18.12
 
 ### Fixed - Live player identity and opponent intelligence

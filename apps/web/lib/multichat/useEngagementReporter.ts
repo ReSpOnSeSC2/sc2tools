@@ -64,7 +64,7 @@ export function useEngagementReporter(
       const key = `e:${eventIdentity}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      if (e.atMs < mountedAtRef.current - 5_000) continue;
+      if (e.replayed || e.atMs < mountedAtRef.current - 5_000) continue;
       pending.push({
         platform: e.platform,
         id: `ev:${e.updateKey || e.id}`,

@@ -15,9 +15,13 @@ let mockChat: MultiChatState = {
   active: false,
 };
 const engagementSpy = vi.hoisted(() => vi.fn());
+const multiChatSpy = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/multichat/useMultiChat", () => ({
-  useMultiChat: () => mockChat,
+  useMultiChat: (options: unknown) => {
+    multiChatSpy(options);
+    return mockChat;
+  },
 }));
 
 vi.mock("@/lib/multichat/useEngagementReporter", () => ({
@@ -47,6 +51,7 @@ let studioState: Record<string, unknown> = { ...EMPTY_STUDIO };
 
 beforeEach(() => {
   engagementSpy.mockClear();
+  multiChatSpy.mockClear();
   configState = CONFIG;
   studioState = { ...EMPTY_STUDIO };
   fetchMock.mockReset();
@@ -92,6 +97,12 @@ function studioPosts(): Array<Record<string, unknown>> {
     .map(([, init]) => JSON.parse(String((init as RequestInit).body)));
 }
 
+async function drain() {
+  await act(async () => {
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  });
+}
+
 describe("DockClient", () => {
   it("does not render a standalone build-vote section", async () => {
     render(<DockClient token="tok_test" />);
@@ -120,6 +131,22 @@ describe("DockClient", () => {
     expect(await screen.findByText("gg wp")).toBeTruthy();
     expect(screen.getByText("Viewer")).toBeTruthy();
     expect(await screen.findByText("Twitch")).toBeTruthy();
+  });
+
+  it("preserves chat-engine configuration identity when only alert presentation changes", async () => {
+    vi.useFakeTimers();
+    configState = { ...CONFIG, alerts: { enabled: true, durationSeconds: 5 } };
+    render(<DockClient token="tok_test" />);
+    await drain();
+    const initialPlatforms = multiChatSpy.mock.lastCall?.[0].config;
+    expect(initialPlatforms).toEqual(CONFIG);
+
+    configState = { ...CONFIG, alerts: { enabled: false, durationSeconds: 10 } };
+    await act(async () => { vi.advanceTimersByTime(60_000); });
+    await drain();
+
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/config"))).toHaveLength(2);
+    expect(multiChatSpy.mock.lastCall?.[0].config).toBe(initialPlatforms);
   });
 
   it("keeps config-side moderation closed until a successful retry", async () => {
@@ -262,9 +289,11 @@ describe("DockClient", () => {
     expect(screen.queryByText(message.text)).toBeNull();
     expect(screen.queryByText(event.user)).toBeNull();
     expect(engagementSpy).toHaveBeenLastCalledWith("tok_test", [], []);
+    expect(screen.getByText("Loading chat settings…")).toBeTruthy();
+    expect(screen.queryByText("Connected — waiting for chat…")).toBeNull();
 
     await act(async () => {
-      vi.advanceTimersByTime(60_000);
+      vi.advanceTimersByTime(2_000);
       for (let i = 0; i < 8; i += 1) await Promise.resolve();
     });
 
@@ -276,6 +305,98 @@ describe("DockClient", () => {
       [message],
       [event],
     );
+    expect(screen.queryByText("Loading chat settings…")).toBeNull();
+
+    await act(async () => { vi.advanceTimersByTime(59_999); });
+    await drain();
+    expect(studioGets).toBe(2);
+    await act(async () => { vi.advanceTimersByTime(1); });
+    await drain();
+    expect(studioGets).toBe(3);
+  });
+
+  it("backs off initial studio failures with bounded retries and recovers from invalid responses", async () => {
+    vi.useFakeTimers();
+    let studioGets = 0;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes("/config")) {
+        return { ok: true, json: async () => ({ config: configState }) };
+      }
+      if (String(url).includes("/studio")) {
+        studioGets += 1;
+        if (studioGets === 1) throw new Error("connection lost");
+        if (studioGets === 2) return { ok: true, json: async () => [] };
+        if (studioGets <= 5) return { ok: false, status: 503 };
+        return { ok: true, json: async () => studioState };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    render(<DockClient token="tok_test" />);
+    await drain();
+
+    for (const [index, delay] of [2_000, 5_000, 10_000, 30_000, 30_000].entries()) {
+      expect(studioGets).toBe(index + 1);
+      expect(screen.getByText("Loading chat settings…")).toBeTruthy();
+      await act(async () => { vi.advanceTimersByTime(delay - 1); });
+      await drain();
+      expect(studioGets).toBe(index + 1);
+      await act(async () => { vi.advanceTimersByTime(1); });
+      await drain();
+    }
+    expect(studioGets).toBe(6);
+    expect(screen.getByText("Connected — waiting for chat…")).toBeTruthy();
+    expect(screen.queryByText("Loading chat settings…")).toBeNull();
+  });
+
+  it.each([false, true])("cancels the old token's studio retry even when already in flight (%s)", async (inFlight) => {
+    vi.useFakeTimers();
+    let oldStudioGets = 0;
+    let finishOldGet: ((response: unknown) => void) | undefined;
+    fetchMock.mockImplementation(async (url: string) => {
+      const target = String(url);
+      if (target.includes("/config")) {
+        return { ok: true, json: async () => ({ config: configState }) };
+      }
+      if (target.includes("/studio")) {
+        if (target.includes("old-token")) {
+          oldStudioGets += 1;
+          if (oldStudioGets === 1) return { ok: false, status: 503 };
+          return new Promise((resolve) => { finishOldGet = resolve; });
+        }
+        return { ok: true, json: async () => ({ ...EMPTY_STUDIO, blockedUsers: ["NewBlocked"] }) };
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    mockChat = {
+      active: true,
+      statuses: { twitch: { state: "connected" } },
+      events: [],
+      messages: [
+        { platform: "twitch", id: "blocked", user: "NewBlocked", text: "must stay hidden", badges: [], atMs: 1 },
+        { platform: "twitch", id: "allowed", user: "Allowed", text: "new token is ready", badges: [], atMs: 2 },
+      ],
+    };
+    const view = render(<DockClient token="old-token" />);
+    await drain();
+    if (inFlight) {
+      await act(async () => { vi.advanceTimersByTime(2_000); });
+      await drain();
+      expect(finishOldGet).toBeTypeOf("function");
+    }
+    view.rerender(<DockClient token="new-token" />);
+    await drain();
+    expect(screen.getByText("new token is ready")).toBeTruthy();
+    expect(screen.queryByText("must stay hidden")).toBeNull();
+
+    await act(async () => {
+      finishOldGet?.({ ok: true, json: async () => EMPTY_STUDIO });
+    });
+    await drain();
+    await act(async () => { vi.advanceTimersByTime(60_000); });
+    await drain();
+    expect(oldStudioGets).toBe(inFlight ? 2 : 1);
+    expect(screen.getByText("new token is ready")).toBeTruthy();
+    expect(screen.queryByText("must stay hidden")).toBeNull();
   });
 
   it("excludes Dock-blocked messages and events from engagement", async () => {

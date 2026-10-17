@@ -12,8 +12,8 @@
  *              Kick's bot protection blocks the automatic lookup, a
  *              guided manual flow takes over (open one URL in your own
  *              browser, paste what you see — we extract the id).
- *   - YouTube: channel handle/URL. The live stream is discovered
- *              automatically every stream — no video id juggling.
+ *   - YouTube: channel handle/URL. All public live broadcasts are discovered
+ *              automatically; a live-video URL pins one broadcast.
  *   - TikTok:  @username only. NO stream key required — chat reads
  *              from the public LIVE; while you're offline the widget
  *              simply idles and reconnects when you go live.
@@ -539,7 +539,7 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
               label="YouTube"
               enabled={draft.youtubeEnabled}
               onToggle={(on) => set({ youtubeEnabled: on })}
-              hint="Live chat, memberships, gifted memberships, Super Chats, Super Stickers and Jewels gifts are recognized automatically. Connect YouTube under Notification accounts to add public free channel subscriptions."
+              hint="Use your channel to combine chats from separate landscape and vertical broadcasts, or a live-video URL to follow only that broadcast. Memberships, gifts and Super Chats are recognized automatically. Connect YouTube under Notification accounts to add public free channel subscriptions."
             >
               <TextInput
                 value={draft.youtubeChannel}

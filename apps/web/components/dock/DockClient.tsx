@@ -57,6 +57,8 @@ import { newestStudioSnapshot, useStudioUpdates } from "@/lib/multichat/useStudi
 
 /** Platform config re-read cadence — same as the OBS widget. */
 const CONFIG_REFRESH_MS = 60_000;
+/** Recover initial moderation state promptly without hammering an outage. */
+const STUDIO_RETRY_MS = [2_000, 5_000, 10_000, 30_000] as const;
 const DEFAULT_MODERATION_APPEARANCE = {
   blockedUsers: DEFAULT_APPEARANCE.blockedUsers,
   hideBots: DEFAULT_APPEARANCE.hideBots,
@@ -108,6 +110,7 @@ function usePlatformConfig(token: string): {
           appearance,
           tts: rawTts,
           sound: _sound,
+          alerts: _alerts,
           ...next
         } = config;
         const json = JSON.stringify(next);
@@ -225,6 +228,8 @@ export function DockClient({ token }: { token: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let retryAttempt = 0;
     const load = async () => {
       const mutationSequence = studioMutationRef.current;
       const fetchSequence = ++studioFetchRef.current;
@@ -243,14 +248,24 @@ export function DockClient({ token }: { token: string }) {
         ) return;
         adoptStudioSnapshot(sanitizeStudioState(body));
       } catch {
-        /* transient — the interval or first action response re-syncs */
+        /* Keep moderation closed until an authoritative snapshot arrives. */
+      } finally {
+        if (!cancelled) {
+          // A live update or successful action can also establish readiness.
+          // Keep the normal fallback cadence once any authoritative snapshot
+          // exists, including after a later transient refresh failure.
+          const ready = latestStudioRef.current?.token === token;
+          const delay = ready
+            ? CONFIG_REFRESH_MS
+            : STUDIO_RETRY_MS[Math.min(retryAttempt++, STUDIO_RETRY_MS.length - 1)];
+          timer = setTimeout(load, delay);
+        }
       }
     };
     void load();
-    const timer = setInterval(load, CONFIG_REFRESH_MS);
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      clearTimeout(timer);
     };
   }, [studioUrl, token, adoptStudioSnapshot]);
 
@@ -443,6 +458,7 @@ export function DockClient({ token }: { token: string }) {
         <section id="dock-chat" className="mb-3 min-w-0 scroll-mt-12 lg:mb-0">
           <DockChat
             loaded={loaded}
+            studioReady={studioSnapshotReady}
             platforms={platforms}
             messages={moderatedMessages}
             events={moderatedEvents}

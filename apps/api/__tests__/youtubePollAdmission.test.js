@@ -240,7 +240,7 @@ describe("bounded YouTube chat polling", () => {
       fetchImpl: jest.fn(async (url) => {
         seen.push(String(url));
         return new Response(
-          '<html><script>var ytInitialData={"continuation":"safe_token_123"};</script></html>',
+          '<html><script>var ytInitialData={"contents":{"liveChatRenderer":{"header":{"liveChatHeaderRenderer":{"viewSelector":{"sortFilterSubMenuRenderer":{"subMenuItems":[{"title":"Live chat","continuation":"safe_token_123"}]}}}}}}};</script></html>',
           { status: 200 },
         );
       }),
@@ -256,6 +256,68 @@ describe("bounded YouTube chat polling", () => {
 });
 
 describe("YouTube poll route backpressure", () => {
+  test("reports an expired upstream cursor as renewable instead of a transient outage", async () => {
+    const app = express();
+    app.use(express.json());
+    app.use("/v1", buildMultichatRouter({
+      overlayTokens: { resolve: async () => ({ userId: "user-1" }) },
+      users: { getPreferences: async () => ({}) },
+      tiktokRelay: {},
+      youtubePollCoordinator: {
+        poll: async () => { throw new YoutubeChatError("invalid_continuation", "chat cursor expired"); },
+      },
+    }));
+    const response = await request(app)
+      .post("/v1/multichat/safe-test-token/youtube/poll")
+      .send({ continuation: CONTINUATION });
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("invalid_continuation");
+  });
+
+  test("supports dual-chat OBS readers without starving settings and keeps both budgets bounded", async () => {
+    const poll = jest.fn(async () => JSON.stringify({
+      messages: [], events: [], continuation: CONTINUATION, timeoutMs: 5000, done: false,
+    }));
+    const resolve = jest.fn(async () => JSON.stringify({
+      videoId: "abcABC12345", continuation: CONTINUATION, clientVersion: "2.1.0",
+    }));
+    const app = express();
+    app.use(express.json());
+    app.use("/v1", buildMultichatRouter({
+      overlayTokens: { resolve: async () => ({ userId: "dual-chat-user" }) },
+      users: { getPreferences: async () => ({ youtube: { enabled: true, channel: "@streamer" } }) },
+      tiktokRelay: {},
+      youtubePollCoordinator: { poll, resolve },
+    }));
+
+    // Five surfaces, each reading two broadcasts every five seconds, fit
+    // comfortably below the dedicated YouTube budget (120 polls/minute).
+    for (let index = 0; index < 239; index += 1) {
+      const response = await request(app)
+        .post("/v1/multichat/dual-chat-token/youtube/poll")
+        .send({ continuation: CONTINUATION });
+      expect(response.status).toBe(200);
+    }
+    const discovery = await request(app)
+      .get("/v1/multichat/dual-chat-token/youtube/resolve?channel=@streamer");
+    expect(discovery.status).toBe(200);
+    const limitedChat = await request(app)
+      .post("/v1/multichat/dual-chat-token/youtube/poll")
+      .send({ continuation: CONTINUATION });
+    expect(limitedChat.status).toBe(429);
+    expect(Number(limitedChat.headers["retry-after"])).toBeGreaterThan(0);
+    expect(poll).toHaveBeenCalledTimes(239);
+
+    for (let index = 0; index < 60; index += 1) {
+      const config = await request(app).get("/v1/multichat/dual-chat-token/config");
+      expect(config.status).toBe(200);
+    }
+    expect((await request(app).get("/v1/multichat/dual-chat-token/config")).status).toBe(429);
+    expect((await request(app)
+      .post("/v1/multichat/another-chat-token/youtube/poll")
+      .send({ continuation: CONTINUATION })).status).toBe(200);
+  });
+
   test("returns retryable 503 for a distinct poll when the global lane is busy", async () => {
     const app = express();
     app.use(express.json());

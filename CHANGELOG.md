@@ -13,6 +13,14 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Agent 0.18.13 / YouTube chat:** channel discovery now reads only the
+  channel's structured live-broadcast listings, preventing recommended videos
+  from sending OBS widgets or Stream Dock to another channel's chat. Separate
+  landscape and vertical broadcasts are merged; a direct video URL stays
+  pinned. Polling retries retain each chat's position, restored history stays
+  silent, and a separate bounded YouTube request budget protects Dock settings.
+  The Dock retries unavailable settings promptly and reports when they are loading.
+
 - Notification badges now lead to an **Unread** view, including older recovered
   installs and review activity that previously sat beyond the newest page.
   Feeds catch up after reconnects, pagination keeps events with matching dates,

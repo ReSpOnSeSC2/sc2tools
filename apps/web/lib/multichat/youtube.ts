@@ -1,27 +1,28 @@
-// YouTube chat engine — drives the API's stateless resolve/poll relay.
-//
-// The Browser Source owns the polling loop (the API retains only a tiny
-// bounded in-flight/result cache):
-// resolve the streamer's channel to a live continuation once, then
-// poll at the cadence YouTube itself requests. A finished stream
-// re-resolves on a slow timer so the widget picks the next stream up
-// automatically.
+// Each live broadcast owns its cursor. Channel discovery can add a portrait or
+// landscape broadcast without resetting the chats already being polled.
 
-import { isChatEventKind } from "./events";
-import type { ChatEngine, EngineCallbacks } from "./types";
+import { EVENT_CAP, isChatEventKind } from "./events";
+import { FEED_CAP } from "./feed";
+import type { ChatEngine, EngineCallbacks, PlatformState } from "./types";
 
-/** Re-resolve cadence while the channel is offline / stream ended. */
-const OFFLINE_RETRY_MS = 60_000;
-/** Backoff after transient poll failures. */
+const DISCOVERY_INTERVAL_MS = 60_000;
 const ERROR_RETRY_MS = 10_000;
-/** Allow a small API/browser clock difference at initial connection. */
+const REQUEST_TIMEOUT_MS = 20_000;
 const FIRST_POLL_CLOCK_SKEW_MS = 5_000;
+const MAX_SESSIONS = 10;
+const MAX_RETAINED_SESSIONS = 20;
+
+interface ResolvedSession {
+  videoId?: string;
+  continuation: string;
+  clientVersion: string;
+}
 
 interface WireMessage {
   id: string;
   user: string;
   text: string;
-  badges: string[];
+  badges?: string[];
   atMs: number;
 }
 
@@ -38,216 +39,329 @@ interface WireEvent {
 
 interface PollResponse {
   messages: WireMessage[];
-  /** Absent on older API builds — treat as empty. */
   events?: WireEvent[];
   continuation: string | null;
   timeoutMs: number;
   done: boolean;
 }
 
-export function createYoutubeChat(
-  opts: {
-    apiBase: string;
-    token: string;
-    channel: string;
-    callbacks: EngineCallbacks;
-  },
-): ChatEngine {
-  const { apiBase, token, channel, callbacks } = opts;
-  let closed = false;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  let pollBackpressured = false;
-  const controller = new AbortController();
+interface RetainedSession {
+  startedAtMs: number;
+  retryAtMs: number;
+  messages: Set<string>;
+  events: Set<string>;
+}
 
-  const schedule = (fn: () => void, ms: number) => {
+interface Session extends ResolvedSession {
+  key: string;
+  firstPoll: boolean;
+  timer: ReturnType<typeof setTimeout> | null;
+  inFlight: boolean;
+  state: PlatformState;
+  detail?: string;
+  retained: RetainedSession;
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+/** Accept both the original singular relay and the multi-broadcast response. */
+function resolvedSessions(raw: unknown): ResolvedSession[] {
+  const body = record(raw);
+  if (!body) return [];
+  const candidates = Array.isArray(body.sessions) ? body.sessions : [body];
+  const sessions = new Map<string, ResolvedSession>();
+  for (const candidate of candidates.slice(0, MAX_SESSIONS * 2)) {
+    const item = record(candidate);
+    if (
+      !item || typeof item.continuation !== "string" ||
+      !item.continuation || item.continuation.length > 4096 ||
+      typeof item.clientVersion !== "string" || !item.clientVersion ||
+      item.clientVersion.length > 100 ||
+      (item.videoId !== undefined &&
+        (typeof item.videoId !== "string" || !/^[\w-]{11}$/.test(item.videoId)))
+    ) continue;
+    const videoId = typeof item.videoId === "string" ? item.videoId : undefined;
+    // Multi-session responses need stable identities. A legacy singular
+    // response may omit videoId, and keeps its original unprefixed IDs.
+    if (Array.isArray(body.sessions) && !videoId) continue;
+    sessions.set(videoId ?? "legacy", {
+      ...(videoId ? { videoId } : {}),
+      continuation: item.continuation,
+      clientVersion: item.clientVersion,
+    });
+    if (sessions.size === MAX_SESSIONS) break;
+  }
+  return [...sessions.values()];
+}
+
+function remember(seen: Set<string>, id: string, cap: number): boolean {
+  if (seen.has(id)) return false;
+  seen.add(id);
+  while (seen.size > cap) seen.delete(seen.values().next().value!);
+  return true;
+}
+
+function pollDelay(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? Math.max(1_000, Math.min(30_000, value))
+    : 5_000;
+}
+
+export function createYoutubeChat(opts: {
+  apiBase: string;
+  token: string;
+  channel: string;
+  callbacks: EngineCallbacks;
+}): ChatEngine {
+  const { apiBase, token, channel, callbacks } = opts;
+  const base = `${apiBase}/v1/multichat/${encodeURIComponent(token)}`;
+  const sessions = new Map<string, Session>();
+  const retained = new Map<string, RetainedSession>();
+  const controllers = new Set<AbortController>();
+  let closed = false;
+  let resolveInFlight = false;
+  let resolveTimer: ReturnType<typeof setTimeout> | null = null;
+  let resolveDueAt = Infinity;
+  let discoveryState: PlatformState = "connecting";
+  let discoveryDetail: string | undefined;
+  let lastStatus = "";
+
+  const publishStatus = () => {
     if (closed) return;
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(fn, ms);
+    const active = [...sessions.values()];
+    const connected = active.filter((session) => session.state === "connected");
+    const retrying = active.length - connected.length;
+    const state = connected.length ? "connected" : active.length
+      ? active.some((session) => session.state === "connecting") ? "connecting" : "error"
+      : discoveryState;
+    const detail = connected.length
+      ? active.length > 1
+        ? `${connected.length} live chats${retrying ? `; ${retrying} reconnecting` : ""}`
+        : undefined
+      : active.find((session) => session.detail)?.detail ?? discoveryDetail;
+    const signature = `${state}:${detail ?? ""}`;
+    if (signature === lastStatus) return;
+    lastStatus = signature;
+    callbacks.onStatus(state, detail);
   };
 
-  const base = `${apiBase}/v1/multichat/${encodeURIComponent(token)}`;
-
-  const resolve = async (cycleStartedAtMs: number = Date.now()) => {
-    if (closed) return;
-    callbacks.onStatus("connecting");
+  // Include body reads in the timeout, and abort every outstanding request on
+  // close. Browsers that resolve an aborted request late still hit guards below.
+  const request = async (url: string, init?: RequestInit) => {
+    const controller = new AbortController();
+    controllers.add(controller);
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      const res = await fetch(
-        `${base}/youtube/resolve?channel=${encodeURIComponent(channel)}`,
-        { signal: controller.signal, cache: "no-store" },
-      );
-      if (res.status === 429 || res.status === 503) {
-        callbacks.onStatus(
-          "connecting",
-          res.status === 429 ? "rate limited; retrying" : undefined,
-        );
-        schedule(
-          () => void resolve(cycleStartedAtMs),
-          retryAfterMs(res.headers.get("retry-after"), ERROR_RETRY_MS),
-        );
-        return;
-      }
-      if (res.status === 502) {
-        const body = await res.json().catch(() => null);
-        const code = body?.error?.code;
-        callbacks.onStatus(
-          code === "not_live" ? "offline" : "error",
-          code === "not_live" ? undefined : String(code || "upstream"),
-        );
-        schedule(resolve, OFFLINE_RETRY_MS);
-        return;
-      }
-      if (!res.ok) {
-        callbacks.onStatus("error", `resolve ${res.status}`);
-        schedule(resolve, OFFLINE_RETRY_MS);
-        return;
-      }
-      const data = (await res.json()) as {
-        continuation: string;
-        clientVersion: string;
-      };
-      pollBackpressured = false;
-      callbacks.onStatus("connected");
-      void poll(data.continuation, data.clientVersion, true, cycleStartedAtMs);
-    } catch (err) {
-      if (closed) return;
-      callbacks.onStatus("error", String(err).slice(0, 80));
-      schedule(resolve, ERROR_RETRY_MS);
+      const response = await fetch(url, {
+        ...init, signal: controller.signal, cache: "no-store",
+      });
+      const body: unknown = await response.json().catch((error: unknown) => {
+        if (response.ok) throw error;
+        return null;
+      });
+      return { response, body };
+    } finally {
+      clearTimeout(timeout);
+      controllers.delete(controller);
     }
   };
 
-  const poll = async (
-    continuation: string,
-    clientVersion: string,
-    firstPoll: boolean,
-    cycleStartedAtMs: number,
-  ) => {
+  const scheduleDiscovery = (delay: number) => {
     if (closed) return;
+    const dueAt = Date.now() + delay;
+    if (resolveTimer && resolveDueAt <= dueAt) return;
+    if (resolveTimer) clearTimeout(resolveTimer);
+    resolveDueAt = dueAt;
+    resolveTimer = setTimeout(() => {
+      resolveTimer = null;
+      resolveDueAt = Infinity;
+      void discover();
+    }, delay);
+  };
+
+  const schedulePoll = (session: Session, delay: number) => {
+    if (closed || sessions.get(session.key) !== session) return;
+    if (session.timer) clearTimeout(session.timer);
+    session.timer = setTimeout(() => {
+      session.timer = null;
+      void poll(session);
+    }, delay);
+  };
+
+  const retire = (session: Session, invalid = false) => {
+    if (sessions.get(session.key) !== session) return;
+    if (session.timer) clearTimeout(session.timer);
+    sessions.delete(session.key);
+    // Ended broadcasts can remain in a briefly cached resolve response. Do
+    // not re-add them on each sibling poll; invalid cursors may retry sooner.
+    session.retained.retryAtMs = Date.now() + (invalid ? ERROR_RETRY_MS : DISCOVERY_INTERVAL_MS);
+    discoveryState = invalid ? "connecting" : "ended";
+    discoveryDetail = invalid ? "chat cursor expired; reconnecting" : undefined;
+    publishStatus();
+    scheduleDiscovery(invalid ? ERROR_RETRY_MS : DISCOVERY_INTERVAL_MS);
+  };
+
+  const retryPoll = (session: Session, state: PlatformState, detail: string, delay: number) => {
+    session.state = state;
+    session.detail = detail;
+    publishStatus();
+    schedulePoll(session, delay);
+  };
+
+  const poll = async (session: Session) => {
+    if (closed || session.inFlight || sessions.get(session.key) !== session) return;
+    session.inFlight = true;
     try {
-      const res = await fetch(`${base}/youtube/poll`, {
+      const { response, body } = await request(`${base}/youtube/poll`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ continuation, clientVersion }),
-        signal: controller.signal,
-        cache: "no-store",
+        body: JSON.stringify({ continuation: session.continuation, clientVersion: session.clientVersion }),
       });
-      if (res.status === 429 || res.status === 503) {
-        pollBackpressured = true;
-        callbacks.onStatus(
-          "connecting",
-          res.status === 429 ? "rate limited; retrying" : undefined,
-        );
-        // Keep the exact continuation. Re-resolving here can jump over
-        // messages while another OBS surface continues polling, then classify
-        // anything before that new resolve cycle as stale history.
-        schedule(
-          () =>
-            void poll(
-              continuation,
-              clientVersion,
-              firstPoll,
-              cycleStartedAtMs,
-            ),
-          retryAfterMs(res.headers.get("retry-after"), ERROR_RETRY_MS),
-        );
-        return;
-      }
-      if (!res.ok) {
-        callbacks.onStatus("error", `poll ${res.status}`);
-        schedule(resolve, ERROR_RETRY_MS);
-        return;
-      }
-      const data = (await res.json()) as PollResponse;
-      if (pollBackpressured) {
-        pollBackpressured = false;
-        callbacks.onStatus("connected");
-      }
-      // The resolve continuation replays recent history. Suppress only
-      // entries that predate this engine: a viewer can post while the dock's
-      // first request is in flight, and dropping that whole batch loses a
-      // genuinely live line. The tolerance covers small API/browser skew.
-      const firstPollCutoffMs = cycleStartedAtMs - FIRST_POLL_CLOCK_SKEW_MS;
-      for (const m of data.messages) {
-        if (
-          firstPoll &&
-          (!Number.isFinite(m.atMs) || m.atMs < firstPollCutoffMs)
-        ) {
-          continue;
+      if (closed || sessions.get(session.key) !== session) return;
+      if (!response.ok) {
+        const code = record(record(body)?.error)?.code;
+        if (response.status === 400 || code === "invalid_continuation" || code === "continuation_expired") {
+          retire(session, true);
+        } else {
+          retryPoll(session, response.status === 429 || response.status === 503 ? "connecting" : "error",
+            response.status === 429 ? "rate limited; retrying" : `poll ${response.status}; retrying`,
+            retryAfterMs(response.headers.get("retry-after"), ERROR_RETRY_MS));
         }
+        return;
+      }
+      const data = record(body) as unknown as PollResponse | null;
+      if (
+        !data || !Array.isArray(data.messages) ||
+        (data.events !== undefined && !Array.isArray(data.events)) ||
+        (data.continuation !== null &&
+          (typeof data.continuation !== "string" || !data.continuation || data.continuation.length > 4096))
+      ) throw new Error("invalid chat response");
+      session.state = "connected";
+      session.detail = undefined;
+      publishStatus();
+      const prefix = session.videoId ? `${session.videoId}:` : "";
+      const cutoff = session.retained.startedAtMs - FIRST_POLL_CLOCK_SKEW_MS;
+      for (const message of data.messages.slice(-FEED_CAP)) {
+        if (!message || typeof message.id !== "string" || typeof message.user !== "string" ||
+          typeof message.text !== "string" || !Number.isFinite(message.atMs)) continue;
+        if (!remember(session.retained.messages, message.id, FEED_CAP * 2)) continue;
         callbacks.onMessage({
-          platform: "youtube",
-          id: m.id,
-          user: m.user,
-          text: m.text,
-          badges: (m.badges || []).filter(
-            (b): b is "owner" | "moderator" | "member" | "verified" =>
-              ["owner", "moderator", "member", "verified"].includes(b),
+          platform: "youtube", id: `${prefix}${message.id}`, user: message.user,
+          text: message.text, atMs: message.atMs,
+          badges: (Array.isArray(message.badges) ? message.badges : []).filter(
+            (badge): badge is "owner" | "moderator" | "member" | "verified" =>
+              ["owner", "moderator", "member", "verified"].includes(badge),
           ),
-          atMs: m.atMs,
+          ...(session.firstPoll && message.atMs < cutoff ? { backlog: true } : {}),
         });
       }
-      for (const e of data.events || []) {
-        if (
-          firstPoll &&
-          (!Number.isFinite(e.atMs) || e.atMs < firstPollCutoffMs)
-        ) {
-          continue;
-        }
-        if (!isChatEventKind(e.kind)) continue;
+      for (const event of (data.events ?? []).slice(-EVENT_CAP)) {
+        if (!event || typeof event.id !== "string" || typeof event.user !== "string" ||
+          typeof event.detail !== "string" || !Number.isFinite(event.atMs) || !isChatEventKind(event.kind)) continue;
+        const eventKey = JSON.stringify([event.id, event.updateKey, event.updateVersion, event.amount]);
+        if (!remember(session.retained.events, eventKey, EVENT_CAP * 2)) continue;
         callbacks.onEvent?.({
-          platform: "youtube",
-          id: e.id,
-          kind: e.kind,
-          user: e.user,
-          detail: e.detail,
-          amount: e.amount,
-          atMs: e.atMs,
-          ...(e.updateKey ? { updateKey: e.updateKey } : {}),
-          ...(Number.isFinite(e.updateVersion)
-            ? { updateVersion: e.updateVersion }
-            : {}),
+          platform: "youtube", id: `${prefix}${event.id}`, kind: event.kind,
+          user: event.user, detail: event.detail, amount: event.amount, atMs: event.atMs,
+          ...(session.firstPoll && event.atMs < cutoff ? { replayed: true } : {}),
+          ...(event.updateKey ? { updateKey: `${prefix}${event.updateKey}` } : {}),
+          ...(Number.isFinite(event.updateVersion) ? { updateVersion: event.updateVersion } : {}),
         });
       }
+      session.firstPoll = false;
       if (data.done || !data.continuation) {
-        callbacks.onStatus("ended");
-        schedule(resolve, OFFLINE_RETRY_MS);
+        retire(session);
         return;
       }
-      schedule(
-        () =>
-          void poll(
-            data.continuation as string,
-            clientVersion,
-            false,
-            cycleStartedAtMs,
-          ),
-        data.timeoutMs,
-      );
-    } catch (err) {
-      if (closed) return;
-      callbacks.onStatus("error", String(err).slice(0, 80));
-      schedule(resolve, ERROR_RETRY_MS);
+      session.continuation = data.continuation;
+      schedulePoll(session, pollDelay(data.timeoutMs));
+    } catch (error) {
+      if (closed || sessions.get(session.key) !== session) return;
+      // A network outage/5xx must retain the cursor: discovery can jump over
+      // messages accumulated during that outage.
+      retryPoll(session, "error", String(error).slice(0, 80), ERROR_RETRY_MS);
+    } finally {
+      session.inFlight = false;
     }
   };
 
-  void resolve();
+  const discover = async () => {
+    if (closed || resolveInFlight) return;
+    resolveInFlight = true;
+    const discoveryStartedAtMs = Date.now();
+    publishStatus();
+    try {
+      const { response, body } = await request(`${base}/youtube/resolve?channel=${encodeURIComponent(channel)}`);
+      if (closed) return;
+      if (!response.ok) {
+        const code = record(record(body)?.error)?.code;
+        discoveryState = code === "not_live" ? "offline" : response.status === 429 || response.status === 503 ? "connecting" : "error";
+        discoveryDetail = response.status === 429 ? "rate limited; retrying" : code === "not_live" ? undefined : `resolve ${response.status}`;
+        publishStatus();
+        scheduleDiscovery(response.status === 429 || response.status === 503
+          ? retryAfterMs(response.headers.get("retry-after"), ERROR_RETRY_MS)
+          : DISCOVERY_INTERVAL_MS);
+        return;
+      }
+      const next = resolvedSessions(body);
+      if (!next.length) throw new Error("invalid chat discovery response");
+      discoveryState = "connecting";
+      discoveryDetail = undefined;
+      for (const resolved of next) {
+        const key = resolved.videoId ?? "legacy";
+        if (sessions.has(key) || sessions.size >= MAX_SESSIONS) continue;
+        let history = retained.get(key);
+        if (history && history.retryAtMs > Date.now()) continue;
+        if (!history) {
+          history = { startedAtMs: discoveryStartedAtMs, retryAtMs: 0, messages: new Set(), events: new Set() };
+          retained.set(key, history);
+        }
+        const session: Session = { ...resolved, key, firstPoll: true, timer: null,
+          inFlight: false, state: "connecting", retained: history };
+        sessions.set(key, session);
+        void poll(session);
+      }
+      // Healthy chats survive omissions or partially malformed discovery.
+      // Their own polls authoritatively report when they end.
+      for (const key of retained.keys()) {
+        if (retained.size <= MAX_RETAINED_SESSIONS) break;
+        if (!sessions.has(key)) retained.delete(key);
+      }
+      publishStatus();
+      const cooldowns = [...retained.entries()]
+        .filter(([key, history]) => !sessions.has(key) && history.retryAtMs > Date.now())
+        .map(([, history]) => history.retryAtMs - Date.now());
+      scheduleDiscovery(Math.min(DISCOVERY_INTERVAL_MS, ...cooldowns));
+    } catch (error) {
+      if (closed) return;
+      discoveryState = "error";
+      discoveryDetail = String(error).slice(0, 80);
+      publishStatus();
+      scheduleDiscovery(ERROR_RETRY_MS);
+    } finally {
+      resolveInFlight = false;
+    }
+  };
 
+  void discover();
   return {
     close: () => {
       closed = true;
-      if (timer) clearTimeout(timer);
-      controller.abort();
+      if (resolveTimer) clearTimeout(resolveTimer);
+      for (const session of sessions.values()) if (session.timer) clearTimeout(session.timer);
+      for (const controller of controllers) controller.abort();
+      sessions.clear();
+      retained.clear();
     },
   };
 }
 
-/**
- * Clamp server backpressure so old/malformed proxies cannot cause a hot loop
- * or leave an OBS Browser Source dormant for minutes.
- */
-export function retryAfterMs(
-  header: string | null,
-  fallbackMs: number,
-): number {
+/** Clamp untrusted proxy backpressure without creating a hot retry loop. */
+export function retryAfterMs(header: string | null, fallbackMs: number): number {
   const seconds = Number(header);
   if (!Number.isFinite(seconds) || seconds <= 0) return fallbackMs;
   return Math.max(1_000, Math.min(30_000, Math.round(seconds * 1_000)));

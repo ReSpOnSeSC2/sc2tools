@@ -33,17 +33,16 @@ function parseEmbeddedJsonObject(source, openBrace) {
   return null;
 }
 
-/** @param {string} html @returns {string[] | null} */
-function extractChannelLiveVideoIds(html) {
+/**
+ * @param {string} html
+ * @param {{expectedChannelPath?: string}} [opts]
+ * @returns {string[] | null}
+ */
+function extractChannelLiveVideoIds(html, opts = {}) {
   const assignment = /(?:\b(?:var\s+)?ytInitialData|window\["ytInitialData"\])\s*=\s*\{/.exec(html);
   if (!assignment) return null;
   const data = parseEmbeddedJsonObject(html, html.indexOf("{", assignment.index));
-  const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs;
-  if (!Array.isArray(tabs)) return null;
-  const selected = tabs.find((tab) => tab?.tabRenderer?.selected)?.tabRenderer;
-  const url = selected?.endpoint?.commandMetadata?.webCommandMetadata?.url;
-  // A consent page, redirect to Home, or changed schema is not proof of offline.
-  if (typeof url !== "string" || !/\/streams(?:[/?]|$)/.test(url)) return null;
+  const selected = selectedChannelStreamsTab(data, opts.expectedChannelPath);
   const contents = selected?.content?.richGridRenderer?.contents
     ?? selected?.content?.sectionListRenderer?.contents;
   if (!Array.isArray(contents)) return null;
@@ -69,9 +68,61 @@ function extractChannelLiveVideoIds(html) {
       ) ids.add(id);
       continue;
     }
-    pending.push(...Object.values(item));
+    // Follow only the channel's known listing wrappers. Shelves, ad slots,
+    // and recommendation modules inside the selected tab can contain live
+    // videos owned by other channels and must never become chat sessions.
+    if (item.richItemRenderer?.content) {
+      pending.push(item.richItemRenderer.content);
+    } else if (Array.isArray(item.itemSectionRenderer?.contents)) {
+      pending.push(...item.itemSectionRenderer.contents);
+    } else if (Array.isArray(item.gridRenderer?.items)) {
+      pending.push(...item.gridRenderer.items);
+    }
   }
   return [...ids].reverse();
+}
+
+/**
+ * @param {Record<string, any> | null} data
+ * @param {string | undefined} expectedPath
+ * @returns {Record<string, any> | null}
+ */
+function selectedChannelStreamsTab(data, expectedPath) {
+  const tabs = data?.contents?.twoColumnBrowseResultsRenderer?.tabs;
+  if (!Array.isArray(tabs)) return null;
+  const selected = tabs.find((tab) => tab?.tabRenderer?.selected)?.tabRenderer;
+  const url = selected?.endpoint?.commandMetadata?.webCommandMetadata?.url;
+  // A consent page, redirect to Home, or changed schema is not proof of offline.
+  if (typeof url !== "string") return null;
+  let selectedUrl;
+  try {
+    selectedUrl = new URL(url, "https://www.youtube.com");
+  } catch {
+    return null;
+  }
+  if (
+    selectedUrl.protocol !== "https:" ||
+    !["youtube.com", "www.youtube.com", "m.youtube.com"].includes(selectedUrl.hostname) ||
+    selectedUrl.username || selectedUrl.password || selectedUrl.port ||
+    !/^\/(?:@[^/]+|(?:channel|c|user)\/[^/]+)\/streams\/?$/.test(selectedUrl.pathname)
+  ) return null;
+  const selectedPath = selectedUrl.pathname.replace(/\/streams\/?$/, "");
+  if (expectedPath?.startsWith("/@") && selectedPath.toLowerCase() !== expectedPath.toLowerCase()) {
+    return null;
+  }
+  if (expectedPath?.startsWith("/channel/")) {
+    const expectedId = expectedPath.slice("/channel/".length);
+    const actualId = data?.metadata?.channelMetadataRenderer?.externalId;
+    if (actualId ? actualId !== expectedId : selectedPath !== expectedPath) return null;
+  }
+  // Legacy /c and /user URLs can canonicalize to a handle. When YouTube keeps
+  // that legacy form in its selected endpoint, it must still match the input.
+  if (
+    expectedPath && /^\/(?:c|user)\//.test(expectedPath) &&
+    /^\/(?:c|user)\//.test(selectedPath) &&
+    selectedPath.toLowerCase() !== expectedPath.toLowerCase()
+  ) return null;
+  return selected;
 }
 
 /** @param {unknown} badges @returns {boolean} */

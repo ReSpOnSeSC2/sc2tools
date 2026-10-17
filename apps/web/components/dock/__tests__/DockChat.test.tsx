@@ -21,6 +21,27 @@ const CASES = [
 afterEach(cleanup);
 
 describe("DockChat", () => {
+  it.each([
+    { loaded: false, studioReady: false },
+    { loaded: true, studioReady: false },
+  ])("reports settings loading before moderation is ready (%j)", ({ loaded, studioReady }) => {
+    render(
+      <DockChat
+        loaded={loaded}
+        studioReady={studioReady}
+        platforms={PLATFORMS}
+        messages={[]}
+        statuses={{ twitch: { state: "connected" } }}
+        blockedUsers={[]}
+        busy={false}
+        onHighlight={vi.fn()}
+        onBlock={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Loading chat settings…")).toBeTruthy();
+    expect(screen.queryByText("Connected — waiting for chat…")).toBeNull();
+  });
+
   it("shows a visible, accessible platform indicator on every message", () => {
     const messages: ChatMessage[] = CASES.map(({ platform, user }) => ({
       platform,
