@@ -456,6 +456,9 @@ describe("Match timeline kills and losses", () => {
     expect(counts("5:00", "Units")).toEqual(["1", "0", "0", "1"]);
     expect(counts("5:00", "Workers")).toEqual(["0", "1", "1", "0"]);
     expect(counts("5:00", "Buildings")).toEqual(["1", "0", "0", "1"]);
+    expect(counts("5:00", "Minerals")).toEqual(["200", "50", "50", "200"]);
+    expect(counts("5:00", "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("5:00", "Total")).toEqual(["200", "50", "50", "200"]);
 
     const readout = screen.getByText("Game time").closest("dl")!;
     const heading = screen.getByRole("heading", { name: "Killed & lost" });
@@ -466,9 +469,13 @@ describe("Match timeline kills and losses", () => {
     expect(counts("1:15", "Units")).toEqual(["1", "0", "0", "1"]);
     expect(counts("1:15", "Workers")).toEqual(["0", "0", "0", "0"]);
     expect(counts("1:15", "Buildings")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("1:15", "Minerals")).toEqual(["50", "0", "0", "50"]);
+    expect(counts("1:15", "Total")).toEqual(["50", "0", "0", "50"]);
     tap(overlay, 140);
     expect(counts("2:20", "Workers")).toEqual(["0", "1", "1", "0"]);
     expect(counts("2:20", "Buildings")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("2:20", "Minerals")).toEqual(["50", "50", "50", "50"]);
+    expect(counts("2:20", "Total")).toEqual(["50", "50", "50", "50"]);
   });
 
   it("switches to worker losses without forgetting the army category filters", () => {
@@ -481,6 +488,9 @@ describe("Match timeline kills and losses", () => {
     fireEvent.click(metric("Army"));
     expect(screen.queryByRole("group", { name: "Casualty categories" })).toBeNull();
     expect(counts("5:00", "Workers")).toEqual(["0", "1", "1", "0"]);
+    expect(counts("5:00", "Minerals")).toEqual(["0", "50", "50", "0"]);
+    expect(counts("5:00", "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("5:00", "Total")).toEqual(["0", "50", "50", "0"]);
     expect(within(casualtyTable("5:00")).queryByRole("row", { name: /^Units\b/ })).toBeNull();
     expect(within(casualtyTable("5:00")).queryByRole("row", { name: /^Buildings\b/ })).toBeNull();
 
@@ -490,6 +500,43 @@ describe("Match timeline kills and losses", () => {
     expect(within(restored).getByRole("button", { name: "Show Buildings" }).getAttribute("aria-pressed")).toBe("false");
     expect(within(restored).getByRole("button", { name: "Show Workers" }).getAttribute("aria-pressed")).toBe("false");
     expect(counts("5:00", "Units")).toEqual(["1", "0", "0", "1"]);
+    expect(counts("5:00", "Minerals")).toEqual(["50", "0", "0", "50"]);
+    expect(counts("5:00", "Total")).toEqual(["50", "0", "0", "50"]);
+  });
+
+  it("passes the game's patch era into mineral, gas and combined casualty totals", () => {
+    const pricedDeaths: CasualtyEvent[] = [
+      { time: 75.25, owner: "opp", killer: "me", category: "units", name: "Queen" },
+      { time: 200, owner: "me", killer: "opp", category: "buildings", name: "Factory" },
+    ];
+    const chart = (patchEra: "before" | "after") => (
+      <MacroChartSection
+        gameId="casualty-costs"
+        samples={samples}
+        oppSamples={samples}
+        leaks={[]}
+        gameLengthSec={300}
+        casualtyEvents={pricedDeaths}
+        patchEra={patchEra}
+      />
+    );
+    const view = render(chart("before"));
+    expect(counts("5:00", "Minerals")).toEqual(["150", "150", "150", "150"]);
+    expect(counts("5:00", "Gas")).toEqual(["0", "100", "100", "0"]);
+    expect(counts("5:00", "Total")).toEqual(["150", "250", "250", "150"]);
+
+    view.rerender(chart("after"));
+    expect(counts("5:00", "Minerals")).toEqual(["175", "150", "150", "175"]);
+    expect(counts("5:00", "Gas")).toEqual(["0", "100", "100", "0"]);
+    expect(counts("5:00", "Total")).toEqual(["175", "250", "250", "175"]);
+
+    const overlay = chartOverlay();
+    tap(overlay, 75.2);
+    expect(counts("1:15", "Total")).toEqual(["0", "0", "0", "0"]);
+    tap(overlay, 75.25);
+    expect(counts("1:15", "Minerals")).toEqual(["175", "0", "0", "175"]);
+    expect(counts("1:15", "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("1:15", "Total")).toEqual(["175", "0", "0", "175"]);
   });
 
   it("hides the section when neither Army nor Workers is selected", () => {

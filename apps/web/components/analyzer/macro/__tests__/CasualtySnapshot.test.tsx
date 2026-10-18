@@ -45,6 +45,9 @@ describe("CasualtySnapshot", () => {
     expect(rowCounts(table, "Units")).toEqual(["1", "0", "0", "1"]);
     expect(rowCounts(table, "Buildings")).toEqual(["0", "1", "1", "0"]);
     expect(rowCounts(table, "Workers")).toEqual(["1", "1", "1", "1"]);
+    expect(rowCounts(table, "Minerals")).toEqual(["100", "200", "200", "100"]);
+    expect(rowCounts(table, "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(rowCounts(table, "Total")).toEqual(["100", "200", "200", "100"]);
 
     view.rerender(<CasualtySnapshot events={events} time={60} workersOnly={false} />);
     const later = tableAt("1:00");
@@ -53,10 +56,16 @@ describe("CasualtySnapshot", () => {
     // An unknown killer still contributes to the victim's losses.
     expect(rowCounts(later, "Buildings")).toEqual(["1", "1", "1", "2"]);
     expect(rowCounts(later, "Workers")).toEqual(["1", "1", "1", "1"]);
+    expect(rowCounts(later, "Minerals")).toEqual(["250", "300", "200", "400"]);
+    expect(rowCounts(later, "Gas")).toEqual(["100", "0", "0", "100"]);
+    expect(rowCounts(later, "Total")).toEqual(["350", "300", "200", "500"]);
 
     view.rerender(<CasualtySnapshot events={events} time={9} workersOnly={false} />);
     for (const category of ["Units", "Buildings", "Workers"]) {
       expect(rowCounts(tableAt("0:09"), category)).toEqual(["0", "0", "0", "0"]);
+    }
+    for (const resource of ["Minerals", "Gas", "Total"]) {
+      expect(rowCounts(tableAt("0:09"), resource)).toEqual(["0", "0", "0", "0"]);
     }
   });
 
@@ -74,9 +83,15 @@ describe("CasualtySnapshot", () => {
     }
 
     expect(screen.getByText("Select a category to see kills and losses.")).toBeTruthy();
+    expect(screen.queryByRole("row", { name: /^Minerals\b/ })).toBeNull();
+    expect(screen.queryByRole("row", { name: /^Gas\b/ })).toBeNull();
+    expect(screen.queryByRole("row", { name: /^Total\b/ })).toBeNull();
     fireEvent.click(categoryButton("Buildings"));
     expect(categoryButton("Buildings").getAttribute("aria-pressed")).toBe("true");
     expect(rowCounts(tableAt("1:00"), "Buildings")).toEqual(["1", "1", "1", "2"]);
+    expect(rowCounts(tableAt("1:00"), "Minerals")).toEqual(["150", "150", "150", "300"]);
+    expect(rowCounts(tableAt("1:00"), "Gas")).toEqual(["100", "0", "0", "100"]);
+    expect(rowCounts(tableAt("1:00"), "Total")).toEqual(["250", "150", "150", "400"]);
     expect(within(tableAt("1:00")).queryByRole("row", { name: /^Units\b/ })).toBeNull();
     expect(within(tableAt("1:00")).queryByRole("row", { name: /^Workers\b/ })).toBeNull();
     expect(screen.queryByText("Select a category to see kills and losses.")).toBeNull();
@@ -91,6 +106,9 @@ describe("CasualtySnapshot", () => {
     expect(screen.queryByRole("group", { name: "Casualty categories" })).toBeNull();
     const workers = tableAt("1:00");
     expect(rowCounts(workers, "Workers")).toEqual(["1", "1", "1", "1"]);
+    expect(rowCounts(workers, "Minerals")).toEqual(["50", "50", "50", "50"]);
+    expect(rowCounts(workers, "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(rowCounts(workers, "Total")).toEqual(["50", "50", "50", "50"]);
     expect(within(workers).queryByRole("row", { name: /^Units\b/ })).toBeNull();
     expect(within(workers).queryByRole("row", { name: /^Buildings\b/ })).toBeNull();
 
@@ -99,6 +117,9 @@ describe("CasualtySnapshot", () => {
     expect(categoryButton("Buildings").getAttribute("aria-pressed")).toBe("false");
     expect(categoryButton("Workers").getAttribute("aria-pressed")).toBe("false");
     expect(rowCounts(tableAt("1:00"), "Units")).toEqual(["1", "1", "0", "1"]);
+    expect(rowCounts(tableAt("1:00"), "Minerals")).toEqual(["50", "100", "0", "50"]);
+    expect(rowCounts(tableAt("1:00"), "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(rowCounts(tableAt("1:00"), "Total")).toEqual(["50", "100", "0", "50"]);
   });
 
   it("distinguishes unavailable replay details from tracked zero deaths", () => {
@@ -112,6 +133,55 @@ describe("CasualtySnapshot", () => {
     for (const category of ["Units", "Buildings", "Workers"]) {
       expect(rowCounts(tableAt("1:00"), category)).toEqual(["0", "0", "0", "0"]);
     }
+    for (const resource of ["Minerals", "Gas", "Total"]) {
+      expect(rowCounts(tableAt("1:00"), resource)).toEqual(["0", "0", "0", "0"]);
+    }
+  });
+
+  it("prices casualties only once their exact time is reached and reprices for the game's era", () => {
+    const queen: CasualtyEvent[] = [
+      { time: 75.25, owner: "opp", killer: "me", category: "units", name: "Queen" },
+    ];
+    const view = render(
+      <CasualtySnapshot events={queen} time={75.2} workersOnly={false} patchEra="before" />,
+    );
+    expect(rowCounts(tableAt("1:15"), "Minerals")).toEqual(["0", "0", "0", "0"]);
+
+    view.rerender(
+      <CasualtySnapshot events={queen} time={75.25} workersOnly={false} patchEra="before" />,
+    );
+    expect(rowCounts(tableAt("1:15"), "Units")).toEqual(["1", "0", "0", "1"]);
+    expect(rowCounts(tableAt("1:15"), "Minerals")).toEqual(["150", "0", "0", "150"]);
+    expect(rowCounts(tableAt("1:15"), "Total")).toEqual(["150", "0", "0", "150"]);
+
+    view.rerender(
+      <CasualtySnapshot events={queen} time={75.25} workersOnly={false} patchEra="after" />,
+    );
+    expect(rowCounts(tableAt("1:15"), "Minerals")).toEqual(["175", "0", "0", "175"]);
+    expect(rowCounts(tableAt("1:15"), "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(rowCounts(tableAt("1:15"), "Total")).toEqual(["175", "0", "0", "175"]);
+  });
+
+  it("keeps unpriced deaths in counts and labels only affected resource totals as lower bounds", () => {
+    const unpriced: CasualtyEvent[] = [
+      { time: 10, owner: "opp", killer: "me", category: "units", name: "Marine" },
+      { time: 20, owner: "opp", killer: "me", category: "units", name: "UnknownModdedUnit" },
+      { time: 30, owner: "me", killer: "opp", category: "workers", name: "Probe" },
+    ];
+    render(<CasualtySnapshot events={unpriced} time={30} workersOnly={false} />);
+    const table = tableAt("0:30");
+    expect(rowCounts(table, "Units")).toEqual(["2", "0", "0", "2"]);
+    expect(rowCounts(table, "Minerals").map((value) => value?.replace(/\s/g, ""))).toEqual(["≥50", "50", "50", "≥50"]);
+    expect(rowCounts(table, "Gas").map((value) => value?.replace(/\s/g, ""))).toEqual(["≥0", "0", "0", "≥0"]);
+    expect(rowCounts(table, "Total").map((value) => value?.replace(/\s/g, ""))).toEqual(["≥50", "50", "50", "≥50"]);
+    const footnote = "Some casualties have no recorded price; resource totals are a lower bound.";
+    expect(screen.getByText(footnote)).toBeTruthy();
+
+    fireEvent.click(categoryButton("Units"));
+    expect(rowCounts(tableAt("0:30"), "Minerals")).toEqual(["0", "50", "50", "0"]);
+    expect(rowCounts(tableAt("0:30"), "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(rowCounts(tableAt("0:30"), "Total")).toEqual(["0", "50", "50", "0"]);
+    expect(screen.queryByText(footnote)).toBeNull();
   });
 
   it("requests reanalysis for missing details and disables repeat requests while pending", () => {

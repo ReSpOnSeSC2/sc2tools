@@ -255,6 +255,7 @@ export function MacroChartSection({
           oppName={oppName}
           onRecompute={onRecompute}
           recomputing={recomputing}
+          patchEra={patchEra}
         />
       </div>
       <div className="px-4 sm:px-0">

@@ -127,6 +127,7 @@ export function OfflineMacroChart(props: OfflineMacroChartProps) {
           workersOnly={!hasArmy && hasWorkers}
           myName={myName}
           oppName={oppName}
+          patchEra={props.patchEra}
         />
       </div>
       <div className="px-4 sm:px-0">

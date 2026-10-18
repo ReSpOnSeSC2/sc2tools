@@ -110,6 +110,11 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Killed/lost resource totals** — the match timeline breaks both players'
+  kills and losses into minerals, gas and combined value. Totals follow the
+  selected time and category filters, use the replay's balance patch, and
+  include morph investments and consumed Zerg construction workers.
+
 - **Agent 0.18.14 / replay engine 1.6.12: timeline kills and losses.** Macro
   breakdown shows both players' unit, building and worker casualties below the
   timeline values. Army has independent category filters; Workers shows workers

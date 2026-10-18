@@ -67,10 +67,16 @@ describe("OfflineMacroChart casualties", () => {
     vi.spyOn(overlay, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 300, 220));
     fireEvent.click(overlay, { clientX: 75.2, clientY: 30 });
     expect(counts("1:15", "Workers")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("1:15", "Minerals")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("1:15", "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("1:15", "Total")).toEqual(["0", "0", "0", "0"]);
     fireEvent.click(overlay, { clientX: 75.25, clientY: 30 });
     expect(counts("1:15", "Workers")).toEqual(["1", "0", "0", "1"]);
     expect(counts("1:15", "Units")).toEqual(["0", "0", "0", "0"]);
     expect(counts("1:15", "Buildings")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("1:15", "Minerals")).toEqual(["50", "0", "0", "50"]);
+    expect(counts("1:15", "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("1:15", "Total")).toEqual(["50", "0", "0", "50"]);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -80,6 +86,9 @@ describe("OfflineMacroChart casualties", () => {
     fireEvent.click(metric("Workers"));
     fireEvent.click(metric("Army"));
     expect(counts("5:00", "Workers")).toEqual(["1", "0", "0", "1"]);
+    expect(counts("5:00", "Minerals")).toEqual(["50", "0", "0", "50"]);
+    expect(counts("5:00", "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("5:00", "Total")).toEqual(["50", "0", "0", "50"]);
     expect(screen.queryByRole("group", { name: "Casualty categories" })).toBeNull();
     const table = screen.getByRole("table", { name: "Kills and losses at 5:00" });
     expect(within(table).queryByRole("row", { name: /^Units\b/ })).toBeNull();
@@ -90,6 +99,34 @@ describe("OfflineMacroChart casualties", () => {
     fireEvent.click(metric("Army"));
     expect(screen.getByRole("button", { name: "Show Buildings" }).getAttribute("aria-pressed")).toBe("false");
     expect(counts("5:00", "Units")).toEqual(["0", "1", "1", "0"]);
+    expect(counts("5:00", "Minerals")).toEqual(["50", "100", "100", "50"]);
+    expect(counts("5:00", "Gas")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("5:00", "Total")).toEqual(["50", "100", "100", "50"]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("prices local casualties with the game's patch era without fetching", () => {
+    const casualtyEvents: NonNullable<OfflineMacroChartProps["casualtyEvents"]> = [
+      { time: 75.25, owner: "opp", killer: "me", category: "units", name: "Queen" },
+      { time: 120, owner: "me", killer: "opp", category: "buildings", name: "Factory" },
+      { time: 200, owner: "opp", killer: "me", category: "workers", name: "Drone" },
+    ];
+    const view = render(
+      <OfflineMacroChart {...props} casualtyEvents={casualtyEvents} patchEra="before" />,
+    );
+    expect(counts("5:00", "Minerals")).toEqual(["200", "150", "150", "200"]);
+    expect(counts("5:00", "Gas")).toEqual(["0", "100", "100", "0"]);
+    expect(counts("5:00", "Total")).toEqual(["200", "250", "250", "200"]);
+
+    view.rerender(
+      <OfflineMacroChart {...props} casualtyEvents={casualtyEvents} patchEra="after" />,
+    );
+    expect(counts("5:00", "Minerals")).toEqual(["225", "150", "150", "225"]);
+    expect(counts("5:00", "Gas")).toEqual(["0", "100", "100", "0"]);
+    expect(counts("5:00", "Total")).toEqual(["225", "250", "250", "225"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Show Buildings" }));
+    expect(counts("5:00", "Total")).toEqual(["225", "0", "0", "225"]);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
