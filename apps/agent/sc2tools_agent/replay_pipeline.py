@@ -3032,6 +3032,11 @@ def _compute_macro_breakdown(
         "stats_events": my_stats_ds,
         "opp_stats_events": opp_stats_ds,
         "unit_timeline": unit_timeline,
+        # Exact tracker deaths are not sampled: keeping every event makes
+        # selected-time killed/lost counts reliable between stats ticks.
+        # Older bundled engines omit the field, which remains unavailable.
+        **({"casualty_events": list(my_macro["casualty_events"])}
+           if isinstance(my_macro.get("casualty_events"), list) else {}),
         # Structure lifetimes ({name, unit_id, born_time, died_time})
         # for BOTH sides. The SPA's Buildings roster subtracts
         # destroyed structures using these records

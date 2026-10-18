@@ -820,6 +820,10 @@ def compute_macro_score(
         # times as stats_events. Drives the Unit roster panel under the
         # Active Army & Workers chart.
         "unit_timeline": macro_events.get("unit_timeline", []) or [],
+        # Presence distinguishes an exact death ledger from older extracts
+        # that never tracked casualties. Do not turn missing data into [].
+        **({"casualty_events": macro_events["casualty_events"]}
+           if "casualty_events" in macro_events else {}),
         "top_3_leaks": [l.to_dict() for l in top_3],
         "all_leaks": [l.to_dict() for l in leaks],
         "raw": raw,

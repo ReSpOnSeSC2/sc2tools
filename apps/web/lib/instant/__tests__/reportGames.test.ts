@@ -72,6 +72,16 @@ describe("offline build orders", () => {
 });
 
 describe("macroChartProps", () => {
+  it("preserves exact casualties and distinguishes unavailable from tracked zero", () => {
+    const payload = realWin();
+    const builds = gameBuilds(payload);
+    const casualtyEvents = [{ time: 75.25, owner: "opp" as const, killer: "me" as const, category: "workers" as const, name: "Drone" }];
+    expect(macroChartProps(payload, builds)?.casualtyEvents).toBeUndefined();
+    const tracked = { ...payload, macroBreakdown: { ...payload.macroBreakdown, casualty_events: casualtyEvents } };
+    expect(macroChartProps(tracked, builds)?.casualtyEvents).toBe(casualtyEvents);
+    expect(macroChartProps({ ...tracked, macroBreakdown: { ...tracked.macroBreakdown, casualty_events: [] } }, builds)?.casualtyEvents).toEqual([]);
+  });
+
   it("wires the real breakdown like the analyzer's macro panel", () => {
     const payload = realWin();
     const breakdown = payload.macroBreakdown ?? {};

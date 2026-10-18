@@ -51,7 +51,7 @@ export interface GameBuilds {
  * `MacroChartSection`'s props minus the API-bound `gameId`, plus the
  * build order it would have fetched (parsed here from the payload).
  */
-export interface OfflineMacroChartProps extends Omit<MacroChartSectionProps, "gameId" | "highlightedKey"> {
+export interface OfflineMacroChartProps extends Omit<MacroChartSectionProps, "gameId" | "highlightedKey" | "onRecompute" | "recomputing"> {
   buildOrder: BuildOrderResponse;
 }
 
@@ -112,6 +112,7 @@ function chartSeries(breakdown: Breakdown, samples: StatsEvent[]) {
     samples,
     oppSamples: breakdown.opp_stats_events ?? [],
     unitTimeline: breakdown.unit_timeline,
+    casualtyEvents: breakdown.casualty_events,
     myProductionBuildings: breakdown.production_buildings,
     oppProductionBuildings: breakdown.opp_production_buildings,
     supplyBlockWindows: raw.supply_block_windows ?? [],

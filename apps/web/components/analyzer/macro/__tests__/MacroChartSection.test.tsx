@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MacroChartSection } from "../MacroChartSection";
-import type { StatsEvent } from "../MacroBreakdownPanel.types";
+import type { CasualtyEvent, StatsEvent } from "../MacroBreakdownPanel.types";
 import { timelineMetric } from "../timelineMetrics";
 
 const useApiMock = vi.fn();
@@ -415,5 +415,91 @@ describe("Match timeline tabs and read-out", () => {
   it("offers no supply-block switch when nobody was blocked", () => {
     render(<TestPage />);
     expect(screen.queryByRole("switch")).toBeNull();
+  });
+});
+
+describe("Match timeline kills and losses", () => {
+  const deaths: CasualtyEvent[] = [
+    { time: 75, owner: "opp", killer: "me", category: "units", name: "Marine" },
+    { time: 140, owner: "me", killer: "opp", category: "workers", name: "Probe" },
+    { time: 200, owner: "opp", killer: "me", category: "buildings", name: "Barracks" },
+  ];
+
+  function renderCasualties() {
+    return render(
+      <MacroChartSection
+        gameId="casualties"
+        samples={samples}
+        oppSamples={samples}
+        leaks={[]}
+        gameLengthSec={300}
+        casualtyEvents={deaths}
+      />,
+    );
+  }
+
+  function casualtyTable(clock: string) {
+    return screen.getByRole("table", { name: `Kills and losses at ${clock}` });
+  }
+
+  function counts(clock: string, category: string) {
+    const row = within(casualtyTable(clock)).getByRole("row", { name: new RegExp(`^${category}\\b`) });
+    return within(row).getAllByRole("cell").map((cell) => cell.textContent);
+  }
+
+  function metric(name: string) {
+    return within(screen.getByRole("group", { name: "Chart metrics" })).getByRole("button", { name });
+  }
+
+  it("places kills and losses after army value and follows the chart's selected time", () => {
+    renderCasualties();
+    expect(counts("5:00", "Units")).toEqual(["1", "0", "0", "1"]);
+    expect(counts("5:00", "Workers")).toEqual(["0", "1", "1", "0"]);
+    expect(counts("5:00", "Buildings")).toEqual(["1", "0", "0", "1"]);
+
+    const readout = screen.getByText("Game time").closest("dl")!;
+    const heading = screen.getByRole("heading", { name: "Killed & lost" });
+    expect(readout.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    const overlay = chartOverlay();
+    tap(overlay, 75);
+    expect(counts("1:15", "Units")).toEqual(["1", "0", "0", "1"]);
+    expect(counts("1:15", "Workers")).toEqual(["0", "0", "0", "0"]);
+    expect(counts("1:15", "Buildings")).toEqual(["0", "0", "0", "0"]);
+    tap(overlay, 140);
+    expect(counts("2:20", "Workers")).toEqual(["0", "1", "1", "0"]);
+    expect(counts("2:20", "Buildings")).toEqual(["0", "0", "0", "0"]);
+  });
+
+  it("switches to worker losses without forgetting the army category filters", () => {
+    renderCasualties();
+    const filters = screen.getByRole("group", { name: "Casualty categories" });
+    fireEvent.click(within(filters).getByRole("button", { name: "Show Buildings" }));
+    fireEvent.click(within(filters).getByRole("button", { name: "Show Workers" }));
+
+    fireEvent.click(metric("Workers"));
+    fireEvent.click(metric("Army"));
+    expect(screen.queryByRole("group", { name: "Casualty categories" })).toBeNull();
+    expect(counts("5:00", "Workers")).toEqual(["0", "1", "1", "0"]);
+    expect(within(casualtyTable("5:00")).queryByRole("row", { name: /^Units\b/ })).toBeNull();
+    expect(within(casualtyTable("5:00")).queryByRole("row", { name: /^Buildings\b/ })).toBeNull();
+
+    fireEvent.click(metric("Army"));
+    const restored = screen.getByRole("group", { name: "Casualty categories" });
+    expect(within(restored).getByRole("button", { name: "Show Units" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(restored).getByRole("button", { name: "Show Buildings" }).getAttribute("aria-pressed")).toBe("false");
+    expect(within(restored).getByRole("button", { name: "Show Workers" }).getAttribute("aria-pressed")).toBe("false");
+    expect(counts("5:00", "Units")).toEqual(["1", "0", "0", "1"]);
+  });
+
+  it("hides the section when neither Army nor Workers is selected", () => {
+    renderCasualties();
+    fireEvent.click(metric("Supply"));
+    fireEvent.click(metric("Army"));
+    expect(screen.queryByRole("heading", { name: "Killed & lost" })).toBeNull();
+
+    fireEvent.click(metric("Workers"));
+    expect(counts("5:00", "Workers")).toEqual(["0", "1", "1", "0"]);
+    expect(within(casualtyTable("5:00")).queryByRole("row", { name: /^Units\b/ })).toBeNull();
   });
 });

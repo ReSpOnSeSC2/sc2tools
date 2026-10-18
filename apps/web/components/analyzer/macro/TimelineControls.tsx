@@ -296,7 +296,7 @@ function PlayerCell({
 }) {
   return (
     <div className="min-w-0 border-l border-border px-3 py-1.5">
-      <dt className="truncate text-micro text-text-muted">
+      <dt className="relative truncate text-micro text-text-muted">
         <span className="font-semibold text-text">{name}</span>
         {/* The chosen metric is already on the switch on a phone. */}
         <span className="sr-only sm:not-sr-only sm:whitespace-nowrap"> {caption}</span>

@@ -22,9 +22,10 @@
  */
 import { useCallback, useMemo, useState } from "react";
 import { ActiveArmyChart, TIMELINE_CONTROL_ATTR } from "@/components/analyzer/macro/ActiveArmyChart";
+import { CasualtySnapshot } from "@/components/analyzer/macro/CasualtySnapshot";
 import { CompositionSnapshot } from "@/components/analyzer/macro/CompositionSnapshot";
 import { buildSeries } from "@/components/analyzer/macro/activeArmyLayout";
-import { timelineMetricsFor } from "@/components/analyzer/macro/timelineMetrics";
+import { DEFAULT_TIMELINE_METRIC, selectedMetrics, timelineMetricsFor, type TimelineMetric } from "@/components/analyzer/macro/timelineMetrics";
 import { INITIAL_HOVER, nextHover, type HoverEvent, type HoverState } from "@/components/analyzer/macro/timelineSelection";
 import { Toggle } from "@/components/ui/Toggle";
 import { gamePace, withApm } from "@/lib/apm";
@@ -80,10 +81,20 @@ function TimelineHeader({ hasBlocks, showBlocks, onShowBlocks }: { hasBlocks: bo
 export function OfflineMacroChart(props: OfflineMacroChartProps) {
   const [hover, setHover] = useState<HoverState>(INITIAL_HOVER);
   const [showBlocks, setShowBlocks] = useState(true);
+  const [chosenMetrics, setChosenMetrics] = useState<TimelineMetric[]>([DEFAULT_TIMELINE_METRIC]);
   const { mySeries, oppSeries, metrics, apmAverages } = useSeries(props);
   const handleHover = useCallback((event: HoverEvent) => setHover((prev) => nextHover(prev, event)), []);
   const { supplyBlockWindows, oppSupplyBlockWindows, myName, oppName, myRace, oppRace, gameLengthSec } = props;
   const hasBlocks = (supplyBlockWindows?.length ?? 0) + (oppSupplyBlockWindows?.length ?? 0) > 0;
+  const shownMetrics = selectedMetrics(chosenMetrics, metrics);
+  const hasArmy = shownMetrics.some((metric) => metric.key === "army");
+  const hasWorkers = shownMetrics.some((metric) => metric.key === "workers");
+  const finalTime = Math.max(
+    gameLengthSec ?? 0,
+    mySeries[mySeries.length - 1]?.t ?? 0,
+    oppSeries[oppSeries.length - 1]?.t ?? 0,
+  );
+  const casualtyTime = hover.time == null ? finalTime : Math.max(0, Math.min(finalTime, hover.time));
   return (
     <div className="space-y-3">
       <TimelineHeader hasBlocks={hasBlocks} showBlocks={showBlocks} onShowBlocks={setShowBlocks} />
@@ -102,11 +113,22 @@ export function OfflineMacroChart(props: OfflineMacroChartProps) {
         oppName={oppName}
         myRace={myRace}
         metrics={metrics}
+        selected={chosenMetrics}
+        onSelectionChange={setChosenMetrics}
         apmAverages={apmAverages}
         showSupplyBlocks={showBlocks}
         showTitle={false}
         className="px-3 pt-2 sm:px-0 sm:pt-0"
       />
+      <div hidden={!hasArmy && !hasWorkers} className="px-4 sm:px-0">
+        <CasualtySnapshot
+          events={props.casualtyEvents}
+          time={casualtyTime}
+          workersOnly={!hasArmy && hasWorkers}
+          myName={myName}
+          oppName={oppName}
+        />
+      </div>
       <div className="px-4 sm:px-0">
         <CompositionSnapshot
           mySeries={mySeries}

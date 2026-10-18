@@ -38,7 +38,11 @@ const gzip = promisify(zlib.gzip);
 const SAMPLE_BLOB = {
   buildLog: ["[0:00] Nexus", "[0:17] Pylon"],
   oppBuildLog: ["[0:00] Hatchery", "[0:30] Drone"],
-  macroBreakdown: { raw: { sq: 80 }, top_3_leaks: [], stats_events: [] },
+  macroBreakdown: { raw: { sq: 80 }, top_3_leaks: [], stats_events: [], casualty_events: [
+    { time: 110.25, owner: "opp", killer: "me", category: "workers", name: "Drone" },
+    { time: 240, owner: "me", killer: null, category: "units", name: "Marine" },
+    { time: 241.5, owner: "me", killer: "opp", category: "buildings", name: "Nexus" },
+  ] },
   apmCurve: { window_sec: 30, has_data: true, players: [] },
 };
 

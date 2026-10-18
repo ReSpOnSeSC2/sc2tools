@@ -1060,6 +1060,16 @@ def _unit_timeline_name(clean: str) -> Optional[str]:
     return clean
 
 
+def _casualty_building_name(raw: str) -> Optional[str]:
+    """Resolve structure aliases and movement stances before unit classification."""
+    name = _event_name(raw)
+    for suffix in ("Uprooted", "Flying", "Lowered"):
+        if name.endswith(suffix) and name[:-len(suffix)] in KNOWN_BUILDINGS:
+            name = name[:-len(suffix)]
+            break
+    return name if name in KNOWN_BUILDINGS else None
+
+
 def _unit_type_name_at_event(event) -> Optional[str]:
     """Resolve completion events against their frame, not the final form.
 
@@ -1190,6 +1200,11 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                                building unit owned by ``my_pid``. Used for
                                idle-production heuristics.
 
+      ``casualty_events``      Optional exact death ledger, with relative
+                               owner/killer and disjoint units/buildings/
+                               workers categories. Missing on incomplete or
+                               unsupported trackers; [] means tracked zero.
+
       ``creep_tumor_events``   List[{time, kind, unit_id, died_time}] of
                                creep tumors ``my_pid`` started, in plant
                                order. ``kind`` is "queen" (Queen cast) or
@@ -1250,6 +1265,61 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
     # Distinct from the buildings ``lifetimes`` dict above so nothing
     # cross-contaminates the macro engine's bases/production_buildings.
     unit_lifetimes: Dict[int, Dict] = {}
+    # The casualty ledger is separate from the army roster: workers are
+    # deliberately excluded from unit_lifetimes, and alive-map differences
+    # cannot distinguish combat from morphs or simultaneous production.
+    casualty_identities: Dict[int, Dict] = {}
+    casualty_deaths: Set[int] = set()
+    casualty_events: List[Dict] = []
+    casualty_complete = (UnitDiedEvent is not None
+                         and getattr(replay, "tracker_events", None) is not None)
+
+    def record_casualty(uid, event, killer_pid):
+        if (uid in casualty_deaths or uid in hallucinated_uids
+                or _is_explicit_hallucination(event)):
+            return
+        info = casualty_identities.get(uid)
+        if not info or info["pid"] not in counted_pids:
+            return
+        casualty_deaths.add(uid)
+        building = _casualty_building_name(info["name"])
+        name = building or _canonical_unit_name(_event_name(info["name"]))
+        if name == "DroneBurrowed":
+            name = "Drone"
+        owner_pid = info["pid"]
+        enemy_pid = opp_pid if owner_pid == my_pid else my_pid
+        # No attribution fallback: a self-kill or unattributed death must
+        # never become an opponent kill. Tracker-only deaths of Drones and
+        # Templars without a killer can represent construction / Archon merges.
+        if killer_pid is None and name in {"Drone", "HighTemplar", "DarkTemplar"}:
+            return
+        if building:
+            # Cancelling construction also fires UnitDied. Unfinished
+            # structures require an explicit enemy kill; completed structures
+            # can be genuinely lost to self-damage or an unattributed death.
+            enemy_kill = enemy_pid is not None and killer_pid == enemy_pid
+            if (building in CREEP_TUMOR_TYPES
+                    or (not info.get("building_completed") and not enemy_kill)):
+                return
+            category, name = "buildings", building
+        elif name in WORKER_NAMES:
+            category = "workers"
+        else:
+            if (name.startswith(("Beacon", "Spray", "Reward"))
+                    or _unit_timeline_name(name) is None):
+                return
+            category = "units"
+        time = event_seconds_precise(event, replay)
+        if not math.isfinite(time) or time < 0:
+            return
+        casualty_events.append({
+            "time": round(time, 3),
+            "owner": "me" if owner_pid == my_pid else "opp",
+            "killer": ("me" if killer_pid == my_pid else "opp")
+            if killer_pid in counted_pids and killer_pid != owner_pid else None,
+            "category": category,
+            "name": name,
+        })
     # Set of unit_ids whose first-completion event we've already
     # recorded. Needed because non-building units fire EITHER
     # UnitBornEvent (Gateway-trained, larva-morph) OR
@@ -1387,9 +1457,20 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     if _is_explicit_hallucination(event):
                         if uid is not None:
                             hallucinated_uids.add(uid)
+                            casualty_identities.pop(uid, None)
                         continue
                     if uid in hallucinated_uids:
                         continue
+                    if uid is not None and pid in counted_pids:
+                        previous = casualty_identities.get(uid) or {}
+                        building = _casualty_building_name(clean)
+                        completed = bool(building and (
+                            isinstance(event, (UnitBornEvent, UnitDoneEvent))
+                            or previous.get("building_completed")))
+                        casualty_identities[uid] = {
+                            "pid": pid, "name": _event_name(clean),
+                            "building_completed": completed,
+                        }
                     timeline_name = _unit_timeline_name(clean)
 
                     # Track non-building, non-skip units for BOTH pids so
@@ -1556,7 +1637,27 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     clean = _clean_building_name(raw)
                     uid = _resolve_unit_id(event)
                     if uid in hallucinated_uids or _is_explicit_hallucination(event):
+                        if uid is not None:
+                            hallucinated_uids.add(uid)
+                            casualty_identities.pop(uid, None)
                         continue
+                    # A cocoon is still the parent investment until the
+                    # completed morph appears. Stance and structure changes
+                    # update the same identity; Drone -> building consumes no
+                    # worker casualty.
+                    identity = casualty_identities.get(uid)
+                    if uid is not None and (pid in counted_pids or identity):
+                        if not clean.endswith(("Cocoon", "Egg")):
+                            casualty_identities[uid] = {
+                                "pid": identity["pid"] if identity else pid,
+                                "name": _event_name(clean),
+                                # Drone -> building starts construction;
+                                # an existing structure's morph or movement
+                                # stance preserves its completion evidence.
+                                "building_completed": bool(
+                                    identity and identity.get("building_completed")
+                                    and _casualty_building_name(clean)),
+                            }
                     # Buildings: only follow morphs for my_pid (existing
                     # behavior — the macro engine only cares about my
                     # bases / production buildings).
@@ -1637,6 +1738,7 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     )
                     if isinstance(killer_pid, int) and killer_pid == 0:
                         killer_pid = None
+                    record_casualty(uid, event, killer_pid)
                     if uid in creep_tumors_by_uid:
                         creep_tumors_by_uid[uid]["died_time"] = int(died_t)
                     if uid in lifetimes:
@@ -1694,10 +1796,17 @@ def extract_macro_events(replay, my_pid: int, opp_pid: Optional[int] = None) -> 
                     continue
             except Exception:
                 # Swallow per-event errors and keep walking.
+                casualty_complete = False
                 continue
     except Exception:
         # Iterator gave up - return whatever we collected.
+        casualty_complete = False
         pass
+
+    # Absence means unavailable, while [] means tracked with no casualties.
+    # A failed tracker walk must never claim an authoritative zero count.
+    if casualty_complete:
+        out["casualty_events"] = sorted(casualty_events, key=lambda row: row["time"])
 
     # Game-event pass for ability uses (inject / chrono / MULE).
     #

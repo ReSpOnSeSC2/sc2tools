@@ -241,6 +241,8 @@ export function MacroBreakdownPanel({
               onHighlight={setHighlightedKey}
               headerMeta={headerMeta}
               replayController={replayController}
+              onRecompute={recompute}
+              recomputing={recomputing}
             />
           )}
         </div>
@@ -413,6 +415,8 @@ function BreakdownBody({
   onHighlight,
   headerMeta,
   replayController,
+  onRecompute,
+  recomputing,
 }: {
   data: MacroBreakdownData;
   gameId: string;
@@ -421,6 +425,8 @@ function BreakdownBody({
   onHighlight: (key: string | null, leak: LeakItem | null) => void;
   headerMeta?: PanelHeaderMeta;
   replayController: MapReplayController;
+  onRecompute: () => void;
+  recomputing: boolean;
 }) {
   const score =
     typeof data.macro_score === "number"
@@ -469,6 +475,9 @@ function BreakdownBody({
             samples={data.stats_events || []}
             oppSamples={data.opp_stats_events || []}
             unitTimeline={data.unit_timeline}
+            casualtyEvents={data.casualty_events}
+            onRecompute={onRecompute}
+            recomputing={recomputing}
             myProductionBuildings={data.production_buildings}
             oppProductionBuildings={data.opp_production_buildings}
             gameLengthSec={data.game_length_sec}

@@ -17,14 +17,21 @@ import {
   CompositionSnapshot,
   type BuildOrderResponse,
 } from "./CompositionSnapshot";
+import { CasualtySnapshot } from "./CasualtySnapshot";
 import type {
+  CasualtyEvent,
   LeakItem,
   ProductionBuildingRecord,
   StatsEvent,
   UnitTimelineEntry,
 } from "./MacroBreakdownPanel.types";
 import { buildSeries } from "./activeArmyLayout";
-import { timelineMetricsFor } from "./timelineMetrics";
+import {
+  DEFAULT_TIMELINE_METRIC,
+  selectedMetrics,
+  timelineMetricsFor,
+  type TimelineMetric,
+} from "./timelineMetrics";
 import {
   INITIAL_HOVER,
   nextHover,
@@ -38,6 +45,10 @@ export interface MacroChartSectionProps {
   samples: StatsEvent[];
   oppSamples: StatsEvent[];
   unitTimeline?: UnitTimelineEntry[];
+  /** Exact deaths through the selected moment; absence means legacy data. */
+  casualtyEvents?: CasualtyEvent[];
+  onRecompute?: () => void;
+  recomputing?: boolean;
   /** Per-structure lifetimes (born/died plus lifecycle result) used by
    *  both rosters to drop destroyed buildings. */
   myProductionBuildings?: ProductionBuildingRecord[];
@@ -103,6 +114,9 @@ export function MacroChartSection({
   samples,
   oppSamples,
   unitTimeline,
+  casualtyEvents,
+  onRecompute,
+  recomputing,
   myProductionBuildings,
   oppProductionBuildings,
   gameLengthSec,
@@ -120,6 +134,7 @@ export function MacroChartSection({
 }: MacroChartSectionProps) {
   const [hover, setHover] = useState<HoverState>(INITIAL_HOVER);
   const [showBlocks, setShowBlocks] = useState(true);
+  const [chosenMetrics, setChosenMetrics] = useState<TimelineMetric[]>([DEFAULT_TIMELINE_METRIC]);
   const hasBlocks =
     (supplyBlockWindows?.length ?? 0) + (oppSupplyBlockWindows?.length ?? 0) > 0;
 
@@ -161,6 +176,15 @@ export function MacroChartSection({
     [oppSamples, unitTimeline, buildOrder.data?.opp_events, apm, patchEra],
   );
   const metrics = useMemo(() => timelineMetricsFor({ apm: apm !== null }), [apm]);
+  const shownMetrics = selectedMetrics(chosenMetrics, metrics);
+  const hasArmy = shownMetrics.some((metric) => metric.key === "army");
+  const hasWorkers = shownMetrics.some((metric) => metric.key === "workers");
+  const finalTime = Math.max(
+    gameLengthSec ?? 0,
+    mySeries[mySeries.length - 1]?.t ?? 0,
+    oppSeries[oppSeries.length - 1]?.t ?? 0,
+  );
+  const casualtyTime = hover.time == null ? finalTime : Math.max(0, Math.min(finalTime, hover.time));
   const apmAverages = useMemo(
     () => (apm ? { my: gamePace(apm.me), opp: gamePace(apm.opp) } : null),
     [apm],
@@ -215,11 +239,24 @@ export function MacroChartSection({
         oppName={oppName}
         myRace={myRace}
         metrics={metrics}
+        selected={chosenMetrics}
+        onSelectionChange={setChosenMetrics}
         apmAverages={apmAverages}
         showSupplyBlocks={showBlocks}
         showTitle={false}
         className="sticky top-[var(--macro-header-h,0px)] z-[5] bg-bg-surface px-3 pt-2 shadow-[0_8px_12px_-12px_rgb(0_0_0/0.5)] sm:static sm:z-auto sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none"
       />
+      <div hidden={!hasArmy && !hasWorkers} className="px-4 sm:px-0">
+        <CasualtySnapshot
+          events={casualtyEvents}
+          time={casualtyTime}
+          workersOnly={!hasArmy && hasWorkers}
+          myName={myName}
+          oppName={oppName}
+          onRecompute={onRecompute}
+          recomputing={recomputing}
+        />
+      </div>
       <div className="px-4 sm:px-0">
         <CompositionSnapshot
           mySeries={mySeries}

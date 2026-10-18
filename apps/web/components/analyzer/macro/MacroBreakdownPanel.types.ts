@@ -105,6 +105,19 @@ export interface UnitTimelineEntry {
   opp?: Record<string, number>;
 }
 
+export type CasualtyCategory = "units" | "buildings" | "workers";
+export type CasualtySide = "me" | "opp";
+
+/** A real death, distinct from production, morphing and temporary summons.
+ * Workers and units are disjoint. Unknown/self deaths count as losses only. */
+export interface CasualtyEvent {
+  time: number;
+  owner: CasualtySide;
+  killer: CasualtySide | null;
+  category: CasualtyCategory;
+  name: string;
+}
+
 /**
  * One structure's lifetime, from the agent's
  * ``macroBreakdown.production_buildings`` array. Every building the
@@ -175,6 +188,8 @@ export interface MacroBreakdownData {
   stats_events?: StatsEvent[];
   opp_stats_events?: StatsEvent[];
   unit_timeline?: UnitTimelineEntry[];
+  /** Exact death ledger. Absent on older analyses; [] means no casualties. */
+  casualty_events?: CasualtyEvent[];
   /**
    * Per-structure lifetimes with born/died timestamps, one array per
    * side. Drive the death-aware Buildings roster (destroyed structures

@@ -3,6 +3,7 @@
 const express = require("express");
 const rateLimitModule = require("express-rate-limit");
 const { parseFilters } = require("../util/parseQuery");
+const { validateCasualtyEvents } = require("../validation/casualtyEvents");
 
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
@@ -237,6 +238,7 @@ function publicReplayItem(raw, rawLinks, downloadsEnabled = true) {
 function publicMacroBreakdown(raw) {
   const source = objectOrEmpty(raw);
   if (source.ok !== true) return null;
+  const casualties = publicCasualtyEvents(source.casualty_events);
   const out = {
     ok: true,
     macro_score: boundedNumber(source.macro_score, 0, 100, false),
@@ -247,7 +249,26 @@ function publicMacroBreakdown(raw) {
     top_3_leaks: publicLeaks(source.top_3_leaks, 3),
     stats_events: publicStatsEvents(source.stats_events),
     opp_stats_events: publicStatsEvents(source.opp_stats_events),
+    ...(casualties !== undefined ? { casualty_events: casualties } : {}),
   };
+  return out;
+}
+
+/**
+ * Keep exact casualty counts available in shared replays and reviews without
+ * carrying any source identity metadata. Never turn an absent or malformed
+ * ledger into a partial list (or an apparent verified zero).
+ * @param {unknown} raw
+ */
+function publicCasualtyEvents(raw) {
+  if (!Array.isArray(raw) || !validateCasualtyEvents(raw)) return undefined;
+  const out = [];
+  for (const entry of raw) {
+    const { time, owner, killer, category } = entry;
+    const name = boundedString(entry.name, 64);
+    if (name === null) return undefined;
+    out.push({ time, owner, killer, category, name });
+  }
   return out;
 }
 

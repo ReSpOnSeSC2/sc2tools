@@ -2,7 +2,33 @@
 
 const express = require("express");
 const request = require("supertest");
-const { buildPublicReplaysRouter } = require("../src/routes/publicReplays");
+const { buildPublicReplaysRouter, publicMacroBreakdown } = require("../src/routes/publicReplays");
+const { reviewMacroBreakdown } = require("../src/services/reviewRedaction");
+
+describe.each([publicMacroBreakdown, reviewMacroBreakdown])("shared casualty redaction (%#)", (redact) => {
+  const event = { time: 123.45, owner: "opp", killer: "me", category: "workers", name: "Drone" };
+
+  test("preserves exact relative-owner events and drops arbitrary nested metadata", () => {
+    const events = [event, { time: 150, owner: "me", killer: null, category: "units", name: "Marine" },
+      { time: 200, owner: "me", killer: "opp", category: "buildings", name: "Nexus" }];
+    const out = redact({ ok: true, casualty_events: events.map((entry) => ({ ...entry,
+      playerName: "secret", replayHash: "private", nested: { identity: "hidden" },
+    })) });
+    expect(out?.casualty_events).toEqual(events);
+  });
+
+  test("keeps unavailable data distinguishable from verified zero casualties", () => {
+    expect(redact({ ok: true })).not.toHaveProperty("casualty_events");
+    expect(redact({ ok: true, casualty_events: [] })).toHaveProperty("casualty_events", []);
+  });
+
+  test.each([null, [{ ...event, killer: undefined }], [{ ...event, time: -1 }],
+    [event, { ...event, name: "X".repeat(65) }], Array(20001).fill(event)])(
+    "omits a malformed or oversized ledger entirely (%#)", (casualty_events) => {
+      expect(redact({ ok: true, casualty_events })).not.toHaveProperty("casualty_events");
+    },
+  );
+});
 
 function makeDeps(overrides = {}) {
   return {

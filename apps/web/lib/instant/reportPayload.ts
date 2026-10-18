@@ -16,6 +16,7 @@
  */
 import type {
   BreakdownRaw,
+  CasualtyEvent,
   ChronoTarget,
   LeakItem,
   MacroBreakdownData,
@@ -226,6 +227,22 @@ function toBuildings(value: unknown): ProductionBuildingRecord[] {
   });
 }
 
+function toCasualtyEvents(value: unknown): CasualtyEvent[] | undefined {
+  if (!Array.isArray(value) || value.length > 20_000) return undefined;
+  const events: CasualtyEvent[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) return undefined;
+    const time = num(item.time);
+    if (time === null || time < 0 || time > 86_400) return undefined;
+    if (typeof item.name !== "string" || item.name.length < 1 || item.name.length > 64) return undefined;
+    if (item.owner !== "me" && item.owner !== "opp") return undefined;
+    if (item.killer !== null && item.killer !== "me" && item.killer !== "opp") return undefined;
+    if (item.category !== "units" && item.category !== "buildings" && item.category !== "workers") return undefined;
+    events.push({ time, owner: item.owner, killer: item.killer, category: item.category, name: item.name });
+  }
+  return events;
+}
+
 function toPlayerStatsRecord(value: unknown): PlayerStatsRecord | null {
   if (!isRecord(value) || typeof value.name !== "string" || typeof value.is_me !== "boolean") {
     return null;
@@ -262,6 +279,10 @@ function toMacroBreakdown(value: unknown): InstantMacroBreakdown | null {
   setIfArray(out, "stats_events", value.stats_events, toStatsEvents);
   setIfArray(out, "opp_stats_events", value.opp_stats_events, toStatsEvents);
   setIfArray(out, "unit_timeline", value.unit_timeline, toUnitTimeline);
+  // An exact ledger is useful only when every row is valid. Dropping one
+  // bad row would produce partial totals; dropping all would claim zero.
+  const casualties = toCasualtyEvents(value.casualty_events);
+  if (casualties !== undefined) out.casualty_events = casualties;
   setIfArray(out, "production_buildings", value.production_buildings, toBuildings);
   setIfArray(out, "opp_production_buildings", value.opp_production_buildings, toBuildings);
   const playerStats = toPlayerStats(value.player_stats);

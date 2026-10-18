@@ -127,6 +127,8 @@ def _compute_for_replay(file_path: str, player_name: str) -> Dict[str, Any]:
         # name. Drives the Unit Roster panel that appears below the
         # chart on hover.
         "unit_timeline": result.get("unit_timeline", []) or [],
+        **({"casualty_events": result["casualty_events"]}
+           if "casualty_events" in result else {}),
     }
 
 

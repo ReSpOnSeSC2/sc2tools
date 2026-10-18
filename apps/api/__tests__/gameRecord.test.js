@@ -170,6 +170,45 @@ describe("validateGameRecord", () => {
     expect(r.valid).toBe(true);
   });
 
+  describe("exact casualty ledger", () => {
+    const event = { time: 123.45, owner: "opp", killer: "me", category: "workers", name: "Drone" };
+    /** @param {unknown} casualty_events */
+    const record = (casualty_events) => ({
+      gameId: "casualties", date: "2026-10-18T12:00:00Z", result: "Victory",
+      myRace: "Protoss", map: "Rainfall LE", macroBreakdown: { casualty_events },
+    });
+
+    test("accepts exact events, unattributed losses and explicit zero casualties in place", () => {
+      for (const events of [[], [event, { ...event, owner: "me", killer: null, category: "units", name: "Stalker" }],
+        [{ ...event, category: "buildings", name: "Hatchery", time: 86_400 }]]) {
+        const raw = record(events);
+        const result = validateGameRecord(raw);
+        expect(result.valid).toBe(true);
+        if (result.valid) expect(result.value).toBe(raw);
+      }
+    });
+
+    test.each(["time", "owner", "killer", "category", "name"])("requires event %s", (key) => {
+      const incomplete = /** @type {Record<string, any>} */ ({ ...event });
+      delete incomplete[key];
+      expect(validateGameRecord(record([incomplete])).valid).toBe(false);
+    });
+
+    test.each([
+      { time: -0.01 }, { time: 86_400.01 }, { time: Infinity }, { time: NaN }, { time: "123" },
+      { owner: "opponent" }, { owner: null }, { killer: "unknown" }, { category: "army" },
+      { name: "" }, { name: "X".repeat(65) },
+    ])("rejects malformed casualty fields: %p", (invalid) => {
+      expect(validateGameRecord(record([{ ...event, ...invalid }])).valid).toBe(false);
+    });
+
+    test("bounds the ledger without truncating it", () => {
+      expect(validateGameRecord(record(Array(20000).fill(event))).valid).toBe(true);
+      expect(validateGameRecord(record(Array(20001).fill(event))).valid).toBe(false);
+      expect(validateGameRecord(record(null)).valid).toBe(false);
+    });
+  });
+
   test.each([
     { ["X".repeat(65)]: 1 },
     Object.fromEntries(Array.from({ length: 257 }, (_, i) => [

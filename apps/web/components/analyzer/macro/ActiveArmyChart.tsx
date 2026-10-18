@@ -102,6 +102,9 @@ export interface ActiveArmyChartProps {
   myRace?: string | null;
   /** Metrics this game offers; APM is included only with a trusted curve. */
   metrics?: readonly TimelineMetricDef[];
+  /** Optional host-owned selection, shared with metric-specific details. */
+  selected?: readonly TimelineMetric[];
+  onSelectionChange?: (next: TimelineMetric[]) => void;
   /** Each player's game-average APM and SPM, shown under the APM view. */
   apmAverages?: { my: GamePace | null; opp: GamePace | null } | null;
   /** Draw the supply-block bands (the host owns the on/off switch). */
@@ -164,6 +167,8 @@ export function ActiveArmyChart({
   oppName,
   myRace,
   metrics = BASE_METRICS,
+  selected,
+  onSelectionChange,
   apmAverages = null,
   showSupplyBlocks = true,
   showTitle = true,
@@ -177,8 +182,8 @@ export function ActiveArmyChart({
   const [containerRef, size] = useElementSize();
   const [chosen, setChosen] = useState<TimelineMetric[]>([DEFAULT_TIMELINE_METRIC]);
   const shown = useMemo(
-    () => selectedMetrics(chosen, metrics).map((m) => m.key),
-    [chosen, metrics],
+    () => selectedMetrics(selected ?? chosen, metrics).map((m) => m.key),
+    [selected, chosen, metrics],
   );
 
   const layout = useMemo(
@@ -311,7 +316,15 @@ export function ActiveArmyChart({
         </figcaption>
       ) : null}
 
-      <MetricSwitch selected={shown} onChange={setChosen} race={myRace} metrics={metrics} />
+      <MetricSwitch
+        selected={shown}
+        onChange={(next) => {
+          setChosen(next);
+          onSelectionChange?.(next);
+        }}
+        race={myRace}
+        metrics={metrics}
+      />
 
       <div
         ref={containerRef}

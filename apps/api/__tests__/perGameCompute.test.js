@@ -24,7 +24,10 @@ describe("services/perGameCompute", () => {
     const stored = {
       buildLog: ["[0:00] Nexus", "[0:17] Pylon"],
       oppBuildLog: ["[0:00] Hatchery"],
-      macroBreakdown: { raw: { sq: 74 }, stats_events: [{ t: 0 }] },
+      macroBreakdown: { raw: { sq: 74 }, stats_events: [{ t: 0 }], casualty_events: [
+        { time: 110.25, owner: "opp", killer: "me", category: "workers", name: "Drone" },
+        { time: 240, owner: "me", killer: null, category: "units", name: "Marine" },
+      ] },
       apmCurve: { window_sec: 30, has_data: true, players: [{ name: "You", samples: [] }] },
     };
 
@@ -93,6 +96,45 @@ describe("services/perGameCompute", () => {
       expect(await service.buildOrder("u", "g")).toMatchObject({ my_status: "not_extracted", opp_status: "not_extracted", events: [] });
       expect(await service.macroBreakdown("u", "g")).toEqual({ ok: false, code: "not_computed" });
     });
+
+    test.each([undefined, []])("preserves casualty availability (%p) without fetching map playback", async (events) => {
+      const macroBreakdown = { unit_timeline: [{ time: 10, my: { Probe: 8 }, opp: {} }] };
+      if (events !== undefined) macroBreakdown.casualty_events = events;
+      const findOne = jest.fn().mockResolvedValue({ gameId: "g" });
+      const detailRead = jest.fn().mockResolvedValue({ macroBreakdown });
+      const service = new PerGameComputeService({ games: { findOne } }, { gameDetails: { findOne: detailRead } });
+      const result = await service.macroBreakdown("owner", "g");
+      if (events === undefined) expect(result).not.toHaveProperty("casualty_events");
+      else expect(result.casualty_events).toEqual([]);
+      expect(detailRead).toHaveBeenCalledTimes(1);
+      expect(detailRead).toHaveBeenCalledWith("owner", "g", expect.objectContaining({ fields: ["macroBreakdown"] }));
+      expect(findOne.mock.calls[0][1].projection).not.toHaveProperty("mapPlayback");
+    });
+
+    test("a macro recompute persists the exact ledger to the detail store", async () => {
+      const date = new Date("2026-10-18T12:00:00Z");
+      const updateOne = jest.fn().mockResolvedValue({ matchedCount: 1 });
+      const upsert = jest.fn();
+      const service = new PerGameComputeService({ games: { updateOne, findOne: async () => ({ date }) } }, {
+        gameDetails: { upsert },
+      });
+      await service.writeMacroBreakdown("owner", "g", { macroScore: 74, breakdown: stored.macroBreakdown });
+      expect(upsert).toHaveBeenCalledWith("owner", "g", date, { macroBreakdown: stored.macroBreakdown });
+      expect(updateOne.mock.calls[0][1].$set).not.toHaveProperty("macroBreakdown");
+    });
+
+    test.each([null, [{ time: -1 }], Array(20001).fill(stored.macroBreakdown.casualty_events[0])])(
+      "rejects a malformed recomputed casualty ledger before writing", async (casualty_events) => {
+        const updateOne = jest.fn();
+        const upsert = jest.fn();
+        const service = new PerGameComputeService({ games: { updateOne } }, { gameDetails: { upsert } });
+        await expect(service.writeMacroBreakdown("owner", "g", {
+          macroScore: 74, breakdown: { casualty_events },
+        })).rejects.toMatchObject({ status: 400, code: "invalid_casualty_events" });
+        expect(updateOne).not.toHaveBeenCalled();
+        expect(upsert).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe("parseBuildLogLines", () => {

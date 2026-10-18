@@ -17,6 +17,7 @@ const {
 const { toStartSeconds, isFinishTimeEvent } = require("./buildDurations");
 const { proxyEvidence } = require("./proxyClassification");
 const { gamesMatchStage } = require("../util/parseQuery");
+const { validateCasualtyEvents } = require("../validation/casualtyEvents");
 
 const {
   KNOWN_BUILDING_NAMES,
@@ -448,6 +449,16 @@ class PerGameComputeService {
   async writeMacroBreakdown(userId, gameId, payload) {
     if (!payload || typeof payload.macroScore !== "number") {
       throw new Error("macroScore required");
+    }
+    if (payload.breakdown && typeof payload.breakdown === "object"
+      && "casualty_events" in payload.breakdown
+      && !validateCasualtyEvents(payload.breakdown.casualty_events)) {
+      const err = /** @type {Error & {code: string, status: number}} */ (
+        new Error("invalid_casualty_events")
+      );
+      err.code = "invalid_casualty_events";
+      err.status = 400;
+      throw err;
     }
     // Slim-row update keeps the surface fields the Recent Games table
     // and aggregations read directly: macroScore + top3Leaks for

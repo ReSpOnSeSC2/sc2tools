@@ -32,6 +32,7 @@ const BUILD_LOG_LINE_MAX_LENGTH = 256;
 // bounded even though the surrounding agent payload remains forward
 // compatible.
 const { PLAY_SIGNATURE_SCHEMA, validPlaySignatureSemantics } = require("./playSignature");
+const { CASUALTY_EVENTS_SCHEMA } = require("./casualtyEvents");
 const { INGEST_PROVENANCE, LIMITS } = require("../config/constants");
 
 const UNIT_TIMELINE_SIDE_SCHEMA = {
@@ -271,6 +272,7 @@ const GAME_SCHEMA = {
         top_3_leaks: { type: "array", maxItems: 10 },
         stats_events: { type: "array", maxItems: 5000 },
         opp_stats_events: { type: "array", maxItems: 5000 },
+        casualty_events: CASUALTY_EVENTS_SCHEMA,
         // unit_timeline arrives at the same cadence as stats_events
         // (one entry per 10 s game-time bucket post-downsample, matching
         // sc2reader's native PlayerStatsEvent cadence). Each entry

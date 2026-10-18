@@ -1250,6 +1250,10 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
                 {"time": 0, "my": {}, "opp": {}},
                 {"time": 60, "my": {"Zealot": 1}, "opp": {"Zergling": 6}},
             ],
+            "casualty_events": [
+                {"time": 59.125, "owner": "opp", "killer": "me",
+                 "category": "workers", "name": "Drone"},
+            ],
             "player_stats": {},
             "ability_events": [],
             # Structure lifetimes for both sides — the SPA's
@@ -1337,6 +1341,10 @@ def test_parse_replay_for_cloud_emits_macro_breakdown_and_opp_build_log(
     assert isinstance(mb.get("stats_events"), list)
     assert len(mb["stats_events"]) >= 1
     assert "raw" in mb
+    assert mb["casualty_events"] == [
+        {"time": 59.125, "owner": "opp", "killer": "me",
+         "category": "workers", "name": "Drone"},
+    ]
     # Structure lifetimes pass through for BOTH sides. Without these
     # the SPA's Buildings roster falls back to cumulative build-order
     # counts and destroyed spines / cannons never leave the roster.
@@ -1542,6 +1550,8 @@ def test_parse_replay_for_cloud_ships_partial_macro_breakdown_on_score_failure(
     assert len(mb["stats_events"]) >= 1
     assert len(mb["opp_stats_events"]) >= 1
     assert len(mb["unit_timeline"]) >= 1
+    # Older engines omit exact casualties: never manufacture tracked zeroes.
+    assert "casualty_events" not in mb
     # Extractor output without the opponent lifetime mirrors (older
     # replay-engine copy) degrades to empty lists, not a KeyError.
     assert mb["production_buildings"] == []
