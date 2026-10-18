@@ -110,6 +110,13 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Agent 0.18.14 / replay engine 1.6.12: timeline kills and losses.** Macro
+  breakdown shows both players' unit, building and worker casualties below the
+  timeline values. Army has independent category filters; Workers shows workers
+  only. Counts follow the selected moment, filter choices persist, and morphs,
+  canceled construction and temporary units do not inflate losses. Update the
+  agent and re-analyze older replays to populate the new breakdown.
+
 - **Visual examples for all 31 Stream Studio widgets** — each guide now
   shows the actual widget design with sample data, with an enlarged view
   for reading the details. A searchable visual gallery lets new users

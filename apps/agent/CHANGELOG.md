@@ -2,6 +2,22 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.18.14
+
+### Added - Timeline kills and losses
+
+- Replay analysis now records unit, building and worker kills and losses for
+  both players at each death's exact game time. Workers stay separate from units;
+  morphs, Archon merges, canceled construction, temporary units and hallucinations
+  do not inflate casualties.
+- The matching website update adds a killed/lost breakdown below the timeline
+  values. Army offers independent Units, Buildings and Workers filters; Workers
+  shows worker casualties only. Counts follow the inspected moment, and filter
+  choices persist when switching views.
+- Update the agent and re-analyze older replays to populate the new breakdown.
+  Missing records remain unavailable rather than appearing as zero casualties.
+- Includes replay engine **1.6.12**, shared with browser Instant Analysis.
+
 ## 0.18.13
 
 ### Fixed - YouTube chat identity and Stream Dock recovery
