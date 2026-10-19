@@ -246,18 +246,6 @@ export function MacroChartSection({
         showTitle={false}
         className="sticky top-[var(--macro-header-h,0px)] z-[5] bg-bg-surface px-3 pt-2 shadow-[0_8px_12px_-12px_rgb(0_0_0/0.5)] sm:static sm:z-auto sm:bg-transparent sm:px-0 sm:pt-0 sm:shadow-none"
       />
-      <div hidden={!hasArmy && !hasWorkers} className="px-4 sm:px-0">
-        <CasualtySnapshot
-          events={casualtyEvents}
-          time={casualtyTime}
-          workersOnly={!hasArmy && hasWorkers}
-          myName={myName}
-          oppName={oppName}
-          onRecompute={onRecompute}
-          recomputing={recomputing}
-          patchEra={patchEra}
-        />
-      </div>
       <div className="px-4 sm:px-0">
         <CompositionSnapshot
           mySeries={mySeries}
@@ -274,6 +262,18 @@ export function MacroChartSection({
           buildOrderError={Boolean(buildOrder.error)}
           myProductionBuildings={myProductionBuildings}
           oppProductionBuildings={oppProductionBuildings}
+          patchEra={patchEra}
+        />
+      </div>
+      <div hidden={!hasArmy && !hasWorkers} className="px-4 sm:px-0">
+        <CasualtySnapshot
+          events={casualtyEvents}
+          time={casualtyTime}
+          workersOnly={!hasArmy && hasWorkers}
+          myName={myName}
+          oppName={oppName}
+          onRecompute={onRecompute}
+          recomputing={recomputing}
           patchEra={patchEra}
         />
       </div>
