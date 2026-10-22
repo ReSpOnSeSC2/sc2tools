@@ -38,8 +38,8 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "Every article has its own address on the help center, for example [/help/getting-started](/help/getting-started).",
-        "In the app, add the article name after `#` to open it in Settings → Help, for example [/settings?tab=help#getting-started](/settings?tab=help#getting-started).",
+        "Every article has its own address on the help center, for example `/help/getting-started`.",
+        "In the app, add the article name after `#` to open it in Settings → Help, for example `/settings?tab=help#getting-started`.",
       ],
     },
     { type: "heading", text: "Still stuck?" },

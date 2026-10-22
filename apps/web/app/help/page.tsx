@@ -16,8 +16,15 @@ export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/help" },
-  openGraph: { type: "website", siteName: "SC2 Tools", url: "/help", title: TITLE, description: DESCRIPTION },
-  twitter: { card: "summary", title: TITLE, description: DESCRIPTION },
+  openGraph: {
+    type: "website",
+    siteName: "SC2 Tools",
+    url: "/help",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "SC2 Tools Help" }],
+  },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/og.jpg"] },
 };
 
 const TOPIC_LINK_CLASS =

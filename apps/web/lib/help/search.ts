@@ -57,16 +57,21 @@ const STOPWORDS: ReadonlySet<string> = new Set([
  * removed. A leading "!" is kept, so chat commands ("!win") are their
  * own words and don't match "win rate".
  *
+ * A word joined by hyphens also counts as one word, so "check-in" is found
+ * by "checkin" as well as "check in".
+ *
  * Example: `helpSearchTokens("What's the 6-digit code? !rank")` → ["whats", "the", "digit", "code", "!rank"].
+ * Example: `helpSearchTokens("Build check-in")` → ["build", "check", "in", "checkin"].
  */
 export function helpSearchTokens(text: string): string[] {
-  const words = text
+  const plain = text
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
-    .replace(/['’]/g, "")
-    .match(/!?[a-z0-9]+/g);
-  return (words ?? []).filter((token) => token.length >= MIN_PREFIX_CHARS);
+    .replace(/['’]/g, "");
+  const words = plain.match(/!?[a-z0-9]+/g) ?? [];
+  const joined = (plain.match(/[a-z]+(?:-[a-z]+)+/g) ?? []).map((word) => word.replace(/-/g, ""));
+  return [...words, ...joined].filter((token) => token.length >= MIN_PREFIX_CHARS);
 }
 
 /** True when a and b differ by at most one insertion, deletion or substitution. */

@@ -80,6 +80,8 @@ describe("/help/[slug]", () => {
     expect(meta.alternates?.canonical).toBe("/help/getting-started");
     expect(meta.title).toBe("Getting started (5 minutes) · SC2 Tools Help");
     expect(meta.description).toContain("pair the desktop app");
+    expect(meta.openGraph?.images).toEqual([expect.objectContaining({ url: "/og.jpg" })]);
+    expect(meta.twitter).toEqual(expect.objectContaining({ card: "summary_large_image" }));
   });
 
   it("renders breadcrumbs, the article, its update date, related articles and structured data", async () => {

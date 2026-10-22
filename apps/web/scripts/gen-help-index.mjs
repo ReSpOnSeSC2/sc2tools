@@ -30,6 +30,7 @@ export const HELP_INDEX_FILE = path.join(HELP_ARTICLES_DIR, "index.generated.ts"
 
 const NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const ARTICLE_FILE_RE = /^([a-z0-9-]+)\.ts$/;
+const SOURCE_FILE_RE = /\.(?:[cm]?[jt]sx?)$/;
 
 /**
  * Article files as "<category>/<slug>.ts" paths relative to the
@@ -47,9 +48,10 @@ export function listHelpArticleFiles(dir = HELP_ARTICLES_DIR) {
     }
     for (const file of readdirSync(path.join(dir, entry.name), { withFileTypes: true })) {
       if (!file.isFile() || file.name.endsWith(".test.ts") || file.name.endsWith(".d.ts")) continue;
+      if (!SOURCE_FILE_RE.test(file.name)) continue;
       const match = ARTICLE_FILE_RE.exec(file.name);
-      if (!match) continue;
-      if (!NAME_RE.test(match[1])) {
+      // A source file the index would skip is an article nobody sees.
+      if (!match || !NAME_RE.test(match[1])) {
         throw new Error(`help:index: article file "${entry.name}/${file.name}" must be named <slug>.ts in lowercase-hyphen form`);
       }
       files.push(`${entry.name}/${file.name}`);

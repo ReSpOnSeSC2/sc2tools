@@ -11,6 +11,7 @@ const article: HelpArticle = {
   order: 2,
   keywords: [
     "multichat",
+    "translate",
     "chat overlay",
     "twitch",
     "kick",

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
+import { HelpLink } from "@/components/help/HelpLink";
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { SaveBar } from "@/components/ui/SaveBar";
@@ -24,9 +24,6 @@ import {
   useBuildCheckInPrefsRevision,
   useBuildCheckInRevision,
 } from "./BuildCheckInProvider";
-
-/** The full guide lives in Settings → Help. */
-const BUILD_CHECKIN_HELP_HREF = "/settings?tab=help#build-check-in";
 
 /**
  * Settings · Build check-in — the three cloud switches shared with the
@@ -137,12 +134,12 @@ export function BuildCheckInSettings() {
             </li>
             <li>Games under 45 seconds never count toward a build.</li>
           </ul>
-          <Link
-            href={BUILD_CHECKIN_HELP_HREF}
+          <HelpLink
+            slug="build-check-in"
             className="mt-3 inline-flex min-h-11 items-center text-caption font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             How build check-in works, step by step
-          </Link>
+          </HelpLink>
         </Card>
       </Section>
 

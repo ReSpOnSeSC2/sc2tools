@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   HELP_INDEX_FILE,
@@ -24,6 +26,21 @@ describe("lib/help/articles/index.generated.ts", () => {
     const identifiers = files.map(helpArticleIdentifier);
     expect(new Set(identifiers).size).toBe(identifiers.length);
   });
+
+  it.each(["buildOrders.ts", "build_orders.ts", "build-orders.tsx"])(
+    "refuses an article file it would otherwise skip (%s)",
+    (name) => {
+      const dir = mkdtempSync(path.join(tmpdir(), "help-index-"));
+      try {
+        mkdirSync(path.join(dir, "builds"));
+        writeFileSync(path.join(dir, "builds", "ok.ts"), "");
+        writeFileSync(path.join(dir, "builds", name), "");
+        expect(() => listHelpArticleFiles(dir)).toThrow(/must be named <slug>\.ts/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
 
   it("renders sorted imports and the ALL_HELP_ARTICLES array", () => {
     const source = helpIndexSource(["builds/build-check-in.ts", "getting-started/how-to-use-help.ts"]);

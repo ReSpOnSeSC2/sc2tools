@@ -32,6 +32,11 @@ describe("helpSearchTokens", () => {
     expect(helpSearchTokens("What's the 6-digit Côde?")).toEqual(["whats", "the", "digit", "code"]);
   });
 
+  it("also counts a hyphenated word as one word", () => {
+    expect(helpSearchTokens("Build check-in")).toEqual(["build", "check", "in", "checkin"]);
+    expect(helpSearchTokens("6-digit")).toEqual(["digit"]);
+  });
+
   it("keeps chat commands as their own words", () => {
     expect(helpSearchTokens("Type !win or !1 / !2, wow!")).toEqual(["type", "!win", "or", "!1", "!2", "wow"]);
   });
@@ -61,6 +66,12 @@ describe("searchHelp on the shipped articles", () => {
     expect(top("stream dock")).toBe("stream-dock");
     expect(top("!rank")).toBe("viewer-engagement");
     expect(slugs("!win")).toEqual(["viewer-engagement"]);
+  });
+
+  it("finds hyphenated features typed as one word", () => {
+    expect(top("checkin")).toBe("build-check-in");
+    expect(top("checkins")).toBe("build-check-in");
+    expect(top("translate")).toBe("multi-platform-chat");
   });
 
   it("tolerates one typo in longer words, not in short ones", () => {
