@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import { AlertTriangle, RefreshCcw } from "lucide-react";
+import { ReportErrorAction } from "@/components/feedback/ReportErrorAction";
 import { Button } from "@/components/ui/Button";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { captureException } from "@/lib/sentry";
@@ -13,7 +14,8 @@ import { captureException } from "@/lib/sentry";
  * back — the single worst "is this app broken?" signal we could send.
  * Header/Footer chrome stays mounted (this boundary sits under the
  * root layout), the user keeps their bearings, and `reset()` re-renders
- * the segment without a full reload.
+ * the segment without a full reload. "Report this problem" sends the
+ * page and the error reference along with the report.
  */
 export default function RouteError({
   error,
@@ -24,7 +26,6 @@ export default function RouteError({
 }) {
   useEffect(() => {
     // Server components log server-side; this covers client crashes.
-    // eslint-disable-next-line no-console
     console.error("route_error", error);
     void captureException(error);
   }, [error]);
@@ -65,6 +66,7 @@ export default function RouteError({
             >
               Back to dashboard
             </Link>
+            <ReportErrorAction digest={error.digest} />
           </div>
         }
       />

@@ -5,6 +5,7 @@ import {
   Cpu,
   Library,
   MessageSquareText,
+  MonitorPlay,
   ShieldCheck,
   SlidersHorizontal,
   Users2,
@@ -19,7 +20,8 @@ import { TABS, hrefForTab, type TabId } from "@/components/analyzer/tabs";
  * "Surfaces" are every signed-in destination in the product: the seven
  * analyzer sections plus Today, and the account-level pages that used
  * to hang off the marketing header (custom builds, community, reviews,
- * coaching, agent, settings, admin). Role-gated entries remain in this
+ * coaching, agent, settings, admin), plus a Stream Studio shortcut into
+ * Settings → Overlay. Role-gated entries remain in this
  * shared model and are filtered before either responsive nav renders.
  *
  * The public build guides (/guides) are an entry while the guides flag
@@ -55,6 +57,9 @@ export type NavEntry = {
    *  it is in the rail but is never an app surface, a protected route or
    *  the active section. */
   ownChrome?: boolean;
+  /** A shortcut into another surface (a Settings tab): in the rail, but
+   *  the surface it opens owns the route, the title and the active state. */
+  shortcut?: boolean;
 };
 
 export const TODAY_ENTRY: NavEntry = {
@@ -95,6 +100,16 @@ const UTILITY_ENTRIES: NavEntry[] = [
     group: "utility",
     coachingOnly: true,
   },
+  // Overlay widgets, chat, the Stream Dock and alerts all live under
+  // Settings → Overlay; streamers look for them by this name.
+  {
+    key: "stream-studio",
+    href: "/settings?tab=overlay",
+    label: "Stream Studio",
+    icon: MonitorPlay,
+    group: "utility",
+    shortcut: true,
+  },
   { key: "devices", href: "/devices", label: "Devices", icon: Cpu, group: "utility" },
   { key: "settings", href: "/settings", label: "Settings", icon: SlidersHorizontal, group: "utility" },
   { key: "admin", href: "/admin", label: "Admin", icon: ShieldCheck, group: "utility", adminOnly: true },
@@ -106,8 +121,12 @@ export const NAV_ENTRIES: readonly NavEntry[] = [
   ...UTILITY_ENTRIES,
 ];
 
-/** The entries whose pages render inside the app chrome. */
-const SURFACE_ENTRIES: readonly NavEntry[] = NAV_ENTRIES.filter((e) => !e.ownChrome);
+/**
+ * The entries whose pages render inside the app chrome. Shortcuts point
+ * into one of these (Stream Studio is /settings), so they never claim a
+ * route of their own.
+ */
+const SURFACE_ENTRIES: readonly NavEntry[] = NAV_ENTRIES.filter((e) => !e.ownChrome && !e.shortcut);
 
 /** The bottom tab bar carries the highest-traffic destinations. */
 export const MOBILE_TAB_KEYS: readonly string[] = [

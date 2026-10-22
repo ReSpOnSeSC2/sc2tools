@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
 import { AdminEventRow } from "./AdminEventRow";
-import type { AdminEvent, AdminEventAgentConnectedPayload } from "./adminTypes";
+import type {
+  AdminEvent,
+  AdminEventAgentConnectedPayload,
+  AdminEventUserMessagePayload,
+} from "./adminTypes";
 
 afterEach(cleanup);
 
@@ -17,6 +21,68 @@ it("identifies external email and links to the original Gmail message", () => {
   expect(screen.getByText("from reporter@example.com · via email")).toBeTruthy();
   expect(screen.getByRole("link", { name: "Open original email in Gmail" }).getAttribute("href"))
     .toBe("https://mail.google.com/mail/u/?authuser=responsecoaching%40gmail.com#all/abc123");
+});
+
+describe("AdminEventRow in-app reports", () => {
+  function reportEvent(payload: Partial<AdminEventUserMessagePayload> = {}): AdminEvent {
+    return {
+      eventId: "report-1", type: "user_message", createdAt: new Date().toISOString(), readAt: null,
+      payload: {
+        userId: "u1", clerkUserId: "user_1", email: "player@example.com",
+        subject: "Opponents page is blank", message: "Spins forever.", ...payload,
+      },
+    };
+  }
+
+  it("tags the report type and shows its context as a compact line", () => {
+    render(
+      <ul>
+        <AdminEventRow
+          event={reportEvent({
+            type: "problem",
+            context: {
+              page: "/app/opponents/1-S2-1-99",
+              build: "4f9c2ab1d0e3",
+              viewport: "1440x900",
+              browser: "Chrome 129 on Windows",
+              agentVersion: "0.19.0",
+              agentStatus: "online",
+              failedRequests: [
+                { path: "/v1/me", status: 502 },
+                { path: "/v1/games", status: 500, code: "internal_error", requestId: "req_2" },
+              ],
+            },
+          })}
+          unread
+        />
+      </ul>,
+    );
+    expect(screen.getByText("Problem")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "/app/opponents/1-S2-1-99 · build 4f9c2ab1d0e3 · 1440×900 · Chrome 129 on Windows · app v0.19.0, online",
+      ),
+    ).toBeTruthy();
+    expect(screen.getByText("2 failed requests")).toBeTruthy();
+    const lines = screen.getAllByRole("listitem").slice(1).map((li) => li.textContent);
+    expect(lines).toEqual(["500 · /v1/games · internal_error · ref req_2", "502 · /v1/me"]);
+  });
+
+  it("keeps older reports without a type or context unchanged", () => {
+    render(<ul><AdminEventRow event={reportEvent()} unread={false} /></ul>);
+    expect(screen.getByText("Opponents page is blank")).toBeTruthy();
+    expect(screen.queryByText("Problem")).toBeNull();
+    expect(screen.queryByText(/failed request/)).toBeNull();
+  });
+
+  it.each([
+    ["idea", "Idea"],
+    ["question", "Question"],
+  ] as const)("labels a %s", (type, label) => {
+    render(<ul><AdminEventRow event={reportEvent({ type, context: { agentStatus: "not_paired" } })} unread /></ul>);
+    expect(screen.getByText(label)).toBeTruthy();
+    expect(screen.getByText("app not paired")).toBeTruthy();
+  });
 });
 
 function signupEvent(

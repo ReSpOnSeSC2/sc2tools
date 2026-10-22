@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { errorReportMailto } from "@/lib/feedback/errorReport";
+import { HELP_SUPPORT_EMAIL } from "@/lib/help/support";
 import { captureException } from "@/lib/sentry";
 
 /**
@@ -9,6 +11,9 @@ import { captureException } from "@/lib/sentry";
  * cannot rely on the layout's fonts or CSS variables — everything here
  * is inline-styled and dependency-free on purpose. Without this file,
  * a root-layout crash surfaces Next's unstyled default error screen.
+ *
+ * Clerk, toasts and the report form can't mount here either, so the way
+ * to tell us is an email link that already carries the error reference.
  */
 export default function GlobalError({
   error,
@@ -44,7 +49,14 @@ export default function GlobalError({
           </h1>
           <p style={{ color: "#9aa3b2", fontSize: 15, lineHeight: 1.5 }}>
             The whole page failed to render. Reloading usually fixes it
-            — if it keeps happening, please report it from the app.
+            — if it keeps happening, email us at{" "}
+            <a
+              href={errorReportMailto({ digest: error.digest })}
+              style={{ color: "#7dd3fc", textDecoration: "underline" }}
+            >
+              {HELP_SUPPORT_EMAIL}
+            </a>
+            .
             {error.digest ? (
               <>
                 {" "}

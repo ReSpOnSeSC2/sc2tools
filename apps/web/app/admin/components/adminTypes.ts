@@ -7,6 +7,8 @@
  * call site at the type-checker level.
  */
 
+import type { ReportContext, ReportType } from "@/lib/feedback/reportContext";
+
 export type StorageStatsResp = {
   totalDocs: number;
   totalDataBytes: number;
@@ -548,6 +550,10 @@ export type AdminEventUserMessagePayload = {
   email: string | null;
   subject: string;
   message: string;
+  /** Sent from the in-app report form; absent on older reports and emails. */
+  type?: ReportType;
+  /** The diagnostics the sender chose to include (lib/feedback/reportContext.ts). */
+  context?: ReportContext;
   source?: "email";
   mailbox?: string;
   gmailMessageId?: string;

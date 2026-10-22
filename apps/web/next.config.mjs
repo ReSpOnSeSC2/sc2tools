@@ -110,6 +110,13 @@ const nextConfig = {
   // the server bundle so webpack never tries to compile its Node-side
   // sharp/onnxruntime-node requires.
   serverExternalPackages: ["@xenova/transformers"],
+  // The commit this build came from, attached to bug reports so an admin
+  // knows which deploy a report is about (lib/feedback/reportContext.ts).
+  // Vercel provides VERCEL_GIT_COMMIT_SHA at build time; an explicit
+  // NEXT_PUBLIC_BUILD_SHA wins. Empty in local dev.
+  env: {
+    NEXT_PUBLIC_BUILD_SHA: process.env.NEXT_PUBLIC_BUILD_SHA || process.env.VERCEL_GIT_COMMIT_SHA || "",
+  },
   async redirects() {
     const guidesOn = isGuidesFlagOn(process.env.NEXT_PUBLIC_GUIDES_ENABLED);
     return [...metaRedirects(guidesOn), ...retiredToolRedirects(guidesOn)];

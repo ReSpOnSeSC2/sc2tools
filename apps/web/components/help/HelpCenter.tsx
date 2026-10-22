@@ -18,8 +18,9 @@ import { HelpSupportLine } from "./HelpSupportLine";
 
 /**
  * The help center embedded in Settings → Help: search on top, then every
- * article as a collapsible section grouped by topic, then the support
- * line. Same articles as the public /help pages.
+ * article as a collapsible section grouped by topic, then "Still stuck?"
+ * with a Report a problem button and the support email under it. Same
+ * articles as the public /help pages.
  *
  * Each section's id is its slug, so `/settings?tab=help#<slug>` opens
  * and scrolls to it, as does an old anchor listed in an article's
@@ -154,7 +155,7 @@ export function HelpCenter() {
           ))}
         </section>
       ))}
-      <HelpSupportLine className="border-t border-border pt-4" />
+      <HelpSupportLine variant="panel" className="border-t border-border pt-4" />
     </div>
   );
 }

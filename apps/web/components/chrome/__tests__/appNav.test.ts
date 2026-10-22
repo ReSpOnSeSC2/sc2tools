@@ -131,6 +131,21 @@ describe("app surface matching", () => {
     expect(MOBILE_TAB_KEYS).not.toContain("guides");
   });
 
+  it("links Stream Studio as a shortcut that never claims a route", () => {
+    const studio = NAV_ENTRIES.find((entry) => entry.key === "stream-studio");
+    expect(studio).toMatchObject({
+      href: "/settings?tab=overlay",
+      label: "Stream Studio",
+      group: "utility",
+      shortcut: true,
+    });
+    // /settings stays Settings: title, active entry and protection.
+    expect(matchSurface("/settings")?.entry.key).toBe("settings");
+    expect(surfaceTitle("/settings")).toBe("Settings");
+    expect(isProtectedSurfacePath("/settings")).toBe(true);
+    expect(MOBILE_TAB_KEYS).not.toContain("stream-studio");
+  });
+
   it("keeps Coaching in the shared nav model behind its membership gate", () => {
     expect(isAppSurfacePath("/coaching")).toBe(true);
     expect(matchSurface("/coaching")?.entry.key).toBe("coaching");

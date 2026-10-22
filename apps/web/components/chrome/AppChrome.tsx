@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
-import { ChevronLeft, MoreHorizontal, X } from "lucide-react";
+import { Bug, ChevronLeft, LifeBuoy, MoreHorizontal, X } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { SyncStatus } from "@/components/SyncStatus";
+import { LazyReportIssueModal } from "@/components/feedback/LazyReportIssueModal";
 import { useApi } from "@/lib/clientApi";
+import type { ReportType } from "@/lib/feedback/reportContext";
 import {
   MOBILE_TAB_KEYS,
   NAV_ENTRIES,
@@ -20,6 +22,8 @@ import {
 } from "./appNav";
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
 import { ConnectionBanner, ConnectionStatusProvider } from "./ConnectionStatus";
+import { HelpMenu } from "./HelpMenu";
+import { helpMenuItems, type HelpMenuItem } from "./helpMenu";
 import { BuildCheckInAlert } from "@/components/build-checkin/BuildCheckInAlert";
 import { BuildCheckInProvider } from "@/components/build-checkin/BuildCheckInProvider";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -41,8 +45,12 @@ import { SiteStats } from "./SiteStats";
  *   - Mobile: a bottom tab bar with the four highest-traffic
  *     destinations and a More sheet for the rest. No hamburger.
  *   - Both: a slim sticky context bar carrying the section name, a
- *     back control on detail pages, theme and account. The activity bar
- *     immediately below groups live sync state with the public site counts.
+ *     back control on detail pages, theme, Help & support and account.
+ *     The activity bar immediately below groups live sync state with the
+ *     public site counts.
+ *   - Help & support: the "?" menu in the context bar (desktop; on
+ *     phones the same items sit in the More sheet), plus Help and Report
+ *     a problem in the avatar menu. All of them open one report form.
  *   - BuildCheckInProvider wraps the shell so the header's check-in chip
  *     and every page's check-in surfaces share one realtime revision.
  *   - ConnectionStatusProvider wraps everything in the app's SWRConfig;
@@ -89,6 +97,24 @@ function AppChromeShell({ children }: { children: ReactNode }) {
   const ownsHeading = match?.entry.group !== "utility";
   const backHref = match?.backHref ?? "/app";
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [report, setReport] = useState<{ open: boolean; type: ReportType }>({
+    open: false,
+    type: "problem",
+  });
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const openReport = useCallback((type: ReportType) => {
+    setReport({ open: true, type });
+  }, []);
+  const closeReport = useCallback(() => {
+    setReport((current) => ({ ...current, open: false }));
+  }, []);
+  // From the More sheet: the sheet closes first, so park focus on its
+  // More button for the form to hand back when it closes.
+  const reportFromSheet = useCallback((type: ReportType) => {
+    setSheetOpen(false);
+    moreButtonRef.current?.focus();
+    setReport({ open: true, type });
+  }, []);
 
   // useApi gates on isSignedIn internally and SWR dedupes it against the
   // rest of the app, so this costs nothing extra and is a no-op for
@@ -226,12 +252,31 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               </SignedIn>
               <ThemeToggle />
               <SignedIn>
+                {/* Phones reach the same items from the More sheet. */}
+                <HelpMenu signedIn onReport={openReport} className="hidden md:block" />
                 <UserButton
                   afterSignOutUrl="/"
                   appearance={{ elements: { avatarBox: "h-8 w-8" } }}
-                />
+                >
+                  {/* Ours first; listing Clerk's two defaults after keeps them below. */}
+                  <UserButton.MenuItems>
+                    <UserButton.Link
+                      label="Help"
+                      labelIcon={<LifeBuoy className="h-4 w-4" aria-hidden />}
+                      href="/help"
+                    />
+                    <UserButton.Action
+                      label="Report a problem"
+                      labelIcon={<Bug className="h-4 w-4" aria-hidden />}
+                      onClick={() => openReport("problem")}
+                    />
+                    <UserButton.Action label="manageAccount" />
+                    <UserButton.Action label="signOut" />
+                  </UserButton.MenuItems>
+                </UserButton>
               </SignedIn>
               <SignedOut>
+                <HelpMenu signedIn={false} />
                 <Link
                   href="/sign-in"
                   className="hard-press hidden h-8 items-center rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:inline-flex"
@@ -288,6 +333,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               />
             ))}
             <button
+              ref={moreButtonRef}
               type="button"
               onClick={() => setSheetOpen(true)}
               aria-haspopup="dialog"
@@ -326,8 +372,17 @@ function AppChromeShell({ children }: { children: ReactNode }) {
           entries={sheetEntries}
           activeKey={activeKey}
           onClose={() => setSheetOpen(false)}
+          onReport={reportFromSheet}
         />
       ) : null}
+
+      <SignedIn>
+        <LazyReportIssueModal
+          open={report.open}
+          initialType={report.type}
+          onClose={closeReport}
+        />
+      </SignedIn>
     </div>
   );
 }
@@ -407,10 +462,12 @@ function MoreSheet({
   entries,
   activeKey,
   onClose,
+  onReport,
 }: {
   entries: readonly NavEntry[];
   activeKey: string | null;
   onClose: () => void;
+  onReport: (type: ReportType) => void;
 }) {
   // Esc closes; body scroll locks while open.
   useEffect(() => {
@@ -479,10 +536,23 @@ function MoreSheet({
             active={activeKey === entry.key}
           />
         ))}
+        <div className="px-2 pb-1 pt-3">
+          <span className="text-micro font-bold uppercase tracking-[0.14em] text-text-dim">
+            Help &amp; support
+          </span>
+        </div>
+        {helpMenuItems(true).map((item) => (
+          <SheetHelpItem key={item.key} item={item} onReport={onReport} />
+        ))}
       </div>
     </div>
   );
 }
+
+const SHEET_ROW_CLASS = [
+  "flex min-h-[44px] w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-body font-semibold",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+].join(" ");
 
 function SheetLink({ entry, active }: { entry: NavEntry; active: boolean }) {
   const Icon: NavIcon = entry.icon;
@@ -491,13 +561,43 @@ function SheetLink({ entry, active }: { entry: NavEntry; active: boolean }) {
       href={entry.href}
       aria-current={active ? "page" : undefined}
       className={[
-        "flex min-h-[44px] items-center gap-3 rounded-xl px-2.5 py-2 text-body font-semibold",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        SHEET_ROW_CLASS,
         active ? "bg-accent-cyan/10 text-accent" : "text-text hover:bg-bg-elevated",
       ].join(" ")}
     >
       <Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
       {entry.label}
+    </Link>
+  );
+}
+
+function SheetHelpItem({
+  item,
+  onReport,
+}: {
+  item: HelpMenuItem;
+  onReport: (type: ReportType) => void;
+}) {
+  const Icon: NavIcon = item.icon;
+  const className = `${SHEET_ROW_CLASS} text-text hover:bg-bg-elevated`;
+  if (item.report) {
+    const type = item.report;
+    return (
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        onClick={() => onReport(type)}
+        className={className}
+      >
+        <Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
+        {item.label}
+      </button>
+    );
+  }
+  return (
+    <Link href={item.href} className={className}>
+      <Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
+      {item.label}
     </Link>
   );
 }

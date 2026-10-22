@@ -26,7 +26,20 @@ vi.mock("@clerk/nextjs", () => ({
     isLoaded: true,
     isSignedIn: harness.signedIn,
   }),
-  UserButton: () => <div data-testid="user-button" />,
+  // The avatar menu: our items render as plain links and buttons so the
+  // tests can see their order against Clerk's two defaults.
+  UserButton: Object.assign(
+    ({ children }: { children?: ReactNode }) => <div data-testid="user-button">{children}</div>,
+    {
+      MenuItems: ({ children }: { children: ReactNode }) => <ul aria-label="Account menu">{children}</ul>,
+      Link: ({ label, href }: { label: string; href: string }) => (
+        <li><a href={href}>{label}</a></li>
+      ),
+      Action: ({ label, onClick }: { label: string; onClick?: () => void }) => (
+        <li>{onClick ? <button type="button" onClick={onClick}>{label}</button> : <span>{label}</span>}</li>
+      ),
+    },
+  ),
   SignedIn: ({ children }: { children: ReactNode }) =>
     harness.signedIn ? <>{children}</> : null,
   SignedOut: ({ children }: { children: ReactNode }) =>
@@ -49,6 +62,15 @@ vi.mock("@/components/build-checkin/BuildCheckInAlert", () => ({
 }));
 vi.mock("../SiteStats", () => ({
   SiteStats: ({ syncStatus }: { syncStatus?: ReactNode }) => <div data-testid="site-stats">{syncStatus}</div>,
+}));
+// The real form has its own tests; here it only has to open with a type.
+vi.mock("@/components/feedback/LazyReportIssueModal", () => ({
+  LazyReportIssueModal: ({ open, initialType, onClose }: { open: boolean; initialType?: string; onClose: () => void }) =>
+    open ? (
+      <div role="dialog" aria-label="Report form" data-type={initialType}>
+        <button type="button" onClick={onClose}>Close form</button>
+      </div>
+    ) : null,
 }));
 
 afterEach(() => {
@@ -89,6 +111,7 @@ describe("AppChrome navigation", () => {
       "/community",
       "/devices",
       "/settings",
+      "/settings?tab=overlay",
     ]) {
       expect(railHrefs()).toContain(href);
     }
@@ -323,5 +346,85 @@ describe("AppChrome for signed-out visitors", () => {
     render(<AppChrome>content</AppChrome>);
 
     expect(railHrefs()).toEqual(["/", "/guides", "/community"]);
+  });
+});
+
+describe("AppChrome help & support", () => {
+  const reportForm = () => screen.queryByRole("dialog", { name: "Report form" });
+
+  it("links Stream Studio from the rail without stealing Settings' active state", () => {
+    harness.pathname = "/settings";
+    render(<AppChrome>content</AppChrome>);
+    const rail = screen.getByRole("navigation", { name: "App navigation" });
+    const studio = within(rail).getByRole("link", { name: "Stream Studio" });
+    expect(studio.getAttribute("href")).toBe("/settings?tab=overlay");
+    expect(studio.getAttribute("aria-current")).toBeNull();
+    expect(within(rail).getByRole("link", { name: "Settings" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("puts the Help & support menu between the theme toggle and the avatar", () => {
+    render(<AppChrome>content</AppChrome>);
+    const header = screen.getByRole("banner");
+    const help = within(header).getByRole("button", { name: "Help & support" });
+    expect(help.compareDocumentPosition(screen.getByTestId("user-button")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    fireEvent.click(help);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Suggest a feature" }));
+    expect(reportForm()?.getAttribute("data-type")).toBe("idea");
+  });
+
+  it("adds Help and Report a problem above Clerk's defaults in the avatar menu", () => {
+    render(<AppChrome>content</AppChrome>);
+    const menu = within(screen.getByTestId("user-button")).getByRole("list", { name: "Account menu" });
+    expect(Array.from(menu.querySelectorAll("li")).map((li) => li.textContent)).toEqual([
+      "Help",
+      "Report a problem",
+      "manageAccount",
+      "signOut",
+    ]);
+    expect(within(menu).getByRole("link", { name: "Help" }).getAttribute("href")).toBe("/help");
+
+    expect(reportForm()).toBeNull();
+    fireEvent.click(within(menu).getByRole("button", { name: "Report a problem" }));
+    expect(reportForm()?.getAttribute("data-type")).toBe("problem");
+    fireEvent.click(screen.getByRole("button", { name: "Close form" }));
+    expect(reportForm()).toBeNull();
+  });
+
+  it("renders the avatar menu items only when signed in", () => {
+    harness.signedIn = false;
+    harness.me = undefined;
+    harness.pathname = "/community";
+    render(<AppChrome>content</AppChrome>);
+    expect(screen.queryByRole("list", { name: "Account menu" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Report a problem" })).toBeNull();
+
+    // Visitors still get help, with the support email in place of the form.
+    fireEvent.click(within(screen.getByRole("banner")).getByRole("button", { name: "Help & support" }));
+    expect(screen.queryByRole("menuitem", { name: "Report a problem" })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: "Email support" }).getAttribute("href")).toBe(
+      "mailto:responsecoaching@gmail.com",
+    );
+  });
+
+  it("groups Help & support in the mobile More sheet and opens the form from it", () => {
+    render(<AppChrome>content</AppChrome>);
+    fireEvent.click(screen.getByRole("button", { name: /More/ }));
+    const sheet = screen.getByRole("dialog", { name: "More sections" });
+    expect(within(sheet).getByText("Help & support")).toBeTruthy();
+    for (const [name, href] of [
+      ["Search help", "/help"],
+      ["Stream Studio crash course", "/stream-studio/learn"],
+      ["Download / update the desktop app", "/download"],
+      ["How reports work", "/help/report-a-problem"],
+      ["Support SC2 Tools", "/donate"],
+    ]) {
+      expect(within(sheet).getByRole("link", { name }).getAttribute("href")).toBe(href);
+    }
+
+    fireEvent.click(within(sheet).getByRole("button", { name: "Report a problem" }));
+    expect(screen.queryByRole("dialog", { name: "More sections" })).toBeNull();
+    expect(reportForm()?.getAttribute("data-type")).toBe("problem");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: /More/ }));
   });
 });

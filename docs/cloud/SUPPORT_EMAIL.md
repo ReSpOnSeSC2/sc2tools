@@ -1,7 +1,9 @@
 # Support email in SC2 Tools Messages
 
-Reports submitted by the site's **Report a bug** form are saved through
-`POST /v1/messages`. Direct mail sent to `responsecoaching@gmail.com` bypasses
+Reports submitted by the site's **Report a problem** form (Help & support
+menu, avatar menu, error screens, Settings → Help) are saved through
+`POST /v1/messages`, with their type and any diagnostics the sender kept
+ticked. Direct mail sent to `responsecoaching@gmail.com` bypasses
 that route. The optional support Gmail bridge imports only incoming email
 carrying the exact **SC2Tools Support** Gmail label into the same `user_message`
 admin events, so it appears in **Admin → Notifications → Messages**, unread
