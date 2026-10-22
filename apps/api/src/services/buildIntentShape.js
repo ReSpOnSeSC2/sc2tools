@@ -106,6 +106,33 @@ function detectorView(row) {
   };
 }
 
+/**
+ * Projection fragment carrying exactly what ``overrideActive`` and
+ * ``detectorView`` read. Never includes notes or the suggestion cache.
+ */
+const BUILD_INTENT_LABEL_PROJECTION = Object.freeze({
+  "buildIntent.status": 1,
+  "buildIntent.applied": 1,
+  "buildIntent.build": 1,
+  "buildIntent.detected": 1,
+});
+
+/**
+ * A raw row as the classifier sees it: on an override row ``myBuild`` and
+ * ``_customBuildSlug`` are replaced by the detector's values (``null`` when
+ * the detector had none, so ``a || b`` slug fallbacks never reach the
+ * declared slug). Rows without an override are returned unchanged.
+ *
+ * @template {Record<string, any>} T
+ * @param {T} row
+ * @returns {T}
+ */
+function withDetectorLabels(row) {
+  if (!overrideActive(row)) return row;
+  const view = detectorView(row);
+  return { ...row, myBuild: view.myBuild, _customBuildSlug: view.customBuildSlug };
+}
+
 /** Aggregation expression: true while a confirmed override is written. */
 const OVERRIDE_ACTIVE_EXPR = Object.freeze({
   $and: [
@@ -183,6 +210,22 @@ const COUNTED_BY_CHECKIN_EXPR = Object.freeze({
 });
 
 /**
+ * Aggregation expression for a game row's ``planned`` field on per-build
+ * recent-game lists: ``{detected, notes}`` while an override is written
+ * (``detected`` = the classifier's label), else null.
+ */
+const PLANNED_GAME_EXPR = Object.freeze({
+  $cond: [
+    OVERRIDE_ACTIVE_EXPR,
+    {
+      detected: { $ifNull: ["$buildIntent.detected.name", null] },
+      notes: { $ifNull: ["$buildIntent.notes", ""] },
+    },
+    null,
+  ],
+});
+
+/**
  * Too-short games (leavers, loading-screen disconnects) never take an
  * override: a check-in there would hand the build a free win or loss.
  * @param {{durationSec?: unknown, myBuild?: unknown}} game
@@ -223,12 +266,15 @@ module.exports = {
   parseBuildKey,
   overrideActive,
   detectorView,
+  withDetectorLabels,
+  BUILD_INTENT_LABEL_PROJECTION,
   OVERRIDE_ACTIVE_EXPR,
   OVERRIDE_ACTIVE_FILTER,
   DETECTOR_BUILD_EXPR,
   DETECTOR_SLUG_EXPR,
   AGREES_WITH_DETECTOR_MATCH,
   COUNTED_BY_CHECKIN_EXPR,
+  PLANNED_GAME_EXPR,
   isTooShortGame,
   sanitizeNotes,
 };

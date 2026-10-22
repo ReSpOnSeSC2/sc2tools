@@ -1,6 +1,7 @@
 "use strict";
 
 const sentry = require("../util/sentry");
+const { sanitiseRequestUrl } = require("./requestLogging");
 
 /**
  * Build a 4-arg Express error handler that logs structured fields and
@@ -18,7 +19,9 @@ function buildErrorHandler(logger) {
         err,
         reqId: req.id,
         method: req.method,
-        path: req.path,
+        // Same redaction as request logs: tokens and live game keys in
+        // path segments never reach error logs.
+        path: sanitiseRequestUrl(req.path),
         status,
       },
       "request_failed",

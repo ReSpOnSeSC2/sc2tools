@@ -16,7 +16,8 @@ describe("games schema v7 opponent custom-strategy provenance", () => {
   });
 
   test("registers games v7 and forwards v6 rows without synthetic fields", () => {
-    expect(expectedVersion(COLLECTIONS.GAMES)).toBe(7);
+    // v8 (build check-in) builds on v7; the v6 -> v7 step itself is unchanged.
+    expect(expectedVersion(COLLECTIONS.GAMES)).toBeGreaterThanOrEqual(7);
     const migrated = migrateDoc(
       {
         gameId: "legacy-v6-game",
@@ -25,6 +26,7 @@ describe("games schema v7 opponent custom-strategy provenance", () => {
         [VERSION_KEY]: 6,
       },
       COLLECTIONS.GAMES,
+      { targetVersion: 7 },
     );
 
     expect(migrated).toEqual({

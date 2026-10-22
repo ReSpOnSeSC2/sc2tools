@@ -109,6 +109,38 @@ does not deploy this server or complete Google's review.
 | GET    | /v1/macro/backfill/status                    | clerk/device | Job state                     |
 | POST   | /v1/macro/backfill/progress                  | device       | Agent reports per-game result |
 
+### Build check-in
+
+A confirmed check-in makes a game count toward the build the player went
+for, even when the replay classifier labelled it as something else
+(`docs/adr/0025-build-check-in-attribution.md`). Every route answers
+`Cache-Control: private, no-store` and is rate limited per user (live writes
+30/min, other writes 60/min, reads 120/min). `via`/`origin` come from the
+credential (device token = agent, Clerk session = web). Errors are
+`{error: {code, message}}`, plus `gameId` on `already_bound` and `reason` on
+`not_eligible`. Request logs redact the live game key (it holds both
+players' names).
+
+| Method | Path                                         | Auth         | Purpose                       |
+| ------ | -------------------------------------------- | ------------ | ----------------------------- |
+| GET    | /v1/build-intents/options?matchup=PvZ        | clerk/device | Check-in options for a matchup with the user's record per build |
+| GET    | /v1/build-intents/live/:gameKey              | clerk/device | Live game state (declaration, roll, hold) |
+| PUT    | /v1/build-intents/live/:gameKey              | clerk/device | `register`, `declare`, `undeclare`, `release`, `postgame` |
+| GET    | /v1/build-intents/pending?limit=10           | clerk/device | Undecided games of the last 72 h (1–25) |
+| POST   | /v1/build-intents/pending/dismiss            | clerk/device | "No set build" for the whole queue |
+| GET    | /v1/games/:gameId/build-intent               | clerk/device | A game's check-in state (`?include=options`) |
+| PUT    | /v1/games/:gameId/build-intent               | clerk/device | `confirm`, `skip`, `defer`, `notes` |
+| GET    | /v1/me/preferences/buildCheckin              | clerk/device | `{enabled, askAtLoading, askAfterGame}` (default true) |
+| PUT    | /v1/me/preferences/buildCheckin              | clerk/device | Store the three switches |
+
+`POST /v1/agent/live` registers the live game on `match_loading` /
+`match_started` envelopes, and `POST /v1/games` binds each uploaded 1v1
+replay to its live record before answering. Realtime: overlay rooms get only
+`overlay:buildIntent {gameKey, suppressRandomizer, holdRemainingMs}` (never a
+build name), the user room gets `build-intent:changed {gameKey}` or
+`{gameId}`, and the randomizer widget reports real spins with
+`overlay:randomizer:rolled {gameKey, buildId}`.
+
 ### Bulk import (Stage C bucket 3)
 
 | Method | Path                              | Auth         | Purpose                          |

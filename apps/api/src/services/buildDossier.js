@@ -45,7 +45,12 @@ const TimingCatalog = require("./timingCatalog");
  * Newest-first is assumed for recency-weighted predictions and
  * "last 5 games" — caller should sort by date desc.
  *
+ * ``opts.timingGames`` (default: ``games``) narrows the median timings —
+ * the build's shape — to a subset, e.g. games whose replay agrees with a
+ * build check-in's label. Every other field still describes ``games``.
+ *
  * @param {Array<any>} games
+ * @param {{ timingGames?: Array<any> }} [opts]
  * @returns {{
  *   topStrategies: Array<{strategy: string, wins: number, losses: number, count: number, winRate: number}>,
  *   predictedStrategies: Array<{strategy: string, probability: number}>,
@@ -69,13 +74,14 @@ const TimingCatalog = require("./timingCatalog");
  *   },
  * }}
  */
-function computeDossierExtras(games) {
+function computeDossierExtras(games, opts = {}) {
   const list = Array.isArray(games) ? games : [];
+  const timingList = Array.isArray(opts.timingGames) ? opts.timingGames : list;
   const myRace = Dna.resolveMyRace(list);
   const oppRaceModal = Dna.resolveModalOppRace(list);
   const matchupLabel = TimingCatalog.matchupLabel(myRace, oppRaceModal) || "";
   const medianTimingsLegacy = Dna.computeMatchupAwareMedianTimings(
-    list,
+    timingList,
     myRace,
   );
   const medianTimingsOrder = Object.keys(medianTimingsLegacy);
@@ -97,7 +103,7 @@ function computeDossierExtras(games) {
   if (myRace) {
     for (const ml of Object.keys(matchupCounts)) {
       const opp = ml.slice(-1);
-      const t = Dna.computeMedianTimingsForMatchup(list, myRace, opp);
+      const t = Dna.computeMedianTimingsForMatchup(timingList, myRace, opp);
       matchupTimingsLegacy[ml] = { timings: t, order: Object.keys(t) };
     }
   }

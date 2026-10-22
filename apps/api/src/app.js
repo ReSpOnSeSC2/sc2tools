@@ -45,6 +45,7 @@ const {
   InfrastructureUsageService,
 } = require("./services/infrastructureUsage");
 const { CustomBuildsService } = require("./services/customBuilds");
+const { BuildIntentsService } = require("./services/buildIntents");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { PlatformIntegrationsService } = require("./services/platformIntegrations");
@@ -146,6 +147,7 @@ const { buildCoachingRouter } = require("./routes/coaching");
 const { buildCoachingService } = require("./services/coaching");
 const { buildOpponentsRouter } = require("./routes/opponents");
 const { buildGamesRouter } = require("./routes/games");
+const { buildBuildIntentsRouter } = require("./routes/buildIntents");
 const { buildReplaysRouter } = require("./routes/replays");
 const { buildReplayFilesRouter } = require("./routes/replayFiles");
 const { buildPlaybackArtifactsRouter } = require("./routes/playbackArtifacts");
@@ -613,6 +615,15 @@ function makeServices(deps) {
       });
     }
   };
+  // Build check-in: live records, the randomizer hold, the ingest bind and
+  // per-game check-ins. Reads the live broker (declare window, roll reports)
+  // and the detail store (suggestions on a single-game read).
+  const buildIntents = new BuildIntentsService(deps.db, {
+    io: deps.io,
+    liveGameBroker,
+    perGame,
+    logger: deps.logger,
+  });
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io });
@@ -800,6 +811,7 @@ function makeServices(deps) {
     playbackArtifacts,
     infrastructureUsage,
     customBuilds,
+    buildIntents,
     pairings,
     overlayTokens,
     platformIntegrations,
@@ -1413,6 +1425,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       opponents: services.opponents,
       users: services.users,
       customBuilds: services.customBuilds,
+      buildIntents: services.buildIntents,
       overlayLive: services.overlayLive,
       overlayTokens: services.overlayTokens,
       liveGameBroker: services.liveGameBroker,
@@ -1425,6 +1438,12 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       browserIngestQuota: services.browserIngestQuota,
       runtimeCapacityRegistry: deps.runtimeCapacityRegistry,
     }),
+  );
+  // Build check-in routes (per-route auth; /games/:gameId/build-intent does
+  // not collide with the games router's exact /games/:gameId match).
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildBuildIntentsRouter({ buildIntents: services.buildIntents, auth }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
@@ -1511,6 +1530,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       auth,
       engagement: services.multichatEngagement,
       overlayTokens: services.overlayTokens,
+      buildIntents: services.buildIntents,
       logger: deps.logger,
     }),
   );

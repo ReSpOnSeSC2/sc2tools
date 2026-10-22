@@ -35,6 +35,14 @@ join key for every other collection's `userId`.
   "email": "you@example.com",
   "createdAt": ISODate,
   "lastSeenAt": ISODate,
+  "preferences": {                  // GET/PUT /v1/me/preferences/:type
+    "buildCheckin": {               // build check-in switches; absent = all true
+      "enabled": true,              // false: no pending check-ins, no agent cards, no randomizer hold
+      "askAtLoading": true,         // agent loading-screen card
+      "askAfterGame": true          // agent end-of-game card
+    },
+    "randomizer": { "version": 2, "matchups": { "PvZ": { "enabled": true, "builds": [ { "id": "pvz-2-stargate-phoenix", "...": "..." } ] } } }
+  },
   "_schemaVersion": 1
 }
 ```
@@ -147,10 +155,35 @@ deterministic and re-uploads dedupe.
   "earlyBuildLog": [ "..." ],
   "oppEarlyBuildLog": [ "..." ],
   "oppBuildLog": [ "..." ],
+  "buildIntent": {                  // build check-in, server-owned (never accepted from uploads)
+    "status": "confirmed",          // none | pending | confirmed | skipped
+    "build": { "key": "pvz-2-stargate-phoenix", "name": "PvZ - 2 Stargate Phoenix", "slug": null, "source": "catalog" },
+    "applied": true,                // true only while myBuild/_customBuildSlug carry `build`
+    "detected": { "name": "PvZ - Macro Transition (Unclassified)", "slug": null }, // classifier label while applied
+    "suggestion": { "key": "...", "name": "...", "slug": null, "source": "catalog",
+                    "reason": "randomizer", "passedRules": null, "ruleCount": null }, // declared|randomizer|detected|rules|usual
+    "randomizer": null,             // BuildRef the OBS randomizer rolled for this game
+    "origin": "pregame",            // pregame | postgame | web | null
+    "via": "agent",                 // agent | web | null
+    "gameKey": "Opp|Me#123|1717000000000", // live key bound at ingest (first-wins marker)
+    "notes": "",                    // private, <= 1000 chars; served only by the build-intent routes
+    "confirmedAt": ISODate,
+    "updatedAt": ISODate
+  },
   "createdAt": ISODate,
-  "_schemaVersion": 1
+  "_schemaVersion": 8
 }
 ```
+
+`buildIntent` (schema v8): a confirmed, applied check-in rewrites `myBuild`
+(and `_customBuildSlug` for a custom build) to the declared build, so every
+per-user W-L surface counts the game; `buildIntent.detected` keeps the
+classifier's label for cross-user readers and the classifier itself. Keys
+are era-neutral (`catalogKeyForName`, or `custom:<slug>`); `build.name` is
+spelled for the game's patch ("8 Pool" on 5.0.16). Rows without a
+check-in have no `buildIntent`; a notes-only write creates `status: "none"`.
+Rolling back to v7 restores the detected label exactly and drops the
+subdocument.
 
 Indexes:
 
@@ -159,6 +192,7 @@ Indexes:
 | `{userId: 1, gameId: 1}` unique                   | Idempotent upsert from agent retries               |
 | `{userId: 1, date: -1}`                           | Games tab (newest first), recent-history charts    |
 | `{userId: 1, oppPulseId: 1, date: -1}`            | Per-opponent drilldown                             |
+| `{userId: 1, "buildIntent.status": 1, date: -1}` partial (`status: "pending"`) | Build check-in pending queue |
 
 Note: the `oppPulseId` field on the index is the legacy alias. The
 service writes the pulse id under both `opponent.pulseId` (nested) and
@@ -170,6 +204,54 @@ Hot queries:
 - `updateOne({userId, gameId}, {...})` upsert — every game ingest.
 - `find({userId}).sort({date: -1}).limit(100)` — Games tab.
 - `find({userId, oppPulseId}).sort({date: -1})` — opponent drilldown.
+
+---
+
+## `build_intent_live`
+
+One short-lived row per live game key (build check-in). The agent's live
+envelope registers it; the loading-screen card, the web and the OBS
+randomizer write to it; the replay upload binds it to the game
+(`gameId`), after which it is read-only. Purge-only on account deletion
+(never exported or restored).
+
+```jsonc
+{
+  "userId": "...",
+  "gameKey": "[oM]Opp#123|Me#456|1717000000000", // sorted /game names + agent ms at loading
+  "keyStartedAtMs": 1717000000000,
+  "playerNames": ["opp", "me"],     // normalised (clan tag, #discriminator stripped; lowercase)
+  "myRace": "Protoss",              // Protoss | Terran | Zerg | Random | null (envelope wins)
+  "oppRace": "Zerg",
+  "oppName": "[oM]Opp",
+  "matchup": "PvZ",                 // null until both races are concrete
+  "declared": { "key": "...", "name": "...", "slug": null, "source": "catalog", "at": ISODate, "via": "agent" },
+  "postgame": { "buildKey": "...", "skip": false, "notes": "...", "at": ISODate, "via": "agent" },
+  "randomizer": { "key": "...", "name": "...", "slug": null, "source": "catalog", "at": ISODate, "verifiedPool": true },
+  "hold": { "untilMs": 1717000006000, "released": false, "decidedAt": ISODate }, // OBS randomizer hold (6 s)
+  "gameId": null,                   // set by the ingest bind
+  "boundAt": null,
+  "createdAt": ISODate,
+  "updatedAt": ISODate,
+  "expiresAt": ISODate,             // createdAt + 12 h; now + 7 d once declared/postgame/randomizer is set
+  "_schemaVersion": 1
+}
+```
+
+Indexes:
+
+| Spec                                          | Purpose                                   |
+| --------------------------------------------- | ----------------------------------------- |
+| `{userId: 1, gameKey: 1}` unique              | One record per live game                  |
+| `{userId: 1, gameId: 1, keyStartedAtMs: 1}`   | Ingest bind: unbound records by start time |
+| `{expiresAt: 1}` TTL (`expireAfterSeconds: 0`) | Reap records                              |
+
+Hot queries:
+
+- `findOneAndUpdate({userId, gameKey, gameId: null}, pipeline, {upsert})` —
+  registration and every live write.
+- `find({userId, gameId: null, keyStartedAtMs: {$gte, $lt}}).sort({keyStartedAtMs: -1}).limit(5)`
+  — ingest bind candidates.
 
 ---
 
@@ -494,7 +576,8 @@ committed snapshot + channel RSS sync + admin additions.
 
 ## Schema versioning
 
-Every document carries `_schemaVersion` (integer, currently `1`).
+Every document carries `_schemaVersion` (integer; `1` for most
+collections, `8` for `games`).
 The API stamps the current version on every write via
 [`apps/api/src/db/schemaVersioning.js`](../apps/api/src/db/schemaVersioning.js).
 

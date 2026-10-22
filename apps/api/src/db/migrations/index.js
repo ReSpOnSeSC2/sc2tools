@@ -22,6 +22,7 @@
 
 const { COLLECTIONS } = require("../../config/constants");
 const { registerMigration, _internals } = require("../schemaVersioning");
+const { overrideActive } = require("../../services/buildIntentShape");
 
 /**
  * Forward shape change for opponents v1 → v2.
@@ -99,6 +100,35 @@ function gamesV7toV6(doc) {
   return next;
 }
 
+/**
+ * Games v8 adds the optional server-owned ``buildIntent`` subdocument (build
+ * check-in). Existing rows stay valid without one.
+ * @param {Record<string, any>} doc
+ */
+function gamesV7toV8(doc) {
+  return { ...doc };
+}
+
+/**
+ * Rollback drops ``buildIntent`` and, when a confirmed check-in was applied,
+ * restores the classifier's label exactly (``clearOverridePipeline``
+ * semantics: a missing detected field is unset, never left as the declared
+ * build).
+ * @param {Record<string, any>} doc
+ */
+function gamesV8toV7(doc) {
+  const next = { ...doc };
+  if (overrideActive(next)) {
+    const detected = next.buildIntent.detected || {};
+    if (typeof detected.name === "string") next.myBuild = detected.name;
+    else delete next.myBuild;
+    if (typeof detected.slug === "string") next._customBuildSlug = detected.slug;
+    else delete next._customBuildSlug;
+  }
+  delete next.buildIntent;
+  return next;
+}
+
 const REGISTRATIONS = [
   {
     collection: COLLECTIONS.OPPONENTS,
@@ -126,6 +156,15 @@ const REGISTRATIONS = [
     backward: gamesV7toV6,
     description:
       "August-2026: add independent opponent custom-strategy provenance.",
+  },
+  {
+    collection: COLLECTIONS.GAMES,
+    fromVersion: 7,
+    toVersion: 8,
+    forward: gamesV7toV8,
+    backward: gamesV8toV7,
+    description:
+      "October-2026: add the optional build check-in subdocument.",
   },
 ];
 
@@ -165,6 +204,8 @@ module.exports = {
     gamesV6toV5,
     gamesV6toV7,
     gamesV7toV6,
+    gamesV7toV8,
+    gamesV8toV7,
     alreadyRegistered,
   },
 };

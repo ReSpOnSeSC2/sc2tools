@@ -10,6 +10,7 @@ const {
   writeTempFile,
   PythonError,
 } = require("../util/pythonRunner");
+const { BUILD_INTENT_LABEL_PROJECTION, detectorView } = require("./buildIntentShape");
 
 // Training runs beside the API process on a small shared-memory
 // instance. Keep both the Python input and the number of samples
@@ -385,6 +386,7 @@ class MLService {
             buildLog: 1,
             "opponent.race": 1,
             macroScore: 1,
+            ...BUILD_INTENT_LABEL_PROJECTION,
           },
         },
       )
@@ -550,7 +552,9 @@ function compactTrainingGame(game, buildLog) {
       : clippedString(game.date, 64),
     result: clippedString(game.result, 32),
     myRace: clippedString(game.myRace, 32),
-    myBuild: clippedString(game.myBuild, 256),
+    // Train on what the replay shows: a build check-in's declared label
+    // would teach the model openers the player never executed.
+    myBuild: clippedString(detectorView(game).myBuild, 256),
     map: clippedString(game.map, 256),
     opponent: {
       race: clippedString(game.opponent && game.opponent.race, 32),

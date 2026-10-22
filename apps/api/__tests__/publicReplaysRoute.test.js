@@ -260,7 +260,7 @@ describe("public replay archive routes", () => {
       .set("Authorization", "Bearer viewer");
 
     expect(response.status).toBe(200);
-    expect(deps.replayLibrary.getDetail).toHaveBeenCalledWith("owner-1", "g1");
+    expect(deps.replayLibrary.getDetail).toHaveBeenCalledWith("owner-1", "g1", { view: "detector" });
     expect(deps.perGame.macroBreakdown).toHaveBeenCalledWith("owner-1", "g1");
     expect(deps.perGame.buildOrder).toHaveBeenCalledWith("owner-1", "g1");
     expect(response.body.game).toMatchObject({

@@ -76,6 +76,9 @@ const PURGE_ONLY_COLLECTIONS = [
   // Short-lived browser-ingest quota counters: operational state, never
   // exported or restored, but still keyed to the account.
   ["browserIngestDaily", "userId"],
+  // Build check-in live records (TTL): in-flight game state that a restore
+  // must never replay. Bound answers already live on games.buildIntent.
+  ["buildIntentLive", "userId"],
 ];
 
 class GdprService {

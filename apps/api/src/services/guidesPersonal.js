@@ -64,7 +64,8 @@ function median(values) {
  */
 async function myRecord(games, userId, matchup, buildKey) {
   const [row] = await games.aggregate([
-    { $match: { ...guideGamesMatch(matchup), userId, myBuild: buildKey } },
+    // The user's own record: a confirmed build check-in counts here.
+    { $match: { ...guideGamesMatch(matchup, { ownStats: true }), userId, myBuild: buildKey } },
     { $project: { _id: 0, result: 1, era: eraExpression() } },
     { $match: { era: GUIDE_CURRENT_ERA } },
     {

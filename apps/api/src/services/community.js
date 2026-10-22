@@ -15,6 +15,7 @@ const {
   matchupFromRaces,
 } = require("./communityBuildSnapshot");
 const { communitySitemap } = require("./communitySitemap");
+const { DETECTOR_SLUG_EXPR } = require("./buildIntentShape");
 
 const K_ANONYMITY_THRESHOLD = 5;
 
@@ -1018,6 +1019,8 @@ class CommunityService {
    * Authenticated owner-only replay totals for the creator's published cards.
    * The response is keyed by PUBLIC slug and never exposes the private source
    * slug or any replay identity. Other viewers receive only their own rows.
+   * A published card advertises a rule-defined build, so its "you" totals key
+   * on the classifier's slug: a build check-in never counts toward a card.
    *
    * @param {string} userId
    * @returns {Promise<Array<{publicSlug: string, total: number, wins: number, losses: number}>>}
@@ -1049,6 +1052,7 @@ class CommunityService {
             userId,
             $or: [
               { _customBuildSlug: { $in: sourceSlugs } },
+              { "buildIntent.detected.slug": { $in: sourceSlugs } },
               { _customOpponentStrategySlug: { $in: sourceSlugs } },
             ],
             isResumedFromReplay: { $ne: true },
@@ -1064,7 +1068,7 @@ class CommunityService {
               $setUnion: [
                 {
                   $filter: {
-                    input: ["$_customBuildSlug", "$_customOpponentStrategySlug"],
+                    input: [DETECTOR_SLUG_EXPR, "$_customOpponentStrategySlug"],
                     as: "slug",
                     cond: { $in: ["$$slug", sourceSlugs] },
                   },

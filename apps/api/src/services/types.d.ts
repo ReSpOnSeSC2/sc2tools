@@ -676,6 +676,18 @@ export interface CustomBuildsService {
   >;
 }
 
+/**
+ * The build check-in surface the replay ingest route needs
+ * (services/buildIntents.js ``BuildIntentsService``).
+ */
+export interface BuildIntentBinder {
+  bindIngestedGame(
+    userId: string,
+    game: Record<string, any>,
+    opts: { created: boolean; spatial?: unknown },
+  ): Promise<{ bound: boolean; status: string } | null>;
+}
+
 export interface ParsedBuildLogEvent {
   time: number;
   name: string;

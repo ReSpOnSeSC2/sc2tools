@@ -25,6 +25,7 @@ const {
 } = require("./scouting/compositionAt");
 const {
   INELIGIBLE,
+  classifierRow,
   guideIneligibilityReason,
   leagueBandOf,
   matchupOf,
@@ -339,7 +340,9 @@ function durationOf(v) {
 /**
  * Distil one game into guide sample fields — pure; the ingest hook and the
  * backfill job share it. Works on the ingest payload (ISO ``date``) and on
- * a slim games row merged with its details (Date ``date``).
+ * a slim games row merged with its details (Date ``date``). A row carrying
+ * a build check-in is sampled under the classifier's label
+ * (guideRules.classifierRow), never the declared build.
  *
  * Example: `extractSample(game)` → `{ buildKey, matchup, era, …, milestones, army }`
  * or `{ skip: "not_ladder" }`.
@@ -350,7 +353,7 @@ function durationOf(v) {
 function extractSample(raw) {
   const reason = guideIneligibilityReason(raw);
   if (reason) return { skip: reason };
-  const game = /** @type {Record<string, any>} */ (raw);
+  const game = classifierRow(/** @type {Record<string, any>} */ (raw));
   const era = eraForGame(game);
   if (!era) return { skip: SKIP.NO_ERA };
   if (!RESULTS.includes(game.result)) return { skip: SKIP.BAD_RESULT };

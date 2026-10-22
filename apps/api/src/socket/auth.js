@@ -10,6 +10,11 @@ const { updatePlaybackJob } = require("../services/replayPlaybackJobs");
  * streamer manually refreshes. The 2 s figure is the spec floor. */
 const RESYNC_MIN_INTERVAL_MS = 2000;
 
+/** Randomizer roll reports one overlay socket may send per window. The
+ * service separately caps accepted writes per user and live game. */
+const ROLL_REPORTS_PER_WINDOW = 10;
+const ROLL_REPORT_WINDOW_MS = 60_000;
+
 /**
  * Authenticate Socket.io connections. Three flavours of caller:
  *
@@ -44,6 +49,10 @@ const RESYNC_MIN_INTERVAL_MS = 2000;
  *   * ``overlay:live`` — replayed once on overlay connect / resync
  *     from ``LiveGameBroker.latestOverlayLive`` (the post-game
  *     payload built by ``OverlayLiveService.buildFromGame``).
+ *   * ``overlay:buildIntent`` — build check-in state of the current live
+ *     game, ``{ gameKey, suppressRandomizer, holdRemainingMs }`` (never a
+ *     build key or name), replayed on connect (before ``overlay:config``)
+ *     and on resync via ``resolveBuildIntent``.
  *   * ``overlay:heartbeat`` — reply to a client-initiated
  *     ``overlay:heartbeat`` ping. Carries
  *     ``{ gameKey: string|null, ts: number }`` so the client can
@@ -59,6 +68,9 @@ const RESYNC_MIN_INTERVAL_MS = 2000;
  *     Rate-limited to once per 2 s per socket.
  *   * ``overlay:heartbeat`` — periodic 30 s ping from the client.
  *     The cloud responds with the broker's current gameKey.
+ *   * ``overlay:randomizer:rolled`` — ``{ gameKey, buildId }`` reported by
+ *     the randomizer widget at spin time; handed to ``onRandomizerRolled``
+ *     (which validates everything) at most 10 times a minute per socket.
  *
  * @param {import('socket.io').Server} io
  * @param {{
@@ -82,6 +94,12 @@ const RESYNC_MIN_INTERVAL_MS = 2000;
  *     overlayLive?: object|null,
  *     gameKey?: string|null,
  *   } | null,
+ *   resolveBuildIntent?: (userId: string) => Promise<{
+ *     gameKey: string,
+ *     suppressRandomizer: boolean,
+ *     holdRemainingMs: number,
+ *   } | null>,
+ *   onRandomizerRolled?: (userId: string, token: string, payload: unknown) => Promise<void>|void,
  *   resolveClerkUser?: (clerkUserId: string) => Promise<{userId: string}|null>,
  *   isAdminClerkId?: (clerkUserId: string) => boolean,
  * }} opts
@@ -229,6 +247,12 @@ function attachSocketAuth(io, opts) {
                 // means the OBS widget stays dormant for this streamer.
               }
             }
+            // The randomizer cannot spin before ``overlay:config``; sending
+            // the check-in state first keeps a declared game's reveal from
+            // flashing on a reconnect.
+            if (opts.resolveBuildIntent) {
+              await replayOverlayBuildIntent(socket, opts.resolveBuildIntent, info.userId);
+            }
             if (config.enabledWidgets || config.voicePrefs || config.randomizer) {
               socket.emit("overlay:config", config);
             }
@@ -354,7 +378,28 @@ function attachSocketAuth(io, opts) {
         if (opts.resolvePlatformEvents) {
           replayOverlayPlatformEvents(socket, opts.resolvePlatformEvents, userId);
         }
+        if (opts.resolveBuildIntent) {
+          void replayOverlayBuildIntent(socket, opts.resolveBuildIntent, userId);
+        }
       });
+      // Build check-in: the randomizer widget reports a real spin. The
+      // handler re-validates the token, the live game, the matchup pool and
+      // the build server-side; this only bounds per-socket volume.
+      socket.on(
+        "overlay:randomizer:rolled",
+        /** @param {unknown} payload */
+        (payload) => {
+          const userId = socket.data.overlayUserId;
+          if (!userId || !t || !opts.onRandomizerRolled) return;
+          if (!takeRollReportSlot(socket)) return;
+          const onRolled = opts.onRandomizerRolled;
+          Promise.resolve()
+            .then(() => onRolled(userId, t, payload))
+            .catch(() => {
+              // Roll reports are advisory; a failure only loses the roll.
+            });
+        },
+      );
       // 30-second heartbeat the client uses to detect when its cached
       // gameKey has drifted from the cloud's view (e.g. Streamlabs
       // held the page from getting fresh socket events). The reply is
@@ -490,6 +535,44 @@ function replayOverlayLiveSnapshot(socket, resolveLiveSnapshot, userId) {
 }
 
 /**
+ * Per-socket budget for ``overlay:randomizer:rolled`` reports.
+ * @param {{ data: Record<string, any> }} socket
+ * @returns {boolean}
+ */
+function takeRollReportSlot(socket) {
+  const now = Date.now();
+  const windowStart = typeof socket.data.rollReportWindowStart === "number"
+    ? socket.data.rollReportWindowStart
+    : 0;
+  if (now - windowStart >= ROLL_REPORT_WINDOW_MS) {
+    socket.data.rollReportWindowStart = now;
+    socket.data.rollReportCount = 0;
+  }
+  const count = Number(socket.data.rollReportCount || 0);
+  if (count >= ROLL_REPORTS_PER_WINDOW) return false;
+  socket.data.rollReportCount = count + 1;
+  return true;
+}
+
+/**
+ * Replay the build check-in state of the current live game. Never throws;
+ * a lookup failure just leaves the widget on its own short timeout.
+ *
+ * @param {{emit: (event: string, payload: unknown) => unknown}} socket
+ * @param {(userId: string) => Promise<{gameKey: string, suppressRandomizer: boolean, holdRemainingMs: number}|null>} resolveBuildIntent
+ * @param {string} userId
+ * @returns {Promise<void>}
+ */
+async function replayOverlayBuildIntent(socket, resolveBuildIntent, userId) {
+  try {
+    const state = await resolveBuildIntent(userId);
+    if (state && typeof state === "object") socket.emit("overlay:buildIntent", state);
+  } catch {
+    // See above.
+  }
+}
+
+/**
  * Replay the current Stream Dock snapshot without blocking or failing the
  * socket connection. The live broadcast remains the fast path; this closes
  * the gap when a Browser Source reconnects after missing a manual scene
@@ -537,4 +620,5 @@ module.exports = {
   attachSocketAuth,
   replayOverlayPlatformEvents,
   RESYNC_MIN_INTERVAL_MS,
+  ROLL_REPORTS_PER_WINDOW,
 };

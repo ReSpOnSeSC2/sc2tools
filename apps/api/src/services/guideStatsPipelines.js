@@ -231,6 +231,8 @@ function gameProjection(matchup) {
     _id: 0,
     userId: 1,
     date: 1,
+    // guideGamesMatch keeps only rows whose label agrees with the
+    // classifier, so this is never a declared build check-in.
     build: "$myBuild",
     era: eraExpression(),
     win: { $cond: [{ $eq: ["$result", RESULT_VICTORY] }, 1, 0] },

@@ -7,6 +7,10 @@ const {
   releaseReplayIngestAdmission,
 } = require("../middleware/replayIngestAdmission");
 const { browserUploadStatusOf } = require("../services/replayFilesCors");
+const {
+  CHECKIN_PREF_TYPE,
+  sanitizeCheckinPrefs,
+} = require("../services/buildIntentPrefs");
 
 // Hard cap on the per-request MMR fan-out. Profiles with many toons
 // are rare but legitimate (smurf accounts, region-hoppers); we cap to
@@ -354,7 +358,8 @@ function buildMeRouter(deps) {
   // "arcade" stores Arcade tab state (streak, XP/level, unlocked card slugs,
   // current Stock Market portfolio + week key, Bingo card state, badges).
   // "onboarding" stores the checklist bits only the client knows
-  // (downloadStartedAt, dismissedAt).
+  // (downloadStartedAt, dismissedAt). "buildCheckin" is the build check-in
+  // switches (always exactly three booleans, default true).
   const PREF_TYPES = new Set([
     "misc",
     "voice",
@@ -362,6 +367,7 @@ function buildMeRouter(deps) {
     "randomizer",
     "onboarding",
     "multichat",
+    CHECKIN_PREF_TYPE,
   ]);
 
   router.get("/me/preferences/:type", deps.auth, async (req, res, next) => {
@@ -374,7 +380,7 @@ function buildMeRouter(deps) {
         return;
       }
       const prefs = await deps.users.getPreferences(auth.userId, type);
-      res.json(prefs);
+      res.json(type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(prefs) : prefs);
     } catch (err) {
       next(err);
     }
@@ -393,7 +399,8 @@ function buildMeRouter(deps) {
         res.status(400).json({ error: { code: "invalid_body" } });
         return;
       }
-      const saved = await deps.users.updatePreferences(auth.userId, type, req.body);
+      const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body) : req.body;
+      const saved = await deps.users.updatePreferences(auth.userId, type, body);
       res.json(saved);
     } catch (err) {
       next(err);

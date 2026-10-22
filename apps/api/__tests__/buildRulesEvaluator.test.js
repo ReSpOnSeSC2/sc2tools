@@ -564,6 +564,8 @@ describe("failure reasons and counts", () => {
       failedRule: rules[1],
       failedReason: "BuildStargate: needs at least 2 before 3:20, had 1",
       failedGot: 1,
+      passedCount: 1,
+      ruleCount: 2,
     });
     expect(out.failedRule).toBe(rules[1]);
   });
@@ -582,7 +584,7 @@ describe("failure reasons and counts", () => {
     expect(badName).not.toHaveProperty("failedGot");
     expect(evaluateRules(
       [{ type: "before", name: "BuildStargate", time_lt: 400 }], events,
-    )).toStrictEqual({ pass: true, almost: false });
+    )).toStrictEqual({ pass: true, almost: false, passedCount: 1, ruleCount: 1 });
   });
 });
 

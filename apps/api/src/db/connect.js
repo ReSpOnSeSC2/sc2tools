@@ -61,6 +61,7 @@ const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndex
  *   guideStats: import('mongodb').Collection,
  *   guideNotes: import('mongodb').Collection,
  *   guideVideos: import('mongodb').Collection<any>,
+ *   buildIntentLive: import('mongodb').Collection<any>,
  *   close: () => Promise<void>,
  * }} DbContext
  */
@@ -154,6 +155,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     guideStats: db.collection(COLLECTIONS.GUIDE_STATS),
     guideNotes: db.collection(COLLECTIONS.GUIDE_NOTES),
     guideVideos: db.collection(COLLECTIONS.GUIDE_VIDEOS),
+    buildIntentLive: db.collection(COLLECTIONS.BUILD_INTENT_LIVE),
     close: () => client.close(),
   };
   await ensureIndexes(ctx, { logger, awaitBackground: awaitBackgroundIndexes });
@@ -254,6 +256,28 @@ function attachSlowQueryLogging(client, logger, thresholdMs) {
 async function ensureBrowserIngestDailyIndexes(ctx) {
   await ctx.browserIngestDaily.createIndex({ userId: 1, day: 1 }, { unique: true });
   await ctx.browserIngestDaily.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+}
+
+/**
+ * Build check-in (services/buildIntents.js). Live records are unique per
+ * (userId, gameKey); the ingest bind looks up a user's unbound records by
+ * key start time; the TTL index reclaims them at ``expiresAt``. The partial
+ * games index serves the pending queue without allocating entries for the
+ * (much larger) set of games that never had a pending check-in.
+ *
+ * @param {{ buildIntentLive: import('mongodb').Collection<any>, games: import('mongodb').Collection }} ctx
+ */
+async function ensureBuildIntentIndexes(ctx) {
+  await ctx.buildIntentLive.createIndex({ userId: 1, gameKey: 1 }, { unique: true });
+  await ctx.buildIntentLive.createIndex({ userId: 1, gameId: 1, keyStartedAtMs: 1 });
+  await ctx.buildIntentLive.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await ctx.games.createIndex(
+    { userId: 1, "buildIntent.status": 1, date: -1 },
+    {
+      name: "build_intent_pending",
+      partialFilterExpression: { "buildIntent.status": "pending" },
+    },
+  );
 }
 
 /**
@@ -666,6 +690,7 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.pulseCharacterLinks.createIndex({ accountId: 1 }, { sparse: true });
   await ctx.pulseCharacterLinks.createIndex({ toonHandle: 1 }, { sparse: true });
 
+  await ensureBuildIntentIndexes(ctx);
   await ensureGuideIndexes(ctx);
   await ensureReviewIndexes(ctx);
   // Last, so the ``games`` collection exists and the long build never
