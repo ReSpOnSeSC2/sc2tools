@@ -9,6 +9,7 @@ const harness = vi.hoisted(() => ({
   getToken: vi.fn(async () => "token"),
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
   bump: vi.fn(),
+  prefsRevision: 0,
 }));
 
 vi.mock("@clerk/nextjs", () => ({
@@ -19,6 +20,7 @@ vi.mock("@/components/ui/Toast", () => ({
 }));
 vi.mock("../BuildCheckInProvider", () => ({
   useBuildCheckInRevision: () => ({ revision: 0, bump: harness.bump }),
+  useBuildCheckInPrefsRevision: () => harness.prefsRevision,
 }));
 vi.mock("@/lib/clientApi", () => ({
   apiCall: (...args: unknown[]) => harness.apiCall(...args),
@@ -44,6 +46,7 @@ afterEach(() => {
   harness.toast.success.mockReset();
   harness.toast.error.mockReset();
   harness.bump.mockReset();
+  harness.prefsRevision = 0;
 });
 
 const switchFor = (name: string) => screen.getByRole("switch", { name });
@@ -100,6 +103,22 @@ describe("BuildCheckInSettings", () => {
     });
     expect(switchFor("Build check-ins").getAttribute("aria-checked")).toBe("false");
     expect(harness.bump).not.toHaveBeenCalled();
+  });
+
+  it("refetches the switches when the desktop app changes them", () => {
+    harness.data = { enabled: true, askAtLoading: true, askAfterGame: true };
+    const view = render(<BuildCheckInSettings />);
+    expect(harness.mutate).not.toHaveBeenCalled();
+    harness.prefsRevision = 1;
+    view.rerender(<BuildCheckInSettings />);
+    expect(harness.mutate).toHaveBeenCalledTimes(1);
+    expect(harness.mutate).toHaveBeenCalledWith();
+
+    // The refetched value replaces a clean draft.
+    harness.data = { enabled: true, askAtLoading: false, askAfterGame: true };
+    view.rerender(<BuildCheckInSettings />);
+    expect(switchFor("Ask during the loading screen").getAttribute("aria-checked")).toBe("false");
+    expect(screen.queryByRole("region", { name: "Unsaved changes" })).toBeNull();
   });
 
   it("offers a retry when the settings can't load", () => {

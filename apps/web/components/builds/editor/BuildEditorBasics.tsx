@@ -33,9 +33,15 @@ export function BuildEditorBasics({
   draft,
   setDraft,
   errors,
+  lockedMatchup,
 }: BuildEditorBasicsProps) {
   const [showStrategyNotes, setShowStrategyNotes] = useState(false);
   const profileDisplayName = useMyDisplayName();
+  // A locked matchup keeps the build on the source game: its own race
+  // can't change and the opponent race is that game's or Any.
+  const vsRaceOptions: ReadonlyArray<VsRaceLite> = lockedMatchup
+    ? Array.from(new Set<VsRaceLite>([lockedMatchup.vsRace, "Any"]))
+    : VS_RACE_OPTIONS;
 
   useEffect(() => {
     if (!profileDisplayName) return;
@@ -71,22 +77,36 @@ export function BuildEditorBasics({
           />
         </Field>
 
-        <Field label="Race">
-          <Select
-            value={draft.race}
-            onChange={(e) =>
-              setDraft((d) => ({ ...d, race: e.target.value as RaceLite }))
-            }
-          >
-            {RACE_OPTIONS.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </Select>
+        <Field
+          label="Race"
+          hint={lockedMatchup ? "Set by this game." : undefined}
+        >
+          {lockedMatchup ? (
+            <Input value={lockedMatchup.race} readOnly aria-readonly="true" />
+          ) : (
+            <Select
+              value={draft.race}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, race: e.target.value as RaceLite }))
+              }
+            >
+              {RACE_OPTIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </Select>
+          )}
         </Field>
 
-        <Field label="Vs race">
+        <Field
+          label="Vs race"
+          hint={
+            lockedMatchup && lockedMatchup.vsRace !== "Any"
+              ? `Only ${lockedMatchup.vsRace} or Any fits this game.`
+              : undefined
+          }
+        >
           <Select
             value={draft.vsRace}
             onChange={(e) =>
@@ -96,7 +116,7 @@ export function BuildEditorBasics({
               }))
             }
           >
-            {VS_RACE_OPTIONS.map((r) => (
+            {vsRaceOptions.map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, PencilLine } from "lucide-react";
 import { Badge, type BadgeSize } from "@/components/ui/Badge";
 import { plannedTooltip } from "@/lib/buildIntent";
 
@@ -29,6 +29,36 @@ export function PlannedBadge({
       data-testid="planned-badge"
     >
       Planned
+      <span className="sr-only">{`. ${tooltip}`}</span>
+    </Badge>
+  );
+}
+
+/**
+ * "Corrected" marker for an opponent build that comes from the player's
+ * check-in rather than the replay classifier; the tooltip names what the
+ * replay itself was classified as.
+ */
+export function CorrectedBadge({
+  detected,
+  size = "sm",
+  className = "",
+}: {
+  detected?: string | null;
+  size?: BadgeSize;
+  className?: string;
+}) {
+  const tooltip = plannedTooltip(detected);
+  return (
+    <Badge
+      size={size}
+      variant="neutral"
+      title={tooltip}
+      iconLeft={<PencilLine className="h-3 w-3" aria-hidden />}
+      className={["shrink-0 cursor-help", className].filter(Boolean).join(" ")}
+      data-testid="corrected-badge"
+    >
+      Corrected
       <span className="sr-only">{`. ${tooltip}`}</span>
     </Badge>
   );

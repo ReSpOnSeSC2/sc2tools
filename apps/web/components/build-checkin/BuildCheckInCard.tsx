@@ -1,71 +1,176 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ClipboardCheck, Info, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import {
   INELIGIBLE_REASON_COPY,
+  mergeIntentUpdate,
   useGameBuildIntent,
   type BuildOption,
+  type CheckInSide,
   type GameIntentState,
 } from "@/lib/buildIntent";
 import { useBuildCheckInRevision } from "./BuildCheckInProvider";
 import { BuildPicker } from "./BuildPicker";
-import { CheckInNotesEditor, useCheckInNotes } from "./CheckInNotes";
+import {
+  CheckInNewBuild,
+  type NewBuildRequest,
+  type NewBuildSaved,
+} from "./CheckInNewBuild";
+import {
+  CheckInNotesEditor,
+  useCheckInNotes,
+  type CheckInNotesDraft,
+} from "./CheckInNotes";
 import {
   CheckInStatusBadge,
   DetectedLine,
   ReasonChip,
 } from "./CheckInParts";
-import { useCheckInActions } from "./useCheckInActions";
+import { OpponentBuildRow, type PickerSignal } from "./OpponentBuildRow";
+import { useCheckInActions, type CheckInActions } from "./useCheckInActions";
+import { useNewBuildCheckIn } from "./useNewBuildCheckIn";
+
+type SideSignal = PickerSignal & { side: CheckInSide };
 
 /**
  * BuildCheckInCard — the game page's "which build were you going for?"
  * surface. Eligible games get the full card (planned vs detected, the
  * server's suggestion with Confirm while pending, Change via the picker,
- * "No set build" and notes); a game nobody checked in yet shows a compact
- * "Set planned build" action that expands into the card; an ineligible game
- * gets a one-line reason. Loading never reserves space, so pages for games
- * without a check-in don't jump.
+ * "No set build", the opponent's build with its own Change, and notes);
+ * a game nobody checked in yet shows a compact "Set planned build" action
+ * that expands into the card; an ineligible game gets a one-line reason.
+ * Loading never reserves space, so pages for games without a check-in
+ * don't jump.
+ *
+ * Either picker can "Add new build…": the custom-build editor opens on
+ * this game's build order and, once saved, the new build becomes this
+ * game's check-in for that side. `initialNewBuild` (the `?newBuild=` deep
+ * link the desktop app opens) does the same as soon as the game loads.
  */
 export function BuildCheckInCard({
   gameId,
   onChanged,
+  initialNewBuild = null,
+  onNewBuildOpened,
 }: {
   gameId: string;
   /** After a successful write, e.g. to refresh the page's game summary. */
   onChanged?: (state: GameIntentState) => void;
+  /** Open "Add new build" for this side once the game's check-in loads. */
+  initialNewBuild?: CheckInSide | null;
+  /** The deep link was acted on (or can't be); e.g. drop it from the URL. */
+  onNewBuildOpened?: () => void;
 }) {
   const { revision } = useBuildCheckInRevision();
   const request = useGameBuildIntent(gameId, revision);
   const [expanded, setExpanded] = useState(false);
+  const [creating, setCreating] = useState<NewBuildRequest | null>(null);
+  const [signal, setSignal] = useState<SideSignal | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const deepLinkHandled = useRef(false);
   const state = request.data;
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
+  const applyUpdate = (next: GameIntentState) => {
+    // PUT responses carry no build lists; keep the ones already loaded.
+    void request.mutate((current) => mergeIntentUpdate(current, next), {
+      revalidate: false,
+    });
+    // A write on an unchecked game (notes, the opponent's build) keeps the
+    // full card open instead of folding back to the compact action.
+    if (next.status === "none") setExpanded(true);
+    onChanged?.(next);
+  };
+  const actions = useCheckInActions(gameId, applyUpdate);
+  const notes = useCheckInNotes(state?.notes ?? "");
+  const checkInNewBuild = useNewBuildCheckIn(actions);
+
+  const openNewBuild = (side: CheckInSide, query = "") => {
+    const current = stateRef.current;
+    setCreating({
+      gameId,
+      side,
+      defaultName: query.trim() || undefined,
+      myRace: current?.myRace ?? null,
+      oppRace: current?.oppRace ?? null,
+    });
+  };
+
+  const onNewBuildSaved = async (saved: NewBuildSaved) => {
+    const game = stateRef.current;
+    const notesForWrite = notes.dirty ? notes.draft : undefined;
+    const outcome = await checkInNewBuild(saved, game, notesForWrite);
+    if (outcome.state) {
+      if (notesForWrite !== undefined) notes.markSaved(outcome.state.notes ?? notesForWrite);
+      setSignal({ side: saved.side, key: saved.key, open: false, nonce: Date.now() });
+      return;
+    }
+    // The build is saved either way: refresh the lists so it shows up, and
+    // open that side's picker on it (selected once the list includes it).
+    void request.mutate();
+    if (!game?.eligible || outcome.errorCode === "not_eligible") return;
+    if (saved.side === "opponent" && !game.opponent) return;
+    if (game.status === "none") setExpanded(true);
+    setSignal({ side: saved.side, key: saved.key, open: true, nonce: Date.now() });
+  };
+
+  useEffect(() => {
+    if (!initialNewBuild || deepLinkHandled.current) return;
+    if (!state) {
+      if (request.error?.status === 404) {
+        deepLinkHandled.current = true;
+        onNewBuildOpened?.();
+      }
+      return;
+    }
+    deepLinkHandled.current = true;
+    if (state.eligible && state.status === "none") setExpanded(true);
+    openNewBuild(initialNewBuild);
+    rootRef.current?.scrollIntoView?.({
+      block: "start",
+      behavior: prefersReducedMotion() ? "auto" : "smooth",
+    });
+    onNewBuildOpened?.();
+    // openNewBuild/onNewBuildOpened are fresh each render; the ref guard
+    // makes this run once per page.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialNewBuild, state, request.error]);
+
+  const launcher = (
+    <CheckInNewBuild
+      request={creating}
+      onClose={() => setCreating(null)}
+      onSaved={(saved) => void onNewBuildSaved(saved)}
+    />
+  );
+
+  let content: ReactNode;
   if (!state) {
-    if (!request.error || request.error.status === 404) return null;
-    return (
-      <div
-        role="status"
-        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-dashed border-border px-4 py-3 text-caption text-text-muted"
-      >
-        <span>Build check-in couldn't load. {request.error.message}</span>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => void request.mutate()}
-          iconLeft={<RotateCcw className="h-4 w-4" aria-hidden />}
+    content =
+      !request.error || request.error.status === 404 ? null : (
+        <div
+          role="status"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-dashed border-border px-4 py-3 text-caption text-text-muted"
         >
-          Try again
-        </Button>
-      </div>
-    );
-  }
-
-  if (!state.eligible) return <IneligibleLine state={state} />;
-
-  if (state.status === "none" && !expanded) {
-    return (
+          <span>Build check-in couldn&apos;t load. {request.error.message}</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void request.mutate()}
+            iconLeft={<RotateCcw className="h-4 w-4" aria-hidden />}
+          >
+            Try again
+          </Button>
+        </div>
+      );
+  } else if (!state.eligible) {
+    content = <IneligibleLine state={state} />;
+  } else if (state.status === "none" && !state.opponent?.applied && !expanded) {
+    content = (
       <div
         className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-dashed border-border bg-bg-surface px-4 py-3"
         data-testid="build-checkin-compact"
@@ -75,6 +180,7 @@ export function BuildCheckInCard({
           <span>
             Went for a different build than the replay shows? Set your planned
             build and this game counts toward it.
+            {state.opponent ? " You can correct the opponent's build here too." : null}
           </span>
         </p>
         <Button variant="secondary" size="sm" onClick={() => setExpanded(true)}>
@@ -82,30 +188,41 @@ export function BuildCheckInCard({
         </Button>
       </div>
     );
+  } else {
+    content = (
+      <CheckInPanel
+        key={state.gameId}
+        state={state}
+        actions={actions}
+        notes={notes}
+        signal={signal}
+        optionsLoading={request.isValidating}
+        onRefetch={() => void request.mutate()}
+        onCollapse={
+          state.status === "none" && expanded ? () => setExpanded(false) : undefined
+        }
+        onAddNew={openNewBuild}
+      />
+    );
   }
 
-  const applyUpdate = (next: GameIntentState) => {
-    // PUT responses carry no build list; keep the one already loaded.
-    void request.mutate(
-      (current) => ({
-        ...next,
-        options: next.options ?? current?.options,
-        usualKey: next.usualKey ?? current?.usualKey ?? null,
-      }),
-      { revalidate: false },
-    );
-    onChanged?.(next);
-  };
-
   return (
-    <CheckInPanel
-      key={state.gameId}
-      state={state}
-      optionsLoading={request.isValidating}
-      onUpdated={applyUpdate}
-      onRefetch={() => void request.mutate()}
-      onCollapse={state.status === "none" ? () => setExpanded(false) : undefined}
-    />
+    <>
+      {content ? (
+        <div ref={rootRef} className="scroll-mt-20">
+          {content}
+        </div>
+      ) : null}
+      {launcher}
+    </>
+  );
+}
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
   );
 }
 
@@ -124,7 +241,7 @@ function IneligibleLine({ state }: { state: GameIntentState }) {
         {planned ? (
           <>
             {" "}You planned <span className="font-semibold text-text">{planned.name}</span>;
-            it isn't counted.
+            it isn&apos;t counted.
           </>
         ) : null}
       </p>
@@ -134,77 +251,47 @@ function IneligibleLine({ state }: { state: GameIntentState }) {
 
 function CheckInPanel({
   state,
+  actions,
+  notes,
+  signal,
   optionsLoading,
-  onUpdated,
   onRefetch,
   onCollapse,
+  onAddNew,
 }: {
   state: GameIntentState;
+  actions: CheckInActions;
+  notes: CheckInNotesDraft;
+  signal: SideSignal | null;
   optionsLoading: boolean;
-  onUpdated: (next: GameIntentState) => void;
   onRefetch: () => void;
   /** Present while a status-none game is expanded from the compact action. */
   onCollapse?: () => void;
+  onAddNew: (side: CheckInSide, query: string) => void;
 }) {
   const titleId = useId();
-  const actions = useCheckInActions(state.gameId, onUpdated);
-  const notes = useCheckInNotes(state.notes ?? "");
-  const suggestion = state.suggestion;
-  const [picking, setPicking] = useState(
-    Boolean(onCollapse) || (state.status === "pending" && !suggestion),
-  );
-  // Focus the search box only when the player opened the picker, never
-  // on page load.
-  const [focusPicker, setFocusPicker] = useState(Boolean(onCollapse));
-  const [selectedKey, setSelectedKey] = useState<string | null>(
-    state.status === "confirmed" ? state.build?.key ?? null : suggestion?.key ?? null,
-  );
-  const options = state.options;
-  const selected: BuildOption | null =
-    options?.find((option) => option.key === selectedKey) ?? null;
-  const busy = actions.busy !== null;
-  const notesForWrite = notes.dirty ? notes.draft : undefined;
+  const notesForWrite = () => (notes.dirty ? notes.draft : undefined);
 
   const afterWrite = (errorCode: string | null) => {
     // The game's eligibility or existence changed underneath us.
     if (errorCode === "not_eligible" || errorCode === "not_found") onRefetch();
   };
 
-  const confirm = async (key: string, name: string) => {
-    const outcome = await actions.confirm(key, name, notesForWrite);
+  const saveOpponent = async (key: string | null, name: string | null) => {
+    const pendingNotes = notesForWrite();
+    const outcome = await actions.setOpponent(key, name, pendingNotes);
     if (outcome.state) {
-      if (notesForWrite !== undefined) notes.markSaved(outcome.state.notes ?? notesForWrite);
-      setPicking(false);
-    } else {
-      afterWrite(outcome.errorCode);
+      if (pendingNotes !== undefined) notes.markSaved(outcome.state.notes ?? pendingNotes);
+      return true;
     }
-  };
-
-  const skip = async () => {
-    const outcome = await actions.skip(notesForWrite);
-    if (outcome.state) {
-      if (notesForWrite !== undefined) notes.markSaved(outcome.state.notes ?? notesForWrite);
-      setPicking(false);
-    } else {
-      afterWrite(outcome.errorCode);
-    }
+    afterWrite(outcome.errorCode);
+    return false;
   };
 
   const saveNotes = async () => {
     const outcome = await actions.saveNotes(notes.draft);
     if (outcome.state) notes.markSaved(outcome.state.notes ?? notes.draft);
     else afterWrite(outcome.errorCode);
-  };
-
-  const cancelPicking = () => {
-    if (onCollapse) {
-      onCollapse();
-      return;
-    }
-    setPicking(false);
-    setSelectedKey(
-      state.status === "confirmed" ? state.build?.key ?? null : suggestion?.key ?? null,
-    );
   };
 
   const actionMessage =
@@ -240,73 +327,30 @@ function CheckInPanel({
       </div>
 
       <div className="space-y-4 p-4">
-        <DetectedLine
-          detected={state.detected?.name}
-          executed={state.status === "confirmed" && state.executed}
+        <YourBuildRow
+          state={state}
+          actions={actions}
+          notes={notes}
+          signal={signal?.side === "you" ? signal : null}
+          optionsLoading={optionsLoading}
+          onRefetch={onRefetch}
+          onCollapse={onCollapse}
+          onAddNew={(query) => onAddNew("you", query)}
+          afterWrite={afterWrite}
         />
 
-        {picking ? (
-          <div className="space-y-3">
-            {state.status === "pending" && !suggestion ? (
-              <p className="text-caption text-text">Pick the build you were going for.</p>
-            ) : null}
-            <BuildPicker
-              options={options}
-              loading={options === undefined && optionsLoading}
-              error={
-                options === undefined && !optionsLoading
-                  ? "The build list couldn't load."
-                  : null
-              }
-              onRetry={onRefetch}
-              value={selectedKey}
-              onChange={(option) => setSelectedKey(option.key)}
-              rolledKey={state.randomizer?.key ?? null}
-              usualKey={state.usualKey ?? null}
-              suggestedKey={suggestion?.key ?? null}
-              label="Build you went for"
-              autoFocus={focusPicker}
-              disabled={busy}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                size="sm"
-                loading={actions.busy === "confirm"}
-                disabled={!selected || busy}
-                onClick={() => selected && void confirm(selected.key, selected.name)}
-              >
-                {selected ? `Confirm ${selected.name}` : "Confirm"}
-              </Button>
-              <Button variant="ghost" size="sm" disabled={busy} onClick={cancelPicking}>
-                Cancel
-              </Button>
-              {state.status === "pending" ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  loading={actions.busy === "skip"}
-                  disabled={busy}
-                  onClick={() => void skip()}
-                >
-                  No set build
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        ) : (
-          <StatusSummary
-            state={state}
+        {state.opponent ? (
+          <OpponentBuildRow
+            opponent={state.opponent}
+            matchup={state.matchup}
             busy={actions.busy}
-            onConfirmSuggestion={() =>
-              suggestion && void confirm(suggestion.key, suggestion.name)
-            }
-            onChange={() => {
-              setFocusPicker(true);
-              setPicking(true);
-            }}
-            onSkip={() => void skip()}
+            optionsLoading={optionsLoading}
+            onSave={saveOpponent}
+            onRetry={onRefetch}
+            onAddNew={(query) => onAddNew("opponent", query)}
+            signal={signal?.side === "opponent" ? signal : null}
           />
-        )}
+        ) : null}
 
         <p
           role={actionMessage?.error ? "alert" : "status"}
@@ -324,7 +368,11 @@ function CheckInPanel({
           <CheckInNotesEditor
             notes={notes}
             saving={actions.busy === "notes"}
-            disabled={actions.busy === "confirm" || actions.busy === "skip"}
+            disabled={
+              actions.busy === "confirm" ||
+              actions.busy === "skip" ||
+              actions.busy === "opponent"
+            }
             status={notesMessage?.text ?? ""}
             statusIsError={Boolean(notesMessage?.error)}
             onSave={() => void saveNotes()}
@@ -338,6 +386,156 @@ function CheckInPanel({
   );
 }
 
+/** The player's own side: detected label, suggestion or planned build, and the picker. */
+function YourBuildRow({
+  state,
+  actions,
+  notes,
+  signal,
+  optionsLoading,
+  onRefetch,
+  onCollapse,
+  onAddNew,
+  afterWrite,
+}: {
+  state: GameIntentState;
+  actions: CheckInActions;
+  notes: CheckInNotesDraft;
+  signal: PickerSignal | null;
+  optionsLoading: boolean;
+  onRefetch: () => void;
+  onCollapse?: () => void;
+  onAddNew: (query: string) => void;
+  afterWrite: (errorCode: string | null) => void;
+}) {
+  const suggestion = state.suggestion;
+  const [picking, setPicking] = useState(
+    Boolean(onCollapse) || (state.status === "pending" && !suggestion),
+  );
+  // Focus the search box only when the player opened the picker, never
+  // on page load.
+  const [focusPicker, setFocusPicker] = useState(Boolean(onCollapse));
+  const [selectedKey, setSelectedKey] = useState<string | null>(
+    state.status === "confirmed" ? state.build?.key ?? null : suggestion?.key ?? null,
+  );
+  const options = state.options;
+  const selected: BuildOption | null =
+    options?.find((option) => option.key === selectedKey) ?? null;
+  const busy = actions.busy !== null;
+
+  useEffect(() => {
+    if (!signal) return;
+    setSelectedKey(signal.key);
+    setPicking(signal.open);
+  }, [signal]);
+
+  const confirm = async (key: string, name: string) => {
+    const pendingNotes = notes.dirty ? notes.draft : undefined;
+    const outcome = await actions.confirm(key, name, pendingNotes);
+    if (outcome.state) {
+      if (pendingNotes !== undefined) notes.markSaved(outcome.state.notes ?? pendingNotes);
+      setPicking(false);
+    } else {
+      afterWrite(outcome.errorCode);
+    }
+  };
+
+  const skip = async () => {
+    const pendingNotes = notes.dirty ? notes.draft : undefined;
+    const outcome = await actions.skip(pendingNotes);
+    if (outcome.state) {
+      if (pendingNotes !== undefined) notes.markSaved(outcome.state.notes ?? pendingNotes);
+      setPicking(false);
+    } else {
+      afterWrite(outcome.errorCode);
+    }
+  };
+
+  const cancelPicking = () => {
+    if (onCollapse) {
+      onCollapse();
+      return;
+    }
+    setPicking(false);
+    setSelectedKey(
+      state.status === "confirmed" ? state.build?.key ?? null : suggestion?.key ?? null,
+    );
+  };
+
+  return (
+    <div role="group" aria-label="Your build" className="space-y-4">
+      <DetectedLine
+        detected={state.detected?.name}
+        executed={state.status === "confirmed" && state.executed}
+      />
+
+      {picking ? (
+        <div className="space-y-3">
+          {state.status === "pending" && !suggestion ? (
+            <p className="text-caption text-text">Pick the build you were going for.</p>
+          ) : null}
+          <BuildPicker
+            options={options}
+            loading={options === undefined && optionsLoading}
+            error={
+              options === undefined && !optionsLoading
+                ? "The build list couldn't load."
+                : null
+            }
+            onRetry={onRefetch}
+            value={selectedKey}
+            onChange={(option) => setSelectedKey(option.key)}
+            rolledKey={state.randomizer?.key ?? null}
+            usualKey={state.usualKey ?? null}
+            suggestedKey={suggestion?.key ?? null}
+            label="Build you went for"
+            onAddNew={onAddNew}
+            autoFocus={focusPicker}
+            disabled={busy}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              loading={actions.busy === "confirm"}
+              disabled={!selected || busy}
+              onClick={() => selected && void confirm(selected.key, selected.name)}
+            >
+              {selected ? `Confirm ${selected.name}` : "Confirm"}
+            </Button>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={cancelPicking}>
+              Cancel
+            </Button>
+            {state.status === "pending" ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                loading={actions.busy === "skip"}
+                disabled={busy}
+                onClick={() => void skip()}
+              >
+                No set build
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : (
+        <StatusSummary
+          state={state}
+          busy={actions.busy}
+          onConfirmSuggestion={() =>
+            suggestion && void confirm(suggestion.key, suggestion.name)
+          }
+          onChange={() => {
+            setFocusPicker(true);
+            setPicking(true);
+          }}
+          onSkip={() => void skip()}
+        />
+      )}
+    </div>
+  );
+}
+
 function StatusSummary({
   state,
   busy,
@@ -346,7 +544,7 @@ function StatusSummary({
   onSkip,
 }: {
   state: GameIntentState;
-  busy: ReturnType<typeof useCheckInActions>["busy"];
+  busy: CheckInActions["busy"];
   onConfirmSuggestion: () => void;
   onChange: () => void;
   onSkip: () => void;

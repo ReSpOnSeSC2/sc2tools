@@ -15,7 +15,7 @@ import { fmtDate, fmtMinutes, fmtMmr, raceColour } from "@/lib/format";
 import { ShareGameButton } from "./ShareGameButton";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { isReviewableGame } from "@/lib/reviews";
-import { PlannedBadge } from "@/components/build-checkin/PlannedBadge";
+import { CorrectedBadge, PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import { isLossResult, isWinResult, type GameSummary } from "./types";
 import {
   opponentProfileHref,
@@ -30,7 +30,7 @@ import {
  * plus a back link to the source opponent dossier (or dashboard fallback).
  * When a confirmed build check-in overrides the classifier, "My build"
  * shows the planned build with a "Planned" marker naming the replay's own
- * label.
+ * label; a corrected opponent build gets a "Corrected" marker the same way.
  *
  * Layout: children stack vertically; the page decides what goes in.
  */
@@ -41,6 +41,8 @@ export function GameDetailShell({
   streamLinks,
   buildLabel,
   planned,
+  oppStrategyLabel,
+  oppCorrected,
 }: {
   game: GameSummary;
   children: ReactNode;
@@ -50,6 +52,10 @@ export function GameDetailShell({
   buildLabel?: string | null;
   /** Check-in override marker; undefined falls back to the slim row's flag. */
   planned?: { detected: string | null } | null;
+  /** Effective opponent strategy from the check-in state; the slim row's otherwise. */
+  oppStrategyLabel?: string | null;
+  /** Opponent-build correction marker; undefined falls back to the slim row's flag. */
+  oppCorrected?: { detected: string | null } | null;
 }) {
   const matchup = matchupLabel(game.myRace, game.opponent?.race);
   const oppName = (game.opponent?.displayName || "").trim() || "Opponent";
@@ -71,6 +77,14 @@ export function GameDetailShell({
       ? planned
       : game.buildPlanned
         ? { detected: game.detectedBuild ?? null }
+        : null;
+  const oppStrategy =
+    oppStrategyLabel !== undefined ? oppStrategyLabel : game.opponent?.strategy;
+  const correctedMarker =
+    oppCorrected !== undefined
+      ? oppCorrected
+      : game.oppStrategyPlanned
+        ? { detected: game.detectedOppStrategy ?? null }
         : null;
   return (
     <div className="space-y-6">
@@ -174,8 +188,11 @@ export function GameDetailShell({
               <span className="text-text-dim">·</span>
               <span className="text-text-dim">Opponent strategy</span>
               <Badge size="sm" variant="neutral">
-                {game.opponent?.strategy || "Unknown"}
+                {oppStrategy || "Unknown"}
               </Badge>
+              {correctedMarker ? (
+                <CorrectedBadge detected={correctedMarker.detected} />
+              ) : null}
             </div>
           </div>
         </div>

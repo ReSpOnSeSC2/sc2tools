@@ -127,7 +127,10 @@ export function SettingsHelp() {
             loading screen or after the game. A confirmed check-in counts
             the game toward that build&apos;s win/loss record even when the
             replay was classified as something else, so each build&apos;s
-            record shows how the plan really does.
+            record shows how the plan really does. You can also correct
+            the <b className="text-text">opponent&apos;s build</b> when the
+            replay named it wrong, and save a build you don&apos;t have yet
+            as a new custom build right from the check-in.
           </p>
 
           <p className="font-medium text-text">What you need</p>
@@ -211,7 +214,9 @@ export function SettingsHelp() {
             weren&apos;t going for anything in particular; the game keeps the
             replay&apos;s label) or <b className="text-text">Later</b>. Use the
             notes box for what threw the build off. Ctrl+Enter confirms, Esc
-            means Later.
+            means Later. Once your replay has uploaded, the card also shows{" "}
+            <b className="text-text">Opponent&apos;s build</b> and{" "}
+            <b className="text-text">Add new build…</b> (see below).
           </Step>
           <Step n={4}>
             <b className="text-text">Picked at loading?</b> If the replay
@@ -224,9 +229,11 @@ export function SettingsHelp() {
             <b className="text-text">Missed one?</b> The{" "}
             <b className="text-text">Build check-ins (N)</b> chip in the header
             lists games from the last 72 hours that are waiting: Confirm,
-            Change… or No set build, or Dismiss all. Every game page also has
-            a <b className="text-text">Build check-in</b> card where you can
-            set or change the planned build and edit your notes at any time.
+            Change… or No set build, or Dismiss all. Each game also shows the
+            opponent&apos;s build. Every game page also has a{" "}
+            <b className="text-text">Build check-in</b> card where you can
+            set or change the planned build, correct the opponent&apos;s
+            build and edit your notes at any time.
             The desktop app&apos;s tray menu has{" "}
             <b className="text-text">Build check-in…</b> to reopen a card you
             closed.
@@ -236,6 +243,86 @@ export function SettingsHelp() {
             loading card because the matchup isn&apos;t known yet. You&apos;re
             asked after the game, with the real matchup.
           </p>
+
+          <p className="font-medium text-text">The opponent&apos;s build</p>
+          <p>
+            The replay also names the build your opponent went for. When it
+            got that wrong, correct it, and your own stats against that
+            build (opponent history, how your builds do against each
+            opener, the custom builds you saved for opponents) count the
+            game under the build they really played.
+          </p>
+          <Step n={1}>
+            <b className="text-text">After the game, on the desktop
+            card.</b> Once your replay has uploaded, the card shows{" "}
+            <b className="text-text">Opponent&apos;s build: …</b> with what
+            the replay found. Click <b className="text-text">Change</b>: the
+            list switches to the opponent&apos;s builds, with the ones
+            you&apos;ve <b className="text-text">Faced before</b> first, then{" "}
+            <b className="text-text">All builds</b> and a{" "}
+            <i>Search opponent builds</i> box. Pick one and the row is marked{" "}
+            <b className="text-text">changed</b>;{" "}
+            <b className="text-text">Use replay&apos;s label</b> undoes it.
+            The correction is saved with <b className="text-text">Confirm</b>,{" "}
+            <b className="text-text">No set build</b> or{" "}
+            <b className="text-text">Done</b>.
+          </Step>
+          <Step n={2}>
+            <b className="text-text">On the website.</b> The game page&apos;s{" "}
+            <b className="text-text">Build check-in</b> card has an{" "}
+            <b className="text-text">Opponent&apos;s build: …</b> line. Press{" "}
+            <b className="text-text">Change…</b>, pick the build, then{" "}
+            <b className="text-text">Save</b>, or{" "}
+            <b className="text-text">Use replay&apos;s label</b> to go back to
+            what the replay found. A corrected build carries a{" "}
+            <b className="text-text">Corrected</b> badge (hover it to see the
+            replay&apos;s own label), on the card and next to{" "}
+            <i>Opponent strategy</i> at the top of the page.
+          </Step>
+
+          <p className="font-medium text-text">Add a build you don&apos;t have yet</p>
+          <p>
+            Went for something new, or faced a build that isn&apos;t in the
+            list? Save it as a custom build from the game itself, with the
+            same editor as <i>Save as new build</i> on a game&apos;s build
+            order, and it becomes this game&apos;s check-in in one go.
+          </p>
+          <Step n={1}>
+            <b className="text-text">On the desktop card</b>, click{" "}
+            <b className="text-text">Add new build…</b> under your builds or
+            under the opponent&apos;s. It opens this game on sc2tools.com
+            with the editor ready, and the card steps aside. It&apos;s
+            available once your replay has uploaded.
+          </Step>
+          <Step n={2}>
+            <b className="text-text">On the website</b>, press{" "}
+            <b className="text-text">Change…</b> on either side of the game
+            page&apos;s check-in card (or in the{" "}
+            <b className="text-text">Build check-ins (N)</b> list) and click{" "}
+            <b className="text-text">Add new build…</b> under the list. If your
+            search found nothing, <b className="text-text">Add “…” as a new
+            build…</b> uses what you typed as the name. In the check-in list,
+            the opponent&apos;s line has its own{" "}
+            <b className="text-text">Add new build…</b>.
+          </Step>
+          <Step n={3}>
+            <b className="text-text">Build it from the replay.</b> The editor
+            shows this game&apos;s build order for that player: click{" "}
+            <b className="text-text">+</b> on the starred steps that define
+            the build, check the live match preview, name it and press{" "}
+            <b className="text-text">Save build</b> (or{" "}
+            <b className="text-text">Save &amp; Reclassify</b> to also match
+            your older games). The race is set by the game; the vs race can
+            be this game&apos;s or Any.
+          </Step>
+          <Step n={4}>
+            <b className="text-text">Done.</b>{" "}
+            <i>Saved to your library and checked in</i> means the new build
+            is in your library and counts for this game. If a build with
+            that name already exists, you&apos;re asked to pick another name,
+            so nothing is overwritten. If the game can&apos;t take a
+            check-in, the build is still saved to your library.
+          </Step>
 
           <p className="font-medium text-text">How it counts</p>
           <ul className="list-disc space-y-1 pl-5">
@@ -257,9 +344,13 @@ export function SettingsHelp() {
               diluted by games that went sideways.
             </li>
             <li>
+              A corrected opponent build counts the same way: your own
+              stats against that build include the game.
+            </li>
+            <li>
               Community guides, ladder meta and coaching keep the
-              replay&apos;s own label. Your check-ins only change your own
-              stats.
+              replay&apos;s own label, for your build and the
+              opponent&apos;s. Your check-ins only change your own stats.
             </li>
             <li>
               Games under 45 seconds never count toward a build.{" "}
@@ -295,6 +386,12 @@ export function SettingsHelp() {
               late?</b> That&apos;s the short hold while you decide;{" "}
               <i>Roll now</i> skips it, and turning off{" "}
               <i>Ask during the loading screen</i> removes it.
+            </li>
+            <li>
+              <b className="text-text">No opponent&apos;s build or Add new
+              build… on the desktop card?</b> Both need your replay, so they
+              appear once it has uploaded (<i>Available once your replay
+              uploads</i>). Until then, use the game page on the website.
             </li>
           </ul>
         </HelpSection>

@@ -12,6 +12,13 @@
  */
 
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
+import type { CheckInSide } from "@/lib/buildIntentLinks";
+
+export {
+  NEW_BUILD_QUERY_PARAM,
+  newBuildHref,
+  type CheckInSide,
+} from "@/lib/buildIntentLinks";
 
 /* ------------------------------------------------------------------
  * Contract types
@@ -56,6 +63,8 @@ export interface BuildOption extends BuildRef {
 
 export interface BuildOptionsResponse {
   matchup: string;
+  /** Which list this is; absent on older APIs (= "you"). */
+  side?: CheckInSide;
   randomizerEnabled: boolean;
   usualKey: string | null;
   builds: BuildOption[];
@@ -75,6 +84,34 @@ export type IneligibleReason = "resumed" | "not_1v1" | "no_matchup" | "too_short
 export type BuildIntentOrigin = "pregame" | "postgame" | "web";
 
 export type BuildIntentVia = "agent" | "web";
+
+/** The opponent's build as the replay suggests it (only ever "detected" or "rules"). */
+export interface OpponentBuildSuggestion extends BuildRef {
+  reason: Extract<SuggestionReason, "detected" | "rules">;
+  passedRules: number | null;
+  ruleCount: number | null;
+}
+
+/**
+ * The opponent axis of a game's check-in: an optional correction of the
+ * opponent's build. There is no pending state or queue for this side.
+ */
+export interface OpponentIntentState {
+  /** The effective `opponent.strategy` (the correction while applied); null when none. */
+  label: string | null;
+  status: "none" | "confirmed";
+  /** `deleted: true` when the chosen custom build was later deleted (frozen). */
+  build: (BuildRef & { deleted?: boolean }) | null;
+  /** True only while the game's opponent label carries `build`. */
+  applied: boolean;
+  /** The classifier's opponent label; `key` is set when it is a pickable option. */
+  detected: { name: string | null; slug: string | null; key: string | null } | null;
+  suggestion: OpponentBuildSuggestion | null;
+  /** Whether the replay agrees with the correction; null when there is none. */
+  executed: boolean | null;
+  /** Only with `?include=options` (never on pending-queue items). */
+  options?: BuildOption[];
+}
 
 /** `GET/PUT /v1/games/:gameId/build-intent`. */
 export interface GameIntentState {
@@ -108,6 +145,11 @@ export interface GameIntentState {
   /** Only with `?include=options`. */
   options?: BuildOption[];
   usualKey?: string | null;
+  /**
+   * The opponent's build; null when the game has no concrete matchup
+   * (absent on APIs that predate the opponent axis).
+   */
+  opponent?: OpponentIntentState | null;
 }
 
 /** `GET /v1/build-intents/pending`. */
@@ -121,13 +163,19 @@ export interface DismissPendingResponse {
   dismissed: number;
 }
 
-export type GameIntentAction = "confirm" | "skip" | "defer" | "notes";
+export type GameIntentAction = "confirm" | "skip" | "defer" | "notes" | "opponent";
 
-/** `PUT /v1/games/:gameId/build-intent` body; omitted `notes` = unchanged. */
+/**
+ * `PUT /v1/games/:gameId/build-intent` body; omitted `notes` = unchanged.
+ * `opponentBuildKey` rides along with any action: a key corrects the
+ * opponent's build, `null` goes back to the replay's label, omitted keeps
+ * it. The "opponent" action changes only that (the key is required).
+ */
 export interface GameIntentRequest {
   action: GameIntentAction;
   buildKey?: string;
   notes?: string;
+  opponentBuildKey?: string | null;
 }
 
 /** `GET/PUT /v1/build-intents/live/:gameKey` (agent surface; typed for completeness). */
@@ -185,10 +233,25 @@ export function pendingIntentsPath(limit = 10): string {
   return `/v1/build-intents/pending?limit=${safe}`;
 }
 
-/** Null for anything that is not a concrete matchup such as "PvZ". */
-export function buildOptionsPath(matchup: string | null | undefined): string | null {
+/**
+ * Null for anything that is not a concrete matchup such as "PvZ". The
+ * opponent list is the builds the opponent can go for in that matchup.
+ *
+ * Example: `buildOptionsPath("PvZ", "opponent")` →
+ * "/v1/build-intents/options?matchup=PvZ&side=opponent".
+ */
+export function buildOptionsPath(
+  matchup: string | null | undefined,
+  side: CheckInSide = "you",
+): string | null {
   if (!matchup || !MATCHUP_RE.test(matchup)) return null;
-  return `/v1/build-intents/options?matchup=${encodeURIComponent(matchup)}`;
+  const base = `/v1/build-intents/options?matchup=${encodeURIComponent(matchup)}`;
+  return side === "opponent" ? `${base}&side=opponent` : base;
+}
+
+/** Example: `customBuildKey("dt-3-gate")` → "custom:dt-3-gate". */
+export function customBuildKey(slug: string): string {
+  return `custom:${slug}`;
 }
 
 /**
@@ -222,9 +285,17 @@ export function usePendingIntents(limit: number | null, revision: number) {
   );
 }
 
-/** Build list for one matchup; null skips. */
-export function useBuildOptions(matchup: string | null) {
-  return useApi<BuildOptionsResponse>(buildOptionsPath(matchup), {
+/**
+ * Build list for one matchup and side; null skips. The revision refetches
+ * the list after a check-in write (records and new builds change).
+ */
+export function useBuildOptions(
+  matchup: string | null,
+  { side = "you", revision = 0 }: { side?: CheckInSide; revision?: number } = {},
+) {
+  const path = buildOptionsPath(matchup, side);
+  return useApi<BuildOptionsResponse>(path ? withRevision(path, revision) : null, {
+    keepPreviousData: true,
     revalidateOnFocus: false,
   });
 }
@@ -246,16 +317,33 @@ export function putGameIntent(
   });
 }
 
+/** Extra fields a "you"-side write can carry in the same request. */
+export interface GameIntentWriteOptions {
+  /** A key corrects the opponent's build, null restores the replay's label. */
+  opponentBuildKey?: string | null;
+}
+
+function withOptionalFields(
+  notes: string | undefined,
+  opts: GameIntentWriteOptions | undefined,
+): Pick<GameIntentRequest, "notes" | "opponentBuildKey"> {
+  return {
+    ...(notes === undefined ? {} : { notes }),
+    ...(opts?.opponentBuildKey === undefined ? {} : { opponentBuildKey: opts.opponentBuildKey }),
+  };
+}
+
 export function confirmGameIntent(
   getToken: TokenGetter,
   gameId: string,
   buildKey: string,
   notes?: string,
+  opts?: GameIntentWriteOptions,
 ): Promise<GameIntentState> {
   return putGameIntent(getToken, gameId, {
     action: "confirm",
     buildKey,
-    ...(notes === undefined ? {} : { notes }),
+    ...withOptionalFields(notes, opts),
   });
 }
 
@@ -264,9 +352,27 @@ export function skipGameIntent(
   getToken: TokenGetter,
   gameId: string,
   notes?: string,
+  opts?: GameIntentWriteOptions,
 ): Promise<GameIntentState> {
   return putGameIntent(getToken, gameId, {
     action: "skip",
+    ...withOptionalFields(notes, opts),
+  });
+}
+
+/**
+ * Correct the opponent's build only (`null` = use the replay's label);
+ * the player's own check-in is left as it is.
+ */
+export function setOpponentBuild(
+  getToken: TokenGetter,
+  gameId: string,
+  opponentBuildKey: string | null,
+  notes?: string,
+): Promise<GameIntentState> {
+  return putGameIntent(getToken, gameId, {
+    action: "opponent",
+    opponentBuildKey,
     ...(notes === undefined ? {} : { notes }),
   });
 }
@@ -325,6 +431,9 @@ const ERROR_COPY: Record<string, string> = {
     "This game can't take a check-in. Only 1v1 games of 45 seconds or more with a known matchup count.",
   unknown_build:
     "That build isn't available for this matchup any more. Pick another one.",
+  unknown_opponent_build:
+    "That opponent build isn't available for this matchup any more. Pick another one.",
+  slug_taken: "You already have a build called that — pick another name",
   already_bound:
     "That game has already been uploaded. Set its build from the game page instead.",
   invalid_notes: `Notes can be at most ${BUILD_INTENT_NOTES_MAX_LENGTH.toLocaleString("en-US")} characters.`,
@@ -463,6 +572,28 @@ export function effectiveBuild(
 }
 
 /**
+ * Fold a PUT response into the loaded state: write responses carry no
+ * build lists, so the loaded ones (both sides) are kept.
+ */
+export function mergeIntentUpdate(
+  current: GameIntentState | undefined,
+  next: GameIntentState,
+): GameIntentState {
+  const opponent =
+    next.opponent === undefined
+      ? current?.opponent
+      : next.opponent && next.opponent.options === undefined && current?.opponent?.options
+        ? { ...next.opponent, options: current.opponent.options }
+        : next.opponent;
+  return {
+    ...next,
+    options: next.options ?? current?.options,
+    usualKey: next.usualKey ?? current?.usualKey ?? null,
+    ...(opponent === undefined ? {} : { opponent }),
+  };
+}
+
+/**
  * Split options into the "Your builds" and "All builds" groups, keeping
  * the server's order and dropping options that don't match `query`.
  */
@@ -489,4 +620,109 @@ export function matchupFromRaces(
   const theirs = (oppRace || "").trim().charAt(0).toUpperCase();
   const matchup = `${mine}v${theirs}`;
   return MATCHUP_RE.test(matchup) ? matchup : null;
+}
+
+/**
+ * The opponent's build as the game's own stats see it, plus the
+ * "Corrected" marker data while a check-in overrides the classifier.
+ * Without an opponent state the fallback (the slim row's strategy) is
+ * returned unchanged.
+ */
+export function effectiveOpponentBuild(
+  opponent: Pick<OpponentIntentState, "label" | "applied" | "build" | "detected"> | null | undefined,
+  fallback: string | null | undefined,
+): { label: string | null; corrected: { detected: string | null } | null } {
+  if (!opponent) return { label: fallback ?? null, corrected: null };
+  if (opponent.applied && opponent.build) {
+    return {
+      label: opponent.build.name,
+      corrected: { detected: opponent.detected?.name ?? null },
+    };
+  }
+  return {
+    label: opponent.label ?? opponent.detected?.name ?? fallback ?? null,
+    corrected: null,
+  };
+}
+
+/**
+ * The option key the opponent row starts on: the correction while one is
+ * applied, otherwise the replay's own label when it is a pickable option.
+ */
+export function opponentCurrentKey(
+  opponent: Pick<OpponentIntentState, "applied" | "build" | "detected"> | null | undefined,
+): string | null {
+  if (!opponent) return null;
+  if (opponent.applied && opponent.build) return opponent.build.key;
+  return opponent.detected?.key ?? null;
+}
+
+/* ------------------------------------------------------------------
+ * "Add new build" from a check-in
+ * ------------------------------------------------------------------ */
+
+export const NEW_BUILD_CHECKED_IN = "Saved to your library and checked in";
+export const NEW_BUILD_NOT_CHECKED_IN =
+  "Saved to your library, but this game can't take it as its check-in";
+export const NEW_BUILD_CHECKIN_FAILED =
+  "Saved to your library, but the check-in didn't go through";
+
+/**
+ * The editor's starting name when the player didn't type one: the
+ * matchup for your own builds ("PvZ — New build") and the opponent's
+ * race for theirs ("Zerg build vs Protoss").
+ */
+export function defaultNewBuildName(
+  side: CheckInSide,
+  myRace: string | null | undefined,
+  oppRace: string | null | undefined,
+): string {
+  const mine = raceWord(myRace);
+  const theirs = raceWord(oppRace);
+  if (side === "opponent") {
+    if (theirs && mine) return `${theirs} build vs ${mine}`;
+    return theirs ? `${theirs} build` : "Opponent build";
+  }
+  const matchup = matchupFromRaces(myRace, oppRace);
+  return matchup ? `${matchup} — New build` : "New build";
+}
+
+/**
+ * Copy for a just-saved build that didn't become the game's check-in:
+ * either the game can't take it (wrong matchup, ineligible game) or the
+ * write itself failed (network, rate limit) and can be retried.
+ *
+ * Example: `newBuildCheckinFailure("unknown_build", "…")` →
+ * `{ title: NEW_BUILD_NOT_CHECKED_IN, reason: "It doesn't fit this game's matchup." }`.
+ */
+export function newBuildCheckinFailure(
+  code: string | null,
+  fallback: string,
+  ineligibleReason?: IneligibleReason | null,
+): { title: string; reason: string } {
+  switch (code) {
+    case "unknown_build":
+    case "unknown_opponent_build":
+      return { title: NEW_BUILD_NOT_CHECKED_IN, reason: "It doesn't fit this game's matchup." };
+    case "not_eligible":
+      return {
+        title: NEW_BUILD_NOT_CHECKED_IN,
+        reason: ineligibleReason ? INELIGIBLE_REASON_COPY[ineligibleReason] : ERROR_COPY.not_eligible,
+      };
+    default:
+      return { title: NEW_BUILD_CHECKIN_FAILED, reason: fallback };
+  }
+}
+
+function raceWord(race: string | null | undefined): string | null {
+  switch ((race || "").trim().charAt(0).toUpperCase()) {
+    case "P":
+      return "Protoss";
+    case "T":
+      return "Terran";
+    case "Z":
+      return "Zerg";
+    default:
+      return null;
+  }
 }

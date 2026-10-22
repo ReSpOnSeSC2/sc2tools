@@ -16,8 +16,13 @@ vi.mock("@/lib/useUserSocket", () => ({
 
 import {
   BuildCheckInProvider,
+  useBuildCheckInPrefsRevision,
   useBuildCheckInRevision,
 } from "../BuildCheckInProvider";
+
+function PrefsConsumer() {
+  return <span>prefs:{useBuildCheckInPrefsRevision()}</span>;
+}
 
 function Consumer({ live = true, label = "consumer" }: { live?: boolean; label?: string }) {
   const { revision, bump } = useBuildCheckInRevision(live);
@@ -137,6 +142,30 @@ describe("BuildCheckInProvider", () => {
     fireEvent.click(screen.getByText("a:0"));
     expect(screen.getByText("a:1")).toBeTruthy();
     expect(screen.getByText("b:1")).toBeTruthy();
+  });
+
+  it("counts preference pings separately and keeps the socket open for them", () => {
+    render(
+      <BuildCheckInProvider>
+        <PrefsConsumer />
+        <Consumer live={false} />
+      </BuildCheckInProvider>,
+    );
+    expect(harness.handlers).not.toBeNull();
+    act(() => {
+      harness.handlers?.["build-intent:changed"]({ gameId: "g1" });
+      harness.handlers?.["build-intent:changed"]({ prefs: "yes" });
+    });
+    expect(screen.getByText("prefs:0")).toBeTruthy();
+    act(() => {
+      harness.handlers?.["build-intent:changed"]({ prefs: true });
+    });
+    expect(screen.getByText("prefs:1")).toBeTruthy();
+    // It also refreshes the chip and queue (pending state follows the switch).
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    expect(screen.getByRole("button").textContent).toBe("consumer:1");
   });
 
   it("degrades to a fixed revision without a provider", () => {

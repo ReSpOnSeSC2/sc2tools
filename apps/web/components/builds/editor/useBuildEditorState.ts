@@ -35,6 +35,9 @@ import type {
 } from "./BuildEditor.types";
 
 const TOAST_TTL_MS = 6000;
+/** Name error for a create-only save whose slug is already in the library. */
+export const SLUG_TAKEN_NAME_ERROR =
+  "You already have a build called that — pick another name";
 /** Stable "no rules" value for previewRules, so resets don't re-render. */
 const NO_RULES: ReadonlyArray<BuildRule> = [];
 
@@ -62,6 +65,12 @@ export interface UseBuildEditorStateOptions {
    * with a sign-up nudge instead of PUTing to the API.
    */
   demoMode?: boolean;
+  /**
+   * Ask the API to refuse a save whose slug already exists (409
+   * `slug_taken`) instead of overwriting that build; shown as a name
+   * error. Ignored with `lockedSlug` (an edit targets an existing build).
+   */
+  createOnly?: boolean;
 }
 
 interface BuildOrderApiResp {
@@ -103,7 +112,7 @@ interface SaveBuildResponse {
 export function useBuildEditorState(
   opts: UseBuildEditorStateOptions,
 ): BuildEditorState {
-  const { open, context, initialDraft, lockedSlug, onSaved, demoMode } = opts;
+  const { open, context, initialDraft, lockedSlug, onSaved, demoMode, createOnly } = opts;
   const { sourceRows, countRepeats = true } = context;
   const { getToken } = useAuth();
 
@@ -501,6 +510,7 @@ export function useBuildEditorState(
         perspective: context.perspective === "opponent" ? "opponent" : "you",
         schemaVersion: 3,
         reclassify: andReclassify,
+        ...(createOnly && !lockedSlug ? { createOnly: true } : {}),
       };
       try {
         const resp = await apiCall<SaveBuildResponse | null>(
@@ -601,12 +611,19 @@ export function useBuildEditorState(
         });
       } catch (err: unknown) {
         setSaving(false);
+        if (errorCode(err) === "slug_taken") {
+          // Create-only save: another build (live or deleted) owns this
+          // slug. Nothing was written; the player renames and saves again.
+          setErrors({ name: SLUG_TAKEN_NAME_ERROR });
+          pushToast("error", "Fix the highlighted fields before saving.");
+          return;
+        }
         const message = extractMessage(err) || "Save failed.";
         setSaveError(message);
         pushToast("error", `Save failed: ${message}`);
       }
     },
-    [draft, context.gameId, context.perspective, demoMode, getToken, lockedSlug, onSaved, pushToast],
+    [draft, context.gameId, context.perspective, createOnly, demoMode, getToken, lockedSlug, onSaved, pushToast],
   );
 
   return {
@@ -691,6 +708,12 @@ function extractMessage(err: unknown): string | null {
     return humanizeIfJsonEnvelope(raw);
   }
   return null;
+}
+
+function errorCode(err: unknown): string | null {
+  if (!err || typeof err !== "object" || !("code" in err)) return null;
+  const code = (err as { code?: unknown }).code;
+  return typeof code === "string" ? code : null;
 }
 
 function isAbortError(err: unknown): boolean {

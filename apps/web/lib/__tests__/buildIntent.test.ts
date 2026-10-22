@@ -14,23 +14,35 @@ import {
   buildOptionsPath,
   checkinsText,
   confirmGameIntent,
+  customBuildKey,
+  defaultNewBuildName,
   dismissPendingIntents,
   effectiveBuild,
+  effectiveOpponentBuild,
   gameIntentPath,
   groupBuildOptions,
   matchupFromRaces,
+  mergeIntentUpdate,
+  NEW_BUILD_CHECKIN_FAILED,
+  NEW_BUILD_NOT_CHECKED_IN,
+  newBuildCheckinFailure,
+  newBuildHref,
+  opponentCurrentKey,
   pendingIntentsPath,
   plannedTooltip,
   putCheckinPrefs,
   recordText,
   sanitizeCheckinPrefs,
   saveGameIntentNotes,
+  setOpponentBuild,
   skipGameIntent,
   suggestionReasonLabel,
   winRate,
   winRateText,
   withRevision,
   type BuildOption,
+  type GameIntentState,
+  type OpponentIntentState,
 } from "../buildIntent";
 
 const getToken = async () => "token";
@@ -74,8 +86,17 @@ describe("paths", () => {
 
   it("only builds an options path for a concrete matchup", () => {
     expect(buildOptionsPath("PvZ")).toBe("/v1/build-intents/options?matchup=PvZ");
+    expect(buildOptionsPath("PvZ", "you")).toBe("/v1/build-intents/options?matchup=PvZ");
+    expect(buildOptionsPath("PvZ", "opponent")).toBe(
+      "/v1/build-intents/options?matchup=PvZ&side=opponent",
+    );
     expect(buildOptionsPath("PvR")).toBeNull();
-    expect(buildOptionsPath(null)).toBeNull();
+    expect(buildOptionsPath(null, "opponent")).toBeNull();
+  });
+
+  it("builds custom keys and the new-build deep link", () => {
+    expect(customBuildKey("dt-3-gate")).toBe("custom:dt-3-gate");
+    expect(newBuildHref("a|b", "opponent")).toBe("/app/game/a%7Cb?newBuild=opponent");
   });
 
   it("folds the revision into a fragment the API never sees", () => {
@@ -98,6 +119,44 @@ describe("mutations", () => {
       action: "confirm",
       buildKey: "pvz-stargate",
       notes: "Got scouted",
+    });
+  });
+
+  it("carries the opponent's build along with any write", async () => {
+    apiCallMock.mockResolvedValue({ gameId: "g1" });
+    await confirmGameIntent(getToken, "g1", "pvz-stargate", undefined, {
+      opponentBuildKey: "zerg-12-pool",
+    });
+    await skipGameIntent(getToken, "g1", "notes", { opponentBuildKey: null });
+    await confirmGameIntent(getToken, "g1", "pvz-stargate", undefined, {});
+    expect(JSON.parse(apiCallMock.mock.calls[0][2].body)).toEqual({
+      action: "confirm",
+      buildKey: "pvz-stargate",
+      opponentBuildKey: "zerg-12-pool",
+    });
+    expect(JSON.parse(apiCallMock.mock.calls[1][2].body)).toEqual({
+      action: "skip",
+      notes: "notes",
+      opponentBuildKey: null,
+    });
+    expect(JSON.parse(apiCallMock.mock.calls[2][2].body)).toEqual({
+      action: "confirm",
+      buildKey: "pvz-stargate",
+    });
+  });
+
+  it("corrects only the opponent's build, or resets it with null", async () => {
+    apiCallMock.mockResolvedValue({ gameId: "g1" });
+    await setOpponentBuild(getToken, "a|b", "custom:ling-flood");
+    await setOpponentBuild(getToken, "g1", null, "Proxy hatch");
+    expect(apiCallMock).toHaveBeenNthCalledWith(1, getToken, "/v1/games/a%7Cb/build-intent", {
+      method: "PUT",
+      body: JSON.stringify({ action: "opponent", opponentBuildKey: "custom:ling-flood" }),
+    });
+    expect(JSON.parse(apiCallMock.mock.calls[1][2].body)).toEqual({
+      action: "opponent",
+      opponentBuildKey: null,
+      notes: "Proxy hatch",
     });
   });
 
@@ -166,6 +225,12 @@ describe("error copy", () => {
     expect(
       buildIntentErrorMessage({ status: 400, code: "invalid_notes", message: "x" }),
     ).toBe("Notes can be at most 1,000 characters.");
+    expect(
+      buildIntentErrorMessage({ status: 400, code: "unknown_opponent_build", message: "x" }),
+    ).toBe("That opponent build isn't available for this matchup any more. Pick another one.");
+    expect(
+      buildIntentErrorMessage({ status: 409, code: "slug_taken", message: "x" }),
+    ).toBe("You already have a build called that — pick another name");
   });
 
   it("keeps the humanised message for other codes and handles network failures", () => {
@@ -251,5 +316,105 @@ describe("display helpers", () => {
     expect(matchupFromRaces("Protoss", "zerg")).toBe("PvZ");
     expect(matchupFromRaces("Random", "Zerg")).toBeNull();
     expect(matchupFromRaces(null, "Zerg")).toBeNull();
+  });
+});
+
+describe("opponent axis", () => {
+  const opponent = (overrides: Partial<OpponentIntentState> = {}): OpponentIntentState => ({
+    label: "Zerg - 12 Pool",
+    status: "none",
+    build: null,
+    applied: false,
+    detected: { name: "Zerg - 12 Pool", slug: null, key: "zerg-12-pool" },
+    suggestion: null,
+    executed: null,
+    ...overrides,
+  });
+  const corrected = opponent({
+    label: "Ling Flood",
+    status: "confirmed",
+    applied: true,
+    build: { key: "custom:ling-flood", name: "Ling Flood", slug: "ling-flood", source: "custom" },
+  });
+
+  it("resolves the opponent's effective build and its Corrected marker", () => {
+    expect(effectiveOpponentBuild(corrected, "stale")).toEqual({
+      label: "Ling Flood",
+      corrected: { detected: "Zerg - 12 Pool" },
+    });
+    expect(effectiveOpponentBuild(opponent(), "stale")).toEqual({
+      label: "Zerg - 12 Pool",
+      corrected: null,
+    });
+    expect(effectiveOpponentBuild(opponent({ label: null, detected: null }), "Row")).toEqual({
+      label: "Row",
+      corrected: null,
+    });
+    expect(effectiveOpponentBuild(null, "Row")).toEqual({ label: "Row", corrected: null });
+  });
+
+  it("starts the picker on the correction, else on the replay's label", () => {
+    expect(opponentCurrentKey(corrected)).toBe("custom:ling-flood");
+    expect(opponentCurrentKey(opponent())).toBe("zerg-12-pool");
+    expect(opponentCurrentKey(opponent({ detected: null }))).toBeNull();
+    expect(opponentCurrentKey(undefined)).toBeNull();
+  });
+
+  it("keeps both loaded build lists when a write response arrives", () => {
+    const yours = [option({ key: "pvz-stargate" })];
+    const theirs = [option({ key: "zerg-12-pool", name: "Zerg - 12 Pool" })];
+    const current = {
+      gameId: "g1",
+      options: yours,
+      usualKey: "pvz-stargate",
+      opponent: opponent({ options: theirs }),
+    } as GameIntentState;
+    const next = { gameId: "g1", opponent: corrected } as GameIntentState;
+    expect(mergeIntentUpdate(current, next)).toMatchObject({
+      options: yours,
+      usualKey: "pvz-stargate",
+      opponent: { ...corrected, options: theirs },
+    });
+    // A game without a matchup keeps `opponent: null`; an older API's
+    // response without the field keeps what was loaded.
+    expect(mergeIntentUpdate(current, { gameId: "g1", opponent: null } as GameIntentState).opponent)
+      .toBeNull();
+    expect(mergeIntentUpdate(current, { gameId: "g1" } as GameIntentState).opponent).toEqual(
+      current.opponent,
+    );
+    expect(mergeIntentUpdate(undefined, next).opponent).toEqual(corrected);
+  });
+});
+
+describe("Add new build copy", () => {
+  it("names a new build after the matchup or the opponent's race", () => {
+    expect(defaultNewBuildName("you", "Protoss", "Zerg")).toBe("PvZ — New build");
+    expect(defaultNewBuildName("opponent", "Protoss", "Zerg")).toBe("Zerg build vs Protoss");
+    expect(defaultNewBuildName("opponent", "P", "T")).toBe("Terran build vs Protoss");
+    expect(defaultNewBuildName("you", null, "Zerg")).toBe("New build");
+    expect(defaultNewBuildName("opponent", null, "Zerg")).toBe("Zerg build");
+    expect(defaultNewBuildName("opponent", "Protoss", "Random")).toBe("Opponent build");
+  });
+
+  it("explains why a saved build didn't become the check-in", () => {
+    expect(newBuildCheckinFailure("unknown_build", "x")).toEqual({
+      title: NEW_BUILD_NOT_CHECKED_IN,
+      reason: "It doesn't fit this game's matchup.",
+    });
+    expect(newBuildCheckinFailure("unknown_opponent_build", "x").title).toBe(
+      NEW_BUILD_NOT_CHECKED_IN,
+    );
+    expect(newBuildCheckinFailure("not_eligible", "x", "too_short")).toEqual({
+      title: NEW_BUILD_NOT_CHECKED_IN,
+      reason: "Games under 45 seconds never count toward a build.",
+    });
+    expect(newBuildCheckinFailure("not_eligible", "x").reason).toMatch(/can't take a check-in/);
+    expect(newBuildCheckinFailure("rate_limited", "Too many changes.")).toEqual({
+      title: NEW_BUILD_CHECKIN_FAILED,
+      reason: "Too many changes.",
+    });
+    expect(NEW_BUILD_NOT_CHECKED_IN).toBe(
+      "Saved to your library, but this game can't take it as its check-in",
+    );
   });
 });

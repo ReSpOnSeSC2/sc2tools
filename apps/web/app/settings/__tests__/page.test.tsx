@@ -59,6 +59,17 @@ describe("SettingsPage ?tab=", () => {
     expect(screen.getAllByRole("tab", { name: "Build check-in" })).toHaveLength(2);
   });
 
+  it("follows a ?tab= change while Settings stays mounted", () => {
+    mocks.tab = "checkin";
+    const view = render(<SettingsPage />);
+    expect(screen.getByText("checkin body")).toBeTruthy();
+    // e.g. "How build check-in works" links to ?tab=help#build-check-in.
+    mocks.tab = "help";
+    view.rerender(<SettingsPage />);
+    expect(screen.getByText("help body")).toBeTruthy();
+    expect(screen.queryByText("checkin body")).toBeNull();
+  });
+
   it("opens any other known tab and ignores unknown ones", () => {
     mocks.tab = "voice";
     render(<SettingsPage />);

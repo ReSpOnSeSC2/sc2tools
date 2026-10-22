@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { ClipboardCheck } from "lucide-react";
 import { usePendingIntents } from "@/lib/buildIntent";
 import { useBuildCheckInLive, useBuildCheckInRevision } from "./BuildCheckInProvider";
@@ -14,6 +15,12 @@ import { BuildCheckInQueue } from "./BuildCheckInQueue";
  */
 export function BuildCheckInAlert({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  // The chip lives in the app chrome, which survives client navigation:
+  // any link out of the queue (Open game, Settings, a build) closes it.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
   const { revision } = useBuildCheckInRevision(false);
   const pending = usePendingIntents(1, revision);
   const data = pending.data;

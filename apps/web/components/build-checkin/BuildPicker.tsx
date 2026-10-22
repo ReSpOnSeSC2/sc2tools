@@ -4,11 +4,12 @@ import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
 } from "react";
 import Link from "next/link";
-import { Check, Search } from "lucide-react";
+import { Check, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
@@ -33,16 +34,36 @@ export interface BuildPickerProps {
   suggestedKey?: string | null;
   /** Accessible name of the list, e.g. "Build you went for". */
   label?: string;
+  /** Group headings; the opponent list uses "Faced before" / "All builds". */
+  groupTitles?: { yours: string; all: string };
+  /** Search box placeholder. */
+  searchPlaceholder?: string;
+  /**
+   * Offer to create a build that isn't listed yet. Called with the
+   * current search text (trimmed; "" when empty), which the editor
+   * uses as the new build's name.
+   */
+  onAddNew?: (query: string) => void;
+  /** Text of the "add" action when no search text names the build. */
+  addNewLabel?: string;
+  /**
+   * Move focus into the search box once it can take it (the list may
+   * still be loading when the picker opens). Only the first time.
+   */
   autoFocus?: boolean;
   disabled?: boolean;
   className?: string;
 }
 
+const DEFAULT_GROUP_TITLES = { yours: "Your builds", all: "All builds" } as const;
+
 /**
  * BuildPicker — searchable single-select list of the builds a player can
  * check in to, grouped as "Your builds" (custom, played or in the
  * randomizer pool) and "All builds" (the rest of the catalog). Rows keep
- * the server's order, so nothing moves under the pointer.
+ * the server's order, so nothing moves under the pointer. With `onAddNew`
+ * an "Add new build…" action sits under the list; when the search matches
+ * nothing it offers the search text as the new build's name.
  *
  * Keyboard: the search box is an ARIA combobox that owns the listbox; the
  * arrow keys move the highlighted row (aria-activedescendant), Enter picks
@@ -59,12 +80,18 @@ export function BuildPicker({
   usualKey = null,
   suggestedKey = null,
   label = "Build you went for",
+  groupTitles = DEFAULT_GROUP_TITLES,
+  searchPlaceholder = "Search builds…",
+  onAddNew,
+  addNewLabel = "Add new build…",
   autoFocus = false,
   disabled = false,
   className = "",
 }: BuildPickerProps) {
   const baseId = useId();
   const listId = `${baseId}-list`;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const didAutoFocus = useRef(false);
   const [query, setQuery] = useState("");
   const groups = useMemo(
     () => groupBuildOptions(options ?? [], query),
@@ -136,6 +163,18 @@ export function BuildPicker({
   const total = options?.length ?? 0;
   const matchCount = flat.length;
   const waiting = loading && options === undefined;
+  const inputDisabled = disabled || waiting || Boolean(error && !options);
+  const trimmedQuery = query.trim();
+
+  // `autoFocus` on the element only works on mount, and a disabled input
+  // can't take focus: the list is often still loading when the picker
+  // opens. Focus once it is usable, and only once, so a busy toggle
+  // during a write never pulls focus back here.
+  useEffect(() => {
+    if (!autoFocus || inputDisabled || didAutoFocus.current) return;
+    didAutoFocus.current = true;
+    inputRef.current?.focus({ preventScroll: true });
+  }, [autoFocus, inputDisabled]);
 
   return (
     <div className={["space-y-2", className].filter(Boolean).join(" ")}>
@@ -154,11 +193,9 @@ export function BuildPicker({
           aria-activedescendant={activeId}
           autoComplete="off"
           spellCheck={false}
-          // The picker opens on an explicit "Change…" click, so moving focus
-          // into it is the expected outcome.
-          autoFocus={autoFocus}
-          disabled={disabled || waiting || Boolean(error && !options)}
-          placeholder="Search builds…"
+          ref={inputRef}
+          disabled={inputDisabled}
+          placeholder={searchPlaceholder}
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -190,21 +227,23 @@ export function BuildPicker({
         ) : total === 0 ? (
           <div className="px-3 py-4 text-caption text-text-muted">
             <p>No builds for this matchup yet.</p>
-            <Link
-              href="/builds"
-              className="mt-1 inline-flex min-h-11 items-center font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              Create one in your build library
-            </Link>
+            {onAddNew ? null : (
+              <Link
+                href="/builds"
+                className="mt-1 inline-flex min-h-11 items-center font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                Create one in your build library
+              </Link>
+            )}
           </div>
         ) : matchCount === 0 ? (
           <p className="px-3 py-4 text-caption text-text-muted">
-            No builds match “{query.trim()}”.
+            No builds match “{trimmedQuery}”.
           </p>
         ) : (
           <>
             <OptionGroup
-              title="Your builds"
+              title={groupTitles.yours}
               baseId={`${baseId}-yours`}
               options={groups.yours}
               offset={0}
@@ -219,7 +258,7 @@ export function BuildPicker({
               onPick={onChange}
             />
             <OptionGroup
-              title="All builds"
+              title={groupTitles.all}
               baseId={`${baseId}-all`}
               options={groups.all}
               offset={groups.yours.length}
@@ -236,6 +275,21 @@ export function BuildPicker({
           </>
         )}
       </div>
+      {onAddNew && !waiting && !(error && !options) ? (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onAddNew(trimmedQuery)}
+          className="inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-md px-1 text-left text-caption font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Plus className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">
+            {trimmedQuery && matchCount === 0
+              ? `Add “${trimmedQuery}” as a new build…`
+              : addNewLabel}
+          </span>
+        </button>
+      ) : null}
       <p className="sr-only" aria-live="polite">
         {waiting
           ? "Loading builds"

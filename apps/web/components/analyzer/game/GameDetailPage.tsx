@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, FileQuestion } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
@@ -27,7 +28,13 @@ import {
 } from "@/lib/opponentNavigation";
 import { clampReplayTime } from "@/lib/replayLink";
 import { patchEraForGame } from "@/lib/ladderPulse";
-import { effectiveBuild, useGameBuildIntent } from "@/lib/buildIntent";
+import {
+  effectiveBuild,
+  effectiveOpponentBuild,
+  useGameBuildIntent,
+  type CheckInSide,
+} from "@/lib/buildIntent";
+import { withoutNewBuildParam } from "@/lib/buildIntentLinks";
 import { BuildCheckInCard } from "@/components/build-checkin/BuildCheckInCard";
 import { useBuildCheckInRevision } from "@/components/build-checkin/BuildCheckInProvider";
 
@@ -53,11 +60,15 @@ type GameDetailPageProps = {
   opponentContext?: OpponentNavigationContext | null;
   /** Initial game-clock position from a replay example link. */
   initialTimeSec?: number | null;
+  /** `?newBuild=` deep link: open "Add new build" for that side once. */
+  initialNewBuild?: CheckInSide | null;
 };
 
 export function GameDetailPage(props: GameDetailPageProps) {
   // A new replay or timestamp is a new navigation. Ordinary data refreshes
   // retain the user's cursor, while client-side links reset it immediately.
+  // The one-shot `newBuild` link stays out of the key: dropping it from the
+  // URL must not remount the page (and close the editor it opened).
   const initialTimeSec = clampReplayTime(props.initialTimeSec);
   return (
     <GameDetailContent
@@ -72,7 +83,9 @@ function GameDetailContent({
   gameId,
   opponentContext,
   initialTimeSec,
+  initialNewBuild = null,
 }: GameDetailPageProps) {
+  const router = useRouter();
   const enc = encodeURIComponent(gameId);
   const gameReq = useApi<GameSummary>(gameId ? `/v1/games/${enc}` : null, {
     revalidateOnFocus: false,
@@ -178,6 +191,16 @@ function GameDetailContent({
   const checkinBuild = intentReq.data
     ? effectiveBuild(intentReq.data, game.myBuild)
     : null;
+  // Older APIs omit the opponent axis; the slim row's flags cover them.
+  const checkinOpponent =
+    intentReq.data && intentReq.data.opponent !== undefined
+      ? effectiveOpponentBuild(intentReq.data.opponent, game.opponent?.strategy)
+      : null;
+  // Once the editor opened, a refresh or a copied link mustn't reopen it.
+  const dropNewBuildParam = () => {
+    const { pathname, search, hash } = window.location;
+    router.replace(withoutNewBuildParam(pathname, search, hash), { scroll: false });
+  };
 
   return (
     <GameDetailShell
@@ -186,10 +209,14 @@ function GameDetailContent({
       streamLinks={streamLinks}
       buildLabel={checkinBuild ? checkinBuild.label : undefined}
       planned={checkinBuild ? checkinBuild.planned : undefined}
+      oppStrategyLabel={checkinOpponent ? checkinOpponent.label : undefined}
+      oppCorrected={checkinOpponent ? checkinOpponent.corrected : undefined}
     >
       <BuildCheckInCard
         gameId={gameId}
         onChanged={() => void gameReq.mutate()}
+        initialNewBuild={initialNewBuild}
+        onNewBuildOpened={initialNewBuild ? dropNewBuildParam : undefined}
       />
 
       <InteractiveTimeline
@@ -248,7 +275,9 @@ function GameDetailContent({
         myEvents={buildReq.data?.events}
         oppEvents={buildReq.data?.opp_events}
         myLabel={checkinBuild?.label ?? buildReq.data?.my_build ?? game.myBuild}
-        oppLabel={buildReq.data?.opp_strategy ?? game.opponent?.strategy}
+        oppLabel={
+          checkinOpponent?.label ?? buildReq.data?.opp_strategy ?? game.opponent?.strategy
+        }
         myStatus={buildReq.data?.my_status}
         oppStatus={buildReq.data?.opp_status}
         loading={buildReq.isLoading}

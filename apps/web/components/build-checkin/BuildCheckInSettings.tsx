@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/Button";
@@ -20,7 +20,10 @@ import {
   sanitizeCheckinPrefs,
   type BuildCheckinPrefs,
 } from "@/lib/buildIntent";
-import { useBuildCheckInRevision } from "./BuildCheckInProvider";
+import {
+  useBuildCheckInPrefsRevision,
+  useBuildCheckInRevision,
+} from "./BuildCheckInProvider";
 
 /** The full guide lives in Settings → Help. */
 const BUILD_CHECKIN_HELP_HREF = "/settings?tab=help#build-check-in";
@@ -28,13 +31,18 @@ const BUILD_CHECKIN_HELP_HREF = "/settings?tab=help#build-check-in";
 /**
  * Settings · Build check-in — the three cloud switches shared with the
  * desktop agent (`/v1/me/preferences/buildCheckin`). Drafts follow the
- * rest of Settings: nothing is written until Save.
+ * rest of Settings: nothing is written until Save. A change made in the
+ * desktop app shows up here live unless there are unsaved edits.
  */
 export function BuildCheckInSettings() {
   const { getToken } = useAuth();
   const toastContext = useToastOptional();
   const { bump } = useBuildCheckInRevision(false);
   const { data, error, isLoading, mutate } = useApi<unknown>(BUILD_CHECKIN_PREFS_PATH);
+  const prefsRevision = useBuildCheckInPrefsRevision();
+  useEffect(() => {
+    if (prefsRevision > 0) void mutate();
+  }, [prefsRevision, mutate]);
   const serverPrefs = useMemo<BuildCheckinPrefs | undefined>(
     () => (data === undefined ? undefined : sanitizeCheckinPrefs(data)),
     [data],

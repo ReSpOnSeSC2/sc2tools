@@ -60,6 +60,18 @@ export interface BuildEditorModalProps {
    * fetch is suppressed and Save is replaced with a sign-up CTA.
    */
   demoMode?: boolean;
+  /**
+   * Keep the build on the source game's matchup: `race` is read-only and
+   * the vs race is limited to `vsRace` or Any. Used when the new build
+   * must fit the game it is created from (build check-in).
+   */
+  lockMatchup?: boolean;
+  /**
+   * Create a new build only, never overwrite one: the save asks the API
+   * to refuse a name whose slug already exists (live or deleted), and
+   * the editor shows that as a name error. Ignored with `lockedSlug`.
+   */
+  createOnly?: boolean;
 }
 
 /**
@@ -89,6 +101,8 @@ export function BuildEditorModal({
   lockedSlug,
   mode = "create",
   demoMode = false,
+  lockMatchup = false,
+  createOnly = false,
 }: BuildEditorModalProps) {
   const { toast } = useToast();
   const sourceRows = useMemo(() => eventsToSourceRows(events), [events]);
@@ -138,11 +152,17 @@ export function BuildEditorModal({
     ],
   );
 
+  const lockedMatchup = useMemo(
+    () => (lockMatchup ? { race, vsRace } : undefined),
+    [lockMatchup, race, vsRace],
+  );
+
   const editor = useBuildEditorState({
     open,
     initialDraft: seedDraft,
     lockedSlug,
     demoMode,
+    createOnly,
     context: {
       gameId,
       sourceEvents: events,
@@ -254,6 +274,7 @@ export function BuildEditorModal({
               draft={editor.draft}
               setDraft={editor.setDraft}
               errors={editor.errors}
+              lockedMatchup={lockedMatchup}
             />
             <BuildEditorPreview
               preview={editor.preview}
