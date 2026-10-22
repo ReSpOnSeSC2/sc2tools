@@ -31,6 +31,10 @@ Card policy (contract §1.2, §1.3)
   only when the replay disagrees (``notes_first``). **Later**, 120 s
   without interaction and the next game's start set it aside with its
   draft; a pre-empted card the player touched comes back once.
+* Once the replay is in, the end card also offers the opponent's build
+  (sent as ``opponentBuildKey`` only when the player changed it) and
+  **Add new build…**, which opens the game on sc2tools.com and steps
+  aside for the browser.
 """
 
 from __future__ import annotations
@@ -57,13 +61,16 @@ from .matching import (
     user_result,
     within_match_window,
 )
+from .links import DEFAULT_DASHBOARD_URL, new_build_url, web_queue_url
 from .models import (
+    BUILD_SIDES,
     CHECKING_REPLAY,
     STATUS_DECLARE_OFFLINE,
     STATUS_DECLARE_UNAVAILABLE,
     STATUS_REPLAY_UNAVAILABLE,
     STATUS_SAVE_FAILED,
     STATUS_SAVE_UNKNOWN_BUILD,
+    STATUS_SAVE_UNKNOWN_OPPONENT_BUILD,
     BuildOptions,
     BuildRef,
     CheckinPrefs,
@@ -93,7 +100,7 @@ from .records import (
     LoadingCard,
     PostgameCard,
 )
-from .render import loading_model, postgame_model, preselection
+from .render import loading_model, opponent_write, postgame_model, preselection
 from .view import (
     HIDE_CONFIRMED,
     HIDE_DECIDED,
@@ -106,6 +113,7 @@ from .view import (
     HIDE_NEW_GAME,
     HIDE_NOT_1V1,
     HIDE_NOT_ELIGIBLE,
+    HIDE_OPENED_WEB,
     HIDE_PREEMPTED,
     HIDE_RANDOM,
     HIDE_REPLACED,
@@ -117,7 +125,7 @@ from .view import (
 
 _log = logging.getLogger("sc2tools_agent.build_checkin")
 
-DEFAULT_WEB_QUEUE_URL = "https://sc2tools.com/app"
+DEFAULT_WEB_QUEUE_URL = web_queue_url(DEFAULT_DASHBOARD_URL)
 
 LOADING_CUTOFF_SEC = 30.0
 """Game seconds after which the loading card is in the way."""
@@ -126,9 +134,15 @@ LOADING_CARD_MAX_SEC = 180.0
 POSTGAME_IDLE_HIDE_SEC = 120.0
 PENDING_CARD_MAX_AGE_SEC = 30 * 60.0
 """A card still waiting for the window after this long is left to the web."""
+RESHOW_MAX_WAIT_SEC = 90 * 60.0
+"""A pre-empted card the player touched comes back after the next match,
+however long it ran, unless that took longer than this."""
 LIVE_PING_MAX_AGE_SEC = 30 * 60.0
 OPTIONS_TTL_SEC = 600.0
 PREFS_REFRESH_MIN_SEC = 30.0
+PREFS_RETRY_SEC = (5.0, 15.0, 60.0)
+"""Backoff for a preference read that failed before any answer (offline
+at login); the last step repeats until the server answers."""
 TRACKED_GAMES = 5
 MAX_CARDS = 10
 SEEN_GAME_IDS = 200
@@ -138,6 +152,15 @@ MAX_REGISTERS = 2
 
 _LOADING_WHICH = "loading"
 _POSTGAME_WHICH = "postgame"
+
+_KEEP: Any = object()
+"""Default of an action's ``opponent`` argument: the view did not touch
+the opponent row, so the card keeps its own opponent draft."""
+
+_SAVE_ERRORS = {
+    "unknown_build": STATUS_SAVE_UNKNOWN_BUILD,
+    "unknown_opponent_build": STATUS_SAVE_UNKNOWN_OPPONENT_BUILD,
+}
 
 
 class Executor(Protocol):
@@ -176,8 +199,17 @@ class BuildCheckinController:
         intro_seen: bool = False,
         on_intro_dismissed: Optional[Callable[[], None]] = None,
         web_queue_url: str = DEFAULT_WEB_QUEUE_URL,
+        dashboard_url: str = DEFAULT_DASHBOARD_URL,
         open_url: Callable[[str], Any] = webbrowser.open,
+        prefs: Optional[CheckinPrefs] = None,
+        on_prefs_changed: Optional[Callable[[CheckinPrefs], None]] = None,
     ) -> None:
+        """``prefs`` is the last preference the server confirmed (kept in
+        ``AgentState``): the cards follow it until this session's first
+        read answers, so a player who turned them off is not shown one
+        just because the agent started offline. ``on_prefs_changed``
+        persists each newly confirmed value (called off the state
+        thread)."""
         self._api = api
         self._view: Any = view if view is not None else NullView()
         self._owns_executor = executor is None
@@ -189,7 +221,9 @@ class BuildCheckinController:
         self._wall_clock = wall_clock
         self._on_intro_dismissed = on_intro_dismissed
         self._web_queue_url = web_queue_url
+        self._dashboard_url = dashboard_url
         self._open_url = open_url
+        self._on_prefs_changed = on_prefs_changed
 
         self._inbox: "queue.Queue[Optional[Tuple[Callable[..., None], tuple]]]" = (
             queue.Queue()
@@ -200,11 +234,14 @@ class BuildCheckinController:
         self._unsubscribe: Optional[Callable[[], None]] = None
 
         # ---- state below is touched only by the state thread ----
-        self._prefs = CheckinPrefs()
-        self._prefs_confirmed: Optional[CheckinPrefs] = None
+        self._prefs = prefs or CheckinPrefs()
+        self._prefs_confirmed: Optional[CheckinPrefs] = prefs
+        self._prefs_remembered: Optional[CheckinPrefs] = prefs
         self._supported: Optional[bool] = None
         self._prefs_read_inflight = False
         self._prefs_read_at: Optional[float] = None
+        self._prefs_retry_at: Optional[float] = None
+        self._prefs_failures = 0
         self._prefs_write_inflight = False
         self._prefs_write_pending: Optional[CheckinPrefs] = None
 
@@ -322,8 +359,9 @@ class BuildCheckinController:
         del path  # the replay file is irrelevant to the card
         self._post(self._handle_accepted, game, game_id, dict(accepted_row or {}))
 
-    def on_intent_changed(self, ping: Dict[str, str]) -> None:
-        """``build-intent:changed`` socket ping: ``{gameKey}`` or ``{gameId}``."""
+    def on_intent_changed(self, ping: Dict[str, Any]) -> None:
+        """``build-intent:changed`` socket ping: ``{gameKey}``, ``{gameId}``
+        or ``{prefs: true}`` (the check-in preference changed)."""
         self._post(self._handle_ping, dict(ping or {}))
 
     def declare(self, game_key: str, build_key: str) -> None:
@@ -338,11 +376,21 @@ class BuildCheckinController:
     def not_now(self, game_key: str) -> None:
         self._post(self._handle_not_now, game_key)
 
-    def confirm(self, card_id: str, build_key: str, notes: str = "") -> None:
-        self._post(self._handle_confirm, card_id, build_key, notes)
+    def confirm(
+        self,
+        card_id: str,
+        build_key: str,
+        notes: str = "",
+        opponent: Any = _KEEP,
+    ) -> None:
+        """Answer the end card. ``opponent`` (the opponent row's key,
+        ``None`` for the replay's label) is passed once the player
+        changed that row; it reaches the server only when it differs
+        from what the game counts."""
+        self._post(self._handle_confirm, card_id, build_key, notes, opponent)
 
-    def no_set_build(self, card_id: str, notes: str = "") -> None:
-        self._post(self._handle_no_set_build, card_id, notes)
+    def no_set_build(self, card_id: str, notes: str = "", opponent: Any = _KEEP) -> None:
+        self._post(self._handle_no_set_build, card_id, notes, opponent)
 
     def later(self, card_id: str, notes: str = "") -> None:
         self._post(self._handle_later, card_id, notes)
@@ -355,10 +403,17 @@ class BuildCheckinController:
         card_id: str,
         build_key: Optional[str],
         notes: str,
+        opponent: Any = _KEEP,
     ) -> None:
-        """The player changed the end card's selection or notes; keeps the
-        draft current so pre-emption and auto-hide never lose it."""
-        self._post(self._handle_update_draft, card_id, build_key, notes)
+        """The player changed the end card's selection, notes or opponent
+        row; keeps the draft current so pre-emption and auto-hide never
+        lose it."""
+        self._post(self._handle_update_draft, card_id, build_key, notes, opponent)
+
+    def add_build(self, card_id: str, side: str) -> None:
+        """**Add new build…** (``side``: ``you`` | ``opponent``): open the
+        game on sc2tools.com with the build editor and step aside."""
+        self._post(self._handle_add_build, card_id, side)
 
     def disable(self, which: str) -> None:
         """``loading`` | ``postgame``: the cards' "don't ask" links."""
@@ -486,6 +541,8 @@ class BuildCheckinController:
         game = self._current_game()
         if game is not None and game.loading is not None and game.loading.visible:
             deadlines.append(game.loading.shown_at + LOADING_CARD_MAX_SEC)
+        if self._prefs_retry_at is not None:
+            deadlines.append(self._prefs_retry_at)
         return min(deadlines) if deadlines else None
 
     def _run_timers(self) -> None:
@@ -507,6 +564,9 @@ class BuildCheckinController:
             and now - game.loading.shown_at >= LOADING_CARD_MAX_SEC
         ):
             self._hide_loading(game, HIDE_TIMEOUT)
+        if self._prefs_retry_at is not None and now >= self._prefs_retry_at:
+            self._prefs_retry_at = None
+            self._handle_refresh_prefs(True)
 
     # ================================================================
     # Shared predicates
@@ -581,6 +641,7 @@ class BuildCheckinController:
         if key is None or (phase not in ACTIVE_PHASES and phase != "match_ended"):
             return
         game = self._games.get(key)
+        new = game is None
         if game is None:
             game = self._track(key)
         elif key != self._current_key or game.closed:
@@ -590,6 +651,10 @@ class BuildCheckinController:
             self._handle_match_ended(game)
         else:
             self._handle_active(game)
+        if new and self._supported is None:
+            # Still no answer from the server (offline at login): a game
+            # start is a good moment to try again.
+            self._handle_refresh_prefs(False)
 
     def _track(self, key: str) -> LiveGame:
         previous = self._current_game()
@@ -654,7 +719,6 @@ class BuildCheckinController:
         self._pump_cards()
 
     def _handle_active(self, game: LiveGame) -> None:
-        self._maybe_prefetch(game.my_race)
         card = game.loading
         if card is not None:
             if card.visible:
@@ -663,9 +727,11 @@ class BuildCheckinController:
                     self._hide_loading(game, blocker)
                 else:
                     self._sync_loading(game)
-            return
-        if self._loading_may_show(game):
+        elif self._loading_may_show(game):
             self._show_loading(game)
+        # After the card's register (its answer carries the current
+        # prefs), so three list fetches never queue in front of it.
+        self._maybe_prefetch(game.my_race)
 
     def _loading_blocker(self, game: LiveGame) -> Optional[str]:
         """Why a loading card must not be up right now, if it must not."""
@@ -756,6 +822,8 @@ class BuildCheckinController:
             game.ended_at = self._clock()
         self._hide_loading(game, HIDE_MATCH_ENDED)
         self._maybe_open_shell(game)
+        if first:
+            self._maybe_resend_declaration(game)
         self._pump_cards()
         if first:
             self._handle_refresh_prefs(False)
@@ -801,25 +869,54 @@ class BuildCheckinController:
             option = cached.find(build_key) if cached is not None else None
         if option is None:
             return
+        repick = game.loading is not None and game.loading.changing
+        if game.loading is not None:
+            game.loading.changing = False
+            game.loading.status = ""
+        if (
+            repick
+            and game.declared is not None
+            and game.declared.key == option.key
+            and not game.declare_failed
+        ):
+            # Re-picked the standing pick: nothing to write.
+            self._render_loading(game)
+            return
         game.declared = option.ref
         game.declared_synced = False
         game.declare_failed = False
-        if game.loading is not None:
-            game.loading.status = ""
         self._enqueue_live_op(game, LiveOp("declare", option.key))
         self._render_loading(game)
+
+    def _locked(self, game: LiveGame) -> bool:
+        return game.declared is not None or self._declared_elsewhere(game) is not None
 
     def _handle_undeclare(self, game_key: Any) -> None:
         game = self._live_game_for_action(game_key)
         if game is None:
             return
+        card = game.loading
+        if card is not None and card.visible:
+            # **Change**: reopen the list but keep the pick on the server.
+            # Withdrawing it now would let the overlay randomizer spin on
+            # stream while the player re-picks; the next row (or Not now)
+            # replaces it.
+            if self._locked(game):
+                card.changing = True
+                card.status = ""
+                self._render_loading(game)
+            return
+        self._withdraw_declaration(game)
+        self._render_loading(game)
+
+    def _withdraw_declaration(self, game: LiveGame) -> None:
         game.declared = None
         game.declared_synced = False
         game.declare_failed = False
         if game.loading is not None:
+            game.loading.changing = False
             game.loading.status = ""
         self._enqueue_live_op(game, LiveOp("undeclare"))
-        self._render_loading(game)
 
     def _handle_roll_now(self, game_key: Any) -> None:
         game = self._live_game_for_action(game_key)
@@ -833,6 +930,11 @@ class BuildCheckinController:
         game = self._live_game_for_action(game_key)
         if game is None:
             return
+        if game.loading is not None and game.loading.changing and self._locked(game):
+            # Not now over a standing pick withdraws it. The pick already
+            # released the hold, so there is nothing else to release.
+            game.released = True
+            self._withdraw_declaration(game)
         self._release_hold(game)
         self._hide_loading(game, HIDE_DISMISSED)
 
@@ -926,6 +1028,7 @@ class BuildCheckinController:
                     game.loading.status = status
                 if game.phase == "match_ended":
                     self._maybe_open_shell(game)
+                    self._maybe_resend_declaration(game)
         else:
             if mine:
                 game.declared_synced = True
@@ -1017,6 +1120,76 @@ class BuildCheckinController:
             card.flush_pending = False
             self._flush_notes(card)
 
+    def _maybe_resend_declaration(self, game: LiveGame) -> None:
+        """Deliver a loading-screen pick the declare never got through.
+
+        The end card normally carries it (it pre-selects the pick). With
+        after-game cards off nothing would, although the loading card
+        promised to confirm the pick after the game: send it as the
+        game's answer instead, on the live record until the replay is
+        bound and on the game after.
+        """
+        declared = game.declared
+        if (
+            declared is None
+            or not game.declare_failed
+            or game.resend_inflight
+            or game.ended_at is None
+            or game.card_id is not None
+            or self._postgame_allowed()
+            or self._supported is False
+            or not self._prefs.enabled
+        ):
+            return
+        game.resend_inflight = True
+        tag = (game.game_key, declared.key)
+        if game.game_id is not None:
+            self._call(
+                self._on_declaration_resent, tag,
+                self._api.put_game_intent, game.game_id,
+                {"action": "confirm", "buildKey": declared.key},
+            )
+        else:
+            # ``postgame``, not ``declare``: the declare window closed
+            # with the match.
+            self._call(
+                self._on_declaration_resent, tag,
+                self._api.put_live_intent, game.game_key,
+                {"action": "postgame", "buildKey": declared.key},
+            )
+
+    def _on_declaration_resent(
+        self,
+        tag: Tuple[str, str],
+        value: Any,
+        error: Optional[BaseException],
+    ) -> None:
+        del value
+        key, build_key = tag
+        game = self._games.get(key)
+        if game is None:
+            return
+        game.resend_inflight = False
+        if game.declared is None or game.declared.key != build_key:
+            return
+        if error is None:
+            game.declare_failed = False
+            _log.info("build_checkin_declaration_resent")
+            return
+        failure = _Failure(error)
+        if failure.code == "already_bound" and failure.game_id:
+            # The replay got there first: answer on the game itself.
+            if game.game_id is None:
+                self._bind_game(game, failure.game_id)
+            self._maybe_resend_declaration(game)
+            return
+        _log.warning(
+            "build_checkin_declaration_resend_failed status=%s code=%s",
+            failure.status, failure.code,
+        )
+        if failure.code in ("unknown_build", "not_eligible"):
+            game.declare_failed = False  # the server will never take it
+
     # ================================================================
     # Upload accepted → end card
     # ================================================================
@@ -1027,36 +1200,45 @@ class BuildCheckinController:
         self._seen_game_ids[game_id] = None
         while len(self._seen_game_ids) > SEEN_GAME_IDS:
             self._seen_game_ids.popitem(last=False)
-        self._check_accepted(game_obj, game_id, row)
+        fresh = self._check_accepted(game_obj, game_id, row)
         # Records changed: refresh prefs and the matchup lists after the
         # card's own request so the card is never queued behind them.
+        # Only a freshly played game forces the lists: re-sync, restores
+        # and sweeps ride the same lane in bursts and would otherwise
+        # spend the read limit the real game's card needs.
         self._handle_refresh_prefs(False)
         race = canonical_race(getattr(game_obj, "my_race", None))
         if is_concrete_race(race):
             self._prefetched_race = race
             for matchup in matchups_for_race(race):
-                self._ensure_options(matchup, force=True)
+                self._ensure_options(matchup, force=fresh)
 
-    def _check_accepted(self, game_obj: Any, game_id: str, row: Dict[str, Any]) -> None:
+    def _check_accepted(self, game_obj: Any, game_id: str, row: Dict[str, Any]) -> bool:
+        """Bind the replay to its live game and fetch the card's state.
+        ``True`` when the upload is a game just played (it may change the
+        player's records)."""
         reason = accepted_ineligibility(
             game_obj, row, now_ms=int(self._wall_clock() * 1000),
         )
         if reason is not None:
             _log.debug("build_checkin_accept_skipped reason=%s", reason)
-            return
+            return False
         game = self._match_live_game(game_obj, game_id)
         if game is None:
             _log.debug("build_checkin_accept_skipped reason=no_live_match")
-            return
+            return True
         self._bind_game(game, game_id)
         card = self._cards.get(game.card_id) if game.card_id else None
         if self._supported is False or not self._prefs.enabled:
-            return
-        if card is None and not self._prefs.ask_after_game:
-            return
+            return True
+        if card is None:
+            self._maybe_resend_declaration(game)
+            if not self._prefs.ask_after_game:
+                return True
         if card is not None and not card.undecided:
-            return  # already answered from the card
+            return True  # already answered from the card
         self._fetch_game_state(game_id, include_options=True)
+        return True
 
     def _match_live_game(self, game_obj: Any, game_id: str) -> Optional[LiveGame]:
         opponent = opponent_name_of(game_obj)
@@ -1080,7 +1262,7 @@ class BuildCheckinController:
             card.state_fetching = True
         self._call(
             self._on_game_state,
-            (game_id, gen),
+            (game_id, gen, include_options),
             self._api.get_game_intent,
             game_id,
             include_options=include_options,
@@ -1088,11 +1270,11 @@ class BuildCheckinController:
 
     def _on_game_state(
         self,
-        tag: Tuple[str, int],
+        tag: Tuple[str, int, bool],
         value: Any,
         error: Optional[BaseException],
     ) -> None:
-        game_id, gen = tag
+        game_id, gen, with_lists = tag
         if self._state_gens.get(game_id) != gen:
             return
         game = self._game_by_id(game_id)
@@ -1100,6 +1282,8 @@ class BuildCheckinController:
         if card is not None:
             card.state_fetching = False
         state = parse_game_intent(value, game_id) if error is None else None
+        if card is not None and state is not None and with_lists:
+            card.options_stale = False
         if state is None:
             if error is not None:
                 _log.info(
@@ -1155,7 +1339,7 @@ class BuildCheckinController:
             if game is None or not self._postgame_allowed():
                 return
             card = self._new_card(game)
-        card.server = state
+        card.server = self._with_known_lists(card.server, state)
         card.variant = variant
         card.awaiting_replay = False
         if card.status in (CHECKING_REPLAY, STATUS_REPLAY_UNAVAILABLE):
@@ -1168,6 +1352,26 @@ class BuildCheckinController:
             self._request_show(card)
         else:
             self._render_card(card)
+
+    def _with_known_lists(
+        self,
+        previous: Optional[GameIntentState],
+        state: GameIntentState,
+    ) -> GameIntentState:
+        """``state``, keeping the build lists of ``previous`` when this
+        read did not ask for them (a ping refresh)."""
+        if previous is None:
+            return state
+        options = state.options if state.options is not None else previous.options
+        opponent = state.opponent
+        if (
+            opponent is not None
+            and opponent.options is None
+            and previous.opponent is not None
+            and previous.opponent.options is not None
+        ):
+            opponent = replace(opponent, options=previous.opponent.options)
+        return replace(state, options=options, opponent=opponent)
 
     # ================================================================
     # End cards
@@ -1312,7 +1516,17 @@ class BuildCheckinController:
         if card.touched and card.reshows == 0:
             # Once more after the next match; then the web queue has it.
             card.reshow_pending = True
+            card.preempted_at = self._clock()
             self._pending_show.add(card.card_id)
+
+    def _waited_too_long(self, card: PostgameCard, now: float) -> bool:
+        if card.reshow_pending:
+            # Due once the next match ends, however long that match ran.
+            return (
+                card.preempted_at is not None
+                and now - card.preempted_at > RESHOW_MAX_WAIT_SEC
+            )
+        return now - card.created_at > PENDING_CARD_MAX_AGE_SEC
 
     def _pump_cards(self) -> None:
         """Fill a free window with the newest card that is waiting."""
@@ -1330,7 +1544,7 @@ class BuildCheckinController:
         )
         self._pending_show.intersection_update(self._cards)
         for card in waiting:
-            if not card.undecided or now - card.created_at > PENDING_CARD_MAX_AGE_SEC:
+            if not card.undecided or self._waited_too_long(card, now):
                 self._pending_show.discard(card.card_id)
                 card.reshow_pending = False
                 continue
@@ -1351,7 +1565,24 @@ class BuildCheckinController:
         card.touched = True
         card.last_activity = self._clock()
 
-    def _handle_update_draft(self, card_id: Any, build_key: Any, notes: Any) -> None:
+    def _note_opponent(self, card: PostgameCard, opponent: Any) -> bool:
+        """Take the view's opponent row; ``True`` when it changed."""
+        if opponent is _KEEP:
+            return False
+        key = opponent if isinstance(opponent, str) and opponent else None
+        if card.opp_touched and card.opp_selection == key:
+            return False
+        card.opp_touched = True
+        card.opp_selection = key
+        return True
+
+    def _handle_update_draft(
+        self,
+        card_id: Any,
+        build_key: Any,
+        notes: Any,
+        opponent: Any = _KEEP,
+    ) -> None:
         card = self._card_for_action(card_id)
         if card is None:
             return
@@ -1359,8 +1590,16 @@ class BuildCheckinController:
         card.last_activity = self._clock()
         card.selection = build_key if isinstance(build_key, str) and build_key else None
         card.notes = sanitize_notes(notes)
+        if self._note_opponent(card, opponent):
+            self._render_card(card)  # the row's label and "changed" mark
 
-    def _handle_confirm(self, card_id: Any, build_key: Any, notes: Any) -> None:
+    def _handle_confirm(
+        self,
+        card_id: Any,
+        build_key: Any,
+        notes: Any,
+        opponent: Any = _KEEP,
+    ) -> None:
         card = self._card_for_action(card_id)
         if card is None or card.busy or not isinstance(build_key, str) or not build_key:
             return
@@ -1368,6 +1607,8 @@ class BuildCheckinController:
         card.last_activity = self._clock()
         card.selection = build_key
         card.notes = sanitize_notes(notes)
+        self._note_opponent(card, opponent)
+        change = opponent_write(card)
         server = card.server
         if (
             card.variant == NOTES_FIRST
@@ -1375,28 +1616,77 @@ class BuildCheckinController:
             and server.build is not None
             and build_key == server.build.key
         ):
-            # "Done": the declaration stands, only the notes may be new.
-            if card.notes == (card.notes_synced or ""):
+            # "Done": the declaration stands; the notes and the opponent's
+            # build may be new.
+            new_notes = card.notes != (card.notes_synced or "")
+            if change is not None:
+                self._start_write(card, CardOp(
+                    "opponent",
+                    notes=card.notes if new_notes else None,
+                    final=True,
+                    send_opponent=True,
+                    opponent_key=change[0],
+                ))
+            elif new_notes:
+                self._start_write(card, CardOp("notes", notes=card.notes, final=True))
+            else:
                 self._hide_card(card, HIDE_CONFIRMED, done=True)
                 self._pump_cards()
-                return
-            self._start_write(card, CardOp("notes", notes=card.notes, final=True))
             return
-        self._start_write(
-            card,
-            CardOp("confirm", build_key=build_key, notes=self._notes_for_write(card), final=True),
-        )
+        self._start_write(card, CardOp(
+            "confirm",
+            build_key=build_key,
+            notes=self._notes_for_write(card),
+            final=True,
+            send_opponent=change is not None,
+            opponent_key=change[0] if change is not None else None,
+        ))
 
-    def _handle_no_set_build(self, card_id: Any, notes: Any) -> None:
+    def _handle_no_set_build(self, card_id: Any, notes: Any, opponent: Any = _KEEP) -> None:
         card = self._card_for_action(card_id)
         if card is None or card.busy:
             return
         card.touched = True
         card.last_activity = self._clock()
         card.notes = sanitize_notes(notes)
-        self._start_write(
-            card, CardOp("skip", notes=self._notes_for_write(card), final=True),
+        self._note_opponent(card, opponent)
+        change = opponent_write(card)
+        self._start_write(card, CardOp(
+            "skip",
+            notes=self._notes_for_write(card),
+            final=True,
+            send_opponent=change is not None,
+            opponent_key=change[0] if change is not None else None,
+        ))
+
+    def _handle_add_build(self, card_id: Any, side: Any) -> None:
+        card = self._card_for_action(card_id)
+        if (
+            card is None
+            or card.busy
+            or not isinstance(side, str)
+            or side not in BUILD_SIDES
+            or card.game_id is None
+            or card.card_id != self._visible_card_id
+            or self._game_in_progress()
+        ):
+            # A click that raced the next match's loading screen must
+            # never put a browser over the game.
+            return
+        self._background(
+            self._open_url, new_build_url(self._dashboard_url, card.game_id, side),
         )
+        _log.info("build_checkin_add_build side=%s", side)
+        # The player is about to save a build: every list that could
+        # show it is out of date, the agent's own cache included.
+        card.options_stale = True
+        if card.matchup:
+            self._options.pop(card.matchup, None)
+        # Out of the browser's way. The draft stays; a confirm on the web
+        # retires the card through its ping, and the tray brings it back.
+        card.reshow_pending = False
+        self._pending_show.discard(card.card_id)
+        self._set_aside(card, HIDE_OPENED_WEB)
 
     def _handle_later(self, card_id: Any, notes: Any) -> None:
         card = self._card_for_action(card_id)
@@ -1444,6 +1734,8 @@ class BuildCheckinController:
                     body["buildKey"] = op.build_key
                 if op.notes is not None:
                     body["notes"] = op.notes
+                if op.send_opponent:
+                    body["opponentBuildKey"] = op.opponent_key
                 card.op_inflight = op
                 self._call(
                     self._on_card_write, (card.card_id, op),
@@ -1491,24 +1783,22 @@ class BuildCheckinController:
                 "build_checkin_save_failed action=%s status=%s code=%s",
                 op.action, failure.status, failure.code,
             )
-            if failure.code == "already_bound" and failure.game_id and card.game_id is None:
+            if failure.code == "already_bound" and failure.game_id:
                 # The replay was bound while the card was open: same
-                # answer, game route.
-                game = self._game_for_card(card)
-                if game is not None:
-                    self._bind_game(game, failure.game_id)
-                self._bind_card(card, failure.game_id)
+                # answer, game route. The upload's acceptance may already
+                # have bound the card while this write was out.
+                if card.game_id is None:
+                    game = self._game_for_card(card)
+                    if game is not None:
+                        self._bind_game(game, failure.game_id)
+                    self._bind_card(card, failure.game_id)
                 card.ops.appendleft(op)
             elif op.final:
                 card.busy = False
                 if failure.code == "not_eligible":
                     self._retire(card, HIDE_NOT_ELIGIBLE)
                     return
-                card.status = (
-                    STATUS_SAVE_UNKNOWN_BUILD
-                    if failure.code == "unknown_build"
-                    else STATUS_SAVE_FAILED
-                )
+                card.status = _SAVE_ERRORS.get(failure.code or "", STATUS_SAVE_FAILED)
                 self._render_card(card)
             self._run_card_ops(card)
             return
@@ -1535,6 +1825,10 @@ class BuildCheckinController:
     # ================================================================
 
     def _handle_ping(self, ping: Dict[str, Any]) -> None:
+        if ping.get("prefs") is True:
+            # Changed on the website (or another device): follow it now,
+            # not at the next match end.
+            self._handle_refresh_prefs(True)
         key = ping.get("gameKey")
         if isinstance(key, str):
             game = self._games.get(key)
@@ -1556,7 +1850,8 @@ class BuildCheckinController:
                 and card.op_inflight is None
             ):
                 self._fetch_game_state(
-                    game_id, include_options=card.server_options is None,
+                    game_id,
+                    include_options=card.server_options is None or card.options_stale,
                 )
 
     # ================================================================
@@ -1630,14 +1925,32 @@ class BuildCheckinController:
             if _Failure(error).status == 404:
                 # This API predates build check-in: stay dormant.
                 self._set_supported(False)
+            elif self._supported is None:
+                self._schedule_prefs_retry()
             return
         prefs = parse_prefs(value)
         if prefs is None:
             return
+        self._prefs_failures = 0
+        self._prefs_retry_at = None
         self._apply_server_prefs(prefs)
         self._set_supported(True)
 
+    def _schedule_prefs_retry(self) -> None:
+        """No answer yet this session (offline at login): try again soon,
+        then less often. Meanwhile the cards follow the last preference
+        the server confirmed in an earlier session."""
+        delay = PREFS_RETRY_SEC[min(self._prefs_failures, len(PREFS_RETRY_SEC) - 1)]
+        self._prefs_failures += 1
+        self._prefs_retry_at = self._clock() + delay
+        # Once at INFO; an agent left offline would repeat it every minute.
+        _log.log(
+            logging.INFO if self._prefs_failures == 1 else logging.DEBUG,
+            "build_checkin_prefs_read_retry in_sec=%d", int(delay),
+        )
+
     def _set_supported(self, supported: bool) -> None:
+        self._prefs_retry_at = None  # the server answered
         if self._supported == supported:
             return
         self._supported = supported
@@ -1650,9 +1963,17 @@ class BuildCheckinController:
 
     def _apply_server_prefs(self, prefs: CheckinPrefs) -> None:
         self._prefs_confirmed = prefs
+        self._remember_prefs(prefs)
         if self._prefs_write_inflight or self._prefs_write_pending is not None:
             return  # the player's newer choice is on its way to the server
         self._apply_prefs(prefs)
+
+    def _remember_prefs(self, prefs: CheckinPrefs) -> None:
+        """Persist a newly confirmed preference for the next start."""
+        if self._on_prefs_changed is None or prefs == self._prefs_remembered:
+            return
+        self._prefs_remembered = prefs
+        self._background(self._on_prefs_changed, prefs)
 
     def _apply_prefs(self, prefs: CheckinPrefs) -> None:
         if prefs == self._prefs:
@@ -1705,6 +2026,7 @@ class BuildCheckinController:
         else:
             saved = parse_prefs(value) or target
             self._prefs_confirmed = saved
+            self._remember_prefs(saved)
             self._set_supported(True)
             if self._prefs_write_pending is None:
                 self._apply_prefs(saved)
@@ -1751,6 +2073,9 @@ class BuildCheckinController:
             return
         if visible is not None:
             self._set_aside(visible, HIDE_REPLACED)
+        if card.options_stale and card.game_id is not None and not card.busy:
+            # Back from the website, maybe with a new build: list it.
+            self._fetch_game_state(card.game_id, include_options=True)
         self._show_card(card)
 
     def _handle_set_view(self, view: Optional[BuildCheckinView]) -> None:
@@ -1774,4 +2099,6 @@ __all__ = [
     "OPTIONS_TTL_SEC",
     "PENDING_CARD_MAX_AGE_SEC",
     "POSTGAME_IDLE_HIDE_SEC",
+    "PREFS_RETRY_SEC",
+    "RESHOW_MAX_WAIT_SEC",
 ]

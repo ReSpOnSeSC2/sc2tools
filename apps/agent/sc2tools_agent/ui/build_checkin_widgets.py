@@ -9,7 +9,9 @@
 * :class:`BuildList` — the "Your builds" rows, a **More builds…**
   expander with a scrollable list of every other option, and on the end
   card a search box. Rows keep their first-paint order for the life of
-  one card: later models update rows in place and only ever append.
+  one card: later models update rows in place and only ever append. The
+  section titles and search copy are parameters, so the end card's
+  opponent list ("Faced before" / "All builds") reuses it.
 
 Imports PySide6 at load time; only the GUI path imports this module.
 """
@@ -52,6 +54,13 @@ ROLLED_CHIP = "Rolled"
 USUAL_CHIP = "Usual"
 SUGGESTED_CHIP = "Suggested"
 MAX_ROW_CHIPS = 2
+
+FEATURED_TITLE = "YOUR BUILDS"
+MORE_TITLE = "BUILDS"
+MORE_TOGGLE = "More builds…"
+FEWER_TOGGLE = "Fewer builds"
+SEARCH_PLACEHOLDER = "Search builds"
+NO_MATCH = "No builds match your search."
 
 
 def card_stylesheet() -> str:
@@ -108,6 +117,8 @@ QLabel#checkinStatus {{ color: {_TEXT_MUTED}; }}
 QLabel#checkinStatus[tone="warning"] {{ color: {_WARNING}; }}
 QLabel#checkinIntro {{ color: {_TEXT}; font-size: 11px; }}
 QLabel#checkinLocked {{ font-weight: 600; }}
+QLabel#checkinOpponent {{ color: {_TEXT}; }}
+QLabel#checkinChanged {{ color: {_ACCENT_CYAN}; font-size: 11px; font-weight: 600; }}
 QLabel#checkinLocked[saving="true"] {{ color: {_TEXT_MUTED}; }}
 QLabel#checkinPrompt {{ font-size: 13px; }}
 QFrame#checkinStrip {{
@@ -187,6 +198,7 @@ QPushButton#checkinLink:disabled, QPushButton#checkinQuiet:disabled {{
     background-color: transparent;
     border-color: transparent;
 }}
+QPushButton#checkinLink:disabled {{ color: {_TEXT_DIM}; text-decoration: none; }}
 QLineEdit#checkinSearch, QPlainTextEdit#checkinNotes {{
     background-color: {_ELEVATED};
     color: {_TEXT};
@@ -495,11 +507,18 @@ class BuildList(QtWidgets.QWidget):
         selectable: bool,
         searchable: bool,
         focusable: bool,
+        featured_title: str = FEATURED_TITLE,
+        more_title: str = MORE_TITLE,
+        more_toggle: str = MORE_TOGGLE,
+        search_placeholder: str = SEARCH_PLACEHOLDER,
+        no_match: str = NO_MATCH,
         parent: Optional[QtWidgets.QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self._selectable = selectable
         self._focusable = focusable
+        self._more_text = more_toggle
+        self._no_match = no_match
         self._rows: Dict[str, BuildRow] = {}
         self._featured: List[str] = []
         self._more: List[str] = []
@@ -517,13 +536,13 @@ class BuildList(QtWidgets.QWidget):
         if searchable:
             self.search = QtWidgets.QLineEdit()
             self.search.setObjectName("checkinSearch")
-            self.search.setPlaceholderText("Search builds")
-            self.search.setAccessibleName("Search builds")
+            self.search.setPlaceholderText(search_placeholder)
+            self.search.setAccessibleName(search_placeholder)
             self.search.setClearButtonEnabled(True)
             self.search.textEdited.connect(self._on_search_edited)
             layout.addWidget(self.search)
 
-        self.featured_label = plain_label("YOUR BUILDS", "checkinSection")
+        self.featured_label = plain_label(featured_title, "checkinSection")
         layout.addWidget(self.featured_label)
         self._featured_box = QtWidgets.QWidget()
         self._featured_layout = QtWidgets.QVBoxLayout(self._featured_box)
@@ -531,14 +550,14 @@ class BuildList(QtWidgets.QWidget):
         self._featured_layout.setSpacing(ROW_SPACING)
         layout.addWidget(self._featured_box)
 
-        self.more_toggle = button("More builds…", "checkinMoreToggle", focusable=focusable)
+        self.more_toggle = button(more_toggle, "checkinMoreToggle", focusable=focusable)
         self.more_toggle.setCheckable(True)
         self.more_toggle.setFlat(True)
         self.more_toggle.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
         self.more_toggle.toggled.connect(self._on_more_toggled)
         layout.addWidget(self.more_toggle)
 
-        self.more_label = plain_label("BUILDS", "checkinSection")
+        self.more_label = plain_label(more_title, "checkinSection")
         layout.addWidget(self.more_label)
         self.more_area = QtWidgets.QScrollArea()
         self.more_area.setWidgetResizable(True)
@@ -716,7 +735,7 @@ class BuildList(QtWidgets.QWidget):
         self.more_toggle.setVisible(expander)
         if expander:
             self.more_toggle.setText(
-                ("Fewer builds" if self.more_toggle.isChecked() else "More builds…")
+                (FEWER_TOGGLE if self.more_toggle.isChecked() else self._more_text)
                 + f"  ({len(self._more)})"
             )
         self.more_label.setVisible(show_more and not self._featured and not searching)
@@ -726,7 +745,7 @@ class BuildList(QtWidgets.QWidget):
             max(0, visible_rows * (ROW_HEIGHT + ROW_SPACING) - ROW_SPACING),
         )
         if searching and not featured_hits and not more_hits:
-            self.empty_label.setText("No builds match your search.")
+            self.empty_label.setText(self._no_match)
             self.empty_label.setVisible(True)
         else:
             self.empty_label.setVisible(False)

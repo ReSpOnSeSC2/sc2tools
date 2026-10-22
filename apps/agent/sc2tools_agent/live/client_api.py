@@ -369,7 +369,15 @@ class LiveClientPoller:
                 # if loading didn't already (rare race when the
                 # poller starts mid-game).
                 if self._current_game_key is None:
-                    self._match_started_at_ms = int(time.time() * 1000)
+                    # First sight of a match already under way: stamp
+                    # the key with when it started, not with this poll,
+                    # so the uploaded replay still pairs with the live
+                    # record (the cloud binds a key only to a replay
+                    # that started at most a minute before its stamp).
+                    self._match_started_at_ms = int(
+                        time.time() * 1000
+                        - max(0.0, float(game.display_time)) * 1000
+                    )
                     self._current_game_key = _synthesise_game_key(
                         players=game.players,
                         started_at_ms=self._match_started_at_ms,

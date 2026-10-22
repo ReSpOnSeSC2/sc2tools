@@ -13,9 +13,11 @@ from unittest.mock import Mock
 import pytest
 
 from sc2tools_agent import runner
-from sc2tools_agent.build_checkin import BuildCheckinController
+from sc2tools_agent.build_checkin import BuildCheckinController, wiring
+from sc2tools_agent.build_checkin.models import CheckinPrefs
 from sc2tools_agent.build_checkin.wiring import (
     build_checkin_view_for,
+    new_build_url,
     start_build_checkin,
     web_queue_url,
 )
@@ -103,6 +105,63 @@ def test_view_lookup() -> None:
 def test_web_queue_url() -> None:
     assert web_queue_url("https://sc2tools.com/") == "https://sc2tools.com/app"
     assert web_queue_url("http://localhost:3000") == "http://localhost:3000/app"
+    assert new_build_url("https://sc2tools.com/", "g|1", "you") == (
+        "https://sc2tools.com/app/game/g%7C1?newBuild=you"
+    )
+
+
+def test_start_helper_passes_the_dashboard_and_the_cached_prefs(tmp_path: Path, monkeypatch) -> None:
+    captured = {}
+    monkeypatch.setattr(
+        wiring, "BuildCheckinController", lambda **kwargs: captured.update(kwargs) or Mock(),
+    )
+    state = AgentState(
+        device_token="t",
+        build_checkin_prefs={"enabled": True, "askAtLoading": False, "askAfterGame": True},
+    )
+    start_build_checkin(
+        api=FakeCheckinApi(), bus=EventBus(), state=state, state_dir=tmp_path,
+        dashboard_url="http://localhost:3000",
+    )
+    assert captured["dashboard_url"] == "http://localhost:3000"
+    assert captured["web_queue_url"] == "http://localhost:3000/app"
+    assert captured["prefs"] == CheckinPrefs(ask_at_loading=False)
+
+    captured["on_prefs_changed"](CheckinPrefs(enabled=False))
+    assert state.build_checkin_prefs == {
+        "enabled": False, "askAtLoading": True, "askAfterGame": True,
+    }
+    saved = load_state(tmp_path)
+    assert saved.build_checkin_prefs == state.build_checkin_prefs
+    assert saved.device_token == "t"
+
+
+def test_first_start_has_no_cached_prefs(tmp_path: Path, monkeypatch) -> None:
+    captured = {}
+    monkeypatch.setattr(
+        wiring, "BuildCheckinController", lambda **kwargs: captured.update(kwargs) or Mock(),
+    )
+    start_build_checkin(
+        api=FakeCheckinApi(), bus=EventBus(), state=AgentState(), state_dir=tmp_path,
+        dashboard_url="https://sc2tools.com",
+    )
+    assert captured["prefs"] is None
+
+
+def test_loaded_prefs_reach_agent_state(tmp_path: Path) -> None:
+    api = FakeCheckinApi()
+    api.prefs["askAfterGame"] = False
+    state = AgentState(device_token="t")
+    controller = start_build_checkin(
+        api=api, bus=EventBus(), state=state, state_dir=tmp_path,
+        dashboard_url="https://sc2tools.com",
+    )
+    try:
+        assert _wait(lambda: load_state(tmp_path).build_checkin_prefs == {
+            "enabled": True, "askAtLoading": True, "askAfterGame": False,
+        })
+    finally:
+        controller.stop()
 
 
 def test_runtime_cell_has_a_build_checkin_slot() -> None:

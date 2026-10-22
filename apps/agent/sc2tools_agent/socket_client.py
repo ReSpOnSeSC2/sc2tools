@@ -10,7 +10,7 @@ agent having to poll. Events the cloud emits today:
   - ``import:start_request``            {jobId, folder?, force?}
   - ``import:cancel_request``           {jobId}
   - ``import:pick_folder_request``      {reqId}
-  - ``build-intent:changed``            {gameKey} | {gameId}
+  - ``build-intent:changed``            {gameKey} | {gameId} | {prefs: true}
 
 For the per-game events we look the .SC2Replay up by gameId in the
 upload state, re-parse it, and push the new payload up — same code
@@ -64,7 +64,7 @@ class SocketClient:
         on_import_cancel: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_import_pick_folder: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_bot_lab: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
-        on_build_intent_changed: Optional[Callable[[Dict[str, str]], None]] = None,
+        on_build_intent_changed: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._device_token = device_token
@@ -83,7 +83,8 @@ class SocketClient:
         self._on_import_pick_folder = on_import_pick_folder
         self._on_bot_lab = on_bot_lab
         # Build check-in ping: a live record or a game's check-in changed
-        # (web pick, randomizer roll, confirmation). Only ids travel.
+        # (web pick, randomizer roll, confirmation), or the check-in
+        # preference did. Only ids and the prefs flag travel.
         self._on_build_intent_changed = on_build_intent_changed
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
@@ -243,11 +244,13 @@ class SocketClient:
             cb = self._on_build_intent_changed
             if cb is None or not isinstance(payload, dict):
                 return
-            ping = {
+            ping: Dict[str, Any] = {
                 field: value
                 for field in ("gameKey", "gameId")
                 if isinstance(value := payload.get(field), str) and value
             }
+            if payload.get("prefs") is True:
+                ping["prefs"] = True
             if not ping:
                 return
             # Both ids carry player names; never log their values.

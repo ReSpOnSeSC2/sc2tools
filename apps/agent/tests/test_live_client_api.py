@@ -1310,3 +1310,42 @@ def test_loading_re_emits_are_capped_per_match() -> None:
     poller._reset_match_state()
     assert poller._loading_identity is None
     assert poller._loading_emits == 0
+
+
+# ------------------------------------------------ key stamp of a late start
+
+
+def test_first_sight_mid_match_backdates_the_key_to_the_match_start(monkeypatch) -> None:
+    """Agent started (or loading missed) 3 minutes into a game: the key's
+    stamp is the match start, so the replay still pairs with it."""
+    from sc2tools_agent.live import client_api
+
+    monkeypatch.setattr(client_api.time, "time", lambda: 1_790_000_500.0)
+    poller, seen = _drive([([], _live_game("Opponent", display_time=180.0))])
+
+    assert [event.phase for event in seen] == [LiveLifecyclePhase.MATCH_STARTED]
+    stamp = int(seen[0].game_key.rsplit("|", 1)[1])
+    assert stamp == 1_790_000_500_000 - 180_000
+    assert poller._match_started_at_ms == stamp
+
+
+def test_loading_seen_keeps_the_loading_stamp(monkeypatch) -> None:
+    from sc2tools_agent.live import client_api
+
+    monkeypatch.setattr(client_api.time, "time", lambda: 1_790_000_000.0)
+    complete = _live_game("Opponent", display_time=0.0)
+    _poller, seen = _drive([
+        (["ScreenLoading"], complete),
+        ([], {**complete, "displayTime": 2.0}),
+    ])
+
+    assert len({event.game_key for event in seen}) == 1
+    assert seen[0].game_key.endswith("|1790000000000")
+
+
+def test_first_sight_with_a_bogus_clock_never_stamps_the_future(monkeypatch) -> None:
+    from sc2tools_agent.live import client_api
+
+    monkeypatch.setattr(client_api.time, "time", lambda: 1_790_000_500.0)
+    poller = _drive([([], _live_game("Opponent", display_time=0.5))])[0]
+    assert poller._match_started_at_ms == 1_790_000_499_500

@@ -64,6 +64,32 @@ STATUS_REPLAY_UNAVAILABLE = (
 )
 STATUS_SAVE_FAILED = "Couldn't save. Check your connection and try again."
 STATUS_SAVE_UNKNOWN_BUILD = "That build isn't available for this game. Pick another."
+STATUS_SAVE_UNKNOWN_OPPONENT_BUILD = (
+    "That opponent build isn't available any more — pick another."
+)
+
+CURRENT_PICK = "Current pick"
+"""Chip on the loading card's locked-in row while the player re-picks."""
+NOT_NOW_TIP = "Skip this game's check-in at loading"
+NOT_NOW_CLEARS_TIP = "Clear your pick and skip this game's check-in"
+
+OPPONENT_ROW = "Opponent's build: {name}"
+OPPONENT_UNKNOWN = "unknown"
+OPPONENT_CHANGED = "changed"
+OPPONENT_FEATURED_TITLE = "FACED BEFORE"
+OPPONENT_MORE_TITLE = "ALL BUILDS"
+OPPONENT_MORE_TOGGLE = "All builds…"
+OPPONENT_SEARCH = "Search opponent builds"
+OPPONENT_NO_MATCH = "No opponent builds match your search."
+OPPONENT_EMPTY = "No opponent builds to pick for this matchup yet."
+USE_REPLAY_LABEL = "Use replay's label"
+ADD_NEW_BUILD = "Add new build…"
+ADD_NEW_BUILD_HINT = "Opens sc2tools.com to save a build from this replay"
+ADD_NEW_BUILD_UNAVAILABLE = "Available once your replay uploads"
+
+SIDE_YOU = "you"
+SIDE_OPPONENT = "opponent"
+BUILD_SIDES = frozenset({SIDE_YOU, SIDE_OPPONENT})
 
 REASON_LABELS: Mapping[str, str] = {
     "declared": "Your pick at loading",
@@ -86,6 +112,7 @@ _LEADING_CLAN_TAG_RE = re.compile(r"^\s*\[[^\]]*\]\s*")
 _TRAILING_DISCRIMINATOR_RE = re.compile(r"#\d+$")
 _MATCHUP_RE = re.compile(r"^[PTZ]v[PTZ]$")
 _STATUSES = frozenset({"none", "pending", "confirmed", "skipped"})
+_OPPONENT_STATUSES = frozenset({"none", "confirmed"})
 
 
 def canonical_race(value: Any) -> Optional[str]:
@@ -383,6 +410,93 @@ def parse_live_state(raw: Any, game_key: str) -> Optional[LiveState]:
 
 
 @dataclass(frozen=True)
+class OpponentIntent:
+    """``GameIntentState.opponent``: the opponent's build for one game.
+
+    ``label`` is the effective ``opponent.strategy`` (the player's
+    correction while ``applied``, else the classifier's label);
+    ``detected_*`` is always the classifier's own label.
+    """
+
+    label: Optional[str] = None
+    status: str = "none"
+    build: Optional[BuildRef] = None
+    applied: bool = False
+    detected_name: Optional[str] = None
+    detected_key: Optional[str] = None
+    suggestion: Optional[Suggestion] = None
+    executed: Optional[bool] = None
+    options: Optional[BuildOptions] = None
+
+    @property
+    def corrected(self) -> bool:
+        """The player's correction is what the game counts."""
+        return self.applied and self.build is not None
+
+    @property
+    def effective_key(self) -> Optional[str]:
+        """The option key of what the game counts as the opponent's build
+        (``None`` when the classifier's label is not an option)."""
+        build = self.build
+        if self.applied and build is not None:
+            return build.key
+        return self.detected_key
+
+    @property
+    def replay_name(self) -> Optional[str]:
+        """What the replay alone says the opponent did."""
+        return self.detected_name or (None if self.corrected else self.label)
+
+
+def parse_opponent_intent(raw: Any, matchup: Optional[str]) -> Optional[OpponentIntent]:
+    if not isinstance(raw, dict):
+        return None
+    status = raw.get("status")
+    detected_raw = raw.get("detected")
+    detected: Mapping[str, Any] = detected_raw if isinstance(detected_raw, dict) else {}
+    executed = raw.get("executed")
+    options: Optional[BuildOptions] = None
+    if isinstance(raw.get("options"), list):
+        options = BuildOptions(
+            matchup=matchup, builds=parse_build_options_list(raw.get("options")),
+        )
+    return OpponentIntent(
+        label=_str(raw, "label"),
+        status=status if status in _OPPONENT_STATUSES else "none",
+        build=parse_build_ref(raw.get("build")),
+        applied=raw.get("applied") is True,
+        detected_name=_str(detected, "name"),
+        detected_key=_str(detected, "key"),
+        suggestion=parse_suggestion(raw.get("suggestion")),
+        executed=executed if isinstance(executed, bool) else None,
+        options=options,
+    )
+
+
+def opponent_change(
+    selection: Optional[str],
+    *,
+    server_key: Optional[str],
+    corrected: bool,
+    replay_key: Optional[str] = None,
+) -> Optional[Tuple[Optional[str]]]:
+    """What an answer must send as ``opponentBuildKey``, or ``None`` when
+    the opponent's build stays as the server has it.
+
+    ``selection`` is the opponent row the player picked; ``None`` (or
+    ``replay_key``, the classifier's own row) means the replay's label,
+    which clears a correction with ``null``. The result is a one-tuple so
+    "clear the correction" (``(None,)``) differs from "send nothing"
+    (``None``).
+    """
+    if selection == server_key:
+        return None
+    if selection is None or selection == replay_key:
+        return (None,) if corrected else None
+    return (selection,)
+
+
+@dataclass(frozen=True)
 class GameIntentState:
     """``GameIntentState`` from ``/v1/games/:gameId/build-intent``."""
 
@@ -408,13 +522,17 @@ class GameIntentState:
     via: Optional[str] = None
     prefs: Optional[CheckinPrefs] = None
     options: Optional[BuildOptions] = None
+    opponent: Optional[OpponentIntent] = None
+    """``None`` when the game has no opponent race/matchup (or the API
+    predates the opponent axis)."""
 
 
 def parse_game_intent(raw: Any, game_id: str) -> Optional[GameIntentState]:
     if not isinstance(raw, dict):
         return None
     status = raw.get("status")
-    detected = raw.get("detected") if isinstance(raw.get("detected"), dict) else {}
+    detected_raw = raw.get("detected")
+    detected: Mapping[str, Any] = detected_raw if isinstance(detected_raw, dict) else {}
     matchup = _matchup(raw)
     options: Optional[BuildOptions] = None
     if isinstance(raw.get("options"), list):
@@ -446,6 +564,7 @@ def parse_game_intent(raw: Any, game_id: str) -> Optional[GameIntentState]:
         via=_str(raw, "via"),
         prefs=parse_prefs(raw.get("prefs")),
         options=options,
+        opponent=parse_opponent_intent(raw.get("opponent"), matchup),
     )
 
 
@@ -504,9 +623,10 @@ class LoadingCardModel:
     ``featured`` / ``more`` never reorder for one ``game_key``.
 
     Actions: a row → ``declare(game_key, key)``; **Change** →
-    ``undeclare``; **Roll now** → ``roll_now``; **Not now** →
-    ``not_now``; "Don't ask at loading" → ``disable("loading")``; the
-    intro's close → ``dismiss_intro()``.
+    ``undeclare`` (reopens the list; the pick stands on the server until
+    another row or **Not now**); **Roll now** → ``roll_now``; **Not
+    now** → ``not_now``; "Don't ask at loading" → ``disable("loading")``;
+    the intro's close → ``dismiss_intro()``.
     """
 
     game_key: str
@@ -527,10 +647,51 @@ class LoadingCardModel:
     locked_key: Optional[str] = None
     declared_elsewhere: bool = False
     can_change: bool = False
+    changing: bool = False
+    """**Change** reopened the list over a standing pick: ``locked_key``
+    carries the ``current_pick_label`` chip and **Not now** clears it."""
+    current_pick_label: str = CURRENT_PICK
+    not_now_tip: str = NOT_NOW_TIP
     show_intro: bool = False
     intro_text: str = INTRO_TEXT
     status: str = ""
     saving: bool = False
+
+
+@dataclass(frozen=True)
+class OpponentRowModel:
+    """The end card's "Opponent's build: X · Change" row and its list.
+
+    ``selection`` is what the list checks (``None`` when the shown build
+    is not an option). ``changed`` marks a pick that differs from what
+    the server counts; ``corrected`` means the server already counts the
+    player's correction instead of the replay's label.
+    """
+
+    label: str
+    name: str
+    selection: Optional[str] = None
+    server_key: Optional[str] = None
+    replay_key: Optional[str] = None
+    """The row **Use replay's label** selects (``None``: not an option)."""
+    replay_name: Optional[str] = None
+    corrected: bool = False
+    changed: bool = False
+    changed_label: str = OPPONENT_CHANGED
+    detected_label: Optional[str] = None
+    """``Replay classified as: Y`` while a correction is shown."""
+    show_use_replay: bool = False
+    use_replay_label: str = USE_REPLAY_LABEL
+    featured: Tuple[BuildOptionModel, ...] = ()
+    more: Tuple[BuildOptionModel, ...] = ()
+    options_loading: bool = False
+    touched: bool = False
+    featured_title: str = OPPONENT_FEATURED_TITLE
+    more_title: str = OPPONENT_MORE_TITLE
+    more_toggle: str = OPPONENT_MORE_TOGGLE
+    search_placeholder: str = OPPONENT_SEARCH
+    no_match: str = OPPONENT_NO_MATCH
+    empty: str = OPPONENT_EMPTY
 
 
 @dataclass(frozen=True)
@@ -547,13 +708,20 @@ class PostgameCardModel:
     the view keeps the selection and notes text its widgets hold and only
     refreshes the other fields.
 
-    Actions: **Confirm** → ``confirm(card_id, key, notes)``; **Done**
-    (notes-first) → ``confirm(card_id, selection, notes)``; **No set
-    build** → ``no_set_build``; **Later** / Esc → ``later``; any click or
-    keystroke → ``interacted``, and selection/notes edits →
-    ``update_draft`` so a pre-empted card keeps them; "Turn off
-    check-ins after games" → ``disable("postgame")``. Disable the
-    buttons while ``busy``.
+    Once the replay is in, ``opponent`` adds the "Opponent's build" row
+    and ``can_add_build`` enables **Add new build…** under each list.
+
+    Actions: **Confirm** → ``confirm(card_id, key, notes[, opponent])``;
+    **Done** (notes-first) → ``confirm(card_id, selection, notes[,
+    opponent])``; **No set build** → ``no_set_build(card_id, notes[,
+    opponent])``; **Later** / Esc → ``later``; any click or keystroke →
+    ``interacted``, and selection/notes edits → ``update_draft(card_id,
+    key, notes[, opponent])`` so a pre-empted card keeps them; **Add new
+    build…** → ``add_build(card_id, "you" | "opponent")``; "Turn off
+    check-ins after games" → ``disable("postgame")``. ``opponent`` (the
+    opponent row's key, ``None`` for the replay's label) is passed only
+    once the player changed that row. Disable the buttons while
+    ``busy``.
     """
 
     card_id: str
@@ -588,6 +756,11 @@ class PostgameCardModel:
     touched: bool = False
     show_intro: bool = False
     intro_text: str = INTRO_TEXT
+    opponent: Optional[OpponentRowModel] = None
+    can_add_build: bool = False
+    """The replay is in, so **Add new build…** can open it on the web."""
+    add_build_label: str = ADD_NEW_BUILD
+    add_build_hint: str = ADD_NEW_BUILD_UNAVAILABLE
 
 
 def option_models(
@@ -682,11 +855,16 @@ def card_title(*parts: Optional[str]) -> str:
 
 
 __all__ = [
+    "ADD_NEW_BUILD",
+    "ADD_NEW_BUILD_HINT",
+    "ADD_NEW_BUILD_UNAVAILABLE",
+    "BUILD_SIDES",
     "BuildOption",
     "BuildOptionModel",
     "BuildOptions",
     "BuildRef",
     "CHECKING_REPLAY",
+    "CURRENT_PICK",
     "CheckinPrefs",
     "DETECTED_LABEL",
     "FEATURED_OPTIONS",
@@ -695,27 +873,44 @@ __all__ = [
     "INTRO_TEXT",
     "LOADING_HEADING",
     "LOCKED_IN",
+    "LiveState",
+    "LoadingCardModel",
+    "NOTES_FIRST_HEADING",
     "NOTES_FIRST_PROMPT",
+    "NOTES_MAX_LENGTH",
+    "NOTES_PLACEHOLDER",
+    "NOT_NOW_CLEARS_TIP",
+    "NOT_NOW_TIP",
+    "OPPONENT_CHANGED",
+    "OPPONENT_EMPTY",
+    "OPPONENT_FEATURED_TITLE",
+    "OPPONENT_MORE_TITLE",
+    "OPPONENT_MORE_TOGGLE",
+    "OPPONENT_NO_MATCH",
+    "OPPONENT_ROW",
+    "OPPONENT_SEARCH",
+    "OPPONENT_UNKNOWN",
+    "OpponentIntent",
+    "OpponentRowModel",
+    "PICKED_ON_WEB",
+    "POSTGAME_HEADING",
+    "PostgameCardModel",
     "RANDOMIZER_ROLLED",
     "RANDOMIZER_ROLLING",
     "RANDOMIZER_WILL_ROLL",
     "REASON_LABELS",
+    "RandomizerStripModel",
+    "SIDE_OPPONENT",
+    "SIDE_YOU",
     "STATUS_DECLARE_OFFLINE",
     "STATUS_DECLARE_UNAVAILABLE",
     "STATUS_OPTIONS_FAILED",
     "STATUS_REPLAY_UNAVAILABLE",
     "STATUS_SAVE_FAILED",
     "STATUS_SAVE_UNKNOWN_BUILD",
-    "LiveState",
-    "LoadingCardModel",
-    "NOTES_FIRST_HEADING",
-    "NOTES_MAX_LENGTH",
-    "NOTES_PLACEHOLDER",
-    "PICKED_ON_WEB",
-    "POSTGAME_HEADING",
-    "PostgameCardModel",
-    "RandomizerStripModel",
+    "STATUS_SAVE_UNKNOWN_OPPONENT_BUILD",
     "Suggestion",
+    "USE_REPLAY_LABEL",
     "WAITING_FOR_MATCHUP",
     "canonical_race",
     "card_title",
@@ -727,12 +922,14 @@ __all__ = [
     "matchup_for",
     "matchups_for_race",
     "normalize_player_name",
+    "opponent_change",
     "option_models",
     "parse_build_option",
     "parse_build_options",
     "parse_build_ref",
     "parse_game_intent",
     "parse_live_state",
+    "parse_opponent_intent",
     "parse_prefs",
     "parse_suggestion",
     "reason_label",

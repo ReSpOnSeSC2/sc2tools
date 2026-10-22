@@ -13,7 +13,11 @@ window and can activate it over the game.
 * :class:`PostgameCardWindow` — "Which build were you going for?". Shows
   without activating but can take focus once the player clicks into it
   (search, notes). When it closes while it is the foreground window and
-  the window it took focus from is SC2, focus goes back to SC2.
+  the window it took focus from is SC2, focus goes back to SC2 — except
+  when **Add new build…** just opened the browser, which keeps it. Once
+  the replay is in it also carries the compact "Opponent's build: X ·
+  Change" row, an accordion that swaps the build list for the
+  opponent's.
 
 On Windows each card is excluded from screen capture and re-asserts
 topmost once a second while visible (``win32_window``). Placement: the
@@ -29,7 +33,17 @@ from typing import Any, Optional
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from ..build_checkin.models import CHECKING_REPLAY, LoadingCardModel, PostgameCardModel
+from ..build_checkin.models import (
+    CHECKING_REPLAY,
+    DETECTED_LABEL,
+    OPPONENT_ROW,
+    OPPONENT_UNKNOWN,
+    LoadingCardModel,
+    OpponentRowModel,
+    PostgameCardModel,
+    opponent_change,
+)
+from ..build_checkin.view import HIDE_OPENED_WEB
 from . import win32_window
 from .build_checkin_widgets import (
     BuildList,
@@ -455,7 +469,12 @@ class LoadingCardWindow(CardWindow):
 
         has_rows = bool(model.featured or model.more)
         if has_rows:
-            self.builds.set_rows(model.featured, model.more)
+            # Re-picking after **Change**: the standing pick is marked.
+            self.builds.set_rows(
+                model.featured, model.more,
+                reason_key=model.locked_key if model.changing else None,
+                reason_label=model.current_pick_label if model.changing else None,
+            )
         self.builds.setVisible(not model.waiting_for_matchup and self.builds.has_rows())
         self.loading.setVisible(model.options_loading and not self.builds.has_rows())
         self.empty.setVisible(
@@ -467,6 +486,7 @@ class LoadingCardWindow(CardWindow):
         self.status.setText(model.status)
         self.status.setVisible(bool(model.status))
         set_tone(self.status, "tone", "warning")
+        self.not_now.setToolTip(model.not_now_tip)
 
     # ---------------------------------------------------- player out
 
@@ -501,6 +521,10 @@ class PostgameCardWindow(CardWindow):
         """The player changed the selection or notes in this showing."""
         self._changing = False
         """Notes-first card with the build list opened by Change build."""
+        self._opp_open = False
+        """The opponent accordion replaces the build list."""
+        self._opp_touched = False
+        """The player changed the opponent row (this showing or a draft)."""
         self._applying = False
         self._reason: Optional[tuple] = None
         self._planned: Optional[str] = None
@@ -535,6 +559,20 @@ class PostgameCardWindow(CardWindow):
         self.detected = plain_label("", "checkinMuted", wrap=True)
         layout.addWidget(self.detected)
 
+        # ---- "Opponent's build: X · changed · Change" ----
+        self.opp_row = QtWidgets.QWidget()
+        opp_row = QtWidgets.QHBoxLayout(self.opp_row)
+        opp_row.setContentsMargins(0, 0, 0, 0)
+        opp_row.setSpacing(6)
+        self.opp_label = plain_label("", "checkinOpponent", wrap=True)
+        opp_row.addWidget(self.opp_label, 1)
+        self.opp_changed = plain_label("", "checkinChanged")
+        opp_row.addWidget(self.opp_changed, 0, QtCore.Qt.AlignTop)
+        self.opp_change = link("Change")
+        self.opp_change.clicked.connect(self._toggle_opponent)
+        opp_row.addWidget(self.opp_change, 0, QtCore.Qt.AlignTop)
+        layout.addWidget(self.opp_row)
+
         self.status = plain_label("", "checkinStatus", wrap=True)
         layout.addWidget(self.status)
         self.busy_bar = _busy_bar()
@@ -553,7 +591,47 @@ class PostgameCardWindow(CardWindow):
         picker.addWidget(self.loading)
         self.empty = plain_label("", "checkinMuted", wrap=True)
         picker.addWidget(self.empty)
+        self.add_build = link("")
+        self.add_build.clicked.connect(lambda: self._add_build("you"))
+        picker.addWidget(self.add_build)
         layout.addWidget(self.picker)
+
+        # ---- the opponent's list (accordion) ----
+        self.opp_picker = QtWidgets.QWidget()
+        opp_picker = QtWidgets.QVBoxLayout(self.opp_picker)
+        opp_picker.setContentsMargins(0, 0, 0, 0)
+        opp_picker.setSpacing(6)
+        defaults = OpponentRowModel(label="", name="")
+        self.opp_builds = BuildList(
+            selectable=True, searchable=True, focusable=True,
+            featured_title=defaults.featured_title,
+            more_title=defaults.more_title,
+            more_toggle=defaults.more_toggle,
+            search_placeholder=defaults.search_placeholder,
+            no_match=defaults.no_match,
+        )
+        self.opp_builds.setAccessibleName("Opponent's build")
+        self.opp_builds.picked.connect(self._opp_picked)
+        self.opp_builds.searched.connect(self._searched)
+        self.opp_builds.expanded.connect(self._expanded)
+        opp_picker.addWidget(self.opp_builds)
+        self.opp_loading = plain_label("Loading builds…", "checkinMuted")
+        opp_picker.addWidget(self.opp_loading)
+        self.opp_empty = plain_label(defaults.empty, "checkinMuted", wrap=True)
+        opp_picker.addWidget(self.opp_empty)
+        opp_footer = QtWidgets.QHBoxLayout()
+        opp_footer.setContentsMargins(0, 0, 0, 0)
+        opp_footer.setSpacing(8)
+        self.opp_add = link("")
+        self.opp_add.clicked.connect(lambda: self._add_build("opponent"))
+        opp_footer.addWidget(self.opp_add)
+        opp_footer.addStretch(1)
+        self.opp_use_replay = link(defaults.use_replay_label)
+        self.opp_use_replay.clicked.connect(self._use_replay_label)
+        opp_footer.addWidget(self.opp_use_replay)
+        opp_picker.addLayout(opp_footer)
+        layout.addWidget(self.opp_picker)
+        self.opp_picker.hide()
 
         self.notes = QtWidgets.QPlainTextEdit()
         self.notes.setObjectName("checkinNotes")
@@ -592,7 +670,7 @@ class PostgameCardWindow(CardWindow):
             shortcut = QtGui.QShortcut(QtGui.QKeySequence(keys), self)
             shortcut.activated.connect(self._primary_clicked)
         escape = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Escape), self)
-        escape.activated.connect(self._later)
+        escape.activated.connect(self._escape)
 
     # ---------------------------------------------------- controller in
 
@@ -600,12 +678,19 @@ class PostgameCardWindow(CardWindow):
         fresh = model.card_id != self._identity or not self.isVisible()
         if model.card_id != self._identity:
             self.builds.reset()
+            self.opp_builds.reset()
             self._reason = None
             self._changing = False
         if fresh:
             self._touched = False
+            self._opp_open = False
+            self._opp_touched = model.opponent is not None and model.opponent.touched
         self._identity = model.card_id
-        self._render(model, apply_draft=fresh or not (model.touched or self._touched))
+        self._render(
+            model,
+            apply_draft=fresh or not (model.touched or self._touched),
+            opponent_draft=fresh or not self._opp_touched,
+        )
         self._present()
 
     def update_model(self, model: PostgameCardModel) -> None:
@@ -613,7 +698,9 @@ class PostgameCardWindow(CardWindow):
         self.settle()
 
     def dismiss(self, reason: str = "") -> None:
-        win32_window.restore_foreground(self.native_handle(), self._previous_foreground)
+        if reason != HIDE_OPENED_WEB:
+            # The browser just opened from this card should keep focus.
+            win32_window.restore_foreground(self.native_handle(), self._previous_foreground)
         super().dismiss(reason)
 
     def _tick(self) -> None:
@@ -624,11 +711,23 @@ class PostgameCardWindow(CardWindow):
             if foreground is not None:
                 self._previous_foreground = foreground
 
-    def _render(self, model: PostgameCardModel, *, apply_draft: bool) -> None:
+    def _render(
+        self,
+        model: PostgameCardModel,
+        *,
+        apply_draft: bool,
+        opponent_draft: Optional[bool] = None,
+    ) -> None:
         self.model = model
         self._applying = True
         try:
             self._render_picker(model, apply_draft=apply_draft)
+            self._render_opponent(
+                model,
+                apply_draft=(
+                    not self._opp_touched if opponent_draft is None else opponent_draft
+                ),
+            )
             self._render_header(model)
             if apply_draft and self.notes.toPlainText() != model.notes:
                 self.notes.setPlainText(model.notes)
@@ -678,7 +777,9 @@ class PostgameCardWindow(CardWindow):
             self._planned = model.selection
             self.builds.set_selection(model.selection)
             self.builds.ensure_visible(model.selection)
-        show_picker = model.variant != NOTES_FIRST_VARIANT or self._changing
+        show_picker = (
+            model.variant != NOTES_FIRST_VARIANT or self._changing
+        ) and not (self._opp_open and model.opponent is not None)
         has_rows = self.builds.has_rows()
         self.picker.setVisible(show_picker)
         self.builds.setVisible(has_rows)
@@ -693,6 +794,80 @@ class PostgameCardWindow(CardWindow):
         else:
             self.empty.setVisible(False)
         self.builds.set_rows_enabled(not model.busy)
+        self._render_add_link(self.add_build, model)
+
+    def _render_add_link(self, widget: QtWidgets.QPushButton, model: PostgameCardModel) -> None:
+        widget.setText(model.add_build_label)
+        widget.setEnabled(model.can_add_build and not model.busy)
+        # Disabled until the replay is in; the tooltip says why.
+        widget.setToolTip(model.add_build_hint)
+        widget.setAccessibleDescription(model.add_build_hint)
+
+    def _render_opponent(self, model: PostgameCardModel, *, apply_draft: bool) -> None:
+        opp = model.opponent
+        self.opp_row.setVisible(opp is not None)
+        if opp is None:
+            self._opp_open = False
+            self.opp_picker.setVisible(False)
+            return
+        if opp.featured or opp.more:
+            self.opp_builds.set_rows(opp.featured, opp.more)
+        if apply_draft:
+            self.opp_builds.set_selection(opp.selection)
+            self.opp_builds.ensure_visible(opp.selection)
+        has_rows = self.opp_builds.has_rows()
+        self.opp_picker.setVisible(self._opp_open)
+        self.opp_builds.setVisible(has_rows)
+        self.opp_loading.setVisible(opp.options_loading and not has_rows)
+        self.opp_empty.setVisible(not has_rows and not opp.options_loading)
+        self.opp_builds.set_rows_enabled(not model.busy)
+        self._render_add_link(self.opp_add, model)
+        self.opp_use_replay.setText(opp.use_replay_label)
+        self.opp_use_replay.setEnabled(not model.busy)
+        self.opp_change.setText("Close" if self._opp_open else "Change")
+        self.opp_change.setAccessibleName(
+            "Close the opponent's builds" if self._opp_open else "Change the opponent's build",
+        )
+        self.opp_change.setEnabled(not model.busy)
+        self._render_opponent_label(opp)
+
+    def _render_opponent_label(self, opp: OpponentRowModel) -> None:
+        """The row's text. A pick the controller has not echoed yet is
+        named from the list itself so the row never lags the click."""
+        if self._opp_touched:
+            key = self.opp_builds.selection()
+            row = self.opp_builds.row(key) if key else None
+            if row is not None:
+                name = row.name
+            elif key == opp.replay_key:
+                name = opp.replay_name or OPPONENT_UNKNOWN
+            else:
+                name = opp.name
+            changed = opponent_change(
+                key,
+                server_key=opp.server_key,
+                corrected=opp.corrected,
+                replay_key=opp.replay_key,
+            ) is not None
+            show_replay = key != opp.replay_key
+            detected = (
+                DETECTED_LABEL.format(name=opp.replay_name)
+                if show_replay and opp.replay_name and opp.replay_name != name
+                else None
+            )
+            label = OPPONENT_ROW.format(name=name)
+        else:
+            label, changed, show_replay = opp.label, opp.changed, opp.show_use_replay
+            detected = opp.detected_label
+        self.opp_label.setText(label)
+        self.opp_label.setToolTip(detected or "")
+        self.opp_label.setAccessibleName(
+            f"{label}, {opp.changed_label}" if changed else label,
+        )
+        self.opp_label.setAccessibleDescription(detected or "")
+        self.opp_changed.setText(f"· {opp.changed_label}")
+        self.opp_changed.setVisible(changed)
+        self.opp_use_replay.setVisible(show_replay)
 
     def _render_actions(self, model: PostgameCardModel) -> None:
         notes_first = model.variant == NOTES_FIRST_VARIANT and not self._changing
@@ -761,10 +936,19 @@ class PostgameCardWindow(CardWindow):
             self._last_interaction = now
             self._act("interacted", self.card_id)
 
+    def opponent_args(self) -> tuple:
+        """The opponent row for an action, once the player changed it."""
+        if self._opp_touched and self.model is not None and self.model.opponent is not None:
+            return (self.opp_builds.selection(),)
+        return ()
+
     def _draft_changed(self) -> None:
         self._touched = True
         self._last_interaction = time.monotonic()
-        self._act("update_draft", self.card_id, self.selection(), self.notes_text())
+        self._act(
+            "update_draft", self.card_id, self.selection(), self.notes_text(),
+            *self.opponent_args(),
+        )
 
     def _searched(self, _text: str) -> None:
         self._interacted()
@@ -804,7 +988,7 @@ class PostgameCardWindow(CardWindow):
         selection = self.selection()
         if selection is None:
             return
-        self._act("confirm", model.card_id, selection, self.notes_text())
+        self._act("confirm", model.card_id, selection, self.notes_text(), *self.opponent_args())
 
     def _secondary_clicked(self) -> None:
         model = self.model
@@ -812,19 +996,67 @@ class PostgameCardWindow(CardWindow):
             return
         if model.variant == NOTES_FIRST_VARIANT:
             self._changing = True
+            self._opp_open = False
             self._interacted()
             self._render(model, apply_draft=False)
             self.settle()
             if self.builds.search is not None:
                 self.builds.search.setFocus(QtCore.Qt.OtherFocusReason)
             return
-        self._act("no_set_build", model.card_id, self.notes_text())
+        self._act("no_set_build", model.card_id, self.notes_text(), *self.opponent_args())
 
     def _later(self) -> None:
         model = self.model
         if model is None or model.busy or not self.isVisible():
             return
         self._act("later", model.card_id, self.notes_text())
+
+    def _escape(self) -> None:
+        """Esc closes the opponent's list first, then means Later."""
+        if self._opp_open and self.model is not None and not self.model.busy:
+            self._set_opponent_open(False)
+            return
+        self._later()
+
+    # ---------------------------------------------------- opponent row
+
+    def _set_opponent_open(self, open_: bool) -> None:
+        self._opp_open = open_
+        if self.model is not None:
+            self._render(self.model, apply_draft=False, opponent_draft=False)
+        self.settle()
+        if open_ and self.opp_builds.search is not None:
+            self.opp_builds.search.setFocus(QtCore.Qt.OtherFocusReason)
+        elif not open_ and self.isActiveWindow():
+            # Back to the row's trigger, not to whatever follows the
+            # list that just closed under the keyboard focus.
+            self.opp_change.setFocus(QtCore.Qt.OtherFocusReason)
+
+    def _toggle_opponent(self) -> None:
+        if self.model is None or self.model.busy or self.model.opponent is None:
+            return
+        self._interacted()
+        self._set_opponent_open(not self._opp_open)
+
+    def _opp_picked(self, _key: str) -> None:
+        if self.card_id is None:
+            return
+        self._opp_touched = True
+        self._set_opponent_open(False)
+        self._draft_changed()
+
+    def _use_replay_label(self) -> None:
+        model = self.model
+        if model is None or model.busy or model.opponent is None:
+            return
+        self.opp_builds.set_selection(model.opponent.replay_key)
+        self._opp_picked(model.opponent.replay_key or "")
+
+    def _add_build(self, side: str) -> None:
+        model = self.model
+        if model is None or model.busy or not model.can_add_build:
+            return
+        self._act("add_build", model.card_id, side)
 
 
 __all__ = [

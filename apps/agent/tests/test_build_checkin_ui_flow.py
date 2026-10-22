@@ -5,6 +5,7 @@ the cards' buttons driving the controller back."""
 from __future__ import annotations
 
 import os
+from urllib.parse import quote
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -21,10 +22,12 @@ from sc2tools_agent.ui.build_checkin_window import (  # noqa: E402
     CheckinViewProxy,
 )
 from tests.build_checkin_fakes import (  # noqa: E402
+    OPP_OPTIONS,
     Harness,
     cloud_game,
     envelope,
     game_state,
+    opponent_state,
     option,
     suggestion,
 )
@@ -81,9 +84,25 @@ def test_declaring_from_the_loading_card(flow) -> None:
 
     card.change.click()
     h.pump()
-    assert h.api.live[key]["declared"] is None
+    # Re-picking keeps the standing pick on the server (and the overlay
+    # randomizer quiet) until another row replaces it.
+    assert h.api.live[key]["declared"]["key"] == "custom:dt-3-gate"
     assert card.full.isVisibleTo(card)
     assert card.builds.keys()[0] == ["custom:dt-3-gate", "pvz-2-stargate-phoenix"]
+    assert card.builds.row("custom:dt-3-gate").chips == [("Current pick", "reason")]
+    assert card.not_now.toolTip() == "Clear your pick and skip this game's check-in"
+
+    click(card.builds.row("pvz-2-stargate-phoenix"))
+    h.pump()
+    assert h.api.live[key]["declared"]["key"] == "pvz-2-stargate-phoenix"
+    assert card.locked.text() == "Locked in: PvZ - 2 Stargate Phoenix"
+    card.change.click()
+    h.pump()
+    assert card.builds.row("custom:dt-3-gate").chips == []
+    assert card.builds.row("pvz-2-stargate-phoenix").chips[0] == ("Current pick", "reason")
+    click(card.builds.row("pvz-2-stargate-phoenix"))
+    h.pump()
+    assert card.bar.isVisibleTo(card)
 
     card.intro_dismiss.click()
     h.pump()
@@ -181,3 +200,72 @@ def test_turn_off_after_games(flow) -> None:
     h.pump()
     assert h.api.prefs["askAfterGame"] is False
     assert not card.isVisible()
+
+
+def _accepted_card(h, host):
+    key = h.new_key()
+    h.play(key)
+    h.wall.advance(620)
+    card = host.window(POSTGAME)
+    assert not card.opp_row.isVisibleTo(card)
+    assert not card.add_build.isEnabled()
+    h.api.games[GID] = game_state(
+        GID,
+        suggestion=suggestion("custom:dt-3-gate", "DT into 3 Gate", reason="detected"),
+        options=[option("custom:dt-3-gate", "DT into 3 Gate"),
+                 option("pvz-2-stargate-phoenix", "PvZ - 2 Stargate Phoenix")],
+        opponent=opponent_state(options=OPP_OPTIONS),
+    )
+    started = int(key.rsplit("|", 1)[1]) / 1000 + 8
+    h.accept(cloud_game(GID, started=started))
+    return card
+
+
+def test_correcting_the_opponents_build_from_the_end_card(flow) -> None:
+    h, host = flow
+    card = _accepted_card(h, host)
+    assert card.opp_row.isVisibleTo(card)
+    assert card.opp_label.text() == "Opponent's build: Zerg - 12 Pool"
+    assert card.add_build.isEnabled()
+
+    card.opp_change.click()
+    h.pump()
+    assert card.opp_picker.isVisibleTo(card) and not card.picker.isVisibleTo(card)
+    click(card.opp_builds.row("custom:ling-flood"))
+    h.pump()
+    assert not card.opp_picker.isVisibleTo(card)
+    assert card.opp_label.text() == "Opponent's build: Ling flood"
+    assert card.opp_changed.isVisibleTo(card)
+    # The controller's own repaint agrees with what the card shows.
+    assert card.model.opponent.changed is True
+    assert card.model.opponent.label == "Opponent's build: Ling flood"
+
+    card.primary.click()
+    h.pump()
+    body = h.api.calls_to("put_game_intent")[-1][0][1]
+    assert body == {
+        "action": "confirm", "buildKey": "custom:dt-3-gate",
+        "opponentBuildKey": "custom:ling-flood",
+    }
+    assert h.api.games[GID]["opponent"]["build"]["key"] == "custom:ling-flood"
+    assert not card.isVisible()
+
+
+def test_add_new_build_opens_the_game_page_and_steps_aside(flow) -> None:
+    h, host = flow
+    card = _accepted_card(h, host)
+    card.opp_change.click()
+    card.opp_add.click()
+    h.pump()
+    assert h.opened == [
+        f"https://sc2tools.test/app/game/{quote(GID, safe='')}?newBuild=opponent",
+    ]
+    assert not card.isVisible()
+    # Back from the website: the tray reopens it with fresh lists.
+    h.api.games[GID]["opponent"]["options"] = OPP_OPTIONS + [
+        option("custom:new-opp", "New opponent build", source="custom"),
+    ]
+    h.ctl.reopen()
+    h.pump()
+    assert card.isVisible()
+    assert card.opp_builds.row("custom:new-opp") is not None

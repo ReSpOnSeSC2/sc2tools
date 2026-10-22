@@ -28,14 +28,17 @@ from sc2tools_agent.build_checkin.models import (
     matchup_for,
     matchups_for_race,
     normalize_player_name,
+    opponent_change,
     option_models,
     parse_build_options,
     parse_game_intent,
     parse_live_state,
+    parse_opponent_intent,
     parse_prefs,
     reason_label,
     sanitize_notes,
 )
+from sc2tools_agent.build_checkin.links import new_build_url, web_queue_url
 from sc2tools_agent.build_checkin.records import (
     NOTES_FIRST,
     LiveGame,
@@ -44,16 +47,21 @@ from sc2tools_agent.build_checkin.records import (
 )
 from sc2tools_agent.build_checkin.render import (
     loading_model,
+    opponent_pick,
+    opponent_row_model,
+    opponent_write,
     postgame_model,
     preselection,
 )
 from sc2tools_agent.build_checkin.models import parse_game_intent as _parse_state
 from sc2tools_agent.build_checkin.models import LiveState
 from tests.build_checkin_fakes import (
+    OPP_OPTIONS,
     WALL_START,
     cloud_game,
     game_state,
     iso,
+    opponent_state,
     option,
     options_payload,
     suggestion,
@@ -395,3 +403,194 @@ def test_started_ms_and_window() -> None:
     assert not within_match_window(key_ms - 120_001, key_ms)
     assert within_match_window(key_ms + 600_000, key_ms)
     assert not within_match_window(key_ms + 600_001, key_ms)
+
+
+# ------------------------------------------------------ opponent axis
+
+
+def test_opponent_intent_parse() -> None:
+    raw = game_state("g", opponent=opponent_state(
+        options=OPP_OPTIONS,
+        build={"key": "zvp-roach-rush", "name": "ZvP - Roach Rush", "slug": None,
+               "source": "catalog", "deleted": True},
+        suggestion={**suggestion("custom:ling-flood", reason="rules"),
+                    "passedRules": 3, "ruleCount": 4},
+    ))
+    opp = parse_game_intent(raw, "g").opponent
+    assert (opp.label, opp.status, opp.applied, opp.corrected) == (
+        "ZvP - Roach Rush", "confirmed", True, True,
+    )
+    assert opp.build.deleted is True
+    assert (opp.detected_name, opp.detected_key) == ("Zerg - 12 Pool", "zerg-12-pool")
+    assert opp.effective_key == "zvp-roach-rush"
+    assert opp.replay_name == "Zerg - 12 Pool"
+    assert (opp.suggestion.reason, opp.suggestion.passed_rules) == ("rules", 3)
+    assert opp.options.matchup == "PvZ"
+    assert [b.key for b in opp.options.builds][:2] == ["zerg-12-pool", "custom:ling-flood"]
+
+    plain = parse_game_intent(game_state("g", opponent=opponent_state()), "g").opponent
+    assert plain.corrected is False and plain.options is None
+    assert plain.effective_key == "zerg-12-pool"
+    assert plain.executed is None
+
+
+def test_opponent_intent_parse_is_defensive() -> None:
+    assert parse_game_intent(game_state("g"), "g").opponent is None
+    assert parse_opponent_intent(None, "PvZ") is None
+    odd = parse_opponent_intent({"status": "pending", "applied": "yes", "detected": [],
+                                 "executed": "no", "label": 7}, "PvZ")
+    assert (odd.status, odd.applied, odd.label, odd.detected_key, odd.executed) == (
+        "none", False, None, None, None,
+    )
+    # "Applied" without a build to show is no correction.
+    broken = parse_opponent_intent({"applied": True, "detected": {"key": "k", "name": "K"}}, "PvZ")
+    assert broken.corrected is False and broken.effective_key == "k"
+    unclassified = parse_opponent_intent({"label": "Zerg Standard Play (Unclassified)"}, None)
+    assert unclassified.replay_name == "Zerg Standard Play (Unclassified)"
+
+
+@pytest.mark.parametrize("selection,server_key,corrected,expected", [
+    ("a", "a", False, None),
+    ("b", "a", False, ("b",)),
+    ("b", "a", True, ("b",)),
+    (None, None, False, None),
+    (None, "a", True, (None,)),
+    (None, "a", False, None),
+    ("a", None, False, ("a",)),
+    ("r", "a", True, (None,)),
+    ("r", "r", False, None),
+])
+def test_opponent_change(selection, server_key, corrected, expected) -> None:
+    assert opponent_change(
+        selection, server_key=server_key, corrected=corrected, replay_key="r",
+    ) == expected
+
+
+ROACH = {"key": "zvp-roach-rush", "name": "ZvP - Roach Rush", "slug": None, "source": "catalog"}
+
+
+def _opp_card(opponent, **kwargs) -> PostgameCard:
+    server = parse_game_intent(game_state("g", opponent=opponent), "g")
+    return _card(server=server, game_id="g", **kwargs)
+
+
+def _opp_row(card: PostgameCard, **kwargs):
+    return opponent_row_model(card, options_loading=kwargs.get("options_loading", False))
+
+
+def test_opponent_row_follows_the_server_until_touched() -> None:
+    card = _opp_card(opponent_state(options=OPP_OPTIONS))
+    row = _opp_row(card)
+    assert (row.label, row.name, row.selection) == (
+        "Opponent's build: Zerg - 12 Pool", "Zerg - 12 Pool", "zerg-12-pool",
+    )
+    assert (row.changed, row.show_use_replay, row.detected_label, row.touched) == (
+        False, False, None, False,
+    )
+    assert [m.key for m in row.featured] == ["zerg-12-pool", "custom:ling-flood"]
+    assert row.featured[0].record == "2–1"
+    assert opponent_pick(card) == "zerg-12-pool"
+    assert opponent_write(card) is None
+
+
+def test_opponent_row_after_a_pick() -> None:
+    card = _opp_card(opponent_state(options=OPP_OPTIONS), opp_touched=True,
+                     opp_selection="zvp-ling-bane-bust")
+    row = _opp_row(card)
+    assert row.label == "Opponent's build: ZvP - Ling Bane Bust"
+    assert row.changed is True and row.touched is True
+    assert row.detected_label == "Replay classified as: Zerg - 12 Pool"
+    assert row.show_use_replay is True
+    assert opponent_write(card) == ("zvp-ling-bane-bust",)
+
+
+def test_opponent_row_names_picks_outside_the_list() -> None:
+    corrected = _opp_card(opponent_state(build=ROACH), opp_touched=True,
+                          opp_selection="zvp-roach-rush")
+    assert _opp_row(corrected).name == "ZvP - Roach Rush"
+    assert _opp_row(corrected).changed is False
+    replay = _opp_card(opponent_state(build=ROACH), opp_touched=True,
+                       opp_selection="zerg-12-pool")
+    assert _opp_row(replay).name == "Zerg - 12 Pool"
+    assert _opp_row(replay).changed is True
+    assert opponent_write(replay) == (None,)  # the replay's label, as null
+    unknown = _opp_card(opponent_state(), opp_touched=True, opp_selection="custom:gone")
+    assert _opp_row(unknown).label == "Opponent's build: unknown"
+
+
+def test_opponent_row_with_an_unclassified_replay() -> None:
+    generic = dict(label="Zerg Standard Play (Unclassified)",
+                   detected="Zerg Standard Play (Unclassified)", detected_key=None)
+    row = _opp_row(_opp_card(opponent_state(**generic)))
+    assert row.label == "Opponent's build: Zerg Standard Play (Unclassified)"
+    assert row.selection is None and row.show_use_replay is False
+    nameless = _opp_row(_opp_card(opponent_state(label=None, detected=None, detected_key=None)))
+    assert nameless.label == "Opponent's build: unknown"
+    # Back to the replay's label from a correction: cleared with null.
+    back = _opp_card(opponent_state(build=ROACH, **generic), opp_touched=True, opp_selection=None)
+    assert _opp_row(back).name == "Zerg Standard Play (Unclassified)"
+    assert _opp_row(back).changed is True
+    assert opponent_write(back) == (None,)
+
+
+def test_opponent_rows_keep_their_order_across_refreshes() -> None:
+    card = _opp_card(opponent_state(options=OPP_OPTIONS))
+    _opp_row(card)
+    card.server = parse_game_intent(game_state("g", opponent=opponent_state(
+        options=[option("zvp-new", "ZvP - New", games=9)] + list(reversed(OPP_OPTIONS)),
+    )), "g")
+    row = _opp_row(card)
+    assert [m.key for m in row.featured] == ["zerg-12-pool", "custom:ling-flood"]
+    assert [m.key for m in row.more][-1] == "zvp-new"
+
+
+def test_opponent_row_loading_only_without_rows() -> None:
+    card = _opp_card(opponent_state())
+    assert _opp_row(card, options_loading=True).options_loading is True
+    card.opp_rows.merge(parse_build_options(options_payload("PvZ", *OPP_OPTIONS)).builds)
+    assert _opp_row(card, options_loading=True).options_loading is False
+
+
+def test_postgame_model_add_build_waits_for_the_replay() -> None:
+    before = postgame_model(_card(), roll=None, options=None, options_loading=False,
+                            show_intro=False)
+    assert (before.can_add_build, before.add_build_hint, before.opponent) == (
+        False, "Available once your replay uploads", None,
+    )
+    card = _opp_card(opponent_state(options=OPP_OPTIONS))
+    after = postgame_model(card, roll=None, options=None, options_loading=False,
+                           show_intro=False)
+    assert after.can_add_build is True
+    assert after.add_build_hint == "Opens sc2tools.com to save a build from this replay"
+    assert after.opponent.label == "Opponent's build: Zerg - 12 Pool"
+
+
+def test_loading_model_while_changing_a_pick() -> None:
+    game = _game(declared=DT)
+    card = LoadingCard(shown_at=0.0, changing=True)
+    model = loading_model(game, card, options=_options(randomizer=True), options_loading=False,
+                          options_failed=False, declared_elsewhere=None, show_intro=False)
+    assert (model.collapsed, model.changing, model.can_change) == (False, True, False)
+    assert model.locked_key == DT.key and model.current_pick_label == "Current pick"
+    assert model.randomizer is None
+    assert model.not_now_tip == "Clear your pick and skip this game's check-in"
+    # Nothing left to change once the pick is gone.
+    gone = loading_model(_game(), card, options=_options(randomizer=True), options_loading=False,
+                         options_failed=False, declared_elsewhere=None, show_intro=False)
+    assert (gone.changing, gone.collapsed) == (False, False)
+    assert gone.randomizer is not None
+    assert gone.not_now_tip == "Skip this game's check-in at loading"
+
+
+def test_links() -> None:
+    gid = "2026-10-22T18:10:00Z|Foo Bar|Map/1|600"
+    assert new_build_url("https://sc2tools.com/", gid, "you") == (
+        "https://sc2tools.com/app/game/2026-10-22T18%3A10%3A00Z%7CFoo%20Bar%7CMap%2F1%7C600"
+        "?newBuild=you"
+    )
+    assert new_build_url("http://localhost:3000", "g", "opponent") == (
+        "http://localhost:3000/app/game/g?newBuild=opponent"
+    )
+    with pytest.raises(ValueError):
+        new_build_url("https://sc2tools.com", "g", "both")
+    assert web_queue_url("https://sc2tools.com/") == "https://sc2tools.com/app"

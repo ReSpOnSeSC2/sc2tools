@@ -9,8 +9,10 @@ from dataclasses import replace
 import pytest
 
 from sc2tools_agent.build_checkin.controller import (
+    OPTIONS_TTL_SEC,
     PENDING_CARD_MAX_AGE_SEC,
     POSTGAME_IDLE_HIDE_SEC,
+    RESHOW_MAX_WAIT_SEC,
 )
 from sc2tools_agent.build_checkin.models import (
     CHECKING_REPLAY,
@@ -739,15 +741,55 @@ def test_replay_accepted_mid_game_waits_for_the_match_to_end(h: Harness) -> None
 
 
 def test_waiting_cards_expire(h: Harness) -> None:
+    """A card that never got the window (its replay landed mid-game) is
+    left to the web queue once it is half an hour old."""
+    first = h.new_key()
+    _declare_and_finish(h, first)
+    second = h.new_key()
+    h.send(envelope("match_loading", second))
+    h.api.games[GID] = game_state(
+        GID, status="confirmed", origin="pregame",
+        build=option("custom:dt-3-gate", "DT into 3 Gate"),
+    )
+    h.accept(_game(first))
+    h.send(envelope("match_started", second, display_time=45.0))
+    h.advance(PENDING_CARD_MAX_AGE_SEC + 1)
+    h.send({"type": "liveGameState", "phase": "menu"})
+    assert h.view.of("show_postgame") == []
+
+
+@pytest.mark.parametrize("minutes", [28, 45])
+def test_touched_preempted_card_returns_after_a_long_next_match(h: Harness, minutes: int) -> None:
     first = h.new_key()
     _finish(h, first)
-    h.ctl.interacted(_card(h).card_id)
+    first_card = _card(h).card_id
+    h.ctl.update_draft(first_card, "pvz-chargelot-all-in", "draft notes")
     h.pump()
     second = h.new_key()
     h.send(envelope("match_loading", second))
-    h.advance(PENDING_CARD_MAX_AGE_SEC + 1)
+    h.send(envelope("match_started", second, display_time=45.0))
+    h.advance(minutes * 60)
+    h.end(second)
+    second_card = _card(h).card_id
+    h.ctl.no_set_build(second_card, "")
+    h.pump()
+    returned = h.view.last("show_postgame")
+    assert returned.card_id == first_card
+    assert (returned.selection, returned.notes) == ("pvz-chargelot-all-in", "draft notes")
+
+
+def test_preempted_card_is_not_kept_forever(h: Harness) -> None:
+    first = h.new_key()
+    _finish(h, first)
+    first_card = _card(h).card_id
+    h.ctl.interacted(first_card)
+    h.pump()
+    second = h.new_key()
+    h.send(envelope("match_loading", second))
+    h.send(envelope("match_started", second, display_time=45.0))
+    h.advance(RESHOW_MAX_WAIT_SEC + 1)
     h.send({"type": "liveGameState", "phase": "menu"})
-    assert len(h.view.of("show_postgame")) == 1
+    assert [m.card_id for m in h.view.of("show_postgame")] == [first_card]
 
 
 # ---------------------------------------------------------------- reopen
@@ -923,3 +965,153 @@ def test_match_end_refreshes_prefs(h: Harness) -> None:
     h.advance(31)
     _finish(h, h.new_key())
     assert len(h.api.calls_to("get_checkin_prefs")) == 2
+
+
+# ------------------------------------------------ review regressions
+
+
+def test_already_bound_after_the_acceptance_bound_the_card_reroutes() -> None:
+    """The upload's acceptance reaches the state thread before the 409 of
+    the live answer: the answer still goes to the game."""
+    executor = ManualExecutor()
+    h = Harness(executor=executor)
+    h.boot()
+    key = h.new_key()
+    h.play(key)
+    while executor.jobs:
+        executor.run_all()
+        h.pump()
+    card_id = _card(h).card_id
+    h.ctl.confirm(card_id, "custom:dt-3-gate", "")
+    h.pump()
+    put = len(executor.jobs) - 1  # the live postgame write, not sent yet
+    h.api.live[key]["gameId"] = GID
+    h.api.games[GID] = game_state(GID)
+    h.wall.advance(620)
+    h.accept(_game(key))
+    executor.run(put)  # → 409 already_bound {gameId}
+    h.pump()
+    while executor.jobs:
+        executor.run_all()
+        h.pump()
+    assert [args for args, _ in h.api.calls_to("put_game_intent")] == [
+        (GID, {"action": "confirm", "buildKey": "custom:dt-3-gate"}),
+    ]
+    assert h.view.of("hide_postgame") == [(card_id, "confirmed")]
+
+
+def _failed_declare(h: Harness, key: str) -> None:
+    h.send(envelope("match_loading", key))
+    h.api.fail_next("put_live_intent", ConnectionError("offline"))
+    h.ctl.declare(key, "custom:dt-3-gate")
+    h.pump()
+    h.send(envelope("match_started", key, display_time=45.0))
+
+
+def _without_end_cards() -> Harness:
+    h = Harness()
+    h.api.prefs["askAfterGame"] = False
+    return h.boot()
+
+
+def test_undelivered_pick_is_sent_after_the_game_when_end_cards_are_off() -> None:
+    h = _without_end_cards()
+    key = h.new_key()
+    _failed_declare(h, key)
+    h.end(key)
+    assert h.view.of("show_postgame") == []
+    assert h.api.live_bodies()[-1] == {"action": "postgame", "buildKey": "custom:dt-3-gate"}
+    assert h.api.live[key]["postgame"]["buildKey"] == "custom:dt-3-gate"
+    # Delivered: the replay's acceptance does not send it again.
+    h.wall.advance(620)
+    h.api.games[GID] = game_state(GID)
+    h.accept(_game(key))
+    assert h.api.calls_to("put_game_intent") == []
+
+
+def test_undelivered_pick_goes_to_the_game_once_bound() -> None:
+    h = _without_end_cards()
+    key = h.new_key()
+    _failed_declare(h, key)
+    h.api.live[key]["gameId"] = GID
+    h.end(key)
+    assert [args for args, _ in h.api.calls_to("put_game_intent")] == [
+        (GID, {"action": "confirm", "buildKey": "custom:dt-3-gate"}),
+    ]
+
+
+def test_undelivered_pick_is_retried_when_the_replay_is_accepted() -> None:
+    h = _without_end_cards()
+    key = h.new_key()
+    _failed_declare(h, key)
+    h.api.fail_next("put_live_intent", ConnectionError("still offline"))
+    h.end(key)
+    h.wall.advance(620)
+    h.api.games[GID] = game_state(GID)
+    h.accept(_game(key))
+    assert [args for args, _ in h.api.calls_to("put_game_intent")] == [
+        (GID, {"action": "confirm", "buildKey": "custom:dt-3-gate"}),
+    ]
+    assert h.view.of("show_postgame") == []
+
+
+def test_declare_failing_after_the_match_ended_is_still_resent() -> None:
+    executor = ManualExecutor()
+    h = Harness(executor=executor)
+    h.api.prefs["askAfterGame"] = False
+    h.boot()
+    while executor.jobs:
+        executor.run_all()
+        h.pump()
+    key = h.new_key()
+    h.send(envelope("match_loading", key))
+    while executor.jobs:
+        executor.run_all()
+        h.pump()
+    h.api.fail_next("put_live_intent", ConnectionError("offline"))
+    h.ctl.declare(key, "custom:dt-3-gate")
+    h.pump()
+    h.send(envelope("match_started", key, display_time=45.0))
+    h.end(key)
+    while executor.jobs:  # the declare fails only now
+        executor.run_all()
+        h.pump()
+    assert h.api.live_bodies()[-1] == {"action": "postgame", "buildKey": "custom:dt-3-gate"}
+
+
+def test_with_end_cards_on_the_card_carries_the_undelivered_pick(h: Harness) -> None:
+    key = h.new_key()
+    _failed_declare(h, key)
+    h.end(key)
+    assert "postgame" not in h.api.live_actions()
+    assert (_card(h).selection, _card(h).reason) == ("custom:dt-3-gate", "declared")
+
+
+def test_a_rejected_resend_is_not_retried() -> None:
+    h = _without_end_cards()
+    key = h.new_key()
+    _failed_declare(h, key)
+    h.api.fail_next("put_live_intent", api_error(400, "unknown_build"))
+    h.end(key)
+    h.wall.advance(620)
+    h.api.games[GID] = game_state(GID)
+    h.accept(_game(key))
+    assert h.api.calls_to("put_game_intent") == []
+
+
+def test_resync_bursts_never_force_list_refetches(h: Harness) -> None:
+    h.send(envelope("match_loading", h.new_key()))
+    before = len(h.api.calls_to("get_build_options"))
+    assert before == 3
+    for index in range(10):
+        game = cloud_game(f"old-{index}", started=WALL_START - 86_400 * (index + 1))
+        h.ctl.on_game_accepted(None, game, game.game_id, {"created": False})
+        h.ctl.on_game_accepted(None, game, f"stale-{index}", {"created": True})
+    h.pump()
+    assert len(h.api.calls_to("get_build_options")) == before
+    h.advance(OPTIONS_TTL_SEC + 1)
+    for index in range(10):
+        game = cloud_game(f"later-{index}", started=WALL_START - 86_400)
+        h.ctl.on_game_accepted(None, game, game.game_id, {"created": False})
+    h.pump()
+    assert len(h.api.calls_to("get_build_options")) == before + 3
