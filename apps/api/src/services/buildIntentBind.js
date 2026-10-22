@@ -14,8 +14,9 @@
  * replay's opponent explicitly.
  *
  * Claim order: the newest record that saw its own loading screen
- * (``loadingSeen``) is this match's; records keyed after it are re-keys of
- * the same match (an agent that lost track of it or restarted mid-game).
+ * (``loadingSeen``) before the replay started is this match's; records keyed
+ * after it are re-keys of the same match (an agent that lost track of it or
+ * restarted mid-game, or a rejoin's loading screen).
  * Those are claimed answer first (post-game answer, then declaration, then
  * none), window records before late ones and newest first within each.
  * Records keyed before it saw an earlier loading screen (an earlier match
@@ -169,7 +170,11 @@ class BuildIntentBind {
       .limit(BUILD_INTENT.BIND_MAX_CANDIDATES)
       .toArray();
     const matched = acceptableCandidates(candidates, opponent.displayName);
-    const anchor = matched.findIndex((doc) => doc.loadingSeen === true);
+    // A loading screen seen after the replay started is a rejoin of this
+    // match, never the start of a new one.
+    const anchor = matched.findIndex(
+      (doc) => doc.loadingSeen === true && doc.keyStartedAtMs <= startedAtMs,
+    );
     let same = anchor < 0 ? matched : matched.slice(0, anchor + 1);
     const older = anchor < 0 ? [] : matched.slice(anchor + 1);
     // A post-game answer in the window outranks anything keyed later.

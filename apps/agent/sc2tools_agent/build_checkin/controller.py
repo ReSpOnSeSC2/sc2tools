@@ -152,8 +152,10 @@ DECLARE_ATTEMPTS = 2
 MAX_REGISTERS = 2
 # The poller re-keys a match it briefly lost track of. A loading screen back
 # this soon against the same opponent, or a match first seen already running
-# this soon after, is that match: its loading-screen pick carries over.
-REKEY_LOADING_GAP_SEC = 10.0
+# this soon after, is that match: its loading-screen pick carries over. The
+# loading gap covers a client-API outage (a few missed polls, then the idle
+# backoff) and is shorter than a re-queue into a rematch.
+REKEY_LOADING_GAP_SEC = 30.0
 REKEY_MATCH_GAP_SEC = 120.0
 
 _LOADING_WHICH = "loading"
@@ -762,6 +764,9 @@ class BuildCheckinController:
         game.declared = pick
         game.declared_synced = False
         game.declare_failed = False
+        # Register first: its answer may predate the declare and must never
+        # be the newest live state the card sees.
+        self._ensure_registered(game)
         self._enqueue_live_op(game, LiveOp("declare", pick.key))
         _log.info("build_checkin_pick_carried loading=%s", game.loading_seen)
 
@@ -1132,7 +1137,7 @@ class BuildCheckinController:
         game.live_applied_gen = gen
         game.live = state
         if state.prefs is not None:
-            self._apply_server_prefs(state.prefs)
+            self._apply_state_prefs(state.prefs)
         if state.game_id:
             self._bind_game(game, state.game_id)
         if not game.writing:
@@ -1347,7 +1352,7 @@ class BuildCheckinController:
                 self._render_card(card)
             return
         if state.prefs is not None:
-            self._apply_server_prefs(state.prefs)
+            self._apply_state_prefs(state.prefs)
         self._apply_game_state(game, card, state)
 
     def _apply_game_state(
@@ -1925,6 +1930,16 @@ class BuildCheckinController:
                 card.opp_saved = op.opponent_draft
             else:
                 self._release_opponent_draft(card)
+        if op.opponent_draft is not None and card.opp_touched:
+            # The server holds the hand-off pick now: a later change on the
+            # card is judged against it, not against what the card first saw.
+            opp = card.server.opponent if card.server is not None else None
+            held = op.opponent_key
+            if held is None and opp is not None:
+                held = opp.detected_key
+            card.opp_base = (held,)
+            if card.undecided and card.game_id is not None and not card.busy:
+                self._fetch_game_state(card.game_id, include_options=card.options_stale)
         if op.final:
             card.busy = False
             if op.action in ("confirm", "skip"):
@@ -2093,6 +2108,17 @@ class BuildCheckinController:
             # defaults it started with.
             self._view_call("update_prefs", self._prefs)
         self._enforce_prefs()
+
+    def _apply_state_prefs(self, prefs: CheckinPrefs) -> None:
+        """Preferences riding on a live or game state. The request may have
+        left before a save landed, so a value that differs from the last
+        confirmed one is read again instead of applied."""
+        if prefs == self._prefs_confirmed:
+            return
+        if self._prefs_confirmed is None:
+            self._apply_server_prefs(prefs)
+        else:
+            self._handle_refresh_prefs(True)
 
     def _apply_server_prefs(self, prefs: CheckinPrefs) -> None:
         self._prefs_confirmed = prefs

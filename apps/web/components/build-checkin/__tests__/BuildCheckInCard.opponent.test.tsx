@@ -265,6 +265,13 @@ async function addProxyGate() {
   return editorProps();
 }
 
+/** Focus falls to <body>, as when the focused control is disabled or removed. */
+function dropFocus() {
+  const holder = outsideInput();
+  holder.focus();
+  holder.remove();
+}
+
 function outsideInput() {
   const input = document.createElement("input");
   input.setAttribute("aria-label", "Elsewhere on the page");
@@ -336,6 +343,43 @@ describe("BuildCheckInCard — Add new build", () => {
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByRole("button", { name: "Change…" })),
     );
+  });
+
+  it("never moves focus behind the editor while it is still open", async () => {
+    harness.intent = intent({ opponent: opponentState() });
+    harness.buildOrder = BUILD_ORDER;
+    harness.apiCall.mockResolvedValue(PROXY_GATE_CONFIRMED);
+    renderCard();
+    const props = await addProxyGate();
+    // Chrome drops focus to <body> when the editor disables its Save button.
+    dropFocus();
+    act(() => {
+      props.onSaved?.("proxy-gate", { name: "Proxy Gate" } as never, { reclassifyRequested: false });
+    });
+    await waitFor(() => expect(screen.getByText("Planned build")).toBeTruthy());
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.click(screen.getByRole("button", { name: "Close editor" }));
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Change…" })),
+    );
+  });
+
+  it("puts focus back in the picker when the check-in fails after the editor closed", async () => {
+    harness.intent = intent({ opponent: opponentState() });
+    harness.buildOrder = BUILD_ORDER;
+    let fail: (reason: unknown) => void = () => {};
+    harness.apiCall.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+    renderCard();
+    const props = await addProxyGate();
+    act(() => {
+      props.onSaved?.("proxy-gate", { name: "Proxy Gate" } as never, { reclassifyRequested: false });
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Close editor" }));
+    // The button that opened the editor is disabled while the check-in is
+    // out, so the browser can't give focus back to it.
+    dropFocus();
+    await act(async () => fail({ status: 0, message: "Failed to fetch" }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("combobox")));
   });
 
   it("leaves focus where the player moved it while the check-in was saving", async () => {

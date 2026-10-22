@@ -201,6 +201,21 @@ describe("build check-in ingest bind: recovery and late keys", () => {
       expect(row.buildIntent).toEqual(expect.objectContaining({ status: "pending", gameKey: own }));
     });
 
+    test("a rejoin's loading screen never outranks the match's own loading pick", async () => {
+      const user = await newUser();
+      const game = ingestGame(9);
+      const declared = keyAt(game, -20_000);
+      const rejoined = keyAt(game, 40_000);
+      await register(user, declared, LOADING);
+      await putLive(user, declared, { action: "declare", buildKey: PHOENIX_KEY });
+      await register(user, rejoined, LOADING);
+      await upload(user, game);
+      expect((await liveRow(user, declared)).gameId).toBe(game.gameId);
+      expect((await gameRow(user, game.gameId)).buildIntent).toEqual(
+        expect.objectContaining({ status: "confirmed", gameKey: declared }),
+      );
+    });
+
     test("an earlier match's record still binds when it is the only one", async () => {
       const user = await newUser();
       const game = ingestGame(7);

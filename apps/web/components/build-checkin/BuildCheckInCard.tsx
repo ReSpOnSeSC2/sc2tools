@@ -14,7 +14,7 @@ import {
 } from "@/lib/buildIntent";
 import { useBuildCheckInRevision } from "./BuildCheckInProvider";
 import { BuildPicker } from "./BuildPicker";
-import { focusWasLost } from "./focus";
+import { usePickerRowFocus } from "./focus";
 import {
   CheckInNewBuild,
   type NewBuildRequest,
@@ -141,23 +141,10 @@ export function BuildCheckInCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialNewBuild, state, request.error]);
 
-  const closeNewBuild = () => {
-    const side = creating?.side;
-    setCreating(null);
-    // The editor hands focus back to the control that opened it, which is
-    // gone once the new build was checked in: use that side's "Change…".
-    window.setTimeout(() => {
-      if (!side || !focusWasLost()) return;
-      rootRef.current
-        ?.querySelector<HTMLElement>(`[data-checkin-change="${side}"]`)
-        ?.focus();
-    }, 0);
-  };
-
   const launcher = (
     <CheckInNewBuild
       request={creating}
-      onClose={closeNewBuild}
+      onClose={() => setCreating(null)}
       onSaved={(saved) => void onNewBuildSaved(saved)}
     />
   );
@@ -217,6 +204,7 @@ export function BuildCheckInCard({
         onRefetch={() => void request.mutate()}
         onCollapse={collapsible && expanded ? () => setExpanded(false) : undefined}
         onAddNew={openNewBuild}
+        editorOpen={creating !== null}
       />
     );
   }
@@ -273,6 +261,7 @@ function CheckInPanel({
   onRefetch,
   onCollapse,
   onAddNew,
+  editorOpen,
 }: {
   state: GameIntentState;
   actions: CheckInActions;
@@ -283,6 +272,8 @@ function CheckInPanel({
   /** Present while a status-none game is expanded from the compact action. */
   onCollapse?: () => void;
   onAddNew: (side: CheckInSide, query: string) => void;
+  /** The build editor dialog is open over the page. */
+  editorOpen: boolean;
 }) {
   const titleId = useId();
   const notesForWrite = () => (notes.dirty ? notes.draft : undefined);
@@ -352,6 +343,7 @@ function CheckInPanel({
           onCollapse={onCollapse}
           onAddNew={(query) => onAddNew("you", query)}
           afterWrite={afterWrite}
+          editorOpen={editorOpen}
         />
 
         {state.opponent ? (
@@ -364,6 +356,7 @@ function CheckInPanel({
             onRetry={onRefetch}
             onAddNew={(query) => onAddNew("opponent", query)}
             signal={signal?.side === "opponent" ? signal : null}
+            editorOpen={editorOpen}
           />
         ) : null}
 
@@ -412,6 +405,7 @@ function YourBuildRow({
   onCollapse,
   onAddNew,
   afterWrite,
+  editorOpen,
 }: {
   state: GameIntentState;
   actions: CheckInActions;
@@ -422,6 +416,7 @@ function YourBuildRow({
   onCollapse?: () => void;
   onAddNew: (query: string) => void;
   afterWrite: (errorCode: string | null) => void;
+  editorOpen: boolean;
 }) {
   const suggestion = state.suggestion;
   const [picking, setPicking] = useState(
@@ -437,28 +432,27 @@ function YourBuildRow({
   const selected: BuildOption | null =
     options?.find((option) => option.key === selectedKey) ?? null;
   const busy = actions.busy !== null;
-  const changeRef = useRef<HTMLButtonElement>(null);
-  const returnFocus = useRef(false);
+  const { changeRef, rowRef, returnOnClose, returnToPickerIfLost } = usePickerRowFocus({
+    picking,
+    busy,
+    editorOpen,
+  });
 
   useEffect(() => {
     if (!signal) return;
     setSelectedKey(signal.key);
     // Closing from outside (the new build was checked in) unmounts the
-    // picker's "Add new build…" button that opened the editor.
-    if (!signal.open) returnFocus.current = true;
+    // picker's "Add new build…" button that opened the editor; reopening
+    // after a failed check-in finds that button disabled, or gone.
+    if (signal.open) returnToPickerIfLost();
+    else returnOnClose();
     setPicking(signal.open);
-  }, [signal]);
+  }, [signal, returnOnClose, returnToPickerIfLost]);
 
-  // The picker's controls unmount when it closes: give focus back to the
-  // "Change…" button so keyboard users keep their place.
-  useEffect(() => {
-    if (picking || !returnFocus.current) return;
-    returnFocus.current = false;
-    if (focusWasLost()) changeRef.current?.focus();
-  }, [picking]);
-
+  // The picker's controls unmount when it closes: "Change…" takes focus
+  // back so keyboard users keep their place.
   const closePicker = () => {
-    if (picking) returnFocus.current = true;
+    if (picking) returnOnClose();
     setPicking(false);
   };
 
@@ -496,7 +490,7 @@ function YourBuildRow({
   };
 
   return (
-    <div role="group" aria-label="Your build" className="space-y-4">
+    <div ref={rowRef} role="group" aria-label="Your build" className="space-y-4">
       <DetectedLine
         detected={state.detected?.name}
         executed={state.status === "confirmed" && state.executed}
@@ -621,7 +615,6 @@ function StatusSummary({
           </Button>
           <Button
             ref={changeRef}
-            data-checkin-change="you"
             variant="secondary"
             size="sm"
             disabled={disabled}
@@ -663,7 +656,6 @@ function StatusSummary({
         <div className="flex flex-wrap items-center gap-2">
           <Button
             ref={changeRef}
-            data-checkin-change="you"
             variant="secondary"
             size="sm"
             disabled={disabled}
@@ -694,7 +686,6 @@ function StatusSummary({
       </p>
       <Button
         ref={changeRef}
-        data-checkin-change="you"
         variant="secondary"
         size="sm"
         disabled={disabled}

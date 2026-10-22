@@ -66,6 +66,14 @@ def test_a_loading_screen_back_within_seconds_keeps_the_pick(h: Harness) -> None
     assert model.locked_label == LOCKED_IN.format(name="DT into 3 Gate")
 
 
+def test_the_card_registers_before_the_carried_declare(h: Harness) -> None:
+    _declared_then_lost(h)
+    key = h.new_key()
+    h.send(envelope("match_loading", key))
+    # A register answer can predate the declare: it must never be newer.
+    assert [body["action"] for body in _bodies(h, key)] == ["register", "declare"]
+
+
 def test_a_match_first_seen_running_keeps_the_pick(h: Harness) -> None:
     _declared_then_lost(h)
     h.advance(REKEY_MATCH_GAP_SEC - 1)

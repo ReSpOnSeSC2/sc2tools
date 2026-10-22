@@ -274,8 +274,9 @@ Indexes:
 `hold` stays `null` until `askClient` is set and the matchup is concrete:
 envelope-only records (a headless agent shows no loading card) never hold
 the OBS reveal. The ingest bind takes the newest record that saw its own
-loading screen as this match's; it and the re-keys after it (first seen
-mid-match) are claimed post-game answer first, then a declaration, then
+loading screen before the replay started as this match's; it and the re-keys
+after it (first seen mid-match, or a rejoin's loading screen) are claimed
+post-game answer first, then a declaration, then
 empty ones. Records keyed before it saw an earlier loading screen (an earlier
 match against the same opponent) come after them, newest first; without any
 `loadingSeen` record every candidate is ranked answer first. A record keyed

@@ -642,6 +642,25 @@ describe("BuildCheckInQueue — opponent and Add new build", () => {
     expect(within(dialog).getByRole("button", { name: "Change…" })).toBeTruthy();
   });
 
+  it("never reopens a picker for a build saved after the list closed", async () => {
+    harness.apiCall.mockRejectedValueOnce({ status: 0, message: "Failed to fetch" });
+    let dialog = setup(withOpponent({ opponent: null }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Change…" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add new build…" }));
+    await screen.findByRole("dialog", { name: "Build editor" });
+    // The editor's save is still out when the player leaves the list.
+    const onSaved = harness.editor?.onSaved;
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    act(() => {
+      onSaved?.("custom-two", { name: "Custom Two" } as never, { reclassifyRequested: false });
+    });
+    await waitFor(() => expect(harness.toast.error).toHaveBeenCalled());
+
+    dialog = openQueue();
+    await act(async () => {});
+    expect(within(dialog).queryByRole("listbox")).toBeNull();
+  });
+
   it("never reopens a picker for a check-in that failed after the list closed", async () => {
     let fail: (reason: unknown) => void = () => {};
     harness.apiCall.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));

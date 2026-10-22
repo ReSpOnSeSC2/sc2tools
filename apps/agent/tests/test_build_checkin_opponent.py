@@ -512,6 +512,25 @@ def test_a_hand_off_landing_on_screen_is_released_when_the_card_steps_aside() ->
     assert _game_bodies(h)[-1] == {"action": "confirm", "buildKey": PHOENIX}
 
 
+def test_undoing_a_landed_hand_off_on_screen_is_saved() -> None:
+    h, executor, card_id = _manual_card()
+    h.ctl.update_draft(card_id, PHOENIX, "", "zvp-roach-rush")
+    h.ctl.add_build(card_id, "you")
+    h.pump()
+    put = _hold_opponent_put(h, executor)
+    h.ctl.reopen()
+    _drain(h, executor)
+    put()
+    _drain(h, executor)
+    # Back to the replay's label on the card, then Confirm.
+    h.ctl.confirm(card_id, PHOENIX, "", "zerg-12-pool")
+    _drain(h, executor)
+    body = _game_bodies(h)[-1]
+    assert body["action"] == "confirm"
+    assert "opponentBuildKey" in body and body["opponentBuildKey"] is None
+    assert h.api.games[GID]["opponent"]["applied"] is False
+
+
 def _decided_on_the_web(h: Harness) -> None:
     h.api.games[GID].update(
         status="confirmed", origin="web",

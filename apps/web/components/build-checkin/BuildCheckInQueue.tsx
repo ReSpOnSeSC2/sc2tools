@@ -69,12 +69,14 @@ export function BuildCheckInQueue({
     /** The game as listed when the editor opened. */
     item: GameIntentState;
     open: boolean;
+    /** The queue session the editor was opened in. */
+    session: number;
   } | null>(null);
   const [signal, setSignal] = useState<(PickerSignal & { gameId: string }) | null>(null);
   const writer = useCheckInActions(newBuild?.request.gameId ?? "");
   const checkInNewBuild = useNewBuildCheckIn(writer);
-  // Bumped whenever the queue opens or closes: a check-in that answers
-  // after that belongs to a list the player already left.
+  // Bumped whenever the queue opens or closes: a new build saved or checked
+  // in after that belongs to a list the player already left.
   const session = useRef(0);
 
   // A closed queue unmounts its items: nothing it asked of them may be
@@ -96,6 +98,7 @@ export function BuildCheckInQueue({
   const openNewBuild = (item: GameIntentState, side: CheckInSide, query = "") =>
     setNewBuild({
       open: true,
+      session: session.current,
       item,
       request: {
         gameId: item.gameId,
@@ -117,7 +120,7 @@ export function BuildCheckInQueue({
 
   const onNewBuildSaved = async (saved: NewBuildSaved) => {
     const item = newBuild?.item.gameId === saved.gameId ? newBuild.item : undefined;
-    const started = session.current;
+    const started = newBuild?.session ?? session.current;
     const outcome = await checkInNewBuild(saved, item);
     if (outcome.state) return;
     // Saved but not checked in: refresh the lists (the new build may now
