@@ -1,0 +1,132 @@
+name: ladder-map-pool
+
+# Weekly check on the SC2 ladder map pool (1v1 + team).
+#
+# The API keeps its pool current on its own: it re-fetches Liquipedia on
+# boot and every 24 h (apps/api/src/jobs/ladderMapPoolRefreshJob.js) and
+# serves it on GET /v1/seasons. Two failures would otherwise only show
+# up as a log line, and this workflow goes red on each:
+#
+#   * live-pool — Liquipedia is unreachable, or changed its page
+#     template so the parser finds no 1v1 maps. Production would keep
+#     serving the old pool and log ``ladderMapPool_no_maps_parsed``.
+#   * production — /v1/seasons isn't serving a Liquipedia pool from the
+#     last 48 h (two missed refreshes), i.e. production's refresh is
+#     failing and it's on the persisted seed or the hardcoded fallback.
+#
+# When the pool rotates, live-pool also opens (or updates) a single PR
+# rewriting apps/api/data/ladder-map-pool.json, the seed a fresh
+# container serves until its first refresh succeeds. That PR is the
+# rotation notice; merging it keeps the seed current. Production already
+# serves the new pool either way.
+#
+# GitHub emails failures of scheduled runs to whoever last edited the
+# cron below.
+
+on:
+  schedule:
+    # Mondays 06:23 UTC, off the hour to dodge the top-of-hour cron rush.
+    - cron: "23 6 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ladder-map-pool
+  cancel-in-progress: false
+
+jobs:
+  live-pool:
+    name: Liquipedia pool parses + seed is current
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      # Rebuilt from the default branch and force-pushed on every
+      # rotation; don't push to it by hand.
+      BRANCH: automation/ladder-map-pool
+      SEED: apps/api/data/ladder-map-pool.json
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Fetch + parse the live pool, update the seed if it changed
+        # No npm ci: the script and the service only use Node built-ins.
+        # Three tries a minute apart, because Liquipedia rate-limits its
+        # API and one transient 429 shouldn't fail the run. A template
+        # change fails all three.
+        run: |
+          set -euo pipefail
+          SUMMARY="$RUNNER_TEMP/pool-summary.md"
+          for attempt in 1 2 3; do
+            if node apps/api/scripts/refresh-ladder-map-pool.js --summary "$SUMMARY"; then
+              cat "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then sleep 60; fi
+          done
+          exit 1
+      - name: Open or update the seed PR
+        # main only, so a manual run on another branch just checks.
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- "$SEED"; then
+            echo "Seed already matches the live pool."
+            exit 0
+          fi
+          {
+            cat "$RUNNER_TEMP/pool-summary.md"
+            echo
+            echo "---"
+            echo "Opened by \`.github/workflows/ladder-map-pool.yml\`. Production already"
+            echo "serves this pool (it refreshes from Liquipedia every 24 h); merging"
+            echo "updates the seed a fresh container serves before its first refresh."
+            echo
+            echo "CI doesn't start on PRs opened with the workflow token. Run"
+            echo "**api-ci** on \`$BRANCH\` from the Actions tab if a check is required."
+          } > "$RUNNER_TEMP/pr-body.md"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git commit --quiet -m "chore(api): refresh ladder map pool seed" -- "$SEED"
+          git push --force origin "$BRANCH"
+          open_pr="$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$open_pr" ]; then
+            gh pr edit "$open_pr" --body-file "$RUNNER_TEMP/pr-body.md"
+          else
+            gh pr create --head "$BRANCH" \
+              --title "chore(api): refresh ladder map pool seed" \
+              --body-file "$RUNNER_TEMP/pr-body.md"
+          fi
+
+  production:
+    name: Production serves a fresh Liquipedia pool
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check GET /v1/seasons
+        run: |
+          set -euo pipefail
+          url="https://sc2tools-api.onrender.com/v1/seasons"
+          # --max-time 60 + retries: Render cold starts can take 30+ s.
+          body="$(curl --silent --show-error --fail \
+            --max-time 60 \
+            --retry 2 --retry-delay 5 --retry-all-errors \
+            "$url")"
+          source="$(jq -r '.mapPoolSource // "missing"' <<<"$body")"
+          fetched_ms="$(jq -r '.mapPoolFetchedAt // 0' <<<"$body")"
+          count="$(jq -r '.mapPool | length' <<<"$body")"
+          age_h=$(( ($(date +%s) * 1000 - fetched_ms) / 3600000 ))
+          echo "mapPoolSource=$source mapPoolFetchedAt=$fetched_ms (${age_h}h ago) maps=$count"
+          jq -r '.mapPool | join(", ")' <<<"$body"
+          if [ "$source" != "liquipedia" ] || [ "$age_h" -gt 48 ] || [ "$count" -eq 0 ]; then
+            echo "::error::Production isn't serving a fresh Liquipedia pool (source=$source, ${age_h}h old, $count maps). Check the API logs for ladderMapPool_fetch_failed / _http_error / _no_maps_parsed."
+            exit 1
+          fi

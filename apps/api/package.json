@@ -16,6 +16,7 @@
     "test:watch": "jest --watch",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "refresh-map-pool": "node scripts/refresh-ladder-map-pool.js",
     "check": "npm run lint && npm run typecheck && npm test"
   },
   "dependencies": {

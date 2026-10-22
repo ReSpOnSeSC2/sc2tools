@@ -253,3 +253,21 @@ describe("LadderMapPoolService — get/refresh", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 });
+
+// buildApp() constructs the service with no options (via SeasonsService),
+// so it uses the real ``globalThis.fetch`` and the committed seed file.
+// The jest setup file helpers/blockLiquipedia.js must keep that instance
+// offline, or every ingest suite rewrites data/ladder-map-pool.json.
+describe("LadderMapPoolService — default construction under jest", () => {
+  const SEED_PATH = path.join(__dirname, "..", "..", "data", "ladder-map-pool.json");
+
+  test("never reaches Liquipedia or rewrites the committed seed", async () => {
+    const before = await fs.readFile(SEED_PATH, "utf8");
+    const svc = new LadderMapPoolService();
+    const got = await svc.get();
+    const refreshed = await svc.refresh();
+    expect(got.source).not.toBe("liquipedia");
+    expect(refreshed.source).not.toBe("liquipedia");
+    expect(await fs.readFile(SEED_PATH, "utf8")).toBe(before);
+  });
+});
