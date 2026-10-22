@@ -641,4 +641,28 @@ describe("BuildCheckInQueue — opponent and Add new build", () => {
     expect(within(dialog).queryByRole("listbox")).toBeNull();
     expect(within(dialog).getByRole("button", { name: "Change…" })).toBeTruthy();
   });
+
+  it("never reopens a picker for a check-in that failed after the list closed", async () => {
+    let fail: (reason: unknown) => void = () => {};
+    harness.apiCall.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject; }));
+    let dialog = setup(withOpponent({ opponent: null }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Change…" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add new build…" }));
+    await screen.findByRole("dialog", { name: "Build editor" });
+    act(() => {
+      harness.editor?.onSaved?.("custom-two", { name: "Custom Two" } as never, {
+        reclassifyRequested: false,
+      });
+    });
+    // The editor closes and the player leaves while the check-in is out.
+    fireEvent.click(screen.getByRole("button", { name: "Close editor" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    await act(async () => fail({ status: 0, message: "Failed to fetch" }));
+    await waitFor(() => expect(harness.toast.error).toHaveBeenCalled());
+
+    dialog = openQueue();
+    await act(async () => {});
+    expect(within(dialog).queryByRole("listbox")).toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Change…" })).toBeTruthy();
+  });
 });

@@ -10,6 +10,7 @@ import {
 import { BuildPicker } from "./BuildPicker";
 import { ReasonChip } from "./CheckInParts";
 import { CorrectedBadge } from "./PlannedBadge";
+import { focusWasLost } from "./focus";
 import type { CheckInBusy } from "./useCheckInActions";
 
 /** Open (or close) a side's picker from outside, e.g. after "Add new build". */
@@ -76,7 +77,7 @@ export function OpponentBuildRow({
   useEffect(() => {
     if (picking || !returnFocus.current) return;
     returnFocus.current = false;
-    changeRef.current?.focus();
+    if (focusWasLost()) changeRef.current?.focus();
   }, [picking]);
 
   const save = async (key: string | null, name: string | null) => {
@@ -120,6 +121,7 @@ export function OpponentBuildRow({
         {picking ? null : (
           <Button
             ref={changeRef}
+            data-checkin-change="opponent"
             variant="ghost"
             size="sm"
             disabled={disabled}

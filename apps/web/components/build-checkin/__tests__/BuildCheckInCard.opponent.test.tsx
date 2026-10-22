@@ -110,6 +110,7 @@ function renderCard(onChanged = vi.fn()) {
 
 afterEach(() => {
   cleanup();
+  document.body.innerHTML = "";
   harness.intent = undefined;
   harness.error = undefined;
   harness.buildOrder = undefined;
@@ -249,6 +250,28 @@ describe("BuildCheckInCard — opponent's build", () => {
   });
 });
 
+const PROXY_GATE_CONFIRMED = {
+  ...confirmedResponse("custom:proxy-gate", "Proxy Gate"),
+  build: { key: "custom:proxy-gate", name: "Proxy Gate", slug: "proxy-gate", source: "custom" },
+};
+
+/** "Change…" → type a new name → "Add … as a new build…" (focused, as by keyboard). */
+async function addProxyGate() {
+  fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "Proxy Gate" } });
+  const add = screen.getByRole("button", { name: "Add “Proxy Gate” as a new build…" });
+  add.focus();
+  fireEvent.click(add);
+  return editorProps();
+}
+
+function outsideInput() {
+  const input = document.createElement("input");
+  input.setAttribute("aria-label", "Elsewhere on the page");
+  document.body.appendChild(input);
+  return input;
+}
+
 describe("BuildCheckInCard — Add new build", () => {
   it("opens the editor on your side of the replay and checks the new build in", async () => {
     harness.intent = intent({ opponent: opponentState() });
@@ -296,23 +319,57 @@ describe("BuildCheckInCard — Add new build", () => {
   it("gives focus back to Change… once the new build is checked in", async () => {
     harness.intent = intent({ opponent: opponentState() });
     harness.buildOrder = BUILD_ORDER;
-    harness.apiCall.mockResolvedValue({
-      ...confirmedResponse("custom:proxy-gate", "Proxy Gate"),
-      build: { key: "custom:proxy-gate", name: "Proxy Gate", slug: "proxy-gate", source: "custom" },
-    });
+    harness.apiCall.mockResolvedValue(PROXY_GATE_CONFIRMED);
     renderCard();
-    fireEvent.click(screen.getByRole("button", { name: "Change…" }));
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Proxy Gate" } });
-    const add = screen.getByRole("button", { name: "Add “Proxy Gate” as a new build…" });
-    add.focus();
-    fireEvent.click(add);
-    const props = await editorProps();
+    const props = await addProxyGate();
+    // A fast check-in lands while the editor is still open: focus stays in it.
+    const dialog = screen.getByRole("dialog", { name: "Build editor" });
+    const close = within(dialog).getByRole("button", { name: "Close editor" });
+    close.focus();
     act(() => {
       props.onSaved?.("proxy-gate", { name: "Proxy Gate" } as never, { reclassifyRequested: false });
     });
     await waitFor(() => expect(screen.getByText("Planned build")).toBeTruthy());
-    // The picker (and the button that opened the editor) is gone.
-    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Change…" }));
+    expect(document.activeElement).toBe(close);
+    // Once it closes, the button that opened it is gone: "Change…" takes over.
+    fireEvent.click(close);
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Change…" })),
+    );
+  });
+
+  it("leaves focus where the player moved it while the check-in was saving", async () => {
+    harness.intent = intent({ opponent: opponentState() });
+    harness.buildOrder = BUILD_ORDER;
+    let answer: (value: unknown) => void = () => {};
+    harness.apiCall.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+    renderCard();
+    const props = await addProxyGate();
+    act(() => {
+      props.onSaved?.("proxy-gate", { name: "Proxy Gate" } as never, { reclassifyRequested: false });
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Close editor" }));
+    const elsewhere = outsideInput();
+    elsewhere.focus();
+    await act(async () => answer(PROXY_GATE_CONFIRMED));
+    await waitFor(() => expect(screen.getByText("Planned build")).toBeTruthy());
+    expect(document.activeElement).toBe(elsewhere);
+  });
+
+  it("leaves focus where the player moved it while a picker confirm was saving", async () => {
+    harness.intent = intent({ opponent: opponentState() });
+    let answer: (value: unknown) => void = () => {};
+    harness.apiCall.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+    const options = within(screen.getByRole("listbox")).getAllByRole("option");
+    fireEvent.click(options[options.length - 1]);
+    fireEvent.click(screen.getAllByRole("button").find((node) => /^Confirm /.test(node.textContent ?? ""))!);
+    const elsewhere = outsideInput();
+    elsewhere.focus();
+    await act(async () => answer(confirmedResponse("custom:dt-3-gate", "DT into 3 Gate")));
+    await waitFor(() => expect(screen.queryByRole("listbox")).toBeNull());
+    expect(document.activeElement).toBe(elsewhere);
   });
 
   it("builds the opponent's side from their events and corrects it", async () => {
@@ -540,7 +597,9 @@ describe("BuildCheckInCard — Cancel on an unchecked game", () => {
       expect(screen.queryByRole("listbox", { name: "Opponent's build in PvZ" })).toBeNull(),
     );
     const yours = screen.getByRole("group", { name: "Your build" });
-    fireEvent.click(within(yours).getByRole("button", { name: "Cancel" }));
+    const cancel = within(yours).getByRole("button", { name: "Cancel" });
+    cancel.focus();
+    fireEvent.click(cancel);
     expect(screen.queryByRole("listbox", { name: /Build you went for/ })).toBeNull();
     // The corrected opponent keeps the full card: nothing to fold back to.
     expect(screen.queryByTestId("build-checkin-compact")).toBeNull();

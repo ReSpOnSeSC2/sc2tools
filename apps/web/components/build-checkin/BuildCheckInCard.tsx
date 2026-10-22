@@ -14,6 +14,7 @@ import {
 } from "@/lib/buildIntent";
 import { useBuildCheckInRevision } from "./BuildCheckInProvider";
 import { BuildPicker } from "./BuildPicker";
+import { focusWasLost } from "./focus";
 import {
   CheckInNewBuild,
   type NewBuildRequest,
@@ -140,10 +141,23 @@ export function BuildCheckInCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialNewBuild, state, request.error]);
 
+  const closeNewBuild = () => {
+    const side = creating?.side;
+    setCreating(null);
+    // The editor hands focus back to the control that opened it, which is
+    // gone once the new build was checked in: use that side's "Change…".
+    window.setTimeout(() => {
+      if (!side || !focusWasLost()) return;
+      rootRef.current
+        ?.querySelector<HTMLElement>(`[data-checkin-change="${side}"]`)
+        ?.focus();
+    }, 0);
+  };
+
   const launcher = (
     <CheckInNewBuild
       request={creating}
-      onClose={() => setCreating(null)}
+      onClose={closeNewBuild}
       onSaved={(saved) => void onNewBuildSaved(saved)}
     />
   );
@@ -440,7 +454,7 @@ function YourBuildRow({
   useEffect(() => {
     if (picking || !returnFocus.current) return;
     returnFocus.current = false;
-    changeRef.current?.focus();
+    if (focusWasLost()) changeRef.current?.focus();
   }, [picking]);
 
   const closePicker = () => {
@@ -607,6 +621,7 @@ function StatusSummary({
           </Button>
           <Button
             ref={changeRef}
+            data-checkin-change="you"
             variant="secondary"
             size="sm"
             disabled={disabled}
@@ -648,6 +663,7 @@ function StatusSummary({
         <div className="flex flex-wrap items-center gap-2">
           <Button
             ref={changeRef}
+            data-checkin-change="you"
             variant="secondary"
             size="sm"
             disabled={disabled}
@@ -678,6 +694,7 @@ function StatusSummary({
       </p>
       <Button
         ref={changeRef}
+        data-checkin-change="you"
         variant="secondary"
         size="sm"
         disabled={disabled}

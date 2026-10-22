@@ -5,8 +5,9 @@
 /**
  * Build check-in ingest bind, failure and edge cases: a claim is released
  * when the bind fails after claiming (unless the game write did land),
- * records of this match carrying an answer are claimed first (an earlier
- * match's never outranks this one's), and a record keyed
+ * records of this match carrying an answer are claimed first while an
+ * earlier match's never outrank this one's own loading-screen record, and a
+ * record keyed
  * mid-game (an agent that first saw the match late) still binds its answer
  * when it names the replay's opponent. Full app, real Mongo.
  */
@@ -65,8 +66,11 @@ describe("build check-in ingest bind: recovery and late keys", () => {
       .expect(200);
   }
 
-  async function register(user, gameKey, fields = { myRace: "Protoss", oppRace: "Zerg", oppName: "Opp" }) {
-    await putLive(user, gameKey, { action: "register", ...fields });
+  const LIVE_FIELDS = { myRace: "Protoss", oppRace: "Zerg", oppName: "Opp" };
+
+  /** ``extra.phase``: the live phase the agent's card registered in. */
+  async function register(user, gameKey, extra = {}) {
+    await putLive(user, gameKey, { action: "register", ...LIVE_FIELDS, ...extra });
   }
 
   async function upload(user, game) {
@@ -145,43 +149,50 @@ describe("build check-in ingest bind: recovery and late keys", () => {
   });
 
   describe("claim order", () => {
-    test("a record with the post-game answer is claimed before a newer empty one", async () => {
+    const LOADING = { phase: "match_loading" };
+    const MID_GAME = { phase: "match_started" };
+
+    test("a re-key first seen mid-game never outranks this match's answered loading record", async () => {
       const user = await newUser();
       const game = ingestGame(4);
-      const answered = keyAt(game, -40_000);
-      const empty = keyAt(game, -10_000);
-      await register(user, answered);
+      // A long load plus pauses: the loading key sits well before the start.
+      const answered = keyAt(game, -150_000);
+      const rekeyed = keyAt(game, -10_000);
+      await register(user, answered, LOADING);
       await putLive(user, answered, { action: "postgame", buildKey: ROBO_KEY });
-      await register(user, empty);
+      await register(user, rekeyed, MID_GAME);
       await upload(user, game);
       expect((await liveRow(user, answered)).gameId).toBe(game.gameId);
-      expect((await liveRow(user, empty)).gameId).toBeNull();
+      expect((await liveRow(user, rekeyed)).gameId).toBeNull();
       const row = await gameRow(user, game.gameId);
       expect(row.myBuild).toBe(ROBO);
       expect(row.buildIntent).toEqual(expect.objectContaining({ status: "confirmed", origin: "postgame", gameKey: answered }));
     });
 
-    test("a declaration is claimed before a newer empty record", async () => {
+    test("a loading-screen declaration is claimed before a newer empty re-key", async () => {
       const user = await newUser();
       const game = ingestGame(5);
       const declared = keyAt(game, -40_000);
-      const empty = keyAt(game, -10_000);
-      await register(user, declared);
+      const rekeyed = keyAt(game, -10_000);
+      await register(user, declared, LOADING);
       await putLive(user, declared, { action: "declare", buildKey: PHOENIX_KEY });
-      await register(user, empty);
+      await register(user, rekeyed, MID_GAME);
       await upload(user, game);
       expect((await gameRow(user, game.gameId)).buildIntent.gameKey).toBe(declared);
     });
 
-    test("an earlier match's unbound declaration never outranks this match's own record", async () => {
+    test.each([
+      ["a quick", -100_000],
+      ["a slow", -3 * 60_000],
+    ])("an earlier match's unbound declaration never lands on %s rematch", async (_label, offset) => {
       const user = await newUser();
-      const game = ingestGame(6);
+      const game = ingestGame(offset);
       // Game 1 vs the same opponent ended in loading: declared, never uploaded.
-      const aborted = keyAt(game, -3 * 60_000);
+      const aborted = keyAt(game, offset);
       const own = keyAt(game, -15_000);
-      await register(user, aborted);
+      await register(user, aborted, LOADING);
       await putLive(user, aborted, { action: "declare", buildKey: PHOENIX_KEY });
-      await register(user, own);
+      await register(user, own, LOADING);
       await upload(user, game);
       expect((await liveRow(user, own)).gameId).toBe(game.gameId);
       expect((await liveRow(user, aborted)).gameId).toBeNull();
@@ -194,11 +205,23 @@ describe("build check-in ingest bind: recovery and late keys", () => {
       const user = await newUser();
       const game = ingestGame(7);
       const early = keyAt(game, -3 * 60_000);
-      await register(user, early);
+      await register(user, early, LOADING);
       await putLive(user, early, { action: "declare", buildKey: PHOENIX_KEY });
       await upload(user, game);
       expect((await liveRow(user, early)).gameId).toBe(game.gameId);
       expect((await gameRow(user, game.gameId)).buildIntent.gameKey).toBe(early);
+    });
+
+    test("records that never reported their phase are claimed answer first", async () => {
+      const user = await newUser();
+      const game = ingestGame(8);
+      const answered = keyAt(game, -40_000);
+      const empty = keyAt(game, -10_000);
+      await register(user, answered);
+      await putLive(user, answered, { action: "postgame", buildKey: ROBO_KEY });
+      await register(user, empty);
+      await upload(user, game);
+      expect((await gameRow(user, game.gameId)).buildIntent.gameKey).toBe(answered);
     });
   });
 
@@ -236,16 +259,16 @@ describe("build check-in ingest bind: recovery and late keys", () => {
         await register(user, key);
       }],
       ["it names another opponent", async (user, key) => {
-        await register(user, key, { myRace: "Protoss", oppRace: "Zerg", oppName: "Someone" });
+        await register(user, key, { oppName: "Someone" });
         await putLive(user, key, { action: "postgame", buildKey: PHOENIX_KEY });
       }, "Someone|Streamer"],
       ["it names nobody", async (user, key) => {
-        await register(user, key, { myRace: "Protoss", oppRace: "Zerg" });
+        await register(user, key, { oppName: null });
         await putLive(user, key, { action: "postgame", buildKey: PHOENIX_KEY });
       }, "unknown"],
     ])("is left alone when %s", async (_label, arrange, names = "Opp|Streamer") => {
       const user = await newUser();
-      const game = ingestGame(8 + userCounter);
+      const game = ingestGame(20 + userCounter);
       const late = keyAt(game, 3 * 60_000, names);
       await arrange(user, late);
       await upload(user, game);

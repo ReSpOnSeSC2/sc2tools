@@ -63,6 +63,10 @@ until the player confirms. Games shorter than 45 seconds never take an
 override. Pre-game declarations live in an ephemeral `build_intent_live`
 collection keyed by the agent's live `gameKey` and are bound to the uploaded
 game at ingest by time window and normalised opponent name, first binding wins.
+The match's own record is the newest one that saw its loading screen; records
+from an earlier loading screen against the same opponent (an abandoned match)
+only bind when nothing newer does, and the agent carries a pick over when it
+re-keys a match it briefly lost track of.
 
 ## Consequences
 
