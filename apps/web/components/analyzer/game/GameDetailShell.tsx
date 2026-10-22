@@ -15,6 +15,7 @@ import { fmtDate, fmtMinutes, fmtMmr, raceColour } from "@/lib/format";
 import { ShareGameButton } from "./ShareGameButton";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { isReviewableGame } from "@/lib/reviews";
+import { PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import { isLossResult, isWinResult, type GameSummary } from "./types";
 import {
   opponentProfileHref,
@@ -27,6 +28,9 @@ import {
  * glance: result, matchup, map, date, duration, MMRs, and the two
  * strategy labels (my build vs the opponent's classified strategy),
  * plus a back link to the source opponent dossier (or dashboard fallback).
+ * When a confirmed build check-in overrides the classifier, "My build"
+ * shows the planned build with a "Planned" marker naming the replay's own
+ * label.
  *
  * Layout: children stack vertically; the page decides what goes in.
  */
@@ -35,11 +39,17 @@ export function GameDetailShell({
   children,
   opponentContext,
   streamLinks,
+  buildLabel,
+  planned,
 }: {
   game: GameSummary;
   children: ReactNode;
   opponentContext?: OpponentNavigationContext | null;
   streamLinks?: GameStreamLink[] | null;
+  /** Effective build label from the live check-in state; the slim row's otherwise. */
+  buildLabel?: string | null;
+  /** Check-in override marker; undefined falls back to the slim row's flag. */
+  planned?: { detected: string | null } | null;
 }) {
   const matchup = matchupLabel(game.myRace, game.opponent?.race);
   const oppName = (game.opponent?.displayName || "").trim() || "Opponent";
@@ -55,6 +65,13 @@ export function GameDetailShell({
     game.replayAvailable === true || Boolean(game.replayFile?.storedAt);
   const replaySizeBytes =
     game.replaySizeBytes ?? game.replayFile?.sizeBytes ?? null;
+  const myBuild = buildLabel !== undefined ? buildLabel : game.myBuild;
+  const plannedMarker =
+    planned !== undefined
+      ? planned
+      : game.buildPlanned
+        ? { detected: game.detectedBuild ?? null }
+        : null;
   return (
     <div className="space-y-6">
       <header className="space-y-3">
@@ -149,8 +166,11 @@ export function GameDetailShell({
             <div className="flex flex-wrap items-center gap-2 text-caption">
               <span className="text-text-dim">My build</span>
               <Badge size="sm" variant="accent">
-                {game.myBuild || "Unclassified"}
+                {myBuild || "Unclassified"}
               </Badge>
+              {plannedMarker ? (
+                <PlannedBadge detected={plannedMarker.detected} />
+              ) : null}
               <span className="text-text-dim">·</span>
               <span className="text-text-dim">Opponent strategy</span>
               <Badge size="sm" variant="neutral">

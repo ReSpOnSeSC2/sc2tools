@@ -12,12 +12,20 @@
  * Test fires (`overlay:live` with `isTest: true`) also drive a spin —
  * the test payload always carries a matchup so the streamer can preview
  * the reveal without queuing a real ladder game.
+ *
+ * Build check-in gates real games (never Test fires): the spin waits
+ * briefly for the server's check-in state, never runs while a declared
+ * build suppresses it, and holds until the check-in hold ends or the
+ * match starts. A declaration that lands after the reveal began hides
+ * it. Each real spin is reported through `onSpin` the moment it starts.
  */
 import { useEffect, useRef, useState } from "react";
 import { coerceRace } from "@/lib/race";
 import type {
   LiveGameEnvelope,
   LiveGamePayload,
+  RandomizerIntentGate,
+  RandomizerSpinEvent,
 } from "@/components/overlay/types";
 import type {
   MatchupKey,
@@ -27,7 +35,8 @@ import type {
 import { isMatchupKey } from "@/lib/randomizer/types";
 import { mulberry32, seedFromString, spinResult } from "@/lib/randomizer/engine";
 import { RandomizerSequence } from "@/components/randomizer/RandomizerSequence";
-import { useGameStartTriggerKey } from "../gameStartTrigger";
+import { gameKeyFromTriggerKey, useGameStartTriggerKey } from "../gameStartTrigger";
+import { randomizerSpinDelayMs } from "../buildIntentGate";
 import {
   setRevealSoundEnabled,
   setRevealSoundVolume,
@@ -44,18 +53,43 @@ export function RandomizerWidget({
   liveGame,
   config,
   visible = true,
+  intent = null,
+  onSpin,
 }: {
   live: LiveGamePayload | null;
   liveGame: LiveGameEnvelope | null;
   config: RandomizerConfig | null;
   visible?: boolean;
+  /** Build check-in gate for the client's current match. */
+  intent?: RandomizerIntentGate | null;
+  /** Called once per spin, as it starts. */
+  onSpin?: (spin: RandomizerSpinEvent) => void;
 }) {
   const matchup = deriveMatchup(live, liveGame);
   const spinKey = deriveSpinKey(matchup, live, liveGame);
   const triggerKey = useGameStartTriggerKey(live, liveGame);
   const [spin, setSpin] = useState<SpinState | null>(null);
+  const [dismissedSpinId, setDismissedSpinId] = useState<number | null>(null);
+  // Bumped by the gate's timers so the spin effect re-checks the gate.
+  const [gateClock, setGateClock] = useState(0);
   const consumedStarts = useRef(new Set<string>());
   const spinIdRef = useRef(0);
+  const eligibleSince = useRef<{ key: string; atMs: number } | null>(null);
+  const onSpinRef = useRef(onSpin);
+
+  const isTest = Boolean(live?.isTest);
+  const gameKey = gameKeyFromTriggerKey(triggerKey);
+  const gate = intent && intent.gameKey === gameKey ? intent : null;
+  const intentSeen = gate?.seen ?? false;
+  const suppressed = gate?.suppressRandomizer ?? false;
+  const holdDeadlineMs = gate?.holdDeadlineMs ?? 0;
+  const phase = liveGame?.phase ?? null;
+  // Only an agent-envelope or result-less pre-game start is a real roll.
+  const rollGameKey = !isTest && (liveGame !== null || !live?.result) ? gameKey : null;
+
+  useEffect(() => {
+    onSpinRef.current = onSpin;
+  }, [onSpin]);
 
   // Mirror the streamer's sound preference into the audio engine.
   useEffect(() => {
@@ -69,6 +103,27 @@ export function RandomizerWidget({
     if (consumedStarts.current.has(triggerKey)) return;
     const mc = config.matchups[matchup];
     if (!mc || !mc.enabled || mc.builds.length === 0) return;
+    if (!isTest) {
+      const now = Date.now();
+      // The bounded wait starts once this match could first spin: the
+      // server decides the hold on the envelope that first carries a
+      // concrete matchup, so races that arrive late must not find the
+      // wait already used up.
+      if (eligibleSince.current?.key !== triggerKey) {
+        eligibleSince.current = { key: triggerKey, atMs: now };
+      }
+      const delay = randomizerSpinDelayMs({
+        gate: { seen: intentSeen, suppressRandomizer: suppressed, holdDeadlineMs },
+        phase,
+        waitStartedAtMs: eligibleSince.current.atMs,
+        nowMs: now,
+      });
+      if (delay === null) return;
+      if (delay > 0) {
+        const handle = window.setTimeout(() => setGateClock((n) => n + 1), delay);
+        return () => window.clearTimeout(handle);
+      }
+    }
     // Game-key seeding keeps the build and unit pair identical if the same
     // overlay is refreshed or rendered by both the composite and dedicated
     // Browser Sources. Test fires carry a unique nonce so every click still
@@ -78,11 +133,30 @@ export function RandomizerWidget({
     consumedStarts.current.add(triggerKey);
     spinIdRef.current += 1;
     setSpin({ outcome, spinId: spinIdRef.current, triggerKey });
-  }, [visible, matchup, spinKey, triggerKey, config]);
+    onSpinRef.current?.({
+      triggerKey,
+      startedAtMs: Date.now(),
+      roll: rollGameKey ? { gameKey: rollGameKey, buildId: outcome.winner.id } : null,
+    });
+  }, [
+    visible, matchup, spinKey, triggerKey, config, isTest, rollGameKey,
+    intentSeen, suppressed, holdDeadlineMs, phase, gateClock,
+  ]);
+
+  // A declaration that lands after the reveal began takes it off stream
+  // for good: replaying a half-played reveal on an undeclare would be worse.
+  const spinGameKey = spin ? gameKeyFromTriggerKey(spin.triggerKey) : null;
+  const spinSuppressed = spinGameKey !== null
+    && intent?.gameKey === spinGameKey
+    && intent.suppressRandomizer;
+  useEffect(() => {
+    if (spin && spinSuppressed) setDismissedSpinId(spin.spinId);
+  }, [spin, spinSuppressed]);
 
   // Keep the reveal mounted through transient phase gaps; the clients hide
   // its frame. A genuinely different match must wait for its own outcome.
   if (!spin || (triggerKey !== null && spin.triggerKey !== triggerKey)) return null;
+  if (spinSuppressed || dismissedSpinId === spin.spinId) return null;
 
   return (
     <div

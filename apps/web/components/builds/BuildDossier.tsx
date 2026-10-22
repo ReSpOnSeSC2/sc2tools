@@ -25,6 +25,7 @@ import { unitLabel } from "@/components/analyzer/UnitCompositionTable";
 import { BuildTransitionSankey } from "@/components/analyzer/BuildTransitionSankey";
 import type { GameSummary } from "@/components/analyzer/game/types";
 import { useApi } from "@/lib/clientApi";
+import { checkinsText } from "@/lib/buildIntent";
 import { BreakdownCard, TopOpponentsCard } from "./BuildBreakdownCards";
 import { BuildGamesTable } from "./BuildGamesTable";
 import { BuildCompositionExplorer } from "./BuildCompositionExplorer";
@@ -61,6 +62,8 @@ export interface BuildDossierData {
     total: number;
     winRate: number;
     lastPlayed?: string | null;
+    /** Games counted here only because of a confirmed build check-in. */
+    checkins?: number;
   };
   byMatchup: BuildDetailRow[];
   byMap: BuildDetailRow[];
@@ -258,6 +261,7 @@ function PerformanceTiles({
   const losses = totals.losses ?? 0;
   const wr = totals.winRate ?? 0;
   const last = totals.lastPlayed ?? null;
+  const checkins = checkinsText(totals.checkins);
   return (
     <Card title="Performance">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -270,9 +274,17 @@ function PerformanceTiles({
           color={total > 0 ? wrColor(wr, total) : undefined}
         />
       </div>
-      {last ? (
-        <p className="mt-2 text-micro text-text-dim">
-          Last played {fmtAgo(last)}
+      {last || checkins ? (
+        <p className="mt-2 flex flex-wrap gap-x-3 text-micro text-text-dim">
+          {last ? <span>Last played {fmtAgo(last)}</span> : null}
+          {checkins ? (
+            <span
+              title="Games you checked in to this build that the replay classified as something else"
+              data-testid="dossier-checkins"
+            >
+              {checkins}
+            </span>
+          ) : null}
         </p>
       ) : null}
     </Card>

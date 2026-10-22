@@ -44,6 +44,9 @@ vi.mock("@/components/ui/ThemeToggle", () => ({ ThemeToggle: () => null }));
 vi.mock("../CoachingBookingAlert", () => ({
   CoachingBookingAlert: () => <div data-testid="coaching-alert-slot" />,
 }));
+vi.mock("@/components/build-checkin/BuildCheckInAlert", () => ({
+  BuildCheckInAlert: () => <div data-testid="build-checkin-alert-slot" />,
+}));
 vi.mock("../SiteStats", () => ({
   SiteStats: ({ syncStatus }: { syncStatus?: ReactNode }) => <div data-testid="site-stats">{syncStatus}</div>,
 }));
@@ -190,6 +193,14 @@ describe("AppChrome navigation", () => {
     expect(screen.queryByRole("link", { name: /^Back to/ })).toBeNull();
   });
 
+  it("puts the build check-in chip in the header beside the coaching alert", () => {
+    harness.pathname = "/builds";
+    render(<AppChrome>content</AppChrome>);
+    const header = screen.getByRole("banner");
+    const chip = within(header).getByTestId("build-checkin-alert-slot");
+    expect(chip.nextElementSibling?.getAttribute("data-testid")).toBe("coaching-alert-slot");
+  });
+
   it("shows live sync only on analyzer routes", () => {
     harness.pathname = "/app/trends";
     const analyzer = render(<AppChrome>content</AppChrome>);
@@ -295,6 +306,7 @@ describe("AppChrome for signed-out visitors", () => {
     expect(within(header).getByRole("link", { name: "Sign in" })).toBeTruthy();
     expect(within(header).getByRole("link", { name: "Get started" })).toBeTruthy();
     expect(screen.queryByTestId("user-button")).toBeNull();
+    expect(screen.queryByTestId("build-checkin-alert-slot")).toBeNull();
 
     // The mobile bar drops the section tabs for a sign-in entry point.
     const bar = screen.getByRole("navigation", { name: "Quick sections" });

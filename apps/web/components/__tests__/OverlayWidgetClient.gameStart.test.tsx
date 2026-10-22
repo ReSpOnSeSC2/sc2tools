@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type { LiveGameEnvelope, LiveGamePayload } from "../overlay/types";
 import type { SpinOutcome } from "@/lib/randomizer/types";
 import { defaultRandomizerConfig } from "@/lib/randomizer/config";
+import { RANDOMIZER_INTENT_WAIT_MS } from "../overlay/buildIntentGate";
 
 type Handler = (...args: unknown[]) => void;
 class FakeSocket {
@@ -58,6 +59,10 @@ function configure() {
   }
   act(() => socket.fire("overlay:config", { randomizer: config }));
 }
+/** A real game's spin waits (bounded) for build check-in state that never comes here. */
+function settleIntentWait() {
+  act(() => vi.advanceTimersByTime(RANDOMIZER_INTENT_WAIT_MS));
+}
 
 describe("dedicated game-start widgets", () => {
   beforeEach(() => { vi.useFakeTimers(); reveals.length = 0; });
@@ -102,6 +107,7 @@ describe("dedicated game-start widgets", () => {
     const view = render(<OverlayWidgetClient token="token" widget="randomizer" />);
     configure();
     fireEnvelope();
+    settleIntentWait();
     expect(reveals).toEqual(["PvT"]);
     act(() => vi.advanceTimersByTime(2_000));
     fireEnvelope({ phase: "menu" });
@@ -119,6 +125,7 @@ describe("dedicated game-start widgets", () => {
     expect(view.container.querySelector<HTMLElement>(".overlay-widget-frame")?.style.display)
       .toBe("none");
     fireEnvelope({ gameKey: "game-2", capturedAt: 35 });
+    settleIntentWait();
     expect(reveals).toEqual(["PvT", "PvT"]);
   });
 
@@ -143,11 +150,13 @@ describe("dedicated game-start widgets", () => {
     const view = render(<OverlayWidgetClient token="token" widget="randomizer" />);
     configure();
     fireEnvelope();
-    act(() => vi.advanceTimersByTime(5_000));
+    settleIntentWait();
+    act(() => vi.advanceTimersByTime(5_000 - RANDOMIZER_INTENT_WAIT_MS));
     fireEnvelope({ gameKey: undefined, user: undefined, opponent: undefined, synthetic: true });
     fireEnvelope({ phase: "match_started", capturedAt: 6 });
     expect(reveals).toEqual(["PvT"]);
-    act(() => vi.advanceTimersByTime(27_000));
+    // The window runs 32 s from the spin, which waited for check-in state.
+    act(() => vi.advanceTimersByTime(27_000 + RANDOMIZER_INTENT_WAIT_MS));
     fireEnvelope({ gameKey: undefined, synthetic: true });
     fireEnvelope({ phase: "match_in_progress", capturedAt: 33 });
     expect(reveals).toEqual(["PvT"]);
@@ -163,6 +172,7 @@ describe("dedicated game-start widgets", () => {
     fireEnvelope({ phase: "match_in_progress", capturedAt: 33 });
     expect(reveals).toEqual([]);
     fireEnvelope({ gameKey: "game-2", capturedAt: 34 });
+    settleIntentWait();
     expect(reveals).toEqual(["PvT"]);
   });
 
@@ -175,6 +185,7 @@ describe("dedicated game-start widgets", () => {
     fireEnvelope({ gameKey: "new-game", synthetic: true, user: undefined, opponent: undefined });
     expect(reveals).toEqual([]);
     fireEnvelope({ gameKey: "new-game", opponent: { name: "NewOpponent", race: "Zerg" } });
+    settleIntentWait();
     expect(reveals).toEqual(["PvZ"]);
     fireEnvelope({
       gameKey: "new-game", phase: "match_started",
@@ -188,6 +199,7 @@ describe("dedicated game-start widgets", () => {
     render(<OverlayWidgetClient token="token" widget="randomizer" />);
     configure();
     fireEnvelope();
+    settleIntentWait();
     fireEnvelope({ streamerHistory: { oppName: "Opponent", matchup: "PvZ" } });
     configure();
     expect(reveals).toEqual(["PvT"]);

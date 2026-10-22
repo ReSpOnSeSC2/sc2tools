@@ -27,6 +27,9 @@ import {
 } from "@/lib/opponentNavigation";
 import { clampReplayTime } from "@/lib/replayLink";
 import { patchEraForGame } from "@/lib/ladderPulse";
+import { effectiveBuild, useGameBuildIntent } from "@/lib/buildIntent";
+import { BuildCheckInCard } from "@/components/build-checkin/BuildCheckInCard";
+import { useBuildCheckInRevision } from "@/components/build-checkin/BuildCheckInProvider";
 
 /**
  * GameDetailPage — the per-replay deep dive ("I just lost a weird
@@ -37,6 +40,7 @@ import { patchEraForGame } from "@/lib/ladderPulse";
  *   - GET /v1/games/:id/macro-breakdown  → stats_events, leaks, raw
  *   - GET /v1/games/:id/build-order      → parsed build logs, both sides
  *   - GET /v1/games/vod-links?gameId=:id → timestamped POV VOD links
+ *   - GET /v1/games/:id/build-intent     → build check-in (card + header label)
  *
  * Every payload degrades independently: a 404 on the game row is a
  * branded empty state; a missing macro breakdown (pre-v0.5 agents)
@@ -85,6 +89,10 @@ function GameDetailContent({
     gameId ? `/v1/games/vod-links?gameId=${enc}` : null,
     { revalidateOnFocus: false, shouldRetryOnError: false },
   );
+  // Same request as the check-in card (SWR shares it): a confirmed check-in
+  // changes the header's build label without refetching the build order.
+  const { revision: checkinRevision } = useBuildCheckInRevision(false);
+  const intentReq = useGameBuildIntent(gameId || null, checkinRevision);
 
   // Timeline scrub cursor — shared so the loss-autopsy timestamps and
   // the mechanics panel's supply-block chips can jump the chart.
@@ -167,13 +175,23 @@ function GameDetailContent({
     : Array.isArray(fallbackStreamLinks)
       ? fallbackStreamLinks
       : undefined;
+  const checkinBuild = intentReq.data
+    ? effectiveBuild(intentReq.data, game.myBuild)
+    : null;
 
   return (
     <GameDetailShell
       game={game}
       opponentContext={opponentContext}
       streamLinks={streamLinks}
+      buildLabel={checkinBuild ? checkinBuild.label : undefined}
+      planned={checkinBuild ? checkinBuild.planned : undefined}
     >
+      <BuildCheckInCard
+        gameId={gameId}
+        onChanged={() => void gameReq.mutate()}
+      />
+
       <InteractiveTimeline
         statsEvents={breakdown?.stats_events}
         oppStatsEvents={breakdown?.opp_stats_events}
@@ -229,7 +247,7 @@ function GameDetailContent({
       <BuildOrderColumns
         myEvents={buildReq.data?.events}
         oppEvents={buildReq.data?.opp_events}
-        myLabel={buildReq.data?.my_build ?? game.myBuild}
+        myLabel={checkinBuild?.label ?? buildReq.data?.my_build ?? game.myBuild}
         oppLabel={buildReq.data?.opp_strategy ?? game.opponent?.strategy}
         myStatus={buildReq.data?.my_status}
         oppStatus={buildReq.data?.opp_status}

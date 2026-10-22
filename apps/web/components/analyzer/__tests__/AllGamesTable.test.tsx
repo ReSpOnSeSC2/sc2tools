@@ -481,3 +481,35 @@ describe("AllGamesTable game analysis entry point", () => {
       .toHaveLength(2);
   });
 });
+
+describe("AllGamesTable build check-in marker", () => {
+  const BASE = {
+    id: "game/88",
+    date: "2026-07-11T12:00:00.000Z",
+    result: "Win",
+    map: "Ancient Cistern",
+    my_race: "Protoss",
+    opp_race: "Zerg",
+    opp_strategy: "Roach timing",
+    my_build: "DT into 3 Gate",
+    game_length: 720,
+  };
+
+  it("marks rows whose build comes from a confirmed check-in", () => {
+    useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: null });
+    render(
+      <AllGamesTable
+        games={[
+          { ...BASE, build_planned: true, detected_build: "PvZ - Macro Transition (Unclassified)" },
+          { ...BASE, id: "game/89", build_planned: false, detected_build: null },
+        ]}
+      />,
+    );
+    const badges = screen.getAllByTestId("planned-badge");
+    // One planned game: a desktop row plus its mobile card.
+    expect(badges).toHaveLength(2);
+    expect(badges[0].getAttribute("title")).toBe(
+      "Replay classified as PvZ - Macro Transition (Unclassified)",
+    );
+  });
+});

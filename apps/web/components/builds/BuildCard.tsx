@@ -26,6 +26,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { fmtAgo, pct1, wrColor } from "@/lib/format";
+import { checkinsText } from "@/lib/buildIntent";
 import {
   matchupLabel,
   raceIconName,
@@ -174,6 +175,7 @@ function BuildStatsRow({
   const statsState = build.statsState ?? "ready";
   const statsPending = statsState === "loading";
   const statsUnavailable = statsState === "unavailable";
+  const checkins = total > 0 ? checkinsText(stats?.checkins) : null;
   const updated = build.updatedAt;
   return (
     <dl className="mt-4 flex flex-wrap items-end justify-between gap-3 text-caption">
@@ -212,6 +214,14 @@ function BuildStatsRow({
               <span className="text-text-dim">No classified replays</span>
             )}
           </dd>
+          {checkins && !statsPending && !statsUnavailable ? (
+            <dd
+              className="text-micro text-text-dim"
+              title="Games you checked in to this build that the replay classified as something else"
+            >
+              {checkins}
+            </dd>
+          ) : null}
         </div>
       </div>
       <div className="text-right">

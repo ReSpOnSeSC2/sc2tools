@@ -17,6 +17,7 @@ import { SettingsImport } from "@/components/analyzer/settings/SettingsImport";
 import { SettingsBackups } from "@/components/analyzer/settings/SettingsBackups";
 import { SettingsMisc } from "@/components/analyzer/settings/SettingsMisc";
 import { SettingsHelp } from "@/components/analyzer/settings/SettingsHelp";
+import { BuildCheckInSettings } from "@/components/build-checkin/BuildCheckInSettings";
 import { Skeleton } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
@@ -53,6 +54,8 @@ function renderTab(id: SettingsTabId, origin: string) {
       return <SettingsOverlay origin={origin} />;
     case "randomizer":
       return <SettingsRandomizer />;
+    case "checkin":
+      return <BuildCheckInSettings />;
     case "voice":
       return <SettingsVoice />;
     case "import":

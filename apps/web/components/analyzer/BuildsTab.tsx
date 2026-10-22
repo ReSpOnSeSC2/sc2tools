@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
+import { checkinsText } from "@/lib/buildIntent";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { usePersistentSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
@@ -24,6 +25,8 @@ type BuildRow = {
   losses: number;
   winRate: number;
   myMatchups?: Record<string, number>;
+  /** Games counted here only because of a confirmed build check-in. */
+  checkins?: number;
 };
 
 const LS_MIN_BUILDS = "analyzer.builds.minGames";
@@ -120,6 +123,7 @@ export function BuildsTab() {
                     <div className="text-sm font-semibold text-text">
                       {b.name}
                     </div>
+                    <CheckinsNote count={b.checkins} />
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums">
                       <span className="text-success">{b.wins}W</span>
                       <span className="text-danger">{b.losses}L</span>
@@ -176,6 +180,7 @@ export function BuildsTab() {
                     >
                       <td className="truncate px-3 py-1.5 text-text" title={b.name}>
                         {b.name}
+                        <CheckinsNote count={b.checkins} inline />
                       </td>
                       <td className="px-2 py-1.5 text-right text-success">{b.wins}</td>
                       <td className="px-2 py-1.5 text-right text-danger">{b.losses}</td>
@@ -220,6 +225,23 @@ export function BuildsTab() {
         />
       )}
     </div>
+  );
+}
+
+/** "incl. N check-ins" — games counted only because of a confirmed check-in. */
+function CheckinsNote({ count, inline = false }: { count?: number; inline?: boolean }) {
+  const text = checkinsText(count);
+  if (!text) return null;
+  return (
+    <span
+      className={[
+        "text-micro text-text-dim",
+        inline ? "ml-2" : "block",
+      ].join(" ")}
+      title="Games you checked in to this build that the replay classified as something else"
+    >
+      {text}
+    </span>
   );
 }
 

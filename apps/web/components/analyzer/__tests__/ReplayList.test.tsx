@@ -334,6 +334,27 @@ describe("ReplayList", () => {
     expect(askMock).not.toHaveBeenCalled();
   });
 
+  it("marks owner rows whose build comes from a check-in, never shared rows", () => {
+    const planned: ReplayLibraryItem = {
+      ...REPLAY,
+      myBuild: "DT into 3 Gate",
+      buildPlanned: true,
+      detectedBuild: "PvT - Macro Transition (Unclassified)",
+    };
+    render(<ReplayList items={[planned]} owner playerName="Reaver" />);
+    const badges = screen.getAllByTestId("planned-badge");
+    expect(badges.length).toBeGreaterThan(0);
+    expect(badges[0].getAttribute("title")).toBe(
+      "Replay classified as PvT - Macro Transition (Unclassified)",
+    );
+    cleanup();
+
+    render(
+      <ReplayList items={[planned]} owner={false} playerName="Reaver" publicHandle="reaver" />,
+    );
+    expect(screen.queryByTestId("planned-badge")).toBeNull();
+  });
+
   it("renders an accessible empty state for an exhausted query", () => {
     render(<ReplayList items={[]} owner playerName="Reaver" />);
     expect(screen.getByText("No replays match these filters")).toBeTruthy();

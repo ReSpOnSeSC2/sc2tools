@@ -207,3 +207,21 @@ export function resolveWidgetDurationMs(
   if (prod === null) return TEST_DURATION_MS;
   return Math.min(prod, TEST_DURATION_MS);
 }
+
+/**
+ * Extend a start-only window so it runs its full duration from
+ * ``anchorMs`` — the moment a held randomizer reveal can (or did) begin.
+ * The window is first armed when the match's start key appears; a build
+ * check-in hold can push the spin seconds later, and the two-act reveal
+ * must still get its whole budget. Never shortens a window and never
+ * reopens one that already closed (a late start stays unshown, as before).
+ */
+export function extendStartWindow(
+  deadlineMs: number,
+  anchorMs: number,
+  durationMs: number,
+  nowMs: number,
+): number {
+  if (deadlineMs <= nowMs) return deadlineMs;
+  return Math.max(deadlineMs, anchorMs + durationMs);
+}

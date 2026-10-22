@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { ChevronDown, ChevronRight, StickyNote, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { Toggle } from "@/components/ui/Toggle";
@@ -10,6 +10,7 @@ import { MapLabel } from "@/components/maps/MapArtwork";
 import { useApi } from "@/lib/clientApi";
 import { fmtDate, fmtMinutes } from "@/lib/format";
 import type { BuildOrderEvent } from "@/lib/build-events";
+import { PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import type { BuildRecentGame } from "./types";
 
 interface BuildOrderResp {
@@ -35,6 +36,10 @@ interface BuildOrderResp {
  * set and surfaces a dismissable chip naming the filter — used by the
  * Phase compositions panel to drill from a clicked signature into the
  * contributing games without leaving the dossier.
+ *
+ * Games on the build through a confirmed check-in carry a "Planned"
+ * marker (naming the replay's own label) and show the player's check-in
+ * notes when expanded.
  */
 export function BuildGamesTable({
   games,
@@ -316,12 +321,16 @@ function GameRow({
           {game.duration ? fmtMinutes(game.duration) : "—"}
         </td>
         <td className="px-2 py-1.5 text-right">
-          <GameResultBadge game={game} />
+          <span className="inline-flex flex-wrap items-center justify-end gap-1">
+            <PlannedMarker game={game} />
+            <GameResultBadge game={game} />
+          </span>
         </td>
       </tr>
       {expanded ? (
         <tr className="bg-bg-elevated/20">
-          <td colSpan={8} className="px-2 pb-3 pt-1">
+          <td colSpan={8} className="space-y-2 px-2 pb-3 pt-1">
+            <CheckInNotes game={game} />
             <BuildOrderExpansion gameId={game.gameId} game={game} />
           </td>
         </tr>
@@ -359,6 +368,7 @@ function GameMobile({
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-2 text-caption">
             <GameResultBadge game={game} />
+            <PlannedMarker game={game} />
             <span className="font-mono text-text-dim">{fmtDate(game.date)}</span>
             <MacroCell value={game.macroScore ?? null} />
           </div>
@@ -389,7 +399,8 @@ function GameMobile({
         </span>
       </button>
       {expanded ? (
-        <div className="border-t border-border px-3 py-2">
+        <div className="space-y-2 border-t border-border px-3 py-2">
+          <CheckInNotes game={game} />
           <BuildOrderExpansion gameId={game.gameId} game={game} />
         </div>
       ) : null}
@@ -416,6 +427,39 @@ function GameResultBadge({ game }: { game: BuildRecentGame }) {
     <Badge size="sm" variant={isWin ? "success" : "danger"}>
       {isWin ? "Win" : "Loss"}
     </Badge>
+  );
+}
+
+/** "Planned" badge, plus a note icon when the check-in has notes. */
+function PlannedMarker({ game }: { game: BuildRecentGame }) {
+  if (!game.planned || game.isResumedFromReplay) return null;
+  return (
+    <>
+      <PlannedBadge detected={game.planned.detected} />
+      {game.planned.notes?.trim() ? (
+        <span className="inline-flex text-text-dim" title="Has a check-in note">
+          <StickyNote className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">Has a check-in note</span>
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/** The player's own words on what happened to the plan. */
+function CheckInNotes({ game }: { game: BuildRecentGame }) {
+  const notes = game.planned?.notes?.trim();
+  if (!notes) return null;
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-border bg-bg-surface px-3 py-2 text-caption">
+      <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+      <div className="min-w-0">
+        <p className="text-micro font-bold uppercase tracking-wider text-text-dim">
+          Check-in note
+        </p>
+        <p className="whitespace-pre-wrap break-words text-text">{notes}</p>
+      </div>
+    </div>
   );
 }
 

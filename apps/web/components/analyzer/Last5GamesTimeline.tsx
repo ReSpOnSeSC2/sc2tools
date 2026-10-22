@@ -27,6 +27,10 @@ export type ProfileGame = {
    *  didn't carry it. */
   opponent?: string | null;
   my_build?: string | null;
+  /** True when a confirmed build check-in overrides the classifier's label. */
+  build_planned?: boolean;
+  /** The classifier's own label while a check-in override is applied. */
+  detected_build?: string | null;
   game_length?: number | null;
   macro_score?: number | null;
   /** Your MMR at the time of the game (from the slim row's myMmr). */

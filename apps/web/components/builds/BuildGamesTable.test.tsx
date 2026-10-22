@@ -144,3 +144,49 @@ describe("BuildGamesTable replay-resume tests", () => {
     ).toBeNull();
   });
 });
+
+describe("BuildGamesTable check-in markers", () => {
+  const PLANNED_GAME: BuildRecentGame = {
+    ...COMPETITIVE_GAME,
+    gameId: "planned-game",
+    result: "win",
+    planned: {
+      detected: "PvZ - Macro Transition (Unclassified)",
+      notes: "Got scouted, so I skipped the third and held.",
+    },
+  };
+
+  it("marks planned games and shows their notes when expanded", () => {
+    const { container } = render(
+      <BuildGamesTable games={[PLANNED_GAME, COMPETITIVE_GAME]} />,
+    );
+    const row = container.querySelector(
+      '[data-game-row-id="planned-game"]',
+    ) as HTMLElement;
+    const badge = within(row).getByTestId("planned-badge");
+    expect(badge.getAttribute("title")).toBe(
+      "Replay classified as PvZ - Macro Transition (Unclassified)",
+    );
+    expect(within(row).getByText("Has a check-in note")).toBeTruthy();
+    const plain = container.querySelector(
+      '[data-game-row-id="competitive-game"]',
+    ) as HTMLElement;
+    expect(within(plain).queryByTestId("planned-badge")).toBeNull();
+
+    expect(screen.queryAllByText(/skipped the third/)).toHaveLength(0);
+    fireEvent.click(row);
+    // Desktop row and mobile card share the expanded state.
+    expect(screen.getAllByText("Check-in note")).toHaveLength(2);
+    expect(screen.getAllByText(/skipped the third/)).toHaveLength(2);
+  });
+
+  it("marks planned games on the mobile cards too", () => {
+    const { container } = render(<BuildGamesTable games={[PLANNED_GAME]} />);
+    const card = container.querySelector(
+      '[data-game-card-id="planned-game"]',
+    ) as HTMLElement;
+    expect(within(card).getByTestId("planned-badge")).toBeTruthy();
+    fireEvent.click(within(card).getByRole("button"));
+    expect(within(card).getByText("Check-in note")).toBeTruthy();
+  });
+});

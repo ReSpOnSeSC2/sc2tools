@@ -7,19 +7,28 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type RefObject,
 } from "react";
 import { io, type Socket } from "socket.io-client";
 import { API_BASE } from "@/lib/clientApi";
 import type {
   LiveGameEnvelope,
   LiveGamePayload,
+  RandomizerIntentGate,
+  RandomizerSpinEvent,
 } from "@/components/overlay/types";
 import { clientTimezone } from "@/lib/timeseries";
 import {
+  extendStartWindow,
   payloadTargetsWidget,
   resolveWidgetDurationMs,
   type WidgetId,
 } from "@/components/overlay/widgetLifecycle";
+import type { RandomizerWindowAnchor } from "@/components/overlay/buildIntentGate";
+import {
+  useOverlayBuildIntents,
+  useRandomizerCheckin,
+} from "@/components/overlay/useRandomizerCheckin";
 import {
   useVoiceReadout,
   type VoicePrefs,
@@ -155,8 +164,10 @@ export function OverlayWidgetClient({
   );
   const [connectionStatus, setConnectionStatus] =
     useState<OverlayConnectionStatus>("connected");
+  // Build check-in state only matters to the randomizer source.
+  const [buildIntents, onBuildIntent] = useOverlayBuildIntents();
 
-  useOverlayWidgetSocket(
+  const socketRef = useOverlayWidgetSocket(
     token,
     widget,
     setLive,
@@ -168,14 +179,17 @@ export function OverlayWidgetClient({
     setStudioEvent,
     setEngagementEvent,
     setConnectionStatus,
+    widget === "randomizer" ? onBuildIntent : null,
   );
   useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
+  const randomizerCheckin = useRandomizerCheckin(socketRef, live, liveGame, buildIntents);
   useWidgetVisibility(
     widget as WidgetId,
     live,
     liveGame,
     session,
     setVisible,
+    randomizerCheckin.windowAnchor,
   );
   // Pre-warm the reveal AudioContext the moment the randomizer source
   // loads — well before a Test fire — so the streamer's first Test isn't
@@ -305,6 +319,8 @@ export function OverlayWidgetClient({
         liveGame={liveGame}
         session={session}
         randomizer={randomizer}
+        randomizerIntent={randomizerCheckin.intent}
+        onRandomizerSpin={randomizerCheckin.onSpin}
         visible={visible}
         ghostParam={effectiveGhostParam}
         studioEvent={studioEvent}
@@ -349,6 +365,8 @@ function WidgetRenderer({
   liveGame,
   session,
   randomizer,
+  randomizerIntent,
+  onRandomizerSpin,
   visible,
   ghostParam,
   studioEvent,
@@ -361,6 +379,8 @@ function WidgetRenderer({
   liveGame: LiveGameEnvelope | null;
   session: SessionSummary | null;
   randomizer: RandomizerConfig | null;
+  randomizerIntent: RandomizerIntentGate | null;
+  onRandomizerSpin: (spin: RandomizerSpinEvent) => void;
   visible: boolean;
   ghostParam: string | null;
   studioEvent: unknown;
@@ -411,7 +431,14 @@ function WidgetRenderer({
       return <SessionWidget live={live} session={session} />;
     case "randomizer":
       return (
-        <RandomizerWidget live={live} liveGame={liveGame} config={randomizer} visible={visible} />
+        <RandomizerWidget
+          live={live}
+          liveGame={liveGame}
+          config={randomizer}
+          visible={visible}
+          intent={randomizerIntent}
+          onSpin={onRandomizerSpin}
+        />
       );
     case "ghost-build":
       // Practice coach — the target build rides in this Browser
@@ -518,7 +545,8 @@ function WidgetRenderer({
  * Subscribe to the overlay socket scoped to one widget id. The
  * configured-widgets event is filtered down to a single boolean so
  * the caller can short-circuit rendering when the streamer disables
- * this specific panel.
+ * this specific panel. Returns the live socket so the randomizer can
+ * report its roll on it.
  */
 function useOverlayWidgetSocket(
   token: string,
@@ -532,7 +560,9 @@ function useOverlayWidgetSocket(
   setStudioEvent: (msg: unknown) => void,
   setEngagementEvent: (msg: unknown) => void,
   setConnectionStatus: (status: OverlayConnectionStatus) => void,
-) {
+  onBuildIntent: ((msg: unknown) => void) | null,
+): RefObject<Socket | null> {
+  const socketRef = useRef<Socket | null>(null);
   // The latest gameKey we've observed in either ``live`` or
   // ``liveGame``. Used by the heartbeat reply handler to decide
   // whether the cloud's view has drifted from ours and a resync is
@@ -569,6 +599,7 @@ function useOverlayWidgetSocket(
       reconnectionDelay: 500,
       reconnectionDelayMax: 5000,
     });
+    socketRef.current = socket;
     socket.on("overlay:live", (msg: LiveGamePayload) => {
       // A token's Browser Sources all share this room. Per-widget Test
       // events carry their destination so neighbouring sources do not
@@ -660,6 +691,9 @@ function useOverlayWidgetSocket(
     socket.on("overlay:engagement", (msg: unknown) => {
       if (msg && typeof msg === "object") setEngagementEvent(msg);
     });
+    // Build check-in state (hold / suppress) for the randomizer's spin
+    // gate; replayed by the cloud on connect and resync.
+    if (onBuildIntent) socket.on("overlay:buildIntent", onBuildIntent);
     // Streamer cancelled the test fire — clear local state so the
     // widget vanishes immediately instead of waiting for the natural
     // visibility timer to expire. ``msg.widget`` narrows the clear to
@@ -694,6 +728,7 @@ function useOverlayWidgetSocket(
     return () => {
       detachResilience();
       socket.disconnect();
+      if (socketRef.current === socket) socketRef.current = null;
     };
   }, [
     token,
@@ -705,8 +740,11 @@ function useOverlayWidgetSocket(
     setVoicePrefs,
     setRandomizer,
     setStudioEvent,
+    setEngagementEvent,
     setConnectionStatus,
+    onBuildIntent,
   ]);
+  return socketRef;
 }
 
 // Re-export the shared stale-clear hook so existing test imports from
@@ -720,7 +758,8 @@ export { useClearStalePostGameOnGameKeyChange } from "@/components/overlay/useCl
  * Scouting and randomizer get one visibility window per match or Test nonce.
  * Their original deadlines survive phase gaps and reconnect snapshots.
  * Opponent stays pinned through active gameplay; other widgets use their
- * payload's normal production or Test duration.
+ * payload's normal production or Test duration. A held randomizer reveal
+ * gets its full window from ``randomizerAnchor`` (spin start or hold end).
  */
 export function useWidgetVisibility(
   widget: WidgetId,
@@ -728,6 +767,7 @@ export function useWidgetVisibility(
   liveGame: LiveGameEnvelope | null,
   session: SessionSummary | null,
   setVisible: (visible: boolean) => void,
+  randomizerAnchor: RandomizerWindowAnchor | null = null,
 ) {
   const timerRef = useRef<number | null>(null);
   // Keep the original deadline after a transient idle/menu tick unmounts
@@ -771,6 +811,9 @@ export function useWidgetVisibility(
   // A new match still re-arms the payload-driven widgets even if a source
   // remained present between games. Start-only widgets use startKey below.
   const currentGameKey = liveGame?.gameKey ?? live?.gameKey ?? null;
+  const anchorAtMs = widget === "randomizer" && !isTest && randomizerAnchor?.key === startKey
+    ? randomizerAnchor.atMs
+    : null;
 
   useEffect(() => {
     if (startOnly) {
@@ -783,10 +826,14 @@ export function useWidgetVisibility(
         return;
       }
       const identity = `${widget}:${startKey}`;
+      const duration = resolveWidgetDurationMs(widget, isTest);
       let deadline = startDeadlines.current.get(identity);
       if (deadline === undefined) {
-        const duration = resolveWidgetDurationMs(widget, isTest);
         deadline = duration === null ? Infinity : Date.now() + duration;
+        startDeadlines.current.set(identity, deadline);
+      }
+      if (anchorAtMs !== null && duration !== null) {
+        deadline = extendStartWindow(deadline, anchorAtMs, duration, Date.now());
         startDeadlines.current.set(identity, deadline);
       }
       const remaining = deadline - Date.now();
@@ -836,6 +883,7 @@ export function useWidgetVisibility(
     currentGameKey,
     startOnly,
     startKey,
+    anchorAtMs,
     setVisible,
   ]);
 

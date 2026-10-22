@@ -19,6 +19,7 @@ import { MapLabel } from "@/components/maps/MapArtwork";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
+import { PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import { Icon } from "@/components/ui/Icon";
 import { fmtDate, fmtMinutes, fmtMmr } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
@@ -354,7 +355,10 @@ function GamePlan({ game, owner }: { game: ReplayLibraryItem; owner: boolean }) 
     <dl className="min-w-0 space-y-1">
       <div className="flex min-w-0 gap-2">
         <dt className="w-12 shrink-0 text-micro uppercase tracking-wide text-text-dim">{owner ? "You" : "Player"}</dt>
-        <dd className="truncate text-text" title={game.myBuild || undefined}>{game.myBuild || "Unclassified"}</dd>
+        <dd className="flex min-w-0 items-center gap-1">
+          <span className="truncate text-text" title={game.myBuild || undefined}>{game.myBuild || "Unclassified"}</span>
+          {owner && game.buildPlanned === true ? <PlannedBadge detected={game.detectedBuild ?? null} /> : null}
+        </dd>
       </div>
       <div className="flex min-w-0 gap-2">
         <dt className="w-12 shrink-0 text-micro uppercase tracking-wide text-text-dim">Opp</dt>
