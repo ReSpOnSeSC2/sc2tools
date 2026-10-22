@@ -107,7 +107,8 @@ describe("DashboardKpiStrip game scope", () => {
 
     expect(screen.getByText("Games in range")).toBeTruthy();
     expect(screen.getByText("10")).toBeTruthy();
-    expect(screen.getByText("Season 68")).toBeTruthy();
+    // The region and length filters narrow the count too, and say so.
+    expect(screen.getByText("Season 68 · 2 more filters")).toBeTruthy();
     expect(screen.queryByText("Lifetime synced replays")).toBeNull();
 
     const rangeUrl = requestedUrls.find(
@@ -124,6 +125,33 @@ describe("DashboardKpiStrip game scope", () => {
     expect(query.get("game_size")).toBe("1v1");
     expect(query.get("min_minutes")).toBe("10");
     expect(query.get("max_minutes")).toBe("20");
+  });
+});
+
+describe("DashboardKpiStrip labels", () => {
+  it("says the Win rate card keeps its own timeframe, not the date filter", () => {
+    renderStrip({
+      ...DEFAULT_ANALYZER_FILTERS,
+      preset: "last_7d",
+      since: "2026-10-01T00:00:00.000Z",
+      until: "2026-10-07T23:59:59.999Z",
+    });
+    expect(screen.getByText("Own timeframe · ignores the date filter")).toBeTruthy();
+    // Its own request carries no global date bounds.
+    const wrUrl = requestedUrls.find(
+      (url) => url.startsWith("/v1/timeseries") && queryOf(url).get("since") === "2026-09-30T04:00:00.000Z",
+    );
+    expect(wrUrl).toBeTruthy();
+  });
+
+  it("names only the date range on Games in range when nothing else narrows it", () => {
+    renderStrip({ ...DEFAULT_ANALYZER_FILTERS, preset: "last_7d" });
+    expect(screen.getByText("7d")).toBeTruthy();
+  });
+
+  it("counts a matchup or Strategies pick on Games in range", () => {
+    renderStrip({ ...DEFAULT_ANALYZER_FILTERS, opp_race: "Z" });
+    expect(screen.getByText("12-worker patch · 1 more filter")).toBeTruthy();
   });
 });
 

@@ -17,16 +17,15 @@ import {
  * Regression: drill-down filters must NOT persist across reloads.
  *
  * The Opponents/Strategies/etc. tabs read the global ``analyzer.filters``
- * blob from localStorage. The FilterBar only surfaces date range, region,
- * and "hide too-short" — so persisting the drill-down filters (race,
- * opp_race, map, mmr_min, mmr_max, build, opp_strategy) meant a stale one,
- * set by clicking into a chart/build/MMR bucket, would silently stick and
- * hide opponents (e.g. a ranked opponent vanished from the Opponents tab
- * because an old opp_strategy/mmr filter remained in storage with no
- * visible chip and no way to clear it). ``pickPersisted`` is the guard:
- * it strips everything except the user-visible global controls, on both
- * write and read, which also self-heals sessions that already persisted a
- * stale value.
+ * blob from localStorage. Persisting the drill-down filters (map,
+ * mmr_min, mmr_max, build, opp_strategy) meant a stale one, set by
+ * clicking into a chart/build/MMR bucket, would silently stick and hide
+ * opponents (e.g. a ranked opponent vanished from the Opponents tab
+ * because an old opp_strategy/mmr filter remained in storage).
+ * ``pickPersisted`` is the guard: it keeps only the filter bar's own
+ * controls — now including the matchup (race / opp_race), which the
+ * Matchup picker shows and edits — on both write and read, which also
+ * self-heals sessions that already persisted a stale value.
  */
 describe("pickPersisted", () => {
   it("keeps only the user-visible global filter controls", () => {
@@ -50,24 +49,33 @@ describe("pickPersisted", () => {
     });
   });
 
-  it("strips invisible drill-down filters so they cannot silently persist", () => {
+  it("strips session-only drill-down filters so they cannot silently persist", () => {
     const out = pickPersisted({
       preset: "all",
       regions: "EU",
-      // Drill-down filters set by clicking into a chart/build/etc.
+      // The Matchup picker's choice is a visible bar control: it persists.
       race: "Z",
       opp_race: "T",
+      // Drill-down filters set by clicking into a chart/build/etc.
       map: "site delta le",
       mmr_min: 5000,
       mmr_max: 6000,
       build: "PvT - 1 Gate Expand",
       opp_strategy: "TvP - 2-1-1",
     });
-    expect(out).toEqual({ preset: "all", regions: "EU" });
-    expect(out).not.toHaveProperty("race");
+    expect(out).toEqual({ preset: "all", regions: "EU", race: "Z", opp_race: "T" });
+    expect(out).not.toHaveProperty("map");
     expect(out).not.toHaveProperty("mmr_min");
     expect(out).not.toHaveProperty("build");
     expect(out).not.toHaveProperty("opp_strategy");
+  });
+
+  it("persists the matchup across reloads", () => {
+    expect(toStoredFilters({ opp_race: "Z", race: "P", build: "PvZ - Stargate" })).toEqual({
+      race: "P",
+      opp_race: "Z",
+      regions_rev: REGIONS_REV,
+    });
   });
 
   it("omits undefined keys entirely", () => {
@@ -148,6 +156,19 @@ describe("hydrateStoredFilters", () => {
     expect(
       hydrateStoredFilters({ preset: "all", min_minutes: 10, max_minutes: 20 }),
     ).toMatchObject({ min_minutes: 10, max_minutes: 20 });
+  });
+
+  it("restores a stored matchup as race letters", () => {
+    const out = hydrateStoredFilters({ preset: "all", race: "zerg", opp_race: "P" });
+    expect(out.race).toBe("Z");
+    expect(out.opp_race).toBe("P");
+  });
+
+  it("drops an unreadable stored matchup instead of filtering on it", () => {
+    const out = hydrateStoredFilters({ preset: "all", race: "x", opp_race: "" });
+    expect(out).not.toHaveProperty("race");
+    expect(out).not.toHaveProperty("opp_race");
+    expect(filtersToQuery(out)).not.toMatch(/race=/);
   });
 
   it("leaves game length unset when nothing was stored", () => {

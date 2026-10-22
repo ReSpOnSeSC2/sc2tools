@@ -2,9 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarRange, ChevronDown, X } from "lucide-react";
-import { ANALYZER_REGIONS, PTR_REGION, useFilters } from "@/lib/filterContext";
+import { HelpLink } from "@/components/help/HelpLink";
+import {
+  ANALYZER_REGIONS,
+  PTR_REGION,
+  activeRegionCodes,
+  useFilters,
+} from "@/lib/filterContext";
 import { PillButton } from "./FilterPill";
+import { FilterSheet } from "./FilterSheet";
 import { GameLengthFilter } from "./GameLengthFilter";
+import { MatchupPicker } from "./MatchupPicker";
 import {
   PRESETS,
   resolvePreset,
@@ -20,12 +28,17 @@ import type { LogicalSeason } from "@/lib/useSeasons";
 const SEASONS_TO_SHOW = 16;
 
 /**
- * Global date-range filter that drives every analyzer tab. Selection
- * is held in the shared filter context, so the same `since/until` hits
- * the Opponents, Strategies, Trends, Maps, Builds, Map intel and
- * Activity tabs at once.
+ * Global filter bar that drives every analyzer tab: date range, matchup,
+ * region, maps, players, game length and "Hide too-short". Selection is
+ * held in the shared filter context, so the same filters hit the
+ * Opponents, Strategies, Trends, Maps, Builds, Map intel and Activity
+ * tabs at once. ActiveFilterChips, under the bar, lists whatever differs
+ * from the defaults.
  *
- * The picker presents three groups:
+ * Below `sm` only the date range stays inline; the other controls move
+ * into the "Filters · N active" bottom sheet (FilterSheet).
+ *
+ * The date picker presents three groups:
  *   - Patch + quick presets (12-worker 5.0.17, the 8-worker 5.0.16 window,
  *     pre-5.0.16 12-worker games, today, last 7d, etc.)
  *   - Recent SC2 ladder seasons — sourced from SC2Pulse via /v1/seasons
@@ -105,6 +118,23 @@ export function FilterBar() {
   // The 8-worker preset has no dates (each game's version decides, PTR
   // games included), so its range reads by patch: "5.0.16 → 5.0.17".
   const eightWorker = patchEraFor(presetId) === "before";
+
+  // Rendered inline from `sm` up, and inside the phone sheet below it.
+  const controls = (
+    <>
+      <MatchupPicker />
+
+      <RegionToggleRow />
+
+      <MapPoolToggle />
+
+      <GameSizeToggle />
+
+      <GameLengthFilter />
+
+      <ExcludeTooShortToggle />
+    </>
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -246,15 +276,11 @@ export function FilterBar() {
         </span>
       ) : null}
 
-      <RegionToggleRow />
+      <FilterSheet>{controls}</FilterSheet>
 
-      <MapPoolToggle />
+      <div className="hidden sm:contents">{controls}</div>
 
-      <GameSizeToggle />
-
-      <GameLengthFilter />
-
-      <ExcludeTooShortToggle />
+      <HelpLink slug="analyzer-filters" variant="icon" />
     </div>
   );
 }
@@ -392,15 +418,10 @@ const REGION_NAMES: Partial<Record<string, string>> = {
  */
 function RegionToggleRow() {
   const { filters, setFilters } = useFilters();
-  const active = useMemo(() => {
-    const raw = (filters.regions || "").trim();
-    if (!raw) return new Set<string>(ANALYZER_REGIONS);
-    const tokens = raw
-      .split(",")
-      .map((t) => t.trim().toUpperCase())
-      .filter((t) => (ANALYZER_REGIONS as readonly string[]).includes(t));
-    return tokens.length > 0 ? new Set(tokens) : new Set<string>(ANALYZER_REGIONS);
-  }, [filters.regions]);
+  const active = useMemo(
+    () => new Set(activeRegionCodes(filters.regions)),
+    [filters.regions],
+  );
 
   const toggle = (code: string) => {
     const next = new Set(active);
@@ -458,19 +479,21 @@ function RegionToggleRow() {
 }
 
 /**
- * "Hide too-short games" toggle. Replays that ended in under 30
- * seconds get tagged "<X>v<Y> - Game Too Short" by the strategy
- * detector on BOTH `myBuild` and `opponent.strategy`. This checkbox
- * sets ``exclude_too_short=1`` on the filter context, which
- * `filtersToQuery` forwards to the API; `gamesMatchStage` then adds
- * a negated regex on whichever side isn't already constrained.
+ * "Hide too-short games" toggle. Replays that ended in under 45
+ * seconds (GAME_TOO_SHORT_THRESHOLD_SECONDS in the replay engine's
+ * strategy_detector_helpers.py) get tagged "<X>v<Y> - Game Too Short"
+ * by the strategy detector on BOTH `myBuild` and `opponent.strategy`.
+ * This checkbox sets ``exclude_too_short=1`` on the filter context,
+ * which `filtersToQuery` forwards to the API; `gamesMatchStage` then
+ * adds a negated regex on whichever side isn't already constrained.
  *
  * Drives every analyzer tab (Opponents, Strategies, Trends, Maps,
  * Builds) in one shot because they all read from the same shared
  * `useFilters()` context.
  *
- * Default off so historical bookmarks and shared links stay
- * reproducible.
+ * Default on (DEFAULT_ANALYZER_FILTERS): a fresh session hides the
+ * disconnects and instant leaves. Turning it off is remembered and
+ * shows as a "Too-short games: Shown" chip.
  */
 function ExcludeTooShortToggle() {
   const { filters, setFilters } = useFilters();
@@ -509,7 +532,7 @@ function ExcludeTooShortToggle() {
           setFilters({ ...filters, exclude_too_short: e.target.checked })
         }
         className="h-3.5 w-3.5 cursor-pointer accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-        aria-label="Exclude games shorter than 30 seconds"
+        aria-label="Hide too-short games, under 45 seconds"
       />
       <span className={enabled ? "text-text" : undefined}>
         Hide too-short

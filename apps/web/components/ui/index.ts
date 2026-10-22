@@ -44,6 +44,8 @@ export {
 } from "./Skeleton";
 export { Section } from "./Section";
 export type { SectionProps } from "./Section";
+export { SegmentedControl } from "./SegmentedControl";
+export type { SegmentedControlProps, SegmentedOption } from "./SegmentedControl";
 export { Select } from "./Select";
 export type { SelectProps, SelectSize } from "./Select";
 export { StatCard } from "./Stat";

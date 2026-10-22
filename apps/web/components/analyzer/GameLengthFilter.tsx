@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 import {
   MAX_GAME_LENGTH_MINUTES,
+  gameLengthLabel,
   normalizeGameLengthBounds,
   useFilters,
 } from "@/lib/filterContext";
@@ -35,14 +36,6 @@ const LENGTH_BANDS: ReadonlyArray<{
   { id: "long", label: "20+", title: "Games of 20 minutes or longer", min: 20 },
 ];
 
-/** Human label for a bound pair, e.g. "7–13 min" / "20+ min" / "< 8 min". */
-function lengthRangeLabel(min?: number, max?: number): string | null {
-  if (min !== undefined && max !== undefined) return `${min}–${max} min`;
-  if (min !== undefined) return `${min}+ min`;
-  if (max !== undefined) return `< ${max} min`;
-  return null;
-}
-
 /**
  * Global "Game length" filter. Bounds are whole minutes and drive every
  * analyzer tab through the shared filter context, the same way Region /
@@ -71,7 +64,7 @@ export function GameLengthFilter() {
     [min, max],
   );
   const isCustom = !isAll && activeBandId === null;
-  const customLabel = isCustom ? lengthRangeLabel(min, max) : null;
+  const customLabel = isCustom ? gameLengthLabel(min, max) : null;
 
   // Draft state for the custom inputs, seeded from the active range so
   // reopening the popover shows what is currently applied rather than

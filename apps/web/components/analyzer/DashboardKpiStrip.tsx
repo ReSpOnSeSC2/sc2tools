@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronDown, Gamepad2 } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
-import { useFilters, filtersToQuery } from "@/lib/filterContext";
+import {
+  describeActiveFilters,
+  filtersToQuery,
+  useFilters,
+} from "@/lib/filterContext";
 import { GlowHalo } from "@/components/ui/GlowHalo";
 import { StatCard } from "@/components/ui/Stat";
 import { fmtMmr, pct1, wrColor } from "@/lib/format";
@@ -183,7 +187,19 @@ export function DashboardKpiStrip() {
       0,
     );
   }, [selectedRangeSeries.data, tz]);
-  const selectedRangeLabel = shortLabelFor(filters.preset || "all", seasons);
+  // The card counts every global filter, not only the date range, so say
+  // when the matchup, region or a Strategies drill-down narrows it too.
+  const otherFilterCount = useMemo(
+    () =>
+      describeActiveFilters(filters, { seasons }).filter((f) => f.key !== "preset")
+        .length,
+    [filters, seasons],
+  );
+  const selectedRangeLabel = `${shortLabelFor(filters.preset || "all", seasons)}${
+    otherFilterCount > 0
+      ? ` · ${otherFilterCount} more ${otherFilterCount === 1 ? "filter" : "filters"}`
+      : ""
+  }`;
 
   // /v1/streak walks games one-by-one to compute the consecutive
   // same-result streak. Pass the global "Hide too-short games"
@@ -243,9 +259,16 @@ export function DashboardKpiStrip() {
           )
         }
         hint={
-          wrStats.totalGames > 0
-            ? `${wrStats.wins}–${wrStats.losses} over ${wrStats.totalGames} games`
-            : "No games in this window"
+          <>
+            {wrStats.totalGames > 0
+              ? `${wrStats.wins}–${wrStats.losses} over ${wrStats.totalGames} games`
+              : "No games in this window"}
+            {/* This card keeps its own timeframe (the menu by its label),
+                so a date range picked in the filter bar leaves it as is. */}
+            <span className="mt-0.5 block text-micro text-text-dim">
+              Own timeframe · ignores the date filter
+            </span>
+          </>
         }
         size="md"
       />

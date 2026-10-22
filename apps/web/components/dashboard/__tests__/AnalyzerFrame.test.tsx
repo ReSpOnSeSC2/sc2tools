@@ -8,9 +8,9 @@ import { cleanup, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ browserImport: false }));
+const mocks = vi.hoisted(() => ({ browserImport: false, pathname: "/app" }));
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), usePathname: () => "/app" }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), usePathname: () => mocks.pathname }));
 vi.mock("next/dynamic", () => ({
   default: () =>
     function FolderSyncAutoRunnerMock() {
@@ -22,6 +22,9 @@ vi.mock("@/lib/clientApi", () => ({ apiCall: vi.fn() }));
 vi.mock("@/components/AnalyzerProvider", () => ({ AnalyzerProvider: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock("@/components/analyzer/DoctorBanner", () => ({ DoctorBanner: () => null }));
 vi.mock("@/components/analyzer/FilterBar", () => ({ FilterBar: () => null }));
+vi.mock("@/components/analyzer/ActiveFilterChips", () => ({
+  ActiveFilterChips: () => <div data-testid="active-filter-chips" />,
+}));
 vi.mock("@/components/imports/useImportStatus", () => ({
   useImportStatus: () => ({ job: null, active: false, pct: 0, etaSeconds: null, isLoading: false, refresh: vi.fn() }),
 }));
@@ -36,6 +39,7 @@ const NEW_USER: DashboardMe = { userId: "u1", source: "cloud", games: { total: 0
 
 beforeEach(() => {
   mocks.browserImport = false;
+  mocks.pathname = "/app";
 });
 
 afterEach(cleanup);
@@ -79,5 +83,22 @@ describe("AnalyzerFrame", () => {
   it("renders the section once games exist", () => {
     render(<AnalyzerFrame me={{ ...NEW_USER, agentPaired: true, games: { total: 5, latest: null } }}>PAGE</AnalyzerFrame>);
     expect(screen.getByText("PAGE")).toBeTruthy();
+  });
+
+  it("shows the Active filters row under the filter bar on every analyzer route", () => {
+    const me = { ...NEW_USER, agentPaired: true, games: { total: 5, latest: null } };
+    for (const pathname of ["/app", "/app/opponents", "/app/opponents/123", "/app/strategies"]) {
+      mocks.pathname = pathname;
+      render(<AnalyzerFrame me={me}>PAGE</AnalyzerFrame>);
+      expect(screen.getByTestId("active-filter-chips"), pathname).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it("leaves the Active filters row off the single-game page", () => {
+    mocks.pathname = "/app/game/abc";
+    render(<AnalyzerFrame me={{ ...NEW_USER, agentPaired: true, games: { total: 5, latest: null } }}>PAGE</AnalyzerFrame>);
+    expect(screen.getByText("PAGE")).toBeTruthy();
+    expect(screen.queryByTestId("active-filter-chips")).toBeNull();
   });
 });
