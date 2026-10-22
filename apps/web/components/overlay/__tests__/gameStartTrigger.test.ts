@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { gameStartTriggerKey, scoutingStartTriggerKey } from "../gameStartTrigger";
+import {
+  gameKeyFromTriggerKey,
+  gameStartTriggerKey,
+  scoutingStartTriggerKey,
+} from "../gameStartTrigger";
 import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 
 function envelope(
@@ -121,5 +125,17 @@ describe("scoutingStartTriggerKey", () => {
   it("keeps settings previews available during loading", () => {
     expect(scoutingStartTriggerKey({ isTest: true, testNonce: "preview" }, envelope()))
       .toBe("test:preview");
+  });
+});
+
+describe("gameKeyFromTriggerKey", () => {
+  it("returns the real match key behind a game start", () => {
+    expect(gameKeyFromTriggerKey("game:Alice|Bob|1700000000000")).toBe("Alice|Bob|1700000000000");
+  });
+
+  it("has no match key for Test fires, keyless starts or no start", () => {
+    expect(gameKeyFromTriggerKey("test:123")).toBeNull();
+    expect(gameKeyFromTriggerKey("game:unkeyed")).toBeNull();
+    expect(gameKeyFromTriggerKey(null)).toBeNull();
   });
 });

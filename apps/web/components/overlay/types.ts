@@ -544,3 +544,40 @@ export interface LiveGameEnvelope {
     | "last5GamesScouting"
   >;
 }
+
+/**
+ * Build check-in state of one live game, pushed on ``overlay:buildIntent``
+ * (after the server decides the randomizer hold, on declare / undeclare /
+ * release, and replayed on connect / resync). Deliberately carries no
+ * build key or name: overlay rooms are readable by anyone holding the
+ * token, so the declared build must never reach them.
+ */
+export interface OverlayBuildIntent {
+  gameKey: string;
+  /** True when a declared build differs from (or precedes) the roll. */
+  suppressRandomizer: boolean;
+  /** Hold left at send time; never compared against a server clock. */
+  holdRemainingMs: number;
+}
+
+/**
+ * Randomizer spin gate for one game, derived from ``overlay:buildIntent``
+ * by the overlay client and passed into ``RandomizerWidget``.
+ */
+export interface RandomizerIntentGate {
+  gameKey: string;
+  /** True once any ``overlay:buildIntent`` for this game has arrived. */
+  seen: boolean;
+  suppressRandomizer: boolean;
+  /** Local ``Date.now()`` deadline of a pending hold; 0 when none. */
+  holdDeadlineMs: number;
+}
+
+/** Reported by ``RandomizerWidget`` the moment a reveal starts. */
+export interface RandomizerSpinEvent {
+  triggerKey: string;
+  /** Local ``Date.now()`` at spin time. */
+  startedAtMs: number;
+  /** What to report as the game's roll; null for Test fires. */
+  roll: { gameKey: string; buildId: string } | null;
+}

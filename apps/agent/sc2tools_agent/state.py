@@ -256,6 +256,20 @@ class AgentState:
     """Optional transition duration override, paired with
     ``obs_transition_name``."""
 
+    # ---- Build check-in cards (see build_checkin/) ----
+
+    build_checkin_intro_seen: bool = False
+    """True once the player dismissed the cards' first-run explainer.
+    The check-in preferences themselves live in the cloud
+    (``buildCheckin``), so they follow the account, not this PC."""
+
+    build_checkin_card_positions: Dict[str, List[int]] = field(
+        default_factory=dict,
+    )
+    """Where the player dragged each check-in card: ``"loading"`` /
+    ``"postgame"`` → ``[x, y]`` in logical screen pixels. Absent means
+    the default spot beside the game."""
+
     @property
     def is_paired(self) -> bool:
         return bool(self.device_token)
@@ -391,6 +405,10 @@ def load_state(state_dir: Path) -> AgentState:
         obs_transition_duration_ms=_coerce_int(
             raw.get("obs_transition_duration_ms"),
         ),
+        build_checkin_intro_seen=raw.get("build_checkin_intro_seen") is True,
+        build_checkin_card_positions=_coerce_positions(
+            raw.get("build_checkin_card_positions"),
+        ),
     )
 
 
@@ -442,6 +460,10 @@ def _snapshot(state: AgentState) -> dict:
         replay_folders_override=list(state.replay_folders_override),
         replay_folders_excluded=list(state.replay_folders_excluded),
         obs_scene_map=dict(state.obs_scene_map),
+        build_checkin_card_positions={
+            kind: list(point)
+            for kind, point in dict(state.build_checkin_card_positions).items()
+        },
     )
     return asdict(stable)
 
@@ -545,6 +567,31 @@ def _coerce_str_map(value: object) -> Dict[str, str]:
     for key, val in value.items():
         if isinstance(key, str) and key and isinstance(val, str):
             out[key] = val.strip()
+    return out
+
+
+def _coerce_positions(value: object) -> Dict[str, List[int]]:
+    """Return ``value`` as ``{name: [x, y]}`` with integer coordinates.
+
+    Off-screen or stale coordinates are the window's problem to clamp;
+    this only drops entries that are not a pair of plain numbers.
+    """
+    if not isinstance(value, dict):
+        return {}
+    out: Dict[str, List[int]] = {}
+    for key, point in value.items():
+        if (
+            isinstance(key, str)
+            and key
+            and isinstance(point, list)
+            and len(point) == 2
+            and all(
+                isinstance(c, (int, float)) and not isinstance(c, bool)
+                and c == c and abs(c) < 1_000_000
+                for c in point
+            )
+        ):
+            out[key] = [int(point[0]), int(point[1])]
     return out
 
 

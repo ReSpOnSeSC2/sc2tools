@@ -261,3 +261,23 @@ describe("BuildDossier composition integration", () => {
     expect(harness.retryGame).toHaveBeenCalledOnce();
   });
 });
+
+describe("BuildDossier check-in counts", () => {
+  it("notes how many games count only through check-ins", () => {
+    harness.data = {
+      ...harness.data!,
+      totals: { total: 12, wins: 7, losses: 5, winRate: 7 / 12, checkins: 3 },
+    };
+    render(<BuildDossier apiPath="/v1/custom-builds/dt-rush/matches" showMacro={false} />);
+    expect(screen.getByTestId("dossier-checkins").textContent).toBe("incl. 3 check-ins");
+  });
+
+  it("says nothing when no game needed a check-in", () => {
+    harness.data = {
+      ...harness.data!,
+      totals: { total: 12, wins: 7, losses: 5, winRate: 7 / 12, checkins: 0 },
+    };
+    render(<BuildDossier apiPath="/v1/custom-builds/dt-rush/matches" showMacro={false} />);
+    expect(screen.queryByTestId("dossier-checkins")).toBeNull();
+  });
+});

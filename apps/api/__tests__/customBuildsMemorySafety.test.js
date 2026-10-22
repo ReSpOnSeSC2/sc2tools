@@ -1556,7 +1556,7 @@ describe("custom-build rule scan memory safety", () => {
       expect(committed.myBuild).toBe("Newer build");
       expect(committed._customBuildClassificationSequence).toBe(20);
       expect(committed._customBuildReclassify).toBeUndefined();
-      expect(committed._schemaVersion).toBe(7);
+      expect(committed._schemaVersion).toBe(8);
     },
   );
 
@@ -1738,7 +1738,7 @@ describe("custom-build rule scan memory safety", () => {
     expect(row._customBuildSlug).toBe("old-custom-build");
     expect(row._customOpponentStrategySlug).toBeUndefined();
     expect(row._customBuildReclassify).toBeUndefined();
-    expect(row._schemaVersion).toBe(7);
+    expect(row._schemaVersion).toBe(8);
   });
 
   test("an opponent-log recompute fences out a verdict from the old detail", async () => {
@@ -1851,7 +1851,7 @@ describe("custom-build rule scan memory safety", () => {
     expect(row._customBuildRevision).not.toBe(revisionDuringWrite);
     expect(row._customBuildSlug).toBe("old-opponent-build");
     expect(row._customBuildReclassify).toBeUndefined();
-    expect(row._schemaVersion).toBe(7);
+    expect(row._schemaVersion).toBe(8);
   });
 
   test("an opponent-log recompute blocks a classifier started during detail I/O", async () => {
@@ -1950,7 +1950,7 @@ describe("custom-build rule scan memory safety", () => {
     expect(completed._customBuildRevision).not.toBe(preFence._customBuildRevision);
     expect(completed._customBuildClassificationSequence).toBe(78);
     expect(completed._customBuildReclassify).toBeUndefined();
-    expect(completed._schemaVersion).toBe(7);
+    expect(completed._schemaVersion).toBe(8);
   });
 
   test("unproven equal-name and prior-name tags survive nonmatch and rename scans", async () => {
@@ -2034,7 +2034,7 @@ describe("custom-build rule scan memory safety", () => {
     expect(result).toEqual(expect.objectContaining({ matched: 1, tagged: 1 }));
     expect(stored.myBuild).toBe("Shared display name");
     expect(stored._customBuildSlug).toBe("claim-collision");
-    expect(stored._schemaVersion).toBe(7);
+    expect(stored._schemaVersion).toBe(8);
 
     const publicGames = new GamesService({ games });
     const [listed, fetched, many] = await Promise.all([
@@ -2140,7 +2140,7 @@ describe("custom-build rule scan memory safety", () => {
     expect(result).toEqual(expect.objectContaining({ cleared: 1 }));
     expect(stored.myBuild).toBeUndefined();
     expect(stored._customBuildSlug).toBeUndefined();
-    expect(stored._schemaVersion).toBe(7);
+    expect(stored._schemaVersion).toBe(8);
   });
 
   test("deleting a build never clears an unproven legacy name collision", async () => {

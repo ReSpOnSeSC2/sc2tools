@@ -24,6 +24,7 @@ vi.mock("@/components/analyzer/settings/SettingsImport", () => ({ SettingsImport
 vi.mock("@/components/analyzer/settings/SettingsBackups", () => ({ SettingsBackups: () => <p>backups body</p> }));
 vi.mock("@/components/analyzer/settings/SettingsMisc", () => ({ SettingsMisc: () => <p>misc body</p> }));
 vi.mock("@/components/analyzer/settings/SettingsHelp", () => ({ SettingsHelp: () => <p>help body</p> }));
+vi.mock("@/components/build-checkin/BuildCheckInSettings", () => ({ BuildCheckInSettings: () => <p>checkin body</p> }));
 
 import SettingsPage from "../page";
 
@@ -49,6 +50,13 @@ describe("SettingsPage ?tab=", () => {
     expect(screen.queryByText("import body")).toBeNull();
     expect(screen.queryAllByRole("tab", { name: "Import" })).toHaveLength(0);
     expect(screen.getByText("foundation body")).toBeTruthy();
+  });
+
+  it("deep-links the Build check-in tab", () => {
+    mocks.tab = "checkin";
+    render(<SettingsPage />);
+    expect(screen.getByText("checkin body")).toBeTruthy();
+    expect(screen.getAllByRole("tab", { name: "Build check-in" })).toHaveLength(2);
   });
 
   it("opens any other known tab and ignores unknown ones", () => {

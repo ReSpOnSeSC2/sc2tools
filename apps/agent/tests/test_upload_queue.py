@@ -2797,3 +2797,117 @@ def test_playback_publications_run_one_at_a_time(tmp_path):
         worker.join(timeout=5)
     assert active["peak"] == 1
     assert all(str(job.file_path) in state.uploaded for job in jobs)
+
+
+# -------------------------------------------------------------------------
+# on_game_accepted: the live-lane hook the post-game build check-in uses.
+# -------------------------------------------------------------------------
+
+
+def _live(job: UploadJob) -> UploadJob:
+    return replace(job, priority=True)
+
+
+def test_game_accepted_fires_after_success_for_live_jobs_only(
+    tmp_path: Path,
+) -> None:
+    events: list[tuple] = []
+    state = AgentState(device_token="t")
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_batch_size=4),
+        state=state,
+        api=_StubApi(),
+        on_success=lambda path: events.append(("success", path.name)),
+        on_game_accepted=lambda path, game, gid, row: events.append(
+            ("accepted", path.name, game.game_id, gid, row),
+        ),
+    )
+    live = _live(_game(tmp_path, "live.SC2Replay"))
+    backlog = _game(tmp_path, "backlog.SC2Replay")
+    assert q.submit(backlog) is True
+    assert q.submit(live) is True
+    q.start()
+    try:
+        assert _wait_for(lambda: len(state.uploaded) == 2, timeout=5.0)
+        assert _wait_for(
+            lambda: any(event[0] == "accepted" for event in events),
+        )
+    finally:
+        q.stop()
+
+    accepted = [event for event in events if event[0] == "accepted"]
+    assert accepted == [(
+        "accepted", "live.SC2Replay", "id-live.SC2Replay", "id-live.SC2Replay",
+        {"gameId": "id-live.SC2Replay", "created": True},
+    )]
+    assert events.index(("success", "live.SC2Replay")) < events.index(accepted[0])
+
+
+def test_game_accepted_fires_once_per_game_id_for_aliases(tmp_path: Path) -> None:
+    """Alias files of one game coalesce into one payload and one callback."""
+    accepted: list[str] = []
+    succeeded: list[Path] = []
+    state = AgentState(device_token="t")
+    q = UploadQueue(
+        cfg=_cfg(tmp_path, upload_batch_size=2),
+        state=state,
+        api=_StubApi(),
+        on_success=succeeded.append,
+        on_game_accepted=lambda path, _game, gid, _row: accepted.append(gid),
+    )
+    first = _live(_game(tmp_path, "alias-a.SC2Replay"))
+    second_base = _live(_game(tmp_path, "alias-b.SC2Replay"))
+    second = replace(
+        second_base,
+        game=replace(second_base.game, game_id=first.game.game_id),
+    )
+
+    q._upload_batch([first, second])
+
+    assert set(succeeded) == {first.file_path, second.file_path}
+    assert accepted == [first.game.game_id]
+
+
+def test_game_accepted_callback_failure_does_not_break_upload(
+    tmp_path: Path,
+) -> None:
+    def _boom(*_args) -> None:
+        raise RuntimeError("controller exploded")
+
+    succeeded: list[Path] = []
+    state = AgentState(device_token="t")
+    q = UploadQueue(
+        cfg=_cfg(tmp_path),
+        state=state,
+        api=_StubApi(),
+        on_success=succeeded.append,
+        on_game_accepted=_boom,
+    )
+    job = _live(_game(tmp_path, "boom.SC2Replay"))
+    assert q.submit(job) is True
+    q.start()
+    try:
+        assert _wait_for(lambda: str(job.file_path) in state.uploaded)
+        assert _wait_for(lambda: succeeded == [job.file_path])
+    finally:
+        q.stop()
+    assert q.is_pending(job.file_path) is False
+
+
+def test_legacy_single_upload_mirrors_game_accepted(tmp_path: Path) -> None:
+    accepted: list[tuple] = []
+    q = UploadQueue(
+        cfg=_cfg(tmp_path),
+        state=AgentState(device_token="t"),
+        api=_StubApi(),
+        on_game_accepted=lambda path, game, gid, row: accepted.append(
+            (path.name, gid, row),
+        ),
+    )
+    q._upload_one(_game(tmp_path, "history.SC2Replay"))
+    q._upload_one(_live(_game(tmp_path, "single.SC2Replay")))
+
+    assert accepted == [(
+        "single.SC2Replay", "id-single.SC2Replay",
+        {"gameId": "id-single.SC2Replay", "created": True},
+    )]

@@ -22,6 +22,8 @@ const {
 } = require("./buildCompositions");
 const { computeTransitions } = require("./buildTransitions");
 const { computePerGameScouting } = require("./scouting/perGameScouting");
+const { BUILD_INTENT_LABEL_PROJECTION } = require("./buildIntentShape");
+const { ownerBuildFlags } = require("./buildIntentReaders");
 const {
   compactAnalysisBuildLog,
   compactAnalysisMacroBreakdown,
@@ -187,6 +189,9 @@ const PROFILE_GAME_PROJECTION = {
   "opponent.leagueId": 1,
   "opponent.region": 1,
   "opponent.strategy": 1,
+  // Build check-in label fields (never notes) for the serializer's
+  // ``build_planned`` / ``detected_build`` flags.
+  ...BUILD_INTENT_LABEL_PROJECTION,
 };
 
 const PROFILE_DETAIL_PROJECTION = {
@@ -221,6 +226,7 @@ const PROFILE_GAME_ROW_PROJECTION = {
   "opponent.race": 1,
   "opponent.strategy": 1,
   "opponent.mmr": 1,
+  ...BUILD_INTENT_LABEL_PROJECTION,
 };
 
 /**
@@ -3765,6 +3771,8 @@ function serializeGameForProfile(g) {
  * Strict allow-list serializer for cursor-paged replay rows. Keeping this
  * separate from `serializeGameForProfile` prevents newly-added slim/detail
  * fields from accidentally inflating the full-history response.
+ * `build_planned` marks a row whose `my_build` comes from a confirmed build
+ * check-in; `detected_build` is then what the replay was classified as.
  *
  * @param {any} g
  * @returns {object}
@@ -3777,6 +3785,7 @@ function serializeCompactProfileGame(g) {
     Number.isFinite(g?.replayFile?.sizeBytes) && g.replayFile.sizeBytes > 0
       ? g.replayFile.sizeBytes
       : null;
+  const intent = ownerBuildFlags(g);
   return {
     id: g?.gameId || null,
     date: g?.date instanceof Date ? g.date.toISOString() : g?.date || null,
@@ -3788,6 +3797,8 @@ function serializeCompactProfileGame(g) {
     opp_race: opp.race || "",
     opp_strategy: opp.strategy || null,
     my_build: g?.myBuild || "",
+    build_planned: intent.buildPlanned,
+    detected_build: intent.detectedBuild,
     my_race: g?.myRace || "",
     matchFormat: typeof g?.matchFormat === "string" ? g.matchFormat : null,
     playerCount: typeof g?.playerCount === "number" ? g.playerCount : null,

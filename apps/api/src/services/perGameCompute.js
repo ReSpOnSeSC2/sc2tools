@@ -18,6 +18,11 @@ const { toStartSeconds, isFinishTimeEvent } = require("./buildDurations");
 const { proxyEvidence } = require("./proxyClassification");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { validateCasualtyEvents } = require("../validation/casualtyEvents");
+const {
+  AGREES_WITH_DETECTOR_MATCH,
+  BUILD_INTENT_LABEL_PROJECTION,
+  withDetectorLabels,
+} = require("./buildIntentShape");
 
 const {
   KNOWN_BUILDING_NAMES,
@@ -756,7 +761,12 @@ class PerGameComputeService {
    *   includeMacroBreakdown?: boolean,
    *   filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>,
    *   match?: Record<string, any>,
-   * }} [opts]
+   *   view?: "detector"|"agreeing",
+   * }} [opts] ``view: "detector"`` reports a build check-in row's classifier
+   *   labels (``myBuild`` + an explicit ``customBuildSlug``) instead of the
+   *   declared build; only the custom-build classifier asks for it.
+   *   ``view: "agreeing"`` keeps only rows whose effective label agrees with
+   *   the detector (build-shape cohorts: phases, compositions, transitions)
    * @returns {Promise<Array<{
    *   gameId: string,
    *   myBuild: string|null,
@@ -814,6 +824,8 @@ class PerGameComputeService {
       apm: 1,
       spq: 1,
       spatial: 1,
+      _customBuildSlug: 1,
+      ...BUILD_INTENT_LABEL_PROJECTION,
     };
     if (includeMacroBreakdown) {
       // Legacy fallback: a few pre-v0.4.3 docs still carry
@@ -827,18 +839,17 @@ class PerGameComputeService {
     // always the most selective predicate; extra match keys are merged
     // on top so a downstream {myBuild, "opponent.strategy"} pair gets
     // pushed into the same indexed find rather than filtered in memory.
-    const filter = extraMatch
-      ? {
-        ...baseMatch,
-        ...extraMatch,
-        isResumedFromReplay: { $ne: true },
-      }
-      : baseMatch;
-    const games = await this.db.games
+    const filter = rulePreviewViewMatch(
+      extraMatch ? mergeRulePreviewMatch(baseMatch, extraMatch) : baseMatch,
+      opts.view,
+    );
+    const detectorLabels = opts.view === "detector";
+    const fetched = await this.db.games
       .find(filter, { projection })
       .sort({ date: -1 })
       .limit(limit)
       .toArray();
+    const games = detectorLabels ? fetched.map(withDetectorLabels) : fetched;
     // Identify games that need a detail-store lookup — anything
     // missing buildLog/oppBuildLog inline (or, when the caller asked
     // for macroBreakdown, missing that too). With the slim-only schema
@@ -903,6 +914,11 @@ class PerGameComputeService {
           date: g.date || null,
           map: g.map || null,
         };
+        if (detectorLabels) {
+          out.customBuildSlug = typeof g._customBuildSlug === "string"
+            ? g._customBuildSlug
+            : null;
+        }
         if (includeMacroBreakdown) {
           out.macroBreakdown = g.macroBreakdown || blob.macroBreakdown || null;
         }
@@ -916,8 +932,15 @@ class PerGameComputeService {
    * page. The metadata predicate runs before detail hydration; perspective
    * selects the sole build-log side a caller needs.
    *
+   * ``view: "detector"`` (custom-build classifier only) hands a build
+   * check-in row to ``metadataFilter`` and the caller with the detector's
+   * labels: ``myBuild``/``customBuildSlug`` are what the classifier last
+   * decided, never the declared build. ``view: "agreeing"`` (build-shape
+   * cohorts) skips check-in rows whose replay was classified as something
+   * else.
+   *
    * @param {string} userId
-   * @param {{limit?: number, pageSize?: number, perspective?: "you"|"opponent"|"both", includeMacroBreakdown?: boolean, filters?: object, match?: Record<string, any>, metadataFilter?: (game: any) => boolean, signal?: AbortSignal, strictDetails?: boolean, tolerateCorruptDetails?: boolean}} [opts]
+   * @param {{limit?: number, pageSize?: number, perspective?: "you"|"opponent"|"both", includeMacroBreakdown?: boolean, filters?: object, match?: Record<string, any>, metadataFilter?: (game: any) => boolean, signal?: AbortSignal, strictDetails?: boolean, tolerateCorruptDetails?: boolean, view?: "detector"|"agreeing"}} [opts]
    * @returns {AsyncGenerator<{games: any[], candidates: number, hasMore: boolean}>}
    */
   async *iterateRulePreviewPages(userId, opts = {}) {
@@ -939,9 +962,11 @@ class PerGameComputeService {
       : { userId, isResumedFromReplay: { $ne: true } };
     const extraMatch = opts.match && typeof opts.match === "object"
       && !Array.isArray(opts.match) ? opts.match : null;
-    const filter = extraMatch
-      ? { ...baseMatch, ...extraMatch, isResumedFromReplay: { $ne: true } }
-      : baseMatch;
+    const filter = rulePreviewViewMatch(
+      extraMatch ? mergeRulePreviewMatch(baseMatch, extraMatch) : baseMatch,
+      opts.view,
+    );
+    const detectorLabels = opts.view === "detector";
     const logFields = perspective === "both"
       ? ["buildLog", "oppBuildLog"]
       : [perspective === "opponent" ? "oppBuildLog" : "buildLog"];
@@ -969,6 +994,7 @@ class PerGameComputeService {
       macroScore: 1,
       apm: 1,
       spq: 1,
+      ...BUILD_INTENT_LABEL_PROJECTION,
     };
     // Do not include legacy inline heavy fields in the metadata page. They are
     // read as a one-row fallback below only when the detail store lacks that
@@ -1012,9 +1038,10 @@ class PerGameComputeService {
         id: tail._id,
       };
       const metadataFilter = opts.metadataFilter;
+      const viewed = detectorLabels ? rows.map(withDetectorLabels) : rows;
       const gated = typeof metadataFilter === "function"
-        ? rows.filter((g) => metadataFilter(g))
-        : rows;
+        ? viewed.filter((g) => metadataFilter(g))
+        : viewed;
       const detailFields = [...logFields];
       if (includeMacroBreakdown) detailFields.push("macroBreakdown");
       if (gated.length === 0) {
@@ -1137,6 +1164,39 @@ class PerGameComputeService {
       if (!hasMore) return;
     }
   }
+}
+
+/**
+ * Merge a caller's cohort push-down over the filter-bar match. Keys in
+ * ``extraMatch`` win, except ``$and`` clauses, which are concatenated so a
+ * push-down predicate can never drop the filter bar's own ``$and`` clauses
+ * (patch era, ranked/custom, game size).
+ * @param {Record<string, any>} baseMatch
+ * @param {Record<string, any>} extraMatch
+ * @returns {Record<string, any>}
+ */
+function mergeRulePreviewMatch(baseMatch, extraMatch) {
+  /** @type {Record<string, any>} */
+  const merged = { ...baseMatch, ...extraMatch, isResumedFromReplay: { $ne: true } };
+  if (Array.isArray(baseMatch.$and) && Array.isArray(extraMatch.$and)) {
+    merged.$and = [...baseMatch.$and, ...extraMatch.$and];
+  }
+  return merged;
+}
+
+/**
+ * Apply the rule-preview ``view``: "agreeing" appends the build check-in
+ * agreement clause to ``$and`` (beside the filter bar's region ``$or``).
+ * @param {Record<string, any>} match
+ * @param {unknown} view
+ * @returns {Record<string, any>}
+ */
+function rulePreviewViewMatch(match, view) {
+  if (view !== "agreeing") return match;
+  return {
+    ...match,
+    $and: [...(Array.isArray(match.$and) ? match.$and : []), AGREES_WITH_DETECTOR_MATCH],
+  };
 }
 
 /**

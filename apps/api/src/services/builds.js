@@ -2,6 +2,12 @@
 
 const { gamesMatchStage } = require("../util/parseQuery");
 const { computeDossierExtras } = require("./buildDossier");
+const {
+  BUILD_INTENT_LABEL_PROJECTION,
+  COUNTED_BY_CHECKIN_EXPR,
+  PLANNED_GAME_EXPR,
+} = require("./buildIntentShape");
+const { agreesWithDetector } = require("./buildIntentReaders");
 
 const DOSSIER_PROJECTION = {
   _id: 0,
@@ -22,6 +28,10 @@ const DOSSIER_PROJECTION = {
   buildLog: 1,
   oppBuildLog: 1,
   opponent: 1,
+  // Build check-in labels: median timings describe the build's shape, so
+  // they use only games whose replay agrees with the label.
+  _customBuildSlug: 1,
+  ...BUILD_INTENT_LABEL_PROJECTION,
 };
 
 const BUCKET_BRANCHES = [
@@ -41,6 +51,10 @@ const BUCKET_BRANCHES = [
  *   list(userId, filters)          → ranked list with W/L/winRate.
  *   detail(userId, name, filters)  → drilldown with last 50 games and
  *                                    matchup / map / strategy slices.
+ *
+ * ``myBuild`` is the effective label: a confirmed build check-in counts
+ * toward the declared build. ``checkins`` says how many games count only
+ * because of one, and recent rows carry ``planned`` for them.
  */
 class BuildsService {
   /** @param {{games: import('mongodb').Collection}} db */
@@ -64,6 +78,7 @@ class BuildsService {
             wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
             losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
             total: { $sum: 1 },
+            checkins: { $sum: COUNTED_BY_CHECKIN_EXPR },
             lastPlayed: { $max: "$date" },
           },
         },
@@ -74,6 +89,7 @@ class BuildsService {
             wins: 1,
             losses: 1,
             total: 1,
+            checkins: 1,
             lastPlayed: 1,
             winRate: {
               $cond: [{ $gt: ["$total", 0] }, { $divide: ["$wins", "$total"] }, 0],
@@ -113,6 +129,7 @@ class BuildsService {
                   $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] },
                 },
                 total: { $sum: 1 },
+                checkins: { $sum: COUNTED_BY_CHECKIN_EXPR },
                 lastPlayed: { $max: "$date" },
               },
             },
@@ -203,6 +220,7 @@ class BuildsService {
                 result: 1,
                 duration: { $ifNull: ["$durationSec", 0] },
                 macroScore: { $ifNull: ["$macroScore", null] },
+                planned: PLANNED_GAME_EXPR,
               },
             },
           ],
@@ -222,6 +240,7 @@ class BuildsService {
       wins: 0,
       losses: 0,
       total: 0,
+      checkins: 0,
       lastPlayed: null,
     };
     if (!totals.total && !resumedCount) return null;
@@ -231,7 +250,9 @@ class BuildsService {
         .sort({ date: -1 })
         .toArray()
       : [];
-    const extras = computeDossierExtras(dossierGames);
+    const extras = computeDossierExtras(dossierGames, {
+      timingGames: dossierGames.filter(agreesWithDetector),
+    });
     return {
       name,
       totals: { ...totals, winRate: totals.total ? totals.wins / totals.total : 0 },

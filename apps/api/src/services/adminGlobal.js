@@ -28,6 +28,8 @@
  * pure data layer, easy to unit-test against an in-memory Mongo.
  */
 
+const { DETECTOR_BUILD_EXPR } = require("./buildIntentShape");
+
 // Whitelisted sort columns for the global player browser. Anything
 // outside this set falls back to ``gameCount`` so a bad query param
 // can never inject a field path into the sort stage.
@@ -306,7 +308,12 @@ class AdminGlobalService {
           {
             $facet: {
               strategies: breakdownStage("$opponent.strategy"),
-              builds: breakdownStage("$myBuild"),
+              // Platform-wide: a confirmed build check-in counts under
+              // the label the classifier gave the replay.
+              builds: [
+                { $project: { _id: 0, result: 1, detectorBuild: DETECTOR_BUILD_EXPR } },
+                ...breakdownStage("$detectorBuild"),
+              ],
               maps: breakdownStage("$map"),
             },
           },

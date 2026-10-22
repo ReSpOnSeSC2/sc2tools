@@ -10,6 +10,8 @@ const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { opponentBuildOrderBusyError } = require("./opponentBuildOrderFence");
 const { PROXY_CLASSIFICATION_VERSION } = require("./proxyClassification");
 const { SessionResolutionGate } = require("./sessionResolutionGate");
+const { BUILD_INTENT_LABEL_PROJECTION } = require("./buildIntentShape");
+const { withOwnerBuildFlags } = require("./buildIntentReaders");
 
 /** @param {number} ms */
 function wait(ms) {
@@ -155,6 +157,10 @@ const PUBLIC_GAME_PROJECTION = Object.freeze({
   "replayFile.sha256": 1,
   isResumedFromReplay: 1,
   resumedReplayGameIds: 1,
+  // Read only to derive the owner flags ``buildPlanned`` / ``detectedBuild``
+  // (services/buildIntentReaders.js); the subdocument is dropped before the
+  // row leaves the service, so check-in notes are never listed here.
+  ...BUILD_INTENT_LABEL_PROJECTION,
 });
 
 /**
@@ -300,6 +306,13 @@ class GamesService {
         || key === "replayUpload"
         || key.startsWith("replayUpload.")
       ) {
+        delete doc[key];
+      }
+    }
+    // A build check-in (``buildIntent``) is written only by the check-in
+    // routes and the ingest bind. An upload can neither forge nor erase one.
+    for (const key of Object.keys(doc)) {
+      if (key === "buildIntent" || key.startsWith("buildIntent.")) {
         delete doc[key];
       }
     }
@@ -583,7 +596,7 @@ class GamesService {
     const hasMore = items.length > limit;
     const page = hasMore ? items.slice(0, limit) : items;
     const nextBefore = hasMore ? page[page.length - 1].date : null;
-    return { items: page, nextBefore };
+    return { items: page.map(withOwnerBuildFlags), nextBefore };
   }
 
   /**
@@ -643,12 +656,13 @@ class GamesService {
    * @param {string} gameId
    */
   async get(userId, gameId) {
-    return this.db.games.findOne(
+    const row = await this.db.games.findOne(
       { userId, gameId },
       {
         projection: PUBLIC_GAME_PROJECTION,
       },
     );
+    return row ? withOwnerBuildFlags(row) : null;
   }
 
   /**
@@ -690,7 +704,7 @@ class GamesService {
     const ordered = [];
     for (const id of ids) {
       const row = byId.get(id);
-      if (row) ordered.push(row);
+      if (row) ordered.push(withOwnerBuildFlags(row));
     }
     return ordered;
   }

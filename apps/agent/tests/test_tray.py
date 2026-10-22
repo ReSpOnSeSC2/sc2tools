@@ -83,3 +83,52 @@ def test_show_window_click_is_safe_without_callback() -> None:
     tray = TrayUI(dashboard_url="https://example.test")
     tray._show_window_clicked(None, None)  # must not raise
     assert tray._on_show_window_cb is None
+
+
+def test_build_checkin_callback_fires_and_errors_are_contained() -> None:
+    fired = {"n": 0}
+
+    def reopen() -> None:
+        fired["n"] += 1
+        if fired["n"] == 2:
+            raise RuntimeError("controller stopped")
+
+    tray = TrayUI(dashboard_url="https://example.test", on_build_checkin=reopen)
+    tray._build_checkin_clicked(None, None)
+    tray._build_checkin_clicked(None, None)  # must not raise
+    assert fired["n"] == 2
+    TrayUI(dashboard_url="https://example.test")._build_checkin_clicked(None, None)
+
+
+class _FakeMenu:
+    SEPARATOR = object()
+
+    def __init__(self, *items) -> None:
+        self.items = items
+
+
+class _FakeItem:
+    def __init__(self, text, action, **kwargs) -> None:
+        self.text = text
+        self.action = action
+
+
+class _FakePystray:
+    Menu = _FakeMenu
+    MenuItem = _FakeItem
+
+
+def _labels(tray: TrayUI) -> list:
+    menu = tray._build_menu(_FakePystray)
+    return [item.text for item in menu.items if isinstance(item, _FakeItem) and isinstance(item.text, str)]
+
+
+def test_build_checkin_menu_item_only_when_wired() -> None:
+    wired = TrayUI(
+        dashboard_url="https://example.test",
+        on_show_window=lambda: None,
+        on_build_checkin=lambda: None,
+    )
+    labels = _labels(wired)
+    assert labels.index("Build check-in…") == labels.index("Open dashboard") + 1
+    assert "Build check-in…" not in _labels(TrayUI(dashboard_url="https://example.test"))

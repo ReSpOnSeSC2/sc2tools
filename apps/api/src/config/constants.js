@@ -132,6 +132,10 @@ const COLLECTIONS = Object.freeze({
   // ``guide_videos``: the site owner's YouTube build-order videos (channel
   // RSS + committed snapshot) shown on guide pages — services/guideVideos.js.
   GUIDE_VIDEOS: "guide_videos",
+  // Build check-in: one short-lived row per live game key (registration,
+  // pre-game declaration, randomizer roll, post-game answer) until the
+  // uploaded replay binds it. TTL-reaped; see services/buildIntentLive.js.
+  BUILD_INTENT_LIVE: "build_intent_live",
 });
 
 const LIMITS = Object.freeze({
@@ -235,6 +239,46 @@ const REVIEWS = Object.freeze({
   LEADERBOARD_SIZE: 10,
 });
 
+// Build check-in (docs/adr/0025-build-check-in-attribution.md). Windows,
+// TTLs and limits for the live record, the ingest bind and the routes.
+const BUILD_INTENT = Object.freeze({
+  // A bare registration lives 12 h; one carrying a declaration, roll or
+  // post-game answer lives a week so a late replay upload still binds it.
+  LIVE_TTL_MS: 12 * 60 * 60 * 1000,
+  LIVE_ANSWERED_TTL_MS: 7 * 24 * 60 * 60 * 1000,
+  // The OBS randomizer waits this long for a loading-screen pick.
+  HOLD_MS: 6000,
+  // A pre-game declaration is refused once the live game is past 2:00.
+  DECLARE_WINDOW_SEC: 120,
+  GAME_KEY_MAX_LENGTH: 400,
+  OPP_NAME_MAX_LENGTH: 80,
+  // Bind candidates: live keys from 10 min before the replay's start up to
+  // 60 s after it (and never at or after the replay's end).
+  BIND_LOOKBACK_MS: 10 * 60 * 1000,
+  BIND_LOOKAHEAD_MS: 60 * 1000,
+  BIND_MAX_CANDIDATES: 5,
+  // Games without a live record become pending only when this fresh.
+  FRESH_PENDING_MS: 24 * 60 * 60 * 1000,
+  PENDING_WINDOW_MS: 72 * 60 * 60 * 1000,
+  PENDING_LIMIT_DEFAULT: 10,
+  PENDING_LIMIT_MAX: 25,
+  DISMISS_MAX: 500,
+  OPTIONS_CACHE_MS: 60 * 1000,
+  OPTIONS_CACHE_MAX_ENTRIES: 512,
+  USUAL_WINDOW_MS: 30 * 24 * 60 * 60 * 1000,
+  USUAL_MIN_GAMES: 2,
+  // Accepted randomizer roll reports per user and live game.
+  ROLL_MAX_WRITES: 3,
+  ROLL_TRACKER_MAX_ENTRIES: 2048,
+  REGISTRATION_CACHE_MAX_ENTRIES: 2048,
+  // Per-user request limits (per minute).
+  RATE_WINDOW_MS: 60 * 1000,
+  RATE_WRITES: 60,
+  RATE_LIVE_WRITES: 30,
+  RATE_READS: 120,
+  RATE_LIMITER_MAX_KEYS: 4096,
+});
+
 const TIMEOUTS = Object.freeze({
   MONGO_CONNECT_MS: 5000,
   MONGO_SOCKET_MS: 30000,
@@ -255,6 +299,7 @@ module.exports = {
   COLLECTIONS,
   LIMITS,
   REVIEWS,
+  BUILD_INTENT,
   TIMEOUTS,
   PYTHON,
   INGEST_PROVENANCE,

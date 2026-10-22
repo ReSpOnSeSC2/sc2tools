@@ -22,6 +22,7 @@ import {
 } from "./GameStreamLinks";
 import { useGameVodLinks } from "./useGameVodLinks";
 import { ReplayDownloadButton } from "./ReplayDownloadButton";
+import { PlannedBadge, PlayedBuildBadge } from "@/components/build-checkin/PlannedBadge";
 import {
   gameAnalysisHref,
   type OpponentNavigationContext,
@@ -329,7 +330,7 @@ function GameRow({
           {game.opp_strategy || "—"}
         </td>
         <td className="px-2 py-1">
-          <BuildBadge name={game.my_build || null} />
+          <PlayedBuildBadge name={game.my_build || null} planned={game.build_planned === true} detected={game.detected_build} />
         </td>
         <td className="px-2 py-1 text-right">
           <MacroCell
@@ -614,6 +615,7 @@ function GameMobileCard({
               </span>
               <span>
                 me: <span className="text-text">{game.my_build || "—"}</span>
+                {game.build_planned === true && game.my_build ? <PlannedBadge detected={game.detected_build} className="ml-1 align-middle" /> : null}
               </span>
               <span>
                 len:{" "}
@@ -813,15 +815,6 @@ function RaceTag({
       ) : null}
       <span className="font-mono">{letter}</span>
     </span>
-  );
-}
-
-function BuildBadge({ name }: { name: string | null }) {
-  if (!name) return <span className="text-text-dim">—</span>;
-  return (
-    <Badge size="sm" variant="neutral" title={`The build I played: ${name}`}>
-      {name}
-    </Badge>
   );
 }
 

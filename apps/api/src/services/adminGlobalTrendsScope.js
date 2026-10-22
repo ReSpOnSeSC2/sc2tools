@@ -2,14 +2,18 @@
 
 const { parseFilters, parseFiniteInt, parseBool, parseRaceLetter } = require("../util/parseQuery");
 const { raceLetterExpr, myLadderRaceExpr } = require("./trendsRegionExpr");
+const { DETECTOR_MY_BUILD_FIELD } = require("./buildIntentReaders");
 
 // Dedupe retains $$ROOT twice. Keep legacy detail blobs, signatures and
 // unrelated metadata out of those blocking sorts and accumulator tables.
+// ``myBuild`` is remapped here, once, to the classifier's label: every
+// global chart reads this snapshot, so a build check-in never shows up in
+// platform-wide build mixes (the shared AggregationsService stays as-is).
 const GLOBAL_HISTORY_PROJECTION = Object.freeze({
   _id: 1, userId: 1, gameId: 1, date: 1, startedAt: 1, updatedAt: 1,
   myToonHandle: 1, myRace: 1, myLadderRace: 1, myMmr: 1, myMmrSource: 1,
   isLadderGame: 1, isResumedFromReplay: 1, playerCount: 1, matchFormat: 1,
-  result: 1, durationSec: 1, map: 1, myBuild: 1, macroScore: 1,
+  result: 1, durationSec: 1, map: 1, myBuild: DETECTOR_MY_BUILD_FIELD, macroScore: 1,
   "top3Leaks.name": 1, "replayFile.sha256": 1,
   "opponent.race": 1, "opponent.mmr": 1, "opponent.strategy": 1,
   "opponent.displayName": 1, "opponent.pulseId": 1, "opponent.pulseCharacterId": 1,
@@ -70,7 +74,7 @@ function trustedReplayMmrExpr() {
  * remain two observations. Legacy rows stay scoped to their uploader because
  * an account cannot safely be inferred from a name or another replay.
  * @param {Record<string, any>} [playerMatch]
- * @param {Record<string, number>} [projection]
+ * @param {Record<string, unknown>} [projection]
  * @returns {Array<Record<string, any>>} */
 function globalHistoryStages(playerMatch = {}, projection = GLOBAL_HISTORY_PROJECTION) {
   return [

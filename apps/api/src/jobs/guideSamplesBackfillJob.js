@@ -41,6 +41,7 @@
 
 const { extractSample } = require("../services/guideSamples");
 const { isGuideEligibleGame } = require("../services/guideRules");
+const { BUILD_INTENT_LABEL_PROJECTION } = require("../services/buildIntentShape");
 const { buildJobLock } = require("../util/jobLock");
 
 const LOCK_COLLECTION = "jobLocks";
@@ -57,12 +58,17 @@ const BATCH_SIZE = 10;
 const LEASE_MS = 10 * 60 * 1000;
 const SCAN_SORT = Object.freeze({ date: -1, _id: -1 });
 const DETAIL_FIELDS = Object.freeze(["buildLog", "macroBreakdown"]);
-/** Slim games fields extractSample / the eligibility rules read. */
+/**
+ * Slim games fields extractSample / the eligibility rules read. The build
+ * check-in label fields let both judge the classifier's label instead of a
+ * declared build (guideRules.classifierRow).
+ */
 const SLIM_PROJECTION = Object.freeze({
   _id: 0, gameId: 1, date: 1, result: 1, myRace: 1, myBuild: 1, map: 1, durationSec: 1,
   playerCount: 1, matchFormat: 1, isLadderGame: 1, gameVersion: 1, gameBuild: 1,
   isResumedFromReplay: 1, _customBuildSlug: 1,
   "opponent.race": 1, "opponent.leagueId": 1, "opponent.mmr": 1,
+  ...BUILD_INTENT_LABEL_PROJECTION,
 });
 
 /**

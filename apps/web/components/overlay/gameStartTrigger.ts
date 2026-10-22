@@ -21,6 +21,12 @@ export function gameStartTriggerKey(
   return null;
 }
 
+/** The real match key behind a start trigger; null for Test and keyless starts. */
+export function gameKeyFromTriggerKey(triggerKey: string | null): string | null {
+  if (!triggerKey?.startsWith("game:") || triggerKey === "game:unkeyed") return null;
+  return triggerKey.slice("game:".length);
+}
+
 /** A partial envelope with no key cannot replace an already-known match. */
 export function useGameStartTriggerKey(
   live: LiveGamePayload | null,

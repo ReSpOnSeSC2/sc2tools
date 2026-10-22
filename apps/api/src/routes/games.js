@@ -82,6 +82,7 @@ function captureGuideSample(guideSamples, userId, game, customTag, created) {
  *     repairLastKnownMmrAfterResumedReplay?: (userId: string) => Promise<boolean>,
  *   },
  *   customBuilds?: import('../services/types').CustomBuildsService,
+ *   buildIntents?: import('../services/types').BuildIntentBinder,
  *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
  *   overlayTokens?: import('../services/types').OverlayTokensService,
  *   liveGameBroker?: import('../services/liveGameBroker').LiveGameBroker,
@@ -796,6 +797,26 @@ function buildGamesRouter(deps) {
               errors: ["custom_build_tag_retry_required"],
             });
             continue;
+          }
+        }
+        // Build check-in: bind the live record (pre-game declaration,
+        // randomizer roll, post-game answer) to the stored game. Awaited so
+        // the agent's follow-up read sees it; a failure never makes the game
+        // retryable.
+        if (deps.buildIntents) {
+          try {
+            await deps.buildIntents.bindIngestedGame(userId, game, {
+              created,
+              spatial: storedSpatial,
+            });
+          } catch (err) {
+            if (req.log) {
+              const e = /** @type {{ code?: unknown, name?: unknown }} */ (err);
+              req.log.warn(
+                { userId, errName: String(e && (e.code || e.name) || "error") },
+                "ingest_build_intent_bind_failed",
+              );
+            }
           }
         }
         captureGuideSample(deps.guideSamples, userId, game, customTag, created);

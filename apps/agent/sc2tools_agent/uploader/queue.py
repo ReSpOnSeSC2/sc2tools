@@ -222,6 +222,9 @@ class UploadQueue:
         on_failure: Optional[Callable[[Path, Exception], None]] = None,
         on_pending_changed: Optional[Callable[[int], None]] = None,
         on_archive_pending_changed: Optional[Callable[[int], None]] = None,
+        on_game_accepted: Optional[
+            Callable[[Path, CloudGame, str, Dict[str, Any]], None]
+        ] = None,
     ) -> None:
         self._cfg = cfg
         self._state = state
@@ -297,6 +300,10 @@ class UploadQueue:
         self._on_archive_pending_changed = (
             on_archive_pending_changed or (lambda _n: None)
         )
+        # Live-lane acceptances with the server's per-game row, for the
+        # post-game build check-in. Fired once per gameId, after
+        # ``on_success`` and outside ``_lock``.
+        self._on_game_accepted = on_game_accepted
         self._lock = threading.Lock()
         # Preserve notification order across parser + uploader threads.
         # The callback itself stays outside ``_lock`` so UI work cannot
@@ -1524,6 +1531,7 @@ class UploadQueue:
             self._archive_journal.enqueue_many(archive_tasks)
 
         accepted_jobs: List[UploadJob] = []
+        accepted_live: List[Tuple[UploadJob, str, Dict[str, Any]]] = []
         rejected_jobs: List[Tuple[UploadJob, str]] = []
         retryable_jobs: List[Tuple[UploadJob, str]] = []
         terminal_paths: set[str] = set()
@@ -1535,6 +1543,7 @@ class UploadQueue:
                 if not jobs:
                     log.warning("upload_unmapped_accepted gameId=%r", gid)
                     continue
+                live_job: Optional[UploadJob] = None
                 for job in jobs:
                     path_str = str(job.file_path)
                     if path_str in terminal_paths:
@@ -1544,6 +1553,10 @@ class UploadQueue:
                     if isinstance(gid, str) and gid:
                         self._state.path_by_game_id[gid] = path_str
                     accepted_jobs.append(job)
+                    if job.priority and live_job is None:
+                        live_job = job
+                if live_job is not None and isinstance(gid, str):
+                    accepted_live.append((live_job, gid, acc))
                 # Reverse-index by gameId so the Socket.io recompute
                 # path can locate this replay's file in O(1) — same
                 # invariant maintained by the pre-batching path.
@@ -1603,6 +1616,8 @@ class UploadQueue:
             # counter. Publish the authoritative reservation count after
             # those callbacks so GUI/tray/console cannot double-decrement.
             self._notify_pending()
+        for job, gid, acc in accepted_live:
+            self._notify_game_accepted(job, gid, acc)
         # Sticky-MMR: pushing one MMR per accepted game would make
         # N redundant API calls for the older entries (each would
         # short-circuit on the date check after the newest had
@@ -1874,6 +1889,9 @@ class UploadQueue:
             # See the batched path above: success sinks decrement first,
             # then this authoritative count corrects any local estimate.
             self._notify_pending()
+        accepted_id = accepted_row.get("gameId")
+        if job.priority and isinstance(accepted_id, str):
+            self._notify_game_accepted(job, accepted_id, accepted_row)
         # Sticky-MMR ping. The session widget falls back to this
         # profile field whenever no game in the user's cloud history
         # carries ``myMmr`` (Tier-2 / Tier-3 / Tier-4 / Tier-5 of
@@ -1883,6 +1901,23 @@ class UploadQueue:
         # otherwise re-syncing 12k old replays would reset the sticky
         # MMR to whatever the streamer's rating was three seasons ago.
         self._maybe_push_last_mmr(job)
+
+    def _notify_game_accepted(
+        self,
+        job: UploadJob,
+        game_id: str,
+        accepted_row: Dict[str, Any],
+    ) -> None:
+        callback = self._on_game_accepted
+        if callback is None:
+            return
+        try:
+            callback(job.file_path, job.game, game_id, dict(accepted_row))
+        except Exception:  # noqa: BLE001
+            log.exception(
+                "upload_game_accepted_callback_failed %s",
+                job.file_path.name,
+            )
 
     def _maybe_push_last_mmr(self, job: UploadJob) -> None:
         """Push the streamer's MMR to the cloud profile if it's the most

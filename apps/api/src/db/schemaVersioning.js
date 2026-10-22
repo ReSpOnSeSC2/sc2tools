@@ -107,7 +107,11 @@ const REGISTRY = Object.freeze({
     // v7 — split opponent-side custom-strategy provenance from the user's
     //      custom-build provenance so one replay can carry both classifications
     //      without either axis overwriting the other.
-    currentVersion: 7,
+    // v8 — optional server-owned ``buildIntent`` (build check-in). While a
+    //      confirmed check-in is applied, ``myBuild``/``_customBuildSlug``
+    //      carry the declared build and ``buildIntent.detected`` keeps the
+    //      classifier's label; rollback restores it.
+    currentVersion: 8,
     versionKey: VERSION_KEY,
   },
   [COLLECTIONS.GAME_DETAILS]: {
@@ -338,6 +342,12 @@ const REGISTRY = Object.freeze({
   },
   [COLLECTIONS.GUIDE_VIDEOS]: {
     collection: COLLECTIONS.GUIDE_VIDEOS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
+  // Short-lived (TTL) build check-in live records, purge-only.
+  [COLLECTIONS.BUILD_INTENT_LIVE]: {
+    collection: COLLECTIONS.BUILD_INTENT_LIVE,
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },

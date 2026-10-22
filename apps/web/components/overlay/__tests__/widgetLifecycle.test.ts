@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  extendStartWindow,
   payloadTargetsWidget,
   resolveWidgetDurationMs,
   TEST_DURATION_MS,
@@ -57,5 +58,19 @@ describe("randomizer lifecycle", () => {
     expect(longestSequenceMs).toBe(19_180);
     expect(longestSequenceMs).toBeLessThan(TEST_DURATION_MS);
     expect(longestSequenceMs).toBeLessThan(WIDGET_DURATION_MS.randomizer!);
+  });
+});
+
+describe("extendStartWindow", () => {
+  it("runs the full window from a later spin or hold end", () => {
+    expect(extendStartWindow(32_000, 6_000, 32_000, 6_000)).toBe(38_000);
+  });
+
+  it("never shortens a window", () => {
+    expect(extendStartWindow(38_000, 1_000, 32_000, 2_000)).toBe(38_000);
+  });
+
+  it("never reopens a window that already closed", () => {
+    expect(extendStartWindow(32_000, 33_000, 32_000, 33_000)).toBe(32_000);
   });
 });

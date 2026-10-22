@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FiltersContext, type AnalyzerFilters } from "@/lib/filterContext";
 
 const harness = vi.hoisted(() => ({
-  rows: [] as Array<{ name: string; total: number; wins: number; losses: number; winRate: number }>,
+  rows: [] as Array<{ name: string; total: number; wins: number; losses: number; winRate: number; checkins?: number }>,
   loaded: true, loading: false, error: null as Error | null,
   mutate: vi.fn(async () => undefined), paths: [] as string[],
 }));
@@ -58,6 +58,17 @@ describe("Builds tab filtered custom build integration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Close dossier" }));
     fireEvent.click(table.getByRole("row", { name: /Standard opener/ }));
     expect(screen.getByRole("dialog", { name: "Standard opener" })).toBeTruthy();
+  });
+
+  it("notes games that count only through a build check-in", () => {
+    harness.rows[0] = { ...harness.rows[0], checkins: 2 };
+    render(<BuildsTab />);
+    const custom = within(screen.getByRole("table")).getByRole("row", { name: /Custom gateway opener/ });
+    expect(within(custom).getByText("incl. 2 check-ins")).toBeTruthy();
+    // The mobile card list carries the same note; rows without check-ins stay quiet.
+    expect(screen.getAllByText("incl. 2 check-ins")).toHaveLength(2);
+    const standard = within(screen.getByRole("table")).getByRole("row", { name: /Standard opener/ });
+    expect(within(standard).queryByText(/check-in/)).toBeNull();
   });
 
   it("applies search, minimum games and sorting equally to both build types", () => {

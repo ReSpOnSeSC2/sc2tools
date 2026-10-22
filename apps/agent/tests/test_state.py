@@ -587,3 +587,58 @@ def test_upload_overrides_garbage_inputs_load_as_none(
     loaded = load_state(tmp_path)
     assert loaded.upload_concurrency_override is None
     assert loaded.upload_batch_size_override is None
+
+
+def test_build_checkin_fields_default_for_existing_installs(tmp_path: Path) -> None:
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"device_token": "paired"}), encoding="utf-8",
+    )
+    loaded = load_state(tmp_path)
+    assert loaded.build_checkin_intro_seen is False
+    assert loaded.build_checkin_card_positions == {}
+
+
+def test_build_checkin_fields_round_trip(tmp_path: Path) -> None:
+    state = AgentState(
+        build_checkin_intro_seen=True,
+        build_checkin_card_positions={"loading": [1650, 120], "postgame": [-1900, 80]},
+    )
+    save_state(tmp_path, state)
+    loaded = load_state(tmp_path)
+    assert loaded.build_checkin_intro_seen is True
+    assert loaded.build_checkin_card_positions == {
+        "loading": [1650, 120], "postgame": [-1900, 80],
+    }
+
+
+@pytest.mark.parametrize("value", ["true", 1, None, [], {}])
+def test_build_checkin_intro_requires_explicit_boolean_true(tmp_path: Path, value) -> None:
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"build_checkin_intro_seen": value}), encoding="utf-8",
+    )
+    assert load_state(tmp_path).build_checkin_intro_seen is False
+
+
+def test_build_checkin_positions_drop_malformed_entries(tmp_path: Path) -> None:
+    (tmp_path / "agent.json").write_text(json.dumps({
+        "build_checkin_card_positions": {
+            "loading": [10.6, 20],
+            "postgame": [1, 2, 3],
+            "": [1, 2],
+            "bool": [True, 2],
+            "text": ["1", 2],
+            "huge": [1e12, 0],
+        },
+    }), encoding="utf-8")
+    assert load_state(tmp_path).build_checkin_card_positions == {"loading": [10, 20]}
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"build_checkin_card_positions": [[1, 2]]}), encoding="utf-8",
+    )
+    assert load_state(tmp_path).build_checkin_card_positions == {}
+
+
+def test_snapshot_copies_build_checkin_positions() -> None:
+    state = AgentState(build_checkin_card_positions={"loading": [1, 2]})
+    snapshot = state_module._snapshot(state)
+    snapshot["build_checkin_card_positions"]["loading"].append(3)
+    assert state.build_checkin_card_positions == {"loading": [1, 2]}

@@ -416,15 +416,20 @@ function evaluateRule(rule, events, earliestBuilds) {
  * an "almost match" with the failing rule surfaced. `failedRule` is the
  * same object as the entry in `rules`, so callers can find its index;
  * `failedGot` is that rule's `got` when it failed on its count.
+ * `passedCount` / `ruleCount` say how close a near-miss came (the build
+ * check-in suggestion ranks custom builds by that ratio); a rule whose
+ * evidence is unavailable does not count as passed.
  *
  * @param {ReadonlyArray<BuildRule>} rules
  * @param {ReadonlyArray<ParsedEvent>} events
- * @returns {{ pass: boolean, almost: boolean, unavailable?: boolean, failedRule?: BuildRule, failedReason?: string, failedGot?: number }}
+ * @returns {{ pass: boolean, almost: boolean, passedCount: number, ruleCount: number, unavailable?: boolean, failedRule?: BuildRule, failedReason?: string, failedGot?: number }}
  */
 function evaluateRules(rules, events) {
   if (!Array.isArray(rules) || rules.length === 0) {
-    return { pass: true, almost: false };
+    return { pass: true, almost: false, passedCount: 0, ruleCount: 0 };
   }
+  const ruleCount = rules.length;
+  let passedCount = 0;
   /** @type {string[]} */
   const failures = [];
   /** @type {BuildRule|undefined} */
@@ -438,7 +443,9 @@ function evaluateRules(rules, events) {
   const earliestBuilds = _earliestBuildTimes(events);
   for (const rule of rules) {
     const r = evaluateRule(rule, events, earliestBuilds);
-    if (!r.pass) {
+    if (r.pass) {
+      passedCount += 1;
+    } else {
       if (r.unavailable === true) {
         if (!firstUnavailableRule) {
           firstUnavailableRule = rule;
@@ -457,15 +464,19 @@ function evaluateRules(rules, events) {
     return {
       pass: false,
       almost: false,
+      passedCount,
+      ruleCount,
       unavailable: true,
       failedRule: firstUnavailableRule,
       failedReason: firstUnavailableReason,
     };
   }
-  if (failures.length === 0) return { pass: true, almost: false };
+  if (failures.length === 0) return { pass: true, almost: false, passedCount, ruleCount };
   return {
     pass: false,
     almost: failures.length === 1,
+    passedCount,
+    ruleCount,
     failedRule: firstFailRule,
     failedReason: failures[0],
     ...(typeof firstFailGot === "number" ? { failedGot: firstFailGot } : {}),

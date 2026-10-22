@@ -32,6 +32,10 @@ export interface ReplayLibraryItem {
   gameBuild?: number | null;
   myRace?: string | null;
   myBuild?: string | null;
+  /** Owner rows: a confirmed build check-in overrides the classifier's label. */
+  buildPlanned?: boolean;
+  /** Owner rows: the classifier's own label while that override is applied. */
+  detectedBuild?: string | null;
   myMmr?: number | null;
   macroScore?: number | null;
   opponent?: ReplayOpponent | null;

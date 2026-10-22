@@ -29,6 +29,23 @@ const {
   assertStableOpponentBuildOrderPage,
   isRetryableReclassificationError,
 } = require("./opponentBuildOrderFence");
+const {
+  AGREES_WITH_DETECTOR_MATCH,
+  BUILD_INTENT_LABEL_PROJECTION,
+  COUNTED_BY_CHECKIN_EXPR,
+  PLANNED_GAME_EXPR,
+  detectorView,
+  overrideActive,
+} = require("./buildIntentShape");
+const { renameCustomOverrides } = require("./buildIntentAttribution");
+const {
+  detectedOnOverride,
+  tagClassificationPipeline,
+  unlessOverride,
+  youClaimFilter,
+} = require("./buildIntentGuards");
+
+/** @typedef {import('./buildIntentGuards').AxisOutcome} AxisOutcome */
 
 const STATS_GAME_SCAN_CAP = 1000;
 const RECENT_GAMES_LIMIT = 50;
@@ -64,6 +81,37 @@ function customBuildSlugForGame(game, perspective) {
       || null;
   }
   return game.customBuildSlug || game._customBuildSlug || null;
+}
+
+/**
+ * Staged-clear filter for one axis' stale claim by ``slug``. The "you" axis
+ * matches the detector's slug, so a build check-in's declared slug is never
+ * cleared (buildIntentGuards.youClaimFilter).
+ * @param {"you"|"opponent"} perspective
+ * @param {string} slug
+ * @returns {Record<string, unknown>}
+ */
+function provenanceClaimFilter(perspective, slug) {
+  return perspective === "opponent"
+    ? { _customOpponentStrategySlug: slug }
+    : youClaimFilter(slug);
+}
+
+/**
+ * Name to write onto a saved build's check-in rows, or null when they keep
+ * theirs: only an existing "you" build whose name (or perspective) changed.
+ * A flip to the opponent perspective or a delete leaves them frozen.
+ * @param {any} previous the stored build before this save (deleted included)
+ * @param {Record<string, unknown>} next
+ * @returns {string|null}
+ */
+function checkinRenameTarget(previous, next) {
+  if (!previous || buildPerspective(next) !== "you") return null;
+  const name = typeof next.name === "string" && next.name ? next.name : null;
+  if (name === null) return null;
+  return previous.name === name && buildPerspective(previous) === "you"
+    ? null
+    : name;
 }
 
 /** @param {any} game @param {"you"|"opponent"} perspective */
@@ -282,7 +330,10 @@ class CustomBuildsService {
    *   perGame?: import('./types').PerGameComputeService,
    *   logger?: {warn?: Function, error?: Function},
    *   onReclassified?: (userId: string, result: Record<string, any>) => void|Promise<void>,
-   * }} [opts]
+   *   onGamesChanged?: (userId: string, count: number) => void,
+   * }} [opts] ``onGamesChanged`` hears replay-label writes outside
+   *   reclassification (a renamed build's check-in rows); hosts that wire
+   *   only ``onReclassified`` hear them as ``{tagged: count}``
    */
   constructor(db, opts = {}) {
     this.db = db;
@@ -293,6 +344,7 @@ class CustomBuildsService {
     this.perGame = opts.perGame || null;
     this.logger = opts.logger || null;
     this.onReclassified = opts.onReclassified || null;
+    this.onGamesChanged = opts.onGamesChanged || null;
     this._reclassifyQueuedUsers = new Set();
     this._reclassifyWorker = null;
     /** @type {{
@@ -348,7 +400,11 @@ class CustomBuildsService {
    *   signal?: AbortSignal,
    *   strictDetails?: boolean,
    *   tolerateCorruptDetails?: boolean,
-   * }} [opts]
+   *   view?: "detector"|"agreeing",
+   * }} [opts] ``view: "detector"`` (classifier passes only) reads build
+   *   check-in rows with the detector's labels, never the declared build;
+   *   ``"agreeing"`` (build-shape cohorts) skips check-in rows whose replay
+   *   was classified as something else
    * @returns {AsyncGenerator<{games: import('./types').PerGameComputeServiceListedGame[], candidates: number, hasMore: boolean}>}
    * @private
    */
@@ -358,12 +414,15 @@ class CustomBuildsService {
       return;
     }
     if (!this.perGame) throw new Error("perGame_unavailable");
-    const games = await this.perGame.listForRulePreview(userId, {
+    /** @type {Parameters<import('./types').PerGameComputeService["listForRulePreview"]>[1] & {view?: "detector"|"agreeing"}} */
+    const listOpts = {
       limit: opts.limit || STATS_GAME_SCAN_CAP,
       includeMacroBreakdown: opts.includeMacroBreakdown,
       filters: opts.filters,
       match: opts.match,
-    });
+      ...(opts.view ? { view: opts.view } : {}),
+    };
+    const games = await this.perGame.listForRulePreview(userId, listOpts);
     const filtered = typeof opts.metadataFilter === "function"
       ? games.filter(opts.metadataFilter)
       : games;
@@ -512,6 +571,20 @@ class CustomBuildsService {
    */
   async _upsertUnlocked(userId, build) {
     if (!build || !build.slug) throw new Error("slug required");
+    // Build check-ins store the declared custom build's display name on the
+    // replay row. Rename them before saving, whatever the reclassify flag, so
+    // name-keyed stats never split the build (a retried save renames again).
+    const previous = typeof this.db.customBuilds.findOne === "function"
+      ? await this.db.customBuilds.findOne(
+        { userId, slug: build.slug },
+        { projection: { _id: 0, name: 1, perspective: 1 } },
+      )
+      : null;
+    const overrideName = checkinRenameTarget(previous, build);
+    const games = this._gamesCollection();
+    const renamedCheckins = overrideName !== null && games
+      ? await renameCustomOverrides(games, userId, build.slug, overrideName)
+      : 0;
     const now = new Date();
     /** @type {Record<string, any>} */
     const doc = { ...build, userId, updatedAt: now };
@@ -527,6 +600,35 @@ class CustomBuildsService {
       { $setOnInsert: { createdAt: now }, $set: doc, $unset: { deletedAt: "" } },
       { upsert: true },
     );
+    if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
+  }
+
+  /**
+   * Tell the host that replay labels changed outside a reclassification run.
+   * Notification failures never fail the write that already landed.
+   * @param {string} userId
+   * @param {number} count
+   */
+  _notifyGamesChanged(userId, count) {
+    try {
+      if (this.onGamesChanged) {
+        this.onGamesChanged(userId, count);
+      } else if (this.onReclassified) {
+        void Promise.resolve(this.onReclassified(userId, {
+          ...emptyReclassifyProgress(),
+          tagged: count,
+        })).catch((err) => this._warnGamesChangedFailed(err));
+      }
+    } catch (err) {
+      this._warnGamesChangedFailed(err);
+    }
+  }
+
+  /** @param {unknown} err */
+  _warnGamesChangedFailed(err) {
+    if (this.logger?.warn) {
+      this.logger.warn({ err }, "custom_build_games_changed_notify_failed");
+    }
   }
 
   /**
@@ -1084,11 +1186,11 @@ class CustomBuildsService {
    * @returns {Promise<null | {
    *   slug: string,
    *   name: string,
-   *   totals: { wins: number, losses: number, total: number, winRate: number, lastPlayed: Date|null },
+   *   totals: { wins: number, losses: number, total: number, checkins: number, winRate: number, lastPlayed: Date|null },
    *   byMatchup: Array<{name: string, wins: number, losses: number, total: number, winRate: number}>,
    *   byMap: Array<{name: string, wins: number, losses: number, total: number, winRate: number}>,
    *   byStrategy: Array<{name: string, wins: number, losses: number, total: number, winRate: number}>,
-   *   recent: Array<{gameId: string, date: string|null, map: string, opponent: string, opp_race: string, opp_strategy: string|null, result: string|null, duration: number|null}>,
+   *   recent: Array<{gameId: string, date: string|null, map: string, opponent: string, opp_race: string, opp_strategy: string|null, result: string|null, duration: number|null, planned: {detected: string|null, notes: string}|null}>,
    *   resumedCount: number,
    *   resumedRecent: Array<Record<string, any>>,
    *   scannedGames: number,
@@ -1115,6 +1217,12 @@ class CustomBuildsService {
       [provenanceField]: slug,
       isResumedFromReplay: true,
     };
+    // Build check-ins count toward the declared build ("you" axis only), but
+    // median timings describe the build's shape: sample agreeing rows only.
+    const ownBuild = perspective === "you";
+    const timingMatch = ownBuild
+      ? { ...baseMatch, ...AGREES_WITH_DETECTOR_MATCH }
+      : baseMatch;
     const aggregate = games.aggregate(
       [
         { $match: baseMatch },
@@ -1132,6 +1240,7 @@ class CustomBuildsService {
                   wins: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "win"] }, 1, 0] } },
                   losses: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "loss"] }, 1, 0] } },
                   total: { $sum: 1 },
+                  ...(ownBuild ? { checkins: { $sum: COUNTED_BY_CHECKIN_EXPR } } : {}),
                   lastPlayed: { $max: "$date" },
                 },
               },
@@ -1163,6 +1272,7 @@ class CustomBuildsService {
                   result: 1,
                   duration: { $ifNull: ["$durationSec", 0] },
                   macroScore: { $ifNull: ["$macroScore", null] },
+                  planned: ownBuild ? PLANNED_GAME_EXPR : { $literal: null },
                 },
               },
             ],
@@ -1199,7 +1309,7 @@ class CustomBuildsService {
       // needs build logs. Preserve it from a deliberately small sample; all
       // counts and breakdowns above remain slim-row-only.
       games.find(
-        baseMatch,
+        timingMatch,
         {
           // Keep the metadata query slim. Even a small count of legacy rows
           // can contain multi-megabyte inline logs, so selected logs are read
@@ -1215,6 +1325,7 @@ class CustomBuildsService {
       total: 0,
       lastPlayed: null,
     };
+    const checkins = Math.max(0, Number(totals.checkins) || 0);
     const timingGames = await this._hydrateClassifiedTimingSample(
       userId,
       timingCandidates,
@@ -1230,6 +1341,7 @@ class CustomBuildsService {
       name: build.name || build.slug,
       totals: {
         ...totals,
+        checkins,
         winRate: decidedWinRate(totals),
       },
       byMatchup: addClassifiedWinRates(doc?.byMatchup || []),
@@ -1387,6 +1499,7 @@ class CustomBuildsService {
    *   signal?: AbortSignal,
    *   filters?: object,
    *   match?: Record<string, unknown>,
+   *   view?: "agreeing",
    * }} opts
    * @returns {Promise<{games: Record<string, any>[], truncated: boolean}>}
    */
@@ -1402,6 +1515,7 @@ class CustomBuildsService {
       filters: opts.filters,
       match: opts.match,
       signal: opts.signal,
+      ...(opts.view ? { view: opts.view } : {}),
       metadataFilter: (game) => (
         !opts.strategyName || game?.opponent?.strategy === opts.strategyName
       ),
@@ -1472,6 +1586,9 @@ class CustomBuildsService {
         signal: opts.signal,
         filters: opts && opts.filters,
         match: matchPushdown,
+        // Build-shape views describe what the build looks like: a build
+        // check-in whose replay went elsewhere counts in W-L, not here.
+        ...(storedPerspective === "you" ? { view: /** @type {const} */ ("agreeing") } : {}),
       },
     );
     const ruleMatched = phaseCohort.games;
@@ -1538,7 +1655,10 @@ class CustomBuildsService {
    *
    * @param {string} userId
    * @param {{signal?: AbortSignal, slugs?: string[]}} [opts]
-   * @returns {Promise<Array<{name: string, slug: string, total: number, wins: number, losses: number, winRate: number, lastPlayed: Date|null, ruleCount: number}>>}
+   * ``checkins`` counts the games included only through a build check-in
+   * (own builds; always 0 for opponent-perspective definitions).
+   *
+   * @returns {Promise<Array<{name: string, slug: string, total: number, wins: number, losses: number, checkins: number, winRate: number, lastPlayed: Date|null, ruleCount: number}>>}
    */
   async evaluateAllStats(userId, opts = {}) {
     if (opts.slugs && (opts.slugs.length > CUSTOM_BUILD_MAX_PAGE_SIZE || opts.slugs.some((slug) => typeof slug !== "string" || !slug || slug.length > 80))) {
@@ -1580,6 +1700,9 @@ class CustomBuildsService {
                   wins: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "win"] }, 1, 0] } },
                   losses: { $sum: { $cond: [{ $eq: ["$_customBuildResult", "loss"] }, 1, 0] } },
                   total: { $sum: 1 },
+                  ...(perspective === "you"
+                    ? { checkins: { $sum: COUNTED_BY_CHECKIN_EXPR } }
+                    : {}),
                   lastPlayed: { $max: "$date" },
                 },
               },
@@ -1606,6 +1729,7 @@ class CustomBuildsService {
           total: row.total,
           wins: row.wins,
           losses: row.losses,
+          checkins: Math.max(0, Number(row.checkins) || 0),
           winRate: decided > 0 ? row.wins / decided : 0,
           lastPlayed: row.lastPlayed,
           ruleCount: extractRules(b).length,
@@ -1687,8 +1811,6 @@ class CustomBuildsService {
     const buildName = build.name || build.slug;
     const perspective = buildPerspective(build);
     const otherPerspective = perspective === "opponent" ? "you" : "opponent";
-    const provenanceField = customBuildProvenanceField(perspective);
-    const otherProvenanceField = customBuildProvenanceField(otherPerspective);
     const runId = randomUUID();
     const jobSequence = Math.max(0, Number(opts.jobSequence) || 0);
     const gamesCollection = this._gamesCollection();
@@ -1703,6 +1825,9 @@ class CustomBuildsService {
       strictDetails: true,
       tolerateCorruptDetails: true,
       signal: opts.signal,
+      // Build check-in rows are classified by their detector label; the
+      // commit routes a "you" verdict into buildIntent.detected.
+      view: "detector",
       metadataFilter: (g) => gameMatchesBuildMatchup(
         normaliseGameRaces(g), build, perspective,
       ) || customBuildSlugForGame(g, perspective) === slug
@@ -1784,7 +1909,7 @@ class CustomBuildsService {
               filter: {
                 userId,
                 gameId: g.gameId,
-                [provenanceField]: slug,
+                ...provenanceClaimFilter(perspective, slug),
                 ...customBuildRevisionMatch(g.customBuildRevision || null),
               },
               update: {
@@ -1813,7 +1938,7 @@ class CustomBuildsService {
               filter: {
                 userId,
                 gameId: g.gameId,
-                [otherProvenanceField]: slug,
+                ...provenanceClaimFilter(otherPerspective, slug),
                 ...customBuildRevisionMatch(g.customBuildRevision || null),
               },
               update: {
@@ -1925,6 +2050,9 @@ class CustomBuildsService {
         strictDetails: true,
         tolerateCorruptDetails: true,
         signal: opts.signal,
+        // Build check-in rows are classified by their detector label; the
+        // commit routes a "you" verdict into buildIntent.detected.
+        view: "detector",
       })) {
         if (opts.signal && opts.signal.aborted) throw abortError();
         assertStableOpponentBuildOrderPage(page.games);
@@ -2091,7 +2219,7 @@ class CustomBuildsService {
                 filter: {
                   userId,
                   gameId: row.gameId,
-                  [customBuildProvenanceField(row.perspective)]: row.slug,
+                  ...provenanceClaimFilter(row.perspective, row.slug),
                   ...customBuildRevisionMatch(row.revision),
                 },
                 update: {
@@ -2200,8 +2328,10 @@ class CustomBuildsService {
    *   chosenByPerspective?: {you: string|null, opponent: string|null},
    *   ruleCount: number,
    *   userSlug?: string|null,
-   * }>} ``userSlug`` is the "you" definition the stored row now carries
-   *   (a fresh winner or a restored deferred label), null when none
+   * }>} ``userSlug`` is the "you" definition the classifier now assigns
+   *   (a fresh winner or a restored deferred label), null when none. On a
+   *   build check-in row that is the detector's slug (stored as
+   *   ``buildIntent.detected.slug``), not the declared build's
    */
   async tagSingleGame(userId, game, opts = {}) {
     if (!this.perGame || !game || !game.gameId) return null;
@@ -2291,33 +2421,36 @@ class CustomBuildsService {
       }
     }
 
-    if (buildCount === 0) {
-      const cleared = await this._gamesCollection().updateOne(
+    // A build check-in owns myBuild/_customBuildSlug. Every write below is one
+    // revision-fenced pipeline deciding per document: check-in rows keep the
+    // declared build and take the "you" outcome as buildIntent.detected;
+    // other rows get the plain classification (buildIntentGuards).
+    const fenced = typeof opts.expectedRevision === "string";
+    const payloadBuild = typeof game.myBuild === "string" ? game.myBuild : null;
+    /** @param {{you: AxisOutcome, opponent: AxisOutcome, clearStaging: boolean}} decision */
+    const writeDecision = async (decision) => {
+      const written = await this._gamesCollection().findOneAndUpdate(
         {
           userId,
-          gameId: game.gameId,
-          ...(typeof opts.expectedRevision === "string"
-            ? { _customBuildRevision: opts.expectedRevision }
-            : {}),
+          gameId: probe.gameId,
+          ...(fenced ? { _customBuildRevision: opts.expectedRevision } : {}),
         },
-        {
-          $set: { _schemaVersion: expectedVersion(COLLECTIONS.GAMES) },
-          $unset: {
-            _customBuildSlug: "",
-            _customOpponentStrategySlug: "",
-            _customBuildReclassify: "",
-            _customBuildClassificationSequence: "",
-          },
-        },
+        tagClassificationPipeline({ ...decision, payloadBuild }),
+        { projection: { _id: 1 } },
       );
-      if (
-        typeof opts.expectedRevision === "string"
-        && cleared.matchedCount === 0
-      ) {
+      if (fenced && !written) {
         const err = new Error("custom_build_tag_superseded");
         /** @type {any} */ (err).code = "custom_build_tag_superseded";
         throw err;
       }
+    };
+
+    if (buildCount === 0) {
+      await writeDecision({
+        you: { mode: "unset" },
+        opponent: { mode: "unset" },
+        clearStaging: true,
+      });
       return { gameId: game.gameId, matched: 0, chosen: null, ruleCount: 0 };
     }
 
@@ -2347,97 +2480,50 @@ class CustomBuildsService {
           _id: 0,
           _customBuildSlug: 1,
           _customOpponentStrategySlug: 1,
+          ...BUILD_INTENT_LABEL_PROJECTION,
         } },
       );
     }
     // Always claim explicit provenance, including when the agent/community
     // label happens to have the same display name. The caller's payload cannot
     // be trusted to report this private server-owned field.
-    /** @type {Record<string, any>} */
-    const classifiedSet = {
-      _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
-    };
-    /** @type {Record<string, string>} */
-    const classifiedUnset = {
-      _customBuildReclassify: "",
-      _customBuildClassificationSequence: "",
-    };
-    if (userWinner) {
-      classifiedSet.myBuild = userWinner.name;
-      classifiedSet._customBuildSlug = userWinner.slug;
-    }
-    if (opponentWinner) {
-      classifiedSet["opponent.strategy"] = opponentWinner.name;
-      classifiedSet._customOpponentStrategySlug = opponentWinner.slug;
-    }
+    /** @type {AxisOutcome} */
+    let you = userWinner
+      ? { mode: "set", name: userWinner.name, slug: userWinner.slug }
+      : { mode: "unset" };
+    /** @type {AxisOutcome} */
+    let opponent = opponentWinner
+      ? { mode: "set", name: opponentWinner.name, slug: opponentWinner.slug }
+      : { mode: "unset" };
     // GamesService preserves provenance slugs across a re-upload, but the raw
     // agent labels are patched before this classifier runs. On a deferred
     // axis, restore the active custom definition's display name together with
     // its slug under the same revision fence; preserving only the slug would
-    // leave an internally inconsistent row.
-    if (deferredByPerspective.you && preservedDeferred?._customBuildSlug) {
-      const current = await this._getForClassification(
-        userId, preservedDeferred._customBuildSlug,
-      );
-      if (current && buildPerspective(current) === "you") {
-        classifiedSet.myBuild = current.name || current.slug;
-        classifiedSet._customBuildSlug = current.slug;
-      } else {
-        classifiedUnset._customBuildSlug = "";
+    // leave an internally inconsistent row. A check-in row restores the
+    // detector's slug, never the declared one.
+    if (deferredByPerspective.you) {
+      const preservedSlug = preservedDeferred
+        ? detectorView(preservedDeferred).customBuildSlug
+        : null;
+      you = preservedSlug
+        ? await this._restoredOutcome(userId, preservedSlug, "you")
+        : { mode: "keep" };
+    }
+    if (deferredByPerspective.opponent) {
+      const preservedSlug = preservedDeferred?._customOpponentStrategySlug;
+      opponent = typeof preservedSlug === "string" && preservedSlug
+        ? await this._restoredOutcome(userId, preservedSlug, "opponent")
+        : { mode: "keep" };
+    }
+    if (you.mode === "keep" && opponent.mode === "keep") {
+      // Nothing to classify. The upload still patched the agent's label over
+      // a check-in's declared build: put it back and refresh the detector.
+      if (overrideActive(preservedDeferred)) {
+        await writeDecision({ you, opponent, clearStaging: false });
       }
-    }
-    if (
-      deferredByPerspective.opponent
-      && preservedDeferred?._customOpponentStrategySlug
-    ) {
-      const current = await this._getForClassification(
-        userId, preservedDeferred._customOpponentStrategySlug,
-      );
-      if (current && buildPerspective(current) === "opponent") {
-        classifiedSet["opponent.strategy"] = current.name || current.slug;
-        classifiedSet._customOpponentStrategySlug = current.slug;
-      } else {
-        classifiedUnset._customOpponentStrategySlug = "";
-      }
-    }
-    if (!userWinner && !deferredByPerspective.you) {
-      classifiedUnset._customBuildSlug = "";
-    }
-    if (!opponentWinner && !deferredByPerspective.opponent) {
-      classifiedUnset._customOpponentStrategySlug = "";
-    }
-    const hasDefinitiveMutation = Boolean(
-      userWinner
-      || opponentWinner
-      || Object.keys(classifiedSet).length > 1
-      || Object.keys(classifiedUnset).length > 2
-      || !deferredByPerspective.you
-      || !deferredByPerspective.opponent
-    );
-    if (!hasDefinitiveMutation) {
       return { gameId: probe.gameId, matched: 0, chosen: null, ruleCount: 0 };
     }
-    const updateResult = await this._gamesCollection().updateOne(
-      {
-        userId,
-        gameId: probe.gameId,
-        ...(typeof opts.expectedRevision === "string"
-          ? { _customBuildRevision: opts.expectedRevision }
-          : {}),
-      },
-      {
-        $set: classifiedSet,
-        $unset: classifiedUnset,
-      },
-    );
-    if (
-      typeof opts.expectedRevision === "string"
-      && updateResult.matchedCount === 0
-    ) {
-      const err = new Error("custom_build_tag_superseded");
-      /** @type {any} */ (err).code = "custom_build_tag_superseded";
-      throw err;
-    }
+    await writeDecision({ you, opponent, clearStaging: true });
     return {
       gameId: probe.gameId,
       matched: matchCount,
@@ -2450,10 +2536,26 @@ class CustomBuildsService {
         userWinner?.ruleCount || 0,
         opponentWinner?.ruleCount || 0,
       ),
-      userSlug: typeof classifiedSet._customBuildSlug === "string"
-        ? classifiedSet._customBuildSlug
-        : null,
+      // The detector's "you" label: it feeds guide samples, which never see
+      // a build check-in.
+      userSlug: you.mode === "set" ? you.slug : null,
     };
+  }
+
+  /**
+   * Deferred-axis restore: the definition currently stored under ``slug``
+   * when it still describes ``perspective``, else drop the stale slug.
+   * @param {string} userId
+   * @param {string} slug
+   * @param {"you"|"opponent"} perspective
+   * @returns {Promise<AxisOutcome>}
+   */
+  async _restoredOutcome(userId, slug, perspective) {
+    const current = await this._getForClassification(userId, slug);
+    if (current && buildPerspective(current) === perspective) {
+      return { mode: "set", name: current.name || current.slug, slug: current.slug };
+    }
+    return { mode: "unset" };
   }
 
   /**
@@ -2851,6 +2953,8 @@ function newerReclassifyMarkersExpression(sequence) {
 
 /**
  * Apply only this run's staged verdict and retain every other in-flight run.
+ * On a build check-in row the "you" verdict updates ``buildIntent.detected``
+ * and the declared ``myBuild``/``_customBuildSlug`` stay (buildIntentGuards).
  * @param {string} runId
  * @param {number} sequence
  */
@@ -2861,8 +2965,9 @@ function commitReclassifyRunPipeline(runId, sequence) {
    * @param {"you"|"opponent"} perspective
    * @param {any} currentValue
    * @param {any} desiredValue
+   * @param {any} [clearedValue]
    */
-  const sideValue = (perspective, currentValue, desiredValue) => ({
+  const sideValue = (perspective, currentValue, desiredValue, clearedValue = "$$REMOVE") => ({
     $let: {
       vars: { decision: reclassifyDecisionExpression(runId, perspective) },
       in: {
@@ -2882,7 +2987,7 @@ function commitReclassifyRunPipeline(runId, sequence) {
             $cond: [
               { $eq: ["$$decision.action", "set"] },
               desiredValue,
-              "$$REMOVE",
+              clearedValue,
             ],
           },
           currentValue,
@@ -2893,12 +2998,23 @@ function commitReclassifyRunPipeline(runId, sequence) {
   return [{
     $set: {
       _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
-      myBuild: sideValue("you", "$myBuild", "$$decision.desiredBuild"),
-      _customBuildSlug: sideValue(
-        "you",
-        "$_customBuildSlug",
-        "$$decision.desiredSlug",
+      myBuild: unlessOverride(
+        "$myBuild",
+        sideValue("you", "$myBuild", "$$decision.desiredBuild"),
       ),
+      _customBuildSlug: unlessOverride(
+        "$_customBuildSlug",
+        sideValue("you", "$_customBuildSlug", "$$decision.desiredSlug"),
+      ),
+      buildIntent: detectedOnOverride(sideValue(
+        "you",
+        "$buildIntent.detected",
+        {
+          name: { $ifNull: ["$$decision.desiredBuild", null] },
+          slug: { $ifNull: ["$$decision.desiredSlug", null] },
+        },
+        { name: null, slug: null },
+      )),
       "opponent.strategy": sideValue(
         "opponent",
         "$opponent.strategy",
@@ -3217,6 +3333,7 @@ function toClassifiedRecent(game) {
     result: game.result,
     duration: game.durationSec || 0,
     macroScore: game.macroScore ?? null,
+    planned: null,
     isResumedFromReplay: true,
   };
 }

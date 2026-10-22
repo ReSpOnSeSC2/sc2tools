@@ -10,6 +10,7 @@ agent having to poll. Events the cloud emits today:
   - ``import:start_request``            {jobId, folder?, force?}
   - ``import:cancel_request``           {jobId}
   - ``import:pick_folder_request``      {reqId}
+  - ``build-intent:changed``            {gameKey} | {gameId}
 
 For the per-game events we look the .SC2Replay up by gameId in the
 upload state, re-parse it, and push the new payload up — same code
@@ -63,6 +64,7 @@ class SocketClient:
         on_import_cancel: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_import_pick_folder: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_bot_lab: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+        on_build_intent_changed: Optional[Callable[[Dict[str, str]], None]] = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._device_token = device_token
@@ -80,6 +82,9 @@ class SocketClient:
         self._on_import_cancel = on_import_cancel
         self._on_import_pick_folder = on_import_pick_folder
         self._on_bot_lab = on_bot_lab
+        # Build check-in ping: a live record or a game's check-in changed
+        # (web pick, randomizer roll, confirmation). Only ids travel.
+        self._on_build_intent_changed = on_build_intent_changed
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         # Lazily imported in start() so test environments that don't
@@ -232,6 +237,25 @@ class SocketClient:
         _bind_import_event("import:start_request", self._on_import_start)
         _bind_import_event("import:cancel_request", self._on_import_cancel)
         _bind_import_event("import:pick_folder_request", self._on_import_pick_folder)
+
+        @sio.on("build-intent:changed")
+        async def _on_build_intent_changed(payload: Optional[Dict[str, Any]]) -> None:
+            cb = self._on_build_intent_changed
+            if cb is None or not isinstance(payload, dict):
+                return
+            ping = {
+                field: value
+                for field in ("gameKey", "gameId")
+                if isinstance(value := payload.get(field), str) and value
+            }
+            if not ping:
+                return
+            # Both ids carry player names; never log their values.
+            log.debug("socket_client_build_intent_changed fields=%s", ",".join(sorted(ping)))
+            try:
+                cb(ping)
+            except Exception:  # noqa: BLE001
+                log.exception("build_intent_changed_callback_failed")
 
         @sio.on("resync:request")
         async def _on_resync(payload: Optional[Dict[str, Any]]) -> None:  # noqa: ARG001

@@ -56,6 +56,8 @@ export interface BuildStats {
   losses: number;
   winRate: number;
   lastPlayed?: string | null;
+  /** Games counted here only because of a confirmed build check-in. */
+  checkins?: number;
 }
 
 /** Decorated build = CustomBuild + optional aggregate stats. */
@@ -88,6 +90,11 @@ export interface BuildRecentGame {
   macroScore?: number | null;
   /** True when this replay was produced by resuming a prior replay. */
   isResumedFromReplay?: boolean;
+  /**
+   * Set when a confirmed build check-in put this game on the build: what
+   * the replay itself was classified as, and the player's check-in notes.
+   */
+  planned?: { detected: string | null; notes: string } | null;
 }
 
 export interface BuildDetailResponse {
@@ -98,6 +105,8 @@ export interface BuildDetailResponse {
     total: number;
     winRate: number;
     lastPlayed?: string | null;
+    /** Games counted here only because of a confirmed build check-in. */
+    checkins?: number;
   };
   byMatchup: BuildDetailRow[];
   byMap: BuildDetailRow[];

@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import { GameDetailPage } from "../GameDetailPage";
 import type { GameSummary } from "../types";
+import type { GameIntentState } from "@/lib/buildIntent";
 
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
@@ -141,15 +142,20 @@ function mockEndpoints({
   macro = MACRO,
   slimError,
   vodLinks,
+  intent,
 }: {
   slim?: GameSummary;
   macro?: MacroBreakdownData | null;
   slimError?: { status: number; message: string };
   vodLinks?: GameVodLinksResponse;
+  intent?: GameIntentState;
 } = {}) {
   const encodedId = encodeURIComponent(slim.gameId);
   useApiMock.mockImplementation((path: string | null) => {
     if (!path) return { data: undefined, error: undefined, isLoading: false };
+    if (path.startsWith(`/v1/games/${encodedId}/build-intent?include=options#`)) {
+      return { data: intent, error: undefined, isLoading: false, mutate: vi.fn() };
+    }
     if (path === `/v1/games/${encodedId}`) {
       return slimError
         ? { data: undefined, error: slimError, isLoading: false }
@@ -370,6 +376,42 @@ describe("GameDetailPage", () => {
     );
   });
 
+  it("headlines a confirmed check-in with a Planned badge naming the replay's label", () => {
+    mockEndpoints({ intent: checkinState({ status: "confirmed", applied: true }) });
+    render(<GameDetailPage gameId="g1" />);
+
+    const header = heroHeader();
+    expect(within(header).getByText("Roach Ling Flood")).toBeTruthy();
+    const planned = within(header).getByTestId("planned-badge");
+    expect(planned.getAttribute("title")).toBe("Replay classified as Roach Allin");
+    expect(screen.getByTestId("build-checkin-card")).toBeTruthy();
+    expect(screen.getByText("Checked in")).toBeTruthy();
+  });
+
+  it("falls back to the slim row's planned flag before the check-in loads", () => {
+    mockEndpoints({
+      slim: { ...SLIM, myBuild: "Roach Ling Flood", buildPlanned: true, detectedBuild: "Roach Allin" },
+    });
+    render(<GameDetailPage gameId="g1" />);
+    expect(
+      within(heroHeader()).getByTestId("planned-badge").getAttribute("title"),
+    ).toBe("Replay classified as Roach Allin");
+    expect(screen.queryByTestId("build-checkin-card")).toBeNull();
+  });
+
+  it("offers the pending check-in above the timeline", () => {
+    mockEndpoints({ intent: checkinState() });
+    render(<GameDetailPage gameId="g1" />);
+    const card = screen.getByTestId("build-checkin-card");
+    expect(within(card).getByText("Needs check-in")).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "Confirm" })).toBeTruthy();
+    expect(
+      card.compareDocumentPosition(screen.getByTestId("interactive-timeline"))
+        & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(within(heroHeader()).queryByTestId("planned-badge")).toBeNull();
+  });
+
   it("keeps the replay download action visible when no stream link exists", () => {
     mockEndpoints({
       slim: {
@@ -388,3 +430,53 @@ describe("GameDetailPage", () => {
     expect(download.textContent).toContain("Download replay");
   });
 });
+
+function checkinState(overrides: Partial<GameIntentState> = {}): GameIntentState {
+  return {
+    gameId: "g1",
+    matchup: "ZvT",
+    myRace: "Zerg",
+    oppRace: "Terran",
+    result: "Defeat",
+    date: "2026-07-01T10:00:00Z",
+    durationSec: 700,
+    map: "Ephemeron",
+    oppName: "Foe",
+    eligible: true,
+    ineligibleReason: null,
+    status: "pending",
+    applied: false,
+    build: overrides.status === "confirmed"
+      ? { key: "custom:roach-ling-flood", name: "Roach Ling Flood", slug: "roach-ling-flood", source: "custom" }
+      : null,
+    suggestion: {
+      key: "custom:roach-ling-flood",
+      name: "Roach Ling Flood",
+      slug: "roach-ling-flood",
+      source: "custom",
+      reason: "rules",
+      passedRules: 3,
+      ruleCount: 4,
+    },
+    randomizer: null,
+    randomizerDeviated: false,
+    detected: { name: "Roach Allin", slug: null, key: null },
+    executed: false,
+    notes: "",
+    origin: null,
+    via: null,
+    confirmedAt: null,
+    updatedAt: null,
+    prefs: { enabled: true, askAtLoading: true, askAfterGame: true },
+    options: [],
+    usualKey: null,
+    ...overrides,
+  };
+}
+
+/** The game hero: the header that carries the "My build" row. */
+function heroHeader(): HTMLElement {
+  const header = screen.getByText("My build").closest("header");
+  if (!header) throw new Error("game header not found");
+  return header;
+}

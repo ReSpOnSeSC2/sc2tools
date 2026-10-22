@@ -96,6 +96,8 @@ describe("ReplayLibraryService", () => {
       myRace: "Protoss",
       myMmr: 4_200,
       myBuild: "Blink pressure",
+      buildPlanned: false,
+      detectedBuild: null,
       macroScore: 82,
       opponent: {
         displayName: "Rival",

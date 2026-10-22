@@ -8,6 +8,7 @@ const {
   paceAxis,
   repertoireAxis,
 } = require("./skillFingerprint");
+const { DETECTOR_BUILD_EXPR } = require("./buildIntentShape");
 
 /**
  * Population calibration for the replay-derived player fingerprint.
@@ -284,7 +285,9 @@ function buildPlayerWindowsPipeline() {
             n: PLAYER_WINDOW_GAMES,
             sortBy: { date: -1, _id: -1 },
             output: {
-              myBuild: "$myBuild",
+              // Population reference: a confirmed build check-in counts
+              // under the label the classifier gave the replay.
+              myBuild: DETECTOR_BUILD_EXPR,
               durationSec: "$durationSec",
               result: "$result",
             },

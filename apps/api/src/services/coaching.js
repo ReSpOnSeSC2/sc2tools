@@ -18,6 +18,8 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { eraForGame } = require("../util/patchEra");
+const { BUILD_INTENT_LABEL_PROJECTION, detectorView } = require("./buildIntentShape");
+const { detectorLabelMatch } = require("./buildIntentReaders");
 const { randomUUID } = require("node:crypto");
 
 const DOC_ID = "locker";
@@ -498,7 +500,9 @@ class CoachingService {
 
   /**
    * Slim per-user game list for the pickers and the season lanes (the
-   * client computes lanes with the shared season catalog).
+   * client computes lanes with the shared season catalog). Coaches read
+   * it, so ``b``/``bid`` are the classifier's labels: a build check-in
+   * never shows up as a build the student executed.
    *
    * @param {string} userId
    * @returns {Promise<Array<{d: string, m: string, o: string,
@@ -516,6 +520,7 @@ class CoachingService {
           projection: {
             _id: 0, date: 1, map: 1, opponent: 1, result: 1, myBuild: 1,
             _customBuildSlug: 1, gameVersion: 1, gameBuild: 1,
+            ...BUILD_INTENT_LABEL_PROJECTION,
           },
         },
       )
@@ -523,17 +528,20 @@ class CoachingService {
       .limit(GAMES_CAP)
       .toArray();
     return rows
-      .map((g) => ({
-        d: toDay(g.date),
-        m: typeof g.map === "string" ? g.map : "",
-        o: typeof g.opponent === "string" ? g.opponent : "",
-        res: g.result === "Win" ? "W" : g.result === "Loss" ? "L" : "",
-        b: typeof g.myBuild === "string" ? g.myBuild : "",
-        bid: typeof g._customBuildSlug === "string" ? g._customBuildSlug : "",
-        // Patch era for the Locker's patch filters: "after" (12 workers) or
-        // "before" (the 8-worker patch 5.0.16), by the game's version.
-        e: eraForGame({ gameVersion: g.gameVersion, gameBuild: g.gameBuild, date: g.date }) || "",
-      }))
+      .map((g) => {
+        const detected = detectorView(g);
+        return {
+          d: toDay(g.date),
+          m: typeof g.map === "string" ? g.map : "",
+          o: typeof g.opponent === "string" ? g.opponent : "",
+          res: g.result === "Win" ? "W" : g.result === "Loss" ? "L" : "",
+          b: detected.myBuild || "",
+          bid: detected.customBuildSlug || "",
+          // Patch era for the Locker's patch filters: "after" (12 workers) or
+          // "before" (the 8-worker patch 5.0.16), by the game's version.
+          e: eraForGame({ gameVersion: g.gameVersion, gameBuild: g.gameBuild, date: g.date }) || "",
+        };
+      })
       .filter((g) => g.d);
   }
 
@@ -2399,9 +2407,11 @@ function assignmentGameMatch(assignment) {
   if (requirement.type === "build" && requirement.build) {
     const name = safeIdentity(requirement.build.name);
     const id = safeIdentity(requirement.build.id);
+    // Progress counts what the replay shows: declaring a build through a
+    // check-in must not complete a "play build X" assignment.
     clauses.push(requirement.build.matchBy === "slug" && id
-      ? { _customBuildSlug: id }
-      : name ? { myBuild: name } : { _id: null });
+      ? detectorLabelMatch("slug", id)
+      : name ? detectorLabelMatch("name", name) : { _id: null });
   }
   return {
     userId: assignment.studentUserId,
@@ -2489,6 +2499,7 @@ function assignmentGameProjection() {
     playerCount: 1,
     "opponent.displayName": 1,
     "replayFile.storedAt": 1,
+    ...BUILD_INTENT_LABEL_PROJECTION,
   };
 }
 
@@ -2502,7 +2513,8 @@ function serializeAssignmentGame(assignmentId, game) {
     map: safeIdentity(game && game.map),
     opponent: safeAssignmentName(game && game.opponent && game.opponent.displayName, "Unknown opponent"),
     result: assignmentGameResult(game && game.result),
-    myBuild: safeIdentity(game && game.myBuild) || null,
+    // Coach-visible: the classifier's label, never a declared check-in.
+    myBuild: safeIdentity(detectorView(game).myBuild) || null,
     isLadderGame: typeof (game && game.isLadderGame) === "boolean"
       ? game.isLadderGame
       : null,

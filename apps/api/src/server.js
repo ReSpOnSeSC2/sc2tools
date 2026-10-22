@@ -145,6 +145,13 @@ async function main() {
       /** @type {any} */ (services).users.getPreferences(userId, "voice"),
     resolveRandomizerPrefs: (userId) =>
       /** @type {any} */ (services).users.getPreferences(userId, "randomizer"),
+    // Build check-in: the current live game's hold / suppress state (no
+    // build names), replayed to overlays on connect and resync, and the
+    // randomizer widget's roll reports.
+    resolveBuildIntent: (userId) =>
+      /** @type {any} */ (services).buildIntents.overlayStateForCurrentGame(userId),
+    onRandomizerRolled: (userId, token, payload) =>
+      /** @type {any} */ (services).buildIntents.handleRandomizerRoll(userId, token, payload),
     // Replayed to Browser Sources on connect/resync. Live Stream Dock pushes
     // are still immediate; this persisted read closes the reconnect gap for
     // the manual Starting Soon / BRB cover.

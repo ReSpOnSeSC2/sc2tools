@@ -11,6 +11,7 @@ import {
   Dices,
   LifeBuoy,
   Upload,
+  ClipboardCheck,
 } from "lucide-react";
 import { Tabs } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -32,6 +33,7 @@ const TABS: ReadonlyArray<TabDef> = [
   { id: "profile", label: "Profile", Icon: UserRound },
   { id: "overlay", label: "Overlay", Icon: MonitorPlay },
   { id: "randomizer", label: "Randomizer", Icon: Dices },
+  { id: "checkin", label: "Build check-in", Icon: ClipboardCheck },
   { id: "voice", label: "Voice", Icon: Volume2 },
   { id: "import", label: "Import", Icon: Upload },
   { id: "backups", label: "Backups & data", Icon: Database },
@@ -44,6 +46,7 @@ export type SettingsTabId =
   | "profile"
   | "overlay"
   | "randomizer"
+  | "checkin"
   | "voice"
   | "import"
   | "backups"

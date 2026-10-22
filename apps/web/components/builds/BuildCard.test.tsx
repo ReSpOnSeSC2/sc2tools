@@ -68,6 +68,28 @@ describe("BuildCard replay-stat states", () => {
 
     expect(screen.getByText("Total games: 576")).toBeTruthy();
     expect(screen.queryByText("n = 576")).toBeNull();
+    expect(screen.queryByText(/check-in/)).toBeNull();
+  });
+
+  it("notes games that count only through a build check-in", () => {
+    render(
+      <BuildCard
+        build={build({
+          statsState: "ready",
+          stats: {
+            name: "PvT 3 Gate",
+            wins: 7,
+            losses: 5,
+            total: 12,
+            winRate: 7 / 12,
+            checkins: 2,
+          },
+        })}
+        {...callbacks}
+      />,
+    );
+
+    expect(screen.getByText("incl. 2 check-ins")).toBeTruthy();
   });
 });
 

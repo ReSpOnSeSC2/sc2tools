@@ -19,6 +19,8 @@ import {
   type NavIcon,
 } from "./appNav";
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
+import { BuildCheckInAlert } from "@/components/build-checkin/BuildCheckInAlert";
+import { BuildCheckInProvider } from "@/components/build-checkin/BuildCheckInProvider";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { reviewsVisible } from "@/lib/reviews";
 import { guidesEnabled } from "@/lib/guides/flags";
@@ -40,6 +42,8 @@ import { SiteStats } from "./SiteStats";
  *   - Both: a slim sticky context bar carrying the section name, a
  *     back control on detail pages, theme and account. The activity bar
  *     immediately below groups live sync state with the public site counts.
+ *   - BuildCheckInProvider wraps the shell so the header's check-in chip
+ *     and every page's check-in surfaces share one realtime revision.
  *
  * /community is reachable signed-out (shared links), so the
  * shell's structure is identical either way and only its contents swap:
@@ -59,6 +63,14 @@ type CoachingMeProbe = {
 };
 
 export function AppChrome({ children }: { children: ReactNode }) {
+  return (
+    <BuildCheckInProvider>
+      <AppChromeShell>{children}</AppChromeShell>
+    </BuildCheckInProvider>
+  );
+}
+
+function AppChromeShell({ children }: { children: ReactNode }) {
   const pathname = usePathname() ?? "/app";
   const match = matchSurface(pathname);
   const activeKey = match?.entry.key ?? null;
@@ -202,6 +214,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <SignedIn>
+                <BuildCheckInAlert compact />
                 <CoachingBookingAlert compact />
                 <NotificationBell compact />
               </SignedIn>

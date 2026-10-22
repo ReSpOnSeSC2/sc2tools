@@ -49,6 +49,7 @@ from .types import (
     LiveLifecyclePhase,
     LivePlayer,
     LiveUIState,
+    normalise_live_race,
 )
 
 _log = logging.getLogger("sc2tools_agent.live.client_api")
@@ -73,6 +74,11 @@ REQUEST_TIMEOUT_SEC = 2.0
 # replay imports can briefly starve SC2 or the polling thread; preserve
 # an active match through two consecutive misses before clearing it.
 ACTIVE_POLL_MISS_GRACE = 2
+# Loading can start with an empty or ``?``-race roster. Re-emit
+# MATCH_LOADING (same key) as names and races fill in so consumers see
+# the matchup before the game starts, but bound the emits per match so
+# a flickering roster cannot flood the bus.
+MAX_LOADING_EMITS_PER_MATCH = 3
 
 _ACTIVE_PHASES = frozenset({
     LiveLifecyclePhase.MATCH_LOADING,
@@ -147,6 +153,11 @@ class LiveClientPoller:
         # repeats the same value within sub-second polls).
         self._last_in_progress_display_time: float = -1.0
         self._active_poll_misses = 0
+        # (normalised name, normalised race) of the humans as of the last
+        # MATCH_LOADING emit. Deliberately separate from
+        # ``_current_player_roster``, which only healthy gameplay anchors.
+        self._loading_identity: Optional[tuple[tuple[str, str], ...]] = None
+        self._loading_emits = 0
 
     # ------------------------------------------------------------ control
     def start(self) -> None:
@@ -330,12 +341,19 @@ class LiveClientPoller:
                     started_at_ms=self._match_started_at_ms,
                 )
                 self._last_in_progress_display_time = -1.0
+            loading_identity = _loading_identity(game.players)
             if new_identity or self._last_phase != LiveLifecyclePhase.MATCH_LOADING:
-                self._emit(
-                    LiveLifecyclePhase.MATCH_LOADING,
-                    ui_state=ui,
-                    game_state=game,
+                self._emit_loading(ui, game, loading_identity)
+            elif (
+                self._loading_emits < MAX_LOADING_EMITS_PER_MATCH
+                and _loading_identity_progressed(
+                    self._loading_identity, loading_identity,
                 )
+            ):
+                # Same match, more of the roster is known: re-announce it
+                # under the unchanged key so the matchup reaches consumers
+                # during loading instead of at MATCH_STARTED.
+                self._emit_loading(ui, game, loading_identity)
             return LiveLifecyclePhase.MATCH_LOADING, self._cfg.fast_interval_sec
 
         if ui.is_in_match and game.display_time > 0:
@@ -433,6 +451,22 @@ class LiveClientPoller:
         self._current_player_roster = None
         self._last_in_progress_display_time = -1.0
         self._active_poll_misses = 0
+        self._loading_identity = None
+        self._loading_emits = 0
+
+    def _emit_loading(
+        self,
+        ui: LiveUIState,
+        game: LiveGameState,
+        loading_identity: tuple[tuple[str, str], ...],
+    ) -> None:
+        self._loading_identity = loading_identity
+        self._loading_emits += 1
+        self._emit(
+            LiveLifecyclePhase.MATCH_LOADING,
+            ui_state=ui,
+            game_state=game,
+        )
 
     # ------------------------------------------------------------ helpers
     def _fetch_ui(self) -> Optional[LiveUIState]:
@@ -535,6 +569,44 @@ def _fully_known_player_roster(
     return tuple(sorted(_normalise_player_name(player.name) for player in players))
 
 
+def _loading_identity(
+    players: List[LivePlayer],
+) -> tuple[tuple[str, str], ...]:
+    """What loading telemetry currently reveals about the humans.
+
+    Unknown names and races (``""`` / ``?``) stay empty strings, so the
+    tuple changes exactly when the roster or a race becomes known.
+    """
+    return tuple(sorted(
+        (
+            _normalise_player_name(player.name) if player.name.strip() else "",
+            normalise_live_race(player.race) or "",
+        )
+        for player in players
+        if player.is_user
+    ))
+
+
+def _loading_identity_progressed(
+    previous: Optional[tuple[tuple[str, str], ...]],
+    current: tuple[tuple[str, str], ...],
+) -> bool:
+    """True when ``current`` differs and reveals at least as much.
+
+    A snapshot that momentarily loses a name or race is noise from the
+    local API, not news, so it never spends one of the bounded emits.
+    """
+    if current == previous:
+        return False
+
+    def known(identity: Optional[tuple[tuple[str, str], ...]]) -> int:
+        return sum(
+            bool(name) + bool(race) for name, race in identity or ()
+        )
+
+    return known(current) >= known(previous) and known(current) > 0
+
+
 def _player_from_dict(raw: Dict[str, Any]) -> LivePlayer:
     """Defensive parse — the localhost API is stable but we still
     coerce every field through ``str`` / ``int`` to immunise against
@@ -586,6 +658,7 @@ __all__ = [
     "DEFAULT_IDLE_BACKOFF_SEC",
     "DEFAULT_INTERVAL_SEC",
     "LiveClientPoller",
+    "MAX_LOADING_EMITS_PER_MATCH",
     "PollerConfig",
     "REQUEST_TIMEOUT_SEC",
 ]

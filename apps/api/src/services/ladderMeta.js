@@ -18,6 +18,7 @@ const {
   PATCH_5_0_16_RELEASE,
   buildEraMatch,
 } = require("../util/patchEra");
+const { AGREES_WITH_DETECTOR_MATCH } = require("./buildIntentShape");
 
 /**
  * Ladder Meta Radar — the effectiveness-weighted opener meta report.
@@ -428,7 +429,9 @@ function shapeRows(rows, bandType, era, updatedAt, prior) {
  * The recompute aggregation:
  *   1. keep 1v1 rows that carry the requested numeric opponent band
  *      source (league or MMR), string races, and a non-empty ``myBuild``
- *      that isn't the "Game Too Short" catch-all;
+ *      that isn't the "Game Too Short" catch-all — and whose label is the
+ *      classifier's (a build check-in that disagrees with the replay never
+ *      feeds the public meta);
  *   2. derive the matchup letters and keep only P/T/Z on both sides;
  *   3. $group per (band, matchup, opener) for wins/losses/games;
  *   4. $group per (band, matchup) collecting the opener buckets and
@@ -500,6 +503,7 @@ function buildGamesMatch(bandType, era) {
     $and: [
       buildEraMatch(era),
       { $or: [{ playerCount: { $exists: false } }, { playerCount: 2 }] },
+      AGREES_WITH_DETECTOR_MATCH,
     ],
   };
 }

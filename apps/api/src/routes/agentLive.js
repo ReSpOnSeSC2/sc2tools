@@ -70,6 +70,7 @@ function normalizeName(value) {
  *   auth: import('express').RequestHandler,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   overlayTokens?: import('../services/types').OverlayTokensService,
+ *   buildIntents?: { registerFromEnvelope: (userId: string, envelope: unknown) => Promise<unknown> },
  *   logger?: import('pino').Logger,
  * }} deps
  */
@@ -136,6 +137,21 @@ function buildAgentLiveRouter(deps) {
             /* engagement is advisory */
           }
         })();
+      }
+      // Build check-in: register the live game (races, opponent name) so
+      // the replay upload can bind to it. Best-effort, never awaited.
+      if (accepted && deps.buildIntents) {
+        const buildIntents = deps.buildIntents;
+        void Promise.resolve()
+          .then(() => buildIntents.registerFromEnvelope(auth.userId, enriched))
+          .catch((err) => {
+            if (log && typeof log.warn === "function") {
+              log.warn(
+                { userId: auth.userId, errName: err && (err.code || err.name) },
+                "build_intent_register_failed",
+              );
+            }
+          });
       }
       if (log && typeof log.debug === "function") {
         log.debug(

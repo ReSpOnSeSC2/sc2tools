@@ -36,6 +36,10 @@ export interface GameSummary {
   macroScore?: number | null;
   apm?: number | null;
   spq?: number | null;
+  /** True when a confirmed build check-in overrides the classifier's label. */
+  buildPlanned?: boolean;
+  /** The classifier's own label while a check-in override is applied. */
+  detectedBuild?: string | null;
   /** Flattened replay fields used by opponent-history projections. */
   replayAvailable?: boolean;
   replayFilename?: string | null;

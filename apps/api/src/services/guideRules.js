@@ -16,6 +16,11 @@ const {
   isGuideStrategyName,
 } = require("../config/guideSlugs");
 const { LEAGUES, bandFromId } = require("../util/leagueBands");
+const {
+  AGREES_WITH_DETECTOR_MATCH,
+  detectorView,
+  overrideActive,
+} = require("./buildIntentShape");
 
 /**
  * Guide eligibility — the ONE definition of "a game that may feed a public
@@ -27,6 +32,13 @@ const { LEAGUES, bandFromId } = require("../util/leagueBands");
  *     rows for the nightly aggregate (services/guideStats.js).
  * guideRules.test.js runs both over the same fixture rows and asserts
  * they select the same games.
+ *
+ * Build check-ins: guides describe what the replays show, never what a
+ * player declared. The JS form judges the classifier's label
+ * (``classifierRow``); the Mongo form keeps only rows whose label agrees
+ * with the classifier (``AGREES_WITH_DETECTOR_MATCH``, a residual filter
+ * after the index scan) unless the caller reads the user's own record
+ * (``{ ownStats: true }``), where a confirmed check-in counts.
  *
  * A game is eligible when it is:
  *   - not a resumed replay (``isResumedFromReplay !== true``);
@@ -119,7 +131,27 @@ function isLadder(game) {
 }
 
 /**
- * Why a game cannot feed a guide, or null when it can.
+ * The row as the classifier labelled it: a confirmed check-in's declared
+ * ``myBuild`` / ``_customBuildSlug`` are swapped back for the detector's
+ * (an absent detector slug leaves no ``_customBuildSlug``). Rows without a
+ * check-in are returned as they are.
+ *
+ * @param {Record<string, any>} game
+ * @returns {Record<string, any>}
+ */
+function classifierRow(game) {
+  if (!overrideActive(game)) return game;
+  const view = detectorView(game);
+  /** @type {Record<string, any>} */
+  const row = { ...game, myBuild: view.myBuild };
+  if (view.customBuildSlug === null) delete row._customBuildSlug;
+  else row._customBuildSlug = view.customBuildSlug;
+  return row;
+}
+
+/**
+ * Why a game cannot feed a guide, or null when it can. Judged on the
+ * classifier's label (``classifierRow``), never a build check-in.
  *
  * Example: `guideIneligibilityReason({ ...game, playerCount: 4 })` → "not_1v1".
  *
@@ -128,7 +160,7 @@ function isLadder(game) {
  */
 function guideIneligibilityReason(raw) {
   if (!raw || typeof raw !== "object") return INELIGIBLE.BAD_MATCHUP;
-  const game = /** @type {Record<string, any>} */ (raw);
+  const game = classifierRow(/** @type {Record<string, any>} */ (raw));
   if (game.isResumedFromReplay === true) return INELIGIBLE.RESUMED;
   if (game._customBuildSlug !== undefined) return INELIGIBLE.CUSTOM_BUILD;
   if (!isOneVOne(game)) return INELIGIBLE.NOT_1V1;
@@ -162,15 +194,21 @@ function racePrefixRegexes(letter) {
 
 /**
  * ``$match`` selecting the slim games rows of one matchup that may feed a
- * guide — same semantics as ``isGuideEligibleGame``. Intentionally no
- * ``userId`` predicate: guides aggregate across every account.
+ * guide — same semantics as ``isGuideEligibleGame``, except that a row
+ * whose build check-in disagrees with the classifier is left out (the
+ * index cannot see the detector's label). Intentionally no ``userId``
+ * predicate: guides aggregate across every account.
+ *
+ * ``ownStats: true`` (a user's own record, services/guidesPersonal.js)
+ * keeps those rows: a confirmed check-in counts toward the declared build.
  *
  * Example: `games.aggregate([{ $match: guideGamesMatch("PvZ") }, …])`.
  *
  * @param {string} matchup "PvZ" form
+ * @param {{ ownStats?: boolean }} [opts]
  * @returns {Record<string, any>}
  */
-function guideGamesMatch(matchup) {
+function guideGamesMatch(matchup, opts = {}) {
   if (typeof matchup !== "string" || !MATCHUP_RE.test(matchup)) {
     throw new TypeError(`guideGamesMatch: invalid matchup "${String(matchup)}"`);
   }
@@ -189,6 +227,7 @@ function guideGamesMatch(matchup) {
           { isLadderGame: { $exists: false }, "opponent.leagueId": { $type: "number" } },
         ],
       },
+      ...(opts.ownStats === true ? [] : [AGREES_WITH_DETECTOR_MATCH]),
     ],
   };
 }
@@ -315,6 +354,7 @@ module.exports = {
   GUIDE_MMR_BANDS,
   INELIGIBLE,
   matchupOf,
+  classifierRow,
   guideIneligibilityReason,
   isGuideEligibleGame,
   guideGamesMatch,

@@ -4,6 +4,7 @@ const {
   computeCompositions,
   prepareCompositionGame,
 } = require("./buildCompositions");
+const { agreesWithDetector } = require("./buildIntentReaders");
 
 const PHASE_GAME_SAMPLE_LIMIT = 100;
 const PHASE_METADATA_PAGE_SIZE = 25;
@@ -64,6 +65,7 @@ class StrategyPhasesService {
    *   filters?: object,
    *   match: Record<string, unknown>,
    *   predicate: (game: any) => boolean,
+   *   view?: "agreeing",
    *   signal?: AbortSignal,
    * }} opts
    * @returns {Promise<{games: Record<string, any>[], truncated: boolean}>}
@@ -85,6 +87,7 @@ class StrategyPhasesService {
       includeMacroBreakdown: true,
       filters: opts.filters,
       match: opts.match,
+      ...(opts.view ? { view: opts.view } : {}),
       signal: opts.signal,
       metadataFilter: opts.predicate,
     })) {
@@ -236,6 +239,10 @@ class StrategyPhasesService {
    * either payload straight to PhaseTrajectoryStrip /
    * PhaseCompositionTabs.
    *
+   * Phases describe what the build looks like, so a game whose label comes
+   * from a build check-in the replay disagrees with is left out (the
+   * ``"agreeing"`` rule-preview view).
+   *
    * @param {string} userId
    * @param {string} buildName
    * @param {{ perspective?: "you"|"opponent", strategyName?: string, compareGameId?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>, signal?: AbortSignal }} [opts]
@@ -273,7 +280,7 @@ class StrategyPhasesService {
     const match = { myBuild: buildName };
     if (strategyName) match["opponent.strategy"] = strategyName;
     const predicate = /** @param {any} g */ (g) => {
-      if (!g || g.myBuild !== buildName) return false;
+      if (!g || g.myBuild !== buildName || !agreesWithDetector(g)) return false;
       if (strategyName) {
         const s = g.opponent && g.opponent.strategy;
         if (s !== strategyName) return false;
@@ -285,6 +292,7 @@ class StrategyPhasesService {
       filters: opts && opts.filters,
       match,
       predicate,
+      view: "agreeing",
       signal: opts.signal,
     });
     // Defensive in-memory filter — see ``evaluate`` for the rationale.
