@@ -414,6 +414,17 @@ def test_build_intent_ping_forwards_only_the_ids() -> None:
     assert pings == [{"gameKey": "A|B|1"}, {"gameId": "g-1"}]
 
 
+def test_build_intent_ping_forwards_a_prefs_change() -> None:
+    import asyncio
+
+    pings: list = []
+    handler = _client_with_build_intent_callback(pings.append)
+    asyncio.run(handler({"prefs": True}))
+    asyncio.run(handler({"prefs": "yes"}))
+    asyncio.run(handler({"prefs": False}))
+    assert pings == [{"prefs": True}]
+
+
 @pytest.mark.parametrize("payload", [None, [], {}, {"gameKey": ""}, {"gameId": 7}])
 def test_build_intent_ping_ignores_malformed_payloads(payload) -> None:
     import asyncio

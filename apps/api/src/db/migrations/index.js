@@ -22,7 +22,10 @@
 
 const { COLLECTIONS } = require("../../config/constants");
 const { registerMigration, _internals } = require("../schemaVersioning");
-const { overrideActive } = require("../../services/buildIntentShape");
+const {
+  overrideActive,
+  opponentOverrideActive,
+} = require("../../services/buildIntentShape");
 
 /**
  * Forward shape change for opponents v1 → v2.
@@ -110,8 +113,9 @@ function gamesV7toV8(doc) {
 }
 
 /**
- * Rollback drops ``buildIntent`` and, when a confirmed check-in was applied,
- * restores the classifier's label exactly (``clearOverridePipeline``
+ * Rollback drops ``buildIntent`` and, on each axis whose confirmed check-in
+ * (or opponent correction) was applied, restores the classifier's label
+ * exactly (``clearOverridePipeline`` / ``clearOpponentOverridePipeline``
  * semantics: a missing detected field is unset, never left as the declared
  * build).
  * @param {Record<string, any>} doc
@@ -124,6 +128,18 @@ function gamesV8toV7(doc) {
     else delete next.myBuild;
     if (typeof detected.slug === "string") next._customBuildSlug = detected.slug;
     else delete next._customBuildSlug;
+  }
+  if (opponentOverrideActive(next)) {
+    const detected = next.buildIntent.opponent.detected || {};
+    if (next.opponent && typeof next.opponent === "object") {
+      next.opponent = { ...next.opponent };
+      if (typeof detected.name === "string") next.opponent.strategy = detected.name;
+      else delete next.opponent.strategy;
+    } else if (typeof detected.name === "string") {
+      next.opponent = { strategy: detected.name };
+    }
+    if (typeof detected.slug === "string") next._customOpponentStrategySlug = detected.slug;
+    else delete next._customOpponentStrategySlug;
   }
   delete next.buildIntent;
   return next;

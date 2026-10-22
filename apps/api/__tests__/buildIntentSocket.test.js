@@ -170,7 +170,11 @@ describe("build check-in realtime", () => {
       opponent: { name: "Opp", race: "Zerg" },
     };
     broker.publish(userId, env);
-    if (register) await service.registerFromEnvelope(userId, { ...env, phase: "match_loading" });
+    if (register) {
+      await service.registerFromEnvelope(userId, { ...env, phase: "match_loading" });
+      // The agent's loading card registers the game it asks about.
+      await service.putLive(userId, gameKey, { action: "register" }, { source: "device" });
+    }
     roomIo.clear();
     return { userId, token, gameKey };
   }

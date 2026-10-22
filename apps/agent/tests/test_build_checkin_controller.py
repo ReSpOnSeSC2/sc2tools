@@ -11,10 +11,13 @@ import pytest
 from sc2tools_agent.build_checkin.controller import (
     LOADING_CARD_MAX_SEC,
     OPTIONS_TTL_SEC,
+    PREFS_RETRY_SEC,
     BuildCheckinController,
 )
 from sc2tools_agent.build_checkin.models import (
     LOCKED_IN,
+    NOT_NOW_CLEARS_TIP,
+    NOT_NOW_TIP,
     PICKED_ON_WEB,
     RANDOMIZER_ROLLING,
     RANDOMIZER_WILL_ROLL,
@@ -377,17 +380,89 @@ def test_unknown_build_key_is_ignored(h: Harness) -> None:
     assert "declare" not in h.api.live_actions()
 
 
-def test_change_undeclares_and_reopens_the_list(h: Harness) -> None:
+def test_change_reopens_the_list_but_keeps_the_pick_on_the_server(h: Harness) -> None:
+    """Withdrawing the pick at Change would let the overlay randomizer
+    spin on stream while the player re-picks."""
     key = h.new_key()
     h.send(envelope("match_loading", key))
     h.ctl.declare(key, "custom:dt-3-gate")
     h.pump()
     h.ctl.undeclare(key)
     h.pump()
-    assert h.api.live_actions()[-1] == "undeclare"
+    assert "undeclare" not in h.api.live_actions()
+    assert h.api.live[key]["declared"]["key"] == "custom:dt-3-gate"
     model = _loading(h)
     assert model.collapsed is False
-    assert model.locked_label is None
+    assert model.changing is True
+    assert model.can_change is False
+    assert model.locked_key == "custom:dt-3-gate"
+    assert model.randomizer is None  # no "will roll" strip while re-picking
+    assert model.not_now_tip == NOT_NOW_CLEARS_TIP
+
+    h.ctl.declare(key, "pvz-2-stargate-phoenix")
+    h.pump()
+    assert h.api.live_bodies()[-1]["action"] == "declare"
+    assert h.api.live[key]["declared"]["key"] == "pvz-2-stargate-phoenix"
+    model = _loading(h)
+    assert (model.collapsed, model.changing) == (True, False)
+    assert model.locked_key == "pvz-2-stargate-phoenix"
+    assert model.not_now_tip == NOT_NOW_TIP
+
+
+def test_repicking_the_standing_pick_writes_nothing(h: Harness) -> None:
+    key = h.new_key()
+    h.send(envelope("match_loading", key))
+    h.ctl.declare(key, "custom:dt-3-gate")
+    h.ctl.undeclare(key)
+    h.pump()
+    writes = len(h.api.live_bodies())
+    h.ctl.declare(key, "custom:dt-3-gate")
+    h.pump()
+    assert len(h.api.live_bodies()) == writes
+    assert _loading(h).collapsed is True
+
+
+def test_not_now_while_changing_withdraws_the_pick(h: Harness) -> None:
+    key = h.new_key()
+    h.send(envelope("match_loading", key))
+    h.ctl.declare(key, "custom:dt-3-gate")
+    h.ctl.undeclare(key)
+    h.ctl.not_now(key)
+    h.pump()
+    # The pick already released the hold: only the withdrawal goes out.
+    assert h.api.live_actions()[-1] == "undeclare"
+    assert "release" not in h.api.live_actions()
+    assert h.api.live[key]["declared"] is None
+    assert h.view.of("hide_loading") == [(key, "dismissed")]
+
+
+@pytest.mark.parametrize("leave", ["in_game", "match_ended"])
+def test_hiding_while_changing_keeps_the_pick(h: Harness, leave: str) -> None:
+    key = h.new_key()
+    h.send(envelope("match_loading", key))
+    h.ctl.declare(key, "custom:dt-3-gate")
+    h.ctl.undeclare(key)
+    h.pump()
+    if leave == "in_game":
+        h.send(envelope("match_in_progress", key, display_time=31.0))
+    else:
+        h.end(key)
+    assert "undeclare" not in h.api.live_actions()
+    assert h.api.live[key]["declared"]["key"] == "custom:dt-3-gate"
+    assert h.view.of("show_postgame") == []  # still declared at loading
+
+
+def test_change_over_a_web_pick_reopens_without_withdrawing(h: Harness) -> None:
+    key = h.new_key()
+    h.send(envelope("match_loading", key))
+    h.api.live[key]["declared"] = {**option("pvz-2-stargate-phoenix"), "via": "web"}
+    h.ctl.on_intent_changed({"gameKey": key})
+    h.pump()
+    assert _loading(h).declared_elsewhere is True
+    h.ctl.undeclare(key)
+    h.pump()
+    assert "undeclare" not in h.api.live_actions()
+    assert _loading(h).changing is True
 
 
 def test_rapid_picks_collapse_to_the_last_one() -> None:
@@ -728,10 +803,11 @@ def test_declare_never_waits_behind_the_register_write() -> None:
     h = Harness(executor=executor)
     key = h.new_key()
     h.send(envelope("match_loading", key))
-    # Let the option lists load but hold the register write back.
+    # Let the option lists (and the first prefs read) load but hold the
+    # register write back: it went out first.
     while len(executor.jobs) > 1:
-        executor.run(0)
-    h.pump()
+        executor.run(1)
+        h.pump()
     assert h.api.live_actions() == []
     h.ctl.declare(key, "custom:dt-3-gate")
     h.pump()
@@ -759,3 +835,132 @@ def test_unavailable_api_is_reported() -> None:
     h.boot()
     assert h.ctl.available is False
     assert h.view.prefs == []
+
+
+# ------------------------------------------------- prefs across sessions
+
+
+def test_confirmed_prefs_are_persisted_when_they_change() -> None:
+    h = Harness().boot()
+    assert h.saved_prefs == [CheckinPrefs()]
+    # Same value again (live register, game reads): nothing to save.
+    h.send(envelope("match_loading", h.new_key()))
+    assert h.saved_prefs == [CheckinPrefs()]
+    h.ctl.set_prefs(ask_at_loading=False)
+    h.pump()
+    assert h.saved_prefs == [CheckinPrefs(), CheckinPrefs(ask_at_loading=False)]
+
+
+def test_cached_prefs_decide_the_cards_while_the_server_is_unreachable() -> None:
+    """Offline at login: a player who turned the loading card off must not
+    get one just because the first read failed."""
+    h = Harness(prefs=CheckinPrefs(ask_at_loading=False))
+    h.api.fail_next("get_checkin_prefs", ConnectionError("offline"))
+    h.boot()
+    assert h.ctl.available is None
+    assert h.ctl.prefs == CheckinPrefs(ask_at_loading=False)
+    h.send(envelope("match_loading", h.new_key()))
+    assert h.view.of("show_loading") == []
+    assert h.api.calls_to("put_live_intent") == []
+
+
+def test_cached_prefs_with_cards_off_still_follow_the_server() -> None:
+    h = Harness(prefs=CheckinPrefs(enabled=False))
+    h.boot()
+    assert h.ctl.prefs == CheckinPrefs()
+    h.send(envelope("match_loading", h.new_key()))
+    assert len(h.view.of("show_loading")) == 1
+    assert h.saved_prefs == [CheckinPrefs()]
+
+
+def test_a_failed_save_reverts_to_the_cached_prefs() -> None:
+    h = Harness(prefs=CheckinPrefs(ask_after_game=False))
+    h.api.fail_next("get_checkin_prefs", ConnectionError("offline"))
+    h.api.fail_next("put_checkin_prefs", ConnectionError("offline"))
+    h.boot()
+    h.ctl.set_prefs(ask_after_game=True)
+    h.pump()
+    assert h.ctl.prefs == CheckinPrefs(ask_after_game=False)
+
+
+def test_prefs_read_retries_with_backoff_until_it_answers() -> None:
+    h = Harness()
+    h.api.fail_next("get_checkin_prefs", ConnectionError("offline"), times=4)
+    h.boot()
+    reads = lambda: len(h.api.calls_to("get_checkin_prefs"))  # noqa: E731
+    assert reads() == 1
+    for delay, expected in ((PREFS_RETRY_SEC[0], 2), (PREFS_RETRY_SEC[1], 3),
+                            (PREFS_RETRY_SEC[2], 4), (PREFS_RETRY_SEC[2], 5)):
+        h.advance(delay - 0.5)
+        assert reads() == expected - 1
+        h.advance(0.5)
+        assert reads() == expected
+    assert h.ctl.available is True
+    h.advance(PREFS_RETRY_SEC[2] * 3)
+    assert reads() == 5
+
+
+def test_prefs_read_is_not_retried_once_the_server_answered(h: Harness) -> None:
+    h.api.fail_next("get_checkin_prefs", ConnectionError("offline"))
+    h.advance(31)
+    h.ctl.refresh_prefs()
+    h.pump()
+    h.advance(PREFS_RETRY_SEC[-1] * 2)
+    assert len(h.api.calls_to("get_checkin_prefs")) == 2
+
+
+def test_api_without_build_checkin_is_not_retried() -> None:
+    h = Harness()
+    h.api.fail_next("get_checkin_prefs", api_error(404, "not_found"))
+    h.boot()
+    h.advance(PREFS_RETRY_SEC[-1] * 3)
+    assert len(h.api.calls_to("get_checkin_prefs")) == 1
+
+
+def test_a_game_start_retries_an_unanswered_prefs_read() -> None:
+    h = Harness()
+    h.api.fail_next("get_checkin_prefs", ConnectionError("offline"), times=3)
+    h.boot()
+    h.advance(PREFS_RETRY_SEC[0])
+    h.advance(PREFS_RETRY_SEC[1])
+    assert len(h.api.calls_to("get_checkin_prefs")) == 3
+    h.advance(31)  # the next retry is still half a minute away
+    h.send(envelope("match_loading", h.new_key()))
+    assert len(h.api.calls_to("get_checkin_prefs")) == 4
+    assert h.ctl.available is True
+
+
+def test_prefs_ping_follows_a_change_made_on_the_web(h: Harness) -> None:
+    h.api.prefs["askAtLoading"] = False
+    h.ctl.on_intent_changed({"prefs": True})
+    h.pump()
+    assert len(h.api.calls_to("get_checkin_prefs")) == 2  # never throttled
+    assert h.ctl.prefs.ask_at_loading is False
+    assert h.view.prefs[-1].ask_at_loading is False
+    h.send(envelope("match_loading", h.new_key()))
+    assert h.view.of("show_loading") == []
+
+
+def test_prefs_ping_hides_a_card_that_was_turned_off(h: Harness) -> None:
+    key = h.new_key()
+    h.send(envelope("match_loading", key))
+    h.api.prefs["enabled"] = False
+    h.ctl.on_intent_changed({"prefs": True})
+    h.pump()
+    assert h.view.of("hide_loading") == [(key, "disabled")]
+
+
+def test_register_goes_out_before_the_list_prefetch() -> None:
+    executor = ManualExecutor()
+    h = Harness(executor=executor)
+    h.boot()
+    executor.run_all()
+    h.pump()
+    executor.run_all()  # the persisted-prefs save
+    before = len(h.api.calls)
+    h.send(envelope("match_loading", h.new_key()))
+    executor.run(0)
+    assert [name for name, *_ in h.api.calls[before:]] == ["put_live_intent"]
+    executor.run_all()
+    names = [name for name, *_ in h.api.calls[before:]]
+    assert names == ["put_live_intent"] + ["get_build_options"] * 3

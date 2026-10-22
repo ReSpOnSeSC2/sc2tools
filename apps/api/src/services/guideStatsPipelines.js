@@ -33,6 +33,10 @@ const {
   leagueBandExpression,
   mmrBandExpression,
 } = require("./guideRules");
+const {
+  DETECTOR_OPP_SLUG_EXPR,
+  DETECTOR_OPP_STRATEGY_EXPR,
+} = require("./buildIntentShape");
 
 /** Name of the partial games index every games pipeline starts on (db/connect.js). */
 const GUIDE_GAMES_INDEX_NAME = "guide_stats_build_opp_race";
@@ -170,9 +174,11 @@ function mapExpression() {
 }
 
 /**
- * Opponent strategy when it may appear on a guide: not relabelled by a
- * private custom strategy and an exact catalog name of the matchup's
- * counters namespace. Everything else is null (not counted).
+ * Opponent strategy when it may appear on a guide: the classifier's label
+ * (never a player's opponent correction), not relabelled by a private
+ * custom strategy and an exact catalog name of the matchup's counters
+ * namespace. Everything else is null (not counted). A corrected row still
+ * counts everywhere else: only its strategy is remapped.
  *
  * @param {string} matchup
  * @returns {Record<string, any>}
@@ -182,11 +188,11 @@ function strategyExpression(matchup) {
     $cond: [
       {
         $and: [
-          { $eq: [{ $type: "$_customOpponentStrategySlug" }, "missing"] },
-          { $in: ["$opponent.strategy", [...strategyNamesForMatchup(matchup)]] },
+          { $eq: [DETECTOR_OPP_SLUG_EXPR, null] },
+          { $in: [DETECTOR_OPP_STRATEGY_EXPR, [...strategyNamesForMatchup(matchup)]] },
         ],
       },
-      "$opponent.strategy",
+      DETECTOR_OPP_STRATEGY_EXPR,
       null,
     ],
   };

@@ -110,7 +110,10 @@ const REGISTRY = Object.freeze({
     // v8 — optional server-owned ``buildIntent`` (build check-in). While a
     //      confirmed check-in is applied, ``myBuild``/``_customBuildSlug``
     //      carry the declared build and ``buildIntent.detected`` keeps the
-    //      classifier's label; rollback restores it.
+    //      classifier's label; likewise an applied opponent correction
+    //      (``buildIntent.opponent``) owns ``opponent.strategy``/
+    //      ``_customOpponentStrategySlug`` and keeps the classifier's label
+    //      in ``buildIntent.opponent.detected``. Rollback restores both.
     currentVersion: 8,
     versionKey: VERSION_KEY,
   },

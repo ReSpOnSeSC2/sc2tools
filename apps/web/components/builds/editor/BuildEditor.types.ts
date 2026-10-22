@@ -168,6 +168,11 @@ export interface BuildEditorBasicsProps {
   draft: BuildEditorDraft;
   setDraft: Dispatch<SetStateAction<BuildEditorDraft>>;
   errors: BuildEditorErrors;
+  /**
+   * The source game's matchup when the build must fit it: the race is
+   * shown read-only and the vs race offers only that race or Any.
+   */
+  lockedMatchup?: { race: RaceLite; vsRace: VsRaceLite };
 }
 
 export interface BuildEditorRulesProps {

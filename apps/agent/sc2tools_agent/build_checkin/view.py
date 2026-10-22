@@ -13,8 +13,8 @@ still drop a call whose ``game_key`` / ``card_id`` it no longer shows.
 Player actions go back through the controller's public methods
 (``declare``, ``undeclare``, ``roll_now``, ``not_now``, ``confirm``,
 ``no_set_build``, ``later``, ``interacted``, ``update_draft``,
-``disable``, ``dismiss_intro``, ``reopen``, ``set_prefs``). They are
-thread-safe and non-blocking.
+``add_build``, ``disable``, ``dismiss_intro``, ``reopen``,
+``set_prefs``). They are thread-safe and non-blocking.
 
 Optional hooks a view may also provide:
 
@@ -48,6 +48,9 @@ HIDE_PREEMPTED = "preempted"
 HIDE_DECIDED = "decided_elsewhere"
 HIDE_NOT_ELIGIBLE = "not_eligible"
 HIDE_REPLACED = "replaced"
+HIDE_OPENED_WEB = "opened_web"
+"""**Add new build…** opened the game on sc2tools.com: step aside for the
+browser (and leave the focus with it rather than handing it to SC2)."""
 
 
 @runtime_checkable
@@ -108,6 +111,7 @@ __all__ = [
     "HIDE_NEW_GAME",
     "HIDE_NOT_1V1",
     "HIDE_NOT_ELIGIBLE",
+    "HIDE_OPENED_WEB",
     "HIDE_PREEMPTED",
     "HIDE_RANDOM",
     "HIDE_REPLACED",

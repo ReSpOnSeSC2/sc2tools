@@ -14,6 +14,8 @@ from typing import Any, Optional
 
 from ..state import AgentState, save_state
 from .controller import BuildCheckinController
+from .links import new_build_url, web_queue_url
+from .models import CheckinPrefs, parse_prefs
 from .view import BuildCheckinView
 
 _log = logging.getLogger("sc2tools_agent.build_checkin")
@@ -38,11 +40,6 @@ def build_checkin_view_for(gui: Any) -> Optional[BuildCheckinView]:
         return None
 
 
-def web_queue_url(dashboard_url: str) -> str:
-    """Where the tray item goes when no card is waiting."""
-    return dashboard_url.rstrip("/") + "/app"
-
-
 def start_build_checkin(
     *,
     api: Any,
@@ -58,6 +55,10 @@ def start_build_checkin(
         state.build_checkin_intro_seen = True
         save_state(state_dir, state)
 
+    def remember_prefs(prefs: CheckinPrefs) -> None:
+        state.build_checkin_prefs = prefs.to_json()
+        save_state(state_dir, state)
+
     try:
         controller = BuildCheckinController(
             api=api,
@@ -65,6 +66,9 @@ def start_build_checkin(
             intro_seen=state.build_checkin_intro_seen,
             on_intro_dismissed=remember_intro_dismissed,
             web_queue_url=web_queue_url(dashboard_url),
+            dashboard_url=dashboard_url,
+            prefs=parse_prefs(state.build_checkin_prefs),
+            on_prefs_changed=remember_prefs,
         )
         bind = getattr(view, "bind_controller", None)
         if callable(bind):
@@ -79,6 +83,7 @@ def start_build_checkin(
 
 __all__ = [
     "build_checkin_view_for",
+    "new_build_url",
     "start_build_checkin",
     "web_queue_url",
 ]

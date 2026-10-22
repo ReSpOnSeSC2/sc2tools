@@ -3,8 +3,17 @@
 const { ObjectId } = require("mongodb");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { REGION_LABELS } = require("../util/regionFromToonHandle");
-const { BUILD_INTENT_LABEL_PROJECTION, detectorView } = require("./buildIntentShape");
-const { detectorLabelMatch, ownerBuildFlags } = require("./buildIntentReaders");
+const {
+  BUILD_INTENT_LABEL_PROJECTION,
+  OPP_INTENT_LABEL_PROJECTION,
+  detectorView,
+  opponentDetectorView,
+} = require("./buildIntentShape");
+const {
+  detectorLabelMatch,
+  opponentDetectorLabelMatch,
+  ownerBuildFlags,
+} = require("./buildIntentReaders");
 
 // A replay-library page is a human-facing table, not an analysis corpus.
 // A modest default keeps first paint quick; the hard ceiling prevents a
@@ -56,9 +65,11 @@ const REPLAY_LIBRARY_PROJECTION = Object.freeze({
   "replayFile.storedAt": 1,
   "replayFile.sizeBytes": 1,
   // Build check-in label fields only (never notes): owner rows derive
-  // ``buildPlanned`` / ``detectedBuild``, detector-view rows the classifier's
-  // label. The serializer never copies the subdocument itself.
+  // ``buildPlanned`` / ``detectedBuild`` and ``oppStrategyPlanned`` /
+  // ``detectedOppStrategy``, detector-view rows the classifier's labels.
+  // The serializer never copies the subdocument itself.
   ...BUILD_INTENT_LABEL_PROJECTION,
+  ...OPP_INTENT_LABEL_PROJECTION,
 });
 
 /** @typedef {"owner"|"detector"} ReplayLibraryView */
@@ -86,8 +97,10 @@ class ReplayLibraryService {
    * toon/Pulse identifiers into a public replay row much harder.
    *
    * `view: "detector"` (the public archive) labels, filters and searches rows
-   * by the classifier's build, never a build check-in; the default owner view
-   * shows the effective label plus `buildPlanned` / `detectedBuild`.
+   * by the classifier's build and opponent strategy, never a build check-in
+   * or an opponent correction; the default owner view shows the effective
+   * labels plus `buildPlanned` / `detectedBuild` and `oppStrategyPlanned` /
+   * `detectedOppStrategy`.
    *
    * @param {string} userId
    * @param {{
@@ -125,10 +138,15 @@ class ReplayLibraryService {
     const view = replayLibraryView(opts.view);
     const filters = sanitizeGlobalFilters(opts.filters);
     const detectorBuild = view === "detector" ? filters.build : undefined;
+    const detectorStrategy = view === "detector" ? filters.oppStrategy : undefined;
     if (detectorBuild !== undefined) delete filters.build;
+    if (detectorStrategy !== undefined) delete filters.oppStrategy;
     /** @type {Array<Record<string, any>>} */
     const clauses = [gamesMatchStage(ownerId, filters)];
     if (detectorBuild !== undefined) clauses.push(detectorLabelMatch("name", detectorBuild));
+    if (detectorStrategy !== undefined) {
+      clauses.push(opponentDetectorLabelMatch("name", detectorStrategy));
+    }
 
     const resultClause = resultMatchClause(opts.result);
     if (resultClause) clauses.push(resultClause);
@@ -164,7 +182,7 @@ class ReplayLibraryService {
         ? encodeReplayLibraryCursor(last.date, last._id, sort)
         : null,
       hasMore,
-      sourceGames: page.map(serializeReplayVodSource),
+      sourceGames: page.map((row) => serializeReplayVodSource(row, view)),
     };
   }
 
@@ -193,10 +211,11 @@ class ReplayLibraryService {
       },
       { projection: REPLAY_LIBRARY_PROJECTION },
     );
+    const view = replayLibraryView(opts.view);
     return row
       ? {
-        game: serializeReplayLibraryGame(row, replayLibraryView(opts.view)),
-        sourceGame: serializeReplayVodSource(row),
+        game: serializeReplayLibraryGame(row, view),
+        sourceGame: serializeReplayVodSource(row, view),
       }
       : null;
   }
@@ -315,7 +334,8 @@ function replayLibraryView(raw) {
 
 /**
  * @param {unknown} raw
- * @param {ReplayLibraryView} [view] "detector" matches the classifier's build label
+ * @param {ReplayLibraryView} [view] "detector" matches the classifier's build
+ *   and opponent labels
  * @returns {Record<string, any>|null}
  */
 function replaySearchClause(raw, view = "owner") {
@@ -333,7 +353,9 @@ function replaySearchClause(raw, view = "owner") {
       { map: pattern },
       { "opponent.displayName": pattern },
       view === "detector" ? detectorLabelMatch("name", pattern) : { myBuild: pattern },
-      { "opponent.strategy": pattern },
+      view === "detector"
+        ? opponentDetectorLabelMatch("name", pattern)
+        : { "opponent.strategy": pattern },
     ],
   };
 }
@@ -341,8 +363,9 @@ function replaySearchClause(raw, view = "owner") {
 /**
  * Strict client serializer. The returned object is intentionally constructed
  * field-by-field; never spread a Mongo row or nested opponent/replay object.
- * Owner rows carry the effective build label plus `buildPlanned` /
- * `detectedBuild`; detector-view rows carry only the classifier's label.
+ * Owner rows carry the effective labels plus `buildPlanned` /
+ * `detectedBuild` and `oppStrategyPlanned` / `detectedOppStrategy`;
+ * detector-view rows carry only the classifier's labels.
  *
  * @param {Record<string, any>} row
  * @param {ReplayLibraryView} [view]
@@ -372,7 +395,7 @@ function serializeReplayLibraryGame(row, view = "owner") {
       displayName: boundedOutputString(opponent.displayName, 80),
       race: opponentRace,
       mmr: safeBoundedNumber(opponent.mmr, 0, 9_999, true),
-      strategy: boundedOutputString(opponent.strategy, 200),
+      strategy: boundedOutputString(replayOpponentStrategy(row, view), 200),
     },
     matchup: matchupLabel(myRace, opponentRace),
     replayAvailable:
@@ -395,7 +418,23 @@ function replayBuildLabel(row, view) {
     myBuild: boundedOutputString(row?.myBuild, 200),
     buildPlanned: flags.buildPlanned,
     detectedBuild: boundedOutputString(flags.detectedBuild, 200),
+    oppStrategyPlanned: flags.oppStrategyPlanned,
+    detectedOppStrategy: boundedOutputString(flags.detectedOppStrategy, 200),
   };
+}
+
+/**
+ * The opponent strategy a row shows: the classifier's label in the detector
+ * view, the effective (possibly corrected) one for the owner.
+ *
+ * @param {Record<string, any>} row
+ * @param {ReplayLibraryView} view
+ * @returns {unknown}
+ */
+function replayOpponentStrategy(row, view) {
+  return view === "detector"
+    ? opponentDetectorView(row).strategy
+    : objectOrEmpty(row?.opponent).strategy;
 }
 
 /** @param {unknown} raw */
@@ -420,12 +459,14 @@ function replayGameVersion(raw) {
 /**
  * Private, primitives-only VOD input. This is not a second public DTO: it
  * includes the minimum toon/Pulse identity needed by the VOD services and
- * therefore must never be sent to a browser.
+ * therefore must never be sent to a browser. Labels follow `view` as in
+ * `serializeReplayLibraryGame`.
  *
  * @param {Record<string, any>} row
+ * @param {ReplayLibraryView} [view]
  * @returns {Record<string, any>}
  */
-function serializeReplayVodSource(row) {
+function serializeReplayVodSource(row, view = "owner") {
   const opponent = objectOrEmpty(row?.opponent);
   return {
     gameId: cleanGameId(row?.gameId),
@@ -438,7 +479,7 @@ function serializeReplayVodSource(row) {
       displayName: boundedOutputString(opponent.displayName, 80),
       race: boundedOutputString(opponent.race, 24),
       mmr: safeBoundedNumber(opponent.mmr, 0, 9_999, true),
-      strategy: boundedOutputString(opponent.strategy, 200),
+      strategy: boundedOutputString(replayOpponentStrategy(row, view), 200),
       toonHandle: boundedIdentityString(opponent.toonHandle, 64),
       pulseCharacterId: numericIdentity(opponent.pulseCharacterId, 32),
     },

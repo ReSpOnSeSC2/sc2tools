@@ -1,4 +1,5 @@
 import { GameDetailPage } from "@/components/analyzer/game/GameDetailPage";
+import { newBuildSideFromQuery } from "@/lib/buildIntentLinks";
 import { opponentContextFromQuery } from "@/lib/opponentNavigation";
 import { replayTimeFromQuery } from "@/lib/replayLink";
 
@@ -6,6 +7,8 @@ import { replayTimeFromQuery } from "@/lib/replayLink";
  * /app/game/[gameId] — per-replay deep dive. Opponent-profile entry points
  * carry their source in the query so refreshes and copied URLs retain the
  * correct backlink; ordinary game URLs keep the dashboard fallback.
+ * `?newBuild=you|opponent` (the desktop app's "Add new build…") opens the
+ * build editor from the game's check-in once, then leaves the URL.
  */
 export default async function GameDetailRoute({
   params,
@@ -20,6 +23,7 @@ export default async function GameDetailRoute({
       gameId={safeDecode(route.gameId || "")}
       opponentContext={opponentContextFromQuery(query)}
       initialTimeSec={replayTimeFromQuery(query)}
+      initialNewBuild={newBuildSideFromQuery(query)}
     />
   );
 }

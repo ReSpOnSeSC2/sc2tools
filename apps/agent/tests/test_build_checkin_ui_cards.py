@@ -15,7 +15,9 @@ pytest.importorskip("PySide6")
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets  # noqa: E402
 
 from sc2tools_agent.build_checkin.models import (  # noqa: E402
+    ADD_NEW_BUILD_HINT,
     CHECKING_REPLAY,
+    NOT_NOW_CLEARS_TIP,
     NOTES_FIRST_HEADING,
     NOTES_MAX_LENGTH,
     PICKED_ON_WEB,
@@ -24,6 +26,7 @@ from sc2tools_agent.build_checkin.models import (  # noqa: E402
     STATUS_SAVE_FAILED,
     BuildOptionModel,
     LoadingCardModel,
+    OpponentRowModel,
     PostgameCardModel,
     RandomizerStripModel,
     format_record,
@@ -757,3 +760,339 @@ def test_utf16_helpers() -> None:
     assert cards.truncate_utf16("ab🎲c", 3) == "ab"
     assert cards.truncate_utf16("ab🎲c", 4) == "ab🎲"
     assert cards.truncate_utf16("short", 10) == "short"
+
+
+# ========================================================== re-picking
+
+
+def test_changing_marks_the_standing_pick_and_explains_not_now(harness) -> None:
+    host, controller, *_ = harness
+    window = show_loading(host, loading_model(
+        changing=True, locked_key="custom:dt-3-gate",
+        locked_label="Locked in: DT into 3 Gate", randomizer=None,
+        not_now_tip=NOT_NOW_CLEARS_TIP,
+    ))
+    assert window.full.isVisibleTo(window) and not window.bar.isVisibleTo(window)
+    assert window.builds.row("custom:dt-3-gate").chips == [("Current pick", "reason")]
+    assert "Current pick" in window.builds.row("custom:dt-3-gate").accessibleName()
+    assert window.not_now.toolTip() == NOT_NOW_CLEARS_TIP
+    assert not window.strip.isVisibleTo(window)
+    QtTest.QTest.mouseClick(window.builds.row("pvz-chargelot"), QtCore.Qt.LeftButton)
+    assert controller.named("declare") == [(KEY, "pvz-chargelot")]
+    host.dispatch("update_loading", (loading_model(),))
+    assert window.builds.row("custom:dt-3-gate").chips == []
+    assert window.not_now.toolTip() == "Skip this game's check-in at loading"
+
+
+# ===================================================== opponent's build
+
+OPP_FEATURED = (
+    option("zerg-12-pool", "Zerg - 12 Pool", 2, 1),
+    option("custom:ling-flood", "Ling flood"),
+)
+OPP_MORE = (
+    option("zvp-roach-rush", "ZvP - Roach Rush", group="catalog"),
+    option("zvp-ling-bane-bust", "ZvP - Ling Bane Bust", group="catalog"),
+)
+
+
+def opp_model(**changes: Any) -> OpponentRowModel:
+    base = OpponentRowModel(
+        label="Opponent's build: Zerg - 12 Pool", name="Zerg - 12 Pool",
+        selection="zerg-12-pool", server_key="zerg-12-pool",
+        replay_key="zerg-12-pool", replay_name="Zerg - 12 Pool",
+        featured=OPP_FEATURED, more=OPP_MORE,
+    )
+    return replace(base, **changes)
+
+
+def with_opponent(**changes: Any) -> PostgameCardModel:
+    opponent = changes.pop("opponent", None) or opp_model()
+    return postgame_model(
+        game_id="g-1", opponent=opponent, can_add_build=True,
+        add_build_hint=ADD_NEW_BUILD_HINT, **changes,
+    )
+
+
+def test_end_card_before_the_replay_has_no_opponent_row(harness) -> None:
+    host, controller, *_ = harness
+    window = show_postgame(host)
+    assert not window.opp_row.isVisibleTo(window)
+    assert not window.opp_picker.isVisibleTo(window)
+    assert window.add_build.isVisibleTo(window)
+    assert window.add_build.text() == "Add new build…"
+    assert not window.add_build.isEnabled()
+    assert window.add_build.toolTip() == "Available once your replay uploads"
+    assert window.add_build.accessibleDescription() == "Available once your replay uploads"
+    window.add_build.click()
+    assert controller.named("add_build") == []
+
+
+def test_opponent_row_is_a_compact_accordion(harness) -> None:
+    host, controller, *_ = harness
+    window = show_postgame(host, with_opponent())
+    assert window.opp_row.isVisibleTo(window)
+    assert window.opp_label.text() == "Opponent's build: Zerg - 12 Pool"
+    assert window.opp_label.textFormat() == QtCore.Qt.PlainText
+    assert not window.opp_changed.isVisibleTo(window)
+    assert window.opp_change.text() == "Change"
+    assert not window.opp_picker.isVisibleTo(window)
+    assert window.picker.isVisibleTo(window)
+    closed_height = window.height()
+
+    window.opp_change.click()
+    assert window.opp_picker.isVisibleTo(window)
+    assert not window.picker.isVisibleTo(window)  # swapped, not stacked
+    assert window.opp_change.text() == "Close"
+    assert window.opp_builds.featured_label.text() == "FACED BEFORE"
+    assert window.opp_builds.search.placeholderText() == "Search opponent builds"
+    assert window.opp_builds.more_toggle.text() == "All builds…  (2)"
+    assert window.opp_builds.selection() == "zerg-12-pool"
+    assert window.opp_builds.keys() == (
+        [o.key for o in OPP_FEATURED], [o.key for o in OPP_MORE],
+    )
+    assert window.card.width() == window.WIDTH
+    assert window.height() < closed_height + 4 * 32  # still a compact card
+    assert controller.named("interacted") == [("checkin-1",)]
+
+    window.opp_change.click()
+    assert not window.opp_picker.isVisibleTo(window)
+    assert window.picker.isVisibleTo(window)
+
+
+def test_all_builds_title_shows_without_faced_before_rows(harness) -> None:
+    host, *_ = harness
+    window = show_postgame(host, with_opponent(opponent=opp_model(featured=())))
+    window.opp_change.click()
+    assert window.opp_builds.more_label.text() == "ALL BUILDS"
+    assert window.opp_builds.more_label.isVisibleTo(window)
+
+
+def test_picking_an_opponent_build_collapses_and_marks_it_changed(harness) -> None:
+    host, controller, *_ = harness
+    window = show_postgame(host, with_opponent())
+    window.notes.setPlainText("Roaches at 4:00")
+    controller.calls.clear()
+    window.opp_change.click()
+    window.opp_builds.more_toggle.click()
+    QtTest.QTest.mouseClick(window.opp_builds.row("zvp-roach-rush"), QtCore.Qt.LeftButton)
+    assert not window.opp_picker.isVisibleTo(window)
+    assert window.picker.isVisibleTo(window)
+    assert window.opp_label.text() == "Opponent's build: ZvP - Roach Rush"
+    assert window.opp_changed.isVisibleTo(window)
+    assert window.opp_changed.text() == "· changed"
+    assert window.opp_label.toolTip() == "Replay classified as: Zerg - 12 Pool"
+    assert window.opp_label.accessibleName() == "Opponent's build: ZvP - Roach Rush, changed"
+    assert controller.named("update_draft") == [
+        ("checkin-1", "pvz-2-stargate-phoenix", "Roaches at 4:00", "zvp-roach-rush"),
+    ]
+    window.primary.click()
+    window.secondary.click()
+    assert controller.named("confirm") == [
+        ("checkin-1", "pvz-2-stargate-phoenix", "Roaches at 4:00", "zvp-roach-rush"),
+    ]
+    assert controller.named("no_set_build") == [
+        ("checkin-1", "Roaches at 4:00", "zvp-roach-rush"),
+    ]
+
+
+def test_picking_the_servers_build_again_is_not_a_change(harness) -> None:
+    host, *_ = harness
+    window = show_postgame(host, with_opponent())
+    window.opp_change.click()
+    QtTest.QTest.mouseClick(window.opp_builds.row("zerg-12-pool"), QtCore.Qt.LeftButton)
+    assert window.opp_label.text() == "Opponent's build: Zerg - 12 Pool"
+    assert not window.opp_changed.isVisibleTo(window)
+    assert window.opp_label.toolTip() == ""
+
+
+def test_actions_leave_the_opponent_out_until_it_is_touched(harness) -> None:
+    host, controller, *_ = harness
+    window = show_postgame(host, with_opponent())
+    QtTest.QTest.mouseClick(window.builds.row("custom:dt-3-gate"), QtCore.Qt.LeftButton)
+    window.primary.click()
+    assert controller.named("update_draft") == [("checkin-1", "custom:dt-3-gate", "")]
+    assert controller.named("confirm") == [("checkin-1", "custom:dt-3-gate", "")]
+
+
+def test_use_replays_label_restores_the_classifier_pick(harness) -> None:
+    host, controller, *_ = harness
+    corrected = opp_model(
+        label="Opponent's build: ZvP - Roach Rush", name="ZvP - Roach Rush",
+        selection="zvp-roach-rush", server_key="zvp-roach-rush", corrected=True,
+        detected_label="Replay classified as: Zerg - 12 Pool", show_use_replay=True,
+    )
+    window = show_postgame(host, with_opponent(opponent=corrected))
+    assert window.opp_label.toolTip() == "Replay classified as: Zerg - 12 Pool"
+    window.opp_change.click()
+    assert window.opp_use_replay.isVisibleTo(window)
+    assert window.opp_use_replay.text() == "Use replay's label"
+    window.opp_use_replay.click()
+    assert window.opp_builds.selection() == "zerg-12-pool"
+    assert not window.opp_picker.isVisibleTo(window)
+    assert window.opp_label.text() == "Opponent's build: Zerg - 12 Pool"
+    assert window.opp_changed.isVisibleTo(window)
+    assert window.opp_label.toolTip() == ""
+    assert controller.named("update_draft")[-1][3] == "zerg-12-pool"
+    window.opp_change.click()
+    assert not window.opp_use_replay.isVisibleTo(window)
+
+
+def test_use_replays_label_that_is_not_an_option_sends_none(harness) -> None:
+    host, controller, *_ = harness
+    corrected = opp_model(
+        label="Opponent's build: ZvP - Roach Rush", name="ZvP - Roach Rush",
+        selection="zvp-roach-rush", server_key="zvp-roach-rush", corrected=True,
+        replay_key=None, replay_name="Zerg Standard Play (Unclassified)",
+        show_use_replay=True,
+    )
+    window = show_postgame(host, with_opponent(opponent=corrected))
+    window.opp_change.click()
+    window.opp_use_replay.click()
+    assert window.opp_builds.selection() is None
+    assert window.opp_label.text() == "Opponent's build: Zerg Standard Play (Unclassified)"
+    assert window.opp_changed.isVisibleTo(window)
+    assert controller.named("update_draft")[-1][3] is None
+    window.primary.click()
+    assert controller.named("confirm")[-1][3] is None
+
+
+def test_escape_closes_the_opponent_list_before_meaning_later(harness) -> None:
+    host, controller, *_ = harness
+    window = show_postgame(host, with_opponent())
+    escape = next(
+        shortcut for shortcut in window.findChildren(QtGui.QShortcut)
+        if shortcut.key().toString() == "Esc"
+    )
+    window.opp_change.click()
+    escape.activated.emit()
+    assert not window.opp_picker.isVisibleTo(window)
+    assert controller.named("later") == []
+    escape.activated.emit()
+    assert controller.named("later") == [("checkin-1", "")]
+
+
+def test_add_new_build_under_each_list(harness) -> None:
+    host, controller, *_ = harness
+    window = show_postgame(host, with_opponent())
+    assert window.add_build.isEnabled()
+    assert window.add_build.toolTip() == ADD_NEW_BUILD_HINT
+    window.add_build.click()
+    window.opp_change.click()
+    assert window.opp_add.isVisibleTo(window) and window.opp_add.isEnabled()
+    assert window.opp_add.text() == "Add new build…"
+    window.opp_add.click()
+    assert controller.named("add_build") == [("checkin-1", "you"), ("checkin-1", "opponent")]
+
+
+def test_busy_card_disables_the_opponent_row_and_links(harness) -> None:
+    host, controller, *_ = harness
+    window = show_postgame(host, with_opponent(busy=True))
+    for widget in (window.add_build, window.opp_change, window.opp_add, window.opp_use_replay):
+        assert not widget.isEnabled()
+    window.opp_change.click()
+    assert not window.opp_picker.isVisibleTo(window)
+    assert controller.named("add_build") == []
+
+
+def test_untouched_opponent_row_follows_the_server(harness) -> None:
+    host, *_ = harness
+    window = show_postgame(host, with_opponent())
+    host.dispatch("update_postgame", (with_opponent(opponent=opp_model(
+        label="Opponent's build: Ling flood", name="Ling flood",
+        selection="custom:ling-flood", server_key="custom:ling-flood", corrected=True,
+    )),))
+    assert window.opp_label.text() == "Opponent's build: Ling flood"
+    assert window.opp_builds.selection() == "custom:ling-flood"
+
+
+def test_touched_opponent_row_keeps_its_pick_through_updates(harness) -> None:
+    host, *_ = harness
+    window = show_postgame(host, with_opponent())
+    window.opp_change.click()
+    QtTest.QTest.mouseClick(window.opp_builds.row("custom:ling-flood"), QtCore.Qt.LeftButton)
+    host.dispatch("update_postgame", (with_opponent(opponent=opp_model(
+        label="Opponent's build: ZvP - Roach Rush", selection="zvp-roach-rush",
+        server_key="zvp-roach-rush", corrected=True,
+    )),))
+    assert window.opp_builds.selection() == "custom:ling-flood"
+    assert window.opp_label.text() == "Opponent's build: Ling flood"
+    assert window.opp_changed.isVisibleTo(window)
+
+
+def test_reshown_card_restores_the_opponent_draft(harness) -> None:
+    host, controller, *_ = harness
+    window = show_postgame(host, with_opponent())
+    host.dispatch("hide_postgame", ("checkin-1", "preempted"))
+    show_postgame(host, with_opponent(touched=True, opponent=opp_model(
+        label="Opponent's build: ZvP - Roach Rush", name="ZvP - Roach Rush",
+        selection="zvp-roach-rush", changed=True, touched=True,
+    )))
+    assert window.opp_builds.selection() == "zvp-roach-rush"
+    assert window.opp_changed.isVisibleTo(window)
+    window.primary.click()
+    assert controller.named("confirm")[-1][3] == "zvp-roach-rush"
+
+
+def test_a_new_card_forgets_the_previous_opponent_list(harness) -> None:
+    host, *_ = harness
+    window = show_postgame(host, with_opponent())
+    window.opp_change.click()
+    show_postgame(host, with_opponent(card_id="checkin-2", opponent=opp_model(
+        featured=(option("protoss-dt-rush", "Protoss - DT Rush"),), more=(),
+        selection=None, server_key=None, replay_key=None,
+    )))
+    assert window.opp_builds.keys() == (["protoss-dt-rush"], [])
+    assert not window.opp_picker.isVisibleTo(window)
+
+
+def test_opponent_strings_are_plain_text(harness) -> None:
+    host, *_ = harness
+    window = show_postgame(host, with_opponent(opponent=opp_model(
+        label="Opponent's build: <b>Proxy</b>", name="<b>Proxy</b>",
+    )))
+    assert window.opp_label.text() == "Opponent's build: <b>Proxy</b>"
+    for label in window.findChildren(QtWidgets.QLabel):
+        assert label.textFormat() == QtCore.Qt.PlainText, label.objectName()
+
+
+def test_notes_first_change_build_closes_the_opponent_list(harness) -> None:
+    host, *_ = harness
+    window = show_postgame(host, with_opponent(
+        variant="notes_first", heading=NOTES_FIRST_HEADING, prompt="You planned X",
+        selection="custom:dt-3-gate", reason=None, reason_label=None,
+    ))
+    assert window.opp_row.isVisibleTo(window)
+    assert not window.picker.isVisibleTo(window)
+    window.opp_change.click()
+    assert window.opp_picker.isVisibleTo(window)
+    window.secondary.click()  # Change build
+    assert window.picker.isVisibleTo(window)
+    assert not window.opp_picker.isVisibleTo(window)
+
+
+def test_opening_the_web_keeps_the_browser_in_front(harness) -> None:
+    host, _controller, _moved, w32 = harness
+    w32.foreground = 4242
+    host.dispatch("show_postgame", (with_opponent(),))
+    window = host.window(POSTGAME)
+    w32.foreground = 5151
+    window._tick()
+    host.dispatch("hide_postgame", ("checkin-1", "opened_web"))
+    assert not window.isVisible()
+    assert w32.restored == []
+
+
+def test_keyboard_focus_moves_with_the_opponent_list(harness, app) -> None:
+    host, *_ = harness
+    window = show_postgame(host, with_opponent())
+    window.activateWindow()
+    app.processEvents()
+    if QtWidgets.QApplication.activeWindow() is not window:
+        pytest.skip("this platform cannot activate the card")
+    window.opp_change.click()
+    app.processEvents()
+    assert window.opp_builds.search.hasFocus()
+    QtTest.QTest.mouseClick(window.opp_builds.row("custom:ling-flood"), QtCore.Qt.LeftButton)
+    app.processEvents()
+    assert window.opp_change.hasFocus()

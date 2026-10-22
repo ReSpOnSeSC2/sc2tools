@@ -48,11 +48,15 @@ class CardOp:
     the replay's gameId is known)."""
 
     action: str
-    """``confirm`` | ``skip`` | ``notes``."""
+    """``confirm`` | ``skip`` | ``notes`` | ``opponent``."""
     build_key: Optional[str] = None
     notes: Optional[str] = None
     final: bool = False
     """Close the card once this write lands."""
+    send_opponent: bool = False
+    """Carry ``opponentBuildKey`` (game route only)."""
+    opponent_key: Optional[str] = None
+    """The opponent's build to count; ``None`` restores the replay's label."""
 
 
 @dataclass
@@ -61,6 +65,8 @@ class LoadingCard:
     visible: bool = True
     rows: FrozenOptionRows = field(default_factory=FrozenOptionRows)
     status: str = ""
+    changing: bool = False
+    """**Change** reopened the list; the pick stands until replaced."""
     model: Optional[LoadingCardModel] = None
 
 
@@ -97,6 +103,8 @@ class LiveGame:
     """This agent's own pick, remembered even when the server never got it."""
     declared_synced: bool = False
     declare_failed: bool = False
+    resend_inflight: bool = False
+    """A pick the declare never delivered is being sent after the game."""
     released: bool = False
     register_count: int = 0
     registered_with_matchup: bool = False
@@ -166,9 +174,18 @@ class PostgameCard:
     """Notes the server holds, when known."""
     flush_pending: bool = False
 
+    opp_rows: FrozenOptionRows = field(default_factory=FrozenOptionRows)
+    opp_selection: Optional[str] = None
+    opp_touched: bool = False
+    """The player changed the opponent row; ``opp_selection`` holds it."""
+    options_stale: bool = False
+    """Builds may have changed on the web: refetch the lists with the
+    next state read."""
+
     touched: bool = False
     reshows: int = 0
     reshow_pending: bool = False
+    preempted_at: Optional[float] = None
     last_activity: float = 0.0
     status: str = ""
     awaiting_replay: bool = False

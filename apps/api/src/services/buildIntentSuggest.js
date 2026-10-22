@@ -17,6 +17,11 @@
  *   bestMatch: the detector's custom build, then the detector's catalog
  *   build ("detected"); then the custom build whose rules came closest
  *   (≥ 50 % passed, "rules"); then the matchup's usual build ("usual").
+ *
+ * The opponent's build (``suggestOpponent``) only has the first two steps:
+ * the detector's opponent label when it is an opponent option ("detected"),
+ * else the opponent-perspective custom build whose rules came closest on
+ * the opponent's events ("rules").
  */
 
 const { evaluateRules } = require("./buildRulesEvaluator");
@@ -40,6 +45,7 @@ const RANDOMIZER_CONSISTENT_RATIO = 0.6;
  * }} BuildOption
  * @typedef {{ rules: Array<Record<string, any>>, updatedAt: number }} CustomRuleSet
  * @typedef {{ myBuild: string|null, customBuildSlug: string|null }} DetectorLabel
+ * @typedef {{ strategy: string|null, customStrategySlug: string|null }} OpponentDetectorLabel
  */
 
 /**
@@ -233,26 +239,37 @@ function rollConsistency(roll, detector, events, customRules) {
 function bestMatch(input) {
   const { game, detector, events, builds, customRules } = input;
   const detected = detectedOption(detector, builds);
-  if (detected) {
-    /** @type {{ passedCount: number, ruleCount: number } | null} */
-    let counts = null;
-    if (detected.source === "custom" && detected.slug) {
-      const rules = customRules.get(detected.slug)?.rules || [];
-      const score = scoreRules(rules, events);
-      // The classifier passed every rule; trust that when the detail is unreadable.
-      if (score && !score.unavailable) {
-        counts = { passedCount: score.passedCount, ruleCount: score.ruleCount };
-      } else if (rules.length > 0) {
-        counts = { passedCount: rules.length, ruleCount: rules.length };
-      }
-    }
-    return toSuggestion(detected, "detected", counts, game);
-  }
+  if (detected) return detectedSuggestion(detected, events, customRules, game);
   const ranked = rankCustomByRules(builds, events, customRules);
   if (ranked) return toSuggestion(ranked.option, "rules", ranked.score, game);
   const usual = input.usualKey ? builds.find((b) => b.key === input.usualKey) : null;
   if (usual) return toSuggestion(usual, "usual", null, game);
   return null;
+}
+
+/**
+ * The detector's option as a "detected" suggestion; a custom build carries
+ * its rule score.
+ * @param {BuildOption} detected
+ * @param {ReadonlyArray<any>|null} events
+ * @param {Map<string, CustomRuleSet>} customRules
+ * @param {Record<string, any>} game
+ * @returns {Suggestion}
+ */
+function detectedSuggestion(detected, events, customRules, game) {
+  /** @type {{ passedCount: number, ruleCount: number } | null} */
+  let counts = null;
+  if (detected.source === "custom" && detected.slug) {
+    const rules = customRules.get(detected.slug)?.rules || [];
+    const score = scoreRules(rules, events);
+    // The classifier passed every rule; trust that when the detail is unreadable.
+    if (score && !score.unavailable) {
+      counts = { passedCount: score.passedCount, ruleCount: score.ruleCount };
+    } else if (rules.length > 0) {
+      counts = { passedCount: rules.length, ruleCount: rules.length };
+    }
+  }
+  return toSuggestion(detected, "detected", counts, game);
 }
 
 /**
@@ -328,6 +345,52 @@ function suggestIntent(input) {
   return { suggestion: bestMatch(base), randomizerDeviated: false };
 }
 
+/**
+ * The opponent axis's detector view in the shape the "you"-axis helpers
+ * read (``executedFor``, ``detectedOptionKey``).
+ * @param {OpponentDetectorLabel} view
+ * @returns {DetectorLabel}
+ */
+function opponentDetectorLabel(view) {
+  return { myBuild: view.strategy, customBuildSlug: view.customStrategySlug };
+}
+
+/**
+ * The opponent option the classifier's opponent label names: its custom
+ * slug among the opponent-perspective custom options, else its era-neutral
+ * name among the catalog opponent options. Generic labels name nothing.
+ *
+ * @param {OpponentDetectorLabel} view
+ * @param {ReadonlyArray<BuildOption>} builds opponent options
+ * @returns {BuildOption|null}
+ */
+function detectedOpponentOption(view, builds) {
+  return detectedOption(opponentDetectorLabel(view), builds);
+}
+
+/**
+ * Which build the opponent most likely went for: the detector's opponent
+ * label when it is an option ("detected"), else the opponent-perspective
+ * custom build whose rules came closest on the opponent's start-time
+ * events (≥ 50 %, "rules"), else null.
+ *
+ * @param {{
+ *   game: Record<string, any>,
+ *   detector: OpponentDetectorLabel,
+ *   events: ReadonlyArray<any>|null,
+ *   builds: ReadonlyArray<BuildOption>,
+ *   customRules?: Map<string, CustomRuleSet>,
+ * }} input
+ * @returns {Suggestion|null}
+ */
+function suggestOpponent(input) {
+  const customRules = input.customRules || new Map();
+  const detected = detectedOpponentOption(input.detector, input.builds);
+  if (detected) return detectedSuggestion(detected, input.events, customRules, input.game);
+  const ranked = rankCustomByRules(input.builds, input.events, customRules);
+  return ranked ? toSuggestion(ranked.option, "rules", ranked.score, input.game) : null;
+}
+
 module.exports = {
   GENERIC_LABEL_RE,
   RULES_MIN_RATIO,
@@ -340,4 +403,7 @@ module.exports = {
   executedFor,
   detectedOptionKey,
   suggestIntent,
+  opponentDetectorLabel,
+  detectedOpponentOption,
+  suggestOpponent,
 };

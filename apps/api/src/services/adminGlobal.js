@@ -28,7 +28,12 @@
  * pure data layer, easy to unit-test against an in-memory Mongo.
  */
 
-const { DETECTOR_BUILD_EXPR } = require("./buildIntentShape");
+const {
+  DETECTOR_BUILD_EXPR,
+  DETECTOR_OPP_STRATEGY_EXPR,
+  OPP_INTENT_LABEL_PROJECTION,
+  opponentDetectorView,
+} = require("./buildIntentShape");
 
 // Whitelisted sort columns for the global player browser. Anything
 // outside this set falls back to ``gameCount`` so a bad query param
@@ -307,13 +312,11 @@ class AdminGlobalService {
         [
           {
             $facet: {
-              strategies: breakdownStage("$opponent.strategy"),
-              // Platform-wide: a confirmed build check-in counts under
-              // the label the classifier gave the replay.
-              builds: [
-                { $project: { _id: 0, result: 1, detectorBuild: DETECTOR_BUILD_EXPR } },
-                ...breakdownStage("$detectorBuild"),
-              ],
+              // Platform-wide: a confirmed build check-in or opponent
+              // correction counts under the label the classifier gave the
+              // replay.
+              strategies: detectorBreakdownStage(DETECTOR_OPP_STRATEGY_EXPR),
+              builds: detectorBreakdownStage(DETECTOR_BUILD_EXPR),
               maps: breakdownStage("$map"),
             },
           },
@@ -450,14 +453,15 @@ class AdminGlobalService {
 
     // The opponent's own strategy distribution + the maps they've
     // been faced on, across every user's games — computed in one pass
-    // over the games for this toon via ``$facet``.
+    // over the games for this toon via ``$facet``. Strategies are the
+    // classifier's labels, never a user's opponent correction.
     const facet = await this.db.games
       .aggregate(
         [
           { $match: pulseGamesMatch(pulseId) },
           {
             $facet: {
-              strategies: breakdownStage("$opponent.strategy"),
+              strategies: detectorBreakdownStage(DETECTOR_OPP_STRATEGY_EXPR),
               maps: breakdownStage("$map"),
             },
           },
@@ -498,7 +502,7 @@ class AdminGlobalService {
    * and carries the owning ``userId`` (+ that user's email) on each row
    * so the admin UI can attribute each game and deep-link its build
    * order via the existing ``/admin/users/<userId>/games/<gameId>``
-   * endpoints.
+   * endpoints. ``opponent.strategy`` is the classifier's label.
    *
    * @param {string} pulseId
    * @param {{ limit?: number, before?: Date }} [opts]
@@ -550,6 +554,7 @@ class AdminGlobalService {
           myMmr: 1,
           macroScore: 1,
           opponent: 1,
+          ...OPP_INTENT_LABEL_PROJECTION,
         },
       })
       .sort({ date: -1 })
@@ -578,7 +583,7 @@ class AdminGlobalService {
           displayName: opp.displayName || "",
           race: opp.race || "",
           mmr: typeof opp.mmr === "number" ? opp.mmr : null,
-          strategy: typeof opp.strategy === "string" ? opp.strategy : null,
+          strategy: opponentDetectorView(g).strategy,
         },
       };
     });
@@ -663,6 +668,20 @@ function breakdownStage(field) {
     },
     { $sort: { count: -1, _id: 1 } },
     { $limit: BREAKDOWN_LIMIT },
+  ];
+}
+
+/**
+ * ``breakdownStage`` over a computed label: the classifier's build or
+ * opponent strategy (``DETECTOR_BUILD_EXPR`` / ``DETECTOR_OPP_STRATEGY_EXPR``).
+ *
+ * @param {Record<string, unknown>} expr
+ * @returns {Array<Record<string, any>>}
+ */
+function detectorBreakdownStage(expr) {
+  return [
+    { $project: { _id: 0, result: 1, detectorLabel: expr } },
+    ...breakdownStage("$detectorLabel"),
   ];
 }
 

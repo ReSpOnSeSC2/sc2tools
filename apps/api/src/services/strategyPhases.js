@@ -4,7 +4,10 @@ const {
   computeCompositions,
   prepareCompositionGame,
 } = require("./buildCompositions");
-const { agreesWithDetector } = require("./buildIntentReaders");
+const {
+  agreesWithDetector,
+  opponentAgreesWithDetector,
+} = require("./buildIntentReaders");
 
 const PHASE_GAME_SAMPLE_LIMIT = 100;
 const PHASE_METADATA_PAGE_SIZE = 25;
@@ -65,9 +68,10 @@ class StrategyPhasesService {
    *   filters?: object,
    *   match: Record<string, unknown>,
    *   predicate: (game: any) => boolean,
-   *   view?: "agreeing",
+   *   agreeOn: "you"|"opponent"|"both",
    *   signal?: AbortSignal,
-   * }} opts
+   * }} opts ``agreeOn``: the build check-in axes whose label must agree
+   *   with the replay's classification (the ``"agreeing"`` rule-preview view)
    * @returns {Promise<{games: Record<string, any>[], truncated: boolean}>}
    * @private
    */
@@ -87,7 +91,8 @@ class StrategyPhasesService {
       includeMacroBreakdown: true,
       filters: opts.filters,
       match: opts.match,
-      ...(opts.view ? { view: opts.view } : {}),
+      view: "agreeing",
+      agreeOn: opts.agreeOn,
       signal: opts.signal,
       metadataFilter: opts.predicate,
     })) {
@@ -144,6 +149,11 @@ class StrategyPhasesService {
    * 1000 games regardless of the timeframe filter and reported a
    * larger sample than the cell it was meant to describe.
    *
+   * Phases describe what the strategy looks like, so a game whose opponent
+   * label comes from a correction the replay disagrees with is left out;
+   * with ``buildName`` the cohort is the build × strategy cell, which agrees
+   * on both axes exactly like ``evaluateByBuildName`` with ``strategyName``.
+   *
    * @param {string} userId
    * @param {string} strategyName
    * @param {{ perspective?: "you"|"opponent", buildName?: string, compareGameId?: string, filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>, signal?: AbortSignal }} [opts]
@@ -182,8 +192,8 @@ class StrategyPhasesService {
     if (buildName) match.myBuild = buildName;
     const predicate = /** @param {any} g */ (g) => {
       const s = g && g.opponent && g.opponent.strategy;
-      if (s !== strategyName) return false;
-      if (buildName && g.myBuild !== buildName) return false;
+      if (s !== strategyName || !opponentAgreesWithDetector(g)) return false;
+      if (buildName && (g.myBuild !== buildName || !agreesWithDetector(g))) return false;
       return true;
     };
     const cohort = await this._preparedCohort(userId, {
@@ -191,6 +201,7 @@ class StrategyPhasesService {
       filters: opts && opts.filters,
       match,
       predicate,
+      agreeOn: buildName ? "both" : "opponent",
       signal: opts.signal,
     });
     // Defensive in-memory filter — keeps the service correct against
@@ -241,7 +252,8 @@ class StrategyPhasesService {
    *
    * Phases describe what the build looks like, so a game whose label comes
    * from a build check-in the replay disagrees with is left out (the
-   * ``"agreeing"`` rule-preview view).
+   * ``"agreeing"`` rule-preview view); with ``strategyName`` the opponent
+   * label must agree too.
    *
    * @param {string} userId
    * @param {string} buildName
@@ -283,7 +295,7 @@ class StrategyPhasesService {
       if (!g || g.myBuild !== buildName || !agreesWithDetector(g)) return false;
       if (strategyName) {
         const s = g.opponent && g.opponent.strategy;
-        if (s !== strategyName) return false;
+        if (s !== strategyName || !opponentAgreesWithDetector(g)) return false;
       }
       return true;
     };
@@ -292,7 +304,7 @@ class StrategyPhasesService {
       filters: opts && opts.filters,
       match,
       predicate,
-      view: "agreeing",
+      agreeOn: strategyName ? "both" : "you",
       signal: opts.signal,
     });
     // Defensive in-memory filter — see ``evaluate`` for the rationale.

@@ -20,6 +20,7 @@ const {
 } = require("./reviewRedaction");
 const {
   BUILD_INTENT_LABEL_PROJECTION,
+  OPP_INTENT_LABEL_PROJECTION,
   withDetectorLabels,
 } = require("./buildIntentShape");
 const { publicVerification } = require("./reviewerReputation");
@@ -122,6 +123,7 @@ class ReviewsService {
           durationSec: 1, macroScore: 1, matchFormat: 1, playerCount: 1, playbackArtifact: 1,
           "opponent.race": 1, "opponent.mmr": 1, "opponent.strategy": 1,
           ...BUILD_INTENT_LABEL_PROJECTION,
+          ...OPP_INTENT_LABEL_PROJECTION,
         },
       },
     );
@@ -130,8 +132,9 @@ class ReviewsService {
     // with neither field are accepted and still need a P/T/Z matchup.
     const oneVsOne = game.matchFormat === "1v1"
       || (!game.matchFormat && (Number(game.playerCount) === 2 || game.playerCount === undefined || game.playerCount === null));
-    // Reviewers are other players: they see the replay's classified build,
-    // never the owner's build check-in.
+    // Reviewers are other players: they see the replay's classified build
+    // and opponent strategy, never the owner's build check-in or opponent
+    // correction.
     const snapshot = buildGameSnapshot(withDetectorLabels(game));
     if (!oneVsOne || !snapshot.matchup) {
       throw reviewError(400, "review_not_1v1", "Only 1v1 games with a known matchup can be posted for review.");

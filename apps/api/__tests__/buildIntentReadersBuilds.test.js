@@ -169,17 +169,25 @@ describe("StrategyPhasesService.evaluateByBuildName", () => {
     expect(captured.metadataFilter(disagreeing)).toBe(false);
   });
 
-  test("strategy evaluation keeps its own (unchanged) cohort", async () => {
+  test("strategy evaluation agrees on the opponent axis only (a \"you\" check-in stays)", async () => {
     let captured = null;
+    const disagreeing = {
+      gameId: "d",
+      myBuild: STARGATE,
+      opponent: { strategy: "Zerg - 12 Pool" },
+      buildIntent: { status: "confirmed", applied: true, build: { name: STARGATE }, detected: { name: UNCLASSIFIED } },
+    };
     const phases = new StrategyPhasesService({}, {
       perGame: {
         async *iterateRulePreviewPages(_userId, opts) {
           captured = opts;
-          yield { games: [], candidates: 0, hasMore: false };
+          yield { games: [disagreeing], candidates: 1, hasMore: false };
         },
       },
     });
-    await phases.evaluate(USER, "Zerg - 12 Pool", {});
-    expect(captured).not.toHaveProperty("view");
+    const result = await phases.evaluate(USER, "Zerg - 12 Pool", {});
+    expect(result.total).toBe(1);
+    expect(captured).toMatchObject({ view: "agreeing", agreeOn: "opponent" });
+    expect(captured.metadataFilter(disagreeing)).toBe(true);
   });
 });

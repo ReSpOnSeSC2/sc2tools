@@ -17,6 +17,7 @@ from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
 from sc2tools_agent.api_client import ApiError
 from sc2tools_agent.build_checkin.controller import BuildCheckinController
+from sc2tools_agent.build_checkin.models import CheckinPrefs
 from sc2tools_agent.replay_pipeline import CloudGame
 
 WALL_START = 1_790_000_000.0
@@ -77,6 +78,36 @@ DEFAULT_OPTIONS = {
 }
 
 
+OPP_OPTIONS = [
+    option("zerg-12-pool", "Zerg - 12 Pool", games=3, wins=2, losses=1),
+    option("custom:ling-flood", "Ling flood", source="custom"),
+    option("zvp-roach-rush", "ZvP - Roach Rush", group="catalog"),
+    option("zvp-ling-bane-bust", "ZvP - Ling Bane Bust", group="catalog"),
+]
+
+
+def opponent_state(
+    *,
+    label: Optional[str] = "Zerg - 12 Pool",
+    detected: Optional[str] = "Zerg - 12 Pool",
+    detected_key: Optional[str] = "zerg-12-pool",
+    build: Optional[Dict[str, Any]] = None,
+    options: Optional[List[Dict[str, Any]]] = None,
+    suggestion: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """``GameIntentState.opponent``; ``build`` makes it a correction."""
+    return {
+        "label": build["name"] if build else label,
+        "status": "confirmed" if build else "none",
+        "build": build,
+        "applied": build is not None,
+        "detected": {"name": detected, "slug": None, "key": detected_key},
+        "suggestion": suggestion,
+        "executed": None,
+        **({"options": options} if options is not None else {}),
+    }
+
+
 def game_state(
     game_id: str,
     *,
@@ -93,6 +124,7 @@ def game_state(
     options: Optional[List[Dict[str, Any]]] = None,
     randomizer: Optional[Dict[str, Any]] = None,
     prefs: Optional[Dict[str, Any]] = None,
+    opponent: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     races = {"P": "Protoss", "T": "Terran", "Z": "Zerg"}
     return {
@@ -117,6 +149,7 @@ def game_state(
         "via": None,
         "prefs": prefs or {"enabled": True, "askAtLoading": True, "askAfterGame": True},
         **({"options": options, "usualKey": None} if options is not None else {}),
+        **({"opponent": opponent} if opponent is not None else {}),
     }
 
 
@@ -231,15 +264,19 @@ class FakeCheckinApi:
         self._enter("get_game_intent", game_id, include_options=include_options)
         if game_id not in self.games:
             raise api_error(404, "not_found")
-        state = dict(self.games[game_id])
+        state = json.loads(json.dumps(self.games[game_id]))
         if not include_options:
             state.pop("options", None)
+            if isinstance(state.get("opponent"), dict):
+                state["opponent"].pop("options", None)
         return state
 
     def put_game_intent(self, game_id: str, body: Dict[str, Any]) -> Dict[str, Any]:
         self._enter("put_game_intent", game_id, dict(body))
         state = self.games.setdefault(game_id, game_state(game_id))
         action = body.get("action")
+        if "opponentBuildKey" in body:
+            self._set_opponent(state, body["opponentBuildKey"])
         if action == "confirm":
             build = self._find(body.get("buildKey"))
             if build is None:
@@ -250,6 +287,20 @@ class FakeCheckinApi:
         if "notes" in body:
             state["notes"] = body["notes"]
         return dict(state)
+
+    def _set_opponent(self, state: Dict[str, Any], key: Optional[str]) -> None:
+        opp = state.get("opponent")
+        if not isinstance(opp, dict):
+            raise api_error(409, "not_eligible", reason="no_matchup")
+        detected = opp.get("detected") or {}
+        if key is None or key == detected.get("key"):
+            opp.update(build=None, applied=False, status="none", label=detected.get("name"))
+            return
+        build = next((b for b in opp.get("options") or OPP_OPTIONS if b["key"] == key), None)
+        if build is None:
+            raise api_error(400, "unknown_opponent_build")
+        opp.update(build={k: build[k] for k in ("key", "name", "slug", "source")},
+                   applied=True, status="confirmed", label=build["name"])
 
 
 class FakeView:
@@ -392,13 +443,21 @@ def cloud_game(
 class Harness:
     """A controller wired to fakes, pumped synchronously."""
 
-    def __init__(self, *, executor: Any = None, intro_seen: bool = True, view: Any = "fake") -> None:
+    def __init__(
+        self,
+        *,
+        executor: Any = None,
+        intro_seen: bool = True,
+        view: Any = "fake",
+        prefs: Optional[CheckinPrefs] = None,
+    ) -> None:
         self.clock = Clock()
         self.wall = Clock(WALL_START)
         self.api = FakeCheckinApi()
         self.view = FakeView() if view == "fake" else view
         self.opened: List[str] = []
         self.intro_dismissed: List[bool] = []
+        self.saved_prefs: List[CheckinPrefs] = []
         self.executor = executor or SyncExecutor()
         self.ctl = BuildCheckinController(
             api=self.api,
@@ -409,7 +468,10 @@ class Harness:
             intro_seen=intro_seen,
             on_intro_dismissed=lambda: self.intro_dismissed.append(True),
             web_queue_url="https://sc2tools.test/app",
+            dashboard_url="https://sc2tools.test",
             open_url=self.opened.append,
+            prefs=prefs,
+            on_prefs_changed=self.saved_prefs.append,
         )
         self._key_seq = 0
 

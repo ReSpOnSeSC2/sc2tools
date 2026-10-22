@@ -5,13 +5,20 @@
  * after custom-build tagging, awaited before the response).
  *
  * Candidates are the user's unbound live records whose key started between
- * 10 min before the replay's start and min(start + 60 s, the replay's end),
- * newest first. A record matches when the replay opponent's normalised name
- * is its opponent name or one of its key's player names; a record with no
- * opponent information is only taken when it is the only candidate. Binding
- * is first-wins on both sides: the record is claimed (``gameId: null`` →
- * gameId), then the game is written only while it has no
- * ``buildIntent.gameKey``; a lost race releases the claim.
+ * 10 min before the replay's start and min(start + 60 s, the replay's end).
+ * A record matches when the replay opponent's normalised name is its
+ * opponent name or one of its key's player names; a record with no opponent
+ * information is only taken when it is the only candidate. Records keyed
+ * later in the game (an agent that first saw the match after it started, so
+ * its key's time is late) join only when they carry an answer and name the
+ * replay's opponent explicitly. Records are claimed answer first (post-game
+ * answer, then declaration, then none), window records before late ones and
+ * newest first within each.
+ *
+ * Binding is first-wins on both sides: the record is claimed (``gameId:
+ * null`` → gameId), then the game is written only while it has no
+ * ``buildIntent.gameKey``; a lost race, or any failure after the claim that
+ * left the game unbound, releases the claim.
  *
  * A user decision made before the bind (web confirm/skip) is never
  * overwritten; nor are non-empty notes or a user's ``confirmedAt``.
@@ -64,18 +71,39 @@ function hasNoOpponentInfo(doc) {
 }
 
 /**
- * Candidates acceptable for this opponent, in claim order.
+ * Claim rank of a record: a post-game answer first, then a declaration.
+ * @param {Record<string, any>} doc
+ */
+function answerRank(doc) {
+  if (doc.postgame && typeof doc.postgame === "object") return 0;
+  if (doc.declared && typeof doc.declared === "object") return 1;
+  return 2;
+}
+
+/**
+ * Records that name this opponent explicitly.
+ * @param {Array<Record<string, any>>} candidates
+ * @param {string} target normalised opponent name
+ */
+function namingOpponent(candidates, target) {
+  if (!target) return [];
+  return candidates.filter((doc) => (
+    normalizePlayerName(doc.oppName) === target
+    || (Array.isArray(doc.playerNames) && doc.playerNames.includes(target))
+  ));
+}
+
+/**
+ * Candidates acceptable for this opponent, in claim order (answer first,
+ * then newest key first).
  * @param {Array<Record<string, any>>} candidates newest key first
  * @param {unknown} opponentName
  */
 function acceptableCandidates(candidates, opponentName) {
-  const target = normalizePlayerName(opponentName);
-  if (target) {
-    const matched = candidates.filter((doc) => (
-      normalizePlayerName(doc.oppName) === target
-      || (Array.isArray(doc.playerNames) && doc.playerNames.includes(target))
-    ));
-    if (matched.length > 0) return matched;
+  const matched = namingOpponent(candidates, normalizePlayerName(opponentName));
+  if (matched.length > 0) {
+    // Array#sort is stable: newest-first order holds within a rank.
+    return matched.sort((a, b) => answerRank(a) - answerRank(b));
   }
   return candidates.length === 1 && hasNoOpponentInfo(candidates[0]) ? candidates : [];
 }
@@ -134,13 +162,19 @@ class BuildIntentBind {
       .sort({ keyStartedAtMs: -1 })
       .limit(BUILD_INTENT.BIND_MAX_CANDIDATES)
       .toArray();
-    if (candidates.length === 0 && !(created && fresh)) return null;
+    let acceptable = acceptableCandidates(candidates, opponent.displayName);
+    // A post-game answer in the window outranks anything keyed later.
+    if (!acceptable.some((doc) => answerRank(doc) === 0)) {
+      const late = await this._lateCandidates(userId, startedAtMs, dateMs, opponent.displayName);
+      acceptable = [...acceptable, ...late].sort((a, b) => answerRank(a) - answerRank(b));
+    }
+    if (acceptable.length === 0 && !(created && fresh)) return null;
     const row = await this.games.findOne({ userId, gameId: game.gameId }, { projection: GAME_PROJECTION });
     if (!row) return null;
     if (row.buildIntent && typeof row.buildIntent === "object"
       && Object.hasOwn(row.buildIntent, "gameKey")) return null;
     const payload = { ...game, spatial: opts.spatial !== undefined ? opts.spatial : game.spatial };
-    for (const candidate of acceptableCandidates(candidates, opponent.displayName)) {
+    for (const candidate of acceptable) {
       const now = new Date(this.now());
       const claimed = await this.live.findOneAndUpdate(
         { _id: candidate._id, gameId: null },
@@ -148,20 +182,87 @@ class BuildIntentBind {
         { returnDocument: "after" },
       );
       if (!claimed) continue;
-      const outcome = await this._bindClaimed(userId, payload, row, claimed);
+      let outcome;
+      try {
+        outcome = await this._bindClaimed(userId, payload, row, claimed);
+      } catch (err) {
+        await this._releaseAfterFailure(userId, game.gameId, claimed);
+        throw err;
+      }
       if (outcome) {
         this._changed(userId, game.gameId);
         return outcome;
       }
       // The game was bound meanwhile: give the record back.
-      await this.live.updateOne(
-        { _id: claimed._id, gameId: game.gameId },
-        { $set: { gameId: null, boundAt: null, updatedAt: new Date(this.now()) } },
-      );
+      await this._release(claimed._id, game.gameId);
       return null;
     }
     if (!created || !fresh) return null;
     return this._markPending(userId, payload, row);
+  }
+
+  /**
+   * Records keyed after the window but before the replay ended: the agent
+   * first saw the match mid-game (started or restarted late). Only records
+   * carrying an answer that name the replay's opponent explicitly; never the
+   * nameless sole-candidate rule.
+   * @param {string} userId
+   * @param {number} startedAtMs
+   * @param {number} dateMs the replay's end
+   * @param {unknown} opponentName
+   * @returns {Promise<Array<Record<string, any>>>}
+   */
+  async _lateCandidates(userId, startedAtMs, dateMs, opponentName) {
+    const target = normalizePlayerName(opponentName);
+    const from = startedAtMs + BUILD_INTENT.BIND_LOOKAHEAD_MS;
+    if (!target || from >= dateMs) return [];
+    const late = await this.live
+      .find({
+        userId,
+        gameId: null,
+        keyStartedAtMs: { $gte: from, $lt: dateMs },
+        $or: [{ postgame: { $type: "object" } }, { declared: { $type: "object" } }],
+      })
+      .sort({ keyStartedAtMs: -1 })
+      .limit(BUILD_INTENT.BIND_MAX_CANDIDATES)
+      .toArray();
+    return namingOpponent(late, target).sort((a, b) => answerRank(a) - answerRank(b));
+  }
+
+  /**
+   * Give a claimed record back after the bind failed (a transient database
+   * error, a deploy). The game is re-read first: an update that did apply
+   * before the error keeps its record. A second failure is swallowed so the
+   * original error is the one reported.
+   * @param {string} userId
+   * @param {string} gameId
+   * @param {Record<string, any>} claimed
+   */
+  async _releaseAfterFailure(userId, gameId, claimed) {
+    try {
+      const current = await this.games.findOne(
+        { userId, gameId },
+        { projection: { _id: 0, "buildIntent.gameKey": 1 } },
+      );
+      const boundKey = current && current.buildIntent && typeof current.buildIntent === "object"
+        ? current.buildIntent.gameKey
+        : undefined;
+      if (boundKey === claimed.gameKey) return;
+      await this._release(claimed._id, gameId);
+    } catch {
+      // Keep the original error; the record expires with its TTL.
+    }
+  }
+
+  /**
+   * @param {unknown} liveId
+   * @param {string} gameId
+   */
+  async _release(liveId, gameId) {
+    await this.live.updateOne(
+      { _id: liveId, gameId },
+      { $set: { gameId: null, boundAt: null, updatedAt: new Date(this.now()) } },
+    );
   }
 
   /**

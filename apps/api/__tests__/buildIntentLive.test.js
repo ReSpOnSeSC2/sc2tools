@@ -4,7 +4,8 @@
 
 /**
  * Build check-in live records: registration from POST /v1/agent/live, the
- * OBS randomizer hold, and PUT/GET /v1/build-intents/live/:gameKey
+ * OBS randomizer hold (decided only once the agent's check-in card
+ * registered the game), and PUT/GET /v1/build-intents/live/:gameKey
  * (register / declare / undeclare / release / postgame). Real Mongo and
  * LiveGameBroker, a header-driven auth stub and a controllable clock.
  */
@@ -153,11 +154,12 @@ describe("build check-in live records", () => {
         randomizer: null,
         gameId: null,
         boundAt: null,
+        askClient: false,
         _schemaVersion: 1,
       }));
       expect(doc.expiresAt.getTime() - doc.createdAt.getTime()).toBe(12 * HOUR_MS);
-      // No randomizer set up: the hold is decided released and announced.
-      expect(doc.hold).toEqual({ untilMs: null, released: true, decidedAt: expect.any(Date) });
+      // No check-in client registered the game yet: the hold stays undecided.
+      expect(doc.hold).toBeNull();
       expect(overlayEmits()).toHaveLength(0);
     });
 
@@ -179,7 +181,6 @@ describe("build check-in live records", () => {
       doc = await liveDoc(userId);
       expect(doc.oppRace).toBe("Zerg");
       expect(doc.matchup).toBe("PvZ");
-      expect(doc.hold).not.toBeNull();
     });
 
     test.each([
@@ -213,11 +214,19 @@ describe("build check-in live records", () => {
   });
 
   describe("randomizer hold", () => {
+    /** The agent's loading card registers the game it asks about. */
+    function registerCard(userId, body = {}) {
+      return putLive(userId, { action: "register", ...body }).expect(200);
+    }
+
     test("holds 6 s when the matchup becomes concrete and a randomizer widget can spin", async () => {
       const userId = await newUser({ hold: true });
       await postEnvelope(userId, envelope());
       await settle();
+      expect((await liveDoc(userId)).hold).toBeNull();
+      await registerCard(userId);
       const doc = await liveDoc(userId);
+      expect(doc.askClient).toBe(true);
       expect(doc.hold).toEqual({ untilMs: nowMs + 6000, released: false, decidedAt: expect.any(Date) });
       expect(overlayEmits()).toEqual([{
         room: `overlay:tok-${userCounter}`,
@@ -252,6 +261,7 @@ describe("build check-in live records", () => {
       }
       await postEnvelope(userId, envelope());
       await settle();
+      await registerCard(userId);
       const doc = await liveDoc(userId);
       expect(doc.hold).toEqual({ untilMs: null, released: true, decidedAt: expect.any(Date) });
       expect(overlayEmits().map((e) => e.payload)).toEqual([
@@ -263,19 +273,56 @@ describe("build check-in live records", () => {
       const userId = await newUser({ hold: true });
       await postEnvelope(userId, envelope());
       await settle();
+      await registerCard(userId);
       const first = (await liveDoc(userId)).hold;
+      expect(first).not.toBeNull();
       nowMs += 1000;
       await postEnvelope(userId, envelope({ opponent: { name: "Cure", race: "Zerg" } }));
-      await putLive(userId, { action: "register", myRace: "Protoss", oppRace: "Zerg" }).expect(200);
+      await registerCard(userId, { myRace: "Protoss", oppRace: "Zerg" });
       await settle();
       expect((await liveDoc(userId)).hold).toEqual(first);
       expect(overlayEmits()).toHaveLength(1);
+    });
+
+    test("an envelope-only game (headless agent) never holds the reveal", async () => {
+      const userId = await newUser({ hold: true });
+      await postEnvelope(userId, envelope());
+      await postEnvelope(userId, envelope({ phase: "match_started", displayTime: 2 }));
+      await settle();
+      // A web register is not a loading card either.
+      await putLive(userId, { action: "register" }, { source: "clerk" }).expect(200);
+      const doc = await liveDoc(userId);
+      expect(doc.matchup).toBe("PvZ");
+      expect(doc.askClient).toBe(false);
+      expect(doc.hold).toBeNull();
+      expect(overlayEmits()).toHaveLength(0);
+      const state = await request(app)
+        .get(`/v1/build-intents/live/${encodeURIComponent(GAME_KEY)}`)
+        .set("x-user", userId)
+        .expect(200);
+      expect(state.body.holdRemainingMs).toBe(0);
+    });
+
+    test("a card registered before the matchup was known holds once the envelope completes it", async () => {
+      const userId = await newUser({ hold: true });
+      await registerCard(userId, { myRace: "Protoss" });
+      let doc = await liveDoc(userId);
+      expect(doc).toEqual(expect.objectContaining({ askClient: true, matchup: null, hold: null }));
+      await postEnvelope(userId, envelope());
+      await settle();
+      doc = await liveDoc(userId);
+      expect(doc.askClient).toBe(true);
+      expect(doc.hold).toEqual({ untilMs: nowMs + 6000, released: false, decidedAt: expect.any(Date) });
+      expect(overlayEmits().map((e) => e.payload)).toEqual([
+        { gameKey: GAME_KEY, suppressRandomizer: false, holdRemainingMs: 6000 },
+      ]);
     });
 
     test("release ends the hold (Roll now / Not now)", async () => {
       const userId = await newUser({ hold: true });
       await postEnvelope(userId, envelope());
       await settle();
+      await registerCard(userId);
       io.clear();
       const res = await putLive(userId, { action: "release" }).expect(200);
       expect(res.body.holdRemainingMs).toBe(0);

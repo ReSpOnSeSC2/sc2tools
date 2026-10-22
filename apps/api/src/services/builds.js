@@ -5,6 +5,7 @@ const { computeDossierExtras } = require("./buildDossier");
 const {
   BUILD_INTENT_LABEL_PROJECTION,
   COUNTED_BY_CHECKIN_EXPR,
+  OPP_COUNTED_BY_CHECKIN_EXPR,
   PLANNED_GAME_EXPR,
 } = require("./buildIntentShape");
 const { agreesWithDetector } = require("./buildIntentReaders");
@@ -54,7 +55,9 @@ const BUCKET_BRANCHES = [
  *
  * ``myBuild`` is the effective label: a confirmed build check-in counts
  * toward the declared build. ``checkins`` says how many games count only
- * because of one, and recent rows carry ``planned`` for them.
+ * because of one, and recent rows carry ``planned`` for them. Opponent
+ * strategy rows (``oppStrategies``, a build's ``byStrategy``) do the same
+ * for corrected opponent builds on ``opponent.strategy``.
  */
 class BuildsService {
   /** @param {{games: import('mongodb').Collection}} db */
@@ -192,6 +195,7 @@ class BuildsService {
                 wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
                 losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
                 total: { $sum: 1 },
+                checkins: { $sum: OPP_COUNTED_BY_CHECKIN_EXPR },
               },
             },
             {
@@ -201,6 +205,7 @@ class BuildsService {
                 wins: 1,
                 losses: 1,
                 total: 1,
+                checkins: 1,
               },
             },
             { $sort: { total: -1 } },
@@ -267,7 +272,9 @@ class BuildsService {
   }
 
   /**
-   * Detected opponent strategies sorted by frequency.
+   * Detected opponent strategies sorted by frequency. A corrected opponent
+   * build counts toward the declared strategy; ``checkins`` says how many
+   * games count only because of a correction.
    *
    * @param {string} userId
    * @param {object} filters
@@ -284,6 +291,7 @@ class BuildsService {
             wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
             losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
             total: { $sum: 1 },
+            checkins: { $sum: OPP_COUNTED_BY_CHECKIN_EXPR },
           },
         },
         {
@@ -293,6 +301,7 @@ class BuildsService {
             wins: 1,
             losses: 1,
             total: 1,
+            checkins: 1,
             winRate: {
               $cond: [{ $gt: ["$total", 0] }, { $divide: ["$wins", "$total"] }, 0],
             },

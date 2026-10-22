@@ -24,7 +24,7 @@ vi.mock("@/lib/clientApi", () => ({
   apiCall: harness.apiCall,
 }));
 
-import { useBuildEditorState } from "./useBuildEditorState";
+import { SLUG_TAKEN_NAME_ERROR, useBuildEditorState } from "./useBuildEditorState";
 
 const initialDraft: BuildEditorDraft = {
   name: "PvT test build",
@@ -356,6 +356,91 @@ describe("useBuildEditorState save", () => {
     expect(result.current.toasts.map((toast) => toast.text)).not.toContain(
       expect.stringContaining("still public"),
     );
+  });
+});
+
+describe("useBuildEditorState create-only saves", () => {
+  it("asks the API not to overwrite an existing build", async () => {
+    const onSaved = vi.fn();
+    harness.apiCall.mockResolvedValueOnce({ ok: true, reclassify: null });
+    const { result } = renderHook(() =>
+      useBuildEditorState({ open: true, context, initialDraft, createOnly: true, onSaved }),
+    );
+
+    await act(async () => {
+      await result.current.save(false);
+    });
+
+    const [, path, init] = harness.apiCall.mock.calls[0] as [unknown, string, RequestInit];
+    expect(path).toBe("/v1/custom-builds/pvt-test-build");
+    expect(JSON.parse(String(init.body))).toMatchObject({ createOnly: true, reclassify: false });
+    expect(onSaved).toHaveBeenCalledWith("pvt-test-build", expect.anything(), expect.anything());
+  });
+
+  it("keeps the upsert body unchanged by default and for edits", async () => {
+    harness.apiCall.mockResolvedValue({ ok: true, reclassify: null });
+    const plain = renderHook(() =>
+      useBuildEditorState({ open: true, context, initialDraft }),
+    );
+    await act(async () => {
+      await plain.result.current.save(false);
+    });
+    plain.unmount();
+    const edit = renderHook(() =>
+      useBuildEditorState({
+        open: true,
+        context,
+        initialDraft,
+        createOnly: true,
+        lockedSlug: "existing-build",
+      }),
+    );
+    await act(async () => {
+      await edit.result.current.save(false);
+    });
+
+    const bodies = harness.apiCall.mock.calls.map(
+      (call) => JSON.parse(String((call[2] as RequestInit).body)) as Record<string, unknown>,
+    );
+    expect(bodies).toHaveLength(2);
+    for (const body of bodies) expect(body).not.toHaveProperty("createOnly");
+    expect(harness.apiCall.mock.calls[1]?.[1]).toBe("/v1/custom-builds/existing-build");
+  });
+
+  it("turns a taken slug into a name error and saves nothing", async () => {
+    const onSaved = vi.fn();
+    harness.apiCall.mockRejectedValueOnce({
+      status: 409,
+      code: "slug_taken",
+      message: "That build already exists.",
+    });
+    const { result } = renderHook(() =>
+      useBuildEditorState({ open: true, context, initialDraft, createOnly: true, onSaved }),
+    );
+
+    await act(async () => {
+      await result.current.save(true);
+    });
+
+    expect(result.current.errors.name).toBe(SLUG_TAKEN_NAME_ERROR);
+    expect(SLUG_TAKEN_NAME_ERROR).toBe(
+      "You already have a build called that — pick another name",
+    );
+    expect(result.current.saveError).toBeNull();
+    expect(result.current.saving).toBe(false);
+    expect(result.current.savedOk).toBe(false);
+    expect(onSaved).not.toHaveBeenCalled();
+
+    // Renaming and saving again clears the error.
+    harness.apiCall.mockResolvedValueOnce({ ok: true, reclassify: null });
+    act(() => {
+      result.current.setDraft((draft) => ({ ...draft, name: "PvT test build 2" }));
+    });
+    await act(async () => {
+      await result.current.save(false);
+    });
+    expect(result.current.errors.name).toBeUndefined();
+    expect(onSaved).toHaveBeenCalledWith("pvt-test-build-2", expect.anything(), expect.anything());
   });
 });
 

@@ -6,8 +6,12 @@
  * Bodies are strict (unknown fields are refused). Errors map to the
  * contract's codes: an unknown ``action`` is ``invalid_action``, a
  * non-string ``notes`` is ``invalid_notes``, a malformed ``buildKey`` is
- * ``unknown_build``; any other shape problem is ``invalid_request``. The
- * notes length limit (1000 after sanitising) is enforced by the services.
+ * ``unknown_build``, a malformed ``opponentBuildKey`` (a game PUT's
+ * opponent correction: a key, or null to clear it) is
+ * ``unknown_opponent_build``; any other shape problem, including the
+ * ``opponent`` action without ``opponentBuildKey``, is ``invalid_request``.
+ * The notes length limit (1000 after sanitising) is enforced by the
+ * services.
  */
 
 const AjvModule = require("ajv");
@@ -19,7 +23,8 @@ const Ajv = /** @type {any} */ (AjvModule).default || AjvModule;
 const ajv = new Ajv({ allErrors: false });
 
 const LIVE_ACTIONS = Object.freeze(["register", "declare", "undeclare", "release", "postgame"]);
-const GAME_ACTIONS = Object.freeze(["confirm", "skip", "defer", "notes"]);
+const GAME_ACTIONS = Object.freeze(["confirm", "skip", "defer", "notes", "opponent"]);
+const OPTION_SIDES = Object.freeze(["you", "opponent"]);
 // Raw notes may carry control characters that sanitising strips; anything
 // this long cannot sanitise to <= 1000 characters of text worth keeping.
 const RAW_NOTES_MAX_LENGTH = 4000;
@@ -49,6 +54,7 @@ const GAME_BODY_SCHEMA = {
     action: { type: "string", enum: [...GAME_ACTIONS] },
     buildKey: { type: "string", minLength: 1, maxLength: BUILD_KEY_MAX_LENGTH },
     notes: { type: "string", maxLength: RAW_NOTES_MAX_LENGTH },
+    opponentBuildKey: { type: ["string", "null"], minLength: 1, maxLength: BUILD_KEY_MAX_LENGTH },
   },
 };
 
@@ -64,9 +70,11 @@ const validateGame = ajv.compile(GAME_BODY_SCHEMA);
  * @param {unknown} raw
  * @param {ReadonlyArray<string>} actions
  * @param {(value: unknown) => boolean} validate compiled schema
+ * @param {(body: Record<string, unknown>) => Validated<Record<string, any>> | null} [check]
+ *   body-specific check run before the schema (null = passed)
  * @returns {Validated<Record<string, any>>}
  */
-function validateBody(raw, actions, validate) {
+function validateBody(raw, actions, validate, check) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return { valid: false, code: "invalid_action", message: "Body must be an object with an action." };
   }
@@ -83,6 +91,8 @@ function validateBody(raw, actions, validate) {
       || body.buildKey.length > BUILD_KEY_MAX_LENGTH)) {
     return { valid: false, code: "unknown_build", message: "Unknown build." };
   }
+  const failed = check ? check(body) : null;
+  if (failed) return failed;
   if (!validate(body)) {
     return { valid: false, code: "invalid_request", message: "Invalid request body." };
   }
@@ -100,9 +110,28 @@ function validateLiveIntentBody(raw) {
 /**
  * Body of ``PUT /v1/games/:gameId/build-intent``.
  * @param {unknown} raw
+ * @returns {Validated<Record<string, any>>}
  */
 function validateGameIntentBody(raw) {
-  return validateBody(raw, GAME_ACTIONS, validateGame);
+  return validateBody(raw, GAME_ACTIONS, validateGame, checkOpponentKey);
+}
+
+/**
+ * ``opponentBuildKey``: a key string, or null to clear the correction;
+ * required by the ``opponent`` action.
+ * @param {Record<string, unknown>} body
+ * @returns {Validated<Record<string, any>> | null}
+ */
+function checkOpponentKey(body) {
+  const key = body.opponentBuildKey;
+  if (key !== undefined && key !== null
+    && (typeof key !== "string" || key.length === 0 || key.length > BUILD_KEY_MAX_LENGTH)) {
+    return { valid: false, code: "unknown_opponent_build", message: "Unknown opponent build." };
+  }
+  if (body.action === "opponent" && key === undefined) {
+    return { valid: false, code: "invalid_request", message: "The opponent action needs opponentBuildKey." };
+  }
+  return null;
 }
 
 /**
@@ -111,6 +140,18 @@ function validateGameIntentBody(raw) {
  */
 function parseMatchupParam(raw) {
   return typeof raw === "string" && MATCHUP_RE.test(raw) ? raw : null;
+}
+
+/**
+ * ``?side=`` for the options route: "you" (default) or "opponent".
+ * @param {unknown} raw
+ * @returns {"you"|"opponent"|null} null when invalid
+ */
+function parseSideParam(raw) {
+  if (raw === undefined) return "you";
+  return typeof raw === "string" && OPTION_SIDES.includes(raw)
+    ? /** @type {"you"|"opponent"} */ (raw)
+    : null;
 }
 
 /**
@@ -130,6 +171,7 @@ module.exports = {
   validateLiveIntentBody,
   validateGameIntentBody,
   parseMatchupParam,
+  parseSideParam,
   parsePendingLimit,
   isValidGameKey,
 };

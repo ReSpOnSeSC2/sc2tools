@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
-import type { BuildOption, GameIntentState } from "@/lib/buildIntent";
+import type { BuildEditorModalProps } from "@/components/builds/editor";
+import type { GameIntentState } from "@/lib/buildIntent";
 
 const harness = vi.hoisted(() => ({
   intent: undefined as GameIntentState | undefined,
   error: undefined as { status: number; message: string; code?: string } | undefined,
+  buildOrder: undefined as unknown,
   validating: false,
   paths: [] as string[],
   mutate: vi.fn(),
@@ -13,6 +15,7 @@ const harness = vi.hoisted(() => ({
   getToken: vi.fn(async () => "token"),
   socket: null as Record<string, (payload: unknown) => void> | null,
   toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+  editor: null as BuildEditorModalProps | null,
 }));
 
 vi.mock("@clerk/nextjs", () => ({
@@ -31,12 +34,34 @@ vi.mock("@/lib/useUserSocket", () => ({
 vi.mock("@/components/ui/Toast", () => ({
   useToastOptional: () => ({ toast: harness.toast }),
 }));
+// The real editor is covered by its own tests; this stub records its props.
+vi.mock("@/components/builds/editor", () => ({
+  BuildEditorModal: (props: BuildEditorModalProps) => {
+    harness.editor = props;
+    return props.open ? (
+      <div role="dialog" aria-label="Build editor">
+        <button type="button" onClick={props.onClose}>
+          Close editor
+        </button>
+      </div>
+    ) : null;
+  },
+}));
 vi.mock("@/lib/clientApi", async () => {
   const React = await import("react");
   return {
     apiCall: (...args: unknown[]) => harness.apiCall(...args),
     useApi: (path: string | null) => {
       const [, rerender] = React.useReducer((value: number) => value + 1, 0);
+      if (path?.endsWith("/build-order")) {
+        return {
+          data: harness.buildOrder,
+          error: undefined,
+          isLoading: harness.buildOrder === undefined,
+          isValidating: false,
+          mutate: vi.fn(),
+        };
+      }
       if (path) harness.paths.push(path);
       const mutate = async (next?: unknown) => {
         harness.mutate(next);
@@ -60,85 +85,11 @@ vi.mock("@/lib/clientApi", async () => {
 
 import { BuildCheckInCard } from "../BuildCheckInCard";
 import { BuildCheckInProvider } from "../BuildCheckInProvider";
-
-function option(overrides: Partial<BuildOption>): BuildOption {
-  return {
-    key: "pvz-stargate",
-    name: "PvZ - Stargate",
-    slug: null,
-    source: "catalog",
-    games: 3,
-    wins: 2,
-    losses: 1,
-    checkins: 0,
-    lastPlayedAt: null,
-    inRandomizer: false,
-    group: "yours",
-    ...overrides,
-  };
-}
-
-const OPTIONS = [
-  option({ key: "pvz-2-stargate-phoenix", name: "PvZ - 2 Stargate Phoenix" }),
-  option({ key: "custom:dt-3-gate", name: "DT into 3 Gate", slug: "dt-3-gate", source: "custom" }),
-  option({ key: "pvz-blink-stalkers", name: "PvZ - Blink Stalkers", group: "all" }),
-];
-
-function intent(overrides: Partial<GameIntentState> = {}): GameIntentState {
-  return {
-    gameId: "g1",
-    matchup: "PvZ",
-    myRace: "Protoss",
-    oppRace: "Zerg",
-    result: "Victory",
-    date: "2026-10-22T18:00:00.000Z",
-    durationSec: 842,
-    map: "Ephemeron",
-    oppName: "Foe",
-    eligible: true,
-    ineligibleReason: null,
-    status: "pending",
-    applied: false,
-    build: null,
-    suggestion: {
-      key: "pvz-2-stargate-phoenix",
-      name: "PvZ - 2 Stargate Phoenix",
-      slug: null,
-      source: "catalog",
-      reason: "randomizer",
-      passedRules: null,
-      ruleCount: null,
-    },
-    randomizer: {
-      key: "pvz-2-stargate-phoenix",
-      name: "PvZ - 2 Stargate Phoenix",
-      slug: null,
-      source: "catalog",
-    },
-    randomizerDeviated: false,
-    detected: { name: "PvZ - Macro Transition (Unclassified)", slug: null, key: null },
-    executed: false,
-    notes: "",
-    origin: null,
-    via: null,
-    confirmedAt: null,
-    updatedAt: null,
-    prefs: { enabled: true, askAtLoading: true, askAfterGame: true },
-    options: OPTIONS,
-    usualKey: "custom:dt-3-gate",
-    ...overrides,
-  };
-}
-
-function confirmedResponse(key: string, name: string, notes = ""): GameIntentState {
-  const { options: _options, usualKey: _usualKey, ...rest } = intent({
-    status: "confirmed",
-    applied: true,
-    build: { key, name, slug: null, source: "catalog" },
-    notes,
-  });
-  return rest;
-}
+import {
+  OPTIONS,
+  confirmedResponse,
+  intent,
+} from "./cardFixtures";
 
 function renderCard(onChanged = vi.fn()) {
   render(
@@ -153,6 +104,8 @@ afterEach(() => {
   cleanup();
   harness.intent = undefined;
   harness.error = undefined;
+  harness.buildOrder = undefined;
+  harness.editor = null;
   harness.validating = false;
   harness.paths = [];
   harness.socket = null;

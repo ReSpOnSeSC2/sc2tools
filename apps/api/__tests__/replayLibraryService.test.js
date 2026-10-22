@@ -98,6 +98,8 @@ describe("ReplayLibraryService", () => {
       myBuild: "Blink pressure",
       buildPlanned: false,
       detectedBuild: null,
+      oppStrategyPlanned: false,
+      detectedOppStrategy: null,
       macroScore: 82,
       opponent: {
         displayName: "Rival",

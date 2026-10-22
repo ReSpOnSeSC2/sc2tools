@@ -8,13 +8,19 @@ order).
 
 from __future__ import annotations
 
-from typing import NamedTuple, Optional
+from typing import NamedTuple, Optional, Tuple
 
 from .models import (
+    ADD_NEW_BUILD_HINT,
+    ADD_NEW_BUILD_UNAVAILABLE,
     DETECTED_LABEL,
     LOCKED_IN,
+    NOT_NOW_CLEARS_TIP,
+    NOT_NOW_TIP,
     NOTES_FIRST_HEADING,
     NOTES_FIRST_PROMPT,
+    OPPONENT_ROW,
+    OPPONENT_UNKNOWN,
     PICKED_ON_WEB,
     POSTGAME_HEADING,
     RANDOMIZER_ROLLED,
@@ -25,9 +31,12 @@ from .models import (
     BuildRef,
     GameIntentState,
     LoadingCardModel,
+    OpponentIntent,
+    OpponentRowModel,
     PostgameCardModel,
     RandomizerStripModel,
     card_title,
+    opponent_change,
     option_models,
     reason_label,
     result_tone,
@@ -66,6 +75,7 @@ def loading_model(
         card.rows.merge(options.builds)
     roll = game.live.randomizer if game.live is not None else None
     locked = game.declared or declared_elsewhere
+    changing = card.changing and locked is not None
     randomizer_on = (
         (game.live is not None and game.live.randomizer_enabled)
         or (options is not None and options.randomizer_enabled)
@@ -115,11 +125,13 @@ def loading_model(
         featured=featured,
         more=more,
         randomizer=strip,
-        collapsed=locked is not None,
+        collapsed=locked is not None and not changing,
         locked_label=locked_label,
         locked_key=locked.key if locked is not None else None,
         declared_elsewhere=game.declared is None and declared_elsewhere is not None,
-        can_change=locked is not None,
+        can_change=locked is not None and not changing,
+        changing=changing,
+        not_now_tip=NOT_NOW_CLEARS_TIP if changing else NOT_NOW_TIP,
         show_intro=show_intro,
         status=status,
         saving=game.declared is not None and game.writing,
@@ -178,6 +190,87 @@ def preselection(
     if options is not None and options.usual_key and options.find(options.usual_key):
         return Preselection(options.usual_key, "usual")
     return NO_PRESELECTION
+
+
+def opponent_pick(card: PostgameCard) -> Optional[str]:
+    """The opponent row's key as this card shows it."""
+    opp = card.server.opponent if card.server is not None else None
+    if card.opp_touched or opp is None:
+        return card.opp_selection
+    return opp.effective_key
+
+
+def opponent_write(card: PostgameCard) -> Optional[Tuple[Optional[str]]]:
+    """``(opponentBuildKey,)`` an answer from this card must send, or
+    ``None`` when the opponent's build stays as the server counts it."""
+    opp = card.server.opponent if card.server is not None else None
+    if opp is None or not card.opp_touched:
+        return None
+    return opponent_change(
+        card.opp_selection,
+        server_key=opp.effective_key,
+        corrected=opp.corrected,
+        replay_key=opp.detected_key,
+    )
+
+
+def _opponent_name(card: PostgameCard, opp: OpponentIntent, key: Optional[str]) -> Optional[str]:
+    if not card.opp_touched:
+        if opp.corrected and opp.build is not None:
+            return opp.label or opp.build.name
+        return opp.label or opp.detected_name
+    if key is None:
+        return opp.replay_name
+    row = card.opp_rows.find(key)
+    if row is not None:
+        return row.name
+    if opp.build is not None and opp.build.key == key:
+        return opp.build.name
+    return opp.replay_name if key == opp.detected_key else None
+
+
+def opponent_row_model(
+    card: PostgameCard,
+    *,
+    options_loading: bool,
+) -> Optional[OpponentRowModel]:
+    """The "Opponent's build" row, once the replay's state is in. Merges
+    the opponent options into the card's frozen opponent rows."""
+    opp = card.server.opponent if card.server is not None else None
+    if opp is None:
+        return None
+    if opp.options is not None and opp.options.builds:
+        card.opp_rows.merge(opp.options.builds)
+    selection = opponent_pick(card)
+    suggestion = opp.suggestion
+    featured, more = option_models(
+        card.opp_rows.ordered(),
+        card.opp_rows.featured,
+        suggested_key=suggestion.build.key if suggestion is not None else None,
+    )
+    name = _opponent_name(card, opp, selection) or OPPONENT_UNKNOWN
+    # The row shows something other than the replay's own label.
+    differs_from_replay = selection != opp.detected_key
+    return OpponentRowModel(
+        label=OPPONENT_ROW.format(name=name),
+        name=name,
+        selection=selection,
+        server_key=opp.effective_key,
+        replay_key=opp.detected_key,
+        replay_name=opp.replay_name,
+        corrected=opp.corrected,
+        changed=opponent_write(card) is not None,
+        detected_label=(
+            DETECTED_LABEL.format(name=opp.replay_name)
+            if differs_from_replay and opp.replay_name and opp.replay_name != name
+            else None
+        ),
+        show_use_replay=differs_from_replay,
+        featured=featured,
+        more=more,
+        options_loading=options_loading and not card.opp_rows.painted,
+        touched=card.opp_touched,
+    )
 
 
 def postgame_model(
@@ -252,6 +345,11 @@ def postgame_model(
         busy=card.busy,
         touched=card.touched,
         show_intro=show_intro,
+        opponent=opponent_row_model(card, options_loading=options_loading),
+        can_add_build=card.game_id is not None,
+        add_build_hint=(
+            ADD_NEW_BUILD_HINT if card.game_id is not None else ADD_NEW_BUILD_UNAVAILABLE
+        ),
     )
 
 
@@ -259,6 +357,9 @@ __all__ = [
     "NO_PRESELECTION",
     "Preselection",
     "loading_model",
+    "opponent_pick",
+    "opponent_row_model",
+    "opponent_write",
     "postgame_model",
     "preselection",
     "server_has_declaration",

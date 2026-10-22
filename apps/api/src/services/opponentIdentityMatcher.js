@@ -1,6 +1,7 @@
 "use strict";
 
 const { controlGroupComponent, actionComponent, validControlGroups, validActions, validCamera, hasIncompatibleLegacySteals } = require("./opponentBehavior");
+const { OPP_INTENT_LABEL_PROJECTION, opponentDetectorView } = require("./buildIntentShape");
 
 /** @typedef {'P'|'T'|'Z'} RaceCode */
 /** @typedef {Record<string, any>} LooseRecord */
@@ -48,8 +49,11 @@ const { controlGroupComponent, actionComponent, validControlGroups, validActions
  * New/reprocessed replays carry ``opponent.playSignature`` with bounded
  * logical control-group habits, phase timing, command/selection/camera
  * observations and opening milestones. Legacy rows still
- * contribute their classified ``strategy`` / ``opening`` labels. Missing
- * evidence remains missing and component weights are re-normalized.
+ * contribute their classified ``strategy`` / ``opening`` labels. The
+ * strategy is always the classifier's label, never the user's correction of
+ * the opponent's build: mixing the two would make identical behaviour look
+ * different. Missing evidence remains missing and component weights are
+ * re-normalized.
  *
  * Probability language
  * --------------------
@@ -449,6 +453,8 @@ const MATCH_GAME_PROJECTION = Object.freeze({
   "opponent.opening": 1,
   "opponent.strategy": 1,
   "opponent.playSignature": 1,
+  // Opponent-build correction label fields for ``behaviorStrategy``.
+  ...OPP_INTENT_LABEL_PROJECTION,
 });
 
 /**
@@ -732,8 +738,8 @@ function buildOrderComponent(targetGames, candidateGames, targetFacingRace) {
   if (target.length === 0 || candidate.length === 0) return null;
 
   const strategy = distributionOverlap(
-    target.map((game) => game?.opponent?.strategy),
-    candidate.map((game) => game?.opponent?.strategy),
+    target.map(behaviorStrategy),
+    candidate.map(behaviorStrategy),
   );
   const opening = distributionOverlap(
     target.map((game) => game?.opponent?.opening),
@@ -778,8 +784,8 @@ function buildOrderComponent(targetGames, candidateGames, targetFacingRace) {
       Math.min(targetMilestones.length / target.length, candidateMilestones.length / candidate.length),
     );
   const sharedBuilds = sharedLabels(
-    target.map((game) => game?.opponent?.strategy),
-    candidate.map((game) => game?.opponent?.strategy),
+    target.map(behaviorStrategy),
+    candidate.map(behaviorStrategy),
     3,
   );
   const sharedMilestones = milestoneHighlights(
@@ -818,7 +824,7 @@ function buildOrderComponent(targetGames, candidateGames, targetFacingRace) {
  */
 function gameHasBuildEvidence(game) {
   return Boolean(
-    validBehaviorLabel(game?.opponent?.strategy)
+    validBehaviorLabel(behaviorStrategy(game))
     || validBehaviorLabel(game?.opponent?.opening)
     || validMilestones(game?.opponent?.playSignature?.build?.milestones).length,
   );
@@ -1328,6 +1334,15 @@ function finiteOr(value, fallback) {
  */
 function cleanString(value) {
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/**
+ * The classifier's strategy label for the opponent of ``game``.
+ * @param {LooseRecord} game
+ * @returns {string|null}
+ */
+function behaviorStrategy(game) {
+  return opponentDetectorView(game).strategy;
 }
 
 /**

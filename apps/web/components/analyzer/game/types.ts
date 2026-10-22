@@ -40,6 +40,10 @@ export interface GameSummary {
   buildPlanned?: boolean;
   /** The classifier's own label while a check-in override is applied. */
   detectedBuild?: string | null;
+  /** True when a check-in corrects the opponent's build (`opponent.strategy`). */
+  oppStrategyPlanned?: boolean;
+  /** The classifier's own opponent label while that correction is applied. */
+  detectedOppStrategy?: string | null;
   /** Flattened replay fields used by opponent-history projections. */
   replayAvailable?: boolean;
   replayFilename?: string | null;
@@ -62,6 +66,8 @@ export interface GameBuildOrderEvent {
   category?: string;
   tier?: number;
   is_building?: boolean;
+  /** Owner-main distance classification; lets the build editor keep proxy rules. */
+  is_proxy?: boolean;
 }
 
 export interface GameBuildOrderResponse {

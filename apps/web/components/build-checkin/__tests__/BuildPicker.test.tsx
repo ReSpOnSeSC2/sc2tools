@@ -168,4 +168,108 @@ describe("BuildPicker", () => {
     fireEvent.click(screen.getAllByRole("option")[0]);
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("titles the groups for the opponent list", () => {
+    renderPicker({
+      label: "Opponent's build",
+      groupTitles: { yours: "Faced before", all: "All builds" },
+      searchPlaceholder: "Search opponent builds…",
+    });
+    const listbox = screen.getByRole("listbox", { name: "Opponent's build" });
+    expect(within(listbox).getByRole("group", { name: "Faced before" })).toBeTruthy();
+    expect(within(listbox).getByRole("group", { name: "All builds" })).toBeTruthy();
+    expect(within(listbox).queryByRole("group", { name: "Your builds" })).toBeNull();
+    expect(screen.getByPlaceholderText("Search opponent builds…")).toBeTruthy();
+  });
+});
+
+describe("BuildPicker — Add new build", () => {
+  it("offers a new build under the list and passes the search text along", () => {
+    const onAddNew = vi.fn();
+    const { combobox } = renderPicker({ onAddNew });
+    // Outside the listbox: only options belong in it.
+    const add = screen.getByRole("button", { name: "Add new build…" });
+    expect(screen.getByRole("listbox").contains(add)).toBe(false);
+    fireEvent.click(add);
+    expect(onAddNew).toHaveBeenLastCalledWith("");
+
+    fireEvent.change(combobox, { target: { value: "blink" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add new build…" }));
+    expect(onAddNew).toHaveBeenLastCalledWith("blink");
+
+    fireEvent.change(combobox, { target: { value: "  Proxy 2 Gate  " } });
+    expect(screen.getByText("No builds match “Proxy 2 Gate”.")).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Add “Proxy 2 Gate” as a new build…" }),
+    );
+    expect(onAddNew).toHaveBeenLastCalledWith("Proxy 2 Gate");
+  });
+
+  it("replaces the library link in an empty list and hides while loading or failed", () => {
+    const onAddNew = vi.fn();
+    const { rerender } = render(
+      <BuildPicker options={[]} value={null} onChange={vi.fn()} onAddNew={onAddNew} addNewLabel="Add the opponent's build…" />,
+    );
+    expect(screen.queryByRole("link", { name: "Create one in your build library" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add the opponent's build…" }));
+    expect(onAddNew).toHaveBeenCalledWith("");
+
+    rerender(<BuildPicker options={undefined} loading value={null} onChange={vi.fn()} onAddNew={onAddNew} />);
+    expect(screen.queryByRole("button", { name: /new build/ })).toBeNull();
+    rerender(<BuildPicker options={undefined} error="Nope." value={null} onChange={vi.fn()} onAddNew={onAddNew} />);
+    expect(screen.queryByRole("button", { name: /new build/ })).toBeNull();
+  });
+
+  it("disables the add action while the picker is disabled", () => {
+    const onAddNew = vi.fn();
+    renderPicker({ onAddNew, disabled: true });
+    const add = screen.getByRole("button", { name: "Add new build…" }) as HTMLButtonElement;
+    expect(add.disabled).toBe(true);
+  });
+});
+
+describe("BuildPicker — focus", () => {
+  it("takes focus once the list has loaded when opened before it", () => {
+    const { rerender } = render(
+      <BuildPicker options={undefined} loading value={null} onChange={vi.fn()} autoFocus />,
+    );
+    const combobox = screen.getByRole("combobox") as HTMLInputElement;
+    expect(combobox.disabled).toBe(true);
+    expect(document.activeElement).not.toBe(combobox);
+
+    rerender(<BuildPicker options={OPTIONS} value={null} onChange={vi.fn()} autoFocus />);
+    expect(combobox.disabled).toBe(false);
+    expect(document.activeElement).toBe(combobox);
+  });
+
+  it("focuses only once, so a busy write never pulls focus back", () => {
+    const { rerender } = render(
+      <>
+        <BuildPicker options={OPTIONS} value={null} onChange={vi.fn()} autoFocus />
+        <button type="button">Confirm</button>
+      </>,
+    );
+    const combobox = screen.getByRole("combobox");
+    expect(document.activeElement).toBe(combobox);
+    const confirm = screen.getByRole("button", { name: "Confirm" });
+    confirm.focus();
+    rerender(
+      <>
+        <BuildPicker options={OPTIONS} value={null} onChange={vi.fn()} autoFocus disabled />
+        <button type="button">Confirm</button>
+      </>,
+    );
+    rerender(
+      <>
+        <BuildPicker options={OPTIONS} value={null} onChange={vi.fn()} autoFocus />
+        <button type="button">Confirm</button>
+      </>,
+    );
+    expect(document.activeElement).toBe(confirm);
+  });
+
+  it("leaves focus alone without autoFocus", () => {
+    render(<BuildPicker options={OPTIONS} value={null} onChange={vi.fn()} />);
+    expect(document.activeElement).not.toBe(screen.getByRole("combobox"));
+  });
 });

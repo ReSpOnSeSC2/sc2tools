@@ -4,11 +4,17 @@
  * Build check-in on a stored game: ``GET/PUT /v1/games/:gameId/build-intent``
  * and the pending queue.
  *
+ * Two axes: the user's own build (``myBuild``/``_customBuildSlug``, with a
+ * pending queue) and the opponent's build (``opponent.strategy``/
+ * ``_customOpponentStrategySlug``, an optional correction with no queue).
  * Every label change goes through the atomic pipelines of
  * ``buildIntentAttribution``; nothing here reads a row and writes its label
- * back. Rows that never had a check-in first get a complete ``status:
- * "none"`` subdocument (without ``gameKey``, which stays the ingest bind's
- * first-wins marker), so a notes-only write never makes a game pending.
+ * back. One PUT is one update: the "you" stages and the opponent stages are
+ * concatenated into a single pipeline. Rows that never had a check-in first
+ * get a complete ``status: "none"`` subdocument (without ``gameKey``, which
+ * stays the ingest bind's first-wins marker), so a notes-only or
+ * opponent-only write never makes a game pending. Resumed (quarantined) rows
+ * refuse every write.
  */
 
 const { BUILD_INTENT, COLLECTIONS } = require("../config/constants");
@@ -17,20 +23,28 @@ const {
   applyOverridePipeline,
   clearOverridePipeline,
   mergeIntentPipeline,
+  applyOpponentOverridePipeline,
+  clearOpponentOverridePipeline,
 } = require("./buildIntentAttribution");
 const {
   detectorView,
   isTooShortGame,
+  opponentDetectorView,
+  opponentOverrideActive,
   parseBuildKey,
   sanitizeNotes,
 } = require("./buildIntentShape");
 const {
   asBuildRef,
+  detectedOpponentOption,
   detectedOptionKey,
   executedFor,
+  opponentDetectorLabel,
   suggestIntent,
+  suggestOpponent,
   twelvePoolName,
 } = require("./buildIntentSuggest");
+const { fitsMatchup } = require("./buildIntentOptions");
 const { readBuildIntentPrefs } = require("./buildIntentPrefs");
 const {
   BuildIntentError,
@@ -51,9 +65,11 @@ const GAME_PROJECTION = Object.freeze({
   durationSec: 1,
   myBuild: 1,
   _customBuildSlug: 1,
+  _customOpponentStrategySlug: 1,
   buildIntent: 1,
   "opponent.race": 1,
   "opponent.displayName": 1,
+  "opponent.strategy": 1,
   isResumedFromReplay: 1,
   matchFormat: 1,
   gameVersion: 1,
@@ -64,6 +80,20 @@ const GAME_PROJECTION = Object.freeze({
 /** @typedef {import('./buildIntentSuggest').Suggestion} Suggestion */
 /** @typedef {import('./buildIntentOptions').OptionsPayload} OptionsPayload */
 /** @typedef {"resumed"|"not_1v1"|"no_matchup"|"too_short"} IneligibleReason */
+/**
+ * @typedef {{
+ *   action: string, buildKey?: string, notes?: string, opponentBuildKey?: string|null,
+ * }} GameIntentBody
+ * @typedef {{ you: ReadonlyArray<any>|null, opponent: ReadonlyArray<any>|null }} GameEvents
+ */
+
+/** Label fields a PUT compares to decide whether ``games:changed`` fires. */
+const LABEL_FIELDS = Object.freeze([
+  (/** @type {Record<string, any>} */ row) => row.myBuild,
+  (/** @type {Record<string, any>} */ row) => row._customBuildSlug,
+  (/** @type {Record<string, any>} */ row) => row.opponent && row.opponent.strategy,
+  (/** @type {Record<string, any>} */ row) => row._customOpponentStrategySlug,
+]);
 
 /**
  * Why a game cannot take a check-in, or null when it can.
@@ -149,6 +179,51 @@ function eraBuild(ref, game) {
   return { ...ref, name: String(poolNameForGame(twelvePoolName(ref.name), game)) };
 }
 
+/**
+ * Pipeline stage giving a row without a check-in its complete ``status:
+ * "none"`` subdocument; rows that have one keep it.
+ * @param {Date} now
+ */
+function ensureIntentStage(now) {
+  return { $set: { buildIntent: { $ifNull: ["$buildIntent", { $literal: defaultIntent(now) }] } } };
+}
+
+/**
+ * "Later": an undecided game (none / pending) becomes pending; a decision
+ * is never undone. Notes merge either way.
+ * @param {{ notes?: string }} notesPatch
+ * @param {Date} now
+ * @returns {Array<Record<string, any>>}
+ */
+function deferPipeline(notesPatch, now) {
+  const touched = notesPatch.notes !== undefined ? { ...notesPatch, updatedAt: now } : {};
+  return [{
+    $set: {
+      _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
+      buildIntent: {
+        $mergeObjects: [
+          { $ifNull: ["$buildIntent", {}] },
+          {
+            $cond: [
+              { $in: [{ $ifNull: ["$buildIntent.status", "none"] }, ["none", "pending"]] },
+              { $literal: { ...notesPatch, status: "pending", updatedAt: now } },
+              { $literal: touched },
+            ],
+          },
+        ],
+      },
+    },
+  }];
+}
+
+/**
+ * ``buildIntent.opponent`` after a correction is withdrawn.
+ * @param {Date} now
+ */
+function opponentClearPatch(now) {
+  return { status: "none", build: null, origin: null, via: null, confirmedAt: null, updatedAt: now };
+}
+
 class BuildIntentGameState {
   /**
    * @param {{
@@ -170,7 +245,8 @@ class BuildIntentGameState {
 
   /**
    * ``GET /v1/games/:gameId/build-intent``. A missing suggestion is computed
-   * for undecided eligible games (never persisted).
+   * for undecided eligible games, and the opponent's suggestion for eligible
+   * ones (never persisted). One detail read serves both when needed.
    *
    * @param {string} userId
    * @param {string} gameId
@@ -181,23 +257,40 @@ class BuildIntentGameState {
     if (!row) throw new BuildIntentError(404, "not_found", "Game not found.");
     const prefs = (await readBuildIntentPrefs(this.users, userId)).checkin;
     const matchup = gameMatchup(row);
-    const options = matchup ? await this.options.forMatchup(userId, matchup) : null;
+    const { options, oppOptions } = await this._optionsFor(userId, matchup);
+    const eligible = ineligibleReason(row) === null;
     const intent = row.buildIntent && typeof row.buildIntent === "object" ? row.buildIntent : null;
     let suggestion = suggestionOut(intent && intent.suggestion);
     let randomizerDeviated = cachedDeviation(intent, suggestion);
     const status = intent && typeof intent.status === "string" ? intent.status : "none";
-    if (!suggestion && options && matchup && ineligibleReason(row) === null
-      && (status === "none" || status === "pending")) {
-      const fresh = await this.suggestFor(userId, row, matchup, options, {
-        events: await this.readEvents(userId, gameId),
-      });
+    const wantYou = Boolean(!suggestion && options && matchup && eligible
+      && (status === "none" || status === "pending"));
+    const opp = eligible && oppOptions && matchup
+      ? await this._opponentSuggestionInput(userId, row, matchup, oppOptions)
+      : null;
+    const events = wantYou || (opp && opp.wantEvents)
+      ? await this.readEvents(userId, gameId, { you: wantYou, opponent: Boolean(opp && opp.wantEvents) })
+      : { you: null, opponent: null };
+    if (wantYou && options && matchup) {
+      const fresh = await this.suggestFor(userId, row, matchup, options, { events: events.you });
       suggestion = fresh.suggestion;
       randomizerDeviated = fresh.randomizerDeviated;
     }
+    const oppSuggestion = opp && oppOptions
+      ? suggestOpponent({
+        game: row,
+        detector: opponentDetectorView(row),
+        events: events.opponent,
+        builds: oppOptions.builds,
+        customRules: opp.customRules,
+      })
+      : null;
     return this.serialize(userId, row, {
       prefs,
       options,
+      oppOptions,
       suggestion,
+      oppSuggestion,
       randomizerDeviated,
       includeOptions: opts.includeOptions === true,
     });
@@ -208,7 +301,7 @@ class BuildIntentGameState {
    *
    * @param {string} userId
    * @param {string} gameId
-   * @param {{ action: string, buildKey?: string, notes?: string }} body
+   * @param {GameIntentBody} body
    * @param {{ source?: string }} auth
    */
   async put(userId, gameId, body, auth) {
@@ -216,13 +309,12 @@ class BuildIntentGameState {
     const before = await this.games.findOne({ userId, gameId }, { projection: GAME_PROJECTION });
     if (!before) throw new BuildIntentError(404, "not_found", "Game not found.");
     const matchup = gameMatchup(before);
-    const options = matchup ? await this.options.forMatchup(userId, matchup) : null;
-    await this._applyAction(userId, gameId, body, { before, options, notesPatch, auth });
+    const { options, oppOptions } = await this._optionsFor(userId, matchup);
+    await this._applyAction(userId, gameId, body, { before, matchup, options, oppOptions, notesPatch, auth });
     const after = await this.games.findOne({ userId, gameId }, { projection: GAME_PROJECTION });
     if (!after) throw new BuildIntentError(404, "not_found", "Game not found.");
     this.options.invalidate(userId);
-    const labelChanged = (before.myBuild ?? null) !== (after.myBuild ?? null)
-      || (before._customBuildSlug ?? null) !== (after._customBuildSlug ?? null);
+    const labelChanged = LABEL_FIELDS.some((field) => (field(before) ?? null) !== (field(after) ?? null));
     if (labelChanged) this.notifier.gamesChanged(userId);
     this.notifier.changed(userId, { gameId });
     const intent = after.buildIntent && typeof after.buildIntent === "object" ? after.buildIntent : null;
@@ -230,72 +322,126 @@ class BuildIntentGameState {
     return this.serialize(userId, after, {
       prefs: (await readBuildIntentPrefs(this.users, userId)).checkin,
       options,
+      oppOptions,
       suggestion,
+      oppSuggestion: this._labelOnlyOpponentSuggestion(after, oppOptions),
       randomizerDeviated: cachedDeviation(intent, suggestion),
       includeOptions: false,
     });
   }
 
   /**
-   * The write of one PUT action.
+   * The single write of one PUT: the action's "you" stages followed by the
+   * opponent stages of ``opponentBuildKey``. Everything is validated before
+   * anything is written.
    * @param {string} userId
    * @param {string} gameId
-   * @param {{ action: string, buildKey?: string }} body
+   * @param {GameIntentBody} body
    * @param {{
    *   before: Record<string, any>,
+   *   matchup: string|null,
    *   options: OptionsPayload|null,
+   *   oppOptions: OptionsPayload|null,
    *   notesPatch: { notes?: string },
    *   auth: { source?: string },
    * }} ctx
    */
   async _applyAction(userId, gameId, body, ctx) {
-    const { before, options, notesPatch } = ctx;
+    const { before, notesPatch } = ctx;
     const reason = ineligibleReason(before);
+    // Quarantined rows are out of every stat; nothing may write their label.
+    if (reason === "resumed") throw notEligible(reason);
     const { via, origin } = provenanceFromAuth(ctx.auth);
     const now = new Date(this.now());
+    /** @type {Array<Record<string, any>>} */
+    let you;
     switch (body.action) {
       case "confirm": {
         if (reason) throw notEligible(reason);
-        const ref = this._resolveConfirmKey(before, options, body.buildKey);
+        const ref = await this._resolveConfirmKey(userId, before, ctx.matchup, ctx.options, body.buildKey);
         if (!ref) throw new BuildIntentError(400, "unknown_build", "Unknown build for this game.");
-        await this.ensureIntent(userId, gameId, now);
-        await this.games.updateOne(
-          { userId, gameId, isResumedFromReplay: { $ne: true } },
-          applyOverridePipeline(eraBuild(ref, before), {
-            ...notesPatch, origin, via, confirmedAt: now, updatedAt: now,
-          }),
-        );
-        return;
+        you = applyOverridePipeline(eraBuild(ref, before), {
+          ...notesPatch, origin, via, confirmedAt: now, updatedAt: now,
+        });
+        break;
       }
       case "skip":
-        await this.ensureIntent(userId, gameId, now);
-        await this.games.updateOne(
-          { userId, gameId },
-          clearOverridePipeline({
-            ...notesPatch, status: "skipped", build: null, origin, via, confirmedAt: null, updatedAt: now,
-          }),
-        );
-        return;
-      case "defer": {
+        you = clearOverridePipeline({
+          ...notesPatch, status: "skipped", build: null, origin, via, confirmedAt: null, updatedAt: now,
+        });
+        break;
+      case "defer":
         if (reason) throw notEligible(reason);
-        await this.ensureIntent(userId, gameId, now);
-        // Only an undecided game becomes pending; a decision is never undone.
-        const res = await this.games.updateOne(
-          { userId, gameId, "buildIntent.status": { $in: ["none", "pending"] } },
-          mergeIntentPipeline({ ...notesPatch, status: "pending", updatedAt: now }),
-        );
-        if (res.matchedCount === 0 && notesPatch.notes !== undefined) {
-          await this.games.updateOne({ userId, gameId }, mergeIntentPipeline({ ...notesPatch, updatedAt: now }));
-        }
-        return;
-      }
+        you = deferPipeline(notesPatch, now);
+        break;
       case "notes":
-        await this.ensureIntent(userId, gameId, now);
-        await this.games.updateOne({ userId, gameId }, mergeIntentPipeline({ ...notesPatch, updatedAt: now }));
-        return;
+        you = mergeIntentPipeline({ ...notesPatch, updatedAt: now });
+        break;
+      case "opponent":
+        if (body.opponentBuildKey === undefined) {
+          throw new BuildIntentError(400, "invalid_request", "opponentBuildKey is required.");
+        }
+        you = notesPatch.notes !== undefined ? mergeIntentPipeline({ ...notesPatch, updatedAt: now }) : [];
+        break;
       default:
         throw new BuildIntentError(400, "invalid_action", "Unknown action.");
     }
+    const opponent = await this._opponentStages(userId, before, body.opponentBuildKey, {
+      reason, matchup: ctx.matchup, oppOptions: ctx.oppOptions, via, origin, now,
+    });
+    if (you.length === 0 && opponent.length === 0) return;
+    const res = await this.games.updateOne(
+      { userId, gameId, isResumedFromReplay: { $ne: true } },
+      [ensureIntentStage(now), ...you, ...opponent],
+    );
+    if (res.matchedCount === 0) {
+      // Quarantined (or deleted) between the read and the write.
+      const gone = !(await this.games.findOne({ userId, gameId }, { projection: { _id: 1 } }));
+      if (gone) throw new BuildIntentError(404, "not_found", "Game not found.");
+      throw notEligible("resumed");
+    }
+  }
+
+  /**
+   * Pipeline stages for ``opponentBuildKey``: omitted → none; null → clear
+   * the correction; the detected build's key → clear an active correction
+   * (otherwise nothing to do); any other key → apply it.
+   * @param {string} userId
+   * @param {Record<string, any>} row
+   * @param {string|null|undefined} key
+   * @param {{
+   *   reason: IneligibleReason|null,
+   *   matchup: string|null,
+   *   oppOptions: OptionsPayload|null,
+   *   via: "agent"|"web",
+   *   origin: "postgame"|"web",
+   *   now: Date,
+   * }} ctx
+   * @returns {Promise<Array<Record<string, any>>>}
+   */
+  async _opponentStages(userId, row, key, ctx) {
+    if (key === undefined) return [];
+    const opp = row.buildIntent && typeof row.buildIntent === "object"
+      && row.buildIntent.opponent && typeof row.buildIntent.opponent === "object"
+      ? row.buildIntent.opponent
+      : null;
+    const active = opponentOverrideActive(row);
+    const clear = active || (opp !== null && opp.status === "confirmed")
+      ? clearOpponentOverridePipeline(opponentClearPatch(ctx.now))
+      : [];
+    if (key === null) return clear;
+    if (ctx.reason) throw notEligible(ctx.reason);
+    const ref = await this._resolveOpponentKey(userId, row, ctx.matchup, key);
+    if (!ref) {
+      throw new BuildIntentError(400, "unknown_opponent_build", "Unknown opponent build for this game.");
+    }
+    const detected = ctx.oppOptions
+      ? detectedOpponentOption(opponentDetectorView(row), ctx.oppOptions.builds)
+      : null;
+    if (detected && detected.key === ref.key) return clear;
+    return applyOpponentOverridePipeline(eraBuild(ref, row), {
+      origin: ctx.origin, via: ctx.via, confirmedAt: ctx.now, updatedAt: ctx.now,
+    });
   }
 
   /**
@@ -314,26 +460,31 @@ class BuildIntentGameState {
       this.games.find(filter, { projection: GAME_PROJECTION }).sort({ date: -1 }).limit(limit).toArray(),
       this.games.countDocuments(filter),
     ]);
-    /** @type {Map<string, OptionsPayload>} */
+    /** @type {Map<string, { options: OptionsPayload|null, oppOptions: OptionsPayload|null }>} */
     const optionsByMatchup = new Map();
     const items = [];
     for (const row of rows) {
       const matchup = gameMatchup(row);
-      let options = null;
-      if (matchup) {
-        options = optionsByMatchup.get(matchup) || await this.options.forMatchup(userId, matchup);
-        optionsByMatchup.set(matchup, options);
-      }
+      const cached = matchup ? optionsByMatchup.get(matchup) : undefined;
+      const { options, oppOptions } = cached || await this._optionsFor(userId, matchup);
+      if (matchup && !cached) optionsByMatchup.set(matchup, { options, oppOptions });
       const intent = row.buildIntent && typeof row.buildIntent === "object" ? row.buildIntent : null;
       let suggestion = suggestionOut(intent && intent.suggestion);
       let randomizerDeviated = cachedDeviation(intent, suggestion);
-      if (!suggestion && options && matchup && ineligibleReason(row) === null) {
+      const eligible = ineligibleReason(row) === null;
+      if (!suggestion && options && matchup && eligible) {
         const fresh = await this.suggestFor(userId, row, matchup, options, { events: null });
         suggestion = fresh.suggestion;
         randomizerDeviated = fresh.randomizerDeviated;
       }
       items.push(await this.serialize(userId, row, {
-        prefs, options, suggestion, randomizerDeviated, includeOptions: false,
+        prefs,
+        options,
+        oppOptions,
+        suggestion,
+        oppSuggestion: eligible ? this._labelOnlyOpponentSuggestion(row, oppOptions) : null,
+        randomizerDeviated,
+        includeOptions: false,
       }));
     }
     return { items, total, disabled: false };
@@ -357,7 +508,12 @@ class BuildIntentGameState {
     if (ids.length === 0) return { dismissed: 0 };
     const now = new Date(this.now());
     const res = await this.games.updateMany(
-      { userId, gameId: { $in: ids }, "buildIntent.status": "pending" },
+      {
+        userId,
+        gameId: { $in: ids },
+        "buildIntent.status": "pending",
+        isResumedFromReplay: { $ne: true },
+      },
       clearOverridePipeline({
         status: "skipped", build: null, origin, via, confirmedAt: null, updatedAt: now,
       }),
@@ -381,33 +537,58 @@ class BuildIntentGameState {
   }
 
   /**
-   * Give a game without a check-in its complete ``status: "none"``
-   * subdocument. Idempotent.
+   * Both sides' options of a matchup (both null without one).
    * @param {string} userId
-   * @param {string} gameId
-   * @param {Date} now
+   * @param {string|null} matchup
+   * @returns {Promise<{ options: OptionsPayload|null, oppOptions: OptionsPayload|null }>}
    */
-  async ensureIntent(userId, gameId, now) {
-    await this.games.updateOne(
-      { userId, gameId, buildIntent: null },
-      { $set: { buildIntent: defaultIntent(now), _schemaVersion: expectedVersion(COLLECTIONS.GAMES) } },
-    );
+  async _optionsFor(userId, matchup) {
+    if (!matchup) return { options: null, oppOptions: null };
+    const [options, oppOptions] = await Promise.all([
+      this.options.forMatchup(userId, matchup),
+      this.options.forOpponent(userId, matchup),
+    ]);
+    return { options, oppOptions };
   }
 
   /**
    * A confirmable key: an option of the game's matchup (the detector's build
-   * when it is one) or the game's randomizer roll.
+   * when it is one), the game's randomizer roll, or the user's live custom
+   * build fitting the matchup (saved after the options were cached).
+   * @param {string} userId
    * @param {Record<string, any>} row
+   * @param {string|null} matchup
    * @param {OptionsPayload|null} options
    * @param {unknown} key
-   * @returns {BuildRef|null}
+   * @returns {Promise<BuildRef|null>}
    */
-  _resolveConfirmKey(row, options, key) {
-    if (!options || !parseBuildKey(key)) return null;
+  async _resolveConfirmKey(userId, row, matchup, options, key) {
+    const parsed = parseBuildKey(key);
+    if (!options || !parsed) return null;
     const option = options.builds.find((b) => b.key === key);
     if (option) return { key: option.key, name: option.name, slug: option.slug, source: option.source };
     const roll = asBuildRef(row.buildIntent && row.buildIntent.randomizer);
-    return roll && roll.key === key ? roll : null;
+    if (roll && roll.key === key) return roll;
+    if (parsed.source !== "custom") return null;
+    const resolved = await this.options.resolveForUser(userId, key);
+    return resolved && fitsMatchup(resolved, matchup) ? resolved.ref : null;
+  }
+
+  /**
+   * An opponent key this game can take: an opponent option, a fitting live
+   * opponent-perspective custom build, or the game's current correction
+   * (re-sending it is idempotent even after that build was deleted).
+   * @param {string} userId
+   * @param {Record<string, any>} row
+   * @param {string|null} matchup
+   * @param {string} key
+   * @returns {Promise<BuildRef|null>}
+   */
+  async _resolveOpponentKey(userId, row, matchup, key) {
+    if (!matchup || !parseBuildKey(key)) return null;
+    const current = asBuildRef(row.buildIntent && row.buildIntent.opponent && row.buildIntent.opponent.build);
+    if (current && current.key === key) return current;
+    return this.options.resolveOpponentKey(userId, matchup, key);
   }
 
   /**
@@ -432,27 +613,73 @@ class BuildIntentGameState {
   }
 
   /**
-   * The game's "you" start-time events from the detail store; null when the
-   * store is unavailable or the game has no build log.
+   * What the opponent suggestion of a single-game read needs: the
+   * opponent-perspective rules, and whether the opponent's events are worth
+   * a detail read (no detected option, no correction, some build has rules).
+   * @param {string} userId
+   * @param {Record<string, any>} row
+   * @param {string} matchup
+   * @param {OptionsPayload} oppOptions
+   */
+  async _opponentSuggestionInput(userId, row, matchup, oppOptions) {
+    const customRules = oppOptions.builds.some((b) => b.source === "custom")
+      ? await this.options.customRules(userId, matchup, "opponent")
+      : new Map();
+    const detected = detectedOpponentOption(opponentDetectorView(row), oppOptions.builds);
+    const wantEvents = !detected
+      && !opponentOverrideActive(row)
+      && [...customRules.values()].some((set) => set.rules.length > 0);
+    return { customRules, wantEvents };
+  }
+
+  /**
+   * The opponent suggestion from the detector label alone (pending list,
+   * PUT responses).
+   * @param {Record<string, any>} row
+   * @param {OptionsPayload|null} oppOptions
+   * @returns {Suggestion|null}
+   */
+  _labelOnlyOpponentSuggestion(row, oppOptions) {
+    if (!oppOptions || ineligibleReason(row) !== null) return null;
+    return suggestOpponent({
+      game: row,
+      detector: opponentDetectorView(row),
+      events: null,
+      builds: oppOptions.builds,
+    });
+  }
+
+  /**
+   * Start-time events from the detail store, per side asked for; null for a
+   * side when the store is unavailable or the game has no such log.
    * @param {string} userId
    * @param {string} gameId
-   * @returns {Promise<ReadonlyArray<any>|null>}
+   * @param {{ you: boolean, opponent: boolean }} [want]
+   * @returns {Promise<GameEvents>}
    */
-  async readEvents(userId, gameId) {
-    if (!this.perGame || typeof this.perGame._readGameWithDetails !== "function") return null;
+  async readEvents(userId, gameId, want = { you: true, opponent: false }) {
+    /** @type {GameEvents} */
+    const none = { you: null, opponent: null };
+    if (!this.perGame || typeof this.perGame._readGameWithDetails !== "function") return none;
+    const fields = [...(want.you ? ["buildLog"] : []), ...(want.opponent ? ["oppBuildLog"] : [])];
+    if (fields.length === 0) return none;
     try {
-      const { slim, blob } = await this.perGame._readGameWithDetails(userId, gameId, {
-        fields: ["buildLog"],
-      });
-      const lines = slim && Array.isArray(blob.buildLog) ? blob.buildLog : [];
-      if (lines.length === 0) return null;
-      return eventsToStartTime(
-        parseBuildLogWithProxies(lines, this.perGame.catalog || null, slim.spatial, "my"),
-        slim,
-      );
+      const { slim, blob } = await this.perGame._readGameWithDetails(userId, gameId, { fields });
+      if (!slim) return none;
+      const side = (/** @type {unknown} */ lines, /** @type {"my"|"opp"} */ proxies) => {
+        if (!Array.isArray(lines) || lines.length === 0) return null;
+        return eventsToStartTime(
+          parseBuildLogWithProxies(lines, this.perGame.catalog || null, slim.spatial, proxies),
+          slim,
+        );
+      };
+      return {
+        you: want.you ? side(blob.buildLog, "my") : null,
+        opponent: want.opponent ? side(blob.oppBuildLog, "opp") : null,
+      };
     } catch {
       // 503 game_details_unavailable / aborts: suggest from the label alone.
-      return null;
+      return none;
     }
   }
 
@@ -463,7 +690,9 @@ class BuildIntentGameState {
    * @param {{
    *   prefs: import('./buildIntentPrefs').CheckinPrefs,
    *   options: OptionsPayload|null,
+   *   oppOptions: OptionsPayload|null,
    *   suggestion: Suggestion|null,
+   *   oppSuggestion: Suggestion|null,
    *   randomizerDeviated: boolean,
    *   includeOptions: boolean,
    * }} ctx
@@ -474,13 +703,7 @@ class BuildIntentGameState {
     const reason = ineligibleReason(row);
     const detector = detectorView(row);
     const builds = ctx.options ? ctx.options.builds : [];
-    const ref = asBuildRef(intent && intent.build);
-    /** @type {(BuildRef & { deleted?: boolean })|null} */
-    let build = ref;
-    if (ref && ref.source === "custom" && ref.slug
-      && !(await this.options.customBuildExists(userId, ref.slug))) {
-      build = { ...ref, deleted: true };
-    }
+    const build = await this._buildOut(userId, intent && intent.build, "you");
     const target = build
       || (ctx.suggestion && ctx.suggestion.reason === "declared" ? ctx.suggestion : null);
     return {
@@ -513,10 +736,59 @@ class BuildIntentGameState {
       confirmedAt: isoOrNull(intent && intent.confirmedAt),
       updatedAt: isoOrNull(intent && intent.updatedAt),
       prefs: ctx.prefs,
+      opponent: await this._opponentState(userId, row, ctx),
       ...(ctx.includeOptions
         ? { options: builds, usualKey: ctx.options ? ctx.options.usualKey : null }
         : {}),
     };
+  }
+
+  /**
+   * The opponent axis of ``GameIntentState``; null without a matchup.
+   * @param {string} userId
+   * @param {Record<string, any>} row
+   * @param {{ oppOptions: OptionsPayload|null, oppSuggestion: Suggestion|null, includeOptions: boolean }} ctx
+   */
+  async _opponentState(userId, row, ctx) {
+    if (!gameMatchup(row)) return null;
+    const intent = row.buildIntent && typeof row.buildIntent === "object" ? row.buildIntent : null;
+    const opp = intent && intent.opponent && typeof intent.opponent === "object" ? intent.opponent : null;
+    const opponent = row.opponent && typeof row.opponent === "object" ? row.opponent : {};
+    const view = opponentDetectorView(row);
+    const label = opponentDetectorLabel(view);
+    const builds = ctx.oppOptions ? ctx.oppOptions.builds : [];
+    const build = await this._buildOut(userId, opp && opp.build, "opponent");
+    return {
+      label: typeof opponent.strategy === "string" ? opponent.strategy : null,
+      status: opp && opp.status === "confirmed" ? "confirmed" : "none",
+      build,
+      applied: Boolean(opp && opp.applied === true),
+      detected: {
+        name: view.strategy,
+        slug: view.customStrategySlug,
+        key: detectedOptionKey(label, builds),
+      },
+      suggestion: ctx.oppSuggestion,
+      executed: build ? executedFor(build, label) : null,
+      ...(ctx.includeOptions ? { options: builds } : {}),
+    };
+  }
+
+  /**
+   * A stored BuildRef for output, flagged ``deleted`` when its custom build
+   * of that side is gone (the check-in stays frozen on it).
+   * @param {string} userId
+   * @param {unknown} value
+   * @param {"you"|"opponent"} side
+   * @returns {Promise<(BuildRef & { deleted?: boolean })|null>}
+   */
+  async _buildOut(userId, value, side) {
+    const ref = asBuildRef(/** @type {any} */ (value));
+    if (ref && ref.source === "custom" && ref.slug
+      && !(await this.options.customBuildExists(userId, ref.slug, side))) {
+      return { ...ref, deleted: true };
+    }
+    return ref;
   }
 }
 

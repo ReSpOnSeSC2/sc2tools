@@ -13,6 +13,16 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- **Build check-in on the website:** the OBS build randomizer no longer
+  waits at the loading screen unless a desktop app that can ask for your
+  build is running (agent 0.19.0). Protoss rolls of race-wide openers such
+  as "Protoss - DT Rush" are recorded and can be checked in. The "How build
+  check-in works" and check-in settings links switch Settings tabs, the
+  check-in list closes when you open a game, its search box takes focus,
+  and "Dismiss all" names every waiting game. Resumed games can't take a
+  check-in, and a server hiccup while a replay uploads no longer loses a
+  pick made at the loading screen.
+
 - **Agent 0.18.13 / YouTube chat:** channel discovery now reads only the
   channel's structured live-broadcast listings, preventing recommended videos
   from sending OBS widgets or Stream Dock to another channel's chat. Separate
@@ -118,13 +128,18 @@ corresponding GitHub Release.
   it never takes focus from the game and is hidden from stream capture) and
   again when the game ends, with its best guess from your replay or the
   build randomizer's roll already selected and room for notes on what threw
-  the build off. Picking a build at the loading screen stops the randomizer
-  from rolling; a roll counts once you confirm it. Missed games wait in the
-  new **Build check-ins** header chip, every game page has a check-in card,
-  and build stats show how many games count through check-ins. Community
-  guides and ladder meta keep the replay's own label. Turn it on or off in
-  Settings → Build check-in; Settings → Help walks through it step by step.
-  Update the agent for the in-game cards; the website works without it.
+  the build off. The same card lets you correct the **opponent's build**:
+  your opponent history, build-vs-strategy and best-answer stats then use
+  your correction. A build you never saved can be added on the spot with the
+  custom-build editor, using this game's replay and matchup, and the game is
+  checked in with it straight away. Picking a build at the loading screen
+  stops the randomizer from rolling; a roll counts once you confirm it.
+  Missed games wait in the **Build check-ins** header chip, every game page
+  has a check-in card, and build stats show how many games count through
+  check-ins. Community guides and ladder meta keep the replay's own labels.
+  Turn it on or off in Settings → Build check-in; Settings → Help walks
+  through it step by step. Update the agent for the in-game cards; the
+  website works without it.
 
 - **Killed/lost resource totals** — the match timeline breaks both players'
   kills and losses into minerals, gas and combined value. Totals follow the

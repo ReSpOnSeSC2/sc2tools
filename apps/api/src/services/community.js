@@ -15,7 +15,12 @@ const {
   matchupFromRaces,
 } = require("./communityBuildSnapshot");
 const { communitySitemap } = require("./communitySitemap");
-const { DETECTOR_SLUG_EXPR } = require("./buildIntentShape");
+const {
+  DETECTOR_OPP_SLUG_EXPR,
+  DETECTOR_SLUG_EXPR,
+  OPP_INTENT_LABEL_PROJECTION,
+  opponentDetectorView,
+} = require("./buildIntentShape");
 
 const K_ANONYMITY_THRESHOLD = 5;
 
@@ -1019,8 +1024,9 @@ class CommunityService {
    * Authenticated owner-only replay totals for the creator's published cards.
    * The response is keyed by PUBLIC slug and never exposes the private source
    * slug or any replay identity. Other viewers receive only their own rows.
-   * A published card advertises a rule-defined build, so its "you" totals key
-   * on the classifier's slug: a build check-in never counts toward a card.
+   * A published card advertises a rule-defined build, so its totals key on
+   * the classifier's slugs: neither a build check-in nor an opponent
+   * correction ever counts toward a card.
    *
    * @param {string} userId
    * @returns {Promise<Array<{publicSlug: string, total: number, wins: number, losses: number}>>}
@@ -1054,6 +1060,7 @@ class CommunityService {
               { _customBuildSlug: { $in: sourceSlugs } },
               { "buildIntent.detected.slug": { $in: sourceSlugs } },
               { _customOpponentStrategySlug: { $in: sourceSlugs } },
+              { "buildIntent.opponent.detected.slug": { $in: sourceSlugs } },
             ],
             isResumedFromReplay: { $ne: true },
           },
@@ -1068,7 +1075,7 @@ class CommunityService {
               $setUnion: [
                 {
                   $filter: {
-                    input: [DETECTOR_SLUG_EXPR, "$_customOpponentStrategySlug"],
+                    input: [DETECTOR_SLUG_EXPR, DETECTOR_OPP_SLUG_EXPR],
                     as: "slug",
                     cond: { $in: ["$$slug", sourceSlugs] },
                   },
@@ -1387,6 +1394,10 @@ class CommunityService {
    * leak (you'd be able to recover individual battle tags by cross-
    * referencing).
    *
+   * ``strategies`` tallies the classifier's opponent label: a player's
+   * private correction of the opponent's build never reaches the public
+   * profile.
+   *
    * @param {string} pulseId
    */
   async aggregateOpponent(pulseId) {
@@ -1442,6 +1453,7 @@ class CommunityService {
           "opponent.race": 1,
           "opponent.strategy": 1,
           "opponent.opening": 1,
+          ...OPP_INTENT_LABEL_PROJECTION,
           _id: 0,
         },
       })
@@ -1479,7 +1491,7 @@ class CommunityService {
       if (!race && g.opponent?.race) race = g.opponent.race;
       const op = g.opponent?.opening;
       if (op) openings[op] = (openings[op] || 0) + 1;
-      const st = g.opponent?.strategy;
+      const st = opponentDetectorView(g).strategy;
       if (st) strategies[st] = (strategies[st] || 0) + 1;
       if (g.map) {
         if (!byMap[g.map]) byMap[g.map] = { wins: 0, losses: 0 };

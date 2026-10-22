@@ -270,6 +270,12 @@ class AgentState:
     ``"postgame"`` → ``[x, y]`` in logical screen pixels. Absent means
     the default spot beside the game."""
 
+    build_checkin_prefs: Optional[Dict[str, bool]] = None
+    """The last ``buildCheckin`` preference the server confirmed
+    (``enabled`` / ``askAtLoading`` / ``askAfterGame``). The cloud stays
+    the source of truth; this copy only decides the cards while the
+    first read of a session has not answered (offline at login)."""
+
     @property
     def is_paired(self) -> bool:
         return bool(self.device_token)
@@ -409,6 +415,7 @@ def load_state(state_dir: Path) -> AgentState:
         build_checkin_card_positions=_coerce_positions(
             raw.get("build_checkin_card_positions"),
         ),
+        build_checkin_prefs=_coerce_checkin_prefs(raw.get("build_checkin_prefs")),
     )
 
 
@@ -464,6 +471,10 @@ def _snapshot(state: AgentState) -> dict:
             kind: list(point)
             for kind, point in dict(state.build_checkin_card_positions).items()
         },
+        build_checkin_prefs=(
+            dict(state.build_checkin_prefs)
+            if state.build_checkin_prefs is not None else None
+        ),
     )
     return asdict(stable)
 
@@ -593,6 +604,20 @@ def _coerce_positions(value: object) -> Dict[str, List[int]]:
         ):
             out[key] = [int(point[0]), int(point[1])]
     return out
+
+
+_CHECKIN_PREF_KEYS = ("enabled", "askAtLoading", "askAfterGame")
+
+
+def _coerce_checkin_prefs(value: object) -> Optional[Dict[str, bool]]:
+    """Return ``value`` as the three ``buildCheckin`` flags, or ``None``.
+
+    Same reading as the API's sanitiser: only an explicit ``false``
+    turns a flag off.
+    """
+    if not isinstance(value, dict):
+        return None
+    return {key: value.get(key) is not False for key in _CHECKIN_PREF_KEYS}
 
 
 def _coerce_str_list(value: object) -> List[str]:

@@ -96,8 +96,9 @@ function askerLabel(asker) {
 
 /**
  * Freeze the public, redacted facts about one of the asker's games at
- * posting time. ``game`` is the owner-private slim row; the output is
- * safe to store on the public request document.
+ * posting time. ``game`` is the owner-private slim row as the classifier
+ * sees it (``withDetectorLabels``: no build check-in or opponent
+ * correction); the output is safe to store on the public request document.
  *
  * @param {Record<string, any>} game
  */

@@ -29,7 +29,7 @@ All routes are mounted under `/v1`.
 | POST   | /v1/games/exists                  | clerk        | Which of these gameIds are stored |
 | GET    | /v1/custom-builds                 | clerk        | List user builds              |
 | GET    | /v1/custom-builds/:slug           | clerk        | One build                     |
-| PUT    | /v1/custom-builds/:slug           | clerk        | Upsert                        |
+| PUT    | /v1/custom-builds/:slug           | clerk        | Upsert (`createOnly: true`: 409 `slug_taken` when a live or deleted build has the slug) |
 | DELETE | /v1/custom-builds/:slug           | clerk        | Soft delete                   |
 | POST   | /v1/device-pairings/start         | none         | Agent: start pairing          |
 | GET    | /v1/device-pairings/:code         | none         | Agent: poll                   |
@@ -121,15 +121,25 @@ credential (device token = agent, Clerk session = web). Errors are
 `not_eligible`. Request logs redact the live game key (it holds both
 players' names).
 
+A check-in has two axes: the user's own build (`buildKey`, with a pending
+queue) and an optional correction of the opponent's build
+(`opponentBuildKey`). Options and keys come from
+`GET /v1/build-intents/options`: `side=you` (default) lists the user's
+fitting custom builds and the matchup's catalog builds; `side=opponent`
+lists the user's opponent-perspective custom builds and the matchup's
+opponent strategies, with the user's record against each. A custom build
+saved a moment ago resolves at once (the options cache is dropped on every
+custom-build save or delete, and `custom:` keys fall back to the database).
+
 | Method | Path                                         | Auth         | Purpose                       |
 | ------ | -------------------------------------------- | ------------ | ----------------------------- |
-| GET    | /v1/build-intents/options?matchup=PvZ        | clerk/device | Check-in options for a matchup with the user's record per build |
+| GET    | /v1/build-intents/options?matchup=PvZ&side=you | clerk/device | Check-in options for a matchup with the user's record per build; `side=opponent` lists the opponent's builds (400 `invalid_side`) |
 | GET    | /v1/build-intents/live/:gameKey              | clerk/device | Live game state (declaration, roll, hold) |
 | PUT    | /v1/build-intents/live/:gameKey              | clerk/device | `register`, `declare`, `undeclare`, `release`, `postgame` |
 | GET    | /v1/build-intents/pending?limit=10           | clerk/device | Undecided games of the last 72 h (1–25) |
 | POST   | /v1/build-intents/pending/dismiss            | clerk/device | "No set build" for the whole queue |
-| GET    | /v1/games/:gameId/build-intent               | clerk/device | A game's check-in state (`?include=options`) |
-| PUT    | /v1/games/:gameId/build-intent               | clerk/device | `confirm`, `skip`, `defer`, `notes` |
+| GET    | /v1/games/:gameId/build-intent               | clerk/device | A game's check-in state, with an `opponent` block (`?include=options` adds both option lists) |
+| PUT    | /v1/games/:gameId/build-intent               | clerk/device | `confirm`, `skip`, `defer`, `notes`, `opponent`; `opponentBuildKey` (a key, or `null` to clear) on any action, in the same update (400 `unknown_opponent_build`, 409 `not_eligible`) |
 | GET    | /v1/me/preferences/buildCheckin              | clerk/device | `{enabled, askAtLoading, askAfterGame}` (default true) |
 | PUT    | /v1/me/preferences/buildCheckin              | clerk/device | Store the three switches |
 
@@ -137,9 +147,13 @@ players' names).
 `match_started` envelopes, and `POST /v1/games` binds each uploaded 1v1
 replay to its live record before answering. Realtime: overlay rooms get only
 `overlay:buildIntent {gameKey, suppressRandomizer, holdRemainingMs}` (never a
-build name), the user room gets `build-intent:changed {gameKey}` or
-`{gameId}`, and the randomizer widget reports real spins with
-`overlay:randomizer:rolled {gameKey, buildId}`.
+build name), the user room gets `build-intent:changed {gameKey}`,
+`{gameId}` or `{prefs: true}` (after `PUT /v1/me/preferences/buildCheckin`,
+so the agent re-reads its switches), and the randomizer widget reports real
+spins with `overlay:randomizer:rolled {gameKey, buildId}`. The randomizer
+hold is decided only once the agent's check-in card registered the game
+(`register` with a device token); quarantined (resumed) games refuse every
+`PUT /v1/games/:gameId/build-intent` with 409 `not_eligible`.
 
 ### Bulk import (Stage C bucket 3)
 

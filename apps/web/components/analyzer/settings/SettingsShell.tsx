@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ServerCog,
   UserRound,
@@ -94,6 +94,11 @@ export function visibleSettingsTabs(
 }
 
 export interface SettingsShellProps {
+  /**
+   * The tab the URL asks for (`?tab=`). A later change (a link to another
+   * tab while Settings is open) switches tabs too, through the same
+   * unsaved-changes guard as a click.
+   */
   initialTab?: SettingsTabId;
   renderTab: (id: SettingsTabId) => ReactNode;
   /** Which tabs to show; defaults to every tab except opt-in ones. */
@@ -125,31 +130,62 @@ function SettingsShellInner({
   const [active, setActive] = useState<SettingsTabId>(() =>
     tabs.some((t) => t.id === initialTab) ? initialTab : (tabs[0]?.id ?? initialTab),
   );
-  const [pending, setPending] = useState<SettingsTabId | null>(null);
+  // `fromUrl`: the URL already names the target, so it isn't rewritten
+  // (that would drop a `#section` anchor the target tab scrolls to).
+  const [pending, setPending] = useState<{ tab: SettingsTabId; fromUrl: boolean } | null>(
+    null,
+  );
   const ctx = useSettingsContext();
+  const lastRequested = useRef(initialTab);
 
-  const requestSwitch = (next: string) => {
+  const activate = (tab: SettingsTabId, fromUrl: boolean) => {
+    setActive(tab);
+    // The shown tab is now the last one asked for, so a later link back
+    // to the previous tab is a change even before the URL catches up.
+    lastRequested.current = tab;
+    if (!fromUrl) writeTabToUrl(tab);
+  };
+
+  const requestSwitch = (next: string, fromUrl = false) => {
     const target = next as SettingsTabId;
     if (target === active) return;
     if (ctx.isDirty(active)) {
-      setPending(target);
+      setPending({ tab: target, fromUrl });
       return;
     }
-    setActive(target);
+    activate(target, fromUrl);
   };
+
+  // A search-param-only navigation keeps this component mounted, so a
+  // link to another tab arrives as a new `initialTab`. Don't remount the
+  // shell for it: that would drop unsaved edits without asking.
+  useEffect(() => {
+    if (initialTab === lastRequested.current) return;
+    lastRequested.current = initialTab;
+    if (tabs.some((t) => t.id === initialTab)) requestSwitch(initialTab, true);
+    // Only a changed request matters; the guard reads the current tab.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTab]);
 
   const confirmDiscard = () => {
     if (pending) {
-      setActive(pending);
+      activate(pending.tab, pending.fromUrl);
       setPending(null);
     }
+  };
+
+  const stay = () => {
+    // A link asked for another tab but the player kept their edits: put
+    // the URL back on the tab that is actually showing.
+    if (pending?.fromUrl) writeTabToUrl(active);
+    setPending(null);
   };
 
   return (
     <>
       <Tabs
         value={active}
-        onValueChange={requestSwitch}
+        onValueChange={(next) => requestSwitch(next)}
         orientation="vertical"
         className="lg:grid-cols-[240px_minmax(0,1fr)]"
       >
@@ -208,7 +244,7 @@ function SettingsShellInner({
 
       <ConfirmDialog
         open={pending !== null}
-        onClose={() => setPending(null)}
+        onClose={stay}
         onConfirm={confirmDiscard}
         title="Discard unsaved changes?"
         description="You have edits on this panel that haven't been saved. Switch tabs anyway?"
@@ -218,6 +254,20 @@ function SettingsShellInner({
       />
     </>
   );
+}
+
+/**
+ * Keep `?tab=` in step with the tab on screen so a refresh, a copied URL
+ * or a later link to the same tab behaves. Replaces the history entry:
+ * switching tabs isn't a navigation.
+ */
+function writeTabToUrl(tab: SettingsTabId): void {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("tab") === tab) return;
+  url.searchParams.set("tab", tab);
+  url.hash = "";
+  window.history.replaceState(null, "", url);
 }
 
 function MobileTabTrigger({

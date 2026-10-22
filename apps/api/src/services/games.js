@@ -10,7 +10,10 @@ const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { opponentBuildOrderBusyError } = require("./opponentBuildOrderFence");
 const { PROXY_CLASSIFICATION_VERSION } = require("./proxyClassification");
 const { SessionResolutionGate } = require("./sessionResolutionGate");
-const { BUILD_INTENT_LABEL_PROJECTION } = require("./buildIntentShape");
+const {
+  BUILD_INTENT_LABEL_PROJECTION,
+  OPP_INTENT_LABEL_PROJECTION,
+} = require("./buildIntentShape");
 const { withOwnerBuildFlags } = require("./buildIntentReaders");
 
 /** @param {number} ms */
@@ -158,9 +161,11 @@ const PUBLIC_GAME_PROJECTION = Object.freeze({
   isResumedFromReplay: 1,
   resumedReplayGameIds: 1,
   // Read only to derive the owner flags ``buildPlanned`` / ``detectedBuild``
+  // and ``oppStrategyPlanned`` / ``detectedOppStrategy``
   // (services/buildIntentReaders.js); the subdocument is dropped before the
   // row leaves the service, so check-in notes are never listed here.
   ...BUILD_INTENT_LABEL_PROJECTION,
+  ...OPP_INTENT_LABEL_PROJECTION,
 });
 
 /**

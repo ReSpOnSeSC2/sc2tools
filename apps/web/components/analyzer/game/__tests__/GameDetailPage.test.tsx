@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import type { BuildEditorModalProps } from "@/components/builds/editor";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import { GameDetailPage } from "../GameDetailPage";
@@ -9,13 +10,22 @@ import type { GameIntentState } from "@/lib/buildIntent";
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
 const getTokenMock = vi.fn(async () => "test-token");
+const routerReplaceMock = vi.fn();
+const editorHarness = vi.hoisted(() => ({ props: null as BuildEditorModalProps | null }));
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true }),
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), replace: routerReplaceMock }),
+}));
+
+vi.mock("@/components/builds/editor", () => ({
+  BuildEditorModal: (props: BuildEditorModalProps) => {
+    editorHarness.props = props;
+    return props.open ? <div role="dialog" aria-label="Build editor" /> : null;
+  },
 }));
 
 vi.mock("@/lib/clientApi", () => ({
@@ -46,6 +56,8 @@ afterEach(() => {
   cleanup();
   useApiMock.mockReset();
   apiCallMock.mockReset();
+  routerReplaceMock.mockReset();
+  editorHarness.props = null;
   getTokenMock.mockClear();
   vi.unstubAllEnvs();
 });
@@ -397,6 +409,80 @@ describe("GameDetailPage", () => {
       within(heroHeader()).getByTestId("planned-badge").getAttribute("title"),
     ).toBe("Replay classified as Roach Allin");
     expect(screen.queryByTestId("build-checkin-card")).toBeNull();
+  });
+
+  it("marks a corrected opponent build in the header and the build columns", () => {
+    mockEndpoints({
+      intent: checkinState({
+        opponent: {
+          label: "Terran - Proxy Reaper",
+          status: "confirmed",
+          build: {
+            key: "terran-proxy-reaper",
+            name: "Terran - Proxy Reaper",
+            slug: null,
+            source: "catalog",
+          },
+          applied: true,
+          detected: { name: "Terran - 2 Rax", slug: null, key: "terran-2-rax" },
+          suggestion: null,
+          executed: false,
+        },
+      }),
+    });
+    render(<GameDetailPage gameId="g1" />);
+    const header = heroHeader();
+    expect(within(header).getByText("Terran - Proxy Reaper")).toBeTruthy();
+    expect(within(header).queryByText("Terran - 2 Rax")).toBeNull();
+    expect(within(header).getByTestId("corrected-badge").getAttribute("title")).toBe(
+      "Replay classified as Terran - 2 Rax",
+    );
+    // The opponent column follows the correction too.
+    expect(screen.getAllByText(/Terran - Proxy Reaper/).length).toBeGreaterThan(1);
+  });
+
+  it("falls back to the slim row's corrected flag before the check-in loads", () => {
+    mockEndpoints({
+      slim: {
+        ...SLIM,
+        opponent: { ...SLIM.opponent!, strategy: "Terran - Proxy Reaper" },
+        oppStrategyPlanned: true,
+        detectedOppStrategy: "Terran - 2 Rax",
+      },
+    });
+    render(<GameDetailPage gameId="g1" />);
+    expect(
+      within(heroHeader()).getByTestId("corrected-badge").getAttribute("title"),
+    ).toBe("Replay classified as Terran - 2 Rax");
+  });
+
+  it("opens Add new build from the ?newBuild link once, then drops it from the URL", async () => {
+    window.history.replaceState(null, "", "/app/game/g1?t=90&newBuild=opponent#map");
+    try {
+      mockEndpoints({ intent: checkinState() });
+      render(<GameDetailPage gameId="g1" initialTimeSec={90} initialNewBuild="opponent" />);
+      await screen.findByRole("dialog", { name: "Build editor" });
+      expect(editorHarness.props).toMatchObject({
+        perspective: "opponent",
+        race: "Terran",
+        vsRace: "Zerg",
+        events: BUILD_ORDER.opp_events,
+        lockMatchup: true,
+        createOnly: true,
+      });
+      expect(routerReplaceMock).toHaveBeenCalledTimes(1);
+      expect(routerReplaceMock).toHaveBeenCalledWith("/app/game/g1?t=90#map", { scroll: false });
+    } finally {
+      window.history.replaceState(null, "", "/");
+    }
+  });
+
+  it("leaves the URL alone without a ?newBuild link", async () => {
+    mockEndpoints({ intent: checkinState() });
+    render(<GameDetailPage gameId="g1" />);
+    await waitFor(() => expect(screen.getByTestId("build-checkin-card")).toBeTruthy());
+    expect(routerReplaceMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog", { name: "Build editor" })).toBeNull();
   });
 
   it("offers the pending check-in above the timeline", () => {

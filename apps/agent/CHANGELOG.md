@@ -2,6 +2,39 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.19.0
+
+### Added - Build check-in
+
+- At the loading screen of a 1v1 a small "What's the plan?" card shows your
+  builds for the matchup with their records. Click the build you are going
+  for and that game counts toward its win/loss record, even if an early
+  scout or an all-in knocks you off it before the replay meets every step.
+  The card never takes keyboard focus from StarCraft II, leaves about 30
+  seconds into the game, and is hidden from screen capture so it never shows
+  on stream. It appears over Windowed (Fullscreen) and windowed modes.
+- With the build randomizer on, the card says it will roll: pick a build to
+  skip the roll on stream, press Roll now, or let it roll after a few
+  seconds. "Change" reopens the list without letting the randomizer spin.
+- When the game ends, "Which build were you going for?" pre-selects the best
+  guess (your loading-screen pick, the randomizer roll, the closest match
+  from your replay, or your usual build) and shows how the replay was
+  classified. Confirm, choose another build, pick No set build, or Later, and
+  add notes on what threw the build off. If you picked at loading and the
+  replay matched, nothing is asked.
+- The same card shows the opponent's build. Change it when the replay got it
+  wrong; your opponent stats then use your correction. "Add new build…"
+  opens the game on sc2tools.com with the custom-build editor ready for this
+  replay, for your build or the opponent's.
+- Settings has a Build check-in group (on/off, ask during the loading
+  screen, ask after each game), shared with the website. The tray menu's
+  "Build check-in…" reopens a card you closed. Your last settings are kept
+  if the app starts before the network is up.
+- The matching website update adds check-in cards on game pages, a header
+  list of games waiting for a check-in, build-stat markers and a step-by-step
+  guide in Settings → Help.
+- Includes replay engine **1.6.12**, shared with browser Instant Analysis.
+
 ## 0.18.14
 
 ### Added - Timeline kills and losses

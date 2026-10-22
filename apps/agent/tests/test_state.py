@@ -642,3 +642,38 @@ def test_snapshot_copies_build_checkin_positions() -> None:
     snapshot = state_module._snapshot(state)
     snapshot["build_checkin_card_positions"]["loading"].append(3)
     assert state.build_checkin_card_positions == {"loading": [1, 2]}
+
+
+def test_build_checkin_prefs_default_to_unknown(tmp_path: Path) -> None:
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"device_token": "paired"}), encoding="utf-8",
+    )
+    assert load_state(tmp_path).build_checkin_prefs is None
+
+
+def test_build_checkin_prefs_round_trip(tmp_path: Path) -> None:
+    prefs = {"enabled": True, "askAtLoading": False, "askAfterGame": True}
+    save_state(tmp_path, AgentState(build_checkin_prefs=dict(prefs)))
+    assert load_state(tmp_path).build_checkin_prefs == prefs
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ({"enabled": False}, {"enabled": False, "askAtLoading": True, "askAfterGame": True}),
+    ({"askAtLoading": 0, "askAfterGame": "no", "extra": False},
+     {"enabled": True, "askAtLoading": True, "askAfterGame": True}),
+    ([False, False], None),
+    ("off", None),
+    (None, None),
+])
+def test_build_checkin_prefs_read_like_the_api(tmp_path: Path, raw, expected) -> None:
+    (tmp_path / "agent.json").write_text(
+        json.dumps({"build_checkin_prefs": raw}), encoding="utf-8",
+    )
+    assert load_state(tmp_path).build_checkin_prefs == expected
+
+
+def test_snapshot_copies_build_checkin_prefs() -> None:
+    state = AgentState(build_checkin_prefs={"enabled": True})
+    snapshot = state_module._snapshot(state)
+    snapshot["build_checkin_prefs"]["enabled"] = False
+    assert state.build_checkin_prefs == {"enabled": True}

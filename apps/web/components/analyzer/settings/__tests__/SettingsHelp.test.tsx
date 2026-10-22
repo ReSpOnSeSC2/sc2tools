@@ -55,6 +55,43 @@ describe("SettingsHelp", () => {
     expect(section.textContent).toContain("Build check-ins (N)");
   });
 
+  it("explains correcting the opponent's build on the desktop card and the website", () => {
+    render(
+      <ToastProvider>
+        <SettingsHelp />
+      </ToastProvider>,
+    );
+    const text = (document.getElementById("build-check-in") as HTMLElement).textContent ?? "";
+    expect(text).toContain("The opponent's build");
+    // Desktop end card labels.
+    expect(text).toContain("Opponent's build: …");
+    expect(text).toContain("Faced before");
+    expect(text).toContain("Search opponent builds");
+    expect(text).toContain("changed");
+    // Website card labels.
+    expect(text).toContain("Change…");
+    expect(text).toContain("Use replay's label");
+    expect(text).toContain("Corrected");
+    expect(text).toContain("Opponent strategy");
+  });
+
+  it("explains adding a new build from a check-in", () => {
+    render(
+      <ToastProvider>
+        <SettingsHelp />
+      </ToastProvider>,
+    );
+    const text = (document.getElementById("build-check-in") as HTMLElement).textContent ?? "";
+    expect(text).toContain("Add a build you don't have yet");
+    expect(text).toContain("Add new build…");
+    expect(text).toContain("Add “…” as a new build…");
+    expect(text).toContain("Save as new build");
+    expect(text).toContain("Save build");
+    expect(text).toContain("Save & Reclassify");
+    expect(text).toContain("Saved to your library and checked in");
+    expect(text).toContain("Available once your replay uploads");
+  });
+
   it("opens the build check-in guide when reached through its anchor", () => {
     window.history.replaceState(null, "", "/settings?tab=help#build-check-in");
     const scrollIntoView = vi.fn();
