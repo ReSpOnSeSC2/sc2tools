@@ -43,6 +43,21 @@ effective label agrees with the detector, so a build's shape is not diluted by
 games that never followed it. W-L views report how many games count only
 because of a check-in.
 
+The opponent's build is a second, optional axis with the same model: a
+confirmed correction becomes the effective `opponent.strategy` (plus
+`_customOpponentStrategySlug` for an opponent-perspective custom build) while
+`buildIntent.opponent.detected` keeps the classifier's label. The same writers
+are guarded on both axes in one composed update, the user's own opponent
+statistics (opponent history, build vs strategy, best answer) use the
+correction, and cross-user surfaces keep the detected opponent label. It has no
+pending queue: the replay's label stands until the player corrects it.
+
+A build that is not in the library yet is created from the check-in with the
+existing custom-build editor ("Save as new build" from the replay), opened with
+the game's matchup locked and refusing to overwrite an existing build's slug;
+saving it checks the game in with the new build. The desktop card opens that
+editor on the website through a deep link.
+
 Only confirmed check-ins count. Randomizer rolls and suggestions are pending
 until the player confirms. Games shorter than 45 seconds never take an
 override. Pre-game declarations live in an ephemeral `build_intent_live`
