@@ -5,6 +5,7 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { supportEmailStateId } = require("./supportEmailScope");
 const { adminEventCursor, adminEventPageFilter } = require("./adminEventCursor");
+const { REPORT_TYPES, sanitiseReportContext } = require("./reportContext");
 
 const EVENT_TYPES = Object.freeze({
   USER_SIGNUP: "user_signup",
@@ -44,6 +45,10 @@ const MESSAGE_BODY_MAX = 4000;
  *   - ``agent_connected`` — confirmed by an authenticated agent heartbeat,
  *                            once per paired device, including installs that
  *                            bypassed the website download hand-off.
+ *   - ``user_message``    — a signed-in user's report from the web app
+ *                            (with an optional type and diagnostics
+ *                            context, see reportContext.js) or a
+ *                            support email picked up by supportEmail.js.
  *
  * Reads serve the admin dashboard's counters and notification feed.
  * Writes are real-time: when a Socket.io ``io`` is wired, each event
@@ -613,13 +618,19 @@ function sanitisePayload(type, raw) {
   if (type === EVENT_TYPES.USER_MESSAGE) {
     // A logged-in user's bug report / message. Identity (userId,
     // clerkUserId, email) is attached server-side from the auth
-    // context, never trusted from the client body.
+    // context, never trusted from the client body. The optional report
+    // type and diagnostics context are whitelisted and credential-free.
+    const reportType = typeof payload.type === "string" && REPORT_TYPES.includes(payload.type)
+      ? payload.type : null;
+    const context = sanitiseReportContext(payload.context);
     return {
       userId: toCleanString(payload.userId, 64) || null,
       clerkUserId: toCleanString(payload.clerkUserId, 64) || null,
       email: toCleanString(payload.email, 254) || null,
       subject: toCleanString(payload.subject, MESSAGE_SUBJECT_MAX),
       message: toCleanString(payload.message, MESSAGE_BODY_MAX),
+      ...(reportType ? { type: reportType } : {}),
+      ...(context ? { context } : {}),
       ...(payload.source === "email" ? {
         source: "email",
         mailbox: toCleanString(payload.mailbox, 254),
