@@ -191,7 +191,7 @@ function MomentRow({
               href={link}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-micro font-semibold tabular-nums text-accent-cyan underline decoration-accent-cyan/50 underline-offset-2"
+              className="text-micro font-semibold tabular-nums text-accent-cyan underline decoration-accent-cyan/50 underline-offset-2 hover:text-accent-hover"
             >
               ▶ {offsetLabel}
             </a>

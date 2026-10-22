@@ -144,7 +144,7 @@ export function ChatBotCard({ twitchChannel }: { twitchChannel: string }) {
           href="https://twitchtokengenerator.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-accent-cyan underline underline-offset-2"
+          className="text-accent-cyan underline underline-offset-2 hover:text-accent-hover"
         >
           twitchtokengenerator.com
         </a>

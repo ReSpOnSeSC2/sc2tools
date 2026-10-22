@@ -305,7 +305,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             ))}
             <Link
               href="/sign-in"
-              className="flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-micro font-bold text-text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-micro font-bold text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <MoreHorizontal className="h-5 w-5" aria-hidden />
               Sign in
@@ -387,7 +387,7 @@ function TabBarLink({ entry, active }: { entry: NavEntry; active: boolean }) {
       className={[
         "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-micro font-bold",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        active ? "bg-accent-cyan/10 text-accent" : "text-text-muted",
+        active ? "bg-accent-cyan/10 text-accent" : "text-text-muted hover:text-text",
       ].join(" ")}
     >
       <Icon className="h-5 w-5" aria-hidden />

@@ -220,7 +220,7 @@ function ReviewerSection({ reviewer }: { reviewer: PublicReviewerSection }) {
             {reviewer.matchupsReviewed.map((m) => `${m.matchup} (${m.count})`).join(" · ")}
           </p>
         ) : null}
-        <Link href="/reviews" className="inline-flex text-caption font-semibold text-accent-cyan underline underline-offset-2">
+        <Link href="/reviews" className="inline-flex text-caption font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">
           Browse replay reviews
         </Link>
       </div>

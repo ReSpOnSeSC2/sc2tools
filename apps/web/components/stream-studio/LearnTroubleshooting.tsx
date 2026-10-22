@@ -62,7 +62,7 @@ export function LearnTroubleshooting() {
           ].map(([term, meaning]) => <div key={term}><dt className="font-semibold text-text">{term}</dt><dd className="mt-1 text-text-muted">{meaning}</dd></div>)}
         </dl>
       </details>
-      <p className="mt-6 text-caption text-text-dim">For the streaming app itself: <a href="https://obsproject.com/kb/browser-source" target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-4">OBS Browser Source reference</a> · <a href="https://support.streamlabs.com/hc/en-us/articles/46771000147739-How-to-Get-Started-with-Streamlabs-Custom-Widgets#how-to-add-multiple-custom-widgets-in-streamlabs-desktop" target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-4">Streamlabs Browser Source walkthrough</a>.</p>
+      <p className="mt-6 text-caption text-text-dim">For the streaming app itself: <a href="https://obsproject.com/kb/browser-source" target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-4 hover:text-accent-hover">OBS Browser Source reference</a> · <a href="https://support.streamlabs.com/hc/en-us/articles/46771000147739-How-to-Get-Started-with-Streamlabs-Custom-Widgets#how-to-add-multiple-custom-widgets-in-streamlabs-desktop" target="_blank" rel="noopener noreferrer" className="text-accent underline underline-offset-4 hover:text-accent-hover">Streamlabs Browser Source walkthrough</a>.</p>
     </section>
   );
 }

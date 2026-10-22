@@ -129,7 +129,7 @@ export default function AdminModerationPage() {
                     <p className="text-caption text-text-dim">
                       {r.target.hidden ? "Auto-hidden pending review · " : ""}
                       Status: {r.target.status} ·{" "}
-                      <Link href={r.target.href} className="text-accent-cyan underline" target="_blank" rel="noreferrer">
+                      <Link href={r.target.href} className="text-accent-cyan underline hover:text-accent-hover" target="_blank" rel="noreferrer">
                         Open in context
                       </Link>
                     </p>

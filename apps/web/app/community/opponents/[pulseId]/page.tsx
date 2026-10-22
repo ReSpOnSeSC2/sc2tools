@@ -41,7 +41,7 @@ export default async function CommunityOpponentPage({
   if (!data) {
     return (
       <article className="space-y-4">
-        <Link href="/community" className="text-xs text-text-muted">
+        <Link href="/community" className="text-xs text-text-muted hover:text-text">
           ← back to community
         </Link>
         <h1 className="text-2xl font-bold">Not enough data</h1>

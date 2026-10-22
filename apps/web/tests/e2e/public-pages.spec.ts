@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 
 /**
  * Public-page responsive smoke, run at 360 / 768 / 1280 via the
@@ -78,6 +78,66 @@ if (process.env.NEXT_PUBLIC_INSTANT_IMPORT === "all") {
     ).toBeLessThanOrEqual(box.clientWidth + 1);
   });
 }
+
+/** WCAG 2.x relative luminance of a computed `rgb()` / `rgba()` colour. */
+function luminance(color: string): number {
+  const [r, g, b] = (color.match(/[\d.]+/g) ?? []).slice(0, 3).map((channel) => {
+    const value = Number(channel) / 255;
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrastRatio(a: string, b: string): number {
+  const [lighter, darker] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+async function paint(target: Locator): Promise<{ color: string; background: string }> {
+  return target.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return { color: style.color, background: style.backgroundColor };
+  });
+}
+
+/**
+ * Primary CTA links keep their label on hover. A global `a:hover` rule
+ * used to out-rank `.text-white` and paint the label the same colour as
+ * its own hover fill ('Get started', 'Download the agent', 'Try again').
+ *
+ * The header 'Get started' sits inside Clerk's <SignedOut>, which never
+ * mounts here (the dummy key can't load Clerk), so the 404 page's
+ * 'Open dashboard' stands in: the same `bg-accent text-white
+ * hover:bg-accent-hover` link-button, rendered with no auth or API.
+ * Reduced motion zeroes the colour transitions, so the computed styles
+ * are final as soon as the pointer lands.
+ */
+test.describe("primary CTA link on hover", () => {
+  async function hoverPrimaryLink(page: Page, testInfo: TestInfo, colorScheme: "light" | "dark") {
+    test.skip(testInfo.project.name !== "desktop-1280", "the viewport doesn't matter here; run it once");
+    await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
+    await page.goto("/this-page-does-not-exist");
+    const cta = page.getByRole("main").getByRole("link", { name: "Open dashboard" });
+    await expect(cta).toBeVisible();
+    const rest = await paint(cta);
+    await cta.hover();
+    const hovered = await paint(cta);
+    // Sanity: the hover fill applied, so the pointer really is on the link.
+    expect(hovered.background, "hover background").not.toBe(rest.background);
+    expect(hovered.color, "label colour on hover").toBe(rest.color);
+    return { rest, hovered };
+  }
+
+  test("label stays readable in the light theme", async ({ page }, testInfo) => {
+    const { rest, hovered } = await hoverPrimaryLink(page, testInfo, "light");
+    expect(contrastRatio(rest.color, rest.background), "label contrast at rest").toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(hovered.color, hovered.background), "label contrast on hover").toBeGreaterThanOrEqual(4.5);
+  });
+
+  test("label keeps its colour in the dark theme", async ({ page }, testInfo) => {
+    await hoverPrimaryLink(page, testInfo, "dark");
+  });
+});
 
 test("/p/<missing> is a real 404, not a soft-404", async ({ page }) => {
   const response = await page.goto("/p/definitely-not-a-real-handle");

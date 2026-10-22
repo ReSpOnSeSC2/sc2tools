@@ -268,6 +268,39 @@ ring. The default ring is a 2 px outline using
 This is established at component level (button, input, link) — see the
 component documentation in `docs/component-library.md` (forthcoming).
 
+## Links, focus and the cascade
+
+How the web app (`apps/web/app/globals.css`) styles links and the focus
+ring, and what that means when you style one yourself.
+
+- **The defaults live in `@layer base`.** Tailwind emits the base layer
+  before its utilities, so a utility class on an element always beats a
+  default. A plain link is `--accent` and turns `--accent-hover` on hover.
+  Every focusable element gets a 2 px `--accent` outline, offset 2 px, on
+  `:focus-visible`.
+- **State selectors are wrapped in `:where()`.** `:where(a):hover` and
+  `:where(*):focus-visible` weigh the same as one class, so source order
+  decides and the utility wins. The resting `a` rule keeps its element
+  weight on purpose: it has to beat Preflight's `a { color: inherit }`,
+  and it still loses to any class.
+- **A link that sets its own colour sets its own hover.** Once a link has
+  a `text-*` colour, the default hover recolour no longer applies, so say
+  what hover should do: `hover:bg-accent-hover` on a primary CTA (the
+  label stays white), `hover:text-text` on a muted nav or footer link,
+  `hover:text-accent-hover` or `hover:underline` on an inline link.
+- **The ring follows the element's corners.** It sets no `border-radius`,
+  so a focused pill stays a pill. A control that draws its own ring opts
+  out with `focus-visible:outline-none focus-visible:ring-2
+  focus-visible:ring-accent`. A bare `outline-none` removes the ring, so
+  never use it without a replacement.
+- **Don't add an unlayered element rule with a pseudo-class** (`a:hover`,
+  `button:focus`, `*:focus-visible`) to `globals.css`. Unlayered rules
+  come after the utilities, so a rule like that overrides them on every
+  element it matches. That is how primary CTA labels used to vanish on
+  hover and focused pills turned square.
+  `apps/web/app/__tests__/globalsCascade.test.ts` fails if one comes
+  back; put the rule in `@layer base` behind `:where()`.
+
 ## Adding a new token
 
 1. Add the value to all three files (`design-tokens.css`,
