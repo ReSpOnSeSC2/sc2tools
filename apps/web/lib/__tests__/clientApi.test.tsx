@@ -23,6 +23,7 @@ vi.mock("swr", () => ({
 }));
 
 import { API_BASE, apiCall, useApi } from "../clientApi";
+import { clearFailedRequests, recentFailedRequests } from "../feedback/failedRequests";
 
 type MockSWRResult = {
   key: readonly [string, string, string] | null;
@@ -192,5 +193,38 @@ describe("client mutation errors", () => {
     await expect(apiCall(harness.auth.getToken, "/v1/private", { method: "POST" })).rejects.toMatchObject({
       status: 503, code: "agent_offline", message: "Open the desktop agent.", requestId: "r1",
     });
+  });
+});
+
+describe("failed requests for bug reports", () => {
+  // Earlier tests fail requests on purpose; start each case empty.
+  beforeEach(clearFailedRequests);
+  afterEach(clearFailedRequests);
+
+  it("remembers failed responses and lost connections without their credentials", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(
+      '{"error":{"code":"forbidden","message":"No.","requestId":"req_7"}}', { status: 403 },
+    )));
+    await expect(apiCall(harness.auth.getToken, "/v1/overlay-tokens/tok_secret/widgets?token=abc"))
+      .rejects.toMatchObject({ status: 403 });
+
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    const view = renderHook(() => useApi("/v1/me"));
+    const swr = view.result.current as unknown as MockSWRResult;
+    await expect(swr.fetcher(swr.key!)).rejects.toBeInstanceOf(TypeError);
+
+    expect(recentFailedRequests()).toEqual([
+      { path: "/v1/overlay-tokens/[redacted]/widgets?token=%5Bredacted%5D", status: 403, code: "forbidden", requestId: "req_7" },
+      { path: "/v1/me", status: 0, code: "network_error" },
+    ]);
+    expect(JSON.stringify(recentFailedRequests())).not.toMatch(/tok_secret|token-user-a/);
+  });
+
+  it("does not count successes or aborted requests", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 200 })));
+    await apiCall(harness.auth.getToken, "/v1/me");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new DOMException("Aborted", "AbortError")));
+    await expect(apiCall(harness.auth.getToken, "/v1/me")).rejects.toMatchObject({ name: "AbortError" });
+    expect(recentFailedRequests()).toEqual([]);
   });
 });

@@ -1,7 +1,9 @@
 "use client";
 
 // Client-side fetch helpers + SWR fetcher. Pulls Clerk JWT via the
-// hook so it works inside React effects.
+// hook so it works inside React effects. Every failed request is also
+// remembered (credentials stripped) so a bug report can include the
+// last few: see lib/feedback/failedRequests.ts.
 
 import { useLayoutEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
@@ -11,6 +13,7 @@ import useSWR, {
   type SWRConfiguration,
   type SWRResponse,
 } from "swr";
+import { recordFailedRequest } from "@/lib/feedback/failedRequests";
 import { networkUnavailableError } from "./requestErrors";
 
 export const API_BASE =
@@ -64,12 +67,12 @@ export function useApi<T>(
       const fetchResource = async (signal?: AbortSignal) => {
         const token = await getToken();
         signal?.throwIfAborted();
-        const res = await fetch(`${API_BASE}${requestPath}`, {
+        const res = await trackedFetch(requestPath, `${API_BASE}${requestPath}`, {
           headers: token ? { authorization: `Bearer ${token}` } : undefined,
           cache: "no-store",
           ...(signal ? { signal } : {}),
         });
-        if (!res.ok) throw await buildApiError(res);
+        if (!res.ok) throw noteFailure(requestPath, await buildApiError(res));
         return res.json();
       };
       return requestOptions?.timeoutMs
@@ -184,7 +187,7 @@ export async function apiCall<T>(
 ): Promise<T> {
   const token = await getToken();
   init.signal?.throwIfAborted();
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await trackedFetch(path, `${API_BASE}${path}`, {
     ...init,
     headers: {
       "content-type": "application/json",
@@ -193,9 +196,28 @@ export async function apiCall<T>(
     },
     cache: "no-store",
   });
-  if (!res.ok) throw await buildApiError(res);
+  if (!res.ok) throw noteFailure(path, await buildApiError(res));
   if (res.status === 204) return null as unknown as T;
   return res.json();
+}
+
+/** Remember a failed response for bug reports, then hand the error back to throw. */
+function noteFailure(path: string, error: ClientApiError): ClientApiError {
+  recordFailedRequest({ path, status: error.status, code: error.code, requestId: error.requestId });
+  return error;
+}
+
+/**
+ * fetch() that also remembers a request that never got a response
+ * (offline, DNS, CORS). Aborts are the caller's choice, not failures.
+ */
+async function trackedFetch(path: string, url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    if (error instanceof TypeError) recordFailedRequest({ path, status: 0, code: "network_error" });
+    throw error;
+  }
 }
 
 /** A scoped deadline also settles a stalled token lookup or response body. */
