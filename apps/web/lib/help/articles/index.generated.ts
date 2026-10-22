@@ -8,6 +8,7 @@ import analyzer_dashboardAndAnalyzer from "./analyzer/dashboard-and-analyzer";
 import builds_buildCheckIn from "./builds/build-check-in";
 import gettingStarted_gettingStarted from "./getting-started/getting-started";
 import gettingStarted_howToUseHelp from "./getting-started/how-to-use-help";
+import gettingStarted_installApp from "./getting-started/install-app";
 import streamStudio_multiPlatformChat from "./stream-studio/multi-platform-chat";
 import streamStudio_obsOverlaySetup from "./stream-studio/obs-overlay-setup";
 import streamStudio_streamDock from "./stream-studio/stream-dock";
@@ -21,6 +22,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_buildCheckIn,
   gettingStarted_gettingStarted,
   gettingStarted_howToUseHelp,
+  gettingStarted_installApp,
   streamStudio_multiPlatformChat,
   streamStudio_obsOverlaySetup,
   streamStudio_streamDock,

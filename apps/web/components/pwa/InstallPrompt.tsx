@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Download, Share, Plus, MoreVertical, X } from "lucide-react";
 
 /**
@@ -347,6 +348,16 @@ function InstallBanner({
         {copy.hint ? (
           <p className="px-1 text-caption text-text-muted">{copy.hint}</p>
         ) : null}
+        {/* A plain link, not <HelpLink>: the side sheet would pull the
+            whole help library into the landing page's first load. */}
+        <p className="px-1 text-center text-caption">
+          <Link
+            href="/help/install-app"
+            className="rounded-sm font-medium text-accent-cyan underline decoration-accent-cyan/40 underline-offset-2 hover:decoration-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            How the app works
+          </Link>
+        </p>
       </div>
     </section>
   );
@@ -390,7 +401,7 @@ function InstructionsSheet({ title, titleId, steps, footnote, onClose }: Instruc
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-sheet flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4"
       onClick={onClose}
     >
       <div
