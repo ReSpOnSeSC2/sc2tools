@@ -2,7 +2,7 @@ import { Banner } from "@/components/Banner";
 import { DownloadInteractive } from "@/components/onboarding/DownloadInteractive";
 
 export const metadata = {
-  title: "Download the agent · SC2 Tools",
+  title: "Download the agent",
   description:
     "Download the SC2 Tools Agent to sync replay analysis and original StarCraft II replay files to your private dashboard library.",
   alternates: { canonical: "/download" },

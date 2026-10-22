@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Menu } from "lucide-react";
@@ -14,6 +13,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { reviewsVisible } from "@/lib/reviews";
 import { guidesEnabled } from "@/lib/guides/flags";
 import { headerNavLinks } from "./headerNav";
+import { LogoMark } from "./LogoMark";
 
 /**
  * Header — sticky site chrome shared by every authed and public page.
@@ -175,12 +175,9 @@ function Brand() {
       aria-label="SC2 Tools — home"
       className="group flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
     >
-      <Image
-        src="/logo.png"
-        alt=""
-        width={28}
-        height={28}
-        className="rounded-full motion-safe:transition-shadow motion-safe:duration-150 group-hover:shadow-[0_0_18px_var(--halo-cyan)] group-focus-visible:shadow-[0_0_18px_var(--halo-cyan)]"
+      <LogoMark
+        size={28}
+        className="motion-safe:transition-shadow motion-safe:duration-150 group-hover:shadow-[0_0_18px_var(--halo-cyan)] group-focus-visible:shadow-[0_0_18px_var(--halo-cyan)]"
         priority
       />
       {/* Display-face wordmark + a brand accent tick. */}

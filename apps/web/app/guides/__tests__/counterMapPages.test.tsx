@@ -57,9 +57,9 @@ describe("/guides/[matchup]/counter/[strategy]", () => {
     mocks.fetchGuideCounter.mockResolvedValue(ok(FIXTURE_COUNTER_PUBLISHED));
     const md = await counterMetadata(COUNTER_PARAMS);
     const pct = `${(FIXTURE_COUNTER_PUBLISHED.overall.winRate * 100).toFixed(1)}%`;
-    expect(md.title).toBe(
-      `How to beat 12 Pool as Protoss — ${pct} win rate over 236 ladder games (12 workers) | SC2 Tools`,
-    );
+    expect(md.title).toEqual({
+      absolute: `How to beat 12 Pool as Protoss — ${pct} win rate over 236 ladder games (12 workers) | SC2 Tools`,
+    });
     expect(md.alternates?.canonical).toBe("/guides/pvz/counter/12-pool");
     expect(String(md.description)).toContain("236 PvZ ladder games");
     expect(String(md.description)).toContain("Sep 27, 2026");
@@ -148,9 +148,9 @@ describe("/guides/maps/[map]", () => {
   it("titles the map page with its real game count", async () => {
     mocks.fetchGuideMap.mockResolvedValue(ok(FIXTURE_MAP));
     const md = await mapMetadata(MAP_PARAMS);
-    expect(md.title).toBe(
-      "Old Sun Temple — best openers by matchup from 2,418 ladder games (12 workers) | SC2 Tools",
-    );
+    expect(md.title).toEqual({
+      absolute: "Old Sun Temple — best openers by matchup from 2,418 ladder games (12 workers) | SC2 Tools",
+    });
     expect(md.alternates?.canonical).toBe("/guides/maps/old-sun-temple");
   });
 

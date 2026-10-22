@@ -1,9 +1,19 @@
+/**
+ * export-stream-backgrounds — renders the 1080p and 4K JPEG virtual sets
+ * served from public/stream-backgrounds/ from the PNG originals.
+ *
+ *   npm run backgrounds:export   (from apps/web)
+ *
+ * The originals live in assets/stream-backgrounds/, outside public/, so
+ * the ~30 MB of PNGs are kept in the repo but never deployed as static
+ * files.
+ */
 import { mkdir, readdir } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 
 const publicRoot = path.resolve("public", "stream-backgrounds");
-const sourceRoot = path.join(publicRoot, "source");
+const sourceRoot = path.resolve("assets", "stream-backgrounds");
 const targets = [
   { directory: "4k", width: 3840, height: 2160 },
   { directory: "1080p", width: 1920, height: 1080 },

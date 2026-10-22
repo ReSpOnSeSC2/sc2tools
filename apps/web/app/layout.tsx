@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { AppShell } from "@/app/AppShell";
 import { siteVerification } from "@/lib/siteVerification";
+import { SITE_TITLE_TEMPLATE } from "@/lib/siteTitle";
 import "./globals.css";
 
 /**
@@ -53,6 +54,8 @@ const serif = localFont({
     },
   ],
   display: "swap",
+  // Only the landing page uses it, so it is not preloaded on every route.
+  preload: false,
   adjustFontFallback: "Times New Roman",
   variable: "--font-serif",
 });
@@ -66,7 +69,9 @@ export const metadata: Metadata = {
   // Resolves relative OG/Twitter image URLs (incl. the per-page ones) to
   // absolute URLs. Without this, social cards point at localhost.
   metadataBase: new URL(SITE_URL),
-  title: SITE_TITLE,
+  // Pages set only their own name; the template adds the brand
+  // ("Settings · SC2 Tools"). See lib/siteTitle.ts.
+  title: { default: SITE_TITLE, template: SITE_TITLE_TEMPLATE },
   description: SITE_DESCRIPTION,
   applicationName: "SC2 Tools",
   appleWebApp: {

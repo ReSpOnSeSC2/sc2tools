@@ -78,7 +78,9 @@ export function guideMetadata(input: GuideMetadataInput): Metadata {
   // site card image is restated here (a route image is inherited instead).
   const twitterImages = input.routeOgImage ? {} : { images: [OG_IMAGE.url] };
   const metadata: Metadata = {
-    title: input.title,
+    // Guide titles are search-tuned and end with "| SC2 Tools" already,
+    // so they skip the root " · SC2 Tools" template.
+    title: { absolute: input.title },
     description,
     alternates: { canonical },
     openGraph: {
@@ -101,7 +103,7 @@ export function guideMetadata(input: GuideMetadataInput): Metadata {
  */
 export function guideUnavailableMetadata(canonical: string, title: string): Metadata {
   return {
-    title: `${title} | ${GUIDE_SITE_NAME}`,
+    title: { absolute: `${title} | ${GUIDE_SITE_NAME}` },
     description: "This build guide is temporarily unavailable. Try again in a moment.",
     robots: { index: false, follow: false },
     alternates: { canonical: canonical.split("?")[0] },

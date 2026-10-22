@@ -1,7 +1,7 @@
 import { OpponentProfileRoute } from "@/components/analyzer/OpponentProfileRoute";
 
 export const metadata = {
-  title: "Opponent dossier · SC2 Tools",
+  title: "Opponent dossier",
   description:
     "Head-to-head record, build tendencies, and likely strategies for one opponent.",
 };

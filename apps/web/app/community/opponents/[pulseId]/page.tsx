@@ -21,7 +21,7 @@ export async function generateMetadata({
 }) {
   const { pulseId } = await params;
   return {
-    title: `Opponent profile · ${pulseId} — SC2 Tools community`,
+    title: `Opponent profile · ${pulseId} · Community`,
     description:
       "Aggregated cross-player stats for a StarCraft II opponent. Names withheld; results k-anonymous.",
     robots: { index: true, follow: true },

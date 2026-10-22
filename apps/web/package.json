@@ -18,6 +18,7 @@
     "scenes:render": "node scripts/render-scene.mjs",
     "guides:catalog": "node scripts/export-guide-catalog.mjs",
     "help:index": "node scripts/gen-help-index.mjs",
+    "perf:budget": "node scripts/check-perf-budget.mjs",
     "engine:build": "node scripts/build-browser-engine.mjs --require",
     "test:engine": "node --test tests/engine/*.test.mjs"
   },

@@ -12,7 +12,7 @@ afterEach(() => {
 
 describe("/stream-studio", () => {
   it("targets the overlay searches in its title, canonical and social card", () => {
-    expect(metadata.title).toBe("SC2 Overlay for OBS: free StarCraft II Stream Studio | SC2 Tools");
+    expect(metadata.title).toEqual({ absolute: "SC2 Overlay for OBS: free StarCraft II Stream Studio | SC2 Tools" });
     expect(metadata.alternates?.canonical).toBe("/stream-studio");
     expect(String(metadata.description)).toContain(`${PRODUCT_FACTS.overlayWidgets} copy-and-paste widgets`);
   });

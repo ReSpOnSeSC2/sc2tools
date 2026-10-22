@@ -17,6 +17,7 @@ import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { isReviewableGame } from "@/lib/reviews";
 import { CorrectedBadge, PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import { isLossResult, isWinResult, type GameSummary } from "./types";
+import { matchupLabel } from "./gameTitle";
 import {
   opponentProfileHref,
   type OpponentNavigationContext,
@@ -256,15 +257,4 @@ function canonicalRaceName(input?: string | null): string | null {
     default:
       return null;
   }
-}
-
-/** "PvZ"-style matchup label from race names/codes; null when unknown. */
-function matchupLabel(
-  myRace?: string | null,
-  oppRace?: string | null,
-): string | null {
-  const mine = (myRace || "").trim().charAt(0).toUpperCase();
-  const theirs = (oppRace || "").trim().charAt(0).toUpperCase();
-  if (!/[TPZR]/.test(mine) || !/[TPZR]/.test(theirs)) return null;
-  return `${mine}v${theirs}`;
 }

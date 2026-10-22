@@ -65,6 +65,36 @@ article resolves to a real page, settings tab or article. Copy is plain
 and written from the reader's side; every number in the product comes
 from replays with fixed rules, so never describe it as AI.
 
+## Performance budget
+
+`perf-budget.json` caps the first-load JavaScript of each route: the gzip
+size of the scripts its HTML loads before it is interactive, the same
+number as the **First Load JS** column of `next build`. CI (web-ci, the
+responsive smoke job) runs the check right after the build:
+
+```bash
+npm run build
+npm run perf:budget   # prints every listed route; exits 1 on a failure
+```
+
+- A listed route over its number, or any other route over `default`, fails.
+- A listed route that no longer exists fails too, so rename it in the file
+  when you rename the route.
+- Code behind `next/dynamic` does not count: it loads when it is shown.
+  That is how `/app/[section]` (one chunk per analyzer section) and
+  `/settings` (one chunk per tab, Foundation eager) stay small.
+
+When a route goes over, first load the new code on demand (a dialog, a
+chart, a tab nobody opens first). Raise a budget only with a reason in the
+PR. The numbers were set with ~10–20% headroom over the build of October
+2026; lower them when a route gets lighter.
+
+Static files count too, just not here: keep big originals out of
+`public/` (the stream background PNGs live in `assets/stream-backgrounds/`
+and `npm run backgrounds:export` writes the JPEGs), and use
+`<LogoMark>` (`/logo-64.webp`, ~2 KB) rather than `/logo.png` (~2 MB) for
+the brand mark in UI.
+
 ## Public community activity
 
 The shared site and app headers display agent downloads, active agents, and

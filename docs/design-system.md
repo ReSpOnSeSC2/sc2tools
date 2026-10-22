@@ -164,6 +164,42 @@ lowest one that still establishes the elevation you need. The overlay
 widgets reuse `--shadow-overlay-card`, `--shadow-overlay-tile`, and
 `--shadow-overlay-streak` to preserve the existing OBS-friendly drop.
 
+## Layers and the bottom edge
+
+Everything pinned to the viewport uses a named layer from
+`apps/web/tailwind.config.ts`, never a raw `z-40` / `z-50` / `z-[60]`:
+
+| Class      | z  | Use                                                                 |
+| ---------- | -- | ------------------------------------------------------------------- |
+| `z-nav`    | 40 | The app rail and the mobile tab bar.                                |
+| `z-sheet`  | 50 | Sheets and drawers opened from the nav (More sheet, install steps). |
+| `z-banner` | 50 | Bars that float over content: Save bar, update prompt, cookie banner. |
+| `z-toast`  | 60 | Toasts, above everything except the skip link (`z-[100]`).          |
+
+The sticky context bar stays at `z-30`, under the nav. Sheets and banners
+share 50: a sheet opened later is later in the DOM, so it paints on top.
+Modals manage their own stacking and are not part of this scale.
+
+**Bottom edge.** On a phone the app has a tab bar along the bottom.
+AppChrome measures it (safe-area padding included) and publishes the
+height as `--chrome-bottom` on `<html>`: 0 on `md+`, where the bar is
+hidden, and unset outside the app. A surface that floats at the bottom
+uses `bottom-above-chrome` instead of `bottom-0`:
+
+```css
+bottom: calc(max(var(--chrome-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 0.75rem);
+```
+
+So it sits 12 px above the tab bar in the app, and 12 px above the home
+indicator everywhere else. Don't use it inside a modal (a dialog's own
+footer, like the build editor's save bar, stays put) or on the overlay
+and dock routes, which have no chrome.
+
+**Top edge.** The installed iOS app draws the page under the status bar,
+so the app's sticky context bar pads itself with
+`pt-[env(safe-area-inset-top)]`. Anything else pinned to the top needs the
+same.
+
 ## Motion
 
 Three durations:

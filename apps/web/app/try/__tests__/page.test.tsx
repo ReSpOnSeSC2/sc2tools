@@ -42,7 +42,7 @@ describe("/try route", () => {
 
   it("renders the tool for everyone, indexable, when the flag is all", async () => {
     const route = await loadRoute("all");
-    expect(route.metadata.title).toBe("SC2 Replay Analyzer: free StarCraft II replay stats | SC2 Tools");
+    expect(route.metadata.title).toEqual({ absolute: "SC2 Replay Analyzer: free StarCraft II replay stats | SC2 Tools" });
     expect(route.metadata.alternates?.canonical).toBe("/try");
     expect(route.metadata.robots).toBeUndefined();
     expect(renderedParts(route.default())).toEqual({ pageProps: { mode: "all" }, explainer: true });

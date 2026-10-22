@@ -12,7 +12,7 @@ import type { ReactNode } from "react";
 
 export const metadata = {
   alternates: { canonical: "/legal/privacy" },
-  title: "Privacy Policy — SC2 Tools",
+  title: "Privacy Policy",
   description:
     "How SC2 Tools processes replay data, connected streaming accounts, and private StarCraft II replay files.",
 };

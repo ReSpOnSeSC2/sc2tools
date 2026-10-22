@@ -12,7 +12,7 @@ interface PageProps {
 export async function generateMetadata({ params }: Pick<PageProps, "params">): Promise<Metadata> {
   const { handle } = await params;
   return {
-    title: "Shared replays · SC2 Tools",
+    title: "Shared replays",
     description: "This replay archive has moved to its player page.",
     robots: { index: false, follow: false },
     alternates: {

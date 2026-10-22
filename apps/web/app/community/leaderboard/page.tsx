@@ -5,7 +5,7 @@ import { CommunityShell } from "@/components/community/CommunityShell";
 import { LeaderboardTab } from "@/components/community/LeaderboardTab";
 
 export const metadata = {
-  title: "Leaderboard — SC2 Tools",
+  title: "Leaderboard",
   description:
     "Stock Market weekly P&L leaderboard. Players who opted into the public board, ranked by their weekly Arcade portfolio performance.",
 };

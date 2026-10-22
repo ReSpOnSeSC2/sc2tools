@@ -1,8 +1,8 @@
 import Link from "next/link";
-import Image from "next/image";
 import type { ReactNode } from "react";
 import { ReportIssueLauncher } from "@/components/feedback/ReportIssueLauncher";
 import { guidesEnabled } from "@/lib/guides/flags";
+import { LogoMark } from "./LogoMark";
 
 /**
  * Footer — three-column site footer.
@@ -95,12 +95,9 @@ function BrandStrip() {
         aria-label="SC2 Tools — home"
         className="group inline-flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
-        <Image
-          src="/logo.png"
-          alt=""
-          width={32}
-          height={32}
-          className="rounded-full motion-safe:transition-shadow motion-safe:duration-150 group-hover:shadow-[0_0_18px_var(--halo-cyan)]"
+        <LogoMark
+          size={32}
+          className="motion-safe:transition-shadow motion-safe:duration-150 group-hover:shadow-[0_0_18px_var(--halo-cyan)]"
         />
         <span className="text-h4 font-semibold tracking-tight text-text">
           SC2 Tools

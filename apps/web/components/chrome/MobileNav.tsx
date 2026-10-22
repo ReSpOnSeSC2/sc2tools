@@ -2,11 +2,11 @@
 
 import { useEffect, useRef } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { createPortal } from "react-dom";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { X } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { LogoMark } from "./LogoMark";
 
 /**
  * MobileNav — slide-in right-side drawer for the <lg viewport.
@@ -128,13 +128,7 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
             aria-label="SC2 Tools — home"
             className="flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg-surface"
           >
-            <Image
-              src="/logo.png"
-              alt=""
-              width={28}
-              height={28}
-              className="rounded-full"
-            />
+            <LogoMark size={28} />
             <span className="flex items-center gap-1.5 font-display text-h4 font-extrabold tracking-tight text-text">
               SC2&nbsp;Tools
               <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-accent" />

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Tabs } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import {
   SettingsContextProvider,
   useSettingsContext,
@@ -137,6 +138,10 @@ function SettingsShellInner({
   );
   const ctx = useSettingsContext();
   const lastRequested = useRef(initialTab);
+  // "Overlay · Settings · SC2 Tools": the browser tab (and a bookmark of
+  // the ?tab= URL) names the settings tab that is open.
+  const activeLabel = tabs.find((t) => t.id === active)?.label;
+  useDocumentTitle(activeLabel ? `${activeLabel} · Settings` : null);
 
   const activate = (tab: SettingsTabId, fromUrl: boolean) => {
     setActive(tab);

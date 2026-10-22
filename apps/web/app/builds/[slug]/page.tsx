@@ -10,7 +10,7 @@ export async function generateMetadata({
 }: BuildDetailPageProps): Promise<Metadata> {
   const { slug } = await params;
   return {
-    title: `${decodeURIComponent(slug)} · Custom build · SC2 Tools`,
+    title: `${decodeURIComponent(slug)} · Custom build`,
   };
 }
 

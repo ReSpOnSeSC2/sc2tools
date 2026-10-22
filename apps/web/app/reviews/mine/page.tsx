@@ -13,7 +13,7 @@ import { reviewsRollout } from "@/lib/reviews";
  */
 
 export const metadata: Metadata = {
-  title: "My reviews · SC2 Tools",
+  title: "My reviews",
   robots: { index: false, follow: false },
 };
 

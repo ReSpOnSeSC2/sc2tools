@@ -44,9 +44,9 @@ describe("/guides/[matchup]", () => {
       band: { type: "league", value: 4 },
       era: "after",
     });
-    expect(md.title).toBe(
-      `PvZ build orders vs Diamond opponents — ${FIXTURE_MATCHUP_BAND.openers.length} openers ranked by win rate (12 workers) | SC2 Tools`,
-    );
+    expect(md.title).toEqual({
+      absolute: `PvZ build orders vs Diamond opponents — ${FIXTURE_MATCHUP_BAND.openers.length} openers ranked by win rate (12 workers) | SC2 Tools`,
+    });
     expect(md.alternates?.canonical).toBe("/guides/pvz");
     expect(String(md.description)).toContain("6,840 games");
   });
@@ -204,9 +204,9 @@ describe("/guides/[matchup]/counter", () => {
   it("lists every counter page, published ones with their game counts", async () => {
     mocks.fetchGuideMatchup.mockResolvedValue(ok(FIXTURE_MATCHUP));
     const md = await counterListMetadata({ params: Promise.resolve({ matchup: "pvz" }) });
-    expect(md.title).toBe(
-      "How to beat Zerg openers as Protoss (PvZ) — 3 counter guides (12 workers) | SC2 Tools",
-    );
+    expect(md.title).toEqual({
+      absolute: "How to beat Zerg openers as Protoss (PvZ) — 3 counter guides (12 workers) | SC2 Tools",
+    });
     expect(md.alternates?.canonical).toBe("/guides/pvz/counter");
     render(await CounterListPage({ params: Promise.resolve({ matchup: "pvz" }) }));
     const pool = screen.getByRole("link", { name: "How to beat 12 Pool" });

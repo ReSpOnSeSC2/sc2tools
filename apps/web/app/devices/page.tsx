@@ -2,7 +2,7 @@ import { DevicesPanel } from "@/components/DevicesPanel";
 import { Banner } from "@/components/Banner";
 
 export const metadata = {
-  title: "Devices · SC2 Tools",
+  title: "Devices",
 };
 
 export default function DevicesPage() {

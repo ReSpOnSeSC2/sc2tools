@@ -78,7 +78,9 @@ describe("/help/[slug]", () => {
   it("sets a canonical URL, title and description", async () => {
     const meta = await generateMetadata({ params: Promise.resolve({ slug: "getting-started" }) });
     expect(meta.alternates?.canonical).toBe("/help/getting-started");
-    expect(meta.title).toBe("Getting started (5 minutes) · SC2 Tools Help");
+    // The root template adds " · SC2 Tools"; the social card carries it itself.
+    expect(meta.title).toBe("Getting started (5 minutes) · Help");
+    expect(meta.openGraph?.title).toBe("Getting started (5 minutes) · Help · SC2 Tools");
     expect(meta.description).toContain("pair the desktop app");
     expect(meta.openGraph?.images).toEqual([expect.objectContaining({ url: "/og.jpg" })]);
     expect(meta.twitter).toEqual(expect.objectContaining({ card: "summary_large_image" }));

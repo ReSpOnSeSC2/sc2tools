@@ -29,7 +29,7 @@ export async function generateMetadata({ params }: PageParams) {
   );
   if (!profile) {
     return {
-      title: "Author profile — SC2 Tools",
+      title: "Author profile",
       description: "This SC2 Tools community profile is private or doesn't exist.",
       robots: { index: false, follow: false },
     };
@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: PageParams) {
       ? `1 published build by ${profile.displayName}.`
       : `${profile.totalBuilds} published builds by ${profile.displayName}.`;
   return {
-    title: `${profile.displayName} — SC2 Tools community`,
+    title: `${profile.displayName} · Community`,
     description,
     openGraph: {
       title: `${profile.displayName} — SC2 Tools community`,

@@ -16,7 +16,7 @@ import {
 
 export const metadata = {
   alternates: { canonical: "/community" },
-  title: "Community — SC2 Tools",
+  title: "Community",
   description:
     "Player-published StarCraft II build orders + the Stock Market weekly P&L leaderboard. Filter by matchup, sort by top, new, or controversial, and save any build to your private library.",
   openGraph: {

@@ -14,7 +14,8 @@ import { createPortal } from "react-dom";
 import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 
 /**
- * Toast — transient notifications anchored bottom-right (desktop) / bottom (mobile).
+ * Toast — transient notifications anchored bottom-right (desktop) / bottom (mobile),
+ * above the app's mobile tab bar (`bottom-above-chrome`).
  *
  * Wrap a subtree in <ToastProvider>, then call useToast() from descendants:
  *   const { toast } = useToast();
@@ -146,11 +147,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    // The Map itself is never replaced, so the cleanup can hold it.
+    const timers = timersRef.current;
     return () => {
-      for (const handle of timersRef.current.values()) {
+      for (const handle of timers.values()) {
         window.clearTimeout(handle);
       }
-      timersRef.current.clear();
+      timers.clear();
     };
   }, []);
 
@@ -174,7 +177,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             <div
               role="region"
               aria-label="Notifications"
-              className="pointer-events-none fixed inset-x-0 bottom-0 z-[60] flex flex-col items-stretch gap-2 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] sm:inset-x-auto sm:right-4 sm:bottom-4 sm:max-w-sm"
+              className="pointer-events-none fixed inset-x-0 bottom-above-chrome z-toast flex flex-col items-stretch gap-2 px-4 sm:inset-x-auto sm:right-4 sm:max-w-sm"
             >
               {items.map((t) => (
                 <ToastCard key={t.id} item={t} onDismiss={() => dismiss(t.id)} />

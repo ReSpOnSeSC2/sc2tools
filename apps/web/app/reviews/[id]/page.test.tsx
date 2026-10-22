@@ -54,7 +54,9 @@ describe("/reviews/[id] SEO", () => {
     const open = await generateMetadata({ params: Promise.resolve({ id: ID }) });
     expect(open.robots).toEqual({ index: true, follow: true });
     expect(open.alternates?.canonical).toBe(`/reviews/${ID}`);
-    expect(String(open.title)).toMatch(/^\[PvZ\] Why did my blink all-in fail .* — Replay Review · SC2 Tools$/);
+    // The root template adds " · SC2 Tools" in the tab; social cards carry it themselves.
+    expect(String(open.title)).toMatch(/^\[PvZ\] Why did my blink all-in fail .* — Replay Review$/);
+    expect(String(open.openGraph?.title)).toBe(`${String(open.title)} · SC2 Tools`);
   });
 
   it("404s a missing review but degrades (noindex) when the API is down; off rollout 404s", async () => {

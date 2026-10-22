@@ -72,6 +72,30 @@ const config: Config = {
         // Courtside structural outline — the bold 2px line on cards/buttons.
         line: channel("--line"),
       },
+      // Named layers for everything pinned to the viewport, lowest first.
+      // Use these instead of raw z-40/z-50/z-[60] so a new floating surface
+      // lands in the right place. Scale and rules: docs/design-system.md
+      // ("Layers and the bottom edge").
+      zIndex: {
+        // The app rail and the mobile tab bar.
+        nav: "40",
+        // Sheets and drawers opened from the nav (the More sheet).
+        sheet: "50",
+        // Bars that float over content: Save bar, update prompt, cookie banner.
+        banner: "50",
+        // Toasts sit above everything except the skip link.
+        toast: "60",
+      },
+      inset: {
+        // `bottom-above-chrome`: where floating bottom surfaces sit. AppChrome
+        // publishes the mobile tab bar's height (safe-area padding included)
+        // as --chrome-bottom; it is 0 on md+ where the bar is hidden, and
+        // unset outside the app, where the safe area alone applies. Keep the
+        // custom property name in sync with CHROME_BOTTOM_VAR
+        // (components/chrome/chromeInsets.ts).
+        "above-chrome":
+          "calc(max(var(--chrome-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 0.75rem)",
+      },
       boxShadow: {
         "halo-cyan": "0 0 60px var(--halo-cyan)",
         "halo-accent": "0 0 60px var(--halo-accent)",

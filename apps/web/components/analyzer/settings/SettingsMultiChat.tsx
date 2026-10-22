@@ -779,11 +779,12 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
         above the inline button in a long card, so edits could be made, never
         scrolled past, and lost on navigation. Portalled to document.body
         because Card's overflow-hidden would clip a sticky element and a
-        transformed ancestor would capture a fixed one.
+        transformed ancestor would capture a fixed one. Floats above the
+        mobile tab bar like the shared SaveBar.
       */}
       {mounted && dirty
         ? createPortal(
-            <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 flex justify-center px-4 pb-4">
+            <div className="pointer-events-none fixed inset-x-0 bottom-above-chrome z-banner flex justify-center px-4">
               <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-3 rounded-full border border-accent/50 bg-bg-surface/95 px-4 py-2.5 shadow-xl backdrop-blur">
                 <span className="text-caption font-medium text-accent">
                   Unsaved chat settings

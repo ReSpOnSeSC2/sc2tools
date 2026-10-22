@@ -5,7 +5,8 @@ const TITLE = "Learn Stream Studio: widget guides & OBS crash course | SC2 Tools
 const DESCRIPTION = "Build your first StarCraft II stream overlay with a five-lesson crash course, setup guides for every widget, suggested starter scenes and practical troubleshooting.";
 
 export const metadata: Metadata = {
-  title: TITLE,
+  // Search-tuned and already branded, so it skips the title template.
+  title: { absolute: TITLE },
   description: DESCRIPTION,
   alternates: { canonical: "/stream-studio/learn" },
   openGraph: { type: "website", siteName: "SC2 Tools", url: "/stream-studio/learn", title: TITLE, description: DESCRIPTION },

@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import {
   SettingsShell,
@@ -9,18 +10,53 @@ import {
   type SettingsTabId,
 } from "@/components/analyzer/settings/SettingsShell";
 import { SettingsFoundation } from "@/components/analyzer/settings/SettingsFoundation";
-import { SettingsProfile } from "@/components/analyzer/settings/SettingsProfile";
-import { SettingsOverlay } from "@/components/analyzer/settings/SettingsOverlay";
-import { SettingsRandomizer } from "@/components/analyzer/settings/SettingsRandomizer";
-import { SettingsVoice } from "@/components/analyzer/settings/SettingsVoice";
-import { SettingsImport } from "@/components/analyzer/settings/SettingsImport";
-import { SettingsBackups } from "@/components/analyzer/settings/SettingsBackups";
-import { SettingsMisc } from "@/components/analyzer/settings/SettingsMisc";
-import { SettingsHelp } from "@/components/analyzer/settings/SettingsHelp";
-import { BuildCheckInSettings } from "@/components/build-checkin/BuildCheckInSettings";
 import { Skeleton } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
+
+/*
+ * Foundation is the default tab, so it ships with the page. Every other
+ * tab is its own chunk, fetched the first time it opens (the overlay
+ * editor, voice catalogue and import tools are most of Settings' code).
+ * While one loads it shows the same skeleton as the page's Suspense
+ * fallback.
+ */
+const SettingsProfile = dynamic(
+  () => import("@/components/analyzer/settings/SettingsProfile").then((mod) => mod.SettingsProfile),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const SettingsOverlay = dynamic(
+  () => import("@/components/analyzer/settings/SettingsOverlay").then((mod) => mod.SettingsOverlay),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const SettingsRandomizer = dynamic(
+  () => import("@/components/analyzer/settings/SettingsRandomizer").then((mod) => mod.SettingsRandomizer),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const BuildCheckInSettings = dynamic(
+  () => import("@/components/build-checkin/BuildCheckInSettings").then((mod) => mod.BuildCheckInSettings),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const SettingsVoice = dynamic(
+  () => import("@/components/analyzer/settings/SettingsVoice").then((mod) => mod.SettingsVoice),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const SettingsImport = dynamic(
+  () => import("@/components/analyzer/settings/SettingsImport").then((mod) => mod.SettingsImport),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const SettingsBackups = dynamic(
+  () => import("@/components/analyzer/settings/SettingsBackups").then((mod) => mod.SettingsBackups),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const SettingsMisc = dynamic(
+  () => import("@/components/analyzer/settings/SettingsMisc").then((mod) => mod.SettingsMisc),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const SettingsHelp = dynamic(
+  () => import("@/components/analyzer/settings/SettingsHelp").then((mod) => mod.SettingsHelp),
+  { loading: () => <Skeleton rows={6} /> },
+);
 
 /**
  * /settings — tabbed account settings. `?tab=<id>` opens a tab directly

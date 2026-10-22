@@ -26,10 +26,19 @@ const VARIANT_CLASSES: Record<CardVariant, string> = {
     "bg-bg-surface border-2 border-line shadow-hard hover:border-accent hover:bg-bg-elevated transition-colors cursor-pointer",
 };
 
+/** Heading level for the legacy inline `title`. */
+export type CardHeadingLevel = 2 | 3 | 4;
+
 interface CardBaseProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   variant?: CardVariant;
   /** Legacy: render header inline. Prefer composing <Card.Header>. */
   title?: ReactNode;
+  /**
+   * Level of the `title` heading (default 3). Use 2 for a card that sits
+   * directly under the page's <h1>, so headings never skip a level.
+   * The look stays the same at every level.
+   */
+  headingLevel?: CardHeadingLevel;
   /** Legacy: right slot in inline header. */
   right?: ReactNode;
   /** Legacy: when both title/right omitted, body still gets default padding. */
@@ -39,6 +48,7 @@ interface CardBaseProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
 export function Card({
   variant = "default",
   title,
+  headingLevel = 3,
   right,
   padded = true,
   className = "",
@@ -46,6 +56,7 @@ export function Card({
   ...rest
 }: CardBaseProps) {
   const hasInlineHeader = title !== undefined || right !== undefined;
+  const Heading = `h${headingLevel}` as const;
   return (
     <section
       className={[
@@ -60,7 +71,7 @@ export function Card({
       {hasInlineHeader ? (
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           {title ? (
-            <h3 className="text-caption font-semibold text-text">{title}</h3>
+            <Heading className="text-caption font-semibold text-text">{title}</Heading>
           ) : (
             <span />
           )}

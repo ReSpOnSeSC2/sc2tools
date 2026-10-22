@@ -7,8 +7,11 @@ import { HelpSearch } from "@/components/help/HelpSearch";
 import { HelpSupportLine } from "@/components/help/HelpSupportLine";
 import { articlesByCategory, helpArticlePath, popularArticles } from "@/lib/help";
 import { helpInlinePlainText } from "@/lib/help/inline";
+import { siteTitle } from "@/lib/siteTitle";
 
-const TITLE = "Help center · SC2 Tools";
+const TITLE = "Help center";
+// Social cards get no title template, so they carry the brand themselves.
+const SHARE_TITLE = siteTitle(TITLE);
 const DESCRIPTION =
   "How to set up SC2 Tools, pair the desktop app, read your stats, use build check-in and run Stream Studio. Search or browse by topic.";
 
@@ -20,11 +23,11 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "SC2 Tools",
     url: "/help",
-    title: TITLE,
+    title: SHARE_TITLE,
     description: DESCRIPTION,
     images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "SC2 Tools Help" }],
   },
-  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION, images: ["/og.jpg"] },
+  twitter: { card: "summary_large_image", title: SHARE_TITLE, description: DESCRIPTION, images: ["/og.jpg"] },
 };
 
 const TOPIC_LINK_CLASS =

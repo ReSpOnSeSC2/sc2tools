@@ -56,9 +56,9 @@ describe("/guides hub", () => {
     mocks.fetchGuideIndex.mockResolvedValue(ok(FIXTURE_INDEX));
     const md = await hubMetadata();
     // publishedBuilds: PvT 2 + PvZ 4 + TvZ 1 + ZvP 2 = 9.
-    expect(md.title).toBe(
-      "StarCraft II build order guides — 9 openers ranked by real ladder win rate (12 workers) | SC2 Tools",
-    );
+    expect(md.title).toEqual({
+      absolute: "StarCraft II build order guides — 9 openers ranked by real ladder win rate (12 workers) | SC2 Tools",
+    });
     expect(md.alternates?.canonical).toBe("/guides");
     expect(md.robots).toBeUndefined();
     expect(String(md.description)).toContain("Sep 27, 2026");
@@ -199,9 +199,9 @@ describe("/guides/maps", () => {
   it("lists published maps with their game counts", async () => {
     mocks.fetchGuideIndex.mockResolvedValue(ok(FIXTURE_INDEX));
     const md = await mapsMetadata();
-    expect(md.title).toBe(
-      "SC2 ladder map guides — 3 maps with openers ranked by win rate (12 workers) | SC2 Tools",
-    );
+    expect(md.title).toEqual({
+      absolute: "SC2 ladder map guides — 3 maps with openers ranked by win rate (12 workers) | SC2 Tools",
+    });
     expect(md.alternates?.canonical).toBe("/guides/maps");
     render(await MapGuidesPage());
     const link = screen.getByRole("link", { name: /Old Sun Temple/ });

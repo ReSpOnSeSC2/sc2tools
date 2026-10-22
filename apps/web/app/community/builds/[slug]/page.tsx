@@ -30,12 +30,12 @@ export async function generateMetadata({
   const data = await getJson<CommunityBuildDetail>(
     `/v1/community/builds/${encodeURIComponent(slug)}`,
   );
-  if (!data) return { title: "Build not found — SC2 Tools" };
+  if (!data) return { title: "Build not found" };
   const description =
     data.description?.slice(0, 200) ||
     `Player-published StarCraft II build for ${data.matchup || "any matchup"}.`;
   return {
-    title: `${data.title} — community build — SC2 Tools`,
+    title: `${data.title} · Community build`,
     description,
     openGraph: {
       title: `${data.title} — SC2 Tools community build`,

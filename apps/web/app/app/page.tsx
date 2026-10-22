@@ -8,7 +8,7 @@ import {
 import { TodayView } from "@/components/dashboard/TodayView";
 
 export const metadata = {
-  title: "Today · SC2 Tools",
+  title: "Today",
   description:
     "Your session at a glance — live game, streak, MMR, and today's pulse from your own replays.",
 };

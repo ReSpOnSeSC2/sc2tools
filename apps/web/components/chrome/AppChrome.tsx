@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Bug, ChevronLeft, LifeBuoy, MoreHorizontal, X } from "lucide-react";
@@ -30,6 +29,8 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { reviewsVisible } from "@/lib/reviews";
 import { guidesEnabled } from "@/lib/guides/flags";
 import { SiteStats } from "./SiteStats";
+import { useChromeBottomInset } from "./chromeInsets";
+import { LogoMark } from "./LogoMark";
 
 /* ------------------------------------------------------------------
  * AppChrome — the shell every signed-in surface renders inside:
@@ -56,6 +57,10 @@ import { SiteStats } from "./SiteStats";
  *   - ConnectionStatusProvider wraps everything in the app's SWRConfig;
  *     its banner sits at the foot of the sticky bar, so "Reconnecting
  *     to SC2 Tools…" stays in view while the API wakes up.
+ *   - Safe areas: the context bar pads below the notch / status bar
+ *     (installed iOS app), and the tab bar's measured height is published
+ *     as --chrome-bottom so floating bottom surfaces (Save bar, toasts,
+ *     the update prompt, the cookie banner) sit above it, never under it.
  *
  * /community is reachable signed-out (shared links), so the
  * shell's structure is identical either way and only its contents swap:
@@ -115,6 +120,8 @@ function AppChromeShell({ children }: { children: ReactNode }) {
     moreButtonRef.current?.focus();
     setReport({ open: true, type });
   }, []);
+  const tabBarRef = useRef<HTMLElement>(null);
+  useChromeBottomInset(tabBarRef);
 
   // useApi gates on isSignedIn internally and SWR dedupes it against the
   // rest of the app, so this costs nothing extra and is a no-op for
@@ -157,8 +164,8 @@ function AppChromeShell({ children }: { children: ReactNode }) {
         <nav
           aria-label="App navigation"
           className={[
-            "group/rail fixed inset-y-0 left-0 z-40 flex w-16 flex-col gap-1 overflow-y-auto overflow-x-hidden",
-            "border-r-2 border-border bg-bg-surface px-2 py-3",
+            "group/rail fixed inset-y-0 left-0 z-nav flex w-16 flex-col gap-1 overflow-y-auto overflow-x-hidden",
+            "border-r-2 border-border bg-bg-surface px-2 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]",
             "motion-safe:transition-[width] motion-safe:duration-150",
             "hover:w-56 focus-within:w-56 hover:shadow-hard",
           ].join(" ")}
@@ -168,14 +175,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             aria-label="SC2 Tools — home"
             className="mb-1 flex h-11 items-center gap-3 rounded-lg px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <Image
-              src="/logo.png"
-              alt=""
-              width={30}
-              height={30}
-              className="shrink-0 rounded-full"
-              priority
-            />
+            <LogoMark size={30} className="shrink-0" priority />
             <RailLabel>SC2&nbsp;Tools</RailLabel>
           </Link>
 
@@ -212,20 +212,16 @@ function AppChromeShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b-2 border-border bg-bg/90 supports-[backdrop-filter]:backdrop-blur-md">
+        {/* pt: in the installed iOS app the status bar overlays the page
+            (black-translucent), so the bar starts below the notch. */}
+        <header className="sticky top-0 z-30 border-b-2 border-border bg-bg/90 pt-[env(safe-area-inset-top)] supports-[backdrop-filter]:backdrop-blur-md">
           <div className="mx-auto flex h-12 w-full max-w-[1680px] items-center gap-3 px-4 sm:px-6 lg:px-8">
             <Link
               href="/"
               aria-label="SC2 Tools — home"
               className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:hidden"
             >
-              <Image
-                src="/logo.png"
-                alt=""
-                width={24}
-                height={24}
-                className="rounded-full"
-              />
+              <LogoMark size={24} />
             </Link>
 
             {showBack ? (
@@ -320,8 +316,9 @@ function AppChromeShell({ children }: { children: ReactNode }) {
       {/* Mobile: tab bar + More sheet. Signed-out visitors on /community
           get the same bar with just the public destinations. */}
       <nav
+        ref={tabBarRef}
         aria-label="Quick sections"
-        className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-border bg-bg/95 pb-[env(safe-area-inset-bottom,0px)] supports-[backdrop-filter]:backdrop-blur-md md:hidden"
+        className="fixed inset-x-0 bottom-0 z-nav border-t-2 border-border bg-bg/95 pb-[env(safe-area-inset-bottom,0px)] supports-[backdrop-filter]:backdrop-blur-md md:hidden"
       >
         <div className="mx-auto flex max-w-md items-stretch px-2 py-1.5">
           <SignedIn>
@@ -488,7 +485,7 @@ function MoreSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 md:hidden"
+      className="fixed inset-0 z-sheet md:hidden"
       role="dialog"
       aria-modal="true"
       aria-label="More sections"
