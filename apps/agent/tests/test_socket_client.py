@@ -374,3 +374,61 @@ def test_capture_thread_start_failure_releases_shared_engine_lock(tmp_path, monk
         on_macro(["game"], replay_fidelity="engine", requested=True)
     assert socket_client._ENGINE_REBUILD_LOCK.acquire(blocking=False)
     socket_client._ENGINE_REBUILD_LOCK.release()
+
+
+class _RecordingSio:
+    def __init__(self):
+        self.handlers = {}
+
+    def event(self, fn):
+        return fn
+
+    def on(self, name):
+        def decorate(fn):
+            self.handlers[name] = fn
+            return fn
+        return decorate
+
+
+def _client_with_build_intent_callback(callback):
+    from sc2tools_agent.socket_client import SocketClient
+
+    client = SocketClient(
+        base_url="https://example.test", device_token="test",
+        on_recompute_games=lambda _ids: None,
+        on_recompute_opp_build=lambda _gid: None,
+        on_build_intent_changed=callback,
+    )
+    client._sio = _RecordingSio()
+    client._wire_handlers()
+    return client._sio.handlers["build-intent:changed"]
+
+
+def test_build_intent_ping_forwards_only_the_ids() -> None:
+    import asyncio
+
+    pings: list = []
+    handler = _client_with_build_intent_callback(pings.append)
+    asyncio.run(handler({"gameKey": "A|B|1", "extra": "ignored"}))
+    asyncio.run(handler({"gameId": "g-1"}))
+    assert pings == [{"gameKey": "A|B|1"}, {"gameId": "g-1"}]
+
+
+@pytest.mark.parametrize("payload", [None, [], {}, {"gameKey": ""}, {"gameId": 7}])
+def test_build_intent_ping_ignores_malformed_payloads(payload) -> None:
+    import asyncio
+
+    pings: list = []
+    handler = _client_with_build_intent_callback(pings.append)
+    asyncio.run(handler(payload))
+    assert pings == []
+
+
+def test_build_intent_ping_survives_callback_errors_and_missing_wiring() -> None:
+    import asyncio
+
+    def _boom(_ping):
+        raise RuntimeError("controller down")
+
+    asyncio.run(_client_with_build_intent_callback(_boom)({"gameId": "g"}))
+    asyncio.run(_client_with_build_intent_callback(None)({"gameId": "g"}))

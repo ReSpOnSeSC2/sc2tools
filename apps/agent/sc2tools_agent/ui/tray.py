@@ -8,6 +8,7 @@ Pystray draws a tiny indicator with a context menu:
     ─────────────────
     Open agent window      (default — double-click the icon)
     Open dashboard
+    Build check-in…        (GUI mode — reopens the last end card)
     Pause syncing
     Open log folder
     Re-sync from scratch
@@ -64,6 +65,7 @@ class TrayUI:
         on_choose_folder: Optional[Callable[[Optional[Path]], None]] = None,
         on_check_updates: Optional[Callable[[], None]] = None,
         on_show_window: Optional[Callable[[], None]] = None,
+        on_build_checkin: Optional[Callable[[], None]] = None,
         synced_count_provider: Optional[Callable[[], int]] = None,
     ) -> None:
         self._dashboard_url = dashboard_url
@@ -78,6 +80,9 @@ class TrayUI:
         # default action (double-click). Without it (no-GUI installs)
         # the item is omitted.
         self._on_show_window_cb = on_show_window
+        # "Build check-in…": re-opens the newest end card the player has
+        # not answered, else the web queue. Omitted when not wired.
+        self._on_build_checkin_cb = on_build_checkin
         # Same authoritative synced-total source the GUI stat card
         # uses (count over state.uploaded's dated entries). Without it
         # the tooltip falls back to the legacy session-local counter,
@@ -234,9 +239,13 @@ class TrayUI:
                     default=True,
                 ),
             )
+        items.append(pystray.MenuItem("Open dashboard", self._open_dashboard))
+        if self._on_build_checkin_cb is not None:
+            items.append(
+                pystray.MenuItem("Build check-in…", self._build_checkin_clicked),
+            )
         items.extend(
             [
-                pystray.MenuItem("Open dashboard", self._open_dashboard),
                 pystray.MenuItem(self._pause_label, self._toggle_pause),
                 pystray.MenuItem(
                     "Open log folder",
@@ -307,6 +316,14 @@ class TrayUI:
             self._on_show_window_cb()
         except Exception:  # noqa: BLE001
             log.exception("show_window_failed")
+
+    def _build_checkin_clicked(self, _icon, _item) -> None:
+        if not self._on_build_checkin_cb:
+            return
+        try:
+            self._on_build_checkin_cb()
+        except Exception:  # noqa: BLE001
+            log.exception("build_checkin_open_failed")
 
     def _open_dashboard(self, _icon, _item) -> None:
         try:

@@ -26,6 +26,11 @@ READ_TIMEOUT_SEC = 30.0
 DEFAULT_RETRIES = 3
 RETRY_BACKOFF_BASE_SEC = 0.5
 
+# Build check-in calls back a card the player is looking at, often during
+# a loading screen. They fail fast instead of riding the upload path's
+# 30 s read timeout and multi-attempt Retry-After waits.
+INTERACTIVE_READ_TIMEOUT_SEC = 5.0
+
 # Per-game read-timeout budget for batch uploads. The flat 30 s
 # READ_TIMEOUT_SEC was sized for single-game posts; a 50-game batch
 # routinely needs longer than that server-side (observed 2026-06-10:
@@ -638,6 +643,89 @@ class ApiClient:
         """
         return self._get("/v1/import/status", auth=True)
 
+    # ---------------- Build check-in ----------------
+    def get_build_options(self, matchup: str) -> Dict[str, Any]:
+        """Builds the player can check in for one matchup (``PvZ``).
+
+        Returns the ``GET /v1/build-intents/options`` body: the matchup,
+        ``randomizerEnabled``, ``usualKey`` and ``builds`` (custom and
+        catalog options with the player's W-L for that matchup).
+        """
+        return self._interactive(
+            "GET",
+            f"/v1/build-intents/options?matchup={quote(str(matchup), safe='')}",
+        )
+
+    def put_live_intent(
+        self,
+        game_key: str,
+        body: Dict[str, Any],
+        *,
+        attempts: int = 1,
+    ) -> Dict[str, Any]:
+        """Write the live record of an in-progress game.
+
+        ``body["action"]`` is ``register`` | ``declare`` | ``undeclare``
+        | ``release`` | ``postgame``. Returns the server ``LiveState``.
+        A record the server already bound to an uploaded game answers
+        409 ``already_bound`` with the ``gameId`` to write instead.
+        """
+        return self._interactive(
+            "PUT", _live_intent_path(game_key), body=body, attempts=attempts,
+        )
+
+    def get_live_intent(self, game_key: str) -> Dict[str, Any]:
+        """Read the live record of a game (``LiveState``); 404 when absent."""
+        return self._interactive("GET", _live_intent_path(game_key))
+
+    def get_game_intent(
+        self,
+        game_id: str,
+        *,
+        include_options: bool = False,
+    ) -> Dict[str, Any]:
+        """Read an uploaded game's check-in state (``GameIntentState``)."""
+        path = _game_intent_path(game_id)
+        if include_options:
+            path += "?include=options"
+        return self._interactive("GET", path)
+
+    def put_game_intent(
+        self,
+        game_id: str,
+        body: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Confirm, skip, defer or annotate an uploaded game's check-in."""
+        return self._interactive("PUT", _game_intent_path(game_id), body=body)
+
+    def get_checkin_prefs(self) -> Dict[str, Any]:
+        """The cloud ``buildCheckin`` preference, defaults applied."""
+        return self._interactive("GET", _CHECKIN_PREFS_PATH)
+
+    def put_checkin_prefs(self, prefs: Dict[str, Any]) -> Dict[str, Any]:
+        """Replace the ``buildCheckin`` preference; returns the saved value."""
+        return self._interactive("PUT", _CHECKIN_PREFS_PATH, body=prefs)
+
+    def _interactive(
+        self,
+        method: str,
+        path: str,
+        *,
+        body: Optional[Dict[str, Any]] = None,
+        attempts: int = 1,
+    ) -> Dict[str, Any]:
+        if not self.device_token:
+            raise PermissionError("agent_not_paired")
+        return self._request(
+            method,
+            path,
+            auth=True,
+            body=body,
+            read_timeout=INTERACTIVE_READ_TIMEOUT_SEC,
+            attempts=attempts,
+            interactive=True,
+        )
+
     # ---------------- internals ----------------
     def _get(
         self,
@@ -670,7 +758,15 @@ class ApiClient:
         allow_202: bool = False,
         read_timeout: Optional[float] = None,
         raw_body: Optional[bytes] = None,
+        attempts: int = DEFAULT_RETRIES,
+        interactive: bool = False,
     ) -> Dict[str, Any]:
+        """Send one request, retrying transport errors, 408/429 and 5xx.
+
+        ``interactive`` callers fail fast: they never retry a 429, never
+        sleep on ``Retry-After`` and never sleep after their last attempt.
+        """
+        attempts = max(1, int(attempts))
         url = f"{self.base_url}{path}"
         headers = {"user-agent": _USER_AGENT, "accept": "application/json"}
         if auth:
@@ -692,7 +788,8 @@ class ApiClient:
             request_body = {"data": encoded}
 
         last_exc: Optional[Exception] = None
-        for attempt in range(DEFAULT_RETRIES):
+        for attempt in range(attempts):
+            final_attempt = attempt + 1 >= attempts
             try:
                 response = requests.request(
                     method,
@@ -706,6 +803,8 @@ class ApiClient:
                 )
             except requests.RequestException as exc:
                 last_exc = exc
+                if interactive and final_attempt:
+                    break
                 _backoff(attempt)
                 continue
 
@@ -728,6 +827,12 @@ class ApiClient:
                 )
             if response.status_code in (408, 429) or response.status_code >= 500:
                 last_exc = _ApiError(response.status_code, response.text)
+                if interactive:
+                    # A rate limit outlasts any wait a card can afford.
+                    if final_attempt or response.status_code == 429:
+                        break
+                    _backoff(attempt)
+                    continue
                 # 429 specifically: the server (express-rate-limit
                 # with ``standardHeaders: true``) sends a
                 # ``Retry-After`` header carrying the seconds until
@@ -756,6 +861,36 @@ class _ApiError(Exception):
         self.status = status
         self.body = body
 
+    @property
+    def error(self) -> Dict[str, Any]:
+        """The structured ``{"error": {...}}`` object, or ``{}``."""
+        try:
+            payload = json.loads(self.body or "")
+        except ValueError:
+            return {}
+        error = payload.get("error") if isinstance(payload, dict) else None
+        return error if isinstance(error, dict) else {}
+
+    @property
+    def code(self) -> Optional[str]:
+        """The structured API error code (``already_bound`` …), if any."""
+        code = self.error.get("code")
+        return code if isinstance(code, str) else None
+
+
+# Public name for callers that branch on an API status or error code.
+ApiError = _ApiError
+
+_CHECKIN_PREFS_PATH = "/v1/me/preferences/buildCheckin"
+
+
+def _live_intent_path(game_key: str) -> str:
+    return f"/v1/build-intents/live/{quote(str(game_key), safe='')}"
+
+
+def _game_intent_path(game_id: str) -> str:
+    return f"/v1/games/{quote(str(game_id), safe='')}/build-intent"
+
 
 def _safe_json(response: requests.Response) -> Dict[str, Any]:
     if not response.text:
@@ -781,13 +916,7 @@ def _error_code(response: requests.Response) -> Optional[str]:
 
 def _api_error_code(exc: _ApiError) -> Optional[str]:
     """``_error_code`` for an already-raised error's response body."""
-    try:
-        payload = json.loads(exc.body or "")
-    except ValueError:
-        return None
-    error = payload.get("error") if isinstance(payload, dict) else None
-    code = error.get("code") if isinstance(error, dict) else None
-    return code if isinstance(code, str) else None
+    return exc.code
 
 
 def _backoff(attempt: int) -> None:

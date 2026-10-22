@@ -1195,3 +1195,118 @@ def test_replay_menu_transition_clears_match_identity() -> None:
     assert poller._current_game_key is None
     assert poller._match_started_at_ms is None
     assert poller._last_in_progress_display_time == -1.0
+
+
+# ------------------------------------------------- loading roster re-emits
+
+
+def _drive(observations: list) -> tuple[LiveClientPoller, List[LiveLifecycleEvent]]:
+    session = _StubSession()
+    for screens, game in observations:
+        session.queue("http://localhost:6119/ui", _ok({"activeScreens": screens}))
+        session.queue("http://localhost:6119/game", _ok(game))
+    poller, seen = _make_poller(session)
+    for _ in observations:
+        phase, _ = poller._tick_once()
+        poller._last_phase = phase
+    return poller, seen
+
+
+def _with_roster(game: dict[str, Any], rows: list[tuple[str, str]]) -> dict[str, Any]:
+    return {
+        **game,
+        "players": [
+            {**game["players"][index], "name": name, "race": race}
+            for index, (name, race) in enumerate(rows)
+        ],
+    }
+
+
+def test_loading_roster_completion_re_emits_loading_under_the_same_key() -> None:
+    """An empty loading roster that fills in announces the matchup once more."""
+    complete = _live_game("Opponent", display_time=0.0)
+    _poller, seen = _drive([
+        (["ScreenLoading"], {**complete, "players": []}),
+        (["ScreenLoading"], {**complete, "players": []}),
+        (["ScreenLoading"], complete),
+        (["ScreenLoading"], complete),
+    ])
+
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_LOADING,
+        LiveLifecyclePhase.MATCH_LOADING,
+    ]
+    assert len({event.game_key for event in seen}) == 1
+    assert seen[0].game_key.startswith("unknown|")
+    assert seen[-1].game_state.opponent_for("Streamer#1").name == "Opponent"
+
+
+def test_loading_races_becoming_concrete_re_emits_loading() -> None:
+    """Complete names with ``?`` races are not yet a known matchup."""
+    complete = _live_game("Opponent", display_time=0.0)
+    unknown_races = _with_roster(complete, [("Streamer#1", "?"), ("Opponent", "?")])
+    _poller, seen = _drive([
+        (["ScreenLoading"], unknown_races),
+        (["ScreenLoading"], unknown_races),
+        (["ScreenLoading"], complete),
+        ([], {**complete, "displayTime": 2.0}),
+    ])
+
+    assert [event.phase for event in seen] == [
+        LiveLifecyclePhase.MATCH_LOADING,
+        LiveLifecyclePhase.MATCH_LOADING,
+        LiveLifecyclePhase.MATCH_STARTED,
+    ]
+    assert len({event.game_key for event in seen}) == 1
+    assert [p.race for p in seen[1].game_state.players] == ["Zerg", "Protoss"]
+
+
+def test_loading_roster_complete_from_first_poll_emits_loading_once() -> None:
+    complete = _live_game("Opponent", display_time=0.0)
+    poller, seen = _drive([
+        (["ScreenLoading"], complete),
+        (["ScreenLoading"], complete),
+        (["ScreenLoading"], _with_roster(complete, [
+            ("[Clan] STREAMER#1", "zerg"), ("  opponent ", "Prot"),
+        ])),
+    ])
+
+    assert [event.phase for event in seen] == [LiveLifecyclePhase.MATCH_LOADING]
+    # The poller never anchors gameplay identity from loading telemetry.
+    assert poller._current_player_roster is None
+
+
+def test_loading_roster_regression_does_not_re_emit() -> None:
+    """A snapshot that momentarily loses a race is noise, not news."""
+    complete = _live_game("Opponent", display_time=0.0)
+    _poller, seen = _drive([
+        (["ScreenLoading"], complete),
+        (["ScreenLoading"], _with_roster(complete, [
+            ("Streamer#1", "?"), ("Opponent", "Protoss"),
+        ])),
+        (["ScreenLoading"], complete),
+    ])
+
+    assert [event.phase for event in seen] == [LiveLifecyclePhase.MATCH_LOADING]
+
+
+def test_loading_re_emits_are_capped_per_match() -> None:
+    from sc2tools_agent.live.client_api import MAX_LOADING_EMITS_PER_MATCH
+
+    complete = _live_game("Opponent", display_time=0.0)
+    steps = [
+        {**complete, "players": []},
+        _with_roster(complete, [("Streamer#1", "?")]),
+        _with_roster(complete, [("Streamer#1", "Zerg")]),
+        _with_roster(complete, [("Streamer#1", "Zerg"), ("Opponent", "?")]),
+        complete,
+    ]
+    poller, seen = _drive([(["ScreenLoading"], game) for game in steps])
+
+    assert len(seen) == MAX_LOADING_EMITS_PER_MATCH
+    assert len({event.game_key for event in seen}) == 1
+
+    # The cap is per match: the next game announces its roster again.
+    poller._reset_match_state()
+    assert poller._loading_identity is None
+    assert poller._loading_emits == 0

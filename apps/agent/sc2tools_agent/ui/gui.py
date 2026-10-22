@@ -638,6 +638,9 @@ class GuiUI:
         stream_status_provider: Optional[Callable[[], dict]] = None,
         on_stream_action: Optional[Callable[[dict], dict]] = None,
         start_minimized: bool = False,
+        build_checkin_available: bool = False,
+        build_checkin_positions: Optional[dict] = None,
+        on_build_checkin_moved: Optional[Callable[[str, int, int], None]] = None,
     ) -> None:
         self._version = version
         self._dashboard_url = dashboard_url
@@ -673,6 +676,17 @@ class GuiUI:
         self._on_obs_build = on_obs_build
         self._stream_status_provider = stream_status_provider
         self._on_stream_action = on_stream_action
+        # Build check-in cards (``build_checkin_window``). Unavailable
+        # under --no-live, where no controller runs. The proxy is handed
+        # to the controller on the boot worker; calls that arrive before
+        # the window exists wait in a short backlog.
+        self._build_checkin_available = build_checkin_available
+        self._build_checkin_positions = dict(build_checkin_positions or {})
+        self._on_build_checkin_moved = on_build_checkin_moved
+        self._checkin_proxy = None
+        self._checkin_lock = threading.Lock()
+        self._checkin_ready = False
+        self._checkin_backlog: Deque[tuple] = deque(maxlen=64)
 
         # Lazily populated at start()
         self._app = None
@@ -757,6 +771,43 @@ class GuiUI:
         else:
             self._pending_replay_archive_status = status
 
+    def build_checkin_view(self):
+        """The view the build check-in controller paints through.
+
+        Called on the boot worker: returns a thread-safe proxy that
+        forwards every call over ``signals.buildCheckin``; the card
+        windows are created on the GUI thread.
+        """
+        if self._checkin_proxy is None:
+            from .build_checkin_window import CheckinViewProxy
+
+            self._checkin_proxy = CheckinViewProxy(self._emit_build_checkin)
+        return self._checkin_proxy
+
+    def _build_checkin_controller(self):
+        proxy = self._checkin_proxy
+        return proxy.controller if proxy is not None else None
+
+    def _emit_build_checkin(self, method: str, args: tuple) -> None:
+        with self._checkin_lock:
+            if not self._checkin_ready:
+                self._checkin_backlog.append((method, args))
+                return
+        self._signals.buildCheckin.emit(method, args)
+
+    def _start_build_checkin_delivery(self) -> None:
+        """The window is wired: deliver the backlog, then live calls.
+
+        Runs on the GUI thread, so the backlog is painted synchronously
+        ahead of any call a worker queues from here on.
+        """
+        with self._checkin_lock:
+            self._checkin_ready = True
+            backlog = list(self._checkin_backlog)
+            self._checkin_backlog.clear()
+        for method, args in backlog:
+            self._signals.buildCheckin.emit(method, args)
+
     # ---------------- lifecycle ----------------
 
     def run(self) -> int:
@@ -791,6 +842,7 @@ class GuiUI:
                 *self._pending_replay_archive_status,
             )
             self._pending_replay_archive_status = None
+        self._start_build_checkin_delivery()
 
         if self._start_minimized:
             log.info("gui_starting_minimized")
@@ -858,6 +910,9 @@ def _make_signals():
         # payload dict carries ``kind`` plus whatever that operation
         # discovered; see ``_on_obs_probe_done``.
         obsProbeDone = QtCore.Signal(dict)
+        # Build check-in view calls from the controller's state thread:
+        # (BuildCheckinView method name, args tuple of frozen models).
+        buildCheckin = QtCore.Signal(str, object)
         quitRequested = QtCore.Signal()
         showRequested = QtCore.Signal()
 
@@ -1060,6 +1115,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
 
             self._build_layout()
+            from .build_checkin_window import BuildCheckinHost
+
+            self._checkin_host = BuildCheckinHost(
+                controller=ui._build_checkin_controller,
+                positions=ui._build_checkin_positions,
+                on_moved=ui._on_build_checkin_moved,
+                settings=self._checkin_settings,
+            )
             self._wire_signals()
             self._refresh_status_card()
             self._refresh_stats()
@@ -2050,6 +2113,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             form.addRow("Map replay", capture_block)
 
             v.addWidget(form_card)
+            from .build_checkin_settings import CheckinSettingsGroup
+
+            # Applies immediately (cloud preference), like the toggles above.
+            self._checkin_settings = CheckinSettingsGroup(
+                controller=ui._build_checkin_controller,
+                available=ui._build_checkin_available,
+            )
+            v.addWidget(self._checkin_settings)
             v.addWidget(self._build_obs_card())
 
             row = QtWidgets.QHBoxLayout()
@@ -2480,10 +2551,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             signals.foldersChanged.connect(self._on_folders_changed)
             signals.settingsStatus.connect(self._on_settings_status)
             signals.obsProbeDone.connect(self._on_obs_probe_done)
+            signals.buildCheckin.connect(self._on_build_checkin)
             signals.quitRequested.connect(self._on_quit_requested)
             signals.showRequested.connect(self._on_show_requested)
 
         # ---- signal handlers (always on the GUI thread) ----
+
+        def _on_build_checkin(self, method: str, args: object) -> None:
+            self._checkin_host.dispatch(method, args)
 
         def _on_pairing_code(self, code: str) -> None:
             self._paired = False
@@ -2631,6 +2706,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _on_quit_requested(self) -> None:
             self._really_quit = True
+            self._checkin_host.close()
             QtWidgets.QApplication.instance().quit()
 
         def _on_show_requested(self) -> None:

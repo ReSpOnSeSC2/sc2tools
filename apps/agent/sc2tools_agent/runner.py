@@ -32,12 +32,15 @@ import os
 import sys
 import threading
 import urllib.parse
+import webbrowser
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from . import __version__
 from . import autostart
 from .api_client import ApiClient
+from .build_checkin import build_checkin_view_for, start_build_checkin
+from .build_checkin.wiring import web_queue_url
 from .config import AgentConfig, load_config
 from .crash_reporter import (
     capture_exception,
@@ -712,6 +715,12 @@ def _run_with_gui(
         ),
         on_quit=request_stop,
         start_minimized=start_minimized,
+        # The check-in controller rides on the live bridge.
+        build_checkin_available=not no_live,
+        build_checkin_positions=dict(state.build_checkin_card_positions),
+        on_build_checkin_moved=lambda kind, x, y: _remember_build_checkin_position(
+            cfg.state_dir, state, kind, x, y,
+        ),
     )
     cell.gui = gui
 
@@ -732,6 +741,9 @@ def _run_with_gui(
             # Route back to the Qt window after a hide-to-tray close —
             # first menu item and the icon's double-click default.
             on_show_window=lambda: cell.gui.show_window() if cell.gui else None,
+            on_build_checkin=lambda: _open_build_checkin(
+                cell, _dashboard_url_from_api(cfg.api_base),
+            ),
             synced_count_provider=lambda: count_synced(state),
         )
         cell.tray = tray
@@ -780,6 +792,8 @@ def _run_with_gui(
         cell.obs_client.shutdown()
     if getattr(cell, "live_metrics_logger", None):
         cell.live_metrics_logger.stop()
+    if getattr(cell, "build_checkin", None):
+        cell.build_checkin.stop()
     if getattr(cell, "live_poller", None):
         cell.live_poller.stop()
     if getattr(cell, "live_bridge", None):
@@ -869,6 +883,11 @@ def _gui_boot_worker(
                 import_ctl.on_upload_failure(p, exc) if import_ctl else None,
             ),
             on_pending_changed=ui.on_pending,
+            # Late-bound: the build check-in starts with the live bridge.
+            on_game_accepted=lambda *accepted: (
+                cell.build_checkin.on_game_accepted(*accepted)
+                if getattr(cell, "build_checkin", None) else None
+            ),
         )
         upload.set_paused(state.paused)
         watcher = ReplayWatcher(
@@ -944,6 +963,10 @@ def _gui_boot_worker(
                 on_import_cancel=import_ctl.handle_cancel_request,
                 on_import_pick_folder=import_ctl.handle_pick_folder_request,
                 on_bot_lab=BotLabController(cfg.state_dir, state).handle,
+                on_build_intent_changed=lambda ping: (
+                    cell.build_checkin.on_intent_changed(ping)
+                    if getattr(cell, "build_checkin", None) else None
+                ),
             )
         cell.socket_client = socket_client
 
@@ -967,6 +990,15 @@ def _gui_boot_worker(
             cell.live_bridge = live_bridge
             cell.live_transport = live_transport
             cell.live_metrics_logger = live_metrics_logger
+            # Subscribed before the bridge starts so no envelope is missed.
+            cell.build_checkin = start_build_checkin(
+                api=api,
+                bus=live_bridge.bus,
+                state=state,
+                state_dir=cfg.state_dir,
+                dashboard_url=_dashboard_url_from_api(cfg.api_base),
+                view=build_checkin_view_for(cell.gui),
+            )
         else:
             log.info("live_bridge_disabled_via_flag")
             cell.live_bus = None
@@ -974,6 +1006,7 @@ def _gui_boot_worker(
             cell.live_bridge = None
             cell.live_transport = None
             cell.live_metrics_logger = None
+            cell.build_checkin = None
 
         # Settings remains interactive while this boot worker is starting.
         # Serialize construction with the checkbox's hot-apply path so an
@@ -1814,6 +1847,45 @@ def _dashboard_url_from_api(api_base: str) -> str:
 def _pairing_url_from_api(api_base: str) -> str:
     """Pairing page lives at /devices on the dashboard origin."""
     return _dashboard_url_from_api(api_base).rstrip("/") + "/devices"
+
+
+def _open_build_checkin(cell: "_RuntimeCell", dashboard_url: str) -> None:
+    """Tray "Build check-in…": the newest unanswered end card, or the
+    web queue when this session has no check-in controller."""
+    controller = getattr(cell, "build_checkin", None)
+    if controller is not None:
+        controller.reopen()
+        return
+    webbrowser.open(web_queue_url(dashboard_url), new=2)
+
+
+def _remember_build_checkin_position(
+    state_dir: Path,
+    state: AgentState,
+    kind: str,
+    x: int,
+    y: int,
+) -> None:
+    """Persist where the player dragged a check-in card (GUI thread).
+
+    The write runs on a short-lived thread so a large ``agent.json``
+    never stalls the window that is being dragged.
+    """
+    positions = dict(state.build_checkin_card_positions)
+    positions[kind] = [int(x), int(y)]
+    state.build_checkin_card_positions = positions
+
+    def save() -> None:
+        try:
+            save_state(state_dir, state)
+        except OSError:
+            logging.getLogger("sc2tools_agent").warning(
+                "build_checkin_position_save_failed", exc_info=True,
+            )
+
+    threading.Thread(
+        target=save, name="sc2tools-checkin-position", daemon=True,
+    ).start()
 
 
 def _configure_logging(cfg: AgentConfig) -> Path:
@@ -2818,6 +2890,7 @@ class _RuntimeCell:
         "live_bridge",
         "live_transport",
         "live_metrics_logger",
+        "build_checkin",
         "obs_client",
         "obs_scene",
         "obs_lock",
@@ -2840,6 +2913,7 @@ class _RuntimeCell:
         self.live_bridge = None
         self.live_transport = None
         self.live_metrics_logger = None
+        self.build_checkin = None
         self.obs_client = None
         self.obs_scene = None
         # The GUI thread can toggle OBS while the boot worker is constructing
