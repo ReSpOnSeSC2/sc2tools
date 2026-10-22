@@ -900,6 +900,55 @@ def test_prefs_read_retries_with_backoff_until_it_answers() -> None:
     assert reads() == 5
 
 
+def test_a_prefs_ping_during_a_read_reads_again() -> None:
+    executor = ManualExecutor()
+    h = Harness(executor=executor)
+    before = dict(h.api.prefs)
+    # The read reaches the server just before the website's save does.
+    h.api.get_checkin_prefs = lambda: dict(before)
+    h.ctl.refresh_prefs()
+    h.pump()
+    del h.api.get_checkin_prefs
+    h.api.prefs = {"enabled": True, "askAtLoading": False, "askAfterGame": True}
+    h.ctl.on_intent_changed({"prefs": True})
+    h.pump()
+    assert len(executor.jobs) == 1  # one read at a time
+    executor.run_all()
+    h.pump()
+    assert len(executor.jobs) == 1  # its answer may be older: read again
+    executor.run_all()
+    h.pump()
+    executor.run_all()  # remembering it for the next start
+    assert h.ctl.prefs == CheckinPrefs(ask_at_loading=False)
+    assert h.saved_prefs == [CheckinPrefs(ask_at_loading=False)]
+    assert len(h.api.calls_to("get_checkin_prefs")) == 1
+
+
+def test_a_read_older_than_a_confirmed_save_is_not_applied() -> None:
+    executor = ManualExecutor()
+    h = Harness(executor=executor)
+    h.ctl.set_prefs(ask_at_loading=False)
+    h.pump()
+    executor.run_all()
+    h.pump()
+    executor.run_all()
+    first = dict(h.api.prefs)
+    h.api.get_checkin_prefs = lambda: dict(first)
+    h.ctl.refresh_prefs()  # answers with the first save
+    h.pump()
+    del h.api.get_checkin_prefs
+    h.ctl.set_prefs(ask_after_game=False)
+    h.pump()
+    executor.run(1)  # the second save lands first
+    h.pump()
+    executor.run_all()  # then the older read
+    h.pump()
+    executor.run_all()
+    both = CheckinPrefs(ask_at_loading=False, ask_after_game=False)
+    assert h.ctl.prefs == both
+    assert h.saved_prefs[-1] == both
+
+
 def test_prefs_read_is_not_retried_once_the_server_answered(h: Harness) -> None:
     h.api.fail_next("get_checkin_prefs", ConnectionError("offline"))
     h.advance(31)

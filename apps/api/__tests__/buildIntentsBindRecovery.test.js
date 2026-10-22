@@ -5,7 +5,8 @@
 /**
  * Build check-in ingest bind, failure and edge cases: a claim is released
  * when the bind fails after claiming (unless the game write did land),
- * records carrying an answer are claimed first, and a record keyed
+ * records of this match carrying an answer are claimed first (an earlier
+ * match's never outranks this one's), and a record keyed
  * mid-game (an agent that first saw the match late) still binds its answer
  * when it names the replay's opponent. Full app, real Mongo.
  */
@@ -170,6 +171,34 @@ describe("build check-in ingest bind: recovery and late keys", () => {
       await register(user, empty);
       await upload(user, game);
       expect((await gameRow(user, game.gameId)).buildIntent.gameKey).toBe(declared);
+    });
+
+    test("an earlier match's unbound declaration never outranks this match's own record", async () => {
+      const user = await newUser();
+      const game = ingestGame(6);
+      // Game 1 vs the same opponent ended in loading: declared, never uploaded.
+      const aborted = keyAt(game, -3 * 60_000);
+      const own = keyAt(game, -15_000);
+      await register(user, aborted);
+      await putLive(user, aborted, { action: "declare", buildKey: PHOENIX_KEY });
+      await register(user, own);
+      await upload(user, game);
+      expect((await liveRow(user, own)).gameId).toBe(game.gameId);
+      expect((await liveRow(user, aborted)).gameId).toBeNull();
+      const row = await gameRow(user, game.gameId);
+      expect(row.myBuild).toBe(UNCLASSIFIED);
+      expect(row.buildIntent).toEqual(expect.objectContaining({ status: "pending", gameKey: own }));
+    });
+
+    test("an earlier match's record still binds when it is the only one", async () => {
+      const user = await newUser();
+      const game = ingestGame(7);
+      const early = keyAt(game, -3 * 60_000);
+      await register(user, early);
+      await putLive(user, early, { action: "declare", buildKey: PHOENIX_KEY });
+      await upload(user, game);
+      expect((await liveRow(user, early)).gameId).toBe(game.gameId);
+      expect((await gameRow(user, game.gameId)).buildIntent.gameKey).toBe(early);
     });
   });
 

@@ -73,8 +73,12 @@ export function BuildCheckInQueue({
   const writer = useCheckInActions(newBuild?.request.gameId ?? "");
   const checkInNewBuild = useNewBuildCheckIn(writer);
 
+  // A closed queue unmounts its items: nothing it asked of them may be
+  // replayed when it opens again.
   useEffect(() => {
-    if (!open) setNewBuild(null);
+    if (open) return;
+    setNewBuild(null);
+    setSignal(null);
   }, [open]);
 
   // A handled game leaves the list on the next refresh; if it took the
@@ -197,6 +201,7 @@ export function BuildCheckInQueue({
                     item={item}
                     revision={revision}
                     signal={signal?.gameId === item.gameId ? signal : null}
+                    onSignalHandled={() => setSignal(null)}
                     onOpenGame={onClose}
                     onCreate={(side, query) => openNewBuild(item, side, query)}
                   />
@@ -307,12 +312,15 @@ function QueueItem({
   item,
   revision,
   signal,
+  onSignalHandled,
   onOpenGame,
   onCreate,
 }: {
   item: GameIntentState;
   revision: number;
   signal: PickerSignal | null;
+  /** The signal is applied once; a remount must not apply it again. */
+  onSignalHandled: () => void;
   onOpenGame: () => void;
   onCreate: (side: CheckInSide, query: string) => void;
 }) {
@@ -337,6 +345,8 @@ function QueueItem({
     if (!signal) return;
     setSelectedKey(signal.key);
     setPicking(signal.open);
+    onSignalHandled();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per signal
   }, [signal]);
 
   // Focus never falls out of the dialog when the control that had it

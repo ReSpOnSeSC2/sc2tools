@@ -617,4 +617,28 @@ describe("BuildCheckInQueue — opponent and Add new build", () => {
     );
     expect(within(dialog).getByRole("button", { name: "Confirm" }).hasAttribute("disabled")).toBe(true);
   });
+
+  it("reopens the picker after a failed check-in only once, not every time the queue opens", async () => {
+    harness.apiCall.mockRejectedValueOnce({ status: 0, message: "Failed to fetch" });
+    let dialog = setup(withOpponent({ opponent: null }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Change…" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Add new build…" }));
+    await screen.findByRole("dialog", { name: "Build editor" });
+    act(() => {
+      harness.editor?.onSaved?.("custom-two", { name: "Custom Two" } as never, {
+        reclassifyRequested: false,
+      });
+    });
+    await waitFor(() => expect(harness.toast.error).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole("button", { name: "Close editor" }));
+    expect(within(dialog).getByRole("listbox", { name: "Build you went for in PvZ" })).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog", { name: "Build check-ins" })).toBeNull();
+
+    dialog = openQueue();
+    await act(async () => {});
+    expect(within(dialog).queryByRole("listbox")).toBeNull();
+    expect(within(dialog).getByRole("button", { name: "Change…" })).toBeTruthy();
+  });
 });

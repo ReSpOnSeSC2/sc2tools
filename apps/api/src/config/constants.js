@@ -257,6 +257,9 @@ const BUILD_INTENT = Object.freeze({
   BIND_LOOKBACK_MS: 10 * 60 * 1000,
   BIND_LOOKAHEAD_MS: 60 * 1000,
   BIND_MAX_CANDIDATES: 5,
+  // Keys from this long before the replay's start can be the same match (a
+  // re-key during loading); older ones belong to an earlier match.
+  BIND_SAME_MATCH_SLACK_MS: 2 * 60 * 1000,
   // Games without a live record become pending only when this fresh.
   FRESH_PENDING_MS: 24 * 60 * 60 * 1000,
   PENDING_WINDOW_MS: 72 * 60 * 60 * 1000,

@@ -293,6 +293,28 @@ describe("BuildCheckInCard — Add new build", () => {
     );
   });
 
+  it("gives focus back to Change… once the new build is checked in", async () => {
+    harness.intent = intent({ opponent: opponentState() });
+    harness.buildOrder = BUILD_ORDER;
+    harness.apiCall.mockResolvedValue({
+      ...confirmedResponse("custom:proxy-gate", "Proxy Gate"),
+      build: { key: "custom:proxy-gate", name: "Proxy Gate", slug: "proxy-gate", source: "custom" },
+    });
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Change…" }));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Proxy Gate" } });
+    const add = screen.getByRole("button", { name: "Add “Proxy Gate” as a new build…" });
+    add.focus();
+    fireEvent.click(add);
+    const props = await editorProps();
+    act(() => {
+      props.onSaved?.("proxy-gate", { name: "Proxy Gate" } as never, { reclassifyRequested: false });
+    });
+    await waitFor(() => expect(screen.getByText("Planned build")).toBeTruthy());
+    // The picker (and the button that opened the editor) is gone.
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Change…" }));
+  });
+
   it("builds the opponent's side from their events and corrects it", async () => {
     harness.intent = intent({ opponent: opponentState() });
     harness.buildOrder = BUILD_ORDER;
@@ -493,6 +515,45 @@ describe("BuildCheckInCard — unchecked games and the opponent", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.getByTestId("build-checkin-card")).toBeTruthy();
     expect(screen.queryByRole("combobox")).toBeNull();
+  });
+});
+
+describe("BuildCheckInCard — Cancel on an unchecked game", () => {
+  it("closes your picker in one click once the opponent's build is corrected", async () => {
+    harness.intent = intent({ status: "none", suggestion: null, opponent: opponentState() });
+    harness.apiCall.mockResolvedValue({
+      ...intent({ status: "none", suggestion: null }),
+      options: undefined,
+      opponent: { ...CORRECTED, options: undefined },
+    });
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Set planned build" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change the opponent's build" }));
+    const listbox = screen.getByRole("listbox", { name: "Opponent's build in PvZ" });
+    fireEvent.click(
+      within(listbox).getAllByRole("option").find(
+        (node) => node.getAttribute("data-build-key") === "custom:ling-flood",
+      )!,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save Ling Flood" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("listbox", { name: "Opponent's build in PvZ" })).toBeNull(),
+    );
+    const yours = screen.getByRole("group", { name: "Your build" });
+    fireEvent.click(within(yours).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("listbox", { name: /Build you went for/ })).toBeNull();
+    // The corrected opponent keeps the full card: nothing to fold back to.
+    expect(screen.queryByTestId("build-checkin-compact")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Set planned build" }));
+  });
+
+  it("folds back to the compact action while nothing is set", () => {
+    harness.intent = intent({ status: "none", suggestion: null, opponent: opponentState() });
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Set planned build" }));
+    const yours = screen.getByRole("group", { name: "Your build" });
+    fireEvent.click(within(yours).getByRole("button", { name: "Cancel" }));
+    expect(screen.getByTestId("build-checkin-compact")).toBeTruthy();
   });
 });
 
