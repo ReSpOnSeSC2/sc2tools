@@ -239,6 +239,8 @@ class BuildCheckinController:
         self._prefs_remembered: Optional[CheckinPrefs] = prefs
         self._supported: Optional[bool] = None
         self._prefs_read_inflight = False
+        self._prefs_reread = False
+        self._prefs_write_gen = 0
         self._prefs_read_at: Optional[float] = None
         self._prefs_retry_at: Optional[float] = None
         self._prefs_failures = 0
@@ -1682,6 +1684,18 @@ class BuildCheckinController:
         card.options_stale = True
         if card.matchup:
             self._options.pop(card.matchup, None)
+        if side == "opponent":
+            # The web owns the opponent's build now: the row follows
+            # what it saves, never an older pick from this card.
+            card.opp_touched = False
+            card.opp_selection = None
+        else:
+            # A confirm on the web leaves the opponent's build alone and
+            # retires this card, so a corrected one is saved first.
+            change = opponent_write(card)
+            if change is not None:
+                card.ops.append(CardOp("opponent", send_opponent=True, opponent_key=change[0]))
+                self._run_card_ops(card)
         # Out of the browser's way. The draft stays; a confirm on the web
         # retires the card through its ping, and the tray brings it back.
         card.reshow_pending = False
@@ -1804,6 +1818,11 @@ class BuildCheckinController:
             return
         if op.notes is not None:
             card.notes_synced = op.notes
+        if op.send_opponent and not op.final and card.state != CARD_VISIBLE:
+            # The opponent draft is saved: follow the server from here, so
+            # a later correction on the web is never undone by this pick.
+            card.opp_touched = False
+            card.opp_selection = None
         if op.final:
             card.busy = False
             if op.action in ("confirm", "skip"):
@@ -1909,7 +1928,13 @@ class BuildCheckinController:
 
     def _handle_refresh_prefs(self, force: bool) -> None:
         now = self._clock()
-        if self._prefs_read_inflight or (
+        if self._prefs_read_inflight:
+            if force:
+                # The read on its way may predate the change (a ping from
+                # the website): read once more when it lands.
+                self._prefs_reread = True
+            return
+        if (
             not force
             and self._prefs_read_at is not None
             and now - self._prefs_read_at < PREFS_REFRESH_MIN_SEC
@@ -1917,10 +1942,16 @@ class BuildCheckinController:
             return
         self._prefs_read_inflight = True
         self._prefs_read_at = now
-        self._call(self._on_prefs_read, None, self._api.get_checkin_prefs)
+        self._call(self._on_prefs_read, self._prefs_write_gen, self._api.get_checkin_prefs)
 
-    def _on_prefs_read(self, _tag: Any, value: Any, error: Optional[BaseException]) -> None:
+    def _on_prefs_read(self, write_gen: int, value: Any, error: Optional[BaseException]) -> None:
         self._prefs_read_inflight = False
+        if self._prefs_reread and not (error is not None and _Failure(error).status == 404):
+            # Superseded: its answer may be older than the change.
+            self._prefs_reread = False
+            self._handle_refresh_prefs(True)
+            return
+        self._prefs_reread = False
         if error is not None:
             if _Failure(error).status == 404:
                 # This API predates build check-in: stay dormant.
@@ -1933,7 +1964,10 @@ class BuildCheckinController:
             return
         self._prefs_failures = 0
         self._prefs_retry_at = None
-        self._apply_server_prefs(prefs)
+        if write_gen == self._prefs_write_gen:
+            # Otherwise a save the server confirmed after this read went
+            # out is newer than its answer.
+            self._apply_server_prefs(prefs)
         self._set_supported(True)
 
     def _schedule_prefs_retry(self) -> None:
@@ -2025,6 +2059,7 @@ class BuildCheckinController:
                 self._apply_prefs(self._prefs_confirmed or CheckinPrefs())
         else:
             saved = parse_prefs(value) or target
+            self._prefs_write_gen += 1
             self._prefs_confirmed = saved
             self._remember_prefs(saved)
             self._set_supported(True)

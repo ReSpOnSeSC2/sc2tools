@@ -21,7 +21,12 @@ corresponding GitHub Release.
   check-in list closes when you open a game, its search box takes focus,
   and "Dismiss all" names every waiting game. Resumed games can't take a
   check-in, and a server hiccup while a replay uploads no longer loses a
-  pick made at the loading screen.
+  pick made at the loading screen. A game no longer takes an unused
+  loading-screen pick from an earlier match against the same opponent.
+  After you add a build from the game page, focus returns to "Change…".
+  Cancel closes your build list in one click once the opponent's build is
+  corrected. The check-in list no longer reopens a game's build list every
+  time it opens.
 
 - **Agent 0.18.13 / YouTube chat:** channel discovery now reads only the
   channel's structured live-broadcast listings, preventing recommended videos

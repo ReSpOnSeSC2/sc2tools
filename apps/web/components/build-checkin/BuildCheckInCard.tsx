@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from "react";
 import { ClipboardCheck, Info, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -148,6 +148,9 @@ export function BuildCheckInCard({
     />
   );
 
+  // The compact action stands in for an unchecked game until something on
+  // it is set; Cancel folds the expanded card back only when it can.
+  const collapsible = state?.status === "none" && !state.opponent?.applied;
   let content: ReactNode;
   if (!state) {
     content =
@@ -169,7 +172,7 @@ export function BuildCheckInCard({
       );
   } else if (!state.eligible) {
     content = <IneligibleLine state={state} />;
-  } else if (state.status === "none" && !state.opponent?.applied && !expanded) {
+  } else if (collapsible && !expanded) {
     content = (
       <div
         className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-dashed border-border bg-bg-surface px-4 py-3"
@@ -198,9 +201,7 @@ export function BuildCheckInCard({
         signal={signal}
         optionsLoading={request.isValidating}
         onRefetch={() => void request.mutate()}
-        onCollapse={
-          state.status === "none" && expanded ? () => setExpanded(false) : undefined
-        }
+        onCollapse={collapsible && expanded ? () => setExpanded(false) : undefined}
         onAddNew={openNewBuild}
       />
     );
@@ -422,19 +423,37 @@ function YourBuildRow({
   const selected: BuildOption | null =
     options?.find((option) => option.key === selectedKey) ?? null;
   const busy = actions.busy !== null;
+  const changeRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
 
   useEffect(() => {
     if (!signal) return;
     setSelectedKey(signal.key);
+    // Closing from outside (the new build was checked in) unmounts the
+    // picker's "Add new build…" button that opened the editor.
+    if (!signal.open) returnFocus.current = true;
     setPicking(signal.open);
   }, [signal]);
+
+  // The picker's controls unmount when it closes: give focus back to the
+  // "Change…" button so keyboard users keep their place.
+  useEffect(() => {
+    if (picking || !returnFocus.current) return;
+    returnFocus.current = false;
+    changeRef.current?.focus();
+  }, [picking]);
+
+  const closePicker = () => {
+    if (picking) returnFocus.current = true;
+    setPicking(false);
+  };
 
   const confirm = async (key: string, name: string) => {
     const pendingNotes = notes.dirty ? notes.draft : undefined;
     const outcome = await actions.confirm(key, name, pendingNotes);
     if (outcome.state) {
       if (pendingNotes !== undefined) notes.markSaved(outcome.state.notes ?? pendingNotes);
-      setPicking(false);
+      closePicker();
     } else {
       afterWrite(outcome.errorCode);
     }
@@ -445,7 +464,7 @@ function YourBuildRow({
     const outcome = await actions.skip(pendingNotes);
     if (outcome.state) {
       if (pendingNotes !== undefined) notes.markSaved(outcome.state.notes ?? pendingNotes);
-      setPicking(false);
+      closePicker();
     } else {
       afterWrite(outcome.errorCode);
     }
@@ -456,7 +475,7 @@ function YourBuildRow({
       onCollapse();
       return;
     }
-    setPicking(false);
+    closePicker();
     setSelectedKey(
       state.status === "confirmed" ? state.build?.key ?? null : suggestion?.key ?? null,
     );
@@ -522,6 +541,7 @@ function YourBuildRow({
         <StatusSummary
           state={state}
           busy={actions.busy}
+          changeRef={changeRef}
           onConfirmSuggestion={() =>
             suggestion && void confirm(suggestion.key, suggestion.name)
           }
@@ -539,12 +559,15 @@ function YourBuildRow({
 function StatusSummary({
   state,
   busy,
+  changeRef,
   onConfirmSuggestion,
   onChange,
   onSkip,
 }: {
   state: GameIntentState;
   busy: CheckInActions["busy"];
+  /** Whichever "Change…" / "Set planned build" button is shown. */
+  changeRef: Ref<HTMLButtonElement>;
   onConfirmSuggestion: () => void;
   onChange: () => void;
   onSkip: () => void;
@@ -582,7 +605,13 @@ function StatusSummary({
           >
             Confirm
           </Button>
-          <Button variant="secondary" size="sm" disabled={disabled} onClick={onChange}>
+          <Button
+            ref={changeRef}
+            variant="secondary"
+            size="sm"
+            disabled={disabled}
+            onClick={onChange}
+          >
             Change…
           </Button>
           <Button
@@ -617,7 +646,13 @@ function StatusSummary({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="sm" disabled={disabled} onClick={onChange}>
+          <Button
+            ref={changeRef}
+            variant="secondary"
+            size="sm"
+            disabled={disabled}
+            onClick={onChange}
+          >
             Change…
           </Button>
           <Button
@@ -641,7 +676,13 @@ function StatusSummary({
           ? "No set build. This game keeps the replay's own label."
           : "No planned build yet."}
       </p>
-      <Button variant="secondary" size="sm" disabled={disabled} onClick={onChange}>
+      <Button
+        ref={changeRef}
+        variant="secondary"
+        size="sm"
+        disabled={disabled}
+        onClick={onChange}
+      >
         Set planned build
       </Button>
     </div>

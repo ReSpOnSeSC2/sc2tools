@@ -373,6 +373,64 @@ def test_add_build_opens_the_game_on_the_web_and_steps_aside(h: Harness, side: s
     assert len(h.view.of("show_postgame")) == 1
 
 
+def test_add_build_saves_a_changed_opponent_before_leaving(h: Harness) -> None:
+    card_id = _accepted(h)
+    h.ctl.update_draft(card_id, PHOENIX, "my note", "zvp-roach-rush")
+    h.ctl.add_build(card_id, "you")
+    h.pump()
+    assert _game_bodies(h) == [
+        {"action": "opponent", "opponentBuildKey": "zvp-roach-rush"},
+        {"action": "notes", "notes": "my note"},
+    ]
+    # The new build is confirmed on the web, which leaves the opponent alone.
+    h.api.games[GID].update(
+        status="confirmed", origin="web",
+        build=option("custom:new-you", "New you build", source="custom"),
+    )
+    h.ctl.on_intent_changed({"gameId": GID})
+    h.pump()
+    assert h.api.games[GID]["opponent"]["build"]["key"] == "zvp-roach-rush"
+    assert len(_game_bodies(h)) == 2
+
+
+def test_a_saved_opponent_pick_follows_a_later_web_correction(h: Harness) -> None:
+    card_id = _accepted(h)
+    h.ctl.update_draft(card_id, PHOENIX, "", "zvp-roach-rush")
+    h.ctl.add_build(card_id, "you")
+    h.pump()
+    # Corrected again on the game page; the player comes back without saving a build.
+    h.api._set_opponent(h.api.games[GID], "zvp-ling-bane-bust")
+    h.ctl.on_intent_changed({"gameId": GID})
+    h.ctl.reopen()
+    h.pump()
+    assert _card(h).opponent.selection == "zvp-ling-bane-bust"
+    h.ctl.confirm(card_id, PHOENIX, "")
+    h.pump()
+    assert _game_bodies(h)[-1] == {"action": "confirm", "buildKey": PHOENIX}
+    assert h.api.games[GID]["opponent"]["build"]["key"] == "zvp-ling-bane-bust"
+
+
+def test_add_build_for_the_opponent_hands_the_row_to_the_web(h: Harness) -> None:
+    card_id = _accepted(h)
+    h.ctl.update_draft(card_id, PHOENIX, "", "zvp-roach-rush")
+    h.ctl.add_build(card_id, "opponent")
+    h.pump()
+    assert all("opponentBuildKey" not in body for body in _game_bodies(h))
+    # Created and counted on the web; the player's own build is still open.
+    h.api.games[GID]["opponent"]["options"] = OPP_OPTIONS + [
+        option("custom:new-opp", "New opponent build", source="custom"),
+    ]
+    h.api._set_opponent(h.api.games[GID], "custom:new-opp")
+    h.ctl.on_intent_changed({"gameId": GID})
+    h.ctl.reopen()
+    h.pump()
+    assert _card(h).opponent.selection == "custom:new-opp"
+    h.ctl.confirm(card_id, PHOENIX, "")
+    h.pump()
+    assert _game_bodies(h)[-1] == {"action": "confirm", "buildKey": PHOENIX}
+    assert h.api.games[GID]["opponent"]["build"]["key"] == "custom:new-opp"
+
+
 def test_add_build_drops_the_matchup_list_cache(h: Harness) -> None:
     card_id = _accepted(h)
     fetched = len(h.api.calls_to("get_build_options"))

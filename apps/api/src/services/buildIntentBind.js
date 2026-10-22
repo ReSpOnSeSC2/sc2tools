@@ -11,9 +11,12 @@
  * information is only taken when it is the only candidate. Records keyed
  * later in the game (an agent that first saw the match after it started, so
  * its key's time is late) join only when they carry an answer and name the
- * replay's opponent explicitly. Records are claimed answer first (post-game
- * answer, then declaration, then none), window records before late ones and
- * newest first within each.
+ * replay's opponent explicitly. Records that can belong to this match (keyed
+ * from 2 min before the replay's start on) are claimed answer first
+ * (post-game answer, then declaration, then none), window records before late
+ * ones and newest first within each; older records of an earlier match
+ * against the same opponent come after them, newest first, so an unbound
+ * answer from that match never lands on this game.
  *
  * Binding is first-wins on both sides: the record is claimed (``gameId:
  * null`` → gameId), then the game is written only while it has no
@@ -94,17 +97,13 @@ function namingOpponent(candidates, target) {
 }
 
 /**
- * Candidates acceptable for this opponent, in claim order (answer first,
- * then newest key first).
+ * Candidates acceptable for this opponent, newest key first.
  * @param {Array<Record<string, any>>} candidates newest key first
  * @param {unknown} opponentName
  */
 function acceptableCandidates(candidates, opponentName) {
   const matched = namingOpponent(candidates, normalizePlayerName(opponentName));
-  if (matched.length > 0) {
-    // Array#sort is stable: newest-first order holds within a rank.
-    return matched.sort((a, b) => answerRank(a) - answerRank(b));
-  }
+  if (matched.length > 0) return matched;
   return candidates.length === 1 && hasNoOpponentInfo(candidates[0]) ? candidates : [];
 }
 
@@ -162,12 +161,17 @@ class BuildIntentBind {
       .sort({ keyStartedAtMs: -1 })
       .limit(BUILD_INTENT.BIND_MAX_CANDIDATES)
       .toArray();
-    let acceptable = acceptableCandidates(candidates, opponent.displayName);
+    const matched = acceptableCandidates(candidates, opponent.displayName);
+    const sameFrom = startedAtMs - BUILD_INTENT.BIND_SAME_MATCH_SLACK_MS;
+    let same = matched.filter((doc) => doc.keyStartedAtMs >= sameFrom);
+    const older = matched.filter((doc) => !(doc.keyStartedAtMs >= sameFrom));
     // A post-game answer in the window outranks anything keyed later.
-    if (!acceptable.some((doc) => answerRank(doc) === 0)) {
+    if (!same.some((doc) => answerRank(doc) === 0)) {
       const late = await this._lateCandidates(userId, startedAtMs, dateMs, opponent.displayName);
-      acceptable = [...acceptable, ...late].sort((a, b) => answerRank(a) - answerRank(b));
+      same = [...same, ...late];
     }
+    // Array#sort is stable: window before late and newest first hold within a rank.
+    const acceptable = [...same.sort((a, b) => answerRank(a) - answerRank(b)), ...older];
     if (acceptable.length === 0 && !(created && fresh)) return null;
     const row = await this.games.findOne({ userId, gameId: game.gameId }, { projection: GAME_PROJECTION });
     if (!row) return null;
