@@ -11,6 +11,9 @@ module.exports = {
   testEnvironment: "node",
   testMatch: ["**/__tests__/**/*.test.js"],
   collectCoverageFrom: ["src/**/*.js"],
+  // Keeps every suite off Liquipedia so no run rewrites the committed
+  // data/ladder-map-pool.json seed (see the file's header).
+  setupFiles: ["<rootDir>/__tests__/helpers/blockLiquipedia.js"],
   coverageThreshold: {
     global: {
       lines: 50,
