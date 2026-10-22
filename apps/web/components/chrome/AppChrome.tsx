@@ -19,6 +19,7 @@ import {
   type NavIcon,
 } from "./appNav";
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
+import { ConnectionBanner, ConnectionStatusProvider } from "./ConnectionStatus";
 import { BuildCheckInAlert } from "@/components/build-checkin/BuildCheckInAlert";
 import { BuildCheckInProvider } from "@/components/build-checkin/BuildCheckInProvider";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -44,6 +45,9 @@ import { SiteStats } from "./SiteStats";
  *     immediately below groups live sync state with the public site counts.
  *   - BuildCheckInProvider wraps the shell so the header's check-in chip
  *     and every page's check-in surfaces share one realtime revision.
+ *   - ConnectionStatusProvider wraps everything in the app's SWRConfig;
+ *     its banner sits at the foot of the sticky bar, so "Reconnecting
+ *     to SC2 Tools…" stays in view while the API wakes up.
  *
  * /community is reachable signed-out (shared links), so the
  * shell's structure is identical either way and only its contents swap:
@@ -64,9 +68,11 @@ type CoachingMeProbe = {
 
 export function AppChrome({ children }: { children: ReactNode }) {
   return (
-    <BuildCheckInProvider>
-      <AppChromeShell>{children}</AppChromeShell>
-    </BuildCheckInProvider>
+    <ConnectionStatusProvider>
+      <BuildCheckInProvider>
+        <AppChromeShell>{children}</AppChromeShell>
+      </BuildCheckInProvider>
+    </ConnectionStatusProvider>
   );
 }
 
@@ -241,6 +247,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               </SignedOut>
             </div>
           </div>
+          <ConnectionBanner />
         </header>
 
         <SiteStats

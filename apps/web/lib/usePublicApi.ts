@@ -53,6 +53,9 @@ export function usePublicApi<T>(
       }
       return (await res.json()) as T;
     },
-    config,
+    // The app shell keeps previous data while a key changes. Public pages
+    // hand each record its own server-rendered fallbackData, so showing
+    // the last record instead would put review A on review B's page.
+    { keepPreviousData: false, ...config },
   );
 }

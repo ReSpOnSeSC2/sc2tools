@@ -17,6 +17,9 @@ vi.mock("@clerk/nextjs", () => ({
 
 vi.mock("swr", () => ({
   default: harness.useSWR,
+  // useApi reads the cache to tell this key's data from kept previous data.
+  useSWRConfig: () => ({ cache: new Map() }),
+  unstable_serialize: (key: unknown) => JSON.stringify(key),
 }));
 
 import { API_BASE, apiCall, useApi } from "../clientApi";
