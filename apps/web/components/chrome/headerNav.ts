@@ -7,8 +7,9 @@ import type { MobileNavLink } from "./MobileNav";
  *
  * Order: Dashboard, Custom builds, Guides (when the build guides are
  * on), Community, Reviews (when the review rollout shows it to this
- * viewer), Settings, then Admin for admins. Guides took the slot of the
- * retired Meta radar.
+ * viewer), Help, Settings, then Admin for admins. Guides took the slot
+ * of the retired Meta radar. Help is public, so signed-out visitors see
+ * Guides, Community, Reviews and Help.
  */
 
 export const GUIDES_NAV_LINK: MobileNavLink = { href: "/guides", label: "Guides", auth: "any" };
@@ -20,6 +21,7 @@ const LEADING_LINKS: readonly MobileNavLink[] = [
   { href: "/builds", label: "Custom builds", auth: "in" },
 ];
 const COMMUNITY_LINK: MobileNavLink = { href: "/community", label: "Community", auth: "any" };
+export const HELP_NAV_LINK: MobileNavLink = { href: "/help", label: "Help", auth: "any" };
 const SETTINGS_LINK: MobileNavLink = { href: "/settings", label: "Settings", auth: "in" };
 
 export interface HeaderNavOptions {
@@ -35,7 +37,7 @@ export interface HeaderNavOptions {
  * Header links for one viewer.
  *
  * Example: `headerNavLinks({ guides: true, reviews: false, isAdmin: false })`
- * → Dashboard, Custom builds, Guides, Community, Settings.
+ * → Dashboard, Custom builds, Guides, Community, Help, Settings.
  */
 export function headerNavLinks(options: HeaderNavOptions): readonly MobileNavLink[] {
   return [
@@ -43,6 +45,7 @@ export function headerNavLinks(options: HeaderNavOptions): readonly MobileNavLin
     ...(options.guides ? [GUIDES_NAV_LINK] : []),
     COMMUNITY_LINK,
     ...(options.reviews ? [REVIEWS_NAV_LINK] : []),
+    HELP_NAV_LINK,
     SETTINGS_LINK,
     ...(options.isAdmin ? [ADMIN_NAV_LINK] : []),
   ];

@@ -41,7 +41,8 @@ const RESOURCES_LINKS: readonly FooterLink[] = [
   { href: "/stream-studio/learn", label: "Stream Studio crash course" },
   { href: YOUTUBE_CHANNEL_URL, label: "YouTube build videos", external: true },
   { href: "/community", label: "Community" },
-  { href: "/welcome", label: "Getting started" },
+  { href: "/help", label: "Help" },
+  { href: "/help/getting-started", label: "Getting started" },
   { href: "/donate", label: "Donate / support" },
   { href: "/sign-in", label: "Sign in" },
 ];

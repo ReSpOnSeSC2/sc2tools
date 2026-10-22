@@ -1,0 +1,30 @@
+import { COMMAND_GROUPS } from "@/lib/multichat/commandsGuide";
+import type { HelpWidgetId } from "./types";
+
+/**
+ * Searchable text for each embeddable help widget, so a reader who
+ * types "!rank" finds the article that embeds the commands card. The
+ * components themselves live in components/help/HelpWidget.tsx.
+ */
+const WIDGET_TEXT: Record<HelpWidgetId, () => string> = {
+  "chat-commands": () =>
+    COMMAND_GROUPS.flatMap((group) => [
+      group.title,
+      group.intro,
+      ...group.commands.flatMap((command) => [command.syntax, command.aliases ?? "", command.description]),
+    ])
+      .filter(Boolean)
+      .join(" "),
+};
+
+/** Every widget id an article may embed. */
+export const HELP_WIDGET_IDS = Object.keys(WIDGET_TEXT) as HelpWidgetId[];
+
+/**
+ * Plain text for a widget's content.
+ *
+ * Example: `helpWidgetText("chat-commands")` → "Predictions While my next game … !win !w …".
+ */
+export function helpWidgetText(id: HelpWidgetId): string {
+  return WIDGET_TEXT[id]();
+}

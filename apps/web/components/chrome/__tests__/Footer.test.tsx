@@ -31,6 +31,12 @@ describe("Footer resources", () => {
     expect(screen.getByRole("link", { name: "Stream Studio crash course" }).getAttribute("href")).toBe("/stream-studio/learn");
   });
 
+  it("links the help center and its getting-started article", () => {
+    render(<Footer />);
+    expect(screen.getByRole("link", { name: "Help" }).getAttribute("href")).toBe("/help");
+    expect(screen.getByRole("link", { name: "Getting started" }).getAttribute("href")).toBe("/help/getting-started");
+  });
+
   it("always links the channel's build-order videos as an external link", () => {
     render(<Footer />);
     const youtube = screen.getByRole("link", { name: "YouTube build videos" });

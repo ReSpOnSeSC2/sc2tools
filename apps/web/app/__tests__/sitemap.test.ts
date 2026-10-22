@@ -8,6 +8,7 @@ vi.mock("@/lib/guides/api", () => ({ fetchGuideSitemap: mocks.fetchGuideSitemap 
 import sitemap, { revalidate } from "@/app/sitemap";
 import { communitySitemapRows, finalizeSitemap, guideSitemapRows, SITEMAP_MAX_URLS } from "@/lib/sitemapEntries";
 import { FIXTURE_SITEMAP } from "@/lib/guides/__fixtures__";
+import { ALL_HELP_ARTICLES } from "@/lib/help";
 
 const SITE = "https://sc2tools.com";
 const COMMUNITY = {
@@ -89,6 +90,16 @@ describe("sitemap", () => {
     expect(list).toContain(`${SITE}/reviews`);
     expect(list).toContain(`${SITE}/reviews/e2eReviewFixture`);
     expect(list).not.toContain(`${SITE}/reviews/short`);
+  });
+
+  it("lists the help center and every help article, dated by the article", async () => {
+    const rows = await sitemap();
+    const list = rows.map((row) => row.url);
+    expect(list).toContain(`${SITE}/help`);
+    for (const article of ALL_HELP_ARTICLES) {
+      const row = rows.find((entry) => entry.url === `${SITE}/help/${article.slug}`);
+      expect(row?.lastModified, article.slug).toEqual(new Date(article.updated));
+    }
   });
 
   it("dates static pages by their last content change, never the request time", async () => {

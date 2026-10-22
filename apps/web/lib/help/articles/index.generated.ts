@@ -1,0 +1,27 @@
+// generated — run npm run help:index
+//
+// Written by scripts/gen-help-index.mjs from every
+// lib/help/articles/<category>/<slug>.ts file. Do not edit by hand.
+
+import type { HelpArticle } from "../types";
+import analyzer_dashboardAndAnalyzer from "./analyzer/dashboard-and-analyzer";
+import builds_buildCheckIn from "./builds/build-check-in";
+import gettingStarted_gettingStarted from "./getting-started/getting-started";
+import gettingStarted_howToUseHelp from "./getting-started/how-to-use-help";
+import streamStudio_multiPlatformChat from "./stream-studio/multi-platform-chat";
+import streamStudio_obsOverlaySetup from "./stream-studio/obs-overlay-setup";
+import streamStudio_streamDock from "./stream-studio/stream-dock";
+import streamStudio_viewerEngagement from "./stream-studio/viewer-engagement";
+import troubleshooting_troubleshootingAndSupport from "./troubleshooting/troubleshooting-and-support";
+
+export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
+  analyzer_dashboardAndAnalyzer,
+  builds_buildCheckIn,
+  gettingStarted_gettingStarted,
+  gettingStarted_howToUseHelp,
+  streamStudio_multiPlatformChat,
+  streamStudio_obsOverlaySetup,
+  streamStudio_streamDock,
+  streamStudio_viewerEngagement,
+  troubleshooting_troubleshootingAndSupport,
+];
