@@ -9,8 +9,9 @@
 // MAX_PAGES) and concatenate. Re-fetches on dbRev / path changes.
 
 import { useAuth } from "@clerk/nextjs";
-import { useEffect, useMemo, useState } from "react";
-import { API_BASE } from "@/lib/clientApi";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { API_BASE, buildApiError, type ClientApiError } from "@/lib/clientApi";
+import { toClientApiError } from "@/lib/requestErrors";
 
 type CursorPage<T> = { items: T[]; nextBefore: string | null };
 
@@ -21,12 +22,15 @@ const BEFORE_PARAM = "before";
 export type UsePaginatedResult<T> = {
   items: T[];
   isLoading: boolean;
-  error: Error | null;
+  /** Same shape as useApi's errors, so RequestError can explain it. */
+  error: ClientApiError | null;
   pagesFetched: number;
   hitMaxPages: boolean;
+  /** Fetch every page again (a Retry button). */
+  mutate: () => void;
 };
 
-type AccountBoundState<T> = UsePaginatedResult<T> & {
+type AccountBoundState<T> = Omit<UsePaginatedResult<T>, "mutate"> & {
   requestKey: string | null;
 };
 
@@ -61,11 +65,14 @@ export function useApiPaginated<T>(
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   const pageLimit = opts.pageLimit || DEFAULT_PAGE_LIMIT;
   const maxPages = opts.maxPages || DEFAULT_MAX_PAGES;
+  // Bumped by Retry; part of the request identity so the effect re-runs.
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const requestKey = useMemo(
     () => isLoaded && isSignedIn && userId && path
-      ? JSON.stringify([userId, path, dbRev, pageLimit, maxPages])
+      ? JSON.stringify([userId, path, dbRev, pageLimit, maxPages, attempt])
       : null,
-    [dbRev, isLoaded, isSignedIn, maxPages, pageLimit, path, userId],
+    [attempt, dbRev, isLoaded, isSignedIn, maxPages, pageLimit, path, userId],
   );
   const [state, setState] = useState<AccountBoundState<T>>(() =>
     emptyState(requestKey, !isLoaded || requestKey !== null),
@@ -97,10 +104,9 @@ export function useApiPaginated<T>(
             cache: "no-store",
             signal: ctrl.signal,
           });
-          if (!res.ok) {
-            const text = await safeText(res);
-            throw new Error(text || `HTTP ${res.status}`);
-          }
+          // Same envelope parsing as useApi: a friendly message and the
+          // request id, never the raw response body.
+          if (!res.ok) throw await buildApiError(res);
           const body: CursorPage<T> | T[] = await res.json();
           const page: CursorPage<T> = Array.isArray(body)
             ? { items: body, nextBefore: null }
@@ -131,7 +137,7 @@ export function useApiPaginated<T>(
         setState({
           ...emptyState<T>(requestKey, false),
           isLoading: false,
-          error: err instanceof Error ? err : new Error(String(err)),
+          error: toClientApiError(err),
         });
       }
     })();
@@ -146,9 +152,9 @@ export function useApiPaginated<T>(
   // render: if Clerk's account changed, never expose pages tagged for the old
   // request while its AbortController is being retired.
   if (state.requestKey !== requestKey) {
-    return emptyState(requestKey, !isLoaded || requestKey !== null);
+    return { ...emptyState<T>(requestKey, !isLoaded || requestKey !== null), mutate: retry };
   }
-  return state;
+  return { ...state, mutate: retry };
 }
 
 function appendQuery(path: string, cursor: string | null, pageLimit: number): string {
@@ -156,12 +162,4 @@ function appendQuery(path: string, cursor: string | null, pageLimit: number): st
   const parts = [`limit=${pageLimit}`];
   if (cursor) parts.push(`${BEFORE_PARAM}=${encodeURIComponent(cursor)}`);
   return `${path}${sep}${parts.join("&")}`;
-}
-
-async function safeText(res: Response): Promise<string> {
-  try {
-    return await res.text();
-  } catch {
-    return res.statusText || "";
-  }
 }

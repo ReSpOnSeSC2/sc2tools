@@ -208,3 +208,109 @@ export function filtersToQuery(p: Record<string, unknown>): string {
   const q = usp.toString();
   return q ? `?${q}` : "";
 }
+
+/** One filter that narrows the analyzer beyond the defaults. */
+export type ActiveFilter = {
+  /** Stable id: race, build, opp_race, opp_strategy, map, mmr, regions, map_pool, game_size, length. */
+  key: string;
+  /** What the filter is, e.g. "My race". */
+  label: string;
+  /** What it is set to, e.g. "Protoss". */
+  value: string;
+  /** Merge into the filters to clear just this one. */
+  clearPatch: Partial<AnalyzerFilters>;
+};
+
+const RACE_NAMES: Record<string, string> = {
+  P: "Protoss",
+  T: "Terran",
+  Z: "Zerg",
+  R: "Random",
+};
+
+function raceName(code: string): string {
+  return RACE_NAMES[code.trim().charAt(0).toUpperCase()] ?? code;
+}
+
+function rangeLabel(min: number | undefined, max: number | undefined, unit = ""): string | null {
+  if (min !== undefined && max !== undefined) return `${min}–${max}${unit}`;
+  if (min !== undefined) return `${min}+${unit}`;
+  if (max !== undefined) return `under ${max}${unit}`;
+  return null;
+}
+
+/**
+ * Every filter that narrows the analyzer beyond its defaults (the date
+ * preset and the too-short toggle aside), in the order the filter bar
+ * shows them, each with the patch that clears it. Empty states list
+ * these so "nothing matches" says why.
+ *
+ * Example: `describeActiveFilters({ race: "P", map_pool: "all" })` →
+ * `[{ key: "race", label: "My race", value: "Protoss", clearPatch: { race: undefined } },
+ *   { key: "map_pool", label: "Games", value: "Ladder and custom", clearPatch: { map_pool: "ladder" } }]`.
+ */
+export function describeActiveFilters(filters: AnalyzerFilters): ActiveFilter[] {
+  const out: ActiveFilter[] = [];
+  if (filters.race) {
+    out.push({ key: "race", label: "My race", value: raceName(filters.race), clearPatch: { race: undefined } });
+  }
+  if (filters.build) {
+    out.push({ key: "build", label: "My build", value: filters.build, clearPatch: { build: undefined } });
+  }
+  if (filters.opp_race) {
+    out.push({
+      key: "opp_race",
+      label: "Opponent race",
+      value: raceName(filters.opp_race),
+      clearPatch: { opp_race: undefined, opp_strategy: undefined },
+    });
+  }
+  if (filters.opp_strategy) {
+    out.push({
+      key: "opp_strategy",
+      label: "Opponent strategy",
+      value: filters.opp_strategy,
+      clearPatch: { opp_strategy: undefined },
+    });
+  }
+  if (filters.map) {
+    out.push({ key: "map", label: "Map", value: filters.map, clearPatch: { map: undefined } });
+  }
+  const mmr = rangeLabel(filters.mmr_min, filters.mmr_max);
+  if (mmr) {
+    out.push({ key: "mmr", label: "MMR", value: mmr, clearPatch: { mmr_min: undefined, mmr_max: undefined } });
+  }
+  const regions = (filters.regions ?? "")
+    .split(",")
+    .map((region) => region.trim())
+    .filter(Boolean);
+  if (regions.length > 0 && !ANALYZER_REGIONS.every((region) => regions.includes(region))) {
+    out.push({ key: "regions", label: "Regions", value: regions.join(", "), clearPatch: { regions: undefined } });
+  }
+  if (filters.map_pool && filters.map_pool !== DEFAULT_ANALYZER_FILTERS.map_pool) {
+    out.push({
+      key: "map_pool",
+      label: "Games",
+      value: filters.map_pool === "nonladder" ? "Custom only" : "Ladder and custom",
+      clearPatch: { map_pool: DEFAULT_ANALYZER_FILTERS.map_pool },
+    });
+  }
+  if (filters.game_size && filters.game_size !== DEFAULT_ANALYZER_FILTERS.game_size) {
+    out.push({
+      key: "game_size",
+      label: "Players",
+      value: filters.game_size === "team" ? "Team games" : "1v1 and team",
+      clearPatch: { game_size: DEFAULT_ANALYZER_FILTERS.game_size },
+    });
+  }
+  const length = rangeLabel(filters.min_minutes, filters.max_minutes, " min");
+  if (length) {
+    out.push({
+      key: "length",
+      label: "Length",
+      value: length,
+      clearPatch: { min_minutes: undefined, max_minutes: undefined },
+    });
+  }
+  return out;
+}

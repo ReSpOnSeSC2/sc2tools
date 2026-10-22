@@ -2,6 +2,22 @@
 
 import { BuildPagination } from "@/components/builds/BuildPagination";
 import { useCustomBuildPage } from "@/components/builds/useCustomBuildPage";
+import { RequestError } from "@/components/ui/RequestError";
+import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
+
+/** Placeholder build cards in the same grid as the loaded ones. */
+function BuildCardsSkeleton() {
+  return (
+    <SkeletonRegion label="Loading your builds" className="grid gap-3 md:grid-cols-2">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} aria-hidden className="space-y-2 rounded-xl border border-border bg-bg-surface p-5">
+          <SkeletonBar className="h-5 w-48 max-w-full" />
+          <SkeletonBar className="h-4 w-32" />
+        </div>
+      ))}
+    </SkeletonRegion>
+  );
+}
 
 export function BuildsPanel() {
   const page = useCustomBuildPage();
@@ -17,8 +33,8 @@ export function BuildsPanel() {
   }
   return (
     <>
-    {isLoading ? <p className="text-text-muted">Loading…</p> : null}
-    {error ? <p role="alert" className="text-danger">Failed: {error.message} <button type="button" onClick={() => void page.mutate().catch(() => undefined)}>Retry</button></p> : null}
+    {isLoading ? <BuildCardsSkeleton /> : null}
+    {error ? <RequestError error={error} onRetry={() => page.mutate()} /> : null}
     {!isLoading && !error && data?.items.length === 0 ? <p className="text-text-muted">This page has no saved builds. Go to Previous to see the rest of your library.</p> : null}
     <div className="grid gap-3 md:grid-cols-2">
       {data?.items.map((b) => (

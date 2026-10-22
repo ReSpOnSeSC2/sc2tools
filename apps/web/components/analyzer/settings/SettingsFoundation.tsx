@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { Section } from "@/components/ui/Section";
 import { fmtAgo } from "@/lib/format";
 
@@ -67,13 +68,8 @@ const QUICK_LINKS: ReadonlyArray<{
 export function SettingsFoundation() {
   const me = useApi<Me>("/v1/me");
 
-  if (me.isLoading) return <Skeleton rows={3} />;
-  if (!me.data) {
-    return (
-      <Card>
-        <p className="text-danger">Couldn&rsquo;t load your account.</p>
-      </Card>
-    );
+  if (!hasQueryData(me)) {
+    return <QueryState q={me} skeleton={<Skeleton rows={3} />} errorTitle="Account" />;
   }
 
   const games = me.data.games ?? { total: 0, latest: null };

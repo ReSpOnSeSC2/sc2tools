@@ -3,6 +3,7 @@
 import { useApi } from "@/lib/clientApi";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 
 type Me = {
   email?: string;
@@ -12,8 +13,9 @@ type Me = {
 
 export function WizardStepsEarly() {
   const me = useApi<Me>("/v1/me");
-  if (me.isLoading) return <Skeleton rows={2} />;
-  const total = me.data?.games?.total || 0;
+  // Without the account answer, "0 games synced" would be a guess.
+  if (!hasQueryData(me)) return <QueryState q={me} skeleton={<Skeleton rows={2} />} />;
+  const total = me.data.games?.total || 0;
 
   return (
     <div className="space-y-3 text-sm">

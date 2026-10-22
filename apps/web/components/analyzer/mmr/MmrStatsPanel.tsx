@@ -6,6 +6,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
+import { QueryState } from "@/components/ui/QueryState";
 import { MmrBucketChart, type MmrBucketRow } from "./MmrBucketChart";
 import { MmrRangeFilter } from "./MmrRangeFilter";
 
@@ -98,9 +99,10 @@ export function MmrStatsPanel({
     return filtersToQuery(params);
   }, [filters, mmrDelta]);
 
-  const { data, isLoading } = useApi<BucketResponse>(
+  const bucketsApi = useApi<BucketResponse>(
     `${endpoint}${query}#${dbRev}`,
   );
+  const { data } = bucketsApi;
 
   const rows: MmrBucketRow[] = useMemo(() => {
     const buckets = data?.buckets || [];
@@ -143,16 +145,16 @@ export function MmrStatsPanel({
         onMmrDelta={setMmrDelta}
       />
       <div className="mt-4">
-        {isLoading ? (
-          <Skeleton rows={4} />
-        ) : (
-          <MmrBucketChart
-            rows={rows}
-            minSampleSize={minGames}
-            emptyTitle={emptyTitle}
-            emptySub={emptySub}
-          />
-        )}
+        <QueryState q={bucketsApi} skeleton={<Skeleton rows={4} />} filtered>
+          {() => (
+            <MmrBucketChart
+              rows={rows}
+              minSampleSize={minGames}
+              emptyTitle={emptyTitle}
+              emptySub={emptySub}
+            />
+          )}
+        </QueryState>
       </div>
     </Card>
   );

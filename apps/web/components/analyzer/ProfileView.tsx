@@ -17,7 +17,9 @@ import {
   type MergedIdentity,
   type GlobalPlayerIdentity,
 } from "@/lib/opponentGroups";
-import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
+import { Card, EmptyState, Stat, WrBar } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
+import { isNotFoundError } from "@/lib/requestErrors";
 import { pct1, wrColor } from "@/lib/format";
 import {
   isBarcodeName,
@@ -51,6 +53,11 @@ import { OpponentIdentityCandidates } from "./OpponentIdentityCandidates";
 import { PlayerChannelLinks } from "./PlayerChannelLinks";
 import { usePlayerChannels } from "./usePlayerChannels";
 import { OpponentIdentitySubmission } from "./OpponentIdentitySubmission";
+import {
+  DOSSIER_ERROR_COPY,
+  DossierSkeleton,
+  OpponentNotFound,
+} from "./OpponentDossierStates";
 
 type OpponentProfileResp = {
   globalIdentity?: GlobalPlayerIdentity | null;
@@ -166,9 +173,10 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
     (raw): raw is boolean => typeof raw === "boolean",
   );
   const profileQuery = buildProfileQuery(filters, groupByPlayer);
-  const { data, isLoading, mutate } = useApi<OpponentProfileResp>(
+  const profile = useApi<OpponentProfileResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}`,
   );
+  const { data, mutate } = profile;
   // Per-race SC2Pulse breakdown — fetched in parallel (live, cached
   // server-side) so it doesn't block the main profile render. Drives
   // the header MMR chip + the "Ladder MMR by race" panel.
@@ -221,8 +229,20 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   };
   const channelsFor = usePlayerChannels([channelProfileIdentity]);
 
-  if (isLoading) return <Skeleton rows={6} />;
-  if (!data) return <EmptyState title="Opponent not found" sub={pulseId} />;
+  // A 404 means "not in your history"; a 503, 5xx or dropped connection
+  // means the dossier couldn't be built right now, and gets Retry.
+  if (!hasQueryData(profile)) {
+    return (
+      <QueryState
+        q={profile}
+        skeleton={<DossierSkeleton />}
+        filtered
+        errorCopy={DOSSIER_ERROR_COPY}
+        renderError={(error) => (isNotFoundError(error) ? <OpponentNotFound /> : undefined)}
+      />
+    );
+  }
+  if (!data) return <OpponentNotFound />;
   const filterActive = !!selectedMap || !!selectedBuildMatchup;
   const t = filterActive
     ? totalsFromGames(filteredGames)

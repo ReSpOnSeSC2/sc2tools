@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
 
 type MixPoint = {
@@ -145,9 +146,10 @@ export function MixOverTimeChart({
     }),
     [filters, bucket, tz, hasMatchupFilter, opponentRace],
   );
-  const { data, isLoading } = useApi<MixResponse>(
+  const mixApi = useApi<MixResponse>(
     `/v1/${endpoint}${filtersToQuery(params)}#${dbRev}`,
   );
+  const { data } = mixApi;
   const [topN, setTopN] = useState<number>(DEFAULT_TOP_N);
   // The hovered/tapped period lives in a dedicated panel below the
   // matrix instead of a floating tooltip — on narrow mobile viewports
@@ -197,13 +199,13 @@ export function MixOverTimeChart({
     <TopNToggle value={topN} onChange={setTopN} />
   );
 
-  if (isLoading) {
+  if (!hasQueryData(mixApi)) {
     return (
       <Card title={title} right={headerControls}>
         {matchupControl ? (
           <div className="-mt-1 mb-3 flex justify-end">{matchupControl}</div>
         ) : null}
-        <Skeleton rows={3} />
+        <QueryState q={mixApi} skeleton={<Skeleton rows={3} />} filtered />
       </Card>
     );
   }

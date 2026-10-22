@@ -6,6 +6,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { fmtMmr, pct1, wrColor } from "@/lib/format";
 import { MmrRangeFilter } from "./MmrRangeFilter";
 
@@ -66,9 +67,10 @@ export function BuildMatchupHeatmap() {
     return filtersToQuery(params);
   }, [filters, mmrDelta]);
 
-  const { data, isLoading } = useApi<ServerResponse>(
+  const heatmapApi = useApi<ServerResponse>(
     `/v1/mmr-stats/build-vs-strategy${query}#${dbRev}`,
   );
+  const { data } = heatmapApi;
 
   const bucketStats = useMemo(() => {
     const counts = new Map<number, { label: string; games: number }>();
@@ -142,8 +144,10 @@ export function BuildMatchupHeatmap() {
               active={activeBucket}
               onPick={setSelectedBucket}
             />
-          ) : (
+          ) : hasQueryData(heatmapApi) ? (
             <span className="text-xs text-text-dim">no MMR data yet</span>
+          ) : (
+            <span className="text-xs text-text-dim">—</span>
           )}
         </div>
         <div className="flex flex-col gap-1">
@@ -161,8 +165,8 @@ export function BuildMatchupHeatmap() {
       </div>
 
       <div className="mt-4">
-        {isLoading ? (
-          <Skeleton rows={4} />
+        {!hasQueryData(heatmapApi) ? (
+          <QueryState q={heatmapApi} skeleton={<Skeleton rows={4} />} filtered />
         ) : grid.builds.length === 0 ? (
           <EmptyState
             title="No matchups in this bucket yet"

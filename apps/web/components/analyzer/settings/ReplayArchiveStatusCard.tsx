@@ -13,6 +13,7 @@ import { useApi } from "@/lib/clientApi";
 import { fmtAgo } from "@/lib/format";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { RequestError } from "@/components/ui/RequestError";
 import { Section } from "@/components/ui/Section";
 
 export type ReplayArchiveStatus = {
@@ -57,6 +58,19 @@ export function ReplayArchiveStatusCard() {
             <Cloud className="h-5 w-5 animate-pulse text-accent-cyan" aria-hidden />
             Checking replay archive readiness&hellip;
           </div>
+        </Card>
+      ) : request.error && !request.data ? (
+        <Card>
+          <RequestError
+            error={request.error}
+            onRetry={() => request.mutate()}
+            copy={{
+              server: {
+                title: "Archive status temporarily unavailable",
+                body: "Your replay data has not been changed. Try again in a moment.",
+              },
+            }}
+          />
         </Card>
       ) : status ? (
         <ArchiveStatus status={status} />

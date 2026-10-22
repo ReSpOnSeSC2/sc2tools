@@ -30,7 +30,7 @@ describe("BuildCard replay-stat states", () => {
   it("does not describe an unfinished request as zero matches", () => {
     render(<BuildCard build={build({ statsState: "loading" })} {...callbacks} />);
 
-    expect(screen.getByText("Loading…")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Loading record");
     expect(screen.queryByText("No classified replays")).toBeNull();
   });
 

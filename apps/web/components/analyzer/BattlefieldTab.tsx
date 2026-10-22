@@ -5,11 +5,14 @@ import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
-import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
+import { Card, WrBar } from "@/components/ui/Card";
+import { QueryState } from "@/components/ui/QueryState";
+import { SkeletonRows } from "@/components/ui/Skeleton";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { MapLabel } from "@/components/maps/MapArtwork";
 import { MapPreviewDialog } from "@/components/maps/MapPreviewDialog";
+import { NoFilterMatches } from "./EmptyStates";
 
 type Row = {
   /** Matchup label ("vs P"). */
@@ -143,8 +146,12 @@ export function BattlefieldTab() {
     [muRows, muSort],
   );
 
-  if (muApi.isLoading || mapMuApi.isLoading)
-    return <Skeleton rows={6} />;
+  // Rows the Min games picker is hiding, for the empty states' "Lower
+  // Min games to 1" offer.
+  const hiddenMatchups = (muApi.data?.length ?? 0) - muRows.length;
+  const hiddenMapCells =
+    (mapMuApi.data?.length ?? 0) -
+    mapMatchupGroups.reduce((n, g) => n + g.cells.length, 0);
 
   return (
     <div className="space-y-5">
@@ -153,215 +160,234 @@ export function BattlefieldTab() {
       </div>
 
       <Card title="Matchups">
-        {sortedMu.length === 0 ? (
-          <EmptyState title="No matchups match" />
-        ) : (
-          <>
-            {/* Mobile — stacked rows. */}
-            <ul className="divide-y divide-border md:hidden">
-              {sortedMu.map((m) => (
-                <li key={m.name} className="flex flex-col gap-1.5 px-1 py-2.5">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-sm font-medium text-text">
-                      {m.name}
-                    </span>
-                    <span
-                      className="font-mono text-sm tabular-nums"
-                      style={{ color: wrColor(m.winRate, m.total) }}
-                    >
-                      {pct1(m.winRate)}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 text-micro text-text-dim">
-                    <span>
-                      <span className="text-success">{m.wins}W</span> ·{" "}
-                      <span className="text-danger">{m.losses}L</span> ·{" "}
-                      {m.total} games
-                    </span>
-                    <FormSparkline results={m.recent} />
-                  </div>
-                  <WrBar wins={m.wins} losses={m.losses} />
-                </li>
-              ))}
-            </ul>
-
-            {/* Desktop — table. ``table-fixed`` + explicit colgroup
-                so the W/L/Games/WR columns pack tightly and don't grab
-                equal shares of leftover space. */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full table-fixed text-sm">
-                <colgroup>
-                  <col />
-                  <col style={{ width: "3.5rem" }} />
-                  <col style={{ width: "3.5rem" }} />
-                  <col style={{ width: "4.5rem" }} />
-                  <col style={{ width: "4.5rem" }} />
-                  <col style={{ width: "7rem" }} />
-                </colgroup>
-                <thead className="bg-bg-elevated">
-                  <tr>
-                    <SortableTh col="name" label="Matchup" {...muSort} />
-                    <SortableTh col="wins" label="W" {...muSort} align="right" />
-                    <SortableTh col="losses" label="L" {...muSort} align="right" />
-                    <SortableTh col="total" label="Games" {...muSort} align="right" />
-                    <SortableTh col="winRate" label="WR" {...muSort} align="right" />
-                    <th className="px-3 py-2 text-right text-micro uppercase text-text-dim">
-                      Recent
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedMu.map((m) => (
-                    <tr key={m.name} className="border-t border-border">
-                      <td className="truncate px-3 py-1.5 font-medium" title={m.name}>
+        <QueryState
+          q={muApi}
+          skeleton={<SkeletonRows rows={4} label="Loading matchups" />}
+          filtered
+          isEmpty={() => sortedMu.length === 0}
+          empty={
+            <NoFilterMatches
+              title="No matchups match these filters"
+              minGames={minGames}
+              hiddenByMinGames={hiddenMatchups}
+              onLowerMinGames={() => setMinGames(1)}
+            />
+          }
+        >
+          {() => (
+            <>
+              {/* Mobile — stacked rows. */}
+              <ul className="divide-y divide-border md:hidden">
+                {sortedMu.map((m) => (
+                  <li key={m.name} className="flex flex-col gap-1.5 px-1 py-2.5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="text-sm font-medium text-text">
                         {m.name}
-                      </td>
-                      <td className="px-2 py-1.5 text-right text-success">{m.wins}</td>
-                      <td className="px-2 py-1.5 text-right text-danger">{m.losses}</td>
-                      <td className="px-2 py-1.5 text-right tabular-nums">{m.total}</td>
-                      <td
-                        className="px-2 py-1.5 text-right tabular-nums"
+                      </span>
+                      <span
+                        className="font-mono text-sm tabular-nums"
                         style={{ color: wrColor(m.winRate, m.total) }}
                       >
                         {pct1(m.winRate)}
-                      </td>
-                      <td className="px-3 py-1.5 text-right">
-                        <FormSparkline results={m.recent} />
-                      </td>
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 text-micro text-text-dim">
+                      <span>
+                        <span className="text-success">{m.wins}W</span> ·{" "}
+                        <span className="text-danger">{m.losses}L</span> ·{" "}
+                        {m.total} games
+                      </span>
+                      <FormSparkline results={m.recent} />
+                    </div>
+                    <WrBar wins={m.wins} losses={m.losses} />
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desktop — table. ``table-fixed`` + explicit colgroup
+                  so the W/L/Games/WR columns pack tightly and don't grab
+                  equal shares of leftover space. */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full table-fixed text-sm">
+                  <colgroup>
+                    <col />
+                    <col style={{ width: "3.5rem" }} />
+                    <col style={{ width: "3.5rem" }} />
+                    <col style={{ width: "4.5rem" }} />
+                    <col style={{ width: "4.5rem" }} />
+                    <col style={{ width: "7rem" }} />
+                  </colgroup>
+                  <thead className="bg-bg-elevated">
+                    <tr>
+                      <SortableTh col="name" label="Matchup" {...muSort} />
+                      <SortableTh col="wins" label="W" {...muSort} align="right" />
+                      <SortableTh col="losses" label="L" {...muSort} align="right" />
+                      <SortableTh col="total" label="Games" {...muSort} align="right" />
+                      <SortableTh col="winRate" label="WR" {...muSort} align="right" />
+                      <th className="px-3 py-2 text-right text-micro uppercase text-text-dim">
+                        Recent
+                      </th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
-        )}
+                  </thead>
+                  <tbody>
+                    {sortedMu.map((m) => (
+                      <tr key={m.name} className="border-t border-border">
+                        <td className="truncate px-3 py-1.5 font-medium" title={m.name}>
+                          {m.name}
+                        </td>
+                        <td className="px-2 py-1.5 text-right text-success">{m.wins}</td>
+                        <td className="px-2 py-1.5 text-right text-danger">{m.losses}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{m.total}</td>
+                        <td
+                          className="px-2 py-1.5 text-right tabular-nums"
+                          style={{ color: wrColor(m.winRate, m.total) }}
+                        >
+                          {pct1(m.winRate)}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">
+                          <FormSparkline results={m.recent} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </QueryState>
       </Card>
 
       <Card title="Win rate by map by matchup">
-        {mapMatchupGroups.length === 0 ? (
-          <EmptyState
-            title="No map matchups match"
-            sub={
-              (mapMuApi.data || []).length > 0
-                ? `Every map-matchup cell is hidden by the Min games ≥ ${minGames} filter. Drop it to 1 to see them all.`
-                : undefined
-            }
-          />
-        ) : (
-          <>
-            <div className="mb-4 flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-caption text-text-dim">
-                Each map shows its overall record. Matchup rows require at
-                least {minGames} games.
-              </p>
-              <div
-                className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap"
-                role="group"
-                aria-label="Map sorting controls"
-              >
-                <label className="flex min-w-0 flex-1 items-center gap-2 text-micro font-semibold uppercase tracking-wider text-text-dim sm:flex-none">
-                  Sort
-                  <select
-                    aria-label="Sort maps by"
-                    value={mapSort.sortBy}
-                    onChange={(event) =>
-                      mapSort.setSortExplicit(event.target.value, mapSort.sortDir)
-                    }
-                    className="h-9 min-w-0 flex-1 rounded-md border border-border-strong bg-bg-elevated px-2 text-caption font-medium normal-case tracking-normal text-text outline-none transition-colors hover:border-accent/70 focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 sm:flex-none"
-                  >
-                    <option value="map">Map</option>
-                    <option value="winRate">Win rate</option>
-                    <option value="total">Games</option>
-                    <option value="wins">Wins</option>
-                    <option value="losses">Losses</option>
-                  </select>
-                </label>
-                <button
-                  type="button"
-                  aria-label={`Sort direction: ${
-                    mapSort.sortDir === "asc" ? "ascending" : "descending"
-                  }. Activate to reverse.`}
-                  onClick={() =>
-                    mapSort.setSortExplicit(
-                      mapSort.sortBy,
-                      mapSort.sortDir === "asc" ? "desc" : "asc",
-                    )
-                  }
-                  className="h-9 shrink-0 whitespace-nowrap rounded-md border border-border-strong bg-bg-elevated px-2.5 text-caption font-medium text-text transition-colors hover:border-accent/70 hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        <QueryState
+          q={mapMuApi}
+          skeleton={<SkeletonRows rows={4} label="Loading map matchups" />}
+          filtered
+          isEmpty={() => mapMatchupGroups.length === 0}
+          empty={
+            <NoFilterMatches
+              title="No map matchups match these filters"
+              minGames={minGames}
+              hiddenByMinGames={hiddenMapCells}
+              onLowerMinGames={() => setMinGames(1)}
+            />
+          }
+        >
+          {() => (
+            <>
+              <div className="mb-4 flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-caption text-text-dim">
+                  Each map shows its overall record. Matchup rows require at
+                  least {minGames} games.
+                </p>
+                <div
+                  className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap"
+                  role="group"
+                  aria-label="Map sorting controls"
                 >
-                  {mapSort.sortBy === "map"
-                    ? mapSort.sortDir === "asc"
-                      ? "A to Z"
-                      : "Z to A"
-                    : mapSort.sortDir === "asc"
-                      ? "Low to high"
-                      : "High to low"}
-                </button>
-              </div>
-            </div>
-
-            <ul
-              className="space-y-4"
-              aria-label="Map performance by matchup"
-            >
-              {sortedMapMatchupGroups.map((g) => (
-                <li key={g.map} className="space-y-2">
-                  <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
-                    <button
-                      type="button"
-                      aria-label={`Open larger preview of ${g.map}`}
-                      aria-haspopup="dialog"
-                      onClick={() => setPreviewMap(g.map)}
-                      className="group/map -m-1 inline-flex min-h-11 min-w-0 max-w-full cursor-zoom-in items-center rounded-lg p-1 text-left transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  <label className="flex min-w-0 flex-1 items-center gap-2 text-micro font-semibold uppercase tracking-wider text-text-dim sm:flex-none">
+                    Sort
+                    <select
+                      aria-label="Sort maps by"
+                      value={mapSort.sortBy}
+                      onChange={(event) =>
+                        mapSort.setSortExplicit(event.target.value, mapSort.sortDir)
+                      }
+                      className="h-9 min-w-0 flex-1 rounded-md border border-border-strong bg-bg-elevated px-2 text-caption font-medium normal-case tracking-normal text-text outline-none transition-colors hover:border-accent/70 focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent/40 sm:flex-none"
                     >
-                      <MapLabel
-                        name={g.map}
-                        size="sm"
-                        className="min-w-0"
-                        textClassName="text-sm font-semibold text-text group-hover/map:text-accent"
-                      />
-                    </button>
-                    <span className="shrink-0 text-micro text-text-dim">
-                      <span className="text-success">{g.wins}W</span> ·{" "}
-                      <span className="text-danger">{g.losses}L</span> ·{" "}
-                      <span
-                        className="font-mono tabular-nums"
-                        style={{ color: wrColor(g.winRate, g.total) }}
+                      <option value="map">Map</option>
+                      <option value="winRate">Win rate</option>
+                      <option value="total">Games</option>
+                      <option value="wins">Wins</option>
+                      <option value="losses">Losses</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    aria-label={`Sort direction: ${
+                      mapSort.sortDir === "asc" ? "ascending" : "descending"
+                    }. Activate to reverse.`}
+                    onClick={() =>
+                      mapSort.setSortExplicit(
+                        mapSort.sortBy,
+                        mapSort.sortDir === "asc" ? "desc" : "asc",
+                      )
+                    }
+                    className="h-9 shrink-0 whitespace-nowrap rounded-md border border-border-strong bg-bg-elevated px-2.5 text-caption font-medium text-text transition-colors hover:border-accent/70 hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    {mapSort.sortBy === "map"
+                      ? mapSort.sortDir === "asc"
+                        ? "A to Z"
+                        : "Z to A"
+                      : mapSort.sortDir === "asc"
+                        ? "Low to high"
+                        : "High to low"}
+                  </button>
+                </div>
+              </div>
+
+              <ul
+                className="space-y-4"
+                aria-label="Map performance by matchup"
+              >
+                {sortedMapMatchupGroups.map((g) => (
+                  <li key={g.map} className="space-y-2">
+                    <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+                      <button
+                        type="button"
+                        aria-label={`Open larger preview of ${g.map}`}
+                        aria-haspopup="dialog"
+                        onClick={() => setPreviewMap(g.map)}
+                        className="group/map -m-1 inline-flex min-h-11 min-w-0 max-w-full cursor-zoom-in items-center rounded-lg p-1 text-left transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                       >
-                        {pct1(g.winRate)}
+                        <MapLabel
+                          name={g.map}
+                          size="sm"
+                          className="min-w-0"
+                          textClassName="text-sm font-semibold text-text group-hover/map:text-accent"
+                        />
+                      </button>
+                      <span className="shrink-0 text-micro text-text-dim">
+                        <span className="text-success">{g.wins}W</span> ·{" "}
+                        <span className="text-danger">{g.losses}L</span> ·{" "}
+                        <span
+                          className="font-mono tabular-nums"
+                          style={{ color: wrColor(g.winRate, g.total) }}
+                        >
+                          {pct1(g.winRate)}
+                        </span>
                       </span>
-                    </span>
-                  </div>
-                  <ul className="space-y-2 pl-1">
-                    {g.cells.map((c) => (
-                      <li key={c.matchup} className="flex flex-col gap-1">
-                        <div className="flex items-baseline justify-between gap-2 text-micro">
-                          <span className="font-medium text-text-dim">
-                            {c.matchup}
-                          </span>
-                          <span className="flex items-baseline gap-2">
-                            <span className="text-text-dim">
-                              <span className="text-success">{c.wins}W</span> ·{" "}
-                              <span className="text-danger">{c.losses}L</span> ·{" "}
-                              {c.total}
+                    </div>
+                    <ul className="space-y-2 pl-1">
+                      {g.cells.map((c) => (
+                        <li key={c.matchup} className="flex flex-col gap-1">
+                          <div className="flex items-baseline justify-between gap-2 text-micro">
+                            <span className="font-medium text-text-dim">
+                              {c.matchup}
                             </span>
-                            <span
-                              className="w-12 text-right font-mono tabular-nums"
-                              style={{ color: wrColor(c.winRate, c.total) }}
-                            >
-                              {pct1(c.winRate)}
+                            <span className="flex items-baseline gap-2">
+                              <span className="text-text-dim">
+                                <span className="text-success">{c.wins}W</span> ·{" "}
+                                <span className="text-danger">{c.losses}L</span> ·{" "}
+                                {c.total}
+                              </span>
+                              <span
+                                className="w-12 text-right font-mono tabular-nums"
+                                style={{ color: wrColor(c.winRate, c.total) }}
+                              >
+                                {pct1(c.winRate)}
+                              </span>
                             </span>
-                          </span>
-                        </div>
-                        <WrBar wins={c.wins} losses={c.losses} />
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
+                          </div>
+                          <WrBar wins={c.wins} losses={c.losses} />
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </QueryState>
       </Card>
 
       <MapPreviewDialog

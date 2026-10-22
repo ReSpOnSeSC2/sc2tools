@@ -6,6 +6,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState, Skeleton } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { AllGamesTable } from "../AllGamesTable";
 import type { ProfileGame } from "../Last5GamesTimeline";
 import { fmtDate, fmtMinutes } from "@/lib/format";
@@ -46,11 +47,12 @@ export function OppMmrBucketGamesModal({
     return { ...filters, lo: band.lo, hi: band.hi };
   }, [filters, band]);
 
-  const { data, isLoading, error } = useApi<Response>(
+  const gamesApi = useApi<Response>(
     open && query
       ? `/v1/opp-mmr-buckets/games${filtersToQuery(query)}#${dbRev}`
       : null,
   );
+  const { data } = gamesApi;
 
   if (!band) return null;
 
@@ -68,10 +70,8 @@ export function OppMmrBucketGamesModal({
       title={`Opponents at ${band.lo}–${band.hi - 1} MMR`}
       description={description}
     >
-      {isLoading ? (
-        <Skeleton rows={5} />
-      ) : error ? (
-        <p className="text-sm text-danger">{error.message}</p>
+      {!hasQueryData(gamesApi) ? (
+        <QueryState q={gamesApi} skeleton={<Skeleton rows={5} />} filtered />
       ) : games.length === 0 ? (
         <EmptyState
           title="No games in this band"

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, EmptyState } from "@/components/ui/Card";
+import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { useDailySeed } from "./hooks/useDailySeed";
 import { useArcadeData } from "./hooks/useArcadeData";
 import { useArcadeState } from "./hooks/useArcadeState";
@@ -173,9 +174,18 @@ export function ModeRunner({
   }, [question, mode, scoreResult, answered, isDaily]);
 
   if (loading) {
+    // Shaped like a round: prompt line, then answer choices.
     return (
       <Card>
-        <EmptyState title="Loading…" sub="Pulling your data." />
+        <SkeletonRegion label="Loading your games for this round" className="space-y-4">
+          <SkeletonBar className="h-5 w-2/3" />
+          <SkeletonBar className="h-4 w-1/2" />
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[0, 1, 2, 3].map((i) => (
+              <SkeletonBar key={i} className="h-11 rounded-lg" />
+            ))}
+          </div>
+        </SkeletonRegion>
       </Card>
     );
   }
@@ -200,7 +210,6 @@ export function ModeRunner({
       // disagree (e.g. a race condition between probe + render or a mode
       // bug). Show the unified warm-up card instead of leaking the
       // per-mode reason as the day's headline.
-      // eslint-disable-next-line no-console
       console.warn("[arcade] eligibility/generate mismatch", mode.id);
       return <DailyEmptyState kind={mode.kind === "quiz" ? "quiz" : "game"} />;
     }

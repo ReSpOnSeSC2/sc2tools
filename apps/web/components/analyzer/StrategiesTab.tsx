@@ -14,11 +14,14 @@ import {
   useLocalStorageState,
 } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
+import { Button } from "@/components/ui/Button";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { usePersistentSort } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { AllGamesTable } from "./AllGamesTable";
+import { NoFilterMatches } from "./EmptyStates";
 import { StrategyMmrPanel } from "./mmr/StrategyMmrPanel";
 import { BuildMatchupHeatmap } from "./mmr/BuildMatchupHeatmap";
 import type { ProfileGame } from "./Last5GamesTimeline";
@@ -157,16 +160,21 @@ function ByOppStrategyView({
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN, 3);
   const sort = usePersistentSort(LS_OPP_SORT, "winRate", "desc");
 
-  const { data, isLoading } = useApi<StratRow[]>(
+  const strategiesApi = useApi<StratRow[]>(
     `/v1/opp-strategies${filtersToQuery(filters)}#${dbRev}`,
   );
+  const { data } = strategiesApi;
 
-  const rows = useMemo(() => {
+  const { rows, hiddenByMinGames } = useMemo(() => {
     let r = data || [];
     const s = search.trim().toLowerCase();
     if (s) r = r.filter((x) => (x.name || "").toLowerCase().includes(s));
+    const searched = r.length;
     if (minGames > 1) r = r.filter((x) => (x.total || 0) >= minGames);
-    return sort.sortRows(r, (row, col) => (row as Record<string, unknown>)[col]);
+    return {
+      rows: sort.sortRows(r, (row, col) => (row as Record<string, unknown>)[col]),
+      hiddenByMinGames: searched - r.length,
+    };
   }, [data, search, minGames, sort]);
 
   const kpis = useMemo<Kpi[]>(() => {
@@ -204,7 +212,9 @@ function ByOppStrategyView({
     ];
   }, [data, minGames]);
 
-  if (isLoading) return <Skeleton rows={6} />;
+  if (!hasQueryData(strategiesApi)) {
+    return <QueryState q={strategiesApi} skeleton={<Skeleton rows={6} />} filtered />;
+  }
 
   return (
     <div className="space-y-4">
@@ -229,12 +239,17 @@ function ByOppStrategyView({
 
       {rows.length === 0 ? (
         <Card>
-          <EmptyState
-            title="No strategies match"
-            sub={
-              (data || []).length > 0
-                ? `No strategies match your filter (search / min games ${minGames}).`
-                : undefined
+          <NoFilterMatches
+            title="No strategies match these filters"
+            minGames={minGames}
+            hiddenByMinGames={hiddenByMinGames}
+            onLowerMinGames={() => setMinGames(1)}
+            extraAction={
+              search.trim() ? (
+                <Button variant="secondary" size="sm" onClick={() => setSearch("")}>
+                  Clear search
+                </Button>
+              ) : null
             }
           />
         </Card>
@@ -302,7 +317,9 @@ function StrategyGamesView({
     [filters, drill, dbRev],
   );
 
-  const { data, isLoading, error } = useApi<GamesListResp>(apiPath);
+  const gamesApi = useApi<GamesListResp>(apiPath);
+  const { data } = gamesApi;
+  const loaded = hasQueryData(gamesApi);
 
   const games = useMemo<ProfileGame[]>(() => {
     const raw = data?.games || [];
@@ -367,7 +384,7 @@ function StrategyGamesView({
         <h2 className="truncate text-base font-semibold text-text">
           {titleText}
         </h2>
-        {!isLoading && summary.total > 0 ? (
+        {loaded && summary.total > 0 ? (
           // ``w-full md:w-auto`` forces the stats line onto its own row
           // on mobile (so it left-aligns under the title) and lets it
           // slot back into the flex row with ``md:ml-auto`` on desktop,
@@ -392,12 +409,8 @@ function StrategyGamesView({
           strategy={drill.opp_strategy}
         />
       ) : null}
-      {isLoading ? (
-        <Skeleton rows={6} />
-      ) : error ? (
-        <Card>
-          <EmptyState title="Couldn't load games" sub={error.message} />
-        </Card>
+      {!loaded ? (
+        <QueryState q={gamesApi} skeleton={<Skeleton rows={6} />} errorTitle="Games" filtered />
       ) : games.length === 0 ? (
         <Card>
           <EmptyState sub="No games match this filter combination." />

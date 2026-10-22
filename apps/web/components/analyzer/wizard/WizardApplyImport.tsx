@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { fmtAgo } from "@/lib/format";
 
 type Status = {
@@ -37,8 +38,12 @@ export function WizardApplyImport() {
     }
   }
 
-  if (status.isLoading) return <Skeleton rows={3} />;
-  const cur = status.data?.current;
+  if (!hasQueryData(status)) {
+    return (
+      <QueryState q={status} skeleton={<Skeleton rows={3} />} errorTitle="Import your replay history" />
+    );
+  }
+  const cur = status.data.current;
   const running = cur && (cur.status === "running" || cur.status === "scanning");
   const total = cur?.totalReplays || 0;
   const done = cur?.scanned || 0;

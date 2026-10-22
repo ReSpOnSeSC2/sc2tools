@@ -293,7 +293,12 @@ describe("OpponentsTab MMR impact", () => {
     fireEvent.change(screen.getByRole("textbox", { name: "Search opponents" }), { target: { value: "papito" } });
     fireEvent.change(screen.getByRole("combobox", { name: "Filter opponents by MMR impact" }), { target: { value: "net-loss" } });
     fireEvent.click(screen.getByRole("radio", { name: "20" }));
-    expect(within(screen.getByRole("table")).queryByText("+140")).toBeNull();
+    // Nothing in the table survives these controls; the empty state
+    // offers a way back from each local control.
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getByText("No opponents match these filters")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Clear search" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show all MMR impact" })).toBeTruthy();
     expect(within(screen.getByRole("button", { name: /most net MMR won$/ })).getByText("+140")).toBeTruthy();
     expect(within(screen.getByRole("button", { name: /most net MMR lost$/ })).getByText("-130")).toBeTruthy();
   });
@@ -367,9 +372,13 @@ describe("OpponentsTab MMR impact", () => {
       items: [], isLoading: false, error: new Error("offline"), pagesFetched: 0, hitMaxPages: false,
     });
     render(<OpponentsTab onOpen={() => {}} />);
-    expect(screen.getByRole("alert").textContent).toContain("verified MMR impact is temporarily unavailable");
+    const alerts = screen.getAllByRole("alert").map((alert) => alert.textContent);
+    expect(alerts.some((text) => text?.includes("verified MMR impact is temporarily unavailable"))).toBe(true);
     expect(screen.queryByRole("button", { name: /most net MMR (won|lost)$/ })).toBeNull();
     expect(screen.queryByText(/No verified opponent MMR pairs match/)).toBeNull();
+    // The list itself shows Retry, not "no opponents match".
+    expect(screen.getByTestId("request-error")).toBeTruthy();
+    expect(screen.queryByText("No opponents match these filters")).toBeNull();
   });
 
   it("keeps expanded identity rows aligned with the record-first columns", () => {

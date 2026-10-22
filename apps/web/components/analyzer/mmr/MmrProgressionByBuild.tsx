@@ -16,6 +16,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { fmtMmr } from "@/lib/format";
 import { clientTimezone, localDateKey } from "@/lib/timeseries";
 
@@ -57,9 +58,10 @@ export function MmrProgressionByBuild() {
   const [topN, setTopN] = useLocalStoragePositiveInt(LS_TOP_N, 5);
   const tz = useMemo(() => clientTimezone(), []);
 
-  const { data, isLoading } = useApi<BuildSeries[]>(
+  const progressionApi = useApi<BuildSeries[]>(
     `/v1/mmr-stats/progression${filtersToQuery(filters)}#${dbRev}`,
   );
+  const { data } = progressionApi;
 
   const { chartData, seriesList, totalPoints, mmrDomain } = useMemo(
     () => shapeProgressionForChart(data || [], minGames, topN, tz),
@@ -95,8 +97,8 @@ export function MmrProgressionByBuild() {
       </div>
 
       <div className="mt-4" style={{ height: 280 }}>
-        {isLoading ? (
-          <Skeleton rows={4} />
+        {!hasQueryData(progressionApi) ? (
+          <QueryState q={progressionApi} skeleton={<Skeleton rows={4} />} filtered />
         ) : totalPoints === 0 ? (
           <EmptyState
             title="No MMR-tagged builds yet"

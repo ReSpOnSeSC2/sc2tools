@@ -102,7 +102,7 @@ describe("Builds tab filtered custom build integration", () => {
     expect(request.hash).toBe("#3");
     harness.rows = [];
     rerender(scopedTab({ ...filters, regions: "EU" }, 4));
-    expect(screen.getByText("No builds match")).toBeTruthy();
+    expect(screen.getByText("No builds match these filters")).toBeTruthy();
     expect(screen.queryByText("Custom gateway opener")).toBeNull();
     expect(screen.queryByText("Standard opener")).toBeNull();
     expect(harness.paths.at(-1)).toContain("regions=EU");
@@ -112,7 +112,7 @@ describe("Builds tab filtered custom build integration", () => {
   it("does not display zero-game definitions or fetch an unfiltered library", () => {
     harness.rows = [{ name: "Unplayed saved build", total: 0, wins: 0, losses: 0, winRate: 0 }];
     render(<BuildsTab />);
-    expect(screen.getByText("No builds match")).toBeTruthy();
+    expect(screen.getByText("No builds match these filters")).toBeTruthy();
     expect(screen.queryByText("Unplayed saved build")).toBeNull();
     expect(harness.paths.every((path) => path.startsWith("/v1/builds"))).toBe(true);
   });
@@ -120,8 +120,8 @@ describe("Builds tab filtered custom build integration", () => {
   it("honors the persisted minimum-game threshold for every build", () => {
     localStorage.setItem("analyzer.builds.minGames", "20");
     render(<BuildsTab />);
-    expect(screen.getByText("No builds match")).toBeTruthy();
-    expect(screen.getByText(/2 builds hidden by Min games/)).toBeTruthy();
+    expect(screen.getByText("No builds match these filters")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Lower Min games to 1 (2 hidden by Min games)" })).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "1" }));
     expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(3);
   });
@@ -130,15 +130,15 @@ describe("Builds tab filtered custom build integration", () => {
     harness.loaded = false; harness.loading = true;
     render(<BuildsTab />);
     expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.queryByText("No builds match")).toBeNull();
+    expect(screen.queryByText("No builds match these filters")).toBeNull();
     expect(screen.queryByText("Custom gateway opener")).toBeNull();
   });
 
   it("reports a failed query and supports retry without claiming no matching games", () => {
     harness.loaded = false; harness.error = new Error("Unavailable");
     render(<BuildsTab />);
-    expect(screen.getByRole("alert").textContent).toContain("Couldn't load builds for these filters.");
-    expect(screen.queryByText("No builds match")).toBeNull();
+    expect(screen.getByTestId("request-error").textContent).toContain("Your filters are still applied.");
+    expect(screen.queryByText("No builds match these filters")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(harness.mutate).toHaveBeenCalledOnce();
   });

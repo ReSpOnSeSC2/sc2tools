@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { useApi } from "@/lib/clientApi";
 import { Card, Skeleton, Stat } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import type { GlobalPlayerIdentity } from "@/lib/opponentGroups";
 
 /**
@@ -82,10 +83,11 @@ export function LadderContextCard({ pulseId, confirmedIdentity }: {
   pulseId: string;
   confirmedIdentity?: GlobalPlayerIdentity | null;
 }) {
-  const { data, isLoading } = useApi<PulseIntelResp>(
+  const intelApi = useApi<PulseIntelResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}/pulse-intel`,
     { revalidateOnFocus: false },
   );
+  const { data } = intelApi;
 
   const spark = useMemo(
     () =>
@@ -96,14 +98,14 @@ export function LadderContextCard({ pulseId, confirmedIdentity }: {
     [data?.intel?.ratingHistory],
   );
 
-  if (isLoading) {
+  if (!hasQueryData(intelApi)) {
     return (
       <Card title="Ladder context">
-        <Skeleton rows={2} />
+        <QueryState q={intelApi} skeleton={<Skeleton rows={2} />} />
       </Card>
     );
   }
-  const intel = data?.intel;
+  const intel = intelApi.data.intel;
   if (!intel) return null;
   // SWR may still hold the barcode's previous response while the
   // approval refreshes. A confirmed main profile must match exactly.

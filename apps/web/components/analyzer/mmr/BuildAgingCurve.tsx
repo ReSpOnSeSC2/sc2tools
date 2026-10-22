@@ -17,6 +17,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 
 interface CurvePoint {
   n: number;
@@ -55,9 +56,10 @@ export function BuildAgingCurve() {
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_GAMES, 10);
   const [topN, setTopN] = useLocalStoragePositiveInt(LS_TOP_N, 6);
 
-  const { data, isLoading } = useApi<BuildSeries[]>(
+  const agingApi = useApi<BuildSeries[]>(
     `/v1/mmr-stats/aging-curve${filtersToQuery(filters)}#${dbRev}`,
   );
+  const { data } = agingApi;
 
   const { chartData, seriesList, totalPoints } = useMemo(
     () => shapeAgingForChart(data || [], minGames, topN),
@@ -93,8 +95,8 @@ export function BuildAgingCurve() {
       </div>
 
       <div className="mt-4" style={{ height: 280 }}>
-        {isLoading ? (
-          <Skeleton rows={4} />
+        {!hasQueryData(agingApi) ? (
+          <QueryState q={agingApi} skeleton={<Skeleton rows={4} />} filtered />
         ) : totalPoints === 0 ? (
           <EmptyState
             title="No builds with enough plays yet"
