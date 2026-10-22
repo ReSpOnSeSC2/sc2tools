@@ -29,7 +29,8 @@ const ME_MMR_MAX_TOONS = 8;
  *                                     agent's device-token, so the desktop app can
  *                                     read its handle from the cloud after pairing)
  *   GET    /me/preferences/:type    — read stored preferences ("misc" | "voice")
- *   PUT    /me/preferences/:type    — replace preferences for that type
+ *   PUT    /me/preferences/:type    — replace preferences for that type ("buildCheckin"
+ *                                     also pings ``build-intent:changed {prefs: true}``)
  *   GET    /me/doctor               — diagnostic warnings (no agent, no profile, etc.)
  *   GET    /me/replay-archive-status — one-time original replay backfill progress
  *   POST   /me/replay-archive-resync — agent acknowledges a full local re-sync
@@ -61,6 +62,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   isAdmin?: (req: import('express').Request) => boolean,
  *   isAdminEmail?: (email: string) => boolean,
  *   onAdminGranted?: (clerkUserId: string) => void,
+ *   buildIntents?: { preferencesChanged(userId: string, type: string): void } | null,
  *   logger?: import('pino').Logger,
  * }} deps
  */
@@ -401,6 +403,15 @@ function buildMeRouter(deps) {
       }
       const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body) : req.body;
       const saved = await deps.users.updatePreferences(auth.userId, type, body);
+      if (deps.buildIntents) {
+        try {
+          // Build check-in switches reach the agent as a user-room ping;
+          // randomizer pools change which builds are check-in options.
+          deps.buildIntents.preferencesChanged(auth.userId, type);
+        } catch {
+          // Advisory: clients also refresh on their own.
+        }
+      }
       res.json(saved);
     } catch (err) {
       next(err);

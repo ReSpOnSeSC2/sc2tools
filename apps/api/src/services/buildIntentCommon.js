@@ -7,8 +7,9 @@
  *
  * Realtime privacy: overlay rooms only ever receive
  * ``overlay:buildIntent {gameKey, suppressRandomizer, holdRemainingMs}`` and
- * the user room only ``build-intent:changed {gameKey}`` / ``{gameId}``. No
- * build key or name reaches a room an overlay token can join.
+ * the user room only ``build-intent:changed {gameKey}`` / ``{gameId}`` /
+ * ``{prefs: true}`` (the ``buildCheckin`` switches changed). No build key
+ * or name reaches a room an overlay token can join.
  */
 
 const { MATCHUP_RE } = require("./buildIntentShape");
@@ -171,9 +172,10 @@ class BuildIntentNotifier {
   }
 
   /**
-   * Ping the user's private room: ``{gameKey}`` or ``{gameId}`` only.
+   * Ping the user's private room: ``{gameKey}``, ``{gameId}`` or
+   * ``{prefs: true}`` only.
    * @param {string} userId
-   * @param {{ gameKey: string } | { gameId: string }} payload
+   * @param {{ gameKey: string } | { gameId: string } | { prefs: true }} payload
    */
   changed(userId, payload) {
     if (!this.io) return;

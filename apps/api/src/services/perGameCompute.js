@@ -21,6 +21,8 @@ const { validateCasualtyEvents } = require("../validation/casualtyEvents");
 const {
   AGREES_WITH_DETECTOR_MATCH,
   BUILD_INTENT_LABEL_PROJECTION,
+  OPP_AGREES_WITH_DETECTOR_MATCH,
+  OPP_INTENT_LABEL_PROJECTION,
   withDetectorLabels,
 } = require("./buildIntentShape");
 
@@ -762,11 +764,14 @@ class PerGameComputeService {
    *   filters?: ReturnType<typeof import('../util/parseQuery').parseFilters>,
    *   match?: Record<string, any>,
    *   view?: "detector"|"agreeing",
+   *   agreeOn?: "you"|"opponent"|"both",
    * }} [opts] ``view: "detector"`` reports a build check-in row's classifier
-   *   labels (``myBuild`` + an explicit ``customBuildSlug``) instead of the
-   *   declared build; only the custom-build classifier asks for it.
-   *   ``view: "agreeing"`` keeps only rows whose effective label agrees with
-   *   the detector (build-shape cohorts: phases, compositions, transitions)
+   *   labels on both axes (``myBuild`` + an explicit ``customBuildSlug``,
+   *   ``opponent.strategy`` + an explicit ``customOpponentStrategySlug``)
+   *   instead of the declared builds; only the custom-build classifier asks
+   *   for it. ``view: "agreeing"`` keeps only rows whose effective label
+   *   agrees with the detector on the ``agreeOn`` axis (default "you";
+   *   build-shape cohorts: phases, compositions, transitions)
    * @returns {Promise<Array<{
    *   gameId: string,
    *   myBuild: string|null,
@@ -825,7 +830,9 @@ class PerGameComputeService {
       spq: 1,
       spatial: 1,
       _customBuildSlug: 1,
+      _customOpponentStrategySlug: 1,
       ...BUILD_INTENT_LABEL_PROJECTION,
+      ...OPP_INTENT_LABEL_PROJECTION,
     };
     if (includeMacroBreakdown) {
       // Legacy fallback: a few pre-v0.4.3 docs still carry
@@ -842,6 +849,7 @@ class PerGameComputeService {
     const filter = rulePreviewViewMatch(
       extraMatch ? mergeRulePreviewMatch(baseMatch, extraMatch) : baseMatch,
       opts.view,
+      opts.agreeOn,
     );
     const detectorLabels = opts.view === "detector";
     const fetched = await this.db.games
@@ -918,6 +926,10 @@ class PerGameComputeService {
           out.customBuildSlug = typeof g._customBuildSlug === "string"
             ? g._customBuildSlug
             : null;
+          out.customOpponentStrategySlug =
+            typeof g._customOpponentStrategySlug === "string"
+              ? g._customOpponentStrategySlug
+              : null;
         }
         if (includeMacroBreakdown) {
           out.macroBreakdown = g.macroBreakdown || blob.macroBreakdown || null;
@@ -934,13 +946,14 @@ class PerGameComputeService {
    *
    * ``view: "detector"`` (custom-build classifier only) hands a build
    * check-in row to ``metadataFilter`` and the caller with the detector's
-   * labels: ``myBuild``/``customBuildSlug`` are what the classifier last
-   * decided, never the declared build. ``view: "agreeing"`` (build-shape
-   * cohorts) skips check-in rows whose replay was classified as something
-   * else.
+   * labels on both axes: ``myBuild``/``customBuildSlug`` and
+   * ``opponent.strategy``/``customOpponentStrategySlug`` are what the
+   * classifier last decided, never a declared build. ``view: "agreeing"``
+   * (build-shape cohorts) skips check-in rows whose replay was classified as
+   * something else on the ``agreeOn`` axis (default "you").
    *
    * @param {string} userId
-   * @param {{limit?: number, pageSize?: number, perspective?: "you"|"opponent"|"both", includeMacroBreakdown?: boolean, filters?: object, match?: Record<string, any>, metadataFilter?: (game: any) => boolean, signal?: AbortSignal, strictDetails?: boolean, tolerateCorruptDetails?: boolean, view?: "detector"|"agreeing"}} [opts]
+   * @param {{limit?: number, pageSize?: number, perspective?: "you"|"opponent"|"both", includeMacroBreakdown?: boolean, filters?: object, match?: Record<string, any>, metadataFilter?: (game: any) => boolean, signal?: AbortSignal, strictDetails?: boolean, tolerateCorruptDetails?: boolean, view?: "detector"|"agreeing", agreeOn?: "you"|"opponent"|"both"}} [opts]
    * @returns {AsyncGenerator<{games: any[], candidates: number, hasMore: boolean}>}
    */
   async *iterateRulePreviewPages(userId, opts = {}) {
@@ -965,6 +978,7 @@ class PerGameComputeService {
     const filter = rulePreviewViewMatch(
       extraMatch ? mergeRulePreviewMatch(baseMatch, extraMatch) : baseMatch,
       opts.view,
+      opts.agreeOn,
     );
     const detectorLabels = opts.view === "detector";
     const logFields = perspective === "both"
@@ -995,6 +1009,7 @@ class PerGameComputeService {
       apm: 1,
       spq: 1,
       ...BUILD_INTENT_LABEL_PROJECTION,
+      ...OPP_INTENT_LABEL_PROJECTION,
     };
     // Do not include legacy inline heavy fields in the metadata page. They are
     // read as a one-row fallback below only when the detail store lacks that
@@ -1186,16 +1201,24 @@ function mergeRulePreviewMatch(baseMatch, extraMatch) {
 
 /**
  * Apply the rule-preview ``view``: "agreeing" appends the build check-in
- * agreement clause to ``$and`` (beside the filter bar's region ``$or``).
+ * agreement clause of each ``agreeOn`` axis ("you" by default, "opponent",
+ * or "both") to ``$and`` (beside the filter bar's region ``$or``). The
+ * clauses are ``$or`` fragments, so they are never spread into one object.
  * @param {Record<string, any>} match
  * @param {unknown} view
+ * @param {unknown} [agreeOn]
  * @returns {Record<string, any>}
  */
-function rulePreviewViewMatch(match, view) {
+function rulePreviewViewMatch(match, view, agreeOn) {
   if (view !== "agreeing") return match;
+  const clauses = agreeOn === "opponent"
+    ? [OPP_AGREES_WITH_DETECTOR_MATCH]
+    : agreeOn === "both"
+      ? [AGREES_WITH_DETECTOR_MATCH, OPP_AGREES_WITH_DETECTOR_MATCH]
+      : [AGREES_WITH_DETECTOR_MATCH];
   return {
     ...match,
-    $and: [...(Array.isArray(match.$and) ? match.$and : []), AGREES_WITH_DETECTOR_MATCH],
+    $and: [...(Array.isArray(match.$and) ? match.$and : []), ...clauses],
   };
 }
 

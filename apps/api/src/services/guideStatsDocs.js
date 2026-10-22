@@ -170,6 +170,9 @@ function shapeBuildDocs(result, context) {
 
 /**
  * Counter docs (every catalog opponent strategy × era) of one matchup.
+ * Strategy cells count the classifier's opponent label
+ * (guideStatsPipelines ``strategyExpression``), never a player's opponent
+ * correction.
  *
  * @param {MatchupResult} result
  * @param {Date} computedAt

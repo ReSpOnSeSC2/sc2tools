@@ -22,8 +22,14 @@ const {
 } = require("./buildCompositions");
 const { computeTransitions } = require("./buildTransitions");
 const { computePerGameScouting } = require("./scouting/perGameScouting");
-const { BUILD_INTENT_LABEL_PROJECTION } = require("./buildIntentShape");
-const { ownerBuildFlags } = require("./buildIntentReaders");
+const {
+  BUILD_INTENT_LABEL_PROJECTION,
+  OPP_INTENT_LABEL_PROJECTION,
+} = require("./buildIntentShape");
+const {
+  opponentAgreesWithDetector,
+  ownerBuildFlags,
+} = require("./buildIntentReaders");
 const {
   compactAnalysisBuildLog,
   compactAnalysisMacroBreakdown,
@@ -190,8 +196,12 @@ const PROFILE_GAME_PROJECTION = {
   "opponent.region": 1,
   "opponent.strategy": 1,
   // Build check-in label fields (never notes) for the serializer's
-  // ``build_planned`` / ``detected_build`` flags.
+  // ``build_planned`` / ``detected_build`` and ``opp_strategy_planned`` /
+  // ``detected_opp_strategy`` flags; the opponent slug and correction also
+  // keep a disagreeing correction out of the per-strategy phase envelopes.
+  _customOpponentStrategySlug: 1,
   ...BUILD_INTENT_LABEL_PROJECTION,
+  ...OPP_INTENT_LABEL_PROJECTION,
 };
 
 const PROFILE_DETAIL_PROJECTION = {
@@ -227,6 +237,7 @@ const PROFILE_GAME_ROW_PROJECTION = {
   "opponent.strategy": 1,
   "opponent.mmr": 1,
   ...BUILD_INTENT_LABEL_PROJECTION,
+  ...OPP_INTENT_LABEL_PROJECTION,
 };
 
 /**
@@ -1391,6 +1402,7 @@ class OpponentsService {
           },
           opponentGame: {
             ...compactBase,
+            opponentLabelAgrees: opponentAgreesWithDetector(slim),
             _phasePrepared: safePrepareComposition(hydrated, "opponent"),
           },
         });
@@ -3773,6 +3785,8 @@ function serializeGameForProfile(g) {
  * fields from accidentally inflating the full-history response.
  * `build_planned` marks a row whose `my_build` comes from a confirmed build
  * check-in; `detected_build` is then what the replay was classified as.
+ * `opp_strategy_planned` / `detected_opp_strategy` do the same for a
+ * corrected `opp_strategy`.
  *
  * @param {any} g
  * @returns {object}
@@ -3799,6 +3813,8 @@ function serializeCompactProfileGame(g) {
     my_build: g?.myBuild || "",
     build_planned: intent.buildPlanned,
     detected_build: intent.detectedBuild,
+    opp_strategy_planned: intent.oppStrategyPlanned,
+    detected_opp_strategy: intent.detectedOppStrategy,
     my_race: g?.myRace || "",
     matchFormat: typeof g?.matchFormat === "string" ? g.matchFormat : null,
     playerCount: typeof g?.playerCount === "number" ? g.playerCount : null,
@@ -4198,6 +4214,10 @@ function projectMatchupTimings(legacy) {
  * to bound payload size; smaller strategy buckets fall through to the
  * aggregate ``perPhase`` above.
  *
+ * An envelope describes what the strategy looks like, so a game whose
+ * opponent label comes from a correction the replay disagrees with
+ * (``opponentLabelAgrees: false``) is left out.
+ *
  * @param {Array<any>} games
  * @param {{ perspective?: "you"|"opponent", maxStrategies?: number }} [opts]
  * @returns {Array<{
@@ -4219,7 +4239,7 @@ function computeByStrategyPhases(games, opts = {}) {
   const groups = new Map();
 
   for (const g of list) {
-    if (!g) continue;
+    if (!g || g.opponentLabelAgrees === false) continue;
     const raw =
       (g.opponent && g.opponent.strategy) || g.opp_strategy || "";
     const strategy = raw ? String(raw).trim() : "Unknown";

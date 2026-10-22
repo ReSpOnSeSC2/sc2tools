@@ -48,6 +48,8 @@ const {
 
 const USER = "u-readers";
 const PULSE = "1-S2-1-777";
+/** Owner flags of a row without an opponent correction (buildIntentReadersOpponent.test.js). */
+const NO_OPP_FLAGS = Object.freeze({ oppStrategyPlanned: false, detectedOppStrategy: null });
 
 let mongo;
 let db;
@@ -135,10 +137,10 @@ describe("buildIntentReaders helpers", () => {
   test("ownerBuildFlags / withOwnerBuildFlags", async () => {
     await seedThree(db.games, USER);
     const rows = byId(await db.games.find({ userId: USER }).toArray());
-    expect(ownerBuildFlags(rows.normal)).toEqual({ buildPlanned: false, detectedBuild: null });
-    expect(ownerBuildFlags(rows.disagree)).toEqual({ buildPlanned: true, detectedBuild: UNCLASSIFIED });
-    expect(ownerBuildFlags(rows.agree)).toEqual({ buildPlanned: true, detectedBuild: STARGATE });
-    expect(ownerBuildFlags(null)).toEqual({ buildPlanned: false, detectedBuild: null });
+    expect(ownerBuildFlags(rows.normal)).toEqual({ buildPlanned: false, detectedBuild: null, ...NO_OPP_FLAGS });
+    expect(ownerBuildFlags(rows.disagree)).toEqual({ buildPlanned: true, detectedBuild: UNCLASSIFIED, ...NO_OPP_FLAGS });
+    expect(ownerBuildFlags(rows.agree)).toEqual({ buildPlanned: true, detectedBuild: STARGATE, ...NO_OPP_FLAGS });
+    expect(ownerBuildFlags(null)).toEqual({ buildPlanned: false, detectedBuild: null, ...NO_OPP_FLAGS });
     const flagged = withOwnerBuildFlags(rows.disagree);
     expect(flagged).not.toHaveProperty("buildIntent");
     expect(flagged).toMatchObject({ gameId: "disagree", myBuild: STARGATE, buildPlanned: true });

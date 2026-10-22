@@ -624,6 +624,9 @@ function makeServices(deps) {
     perGame,
     logger: deps.logger,
   });
+  // A saved, renamed or deleted custom build changes the check-in options:
+  // drop the cached lists so "Add new build" can confirm the new build at once.
+  customBuilds.onDefinitionsChanged = (userId) => buildIntents.invalidateOptions(userId);
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io });
@@ -1220,6 +1223,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       isAdmin,
       isAdminEmail,
       onAdminGranted,
+      buildIntents: services.buildIntents,
       logger: deps.logger,
     }),
   );
@@ -1451,6 +1455,11 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       customBuilds: services.customBuilds,
       perGame: services.perGame,
       community: services.community,
+      // Live or soft-deleted: a create-only save never revives a deleted build.
+      slugTaken: async (userId, slug) => Boolean(await deps.db.customBuilds.findOne(
+        { userId, slug },
+        { projection: { _id: 1 } },
+      )),
       auth,
     }),
   );

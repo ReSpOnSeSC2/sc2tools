@@ -9,6 +9,11 @@
  *
  * Races are authoritative from the envelope; request bodies only fill fields
  * the record does not have yet.
+ *
+ * The randomizer hold is decided only once a client that can ask has
+ * registered the game (a device-authenticated ``register`` marks the record
+ * ``askClient``): a headless agent posts envelopes but shows no loading
+ * card, so its games never hold the OBS reveal.
  */
 
 const { BUILD_INTENT, COLLECTIONS } = require("../config/constants");
@@ -177,7 +182,7 @@ class BuildIntentLive {
   /**
    * Register (or refresh) the live record of an agent envelope. Envelope
    * races and opponent name win over earlier values. Decides the randomizer
-   * hold once the matchup is concrete.
+   * hold once the matchup is concrete and a check-in client registered.
    *
    * @param {string} userId
    * @param {unknown} envelope
@@ -218,7 +223,7 @@ class BuildIntentLive {
     };
     switch (body.action) {
       case "register":
-        return this._register(userId, gameKey, fields);
+        return this._register(userId, gameKey, fields, auth);
       case "declare":
         return this._declare(userId, gameKey, fields, body.buildKey, via);
       case "undeclare":
@@ -328,12 +333,17 @@ class BuildIntentLive {
   }
 
   /**
+   * A device-authenticated register comes from the agent's check-in card:
+   * it marks the record ``askClient`` so the hold can be decided.
    * @param {string} userId
    * @param {string} gameKey
    * @param {LiveFields} fields
+   * @param {{ source?: string }} auth
    */
-  async _register(userId, gameKey, fields) {
-    let doc = await this._upsert(userId, gameKey, fields, false);
+  async _register(userId, gameKey, fields, auth) {
+    let doc = await this._upsert(userId, gameKey, fields, false, {
+      askClient: Boolean(auth && auth.source === "device"),
+    });
     doc = await this._maybeDecideHold(userId, doc);
     this.options.invalidate(userId);
     return this._state(userId, doc);
@@ -440,15 +450,17 @@ class BuildIntentLive {
   /**
    * Create the unbound record, or update it: ``overwrite`` replaces races
    * and opponent name with non-null ``fields`` (envelope data), otherwise
-   * they only fill missing values (request bodies).
+   * they only fill missing values (request bodies). ``askClient`` is only
+   * ever turned on.
    *
    * @param {string} userId
    * @param {string} gameKey
    * @param {LiveFields} fields
    * @param {boolean} overwrite
+   * @param {{ askClient?: boolean }} [opts]
    * @returns {Promise<Record<string, any>>}
    */
-  async _upsert(userId, gameKey, fields, overwrite) {
+  async _upsert(userId, gameKey, fields, overwrite, opts = {}) {
     const now = new Date(this.now());
     /** @param {string} name @param {string|null} value */
     const field = (name, value) => {
@@ -469,6 +481,7 @@ class BuildIntentLive {
           postgame: { $ifNull: ["$postgame", null] },
           randomizer: { $ifNull: ["$randomizer", null] },
           hold: { $ifNull: ["$hold", null] },
+          askClient: opts.askClient === true ? true : { $ifNull: ["$askClient", false] },
           boundAt: { $ifNull: ["$boundAt", null] },
           updatedAt: now,
           _schemaVersion: expectedVersion(COLLECTIONS.BUILD_INTENT_LIVE),
@@ -514,13 +527,15 @@ class BuildIntentLive {
   }
 
   /**
-   * Decide the randomizer hold once, when the matchup is first concrete.
+   * Decide the randomizer hold once, when the matchup is first concrete and
+   * a check-in client registered the game. Envelope-only records stay
+   * undecided (``hold: null``): the widget's bounded wait covers them.
    * @param {string} userId
    * @param {Record<string, any>} doc
    * @returns {Promise<Record<string, any>>}
    */
   async _maybeDecideHold(userId, doc) {
-    if (!doc || !doc.matchup || doc.hold || doc.gameId) return doc;
+    if (!doc || !doc.matchup || doc.hold || doc.gameId || doc.askClient !== true) return doc;
     const applies = await this._holdApplies(userId, doc.matchup);
     const nowMs = this.now();
     const hold = applies

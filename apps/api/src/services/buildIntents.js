@@ -4,7 +4,8 @@
  * Build check-in ("build intent") service: the one object the routes, the
  * socket layer, the live-envelope route and the ingest route talk to.
  *
- *   options      — buildIntentOptions.js  (per-matchup build list + record)
+ *   options      — buildIntentOptions.js  (per-matchup build list + record,
+ *                                          the user's and the opponent's)
  *   live records — buildIntentLive.js     (registration, hold, declare, roll)
  *   game state   — buildIntentGameState.js (GET/PUT on a game, pending queue)
  *   ingest bind  — buildIntentBind.js     (live record → uploaded game)
@@ -18,6 +19,7 @@ const { BuildIntentLive } = require("./buildIntentLive");
 const { BuildIntentGameState } = require("./buildIntentGameState");
 const { BuildIntentBind } = require("./buildIntentBind");
 const { BuildIntentNotifier } = require("./buildIntentCommon");
+const { CHECKIN_PREF_TYPE } = require("./buildIntentPrefs");
 
 class BuildIntentsService {
   /**
@@ -48,9 +50,39 @@ class BuildIntentsService {
     this.binder = new BuildIntentBind({ ...shared, perGame: opts.perGame || null });
   }
 
-  /** @param {string} userId @param {string} matchup */
-  getOptions(userId, matchup) {
-    return this.options.forMatchup(userId, matchup);
+  /**
+   * @param {string} userId
+   * @param {string} matchup
+   * @param {"you"|"opponent"} [side]
+   */
+  getOptions(userId, matchup, side = "you") {
+    return this.options.forSide(userId, matchup, side);
+  }
+
+  /**
+   * Drop the user's cached options (both sides). Called when a custom build
+   * is saved or deleted, so a build created from a check-in is listed and
+   * confirmable at once.
+   * @param {string} userId
+   */
+  invalidateOptions(userId) {
+    this.options.invalidate(userId);
+  }
+
+  /**
+   * A preference block was replaced (``PUT /v1/me/preferences/:type``).
+   * ``buildCheckin`` pings the user room with ``build-intent:changed
+   * {prefs: true}`` so the agent drops its cards within one round trip;
+   * ``randomizer`` changes which builds are options.
+   * @param {string} userId
+   * @param {string} type
+   */
+  preferencesChanged(userId, type) {
+    if (type === CHECKIN_PREF_TYPE) {
+      this.notifier.changed(userId, { prefs: true });
+    } else if (type === "randomizer") {
+      this.options.invalidate(userId);
+    }
   }
 
   /**

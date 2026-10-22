@@ -9,14 +9,17 @@
  * tokens are the agent, Clerk sessions the web.
  *
  *   GET  /build-intents/options?matchup=PvZ   build list + record per build
+ *        [&side=you|opponent]                 (opponent: the opponent's builds)
  *   GET  /build-intents/live/:gameKey         LiveState (404 not_found)
  *   PUT  /build-intents/live/:gameKey         register | declare | undeclare
  *                                             | release | postgame
  *   GET  /build-intents/pending?limit=10      pending queue (last 72 h)
  *   POST /build-intents/pending/dismiss       "No set build" for the queue
  *   GET  /games/:gameId/build-intent          GameIntentState
- *                                             (?include=options adds the list)
+ *                                             (?include=options adds both lists)
  *   PUT  /games/:gameId/build-intent          confirm | skip | defer | notes
+ *                                             | opponent; every action takes
+ *                                             an optional opponentBuildKey
  *
  * Errors: ``{error: {code, message}}`` (+ ``gameId`` for already_bound,
  * ``reason`` for not_eligible). Request logs redact the live game key
@@ -32,6 +35,7 @@ const {
   validateLiveIntentBody,
   validateGameIntentBody,
   parseMatchupParam,
+  parseSideParam,
   parsePendingLimit,
   isValidGameKey,
 } = require("../validation/buildIntent");
@@ -152,7 +156,12 @@ function registerQueueRoutes(router, deps, limiters) {
       sendError(res, 400, "invalid_matchup", "matchup must look like PvZ.");
       return;
     }
-    res.json(await service.getOptions(auth.userId, matchup));
+    const side = parseSideParam(req.query.side);
+    if (!side) {
+      sendError(res, 400, "invalid_side", "side must be you or opponent.");
+      return;
+    }
+    res.json(await service.getOptions(auth.userId, matchup, side));
   }));
 
   router.get("/build-intents/pending", noStore, deps.auth, limiters.reads, handle(async (req, res) => {

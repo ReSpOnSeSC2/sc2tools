@@ -71,8 +71,9 @@ function buildPublicReplaysRouter(deps) {
       );
       if (!shared) return neutralNotFound(res);
 
-      // Detector view: a visitor sees, filters and searches the label the
-      // classifier gave each replay, never the owner's build check-in.
+      // Detector view: a visitor sees, filters and searches the labels the
+      // classifier gave each replay, never the owner's build check-in or
+      // opponent correction.
       const page = await deps.replayLibrary.list(
         shared.userId,
         { ...parseReplayListQuery(req.query), view: "detector" },
@@ -132,7 +133,10 @@ function buildPublicReplaysRouter(deps) {
             Boolean(deps.replayFiles),
           ),
           macroBreakdown: publicMacroBreakdown(macro),
-          buildOrder: publicBuildOrder(build, detail.game.myBuild),
+          buildOrder: publicBuildOrder(build, {
+            myBuild: detail.game.myBuild,
+            oppStrategy: detail.game.opponent?.strategy,
+          }),
           streams: publicStreamLinks(linksFor(vods, detail.game.gameId)),
         });
       } catch (err) {
@@ -209,8 +213,12 @@ function publicReplayItem(raw, rawLinks, downloadsEnabled = true) {
   const row = objectOrEmpty(raw);
   const opponent = objectOrEmpty(row.opponent);
   // Rows come from the library's detector view. Should an owner-view row
-  // ever arrive, its build check-in still never reaches a visitor.
+  // ever arrive, its build check-in or opponent correction still never
+  // reaches a visitor.
   const myBuild = row.buildPlanned === true ? row.detectedBuild : row.myBuild;
+  const oppStrategy = row.oppStrategyPlanned === true
+    ? row.detectedOppStrategy
+    : opponent.strategy;
   return {
     gameId: boundedString(row.gameId, 200),
     date: safeDateString(row.date),
@@ -227,7 +235,7 @@ function publicReplayItem(raw, rawLinks, downloadsEnabled = true) {
       displayName: boundedString(opponent.displayName, 80),
       race: boundedString(opponent.race, 24),
       mmr: boundedNumber(opponent.mmr, 0, 9_999, true),
-      strategy: boundedString(opponent.strategy, 200),
+      strategy: boundedString(oppStrategy, 200),
     },
     matchup: validMatchup(row.matchup),
     replayAvailable: downloadsEnabled && row.replayAvailable === true,
@@ -358,19 +366,20 @@ function publicStatsEvents(raw) {
 
 /**
  * @param {unknown} raw perGame.buildOrder payload
- * @param {unknown} myBuild the replay's classifier label (the library's
- *   detector view): the payload's own ``my_build`` is the owner's effective
- *   label, which a build check-in may have replaced
+ * @param {{myBuild?: unknown, oppStrategy?: unknown}} labels the replay's
+ *   classifier labels (the library's detector view): the payload's own
+ *   ``my_build`` / ``opp_strategy`` are the owner's effective labels, which a
+ *   build check-in or an opponent correction may have replaced
  */
-function publicBuildOrder(raw, myBuild) {
+function publicBuildOrder(raw, labels) {
   const source = objectOrEmpty(raw);
   if (source.ok !== true) return null;
   return {
     ok: true,
     game_id: boundedString(source.game_id, 200),
-    my_build: boundedString(myBuild, 200),
+    my_build: boundedString(labels.myBuild, 200),
     my_race: boundedString(source.my_race, 24),
-    opp_strategy: boundedString(source.opp_strategy, 200),
+    opp_strategy: boundedString(labels.oppStrategy, 200),
     opponent: boundedString(source.opponent, 80),
     opp_race: boundedString(source.opp_race, 24),
     map: boundedString(source.map, 200),

@@ -615,6 +615,20 @@ describe("background reclassification on build check-in rows", () => {
     expect(stored.buildIntent).toEqual(expect.objectContaining({ status: "skipped", applied: false }));
   });
 
+  test("a committed verdict heals a check-in whose ingest tagger was superseded", async () => {
+    // A re-upload patched the agent's label over the declared build and its
+    // tagger lost the revision race, so nothing restored it.
+    await reupload("r-new", "Agent label", "rev-r-new");
+    expect((await row("r-new")).myBuild).toBe("Agent label");
+
+    await newService().reclassifyAll(USER, { clearUnmatched: true });
+
+    const stored = await row("r-new");
+    expectDeclared(stored);
+    expect(stored.buildIntent.detected)
+      .toEqual({ name: "Stargate Opener", slug: "stargate-opener" });
+  });
+
   test("the classifier pages read the detector view", async () => {
     const service = newService();
     const seen = [];

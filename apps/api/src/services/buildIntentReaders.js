@@ -14,11 +14,19 @@
  *   - build-shape readers keep only rows whose label agrees with the
  *     detector (``agreesWithDetector``, the JS mirror of
  *     ``AGREES_WITH_DETECTOR_MATCH``).
+ *
+ * Every helper has an opponent-axis twin (``opponent`` / ``OPP_`` prefix)
+ * for a corrected opponent build on ``opponent.strategy`` /
+ * ``_customOpponentStrategySlug`` (owner flags ``oppStrategyPlanned`` /
+ * ``detectedOppStrategy``).
  */
 
 const {
   OVERRIDE_ACTIVE_EXPR,
+  OPP_OVERRIDE_ACTIVE_EXPR,
   detectorView,
+  opponentDetectorView,
+  opponentOverrideActive,
   overrideActive,
 } = require("./buildIntentShape");
 
@@ -30,6 +38,13 @@ const OVERRIDE_ACTIVE_QUERY = Object.freeze({
   "buildIntent.status": "confirmed",
   "buildIntent.applied": true,
   "buildIntent.build": { $type: "object" },
+});
+
+/** Query mirror of ``OPP_OVERRIDE_ACTIVE_EXPR``. */
+const OPP_OVERRIDE_ACTIVE_QUERY = Object.freeze({
+  "buildIntent.opponent.status": "confirmed",
+  "buildIntent.opponent.applied": true,
+  "buildIntent.opponent.build": { $type: "object" },
 });
 
 /**
@@ -50,6 +65,24 @@ const DETECTOR_MY_BUILD_FIELD = Object.freeze({
       ],
     },
     "$myBuild",
+  ],
+});
+
+/**
+ * Opponent-axis twin of ``DETECTOR_MY_BUILD_FIELD``: a value for
+ * ``"opponent.strategy"`` (missing stays missing).
+ */
+const DETECTOR_OPP_STRATEGY_FIELD = Object.freeze({
+  $cond: [
+    OPP_OVERRIDE_ACTIVE_EXPR,
+    {
+      $cond: [
+        { $eq: [{ $type: "$buildIntent.opponent.detected.name" }, "string"] },
+        "$buildIntent.opponent.detected.name",
+        "$$REMOVE",
+      ],
+    },
+    "$opponent.strategy",
   ],
 });
 
@@ -80,6 +113,28 @@ function detectorLabelMatch(field, value) {
 }
 
 /**
+ * Opponent-axis twin of ``detectorLabelMatch``: rows whose classifier
+ * opponent label (``opponent.strategy`` / ``_customOpponentStrategySlug``)
+ * equals ``value``, whatever opponent build the player corrected it to.
+ *
+ * @param {"name"|"slug"} field
+ * @param {string|RegExp|Record<string, unknown>} value equality value, regex or operator object
+ * @returns {Record<string, any>}
+ */
+function opponentDetectorLabelMatch(field, value) {
+  const stored = field === "slug" ? "_customOpponentStrategySlug" : "opponent.strategy";
+  const detected = field === "slug"
+    ? "buildIntent.opponent.detected.slug"
+    : "buildIntent.opponent.detected.name";
+  return {
+    $or: [
+      { [stored]: value, $nor: [OPP_OVERRIDE_ACTIVE_QUERY] },
+      { ...OPP_OVERRIDE_ACTIVE_QUERY, [detected]: value },
+    ],
+  };
+}
+
+/**
  * JS mirror of ``AGREES_WITH_DETECTOR_MATCH``: true for every row without a
  * written override and for override rows whose replay landed on the
  * declared build anyway. Build-shape views (timings, phases) keep only
@@ -99,16 +154,51 @@ function agreesWithDetector(row) {
 }
 
 /**
- * Owner-list flags for one row: ``buildPlanned`` while a confirmed check-in
- * supplies the row's label, ``detectedBuild`` = the classifier's own label
+ * JS mirror of ``OPP_AGREES_WITH_DETECTOR_MATCH``: true for every row
+ * without a written opponent correction and for corrected rows whose
+ * replay was classified as the declared opponent build anyway.
+ *
+ * @param {any} row raw games row (``_customOpponentStrategySlug`` + ``buildIntent``)
+ * @returns {boolean}
+ */
+function opponentAgreesWithDetector(row) {
+  const intent = row && typeof row === "object" ? row.buildIntent : null;
+  const opp = intent && typeof intent === "object" ? intent.opponent : null;
+  if (!opp || typeof opp !== "object" || opp.applied !== true) return true;
+  const detected = opp.detected && typeof opp.detected === "object" ? opp.detected : {};
+  const opponent = row.opponent && typeof row.opponent === "object" ? row.opponent : {};
+  return (opponent.strategy ?? null) === (detected.name ?? null)
+    && (row._customOpponentStrategySlug ?? null) === (detected.slug ?? null);
+}
+
+/**
+ * @typedef {object} OwnerBuildFlags
+ * @property {boolean} buildPlanned a confirmed check-in supplies ``myBuild``
+ * @property {string|null} detectedBuild the classifier's ``myBuild`` then
+ * @property {boolean} oppStrategyPlanned a confirmed opponent correction
+ *   supplies ``opponent.strategy``
+ * @property {string|null} detectedOppStrategy the classifier's opponent label then
+ */
+
+/**
+ * Owner-list flags for one row, per axis: ``buildPlanned`` /
+ * ``oppStrategyPlanned`` while a confirmed check-in supplies the label,
+ * ``detectedBuild`` / ``detectedOppStrategy`` = the classifier's own label
  * then (null otherwise).
  *
  * @param {any} row a row projected with ``BUILD_INTENT_LABEL_PROJECTION``
- * @returns {{buildPlanned: boolean, detectedBuild: string|null}}
+ *   and ``OPP_INTENT_LABEL_PROJECTION``
+ * @returns {OwnerBuildFlags}
  */
 function ownerBuildFlags(row) {
-  if (!overrideActive(row)) return { buildPlanned: false, detectedBuild: null };
-  return { buildPlanned: true, detectedBuild: detectorView(row).myBuild };
+  const you = overrideActive(row);
+  const opp = opponentOverrideActive(row);
+  return {
+    buildPlanned: you,
+    detectedBuild: you ? detectorView(row).myBuild : null,
+    oppStrategyPlanned: opp,
+    detectedOppStrategy: opp ? opponentDetectorView(row).strategy : null,
+  };
 }
 
 /**
@@ -128,9 +218,13 @@ function withOwnerBuildFlags(row) {
 
 module.exports = {
   OVERRIDE_ACTIVE_QUERY,
+  OPP_OVERRIDE_ACTIVE_QUERY,
   DETECTOR_MY_BUILD_FIELD,
+  DETECTOR_OPP_STRATEGY_FIELD,
   detectorLabelMatch,
+  opponentDetectorLabelMatch,
   agreesWithDetector,
+  opponentAgreesWithDetector,
   ownerBuildFlags,
   withOwnerBuildFlags,
 };

@@ -166,14 +166,20 @@ test("compositions and transitions use only games whose replay agrees with the l
   await service.evaluateBuildPhases(USER, "dt-rush", { includeTransitions: true });
   expect(pages.mock.calls[0][1]).toEqual(expect.objectContaining({
     view: "agreeing",
+    agreeOn: "you",
     match: { _customBuildSlug: "dt-rush" },
   }));
   const cohort = await listed.mock.results[0].value;
   expect(cohort.games.map((row) => row.gameId)).toEqual(["executed", "plain-dt"]);
 
-  // An opponent definition's cohort is not narrowed by "you"-side check-ins.
+  // An opponent definition's cohort agrees on the opponent axis only, so
+  // "you"-side check-ins never narrow it.
   await service.evaluateBuildPhases(USER, "pool-first", { includeTransitions: false });
-  expect(pages.mock.calls[1][1]).not.toHaveProperty("view");
+  expect(pages.mock.calls[1][1]).toEqual(expect.objectContaining({
+    view: "agreeing",
+    agreeOn: "opponent",
+    match: { _customOpponentStrategySlug: "pool-first" },
+  }));
   const opponentCohort = await listed.mock.results[1].value;
   expect(opponentCohort.games).toHaveLength(5);
 });

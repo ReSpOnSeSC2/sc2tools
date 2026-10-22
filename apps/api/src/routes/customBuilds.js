@@ -90,8 +90,10 @@ function raceMatches(actual, requested, buildName, bucketPos) {
  *   customBuilds: import('../services/types').CustomBuildsService,
  *   perGame?: import('../services/types').PerGameComputeService,
  *   community?: import('../services/community').CommunityService,
+ *   slugTaken?: (userId: string, slug: string) => Promise<boolean>,
  *   auth: import('express').RequestHandler,
- * }} deps
+ * }} deps ``slugTaken``: does a live or soft-deleted build hold the slug
+ *   (``createOnly`` saves); without it only live builds count
  */
 function buildCustomBuildsRouter(deps) {
   const router = express.Router();
@@ -978,8 +980,11 @@ function buildCustomBuildsRouter(deps) {
       // Older clients omitted this flag and expected save-time matching. New
       // clients send false for Save and true for Save & Reclassify.
       const reclassifyRequested = rawBody.reclassify !== false;
+      // "Add new build" (create mode): never overwrite or revive a build.
+      const createOnly = rawBody.createOnly === true;
       const candidate = { ...rawBody, slug };
       delete candidate.reclassify;
+      delete candidate.createOnly;
       const validation = validateCustomBuild(candidate);
       if (!validation.valid) {
         res.status(400).json({
@@ -990,6 +995,13 @@ function buildCustomBuildsRouter(deps) {
       const previousBuild = /** @type {import('../services/types').CustomBuildRecord|null} */ (
         await deps.customBuilds.get(auth.userId, slug)
       );
+      if (createOnly && (previousBuild
+        || (deps.slugTaken ? await deps.slugTaken(auth.userId, slug) : false))) {
+        res.status(409).json({
+          error: { code: "slug_taken", message: "You already have a build with this name." },
+        });
+        return;
+      }
       await deps.customBuilds.upsert(
         auth.userId,
         /** @type {any} */ (validation.value),

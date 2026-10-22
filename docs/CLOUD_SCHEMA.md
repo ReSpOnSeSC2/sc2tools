@@ -168,7 +168,17 @@ deterministic and re-uploads dedupe.
     "gameKey": "Opp|Me#123|1717000000000", // live key bound at ingest (first-wins marker)
     "notes": "",                    // private, <= 1000 chars; served only by the build-intent routes
     "confirmedAt": ISODate,
-    "updatedAt": ISODate
+    "updatedAt": ISODate,
+    "opponent": {                   // correction of the opponent's build; absent = never corrected
+      "status": "confirmed",        // none | confirmed (no pending queue on this axis)
+      "build": { "key": "zvp-ling-bane-bust", "name": "ZvP - Ling Bane Bust", "slug": null, "source": "catalog" },
+      "applied": true,              // true only while opponent.strategy/_customOpponentStrategySlug carry `build`
+      "detected": { "name": "Zerg - 12 Pool", "slug": null }, // classifier's opponent label while applied
+      "origin": "web",              // postgame | web | null
+      "via": "web",                 // agent | web | null
+      "confirmedAt": ISODate,
+      "updatedAt": ISODate
+    }
   },
   "createdAt": ISODate,
   "_schemaVersion": 8
@@ -184,6 +194,19 @@ spelled for the game's patch ("8 Pool" on 5.0.16). Rows without a
 check-in have no `buildIntent`; a notes-only write creates `status: "none"`.
 Rolling back to v7 restores the detected label exactly and drops the
 subdocument.
+
+`buildIntent.opponent` corrects the opponent's build the same way: while
+`applied`, `opponent.strategy` (and `_customOpponentStrategySlug` for one of
+the user's opponent-perspective custom builds) carry the corrected build,
+spelled for the game's patch, and `detected` keeps the classifier's opponent
+label. Opponent keys are `catalogKeyForName` of a counters-catalog strategy
+of the user's matchup (`strategyNamesForMatchup`, e.g. "Zerg - 12 Pool" in
+PvZ) or `custom:<slug>`. It is written only by `PUT
+/v1/games/:gameId/build-intent` (`opponentBuildKey` on any action, or
+`action: "opponent"`); `null` clears it, restoring the detected label
+exactly and leaving `status: "none"`. Too-short, non-1v1 and resumed games
+never take it. The "you"-axis writes merge `buildIntent` shallowly, so they
+keep this subdocument; the v7 rollback restores the opponent label too.
 
 Indexes:
 
@@ -229,6 +252,7 @@ randomizer write to it; the replay upload binds it to the game
   "postgame": { "buildKey": "...", "skip": false, "notes": "...", "at": ISODate, "via": "agent" },
   "randomizer": { "key": "...", "name": "...", "slug": null, "source": "catalog", "at": ISODate, "verifiedPool": true },
   "hold": { "untilMs": 1717000006000, "released": false, "decidedAt": ISODate }, // OBS randomizer hold (6 s)
+  "askClient": true,                // a device-authenticated `register` (the agent's check-in card) came in
   "gameId": null,                   // set by the ingest bind
   "boundAt": null,
   "createdAt": ISODate,
@@ -246,12 +270,22 @@ Indexes:
 | `{userId: 1, gameId: 1, keyStartedAtMs: 1}`   | Ingest bind: unbound records by start time |
 | `{expiresAt: 1}` TTL (`expireAfterSeconds: 0`) | Reap records                              |
 
+`hold` stays `null` until `askClient` is set and the matchup is concrete:
+envelope-only records (a headless agent shows no loading card) never hold
+the OBS reveal. The ingest bind claims records that carry a post-game answer
+first, then a declaration, then empty ones; a record keyed after the replay
+started (an agent that first saw the match mid-game) binds only when it
+carries an answer and names the replay's opponent. A bind that fails after
+claiming gives the record back unless the game write landed.
+
 Hot queries:
 
 - `findOneAndUpdate({userId, gameKey, gameId: null}, pipeline, {upsert})` —
   registration and every live write.
 - `find({userId, gameId: null, keyStartedAtMs: {$gte, $lt}}).sort({keyStartedAtMs: -1}).limit(5)`
-  — ingest bind candidates.
+  — ingest bind candidates (window: 10 min before the replay's start to
+  min(start + 60 s, end)); a second range query, start + 60 s to the end,
+  filtered on `postgame`/`declared` being set, finds records keyed mid-game.
 
 ---
 
@@ -288,11 +322,19 @@ Indexes:
 | `{userId: 1, slug: 1}` unique       | Upsert by slug                           |
 | `{userId: 1, updatedAt: -1}`        | List view sorted by recency              |
 
+A slug stays taken after a soft delete: `PUT /v1/custom-builds/:slug` with
+`createOnly: true` (the "Add new build" editor of the build check-in)
+answers 409 `slug_taken` when a live or deleted build has the slug, so it
+never overwrites or revives one. Builds with `perspective: "opponent"`
+(`race` = the opponent's race, `vs_race` = the user's) are the build
+check-in's opponent options.
+
 Hot queries:
 
 - `find({userId, deletedAt: {$exists: false}}).sort({updatedAt: -1})` —
   list endpoint.
 - `findOne({userId, slug, deletedAt: {$exists: false}})` — detail view.
+- `findOne({userId, slug})` — create-only saves (live or deleted).
 
 ---
 
