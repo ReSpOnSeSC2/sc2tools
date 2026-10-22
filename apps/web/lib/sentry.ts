@@ -3,7 +3,7 @@
  * when NEXT_PUBLIC_SENTRY_DSN is set (Vercel env), so DSN-less deploys
  * and local dev stay no-op. Client init happens in
  * instrumentation-client.ts, server init + request-error forwarding in
- * instrumentation.ts, render-crash capture in components/ui/ErrorBoundary
+ * instrumentation.ts, render-crash capture in components/ui/SectionBoundary
  * plus app/error.tsx and app/global-error.tsx.
  *
  * The dynamic import is kept deliberately: the SDK chunk is only
@@ -15,7 +15,8 @@ const DSN = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
 type Sentry = {
   init: (opts: Record<string, unknown>) => void;
-  captureException: (err: unknown) => void;
+  /** Returns the id of the event it recorded. */
+  captureException: (err: unknown) => string;
 };
 
 let cached: Sentry | null = null;
@@ -46,11 +47,17 @@ export async function initClientSentry(): Promise<void> {
   });
 }
 
-export async function captureException(err: unknown): Promise<void> {
+/**
+ * Report an error. Resolves to the Sentry event id, which a crash panel
+ * shows so a user report can be matched to the event; null when Sentry
+ * is off (no DSN) and the error only went to the console.
+ */
+export async function captureException(err: unknown): Promise<string | null> {
   const s = await getSentry();
   if (s) {
-    s.captureException(err);
-  } else if (typeof console !== "undefined") {
-    console.error(err);
+    const eventId = s.captureException(err);
+    return typeof eventId === "string" && eventId ? eventId : null;
   }
+  if (typeof console !== "undefined") console.error(err);
+  return null;
 }

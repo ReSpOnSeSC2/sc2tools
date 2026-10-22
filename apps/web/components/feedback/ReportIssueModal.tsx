@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { CheckCircle2 } from "lucide-react";
 
@@ -23,25 +23,35 @@ type Status = "idle" | "sending" | "sent";
  * Feedback is self-contained (inline success panel + inline error) so
  * the modal works anywhere in the app without depending on a global
  * ToastProvider, which is only mounted on certain feature pages.
+ *
+ * `prefill` starts the form with a subject and details, e.g. a crashed
+ * section's "Report this problem" (SectionBoundary) passes the page and
+ * error id. The user can edit or clear both before sending.
  */
 export function ReportIssueModal({
   open,
   onClose,
+  prefill,
 }: {
   open: boolean;
   onClose: () => void;
+  prefill?: { subject?: string; message?: string };
 }) {
   const { getToken } = useAuth();
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
+  // Read when the modal opens, so a parent re-render never resets what
+  // the user has typed.
+  const prefillRef = useRef(prefill);
+  prefillRef.current = prefill;
 
-  // Reset to a clean slate each time the modal opens.
+  // Reset to a clean slate (or the prefill) each time the modal opens.
   useEffect(() => {
     if (open) {
-      setSubject("");
-      setMessage("");
+      setSubject((prefillRef.current?.subject ?? "").slice(0, SUBJECT_MAX));
+      setMessage((prefillRef.current?.message ?? "").slice(0, MESSAGE_MAX));
       setStatus("idle");
       setError(null);
     }

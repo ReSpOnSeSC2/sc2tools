@@ -123,7 +123,7 @@ describe("TrendsTab layout", () => {
     expect(screen.getByRole("combobox", { name: "Activity grouping" })).toBeTruthy();
     if (state === "loading") expect(screen.getByRole("status", { name: "Loading Win rate" })).toBeTruthy();
     if (state === "error") {
-      expect(screen.getAllByRole("alert")[0].textContent).toContain("The API took too long to respond.");
+      expect(screen.getAllByRole("alert")[0].textContent).toContain("This took too long to load");
       fireEvent.click(screen.getAllByRole("button", { name: "Retry" })[0]);
       expect(retry).toHaveBeenCalledOnce();
     }

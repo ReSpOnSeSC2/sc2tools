@@ -1,9 +1,15 @@
 "use client";
 
-import { Card } from "@/components/ui/Card";
-import { useState } from "react";
+import { RequestError } from "@/components/ui/RequestError";
 import type { ClientApiError } from "@/lib/clientApi";
+import { useTrendsDataScope } from "@/lib/trendsDataContext";
 
+/**
+ * A Trends chart whose request failed: the shared RequestError inside
+ * the chart's card, so one failed chart never blanks the tab. In the
+ * admin's global trends a timeout also suggests a smaller player
+ * selection.
+ */
 export function TrendsRequestError({
   title,
   retry,
@@ -13,25 +19,18 @@ export function TrendsRequestError({
   retry: () => unknown;
   error?: ClientApiError;
 }) {
-  const [retrying, setRetrying] = useState(false);
-  async function handleRetry() {
-    setRetrying(true);
-    try {
-      await retry();
-    } catch {
-      // SWR retains the request error, so the same retry state stays visible.
-    } finally {
-      setRetrying(false);
-    }
-  }
+  const { isGlobal } = useTrendsDataScope();
   return (
-    <Card title={title}>
-      <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/5 px-3 py-3">
-        <p className="text-sm text-text-muted">{error?.code === "request_timeout" || error?.code === "network_unavailable" || error?.code === "global_trends_busy" ? error.message : "This chart could not be loaded."} Your filters are still applied.</p>
-        <button type="button" disabled={retrying} aria-busy={retrying} onClick={() => { void handleRetry(); }} className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-text hover:bg-bg-elevated focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-60">
-          {retrying ? "Retrying…" : "Retry"}
-        </button>
-      </div>
-    </Card>
+    <RequestError
+      title={title}
+      error={error}
+      onRetry={retry}
+      filtered
+      copy={
+        isGlobal
+          ? { timeout: { body: "The server didn't answer in time. Try again, or narrow the date range or the player selection." } }
+          : undefined
+      }
+    />
   );
 }

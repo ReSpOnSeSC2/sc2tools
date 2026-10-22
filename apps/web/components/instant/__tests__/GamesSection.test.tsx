@@ -201,7 +201,7 @@ describe("GamesSection builds and chart", () => {
     chartFault.on = true;
     vi.spyOn(console, "error").mockImplementation(() => undefined);
     render(<GamesSection games={buildReportGames([realWin()])} />);
-    expect(await screen.findByText(/Failed to render the macro timeline/)).toBeTruthy();
+    expect(await screen.findByText(/Couldn't show the macro timeline/)).toBeTruthy();
     expect(screen.getByTestId("report-build-orders")).toBeTruthy();
   });
 

@@ -12,6 +12,7 @@ import streamStudio_multiPlatformChat from "./stream-studio/multi-platform-chat"
 import streamStudio_obsOverlaySetup from "./stream-studio/obs-overlay-setup";
 import streamStudio_streamDock from "./stream-studio/stream-dock";
 import streamStudio_viewerEngagement from "./stream-studio/viewer-engagement";
+import troubleshooting_somethingWentWrong from "./troubleshooting/something-went-wrong";
 import troubleshooting_troubleshootingAndSupport from "./troubleshooting/troubleshooting-and-support";
 
 export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
@@ -23,5 +24,6 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   streamStudio_obsOverlaySetup,
   streamStudio_streamDock,
   streamStudio_viewerEngagement,
+  troubleshooting_somethingWentWrong,
   troubleshooting_troubleshootingAndSupport,
 ];

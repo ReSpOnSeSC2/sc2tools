@@ -73,7 +73,7 @@ describe("global trends chart integration", () => {
     const retry = vi.fn();
     useApiMock.mockReturnValue({ data: undefined, isLoading: false, error: { message: "Unavailable" }, mutate: retry });
     render(<TrendsDataProvider mode="global" cohort={cohort}><ActivityCalendarChart /></TrendsDataProvider>);
-    expect(screen.getByRole("alert").textContent).toContain("could not be loaded");
+    expect(screen.getByRole("alert").textContent).toContain("Couldn't load this");
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(retry).toHaveBeenCalledOnce();
     await waitFor(() => expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy());

@@ -13,7 +13,7 @@ import {
 import { AgentUpgradeNotice } from "@/components/dashboard/AgentUpgradeNotice";
 import { LiveGamePanel } from "@/components/dashboard/LiveGamePanel";
 import { useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
-import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { SectionBoundary } from "@/components/ui/SectionBoundary";
 import { useApi } from "@/lib/clientApi";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
 
@@ -72,24 +72,24 @@ export function TodayView() {
           subscription and renders only while the desktop agent reports
           a non-idle phase. Boundary keeps a malformed live envelope
           from taking Today down. */}
-      <ErrorBoundary label="the live game panel">
+      <SectionBoundary label="the live game panel">
         <LiveGamePanel />
-      </ErrorBoundary>
+      </SectionBoundary>
 
       <DashboardKpiStrip />
 
-      <ErrorBoundary label="the Daily Pulse strip">
+      <SectionBoundary label="the Daily Pulse strip">
         <DailyPulse
           onNavigate={(tab) => router.push(hrefForTab(tab))}
           onOpenOpponent={(pulseId) =>
             router.push(opponentDossierHref(pulseId))
           }
         />
-      </ErrorBoundary>
+      </SectionBoundary>
 
-      <ErrorBoundary label="Ladder Pulse">
+      <SectionBoundary label="Ladder Pulse">
         <LadderPulse />
-      </ErrorBoundary>
+      </SectionBoundary>
     </div>
   );
 }
