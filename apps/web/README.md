@@ -21,6 +21,8 @@ npm run dev
 | /sign-in, /sign-up  | public | Clerk's hosted UI                      |
 | /download           | public | Agent install instructions             |
 | /try                | public | Instant Analysis: in-browser replay report (flag-gated) |
+| /help               | public | Help center: search, topics, popular articles |
+| /help/[slug]        | public | One help article (statically generated) |
 | /app                | clerk  | Today dashboard + replay analysis      |
 | /app/replays        | clerk  | Replay library and share controls      |
 | /players/[slug]/replays | public | Shareable player replay list + downloads |
@@ -29,6 +31,39 @@ npm run dev
 | /streaming          | clerk  | Overlay tokens                         |
 | /builds             | clerk  | User's custom-build library            |
 | /overlay/[token]    | token  | Public OBS Browser Source target       |
+
+## Adding a help article
+
+Help articles are data, one file per article, shown in three places: the
+public help center (`/help`, `/help/<slug>`), **Settings → Help** (each
+article is a section at `/settings?tab=help#<slug>`), and the side sheet a
+`<HelpLink>` opens.
+
+1. **Create the file** `lib/help/articles/<category>/<slug>.ts`. The folder
+   is the article's `category` (see `lib/help/categories.ts`) and the file
+   name is its `slug`. Default-export an object typed `HelpArticle`
+   (`lib/help/types.ts`): title, a one-or-two-sentence summary, audience,
+   the search `keywords` readers might type, `updated` (`YYYY-MM-DD`),
+   `body` blocks (paragraph, heading, steps, list, callout, settingsLink,
+   image, table, widget) and `related` slugs. Set `signedInOnly` when the
+   steps happen in an account. Text supports `**bold**`, `*italic*`,
+   `` `code` `` and `[label](/path)`; link other articles as
+   `/help/<slug>`.
+2. **Run `npm run help:index`** and commit the regenerated
+   `lib/help/articles/index.generated.ts`. Never edit that file or add to
+   a shared list by hand: the generator keeps parallel changes from
+   colliding, and a test fails while it is stale.
+3. **Link it next to the feature** with
+   `<HelpLink slug="<slug>">How this works</HelpLink>` (or
+   `variant="icon"` for a small "?" button) from
+   `components/help/HelpLink.tsx`.
+
+Renaming a slug? Add the old one to the article's `legacyAnchors` so old
+Settings links still open it. `npx vitest run lib/help components/help app/help`
+checks slugs, file paths, dates, markup, and that every link and related
+article resolves to a real page, settings tab or article. Copy is plain
+and written from the reader's side; every number in the product comes
+from replays with fixed rules, so never describe it as AI.
 
 ## Public community activity
 

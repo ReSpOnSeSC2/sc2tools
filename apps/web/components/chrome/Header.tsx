@@ -207,7 +207,7 @@ function NavLink({ href, label, active }: NavLinkProps) {
       href={href}
       aria-current={active ? "page" : undefined}
       className={[
-        "relative inline-flex h-9 items-center rounded-full px-3.5 font-display text-caption font-bold",
+        "relative inline-flex h-9 items-center whitespace-nowrap rounded-full px-2.5 font-display text-caption font-bold xl:px-3.5",
         "motion-safe:transition-colors motion-safe:duration-150",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         active

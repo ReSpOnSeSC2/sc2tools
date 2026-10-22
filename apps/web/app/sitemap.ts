@@ -4,6 +4,7 @@ import { getInstantImportMode } from "@/lib/instant/flag";
 import { reviewsRollout } from "@/lib/reviews";
 import { fetchGuideSitemap } from "@/lib/guides/api";
 import { guidesEnabled } from "@/lib/guides/flags";
+import { helpSitemapRows } from "@/lib/help/sitemap";
 import type { CommunitySitemapPayload } from "@/lib/guides/types";
 import {
   communitySitemapRows,
@@ -134,11 +135,12 @@ async function communityRows(): Promise<SitemapRows> {
 }
 
 /**
- * Static marketing routes, then reviews, guides, community builds and
- * profiles (in that priority order, so the cap trims profiles first).
- * An unreachable API degrades to the static list, never an error.
+ * Static marketing routes and the help center, then reviews, guides,
+ * community builds and profiles (in that priority order, so the cap
+ * trims profiles first). An unreachable API degrades to the static list,
+ * never an error.
  */
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [reviews, guides, community] = await Promise.all([reviewRows(), guideRows(), communityRows()]);
-  return finalizeSitemap([...staticRows(), ...reviews, ...guides, ...community]);
+  return finalizeSitemap([...staticRows(), ...helpSitemapRows(SITE_URL), ...reviews, ...guides, ...community]);
 }

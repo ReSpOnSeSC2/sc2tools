@@ -62,6 +62,14 @@ describe("BuildCheckInSettings", () => {
     expect(screen.queryByRole("region", { name: "Unsaved changes" })).toBeNull();
   });
 
+  it("opens the step-by-step guide in the help panel", () => {
+    harness.data = {};
+    render(<BuildCheckInSettings />);
+    const link = screen.getByRole("link", { name: "How build check-in works, step by step" });
+    expect(link.getAttribute("href")).toBe("/help/build-check-in");
+    expect(link.getAttribute("aria-haspopup")).toBe("dialog");
+  });
+
   it("disables the agent prompts while check-ins are off", () => {
     harness.data = { enabled: false, askAtLoading: true, askAfterGame: false };
     render(<BuildCheckInSettings />);

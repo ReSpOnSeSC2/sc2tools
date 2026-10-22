@@ -11,7 +11,20 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- **Help center:** every how-to now lives at [sc2tools.com/help](https://sc2tools.com/help),
+  searchable and readable without signing in, and the same articles open
+  inside Settings → Help. Links to a section (`/settings?tab=help#<article>`)
+  open it directly, and some settings open their guide in a side panel so
+  you don't lose your place. New: "Getting started (5 minutes)" and "How to
+  use Help".
+
 ### Fixed
+
+- Primary buttons such as "Get started" and "Download the agent" no longer
+  lose their label when you hover them, and focused round buttons stay
+  round. The notes boxes keep their keyboard focus ring.
 
 - **Build check-in on the website:** the OBS build randomizer no longer
   waits at the loading screen unless a desktop app that can ask for your

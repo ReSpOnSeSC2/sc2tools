@@ -35,7 +35,7 @@ export function ReviewNotFound({ id }: { id: string | null }) {
       icon={<SearchX className="h-6 w-6" aria-hidden />}
       title="Review not found"
       description="It doesn't exist, was removed, or is hidden pending moderator review."
-      action={<Link href="/reviews" className="font-semibold text-accent-cyan underline underline-offset-2">Browse replay reviews</Link>}
+      action={<Link href="/reviews" className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">Browse replay reviews</Link>}
     />
   );
 }

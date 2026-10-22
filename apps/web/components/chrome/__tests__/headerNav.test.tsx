@@ -35,26 +35,36 @@ describe("headerNavLinks", () => {
       "/builds",
       "/guides",
       "/community",
+      "/help",
       "/settings",
     ]);
     expect(hrefs({ guides: false, reviews: false, isAdmin: false })).toEqual([
       "/app",
       "/builds",
       "/community",
+      "/help",
       "/settings",
     ]);
   });
 
-  it("keeps Reviews after Community and Admin last", () => {
+  it("keeps Reviews after Community, Help before Settings and Admin last", () => {
     expect(hrefs({ guides: true, reviews: true, isAdmin: true })).toEqual([
       "/app",
       "/builds",
       "/guides",
       "/community",
       "/reviews",
+      "/help",
       "/settings",
       "/admin",
     ]);
+  });
+
+  it("shows Help to everyone", () => {
+    const help = headerNavLinks({ guides: false, reviews: false, isAdmin: false }).find(
+      (link) => link.href === "/help",
+    );
+    expect(help).toEqual({ href: "/help", label: "Help", auth: "any" });
   });
 
   it("never links the retired /meta radar", () => {
@@ -90,5 +100,6 @@ describe("Header", () => {
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).queryByRole("link", { name: "Guides" })).toBeNull();
     expect(within(nav).getByRole("link", { name: "Community" })).toBeTruthy();
+    expect(within(nav).getByRole("link", { name: "Help" }).getAttribute("href")).toBe("/help");
   });
 });

@@ -18,7 +18,8 @@ import { lockBodyScroll } from "@/lib/bodyScrollLock";
  * Behavior:
  *   - ≤640px viewport: renders as a bottom sheet (full-width) by default,
  *     or a centered card when `mobileLayout="center"`.
- *   - ≥640px viewport: renders as a centered card.
+ *   - ≥640px viewport: renders as a centered card, or a full-height
+ *     panel docked to the right edge when `desktopLayout="side"`.
  *   - Focus is trapped inside while open, returned to the previously
  *     focused element on close.
  *   - Body scroll is locked while open.
@@ -28,6 +29,7 @@ import { lockBodyScroll } from "@/lib/bodyScrollLock";
 
 export type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
 export type ModalMobileLayout = "sheet" | "center";
+export type ModalDesktopLayout = "center" | "side";
 
 const SIZE_CLASSES: Record<ModalSize, string> = {
   sm: "sm:max-w-md",
@@ -49,6 +51,11 @@ export interface ModalProps {
    * Use "center" to render as a centered card on mobile too.
    */
   mobileLayout?: ModalMobileLayout;
+  /**
+   * ≥640px layout. Defaults to "center" (centered card). "side" docks a
+   * full-height panel to the right edge, for reading alongside the page.
+   */
+  desktopLayout?: ModalDesktopLayout;
   /** Hide the X close button (still closes on Esc / scrim click). */
   hideClose?: boolean;
   /** Disable scrim-click dismissal — useful for in-progress flows. */
@@ -64,6 +71,7 @@ export function Modal({
   description,
   size = "md",
   mobileLayout = "sheet",
+  desktopLayout = "center",
   hideClose = false,
   disableScrimClose = false,
   children,
@@ -122,11 +130,13 @@ export function Modal({
   };
 
   const centerOnMobile = mobileLayout === "center";
+  const sideOnDesktop = desktopLayout === "side";
 
   return createPortal(
     <div
       className={[
-        "fixed inset-0 z-50 flex justify-center sm:items-center sm:p-4",
+        "fixed inset-0 z-50 flex justify-center",
+        sideOnDesktop ? "sm:items-stretch sm:justify-end" : "sm:items-center sm:p-4",
         centerOnMobile ? "items-center p-4" : "items-end",
       ].join(" ")}
       role="presentation"
@@ -149,11 +159,18 @@ export function Modal({
           "relative w-full min-w-0 bg-bg-surface text-text border border-border shadow-[var(--shadow-card)]",
           "overflow-hidden flex flex-col",
           centerOnMobile ? "max-h-[85dvh]" : "max-h-[100dvh]",
-          // 3xl gets more vertical room for the build editor's timeline.
-          size === "3xl"
-            ? "sm:max-h-[94vh]"
-            : "sm:max-h-[85vh]",
-          centerOnMobile ? "rounded-2xl" : "rounded-t-2xl sm:rounded-xl",
+          // The side panel spans the full height; 3xl gets more vertical
+          // room for the build editor's timeline.
+          sideOnDesktop
+            ? "sm:h-[100dvh] sm:max-h-[100dvh]"
+            : size === "3xl"
+              ? "sm:max-h-[94vh]"
+              : "sm:max-h-[85vh]",
+          centerOnMobile
+            ? "rounded-2xl"
+            : sideOnDesktop
+              ? "rounded-t-2xl sm:rounded-none sm:border-y-0 sm:border-r-0"
+              : "rounded-t-2xl sm:rounded-xl",
           centerOnMobile
             ? "sm:pb-0"
             : "pb-[env(safe-area-inset-bottom,0px)]",

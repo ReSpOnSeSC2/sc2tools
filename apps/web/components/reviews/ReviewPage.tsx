@@ -335,7 +335,7 @@ function ComposerGate({
   if (!signedIn || !v.signedIn) {
     return (
       <div className="rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted">
-        <Link href={`/sign-in?redirect_url=${encodeURIComponent(data.request.url)}`} className="font-semibold text-accent-cyan underline underline-offset-2">Sign in</Link>
+        <Link href={`/sign-in?redirect_url=${encodeURIComponent(data.request.url)}`} className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">Sign in</Link>
         {" "}to comment, vote or mark reviews helpful.
       </div>
     );

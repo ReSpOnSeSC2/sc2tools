@@ -215,7 +215,7 @@ function WidgetDetail({ guide, onRelated, detailRef }: { guide: WidgetGuide; onR
               <li key={step} className="flex items-start gap-3 text-body text-text-muted"><span className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-full bg-accent/10 text-caption font-bold text-accent" aria-hidden>{index + 1}</span><span>{step}</span></li>
             ))}
           </ol>
-          <Link href={guide.settingsHref} className={`mt-5 inline-flex min-h-11 items-center gap-2 rounded-full border-2 border-line bg-accent px-5 py-2 text-body font-bold text-white shadow-hard ${FOCUS}`}>Open the right settings<ArrowRight className="h-4 w-4" aria-hidden /></Link>
+          <Link href={guide.settingsHref} className={`mt-5 inline-flex min-h-11 items-center gap-2 rounded-full border-2 border-line bg-accent px-5 py-2 text-body font-bold text-white shadow-hard hover:bg-accent-hover ${FOCUS}`}>Open the right settings<ArrowRight className="h-4 w-4" aria-hidden /></Link>
         </div>
         <div className="border-l-4 border-accent bg-accent/5 p-4">
           <h4 className="text-body font-semibold text-text">Your first successful test</h4>

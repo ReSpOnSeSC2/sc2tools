@@ -88,7 +88,7 @@ export function CheckInNotesEditor({
           notes.setDraft(event.target.value);
           onEdit?.();
         }}
-        className="min-h-[88px] w-full resize-y rounded-lg border-2 border-line bg-bg px-3 py-2 text-body leading-relaxed text-text shadow-inner outline-none transition-colors placeholder:text-text-dim focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+        className="min-h-[88px] w-full resize-y rounded-lg border-2 border-line bg-bg px-3 py-2 text-body leading-relaxed text-text shadow-inner transition-colors placeholder:text-text-dim focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
       />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-3 text-micro text-text-dim">

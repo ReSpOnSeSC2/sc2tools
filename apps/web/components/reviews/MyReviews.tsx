@@ -39,7 +39,7 @@ export function MyReviews() {
       title="Sign in to see your reviews"
       description="Your review requests, the reviews you've written and the reviewers you've blocked live here."
       action={
-        <Link href={`/sign-in?redirect_url=${encodeURIComponent("/reviews/mine")}`} className="font-semibold text-accent-cyan underline underline-offset-2">
+        <Link href={`/sign-in?redirect_url=${encodeURIComponent("/reviews/mine")}`} className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">
           Sign in
         </Link>
       }
@@ -73,7 +73,7 @@ function MyReviewsSignedIn() {
             <EmptyStatePanel
               title="You haven't asked for a review yet"
               description="Open one of your 1v1 games from Replays and use “Ask for a review”."
-              action={<Link href="/app/replays" className="font-semibold text-accent-cyan underline underline-offset-2">Go to your replays</Link>}
+              action={<Link href="/app/replays" className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">Go to your replays</Link>}
             />
           ) : (
             <ul className="space-y-3" aria-label="Your review requests">
@@ -86,7 +86,7 @@ function MyReviewsSignedIn() {
           <h2 id="my-answers" className="font-display text-h3 font-bold text-text">Reviews you've written</h2>
           {!mine.data ? null : answered.length === 0 ? (
             <p className="text-body text-text-muted">
-              None yet. <Link href="/reviews" className="font-semibold text-accent-cyan underline underline-offset-2">Browse requests</Link> you can help with.
+              None yet. <Link href="/reviews" className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">Browse requests</Link> you can help with.
             </p>
           ) : (
             <ul className="space-y-2" aria-label="Reviews you've written">
