@@ -110,6 +110,22 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Agent 0.19.0: Build check-in.** Say which build you were going for and
+  the game counts toward that build's win/loss record, even when an early
+  scout, lost workers or an all-in knocked you off it before the replay met
+  every step. The desktop app asks during the loading screen with a small
+  "What's the plan?" card (your builds for the matchup with their records;
+  it never takes focus from the game and is hidden from stream capture) and
+  again when the game ends, with its best guess from your replay or the
+  build randomizer's roll already selected and room for notes on what threw
+  the build off. Picking a build at the loading screen stops the randomizer
+  from rolling; a roll counts once you confirm it. Missed games wait in the
+  new **Build check-ins** header chip, every game page has a check-in card,
+  and build stats show how many games count through check-ins. Community
+  guides and ladder meta keep the replay's own label. Turn it on or off in
+  Settings → Build check-in; Settings → Help walks through it step by step.
+  Update the agent for the in-game cards; the website works without it.
+
 - **Killed/lost resource totals** — the match timeline breaks both players'
   kills and losses into minerals, gas and combined value. Totals follow the
   selected time and category filters, use the replay's balance patch, and

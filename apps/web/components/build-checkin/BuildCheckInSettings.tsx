@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
@@ -20,6 +21,9 @@ import {
   type BuildCheckinPrefs,
 } from "@/lib/buildIntent";
 import { useBuildCheckInRevision } from "./BuildCheckInProvider";
+
+/** The full guide lives in Settings → Help. */
+const BUILD_CHECKIN_HELP_HREF = "/settings?tab=help#build-check-in";
 
 /**
  * Settings · Build check-in — the three cloud switches shared with the
@@ -104,7 +108,7 @@ export function BuildCheckInSettings() {
             />
             <ToggleRow
               title="Ask after each game"
-              description="The desktop agent asks which build you were going for once the replay is uploaded."
+              description="The desktop agent asks which build you were going for when the game ends, with its best guess from your replay already selected."
               checked={draft.askAfterGame}
               disabled={!draft.enabled}
               onChange={(askAfterGame) => set({ askAfterGame })}
@@ -125,6 +129,12 @@ export function BuildCheckInSettings() {
             </li>
             <li>Games under 45 seconds never count toward a build.</li>
           </ul>
+          <Link
+            href={BUILD_CHECKIN_HELP_HREF}
+            className="mt-3 inline-flex min-h-11 items-center text-caption font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            How build check-in works, step by step
+          </Link>
         </Card>
       </Section>
 

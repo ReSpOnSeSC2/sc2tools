@@ -269,7 +269,7 @@ export const WIDGET_GUIDES: readonly WidgetGuide[] = [
       "Use Test to preview a draw; start a real game in a configured matchup to verify the automatic trigger.",
     ],
     check: "Test triggers a preview spin using a sample matchup. That matchup still needs an enabled build pool; test the actual matchup you plan to use by starting a game.",
-    troubleshooting: "Check that changes were saved and that this exact matchup has enabled builds. Random race pairings without a concrete matchup do not produce a draw. A finished game should not trigger a second spin.",
+    troubleshooting: "Check that changes were saved and that this exact matchup has enabled builds. Random race pairings without a concrete matchup do not produce a draw. A finished game should not trigger a second spin. With Build check-in asking at the loading screen, the draw waits a few seconds so you can pick a build instead; picking one skips the draw for that game.",
     placement: "Leave space near the center for the animated reveal, then let it clear for gameplay.",
     source: "all-in-one", settingsHref: "/settings?tab=randomizer", related: ["ghost-build", "topbuilds", "build-profile"],
   },
