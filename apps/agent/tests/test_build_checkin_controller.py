@@ -75,6 +75,7 @@ def test_loading_card_shows_matchup_options_and_registers(h: Harness) -> None:
     register = h.api.live_bodies()[0]
     assert register == {
         "action": "register", "myRace": "Protoss", "oppRace": "Zerg", "oppName": OPP,
+        "phase": "match_loading",
     }
 
 
@@ -947,6 +948,29 @@ def test_a_read_older_than_a_confirmed_save_is_not_applied() -> None:
     both = CheckinPrefs(ask_at_loading=False, ask_after_game=False)
     assert h.ctl.prefs == both
     assert h.saved_prefs[-1] == both
+
+
+def test_a_read_answered_during_a_save_is_read_again_after_it() -> None:
+    executor = ManualExecutor()
+    h = Harness(executor=executor)
+    saved = {"enabled": True, "askAtLoading": False, "askAfterGame": True}
+    h.api.put_checkin_prefs = lambda _prefs: dict(saved)
+    h.ctl.set_prefs(ask_at_loading=False)
+    h.pump()  # the save is out
+    # The save commits, the website changes another switch, and the save's
+    # ping read sees both before the save's own response gets back.
+    h.api.prefs = {"enabled": True, "askAtLoading": False, "askAfterGame": False}
+    h.ctl.refresh_prefs()
+    h.pump()
+    executor.run(1)
+    h.pump()
+    executor.run(0)  # the save's response: only the desktop change
+    h.pump()
+    while executor.jobs:
+        executor.run_all()
+        h.pump()
+    assert h.ctl.prefs == CheckinPrefs(ask_at_loading=False, ask_after_game=False)
+    assert len(h.api.calls_to("get_checkin_prefs")) == 2
 
 
 def test_prefs_read_is_not_retried_once_the_server_answered(h: Harness) -> None:

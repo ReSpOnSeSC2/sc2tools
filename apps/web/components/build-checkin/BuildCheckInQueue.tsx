@@ -32,6 +32,7 @@ import {
 } from "./CheckInNewBuild";
 import { DetectedLine, ReasonChip } from "./CheckInParts";
 import type { PickerSignal } from "./OpponentBuildRow";
+import { focusWasLost } from "./focus";
 import { CorrectedBadge } from "./PlannedBadge";
 import { useCheckInActions } from "./useCheckInActions";
 import { useNewBuildCheckIn } from "./useNewBuildCheckIn";
@@ -68,14 +69,20 @@ export function BuildCheckInQueue({
     /** The game as listed when the editor opened. */
     item: GameIntentState;
     open: boolean;
+    /** The queue session the editor was opened in. */
+    session: number;
   } | null>(null);
   const [signal, setSignal] = useState<(PickerSignal & { gameId: string }) | null>(null);
   const writer = useCheckInActions(newBuild?.request.gameId ?? "");
   const checkInNewBuild = useNewBuildCheckIn(writer);
+  // Bumped whenever the queue opens or closes: a new build saved or checked
+  // in after that belongs to a list the player already left.
+  const session = useRef(0);
 
   // A closed queue unmounts its items: nothing it asked of them may be
   // replayed when it opens again.
   useEffect(() => {
+    session.current += 1;
     if (open) return;
     setNewBuild(null);
     setSignal(null);
@@ -84,15 +91,14 @@ export function BuildCheckInQueue({
   // A handled game leaves the list on the next refresh; if it took the
   // focused control with it, keep focus inside the dialog.
   useEffect(() => {
-    if (!focusInBody.current) return;
-    const active = document.activeElement;
-    if (active && active !== document.body && document.contains(active)) return;
+    if (!focusInBody.current || !focusWasLost()) return;
     bodyRef.current?.focus({ preventScroll: true });
   }, [items]);
 
   const openNewBuild = (item: GameIntentState, side: CheckInSide, query = "") =>
     setNewBuild({
       open: true,
+      session: session.current,
       item,
       request: {
         gameId: item.gameId,
@@ -108,21 +114,20 @@ export function BuildCheckInQueue({
     // The editor hands focus back to the control that opened it; that
     // control is gone when its game was checked in meanwhile.
     window.setTimeout(() => {
-      const active = document.activeElement;
-      if (!active || active === document.body || !document.contains(active)) {
-        bodyRef.current?.focus({ preventScroll: true });
-      }
+      if (focusWasLost()) bodyRef.current?.focus({ preventScroll: true });
     }, 0);
   };
 
   const onNewBuildSaved = async (saved: NewBuildSaved) => {
     const item = newBuild?.item.gameId === saved.gameId ? newBuild.item : undefined;
+    const started = newBuild?.session ?? session.current;
     const outcome = await checkInNewBuild(saved, item);
     if (outcome.state) return;
     // Saved but not checked in: refresh the lists (the new build may now
     // be pickable) and open that game's picker on it. The queue has no
     // opponent picker; the toast says what happened.
     bump();
+    if (session.current !== started) return;
     if (saved.side === "you" && item?.eligible !== false && outcome.errorCode !== "not_eligible") {
       setSignal({ gameId: saved.gameId, key: saved.key, open: true, nonce: Date.now() });
     }

@@ -43,6 +43,8 @@ const LIVE_BODY_SCHEMA = {
     myRace: { type: ["string", "null"], maxLength: RACE_MAX_LENGTH },
     oppRace: { type: ["string", "null"], maxLength: RACE_MAX_LENGTH },
     oppName: { type: ["string", "null"], maxLength: BUILD_INTENT.OPP_NAME_MAX_LENGTH * 2 },
+    // ``register``: the live phase the card registered in.
+    phase: { type: "string", enum: ["match_loading", "match_started"] },
   },
 };
 

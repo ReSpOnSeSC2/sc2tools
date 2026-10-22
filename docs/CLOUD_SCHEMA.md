@@ -253,6 +253,7 @@ randomizer write to it; the replay upload binds it to the game
   "randomizer": { "key": "...", "name": "...", "slug": null, "source": "catalog", "at": ISODate, "verifiedPool": true },
   "hold": { "untilMs": 1717000006000, "released": false, "decidedAt": ISODate }, // OBS randomizer hold (6 s)
   "askClient": true,                // a device-authenticated `register` (the agent's check-in card) came in
+  "loadingSeen": true,              // the agent saw this key's own loading screen (a key first seen mid-match is a re-key)
   "gameId": null,                   // set by the ingest bind
   "boundAt": null,
   "createdAt": ISODate,
@@ -272,11 +273,16 @@ Indexes:
 
 `hold` stays `null` until `askClient` is set and the matchup is concrete:
 envelope-only records (a headless agent shows no loading card) never hold
-the OBS reveal. The ingest bind claims records that carry a post-game answer
-first, then a declaration, then empty ones; a record keyed after the replay
-started (an agent that first saw the match mid-game) binds only when it
-carries an answer and names the replay's opponent. A bind that fails after
-claiming gives the record back unless the game write landed.
+the OBS reveal. The ingest bind takes the newest record that saw its own
+loading screen before the replay started as this match's; it and the re-keys
+after it (first seen mid-match, or a rejoin's loading screen) are claimed
+post-game answer first, then a declaration, then
+empty ones. Records keyed before it saw an earlier loading screen (an earlier
+match against the same opponent) come after them, newest first; without any
+`loadingSeen` record every candidate is ranked answer first. A record keyed
+after the replay started (an agent that first saw the match mid-game) binds
+only when it carries an answer and names the replay's opponent. A bind that
+fails after claiming gives the record back unless the game write landed.
 
 Hot queries:
 

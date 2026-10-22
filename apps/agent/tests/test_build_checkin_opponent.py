@@ -431,6 +431,148 @@ def test_add_build_for_the_opponent_hands_the_row_to_the_web(h: Harness) -> None
     assert h.api.games[GID]["opponent"]["build"]["key"] == "custom:new-opp"
 
 
+def _manual_card():
+    """A full end card on a ManualExecutor: requests wait for the test."""
+    from tests.build_checkin_fakes import ManualExecutor
+
+    executor = ManualExecutor()
+    h = Harness(executor=executor)
+    h.boot()
+    _drain(h, executor)
+    key = h.new_key()
+    h.play(key)
+    h.wall.advance(620)
+    h.api.games[GID] = game_state(GID, opponent=opponent_state(options=OPP_OPTIONS))
+    h.accept(_game(key))
+    _drain(h, executor)
+    return h, executor, _card(h).card_id
+
+
+def _drain(h: Harness, executor) -> None:
+    h.pump()
+    while executor.jobs:
+        executor.run_all()
+        h.pump()
+
+
+def _hold_opponent_put(h: Harness, executor):
+    """``add_build`` queued the browser, then the opponent write: keep the
+    write back so the test decides when it lands."""
+    assert len(executor.jobs) == 2
+    put = executor.jobs.pop()
+    executor.run_all()  # the browser
+    assert h.opened
+    return put
+
+
+def test_a_newer_pick_survives_the_hand_off_landing() -> None:
+    h, executor, card_id = _manual_card()
+    h.ctl.update_draft(card_id, PHOENIX, "", "zvp-roach-rush")
+    h.ctl.add_build(card_id, "you")
+    h.pump()
+    put = _hold_opponent_put(h, executor)
+    # Back on the card before that write lands: a different pick, then Later.
+    h.ctl.reopen()
+    _drain(h, executor)
+    h.ctl.update_draft(card_id, PHOENIX, "", "zvp-ling-bane-bust")
+    h.ctl.later(card_id, "")
+    h.pump()
+    put()
+    _drain(h, executor)
+    h.ctl.reopen()
+    _drain(h, executor)
+    assert _card(h).opponent.selection == "zvp-ling-bane-bust"
+    h.ctl.confirm(card_id, PHOENIX, "")
+    _drain(h, executor)
+    assert _game_bodies(h)[-1]["opponentBuildKey"] == "zvp-ling-bane-bust"
+
+
+def test_a_hand_off_landing_on_screen_is_released_when_the_card_steps_aside() -> None:
+    h, executor, card_id = _manual_card()
+    h.ctl.update_draft(card_id, PHOENIX, "", "zvp-roach-rush")
+    h.ctl.add_build(card_id, "you")
+    h.pump()
+    put = _hold_opponent_put(h, executor)
+    h.ctl.reopen()
+    _drain(h, executor)
+    put()
+    _drain(h, executor)
+    assert _card(h).opponent.selection == "zvp-roach-rush"  # still shown
+    h.ctl.later(card_id, "")
+    _drain(h, executor)
+    # Corrected again on the game page, then back to the card.
+    h.api._set_opponent(h.api.games[GID], "zvp-ling-bane-bust")
+    h.ctl.on_intent_changed({"gameId": GID})
+    _drain(h, executor)
+    h.ctl.reopen()
+    _drain(h, executor)
+    assert _card(h).opponent.selection == "zvp-ling-bane-bust"
+    h.ctl.confirm(card_id, PHOENIX, "")
+    _drain(h, executor)
+    assert _game_bodies(h)[-1] == {"action": "confirm", "buildKey": PHOENIX}
+
+
+def test_undoing_a_landed_hand_off_on_screen_is_saved() -> None:
+    h, executor, card_id = _manual_card()
+    h.ctl.update_draft(card_id, PHOENIX, "", "zvp-roach-rush")
+    h.ctl.add_build(card_id, "you")
+    h.pump()
+    put = _hold_opponent_put(h, executor)
+    h.ctl.reopen()
+    _drain(h, executor)
+    put()
+    _drain(h, executor)
+    # Back to the replay's label on the card, then Confirm.
+    h.ctl.confirm(card_id, PHOENIX, "", "zerg-12-pool")
+    _drain(h, executor)
+    body = _game_bodies(h)[-1]
+    assert body["action"] == "confirm"
+    assert "opponentBuildKey" in body and body["opponentBuildKey"] is None
+    assert h.api.games[GID]["opponent"]["applied"] is False
+
+
+def _decided_on_the_web(h: Harness) -> None:
+    h.api.games[GID].update(
+        status="confirmed", origin="web",
+        build=option("custom:new-you", "New you build", source="custom"),
+    )
+    h.ctl.on_intent_changed({"gameId": GID})
+    h.pump()
+
+
+def test_a_failed_hand_off_is_saved_when_the_web_decides(h: Harness) -> None:
+    card_id = _accepted(h)
+    h.ctl.update_draft(card_id, PHOENIX, "", "zvp-roach-rush")
+    h.api.fail_next("put_game_intent", ConnectionError("offline"))
+    h.ctl.add_build(card_id, "you")
+    h.pump()
+    assert h.api.games[GID]["opponent"]["applied"] is False
+    _decided_on_the_web(h)
+    assert h.api.games[GID]["opponent"]["build"]["key"] == "zvp-roach-rush"
+    assert h.view.of("hide_postgame")[-1] == (card_id, "opened_web")
+
+
+def test_later_then_a_web_decision_still_saves_the_opponent(h: Harness) -> None:
+    card_id = _accepted(h)
+    h.ctl.update_draft(card_id, PHOENIX, "", "zvp-roach-rush")
+    h.ctl.later(card_id, "")
+    h.pump()
+    assert _game_bodies(h) == []
+    _decided_on_the_web(h)
+    assert _game_bodies(h) == [{"action": "opponent", "opponentBuildKey": "zvp-roach-rush"}]
+
+
+def test_a_web_decision_never_overwrites_a_web_correction(h: Harness) -> None:
+    card_id = _accepted(h)
+    h.ctl.update_draft(card_id, PHOENIX, "", "zvp-roach-rush")
+    h.ctl.later(card_id, "")
+    h.pump()
+    h.api._set_opponent(h.api.games[GID], "zvp-ling-bane-bust")
+    _decided_on_the_web(h)
+    assert _game_bodies(h) == []
+    assert h.api.games[GID]["opponent"]["build"]["key"] == "zvp-ling-bane-bust"
+
+
 def test_add_build_drops_the_matchup_list_cache(h: Harness) -> None:
     card_id = _accepted(h)
     fetched = len(h.api.calls_to("get_build_options"))

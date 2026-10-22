@@ -11,12 +11,20 @@
  * information is only taken when it is the only candidate. Records keyed
  * later in the game (an agent that first saw the match after it started, so
  * its key's time is late) join only when they carry an answer and name the
- * replay's opponent explicitly. Records that can belong to this match (keyed
- * from 2 min before the replay's start on) are claimed answer first
- * (post-game answer, then declaration, then none), window records before late
- * ones and newest first within each; older records of an earlier match
- * against the same opponent come after them, newest first, so an unbound
- * answer from that match never lands on this game.
+ * replay's opponent explicitly.
+ *
+ * Claim order: the newest record that saw its own loading screen
+ * (``loadingSeen``) before the replay started is this match's; records keyed
+ * after it are re-keys of the same match (an agent that lost track of it or
+ * restarted mid-game, or a rejoin's loading screen).
+ * Those are claimed answer first (post-game answer, then declaration, then
+ * none), window records before late ones and newest first within each.
+ * Records keyed before it saw an earlier loading screen (an earlier match
+ * against the same opponent, however long ago) come after them, newest
+ * first, so an unbound answer from that match never lands on this game; the
+ * agent carries a pick forward itself when it re-keys the match during
+ * loading. Without such a record (older records, or no live envelopes) all
+ * candidates are ranked answer first.
  *
  * Binding is first-wins on both sides: the record is claimed (``gameId:
  * null`` → gameId), then the game is written only while it has no
@@ -162,9 +170,13 @@ class BuildIntentBind {
       .limit(BUILD_INTENT.BIND_MAX_CANDIDATES)
       .toArray();
     const matched = acceptableCandidates(candidates, opponent.displayName);
-    const sameFrom = startedAtMs - BUILD_INTENT.BIND_SAME_MATCH_SLACK_MS;
-    let same = matched.filter((doc) => doc.keyStartedAtMs >= sameFrom);
-    const older = matched.filter((doc) => !(doc.keyStartedAtMs >= sameFrom));
+    // A loading screen seen after the replay started is a rejoin of this
+    // match, never the start of a new one.
+    const anchor = matched.findIndex(
+      (doc) => doc.loadingSeen === true && doc.keyStartedAtMs <= startedAtMs,
+    );
+    let same = anchor < 0 ? matched : matched.slice(0, anchor + 1);
+    const older = anchor < 0 ? [] : matched.slice(anchor + 1);
     // A post-game answer in the window outranks anything keyed later.
     if (!same.some((doc) => answerRank(doc) === 0)) {
       const late = await this._lateCandidates(userId, startedAtMs, dateMs, opponent.displayName);

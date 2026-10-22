@@ -155,6 +155,7 @@ describe("build check-in live records", () => {
         gameId: null,
         boundAt: null,
         askClient: false,
+        loadingSeen: true,
         _schemaVersion: 1,
       }));
       expect(doc.expiresAt.getTime() - doc.createdAt.getTime()).toBe(12 * HOUR_MS);
@@ -181,6 +182,23 @@ describe("build check-in live records", () => {
       doc = await liveDoc(userId);
       expect(doc.oppRace).toBe("Zerg");
       expect(doc.matchup).toBe("PvZ");
+    });
+
+    test("remembers whether the key saw its own loading screen", async () => {
+      const userId = await newUser();
+      const rekeyed = `[oM]Cure#123|Streamer#456|${KEY_MS + 60_000}`;
+      await postEnvelope(userId, envelope());
+      await postEnvelope(userId, envelope({ phase: "match_started", displayTime: 3 }));
+      await postEnvelope(userId, envelope({ gameKey: rekeyed, phase: "match_started", displayTime: 40 }));
+      await settle();
+      expect((await liveDoc(userId)).loadingSeen).toBe(true);
+      expect((await liveDoc(userId, rekeyed)).loadingSeen).toBe(false);
+      // The agent's card says where it registered; only loading counts.
+      expect((await putLive(userId, { action: "register", phase: "match_started" }, { gameKey: rekeyed })).status).toBe(200);
+      expect((await liveDoc(userId, rekeyed)).loadingSeen).toBe(false);
+      expect((await putLive(userId, { action: "register", phase: "match_loading" }, { gameKey: rekeyed })).status).toBe(200);
+      expect((await liveDoc(userId, rekeyed)).loadingSeen).toBe(true);
+      expect((await putLive(userId, { action: "register", phase: "menu" }, { gameKey: rekeyed })).status).toBe(400);
     });
 
     test.each([

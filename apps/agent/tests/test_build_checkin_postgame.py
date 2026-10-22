@@ -861,10 +861,26 @@ def test_disabling_after_games_sets_the_card_aside(h: Harness) -> None:
     assert h.api.calls_to("put_checkin_prefs")[-1][0][0]["askAfterGame"] is False
 
 
+def test_a_game_state_older_than_a_save_never_reverts_it(h: Harness) -> None:
+    key = h.new_key()
+    _finish(h, key)
+    h.ctl.set_prefs(ask_at_loading=False)
+    h.pump()
+    reads = len(h.api.calls_to("get_checkin_prefs"))
+    # This state was answered before that save landed.
+    h.api.games[GID] = game_state(GID, prefs={"enabled": True, "askAtLoading": True})
+    h.accept(_game(key))
+    assert h.ctl.prefs.ask_at_loading is False
+    assert len(h.api.calls_to("get_checkin_prefs")) == reads + 1
+
+
 def test_server_disabling_check_ins_hides_cards(h: Harness) -> None:
     key = h.new_key()
     _finish(h, key)
     card_id = _card(h).card_id
+    # Turned off elsewhere: the game state says so, and so does the read it
+    # prompts.
+    h.api.prefs = {"enabled": False, "askAtLoading": True, "askAfterGame": True}
     h.api.games[GID] = game_state(GID, prefs={"enabled": False})
     h.accept(_game(key))
     assert h.view.of("hide_postgame") == [(card_id, "disabled")]

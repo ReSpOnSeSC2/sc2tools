@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Deque, Optional
+from typing import Deque, Optional, Tuple
 
 from .models import (
     BuildOptions,
@@ -57,6 +57,9 @@ class CardOp:
     """Carry ``opponentBuildKey`` (game route only)."""
     opponent_key: Optional[str] = None
     """The opponent's build to count; ``None`` restores the replay's label."""
+    opponent_draft: Optional[Tuple[Optional[str]]] = None
+    """``(opp_selection,)`` a non-final opponent write hands over: once it
+    lands the row follows the server again, unless the player re-picked."""
 
 
 @dataclass
@@ -80,6 +83,12 @@ class LiveGame:
     phase: str = "match_loading"
     closed: bool = False
     """Left through menu/idle; later envelopes for this key are stale."""
+    left_at: Optional[float] = None
+    loading_seen: bool = False
+    """This key showed its own loading screen (else: first seen mid-match)."""
+    prev_key: Optional[str] = None
+    """The game tracked just before this one."""
+    carry_checked: bool = False
     display_time: float = 0.0
     one_v_one: Optional[bool] = None
     """From the last envelope that carried ``players``."""
@@ -178,6 +187,11 @@ class PostgameCard:
     opp_selection: Optional[str] = None
     opp_touched: bool = False
     """The player changed the opponent row; ``opp_selection`` holds it."""
+    opp_base: Optional[Tuple[Optional[str]]] = None
+    """``(key,)`` the server counted when the row was first changed."""
+    opp_saved: Optional[Tuple[Optional[str]]] = None
+    """``(opp_selection,)`` the server now holds while the card still shows
+    it as a change; released when the card steps aside."""
     options_stale: bool = False
     """Builds may have changed on the web: refetch the lists with the
     next state read."""

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import {
   effectiveOpponentBuild,
@@ -10,6 +10,7 @@ import {
 import { BuildPicker } from "./BuildPicker";
 import { ReasonChip } from "./CheckInParts";
 import { CorrectedBadge } from "./PlannedBadge";
+import { usePickerRowFocus } from "./focus";
 import type { CheckInBusy } from "./useCheckInActions";
 
 /** Open (or close) a side's picker from outside, e.g. after "Add new build". */
@@ -38,6 +39,7 @@ export function OpponentBuildRow({
   onRetry,
   onAddNew,
   signal,
+  editorOpen = false,
 }: {
   opponent: OpponentIntentState;
   matchup: string | null;
@@ -48,17 +50,22 @@ export function OpponentBuildRow({
   onRetry: () => void;
   onAddNew: (query: string) => void;
   signal?: PickerSignal | null;
+  /** The build editor dialog is open over the page. */
+  editorOpen?: boolean;
 }) {
   const headingId = useId();
   const currentKey = opponentCurrentKey(opponent);
   const { label, corrected } = effectiveOpponentBuild(opponent, null);
   const [picking, setPicking] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(currentKey);
-  const changeRef = useRef<HTMLButtonElement>(null);
-  const returnFocus = useRef(false);
   const options = opponent.options;
   const selected = options?.find((option) => option.key === selectedKey) ?? null;
   const disabled = busy !== null;
+  const { changeRef, rowRef, returnOnClose, returnToPickerIfLost } = usePickerRowFocus({
+    picking,
+    busy: disabled,
+    editorOpen,
+  });
   const suggestion = opponent.suggestion;
   const canReset = opponent.status === "confirmed" || opponent.applied;
 
@@ -66,35 +73,30 @@ export function OpponentBuildRow({
     if (!signal) return;
     setSelectedKey(signal.key);
     // Closing from outside (the new build was checked in) unmounts the
-    // picker's "Add new build…" button that opened the editor.
-    if (!signal.open) returnFocus.current = true;
+    // picker's "Add new build…" button that opened the editor; reopening
+    // after a failed check-in finds that button disabled, or gone.
+    if (signal.open) returnToPickerIfLost();
+    else returnOnClose();
     setPicking(signal.open);
-  }, [signal]);
-
-  // The "Change…" button unmounts while the picker is open; give focus
-  // back to it when the picker closes from inside.
-  useEffect(() => {
-    if (picking || !returnFocus.current) return;
-    returnFocus.current = false;
-    changeRef.current?.focus();
-  }, [picking]);
+  }, [signal, returnOnClose, returnToPickerIfLost]);
 
   const save = async (key: string | null, name: string | null) => {
     if (await onSave(key, name)) {
-      returnFocus.current = true;
+      returnOnClose();
       setPicking(false);
       setSelectedKey(key ?? opponent.detected?.key ?? null);
     }
   };
 
   const cancel = () => {
-    returnFocus.current = true;
+    returnOnClose();
     setPicking(false);
     setSelectedKey(currentKey);
   };
 
   return (
     <div
+      ref={rowRef}
       role="group"
       aria-labelledby={headingId}
       className="space-y-2 border-t border-border pt-4"

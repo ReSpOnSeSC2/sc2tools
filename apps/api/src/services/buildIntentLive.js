@@ -86,11 +86,16 @@ function cleanOppName(name) {
  * @typedef {{ myRace: string|null, oppRace: string|null, oppName: string|null }} LiveFields
  */
 
+/** The live phase that shows the match's own loading screen. */
+const LOADING_PHASE = "match_loading";
+
 /**
  * Registration fields of an agent envelope, or null when the envelope does
  * not register a live game (wrong phase, replay, no game key, no opponent).
+ * ``loading``: the agent saw this key's own loading screen (a key first
+ * seen mid-match is a re-key or a late start).
  * @param {unknown} envelope
- * @returns {(LiveFields & { gameKey: string }) | null}
+ * @returns {(LiveFields & { gameKey: string, loading: boolean }) | null}
  */
 function registrationFields(envelope) {
   if (!envelope || typeof envelope !== "object" || Array.isArray(envelope)) return null;
@@ -108,6 +113,7 @@ function registrationFields(envelope) {
     myRace: normalizeRace(user.race),
     oppRace: normalizeRace(opponent.race),
     oppName: cleanOppName(opponent.name),
+    loading: env.phase === LOADING_PHASE,
   };
 }
 
@@ -195,7 +201,7 @@ class BuildIntentLive {
     if (this.registrations.get(userId) === signature) return null;
     let doc;
     try {
-      doc = await this._upsert(userId, fields.gameKey, fields, true);
+      doc = await this._upsert(userId, fields.gameKey, fields, true, { loadingSeen: fields.loading });
     } catch (err) {
       if (err instanceof BuildIntentError) return null;
       throw err;
@@ -211,7 +217,8 @@ class BuildIntentLive {
    * @param {string} userId
    * @param {string} gameKey validated by the caller
    * @param {{ action: string, buildKey?: string, notes?: string, skip?: boolean,
-   *   myRace?: string|null, oppRace?: string|null, oppName?: string|null }} body
+   *   myRace?: string|null, oppRace?: string|null, oppName?: string|null,
+   *   phase?: string }} body
    * @param {{ source?: string }} auth
    */
   async put(userId, gameKey, body, auth) {
@@ -223,7 +230,7 @@ class BuildIntentLive {
     };
     switch (body.action) {
       case "register":
-        return this._register(userId, gameKey, fields, auth);
+        return this._register(userId, gameKey, fields, auth, body.phase === LOADING_PHASE);
       case "declare":
         return this._declare(userId, gameKey, fields, body.buildKey, via);
       case "undeclare":
@@ -339,10 +346,12 @@ class BuildIntentLive {
    * @param {string} gameKey
    * @param {LiveFields} fields
    * @param {{ source?: string }} auth
+   * @param {boolean} loadingSeen the card registered at the loading screen
    */
-  async _register(userId, gameKey, fields, auth) {
+  async _register(userId, gameKey, fields, auth, loadingSeen) {
     let doc = await this._upsert(userId, gameKey, fields, false, {
       askClient: Boolean(auth && auth.source === "device"),
+      loadingSeen,
     });
     doc = await this._maybeDecideHold(userId, doc);
     this.options.invalidate(userId);
@@ -450,14 +459,14 @@ class BuildIntentLive {
   /**
    * Create the unbound record, or update it: ``overwrite`` replaces races
    * and opponent name with non-null ``fields`` (envelope data), otherwise
-   * they only fill missing values (request bodies). ``askClient`` is only
-   * ever turned on.
+   * they only fill missing values (request bodies). ``askClient`` and
+   * ``loadingSeen`` are only ever turned on.
    *
    * @param {string} userId
    * @param {string} gameKey
    * @param {LiveFields} fields
    * @param {boolean} overwrite
-   * @param {{ askClient?: boolean }} [opts]
+   * @param {{ askClient?: boolean, loadingSeen?: boolean }} [opts]
    * @returns {Promise<Record<string, any>>}
    */
   async _upsert(userId, gameKey, fields, overwrite, opts = {}) {
@@ -482,6 +491,7 @@ class BuildIntentLive {
           randomizer: { $ifNull: ["$randomizer", null] },
           hold: { $ifNull: ["$hold", null] },
           askClient: opts.askClient === true ? true : { $ifNull: ["$askClient", false] },
+          loadingSeen: opts.loadingSeen === true ? true : { $ifNull: ["$loadingSeen", false] },
           boundAt: { $ifNull: ["$boundAt", null] },
           updatedAt: now,
           _schemaVersion: expectedVersion(COLLECTIONS.BUILD_INTENT_LIVE),

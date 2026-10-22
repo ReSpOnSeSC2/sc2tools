@@ -81,6 +81,7 @@ from .models import (
     is_concrete_race,
     matchups_for_race,
     normalize_player_name,
+    opponent_change,
     parse_build_options,
     parse_game_intent,
     parse_live_state,
@@ -149,6 +150,13 @@ SEEN_GAME_IDS = 200
 HTTP_WORKERS = 2
 DECLARE_ATTEMPTS = 2
 MAX_REGISTERS = 2
+# The poller re-keys a match it briefly lost track of. A loading screen back
+# this soon against the same opponent, or a match first seen already running
+# this soon after, is that match: its loading-screen pick carries over. The
+# loading gap covers a client-API outage (a few missed polls, then the idle
+# backoff) and is shorter than a re-queue into a rematch.
+REKEY_LOADING_GAP_SEC = 30.0
+REKEY_MATCH_GAP_SEC = 120.0
 
 _LOADING_WHICH = "loading"
 _POSTGAME_WHICH = "postgame"
@@ -240,7 +248,7 @@ class BuildCheckinController:
         self._supported: Optional[bool] = None
         self._prefs_read_inflight = False
         self._prefs_reread = False
-        self._prefs_write_gen = 0
+        self._prefs_read_during_write = False
         self._prefs_read_at: Optional[float] = None
         self._prefs_retry_at: Optional[float] = None
         self._prefs_failures = 0
@@ -648,7 +656,10 @@ class BuildCheckinController:
             game = self._track(key)
         elif key != self._current_key or game.closed:
             return  # a late envelope of a previous game
+        if phase == "match_loading":
+            game.loading_seen = True
         self._update_game(game, envelope, phase)
+        self._maybe_carry_pick(game)
         if phase == "match_ended":
             self._handle_match_ended(game)
         else:
@@ -662,7 +673,12 @@ class BuildCheckinController:
         previous = self._current_game()
         if previous is not None:
             self._hide_loading(previous, HIDE_NEW_GAME)
-        game = LiveGame(game_key=key, key_ms=game_key_ms(key), seen_at=self._clock())
+        game = LiveGame(
+            game_key=key,
+            key_ms=game_key_ms(key),
+            seen_at=self._clock(),
+            prev_key=previous.game_key if previous is not None else None,
+        )
         self._games[key] = game
         self._current_key = key
         while len(self._games) > TRACKED_GAMES:
@@ -715,10 +731,44 @@ class BuildCheckinController:
         game = self._current_game()
         if game is not None and not game.closed and key in (None, game.game_key):
             game.closed = True
+            game.left_at = self._clock()
             if game.phase in ACTIVE_PHASES:
                 game.phase = phase
             self._hide_loading(game, HIDE_MENU)
         self._pump_cards()
+
+    def _maybe_carry_pick(self, game: LiveGame) -> None:
+        """A re-key of a match the poller briefly lost track of keeps the
+        loading-screen pick: the cloud binds the replay to the newest
+        record of its own loading screen, so the pick must be on it."""
+        if game.carry_checked or not game.opp_norm or game.matchup is None:
+            return
+        game.carry_checked = True
+        prev = self._games.get(game.prev_key) if game.prev_key else None
+        if (
+            prev is None
+            or prev.left_at is None
+            or prev.ended_at is not None
+            or prev.game_id is not None
+            or prev.opp_norm != game.opp_norm
+            or prev.matchup != game.matchup
+            or game.declared is not None
+        ):
+            return
+        pick = prev.declared or self._declared_elsewhere(prev)
+        if pick is None:
+            return
+        gap = game.seen_at - prev.left_at
+        if gap > (REKEY_LOADING_GAP_SEC if game.loading_seen else REKEY_MATCH_GAP_SEC):
+            return
+        game.declared = pick
+        game.declared_synced = False
+        game.declare_failed = False
+        # Register first: its answer may predate the declare and must never
+        # be the newest live state the card sees.
+        self._ensure_registered(game)
+        self._enqueue_live_op(game, LiveOp("declare", pick.key))
+        _log.info("build_checkin_pick_carried loading=%s", game.loading_seen)
 
     def _handle_active(self, game: LiveGame) -> None:
         card = game.loading
@@ -975,6 +1025,10 @@ class BuildCheckinController:
         body: Dict[str, Any] = {"action": op.action}
         if op.action == "declare":
             body["buildKey"] = op.build_key
+        if op.action == "register":
+            # The cloud tells this match's own loading-screen record from a
+            # re-key by it.
+            body["phase"] = "match_loading" if game.loading_seen else "match_started"
         if op.action in ("register", "declare"):
             # Every declare carries the races so it never depends on the
             # register write having landed first.
@@ -1083,7 +1137,7 @@ class BuildCheckinController:
         game.live_applied_gen = gen
         game.live = state
         if state.prefs is not None:
-            self._apply_server_prefs(state.prefs)
+            self._apply_state_prefs(state.prefs)
         if state.game_id:
             self._bind_game(game, state.game_id)
         if not game.writing:
@@ -1298,7 +1352,7 @@ class BuildCheckinController:
                 self._render_card(card)
             return
         if state.prefs is not None:
-            self._apply_server_prefs(state.prefs)
+            self._apply_state_prefs(state.prefs)
         self._apply_game_state(game, card, state)
 
     def _apply_game_state(
@@ -1489,6 +1543,12 @@ class BuildCheckinController:
         """Hide undecided with the draft kept; notes go to the server as
         soon as the game is known."""
         self._hide_card(card, reason, done=False)
+        if (
+            card.opp_saved is not None
+            and card.opp_touched
+            and (card.opp_selection,) == card.opp_saved
+        ):
+            self._release_opponent_draft(card)
         self._flush_notes(card)
 
     def _retire(
@@ -1500,12 +1560,15 @@ class BuildCheckinController:
         """The game no longer needs this card (decided or ineligible).
 
         A draft is still saved, but never over notes the server already
-        holds (typed on the website, say).
+        holds (typed on the website, say), nor over an opponent's build
+        the server changed since the card's was picked.
         """
         if state is not None:
             card.notes_synced = state.notes
             if state.notes:
                 card.notes = state.notes
+            if reason == HIDE_DECIDED:
+                self._flush_opponent_draft(card, state)
         self._flush_notes(card)
         self._hide_card(card, reason, done=True)
         self._pump_cards()
@@ -1574,9 +1637,45 @@ class BuildCheckinController:
         key = opponent if isinstance(opponent, str) and opponent else None
         if card.opp_touched and card.opp_selection == key:
             return False
+        if not card.opp_touched:
+            opp = card.server.opponent if card.server is not None else None
+            card.opp_base = (opp.effective_key if opp is not None else None,)
         card.opp_touched = True
         card.opp_selection = key
+        card.opp_saved = None
         return True
+
+    def _release_opponent_draft(self, card: PostgameCard) -> None:
+        """The server holds the card's opponent pick: the row follows the
+        server again (and a later correction on the website)."""
+        card.opp_touched = False
+        card.opp_selection = None
+        card.opp_base = None
+        card.opp_saved = None
+        if card.undecided and card.game_id is not None:
+            self._fetch_game_state(card.game_id, include_options=card.options_stale)
+
+    def _flush_opponent_draft(self, card: PostgameCard, state: GameIntentState) -> None:
+        opp = state.opponent
+        if opp is None or not card.opp_touched or card.opp_base != (opp.effective_key,):
+            return
+        change = opponent_change(
+            card.opp_selection,
+            server_key=opp.effective_key,
+            corrected=opp.corrected,
+            replay_key=opp.detected_key,
+        )
+        if change is not None:
+            self._queue_opponent_write(card, change[0])
+
+    def _queue_opponent_write(self, card: PostgameCard, key: Optional[str]) -> None:
+        card.ops.append(CardOp(
+            "opponent",
+            send_opponent=True,
+            opponent_key=key,
+            opponent_draft=(card.opp_selection,),
+        ))
+        self._run_card_ops(card)
 
     def _handle_update_draft(
         self,
@@ -1689,13 +1788,14 @@ class BuildCheckinController:
             # what it saves, never an older pick from this card.
             card.opp_touched = False
             card.opp_selection = None
+            card.opp_base = None
+            card.opp_saved = None
         else:
             # A confirm on the web leaves the opponent's build alone and
             # retires this card, so a corrected one is saved first.
             change = opponent_write(card)
             if change is not None:
-                card.ops.append(CardOp("opponent", send_opponent=True, opponent_key=change[0]))
-                self._run_card_ops(card)
+                self._queue_opponent_write(card, change[0])
         # Out of the browser's way. The draft stays; a confirm on the web
         # retires the card through its ping, and the tray brings it back.
         card.reshow_pending = False
@@ -1818,11 +1918,28 @@ class BuildCheckinController:
             return
         if op.notes is not None:
             card.notes_synced = op.notes
-        if op.send_opponent and not op.final and card.state != CARD_VISIBLE:
-            # The opponent draft is saved: follow the server from here, so
-            # a later correction on the web is never undone by this pick.
-            card.opp_touched = False
-            card.opp_selection = None
+        if (
+            op.opponent_draft is not None
+            and card.opp_touched
+            and (card.opp_selection,) == op.opponent_draft
+        ):
+            # Saved, and not re-picked meanwhile: follow the server from
+            # here so a later correction on the web is never undone. A card
+            # on screen keeps showing the pick until it steps aside.
+            if card.state == CARD_VISIBLE:
+                card.opp_saved = op.opponent_draft
+            else:
+                self._release_opponent_draft(card)
+        if op.opponent_draft is not None and card.opp_touched:
+            # The server holds the hand-off pick now: a later change on the
+            # card is judged against it, not against what the card first saw.
+            opp = card.server.opponent if card.server is not None else None
+            held = op.opponent_key
+            if held is None and opp is not None:
+                held = opp.detected_key
+            card.opp_base = (held,)
+            if card.undecided and card.game_id is not None and not card.busy:
+                self._fetch_game_state(card.game_id, include_options=card.options_stale)
         if op.final:
             card.busy = False
             if op.action in ("confirm", "skip"):
@@ -1942,9 +2059,9 @@ class BuildCheckinController:
             return
         self._prefs_read_inflight = True
         self._prefs_read_at = now
-        self._call(self._on_prefs_read, self._prefs_write_gen, self._api.get_checkin_prefs)
+        self._call(self._on_prefs_read, None, self._api.get_checkin_prefs)
 
-    def _on_prefs_read(self, write_gen: int, value: Any, error: Optional[BaseException]) -> None:
+    def _on_prefs_read(self, _tag: Any, value: Any, error: Optional[BaseException]) -> None:
         self._prefs_read_inflight = False
         if self._prefs_reread and not (error is not None and _Failure(error).status == 404):
             # Superseded: its answer may be older than the change.
@@ -1964,10 +2081,7 @@ class BuildCheckinController:
             return
         self._prefs_failures = 0
         self._prefs_retry_at = None
-        if write_gen == self._prefs_write_gen:
-            # Otherwise a save the server confirmed after this read went
-            # out is newer than its answer.
-            self._apply_server_prefs(prefs)
+        self._apply_server_prefs(prefs)
         self._set_supported(True)
 
     def _schedule_prefs_retry(self) -> None:
@@ -1995,11 +2109,26 @@ class BuildCheckinController:
             self._view_call("update_prefs", self._prefs)
         self._enforce_prefs()
 
+    def _apply_state_prefs(self, prefs: CheckinPrefs) -> None:
+        """Preferences riding on a live or game state. The request may have
+        left before a save landed, so a value that differs from the last
+        confirmed one is read again instead of applied."""
+        if prefs == self._prefs_confirmed:
+            return
+        if self._prefs_confirmed is None:
+            self._apply_server_prefs(prefs)
+        else:
+            self._handle_refresh_prefs(True)
+
     def _apply_server_prefs(self, prefs: CheckinPrefs) -> None:
         self._prefs_confirmed = prefs
         self._remember_prefs(prefs)
         if self._prefs_write_inflight or self._prefs_write_pending is not None:
-            return  # the player's newer choice is on its way to the server
+            # The player's newer choice is on its way to the server; this
+            # answer may still hold a change from elsewhere: read again
+            # once the saves are done.
+            self._prefs_read_during_write = True
+            return
         self._apply_prefs(prefs)
 
     def _remember_prefs(self, prefs: CheckinPrefs) -> None:
@@ -2059,13 +2188,22 @@ class BuildCheckinController:
                 self._apply_prefs(self._prefs_confirmed or CheckinPrefs())
         else:
             saved = parse_prefs(value) or target
-            self._prefs_write_gen += 1
+            if self._prefs_read_inflight:
+                # Its answer may predate this save: read once more.
+                self._prefs_reread = True
             self._prefs_confirmed = saved
             self._remember_prefs(saved)
             self._set_supported(True)
             if self._prefs_write_pending is None:
                 self._apply_prefs(saved)
         self._run_prefs_write()
+        if (
+            self._prefs_read_during_write
+            and not self._prefs_write_inflight
+            and self._prefs_write_pending is None
+        ):
+            self._prefs_read_during_write = False
+            self._handle_refresh_prefs(True)
 
     def _handle_disable(self, which: Any) -> None:
         if which == _LOADING_WHICH:
