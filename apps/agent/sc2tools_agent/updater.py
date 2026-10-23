@@ -38,6 +38,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, Optional
 
@@ -87,6 +88,17 @@ class ReleaseArtifact:
 
 
 @dataclass(frozen=True)
+class SiteNotice:
+    """Time-limited public incident text; links stay on the SC2 Tools site."""
+
+    severity: str
+    message: str
+    href: Optional[str]
+    ends_at: str
+    hash: str
+
+
+@dataclass(frozen=True)
 class ReleaseInfo:
     """The full ``GET /v1/agent/version`` payload, normalised."""
 
@@ -98,6 +110,7 @@ class ReleaseInfo:
     release_notes: str
     min_supported_version: Optional[str]
     artifact: Optional[ReleaseArtifact]
+    notice: Optional[SiteNotice] = None
 
 
 class UpdateError(RuntimeError):
@@ -574,7 +587,32 @@ def _coerce_release(payload: Dict[str, Any], *, fallback_current: str) -> Releas
         release_notes=str(payload.get("releaseNotes", "") or ""),
         min_supported_version=_coerce_str(payload.get("minSupportedVersion")),
         artifact=artifact,
+        notice=_coerce_notice(payload.get("notice")),
     )
+
+
+def notice_is_current(notice: Optional[SiteNotice]) -> bool:
+    if notice is None:
+        return False
+    try:
+        expires = datetime.fromisoformat(notice.ends_at.replace("Z", "+00:00"))
+        return expires.tzinfo is not None and expires > datetime.now(timezone.utc)
+    except (TypeError, ValueError):
+        return False
+
+
+def _coerce_notice(raw: Any) -> Optional[SiteNotice]:
+    if not isinstance(raw, dict) or raw.get("severity") not in {"info", "warning", "critical"}:
+        return None
+    message = raw.get("message")
+    if not isinstance(message, str) or not message.strip() or len(message) > 240 or re.search(r"[\x00-\x1f\x7f]", message):
+        return None
+    href = raw.get("href")
+    if not isinstance(href, str) or not href.startswith("/") or href.startswith("//") or len(href) > 300 or re.search(r"[\s\\\x00-\x1f\x7f]", href):
+        href = None
+    key = hashlib.sha256(json.dumps([raw.get("severity"), message, href, raw.get("endsAt")]).encode()).hexdigest()[:24]
+    notice = SiteNotice(raw["severity"], message.strip(), href, str(raw.get("endsAt", "")), key)
+    return notice if notice_is_current(notice) else None
 
 
 def _coerce_str(value: Any) -> Optional[str]:
