@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ReplayStage } from "../ReplayStage";
 import { payload, v4Payload } from "./fixtures";
@@ -7,7 +7,14 @@ import { payload, v4Payload } from "./fixtures";
 // vitest.config.ts sets globals:false, so React Testing Library never
 // registers its automatic cleanup -- without this every render stays
 // mounted and the next query matches the previous test's DOM too.
-afterEach(() => cleanup());
+beforeEach(() => {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query.includes("min-width: 1280px"),
+    addEventListener() {},
+    removeEventListener() {},
+  }));
+});
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 /**
  * jsdom has no 2D canvas context, so ``MapReplayer``'s draw loop bails

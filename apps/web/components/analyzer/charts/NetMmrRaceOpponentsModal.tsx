@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -400,13 +401,4 @@ function SignedMmr({ value, className = "" }: { value: number; className?: strin
 
 function opponentName(opponent: NetMmrOpponentRow): string {
   return (opponent.name || opponent.displayName || "").trim() || "Unknown opponent";
-}
-
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timeout = window.setTimeout(() => setDebounced(value), delayMs);
-    return () => window.clearTimeout(timeout);
-  }, [delayMs, value]);
-  return debounced;
 }

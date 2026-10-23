@@ -116,7 +116,7 @@ describe("BuildCard actions menu", () => {
     expect(menu.className).toContain("overflow-y-auto");
     expect(
       screen.getAllByRole("menuitem").map((item) => item.textContent),
-    ).toEqual(["Edit", "Reclassify replays", "Publish", "Delete"]);
+    ).toEqual(["Edit", "Re-match replays", "Publish", "Delete"]);
     for (const item of screen.getAllByRole("menuitem")) {
       expect(item.className).toContain("min-h-11");
     }

@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Card } from "@/components/ui/Card";
+import { RequestError } from "@/components/ui/RequestError";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import {
@@ -15,6 +16,8 @@ import type { GameSummary } from "./types";
 import { formatApm } from "@/lib/apm";
 
 export interface MechanicsPanelProps {
+  error?: unknown;
+  onRetry?: () => unknown;
   breakdown?: MacroBreakdownData | null;
   game?: GameSummary | null;
   loading?: boolean;
@@ -36,6 +39,7 @@ export interface MechanicsPanelProps {
  * pre-v0.5 payloads).
  */
 export function MechanicsPanel({
+  error, onRetry,
   breakdown,
   game,
   loading,
@@ -113,6 +117,7 @@ export function MechanicsPanel({
   const firstTumorSec =
     typeof raw?.first_tumor_sec === "number" ? raw.first_tumor_sec : null;
 
+  if (error) return <RequestError title="Couldn't load mechanics" error={error} onRetry={onRetry} />;
   if (loading) {
     return (
       <Card title="Mechanics">
@@ -199,7 +204,7 @@ export function MechanicsPanel({
                     onClick={onSeek ? () => onSeek(w.start) : undefined}
                     disabled={!onSeek}
                     aria-label={`Jump timeline to supply block at ${formatGameClock(w.start)}`}
-                    className="inline-flex min-h-[32px] items-center rounded-full border border-border bg-bg-elevated px-2.5 font-mono text-micro tabular-nums text-text-muted transition-colors enabled:hover:border-border-strong enabled:hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default"
+                    className="inline-flex min-h-[44px] items-center rounded-full border border-border bg-bg-elevated px-2.5 font-mono text-micro tabular-nums text-text-muted transition-colors enabled:hover:border-border-strong enabled:hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default"
                   >
                     {formatGameClock(w.start)}–{formatGameClock(w.end)}
                   </button>

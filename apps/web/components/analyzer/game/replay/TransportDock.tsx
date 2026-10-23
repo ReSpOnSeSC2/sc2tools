@@ -161,7 +161,7 @@ function PhaseStrip({
             boxShadow: "inset -1px 0 0 rgba(7,10,15,0.9)",
           }}
         >
-          <span className="truncate text-[0.5625rem] font-semibold uppercase leading-none tracking-[0.1em] text-text-dim">
+          <span className={`${pct(p.to - p.from, gameLength) < 12 ? "hidden" : "truncate"} text-micro font-semibold uppercase leading-none tracking-[0.1em] text-text-dim`}>
             {p.label}
           </span>
         </span>
