@@ -127,10 +127,12 @@ function buildPublicReplaysRouter(deps) {
         );
         if (!detail) return neutralNotFound(res);
 
-        const [macro, build, vods] = await Promise.all([
+        const { filters, result, matchup, search } = parseReplayListQuery(req.query);
+        const [macro, build, vods, neighbors] = await Promise.all([
           readOptional(() => deps.perGame.macroBreakdown(shared.userId, gameId)),
           readOptional(() => deps.perGame.buildOrder(shared.userId, gameId)),
           resolveVods(deps.gameVods, shared.userId, [detail.sourceGame]),
+          readOptional(() => deps.replayLibrary.neighbors(shared.userId, gameId, { filters, result, matchup, search })),
         ]);
         publicNoStore(res);
         res.json({
@@ -146,6 +148,7 @@ function buildPublicReplaysRouter(deps) {
             oppStrategy: detail.game.opponent?.strategy,
           }),
           streams: publicStreamLinks(linksFor(vods, detail.game.gameId)),
+          neighbors: publicReplayNeighbors(neighbors),
         });
       } catch (err) {
         next(err);
@@ -205,6 +208,13 @@ function firstQueryValue(value) {
   return typeof first === "string" || typeof first === "number"
     ? first
     : undefined;
+}
+
+/** @param {unknown} raw */
+function publicReplayNeighbors(raw) {
+  if (!raw) return undefined;
+  const row = objectOrEmpty(raw);
+  return { olderGameId: boundedString(row.olderGameId, 200) || null, newerGameId: boundedString(row.newerGameId, 200) || null };
 }
 
 /** @param {unknown} profile */

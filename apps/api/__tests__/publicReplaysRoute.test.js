@@ -46,6 +46,7 @@ function makeDeps(overrides = {}) {
         nextCursor: null,
       }),
       getDetail: jest.fn().mockResolvedValue(null),
+      neighbors: jest.fn().mockResolvedValue({ olderGameId: null, newerGameId: null }),
     },
     gameVods: {
       resolveForGames: jest.fn().mockResolvedValue({ linksByGameId: {} }),
@@ -91,6 +92,13 @@ const testErrorHandler = (err, _req, res, _next) => {
 };
 
 describe("public replay archive routes", () => {
+  test("analysis neighbors contain only shareable game IDs and ignore pagination", async () => {
+    const deps = makeDeps(); deps.replayLibrary.getDetail.mockResolvedValue({ game: { gameId: "g1" }, sourceGame: { gameId: "g1" } });
+    deps.replayLibrary.neighbors.mockResolvedValue({ olderGameId: "older-id", newerGameId: null, userId: "secret", _id: "secret" });
+    const response = await request(makeApp(deps)).get("/v1/public/replays/owner-1/g1?map=Alcyone&result=loss&matchup=PvZ&search=Blink&cursor=ignore&page=3").set("Authorization", "Bearer viewer").expect(200);
+    expect(response.body.neighbors).toEqual({ olderGameId: "older-id", newerGameId: null }); expect(JSON.stringify(response.body)).not.toContain("secret");
+    expect(deps.replayLibrary.neighbors).toHaveBeenCalledWith("owner-1", "g1", { filters: { map: "alcyone" }, result: "loss", matchup: "PvZ", search: "Blink" });
+  });
   test("summary and facets are strictly allow-listed, numeric and bounded", async () => {
     const deps = makeDeps();
     deps.replayLibrary.list.mockResolvedValue({ items: [], sourceGames: [], hasMore: false, nextCursor: null,

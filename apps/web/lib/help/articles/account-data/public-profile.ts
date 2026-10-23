@@ -76,6 +76,15 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "The replay list and downloads need no account. Full analysis — the timeline, macro breakdown and both build orders — needs a free account. Downloads are the original .SC2Replay file, which includes the in-game names and chat StarCraft II records.",
     },
+    { type: "heading", text: "Shared game analysis", anchor: "shared-analysis" },
+    {
+      type: "paragraph",
+      text: "Open **Analysis** from a replay row. **Back** returns to your filtered list, including its page. **Older game** and **Newer game** move within the same filters; the plain **← / →** keys do the same outside text fields and the timeline. At an end of the list, that direction is unavailable. Alt+← keeps its normal browser Back behavior.",
+    },
+    {
+      type: "paragraph",
+      text: "Use the section links for **Timeline**, **Macro**, **Build orders** and, when a recording is available, **Watch**. A macro leak's timestamp jumps the timeline to that point. **Show all** lists the scored leaks from highest penalty down. Macro scores are out of 100: **80+ good**, **60–79 OK**, and **below 60 leaky**; an unavailable score has a neutral colour.",
+    },
   ],
   related: ["publish-community-builds", "replays", "player-channels", "delete-account"],
 };

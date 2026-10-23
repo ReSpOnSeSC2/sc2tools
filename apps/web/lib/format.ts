@@ -68,6 +68,12 @@ export function fmtDateCompact(iso: string | number | Date | null | undefined): 
   return (date.getFullYear() === new Date().getFullYear() ? compactDateFormatter : compactDateYearFormatter).format(date);
 }
 
+/** Shared macro score bands; unavailable scores keep a neutral tone. */
+export function macroScoreTone(score?: number | null): string {
+  if (score == null || !Number.isFinite(score)) return "text-text-dim";
+  return score >= 80 ? "text-success" : score >= 60 ? "text-warning" : "text-danger";
+}
+
 /**
  * Win-rate colour ramp. Severe scheme: deep red below 30%, deep green
  * above 65%, with a smooth red → amber → green gradient between so a

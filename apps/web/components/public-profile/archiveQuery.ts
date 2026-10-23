@@ -50,3 +50,21 @@ export function archiveFilterLabels(query: PublicReplayQuery) {
   if (query.sort === "date_asc") labels.push({ key: "sort", label: "Oldest first" });
   return labels;
 }
+
+/** Return destinations are query strings only; callers always supply the root. */
+export function parseArchiveFrom(raw: unknown): string | undefined {
+  if (typeof raw !== "string" || raw.length > 512 || !raw || /^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith("/") || raw.includes("#")) return undefined;
+  const value = raw.startsWith("?") ? raw.slice(1) : raw;
+  if (!value.includes("=")) return undefined;
+  return archiveHref("", parseArchiveQuery(Object.fromEntries(new URLSearchParams(value)))).replace(/^\?/, "") || undefined;
+}
+
+export function sharedAnalysisHref(root: string, gameId: string, from?: string) {
+  return `${root}/${encodeURIComponent(gameId)}${from ? `?from=${encodeURIComponent(from)}` : ""}`;
+}
+
+export function archiveBackLabel(from: string | undefined, playerName: string) {
+  const query = parseArchiveQuery(Object.fromEntries(new URLSearchParams(from)));
+  const labels = archiveFilterLabels(query).filter(({ key }) => key !== "sort").map(({ label }) => label);
+  return `Back to ${labels.length ? labels.join(" · ") : `${playerName}'s replays`}${query.page && query.page > 1 ? ` · page ${query.page}` : ""}`;
+}
