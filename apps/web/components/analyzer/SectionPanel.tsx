@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import type { TabId } from "@/components/analyzer/tabs";
 import { Skeleton } from "@/components/ui/Card";
+import { SectionHeader } from "./SectionHeader";
 
 /*
  * Each section is its own chunk: /app/macro no longer downloads the
@@ -42,10 +43,20 @@ const ArcadeTab = dynamic(
 
 /**
  * SectionPanel — renders one analyzer section for its /app/<section>
- * route. Opponents is not handled here: /app/opponents has its own
- * routes (list + per-opponent dossier) so a dossier is a real URL.
+ * route, under its SectionHeader (title, intro, "How to read this").
+ * Opponents is not handled here: /app/opponents has its own routes
+ * (list + per-opponent dossier) so a dossier is a real URL.
  */
 export function SectionPanel({ tab }: { tab: Exclude<TabId, "opponents"> }) {
+  return (
+    <div className="space-y-5">
+      <SectionHeader tab={tab} />
+      <SectionBody tab={tab} />
+    </div>
+  );
+}
+
+function SectionBody({ tab }: { tab: Exclude<TabId, "opponents"> }) {
   switch (tab) {
     case "replays":
       return <ReplayLibrary />;

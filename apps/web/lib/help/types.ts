@@ -24,6 +24,7 @@ export type HelpCategoryId =
   | "game-page"
   | "opponents"
   | "builds"
+  | "reviews-coaching"
   | "stream-studio"
   | "account-data"
   | "troubleshooting";
@@ -46,8 +47,13 @@ export type HelpWidgetId = "chat-commands";
 export type HelpBlock =
   /** A paragraph of text. */
   | { type: "paragraph"; text: string }
-  /** A sub-heading inside the article. */
-  | { type: "heading"; text: string }
+  /**
+   * A sub-heading inside the article. `anchor` gives it a stable id on
+   * the article page (/help/<slug>#<anchor>) so other parts of the app
+   * can link to one section: lowercase letters, digits and hyphens,
+   * unique within the article. Keep an anchor once it is published.
+   */
+  | { type: "heading"; text: string; anchor?: string }
   /** A numbered sequence the reader follows in order. */
   | { type: "steps"; items: string[] }
   /** A bulleted list. */
@@ -76,6 +82,12 @@ export interface HelpArticle {
    * renders for everyone; signed-out readers see a sign-in note.
    */
   signedInOnly?: boolean;
+  /**
+   * Keep the public page out of search engines: a noindex robots tag
+   * and no sitemap row. For features only invited accounts can use. The
+   * article still shows in the help center, search and Settings → Help.
+   */
+  noindex?: boolean;
   /** Extra search terms: the words a reader might type that the text doesn't use. */
   keywords: string[];
   updated: HelpDate;

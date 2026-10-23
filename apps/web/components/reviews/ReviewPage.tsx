@@ -6,6 +6,7 @@ import { useAuth } from "@clerk/nextjs";
 import { ArrowLeft, Lock, MessageSquarePlus, Pin, PinOff } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { MapArtwork } from "@/components/maps/MapArtwork";
 import { apiCall } from "@/lib/clientApi";
 import { usePublicApi } from "@/lib/usePublicApi";
@@ -16,6 +17,7 @@ import {
   formatClock,
   levelLabel,
   pinNumbers,
+  REVIEW_LIMITS,
   reviewHeadline,
   reviewsRollout,
   tagLabel,
@@ -59,8 +61,13 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [seekRequest, setSeekRequest] = useState<{ t: number; seq: number } | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [pinMode, setPinMode] = useState(false);
-  const [draftPin, setDraftPin] = useState<DraftPin | null>(null);
+  const [pickingFor, setPickingFor] = useState<string | null>(null);
+  const [draftPins, setDraftPins] = useState<Record<string, DraftPin>>({});
+  const clearPin = useCallback((owner: string) => {
+    setDraftPins((old) => { const next = { ...old }; delete next[owner]; return next; });
+    setPickingFor((old) => old === owner ? null : old);
+  }, []);
+  const togglePin = useCallback((owner: string) => setPickingFor((old) => old === owner ? null : owner), []);
   const [composing, setComposing] = useState<number | null>(null);
   const [playbackAvailable, setPlaybackAvailable] = useState(false);
   const [pinned, setPinned] = useState(true);
@@ -83,9 +90,11 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
       if (!n || !c.mapPoint || c.gameTimeSec === null) continue;
       out.push({ id: c.id, x: c.mapPoint.x, y: c.mapPoint.y, t: c.gameTimeSec, endT: c.endTimeSec, label: String(n), active: c.id === activeId });
     }
-    if (draftPin) out.push({ id: "__draft__", x: draftPin.x, y: draftPin.y, t: draftPin.t, label: "+", draft: true });
+    for (const [owner, pin] of Object.entries(draftPins)) {
+      out.push({ id: `__draft__:${owner}`, x: pin.x, y: pin.y, t: pin.t, label: "+", draft: true });
+    }
     return out;
-  }, [data.comments, pins, activeId, draftPin]);
+  }, [data.comments, pins, activeId, draftPins]);
 
   const commentMarkers = useMemo<CommentTimelineMarker[]>(
     () => commentClusters(data.comments, duration ?? 0).map((cluster) => {
@@ -113,12 +122,13 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
   }, [data.comments, duration, seek, scrollToComment]);
 
   const onWorldClick = useCallback((x: number, y: number, t: number) => {
-    setDraftPin({ x, y, t });
-    setPinMode(false);
-  }, []);
+    if (!pickingFor) return;
+    setDraftPins((old) => ({ ...old, [pickingFor]: { x, y, t } }));
+    setPickingFor(null);
+  }, [pickingFor]);
 
   const onMarkerClick = useCallback((markerId: string) => {
-    if (markerId === "__draft__") return;
+    if (markerId.startsWith("__draft__:")) return;
     const c = data.comments.find((x) => x.id === markerId);
     if (c?.gameTimeSec !== null && c?.gameTimeSec !== undefined) seek(c.gameTimeSec, c.id);
     scrollToComment(markerId);
@@ -150,7 +160,7 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
             onTimeChange={setCurrentTime}
             onPlaybackAvailable={setPlaybackAvailable}
             mapMarkers={mapMarkers}
-            onWorldClick={pinMode ? onWorldClick : undefined}
+            onWorldClick={pickingFor ? onWorldClick : undefined}
             onMarkerClick={onMarkerClick}
             commentMarkers={commentMarkers}
             onCommentMarker={onCommentMarker}
@@ -186,16 +196,16 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
               durationSec={duration}
               currentTime={currentTime}
               initialTime={composing}
-              draftPin={draftPin}
-              pinMode={pinMode}
+              draftPin={draftPins.root ?? null}
+              nextPinNumber={pins.size + 1}
+              pinMode={pickingFor === "root"}
               canPin={playbackAvailable}
-              onTogglePinMode={() => setPinMode((v) => !v)}
-              onClearPin={() => setDraftPin(null)}
-              onCancel={() => { setComposing(null); setDraftPin(null); setPinMode(false); }}
+              onTogglePinMode={() => togglePin("root")}
+              onClearPin={() => clearPin("root")}
+              onCancel={() => { setComposing(null); clearPin("root"); }}
               onPosted={(commentId) => {
                 setComposing(null);
-                setDraftPin(null);
-                setPinMode(false);
+                clearPin("root");
                 void refresh().then(() => scrollToComment(commentId));
               }}
             />
@@ -207,11 +217,11 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
             currentTime={currentTime}
             durationSec={duration}
             canPin={playbackAvailable}
-            draftPin={draftPin}
-            pinMode={pinMode}
+            pinFor={(owner) => draftPins[owner] ?? null}
+            pickingFor={pickingFor}
             onSeek={seek}
-            onTogglePinMode={() => setPinMode((v) => !v)}
-            onClearPin={() => setDraftPin(null)}
+            onTogglePinMode={togglePin}
+            onClearPin={clearPin}
             onChanged={refresh}
           />
         </div>
@@ -223,6 +233,7 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
 function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: () => Promise<unknown> }) {
   const { getToken } = useAuth();
   const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const r = data.request;
@@ -240,12 +251,15 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
     }
   }
   const headline = reviewHeadline(r.question, r.game.matchup);
-  async function close() {
-    if (!window.confirm("Close this request? New comments stop and the replay analysis is no longer shared. The thread stays readable.")) return;
+  async function close(confirmed = false) {
+    if (!confirmed && !window.confirm("Close this request? New comments stop and the replay analysis is no longer shared. The thread stays readable.")) return;
     setClosing(true);
+    setCloseError(null);
     try {
       await apiCall(getToken, `/v1/reviews/${encodeURIComponent(r.id)}/close`, { method: "POST", body: "{}" });
       await onChanged();
+    } catch (err) {
+      setCloseError((err as { message?: string })?.message || "Couldn't close this request. Check your connection and try again.");
     } finally {
       setClosing(false);
     }
@@ -289,6 +303,7 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
             <Button variant="ghost" size="sm" loading={closing} onClick={() => void close()}>Close request</Button>
           ) : null}
         </div>
+        {closeError ? <p role="alert" className="text-danger">{closeError} <Button variant="ghost" size="sm" loading={closing} onClick={() => void close(true)}>Try again</Button></p> : null}
         {r.asker.isYou && active ? (
           <label className="flex items-start gap-2 text-caption text-text-muted">
             <input
@@ -318,7 +333,24 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
   );
 }
 
-function ComposerGate({
+const GATE_CLASS = "rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted";
+const GATE_LINK_CLASS = "inline-flex min-h-9 items-center text-caption font-semibold";
+
+/** "Why?" next to a gate: the article section on who can review. */
+function WhyLink() {
+  return (
+    <LazyHelpLink slug="replay-reviews" anchor="who-can-review" className={GATE_LINK_CLASS}>
+      Why?<span className="sr-only"> Who can review replays</span>
+    </LazyHelpLink>
+  );
+}
+
+/**
+ * What sits above the thread: Sign in, the reason you can't comment yet
+ * (with the way to fix it and a "Why?" into the help article), or the
+ * "Comment at 5:12" button. Exported for tests.
+ */
+export function ComposerGate({
   data,
   signedIn,
   currentTime,
@@ -341,20 +373,40 @@ function ComposerGate({
     );
   }
   if (!v.canComment) {
-    const reason = v.reason === "min_games"
-      ? `Sync at least ${v.requiredGames ?? 20} games with the desktop agent to review replays (you have ${v.syncedGames ?? 0}).`
-      : v.reason === "blocked"
-        ? "The asker isn't accepting comments from you."
-        : v.reason === "browser_session_required"
-          ? "Sign in on the website to comment."
-          : "Comments are closed.";
-    return <p role="status" className="rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted">{reason}</p>;
+    if (v.reason === "min_games") {
+      return (
+        <div role="status" className={GATE_CLASS}>
+          <p>
+            Sync at least {v.requiredGames ?? REVIEW_LIMITS.MIN_SYNCED_GAMES} games with the desktop app to review replays (you have {v.syncedGames ?? 0}).
+          </p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-4">
+            <Link href="/download" className={`${GATE_LINK_CLASS} text-accent-cyan underline underline-offset-2 hover:text-accent-hover`}>
+              Get the desktop app
+            </Link>
+            <WhyLink />
+          </p>
+        </div>
+      );
+    }
+    const reason = v.reason === "blocked"
+      ? "The asker isn't accepting comments from you."
+      : v.reason === "browser_session_required"
+        ? "Sign in on the website to comment."
+        : "Comments are closed.";
+    return <p role="status" className={GATE_CLASS}>{reason}</p>;
   }
   if (!v.isAsker && v.canReview === false) {
+    const level = data.request.desiredLevel;
+    const wanted = level === "my_league_or_higher" ? "players at their league or higher" : `${levelLabel(level)} players`;
     return (
-      <p role="status" className="rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted">
-        The asker wants reviews from verified {levelLabel(data.request.desiredLevel)} players, so you can reply to existing reviews but not start a new one.
-      </p>
+      <div role="status" className={GATE_CLASS}>
+        <p>
+          The asker wants reviews from verified {wanted}, so you can reply to existing reviews but not start a new one.
+        </p>
+        <p className="mt-1">
+          <WhyLink />
+        </p>
+      </div>
     );
   }
   if (composing !== null) return null;

@@ -23,6 +23,7 @@ import {
 } from "@/components/onboarding/OnboardingChecklist";
 import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
 import { useImportStatus } from "@/components/imports/useImportStatus";
+import { markAppSession } from "@/lib/appSession";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
 import { useUserSocket } from "@/lib/useUserSocket";
 
@@ -51,6 +52,8 @@ const FolderSyncAutoRunner = dynamic(
  *     agent checklist.
  *   - A debounced router.refresh() while those first games land.
  *   - Background Folder Sync (browser import) while /app is open.
+ *   - The browser-session cookie (lib/appSession.ts) that limits the
+ *     Settings "Default tab" to the first /app page of the session.
  *
  * Settings, the build library, community, meta, agent and admin get
  * the chrome without any of this — a date filter would be meaningless
@@ -117,6 +120,12 @@ export function AnalyzerFrame({
   const noGames = me.games.total === 0;
   const view = onboardingView(me, browserImportEnabled);
   useRefreshWhileOnboarding(noGames || view.checklist);
+
+  // The frame persists across /app routes, so this runs once per visit:
+  // from here on the /app page shows Today instead of the default tab.
+  useEffect(() => {
+    markAppSession();
+  }, []);
 
   return (
     <MeContext.Provider value={me}>

@@ -1,13 +1,13 @@
 "use client";
 
-import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/Input";
-import { helpArticlePath } from "@/lib/help";
+import { helpArticlePath } from "@/lib/help/paths";
 import { helpCategory } from "@/lib/help/categories";
 import { helpInlinePlainText } from "@/lib/help/inline";
-import { searchHelp } from "@/lib/help/search";
+import type { searchHelp } from "@/lib/help/search";
 import { isPlainClick } from "./HelpInline";
 
 /**
@@ -48,7 +48,22 @@ export function HelpSearch({ articleHref = helpArticlePath, onOpenArticle, label
   const listRef = useRef<HTMLUListElement>(null);
   const [query, setQuery] = useState("");
   const trimmed = query.trim();
-  const results = useMemo(() => (trimmed ? searchHelp(trimmed) : []), [trimmed]);
+  const [answer, setAnswer] = useState<{ query: string; results: ReturnType<typeof searchHelp>; failed?: boolean }>({ query: "", results: [] });
+  const [attempt, setAttempt] = useState(0);
+  const results = answer.query === trimmed ? answer.results : [];
+  const searching = Boolean(trimmed && answer.query !== trimmed);
+  useEffect(() => {
+    if (!trimmed) return;
+    let cancelled = false;
+    // The article bodies are only needed once someone searches. Browsing
+    // the server-rendered topics should not download the whole help library.
+    void import("@/lib/help/search").then(({ searchHelp }) => {
+      if (!cancelled) setAnswer({ query: trimmed, results: searchHelp(trimmed) });
+    }).catch(() => {
+      if (!cancelled) setAnswer({ query: trimmed, results: [], failed: true });
+    });
+    return () => { cancelled = true; };
+  }, [trimmed, attempt]);
 
   const resultLinks = () => Array.from(listRef.current?.querySelectorAll<HTMLAnchorElement>("a[href]") ?? []);
 
@@ -143,8 +158,11 @@ export function HelpSearch({ articleHref = helpArticlePath, onOpenArticle, label
         ) : null}
       </div>
       <p id={statusId} role="status" aria-live="polite" className={trimmed ? "mt-2 text-caption text-text-dim" : "sr-only"}>
-        {statusText(trimmed, results.length)}
+        {searching ? "Searching…" : answer.failed && answer.query === trimmed ? "Search couldn't load. Browse the topics below or try again." : statusText(trimmed, results.length)}
       </p>
+      {trimmed && answer.failed && answer.query === trimmed ? (
+        <button type="button" className="text-accent underline" onClick={() => setAttempt((n) => n + 1)}>Try search again</button>
+      ) : null}
       {results.length > 0 ? (
         <ul
           id={listId}

@@ -69,8 +69,14 @@ describe("My reviews", () => {
   it("keeps the blocked-reviewers card when the requests fail to load", () => {
     harness.errors["/v1/me/reviews"] = { status: 503, message: "down" };
     render(<MyReviews />);
-    expect(screen.getByText(/Your requests couldn.t be loaded/)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Retry" })).toHaveLength(2);
     expect(screen.getByRole("list", { name: "Blocked reviewers" })).toBeTruthy();
+  });
+
+  it("shows a loading state for written reviews while the request is pending", () => {
+    delete harness.data["/v1/me/reviews"];
+    render(<MyReviews />);
+    expect(screen.getByLabelText("Loading reviews you've written").getAttribute("aria-busy")).toBe("true");
   });
 
   it("lists your requests (with link-only and hidden flags) and the reviews you wrote", () => {

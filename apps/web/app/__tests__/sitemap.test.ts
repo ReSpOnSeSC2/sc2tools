@@ -98,14 +98,17 @@ describe("sitemap", () => {
     expect(list).not.toContain(`${SITE}/reviews/short`);
   });
 
-  it("lists the help center and every help article, dated by the article", async () => {
+  it("lists the help center and every indexable help article, dated by the article", async () => {
     const rows = await sitemap();
     const list = rows.map((row) => row.url);
     expect(list).toContain(`${SITE}/help`);
     for (const article of ALL_HELP_ARTICLES) {
       const row = rows.find((entry) => entry.url === `${SITE}/help/${article.slug}`);
-      expect(row?.lastModified, article.slug).toEqual(new Date(article.updated));
+      if (article.noindex) expect(row, article.slug).toBeUndefined();
+      else expect(row?.lastModified, article.slug).toEqual(new Date(article.updated));
     }
+    // The invite-only coaching guide stays out of search engines.
+    expect(list).not.toContain(`${SITE}/help/coaching`);
   });
 
   it("dates static pages by their last content change, never the request time", async () => {

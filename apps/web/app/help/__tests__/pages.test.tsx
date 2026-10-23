@@ -55,7 +55,7 @@ describe("/help", () => {
     expect(within(builds).getByRole("link", { name: /Build check-in/ }).getAttribute("href")).toBe("/help/build-check-in");
     // Topics with articles get a card; topics without articles yet stay hidden.
     expect(document.getElementById("account-data")).not.toBeNull();
-    expect(document.getElementById("desktop-app")).toBeNull();
+    expect(document.getElementById("desktop-app")).not.toBeNull();
     for (const category of HELP_CATEGORIES) {
       const hasArticles = ALL_HELP_ARTICLES.some((article) => article.category === category.id);
       expect(document.getElementById(category.id) !== null, category.id).toBe(hasArticles);
@@ -121,6 +121,34 @@ describe("/help/[slug]", () => {
     const note = screen.getByText(/The steps in this article happen in your account/).closest("[role='note']") as HTMLElement;
     expect(within(note).getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/sign-in");
     expect(screen.getByRole("link", { name: "Settings → Build check-in" }).getAttribute("href")).toBe("/settings?tab=checkin");
+  });
+
+  it("gives sections stable anchors: /help/replay-reviews#who-can-review lands on its heading", async () => {
+    await renderArticle("replay-reviews");
+    const heading = screen.getByRole("heading", { level: 2, name: "Who can review" });
+    expect(heading.id).toBe("who-can-review");
+    expect(screen.getByRole("link", { name: "desktop app" }).getAttribute("href")).toBe("/download");
+  });
+
+  it("keeps the invite-only coaching article out of search engines", async () => {
+    const coaching = await generateMetadata({ params: Promise.resolve({ slug: "coaching" }) });
+    expect(coaching.robots).toEqual({ index: false, follow: true });
+    const reviews = await generateMetadata({ params: Promise.resolve({ slug: "replay-reviews" }) });
+    expect(reviews.robots).toBeUndefined();
+
+    await renderArticle("coaching");
+    expect(screen.getByRole("heading", { level: 1, name: "Coaching workspace (coaches & students)" })).toBeTruthy();
+    expect(screen.getByText(/The steps in this article happen in your account/)).toBeTruthy();
+  });
+
+  it("files both under Reviews & coaching on the hub", () => {
+    render(<HelpHubPage />);
+    const card = document.getElementById("reviews-coaching") as HTMLElement;
+    expect(within(card).getByRole("heading", { level: 3, name: "Reviews & coaching" })).toBeTruthy();
+    expect(within(card).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
+      "/help/replay-reviews",
+      "/help/coaching",
+    ]);
   });
 
   it("hides the sign-in note once signed in", async () => {

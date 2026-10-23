@@ -54,8 +54,8 @@ describe("review thread: the anonymous asker's replies", () => {
         currentTime={0}
         durationSec={640}
         canPin={false}
-        draftPin={null}
-        pinMode={false}
+        pinFor={() => null}
+        pickingFor={null}
         onSeek={() => {}}
         onTogglePinMode={() => {}}
         onClearPin={() => {}}

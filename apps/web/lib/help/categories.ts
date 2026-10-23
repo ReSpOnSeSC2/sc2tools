@@ -43,6 +43,11 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
     description: "Custom builds, build check-in and how games are matched to builds.",
   },
   {
+    id: "reviews-coaching",
+    name: "Reviews & coaching",
+    description: "Ask other players about a moment in your game, review theirs, and the private coaching workspace.",
+  },
+  {
     id: "stream-studio",
     name: "Stream Studio",
     description: "Overlay widgets, multi-platform chat, the Stream Dock and viewer features.",

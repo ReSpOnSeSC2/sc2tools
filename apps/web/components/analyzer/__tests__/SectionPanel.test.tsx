@@ -52,6 +52,14 @@ describe("SectionPanel", () => {
     expect([...loaded]).toEqual(["macro"]);
   });
 
+  it("puts the section header (h2, intro, How to read this) above the section", async () => {
+    render(<SectionPanel tab="trends" />);
+    expect(screen.getByRole("heading", { level: 2, name: "Trends" })).toBeTruthy();
+    expect(screen.getByText("Win-rate trajectory across periods.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "How to read this" }).getAttribute("href")).toBe("/help/trends");
+    expect(await screen.findByText("trends section")).toBeTruthy();
+  });
+
   it("renders each section for its tab", async () => {
     const cases = [
       ["replays", "replays section"],

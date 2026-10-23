@@ -1,9 +1,14 @@
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { apiFetch } from "@/lib/api";
+import { APP_SESSION_COOKIE } from "@/lib/appSession";
 import { opponentContextFromQuery } from "@/lib/opponentNavigation";
 import {
+  defaultTabRedirect,
   hrefForTab,
   isTabId,
   opponentDossierHref,
+  type TabId,
 } from "@/components/analyzer/tabs";
 import { TodayView } from "@/components/dashboard/TodayView";
 
@@ -14,6 +19,13 @@ export const metadata = {
 };
 
 /**
+ * Longest the "Default tab" lookup may hold the first /app page of a
+ * session. Past this (a restart, an unavailable or slow API) the visit just
+ * shows Today.
+ */
+const DEFAULT_TAB_LOOKUP_TIMEOUT_MS = 1500;
+
+/**
  * /app — the Today screen: the between-games glance (live game, session
  * record, streak, MMR, Daily Pulse). Every analyzer section now lives at
  * its own route under /app/, so this page also honours the two legacy
@@ -21,6 +33,10 @@ export const metadata = {
  *
  *   /app?opponent=<pulseId>  → /app/opponents/<pulseId>   (dossier backlinks)
  *   /app?tab=<tabId>         → /app/<section>             (old deep links)
+ *
+ * Then Settings → "Default tab": when /app is the first analyzer page
+ * of the browser session, a saved section opens instead of Today. The
+ * redirect runs here, before render, so Today never flashes first.
  */
 export default async function AppHome({
   searchParams,
@@ -35,5 +51,33 @@ export default async function AppHome({
   const rawTab = Array.isArray(query.tab) ? query.tab[0] : query.tab;
   if (isTabId(rawTab)) redirect(hrefForTab(rawTab));
 
+  const rawView = Array.isArray(query.view) ? query.view[0] : query.view;
+  const defaultTab = rawView === "today" ? null : await defaultTabForThisVisit();
+  if (defaultTab) redirect(hrefForTab(defaultTab));
+
   return <TodayView />;
+}
+
+/**
+ * The section the saved "Default tab" opens, or null to show Today.
+ *
+ * Only the first /app page of a browser session reads it: AnalyzerFrame
+ * sets the session cookie (lib/appSession.ts) once any /app page has
+ * mounted, so clicking Today later, or opening a bookmark such as
+ * /app/maps first and then Today, always shows Today. A missing
+ * preference, "today", an unknown tab, a failed or slow request: all
+ * show Today.
+ */
+async function defaultTabForThisVisit(): Promise<TabId | null> {
+  try {
+    const jar = await cookies();
+    if (jar.has(APP_SESSION_COOKIE)) return null;
+    const res = await apiFetch<{ defaultTab?: string } | null>(
+      "/v1/me/preferences/misc",
+      { signal: AbortSignal.timeout(DEFAULT_TAB_LOOKUP_TIMEOUT_MS) },
+    );
+    return res.ok ? defaultTabRedirect(res.data?.defaultTab) : null;
+  } catch {
+    return null;
+  }
 }

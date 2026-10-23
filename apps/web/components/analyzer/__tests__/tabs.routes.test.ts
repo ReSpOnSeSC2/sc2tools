@@ -58,6 +58,11 @@ describe("Settings default tab", () => {
     for (const tab of TABS) expect(defaultTabRedirect(tab.id)).toBe(tab.id);
   });
 
+  it("reads a section's URL slug as its tab", () => {
+    expect(defaultTabRedirect("maps")).toBe("battlefield");
+    expect(defaultTabRedirect("trends")).toBe("trends");
+  });
+
   it("stays on Today for Today, no choice or a removed section", () => {
     expect(TODAY_DEFAULT_TAB).toBe("today");
     for (const pref of [TODAY_DEFAULT_TAB, undefined, null, "", "ml"]) {
