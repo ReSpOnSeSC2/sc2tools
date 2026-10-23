@@ -45,6 +45,7 @@ const FULL: LiveGamePayload = {
   headToHead: { wins: 4, losses: 2 },
   streak: { kind: "win", count: 3 },
   cheeseProbability: 0.65,
+  cheeseHistory: { samples: 12, of: 20 },
   predictedStrategies: [
     { name: "Pool first", weight: 0.45 },
     { name: "Hatch first", weight: 0.35 },
@@ -54,7 +55,7 @@ const FULL: LiveGamePayload = {
     { name: "P - 4 Gate", total: 9, winRate: 0.55 },
   ],
   bestAnswer: { build: "P - Stargate", winRate: 0.78, total: 7 },
-  favOpening: { name: "Pool first", share: 0.55, samples: 11 },
+  favOpening: { name: "Pool first", share: 0.55, samples: 11, of: 20 },
   session: {
     wins: 4,
     losses: 4,
@@ -111,7 +112,7 @@ const CASES: Case[] = [
   {
     name: "CheeseWidget",
     element: (live) => <CheeseWidget live={live} />,
-    expects: ["65"],
+    expects: ["65", "12 of last 20 games"],
   },
   {
     name: "RematchWidget",
@@ -141,7 +142,7 @@ const CASES: Case[] = [
   {
     name: "FavOpeningWidget",
     element: (live) => <FavOpeningWidget live={live} />,
-    expects: ["Pool first"],
+    expects: ["Pool first", "11 of last 20 games"],
   },
   {
     name: "BestAnswerWidget",

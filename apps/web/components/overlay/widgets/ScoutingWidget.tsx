@@ -8,6 +8,7 @@ import type {
 } from "../types";
 import { Dim, RevealedTag, WidgetShell } from "../WidgetShell";
 import { scoutingStartTriggerKey } from "../gameStartTrigger";
+import { ofLastGames, phaseLine } from "../scoutingCopy";
 
 /**
  * Scouting Report card — visual rebuild matching the legacy SPA's
@@ -22,8 +23,11 @@ import { scoutingStartTriggerKey } from "../gameStartTrigger";
  *   4. "LAST GAMES" list — newest-first rows of (result-chip, length,
  *      map, YOU build, OPP build) for this matchup. Driven by the new
  *      cloud-derived `live.recentGames` field.
- *   5. Optional "YOUR BEST ANSWER" + "CHEESE" rows (kept compact for
- *      the bottom of the card so the LAST GAMES list dominates).
+ *   5. Optional "YOUR BEST ANSWER", "CHEESE" and "GAMES USUALLY END"
+ *      rows (kept compact for the bottom of the card so the LAST GAMES
+ *      list dominates). The last one is the cloud's phase forecast
+ *      (``opponentPhases``) in a single line: "Mid/Late game · Carrier,
+ *      Tempest".
  *
  * Sized 600px wide on the bottom-center slot — matches the screenshot
  * the streamer uses on stream and leaves the top of the screen free for
@@ -94,6 +98,8 @@ export function ScoutingWidget({
   const cheeseHigh =
     typeof effective.cheeseProbability === "number"
     && effective.cheeseProbability >= 0.4;
+  const cheeseHistory = effective.cheeseHistory;
+  const phases = effective.opponentPhases ? phaseLine(effective.opponentPhases) : null;
 
   const hasAnyContent =
     Boolean(effective.oppName)
@@ -101,6 +107,7 @@ export function ScoutingWidget({
     || recentGames.length > 0
     || bestAnswer != null
     || cheeseHigh
+    || phases != null
     || rivalNote != null
     || opponentNoteText != null;
   if (!hasAnyContent) return null;
@@ -227,6 +234,30 @@ export function ScoutingWidget({
           <span style={{ color: "#d16ba5", fontWeight: 700 }}>
             scout natural early —{" "}
             {Math.round((effective.cheeseProbability || 0) * 100)}% likely
+          </span>
+          {cheeseHistory && cheeseHistory.of > 0 ? (
+            <Dim>
+              <span style={{ whiteSpace: "nowrap" }}>
+                {ofLastGames(cheeseHistory.samples, cheeseHistory.of)}
+              </span>
+            </Dim>
+          ) : null}
+        </FooterRow>
+      ) : null}
+
+      {phases ? (
+        <FooterRow label="GAMES USUALLY END">
+          <span
+            data-testid="opponent-phase-line"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {phases}
           </span>
         </FooterRow>
       ) : null}

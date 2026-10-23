@@ -1,11 +1,16 @@
 "use client";
 
 import type { LiveGamePayload } from "../types";
+import { ofLastGames } from "../scoutingCopy";
 import { Dim, WidgetFooter, WidgetHeader, WidgetShell } from "../WidgetShell";
 
 export function FavOpeningWidget({ live }: { live: LiveGamePayload | null }) {
   const f = live?.favOpening;
   if (!f) return null;
+  // Payloads cached before ``of`` existed still read "N samples".
+  const sample = typeof f.of === "number" && f.of > 0
+    ? ofLastGames(f.samples, f.of)
+    : `${f.samples} samples`;
   return (
     <WidgetShell slot="bottom-left" race={live?.oppRace} visible width={360}>
       <WidgetHeader>
@@ -17,11 +22,11 @@ export function FavOpeningWidget({ live }: { live: LiveGamePayload | null }) {
         </Dim>
       </WidgetHeader>
       <WidgetFooter>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
           {f.name}
         </span>
         <Dim>
-          <span style={{ fontVariantNumeric: "tabular-nums" }}>{f.samples} samples</span>
+          <span style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>{sample}</span>
         </Dim>
       </WidgetFooter>
     </WidgetShell>

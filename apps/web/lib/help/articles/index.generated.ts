@@ -17,6 +17,7 @@ import gettingStarted_installApp from "./getting-started/install-app";
 import gettingStarted_settingsOverview from "./getting-started/settings-overview";
 import streamStudio_multiPlatformChat from "./stream-studio/multi-platform-chat";
 import streamStudio_obsOverlaySetup from "./stream-studio/obs-overlay-setup";
+import streamStudio_opponentScouting from "./stream-studio/opponent-scouting";
 import streamStudio_streamDock from "./stream-studio/stream-dock";
 import streamStudio_viewerEngagement from "./stream-studio/viewer-engagement";
 import troubleshooting_reportAProblem from "./troubleshooting/report-a-problem";
@@ -37,6 +38,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_settingsOverview,
   streamStudio_multiPlatformChat,
   streamStudio_obsOverlaySetup,
+  streamStudio_opponentScouting,
   streamStudio_streamDock,
   streamStudio_viewerEngagement,
   troubleshooting_reportAProblem,

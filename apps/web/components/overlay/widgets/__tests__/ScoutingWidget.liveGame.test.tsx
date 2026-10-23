@@ -462,10 +462,10 @@ describe("ScoutingWidget — live envelope path", () => {
     expect(container.textContent).toContain("Disruptor Drop");
   });
 
-  it("removes the legacy OpponentPhases medians block — even when opponentPhases is set the markup is gone", () => {
-    // The scouting overlay now renders per-game timelines instead of
-    // matchup-wide medians. Pin that the legacy ``opponentPhases``
-    // payload no longer drives any markup on the card.
+  it("renders opponentPhases as one footer line, never the old medians strip", () => {
+    // The phase forecast is one compact line on stream: where games
+    // usually end plus the army they reach. The trajectory strip and
+    // its median labels stay off the card.
     const opponentPhases: OpponentPhases = {
       typicalFinalPhase: "midLate",
       trajectory: {
@@ -514,9 +514,13 @@ describe("ScoutingWidget — live envelope path", () => {
     ).toBeNull();
     expect(container.textContent).not.toContain("Usually reaches");
     expect(container.textContent).not.toContain("Plays into");
+    expect(container.textContent).toContain("GAMES USUALLY END");
+    expect(
+      container.querySelector('[data-testid="opponent-phase-line"]')?.textContent,
+    ).toBe("Mid/Late game · Carrier, Tempest, Mothership");
   });
 
-  it("renders nothing of the medians block when opponentPhases is missing", () => {
+  it("renders no phase line when opponentPhases is missing", () => {
     // Sanity check: even without the legacy payload the rest of the
     // card renders.
     const env = envelope({
@@ -543,6 +547,7 @@ describe("ScoutingWidget — live envelope path", () => {
     ).toBeNull();
     expect(container.textContent).not.toContain("Usually reaches");
     expect(container.textContent).not.toContain("Plays into");
+    expect(container.textContent).not.toContain("GAMES USUALLY END");
     expect(container.textContent).toContain("Future");
     expect(container.textContent).toContain("LAST GAMES");
   });

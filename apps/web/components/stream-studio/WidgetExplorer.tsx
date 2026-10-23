@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Copy, Expand, Layers3, Search, SlidersHorizontal } from "lucide-react";
+import { HelpLink } from "@/components/help/HelpLink";
 import { Modal } from "@/components/ui/Modal";
 import { WIDGET_GROUPS, WIDGET_GUIDES, type WidgetGuide } from "@/lib/streamStudioLearn";
 
@@ -195,6 +196,11 @@ function WidgetDetail({ guide, onRelated, detailRef }: { guide: WidgetGuide; onR
         <div>
           <h4 className="font-display text-h4 font-bold text-text">What you&apos;re looking at</h4>
           <p className="mt-2 text-body text-text-muted">{guide.explanation}</p>
+          {guide.helpSlug ? (
+            <HelpLink slug={guide.helpSlug} className="mt-2 inline-flex min-h-11 items-center text-body">
+              Where these numbers come from
+            </HelpLink>
+          ) : null}
         </div>
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="rounded-md border border-border bg-bg-elevated/50 p-4">
