@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Build library and definitions
+
+- Empty build dossiers explain replay matching and offer re-match, rule editing and pending check-ins. Recent form, section links, sortable game disclosures and retry actions make existing results easier to explore.
+- Build menus add Duplicate, public links and Unpublish; listing labels and delete warnings agree across every surface. Cards show last played and low-sample cues, with a Last played library sort.
+- Definitions group rules by race and matchup, keep filters in the URL, and reveal focused entries from strategy links in dossiers and check-ins.
+
 ### Build editor safety
 
 - Both build editors ask before discarding unsaved work. Save failures keep their complete message visible, and editor notifications use the shared toast layer.

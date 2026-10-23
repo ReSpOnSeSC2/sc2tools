@@ -34,6 +34,7 @@ import { BuildDefinitionCard } from "./BuildDefinitionCard";
 import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildPublishModal } from "./BuildPublishModal";
 import { BuildSignInPrompt } from "./BuildSignInPrompt";
+import { BuildKebab } from "./BuildCard";
 import type { CustomBuild } from "./types";
 
 const BACK_LINK_CLASS =
@@ -82,6 +83,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorFocus, setEditorFocus] = useState<"notes" | "preview" | undefined>();
+  const [editorIntent, setEditorIntent] = useState<"edit" | "duplicate">("edit");
   const [publishOpen, setPublishOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
@@ -149,7 +151,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const tint = raceTint(race);
   const mu = matchupLabel(race, (build.vsRace as VsRace) ?? "Any");
   const fromOpponent = build.perspective === "opponent";
-  const openEditor = (focus?: "notes" | "preview") => { setEditorFocus(focus); setEditorOpen(true); };
+  const openEditor = (focus?: "notes" | "preview") => { setEditorIntent("edit"); setEditorFocus(focus); setEditorOpen(true); };
 
   return (
     <div className="space-y-6">
@@ -191,7 +193,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
               onClick={() => setPublishOpen(true)}
               iconLeft={<Send className="h-4 w-4" aria-hidden />}
             >
-              {build.isPublic ? "Update community" : "Publish"}
+              {build.isPublic ? "Update listing" : "Publish…"}
             </Button>
             <Button
               variant="danger"
@@ -200,6 +202,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
             >
               Delete
             </Button>
+            <BuildKebab slug={slug} name={build.name} isPublic={!!build.isPublic} onEdit={() => openEditor()} onDelete={() => setDeleteOpen(true)} onPublish={() => setPublishOpen(true)} onDuplicate={() => { setEditorIntent("duplicate"); setEditorFocus(undefined); setEditorOpen(true); }} onChanged={() => buildSwr.mutate()} compact />
           </div>
         }
       />
@@ -207,6 +210,9 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
       {dossierPath ? (
         <BuildDossier
           apiPath={dossierPath}
+          slug={slug}
+          onEditRules={() => openEditor("preview")}
+          sectionNavigation
           phasePerspective={
             build.perspective === "opponent" ? "opponent" : undefined
           }
@@ -217,6 +223,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         <EditCustomBuildLauncher
           build={editorOpen ? build : null}
           initialFocus={editorFocus}
+          intent={editorIntent}
           onClose={() => setEditorOpen(false)}
           onSaved={async (saved) => {
             await handleSaved(saved);
@@ -227,6 +234,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         open={publishOpen}
         onClose={() => setPublishOpen(false)}
         build={build}
+        onUnpublished={() => buildSwr.mutate()}
         onPublished={async () => {
           await buildSwr.mutate();
         }}
@@ -238,7 +246,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         intent="danger"
         loading={deletePending}
         title="Delete this build?"
-        description={`“${build.name}” will be removed from your library on every signed-in device.`}
+        description={`“${build.name}” will be removed from your library on every signed-in device.${build.isPublic ? " Its Community listing will also be removed." : ""}`}
         confirmLabel="Delete build"
       />
     </div>

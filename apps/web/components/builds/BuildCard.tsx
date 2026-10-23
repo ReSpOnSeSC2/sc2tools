@@ -13,8 +13,12 @@ import {
   type SyntheticEvent,
 } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import {
   Eye,
+  Copy,
+  ExternalLink,
+  Link2,
   Loader2,
   MoreVertical,
   Pencil,
@@ -36,6 +40,7 @@ import {
   type VsRace,
 } from "@/lib/race";
 import type { DecoratedBuild } from "./types";
+import { useBuildPublicationActions } from "./BuildPublicationActions";
 
 export interface BuildCardProps {
   build: DecoratedBuild;
@@ -44,6 +49,8 @@ export interface BuildCardProps {
   onDelete: (slug: string) => void;
   onPublish: (slug: string) => void;
   onReclassify?: (slug: string) => void;
+  onDuplicate?: (slug: string) => void;
+  onChanged?: () => void | Promise<unknown>;
   reclassifying?: boolean;
   reclassifyDisabled?: boolean;
 }
@@ -61,6 +68,8 @@ export function BuildCard({
   onDelete,
   onPublish,
   onReclassify,
+  onDuplicate,
+  onChanged,
   reclassifying = false,
   reclassifyDisabled = false,
 }: BuildCardProps) {
@@ -154,6 +163,8 @@ export function BuildCard({
               onDelete={onDelete}
               onPublish={onPublish}
               onReclassify={onReclassify}
+              onDuplicate={onDuplicate}
+              onChanged={onChanged}
               reclassifying={reclassifying}
               reclassifyDisabled={reclassifyDisabled}
             />
@@ -177,7 +188,9 @@ function BuildStatsRow({
   const statsPending = statsState === "loading";
   const statsUnavailable = statsState === "unavailable";
   const checkins = total > 0 ? checkinsText(stats?.checkins) : null;
-  const updated = build.updatedAt;
+  const played = stats?.lastPlayed;
+  const latest = played || build.updatedAt;
+  const lowSample = total > 0 && total < 5;
   return (
     <dl className="mt-4 flex flex-wrap items-end justify-between gap-3 text-caption">
       <div className="flex items-baseline gap-3">
@@ -188,13 +201,14 @@ function BuildStatsRow({
           <dd
             className="text-body font-semibold tabular-nums"
             style={{
-              color: total
+              color: total && !lowSample
                 ? wrColor(stats?.winRate ?? 0, total)
                 : "rgb(var(--text-dim))",
             }}
           >
-            {total > 0 ? pct1(stats?.winRate ?? 0) : "—"}
+            {statsPending ? <span role="status" className="inline-flex h-5 items-center"><span className="sr-only">Loading stats</span><SkeletonBar className="h-5 w-12" /></span> : total > 0 ? pct1(stats?.winRate ?? 0) : "—"}
           </dd>
+          {lowSample && !statsPending && !statsUnavailable ? <dd><Badge variant="warning" size="sm" title="Fewer than 5 games: this win rate can swing a lot">Low sample</Badge></dd> : null}
         </div>
         <div>
           <dt className="text-micro uppercase tracking-wider text-text-dim">
@@ -202,9 +216,8 @@ function BuildStatsRow({
           </dt>
           <dd className="text-body tabular-nums text-text">
             {statsPending ? (
-              <span role="status" className="inline-flex h-6 items-center">
-                <span className="sr-only">Loading record</span>
-                <SkeletonBar className="h-4 w-16" />
+              <span className="inline-flex h-5 items-center" aria-hidden>
+                <SkeletonBar className="h-5 w-16" />
               </span>
             ) : statsUnavailable ? (
               <span className="text-warning">Temporarily unavailable</span>
@@ -229,14 +242,9 @@ function BuildStatsRow({
         </div>
       </div>
       <div className="text-right">
-        {total > 0 ? (
-          <Badge variant="neutral" size="sm">
-            Total games: {total}
-          </Badge>
-        ) : null}
-        {updated ? (
-          <div className="mt-1 text-micro text-text-dim">
-            Updated {fmtAgo(updated)}
+        {latest ? (
+          <div title={new Date(latest).toLocaleString()} className="mt-1 text-micro text-text-dim">
+            {played ? "Played" : "Edited"} {fmtAgo(latest)}
           </div>
         ) : null}
       </div>
@@ -252,6 +260,9 @@ interface BuildKebabProps {
   onDelete: (slug: string) => void;
   onPublish: (slug: string) => void;
   onReclassify?: (slug: string) => void;
+  onDuplicate?: (slug: string) => void;
+  onChanged?: () => void | Promise<unknown>;
+  compact?: boolean;
   reclassifying?: boolean;
   reclassifyDisabled?: boolean;
 }
@@ -293,7 +304,7 @@ function visibleViewport() {
   };
 }
 
-function BuildKebab({
+export function BuildKebab({
   slug,
   name,
   isPublic,
@@ -301,6 +312,9 @@ function BuildKebab({
   onDelete,
   onPublish,
   onReclassify,
+  onDuplicate,
+  onChanged,
+  compact = false,
   reclassifying = false,
   reclassifyDisabled = false,
 }: BuildKebabProps) {
@@ -310,7 +324,9 @@ function BuildKebab({
   const menuRef = useRef<HTMLUListElement>(null);
   const initialFocusRef = useRef<"first" | "last">("first");
   const menuId = useId();
-  const menuItemCount = 3 + (onReclassify ? 1 : 0);
+  const menuItemCount = (compact ? 0 : 4 + (onReclassify ? 1 : 0)) + (onDuplicate ? 1 : 0) + (isPublic ? 3 : 0);
+  const actions = useBuildPublicationActions({ slug, name, enabled: open && isPublic, onChanged });
+  const listingState = actions.publication.error ? "Unavailable" : actions.publication.data?.published === false ? "Not published" : "Loading…";
 
   function stop<E extends SyntheticEvent>(e: E) {
     e.preventDefault();
@@ -510,7 +526,7 @@ function BuildKebab({
         visibility: "hidden",
       };
 
-  return (
+  return (<>
     <div
       className="relative"
       onClick={(e: MouseEvent<HTMLDivElement>) => stop(e)}
@@ -518,7 +534,7 @@ function BuildKebab({
       <button
         ref={triggerRef}
         type="button"
-        aria-label={`Build options for ${name}`}
+        aria-label={compact ? `More actions for ${name}` : `Build options for ${name}`}
         aria-expanded={open}
         aria-haspopup="menu"
         aria-controls={open ? menuId : undefined}
@@ -585,6 +601,8 @@ function BuildKebab({
                 "motion-safe:animate-[fadeIn_120ms_ease-out]",
               ].join(" ")}
             >
+              {!compact ? <KebabItem icon={<ExternalLink className="h-4 w-4" aria-hidden />} label="Open full page" href={`/builds/${encodeURIComponent(slug)}`} onClick={() => closeMenu(false)} /> : null}
+              {!compact ?
               <KebabItem
                 icon={<Pencil className="h-4 w-4" aria-hidden />}
                 label="Edit"
@@ -592,8 +610,9 @@ function BuildKebab({
                   closeMenu(false);
                   onEdit(slug);
                 }}
-              />
-              {onReclassify ? (
+              /> : null}
+              {onDuplicate ? <KebabItem icon={<Copy className="h-4 w-4" aria-hidden />} label="Duplicate" onClick={() => { closeMenu(false); onDuplicate(slug); }} /> : null}
+              {!compact && onReclassify ? (
                 <KebabItem
                   icon={
                     reclassifying ? (
@@ -610,15 +629,21 @@ function BuildKebab({
                   }}
                 />
               ) : null}
-              <KebabItem
+              {!compact ? <><li role="separator" className="my-1 border-t border-border" /><KebabItem
                 icon={<Send className="h-4 w-4" aria-hidden />}
-                label={isPublic ? "Publish update" : "Publish"}
+                label={isPublic ? "Update listing" : "Publish…"}
                 onClick={() => {
                   closeMenu(false);
                   onPublish(slug);
                 }}
-              />
-              <KebabItem
+              /></> : null}
+              {isPublic ? <>
+                <KebabItem icon={<ExternalLink className="h-4 w-4" aria-hidden />} label={actions.publicSlug ? "View on Community" : `View on Community · ${listingState}`} href={actions.publicSlug ? `/community/builds/${encodeURIComponent(actions.publicSlug)}` : undefined} disabled={!actions.publicSlug} onClick={() => closeMenu(false)} />
+                <KebabItem icon={<Link2 className="h-4 w-4" aria-hidden />} label={actions.publicSlug ? "Copy public link" : `Copy public link · ${listingState}`} disabled={!actions.publicSlug} onClick={() => { void actions.copy(); closeMenu(true); }} />
+                <KebabItem icon={<Send className="h-4 w-4" aria-hidden />} label="Unpublish" disabled={!actions.publicSlug} onClick={() => { actions.requestUnpublish(); closeMenu(false); }} />
+                {actions.publication.error ? <KebabItem icon={<RefreshCw className="h-4 w-4" aria-hidden />} label="Couldn't load listing · Try again" onClick={() => { void actions.publication.mutate(); }} /> : null}
+              </> : null}
+              {!compact ? <><li role="separator" className="my-1 border-t border-border" /><KebabItem
                 icon={<Trash2 className="h-4 w-4 text-danger" aria-hidden />}
                 label="Delete"
                 tone="danger"
@@ -626,13 +651,15 @@ function BuildKebab({
                   closeMenu(false);
                   onDelete(slug);
                 }}
-              />
+              /></> : null}
             </ul>
           </>,
           document.body,
         )
         : null}
     </div>
+    {actions.dialogs}
+    </>
   );
 }
 
@@ -642,13 +669,17 @@ function KebabItem({
   onClick,
   tone,
   disabled,
+  href,
 }: {
   icon: React.ReactNode;
   label: string;
   onClick: () => void;
   tone?: "danger";
   disabled?: boolean;
+  href?: string;
 }) {
+  const className = ["flex min-h-11 w-full items-center gap-2 px-3 py-2.5 text-left text-caption focus-visible:outline-none focus-visible:bg-bg-elevated disabled:cursor-not-allowed disabled:opacity-60", tone === "danger" ? "text-danger hover:bg-danger/10" : "text-text hover:bg-bg-elevated"].join(" ");
+  if (href && !disabled) return <li role="none"><Link role="menuitem" tabIndex={-1} href={href} onClick={onClick} className={className}>{icon}{label}</Link></li>;
   return (
     <li role="none">
       <button

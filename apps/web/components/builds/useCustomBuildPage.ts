@@ -16,7 +16,7 @@ export interface CustomBuildPage {
 export interface CustomBuildQuery {
   search?: string;
   matchup?: string;
-  sort?: "updated" | "name" | "winRate" | "games";
+  sort?: "updated" | "name" | "winRate" | "games" | "lastPlayed";
   hideEmpty?: boolean;
   view?: "summary";
   includeGeneric?: boolean;

@@ -25,12 +25,15 @@ import {
 import { unitLabel } from "@/components/analyzer/UnitCompositionTable";
 import { BuildTransitionSankey } from "@/components/analyzer/BuildTransitionSankey";
 import type { GameSummary } from "@/components/analyzer/game/types";
+import { resultLabel } from "@/components/analyzer/game/types";
 import { useApi } from "@/lib/clientApi";
 import { checkinsText } from "@/lib/buildIntent";
 import { BreakdownCard, TopOpponentsCard } from "./BuildBreakdownCards";
 import { BuildGamesTable } from "./BuildGamesTable";
 import { BuildCompositionExplorer } from "./BuildCompositionExplorer";
 import { BuildWinRateTrend } from "./BuildWinRateTrend";
+import { BuildDossierEmpty } from "./BuildDossierEmpty";
+import { BuildDossierNav } from "./BuildDossierNav";
 import type {
   BuildDetailRow,
   BuildPhasePayload,
@@ -89,6 +92,10 @@ export interface BuildDossierData {
 
 export interface BuildDossierProps {
   apiPath: string;
+  slug?: string;
+  onEditRules?: () => void;
+  /** Native section anchors and the sticky nav belong only to the full page. */
+  sectionNavigation?: boolean;
   /** Render-prop slot above the dossier (e.g. notes, publish form). */
   headerSlot?: (data: BuildDossierData | null) => ReactNode;
   /** Render-prop slot below the dossier. */
@@ -120,6 +127,9 @@ export function BuildDossier({
   footerSlot,
   showMacro = true,
   phasePerspective,
+  slug,
+  onEditRules,
+  sectionNavigation = false,
 }: BuildDossierProps) {
   const { data, error, isLoading, mutate } = useApi<BuildDossierData>(apiPath);
 
@@ -170,6 +180,10 @@ export function BuildDossier({
     );
   }
 
+  if (data.totals.total === 0 && (data.resumedCount ?? 0) === 0) {
+    return <div className="space-y-5">{headerSlot?.(data)}<BuildDossierEmpty key={apiPath} slug={slug} onEditRules={onEditRules} onMatched={() => { void mutate(); }} />{footerSlot?.(data)}</div>;
+  }
+
   const openFilteredGames = (sampleGameIds: string[], label: string) => {
     if (!sampleGameIds || sampleGameIds.length === 0) return;
     setGameFilter({ scope, gameIds: sampleGameIds, label });
@@ -194,6 +208,7 @@ export function BuildDossier({
   return (
     <div className="space-y-5">
       {headerSlot ? headerSlot(data) : null}
+      {sectionNavigation ? <BuildDossierNav /> : null}
       {error ? (
         // SWR keeps the last good response when a refresh fails.
         <PhaseLoadError
@@ -202,7 +217,12 @@ export function BuildDossier({
           onRetry={() => { void mutate(); }}
         />
       ) : null}
+      <section id={sectionNavigation ? "overview" : undefined} className="scroll-mt-24 space-y-4" aria-label="Build overview">
       <PerformanceTiles totals={data.totals} />
+      {data.totals.total > 0 && data.totals.total < 5 ? <p className="text-caption text-warning">Only {data.totals.total} games so far: treat percentages as early signals.</p> : null}
+      {showMacro ? <MacroAggregate macro={data.macro} /> : null}
+      </section>
+      <section id={sectionNavigation ? "army" : undefined} className="scroll-mt-24 space-y-4" aria-label="Build army">
       {phasePaths.compositions ? (
         <PhaseAndTransitions
           key={phasePaths.compositions}
@@ -219,19 +239,23 @@ export function BuildDossier({
           onSignatureClick={openFilteredGames}
         />
       ) : null}
+      </section>
+      <section id={sectionNavigation ? "matchups" : undefined} className="scroll-mt-24 space-y-4" aria-label="Build matchups and maps">
       <BreakdownGrid data={data} />
       <TopMatchups rows={data.byMatchup} />
       <TendenciesAndPredictions
         strategies={data.topStrategies ?? []}
         predictions={data.predictedStrategies ?? []}
       />
-      {showMacro ? <MacroAggregate macro={data.macro} /> : null}
+      </section>
+      <section id={sectionNavigation ? "games" : undefined} className="scroll-mt-24 space-y-4" aria-label="Build games">
       <Last5AndRecent
         data={data}
         filterGameIds={activeGameFilter?.gameIds}
         filterLabel={activeGameFilter?.label}
         onClearFilter={() => setGameFilter(null)}
       />
+      </section>
       {footerSlot ? footerSlot(data) : null}
     </div>
   );
@@ -466,10 +490,10 @@ function Last5AndRecent({
           <Last5GamesTimeline games={last5} />
         </Card>
         <Card
-          title="Win-rate trend"
+          title="Recent form"
           right={<span className="text-micro text-text-muted">Rolling 10 games</span>}
         >
-          <BuildWinRateTrend recent={data.recent ?? []} />
+          <RecentForm recent={data.recent ?? []} />
         </Card>
       </div>
       {filterGameIds?.length ? (
@@ -484,9 +508,21 @@ function Last5AndRecent({
         games={data.recent ?? []}
         resumedGames={data.resumedRecent ?? []}
         resumedCount={data.resumedCount ?? 0}
+        total={data.totals.total}
       />}
     </div>
   );
+}
+
+function RecentForm({ recent }: { recent: BuildRecentGame[] }) {
+  const ordered = [...recent].filter((game) => !game.isResumedFromReplay).sort((a, b) => (Date.parse(a.date) || 0) - (Date.parse(b.date) || 0));
+  const latest = ordered.slice(-20);
+  const describe = (game: BuildRecentGame) => `${fmtDate(game.date)} · ${game.map || "Unknown map"} · ${resultLabel(game.result)}`;
+  return <div className="space-y-3">
+    <div className="flex flex-wrap gap-1.5" aria-hidden>{latest.map((game) => <span key={game.gameId} data-form-result={resultLabel(game.result)} title={describe(game)} className={`h-3 w-3 rounded-full ${resultLabel(game.result) === "Win" ? "bg-success" : resultLabel(game.result) === "Loss" ? "bg-danger" : "bg-text-dim"}`} />)}</div>
+    <ol className="sr-only" aria-label="Recent game results, oldest to newest">{latest.map((game) => <li key={game.gameId}>{describe(game)}</li>)}</ol>
+    {ordered.length < 10 ? <p className="text-caption text-text-muted">Not enough games for a trend yet</p> : <BuildWinRateTrend recent={ordered} />}
+  </div>;
 }
 
 function CompositionSampleGames({

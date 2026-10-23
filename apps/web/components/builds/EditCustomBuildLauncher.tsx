@@ -10,6 +10,7 @@ import {
   VS_RACE_OPTIONS,
   SKILL_LEVELS,
   isProxyStructureToken,
+  NAME_MAX_CHARS,
   type BuildEditorDraft,
   type BuildRule,
   type RaceLite,
@@ -31,6 +32,7 @@ export interface EditCustomBuildLauncherProps {
   onClose: () => void;
   onSaved: (saved: CustomBuild, result: BuildEditorSaveResult) => void;
   initialFocus?: "notes" | "preview";
+  intent?: "edit" | "duplicate";
 }
 
 interface SavedBuildDoc extends Record<string, unknown> {
@@ -65,6 +67,14 @@ interface OwnerPublicationSettings {
 const RACE_SET = new Set<string>(RACE_OPTIONS);
 const VS_RACE_SET = new Set<string>(VS_RACE_OPTIONS);
 const SKILL_SET = new Set<string>(SKILL_LEVELS.map((l) => l.id));
+
+export function duplicateBuildName(name: string): string {
+  const match = /\s+\(copy(?: (\d+))?\)$/i.exec(name.trim());
+  const base = (match ? name.trim().slice(0, match.index) : name.trim()) || "Untitled build";
+  const copyNumber = match ? Math.min(999999, Number(match[1] || 1) + 1) : 1;
+  const suffix = copyNumber === 1 ? " (copy)" : ` (copy ${copyNumber})`;
+  return `${base.slice(0, NAME_MAX_CHARS - suffix.length).trimEnd()}${suffix}`;
+}
 
 function coerceRace(value: unknown): RaceLite {
   if (typeof value === "string" && RACE_SET.has(value)) return value as RaceLite;
@@ -202,6 +212,7 @@ export function EditCustomBuildLauncher({
   onClose,
   onSaved,
   initialFocus,
+  intent = "edit",
 }: EditCustomBuildLauncherProps) {
   const { getToken } = useAuth();
   const [doc, setDoc] = useState<SavedBuildDoc | null>(null);
@@ -231,7 +242,7 @@ export function EditCustomBuildLauncher({
             getToken,
             `/v1/custom-builds/${encodeURIComponent(slug)}`,
           ),
-          apiCall<OwnerPublicationSettings>(
+          intent === "duplicate" ? Promise.resolve({ published: false, authorName: "", publishAnonymously: false, mirrorPending: false }) : apiCall<OwnerPublicationSettings>(
             getToken,
             `/v1/community/my-build-publication/${encodeURIComponent(slug)}`,
           ),
@@ -252,11 +263,15 @@ export function EditCustomBuildLauncher({
     return () => {
       cancelled = true;
     };
-  }, [slug, getToken]);
+  }, [slug, getToken, intent]);
 
   const initialDraft = useMemo(
-    () => (doc ? toInitialDraft(doc, publication) : null),
-    [doc, publication],
+    () => {
+      if (!doc) return null;
+      const draft = toInitialDraft(doc, publication);
+      return intent === "duplicate" ? { ...draft, name: duplicateBuildName(draft.name || ""), shareWithCommunity: false } : draft;
+    },
+    [doc, publication, intent],
   );
 
   // Source-timeline events synthesised from the saved doc (rules first,
@@ -296,8 +311,12 @@ export function EditCustomBuildLauncher({
     <BuildEditorModal
       open
       onClose={onClose}
-      mode="edit"
-      lockedSlug={doc.slug}
+      mode={intent === "duplicate" ? "create" : "edit"}
+      lockedSlug={intent === "duplicate" ? undefined : doc.slug}
+      createOnly={intent === "duplicate"}
+      saveIntent={intent === "duplicate" ? "duplicate" : undefined}
+      sourceSignature={intent === "duplicate" ? doc.signature : undefined}
+      timelineFromSavedBuild
       initialFocus={initialFocus}
       legacySignature={!doc.rules?.length && !!doc.signature?.length}
       events={events}
