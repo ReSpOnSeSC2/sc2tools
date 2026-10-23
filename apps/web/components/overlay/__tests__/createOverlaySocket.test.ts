@@ -10,7 +10,7 @@ class TestSocket {
   connect = vi.fn();
   disconnect = vi.fn(() => { this.connected = false; });
   on(event: string, handler: Handler) { if (!this.handlers.has(event)) this.handlers.set(event, new Set()); this.handlers.get(event)!.add(handler); return this; }
-  off(event: string, handler: Handler) { this.handlers.get(event)?.delete(handler); return this; }
+  off(event?: string, handler?: Handler) { if (event === undefined) this.handlers.clear(); else if (handler) this.handlers.get(event)?.delete(handler); return this; }
   fire(event: string, ...args: unknown[]) { if (event === "connect") this.connected = true; if (event === "disconnect") this.connected = false; for (const handler of this.handlers.get(event) ?? []) handler(...args); }
 }
 let socket: TestSocket;
@@ -74,6 +74,7 @@ it("jitters retry delays by at most twenty percent", () => {
 it("stops permanently on an invalid token and clears every listener and timer", () => {
   const status = vi.fn();
   ({ dispose } = createOverlaySocket("token", { surface: "scene", onStatus: status }));
+  socket.on("overlay:live", vi.fn());
   vi.advanceTimersByTime(0); socket.fire("connect_error", new Error("invalid_overlay_token"));
   expect(status).toHaveBeenLastCalledWith("invalid");
   window.dispatchEvent(new Event("online")); vi.advanceTimersByTime(120000);

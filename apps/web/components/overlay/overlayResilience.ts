@@ -65,7 +65,8 @@ export function createOverlaySocket(token: string, opts: {
   return { socket, dispose: () => {
     stopped = true; clearTimeout(startTimer); clearRetry(); clearStatus();
     window.removeEventListener("online", online);
-    socket.off("connect", connected); socket.off("connect_error", failed); socket.off("disconnect", retry);
+    // This socket belongs to this surface; retire data subscriptions too.
+    socket.off();
     socket.disconnect();
   } };
 }
