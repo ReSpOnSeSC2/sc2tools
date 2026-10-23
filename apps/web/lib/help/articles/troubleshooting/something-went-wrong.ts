@@ -123,7 +123,7 @@ const article: HelpArticle = {
       ],
     },
   ],
-  related: ["troubleshooting-and-support", "how-to-use-help", "dashboard-and-analyzer"],
+  related: ["report-a-problem", "troubleshooting-and-support", "how-to-use-help", "dashboard-and-analyzer"],
 };
 
 export default article;

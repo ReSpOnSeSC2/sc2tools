@@ -97,7 +97,7 @@ const article: HelpArticle = {
       text: "The form needs an account so we know who to reply to. Email [responsecoaching@gmail.com](mailto:responsecoaching@gmail.com) instead: say what you clicked, add the error reference if you saw one, and attach a screenshot if you can.",
     },
   ],
-  related: ["troubleshooting-and-support", "how-to-use-help"],
+  related: ["something-went-wrong", "troubleshooting-and-support", "how-to-use-help"],
 };
 
 export default article;

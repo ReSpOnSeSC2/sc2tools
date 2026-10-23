@@ -35,7 +35,7 @@ const article: HelpArticle = {
       ],
     },
   ],
-  related: ["report-a-problem", "obs-overlay-setup", "multi-platform-chat", "getting-started"],
+  related: ["report-a-problem", "something-went-wrong", "obs-overlay-setup", "multi-platform-chat", "getting-started"],
 };
 
 export default article;

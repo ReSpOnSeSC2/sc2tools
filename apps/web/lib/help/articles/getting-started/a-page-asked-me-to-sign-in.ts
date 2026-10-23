@@ -79,7 +79,7 @@ const article: HelpArticle = {
       text: "Signing up is free. Your replays, stats, notes and custom builds stay private to your account unless you choose to publish something.",
     },
   ],
-  related: ["getting-started", "how-to-use-help", "troubleshooting-and-support"],
+  related: ["getting-started", "something-went-wrong", "how-to-use-help", "troubleshooting-and-support"],
 };
 
 export default article;
