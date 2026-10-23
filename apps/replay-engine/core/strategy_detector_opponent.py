@@ -25,6 +25,7 @@ from .strategy_detector_helpers import (
     too_short_label,
 )
 from .strategy_detector_race import classify_by_race
+from .preset_policy import apply_policy
 
 
 class OpponentStrategyDetector(BaseStrategyDetector):
@@ -93,4 +94,8 @@ class OpponentStrategyDetector(BaseStrategyDetector):
         # way regardless of who built it. ``my_race`` is the opponent's
         # matchup partner (the user), so the Terran/Zerg per-matchup
         # detectors fire correctly.
-        return classify_by_race(race, enemy_events, self, opp_race=my_race)
+        return apply_policy(
+            self.preset_policy,
+            classify_by_race(race, enemy_events, self, opp_race=my_race),
+            race, my_race, enemy_events, self, eight_worker,
+        )

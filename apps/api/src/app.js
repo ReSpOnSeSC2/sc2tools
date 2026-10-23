@@ -49,6 +49,9 @@ const {
 const { AtlasInfrastructureClient } = require("./services/atlasInfrastructure");
 const { BackupStatusService } = require("./services/backupStatus");
 const { CustomBuildsService } = require("./services/customBuilds");
+const { PresetPoliciesService } = require("./services/presetPolicies");
+const { AdminBuildStudioService } = require("./services/adminBuildStudio");
+const { buildPresetPolicyRouter } = require("./routes/presetPolicy");
 const { BuildIntentsService } = require("./services/buildIntents");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
@@ -629,6 +632,8 @@ function makeServices(deps, clerk) {
       }
     },
   });
+  const presetPolicies = new PresetPoliciesService(deps.db);
+  const buildStudio = new AdminBuildStudioService(deps.db, { customBuilds, policies: presetPolicies });
   // Opponent-log recomputes replace data consumed by opponent-perspective
   // custom rules. Coalesce a fresh all-build pass after the detail write so a
   // scan that overlapped the write cannot silently complete on old details.
@@ -867,6 +872,8 @@ function makeServices(deps, clerk) {
     infrastructureUsage,
     customBuilds,
     buildIntents,
+    presetPolicies,
+    buildStudio,
     pairings,
     overlayTokens,
     platformIntegrations,
@@ -1378,12 +1385,14 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       runtimeCapacityRegistry: deps.runtimeCapacityRegistry,
     }),
   );
+  app.use(SERVICE.ROUTE_PREFIX, buildPresetPolicyRouter(services.presetPolicies));
   // Operational admin router — gated on isAdmin(req) inside the
   // router. Mounted alongside the rest of the v1 prefix so
   // /v1/admin/* shares CORS, rate-limit, and JSON parsing config.
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAdminRouter({
+      buildStudio: { studio: services.buildStudio, policies: services.presetPolicies },
       announcements: services.announcements,
       supportMessages: services.supportMessages,
       jobLedger: services.jobLedger, adminAudit: services.adminAudit,

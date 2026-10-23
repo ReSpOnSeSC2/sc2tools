@@ -1,0 +1,1126 @@
+{
+  "hash": "71e030543e61ebe0ee56eba4ff3f4521420dc35d934453274cf9805eab855cb9",
+  "cases": [
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        }
+      ],
+      "expected": "PvZ - Archon Drop",
+      "name": "completed exactly 6:00"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 361
+        }
+      ],
+      "expected": "PvZ - Macro Transition (Unclassified)",
+      "name": "started before but completed after gate"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Archon Drop",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 361
+        }
+      ],
+      "expected": "Unclassified - Protoss",
+      "name": "replaced baseline cannot bypass tighter gate"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360,
+          "hallucinated": true
+        }
+      ],
+      "expected": "PvZ - Macro Transition (Unclassified)",
+      "name": "hallucination despite valid tech"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        }
+      ],
+      "expected": "PvZ - Macro Transition (Unclassified)",
+      "name": "missing real-unit prerequisite"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 370,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        }
+      ],
+      "expected": "PvZ - Macro Transition (Unclassified)",
+      "name": "tech after unit does not qualify"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Terran",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        }
+      ],
+      "expected": "PvZ - Macro Transition (Unclassified)",
+      "name": "matchup restricted"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": false,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Archon Drop",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        }
+      ],
+      "expected": "Unclassified - Protoss",
+      "name": "disabled replacement suppresses baseline"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "start",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 361
+        }
+      ],
+      "expected": "PvZ - Archon Drop",
+      "name": "explicit start clock permits 6:01 completion"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                },
+                {
+                  "kind": "first",
+                  "names": [
+                    "RoboticsFacility",
+                    "Stargate",
+                    "TwilightCouncil"
+                  ],
+                  "category": "building",
+                  "clock": "start"
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        }
+      ],
+      "expected": "PvZ - Archon Drop",
+      "name": "first tech with absent other options"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                },
+                {
+                  "kind": "order",
+                  "names": [
+                    "RoboticsFacility",
+                    "Stargate"
+                  ],
+                  "category": "building",
+                  "clock": "start"
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        }
+      ],
+      "expected": "PvZ - Macro Transition (Unclassified)",
+      "name": "order requires every named structure"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                },
+                {
+                  "kind": "count",
+                  "name": "RoboticsFacility",
+                  "category": "building",
+                  "clock": "start",
+                  "beforeSeconds": 300,
+                  "min": 1,
+                  "max": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "subtype": "born",
+          "time": 246
+        }
+      ],
+      "expected": "PvZ - Archon Drop",
+      "name": "building born duplicates do not inflate counts"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "Carrier",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ],
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        }
+      ],
+      "expected": "PvZ - Archon Drop",
+      "name": "alternative groups are OR"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          },
+          {
+            "name": "PvZ - DT drop into Archon Drop",
+            "priority": 0,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        }
+      ],
+      "expected": "PvZ - DT drop into Archon Drop",
+      "name": "priority winner is deterministic"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "Adept",
+                  "category": "unit",
+                  "clock": "start",
+                  "beforeSeconds": 360,
+                  "min": 1
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "Adept",
+          "time": 390
+        }
+      ],
+      "expected": "PvZ - Archon Drop",
+      "name": "start clock uses 8 worker duration",
+      "eightWorker": true
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                },
+                {
+                  "kind": "count",
+                  "name": "Gateway",
+                  "category": "building",
+                  "clock": "start",
+                  "beforeSeconds": 180,
+                  "min": 1,
+                  "proxy": true
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        },
+        {
+          "type": "building",
+          "name": "Gateway",
+          "time": 90,
+          "x": 51,
+          "y": 0
+        }
+      ],
+      "expected": "PvZ - Archon Drop",
+      "name": "proxy uses canonical raw geometry"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                },
+                {
+                  "kind": "count",
+                  "name": "Gateway",
+                  "category": "building",
+                  "clock": "start",
+                  "beforeSeconds": 180,
+                  "min": 1,
+                  "proxy": true
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Macro Transition (Unclassified)",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        },
+        {
+          "type": "building",
+          "name": "Gateway",
+          "time": 90,
+          "is_proxy": true
+        }
+      ],
+      "expected": "PvZ - Archon Drop",
+      "name": "proxy stamp is authoritative"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "WarpPrism",
+                  "category": "unit",
+                  "clock": "completion",
+                  "beforeSeconds": 360,
+                  "min": 1
+                },
+                {
+                  "kind": "count",
+                  "name": "Gateway",
+                  "category": "building",
+                  "clock": "start",
+                  "beforeSeconds": 180,
+                  "proxy": true,
+                  "max": 0
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Archon Drop",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        },
+        {
+          "type": "building",
+          "name": "Gateway",
+          "time": 90
+        }
+      ],
+      "expected": "Unclassified - Protoss",
+      "name": "missing proxy evidence cannot prove upper count"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [],
+            "mode": "released",
+            "description": "Human-authored reference text"
+          }
+        ]
+      },
+      "baseline": "PvZ - Archon Drop",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 1000
+        }
+      ],
+      "expected": "PvZ - Archon Drop",
+      "name": "released metadata cannot replace detection"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": false,
+            "anyOf": []
+          }
+        ]
+      },
+      "baseline": "PvZ - Archon Drop",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "type": "building",
+          "name": "Nexus",
+          "time": 0,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "building",
+          "name": "RoboticsFacility",
+          "time": 200,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "unit",
+          "name": "WarpPrism",
+          "time": 360
+        }
+      ],
+      "expected": "Unclassified - Protoss",
+      "name": "disabled procedural label requires no fabricated conditions"
+    }
+  ]
+}

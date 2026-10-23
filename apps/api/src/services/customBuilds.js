@@ -596,11 +596,12 @@ class CustomBuildsService {
    *
    * @param {string} userId
    * @param {{slug: string} & Record<string, unknown>} build
+   * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean}} [options]
    */
-  async upsert(userId, build) {
+  async upsert(userId, build, options = {}) {
     return this._withUserBuildMutation(
       userId,
-      () => this._upsertUnlocked(userId, build),
+      () => this._upsertUnlocked(userId, build, options),
     );
   }
 
@@ -608,19 +609,29 @@ class CustomBuildsService {
    * @private
    * @param {string} userId
    * @param {{slug: string} & Record<string, unknown>} build
+   * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean}} [options]
    */
-  async _upsertUnlocked(userId, build) {
+  async _upsertUnlocked(userId, build, options = {}) {
     if (!build || !build.slug) throw new Error("slug required");
     // Build check-ins (and opponent corrections) store the declared custom
     // build's display name on the replay row. Rename them before saving,
     // whatever the reclassify flag, so name-keyed stats never split the build
     // (a retried save renames again).
-    const previous = typeof this.db.customBuilds.findOne === "function"
+    const previous = options.recordHistory
+      ? await this.db.customBuilds.aggregate([
+        { $match: { userId, slug: build.slug, deletedAt: { $exists: false }, ...(options.expectedId ? { _id: new (require('mongodb').ObjectId)(options.expectedId) } : {}) } },
+        { $limit: 1 },
+        { $project: { _id: 0, ...ROOT_PUBLIC_BUILD_EXPRESSION, definitionRevision: { $ifNull: ["$definitionRevision", 0] }, updatedAt: 1 } },
+      ]).next()
+      : typeof this.db.customBuilds.findOne === "function"
       ? await this.db.customBuilds.findOne(
         { userId, slug: build.slug },
-        { projection: { _id: 0, name: 1, perspective: 1 } },
+        { projection: { _id: 0, name: 1, perspective: 1, definitionRevision: 1 } },
       )
       : null;
+    if (options.expectedRevision !== undefined && (!previous || (previous.definitionRevision || 0) !== options.expectedRevision)) {
+      throw Object.assign(new Error("build_definition_changed"), { status: 409, code: "build_definition_changed" });
+    }
     const overrideName = checkinRenameTarget(previous, build, "you");
     const opponentOverrideName = checkinRenameTarget(previous, build, "opponent");
     const games = this._gamesCollection();
@@ -642,12 +653,16 @@ class CustomBuildsService {
     // Background classification state is server-owned. Never allow a web
     // client save to forge, erase, or replace it.
     delete doc.reclassifyJob;
+    delete doc.definitionRevision;
+    delete doc._definitionHistory;
     stampVersion(doc, COLLECTIONS.CUSTOM_BUILDS);
-    await this.db.customBuilds.updateOne(
-      { userId, slug: build.slug },
-      { $setOnInsert: { createdAt: now }, $set: doc, $unset: { deletedAt: "" } },
-      { upsert: true },
+    const saved = await /** @type {import('mongodb').Collection<any>} */ (this.db.customBuilds).updateOne(
+      { userId, slug: build.slug, ...(options.expectedId ? { _id: new (require('mongodb').ObjectId)(options.expectedId) } : {}), ...(options.expectedRevision === undefined ? {} : options.expectedRevision === 0 ? { $or: [{ definitionRevision: 0 }, { definitionRevision: { $exists: false } }] } : { definitionRevision: options.expectedRevision }) },
+      /** @type {import('mongodb').Document} */ ({ $setOnInsert: { createdAt: now }, $set: doc, $unset: { deletedAt: "" }, $inc: { definitionRevision: 1 },
+        ...(options.recordHistory && previous ? { $push: { _definitionHistory: { $each: [{ revision: previous.definitionRevision || 0, savedAt: now, build: Object.fromEntries(Object.entries(previous).filter(([key]) => key !== "definitionRevision" && key !== "updatedAt")) }], $slice: -10 } } } : {}) }),
+      { upsert: options.expectedRevision === undefined },
     );
+    if (options.expectedRevision !== undefined && !saved.matchedCount) throw Object.assign(new Error("build_definition_changed"), { status: 409, code: "build_definition_changed" });
     if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
     this._notifyDefinitionsChanged(userId);
   }

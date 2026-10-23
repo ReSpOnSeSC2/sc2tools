@@ -23,6 +23,7 @@ from .strategy_detector_pvp import detect_pvp
 from .strategy_detector_pvt import detect_pvt
 from .strategy_detector_pvz import detect_pvz
 from .strategy_detector_race import classify_by_race
+from .preset_policy import apply_policy
 
 
 class UserBuildDetector(BaseStrategyDetector):
@@ -90,16 +91,22 @@ class UserBuildDetector(BaseStrategyDetector):
             ):
                 return cb["name"]
 
+        def finish(label):
+            return apply_policy(
+                self.preset_policy, label, my_race, _matchup_to_vs_race(matchup),
+                my_events, self, eight_worker,
+            )
+
         # 2. Zerg / Terran: delegate to the shared race classifier so the
         # user's own build classifies exactly like the opponent's would,
         # off the same build_definitions catalog (a fast-3-CC Terran ->
         # "Terran - Fast 3 CC" instead of "Unclassified - Terran"). The
         # opponent detector runs the same classify_by_race trees.
         if my_race in ("Zerg", "Terran"):
-            return classify_by_race(
+            return finish(classify_by_race(
                 my_race, my_events, self,
                 opp_race=_matchup_to_vs_race(matchup),
-            )
+            ))
 
         # 3. Protoss matchups dispatch to per-matchup decision trees.
         ctx = DetectionContext(
@@ -112,14 +119,14 @@ class UserBuildDetector(BaseStrategyDetector):
         if "vs Zerg" in matchup:
             label = detect_pvz(ctx)
             if label is not None:
-                return label
+                return finish(label)
         elif "vs Protoss" in matchup:
             label = detect_pvp(ctx)
             if label is not None:
-                return label
+                return finish(label)
         elif "vs Terran" in matchup:
             label = detect_pvt(ctx)
             if label is not None:
-                return label
+                return finish(label)
 
-        return f"Unclassified - {my_race}"
+        return finish(f"Unclassified - {my_race}")

@@ -313,6 +313,7 @@ async function ensureBuildIntentIndexes(ctx) {
  */
 async function ensureIndexes(ctx, opts = {}) {
   await Promise.all([
+    ctx.siteConfig.createIndex({ kind: 1, revision: -1 }, { name: "preset_policy_history" }),
     ctx.jobRuns.createIndex({ job: 1, startedAt: -1 }),
     ctx.users.createIndex({ createdAt: -1, userId: 1 }),
     ctx.adminAudit.createIndex({ createdAt: 1 }, { expireAfterSeconds: 400 * 86400 }),
