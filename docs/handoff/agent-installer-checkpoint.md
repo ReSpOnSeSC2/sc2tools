@@ -10,8 +10,12 @@ fix from runtime: 2,087 Windows tests passed, 1 skipped, 78 subtests (151.81 s).
 The native regression holds the real state-writer lock while Qt timers/navigation
 continue and checks the actual durable commit before Saved feedback. The final
 startup/packaging subset passes 26 checks, including real NSIS fixture compilation
-and signature-verifier rejection cases. Download/help tests: 75 passed; typecheck,
-lint, help index and exact-CI production build/all unchanged budgets passed.
+and signature-verifier rejection cases. After integration with main 17ab0ff2 and runtime bcda8342, Download/help tests
+passed 104; typecheck, touched lint and the 65-article help index passed.
+The exact-CI production build and all unchanged budgets passed, including
+/app 234.4/240 kB, opponents 175.7/180, builds 187.9/270 and help 150.4/185.
+The final main integration changed web/help/docs only; the native verification
+and unsigned package evidence above remain applicable.
 
 A final real unsigned PyInstaller bundle and NSIS setup built successfully;
 the packaged Qt 6.12.0 diagnostic painted the window and Streams page offline.
@@ -26,6 +30,6 @@ Owner-approved project/certificate, API token and repository variables are still
 required. No signature has been requested or claimed. Tagged release builds will
 fail closed without configured signing. No version bump, tag or publication.
 
-Runtime and newest-main integration are kept current before the draft opens.
+Runtime bcda8342 and main 17ab0ff2 are integrated for the stacked draft.
 Actual interactive install/uninstall and a real signed provider run remain owner
 release validation on a disposable Windows profile. No AI feature/call and no application infrastructure change.
