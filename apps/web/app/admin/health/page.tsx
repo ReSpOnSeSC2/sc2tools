@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { formatDuration, timeSince } from "../components/format";
 import { ForbiddenCard } from "../components/AdminFragments";
 import { InfrastructureOverview } from "../components/InfrastructureOverview";
+import { DatabaseBackupsCard } from "../components/DatabaseBackupsCard";
 import type {
   AdminInfrastructureResp,
   HealthResp,
@@ -24,6 +25,8 @@ import type {
  *   - Whether browsers can back up original replays to R2 (the bucket's
  *     CORS rule, set up and verified by the API).
  *   - Atlas disk, pending-invoice costs, and diagnostic credential expiry.
+ *   - Database backups: the newest Atlas Cloud Backup snapshot's age,
+ *     schedule and retention, and the in-app snapshot counts.
  *
  * Operational health refreshes every 30 s. The page checks provider status
  * every five minutes; server-side snapshot caches prevent control-plane API
@@ -85,6 +88,8 @@ export default function AdminHealthPage() {
         error={infrastructure.error?.message ?? null}
         isLoading={infrastructure.isLoading}
       />
+
+      <DatabaseBackupsCard />
 
       <div className="space-y-1">
         <h2 className="text-h3 font-semibold text-text">Operational health</h2>

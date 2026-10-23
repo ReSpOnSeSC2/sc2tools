@@ -1,6 +1,12 @@
 "use client";
 
-import { Download, MessageSquareWarning, MonitorCheck, UserPlus } from "lucide-react";
+import {
+  DatabaseBackup,
+  Download,
+  MessageSquareWarning,
+  MonitorCheck,
+  UserPlus,
+} from "lucide-react";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import {
   describeFailedRequest,
@@ -11,6 +17,7 @@ import { timeSince } from "./format";
 import type {
   AdminEvent,
   AdminEventAgentConnectedPayload,
+  AdminEventBackupStalePayload,
   AdminEventDownloadPayload,
   AdminEventSignupPayload,
   AdminEventUserMessagePayload,
@@ -82,6 +89,7 @@ const ICON_CLASSES: Record<AdminEvent["type"], string> = {
   agent_download: "border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan",
   agent_connected: "border-success/40 bg-success/10 text-success",
   user_message: "border-warning/40 bg-warning/10 text-warning",
+  backup_stale: "border-danger/40 bg-danger/10 text-danger",
 };
 
 function EventIcon({ type }: { type: AdminEvent["type"] }) {
@@ -89,6 +97,7 @@ function EventIcon({ type }: { type: AdminEvent["type"] }) {
   if (type === "agent_connected") return <MonitorCheck className="h-4 w-4" />;
   if (type === "user_message")
     return <MessageSquareWarning className="h-4 w-4" />;
+  if (type === "backup_stale") return <DatabaseBackup className="h-4 w-4" />;
   return <Download className="h-4 w-4" />;
 }
 
@@ -113,6 +122,9 @@ function describe(event: AdminEvent): {
       subtitle: `from ${from}${p.source === "email" ? " · via email" : ""}`,
       body: p.message,
     };
+  }
+  if (event.type === "backup_stale") {
+    return describeBackupStale(event.payload as AdminEventBackupStalePayload);
   }
   if (event.type === "agent_connected") {
     const p = event.payload as AdminEventAgentConnectedPayload;
@@ -182,6 +194,24 @@ function ReportContextLines({ payload }: { payload: AdminEventUserMessagePayload
       ) : null}
     </div>
   );
+}
+
+function describeBackupStale(p: AdminEventBackupStalePayload): {
+  title: string;
+  subtitle: string;
+} {
+  if (p.reason === "missing" || !p.lastSnapshotAt) {
+    return {
+      title: "No database backup found",
+      subtitle: "Atlas has no completed snapshot · see Infrastructure",
+    };
+  }
+  const age = p.ageHours !== null ? `${Math.floor(p.ageHours)} h old` : `taken ${timeSince(p.lastSnapshotAt)}`;
+  const failed = p.latestStatus === "failed" ? " · newest run failed" : "";
+  return {
+    title: "Database backup is overdue",
+    subtitle: `Newest Atlas snapshot is ${age}${failed} · see Infrastructure`,
+  };
 }
 
 function EmailSource({ payload }: { payload: AdminEventUserMessagePayload }) {

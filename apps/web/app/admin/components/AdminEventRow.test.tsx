@@ -5,6 +5,7 @@ import { AdminEventRow } from "./AdminEventRow";
 import type {
   AdminEvent,
   AdminEventAgentConnectedPayload,
+  AdminEventBackupStalePayload,
   AdminEventUserMessagePayload,
 } from "./adminTypes";
 
@@ -185,5 +186,41 @@ describe("AdminEventRow confirmed installs", () => {
 
     expect(screen.getByText("Agent connected")).toBeTruthy();
     expect(screen.queryByText(/Unknown/)).toBeNull();
+  });
+});
+
+describe("AdminEventRow backup alerts", () => {
+  function backupEvent(payload: Partial<AdminEventBackupStalePayload>): AdminEvent {
+    return {
+      eventId: "backup-1",
+      type: "backup_stale",
+      payload: {
+        reason: "stale",
+        lastSnapshotAt: "2026-08-09T12:00:00.000Z",
+        ageHours: 53.5,
+        latestStatus: "completed",
+        ...payload,
+      },
+      createdAt: new Date().toISOString(),
+      readAt: null,
+    };
+  }
+
+  it("says how old the newest snapshot is and where to look", () => {
+    render(<ul><AdminEventRow event={backupEvent({ latestStatus: "failed" })} unread /></ul>);
+
+    expect(screen.getByText("Database backup is overdue")).toBeTruthy();
+    expect(
+      screen.getByText("Newest Atlas snapshot is 53 h old · newest run failed · see Infrastructure"),
+    ).toBeTruthy();
+  });
+
+  it("calls out a cluster with no snapshot at all", () => {
+    render(
+      <ul><AdminEventRow event={backupEvent({ reason: "missing", lastSnapshotAt: null, ageHours: null })} unread /></ul>,
+    );
+
+    expect(screen.getByText("No database backup found")).toBeTruthy();
+    expect(screen.getByText("Atlas has no completed snapshot · see Infrastructure")).toBeTruthy();
   });
 });
