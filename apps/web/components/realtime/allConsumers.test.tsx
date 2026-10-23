@@ -3,7 +3,7 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({
-  io: vi.fn(), refresh: vi.fn(), token: vi.fn(async () => "current-token"),
+  io: vi.fn(), refresh: vi.fn(), apiCall: vi.fn(), toast: {}, token: vi.fn(async () => "current-token"),
   resources: new Map<string, { data: unknown; mutate: ReturnType<typeof vi.fn>; isLoading: boolean }>(),
   handlers: new Map<string, (value?: unknown) => void>(), disconnect: vi.fn(),
 }));
@@ -11,7 +11,7 @@ vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: 
 vi.mock("socket.io-client", () => ({ io: (...args: unknown[]) => h.io(...args) }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/app", useRouter: () => ({ refresh: h.refresh }) }));
 vi.mock("next/dynamic", () => ({ default: () => () => null }));
-vi.mock("@/lib/clientApi", () => ({ API_BASE: "https://api.example.test", apiCall: vi.fn(),
+vi.mock("@/lib/clientApi", () => ({ API_BASE: "https://api.example.test", apiCall: h.apiCall,
   useApi: (path: string | null) => {
     const key = path || "none";
     if (!h.resources.has(key)) {
@@ -30,13 +30,12 @@ vi.mock("@/lib/useSeasons", async (original) => ({ ...await original<object>(), 
 vi.mock("@/lib/reviews", () => ({ reviewsVisible: () => true }));
 vi.mock("@/lib/useChartTheme", () => ({ useReducedMotion: () => true }));
 vi.mock("@/lib/instant/useInstantImport", () => ({ useInstantImport: () => ({ enabled: false }) }));
-vi.mock("@/components/analyzer/arcade/hooks/useAnalysisGames", () => ({ AnalysisGamesProvider: ({ children }: { children: ReactNode }) => children }));
 vi.mock("@/components/analyzer/DoctorBanner", () => ({ DoctorBanner: () => null }));
 vi.mock("@/components/analyzer/FilterBar", () => ({ FilterBar: () => null }));
 vi.mock("@/components/analyzer/ActiveFilterChips", () => ({ ActiveFilterChips: () => null }));
 vi.mock("@/components/onboarding/OnboardingChecklist", () => ({ checklistVisible: () => true, OnboardingChecklist: () => null }));
 vi.mock("@/components/imports/ImportProgressCard", () => ({ ImportProgressCard: () => null }));
-vi.mock("@/components/ui/Toast", () => ({ useToastOptional: () => null }));
+vi.mock("@/components/ui/Toast", () => ({ useToastOptional: () => null, useToast: () => ({ toast: h.toast }) }));
 vi.mock("@/app/admin/components/AdminPageHeader", () => ({ AdminPageHeader: ({ title, actions }: { title: string; actions: ReactNode }) => <header>{title}{actions}</header> }));
 vi.mock("@/app/admin/components/AdminFragments", () => ({ ForbiddenCard: () => null, LoadingRows: () => null, MetricStat: () => null }));
 vi.mock("@/app/admin/components/AdminEventRow", () => ({ AdminEventRow: () => <li>Live durable event</li> }));
@@ -53,28 +52,32 @@ import { useImportStatus } from "@/components/imports/useImportStatus";
 import { AdminShell } from "@/app/admin/components/AdminShell";
 import Dashboard from "@/app/admin/page";
 import Notifications from "@/app/admin/notifications/page";
+import CoachingPractice from "@/app/coaching/CoachingPractice";
 
 function CheckIn() { return <output data-testid="checkin">{useBuildCheckInRevision().revision}</output>; }
 function AnalyzerRevision() { return <output data-testid="analyzer">{useFilters().dbRev}</output>; }
 function Import() { return <output data-testid="import">{useImportStatus().job?.completed}</output>; }
 beforeEach(() => {
   vi.useFakeTimers(); vi.clearAllMocks(); h.resources.clear(); h.handlers.clear();
+  h.apiCall.mockResolvedValue({ items: [], nextCursor: null });
   h.io.mockImplementation(() => ({ connected: false, connect: vi.fn(), disconnect: h.disconnect,
     on: (event: string, callback: (value?: unknown) => void) => h.handlers.set(event, callback), off: () => h.handlers.clear(),
   }));
 });
 afterEach(() => { cleanup(); act(() => vi.runOnlyPendingTimers()); vi.useRealTimers(); });
 
-it("mounts every current user and admin consumer on one socket and fans out reconnects, live events and one shared chart refresh", () => {
+it("mounts every current user and admin consumer on one socket and fans out reconnects, live events and one shared chart refresh", async () => {
   const view = render(<RealtimeProvider>
     <SyncStatus total={5} latest={null} userId="admin" />
     <NotificationBell /><CoachingBookingAlert />
     <BuildCheckInProvider><CheckIn /></BuildCheckInProvider>
-    <AnalyzerProvider><AnalyzerRevision /></AnalyzerProvider>
+    <AnalyzerProvider analysisGamesEnabled><AnalyzerRevision /></AnalyzerProvider>
     <AnalyzerFrame me={{ userId: "admin", source: "cloud", games: { total: 0, latest: null }, agentPaired: false }}><span>Analyzer content</span></AnalyzerFrame>
-    <Import />
+    <Import /><CoachingPractice role="student" />
     <AdminShell><Dashboard /><Notifications /></AdminShell>
   </RealtimeProvider>);
+  await act(async () => {});
+  expect(h.apiCall).toHaveBeenCalledTimes(1);
   expect(h.io).toHaveBeenCalledTimes(1);
   const counts = h.resources.get("/v1/admin/events/counts")!.mutate;
   const dashboard = h.resources.get("/v1/admin/events?limit=8")!.mutate;
@@ -95,7 +98,21 @@ it("mounts every current user and admin consumer on one socket and fans out reco
   expect(h.resources.get("/v1/coaching/alerts")!.mutate).toHaveBeenCalledOnce();
   expect(screen.getByTestId("import").textContent).toBe("4"); expect(screen.getByText("6")).toBeTruthy();
   expect(screen.getByTestId("analyzer").textContent).toBe("0"); expect(h.refresh).not.toHaveBeenCalled();
-  act(() => vi.advanceTimersByTime(2000)); act(() => vi.advanceTimersByTime(0));
+  await act(async () => { vi.advanceTimersByTime(2000); });
+  await act(async () => { vi.advanceTimersByTime(1); });
+  expect(h.apiCall).toHaveBeenCalledTimes(2);
+  expect(h.resources.get("/v1/coaching/assignments?page=1&limit=20")!.mutate).toHaveBeenCalledOnce();
   expect(screen.getByTestId("analyzer").textContent).toBe("1"); expect(screen.getByTestId("checkin").textContent).toBe("1"); expect(h.refresh).toHaveBeenCalledOnce();
+  act(() => h.handlers.get("games:changed")?.({ count: 25, inserted: 2, bulk: true, reason: "ingest" }));
+  expect(screen.getByText("8")).toBeTruthy();
+  await act(async () => { vi.advanceTimersByTime(29999); });
+  expect(h.apiCall).toHaveBeenCalledTimes(2);
+  expect(screen.getByTestId("analyzer").textContent).toBe("1");
+  await act(async () => { vi.advanceTimersByTime(1); });
+  await act(async () => { vi.advanceTimersByTime(1); });
+  expect(h.apiCall).toHaveBeenCalledTimes(3);
+  expect(screen.getByTestId("analyzer").textContent).toBe("2");
+  expect(screen.getByTestId("checkin").textContent).toBe("2");
+  expect(h.refresh).toHaveBeenCalledTimes(2);
   expect(h.io).toHaveBeenCalledTimes(1); view.unmount(); act(() => vi.advanceTimersByTime(0)); expect(h.disconnect).toHaveBeenCalledOnce();
 });

@@ -300,7 +300,8 @@ export function AnalyzerProvider({
   );
   return (
     <FiltersContext.Provider value={value}>
-      <AnalysisGamesProvider enabled={analysisGamesEnabled}>
+      {/* dbRev has already passed the shared refresh clock; avoid a second 30s wait. */}
+      <AnalysisGamesProvider enabled={analysisGamesEnabled} refreshQuietMs={0}>
         {children}
       </AnalysisGamesProvider>
     </FiltersContext.Provider>
