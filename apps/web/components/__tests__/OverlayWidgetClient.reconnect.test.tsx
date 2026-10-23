@@ -19,12 +19,15 @@ import { act, render, cleanup } from "@testing-library/react";
 type SocketHandler = (...args: unknown[]) => void;
 
 class FakeSocket {
-  handlers = new Map<string, SocketHandler>();
+  connect() {}
+  off(event: string, handler: SocketHandler) { this.handlers.get(event)?.delete(handler); }
+  handlers = new Map<string, Set<SocketHandler>>();
   emitted: Array<{ event: string; payload?: unknown }> = [];
   disconnected = false;
 
   on(event: string, handler: SocketHandler) {
-    this.handlers.set(event, handler);
+    if (!this.handlers.has(event)) this.handlers.set(event, new Set());
+    this.handlers.get(event)!.add(handler);
   }
 
   emit(event: string, payload?: unknown) {
@@ -37,8 +40,7 @@ class FakeSocket {
 
   /** Test helper to fire an event on this fake socket. */
   fire(event: string, ...args: unknown[]) {
-    const fn = this.handlers.get(event);
-    if (fn) fn(...args);
+    for (const fn of this.handlers.get(event) ?? []) fn(...args);
   }
 }
 
@@ -63,6 +65,13 @@ vi.mock("@/lib/timeseries", () => ({
 import { OverlayWidgetClient } from "../OverlayWidgetClient";
 
 describe("OverlayWidgetClient — reconnect resync flow", () => {
+  it("shows reconnecting after a refused first handshake even before widget content arrives", () => {
+    const view = render(<OverlayWidgetClient token="tok-1" widget="opponent" />);
+    act(() => { activeSocket!.fire("connect_error", new Error("overlay_unsupported")); vi.advanceTimersByTime(5000); });
+    expect(view.getByTestId("overlay-reconnect-dot")).toBeTruthy();
+    act(() => { activeSocket!.fire("connect"); });
+    expect(view.queryByTestId("overlay-reconnect-dot")).toBeNull();
+  });
   beforeEach(() => {
     activeSocket = null;
     vi.useFakeTimers();

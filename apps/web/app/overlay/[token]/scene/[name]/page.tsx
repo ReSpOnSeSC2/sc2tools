@@ -4,6 +4,8 @@ import {
   VALID_SCENES,
 } from "@/components/overlay/scenes/sceneVariants";
 import { isOverlayCreditHidden, OVERLAY_CREDIT_PARAM } from "@/lib/overlayCredit";
+import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
+import { closestOverlayName } from "@/components/overlay/overlayNames";
 
 export const metadata = {
   title: "Live overlay scene",
@@ -46,15 +48,7 @@ export default async function OverlayScenePage({
 
   if (!isValidScene(name)) {
     return (
-      <div
-        style={{
-          fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
-          color: "#ff6b6b",
-          padding: 16,
-        }}
-      >
-        Unknown scene &quot;{name}&quot;. Valid: {[...VALID_SCENES].join(", ")}
-      </div>
+      <><OverlaySetupCard reason="unknown-scene" name={name} suggestion={closestOverlayName(name, [...VALID_SCENES])} /><OverlayCheckBadge status="invalid" /></>
     );
   }
 

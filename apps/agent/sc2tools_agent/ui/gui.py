@@ -3515,6 +3515,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if not self._stats_refresh_timer.isActive():
                 self._stats_refresh_timer.start()
 
+        def _request_stats_refresh(self):
+            if not self._stats_refresh_timer.isActive():
+                self._stats_refresh_timer.start()
+
         def _refresh_stats(self) -> None:
             # Re-query on every repaint so a mid-session Re-sync (which
             # wipes the uploaded cursor) is reflected without waiting

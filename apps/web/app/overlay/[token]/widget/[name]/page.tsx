@@ -1,6 +1,8 @@
 import { OverlayWidgetClient } from "@/components/OverlayWidgetClient";
 import { OVERLAY_THEME_PARAM } from "@/lib/overlayTheme";
 import { GHOST_BUILD_PARAM } from "@/lib/ghostBuild";
+import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
+import { closestOverlayName } from "@/components/overlay/overlayNames";
 
 export const metadata = {
   title: "Live overlay widget",
@@ -81,15 +83,7 @@ export default async function OverlayWidgetPage({
   const widget = VALID_WIDGETS.has(name) ? name : null;
   if (!widget) {
     return (
-      <div
-        style={{
-          fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
-          color: "#ff6b6b",
-          padding: 16,
-        }}
-      >
-        Unknown widget &quot;{name}&quot;. Valid: {[...VALID_WIDGETS].join(", ")}
-      </div>
+      <><OverlaySetupCard reason="unknown-widget" name={name} suggestion={closestOverlayName(name, [...VALID_WIDGETS])} /><OverlayCheckBadge status="invalid" /></>
     );
   }
   return (

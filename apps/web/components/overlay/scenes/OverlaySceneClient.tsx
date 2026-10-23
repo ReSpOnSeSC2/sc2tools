@@ -27,10 +27,10 @@
  * to show. It is opt-in and never reachable from a real game.
  */
 
-import { useEffect, useMemo, useState } from "react";
-import { io, type Socket } from "socket.io-client";
-import { API_BASE } from "@/lib/clientApi";
-import { clientTimezone } from "@/lib/timeseries";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { attachOverlayResilience, createOverlaySocket, hasActiveOverlayGame, type OverlayConnectionStatus } from "../overlayResilience";
+import { OverlayCheckBadge, OverlaySetupCard } from "../OverlaySetupCard";
+import { ReconnectDot } from "../ReconnectDot";
 import { useStudioState } from "@/lib/multichat/useStudioState";
 import type {
   LiveGameEnvelope,
@@ -107,6 +107,7 @@ export function OverlaySceneClient({
 
   return (
     <DockDrivenOverlaySceneClient
+      key={token}
       token={token}
       scene={scene}
       staticMode={staticMode}
@@ -132,23 +133,20 @@ function DockDrivenOverlaySceneClient({
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [live, setLive] = useState<LiveGamePayload | null>(null);
   const [studioEvent, setStudioEvent] = useState<unknown>(null);
+  const [connectionStatus, setConnectionStatus] = useState<OverlayConnectionStatus>("connecting");
+  const gameKeyRef = useRef<string | null>(null);
   const brollAudioOwner = useBrollAudioOwner();
 
   useEffect(() => {
     if (demo) return;
-    const socket: Socket = io(API_BASE, {
-      // The Browser Source carries no Clerk session; the overlay token
-      // is the auth. Same contract as OverlayWidgetClient.
-      auth: { overlayToken: token, timezone: clientTimezone() },
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 5000,
-    });
+    setLiveGame(null); setLive(null); setStudioEvent(null); gameKeyRef.current = null;
+    const connection = createOverlaySocket(token, { surface: "scene", widget: scene, onStatus: setConnectionStatus });
+    const socket = connection.socket;
+    const detachResilience = attachOverlayResilience(socket, { latestGameKey: () => gameKeyRef.current });
 
     socket.on("overlay:liveGame", (msg: LiveGameEnvelope) => {
       if (!msg || typeof msg !== "object") return;
+      if (typeof msg.gameKey === "string") gameKeyRef.current = msg.gameKey;
       // idle/menu mean "no game" — drop the accent back to stock
       // rather than leaving the last opponent's race tinting an empty
       // downtime screen.
@@ -161,16 +159,18 @@ function DockDrivenOverlaySceneClient({
 
     socket.on("overlay:live", (msg: LiveGamePayload) => {
       if (!msg || typeof msg !== "object") return;
+      if (typeof msg.gameKey === "string") gameKeyRef.current = msg.gameKey;
       setLive(msg);
     });
 
     socket.on("overlay:multichat", (msg: unknown) => setStudioEvent(msg));
 
     return () => {
+      detachResilience();
       socket.removeAllListeners();
-      socket.close();
+      connection.dispose();
     };
-  }, [token, demo]);
+  }, [token, demo, scene]);
 
   // Demo renders sample values and never consults the dock, so there
   // is nothing for the studio poll to feed.
@@ -226,13 +226,15 @@ function DockDrivenOverlaySceneClient({
   // Live: hiding just the headline would still leave an opaque backdrop over
   // the broadcast. Demo mode intentionally shows Starting Soon so Settings can
   // preview the otherwise-invisible source.
+  if (!demo && connectionStatus === "invalid") return <><OverlaySetupCard reason="invalid-token" /><OverlayCheckBadge status="invalid" /></>;
+  const checkBadge = <OverlayCheckBadge status={demo ? "connected" : connectionStatus} live={hasActiveOverlayGame(liveGame)} />;
   if (scene === "manual" && !demo && !dockScene) {
     return (
-      <div
+      <>{checkBadge}{connectionStatus === "reconnecting" ? <ReconnectDot /> : null}<div
         aria-hidden="true"
         data-variant="manual-inactive"
         style={{ width: "100vw", height: "100vh", background: "transparent" }}
-      />
+      /></>
     );
   }
 
@@ -246,6 +248,8 @@ function DockDrivenOverlaySceneClient({
   if (scene === "manual" && !demo && dockScene) {
     return (
       <>
+        {checkBadge}
+        {connectionStatus === "reconnecting" ? <ReconnectDot /> : null}
         <StreamSceneCanvas
           scene={dockScene}
           broll={studio.broll}
@@ -260,6 +264,8 @@ function DockDrivenOverlaySceneClient({
 
   return (
     <>
+      {checkBadge}
+      {connectionStatus === "reconnecting" ? <ReconnectDot /> : null}
       <SC2BackdropScene
         variant={variant}
         accent={accent}
