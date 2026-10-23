@@ -130,7 +130,7 @@ describe("DefinitionsCatalog", () => {
     router.replace.mockClear();
     router.params = "q=8+pool&race=Z&matchup=ZvT";
     window.history.replaceState({}, "", "/definitions?q=8+pool&race=Z&matchup=ZvT#zerg-12-pool");
-    render(<DefinitionsCatalog />);
+    const view = render(<DefinitionsCatalog />);
     fireEvent.click(within(screen.getByRole("group", { name: "Filter by race" })).getByRole("button", { name: "Terran" }));
     expect(window.location.search).toBe("?q=8+pool&race=T");
     expect(document.getElementById("zerg-12-pool")).toBeNull();
@@ -140,6 +140,15 @@ describe("DefinitionsCatalog", () => {
     expect(window.location.search).toBe("");
     expect(window.location.hash).toBe("#pvz-stargate-into-glaives");
     expect(card("pvz-stargate-into-glaives").className).toContain("ring-2");
+    // A superseded router snapshot must not resurrect the old filters
+    // after the browser has already moved to the new hash-only URL.
+    router.params = "q=8+pool&race=T";
+    view.rerender(<DefinitionsCatalog />);
+    expect(screen.getByRole("heading", { name: "PvZ - Stargate into Glaives" })).toBe(document.activeElement);
+    expect((screen.getByLabelText("Search builds and strategies") as HTMLInputElement).value).toBe("");
+    router.params = "";
+    view.rerender(<DefinitionsCatalog />);
+    expect(window.location.search).toBe("");
     expect(router.replace).not.toHaveBeenCalled();
   });
 

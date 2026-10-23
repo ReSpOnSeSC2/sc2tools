@@ -66,6 +66,9 @@ export function DefinitionsCatalog({
   const previousParams = useRef(encodedParams);
   const incomingNavigation = previousParams.current !== encodedParams;
   useEffect(() => {
+    // Ignore a superseded router snapshot while the current address bar
+    // already reflects a newer filter or hash reveal.
+    if (encodedParams !== window.location.search.slice(1)) return;
     previousParams.current = encodedParams;
     const next = readFilters(new URLSearchParams(encodedParams));
     setQuery(next.query); setRace(next.race); setMatchup(next.matchup);
@@ -80,7 +83,7 @@ export function DefinitionsCatalog({
     // Filtering is entirely local. Avoid an RSC navigation whose delayed
     // response could restore old filters over a newer hash reveal.
     if (search !== window.location.search.slice(1)) {
-      window.history.replaceState(window.history.state, "", `/definitions${search ? `?${search}` : ""}${window.location.hash}`);
+      window.history.replaceState(null, "", `/definitions${search ? `?${search}` : ""}${window.location.hash}`);
     }
   }, [query, race, matchup, incomingNavigation]);
 
