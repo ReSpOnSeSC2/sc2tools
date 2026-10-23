@@ -32,6 +32,7 @@ import builds_customBuilds from "./builds/custom-builds";
 import builds_practiceGhostBuild from "./builds/practice-ghost-build";
 import builds_publishCommunityBuilds from "./builds/publish-community-builds";
 import builds_randomizer from "./builds/randomizer";
+import builds_readingGuideStats from "./builds/reading-guide-stats";
 import builds_rulesExplained from "./builds/rules-explained";
 import desktopApp_desktopAppActivityLog from "./desktop-app/desktop-app-activity-log";
 import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
@@ -94,6 +95,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_practiceGhostBuild,
   builds_publishCommunityBuilds,
   builds_randomizer,
+  builds_readingGuideStats,
   builds_rulesExplained,
   desktopApp_desktopAppActivityLog,
   desktopApp_desktopAppOverview,

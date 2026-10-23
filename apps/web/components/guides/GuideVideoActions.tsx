@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLink, Youtube } from "lucide-react";
+import { Youtube } from "lucide-react";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { GUIDE_SECONDARY_ACTION_CLASS } from "@/components/guides/guideUi";
 import { safeChannelUrl, safePlaylistUrl } from "@/components/guides/youtubeUrls";
@@ -21,13 +21,9 @@ export function GuideVideoActions({
       {showAll ? (
         <Link
           href={guidePaths.videos()}
-          target="_blank"
-          rel="noopener noreferrer"
           className={GUIDE_SECONDARY_ACTION_CLASS}
         >
           View all videos
-          <ExternalLink className="h-4 w-4" aria-hidden />
-          <span className="sr-only"> (opens in a new tab)</span>
         </Link>
       ) : null}
       {playlist ? (

@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Section } from "@/components/ui/Section";
+import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
 import { GuideCopyText } from "@/components/guides/GuideCopyText";
 import { GuideEightWorkerVideos } from "@/components/guides/GuideEightWorkerVideos";
 import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
 import { GuideNotEnoughGames } from "@/components/guides/GuideStates";
 import { GuideVideoSection } from "@/components/guides/GuideVideoSection";
+import { GuideSectionNav } from "@/components/guides/GuideSectionNav";
+import { GuideStatsLegend } from "@/components/guides/GuideStatsLegend";
+import { safeVideoUrls } from "@/components/guides/youtubeUrls";
 import { WinRateCell } from "@/components/guides/WinRateCell";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { breadcrumbJsonLd, embeddedVideoJsonLd, type GuideCrumb } from "@/components/guides/guideSeo";
@@ -84,10 +87,17 @@ function PublishedCounter({ payload }: { payload: GuideCounterPublished }) {
         </p>
         <GuideCopyText lines={buildCounterIntro(payload)} />
       </div>
+      <GuideSectionNav items={[
+        ...(payload.videos.length ? [{ id: "video", label: "Video" }] : []),
+        ...(payload.openers.length ? [{ id: "best-openers", label: "Best openers" }] : []),
+        ...(payload.eightWorkerVideos?.some((video) => safeVideoUrls(video).watch) ? [{ id: "eight-worker-videos", label: "8-worker videos" }] : []),
+      ]}>
+      {!payload.openers.length ? <GuideStatsLegend computedAt={payload.computedAt} /> : null}
       <GuideVideoSection videos={payload.videos} />
       {payload.openers.length > 0 ? (
         <Section id="best-openers" title={`Best ${myRaceWord(payload.matchup)} openers against ${payload.name}`}>
-          <ol className="space-y-3">
+          <GuideStatsLegend computedAt={payload.computedAt} />
+          <ol className="mt-4 space-y-3">
             {payload.openers.map((opener, index) => (
               <OpenerCard key={opener.buildKey} opener={opener} rank={index + 1} matchupSlug={payload.matchupSlug} />
             ))}
@@ -95,6 +105,7 @@ function PublishedCounter({ payload }: { payload: GuideCounterPublished }) {
         </Section>
       ) : null}
       <GuideEightWorkerVideos title={EIGHT_WORKER_TITLE} videos={payload.eightWorkerVideos} />
+      </GuideSectionNav>
     </>
   );
 }
