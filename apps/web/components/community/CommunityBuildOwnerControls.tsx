@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Modal, ModalActions } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
+import { CommunityOwnerMenu } from "./CommunityOwnerMenu";
 
 type ConfirmationStep = "closed" | "review" | "final";
 
@@ -111,7 +112,7 @@ export function CommunityBuildOwnerControls({
 
   return (
     <>
-      <Button
+      {compact ? <CommunityOwnerMenu onRemove={openReview} /> : <Button
         type="button"
         variant={compact ? "ghost" : "danger"}
         size={compact ? "sm" : "md"}
@@ -126,7 +127,7 @@ export function CommunityBuildOwnerControls({
         aria-label={compact ? `Remove “${title}” from Community` : undefined}
       >
         Remove{compact ? "" : " from Community"}
-      </Button>
+      </Button>}
 
       <Modal
         open={step !== "closed"}

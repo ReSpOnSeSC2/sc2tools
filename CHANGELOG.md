@@ -17,6 +17,10 @@ corresponding GitHub Release.
 - Build menus add Duplicate, public links and Unpublish; listing labels and delete warnings agree across every surface. Cards show last played and low-sample cues, with a Last played library sort.
 - Definitions group rules by race and matchup, keep filters in the URL, and reveal focused entries from strategy links in dossiers and check-ins.
 - Community browsing filters by your race, opponent race and skill level, with Recently updated sorting and shareable filter chips. Search follows Back/Forward without losing typing focus, results show loading feedback, and pagination distinguishes disabled ends from stale page links.
+### Community build cards and author pages
+
+- Community cards preview timed build steps, keep long author names in bounds, and share one signed score style. Authors manage their listings through a keyboard-accessible menu while keeping both removal confirmations.
+- Build pages put save, vote and share before the rules on phones, preserve long descriptions in an expandable About card, and keep reporting reachable. Author pages add Top/New sorting, search, matchup counts and accurate publishing dates and average scores.
 
 ### Guide reading and map navigation
 

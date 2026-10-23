@@ -1,7 +1,7 @@
 import { BookMarked, Calendar } from "lucide-react";
 import { StatCard } from "@/components/ui/Stat";
 import { Icon } from "@/components/ui/Icon";
-import { fmtAgo } from "@/lib/format";
+import { fmtMonthYear } from "@/lib/format";
 import { coerceRace, raceIconName } from "@/lib/race";
 
 export interface AuthorStatsStripProps {
@@ -10,6 +10,8 @@ export interface AuthorStatsStripProps {
   primaryRace: string | null;
   joinedAt: string | null;
   topMatchup: string | null;
+  firstPublishedAt?: string | null;
+  matchupCount?: number;
 }
 
 /**
@@ -23,6 +25,8 @@ export function AuthorStatsStrip({
   primaryRace,
   joinedAt,
   topMatchup,
+  firstPublishedAt,
+  matchupCount = 0,
 }: AuthorStatsStripProps) {
   const race = primaryRace ? coerceRace(primaryRace) : null;
   const voteTone =
@@ -32,14 +36,14 @@ export function AuthorStatsStrip({
         ? "text-danger"
         : "text-text";
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
       <StatCard
         label="Builds published"
         value={totalBuilds.toLocaleString()}
         hint={
           <span className="inline-flex items-center gap-1">
             <BookMarked className="h-3 w-3" aria-hidden />
-            Public library
+            Across {matchupCount} matchup{matchupCount === 1 ? "" : "s"}
           </span>
         }
       />
@@ -73,10 +77,10 @@ export function AuthorStatsStrip({
         hint={topMatchup ? `Top matchup ${topMatchup}` : undefined}
       />
       <StatCard
-        label="Member since"
+        label="Publishing since"
         value={
-          joinedAt ? (
-            <span className="text-h3">{fmtAgo(joinedAt)}</span>
+          firstPublishedAt || joinedAt ? (
+            <span className="text-h3">{fmtMonthYear(firstPublishedAt || joinedAt)}</span>
           ) : (
             <span className="text-text-muted">—</span>
           )
@@ -88,6 +92,7 @@ export function AuthorStatsStrip({
           </span>
         }
       />
+      <StatCard label="Avg. score per build" value={totalBuilds > 0 ? (totalVotes / totalBuilds).toFixed(1) : "—"} hint="Net votes ÷ builds" />
     </div>
   );
 }

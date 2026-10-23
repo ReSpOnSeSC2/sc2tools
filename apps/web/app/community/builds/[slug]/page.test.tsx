@@ -36,6 +36,8 @@ vi.mock("@/components/community/CommunityBuildSignatureTimeline", () => ({
   },
 }));
 vi.mock("@/components/community/CommunityVotePanel", () => ({ CommunityVotePanel: () => null }));
+vi.mock("@/components/community/CommunityVoteControls", () => ({ CommunityVoteControls: () => null }));
+vi.mock("@/components/community/CommunityBuildReport", () => ({ CommunityBuildReport: () => <p>Report fixture</p> }));
 vi.mock("@/components/community/CommunityBuildOwnerControls", () => ({
   CommunityBuildOwnerControls: () => null,
 }));
@@ -158,7 +160,7 @@ describe("/community/builds/[slug]", () => {
 
   it("puts the skill level in the header, or nothing when it isn't set", async () => {
     await renderPage("Diamond build", { rules: RULES, skillLevel: "diamond" });
-    expect(screen.getByText("Diamond")).toBeTruthy();
+    expect(screen.getAllByText("Diamond")).toHaveLength(2);
     cleanup();
     await renderPage("No level", { rules: RULES, skillLevel: null });
     expect(screen.queryByText("Diamond")).toBeNull();
@@ -177,6 +179,29 @@ describe("/community/builds/[slug]", () => {
       version: "2026-09-10T00:00:00.000Z",
       title: "Saveable",
     });
+  });
+
+  it("places phone actions before rules, hides desktop action cards and removes duplicate meta", async () => {
+    const { container } = await renderPage("Phone build", { rules: RULES, vsRace: "Zerg", perspective: "opponent" });
+    const actions = screen.getByRole("region", { name: "Build actions" });
+    expect(actions.className).toContain("lg:hidden");
+    expect(actions.compareDocumentPosition(screen.getByRole("heading", { name: "Build order" })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const labels = Array.from(screen.getByLabelText("Build details").querySelectorAll("dt")).map((node) => node.textContent);
+    expect(labels).toEqual(["Matchup", "Type", "Rules", "Skill level", "Published", "Updated"]);
+    expect(screen.getByText("Protoss", { exact: false })).toBeTruthy();
+    expect(screen.getByText("Opponent build to scout")).toBeTruthy();
+    expect(container.querySelectorAll("aside > .hidden.lg\\:block")).toHaveLength(2);
+    expect(screen.getByText("Report fixture").closest("aside")).toBeTruthy();
+  });
+
+  it("keeps paragraphs in About and uses a short word-boundary summary", async () => {
+    const description = "A safe opening with early scouting. ".repeat(8).trim() + "\n\nSecond paragraph stays readable.";
+    mocks.getJsonWithStatus.mockResolvedValue({ data: { ...detail("Long notes", { rules: RULES }), description }, status: 200 });
+    render(await CommunityBuildPage({ params: Promise.resolve({ slug: "build-fixture0001" }) }));
+    const about = screen.getByRole("heading", { name: "About this build" }).parentElement!;
+    const full = about.querySelector("p")!;
+    expect(full.textContent).toBe(description); expect(full.className).toContain("whitespace-pre-line");
+    expect(screen.getByRole("heading", { name: "Long notes", level: 1 }).parentElement?.textContent).toContain("…");
   });
 });
 
