@@ -59,6 +59,10 @@ export interface GameSummary {
 /** Raw event shape from GET /v1/games/:id/build-order (perGameCompute). */
 export interface GameBuildOrderEvent {
   time: number;
+  supply?: number;
+  supplyApprox?: boolean;
+  /** Recorded completion time; `time` is rewound to construction/research start. */
+  complete_time?: number;
   time_display?: string;
   name: string;
   display?: string;

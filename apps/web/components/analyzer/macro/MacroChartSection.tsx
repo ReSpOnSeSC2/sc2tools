@@ -27,11 +27,10 @@ import type {
 } from "./MacroBreakdownPanel.types";
 import { buildSeries } from "./activeArmyLayout";
 import {
-  DEFAULT_TIMELINE_METRIC,
   selectedMetrics,
   timelineMetricsFor,
-  type TimelineMetric,
 } from "./timelineMetrics";
+import { useTimelineMetrics } from "./useTimelineMetrics";
 import {
   INITIAL_HOVER,
   nextHover,
@@ -42,6 +41,8 @@ import { gamePace, withApm, type GameApm } from "@/lib/apm";
 import type { PatchEra } from "@/lib/meta";
 
 export interface MacroChartSectionProps {
+  inspectionTime?: number | null;
+  onSeek?: (time: number) => void;
   samples: StatsEvent[];
   oppSamples: StatsEvent[];
   unitTimeline?: UnitTimelineEntry[];
@@ -111,6 +112,8 @@ export interface MacroChartSectionProps {
  *     Opening a different game resets the selection.
  */
 export function MacroChartSection({
+  inspectionTime,
+  onSeek,
   samples,
   oppSamples,
   unitTimeline,
@@ -134,13 +137,16 @@ export function MacroChartSection({
 }: MacroChartSectionProps) {
   const [hover, setHover] = useState<HoverState>(INITIAL_HOVER);
   const [showBlocks, setShowBlocks] = useState(true);
-  const [chosenMetrics, setChosenMetrics] = useState<TimelineMetric[]>([DEFAULT_TIMELINE_METRIC]);
+  const [chosenMetrics, setChosenMetrics] = useTimelineMetrics();
   const hasBlocks =
     (supplyBlockWindows?.length ?? 0) + (oppSupplyBlockWindows?.length ?? 0) > 0;
 
   useEffect(() => {
     setHover(INITIAL_HOVER);
   }, [gameId]);
+  useEffect(() => {
+    if (inspectionTime != null && Number.isFinite(inspectionTime)) setHover({ time: inspectionTime, sticky: true, card: false });
+  }, [inspectionTime]);
 
   const buildOrder = useApi<BuildOrderResponse>(
     gameId ? `/v1/games/${encodeURIComponent(gameId)}/build-order` : null,
@@ -191,8 +197,8 @@ export function MacroChartSection({
   );
 
   const handleHover = useCallback(
-    (event: HoverEvent) => setHover((prev) => nextHover(prev, event)),
-    [],
+    (event: HoverEvent) => { setHover((prev) => nextHover(prev, event)); if (event.type === "tap") onSeek?.(event.time); },
+    [onSeek],
   );
 
   return (

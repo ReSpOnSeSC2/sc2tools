@@ -110,7 +110,7 @@ class GuidesService {
       this._runComputedAt(),
       this.coll.find({ kind: "matchup", era }, { projection: DOC_PROJECTION }).toArray(),
       this.coll
-        .find({ kind: "map", era, published: true }, { projection: { _id: 0, map: 1, mapSlug: 1, games: 1, published: 1 } })
+        .find({ kind: "map", era, published: true }, { projection: { _id: 0, map: 1, mapSlug: 1, games: 1, published: 1, cells: 1 } })
         .sort({ games: -1 })
         .limit(INDEX_MAPS_MAX)
         .toArray(),

@@ -21,6 +21,19 @@ describe("services/perGameCompute", () => {
   });
 
   describe("foreground replay details", () => {
+    test("stamps both sides from the existing detail read using start-time supply", async () => {
+      const detailRead = jest.fn().mockResolvedValue({
+        buildLog: ["[0:17] Pylon", "[0:45] Marine"], oppBuildLog: ["[0:00] Hatchery"],
+        macroBreakdown: { stats_events: [{ time: 0, food_used: 12 }, { time: 20, food_used: 16 }, { time: 44, food_used: 30 }], opp_stats_events: [{ time: 0, food_used: 13 }] },
+      });
+      const service = new PerGameComputeService({ games: { findOne: async () => ({ gameId: "g", myRace: "Protoss" }) } }, { gameDetails: { findOne: detailRead } });
+      const result = await service.buildOrder("owner", "g");
+      expect(result.events.find(event => event.name === "Pylon")).toMatchObject({ supply: 12, supplyApprox: true });
+      // Marine's recorded completion is45; construction start precedes44.
+      expect(result.events.find(event => event.name === "Marine")).toMatchObject({ supply: 16, supplyApprox: true, complete_time: 45 });
+      expect(result.opp_events[0]).toMatchObject({ supply: 13, supplyApprox: true });
+      expect(detailRead).toHaveBeenCalledTimes(1);
+    });
     const stored = {
       buildLog: ["[0:00] Nexus", "[0:17] Pylon"],
       oppBuildLog: ["[0:00] Hatchery"],
@@ -45,7 +58,7 @@ describe("services/perGameCompute", () => {
       });
       expect(await service.macroBreakdown("owner", "g")).toMatchObject({ ok: true, macro_score: 74, ...stored.macroBreakdown });
       expect(await service.apmCurve("owner", "g")).toMatchObject({ ok: true, ...stored.apmCurve });
-      expect(detailRead).toHaveBeenCalledWith("owner", "g", expect.objectContaining({ fields: ["buildLog", "oppBuildLog"] }));
+      expect(detailRead).toHaveBeenCalledWith("owner", "g", expect.objectContaining({ fields: ["buildLog", "oppBuildLog", "macroBreakdown"] }));
       detailRead.mockClear();
       expect(await service.buildOrder("other", "g")).toBeNull();
       expect(await service.macroBreakdown("other", "g")).toBeNull();
@@ -439,6 +452,15 @@ describe("services/perGameCompute", () => {
       expect(byName.get("Lair")).toBe(300);
       expect(byName.get("WarpGateResearch")).toBe(420);
     });
+  });
+
+  test("a Prism completed after the drop deadline stays late despite its earlier display start", () => {
+    const recorded = parseBuildLogLines(["[6:01] WarpPrism"]);
+    const [display] = eventsToStartTime(recorded);
+    expect(display.time).toBeLessThan(360);
+    expect(display.complete_time).toBe(361);
+    // Display projection must leave the raw classifier clock untouched.
+    expect(recorded[0].time).toBe(361);
   });
 
   describe("eventsToStartTime", () => {

@@ -5,10 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import { apiCall } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
 import { Modal } from "@/components/ui/Modal";
 import { SaveBar } from "@/components/ui/SaveBar";
+import { Select } from "@/components/ui/Select";
 import { useToast } from "@/components/ui/Toast";
-import { apiMessage, cloneAvailability, clockValue, COACHING_DAYS, compareWindows, fieldClass, formatDuration, minuteValue, PRESET_SESSION_DURATIONS, timeZoneOptions, useZoneClock } from "./coachingTime";
+import { apiMessage, cloneAvailability, clockValue, COACHING_DAYS, compareWindows, formatDuration, minuteValue, PRESET_SESSION_DURATIONS, timeZoneOptions, useZoneClock, windowProblems } from "./coachingTime";
 import { BookingCard, BookingSummary, ChoiceChip, EmptySchedule } from "./CoachingScheduleParts";
 import type { AvailabilityDraft, AvailabilityWindow, Booking, CalendarPayload } from "./coachingScheduleModel";
 export function CoachSchedule({
@@ -41,6 +44,8 @@ export function CoachSchedule({
   const loadedStamp = useRef(data.availability?.updatedAt ?? "empty");
   const loadedAvailabilityRev = useRef(data.availabilityRev);
   const clock = useZoneClock(draft.timeZone);
+  const problems = windowProblems(draft.windows);
+  const invalidHours = Object.keys(problems).length > 0;
   const bookingTimeZone = data.availability?.timeZone ?? localTimeZone;
   useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
@@ -98,7 +103,7 @@ export function CoachSchedule({
       ...current,
       windows: current.windows.map((window) =>
         window === target ? { ...window, [field]: value } : window,
-      ).sort(compareWindows),
+      ),
     }));
   };
 
@@ -110,6 +115,7 @@ export function CoachSchedule({
   };
 
   const save = async () => {
+    if (invalidHours || !draft.durations.length || !draft.windows.length || saving) return;
     setSaving(true);
     try {
       const next = await apiCall<CalendarPayload>(
@@ -214,20 +220,16 @@ export function CoachSchedule({
         <Card.Body className="space-y-7 p-4 sm:p-5">
           <section aria-labelledby="timezone-heading">
             <div className="flex flex-wrap items-end gap-3">
-              <label className="min-w-0 flex-1">
-                <span id="timezone-heading" className="text-caption font-bold text-text">
-                  Coaching timezone
-                </span>
-                <select
+              <Field label={<span id="timezone-heading">Coaching timezone</span>} className="min-w-0 flex-1">
+                <Select
                   value={draft.timeZone}
                   onChange={(event) => change((current) => ({ ...current, timeZone: event.target.value }))}
-                  className={fieldClass("mt-2 w-full")}
                 >
                   {timeZoneOptions(draft.timeZone).map((zone) => (
                     <option key={zone} value={zone}>{zone.replaceAll("_", " ")}</option>
                   ))}
-                </select>
-              </label>
+                </Select>
+              </Field>
               <div className="rounded-lg border border-border bg-bg-elevated px-3 py-2.5 text-right">
                 <div className="text-micro uppercase tracking-wider text-text-dim">Local time</div>
                 <div className="font-mono text-caption font-semibold tabular-nums text-text">{clock}</div>
@@ -266,10 +268,8 @@ export function CoachSchedule({
                 ))}
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <label className="text-caption text-text-muted" htmlFor="custom-session-minutes">
-                Longer or custom
-              </label>
-              <input
+              <Field label="Longer or custom" htmlFor="custom-session-minutes" className="w-40" hint="Minutes, in 30-minute steps.">
+              <Input
                 id="custom-session-minutes"
                 type="number"
                 min={30}
@@ -277,9 +277,8 @@ export function CoachSchedule({
                 step={30}
                 value={customDuration}
                 onChange={(event) => setCustomDuration(Number(event.target.value))}
-                className={fieldClass("w-24")}
               />
-              <span className="text-caption text-text-muted">minutes</span>
+              </Field>
               <Button size="sm" variant="secondary" iconLeft={<Plus className="h-4 w-4" />} onClick={addCustomDuration}>
                 Add
               </Button>
@@ -310,29 +309,32 @@ export function CoachSchedule({
                     </div>
                     <div className="space-y-2">
                       {windows.map((window, index) => (
-                        <div key={`${day.day}-${index}-${window.startMinute}`} className="flex flex-wrap items-center gap-2">
-                          <input
+                        <div key={`${day.day}-${index}`} className="flex flex-wrap items-start gap-2">
+                          <Field label="Starts" error={problems[draft.windows.indexOf(window)]} className="min-w-32 flex-1 sm:flex-none">
+                          <Input
                             aria-label={`${day.long} start time ${index + 1}`}
                             type="time"
                             step={1800}
                             value={clockValue(window.startMinute)}
                             onChange={(event) => updateWindow(window, "startMinute", minuteValue(event.target.value))}
-                            className={fieldClass("min-w-32 flex-1 sm:flex-none")}
+                            invalid={Boolean(problems[draft.windows.indexOf(window)])}
                           />
-                          <span className="text-caption text-text-dim">to</span>
-                          <input
+                          </Field>
+                          <Field label="Ends" error={problems[draft.windows.indexOf(window)]} className="min-w-32 flex-1 sm:flex-none">
+                          <Input
                             aria-label={`${day.long} end time ${index + 1}`}
                             type="time"
                             step={1800}
                             value={clockValue(window.endMinute)}
                             onChange={(event) => updateWindow(window, "endMinute", minuteValue(event.target.value))}
-                            className={fieldClass("min-w-32 flex-1 sm:flex-none")}
+                            invalid={Boolean(problems[draft.windows.indexOf(window)])}
                           />
+                          </Field>
                           <button
                             type="button"
                             aria-label={`Remove ${day.long} window ${index + 1}`}
                             onClick={() => removeWindow(window)}
-                            className="grid h-10 w-10 place-items-center rounded-full text-text-muted hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                            className="mt-6 grid h-10 w-10 place-items-center rounded-full text-text-muted hover:bg-danger/10 hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                           >
                             <Trash2 className="h-4 w-4" aria-hidden />
                           </button>
@@ -368,7 +370,7 @@ export function CoachSchedule({
             disabled={
               (data.availability?.enabled !== false && !dirty) ||
               draft.durations.length === 0 ||
-              draft.windows.length === 0
+              draft.windows.length === 0 || invalidHours
             }
             iconLeft={<Check className="h-4 w-4" />}
             onClick={() => void save()}
@@ -421,7 +423,7 @@ export function CoachSchedule({
       >
         {cancelBooking ? <BookingSummary booking={cancelBooking} localTimeZone={bookingTimeZone} coachTimeZone={bookingTimeZone} /> : null}
       </Modal>
-      <SaveBar visible={dirty} saving={saving} saveDisabled={!draft.durations.length || !draft.windows.length} onSave={() => { void save(); }} onReset={revert} saveLabel="Publish availability" resetLabel="Reset" message="Unpublished availability changes" stackOnMobile />
+      <SaveBar visible={dirty} saving={saving} saveDisabled={!draft.durations.length || !draft.windows.length || invalidHours} onSave={() => { void save(); }} onReset={revert} saveLabel="Publish availability" resetLabel="Reset" message={invalidHours ? "Fix the highlighted hours to publish" : "Unpublished availability changes"} stackOnMobile />
     </div>
   );
 }

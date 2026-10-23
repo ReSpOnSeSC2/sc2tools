@@ -1,17 +1,21 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { BuildEditorModalProps } from "@/components/builds/editor";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import { GameDetailPage } from "../GameDetailPage";
-import type { GameSummary } from "../types";
+import type { GameBuildOrderResponse, GameSummary } from "../types";
 import type { GameIntentState } from "@/lib/buildIntent";
+import { rawPayload } from "../replay/__tests__/fixtures";
 
 const useApiMock = vi.fn();
 const apiCallMock = vi.fn();
 const getTokenMock = vi.fn(async () => "test-token");
 const routerReplaceMock = vi.fn();
 const editorHarness = vi.hoisted(() => ({ props: null as BuildEditorModalProps | null }));
+
+// Compile the real lazy chunks before assertions; bundler work is not UI latency.
+beforeAll(async () => { await Promise.all([import("../GameMacroSection"), import("../BuildOrderColumns")]); });
 
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: getTokenMock, isLoaded: true, isSignedIn: true }),
@@ -59,6 +63,7 @@ afterEach(() => {
   routerReplaceMock.mockReset();
   editorHarness.props = null;
   getTokenMock.mockClear();
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
 
@@ -155,16 +160,23 @@ function mockEndpoints({
   slimError,
   vodLinks,
   intent,
+  playback = false,
+  buildOrder = BUILD_ORDER,
 }: {
   slim?: GameSummary;
   macro?: MacroBreakdownData | null;
   slimError?: { status: number; message: string };
   vodLinks?: GameVodLinksResponse;
   intent?: GameIntentState;
+  playback?: boolean;
+  buildOrder?: GameBuildOrderResponse;
 } = {}) {
   const encodedId = encodeURIComponent(slim.gameId);
   useApiMock.mockImplementation((path: string | null) => {
     if (!path) return { data: undefined, error: undefined, isLoading: false };
+    if (playback && path === `/v1/games/${encodedId}/map-playback/manifest`) {
+      return { data: rawPayload(), error: undefined, isLoading: false, mutate: vi.fn() };
+    }
     if (path.startsWith(`/v1/games/${encodedId}/build-intent?include=options#`)) {
       return { data: intent, error: undefined, isLoading: false, mutate: vi.fn() };
     }
@@ -178,12 +190,12 @@ function mockEndpoints({
         ? { data: macro, error: undefined, isLoading: false }
         : {
             data: undefined,
-            error: { status: 404, message: "Not found." },
+            error: { status: 404, code: "macro_not_computed", message: "Not found." },
             isLoading: false,
           };
     }
     if (path === `/v1/games/${encodedId}/build-order`) {
-      return { data: BUILD_ORDER, error: undefined, isLoading: false };
+      return { data: buildOrder, error: undefined, isLoading: false };
     }
     if (path === `/v1/games/vod-links?gameId=${encodedId}`) {
       return { data: vodLinks, error: undefined, isLoading: false };
@@ -193,6 +205,39 @@ function mockEndpoints({
 }
 
 describe("GameDetailPage", () => {
+  it("uses the recorded upgrade completion rather than research start and omits unknown completion times", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    mockEndpoints({ playback: true, buildOrder: { ...BUILD_ORDER, events: [
+      { time: 100, complete_time: 300, name: "MetabolicBoost", display: "Metabolic Boost", category: "upgrade" },
+      { time: 50, name: "UnknownTiming", display: "Unknown timing", category: "upgrade" },
+    ] } });
+    const view = render(<GameDetailPage gameId="g1" initialTimeSec={150} />);
+    const bar = screen.getByTestId("replay-top-bar");
+    expect(within(bar).queryByText("Metabolic Boost")).toBeNull();
+    view.rerender(<GameDetailPage gameId="g1" initialTimeSec={300} />);
+    expect(within(bar).getByText("Metabolic Boost")).toBeTruthy();
+    expect(within(bar).queryByText("Unknown timing")).toBeNull();
+  });
+  it("seeks and reveals the mounted replay from a supply block, with banked resources and stable timestamp navigation", async () => {
+    const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    window.history.replaceState(null, "", "/app/game/g1?from=replays");
+    mockEndpoints({ playback: true, macro: { ...MACRO, stats_events: MACRO.stats_events?.map((sample) => ({ ...sample, vespene_current: 75 })) } });
+    const view = render(<GameDetailPage gameId="g1" />);
+    const stage = screen.getByTestId("replay-stage");
+    const scroll = vi.fn(); stage.scrollIntoView = scroll;
+    vi.spyOn(stage, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 1400, 600, 400));
+    fireEvent.click(within(screen.getByTestId("mechanics-panel")).getByRole("button", { name: "Watch the replay at 3:42" }));
+    await waitFor(() => expect(within(stage).getByLabelText("Game clock 3:42 of 10:00")).toBeTruthy());
+    expect(scroll).toHaveBeenCalledOnce(); expect(document.activeElement).toBe(stage);
+    expect(stage.hasAttribute("data-clock-seek")).toBe(true);
+    expect(within(screen.getByTestId("mechanics-panel")).getByRole("button", { name: "Watch the replay at 3:42" }).getAttribute("aria-current")).toBe("step");
+    expect(within(stage).getByTitle(/You.*minerals banked/)).toBeTruthy();
+    await waitFor(() => expect(routerReplaceMock).toHaveBeenCalledWith("/app/game/g1?from=replays&t=222", { scroll: false }));
+    view.rerender(<GameDetailPage gameId="g1" initialTimeSec={60} />);
+    expect(screen.getByTestId("replay-stage")).toBe(stage);
+    await waitFor(() => expect(within(stage).getByLabelText("Game clock 1:00 of 10:00")).toBeTruthy());
+    view.unmount(); canvas.mockRestore(); window.history.replaceState(null, "", "/");
+  });
   it("links only the opponent metadata while the descriptive heading stays plain", () => {
     mockEndpoints({ slim: { ...SLIM, opponent: { ...SLIM.opponent, pulseId: "1-S2-1-99" } } });
     render(<GameDetailPage gameId="g1" />);
@@ -269,10 +314,10 @@ describe("GameDetailPage", () => {
     expect(slider().value).toBe("240");
     mockEndpoints({ slim: { ...SLIM, gameId: "g2" } });
     view.rerender(<GameDetailPage gameId="g2" />);
-    expect(slider().value).toBe("700");
+    expect(slider().value).toBe("0");
   });
 
-  it("renders header, timeline, mechanics and the loss autopsy on a defeat", () => {
+  it("renders header, macro workspace, mechanics and the loss autopsy on a defeat", async () => {
     mockEndpoints();
     const { container } = render(<GameDetailPage gameId="g1" />);
 
@@ -288,24 +333,24 @@ describe("GameDetailPage", () => {
     expect(screen.getByText("Terran - 2 Rax")).toBeTruthy();
 
     // Centerpiece timeline with scrubber + readout.
-    expect(screen.getByTestId("interactive-timeline")).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Army" })).toBeTruthy();
     expect(screen.getByLabelText("Scrub game time")).toBeTruthy();
-    expect(screen.getByTestId("timeline-readout")).toBeTruthy();
+    expect(screen.getByTestId("game-clock-readout")).toBeTruthy();
 
     // Mechanics: race-aware inject stat from the breakdown payload.
     expect(screen.getByTestId("mechanics-panel")).toBeTruthy();
-    expect(screen.getByText("Inject Efficiency")).toBeTruthy();
+    expect(within(screen.getByTestId("mechanics-panel")).getByText("Inject Efficiency")).toBeTruthy();
 
     // Loss → autopsy visible with at least one clickable timestamp.
     expect(screen.getByTestId("loss-autopsy-card")).toBeTruthy();
     expect(screen.getByText("Why you lost")).toBeTruthy();
     expect(screen.getByText("Missed injects")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Jump timeline to 3:42" }),
+      within(screen.getByTestId("loss-autopsy-card")).getByRole("button", { name: "Watch the replay at 3:42" }),
     ).toBeTruthy();
 
     // Build orders, both sides.
-    expect(screen.getByText("Spawning Pool")).toBeTruthy();
+    expect(await screen.findByText("Spawning Pool")).toBeTruthy();
     expect(screen.getByText("Barracks")).toBeTruthy();
   });
 
@@ -319,7 +364,7 @@ describe("GameDetailPage", () => {
     expect(screen.getByText(/You won this one/)).toBeTruthy();
   });
 
-  it("uses replay build-order races for the exact Ghost matchup", () => {
+  it("uses replay build-order races for the exact Ghost matchup", async () => {
     mockEndpoints({
       slim: {
         ...SLIM,
@@ -331,15 +376,17 @@ describe("GameDetailPage", () => {
 
     // BUILD_ORDER says Zerg vs Terran. Those replay-derived values must win
     // over the conflicting slim summary so the build cannot enter PvZ.
-    expect(screen.getByRole("button", { name: "Use as Ghost Build target" })).toBeTruthy();
+    const myColumn = await screen.findByTestId("build-column-me");
+    expect(within(myColumn).getByRole("button", { name: "Use as Ghost Build target" }).title).toContain("ZvT");
+    expect(within(screen.getByTestId("build-column-opp")).getByRole("button", { name: "Use as Ghost Build target" }).title).toContain("TvZ");
     expect(screen.queryByRole("button", { name: "Save for PvZ" })).toBeNull();
   });
 
-  it("degrades to build logs when the macro breakdown was never computed", () => {
+  it("degrades to build logs when the macro breakdown was never computed", async () => {
     mockEndpoints({ macro: null });
     render(<GameDetailPage gameId="g1" />);
     // Timeline can't render without stats_events — explanatory empty state.
-    expect(screen.getByText(/No timeline samples/i)).toBeTruthy();
+    expect(await screen.findByText("No macro breakdown for this game")).toBeTruthy();
     // Mechanics panel still shows what the slim row carries (SQ 71).
     expect(screen.getByTestId("mechanics-panel")).toBeTruthy();
     expect(screen.getByText("71")).toBeTruthy();
@@ -408,7 +455,8 @@ describe("GameDetailPage", () => {
     expect(download.textContent).toContain("Download replay");
     expect(download.getAttribute("title")).toContain("125 KB");
     const actionLine = screen.getByRole("toolbar", { name: "Game actions" });
-    const actions = Array.from(actionLine.querySelectorAll("a,button"));
+    const actions = Array.from(actionLine.querySelectorAll("a,button")).filter(action => !action.closest("details"));
+    expect(within(actionLine).getByText("Export")).toBeTruthy();
     expect(actions).toEqual([screen.getByRole("button", { name: "Share this game as an image" }), download, link]);
     expect(useApiMock).toHaveBeenCalledWith(
       "/v1/games/vod-links?gameId=g1",
@@ -519,7 +567,7 @@ describe("GameDetailPage", () => {
     expect(within(card).getByText("Needs check-in")).toBeTruthy();
     expect(within(card).getByRole("button", { name: "Confirm" })).toBeTruthy();
     expect(
-      card.compareDocumentPosition(screen.getByTestId("interactive-timeline"))
+      card.compareDocumentPosition(screen.getByRole("group", { name: "Game clock" }))
         & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(within(heroHeader()).queryByTestId("planned-badge")).toBeNull();

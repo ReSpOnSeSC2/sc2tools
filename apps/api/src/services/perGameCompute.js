@@ -16,6 +16,7 @@ const {
 } = require("./opponentBuildOrderFence");
 const { toStartSeconds, isFinishTimeEvent } = require("./buildDurations");
 const { proxyEvidence } = require("./proxyClassification");
+const { stampBuildSupply } = require("./buildOrderSupply");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { validateCasualtyEvents } = require("../validation/casualtyEvents");
 const {
@@ -256,7 +257,7 @@ class PerGameComputeService {
    */
   async buildOrder(userId, gameId) {
     const { slim, blob } = await this._readGameWithDetails(userId, gameId, {
-      fields: ["buildLog", "oppBuildLog"],
+      fields: ["buildLog", "oppBuildLog", "macroBreakdown"],
     });
     if (!slim) return null;
     // Merge so ``readEarlyBuildLog`` / ``readOppEarlyBuildLog`` see
@@ -314,10 +315,10 @@ class PerGameComputeService {
       opp_race: slim.opponent?.race || null,
       map: slim.map || null,
       result: slim.result || null,
-      events: eventsToStartTime(rawEvents, slim),
-      early_events: eventsToStartTime(rawEarly, slim),
-      opp_events: eventsToStartTime(rawOpp, slim),
-      opp_early_events: eventsToStartTime(rawOppEarly, slim),
+      events: stampBuildSupply(eventsToStartTime(rawEvents, slim), merged.macroBreakdown?.stats_events),
+      early_events: stampBuildSupply(eventsToStartTime(rawEarly, slim), merged.macroBreakdown?.stats_events),
+      opp_events: stampBuildSupply(eventsToStartTime(rawOpp, slim), merged.macroBreakdown?.opp_stats_events),
+      opp_early_events: stampBuildSupply(eventsToStartTime(rawOppEarly, slim), merged.macroBreakdown?.opp_stats_events),
       my_status: diagBuildStatus(buildLogPresent, rawEvents.length),
       opp_status: diagBuildStatus(oppBuildLogPresent, rawOpp.length),
     };

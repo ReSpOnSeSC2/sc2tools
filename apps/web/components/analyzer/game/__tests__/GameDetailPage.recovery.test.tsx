@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({ macroError: null as unknown, buildError: null as unknown,
@@ -25,37 +25,37 @@ import { GameDetailPage } from "../GameDetailPage";
 beforeEach(() => { state.macroError = null; state.buildError = null; state.gameError = null; state.loading = false; state.crash = false; state.retry.mockReset(); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
-it("shows retryable macro errors without claiming no analysis exists", () => {
+it("shows retryable macro errors without claiming no analysis exists", async () => {
   state.macroError = { status: 500, message: "failed" };
   render(<GameDetailPage gameId="one" />);
-  expect(screen.getByText("Couldn't load the timeline")).toBeTruthy();
+  expect(await screen.findByText("Couldn't load the macro breakdown")).toBeTruthy();
   expect(screen.queryByText(/No timeline samples/)).toBeNull();
   expect(screen.queryByText(/No macro breakdown/)).toBeNull();
   fireEvent.click(screen.getAllByRole("button", { name: "Retry" })[0]);
   expect(state.retry).toHaveBeenCalledOnce();
 });
-it("reserves not-computed copy for a 404, and skeletons for an unsettled request", () => {
-  state.macroError = { status: 404 };
+it("reserves not-computed copy for the explicit missing-analysis code, and skeletons for an unsettled request", async () => {
+  state.macroError = { status: 404, code: "macro_not_computed" };
   const view = render(<GameDetailPage gameId="one" />);
-  expect(screen.getByText(/No timeline samples/)).toBeTruthy();
+  expect(await within(screen.getByRole("region", { name: "Macro breakdown" })).findByText("No macro breakdown for this game")).toBeTruthy();
   state.macroError = null; state.loading = true; view.rerender(<GameDetailPage gameId="one" />);
-  expect(screen.getByRole("status", { name: "Loading timeline" })).toBeTruthy();
+  expect(screen.getByRole("status", { name: "Loading macro breakdown" })).toBeTruthy();
   expect(screen.queryByText(/Not enough data/)).toBeNull();
 });
-it("lets game and build-order requests retry", () => {
+it("lets game and build-order requests retry", async () => {
   state.gameError = { status: 500 };
   const view = render(<GameDetailPage gameId="one" />);
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   expect(state.retry).toHaveBeenCalledOnce();
   state.gameError = null; state.buildError = { status: 500 }; view.rerender(<GameDetailPage gameId="one" />);
-  expect(screen.getByText("Couldn't load build orders")).toBeTruthy();
+  expect(await screen.findByText("Couldn't load build orders")).toBeTruthy();
   expect(screen.queryByText(/No build events/)).toBeNull();
 });
-it("isolates a replay crash and remounts it without losing the hero or build orders", () => {
+it("isolates a replay crash and remounts it without losing the hero or build orders", async () => {
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   state.crash = true; render(<GameDetailPage gameId="one" />);
   expect(screen.getByRole("heading", { name: "My replay hero" })).toBeTruthy();
-  expect(screen.getByTestId("build-order-columns")).toBeTruthy();
+  expect(await screen.findByTestId("build-order-columns")).toBeTruthy();
   state.crash = false; fireEvent.click(screen.getByRole("button", { name: "Try again" }));
   expect(screen.getByText("Replay player recovered")).toBeTruthy();
 });

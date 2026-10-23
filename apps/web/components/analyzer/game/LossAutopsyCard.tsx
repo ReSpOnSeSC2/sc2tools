@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
@@ -10,8 +10,11 @@ import {
   type PersonalMedians,
 } from "@/lib/lossAutopsy";
 import { parseClockToSeconds } from "@/lib/gameTimeline";
+import { RECOMPUTE_ANALYSIS_HINT } from "@/lib/analysisRecompute";
 
 export interface LossAutopsyCardProps {
+  recomputeAction?: ReactNode;
+  seekTarget?: "replay" | "timeline";
   error?: unknown;
   onRetry?: () => unknown;
   loading?: boolean;
@@ -37,6 +40,8 @@ export function LossAutopsyCard({
   game,
   personalMedians,
   onSeek,
+  recomputeAction,
+  seekTarget = "timeline",
 }: LossAutopsyCardProps) {
   const causes = useMemo(
     () => lossAutopsy({ game, personalMedians }),
@@ -54,7 +59,8 @@ export function LossAutopsyCard({
         <EmptyStatePanel
           size="sm"
           title="Not enough data to explain this one"
-          description="The macro engine found no standout leak — sometimes the other player just played better. A recompute from the agent can add missing samples."
+          description={game.macroBreakdown ? "The fixed rules found no standout leak in this replay's available data." : RECOMPUTE_ANALYSIS_HINT}
+          action={recomputeAction}
         />
       ) : (
         <ol className="space-y-4">
@@ -108,10 +114,10 @@ export function LossAutopsyCard({
                             ? () => onSeek(sec)
                             : undefined
                         }
-                        aria-label={`Jump timeline to ${clock}`}
+                        aria-label={seekTarget === "replay" ? `Watch the replay at ${clock}` : `Jump timeline to ${clock}`}
                         className="inline-flex min-h-[44px] items-center rounded-full border border-border bg-bg-elevated px-2.5 font-mono text-micro tabular-nums text-text-muted transition-colors enabled:hover:border-border-strong enabled:hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default"
                       >
-                        {clock}
+                        {seekTarget === "replay" ? `Watch at ${clock}` : clock}
                       </button>
                     );
                   })}

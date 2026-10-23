@@ -46,9 +46,11 @@ export function GameDetailShell({
   planned,
   oppStrategyLabel,
   oppCorrected,
+  exportAction,
 }: {
   game: GameSummary;
   children: ReactNode;
+  exportAction?: ReactNode;
   opponentContext?: OpponentNavigationContext | null;
   streamLinks?: GameStreamLink[] | null;
   /** Effective build label from the live check-in state; the slim row's otherwise. */
@@ -95,8 +97,8 @@ export function GameDetailShell({
         ? { detected: game.detectedOppStrategy ?? null }
         : null;
   return (
-    <div className="space-y-6">
-      <header className="space-y-3">
+    <div className="space-y-6" data-game-workspace>
+      <header id="overview" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]">
         <Link
           href={backHref}
           className={`${inChrome ? "md:hidden " : ""}inline-flex min-h-[44px] items-center gap-1.5 rounded text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
@@ -148,6 +150,7 @@ export function GameDetailShell({
               className="flex min-h-9 w-full flex-wrap items-center justify-end gap-2"
             >
               <ShareGameButton game={game} />
+              {exportAction}
               <ReplayDownloadButton
                 gameId={game.gameId}
                 available={replayAvailable}

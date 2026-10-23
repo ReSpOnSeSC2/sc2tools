@@ -1,6 +1,8 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminEvent } from "../components/adminTypes";
+import { navigation } from "../components/__tests__/navigationFixture";
+vi.mock("next/navigation", () => import("../components/__tests__/navigationFixture"));
 
 const { useApiMock, socketMock, countsMutate, feedMutate, apiCallMock, scenario, auth } = vi.hoisted(() => ({
   useApiMock: vi.fn(), socketMock: vi.fn(), countsMutate: vi.fn(), feedMutate: vi.fn(), apiCallMock: vi.fn(),
@@ -40,6 +42,7 @@ function message(index: number, readAt: string | null = null): AdminEvent {
 }
 
 beforeEach(() => {
+  navigation.url = "/admin/notifications";
   vi.clearAllMocks();
   scenario.items = [];
   scenario.unreadCount = 0;
@@ -127,8 +130,8 @@ describe("admin unread activity", () => {
 
   it("polls both resources and refreshes missed activity on socket connect/reconnect", () => {
     render(<AdminNotificationsPage />);
-    expect(useApiMock).toHaveBeenCalledWith("/v1/admin/events?limit=50&unread=true", { refreshInterval: 60000 });
-    expect(useApiMock).toHaveBeenCalledWith("/v1/admin/events/counts", { refreshInterval: 60000 });
+    expect(useApiMock).toHaveBeenCalledWith("/v1/admin/events?limit=50&unread=true", { refreshInterval: 60000, keepPreviousData: true });
+    expect(useApiMock).toHaveBeenCalledWith("/v1/admin/events/counts", { refreshInterval: 60000, keepPreviousData: true });
     const connected = socketMock.mock.calls.at(-1)?.[1] as () => void;
     act(() => { connected(); connected(); });
     expect(feedMutate).toHaveBeenCalledTimes(2);

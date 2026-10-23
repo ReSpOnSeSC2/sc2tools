@@ -11,6 +11,36 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Build supply and exports
+
+- Game build orders show prior-sample supply with an approximation marker, worker/supply filters and aligned times. Either side can copy text, supply-first text, Markdown or SALT, print a compact cheat sheet, arm a confirmed Ghost target or open the custom-build editor.
+- Custom and Community definitions share the export menu, including rule-only definitions with their actual condition text. Game headers download available stats/casualties CSV and versioned JSON locally.
+
+### Guide comparisons and browsing
+
+- Find and sort openers without losing their original rank, browse phone cards, and group a build's opponent matchups by their likely-range verdict. Complete map lists stay available on demand.
+- Compare your own build timings and record with the guide in one table. Counter lists show your race's aggregate win rates, and the map pool offers a sortable race-specific table when new stats are available.
+
+### Coaching forms
+
+- Practice plans show inline field errors, focus the first field to fix, remember each student's time zone and summarize the actual target before assignment. Failed saves retain the draft for Retry.
+- Weekly availability highlights reversed or overlapping hours and prevents publication until they are corrected. Touching windows remain valid.
+
+### Admin inbox details
+
+- Activity and support message rows now open full details on tap, click, Enter or Space, with diagnostics, replies and account or infrastructure links. Closing returns focus to the row.
+
+### Build detection
+
+- Both PvZ Archon Drop labels require a real Warp Prism completed by 6:00 and observed Archons. Ordinary or late Templar transitions keep their opener label instead of being counted as drops.
+
+### Game workspace and shared clock
+
+- On phones and tablets, replay player names sit above their stats so supply, workers and the clock stay readable without overlapping. Upgrade chips wait for recorded research completion.
+
+- The game page includes the complete macro report, priced leaks and Recompute analysis, with section links that keep the replay mounted. Bank joins the chart metrics, and this browser remembers your selection.
+- Supply blocks, loss causes, macro moments and build steps seek one replay clock. Playback follows through the chart and current build step; timestamp links, completed upgrades and measured banked resources give each moment context.
+
 ### Shared game analysis
 
 - Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.
@@ -59,6 +89,8 @@ corresponding GitHub Release.
 - The app status pill describes your desktop connection and latest upload; community counts stay in an optional desktop disclosure. Install the web app from More or Settings and get a clear offline page when the network is unavailable.
 
 ### Added
+
+- Admin user, opponent, global-player and inbox views retain filters and pages in shareable URLs; sortable tables become phone cards, searches debounce, and game links preserve their private owner selection.
 
 - Operations console adds bounded background-job history and safe Run now controls, a 400-day admin audit log, per-user support snapshots, first-party activation cohorts, and resolved-user repair actions with typed wipe confirmation and game-count conflict protection.
 

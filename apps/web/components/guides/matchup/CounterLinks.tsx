@@ -3,6 +3,7 @@ import { guidePaths } from "@/components/guides/guideMetadata";
 import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS } from "@/components/guides/guideUi";
 import { fmtCount } from "@/lib/guides/format";
 import type { GuideCounterLink } from "@/lib/guides/types";
+import { WinRateCell } from "../WinRateCell";
 
 /**
  * "How to beat …" links for a matchup's opponent openers. Published
@@ -32,6 +33,7 @@ export function CounterLinks({
             How to beat {counter.name}
           </Link>
           <span className="shrink-0 text-right text-micro tabular-nums text-text-dim">
+            {counter.published && counter.winRate != null && counter.ci ? <span className="mb-1 block"><WinRateCell winRate={counter.winRate} ci={counter.ci} showWhisker={false} compact /></span> : null}
             {counter.published && counter.games !== null
               ? `${fmtCount(counter.games)} games`
               : "Not enough games yet"}

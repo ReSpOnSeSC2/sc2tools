@@ -94,6 +94,28 @@ function flooredGames(games) {
   return isNum(games) && games >= GUIDE_CELL_MIN_GAMES ? games : null;
 }
 
+/** Validated aggregate-only rate and interval for compact list payloads.
+ * @param {Doc} raw @returns {{winRate:number,ci:{low:number,high:number}}|null} */
+function compactRate(raw) {
+  const ci = raw.ci;
+  if (!clearsCellFloor(raw.games, raw.users) || !isNum(raw.winRate) || raw.winRate < 0 || raw.winRate > 1) return null;
+  if (!ci || !isNum(ci.low) || !isNum(ci.high) || ci.low < 0 || ci.high > 1 || ci.low > ci.high) return null;
+  return { winRate: raw.winRate, ci: { low: ci.low, high: ci.high } };
+}
+
+/** @param {unknown} rows */
+function indexMapCells(rows) {
+  const nonMirror = MATCHUPS.filter((matchup) => matchup[0] !== matchup[2]);
+  const valid = pickList(rows, (row) => {
+    const rate = compactRate(row);
+    return nonMirror.includes(row.matchup) && rate ? { matchup: row.matchup, games: row.games, ...rate } : null;
+  });
+  return nonMirror.flatMap((matchup) => {
+    const row = valid.find((cell) => cell.matchup === matchup);
+    return row ? [row] : [];
+  });
+}
+
 /**
  * A Cell copied field by field, or null when malformed or below the
  * CELL floor.
@@ -241,7 +263,7 @@ function shapeIndexPayload(input) {
   const byMatchup = new Map(input.matchupDocs.map((doc) => [doc.matchup, doc]));
   const maps = pickList(input.mapDocs, (doc) => (
     servesPublishedMap(doc) && typeof doc.map === "string" && typeof doc.mapSlug === "string"
-      ? { map: doc.map, slug: doc.mapSlug, games: doc.games }
+      ? { map: doc.map, slug: doc.mapSlug, games: doc.games, ...(Array.isArray(doc.cells) ? { cells: indexMapCells(doc.cells) } : {}) }
       : null
   )).sort((a, b) => b.games - a.games || (a.slug < b.slug ? -1 : 1));
   return {
@@ -272,6 +294,7 @@ function counterLinks(matchup, doc) {
       name: guideName("counters", matchup, key),
       published: false,
       games: null,
+      winRate: null, ci: null,
     }));
   }
   return pickList(doc.counters, (row) => (
@@ -282,6 +305,8 @@ function counterLinks(matchup, doc) {
         name: guideName("counters", matchup, row.strategyKey),
         published: row.published === true,
         games: flooredGames(row.games),
+        winRate: compactRate(row)?.winRate ?? null,
+        ci: compactRate(row)?.ci ?? null,
       }
       : null
   ));

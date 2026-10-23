@@ -3,11 +3,13 @@ import { AdminLiveStatus } from "../components/AdminLiveStatus";
 import { useRealtimeStatus } from "@/components/realtime/RealtimeProvider";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { RequestError } from "@/components/ui/RequestError";
+import { useAdminQueryState } from "../components/useAdminQueryState";
+import { useAdminCursor } from "../components/useAdminCursor";
 import { AdminPagination } from "@/app/admin/components/AdminPagination";
 import { Button } from "@/components/ui/Button";
 import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
-import { useCallback, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 
 import { Card } from "@/components/ui/Card";
@@ -40,13 +42,14 @@ const FILTER_LABEL: Record<Filter, string> = {
  * action. Socket.io invalidations refresh durable rows when activity arrives
  * or the socket reconnects; polling recovers updates missed while offline.
  */
-export default function AdminNotificationsPage() {
+function NotificationsBody() {
   const { getToken } = useAuth();
   const realtime = useRealtimeStatus();
-  const [filter, setFilter] = useState<Filter>("all");
-  const [unreadOnly, setUnreadOnly] = useState(true);
-  const [before, setBefore] = useState<string | null>(null);
-  const [pageHistory, setPageHistory] = useState<Array<string | null>>([null]);
+  const [view, setView] = useAdminQueryState({ type: "all", unread: true, before: "" }, { allowed: { type: Object.keys(FILTER_LABEL) } });
+  const filter = view.type as Filter, unreadOnly = view.unread, before = view.before;
+  const setFilter = (type: Filter) => setView({ type });
+  const setUnreadOnly = (unread: boolean) => setView({ unread });
+  const paging = useAdminCursor(before, before => setView({ before }));
   const [markingRead, setMarkingRead] = useState(false);
 
   const params = new URLSearchParams();
@@ -57,10 +60,10 @@ export default function AdminNotificationsPage() {
   const path = `/v1/admin/events?${params.toString()}`;
 
   const { data, error, isLoading, isValidating, mutate } = useApi<AdminEventsListResp>(path, {
-    refreshInterval: 60000,
+    refreshInterval: 60000, keepPreviousData: true,
   });
   const counts = useApi<AdminEventCountsResp>("/v1/admin/events/counts", {
-    refreshInterval: 60000,
+    refreshInterval: 60000, keepPreviousData: true,
   });
 
   useAdminEventsSocket(
@@ -93,28 +96,12 @@ export default function AdminNotificationsPage() {
     }
   }
 
-  function nextPage() {
-    if (data?.nextBefore) {
-      setPageHistory((h) => [...h, data.nextBefore]);
-      setBefore(data.nextBefore);
-    }
-  }
-  function prevPage() {
-    if (pageHistory.length <= 1) return;
-    const popped = pageHistory.slice(0, -1);
-    setPageHistory(popped);
-    setBefore(popped[popped.length - 1] ?? null);
-  }
-
   if (error && error.status === 403) return <ForbiddenCard />;
 
   const unread = counts.data?.unreadCount ?? 0;
   const emptyType = filter === "all" ? "notifications" : FILTER_LABEL[filter].toLowerCase();
 
-  function resetPage() {
-    setBefore(null);
-    setPageHistory([null]);
-  }
+  function resetPage() { setView({ before: "" }); }
 
   return (
     <div className="space-y-6">
@@ -134,7 +121,7 @@ export default function AdminNotificationsPage() {
             Live feed of new signups, agent downloads, confirmed installs, and user messages.
             {realtime.status === "connected" ? "Updates in real time while this page is open." : "Refresh now or wait for the next automatic check while live updates reconnect."}
           </p></details>
-      <p className="text-caption text-text-muted">{unread} unread across all activity.</p>
+      <p className="text-caption text-text-muted">{unread} unread across all activity.{data && isValidating ? <span role="status" className="ml-2">Updating…</span> : null}</p>
 
       {counts.data?.supportEmail ? (
         <p className="rounded-lg border border-border bg-bg-surface px-4 py-3 text-caption text-text-muted"
@@ -197,9 +184,10 @@ export default function AdminNotificationsPage() {
         </div>
       </Card>
 
+      {error && data ? <RequestError error={error} onRetry={() => mutate()} /> : null}
       {isLoading && !data ? (
         <LoadingRows rows={8} />
-      ) : error ? (
+      ) : error && !data ? (
         <RequestError error={error} onRetry={() => mutate()} />
       ) : items.length === 0 ? (
         <Card padded>
@@ -208,7 +196,7 @@ export default function AdminNotificationsPage() {
         </Card>
       ) : (
         <Card padded={false}>
-          <ul className="divide-y divide-border">
+          <ul aria-busy={isValidating} className={`divide-y divide-border transition-opacity ${isValidating ? "opacity-60" : ""}`}>
             {items.map((event) => (
               <AdminEventRow
                 key={event.eventId}
@@ -221,7 +209,7 @@ export default function AdminNotificationsPage() {
         </Card>
       )}
 
-      <AdminPagination hasPrev={!(pageHistory.length <= 1)} hasNext={!(!data?.nextBefore || isValidating)} onPrev={prevPage} onNext={nextPage} label={"Page " + pageHistory.length} loading={isValidating} itemCount={data?.items.length ?? 0} />
+      <AdminPagination hasPrev={paging.hasPrev} prevLabel={paging.prevLabel} hasNext={!!data?.nextBefore} onPrev={paging.previous} onNext={() => paging.next(data?.nextBefore || "")} label={paging.page} loading={isValidating} itemCount={data?.items.length || 0} />
 
       {/* Hint about the live API_BASE so admins can verify the
           environment when triaging in a staging deployment. */}
@@ -231,3 +219,5 @@ export default function AdminNotificationsPage() {
     </div>
   );
 }
+
+export default function AdminNotificationsPage() { return <Suspense fallback={<LoadingRows rows={8} />}><NotificationsBody /></Suspense>; }
