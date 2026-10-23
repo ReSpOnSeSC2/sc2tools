@@ -40,6 +40,8 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Community search restores correctly with Back and Forward after clearing filters, including when cached server props lag behind the address bar.
+
 - Account deletion now removes token-owned stream data and private sound files, ends the sign-in identity with durable retries, and offers an export-first inventory and confirmation flow. Review comments on other requests are anonymized; service backup retention follows the current configured schedule.
 
 ### Navigation and installed app
