@@ -45,7 +45,7 @@ export function AdminEventRow({
   onReportUpdated?: () => unknown;
 }) {
   const meta = describe(event);
-  const report = event.type === "user_message" ? (event.payload as AdminEventUserMessagePayload) : null;
+  const report = !event.anonymizedAt && event.type === "user_message" ? (event.payload as AdminEventUserMessagePayload) : null;
   const [open, setOpen] = useState(false);
   return (
     <li
@@ -123,6 +123,7 @@ export function AdminEventRow({
 /** Explicit fields keep future payload additions (especially credentials)
  * out of both the details UI and copied text. */
 function EventDetailFields({ event }: { event: AdminEvent }) {
+  if (event.anonymizedAt) return <p className="text-caption text-text-muted">Account deleted. Personal details are unavailable.</p>;
   const fields: Array<[string, string | number | null | undefined]> = [];
   let userId: string | null = null;
   if (event.type === "user_message" || event.type === "user_signup" || event.type === "agent_connected") {
@@ -152,7 +153,6 @@ function EventDetailFields({ event }: { event: AdminEvent }) {
       <dt className="font-semibold text-text">{label}</dt><dd className="text-text-muted [overflow-wrap:anywhere]">{value}</dd>
     </div>)}</dl>
     {userId && !event.anonymizedAt ? <a href={`/admin/users/${encodeURIComponent(userId)}`} className="inline-flex min-h-11 items-center text-caption text-accent underline">Open account →</a> : null}
-    {event.anonymizedAt ? <p className="text-caption text-text-muted">Account deleted. Personal details have been removed.</p> : null}
   </div>;
 }
 
@@ -181,6 +181,13 @@ function describe(event: AdminEvent): {
   body?: string;
   href?: string;
 } {
+  if (event.anonymizedAt) {
+    const label: Record<AdminEvent["type"], string> = {
+      user_signup: "Signup", agent_download: "Agent download", agent_connected: "Agent connected",
+      user_message: "User message", backup_stale: "Backup alert", job_overdue: "Background job alert",
+    };
+    return { title: `${label[event.type]} · account deleted`, subtitle: "Personal details unavailable" };
+  }
   if (event.type === "user_signup") {
     const p = event.payload as AdminEventSignupPayload;
     const identity = p.email || p.clerkUserId || "Email unavailable";

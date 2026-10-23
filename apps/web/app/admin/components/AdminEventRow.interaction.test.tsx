@@ -71,11 +71,22 @@ describe("admin activity details", () => {
   it("keeps deleted accounts unavailable and never displays arbitrary payload fields", () => {
     const event = { ...report, anonymizedAt: report.createdAt, payload: { ...report.payload, token: "MUST-NOT-RENDER" } } as unknown as AdminEvent;
     render(<ul><AdminEventRow event={event} unread={false} /></ul>);
-    fireEvent.click(screen.getByRole("button", { name: "Open details: Mobile chart cannot open" }));
+    fireEvent.click(screen.getByRole("button", { name: "Open details: User message · account deleted" }));
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText("Account deleted. Personal details have been removed.")).toBeTruthy();
+    expect(within(dialog).getByText("Account deleted. Personal details are unavailable.")).toBeTruthy();
     expect(within(dialog).queryByRole("link", { name: "Open account →" })).toBeNull();
     expect(within(dialog).queryByRole("button", { name: "Status / Reply" })).toBeNull();
     expect(document.body.textContent).not.toContain("MUST-NOT-RENDER");
+    for (const personal of ["player@example.test", "Mobile chart cannot open", "Full support message details.", "account/one", "clerk-1", "/app/opponents", "/v1/opponents"]) expect(document.body.innerHTML).not.toContain(personal);
+  });
+
+  it("uses the deleted marker before download identity/browser fields, while retaining event type and time", () => {
+    const event: AdminEvent = { eventId: "download-deleted", type: "agent_download", createdAt: report.createdAt, readAt: null, anonymizedAt: report.createdAt,
+      payload: { platform: "windows", version: "0.20.0", channel: "private-channel", ip: "192.0.2.77", userAgent: "private-browser", referer: "private-referrer", country: "US" } };
+    render(<ul><AdminEventRow event={event} unread={false} /></ul>);
+    fireEvent.click(screen.getByRole("button", { name: "Open details: Agent download · account deleted" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.querySelector("time")?.getAttribute("datetime")).toBe(report.createdAt);
+    for (const personal of ["192.0.2.77", "private-browser", "private-referrer", "private-channel"]) expect(document.body.textContent).not.toContain(personal);
   });
 });
