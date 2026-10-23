@@ -1,12 +1,13 @@
 "use client";
 
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type ComponentProps, type ReactNode } from "react";
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { buttonClassName, type ButtonSize, type ButtonVariant } from "./buttonStyles";
 
 /** Button — variants × sizes × loading/disabled, with optional icon slots. */
 export type { ButtonSize, ButtonVariant };
-export { buttonClassName } from "./buttonStyles";
+export { buttonClassName, buttonClassName as buttonClasses } from "./buttonStyles";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -58,5 +59,19 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ) : null}
       </button>
     );
+  },
+);
+
+export type LinkButtonProps = Omit<ComponentProps<typeof Link>, "ref"> &
+  Pick<ButtonProps, "variant" | "size" | "iconLeft" | "iconRight" | "fullWidth">;
+
+/** Navigation with the same class recipe and icon slots as Button. */
+export const LinkButton = forwardRef<HTMLAnchorElement, LinkButtonProps>(
+  function LinkButton({ variant = "primary", size = "md", iconLeft, iconRight, fullWidth = false, className = "", children, ...props }, ref) {
+    return <Link ref={ref} className={buttonClassName({ variant, size, fullWidth, className })} {...props}>
+      {iconLeft ? <span className="flex-shrink-0">{iconLeft}</span> : null}
+      {children}
+      {iconRight ? <span className="flex-shrink-0">{iconRight}</span> : null}
+    </Link>;
   },
 );

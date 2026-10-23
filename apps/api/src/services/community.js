@@ -16,6 +16,7 @@ const {
   matchupFromRaces,
 } = require("./communityBuildSnapshot");
 const { communitySitemap } = require("./communitySitemap");
+const { communityListFilter } = require("./communityListFilters");
 const {
   DETECTOR_OPP_SLUG_EXPR,
   DETECTOR_SLUG_EXPR,
@@ -986,30 +987,26 @@ class CommunityService {
    *
    * @param {{
    *   matchup?: string,
+   *   race?: string,
+   *   vsRace?: string,
+   *   skill?: string,
    *   limit?: number,
    *   offset?: number,
-   *   sort?: 'top' | 'new' | 'controversial',
+   *   sort?: 'top' | 'new' | 'controversial' | 'updated',
    *   search?: string,
    * }} opts
    */
   async listPublic(opts = {}) {
-    const filter = /** @type {Record<string, any>} */ ({ removed: false });
-    if (opts.matchup) filter.matchup = opts.matchup;
-    if (opts.search) {
-      const escaped = String(opts.search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const re = new RegExp(escaped, "i");
-      filter.$or = [
-        { title: re },
-        { description: re },
-        { authorName: re },
-      ];
-    }
+    const filter = communityListFilter(opts);
     const limit = Math.min(opts.limit || 30, 100);
     const offset = Math.max(0, Number(opts.offset) || 0);
     const sortKey = opts.sort || "top";
     /** @type {Record<string, 1 | -1>} */
     let sort;
     switch (sortKey) {
+      case "updated":
+        sort = { updatedAt: -1, publishedAt: -1 };
+        break;
       case "new":
         sort = { publishedAt: -1, votes: -1 };
         break;

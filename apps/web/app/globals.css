@@ -241,6 +241,11 @@ h4 {
  * docs/design-system.md.
  * ============================================================ */
 @layer base {
+  :where(input[type=search])::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
   a {
     color: rgb(var(--accent));
   }

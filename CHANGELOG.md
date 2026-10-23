@@ -57,6 +57,8 @@ corresponding GitHub Release.
 
 - Review comments save browser drafts, guard discarded text and support Ctrl/Cmd+Enter; edit mode validates text and explains its 15-minute window. Request time ranges have phone-safe inputs, presets and clock suggestions. Share, report, block, delete and close actions use accessible menus and explicit confirmations.
 
+- Community browsing filters by your race, opponent race and skill level, with Recently updated sorting and shareable filter chips. Search follows Back/Forward without losing typing focus, results show loading feedback, and pagination distinguishes disabled ends from stale page links.
+
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.

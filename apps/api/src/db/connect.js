@@ -598,6 +598,9 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.communityBuilds.createIndex({ ownerUserId: 1, slug: 1 });
   await ctx.communityBuilds.createIndex({ removed: 1, votes: -1 });
   await ctx.communityBuilds.createIndex({ matchup: 1, removed: 1, votes: -1 });
+  await ctx.communityBuilds.createIndex({ removed: 1, "build.race": 1, "build.vsRace": 1, votes: -1 });
+  await ctx.communityBuilds.createIndex({ removed: 1, "build.skillLevel": 1, votes: -1 });
+  await ctx.communityBuilds.createIndex({ removed: 1, updatedAt: -1 });
 
   await ctx.communityReports.createIndex({ targetType: 1, targetId: 1 });
   await ctx.communityReports.createIndex({ targetType: 1, targetId: 1, resolvedAt: -1 });

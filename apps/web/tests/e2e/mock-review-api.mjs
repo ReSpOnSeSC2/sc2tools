@@ -15,6 +15,7 @@
 
 import http from "node:http";
 import { GUIDE_ROUTES } from "./mock-guides-api.mjs";
+import { communityFixture } from "./mock-community-api.mjs";
 
 const PORT = Number(process.env.MOCK_API_PORT || 8080);
 const ID = "e2eReviewFixture";
@@ -166,6 +167,12 @@ const server = http.createServer((req, res) => {
   if (req.method === "GET" && ROUTES.has(path)) {
     res.writeHead(200, { ...cors, "content-type": "application/json", "cache-control": "no-store" });
     res.end(JSON.stringify(ROUTES.get(path)));
+    return;
+  }
+  const community = req.method === "GET" ? communityFixture(new URL(req.url || "/", "http://fixture.local")) : null;
+  if (community) {
+    res.writeHead(200, { ...cors, "content-type": "application/json", "cache-control": "no-store" });
+    res.end(JSON.stringify(community));
     return;
   }
   if (req.method === "GET" && path.startsWith("/v1/reviews/")) {
