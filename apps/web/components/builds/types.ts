@@ -8,7 +8,7 @@
  * without bumping the schema validator.
  */
 import type { BuildSignatureItem } from "@/lib/build-events";
-import type { BuildRule } from "@/lib/build-rules";
+import type { BuildRule, SkillLevelId } from "@/lib/build-rules";
 import type { Race, VsRace } from "@/lib/race";
 
 export type {
@@ -27,6 +27,10 @@ export interface CustomBuild {
   vsRace?: VsRace;
   description?: string;
   notes?: string;
+  skillLevel?: SkillLevelId | null;
+  winConditions?: string[];
+  losesTo?: string[];
+  transitionsInto?: string[];
   isPublic?: boolean;
   /** Owner-only name mirrored from the Community publication. */
   communityAuthorName?: string;

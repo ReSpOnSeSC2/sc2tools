@@ -18,6 +18,11 @@ corresponding GitHub Release.
 - Desktop sync retains temporary failures with a retry countdown instead of
   repeating error rows; final replay outcomes have readable details and help.
 
+### Build editor safety
+
+- Both build editors ask before discarding unsaved work. Save failures keep their complete message visible, and editor notifications use the shared toast layer.
+- The rich editor includes private notes, preserves notes and legacy signatures during metadata edits, and opens from every Edit action. Dossiers show authored rules, strategy notes and skill level beside personal notes.
+
 ### Resumable setup
 
 - Setup remembers its step in the URL, recognizes paired PCs and existing games, and keeps browser import on its own Back path. Completed steps can be revisited.

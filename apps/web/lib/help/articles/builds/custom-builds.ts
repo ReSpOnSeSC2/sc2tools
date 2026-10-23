@@ -62,6 +62,11 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "**Save build** keeps your changes. **Save & re-match** also checks your past games against the new rules for that build, so its record includes matching replays.",
     },
+    { type: "heading", text: "Private notes vs public description", anchor: "private-notes" },
+    { type: "paragraph", text: "Use **Edit** on any build to change its rules and metadata in the rich editor. **Personal notes (private)** are only for you: scouting tells, timings to remember and reminders. They are never published. The **Description** can appear on your Community listing. The notes link in a dossier opens the editor directly at your notes." },
+    { type: "paragraph", text: "Closing either editor with unsaved changes asks first. **Keep editing** returns to your draft; **Discard** closes it. Saving keeps your changes, and a failed save leaves the draft available to fix or retry." },
+    { type: "heading", text: "Strategy notes and skill level", anchor: "strategy-notes" },
+    { type: "paragraph", text: "The **Build definition** card beside Personal notes shows your match rules, **Wins by**, **Loses to**, **Transitions into** and **Skill level**. Empty rows stay hidden. Its pencil opens the editor. Older signature builds keep matching by their signature until you add rules from their timeline." },
     { type: "heading", text: "Re-match replays" },
     {
       type: "paragraph",

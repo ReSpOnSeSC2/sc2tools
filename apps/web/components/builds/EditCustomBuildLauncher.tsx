@@ -30,12 +30,14 @@ export interface EditCustomBuildLauncherProps {
   build: CustomBuild | null;
   onClose: () => void;
   onSaved: (saved: CustomBuild, result: BuildEditorSaveResult) => void;
+  initialFocus?: "notes" | "preview";
 }
 
 interface SavedBuildDoc extends Record<string, unknown> {
   slug: string;
   name?: string;
   description?: string;
+  notes?: string;
   race?: string;
   vsRace?: string;
   skillLevel?: string | null;
@@ -104,6 +106,7 @@ function toInitialDraft(
   return {
     name: typeof doc.name === "string" ? doc.name : "",
     description: typeof doc.description === "string" ? doc.description : "",
+    notes: typeof doc.notes === "string" ? doc.notes : "",
     race: coerceRace(doc.race),
     vsRace: coerceVsRace(doc.vsRace),
     skillLevel: coerceSkillLevel(doc.skillLevel),
@@ -198,6 +201,7 @@ export function EditCustomBuildLauncher({
   build,
   onClose,
   onSaved,
+  initialFocus,
 }: EditCustomBuildLauncherProps) {
   const { getToken } = useAuth();
   const [doc, setDoc] = useState<SavedBuildDoc | null>(null);
@@ -294,6 +298,8 @@ export function EditCustomBuildLauncher({
       onClose={onClose}
       mode="edit"
       lockedSlug={doc.slug}
+      initialFocus={initialFocus}
+      legacySignature={!doc.rules?.length && !!doc.signature?.length}
       events={events}
       gameId={initialDraft.sourceReplayId}
       race={initialDraft.race ?? "Protoss"}
@@ -309,6 +315,12 @@ export function EditCustomBuildLauncher({
           race: draft.race,
           vsRace: draft.vsRace,
           description: draft.description || undefined,
+          notes: draft.notes.trim(),
+          rules: draft.rules,
+          skillLevel: draft.skillLevel,
+          winConditions: draft.winConditions,
+          losesTo: draft.losesTo,
+          transitionsInto: draft.transitionsInto,
           isPublic: result.communityError
             ? (result.communityPublished ?? publication.published)
             : draft.shareWithCommunity,

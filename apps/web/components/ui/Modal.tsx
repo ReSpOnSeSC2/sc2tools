@@ -7,6 +7,7 @@ import {
   useRef,
   type HTMLAttributes,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
@@ -60,6 +61,8 @@ export interface ModalProps {
   hideClose?: boolean;
   /** Disable scrim-click dismissal — useful for in-progress flows. */
   disableScrimClose?: boolean;
+  /** Focus a specific control when opening; otherwise use the first control. */
+  initialFocusRef?: RefObject<HTMLElement | null>;
   children: ReactNode;
   footer?: ReactNode;
 }
@@ -74,6 +77,7 @@ export function Modal({
   desktopLayout = "center",
   hideClose = false,
   disableScrimClose = false,
+  initialFocusRef,
   children,
   footer,
 }: ModalProps) {
@@ -108,7 +112,7 @@ export function Modal({
     // by adding autoFocus on a child element.
     const initFocus = window.setTimeout(() => {
       const focusables = focusableInside(dialogRef.current);
-      (focusables[0] ?? dialogRef.current)?.focus();
+      (initialFocusRef?.current ?? focusables[0] ?? dialogRef.current)?.focus();
     }, 0);
 
     return () => {
@@ -120,7 +124,7 @@ export function Modal({
         prev.focus();
       }
     };
-  }, [open]);
+  }, [open, initialFocusRef]);
 
   if (!open) return null;
   if (typeof window === "undefined") return null;

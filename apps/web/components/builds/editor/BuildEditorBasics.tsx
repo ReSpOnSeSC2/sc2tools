@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { Field } from "@/components/ui/Field";
 import { Input } from "@/components/ui/Input";
@@ -9,6 +9,7 @@ import { Toggle } from "@/components/ui/Toggle";
 import { Icon } from "@/components/ui/Icon";
 import {
   DESC_MAX_CHARS,
+  BUILD_NOTES_MAX_CHARS,
   NAME_MAX_CHARS,
   RACE_OPTIONS,
   SKILL_LEVELS,
@@ -33,10 +34,13 @@ export function BuildEditorBasics({
   draft,
   setDraft,
   errors,
+  notesRef,
+  onAuthorDefault,
   lockedMatchup,
 }: BuildEditorBasicsProps) {
   const [showStrategyNotes, setShowStrategyNotes] = useState(false);
   const profileDisplayName = useMyDisplayName();
+  const notesId = useId();
   // A locked matchup keeps the build on the source game: its own race
   // can't change and the opponent race is that game's or Any.
   const vsRaceOptions: ReadonlyArray<VsRaceLite> = lockedMatchup
@@ -45,11 +49,12 @@ export function BuildEditorBasics({
 
   useEffect(() => {
     if (!profileDisplayName) return;
+    if (onAuthorDefault) { onAuthorDefault(profileDisplayName); return; }
     setDraft((current) => {
       if (current.communityAuthorName) return current;
       return { ...current, communityAuthorName: profileDisplayName.slice(0, 80) };
     });
-  }, [profileDisplayName, setDraft]);
+  }, [profileDisplayName, setDraft, onAuthorDefault]);
 
   return (
     <section aria-label="Basics" className="space-y-2.5">
@@ -138,6 +143,13 @@ export function BuildEditorBasics({
           }
           placeholder="What this build is for, when to use it, key timings…"
         />
+      </Field>
+
+      <Field label="Personal notes (private)" htmlFor={notesId} hint="Only you see these: scouting tells, timings to remember, reminders.">
+        <textarea id={notesId} ref={notesRef} rows={3} maxLength={BUILD_NOTES_MAX_CHARS}
+          value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
+          className="block w-full resize-y rounded-lg border border-border bg-bg-elevated px-3 py-2 text-body text-text focus:border-accent-cyan focus:outline-none focus:ring-1 focus:ring-accent-cyan" />
+        {draft.notes.length >= 7000 ? <p role="status" aria-label="Personal notes character count" className="mt-1 text-micro tabular-nums text-text-muted">{draft.notes.length}/{BUILD_NOTES_MAX_CHARS}</p> : null}
       </Field>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">

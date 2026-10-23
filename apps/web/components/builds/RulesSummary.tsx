@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { Ban, CircleCheck, Gauge, type LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -19,6 +19,8 @@ export interface RulesSummaryProps {
   rules: ReadonlyArray<BuildRule>;
   /** Card heading. Both build pages use "Build order". */
   title?: string;
+  actions?: ReactNode;
+  children?: ReactNode;
 }
 
 interface GroupCopy {
@@ -58,7 +60,7 @@ const GROUP_COPY: Record<RuleSummaryGroup, GroupCopy> = {
  * proxied buildings. Shared by the community build page and the private
  * build page. No hooks beyond useId, so it renders on the server too.
  */
-export function RulesSummary({ rules, title = "Build order" }: RulesSummaryProps) {
+export function RulesSummary({ rules, title = "Build order", actions, children }: RulesSummaryProps) {
   const headingId = useId();
   if (rules.length === 0) return null;
   const groups = groupRulesForSummary(rules);
@@ -76,6 +78,7 @@ export function RulesSummary({ rules, title = "Build order" }: RulesSummaryProps
           <span className="text-caption text-text-dim">
             {counted} rule{counted === 1 ? "" : "s"}
           </span>
+          {actions ? <div className="ml-auto">{actions}</div> : null}
         </header>
         <div className="space-y-5 px-4 py-4">
           <p className="text-caption text-text-muted">
@@ -87,6 +90,7 @@ export function RulesSummary({ rules, title = "Build order" }: RulesSummaryProps
             ) : null,
           )}
           <RulesLegend withHelpLink />
+          {children}
         </div>
       </section>
     </Card>

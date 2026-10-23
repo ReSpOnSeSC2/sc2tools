@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import {
   deriveDefaultName,
   eventsToSourceRows,
@@ -11,7 +11,8 @@ import {
 import type { BuildEditorSaveResult } from "./BuildEditor.types";
 import type { BuildOrderEvent } from "@/lib/build-events";
 import { Modal } from "@/components/ui/Modal";
-import { useToast } from "@/components/ui/Toast";
+import { useToastOptional } from "@/components/ui/Toast";
+import { useBuildEditorCloseGuard } from "./useBuildEditorCloseGuard";
 import { useBuildEditorState } from "./useBuildEditorState";
 import { BuildEditorBasics } from "./BuildEditorBasics";
 import { BuildEditorRules } from "./BuildEditorRules";
@@ -72,6 +73,8 @@ export interface BuildEditorModalProps {
    * the editor shows that as a name error. Ignored with `lockedSlug`.
    */
   createOnly?: boolean;
+  initialFocus?: "notes" | "preview";
+  legacySignature?: boolean;
 }
 
 /**
@@ -103,8 +106,12 @@ export function BuildEditorModal({
   demoMode = false,
   lockMatchup = false,
   createOnly = false,
+  initialFocus,
+  legacySignature = false,
 }: BuildEditorModalProps) {
-  const { toast } = useToast();
+  const toast = useToastOptional()?.toast;
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const previewRef = useRef<HTMLElement>(null);
   const sourceRows = useMemo(() => eventsToSourceRows(events), [events]);
   // Edit mode rebuilds the timeline from the saved rules' deadlines
   // (EditCustomBuildLauncher.docToEvents), so two rows of a token are two
@@ -127,6 +134,7 @@ export function BuildEditorModal({
     () => ({
       name: initialDraft?.name ?? computedDefaultName,
       description: initialDraft?.description ?? "",
+      notes: initialDraft?.notes ?? "",
       race: initialDraft?.race ?? race,
       vsRace: initialDraft?.vsRace ?? vsRace,
       skillLevel: initialDraft?.skillLevel ?? null,
@@ -174,28 +182,28 @@ export function BuildEditorModal({
     },
     onSaved: (slug, draft, result) => {
       if (result.reclassifyError) {
-        toast.error("Build saved, but replay matching couldn't start", {
+        toast?.error("Build saved, but replay matching couldn't start", {
           description: friendlyReclassifyError(result.reclassifyError),
         });
       }
       if (result.communityError) {
         if (result.communityPublished === false && !draft.shareWithCommunity) {
-          toast.warning("Build saved; Community listing was removed", {
+          toast?.warning("Build saved; Community listing was removed", {
             description:
               "Current Community visibility was verified even though the original confirmation was interrupted.",
           });
         } else if (result.communityPublished === true && draft.shareWithCommunity) {
-          toast.warning("Build saved; Community listing remains public", {
+          toast?.warning("Build saved; Community listing remains public", {
             description:
               "Its visibility was verified, but the listing update was not fully confirmed. Review it before retrying.",
           });
         } else if (!draft.shareWithCommunity) {
-          toast.error("Build saved; Community listing is still public", {
+          toast?.error("Build saved; Community listing is still public", {
             description:
               "Removal failed, so the existing listing remains visible. Try again.",
           });
         } else {
-          toast.error("Build saved; Community listing wasn't updated", {
+          toast?.error("Build saved; Community listing wasn't updated", {
             description:
               result.communityError === "public_author_name_required"
                 ? "Add a profile or community name, or explicitly choose Post anonymously, then save again."
@@ -204,23 +212,26 @@ export function BuildEditorModal({
         }
       }
       if (result.communityMirrorPending) {
-        toast.warning("Community change is live; library badge is syncing", {
+        toast?.warning("Community change is live; library badge is syncing", {
           description:
             "The public listing already has the requested state. Reopen the editor to retry the library badge sync.",
         });
       }
       onSaved?.(slug, draft, result);
-      // Auto-close shortly after a successful save so the user sees
-      // the toast confirm before the modal disappears.
-      window.setTimeout(() => onClose(), 700);
+      // Global notifications survive the editor. Close this instance now;
+      // a stale delayed callback could discard a newly opened editor.
+      onClose();
     },
   });
+
+  const guard = useBuildEditorCloseGuard({ open, dirty: !demoMode && editor.isDirty, saving: editor.saving, name: editor.draft.name, onClose });
 
   return (
     <>
       <Modal
         open={open}
-        onClose={editor.saving ? () => undefined : onClose}
+        onClose={guard.requestClose}
+        initialFocusRef={initialFocus === "notes" ? notesRef : initialFocus === "preview" ? previewRef : undefined}
         title={
           <span className="flex items-center gap-2">
             <span className="text-micro font-semibold uppercase tracking-wider text-text-muted">
@@ -255,7 +266,7 @@ export function BuildEditorModal({
             ruleCount={editor.draft.rules.length}
             saving={editor.saving}
             saveError={editor.saveError}
-            onCancel={onClose}
+            onCancel={guard.requestClose}
             onSave={editor.save}
             mode={mode}
             demoMode={demoMode}
@@ -269,14 +280,18 @@ export function BuildEditorModal({
           }}
           className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-5"
         >
+          <fieldset disabled={editor.saving || editor.savedOk} className="contents">
           <div className="flex min-w-0 flex-col gap-4">
             <BuildEditorBasics
               draft={editor.draft}
               setDraft={editor.setDraft}
               errors={editor.errors}
               lockedMatchup={lockedMatchup}
+              notesRef={notesRef}
+              onAuthorDefault={editor.seedAuthorName}
             />
             <BuildEditorPreview
+              focusRef={previewRef}
               preview={editor.preview}
               loading={editor.previewLoading}
               error={editor.previewError}
@@ -296,6 +311,7 @@ export function BuildEditorModal({
             />
           </div>
           <div className="min-w-0">
+            {legacySignature && editor.draft.rules.length === 0 ? <p role="note" className="mb-4 rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 p-3 text-caption text-text-muted">This build uses the older signature format. Click a timeline row to turn it into a rule. Until you add one, it keeps matching by its signature.</p> : null}
             <BuildEditorRules
               draft={editor.draft}
               errors={editor.errors}
@@ -309,9 +325,11 @@ export function BuildEditorModal({
               addCustomRule={editor.addCustomRule}
             />
           </div>
+          </fieldset>
         </form>
       </Modal>
-      <BuildEditorToasts toasts={editor.toasts} dismiss={editor.dismissToast} />
+      {guard.confirmation}
+      {!toast ? <BuildEditorToasts toasts={editor.toasts} dismiss={editor.dismissToast} /> : null}
     </>
   );
 }

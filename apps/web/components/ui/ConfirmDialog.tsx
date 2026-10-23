@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { Modal } from "./Modal";
 import { Button } from "./Button";
 
@@ -16,6 +16,8 @@ export interface ConfirmDialogProps {
   intent?: "primary" | "danger";
   loading?: boolean;
   children?: ReactNode;
+  /** Prefer the safe action when this dialog guards unsaved work. */
+  focusCancel?: boolean;
 }
 
 /**
@@ -33,7 +35,9 @@ export function ConfirmDialog({
   intent = "primary",
   loading = false,
   children,
+  focusCancel = false,
 }: ConfirmDialogProps) {
+  const cancelRef = useRef<HTMLButtonElement>(null);
   return (
     <Modal
       open={open}
@@ -41,9 +45,10 @@ export function ConfirmDialog({
       title={title}
       description={description}
       size="sm"
+      initialFocusRef={focusCancel ? cancelRef : undefined}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
+          <Button ref={cancelRef} variant="secondary" onClick={onClose} disabled={loading}>
             {cancelLabel}
           </Button>
           <Button
