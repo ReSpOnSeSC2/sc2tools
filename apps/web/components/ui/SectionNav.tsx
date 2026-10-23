@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 
 export interface SectionNavItem { id: string; label: string }
-export interface SectionNavProps { items: readonly SectionNavItem[]; "aria-label"?: string }
+export interface SectionNavProps { items: readonly SectionNavItem[]; "aria-label"?: string; variant?: "rail" | "bar" }
 
 /** Scroll-spy links shared by long reading surfaces. Native hashes work without JS. */
-export function SectionNav({ items, "aria-label": label = "On this page" }: SectionNavProps) {
+export function SectionNav({ items, "aria-label": label = "On this page", variant = "rail" }: SectionNavProps) {
   const [active, setActive] = useState(items[0]?.id ?? "");
   const [edges, setEdges] = useState({ left: false, right: false });
   const scroller = useRef<HTMLDivElement>(null);
@@ -40,17 +40,17 @@ export function SectionNav({ items, "aria-label": label = "On this page" }: Sect
   }, [encodedItems]);
   useEffect(() => {
     const el = scroller.current;
-    if (el && el.getBoundingClientRect().top < window.innerHeight) el.querySelector<HTMLElement>('[aria-current="location"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    if (el && el.getBoundingClientRect().top < window.innerHeight) el.querySelector<HTMLElement>('[aria-current]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [active]);
-  return <nav aria-label={label} className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 min-w-0 self-start border-y border-border bg-bg/95 py-0.5 supports-[backdrop-filter]:backdrop-blur-sm sm:top-[calc(4rem+env(safe-area-inset-top))] lg:col-start-2 lg:row-start-1 lg:top-24 lg:border-0 lg:bg-transparent print:hidden">
-    <h2 className="sr-only mb-2 text-caption font-semibold lg:not-sr-only">{label}</h2>
-    <div className="relative"><div ref={scroller} onScroll={measure} className="flex gap-2 overflow-x-auto lg:block lg:space-y-1 lg:overflow-visible">
-      {items.map((item) => <a key={item.id} href={`#${item.id}`} aria-current={active === item.id ? "location" : undefined} onClick={(event) => {
+  return <nav aria-label={label} className={`sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 min-w-0 self-start border-y border-border bg-bg/95 py-0.5 supports-[backdrop-filter]:backdrop-blur-sm sm:top-[calc(4rem+env(safe-area-inset-top))] print:hidden ${variant === "rail" ? "lg:col-start-2 lg:row-start-1 lg:top-24 lg:border-0 lg:bg-transparent" : ""}`}>
+    <h2 className={`sr-only mb-2 text-caption font-semibold ${variant === "rail" ? "lg:not-sr-only" : ""}`}>{label}</h2>
+    <div className="relative"><div ref={scroller} onScroll={measure} className={`flex gap-2 overflow-x-auto ${variant === "rail" ? "lg:block lg:space-y-1 lg:overflow-visible" : ""}`}>
+      {items.map((item) => <a key={item.id} href={`#${item.id}`} aria-current={active === item.id ? variant === "bar" ? "true" : "location" : undefined} onClick={(event) => {
         const target = document.getElementById(item.id); if (!target || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
         event.preventDefault(); setActive(item.id);
         target.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
         const url = new URL(window.location.href); url.hash = item.id; window.history.replaceState(window.history.state, "", url);
-      }} className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-3 py-2 text-caption font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:flex lg:rounded-md ${active === item.id ? "border-accent/40 bg-accent/10 text-accent" : "border-border text-text-muted hover:text-text lg:border-transparent"}`}>{item.label}</a>)}
-    </div>{edges.left ? <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-5 bg-gradient-to-r from-bg to-transparent lg:hidden" /> : null}{edges.right ? <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-5 bg-gradient-to-l from-bg to-transparent lg:hidden" /> : null}</div>
+      }} className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-3 py-2 text-caption font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${variant === "rail" ? "lg:flex lg:rounded-md" : ""} ${active === item.id ? "border-accent/40 bg-accent/10 text-accent" : `border-border text-text-muted hover:text-text ${variant === "rail" ? "lg:border-transparent" : ""}`}`}>{item.label}</a>)}
+    </div>{edges.left ? <span aria-hidden className={`pointer-events-none absolute inset-y-0 left-0 w-5 bg-gradient-to-r from-bg to-transparent ${variant === "rail" ? "lg:hidden" : ""}`} /> : null}{edges.right ? <span aria-hidden className={`pointer-events-none absolute inset-y-0 right-0 w-5 bg-gradient-to-l from-bg to-transparent ${variant === "rail" ? "lg:hidden" : ""}`} /> : null}</div>
   </nav>;
 }

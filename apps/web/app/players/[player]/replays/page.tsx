@@ -3,11 +3,11 @@ import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import { PublicReplayLibrary } from "@/components/public-profile/PublicReplayLibrary";
 import { archiveFilterLabels, archiveHref, parseArchiveQuery, type PublicReplayQuery } from "@/components/public-profile/archiveQuery";
+import { archiveRequestQuery } from "@/components/public-profile/archiveRequest";
 import { PublicUnavailable } from "@/components/public-profile/PublicUnavailable";
 import type { ReplayLibraryResponse } from "@/components/analyzer/replays/types";
 import { getJsonWithStatus } from "@/lib/serverApi";
 import { siteTitle } from "@/lib/siteTitle";
-import { currentSeasonPresetId, resolvePreset } from "@/lib/datePresets";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -20,27 +20,9 @@ interface PageProps {
 const fetchReplays = cache((player: string, queryKey: string) =>
   getJsonWithStatus<ReplayLibraryResponse>(`/v1/public/replays/${encodeURIComponent(player)}?${queryKey}`),
 );
-const requestTime = cache(() => new Date());
-
-function queryKey(query: PublicReplayQuery): string {
-  const params = new URLSearchParams({ limit: "25", sort: query.sort || "date_desc" });
-  if (query.search) params.set("search", query.search);
-  if (query.result) params.set("result", query.result);
-  if (query.matchup) params.set("matchup", query.matchup);
-  if (query.map) params.set("map", query.map);
-  if (query.build) params.set("build", query.build);
-  if (query.range) {
-    const now = requestTime();
-    const range = query.range === "season" ? resolvePreset(currentSeasonPresetId()) : { since: new Date(now.getTime() - (query.range === "7d" ? 7 : 30) * 86_400_000), until: now };
-    if (range.since) params.set("since", range.since.toISOString());
-    if (range.until) params.set("until", range.until.toISOString());
-  }
-  if (query.cursor) params.set("cursor", query.cursor);
-  return params.toString();
-}
 
 async function readArchive(player: string, query: PublicReplayQuery) {
-  const result = await fetchReplays(player, queryKey(query));
+  const result = await fetchReplays(player, archiveRequestQuery(query));
   if (result.status === 400 && query.cursor) {
     // An invalid cursor response cannot carry the canonical handle. The
     // exceptional recovery read asks only for the public profile, never VODs.

@@ -79,4 +79,5 @@ export interface PublicReplayDetailResponse {
   macroBreakdown?: MacroBreakdownData | null;
   buildOrder?: GameBuildOrderResponse | null;
   streams?: GameStreamLink[];
+  neighbors?: { olderGameId: string | null; newerGameId: string | null };
 }

@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Shared game analysis
+
+- Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.
+- Shared analysis has section links, one Watch entry point, seekable macro-leak timestamps and an expandable penalty-ordered leak list. Macro scores share clear colour bands and an out-of-100 label.
+
 ### Shared replay browsing
 
 - Replay archives combine instant search, matchup, result, map and rolling date filters with removable links, a filtered record and directional page navigation. Apply remains available without JavaScript.
