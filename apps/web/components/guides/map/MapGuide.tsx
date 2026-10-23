@@ -1,7 +1,13 @@
 import Link from "next/link";
-import { MapArtwork } from "@/components/maps/MapArtwork";
+import type { ReactNode } from "react";
+import { GuideSectionNav } from "../GuideSectionNav";
+import { GuideStatsLegend } from "../GuideStatsLegend";
+import { MapHeroEnlarge } from "./MapHeroEnlarge";
+import { MapRaceMatrix } from "./MapRaceMatrix";
+import { OtherMaps } from "./OtherMaps";
+import { GUIDE_MATCHUPS } from "@/lib/guides/slugs";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Section } from "@/components/ui/Section";
+import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
 import { GuideCopyText } from "@/components/guides/GuideCopyText";
 import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
@@ -12,19 +18,11 @@ import { breadcrumbJsonLd, type GuideCrumb } from "@/components/guides/guideSeo"
 import {
   GUIDE_LINK_CLASS,
   GUIDE_PANEL_CLASS,
-  GUIDE_TABLE_CLASS,
-  GUIDE_TABLE_WRAP_CLASS,
-  GUIDE_TD_CLASS,
-  GUIDE_TD_NUM_CLASS,
-  GUIDE_TH_CLASS,
-  GUIDE_TH_NUM_CLASS,
-  GUIDE_THEAD_CLASS,
   eraLabel,
-  myRaceWord,
 } from "@/components/guides/guideUi";
 import { fmtCount, fmtGuideDate } from "@/lib/guides/format";
 import { buildMapIntro } from "@/lib/guides/guideCopy";
-import type { GuideMapMatchupRow, GuideMapOpener, GuideMapPayload, GuideMapPublished } from "@/lib/guides/types";
+import type { GuideIndexMap, GuideMapMatchupRow, GuideMapOpener, GuideMapPayload, GuideMapPublished } from "@/lib/guides/types";
 
 /**
  * Body of /guides/maps/[map]: the map artwork, the win rate of each
@@ -40,42 +38,6 @@ export function mapCrumbs(payload: Pick<GuideMapPayload, "map" | "mapSlug">): Gu
     { name: "Maps", path: guidePaths.maps() },
     { name: payload.map, path: guidePaths.map(payload.mapSlug) },
   ];
-}
-
-function MatchupTable({ rows }: { rows: ReadonlyArray<GuideMapMatchupRow> }) {
-  const sorted = [...rows].sort((a, b) => b.games - a.games);
-  return (
-    <div className={GUIDE_TABLE_WRAP_CLASS}>
-      <table className={GUIDE_TABLE_CLASS}>
-        <caption className="sr-only">Win rate by matchup on this map</caption>
-        <thead className={GUIDE_THEAD_CLASS}>
-          <tr>
-            <th scope="col" className={GUIDE_TH_CLASS}>Matchup</th>
-            <th scope="col" className={GUIDE_TH_NUM_CLASS}>Win rate</th>
-            <th scope="col" className={GUIDE_TH_NUM_CLASS}>Games</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {sorted.map((row) => (
-            <tr key={row.matchup}>
-              <th scope="row" className={`${GUIDE_TD_CLASS} text-left font-medium`}>
-                <Link href={guidePaths.matchup(row.slug)} className={GUIDE_LINK_CLASS}>
-                  {row.matchup}
-                </Link>
-                <span className="block text-micro font-normal text-text-dim">
-                  {myRaceWord(row.matchup)}&apos;s side
-                </span>
-              </th>
-              <td className={GUIDE_TD_NUM_CLASS}>
-                <WinRateCell winRate={row.winRate} ci={row.ci} />
-              </td>
-              <td className={GUIDE_TD_NUM_CLASS}>{fmtCount(row.games)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
 }
 
 function OpenerName({
@@ -105,7 +67,7 @@ function BestOpeners({
   rows: ReadonlyArray<GuideMapMatchupRow>;
   publishedPaths: ReadonlySet<string> | null;
 }) {
-  const withOpeners = rows.filter((row) => row.openers.length > 0);
+  const withOpeners = GUIDE_MATCHUPS.flatMap((matchup) => rows.filter((row) => row.matchup === matchup && row.openers.length > 0));
   if (withOpeners.length === 0) return null;
   return (
     <Section id="best-openers" title="Best openers per matchup">
@@ -134,9 +96,13 @@ function BestOpeners({
 function PublishedMap({
   payload,
   publishedPaths,
+  mapIndex,
+  personalSlot,
 }: {
   payload: GuideMapPublished;
   publishedPaths: ReadonlySet<string> | null;
+  mapIndex: readonly GuideIndexMap[] | null;
+  personalSlot?: ReactNode;
 }) {
   return (
     <>
@@ -151,14 +117,21 @@ function PublishedMap({
           ) : null}
           <GuideCopyText lines={buildMapIntro(payload)} />
         </div>
-        <div className="relative aspect-video w-full overflow-hidden rounded-xl border-2 border-line shadow-hard">
-          <MapArtwork mapName={payload.map} size="card" eager alt={`${payload.map} map`} />
-        </div>
+        <MapHeroEnlarge mapName={payload.map} />
       </div>
-      <Section id="matchups" title="Win rate by matchup" description="Share of decided games won by the first-named race in each matchup.">
-        <MatchupTable rows={payload.matchups} />
-      </Section>
-      <BestOpeners rows={payload.matchups} publishedPaths={publishedPaths} />
+      <GuideSectionNav items={[
+        { id: "matchups", label: "Matchups" },
+        ...(payload.matchups.some((row) => row.openers.length) ? [{ id: "best-openers", label: "Best openers" }] : []),
+        ...(mapIndex?.some((map) => map.slug !== payload.mapSlug) ? [{ id: "other-maps", label: "Other maps" }] : []),
+      ]}>
+        <Section id="matchups" title="Win rate by matchup" description="Each cell is the row race's win rate against the column race on this map.">
+          <GuideStatsLegend computedAt={payload.computedAt} />
+          <div className="mt-4"><MapRaceMatrix rows={payload.matchups} /></div>
+        </Section>
+        {personalSlot}
+        <BestOpeners rows={payload.matchups} publishedPaths={publishedPaths} />
+        <OtherMaps current={payload.mapSlug} maps={mapIndex} />
+      </GuideSectionNav>
     </>
   );
 }
@@ -167,9 +140,13 @@ function PublishedMap({
 export function MapGuide({
   payload,
   publishedPaths = null,
+  mapIndex = null,
+  personalSlot,
 }: {
   payload: GuideMapPayload;
   publishedPaths?: ReadonlySet<string> | null;
+  mapIndex?: readonly GuideIndexMap[] | null;
+  personalSlot?: ReactNode;
 }) {
   const crumbs = mapCrumbs(payload);
   return (
@@ -177,7 +154,7 @@ export function MapGuide({
       <GuideJsonLd items={[breadcrumbJsonLd(crumbs)]} />
       <GuideBreadcrumbs crumbs={crumbs} />
       {payload.published ? (
-        <PublishedMap payload={payload} publishedPaths={publishedPaths} />
+        <PublishedMap payload={payload} publishedPaths={publishedPaths} mapIndex={mapIndex} personalSlot={personalSlot} />
       ) : (
         <GuideNotEnoughGames
           eyebrow="Map guide"

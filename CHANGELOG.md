@@ -13,6 +13,12 @@ corresponding GitHub Release.
 
 - Review comments save browser drafts, guard discarded text and support Ctrl/Cmd+Enter; edit mode validates text and explains its 15-minute window. Request time ranges have phone-safe inputs, presets and clock suggestions. Share, report, block, delete and close actions use accessible menus and explicit confirmations.
 
+### Guide reading and map navigation
+
+- Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
+- Win rates include verdict symbols, charts use one keyboard Tab stop with pinnable details, and a shared legend plus Help article explains ranges, publishing floors and trends.
+- The guide hub previews busy map cards and links to all openers and counters. Map guides show a race matrix with honest mirror cells, enlarged artwork and neighboring maps.
+
 ### Analyzer filters and Trends
 
 - Filters have a readable summary, a full phone editor and focused desktop controls. Today explains its scope and remembers whether its editor is open; Arcade keeps its own scope.

@@ -14,6 +14,7 @@ import type { GuideCell, GuideEra, GuideMatchup } from "@/lib/guides/types";
 /** The site's signature card surface. */
 export const GUIDE_PANEL_CLASS =
   "rounded-xl border-2 border-line bg-bg-surface shadow-hard";
+export const GUIDE_SECTION_ANCHOR_CLASS = "scroll-mt-28 lg:scroll-mt-24";
 
 /** Inline text link (accent, underline on hover, visible focus ring). */
 export const GUIDE_LINK_CLASS =
@@ -121,4 +122,11 @@ export function unitDisplayName(unit: string): string {
 
 export function verdictLabel(verdict: GuideVerdict): string {
   return verdict === "win" ? "Your race is favoured" : verdict === "loss" ? "Your race is behind" : "Too close to call";
+}
+
+/** The same non-color reading is used by tables, cards, charts and legends. */
+export function verdictMeta(verdict: GuideVerdict): { glyph: "▲" | "●" | "▼"; short: "ahead" | "even" | "behind"; phrase: string } {
+  if (verdict === "win") return { glyph: "▲", short: "ahead", phrase: "clearly above 50%" };
+  if (verdict === "loss") return { glyph: "▼", short: "behind", phrase: "clearly below 50%" };
+  return { glyph: "●", short: "even", phrase: "too close to call" };
 }
