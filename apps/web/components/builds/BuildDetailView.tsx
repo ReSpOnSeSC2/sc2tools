@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
@@ -22,6 +22,7 @@ import { RequestError } from "@/components/ui/RequestError";
 import { useToast } from "@/components/ui/Toast";
 import { CommunityBuildSignatureTimeline } from "@/components/community/CommunityBuildSignatureTimeline";
 import { apiCall, useApi } from "@/lib/clientApi";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import { coerceSavedRules } from "@/lib/build-rules";
 import {
   coerceRace,
@@ -41,9 +42,14 @@ import type { CustomBuild } from "./types";
 const BACK_LINK_CLASS =
   "inline-flex min-h-[44px] items-center gap-1.5 text-caption font-medium text-text-muted hover:text-text";
 
-/** The tab title once the build has loaded (the server title is generic). */
+/**
+ * The tab title once the build has loaded (the server title is generic),
+ * before the site name the root template adds.
+ *
+ * Example: `buildDocumentTitle("Proxy Gateway")` → "Proxy Gateway · Custom build".
+ */
 export function buildDocumentTitle(name: string): string {
-  return `${name} · Custom build · SC2 Tools`;
+  return `${name} · Custom build`;
 }
 
 export interface BuildDetailViewProps {
@@ -84,10 +90,9 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const [deletePending, setDeletePending] = useState(false);
 
   // The server title is generic (and noindex): build names are private.
+  // "Proxy Gateway · Custom build · SC2 Tools", like every other tab title.
   const loadedName = buildSwr.data?.name?.trim();
-  useEffect(() => {
-    if (loadedName) document.title = buildDocumentTitle(loadedName);
-  }, [loadedName]);
+  useDocumentTitle(loadedName ? buildDocumentTitle(loadedName) : null);
 
   const handleSaved = useCallback(
     async (saved: CustomBuild) => {

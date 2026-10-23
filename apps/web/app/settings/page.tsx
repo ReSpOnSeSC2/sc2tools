@@ -10,7 +10,7 @@ import {
   type SettingsTabId,
 } from "@/components/analyzer/settings/SettingsShell";
 import { SettingsFoundation } from "@/components/analyzer/settings/SettingsFoundation";
-import { HelpLink } from "@/components/help/HelpLink";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { Skeleton } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
@@ -75,12 +75,14 @@ export default function SettingsPage() {
         title="Settings"
         description="Account, overlay tokens, voice notifications, and personal preferences. Edits stay in draft until you save."
         actions={
-          <HelpLink
+          // Lazy: HelpLink carries the help articles, which would otherwise
+          // ride along with the Settings page's first load.
+          <LazyHelpLink
             slug="settings-overview"
             className="inline-flex min-h-11 items-center text-caption font-semibold"
           >
             What each tab is for
-          </HelpLink>
+          </LazyHelpLink>
         }
       />
       {/* useSearchParams needs a Suspense boundary for static rendering. */}

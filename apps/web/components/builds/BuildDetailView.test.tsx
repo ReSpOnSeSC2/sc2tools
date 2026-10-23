@@ -136,7 +136,7 @@ describe("BuildDetailView states", () => {
   it("names the tab after the build once it loads", () => {
     harness.build = RULE_BUILD;
     render(<BuildDetailView slug={RULE_BUILD.slug} />);
-    expect(document.title).toBe(buildDocumentTitle("Proxy Gateway"));
+    expect(buildDocumentTitle("Proxy Gateway")).toBe("Proxy Gateway · Custom build");
     expect(document.title).toBe("Proxy Gateway · Custom build · SC2 Tools");
   });
 
