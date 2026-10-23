@@ -16,6 +16,11 @@ corresponding GitHub Release.
 - Both build editors ask before discarding unsaved work. Save failures keep their complete message visible, and editor notifications use the shared toast layer.
 - The rich editor includes private notes, preserves notes and legacy signatures during metadata edits, and opens from every Edit action. Dossiers show authored rules, strategy notes and skill level beside personal notes.
 
+### Pairing and devices
+
+- Link a PC through one shared form, normalize pasted codes, check the PC details before confirming, and watch for its first connection. Prefilled codes never submit automatically.
+- Devices show online/offline and update status, support optional labels, and confirm before unpairing. Pairing failures explain expired or already-used codes and preserve the entered code.
+
 ### Removed
 
 - Retired the unused server model-training and prediction endpoints. Replay analysis continues to use fixed rules and statistics; the API image now installs only its server analysis dependencies.
