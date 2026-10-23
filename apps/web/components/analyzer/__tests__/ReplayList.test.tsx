@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import type { ReplayLibraryItem } from "../replays/types";
 import { ReplayList } from "../replays/ReplayList";
 
-const { downloadMock, macroPanelMock, publicDownloadMock, askMock } = vi.hoisted(() => ({
+const { downloadMock, publicDownloadMock, askMock } = vi.hoisted(() => ({
   downloadMock: vi.fn(),
-  macroPanelMock: vi.fn(),
   publicDownloadMock: vi.fn(),
   askMock: vi.fn(),
 }));
@@ -61,23 +60,6 @@ vi.mock("@/components/public-profile/PublicReplayDownloadButton", () => ({
   },
 }));
 
-vi.mock("@/components/analyzer/macro/MacroBreakdownPanel", () => ({
-  MacroBreakdownPanel: (props: {
-    gameId: string;
-    initialScore?: number | null;
-    headerMeta?: { playerName?: string; opponentName?: string | null };
-    onClose: () => void;
-  }) => {
-    macroPanelMock(props);
-    return (
-      <div role="dialog" aria-label="Macro breakdown" data-game-id={props.gameId}>
-        Macro breakdown for {props.headerMeta?.opponentName}
-        <button type="button" onClick={props.onClose}>Close macro</button>
-      </div>
-    );
-  },
-}));
-
 vi.mock("@/components/maps/MapArtwork", () => ({
   MapLabel: ({ name }: { name: string }) => <span data-testid="map-label">{name}</span>,
 }));
@@ -122,7 +104,6 @@ afterEach(() => {
   auth.isLoaded = true; auth.isSignedIn = false;
   cleanup();
   downloadMock.mockClear();
-  macroPanelMock.mockClear();
   publicDownloadMock.mockClear();
   askMock.mockClear();
 });
@@ -175,22 +156,12 @@ describe("ReplayList", () => {
       sizeBytes: 1_572_864,
     }));
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open macro breakdown for Rival" }),
+    const macroLinks = screen.getAllByRole("link", { name: /Open macro breakdown for Rival/ });
+    expect(macroLinks).toHaveLength(2);
+    expect(macroLinks.map((link) => link.getAttribute("href"))).toEqual(
+      Array(2).fill("/app/game/game%2F42#macro"),
     );
-    expect(screen.getByRole("dialog", { name: "Macro breakdown" }).getAttribute("data-game-id")).toBe("game/42");
-    expect(macroPanelMock).toHaveBeenLastCalledWith(expect.objectContaining({
-      gameId: "game/42",
-      initialScore: 78.6,
-      headerMeta: expect.objectContaining({
-        playerName: "Reaver",
-        opponentName: "Rival",
-        // The row's client version picks the panel's patch era.
-        dateIso: "2026-08-28T21:04:00.000Z",
-        gameVersion: "5.0.17.98100",
-        gameBuild: 98_100,
-      }),
-    }));
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("uses protected analysis URLs and delegates downloads to the public share-scoped control", () => {
@@ -332,9 +303,8 @@ describe("ReplayList", () => {
     expect(asks).toHaveLength(2);
     expect(asks.map((b) => b.textContent)).toEqual(["Review", "Ask for review"]);
     expect(askMock).toHaveBeenCalledWith(expect.objectContaining({ gameId: "game/42", matchup: "PvT", durationSec: 845 }));
-    // The macro breakdown opened from a 1v1 row offers it too.
-    fireEvent.click(screen.getAllByRole("button", { name: /Open macro breakdown for/i })[0]);
-    expect(macroPanelMock).toHaveBeenLastCalledWith(expect.objectContaining({ reviewable: true }));
+    // Macro navigation opens the same owner workspace, where review remains available.
+    expect(screen.getAllByRole("link", { name: /Open macro breakdown for/i })[0].getAttribute("href")).toContain("#macro");
     unmount();
 
     askMock.mockClear();

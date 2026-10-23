@@ -87,6 +87,10 @@ export function ReplayStage({
   maxHeightPx,
   initialTimeSec,
   onPlaybackTimeChange,
+  onPlaybackStateChange,
+  onStageSeek,
+  clockLink,
+  upgrades,
   playbackWindow,
   buffering = false,
   seekRequest,
@@ -129,6 +133,10 @@ export function ReplayStage({
   /** Applied on mount; the host keys each game/timestamp navigation. */
   initialTimeSec?: number | null;
   onPlaybackTimeChange?: (time: number) => void;
+  onPlaybackStateChange?: (playing: boolean, time: number) => void;
+  onStageSeek?: (time: number) => void;
+  clockLink?: import("react").ReactNode;
+  upgrades?: Record<ReplaySide, readonly { time: number; name: string }[]>;
   playbackWindow?: { start: number; end: number };
   buffering?: boolean;
   /* ── Review-page hooks (all optional; the game page passes none) ──
@@ -154,6 +162,8 @@ export function ReplayStage({
 
   const [time, setTime] = useState(() => clampReplayTime(initialTimeSec, playback.gameLength) ?? 0);
   const [playing, setPlaying] = useState(false);
+  const currentTime = useRef(time); currentTime.current = time;
+  useEffect(() => { onPlaybackStateChange?.(playing, currentTime.current); }, [playing, onPlaybackStateChange]);
   const [speed, setSpeed] = useState<ReplaySpeed>(8);
 
   const [showProduction, setShowProduction] = useState(defaultShowProduction);
@@ -197,6 +207,7 @@ export function ReplayStage({
     [setMusicPlaying],
   );
   const onSpeedChange = useCallback((next: ReplaySpeed) => setSpeed(next), []);
+  const onUserSeek = useCallback((next: number) => { seek(next); onPlayingChange(false); onStageSeek?.(next); }, [seek, onPlayingChange, onStageSeek]);
 
   // External seek-and-pause. Keyed on ``seq`` so asking for the same
   // moment twice (clicking one time chip again after scrubbing away)
@@ -227,6 +238,7 @@ export function ReplayStage({
          bare, chrome-less map. Absent (compact host, bare replayer) the
          replayer falls back to its own root. */
       data-replay-stage=""
+      tabIndex={-1}
       /* Stable label: hosts and their tests have keyed off
          ``aria-label="Map replay"`` since the replayer shipped. The map
          name is in the top bar. */
@@ -240,7 +252,7 @@ export function ReplayStage({
          tokens against ``STAGE_BG`` so the panels are legible whatever
          theme the page is in; ``:fullscreen`` (globals.css) releases
          the height cap. */
-      className={`${REPLAY_SCOPE_CLASS} flex flex-col overflow-clip rounded-xl border border-border xl:h-[min(88vh,1040px)] xl:min-h-[34rem]`}
+      className={`${REPLAY_SCOPE_CLASS} flex flex-col overflow-clip rounded-xl border border-border data-[clock-seek]:ring-2 data-[clock-seek]:ring-accent xl:h-[min(88vh,1040px)] xl:min-h-[34rem]`}
       style={{
         background: STAGE_BG,
         ...(maxHeightPx ? { height: `${maxHeightPx}px` } : null),
@@ -250,6 +262,7 @@ export function ReplayStage({
         t={time}
         gameLength={model.gameLength}
         hud={hud}
+        upgrades={upgrades ? { me: upgrades.me.filter((row) => row.time <= time), opp: upgrades.opp.filter((row) => row.time <= time) } : undefined}
         mapName={playback.mapName}
         myName={myName}
         oppName={oppName}
@@ -311,7 +324,7 @@ export function ReplayStage({
             onShowWorkersChange={setShowWorkers}
             autoScroll={autoScroll}
             onAutoScrollChange={setAutoScroll}
-            onSeek={seek}
+            onSeek={onUserSeek}
             buildName={buildName}
             buildMatchPct={buildMatchPct}
             myName={myName}
@@ -331,12 +344,13 @@ export function ReplayStage({
         phases={model.phases}
         commentMarkers={commentMarkers}
         onCommentMarker={onCommentMarker}
-        onSeek={seek}
+        onSeek={onUserSeek}
         onPlayingChange={onPlayingChange}
         onSpeedChange={onSpeedChange}
         music={music}
       >
         <ReplaySettings
+          footer={clockLink}
           showProductionRail={showProduction}
           onShowProductionRail={setShowProduction}
           showBuildOrderRail={showBuildOrder}
@@ -367,7 +381,7 @@ export function ReplayStage({
             {panelTab === "production" ? <ProductionRail model={model} playback={playback} side={productionSide} t={time}
               tab={productionTab} onTabChange={setProductionTab} onSideChange={setProductionSide} myName={myName} oppName={oppName} />
             : <BuildOrderRail model={model} t={time} filter={buildFilter} onFilterChange={setBuildFilter} showWorkers={showWorkers}
-              onShowWorkersChange={setShowWorkers} autoScroll={autoScroll} onAutoScrollChange={setAutoScroll} onSeek={seek}
+              onShowWorkersChange={setShowWorkers} autoScroll={autoScroll} onAutoScrollChange={setAutoScroll} onSeek={onUserSeek}
               buildName={buildName} buildMatchPct={buildMatchPct} myName={myName} oppName={oppName} />}
           </div>
         </> : null}

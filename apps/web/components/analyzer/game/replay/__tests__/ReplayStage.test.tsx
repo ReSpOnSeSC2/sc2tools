@@ -24,6 +24,18 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
  */
 
 describe("ReplayStage", () => {
+  it("seeks while paused, reports transport seeks and shows only upgrades completed by that time", () => {
+    const onStageSeek = vi.fn();
+    const upgrades = { me: [{ time: 100, name: "Metabolic Boost" }, { time: 400, name: "Carapace 1" }], opp: [] };
+    const view = render(<ReplayStage playback={payload()} upgrades={upgrades} onStageSeek={onStageSeek} seekRequest={{ t: 120, seq: 1 }} />);
+    const bar = screen.getByTestId("replay-top-bar");
+    expect(within(bar).getByText("Metabolic Boost")).toBeTruthy(); expect(within(bar).queryByText("Carapace 1")).toBeNull();
+    fireEvent.change(screen.getByRole("slider", { name: /playback position/i }), { target: { value: "420" } });
+    expect(onStageSeek).toHaveBeenLastCalledWith(420); expect(within(bar).getByText("Carapace 1")).toBeTruthy();
+    view.rerender(<ReplayStage playback={payload()} upgrades={upgrades} onStageSeek={onStageSeek} seekRequest={{ t: 120, seq: 2 }} />);
+    expect(within(bar).getByLabelText("Game clock 2:00 of 10:00")).toBeTruthy();
+    expect(within(bar).queryByText("Carapace 1")).toBeNull(); expect(onStageSeek).toHaveBeenCalledOnce();
+  });
   it("renders the stage, both rails and the transport dock", () => {
     render(<ReplayStage playback={payload()} />);
     expect(screen.getByTestId("replay-stage")).toBeTruthy();

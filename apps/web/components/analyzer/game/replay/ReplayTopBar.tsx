@@ -213,6 +213,7 @@ function ReplayTopBarImpl({
   oppName,
   myRace,
   oppRace,
+  upgrades,
 }: {
   t: number;
   gameLength: number;
@@ -222,6 +223,7 @@ function ReplayTopBarImpl({
   oppName?: string | null;
   myRace?: string | null;
   oppRace?: string | null;
+  upgrades?: Record<ReplaySide, readonly { time: number; name: string }[]>;
 }) {
   return (
     <div
@@ -253,6 +255,9 @@ function ReplayTopBarImpl({
         race={oppRace}
         mirrored={false}
       />
+      {upgrades && (upgrades.me.length || upgrades.opp.length) ? <div className="col-span-3 grid min-w-0 grid-cols-2 gap-3 border-t border-border pt-1.5">
+        {(["me", "opp"] as const).map((side) => <div key={side} role="group" aria-label={`${sideLabel(side, myName, oppName)} completed upgrades`} className={`flex min-w-0 gap-1 overflow-x-auto ${side === "opp" ? "justify-end" : ""}`}>{upgrades[side].map((row, index) => <span key={`${row.name}:${row.time}:${index}`} title={`Completed at ${formatClock(row.time)}`} className="shrink-0 rounded-full border border-border px-2 py-0.5 text-micro text-text-muted">{row.name}</span>)}</div>)}
+      </div> : null}
     </div>
   );
 }
