@@ -9,13 +9,11 @@ import {
   type CSSProperties,
   type RefObject,
 } from "react";
-import { io, type Socket } from "socket.io-client";
-import { API_BASE } from "@/lib/clientApi";
+import type { Socket } from "socket.io-client";
 import type {
   LiveGameEnvelope,
   LiveGamePayload,
 } from "@/components/overlay/types";
-import { clientTimezone } from "@/lib/timeseries";
 import {
   ALL_WIDGETS,
   extendStartWindow,
@@ -39,8 +37,11 @@ import {
 } from "@/components/overlay/gameStartTrigger";
 import {
   attachOverlayResilience,
+  createOverlaySocket,
+  hasActiveOverlayGame,
   type OverlayConnectionStatus,
 } from "@/components/overlay/overlayResilience";
+import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
 import { ReconnectDot } from "@/components/overlay/ReconnectDot";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
 import { OverlayCredit } from "@/components/overlay/OverlayCredit";
@@ -95,7 +96,11 @@ import { hasLiveIntel, LIVE_INTEL_WIDGETS, liveIntelPayload } from "@/components
  *    so they can position them independently — same trick the legacy
  *    HTML overlay used.
  */
-export function OverlayClient({
+export function OverlayClient(props: Parameters<typeof ConnectedOverlayClient>[0]) {
+  return <ConnectedOverlayClient key={props.token} {...props} />;
+}
+
+function ConnectedOverlayClient({
   token,
   themeParam = null,
   showCredit,
@@ -127,7 +132,7 @@ export function OverlayClient({
   const [visibleLive, setVisibleLive] = useState<Set<WidgetId>>(new Set());
   const [sessionVisible, setSessionVisible] = useState<boolean>(false);
   const [connectionStatus, setConnectionStatus] =
-    useState<OverlayConnectionStatus>("connected");
+    useState<OverlayConnectionStatus>("connecting");
   const [buildIntents, onBuildIntent] = useOverlayBuildIntents();
 
   // Stable callback so the socket effect doesn't reconnect on every
@@ -231,11 +236,14 @@ export function OverlayClient({
 
   const intel = liveIntelPayload(live, liveGame);
 
+  if (connectionStatus === "invalid") return <><OverlaySetupCard reason="invalid-token" /><OverlayCheckBadge status="invalid" /></>;
+
   return (
     <div
       className="relative h-screen w-screen"
       style={{ background: "transparent", ...themeVars } as CSSProperties}
     >
+      <OverlayCheckBadge status={connectionStatus} live={hasActiveOverlayGame(liveGame)} />
       {shouldShow("opponent") && (
         <OpponentWidget live={live} liveGame={liveGame} />
       )}
@@ -271,11 +279,8 @@ export function OverlayClient({
           />
         </div>
       )}
-      {/* Broadcast-safe degraded-connection dot: only while at least
-          one widget is on screen — a transparent between-games scene
-          stays fully transparent even when the socket is down. */}
-      {connectionStatus === "reconnecting" &&
-      (visibleLive.size > 0 || sessionVisible) ? (
+      {/* A refused first handshake has no widget payload to make visible. */}
+      {connectionStatus === "reconnecting" ? (
         <ReconnectDot />
       ) : null}
       {voice.needsGesture ? (
@@ -367,18 +372,8 @@ function useOverlaySocket(
   // against this to detect silently-dropped events.
   const gameKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    const socket: Socket = io(API_BASE, {
-      // The OBS Browser Source has no Clerk session — the token IS the
-      // auth. We also pass the browser's IANA timezone so the server's
-      // session aggregate aligns to the streamer's wall-clock "today",
-      // not UTC.
-      auth: { overlayToken: token, timezone: clientTimezone() },
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 5000,
-    });
+    const connection = createOverlaySocket(token, { surface: "all-in-one", onStatus: setConnectionStatus });
+    const socket = connection.socket;
     socketRef.current = socket;
     socket.on("overlay:live", (msg: LiveGamePayload) => {
       setLive(msg);
@@ -445,11 +440,10 @@ function useOverlaySocket(
     // game tick.
     const detachResilience = attachOverlayResilience(socket, {
       latestGameKey: () => gameKeyRef.current,
-      onStatus: setConnectionStatus,
     });
     return () => {
       detachResilience();
-      socket.disconnect();
+      connection.dispose();
       if (socketRef.current === socket) socketRef.current = null;
     };
   }, [

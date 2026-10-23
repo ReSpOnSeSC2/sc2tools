@@ -134,7 +134,7 @@ function StatCell({
       </span>
       <span
         aria-hidden
-        className="text-[0.625rem] font-medium uppercase leading-tight tracking-[0.08em] text-text-dim"
+        className="text-micro font-medium uppercase leading-tight tracking-[0.08em] text-text-dim"
       >
         {stat.short}
       </span>

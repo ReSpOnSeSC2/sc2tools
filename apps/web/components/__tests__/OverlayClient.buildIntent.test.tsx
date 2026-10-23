@@ -10,6 +10,8 @@ const reveals = vi.hoisted(() => [] as string[]);
 
 type SocketHandler = (...args: unknown[]) => void;
 class FakeSocket {
+  connect() {}
+  off() {}
   handlers = new Map<string, SocketHandler>();
   emitted: Array<[string, unknown]> = [];
   on(event: string, handler: SocketHandler) { this.handlers.set(event, handler); }

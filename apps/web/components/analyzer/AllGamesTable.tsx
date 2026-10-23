@@ -86,9 +86,11 @@ export function AllGamesTable({
   targetGameId,
   targetGameSeq,
   myName,
-  opponentContext,
+  opponentContext, pageLocalSort = false, onSortChange,
 }: {
   games: ProfileGame[];
+  pageLocalSort?: boolean;
+  onSortChange?: (column: string) => void;
   targetGameId?: string | null;
   targetGameSeq?: number;
   /** Logged-in user's display name, for the "you" side of the
@@ -102,6 +104,7 @@ export function AllGamesTable({
   const tableRef = useRef<HTMLTableElement>(null);
   const mobileListRef = useRef<HTMLUListElement>(null);
   const sort = useSort(SORT_COLS.date, "desc");
+  useEffect(() => { onSortChange?.(sort.sortBy); }, [onSortChange, sort.sortBy]);
 
   // Only surface the optional columns when the data is actually
   // present, so the contexts that don't carry per-game names / MMR
@@ -164,6 +167,7 @@ export function AllGamesTable({
 
   return (
     <div className="space-y-3">
+      {pageLocalSort && sort.sortBy !== SORT_COLS.date ? <p role="status" className="text-caption text-text-muted">Sorting applies to {games.length === 1 ? "this game" : `these ${games.length} games`} only</p> : null}
       <div className="hidden overflow-x-auto md:block">
         <table ref={tableRef} className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-bg-elevated text-micro uppercase text-text-muted">

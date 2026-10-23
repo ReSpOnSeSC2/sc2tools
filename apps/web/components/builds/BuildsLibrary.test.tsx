@@ -1,10 +1,12 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
   apiCall: vi.fn(),
   getToken: vi.fn(async () => "test-token"),
   userId: "test-user",
+  query: "",
+  replace: vi.fn(),
   isLoaded: true,
   isSignedIn: true,
   mutateBuilds: vi.fn(async () => undefined),
@@ -21,6 +23,12 @@ const harness = vi.hoisted(() => ({
   paths: [] as string[],
   success: vi.fn(),
   error: vi.fn(),
+}));
+
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: harness.replace }),
+  useSearchParams: () => new URLSearchParams(harness.query),
 }));
 
 vi.mock("@clerk/nextjs", () => ({
@@ -109,16 +117,16 @@ vi.mock("./BuildCard", () => ({
 }));
 
 vi.mock("./BuildFilterBar", () => ({
-  BuildFilterBar: ({ value, onChange, total }: {
+  BuildFilterBar: ({ value, onChange, total, updating }: {
     value: { search: string; sort: string; matchup: string; hideEmpty: boolean };
     onChange: (next: unknown) => void;
-    total: number;
+    total: number; updating?: boolean;
   }) => <>
     <input aria-label="Search" value={value.search} onChange={(event) => onChange({ ...value, search: event.target.value })} />
     <select aria-label="Sort" value={value.sort} onChange={(event) => onChange({ ...value, sort: event.target.value })}>
       <option value="updated">Recently edited</option><option value="games">Most games</option>
     </select>
-    <span>{total} matching builds</span>
+    <span>{total} matching builds</span>{updating ? <span role="status">Updating…</span> : null}
   </>,
 }));
 vi.mock("./BuildDossierModal", () => ({ BuildDossierModal: () => null }));
@@ -164,6 +172,7 @@ import { BuildsLibrary } from "./BuildsLibrary";
 
 beforeEach(() => {
   harness.userId = "test-user";
+  harness.query = ""; harness.replace.mockClear(); sessionStorage.clear();
   harness.isLoaded = true;
   harness.isSignedIn = true;
   harness.apiCall.mockReset();
@@ -217,13 +226,13 @@ describe("BuildsLibrary pagination", () => {
     harness.listPages["cursor=third"] = page(101, 4, null);
     render(<BuildsLibrary />);
 
-    expect(screen.getByText("Showing 1–50 of 104 builds")).toBeTruthy();
+    expect(screen.getByText("Page 1 of 3 · builds 1–50 of 104")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.queryByRole("button", { name: "Edit Build 1" })).toBeNull();
     expect(screen.getByRole("button", { name: "Edit Build 51" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByRole("button", { name: "Edit Build 104" })).toBeTruthy();
-    expect(screen.getByText("Showing 101–104 of 104 builds")).toBeTruthy();
+    expect(screen.getByText("Page 3 of 3 · builds 101–104 of 104")).toBeTruthy();
     expect((screen.getByRole("button", { name: "Next" }) as HTMLButtonElement).disabled).toBe(true);
     const statsPath = harness.paths.filter((path) => path.startsWith("/v1/custom-builds/stats?")).at(-1)!;
     expect(new URLSearchParams(statsPath.split("?")[1]).get("slugs")).toBe("build-101,build-102,build-103,build-104");
@@ -231,7 +240,7 @@ describe("BuildsLibrary pagination", () => {
     expect(screen.getByRole("button", { name: "Edit Build 51" })).toBeTruthy();
   });
 
-  it("runs search and sorting over the full library and resets the cursor", () => {
+  it("runs search and sorting over the full library and resets the cursor", async () => {
     harness.listData = page(1, 50, "second");
     harness.listPages["cursor=second"] = page(51, 50, "third");
     harness.listPages["search=Build+104"] = { ...page(104, 1, null), total: 1 };
@@ -240,7 +249,7 @@ describe("BuildsLibrary pagination", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Search" }), { target: { value: "Build 104" } });
 
-    expect(screen.getByRole("button", { name: "Edit Build 104" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Edit Build 104" })).toBeTruthy();
     expect(screen.getByText("1 matching builds")).toBeTruthy();
     expect(screen.queryByRole("navigation", { name: "Custom build pages" })).toBeNull();
     fireEvent.change(screen.getByRole("combobox", { name: "Sort" }), { target: { value: "games" } });
@@ -425,7 +434,7 @@ describe("BuildsLibrary queued reclassification feedback", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByText("104 matching builds")).toBeTruthy();
     expect((screen.getByRole("button", {
-      name: "Reclassify replays",
+      name: "Re-match replays",
     }) as HTMLButtonElement).disabled).toBe(false);
     expect((screen.getByRole("button", {
       name: "Reclassify PvT Test Build",
@@ -468,7 +477,7 @@ describe("BuildsLibrary queued reclassification feedback", () => {
     });
     render(<BuildsLibrary />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Reclassify replays" }));
+    fireEvent.click(screen.getByRole("button", { name: "Re-match replays" }));
 
     await waitFor(() => {
       expect(harness.success).toHaveBeenCalledWith(
@@ -496,7 +505,7 @@ describe("BuildsLibrary queued reclassification feedback", () => {
       (screen.getByRole("button", { name: "Matching replays…" }) as HTMLButtonElement)
         .disabled,
     ).toBe(true);
-    expect(screen.getByText(/3 tag changes found/)).toBeTruthy();
+    expect(screen.getByText(/40 replays checked so far/)).toBeTruthy();
     expect(harness.success).not.toHaveBeenCalledWith(
       "Replay matching complete.",
       expect.anything(),
@@ -540,7 +549,7 @@ describe("BuildsLibrary queued reclassification feedback", () => {
       expect(harness.success).toHaveBeenCalledWith(
         "Replay matching complete.",
         expect.objectContaining({
-          description: expect.stringContaining("125 replays checked"),
+          description: expect.stringContaining("5 games matched · 2 old matches removed"),
         }),
       );
     });
@@ -624,5 +633,60 @@ describe("BuildsLibrary queued reclassification feedback", () => {
     expect(harness.success).toHaveBeenCalledWith(
       "Replay matching is running in the background.",
     );
+  });
+});
+
+describe("build library navigation polish", () => {
+  it("commits a typing burst only after 250 ms and writes committed filters to the URL", () => {
+    vi.useFakeTimers();
+    try {
+      render(<BuildsLibrary />);
+      const input = screen.getByRole("textbox", { name: "Search" });
+      for (const value of ["b", "bli", "blink"]) fireEvent.change(input, { target: { value } });
+      expect(harness.paths.some((path) => path.includes("search="))).toBe(false);
+      act(() => vi.advanceTimersByTime(249));
+      expect(harness.paths.some((path) => path.includes("search="))).toBe(false);
+      act(() => vi.advanceTimersByTime(1));
+      expect(new Set(harness.paths.filter((path) => path.includes("search=")))).toEqual(new Set(["/v1/custom-builds?search=blink"]));
+      expect(harness.replace).toHaveBeenLastCalledWith("/builds?q=blink", { scroll: false });
+    } finally { vi.useRealTimers(); }
+  });
+  it("reads URL filters and preserves cards while revalidating", () => {
+    harness.query = "mu=PvT&sort=name&hide=1";
+    const view = render(<BuildsLibrary />);
+    expect(harness.paths).toContain("/v1/custom-builds?matchup=PvT&sort=name&hideEmpty=true");
+    const card = screen.getByRole("button", { name: "Edit PvT Test Build" });
+    harness.listValidating = true; view.rerender(<BuildsLibrary />);
+    expect(screen.getByRole("button", { name: "Edit PvT Test Build" })).toBe(card);
+    expect(screen.getByRole("status").textContent).toBe("Updating…");
+  });
+  it("does not claim no matches while an empty prior page is revalidating", () => {
+    harness.query = "q=blink";
+    harness.listData = { items: [], total: 0, libraryTotal: 2 };
+    harness.listValidating = true;
+    render(<BuildsLibrary />);
+    expect(screen.queryByText("No builds match these filters")).toBeNull();
+    expect(screen.getByText("Updating build matches…")).toBeTruthy();
+  });
+  it("restores a cursor page after leaving and returning to the same query", () => {
+    harness.listData = { items: [{ slug: "one", name: "One" }], total: 2, nextCursor: "two", limit: 1 };
+    harness.listPages["cursor=two"] = { items: [{ slug: "two", name: "Two" }], total: 2, nextCursor: null, limit: 1 };
+    const view = render(<BuildsLibrary />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByRole("button", { name: "Edit Two" })).toBeTruthy();
+    view.unmount(); render(<BuildsLibrary />);
+    expect(screen.getByRole("button", { name: "Edit Two" })).toBeTruthy();
+  });
+  it("shows total progress and lets a failed job retry", async () => {
+    harness.statusData = { status: "running", progress: { scanned: 40, total: 100 } };
+    const view = render(<BuildsLibrary />);
+    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("40");
+    expect(screen.getByText("40 of 100 replays checked")).toBeTruthy();
+    harness.statusData = { status: "failed", error: "reclassify_queue_failed", requestId: "req-123" };
+    view.rerender(<BuildsLibrary />);
+    expect(screen.getByText("Error ID: req-123")).toBeTruthy();
+    harness.apiCall.mockResolvedValue({ status: "queued", builds: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalledWith(expect.anything(), "/v1/custom-builds/reclassify-all", expect.objectContaining({ method: "POST" })));
   });
 });

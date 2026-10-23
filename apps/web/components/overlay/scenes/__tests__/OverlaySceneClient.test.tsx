@@ -16,6 +16,10 @@ const socket = vi.hoisted(() => ({
   on: vi.fn(),
   removeAllListeners: vi.fn(),
   close: vi.fn(),
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  off: vi.fn(),
+  emit: vi.fn(),
 }));
 const io = vi.hoisted(() =>
   vi.fn((_url: string, _opts: { auth: { overlayToken: string } }) => socket),
@@ -36,6 +40,20 @@ import {
 } from "@/lib/streamBackgrounds";
 
 let fetchSpy: ReturnType<typeof vi.fn>;
+function fireSocket(event: string, ...args: unknown[]) {
+  for (const [name, handler] of socket.on.mock.calls) if (name === event) handler(...args);
+}
+
+it("attaches scene resync and heartbeat resilience and shows terminal token failures", () => {
+  render(<OverlaySceneClient token="private-scene-token" scene="between-games" />);
+  act(() => fireSocket("connect"));
+  expect(socket.emit).toHaveBeenCalledWith("overlay:resync");
+  act(() => fireSocket("overlay:heartbeat", { gameKey: "missed-key" }));
+  expect(socket.emit.mock.calls.filter(([event]) => event === "overlay:resync")).toHaveLength(2);
+  act(() => fireSocket("connect_error", new Error("invalid_overlay_token")));
+  expect(screen.getByText("This overlay link no longer works")).toBeTruthy();
+  expect(document.body.textContent).not.toContain("private-scene-token");
+});
 
 beforeEach(() => {
   fetchSpy = vi.fn().mockResolvedValue({ ok: false, json: async () => ({}) });

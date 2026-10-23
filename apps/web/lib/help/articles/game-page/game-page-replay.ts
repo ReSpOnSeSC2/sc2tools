@@ -48,7 +48,7 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "Use the **Zoom in** and **Zoom out** buttons on the map, or scroll or pinch, to zoom. Drag to move around once zoomed in.",
+        "Use the **Zoom in** and **Zoom out** buttons, hold Ctrl (Command on Mac) while scrolling, or pinch to zoom. Plain scrolling moves the page unless the map has focus or is fullscreen. Click the map to focus it; Escape or moving the pointer off the map releases focus. Drag to pan when zoomed.",
         "Double-click the map, or press **Reset zoom**, to see the whole map again.",
         "**Full screen** fills the screen with the replay; press it again or Esc to leave.",
       ],
@@ -59,7 +59,7 @@ const article: HelpArticle = {
       items: [
         "**Production** shows what each player is building and researching at this moment.",
         "**Build order** lists each player's build so far, following the replay.",
-        "Show or hide either panel from the display settings button on the replay.",
+        "On desktop, show or hide either panel from the display settings button. On phones, play controls stay directly below the map and above the app navigation. Open Production or Build order from the bar beneath them; tablets show that shared panel expanded.",
       ],
     },
     { type: "heading", text: "The accuracy note", anchor: "accuracy" },

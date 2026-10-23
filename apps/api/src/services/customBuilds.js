@@ -2087,7 +2087,7 @@ class CustomBuildsService {
    *   previousNamesBySlug?: Record<string, string[]>,
    *   assertLease?: () => Promise<void>,
    *   jobSequence?: number,
-   *   onProgress?: (progress: {builds: number, scanned: number, tagged: number, cleared: number, deferred: number}) => void|Promise<void>,
+   *   onProgress?: (progress: {builds: number, scanned: number, tagged: number, cleared: number, deferred: number, total?: number}) => void|Promise<void>,
    * }} [opts]
    */
   async reclassifyAll(userId, opts = {}) {
@@ -2125,10 +2125,13 @@ class CustomBuildsService {
     const runId = randomUUID();
     const jobSequence = Math.max(0, Number(opts.jobSequence) || 0);
     const games = this._gamesCollection();
+    const total = typeof games.countDocuments === "function"
+      ? await games.countDocuments({ userId, isResumedFromReplay: { $ne: true } }) : undefined;
     let scanned = 0;
     let tagged = 0;
     let cleared = 0;
     let deferred = 0;
+    if (opts.onProgress) await opts.onProgress({ builds: buildCount, scanned, tagged, cleared, deferred, ...(total !== undefined ? { total } : {}) });
     try {
       for await (const page of this._rulePages(userId, {
         pageSize: 50,
@@ -2329,6 +2332,7 @@ class CustomBuildsService {
         if (opts.onProgress) {
           await opts.onProgress({
             builds: buildCount,
+            ...(total !== undefined ? { total } : {}),
             scanned,
             tagged,
             cleared,
@@ -2359,6 +2363,7 @@ class CustomBuildsService {
     }
     return {
       builds: buildCount,
+      ...(total !== undefined ? { total } : {}),
       scanned,
       tagged,
       cleared,
@@ -2770,6 +2775,7 @@ function emptyReclassifyProgress() {
 function sanitiseReclassifyProgress(value) {
   const raw = value && typeof value === "object" ? value : {};
   return {
+    ...(Number.isFinite(/** @type {any} */ (raw).total) ? { total: Math.max(0, Number(/** @type {any} */ (raw).total)) } : {}),
     builds: Math.max(0, Number(/** @type {any} */ (raw).builds) || 0),
     scanned: Math.max(0, Number(/** @type {any} */ (raw).scanned) || 0),
     tagged: Math.max(0, Number(/** @type {any} */ (raw).tagged) || 0),

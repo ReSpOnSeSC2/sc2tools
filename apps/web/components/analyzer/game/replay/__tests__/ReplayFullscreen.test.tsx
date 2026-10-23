@@ -238,3 +238,12 @@ describe("without the Fullscreen API", () => {
     expect(screen.getByTestId("replay-reset-zoom")).toBeTruthy();
   });
 });
+
+it("still zooms a plain wheel in fullscreen", () => {
+  const api = installFullscreenApi(); render(<MapReplayer playback={payload()} />);
+  const root = screen.getByTestId("map-replayer"); const canvas = root.querySelector("canvas")!;
+  api.enter(root);
+  const wheel = new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true });
+  act(() => { canvas.dispatchEvent(wheel); });
+  expect(wheel.defaultPrevented).toBe(true); expect(canvas.style.touchAction).toBe("none");
+});

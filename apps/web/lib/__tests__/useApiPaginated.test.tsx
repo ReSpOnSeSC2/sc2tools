@@ -137,7 +137,7 @@ describe("useApiPaginated failures", () => {
       status: 500,
       code: "internal_error",
       requestId: "req-9",
-      message: "Something went wrong on our side. Try again in a moment.",
+      message: "We couldn't load your opponents.",
     });
 
     act(() => view.result.current.mutate());
@@ -151,5 +151,52 @@ describe("useApiPaginated failures", () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
     const view = renderHook(() => useApiPaginated<{ id: string }>("/v1/opponents", 1));
     await waitFor(() => expect(view.result.current.error).toMatchObject({ status: 0, code: "network_unavailable" }));
+  });
+});
+
+describe("useApiPaginated progressive refresh", () => {
+  it("publishes cold page one immediately but swaps a refreshed list only after all pages arrive", async () => {
+    const second = deferred<Response>();
+    const refreshSecond = deferred<Response>();
+    let revision = 1;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ id: "a" }], nextBefore: "two" })))
+      .mockReturnValueOnce(second.promise)
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ id: "new-a" }], nextBefore: "two" })))
+      .mockReturnValueOnce(refreshSecond.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    const view = renderHook(() => useApiPaginated<{ id: string }>("/v1/opponents", revision));
+    await waitFor(() => expect(view.result.current.isLoadingMore).toBe(true));
+    expect(view.result.current.items).toEqual([{ id: "a" }]);
+    expect(view.result.current.isLoading).toBe(false);
+    await act(async () => second.resolve(pageResponse([{ id: "b" }])));
+    await waitFor(() => expect(view.result.current.items).toHaveLength(2));
+    revision++; view.rerender();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(view.result.current.isRefreshing).toBe(true);
+    expect(view.result.current.items).toEqual([{ id: "a" }, { id: "b" }]);
+    await act(async () => refreshSecond.resolve(pageResponse([{ id: "new-b" }])));
+    await waitFor(() => expect(view.result.current.items).toEqual([{ id: "new-a" }, { id: "new-b" }]));
+    expect(view.result.current.isRefreshing).toBe(false);
+  });
+
+  it("keeps stale rows on a failed refresh and aborts superseded revision work", async () => {
+    let revision = 0;
+    const pending = deferred<Response>();
+    const fetchMock = vi.fn().mockResolvedValueOnce(pageResponse([{ id: "kept" }]))
+      .mockReturnValueOnce(pending.promise).mockRejectedValueOnce(new TypeError("offline"));
+    vi.stubGlobal("fetch", fetchMock);
+    const view = renderHook(() => useApiPaginated<{ id: string }>("/v1/opponents", revision));
+    await waitFor(() => expect(view.result.current.items).toHaveLength(1));
+    revision++; view.rerender();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    const signal = fetchMock.mock.calls[1][1].signal as AbortSignal;
+    revision++; view.rerender();
+    await waitFor(() => expect(view.result.current.isStale).toBe(true));
+    expect(signal.aborted).toBe(true);
+    expect(view.result.current.items).toEqual([{ id: "kept" }]);
+    expect(view.result.current.error).toMatchObject({ code: "network_unavailable", message: "Can't reach SC2 Tools. Check your connection." });
+    await act(async () => pending.resolve(pageResponse([{ id: "obsolete" }])));
+    expect(view.result.current.items).toEqual([{ id: "kept" }]);
   });
 });

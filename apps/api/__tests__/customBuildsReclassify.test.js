@@ -506,7 +506,8 @@ describe("POST /v1/custom-builds/reclassify-all", () => {
     expect(res.body.status).toBe("queued");
     expect(res.body.builds).toBe(2);
     expect(res.body.perBuild).toBeUndefined();
-    await waitForJob(db, userId, res.body.job.generation);
+    const completed = await waitForJob(db, userId, res.body.job.generation);
+    expect(completed.progress.total).toBe(await db.games.countDocuments({ userId, isResumedFromReplay: { $ne: true } }));
 
     const a = await db.games.findOne({ userId, gameId: "g-a" });
     const b = await db.games.findOne({ userId, gameId: "g-b" });

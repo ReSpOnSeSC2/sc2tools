@@ -302,7 +302,7 @@ describe("GameDetailPage", () => {
 
     // BUILD_ORDER says Zerg vs Terran. Those replay-derived values must win
     // over the conflicting slim summary so the build cannot enter PvZ.
-    expect(screen.getByRole("button", { name: "Save for ZvT" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Use as Ghost Build target" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Save for PvZ" })).toBeNull();
   });
 

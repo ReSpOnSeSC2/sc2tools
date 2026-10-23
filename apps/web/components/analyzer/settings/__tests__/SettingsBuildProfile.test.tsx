@@ -63,8 +63,9 @@ describe("Settings build profile", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 503, text: async () => "Unavailable" })));
     renderSettings();
     expect((await screen.findByRole("alert")).textContent).toContain("Couldn't load saved ratings");
-    expect((screen.getByRole("textbox", { name: "Build title" }) as HTMLInputElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Show widget" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("textbox", { name: "Build title" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show widget" })).toBeNull();
+    expect(screen.getByRole("status").textContent).toBe("Loading your saved controls…");
     expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
   });
 });

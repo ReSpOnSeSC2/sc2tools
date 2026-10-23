@@ -104,7 +104,13 @@ describe("classification across bounded custom-build pages", () => {
     expect(result.perBuild).toHaveLength(100);
     expect(result.perBuild[0]).toMatchObject({ matched: 51, tagged: 0 });
     expect(Math.max(...sizes)).toBeLessThanOrEqual(50);
-    expect(sizes.filter((size) => size === 37)).toHaveLength(progress.length + 1);
+    expect(progress[0]).toEqual({
+      builds: 137, scanned: 0, tagged: 0, cleared: 0, deferred: 0, total: 51,
+    });
+    // The initial total announcement performs no scan. Each later replay
+    // batch walks all build pages, plus the initial library fingerprint pass.
+    const scannedProgress = progress.filter((value) => value.scanned > 0);
+    expect(sizes.filter((size) => size === 37)).toHaveLength(scannedProgress.length + 1);
     expect(progress.length).toBeGreaterThan(1);
     expect(progress.every((value) => value.builds === 137)).toBe(true);
     expect(await games.countDocuments({
