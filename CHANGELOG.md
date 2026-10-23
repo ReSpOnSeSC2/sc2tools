@@ -11,6 +11,8 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+- Community browsing filters by your race, opponent race and skill level, with Recently updated sorting and shareable filter chips. Search follows Back/Forward without losing typing focus, results show loading feedback, and pagination distinguishes disabled ends from stale page links.
+
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
