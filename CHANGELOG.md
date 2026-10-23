@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Shared game analysis
+
+- Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.
+- Shared analysis has section links, one Watch entry point, seekable macro-leak timestamps and an expandable penalty-ordered leak list. Macro scores share clear colour bands and an out-of-100 label.
+
 ### Game header and completed check-ins
 
 - Replay pages use one compact Share, Download, Review and VOD action bar, a descriptive opponent heading and readable recent-game dates. Missing duration and MMR fields stay out of the way.

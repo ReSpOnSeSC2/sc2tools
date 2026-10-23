@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { MechanicsPanel } from "../MechanicsPanel";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
+import { macroScoreTone } from "@/lib/format";
 
 /**
  * Creep tumor row — Zerg-only, engine 1.5.6+ payloads. The row must
@@ -25,6 +26,22 @@ function zergBreakdown(
 }
 
 afterEach(cleanup);
+
+describe("MechanicsPanel public score bands", () => {
+  it.each([[79, "text-warning"], [80, "text-success"]] as const)(
+    "uses the public override at %s while preserving analyzer defaults",
+    (score, tone) => {
+      const breakdown = { ...zergBreakdown({}), macro_score: score };
+      const view = render(<MechanicsPanel breakdown={breakdown} />);
+      const scoreValue = () => screen.getByText("Macro score").nextElementSibling?.firstElementChild;
+      expect(scoreValue()?.textContent).toBe(String(score));
+      expect(scoreValue()?.classList.contains("text-success")).toBe(true);
+      view.rerender(<MechanicsPanel breakdown={breakdown} macroScoreToneClassName={macroScoreTone(score)} />);
+      expect(scoreValue()?.classList.contains(tone)).toBe(true);
+      if (score === 79) expect(scoreValue()?.classList.contains("text-success")).toBe(false);
+    },
+  );
+});
 
 describe("MechanicsPanel creep tumor stat", () => {
   it("renders queen/spread split, first-plant clock, and losses", () => {
