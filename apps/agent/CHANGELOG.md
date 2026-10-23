@@ -4,6 +4,9 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+- Retry-After scheduling tests use a controlled clock and tolerate floating-point
+  rounding, preventing intermittent Windows CI failures without changing uploads.
+
 ## 0.20.0
 
 ### Added - Native Companion
