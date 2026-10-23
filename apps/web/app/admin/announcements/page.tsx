@@ -13,7 +13,7 @@ type Draft = { severity: SiteNotice["severity"]; audience: SiteNotice["audience"
 const localTime = (value: string) => { const date = new Date(value); return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 const fresh = (): Draft => ({ severity: "info", audience: "all", message: "", href: "", startsAt: localTime(new Date().toISOString()), endsAt: localTime(new Date(Date.now() + 2 * 3600000).toISOString()) });
 const TEMPLATES = [
-  { title: "Upload outage", message: "Uploads are delayed. Your replays remain on this PC; SC2 Tools will retry when the service recovers.", severity: "warning", audience: "all", href: "/help/desktop-app-overview" },
+  { title: "Upload outage", message: "Uploads are delayed. Keep your replay files and try again after the service recovers.", severity: "warning", audience: "all", href: "/help/desktop-app-overview" },
   { title: "Maintenance", message: "SC2 Tools is undergoing maintenance. Some pages may be temporarily unavailable. Your saved data is safe.", severity: "info", audience: "all", href: "/changelog" },
   { title: "Required agent update", message: "A desktop app update is required to keep syncing. Open the desktop app or download the latest version.", severity: "warning", audience: "agent", href: "/download" },
 ] as const;
