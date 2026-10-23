@@ -1,4 +1,4 @@
-import { Section } from "@/components/ui/Section";
+import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { GuideCopyText } from "@/components/guides/GuideCopyText";
 import { GuidePersonalComparison } from "@/components/guides/GuidePersonalComparison";
 import {

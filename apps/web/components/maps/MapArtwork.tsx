@@ -95,7 +95,7 @@ export function MapArtwork({
           onError={() => setFailedSource(source)}
           className={`absolute inset-0 h-full w-full ${
             fit === "contain" ? "object-contain" : "object-cover"
-          } motion-safe:transition-[filter,transform] motion-safe:duration-300 motion-safe:ease-out group-hover/map:scale-[1.06] group-hover/map:brightness-110`}
+          } motion-safe:transition-[filter,transform] motion-safe:duration-300 motion-safe:ease-out motion-safe:group-hover/map:scale-[1.06] motion-safe:group-hover/map:brightness-110`}
         />
       ) : null}
     </span>

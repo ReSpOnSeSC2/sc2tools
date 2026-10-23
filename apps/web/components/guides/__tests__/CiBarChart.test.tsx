@@ -42,7 +42,7 @@ describe("CiBarChart", () => {
 
   it("shows a tooltip on focus, moves with arrow keys and hides on Escape", () => {
     render(<CiBarChart title="Bands" data={LEAGUE_DATA} />);
-    const rows = screen.getAllByRole("listitem");
+    const rows = screen.getAllByRole("button");
     expect(screen.queryByRole("tooltip")).toBeNull();
     fireEvent.focus(rows[0]);
     const tooltip = screen.getByRole("tooltip");
@@ -63,6 +63,53 @@ describe("CiBarChart", () => {
       expect(table.textContent).toContain(datum.label);
       expect(table.textContent).toContain(pct(datum.winRate));
     }
+  });
+
+  it("keeps one Tab stop, moves it with arrows/Home/End and toggles a pinned tooltip", () => {
+    render(<CiBarChart title="Bands" data={LEAGUE_DATA} />);
+    const rows = screen.getAllByRole("button");
+    const tabStops = () => rows.filter((row) => row.tabIndex === 0);
+    expect(tabStops()).toEqual([rows[0]]);
+    rows[0].focus();
+    fireEvent.keyDown(rows[0], { key: "End" });
+    expect(document.activeElement).toBe(rows.at(-1));
+    expect(tabStops()).toEqual([rows.at(-1)]);
+    fireEvent.keyDown(rows.at(-1)!, { key: "Home" });
+    expect(document.activeElement).toBe(rows[0]);
+    fireEvent.keyDown(rows[0], { key: "ArrowDown" });
+    expect(tabStops()).toEqual([rows[1]]);
+    fireEvent.keyDown(rows[1], { key: "Enter" });
+    expect(rows[1].getAttribute("aria-expanded")).toBe("true");
+    fireEvent.blur(rows[1]);
+    expect(screen.getByRole("tooltip").textContent).toContain(LEAGUE_DATA[1].label);
+    fireEvent.keyDown(rows[1], { key: "Escape" });
+    expect(rows[1].getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.click(rows[0]);
+    expect(rows[0].getAttribute("aria-expanded")).toBe("true");
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+    fireEvent.keyDown(rows[0], { key: " " });
+    expect(rows[0].getAttribute("aria-expanded")).toBe("true");
+    fireEvent.keyDown(rows[0], { key: " " });
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("distinguishes all verdicts without relying on bar colour", () => {
+    const data = [
+      { ...LEAGUE_DATA[0], key: "win", winRate: 0.7, ci: { low: 0.6, high: 0.8 } },
+      { ...LEAGUE_DATA[0], key: "even", winRate: 0.5, ci: { low: 0.4, high: 0.6 } },
+      { ...LEAGUE_DATA[0], key: "loss", winRate: 0.3, ci: { low: 0.2, high: 0.4 } },
+    ];
+    const { container } = render(<CiBarChart title="Verdicts" data={data} />);
+    const rows = screen.getAllByRole("button");
+    expect(rows.map((row) => row.textContent?.match(/[▲●▼]/)?.[0])).toEqual(["▲", "●", "▼"]);
+    expect(rows[0].getAttribute("aria-label")).toContain("clearly above 50%");
+    const bar = screen.getAllByTestId("ci-bar")[1];
+    const id = bar.getAttribute("fill")!.slice(5, -1);
+    expect(container.querySelector("pattern")?.id).not.toBe("");
+    expect(document.getElementById(id)?.tagName.toLowerCase()).toBe("pattern");
+    expect(screen.getByText(/hatched: too close to call/)).toBeTruthy();
   });
 
   it("renders nothing without data", () => {
