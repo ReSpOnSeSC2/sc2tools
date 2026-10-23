@@ -30,6 +30,7 @@ function makeDraft(
   return {
     name: "PvT test",
     description: "",
+    notes: "",
     race: "Protoss",
     vsRace: "Terran",
     skillLevel: null,

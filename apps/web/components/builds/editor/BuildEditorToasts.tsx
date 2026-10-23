@@ -10,8 +10,7 @@ export interface BuildEditorToastsProps {
 
 /**
  * BuildEditorToasts — pinned bottom-right toast strip for the editor.
- * Independent of the global app Toast provider so toasts can be shown
- * inside the modal without coupling.
+ * Used only when the editor has no app Toast provider above it.
  */
 export function BuildEditorToasts({ toasts, dismiss }: BuildEditorToastsProps) {
   if (!toasts.length) return null;
