@@ -13,7 +13,7 @@ export function coerceAdminQuery<T extends Values>(defaults: T, params: URLSearc
     let value: string | number | boolean = fallback;
     if (raw !== null) {
       if (typeof fallback === "boolean") value = ["1", "true"].includes(raw) ? true : ["0", "false"].includes(raw) ? false : fallback;
-      else if (typeof fallback === "number") value = raw.trim() && Number.isFinite(Number(raw)) && Number(raw) >= 0 ? Number(raw) : fallback;
+      else if (typeof fallback === "number") value = raw.trim() && Number.isFinite(Number(raw)) && Number(raw) >= 0 ? Number.isInteger(fallback) ? Math.trunc(Number(raw)) : Number(raw) : fallback;
       else value = raw;
     }
     return [key, allowed[key]?.includes(value) === false ? fallback : value];
@@ -25,11 +25,13 @@ export function useAdminQueryState<T extends Values>(defaults: T, options: Optio
   const router = useRouter(), pathname = usePathname(), search = useSearchParams().toString();
   const latest = useRef({ defaults, options, params: new URLSearchParams(search), pathname, router });
   const expected = useRef(search), timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const observedPath = useRef(pathname);
   latest.current = { ...latest.current, defaults, options, pathname, router };
   useEffect(() => {
-    if (search !== expected.current) { for (const timer of timers.current.values()) clearTimeout(timer); timers.current.clear(); }
+    if (search !== expected.current || pathname !== observedPath.current) { for (const timer of timers.current.values()) clearTimeout(timer); timers.current.clear(); }
+    observedPath.current = pathname;
     expected.current = search; latest.current.params = new URLSearchParams(search);
-  }, [search]);
+  }, [pathname, search]);
   useEffect(() => { const pending = timers.current; return () => { for (const timer of pending.values()) clearTimeout(timer); }; }, []);
   const set = useCallback((patch: Partial<QueryState<T>>, settings: { history?: "replace" | "push" } = {}) => {
     const write = (changes: Partial<QueryState<T>>) => {

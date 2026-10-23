@@ -51,6 +51,8 @@ corresponding GitHub Release.
 
 ### Added
 
+- Admin user, opponent, global-player and inbox views retain filters and pages in shareable URLs; sortable tables become phone cards, searches debounce, and game links preserve their private owner selection.
+
 - Operations console adds bounded background-job history and safe Run now controls, a 400-day admin audit log, per-user support snapshots, first-party activation cohorts, and resolved-user repair actions with typed wipe confirmation and game-count conflict protection.
 
 - Read curated updates in What's New, the public changelog and RSS. Service notices explain active incidents and expire automatically; installer release notes are easier to read.

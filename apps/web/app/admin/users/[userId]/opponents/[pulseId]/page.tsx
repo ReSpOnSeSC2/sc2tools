@@ -80,7 +80,8 @@ function OpponentGamesBody({
         )}/opponents/${encodeURIComponent(pulseId)}/retry-pulse`}
       />
 
-      {error ? (
+      {error && data ? <RequestError error={error} onRetry={() => mutate()} /> : null}
+      {error && !data ? (
         <RequestError error={error} onRetry={() => mutate()} />
       ) : isLoading && !data ? (
         <LoadingRows rows={8} />
@@ -93,6 +94,7 @@ function OpponentGamesBody({
           {/* Games list — hidden on mobile once a game is selected. */}
           <div className={view.game ? "hidden lg:block" : "block"}>
             <Card padded={false}>
+              <p role="status" className="text-caption text-text-muted">{data?.items.length || 0} games{data && isValidating ? " · Updating…" : ""}</p>
               <ul aria-busy={isValidating} className={`divide-y divide-border transition-opacity ${isValidating ? "opacity-60" : ""}`}>
                 {(data?.items || []).map((g) => {
                   const active = g.gameId === view.game;

@@ -22,7 +22,6 @@ import {
   MetricStat,
 } from "../../../components/AdminFragments";
 import {
-  AdminGameDetail,
   fmtDate,
   fmtDuration,
   isWin,
@@ -167,7 +166,8 @@ function GamesSection({ pulseId }: { pulseId: string }) {
     <div className="space-y-3">
       <h2 className="text-xl font-semibold">All games</h2>
 
-      {error ? (
+      {error && data ? <RequestError error={error} onRetry={() => mutate()} /> : null}
+      {error && !data ? (
         <RequestError error={error} onRetry={() => mutate()} />
       ) : isLoading && !data ? (
         <LoadingRows rows={8} />
@@ -180,6 +180,7 @@ function GamesSection({ pulseId }: { pulseId: string }) {
           {/* Games list — hidden on mobile once a game is selected. */}
           <div className={view.game ? "hidden lg:block" : "block"}>
             <Card padded={false}>
+              <p role="status" className="text-caption text-text-muted">{data?.items.length || 0} games{data && isValidating ? " · Updating…" : ""}</p>
               <ul aria-busy={isValidating} className={`divide-y divide-border transition-opacity ${isValidating ? "opacity-60" : ""}`}>
                 {(data?.items || []).map((g) => {
                   const active = g.gameId === view.game && g.userId === view.owner;

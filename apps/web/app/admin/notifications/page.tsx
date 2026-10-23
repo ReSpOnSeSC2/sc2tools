@@ -184,9 +184,10 @@ function NotificationsBody() {
         </div>
       </Card>
 
+      {error && data ? <RequestError error={error} onRetry={() => mutate()} /> : null}
       {isLoading && !data ? (
         <LoadingRows rows={8} />
-      ) : error ? (
+      ) : error && !data ? (
         <RequestError error={error} onRetry={() => mutate()} />
       ) : items.length === 0 ? (
         <Card padded>

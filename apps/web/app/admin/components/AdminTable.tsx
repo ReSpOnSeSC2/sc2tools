@@ -14,18 +14,18 @@ export function AdminTable<T>({ columns, rows, rowKey, rowHref, sort, loading, u
   columns: AdminColumn<T>[]; rows: T[]; rowKey: (row: T) => string; rowHref?: (row: T) => string; sort?: Sort;
   loading?: boolean; updating?: boolean; empty: ReactNode; error?: ReactNode; caption: string;
 }) {
-  if (loading && !rows.length) return <LoadingRows rows={8} />;
   if (error && !rows.length) return <>{error}</>;
+  if (loading && !rows.length) return <LoadingRows rows={8} />;
   if (!rows.length) return <>{empty}</>;
   const toggle = (key: string) => { const column = columns.find(item => item.sortKey === key); sort?.onChange(key, sort.by === key ? sort.dir === "asc" ? "desc" : "asc" : column?.defaultDir || (column?.kind === "text" ? "asc" : "desc")); };
   return <div className="space-y-2">{error}<div aria-busy={!!updating} className={`transition-opacity ${updating ? "opacity-60" : ""}`}>
-    <Card padded={false}><div className="hidden overflow-x-auto md:block"><table className="w-full text-left text-caption"><caption className="sr-only">{caption}</caption>
+    <Card padded={false}><div className="hidden max-h-[70vh] overflow-auto md:block"><table className="w-full text-left text-caption"><caption className="sr-only">{caption}</caption>
       <thead className="sticky top-0 bg-bg-elevated"><tr>{columns.map(column => sort && column.sortKey ? <SortableTh key={column.key} col={column.sortKey} label={column.label} align={column.align} sortBy={sort.by} sortDir={sort.dir} setSort={toggle} /> : <th key={column.key} className={`px-3 py-2 ${column.align === "right" ? "text-right" : ""}`}>{column.label}</th>)}</tr></thead>
       <tbody className="divide-y divide-border">{rows.map(row => <tr key={rowKey(row)} className="relative hover:bg-bg-elevated/40">{columns.map((column, index) => <td key={column.key} className={`px-3 py-3 ${column.align === "right" ? "text-right tabular-nums" : ""} [&_button]:relative [&_button]:z-10 [&_input]:relative [&_input]:z-10 [&_select]:relative [&_select]:z-10`}>
         {index === 0 && rowHref ? <Link href={rowHref(row)} className="after:absolute after:inset-0 after:content-[''] focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-accent">{column.render(row)}</Link> : <span className="[&_a]:relative [&_a]:z-10">{column.render(row)}</span>}</td>)}</tr>)}</tbody></table></div>
       <ul className="divide-y divide-border md:hidden" aria-label={`${caption}, cards`}>{rows.map(row => <li key={rowKey(row)} className="relative space-y-2 p-4 hover:bg-bg-elevated/40">{columns.filter(column => column.mobile !== "hidden").map(column => <div key={column.key} className={column.mobile === "title" ? "break-words font-semibold" : "flex justify-between gap-4 text-caption"}>
         {column.mobile === "title" ? rowHref ? <Link href={rowHref(row)} className="after:absolute after:inset-0 after:content-['']">{column.render(row)}</Link> : column.render(row) : <><span className="text-text-muted">{column.label}</span><span className="text-right [&_a]:relative [&_a]:z-10 [&_button]:relative [&_button]:z-10">{column.render(row)}</span></>}</div>)}</li>)}</ul>
-    </Card></div><p role="status" className="text-caption text-text-muted">{rows.length} results{updating ? <span className="ml-2 inline-flex items-center gap-1"><span aria-hidden className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />Updating…</span> : null}</p></div>;
+    </Card></div><p role="status" className="text-caption text-text-muted">{rows.length} {rows.length === 1 ? "result" : "results"}{updating ? <span className="ml-2 inline-flex items-center gap-1"><span aria-hidden className="h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />Updating…</span> : null}</p></div>;
 }
 
 export function AdminMobileSort<T>({ columns, sort }: { columns: AdminColumn<T>[]; sort: Sort }) {
