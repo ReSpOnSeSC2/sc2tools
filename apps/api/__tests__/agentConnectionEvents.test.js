@@ -84,7 +84,7 @@ describe("verified agent connection notifications", () => {
     expect(started.status).toBe(200);
     const claimed = await asUser(request(app).post("/v1/device-pairings/claim"))
       .send({ code: started.body.code });
-    expect(claimed.status).toBe(204);
+    expect(claimed.status).toBe(200);
     const polled = await request(app).get(`/v1/device-pairings/${started.body.code}`);
     expect(polled.status).toBe(200);
     expect(polled.body.status).toBe("ready");

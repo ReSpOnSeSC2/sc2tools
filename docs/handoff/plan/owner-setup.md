@@ -1,5 +1,9 @@
 # Owner setup notes (accumulated)
 
+## Wave 2: pairing-web-and-devices
+
+Deploy the Render API before the web changes: the shared form uses the new authenticated device-preview endpoint and the claim endpoint's 200 JSON response. Existing desktop apps keep working with the token-poll protocol; older apps can still enter codes manually. Newer agent-pairing-recovery releases open `/devices?code=XXXXXX&src=agent` and include bounded PC metadata at start. No new environment variables or infrastructure are required. Network comparison is a salted hint, never an authorization check; raw IP addresses are not stored, and an API restart safely turns an existing code's hint into a mismatch warning. Verify one PC link, its heartbeat, its label and a confirmed Unpair after deployment.
+
 ## Wave 2: retire-server-ml
 
 No new secrets or infrastructure. The API Dockerfile installs `apps/replay-engine/requirements-server.txt`, and image CI guards the actual installed dependencies and spatial CLI. Follow `docs/runbooks/retire-server-ml.md` for the read-only audit, dry run, and forward-only cleanup of `ml_models` and `ml_jobs`. The owner approved adding the migration, but production execution needs separate approval and was not performed during implementation. Do not restore the removed model tooling to run ordinary replay analysis.
@@ -29,3 +33,7 @@ Optional:
 1. After deploy, open Admin > Infrastructure and check the "Database backups" card. If it says "Atlas refused the backup check", give the service account Project Read Only on the project in Atlas (Access Manager). If it says "Not connected", the ATLAS_* variables aren't set in Render.
 2. To turn off the hourly stale-backup check, set SC2TOOLS_BACKUP_ALERT_DISABLED=1 on the Render API service.
 3. Read docs/runbooks/restore-database.md once. Atlas restores have to be done by a person with the Project Owner role, because the app's account is read-only.
+
+### welcome-wizard-resumable
+
+Deploy the API update before the web. Onboarding preference PUTs now merge fields atomically; other preference types retain their existing replacement behavior. No migration, environment setting or release tag is required. The welcome flow depends on the pairing/device API and shared form from `pairing-web-and-devices`.
