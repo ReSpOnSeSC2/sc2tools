@@ -46,3 +46,23 @@ test("definition links reveal hidden rules, preserve URL filters and fit the vie
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   await page.screenshot({ path: testInfo.outputPath(`definitions-${testInfo.project.name}.png`) });
 });
+
+test("Back and Forward accept copied percent-encoded multiword definition filters", async ({ page }) => {
+  await page.goto("/definitions");
+  const search = page.getByRole("textbox", { name: "Search builds and strategies" });
+  await expect(search).toBeVisible();
+  // Retain the current entry's router state to emulate existing browser
+  // history entries with copied URLs, without pre-normalizing their query.
+  await page.evaluate(() => {
+    const state = window.history.state;
+    window.history.pushState(state, "", "/definitions?q=Stargate%20into%20Glaives&race=P&tracking=%E2%9C%93");
+    window.history.pushState(state, "", "/definitions?q=Robo%20Opener&race=P");
+  });
+  await page.goBack();
+  await expect(search).toHaveValue("Stargate into Glaives");
+  await expect(page.getByRole("heading", { name: "PvZ - Stargate into Glaives", exact: true })).toBeVisible();
+  await page.goForward();
+  await expect(search).toHaveValue("Robo Opener");
+  await expect(page.getByRole("heading", { name: "PvZ - Robo Opener", exact: true })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Filter by race", exact: true }).getByRole("button", { name: "Protoss", exact: true })).toHaveAttribute("aria-pressed", "true");
+});

@@ -110,6 +110,17 @@ describe("DefinitionsCatalog", () => {
     expect(screen.getByRole("heading", { name: /^Zerg \(/, level: 2 })).toBeTruthy();
   });
 
+  it("accepts Back navigation with encoded multiword queries and unrelated Unicode parameters", () => {
+    const view = render(<DefinitionsCatalog />);
+    const copiedUrl = "q=Stargate%20into%20Glaives&race=P&tracking=%E2%9C%93";
+    router.params = copiedUrl;
+    window.history.replaceState({}, "", `/definitions?${copiedUrl}`);
+    view.rerender(<DefinitionsCatalog />);
+    expect((screen.getByLabelText("Search builds and strategies") as HTMLInputElement).value).toBe("Stargate into Glaives");
+    expect(screen.getByRole("heading", { name: "PvZ - Stargate into Glaives" })).toBeTruthy();
+    expect(within(screen.getByRole("group", { name: "Filter by race" })).getByRole("button", { name: "Protoss" }).getAttribute("aria-pressed")).toBe("true");
+  });
+
   it("reveals and focuses a hidden hash target on mount and hashchange", async () => {
     router.params = "q=impossible&race=T";
     window.history.replaceState({}, "", "/definitions?q=impossible&race=T#zerg-12-pool");

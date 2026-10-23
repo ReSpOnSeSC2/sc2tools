@@ -68,7 +68,7 @@ export function DefinitionsCatalog({
   useEffect(() => {
     // Ignore a superseded router snapshot while the current address bar
     // already reflects a newer filter or hash reveal.
-    if (encodedParams !== window.location.search.slice(1)) return;
+    if (encodedParams !== new URLSearchParams(window.location.search).toString()) return;
     previousParams.current = encodedParams;
     const next = readFilters(new URLSearchParams(encodedParams));
     setQuery(next.query); setRace(next.race); setMatchup(next.matchup);
