@@ -54,6 +54,11 @@ function sourceFiles(dir: string): string[] {
 
 const FILES = [...sourceFiles(WEB_ROOT), ...sourceFiles(API_ROOT)];
 
+/** Stable diagnostic paths on Windows and POSIX checkouts. */
+function sourcePath(file: string): string {
+  return path.relative(path.dirname(WEB_ROOT), file).split(path.sep).join("/");
+}
+
 /** Every match of `re` as "file:line  match". */
 function findAll(re: RegExp, keep: (match: RegExpExecArray) => boolean = () => true): string[] {
   const hits: string[] = [];
@@ -62,7 +67,7 @@ function findAll(re: RegExp, keep: (match: RegExpExecArray) => boolean = () => t
     lines.forEach((line, index) => {
       for (const match of line.matchAll(re)) {
         if (keep(match)) {
-          hits.push(`${path.relative(path.dirname(WEB_ROOT), file)}:${index + 1}  ${match[0]}`);
+          hits.push(`${sourcePath(file)}:${index + 1}  ${match[0]}`);
         }
       }
     });
@@ -72,7 +77,7 @@ function findAll(re: RegExp, keep: (match: RegExpExecArray) => boolean = () => t
 
 describe("links into Settings", () => {
   it("scans both apps' source", () => {
-    const rel = FILES.map((file) => path.relative(path.dirname(WEB_ROOT), file));
+    const rel = FILES.map(sourcePath);
     expect(rel).toContain("web/app/streaming/page.tsx");
     expect(rel).toContain("api/src/routes/me.js");
     expect(rel).toContain("api/src/config/loader.js");
@@ -81,7 +86,7 @@ describe("links into Settings", () => {
 
   it("never links to /settings#<tab>: use /settings?tab=<tab>", () => {
     const hits = findAll(/\/settings#[\w-]*/g).filter(
-      (hit) => !hit.startsWith(path.relative(path.dirname(WEB_ROOT), LEGACY_HASH_HOME)),
+      (hit) => !hit.startsWith(sourcePath(LEGACY_HASH_HOME)),
     );
     expect(hits).toEqual([]);
   });

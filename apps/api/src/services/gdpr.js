@@ -817,7 +817,7 @@ class GdprService {
     const opponentsDeleted = await this.rebuildOpponentsForUser(userId);
     await gdprFence.assert();
 
-    return {
+    const counts = {
       games: gamesRes.deletedCount || 0,
       opponents: opponentsDeleted,
       macroJobs: macroJobsRes.deletedCount || 0,
@@ -827,6 +827,18 @@ class GdprService {
         until: until ? until.toISOString() : null,
       },
     };
+    // Audit in the shared service so user, admin and operator-initiated wipes
+    // all retain the exact scope needed after a database restore.
+    if (this.logger) {
+      this.logger.info({
+        userId,
+        scope: since || until ? "range" : "all",
+        since: counts.range.since,
+        until: counts.range.until,
+        counts,
+      }, "gdpr_games_wiped");
+    }
+    return counts;
     } finally {
       await this._releaseMutationFence(userId, gdprFence);
     }

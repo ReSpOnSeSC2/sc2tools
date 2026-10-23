@@ -38,6 +38,9 @@ test.describe("signed-out visitor walk", () => {
     expect(response?.status()).toBeLessThan(400);
     expectNotSignIn(page);
     await expectNoEndlessSkeleton(page);
+    await expect(page.getByRole("heading", { name: "Your own build library" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Create account", exact: true })).toHaveAttribute("href", "/sign-up?redirect_url=%2Fbuilds");
+    await expect(page.getByRole("link", { name: "Browse community builds" })).toHaveAttribute("href", "/community");
   });
 
   test("/builds/<slug> never redirects to sign-in or loads forever", async ({ page }) => {
@@ -45,6 +48,9 @@ test.describe("signed-out visitor walk", () => {
     expect(response?.status()).toBeLessThan(400);
     expectNotSignIn(page);
     await expectNoEndlessSkeleton(page);
+    const main = page.locator("main").first();
+    await expect(main.getByRole("heading", { name: "Sign in to open this build" })).toBeVisible();
+    await expect(main.getByRole("link", { name: "Sign in", exact: true })).toHaveAttribute("href", "/sign-in?redirect_url=%2Fbuilds%2Fsome-private-build");
   });
 
   test("/community says the API is down instead of 'no builds yet'", async ({ page }) => {

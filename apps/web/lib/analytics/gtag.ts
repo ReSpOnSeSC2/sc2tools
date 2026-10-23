@@ -15,7 +15,7 @@
  * so the GA4 Internal Traffic data filter can drop it.
  */
 
-import { GA_MEASUREMENT_ID } from "./consent";
+import { GA_MEASUREMENT_ID, readConsent } from "./consent";
 import {
   INTERNAL_TRAFFIC_TYPE,
   isInternalBrowser,
@@ -28,12 +28,14 @@ declare global {
   interface Window {
     dataLayer?: unknown[];
     gtag?: GtagFn;
+    [key: `ga-disable-${string}`]: boolean | undefined;
   }
 }
 
 /** Safe accessor for the global gtag fn. */
 function gtag(): GtagFn | null {
   if (typeof window === "undefined") return null;
+  if (readConsent() !== "granted" || !GA_MEASUREMENT_ID || window[`ga-disable-${GA_MEASUREMENT_ID}`]) return null;
   return typeof window.gtag === "function" ? window.gtag : null;
 }
 

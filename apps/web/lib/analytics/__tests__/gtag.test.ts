@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { gaEvent, isGtagReady, pageview, tagSessionAsInternal } from "@/lib/analytics/gtag";
+import { GA_MEASUREMENT_ID, setConsent } from "@/lib/analytics/consent";
 import {
   INTERNAL_TRAFFIC_STORAGE_KEY,
   isInternalBrowser,
@@ -17,12 +18,14 @@ describe("gtag wrappers", () => {
   const gtag = vi.fn();
 
   beforeEach(() => {
+    setConsent("granted");
     window.gtag = gtag;
   });
 
   afterEach(() => {
     gtag.mockReset();
     delete window.gtag;
+    delete window[`ga-disable-${GA_MEASUREMENT_ID}`];
     window.localStorage.clear();
   });
 
@@ -43,6 +46,30 @@ describe("gtag wrappers", () => {
     expect(params).toEqual({
       page_location: `${window.location.origin}/app/opponents/:pulseId?utm_source=discord`,
     });
+  });
+
+  it("stops every wrapper immediately when consent is revoked mid-visit", () => {
+    gaEvent("before_opt_out");
+    expect(gtag).toHaveBeenCalledWith("event", "before_opt_out", {});
+    setConsent("denied");
+    gtag.mockClear();
+    expect(isGtagReady()).toBe(false);
+    gaEvent("overlay_url_copied");
+    pageview("/welcome");
+    tagSessionAsInternal();
+    expect(gtag).not.toHaveBeenCalled();
+
+    setConsent("granted");
+    gtag.mockClear();
+    gaEvent("after_opt_in");
+    expect(gtag).toHaveBeenCalledWith("event", "after_opt_in", {});
+  });
+
+  it("does not use a still-loaded gtag after the saved choice is cleared", () => {
+    window.localStorage.clear();
+    expect(isGtagReady()).toBe(false);
+    gaEvent("agent_download");
+    expect(gtag).not.toHaveBeenCalled();
   });
 
   it("skips untracked surfaces", () => {

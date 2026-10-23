@@ -183,4 +183,18 @@ describe("SettingsShell #section anchors", () => {
     expect(scrollIntoView).not.toHaveBeenCalled();
     expect(document.getElementById("getting-started")?.hasAttribute(SECTION_FLASH_ATTR)).toBe(false);
   });
+
+  it("leaves Skip to content and other chrome anchors outside the active panel alone", () => {
+    window.history.replaceState(null, "", "/settings?tab=overlay#main-content");
+    render(<main id="main-content" tabIndex={-1}>{shell("overlay")}<footer id="footer-links">Footer</footer></main>);
+    const main = screen.getByRole("main");
+    expect(main.hasAttribute(SECTION_FLASH_ATTR)).toBe(false);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    act(() => {
+      window.history.replaceState(null, "", "/settings?tab=overlay#footer-links");
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    expect(document.getElementById("footer-links")?.hasAttribute(SECTION_FLASH_ATTR)).toBe(false);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
 });

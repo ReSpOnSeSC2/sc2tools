@@ -138,7 +138,7 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(340px,440px)] xl:items-start">
         <div
-          className={pinned ? "sticky top-[50px] z-20 -mx-4 bg-bg px-4 pb-2 pt-1 sm:-mx-6 sm:px-6 xl:static xl:mx-0 xl:bg-transparent xl:p-0" : ""}
+          className={pinned ? "sticky top-[calc(50px+env(safe-area-inset-top,0px))] z-20 -mx-4 bg-bg px-4 pb-2 pt-1 sm:-mx-6 sm:px-6 xl:static xl:mx-0 xl:bg-transparent xl:p-0" : ""}
           data-testid="review-replay"
         >
           <ReviewReplayPanel

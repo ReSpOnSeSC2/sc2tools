@@ -78,8 +78,17 @@ function errorMessage(err: unknown, fallback: string): string {
 
 /** GET /v1/custom-builds?forkedFrom=… (summary view, first match only). */
 interface ForkLookup {
-  items: Array<{ slug: string; name?: string }>;
+  items: Array<{
+    slug: string;
+    name?: string;
+    forkedFrom?: { communitySlug?: string } | null;
+  }>;
   total?: number;
+}
+
+/** Older API deployments may ignore the filter; verify the provenance too. */
+function existingCopy(data: ForkLookup | undefined, communitySlug: string): string | null {
+  return data?.items?.find((item) => item.forkedFrom?.communitySlug === communitySlug)?.slug ?? null;
 }
 
 /** The caller's existing copy of a community build, as a list path. */
@@ -165,14 +174,14 @@ function SignedInSave({
   const [savedSlug, setSavedSlug] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const existingSlug = savedSlug ?? lookup.data?.items?.[0]?.slug ?? null;
+  const existingSlug = savedSlug ?? existingCopy(lookup.data, communitySlug);
   const checking = !lookup.data && !lookup.error;
 
   /** A fresh check right before saving, so a second tab or click never duplicates. */
   async function findExistingCopy(): Promise<string | null> {
     try {
       const fresh = await apiCall<ForkLookup>(getToken, lookupPath);
-      return fresh?.items?.[0]?.slug ?? null;
+      return existingCopy(fresh, communitySlug);
     } catch {
       // The lookup is a convenience; a failed check never blocks saving.
       return null;
@@ -191,12 +200,12 @@ function SignedInSave({
           return;
         }
       }
-      const stamp = Math.floor(Date.now() / 1000).toString(36);
+      const stamp = `${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
       const baseName = (title || build.name || "Saved build").trim();
-      const slug = `${slugifyBuildName(baseName) || "build"}-${stamp}`.slice(
-        0,
-        80,
-      );
+      // Reserve the suffix before shortening the title, including for long
+      // names and two intentional copies saved within the same millisecond.
+      const base = (slugifyBuildName(baseName) || "build").slice(0, 80 - stamp.length - 1);
+      const slug = `${base}-${stamp}`;
       // The snapshot is the author's full saved doc; CustomBuild only
       // types the legacy surface, so read v3 fields via a loose view.
       const snap = build as Partial<CustomBuild> & Record<string, unknown>;

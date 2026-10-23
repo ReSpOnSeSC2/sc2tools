@@ -174,6 +174,17 @@ describe("DatabaseBackupsCard details", () => {
     expect(screen.getByText(/Project Read Only role/)).toBeTruthy();
   });
 
+  it("explains an expired secret separately from project permissions", () => {
+    renderCard(payload(atlas({
+      available: false,
+      errorCode: "atlas_backup_auth_failed",
+      freshness: "unknown",
+      lastSnapshotAt: null,
+    })));
+    expect(screen.getByText(/rotate an expired or revoked secret/)).toBeTruthy();
+    expect(screen.queryByText(/Give the service account the Project Read Only role/)).toBeNull();
+  });
+
   it("labels a last-good result after a failed check", () => {
     renderCard(payload(atlas({ stale: true, errorCode: "atlas_backup_unavailable" })));
     expect(screen.getByText(/This is the last good result/)).toBeTruthy();

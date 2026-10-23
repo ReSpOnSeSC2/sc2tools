@@ -11,9 +11,20 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Repair follow-up
+
+- Build library pages load editors and charts when needed, reducing their initial JavaScript; public build pages remain visible while sign-in loads.
+- Community build copies keep unique names even for long titles, and existing-copy links verify which community build they came from.
+- Reports offer an email fallback if the form cannot load. Retry, Send another, phone navigation and update dismissal preserve keyboard access.
+- Opponent replay history now appears directly above opponent notes. Dossiers distinguish server failures from overload and use an indexed public-profile lookup.
+- Scouting never borrows opening/cheese history from a name-only match, and end-game composition explicitly labels your own army.
+- Analytics opt-out stops events during the current visit. Filter copy identifies cards with their own scope; failed requests discard results from old filters.
+- Restore instructions preserve the original history-wipe range, including admin wipes. Backup health follows the configured schedule and distinguishes expired credentials from missing permissions.
+
+
 ### Added
 
-- **Help & support menu:** a ? menu in the top bar (under More on phones,
+- **Help & support menu:** a Help & support menu (life-buoy icon) in the app top bar (under More on phones,
   plus Help and Report a problem in your avatar menu) has help search, the
   Stream Studio course, the desktop app download and a new report form for
   problems, ideas and questions. As you type, the form suggests matching
@@ -30,7 +41,7 @@ corresponding GitHub Release.
   from a "Filters · N active" button. New help article: "Filters: date,
   matchup, region and more".
 
-- **Install SC2 Tools as an app:** the installed app now opens on Today and
+- **Install SC2 Tools as an app:** the installed app opens on Today or your chosen Default tab and
   has shortcuts to Opponents, Replays and Stream settings, and the update
   prompt has a "Later" option. If you installed it before this release,
   remove it and install it again to get the shortcuts. New help article:

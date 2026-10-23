@@ -173,8 +173,25 @@ recreates any missing indexes. Then confirm:
   ' <userId>
   ```
 
-  Do the same for `gdpr_games_wiped` (history wipes): ask the user to wipe
-  again, or re-run it with `services.gdpr.wipeGames(userId, {})`.
+  Also search for `gdpr_games_wiped` (history wipes, including admin wipes).
+  Preserve the original scope: `since` is inclusive and `until` is exclusive.
+  Re-run a range only with its logged bounds, converting non-null strings to
+  `Date` values, for example:
+
+  ```js
+  await services.gdpr.wipeGames(userId, {
+    since: new Date("2026-10-01T00:00:00.000Z"),
+    until: new Date("2026-10-11T00:00:00.000Z"),
+  });
+  ```
+
+  Older user-wipe logs may have the bounds under `counts.range`. Use `{}`
+  only when the log explicitly records `scope: "all"` or a range with both
+  bounds null. If the scope or either bound is missing or unclear, ask the
+  user to repeat the intended wipe. Never guess a range or replace it with
+  an all-history wipe: that also permanently deletes replay files and R2
+  detail blobs outside the intended range. Admin wipes before this audit
+  update were not logged; reconcile those with the admin and affected users.
 - **R2 is not rolled back.** Games deleted after the restore point come
   back in Mongo but their replay files and R2 detail blobs are gone; games
   created after it have R2 objects with no Mongo row (harmless orphans).

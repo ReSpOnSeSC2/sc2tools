@@ -38,8 +38,8 @@ import { isTokenAuthRoute } from "@/lib/tokenAuthRoutes";
  *
  * ConnectionBanner reads that state and shows "Reconnecting to SC2
  * Tools… your data is safe" when the browser is offline, or after
- * FAILURE_THRESHOLD connection failures in a row: the free-tier API
- * sleeps when idle and takes about 30 seconds to wake. While it shows,
+ * FAILURE_THRESHOLD connection failures in a row. A dropped connection
+ * or a server restart can interrupt requests. While it shows,
  * it pings the API's no-database /v1/ping every PING_INTERVAL_MS; the
  * first answer hides the banner and retries every request that failed.
  * Never shown on the OBS overlay or dock pages.
@@ -112,7 +112,10 @@ export function ConnectionStatusProvider({ children }: { children: ReactNode }) 
     // SWR middleware: every hook's fetcher reports how its request ended.
     const watchRequests: Middleware = (useSWRNext) =>
       function useWatchedRequest(key, fetcher, config) {
-        const watched = fetcher
+        // Same-origin proxies can return cached fallback data while the
+        // API is down. Their response does not prove API connectivity.
+        const observesApi = !(typeof key === "string" && key.startsWith("/api/"));
+        const watched = fetcher && observesApi
           ? async (...args: unknown[]) => {
               try {
                 const data = await fetcher(...args);

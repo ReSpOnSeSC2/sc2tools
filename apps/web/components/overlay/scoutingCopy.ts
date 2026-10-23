@@ -34,14 +34,14 @@ function unitWords(token: string): string {
 
 /**
  * The scouting card's one-line phase forecast: where games against
- * this opponent usually end, plus the army they usually reach when
- * that is mid game or later.
+ * this opponent usually end, plus the streamer's own army in those games
+ * when that is mid game or later.
  *
  * Example: midLate + [Carrier, Tempest, Mothership] →
- * "Mid/Late game · Carrier, Tempest, Mothership".
+ * "Mid/Late game · Your army: Carrier, Tempest, Mothership".
  */
 export function phaseLine(phases: OpponentPhases): string {
   const phase = `${PHASE_LABEL[phases.typicalFinalPhase] ?? "Mid"} game`;
   const units = (phases.typicalLateComp?.units ?? []).filter(Boolean).slice(0, 3);
-  return units.length > 0 ? `${phase} · ${units.map(unitWords).join(", ")}` : phase;
+  return units.length > 0 ? `${phase} · Your army: ${units.map(unitWords).join(", ")}` : phase;
 }

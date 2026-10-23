@@ -34,7 +34,7 @@ const article: HelpArticle = {
   body: [
     {
       type: "paragraph",
-      text: "SC2 Tools keeps your games, builds and settings on a server. When a request to it fails, the section that needed it says so and offers **Retry**. It never shows an empty \"no data\" message for a request that failed, so if you see one, your filters really did match nothing.",
+      text: "SC2 Tools keeps your games, builds and settings on a server. If a section says it couldn't load, use **Retry** to request it again. An empty section by itself does not confirm your filters matched nothing; check for an error or a connection notice too.",
     },
     { type: "heading", text: "What each message means" },
     {
@@ -43,8 +43,8 @@ const article: HelpArticle = {
       rows: [
         [
           "Can't reach SC2 Tools",
-          "No answer came back. Your connection dropped, or the server is waking up or restarting.",
-          "Check your connection, then press **Retry**. Waking up takes about 30 seconds.",
+          "No answer came back. Your connection dropped, or the server is restarting or being updated.",
+          "Check your connection, then press **Retry** in a moment.",
         ],
         [
           "The server is busy",
@@ -97,7 +97,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Reconnecting to SC2 Tools… your data is safe" },
     {
       type: "paragraph",
-      text: "This bar appears under the top bar when your browser is offline, or after a few requests in a row get no answer. The most common reason is that the server is **waking up**: it goes to sleep when nobody has used it for a while and takes about **30 seconds** to start again. It also happens for a minute while we release an update.",
+      text: "This bar appears under the top bar when your browser is offline, or after a few requests in a row get no answer. Your connection may have dropped, or the server may be restarting or being updated.",
     },
     {
       type: "list",

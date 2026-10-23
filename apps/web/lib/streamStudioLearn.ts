@@ -237,7 +237,7 @@ export const WIDGET_GUIDES: readonly WidgetGuide[] = [
   {
     id: "scouting", name: "Scouting tells", group: "game",
     summary: "Your game-start briefing: who they are, your history, and what to watch for.",
-    explanation: "The scouting report combines opponent identity with your head-to-head record, recent games, notes, your best answer, a cheese warning and where your games against them usually end, like \"Mid/Late game · Carrier, Tempest\". It can begin with a thin identity card while the lookup fills in, then show richer history. This is a game-start briefing; it is suppressed once the real post-game result arrives.",
+    explanation: "The scouting report combines opponent identity with your head-to-head record, recent games, notes, your best answer, a cheese warning and where your games against them usually end, like \"Mid/Late game · Your army: Carrier, Tempest\". It can begin with a thin identity card while the lookup fills in, then show richer history. This is a game-start briefing; it is suppressed once the real post-game result arrives.",
     example: { headline: "Game-start briefing · illustrative", lines: ["ExampleOpponent · 3W–2L", "Recent games and your best answer", "Games usually end: Mid/Late game"] },
     appears: "At the start of a real game once gameplay and opponent context are ready; hides after its briefing window.",
     needs: [liveAgent, replayHistory, "Opponent identification. Opening and cheese lines need at least 2 earlier games vs this opponent in this matchup; the \"Games usually end\" line needs 3."],

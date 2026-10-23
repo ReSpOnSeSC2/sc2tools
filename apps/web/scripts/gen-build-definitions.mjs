@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * gen-build-definitions — writes lib/build-definitions.generated.json,
  * every build label the replay engine can emit, for /definitions.

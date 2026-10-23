@@ -168,7 +168,11 @@ describe("ReportIssueModal", () => {
     const thanks = await screen.findByText("Thanks, we got it.");
     await waitFor(() => expect(document.activeElement).toBe(thanks));
 
-    fireEvent.click(screen.getByRole("button", { name: "Send another" }));
+    const sendAnother = screen.getByRole("button", { name: "Send another" });
+    sendAnother.focus();
+    fireEvent.click(sendAnother);
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Subject")));
+    expect(sendAnother.isConnected).toBe(false);
     expect((screen.getByLabelText("Subject") as HTMLInputElement).value).toBe("");
     expect((screen.getByRole("textbox", { name: "Your question" }) as HTMLTextAreaElement).value).toBe("");
     expect((screen.getByRole("radio", { name: "Question" }) as HTMLInputElement).checked).toBe(true);

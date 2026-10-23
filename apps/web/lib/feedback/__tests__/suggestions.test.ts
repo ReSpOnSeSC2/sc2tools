@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { helpMenuItems } from "@/components/chrome/helpMenu";
+import { helpMenuItems } from "@/components/chrome/helpMenuItems";
 import { getArticle, helpArticlePath } from "@/lib/help";
 import { SUGGESTION_LIMIT, reportHelpSuggestions } from "../suggestions";
 

@@ -282,7 +282,7 @@ describe("BuildsLibrary pagination", () => {
     render(<BuildsLibrary />);
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Edit Build 51" }));
-    fireEvent.click(screen.getByRole("button", { name: "Finish editor save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish editor save" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Edit Build 1" })).toBeTruthy());
     expect(harness.mutateBuilds).toHaveBeenCalledOnce();
     expect((screen.getByRole("button", { name: "Previous" }) as HTMLButtonElement).disabled).toBe(true);
@@ -320,10 +320,12 @@ describe("BuildsLibrary signed out", () => {
     expect(screen.queryByLabelText("Search")).toBeNull();
   });
 
-  it("renders nothing until Clerk has loaded", () => {
+  it("keeps the public intro visible until Clerk has loaded", () => {
     harness.isLoaded = false;
     const { container } = render(<BuildsLibrary />);
-    expect(container.innerHTML).toBe("");
+    expect(screen.getByRole("heading", { level: 1, name: "Your own build library" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Browse community builds" })).toBeTruthy();
+    expect(container.querySelector(".animate-pulse")).toBeNull();
     expect(harness.paths).toEqual([]);
   });
 });
@@ -611,7 +613,7 @@ describe("BuildsLibrary queued reclassification feedback", () => {
     render(<BuildsLibrary />);
 
     fireEvent.click(screen.getByRole("button", { name: "Edit PvT Test Build" }));
-    fireEvent.click(screen.getByRole("button", { name: "Finish editor save" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Finish editor save" }));
 
     await waitFor(() => {
       expect(harness.mutateStatus).toHaveBeenCalledWith(

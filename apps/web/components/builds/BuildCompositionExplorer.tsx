@@ -84,7 +84,7 @@ export function BuildCompositionExplorer({ payload, apiPath, onOpenGames }: {
         <summary className={`flex min-h-11 cursor-pointer list-none items-center gap-2 rounded ${focus}`}>Selection &amp; matchups{filters.length ? ` · ${filters.length} active filter${filters.length === 1 ? "" : "s"}` : ""}<ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" aria-hidden /></summary>
         <div className="space-y-2 rounded-lg border border-border bg-bg-elevated/50 p-3 text-micro leading-relaxed">
           <p>This build’s matched games, using the current page filters. {dated.length < games.length ? `${games.length - dated.length} games have no recorded date. ` : ""}Dates describe this sample, not when the data was processed.</p>
-          <p>{filters.length ? filters.map(([key, value]) => `${FILTER_LABELS[key]}: ${value}`).join(" · ") : "No additional page filters."}</p>
+          <p>{filters.length ? filters.map(([key, value]) => `${FILTER_LABELS[key]}: ${key === "exclude_too_short" ? (value === "true" ? "Hidden" : "Shown") : value}`).join(" · ") : "No additional page filters."}</p>
           <p>{[...matchups].map(([name, count]) => `${name}: ${count}`).join(" · ") || "No matched games available."}</p>
         </div>
       </details>

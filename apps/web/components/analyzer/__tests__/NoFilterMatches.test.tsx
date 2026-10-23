@@ -31,11 +31,12 @@ describe("NoFilterMatches", () => {
     expect(applied.textContent).toContain("Map:Alcyone LE");
   });
 
-  it("uses the chip row's list, listing the date range once", () => {
+  it("lists the date range once and omits settings that already widen the result", () => {
     renderWith({ ...DEFAULTS, preset: "all", exclude_too_short: false });
     const applied = screen.getByTestId("no-filter-matches-applied");
     expect(within(applied).getAllByText(/Dates:|Date range:/)).toHaveLength(1);
-    expect(applied.textContent).toContain("Too-short games:Shown");
+    expect(applied.textContent).not.toContain("Too-short games");
+    expect(screen.queryByRole("button", { name: "Reset filters" })).toBeNull();
   });
 
   it("offers Reset filters only when a filter beyond the defaults is on, and keeps the dates", () => {

@@ -18,7 +18,7 @@ import { buttonClassName } from "@/components/ui/buttonStyles";
  */
 
 /** One line for every outage panel: plain, from the visitor's side. */
-export const COMMUNITY_UNAVAILABLE_BODY = "The server may be waking up (about 30 s). Nothing is lost.";
+export const COMMUNITY_UNAVAILABLE_BODY = "The connection may have dropped, or the server may be restarting or being updated. Please try again in a moment.";
 
 export interface CommunityUnavailableProps {
   title: string;

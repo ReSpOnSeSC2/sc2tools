@@ -82,6 +82,13 @@ describe("ConnectionBanner", () => {
     expect(screen.getByText(BANNER_TEXT)).toBeTruthy();
   });
 
+  it("keeps reconnecting when the same-origin stats proxy returns its cached fallback", async () => {
+    const ids = ["a", "b", "c", "/api/site/stats"];
+    renderApp(ids, new Map(ids.map((id) => [id, id.startsWith("/api/") ? ok : offline])));
+    await screen.findByText("/api/site/stats:ok");
+    expect(await screen.findByText(BANNER_TEXT)).toBeTruthy();
+  });
+
   it("is never shown on the overlay or dock pages", () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     for (const pathname of ["/overlay/token-123", "/dock/token-123"]) {

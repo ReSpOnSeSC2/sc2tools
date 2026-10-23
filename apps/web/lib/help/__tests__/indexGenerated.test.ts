@@ -13,7 +13,7 @@ describe("lib/help/articles/index.generated.ts", () => {
   it("matches the article files on disk", () => {
     const expected = helpIndexSource(listHelpArticleFiles());
     expect(
-      readFileSync(HELP_INDEX_FILE, "utf8"),
+      readFileSync(HELP_INDEX_FILE, "utf8").replace(/\r\n/g, "\n"),
       "lib/help/articles/index.generated.ts is stale. Run `npm run help:index` in apps/web and commit the result.",
     ).toBe(expected);
   });

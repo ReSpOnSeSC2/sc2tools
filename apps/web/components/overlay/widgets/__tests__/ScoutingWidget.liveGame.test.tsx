@@ -464,7 +464,7 @@ describe("ScoutingWidget — live envelope path", () => {
 
   it("renders opponentPhases as one footer line, never the old medians strip", () => {
     // The phase forecast is one compact line on stream: where games
-    // usually end plus the army they reach. The trajectory strip and
+    // usually end plus the streamer's own army. The trajectory strip and
     // its median labels stay off the card.
     const opponentPhases: OpponentPhases = {
       typicalFinalPhase: "midLate",
@@ -517,7 +517,7 @@ describe("ScoutingWidget — live envelope path", () => {
     expect(container.textContent).toContain("GAMES USUALLY END");
     expect(
       container.querySelector('[data-testid="opponent-phase-line"]')?.textContent,
-    ).toBe("Mid/Late game · Carrier, Tempest, Mothership");
+    ).toBe("Mid/Late game · Your army: Carrier, Tempest, Mothership");
   });
 
   it("renders no phase line when opponentPhases is missing", () => {

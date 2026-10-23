@@ -60,8 +60,7 @@ const DOSSIER_BUSY = {
   body: "Building a dossier is one of the heaviest requests, and the server builds a few at a time.",
 };
 
-/** RequestError copy for a dossier the server couldn't build right now (503 / 5xx). */
+/** RequestError copy for an explicitly busy dossier request. */
 export const DOSSIER_ERROR_COPY: RequestErrorProps["copy"] = {
   busy: DOSSIER_BUSY,
-  server: DOSSIER_BUSY,
 };

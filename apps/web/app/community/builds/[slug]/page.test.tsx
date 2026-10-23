@@ -192,7 +192,7 @@ describe("/community/builds/[slug] when the build can't be fetched", () => {
     expect(mocks.notFound).not.toHaveBeenCalled();
     const heading = container.querySelector("h1");
     expect(heading?.textContent).toBe("This build is temporarily unavailable");
-    expect(container.textContent).toContain("The server may be waking up (about 30 s). Nothing is lost.");
+    expect(container.textContent).toContain("The connection may have dropped, or the server may be restarting or being updated.");
     const retry = Array.from(container.querySelectorAll("a")).find((a) => a.textContent?.includes("Try again"));
     expect(retry?.getAttribute("href")).toBe("/community/builds/build-fixture0001");
     const metadata = await generateMetadata({ params: params() });

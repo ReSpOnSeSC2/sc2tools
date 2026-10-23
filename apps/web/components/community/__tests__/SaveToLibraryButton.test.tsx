@@ -12,7 +12,9 @@ import type { CustomBuild } from "@/components/builds/types";
  */
 const harness = vi.hoisted(() => ({
   signedIn: true,
-  lookup: { items: [] } as { items: Array<{ slug: string }> } | undefined,
+  lookup: { items: [] } as {
+    items: Array<{ slug: string; forkedFrom?: { communitySlug: string } }>;
+  } | undefined,
   lookupPaths: [] as Array<string | null>,
   mutate: vi.fn(),
   apiCall: vi.fn(),
@@ -79,7 +81,10 @@ beforeEach(() => {
   harness.toastSuccess.mockReset();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("SaveToLibraryButton", () => {
   it("offers signed-out visitors a sign-up that returns to this build", () => {
@@ -105,7 +110,7 @@ describe("SaveToLibraryButton", () => {
   });
 
   it("shows 'In your library — Open' when a copy already exists, with a client link", () => {
-    harness.lookup = { items: [{ slug: "glaive-adepts-abc" }] };
+    harness.lookup = { items: [{ slug: "glaive-adepts-abc", forkedFrom: { communitySlug: "glaives-fixture01" } }] };
     renderButton();
     const open = screen.getByRole("link", { name: /In your library — Open/ });
     expect(open.getAttribute("href")).toBe("/builds/glaive-adepts-abc");
@@ -116,7 +121,7 @@ describe("SaveToLibraryButton", () => {
   it("a click when a copy exists elsewhere shows 'In your library' and does not save", async () => {
     // The page loaded before the copy existed (another tab saved it).
     harness.apiCall.mockImplementation(async (_token: unknown, path: string) => {
-      if (path.startsWith("/v1/custom-builds?")) return { items: [{ slug: "saved-in-other-tab" }] };
+      if (path.startsWith("/v1/custom-builds?")) return { items: [{ slug: "saved-in-other-tab", forkedFrom: { communitySlug: "glaives-fixture01" } }] };
       throw new Error(`unexpected call ${path}`);
     });
     renderButton();
@@ -163,7 +168,7 @@ describe("SaveToLibraryButton", () => {
   });
 
   it("'Save another copy' saves again on purpose", async () => {
-    harness.lookup = { items: [{ slug: "first-copy" }] };
+    harness.lookup = { items: [{ slug: "first-copy", forkedFrom: { communitySlug: "glaives-fixture01" } }] };
     harness.apiCall.mockResolvedValue({ ok: true, saved: true });
     renderButton();
     fireEvent.click(screen.getByRole("button", { name: /Save another copy/ }));
@@ -182,6 +187,43 @@ describe("SaveToLibraryButton", () => {
     fireEvent.click(screen.getByRole("button", { name: /Save to my library/ }));
     expect((await screen.findByRole("alert")).textContent).toBe("The server had a problem.");
     expect(screen.getByRole("button", { name: /Save to my library/ })).toBeTruthy();
+  });
+
+  it("does not trust unrelated rows from an API that ignores forkedFrom", async () => {
+    harness.lookup = { items: [{ slug: "unrelated-build" }] };
+    harness.apiCall.mockImplementation(async (_token: unknown, path: string) => {
+      if (path.startsWith("/v1/custom-builds?")) {
+        return { items: [{ slug: "another-build", forkedFrom: { communitySlug: "another-community-build" } }] };
+      }
+      return { ok: true };
+    });
+    renderButton();
+    expect(screen.queryByRole("link", { name: /In your library/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Save to my library/ }));
+    const open = await screen.findByRole("link", { name: /In your library/ });
+    expect(saves()).toHaveLength(1);
+    expect(open.getAttribute("href")).not.toMatch(/unrelated-build|another-build/);
+  });
+
+  it("keeps a unique suffix for long titles even when two copies save at the same time", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 9, 22, 12));
+    vi.spyOn(crypto, "randomUUID")
+      .mockReturnValueOnce("11111111-1111-4111-8111-111111111111")
+      .mockReturnValueOnce("22222222-2222-4222-8222-222222222222");
+    harness.apiCall.mockImplementation(async (_token: unknown, path: string) =>
+      path.startsWith("/v1/custom-builds?") ? { items: [] } : { ok: true });
+    render(<SaveToLibraryButton build={SNAPSHOT}
+      title="PvZ - Stargate Oracle into Glaive Adepts with a fast third Nexus and Robo for Disruptors"
+      communitySlug="glaives-fixture01" />);
+    fireEvent.click(screen.getByRole("button", { name: /Save to my library/ }));
+    const another = await screen.findByRole("button", { name: "Save another copy" });
+    fireEvent.click(another);
+    await waitFor(() => expect(saves()).toHaveLength(2));
+    const slugs = saves().map(([, , init]) => JSON.parse(String((init as RequestInit).body)).slug as string);
+    expect(slugs[0]).not.toBe(slugs[1]);
+    expect(slugs[0]).toMatch(/-11111111$/);
+    expect(slugs[1]).toMatch(/-22222222$/);
+    expect(slugs.every((slug) => slug.length === 80)).toBe(true);
   });
 
   it("explains a build that predates library saving", () => {

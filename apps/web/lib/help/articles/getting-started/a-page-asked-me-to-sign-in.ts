@@ -39,7 +39,9 @@ const article: HelpArticle = {
         "[Stream Studio](/stream-studio) and its [crash course](/stream-studio/learn).",
         "[Community builds](/community), author profiles and public opponent profiles.",
         "[Build definitions](/definitions): how each build is recognised.",
-        "Replays and archives a player chose to share with a link.",
+        "Browse the [Review Exchange](/reviews). Asking for or writing a review needs an account.",
+        "[Guides](/guides) and [Analyze replays](/try), when these features are enabled.",
+        "A player's shared replay archive (the list of replays). Opening an individual replay's analysis needs a free account.",
         "This help center.",
       ],
     },
@@ -51,6 +53,7 @@ const article: HelpArticle = {
         "Your [custom build library](/builds). Signed out, that page explains what custom builds do and lets you create an account.",
         "[Devices](/devices) and the setup wizard, where you pair the desktop app.",
         "[Settings](/settings), including your overlay links for OBS.",
+        "Opening the analysis of an individual shared replay, including one linked from a public archive.",
         "Asking for or writing replay reviews, voting, and publishing or saving community builds.",
       ],
     },
@@ -71,7 +74,7 @@ const article: HelpArticle = {
     { type: "heading", text: "\"Temporarily unavailable\"" },
     {
       type: "paragraph",
-      text: "A public page couldn't reach our server, which can take about 30 seconds to wake up. Nothing is lost: press **Try again** in a moment. A build or profile that exists is never reported as missing while the server is waking up.",
+      text: "A public page couldn't reach our server. Your connection may have dropped, or the server may be restarting or being updated. Nothing is lost: press **Try again** in a moment. A temporary server failure does not mean the build or profile was removed.",
     },
     {
       type: "callout",

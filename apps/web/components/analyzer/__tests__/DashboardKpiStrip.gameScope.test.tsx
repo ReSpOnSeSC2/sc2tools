@@ -136,7 +136,7 @@ describe("DashboardKpiStrip labels", () => {
       since: "2026-10-01T00:00:00.000Z",
       until: "2026-10-07T23:59:59.999Z",
     });
-    expect(screen.getByText("Own timeframe · ignores the date filter")).toBeTruthy();
+    expect(screen.getByText("Own timeframe · ignores date, matchup, region and Strategies filters")).toBeTruthy();
     // Its own request carries no global date bounds.
     const wrUrl = requestedUrls.find(
       (url) => url.startsWith("/v1/timeseries") && queryOf(url).get("since") === "2026-09-30T04:00:00.000Z",

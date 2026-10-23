@@ -59,9 +59,14 @@ function flash(el: HTMLElement): () => void {
  * Example:
  *   useEffect(() => revealSectionAnchor(window.location.hash), [tab]);
  */
-export function revealSectionAnchor(hash: string): () => void {
+export function revealSectionAnchor(hash: string, root?: HTMLElement): () => void {
   const id = sectionIdFromHash(hash);
   if (!id || typeof document === "undefined") return () => {};
+
+  const findSection = () => {
+    const el = document.getElementById(id);
+    return el && (!root || root.contains(el)) && el !== root ? el : null;
+  };
 
   let observer: MutationObserver | null = null;
   let timeout: number | undefined;
@@ -80,15 +85,15 @@ export function revealSectionAnchor(hash: string): () => void {
     el.scrollIntoView?.({ block: "start", behavior: prefersReducedMotion() ? "auto" : "smooth" });
   };
 
-  const found = document.getElementById(id);
+  const found = findSection();
   if (found) {
     reveal(found);
   } else {
     observer = new MutationObserver(() => {
-      const el = document.getElementById(id);
+      const el = findSection();
       if (el) reveal(el);
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(root ?? document.body, { childList: true, subtree: true });
     timeout = window.setTimeout(stopWaiting, SECTION_WAIT_MS);
     for (const type of INTERRUPT_EVENTS) {
       window.addEventListener(type, stopWaiting, { capture: true, passive: true });
