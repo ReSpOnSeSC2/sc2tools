@@ -219,16 +219,6 @@ const REGISTRY = Object.freeze({
   // keeps the ``REGISTRY covers every COLLECTIONS entry`` invariant
   // green and makes future bumps a one-line edit instead of "add
   // entry + bump test threshold".
-  [COLLECTIONS.ML_MODELS]: {
-    collection: COLLECTIONS.ML_MODELS,
-    currentVersion: 1,
-    versionKey: VERSION_KEY,
-  },
-  [COLLECTIONS.ML_JOBS]: {
-    collection: COLLECTIONS.ML_JOBS,
-    currentVersion: 1,
-    versionKey: VERSION_KEY,
-  },
   [COLLECTIONS.IMPORT_JOBS]: {
     collection: COLLECTIONS.IMPORT_JOBS,
     currentVersion: 1,
