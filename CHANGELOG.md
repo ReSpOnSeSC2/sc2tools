@@ -17,6 +17,12 @@ corresponding GitHub Release.
 - Matchup guides separate opponent league and MMR filters, show the current scope and loading feedback, and offer a way out of empty results.
 - Switch between all nine matchups, view the other side, and read plain-language sample sizes and counter verdicts. A new Build guides help article explains the filters and archived eight-worker games.
 
+### Review recovery
+
+- Failed request closure and reviewer preference saves show recovery actions; preferences roll back when saving fails.
+- Review-board and written-review loading failures show clear Retry states.
+- Map pins belong to each composer, so posting or cancelling a reply preserves the pin on your separate top-level comment.
+
 ### Phase 2b: help and Today
 
 - Help now covers 48 topics, with section links, replay reviews and coaching guides, and a dismissible "How to read this" introduction on analyzer sections.

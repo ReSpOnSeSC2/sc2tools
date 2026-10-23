@@ -61,8 +61,13 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [seekRequest, setSeekRequest] = useState<{ t: number; seq: number } | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [pinMode, setPinMode] = useState(false);
-  const [draftPin, setDraftPin] = useState<DraftPin | null>(null);
+  const [pickingFor, setPickingFor] = useState<string | null>(null);
+  const [draftPins, setDraftPins] = useState<Record<string, DraftPin>>({});
+  const clearPin = useCallback((owner: string) => {
+    setDraftPins((old) => { const next = { ...old }; delete next[owner]; return next; });
+    setPickingFor((old) => old === owner ? null : old);
+  }, []);
+  const togglePin = useCallback((owner: string) => setPickingFor((old) => old === owner ? null : owner), []);
   const [composing, setComposing] = useState<number | null>(null);
   const [playbackAvailable, setPlaybackAvailable] = useState(false);
   const [pinned, setPinned] = useState(true);
@@ -85,9 +90,11 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
       if (!n || !c.mapPoint || c.gameTimeSec === null) continue;
       out.push({ id: c.id, x: c.mapPoint.x, y: c.mapPoint.y, t: c.gameTimeSec, endT: c.endTimeSec, label: String(n), active: c.id === activeId });
     }
-    if (draftPin) out.push({ id: "__draft__", x: draftPin.x, y: draftPin.y, t: draftPin.t, label: "+", draft: true });
+    for (const [owner, pin] of Object.entries(draftPins)) {
+      out.push({ id: `__draft__:${owner}`, x: pin.x, y: pin.y, t: pin.t, label: "+", draft: true });
+    }
     return out;
-  }, [data.comments, pins, activeId, draftPin]);
+  }, [data.comments, pins, activeId, draftPins]);
 
   const commentMarkers = useMemo<CommentTimelineMarker[]>(
     () => commentClusters(data.comments, duration ?? 0).map((cluster) => {
@@ -115,12 +122,13 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
   }, [data.comments, duration, seek, scrollToComment]);
 
   const onWorldClick = useCallback((x: number, y: number, t: number) => {
-    setDraftPin({ x, y, t });
-    setPinMode(false);
-  }, []);
+    if (!pickingFor) return;
+    setDraftPins((old) => ({ ...old, [pickingFor]: { x, y, t } }));
+    setPickingFor(null);
+  }, [pickingFor]);
 
   const onMarkerClick = useCallback((markerId: string) => {
-    if (markerId === "__draft__") return;
+    if (markerId.startsWith("__draft__:")) return;
     const c = data.comments.find((x) => x.id === markerId);
     if (c?.gameTimeSec !== null && c?.gameTimeSec !== undefined) seek(c.gameTimeSec, c.id);
     scrollToComment(markerId);
@@ -152,7 +160,7 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
             onTimeChange={setCurrentTime}
             onPlaybackAvailable={setPlaybackAvailable}
             mapMarkers={mapMarkers}
-            onWorldClick={pinMode ? onWorldClick : undefined}
+            onWorldClick={pickingFor ? onWorldClick : undefined}
             onMarkerClick={onMarkerClick}
             commentMarkers={commentMarkers}
             onCommentMarker={onCommentMarker}
@@ -188,16 +196,16 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
               durationSec={duration}
               currentTime={currentTime}
               initialTime={composing}
-              draftPin={draftPin}
-              pinMode={pinMode}
+              draftPin={draftPins.root ?? null}
+              nextPinNumber={pins.size + 1}
+              pinMode={pickingFor === "root"}
               canPin={playbackAvailable}
-              onTogglePinMode={() => setPinMode((v) => !v)}
-              onClearPin={() => setDraftPin(null)}
-              onCancel={() => { setComposing(null); setDraftPin(null); setPinMode(false); }}
+              onTogglePinMode={() => togglePin("root")}
+              onClearPin={() => clearPin("root")}
+              onCancel={() => { setComposing(null); clearPin("root"); }}
               onPosted={(commentId) => {
                 setComposing(null);
-                setDraftPin(null);
-                setPinMode(false);
+                clearPin("root");
                 void refresh().then(() => scrollToComment(commentId));
               }}
             />
@@ -209,11 +217,11 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
             currentTime={currentTime}
             durationSec={duration}
             canPin={playbackAvailable}
-            draftPin={draftPin}
-            pinMode={pinMode}
+            pinFor={(owner) => draftPins[owner] ?? null}
+            pickingFor={pickingFor}
             onSeek={seek}
-            onTogglePinMode={() => setPinMode((v) => !v)}
-            onClearPin={() => setDraftPin(null)}
+            onTogglePinMode={togglePin}
+            onClearPin={clearPin}
             onChanged={refresh}
           />
         </div>
@@ -225,6 +233,7 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
 function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: () => Promise<unknown> }) {
   const { getToken } = useAuth();
   const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
   const r = data.request;
@@ -242,12 +251,15 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
     }
   }
   const headline = reviewHeadline(r.question, r.game.matchup);
-  async function close() {
-    if (!window.confirm("Close this request? New comments stop and the replay analysis is no longer shared. The thread stays readable.")) return;
+  async function close(confirmed = false) {
+    if (!confirmed && !window.confirm("Close this request? New comments stop and the replay analysis is no longer shared. The thread stays readable.")) return;
     setClosing(true);
+    setCloseError(null);
     try {
       await apiCall(getToken, `/v1/reviews/${encodeURIComponent(r.id)}/close`, { method: "POST", body: "{}" });
       await onChanged();
+    } catch (err) {
+      setCloseError((err as { message?: string })?.message || "Couldn't close this request. Check your connection and try again.");
     } finally {
       setClosing(false);
     }
@@ -291,6 +303,7 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
             <Button variant="ghost" size="sm" loading={closing} onClick={() => void close()}>Close request</Button>
           ) : null}
         </div>
+        {closeError ? <p role="alert" className="text-danger">{closeError} <Button variant="ghost" size="sm" loading={closing} onClick={() => void close(true)}>Try again</Button></p> : null}
         {r.asker.isYou && active ? (
           <label className="flex items-start gap-2 text-caption text-text-muted">
             <input

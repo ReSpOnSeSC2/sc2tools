@@ -16,6 +16,7 @@ import {
   type ReviewerMe,
 } from "@/lib/reviews";
 import { ReviewCard } from "./ReviewCard";
+import { Button } from "@/components/ui/Button";
 
 /**
  * "Requests you can help with" — the signed-in reviewer's verified race's
@@ -81,21 +82,33 @@ export function ReviewLeaderboard({ initial }: { initial: LeaderboardResponse | 
   );
 }
 
-function LeaderboardOptIn({ onChanged }: { onChanged: () => void }) {
+export function useReviewerPrefs(onChanged: () => void) {
   const { getToken } = useAuth();
   const me = useApi<ReviewerMe>("/v1/me/reviewer", { revalidateOnFocus: false });
   const [busy, setBusy] = useState(false);
-  if (!me.data) return null;
+  const [saveError, setSaveError] = useState<string | null>(null);
   const toggle = async (key: "leaderboardOptIn" | "weeklyDigest", value: boolean) => {
+    if (busy || !me.data) return;
+    const prev = me.data;
     setBusy(true);
+    setSaveError(null);
     try {
+      await me.mutate({ ...prev, [key]: value }, { revalidate: false });
       const next = await apiCall<ReviewerMe>(getToken, "/v1/me/reviewer", { method: "PATCH", body: JSON.stringify({ [key]: value }) });
       await me.mutate(next, { revalidate: false });
       onChanged();
-    } finally {
-      setBusy(false);
-    }
+    } catch {
+      await me.mutate(prev, { revalidate: false });
+      setSaveError("Couldn't save that setting. Try again.");
+    } finally { setBusy(false); }
   };
+  return { me, busy, saveError, toggle };
+}
+
+function LeaderboardOptIn({ onChanged }: { onChanged: () => void }) {
+  const { me, busy, saveError, toggle } = useReviewerPrefs(onChanged);
+  if (me.error) return <p role="alert" className="mt-3 text-caption text-text-muted">Your reviewer settings couldn&apos;t load · <Button variant="ghost" size="sm" onClick={() => void me.mutate()}>Try again</Button></p>;
+  if (!me.data) return null;
   return (
     <div className="mt-3 space-y-2 border-t border-border pt-3 text-caption">
       <p className="text-text-muted">
@@ -110,6 +123,7 @@ function LeaderboardOptIn({ onChanged }: { onChanged: () => void }) {
         <input type="checkbox" disabled={busy} checked={me.data.weeklyDigest} onChange={(e) => void toggle("weeklyDigest", e.target.checked)} className="h-4 w-4" />
         Weekly digest of open requests in my matchups
       </label>
+      {saveError ? <p role="alert" className="text-danger">{saveError}</p> : null}
     </div>
   );
 }
