@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { NotificationItem } from "./NotificationItem";
@@ -22,15 +22,13 @@ export default function NotificationPanel(p: Props) {
   const focused = useRef(false);
   const items = p.items.filter((row) => category === "all" || notificationCategory(row.kind) === category);
   useEffect(() => { const timer = setInterval(() => tick((n) => n + 1), 30000); return () => clearInterval(timer); }, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (focused.current || (!p.ready && !p.listError && !p.unreadError)) return;
-    // The parent merges its freshly loaded page in an effect. Focus after
-    // that merge, rather than treating its transient empty render as final.
-    const timer = setTimeout(() => {
-      (panel.current?.querySelector<HTMLElement>("[data-notification-row]") || header.current)?.focus();
-      focused.current = true;
-    }, 0);
-    return () => clearTimeout(timer);
+    // ready means the parent's fresh page has been merged into visible rows.
+    // Focus at that commit; a timer could run on its transient empty render
+    // under scheduler pressure and permanently latch focus on the heading.
+    (panel.current?.querySelector<HTMLElement>("[data-notification-row]") || header.current)?.focus();
+    focused.current = true;
   }, [p.ready, p.items, p.listError, p.unreadError]);
   return <div ref={panel} role="dialog" aria-label="Notifications" style={p.style}
     className="absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border-2 border-line bg-bg-surface p-2 shadow-hard">
