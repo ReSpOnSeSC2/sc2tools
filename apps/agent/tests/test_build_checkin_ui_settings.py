@@ -253,6 +253,7 @@ def test_gui_wires_the_view_settings_and_backlog(tmp_path: Path) -> None:
         app = QtWidgets.QApplication([])
         base = Path(sys.argv[1])
         moved = []
+        reset = []
 
         class Controller:
             available = True
@@ -267,7 +268,7 @@ def test_gui_wires_the_view_settings_and_backlog(tmp_path: Path) -> None:
 
         def make(**extra):
             ui = GuiUI(
-                version="0.16.9", dashboard_url="https://example.test/app",
+                version="0.16.9", dashboard_url="https://example.test",
                 pairing_url="https://example.test/devices", log_dir=base,
                 log_file=base / "agent.log", api_base="https://api.example.test",
                 replay_folders=[], initial_paused=False, initial_paired=True,
@@ -287,6 +288,8 @@ def test_gui_wires_the_view_settings_and_backlog(tmp_path: Path) -> None:
             build_checkin_available=True,
             build_checkin_positions={"loading": [5, 6]},
             on_build_checkin_moved=lambda kind, x, y: moved.append((kind, x, y)),
+            on_build_checkin_reset=lambda: reset.append(True),
+            build_checkin_preview_race=lambda: "Terran",
         )
         group = window._checkin_settings
         assert isinstance(group, settings_mod.CheckinSettingsGroup)
@@ -329,6 +332,25 @@ def test_gui_wires_the_view_settings_and_backlog(tmp_path: Path) -> None:
         assert controller.calls == [("set_prefs", {"ask_at_loading": False})]
         window._checkin_host.remember_position("postgame", 7, 8)
         assert moved == [("postgame", 7, 8)]
+
+        # Exercise the actual Settings -> host callback wiring with no live card.
+        before = list(controller.calls)
+        group.preview_loading.click()
+        preview = window._checkin_host.window("loading")
+        assert preview.is_preview and preview.model.matchup == "TvP"
+        group.preview_postgame.click()
+        assert not preview.isVisible()
+        preview = window._checkin_host.window("postgame")
+        assert preview.is_preview
+        group.reset_positions.click()
+        assert reset == [True] and window._checkin_host._positions == {}
+        assert group.positions_status.text() == "Positions reset"
+        import webbrowser
+        opened = []
+        webbrowser.open = lambda url, **kwargs: opened.append((url, kwargs))
+        group.queue_link.click()
+        assert opened == [("https://example.test/app", {"new": 2})]
+        assert controller.calls == before
 
         window._checkin_host.close()
         window.deleteLater()

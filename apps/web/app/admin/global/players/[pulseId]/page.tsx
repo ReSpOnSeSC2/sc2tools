@@ -5,42 +5,34 @@ import { RequestError } from "@/components/ui/RequestError";
 import { AdminPagination } from "@/app/admin/components/AdminPagination";
 import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
-import { use, useState } from "react";
+import { Suspense, use } from "react";
 import Link from "next/link";
 
 import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
-import { compactNumber, timeSince } from "../../../components/format";
+import { AdminTable, AdminMobileSort, type AdminColumn } from "../../../components/AdminTable";
+import { useAdminQueryState } from "../../../components/useAdminQueryState";
+import { useAdminCursor } from "../../../components/useAdminCursor";
+import { AdminSelectedGame } from "../../../components/AdminSelectedGame";
+import { BreakdownList } from "../../../components/BreakdownList";
+import { compactNumber, timeSince, raceLabel, pctLabel } from "../../../components/format";
 import {
   ForbiddenCard,
   LoadingRows,
   MetricStat,
 } from "../../../components/AdminFragments";
 import {
-  AdminGameDetail,
   fmtDate,
   fmtDuration,
   isWin,
 } from "../../../components/AdminGameDetail";
 import type {
-  GlobalBreakdownRow,
-  GlobalPlayerGameRow,
   GlobalPlayerGamesResp,
   GlobalPlayerProfilePerUser,
   GlobalPlayerProfileResp,
 } from "../../../components/adminTypes";
 
 const PAGE_SIZE = 50;
-
-function raceLabel(race: string): string {
-  if (!race || race === "U") return "Unknown";
-  return race;
-}
-
-function pctLabel(frac: number): string {
-  if (!Number.isFinite(frac)) return "—";
-  return `${Math.round(frac * 100)}%`;
-}
 
 /**
  * /admin/global/players/[pulseId] — admin-level profile for one real
@@ -53,7 +45,7 @@ function pctLabel(frac: number): string {
  * orders, the APM/SPM curve, and the macro breakdown (reusing the same
  * AdminGameDetail renderer as the per-user opponent drill-down).
  */
-export default function AdminGlobalPlayerPage({
+function GlobalPlayerBody({
   params,
 }: {
   params: Promise<{ pulseId: string }>;
@@ -84,12 +76,12 @@ export default function AdminGlobalPlayerPage({
           <SummarySection data={profile.data} />
           <PerUserSection rows={profile.data.perUser} pulseId={pulseId} />
           <div className="grid gap-4 lg:grid-cols-2">
-            <BreakdownCard
+            <BreakdownList
               title="Their strategies"
               subtitle="across every user's games"
               rows={profile.data.strategies}
             />
-            <BreakdownCard
+            <BreakdownList
               title="Maps faced on"
               subtitle="across every user's games"
               rows={profile.data.maps}
@@ -136,216 +128,68 @@ function SummarySection({ data }: { data: GlobalPlayerProfileResp }) {
   );
 }
 
-function PerUserSection({
-  rows,
-  pulseId,
-}: {
-  rows: GlobalPlayerProfilePerUser[];
-  pulseId: string;
-}) {
-  return (
-    <div className="space-y-3">
-      <h2 className="text-xl font-semibold">Tracked by</h2>
-      <Card padded={false}>
-        {/* Mobile: stacked list. Desktop: table. */}
-        <div className="block md:hidden">
-          <ul className="divide-y divide-border">
-            {rows.map((u) => (
-              <li key={u.userId} className="flex flex-col gap-2 px-4 py-3">
-                <div className="flex items-baseline justify-between gap-2">
-                  <Link
-                    href={`/admin/users/${encodeURIComponent(u.userId)}/opponents`}
-                    className="truncate text-body font-semibold text-accent-cyan hover:underline"
-                  >
-                    {u.email || u.userId}
-                  </Link>
-                  <span className="shrink-0 text-caption text-text-dim">
-                    {timeSince(u.lastSeen)}
-                  </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-caption text-text-muted">
-                  <span>
-                    <strong className="text-text">{u.gameCount}</strong> games
-                  </span>
-                  <span>
-                    <span className="text-success">{u.wins}</span>
-                    <span className="text-text-dim">–</span>
-                    <span className="text-danger">{u.losses}</span>
-                  </span>
-                  <span>{pctLabel(u.winRate)} WR</span>
-                  {u.mmr !== null ? <span>{u.mmr} MMR</span> : null}
-                </div>
-                <Link
-                  href={`/admin/users/${encodeURIComponent(
-                    u.userId,
-                  )}/opponents/${encodeURIComponent(pulseId)}`}
-                  className="text-caption text-accent-cyan hover:underline"
-                >
-                  View this user&apos;s games →
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="hidden md:block">
-          <table className="w-full text-sm">
-            <thead className="bg-bg-elevated/40 text-left text-caption uppercase tracking-wider text-text-dim">
-              <tr>
-                <th className="px-4 py-3 font-semibold">User</th>
-                <th className="px-4 py-3 text-right font-semibold">Games</th>
-                <th className="px-4 py-3 text-right font-semibold">W–L</th>
-                <th className="px-4 py-3 text-right font-semibold">Win&nbsp;%</th>
-                <th className="px-4 py-3 text-right font-semibold">MMR</th>
-                <th className="px-4 py-3 text-right font-semibold">Last seen</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {rows.map((u) => (
-                <tr key={u.userId} className="hover:bg-bg-elevated/30">
-                  <td className="px-4 py-2">
-                    <Link
-                      href={`/admin/users/${encodeURIComponent(
-                        u.userId,
-                      )}/opponents`}
-                      className="text-accent-cyan hover:underline"
-                    >
-                      {u.email || u.userId}
-                    </Link>
-                    <div className="font-mono text-caption text-text-dim">
-                      {u.userId}
-                    </div>
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-text">
-                    {u.gameCount}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums">
-                    <span className="text-success">{u.wins}</span>
-                    <span className="text-text-dim">–</span>
-                    <span className="text-danger">{u.losses}</span>
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-text-muted">
-                    {pctLabel(u.winRate)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-text-muted">
-                    {u.mmr !== null ? u.mmr : "—"}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-text-muted">
-                    {timeSince(u.lastSeen)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function BreakdownCard({
-  title,
-  subtitle,
-  rows,
-}: {
-  title: string;
-  subtitle: string;
-  rows: GlobalBreakdownRow[];
-}) {
-  const max = rows.length > 0 ? rows[0].count : 0;
-  return (
-    <Card padded={false}>
-      <Card.Header>
-        <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
-          {title}
-        </h3>
-        <span className="text-caption text-text-dim">{subtitle}</span>
-      </Card.Header>
-      {rows.length === 0 ? (
-        <div className="px-4 py-6 text-caption text-text-muted">
-          No data yet.
-        </div>
-      ) : (
-        <ul className="divide-y divide-border">
-          {rows.map((row) => (
-            <li key={row.key} className="px-4 py-2.5">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="truncate text-body text-text" title={row.key}>
-                  {row.key}
-                </span>
-                <span className="shrink-0 text-caption tabular-nums text-text-muted">
-                  {compactNumber(row.count)} · {pctLabel(row.winRate)} WR
-                </span>
-              </div>
-              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-bg-elevated">
-                <div
-                  className="h-full rounded-full bg-accent-cyan/70"
-                  style={{
-                    width: `${max > 0 ? Math.max(3, (row.count / max) * 100) : 0}%`,
-                  }}
-                />
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
-  );
+function PerUserSection({ rows, pulseId }: { rows: GlobalPlayerProfilePerUser[]; pulseId: string }) {
+  const [view, set] = useAdminQueryState({ tableSort: "gameCount", tableOrder: "desc" }, { allowed: { tableSort: ["email", "gameCount", "winRate", "mmr", "lastSeen"], tableOrder: ["asc", "desc"] } });
+  const columns: AdminColumn<GlobalPlayerProfilePerUser>[] = [
+    { key: "user", label: "User", sortKey: "email", kind: "text", mobile: "title", render: row => <><span>{row.email || row.userId}</span><span className="block break-all font-mono text-caption text-text-muted">{row.userId}</span></> },
+    { key: "games", label: "Games", sortKey: "gameCount", kind: "number", align: "right", mobile: "field", render: row => row.gameCount },
+    { key: "record", label: "W–L", align: "right", mobile: "field", render: row => `${row.wins}–${row.losses}` },
+    { key: "winRate", label: "Win rate", sortKey: "winRate", kind: "number", align: "right", mobile: "field", render: row => pctLabel(row.winRate) },
+    { key: "mmr", label: "MMR", sortKey: "mmr", kind: "number", align: "right", mobile: "field", render: row => row.mmr ?? "—" },
+    { key: "lastSeen", label: "Last seen", sortKey: "lastSeen", kind: "date", align: "right", mobile: "field", render: row => timeSince(row.lastSeen) },
+  ];
+  const sorted = [...rows].sort((a, b) => {
+    const key = view.tableSort as "email" | "gameCount" | "winRate" | "mmr" | "lastSeen", left = a[key], right = b[key];
+    if (left == null) return right == null ? 0 : 1; if (right == null) return -1;
+    return (left < right ? -1 : left > right ? 1 : 0) * (view.tableOrder === "asc" ? 1 : -1);
+  });
+  const sort = { by: view.tableSort, dir: view.tableOrder as "asc" | "desc", onChange: (tableSort: string, tableOrder: "asc" | "desc") => set({ tableSort, tableOrder }) };
+  return <section className="space-y-3"><h2 className="text-h2">Tracked by</h2><AdminMobileSort columns={columns} sort={sort} /><AdminTable columns={columns} rows={sorted} rowKey={row => row.userId} rowHref={row => `/admin/users/${encodeURIComponent(row.userId)}/opponents/${encodeURIComponent(pulseId)}`} sort={sort} caption="Users tracking this player" empty={<p>No users track this player.</p>} /></section>;
 }
 
 function GamesSection({ pulseId }: { pulseId: string }) {
-  const [before, setBefore] = useState<string | null>(null);
-  const [pageHistory, setPageHistory] = useState<Array<string | null>>([null]);
-  const [selected, setSelected] = useState<GlobalPlayerGameRow | null>(null);
-
+  const [view, setView] = useAdminQueryState({ game: "", owner: "", before: "" });
+  const before = view.before;
+  const paging = useAdminCursor(before, before => setView({ before }));
   const query = new URLSearchParams();
   query.set("limit", String(PAGE_SIZE));
   if (before) query.set("before", before);
   const { data, error, isLoading, isValidating, mutate } = useApi<GlobalPlayerGamesResp>(
     `/v1/admin/global/players/${encodeURIComponent(
       pulseId,
-    )}/games?${query.toString()}`,
+    )}/games?${query.toString()}`, { keepPreviousData: true },
   );
 
-  function nextPage() {
-    if (data?.nextBefore) {
-      setPageHistory((h) => [...h, data.nextBefore]);
-      setBefore(data.nextBefore);
-      setSelected(null);
-    }
-  }
-  function prevPage() {
-    if (pageHistory.length <= 1) return;
-    const popped = pageHistory.slice(0, -1);
-    setPageHistory(popped);
-    setBefore(popped[popped.length - 1] ?? null);
-    setSelected(null);
-  }
+  const selected = data?.items.find(g => g.gameId === view.game && g.userId === view.owner);
 
   return (
     <div className="space-y-3">
       <h2 className="text-xl font-semibold">All games</h2>
 
-      {error ? (
+      {error && data ? <RequestError error={error} onRetry={() => mutate()} /> : null}
+      {error && !data ? (
         <RequestError error={error} onRetry={() => mutate()} />
       ) : isLoading && !data ? (
         <LoadingRows rows={8} />
-      ) : !data || data.items.length === 0 ? (
+      ) : (!data || data.items.length === 0) && !view.game ? (
         <Card padded>
           <EmptyStatePanel title="No games recorded against this player" action={<Button variant="secondary" onClick={() => void mutate()}>Refresh</Button>} />
         </Card>
       ) : (
         <div className="lg:grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:gap-4">
           {/* Games list — hidden on mobile once a game is selected. */}
-          <div className={selected ? "hidden lg:block" : "block"}>
+          <div className={view.game ? "hidden lg:block" : "block"}>
             <Card padded={false}>
-              <ul className="divide-y divide-border">
-                {data.items.map((g) => {
-                  const active = selected?.gameId === g.gameId;
+              <p role="status" className="text-caption text-text-muted">{data?.items.length || 0} games{data && isValidating ? " · Updating…" : ""}</p>
+              <ul aria-busy={isValidating} className={`divide-y divide-border transition-opacity ${isValidating ? "opacity-60" : ""}`}>
+                {(data?.items || []).map((g) => {
+                  const active = g.gameId === view.game && g.userId === view.owner;
                   return (
                     <li key={`${g.userId}:${g.gameId}`}>
                       <button
                         type="button"
-                        onClick={() => setSelected(g)}
+                        aria-current={active ? "true" : undefined}
+                        onClick={() => setView({ game: g.gameId, owner: g.userId })}
                         className={[
                           "flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors",
                           active ? "bg-accent/10" : "hover:bg-bg-elevated/40",
@@ -384,17 +228,13 @@ function GamesSection({ pulseId }: { pulseId: string }) {
               </ul>
             </Card>
 
-            <AdminPagination hasPrev={!(pageHistory.length <= 1)} hasNext={!(!data.nextBefore)} onPrev={prevPage} onNext={nextPage} label={"Page " + pageHistory.length} loading={isValidating} itemCount={data?.items.length ?? 0} />
+            <AdminPagination hasPrev={paging.hasPrev} prevLabel={paging.prevLabel} hasNext={!!data?.nextBefore} onPrev={paging.previous} onNext={() => paging.next(data?.nextBefore || "")} label={paging.page} loading={isValidating} itemCount={data?.items.length || 0} />
           </div>
 
           {/* Detail — hidden on mobile until a game is selected. */}
-          <div className={selected ? "block" : "hidden lg:block"}>
-            {selected ? (
-              <AdminGameDetail
-                userId={selected.userId}
-                game={selected}
-                onBack={() => setSelected(null)}
-              />
+          <div className={view.game ? "block" : "hidden lg:block"}>
+            {view.game ? (
+              <AdminSelectedGame userId={view.owner} gameId={view.game} row={selected} onClear={() => setView({ game: "", owner: "" })} />
             ) : (
               <Card padded>
                 <p className="text-text-muted">
@@ -408,3 +248,5 @@ function GamesSection({ pulseId }: { pulseId: string }) {
     </div>
   );
 }
+
+export default function AdminGlobalPlayerPage(props: { params: Promise<{ pulseId: string }> }) { return <Suspense fallback={<LoadingRows rows={8} />}><GlobalPlayerBody {...props} /></Suspense>; }

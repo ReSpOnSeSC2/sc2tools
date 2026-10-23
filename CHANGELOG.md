@@ -16,6 +16,10 @@ corresponding GitHub Release.
 - Game build orders show prior-sample supply with an approximation marker, worker/supply filters and aligned times. Either side can copy text, supply-first text, Markdown or SALT, print a compact cheat sheet, arm a confirmed Ghost target or open the custom-build editor.
 - Custom and Community definitions share the export menu, including rule-only definitions with their actual condition text. Game headers download available stats/casualties CSV and versioned JSON locally.
 
+### Build detection
+
+- Both PvZ Archon Drop labels require a real Warp Prism completed by 6:00 and observed Archons. Ordinary or late Templar transitions keep their opener label instead of being counted as drops.
+
 ### Game workspace and shared clock
 
 - On phones and tablets, replay player names sit above their stats so supply, workers and the clock stay readable without overlapping. Upgrade chips wait for recorded research completion.
@@ -57,6 +61,10 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Desktop check-in previews use local sample data, remember dragged positions and
+  reset every card kind. Search Enter picks the top result, Down/Up moves between
+  search and results, and Ctrl+Enter confirms without automatic focus changes.
+
 - Community search restores correctly with Back and Forward after clearing filters, including when cached server props lag behind the address bar.
 
 - Account deletion now removes token-owned stream data and private sound files, ends the sign-in identity with durable retries, and offers an export-first inventory and confirmation flow. Review comments on other requests are anonymized; service backup retention follows the current configured schedule.
@@ -67,6 +75,8 @@ corresponding GitHub Release.
 - The app status pill describes your desktop connection and latest upload; community counts stay in an optional desktop disclosure. Install the web app from More or Settings and get a clear offline page when the network is unavailable.
 
 ### Added
+
+- Admin user, opponent, global-player and inbox views retain filters and pages in shareable URLs; sortable tables become phone cards, searches debounce, and game links preserve their private owner selection.
 
 - Operations console adds bounded background-job history and safe Run now controls, a 400-day admin audit log, per-user support snapshots, first-party activation cohorts, and resolved-user repair actions with typed wipe confirmation and game-count conflict protection.
 

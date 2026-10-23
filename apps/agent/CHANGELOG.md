@@ -4,6 +4,13 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+- PvZ Archon Drop detection requires a real Warp Prism completed by 6:00 and
+  observed Archons, preventing late Templar transitions from being called drops.
+
+- Desktop check-in previews use local sample data, remember dragged positions and
+  reset every card kind. Search Enter picks the top result, Down/Up moves between
+  search and results, and Ctrl+Enter confirms without automatic focus changes.
+
 - Loading cards show private opponent history and notes, with a local scouting
   switch and a slim card when loading build choices are off. After-game cards
   save a separate private opponent note once the replay identifies the account.

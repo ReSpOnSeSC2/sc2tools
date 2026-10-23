@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import UsersPage from "./page";
 const request = vi.hoisted(() => ({ error: { status: 500, message: "Unavailable", requestId: "users-reference" }, mutate: vi.fn() }));
 vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ ...request, data: undefined, isLoading: true }) }));
+vi.mock("next/navigation", () => import("../components/__tests__/navigationFixture"));
 afterEach(() => { cleanup(); request.error.status = 500; });
 it("retains a single header and Retry while a failed first request revalidates", () => {
   render(<UsersPage />);

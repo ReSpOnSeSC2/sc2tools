@@ -2,10 +2,13 @@
 import { Button } from "@/components/ui/Button";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { RequestError } from "@/components/ui/RequestError";
+import { useAdminQueryState } from "../../../../components/useAdminQueryState";
+import { useAdminCursor } from "../../../../components/useAdminCursor";
+import { AdminSelectedGame } from "../../../../components/AdminSelectedGame";
 import { AdminPagination } from "@/app/admin/components/AdminPagination";
 import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
-import { use, useState } from "react";
+import { Suspense, use } from "react";
 import Link from "next/link";
 
 import { useApi } from "@/lib/clientApi";
@@ -13,13 +16,11 @@ import { Card } from "@/components/ui/Card";
 import { OpponentDiagnosticsPanel } from "@/components/analyzer/OpponentDiagnosticsPanel";
 import { ForbiddenCard, LoadingRows } from "../../../../components/AdminFragments";
 import {
-  AdminGameDetail,
   fmtDate,
   fmtDuration,
   isWin,
 } from "../../../../components/AdminGameDetail";
 import type {
-  AdminGameVsOpponentRow,
   OpponentGamesResp,
 } from "../../../../components/adminTypes";
 
@@ -35,17 +36,16 @@ const PAGE_SIZE = 50;
  * order on the right. On mobile the two swap so only one shows at a
  * time, with a back affordance.
  */
-export default function AdminOpponentGamesPage({
+function OpponentGamesBody({
   params,
 }: {
   params: Promise<{ userId: string; pulseId: string }>;
 }) {
   const { userId, pulseId } = use(params);
 
-  const [before, setBefore] = useState<string | null>(null);
-  const [pageHistory, setPageHistory] = useState<Array<string | null>>([null]);
-  const [selected, setSelected] = useState<AdminGameVsOpponentRow | null>(null);
-
+  const [view, setView] = useAdminQueryState({ game: "", before: "" });
+  const before = view.before;
+  const paging = useAdminCursor(before, before => setView({ before }));
   const query = new URLSearchParams();
   query.set("limit", String(PAGE_SIZE));
   if (before) query.set("before", before);
@@ -53,22 +53,9 @@ export default function AdminOpponentGamesPage({
     userId,
   )}/opponents/${encodeURIComponent(pulseId)}/games?${query.toString()}`;
 
-  const { data, error, isLoading, isValidating, mutate } = useApi<OpponentGamesResp>(path);
+  const { data, error, isLoading, isValidating, mutate } = useApi<OpponentGamesResp>(path, { keepPreviousData: true });
 
-  function nextPage() {
-    if (data?.nextBefore) {
-      setPageHistory((h) => [...h, data.nextBefore]);
-      setBefore(data.nextBefore);
-      setSelected(null);
-    }
-  }
-  function prevPage() {
-    if (pageHistory.length <= 1) return;
-    const popped = pageHistory.slice(0, -1);
-    setPageHistory(popped);
-    setBefore(popped[popped.length - 1] ?? null);
-    setSelected(null);
-  }
+  const selected = data?.items.find(g => g.gameId === view.game);
 
   if (error && error.status === 403) return <ForbiddenCard />;
 
@@ -93,27 +80,30 @@ export default function AdminOpponentGamesPage({
         )}/opponents/${encodeURIComponent(pulseId)}/retry-pulse`}
       />
 
-      {error ? (
+      {error && data ? <RequestError error={error} onRetry={() => mutate()} /> : null}
+      {error && !data ? (
         <RequestError error={error} onRetry={() => mutate()} />
-      ) : isLoading ? (
+      ) : isLoading && !data ? (
         <LoadingRows rows={8} />
-      ) : !data || data.items.length === 0 ? (
+      ) : (!data || data.items.length === 0) && !view.game ? (
         <Card padded>
           <EmptyStatePanel title="No games recorded against this opponent" action={<Button variant="secondary" onClick={() => void mutate()}>Refresh</Button>} />
         </Card>
       ) : (
         <div className="lg:grid lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:gap-4">
           {/* Games list — hidden on mobile once a game is selected. */}
-          <div className={selected ? "hidden lg:block" : "block"}>
+          <div className={view.game ? "hidden lg:block" : "block"}>
             <Card padded={false}>
-              <ul className="divide-y divide-border">
-                {data.items.map((g) => {
-                  const active = selected?.gameId === g.gameId;
+              <p role="status" className="text-caption text-text-muted">{data?.items.length || 0} games{data && isValidating ? " · Updating…" : ""}</p>
+              <ul aria-busy={isValidating} className={`divide-y divide-border transition-opacity ${isValidating ? "opacity-60" : ""}`}>
+                {(data?.items || []).map((g) => {
+                  const active = g.gameId === view.game;
                   return (
                     <li key={g.gameId}>
                       <button
                         type="button"
-                        onClick={() => setSelected(g)}
+                        aria-current={active ? "true" : undefined}
+                        onClick={() => setView({ game: g.gameId })}
                         className={[
                           "flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors",
                           active
@@ -150,17 +140,13 @@ export default function AdminOpponentGamesPage({
               </ul>
             </Card>
 
-            <AdminPagination hasPrev={!(pageHistory.length <= 1)} hasNext={!(!data.nextBefore)} onPrev={prevPage} onNext={nextPage} label={"Page " + pageHistory.length} loading={isValidating} itemCount={data?.items.length ?? 0} />
+            <AdminPagination hasPrev={paging.hasPrev} prevLabel={paging.prevLabel} hasNext={!!data?.nextBefore} onPrev={paging.previous} onNext={() => paging.next(data?.nextBefore || "")} label={paging.page} loading={isValidating} itemCount={data?.items.length || 0} />
           </div>
 
           {/* Detail — hidden on mobile until a game is selected. */}
-          <div className={selected ? "block" : "hidden lg:block"}>
-            {selected ? (
-              <AdminGameDetail
-                userId={userId}
-                game={selected}
-                onBack={() => setSelected(null)}
-              />
+          <div className={view.game ? "block" : "hidden lg:block"}>
+            {view.game ? (
+              <AdminSelectedGame userId={userId} gameId={view.game} row={selected} onClear={() => setView({ game: "" })} />
             ) : (
               <Card padded>
                 <p className="text-text-muted">
@@ -174,3 +160,5 @@ export default function AdminOpponentGamesPage({
     </div>
   );
 }
+
+export default function AdminOpponentGamesPage(props: { params: Promise<{ userId: string; pulseId: string }> }) { return <Suspense fallback={<LoadingRows rows={8} />}><OpponentGamesBody {...props} /></Suspense>; }
