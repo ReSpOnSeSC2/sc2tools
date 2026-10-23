@@ -50,6 +50,8 @@ vi.mock("@/components/analyzer/LadderPulse", () => ({
 
 beforeEach(() => {
   mocks.replace.mockReset();
+  window.sessionStorage.clear();
+  window.history.replaceState(null, "", "/app");
   mocks.useApi.mockClear();
 });
 
@@ -77,6 +79,18 @@ describe("TodayView default tab", () => {
     render(<TodayView />);
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(screen.getByTestId("daily-pulse")).toBeTruthy();
+  });
+
+  it("keeps the Today launcher shortcut on Today despite a saved default section", () => {
+    window.history.replaceState(null, "", "/app?view=today");
+    render(<TodayView />);
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(screen.getByTestId("daily-pulse")).toBeTruthy();
+    // Once Today was chosen explicitly, returning to it stays there this session.
+    cleanup();
+    window.history.replaceState(null, "", "/app");
+    render(<TodayView />);
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 
   it("no longer asks for the misc preferences", () => {

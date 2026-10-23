@@ -33,7 +33,9 @@ describe("BuildOrderColumns", () => {
     );
 
     const mine = within(screen.getByTestId("build-column-me"));
-    expect(mine.getByText("You — Pool First")).toBeTruthy();
+    expect(mine.getAllByText("You — Pool First")).toHaveLength(2);
+    expect(mine.getByRole("button", { name: "You — Pool First" }).className).toContain("md:hidden");
+    expect(mine.getAllByRole("heading", { name: "You — Pool First" }).some((heading) => heading.className.includes("md:flex"))).toBe(true);
     // Time chips keep the m:ss shape; names are humanized.
     expect(mine.getByText("0:17")).toBeTruthy();
     expect(mine.getByText("Spawning Pool")).toBeTruthy();
@@ -42,7 +44,7 @@ describe("BuildOrderColumns", () => {
     expect(mine.getByText("Roach Warren")).toBeTruthy();
 
     const theirs = within(screen.getByTestId("build-column-opp"));
-    expect(theirs.getByText("Opponent — Terran - 2 Rax")).toBeTruthy();
+    expect(theirs.getAllByText("Opponent — Terran - 2 Rax")).toHaveLength(2);
     expect(theirs.getByText("0:20")).toBeTruthy();
     expect(theirs.getByText("Barracks")).toBeTruthy();
     // My rows never leak into the opponent column.

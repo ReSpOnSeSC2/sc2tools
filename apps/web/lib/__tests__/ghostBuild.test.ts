@@ -661,3 +661,12 @@ describe("normalizeGhostName", () => {
     expect(normalizeGhostName("SpawningPool")).toBe("spawningpool");
   });
 });
+
+it("round-trips source-game provenance and drops invalid optional ids", () => {
+  const target = fromBuildLog("Practice", ["[0:17] Pylon"], { sourceGameId: "replay-123" })!;
+  const config = assignGhostTarget(emptyGhostBuildConfig(), "PvT", target);
+  expect(decodeGhostBuildConfig(encodeGhostBuildConfig(config)!)?.slots.PvT?.sourceGameId).toBe("replay-123");
+  for (const sourceGameId of ["x".repeat(65), "", "bad\nvalue", 42]) {
+    expect(normalizeGhostTarget({ ...target, sourceGameId })).not.toHaveProperty("sourceGameId");
+  }
+});
