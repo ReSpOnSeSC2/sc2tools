@@ -1,5 +1,3 @@
-import { ISSUES_URL } from "@/lib/siteLinks";
-
 /**
  * Where to send someone who hit a missing page or a crashed one. Pure,
  * so the choices are unit-tested without rendering Clerk.
@@ -76,18 +74,4 @@ export function notFoundLinks(pathname: string, flags: RecoveryFlags): RecoveryL
 /** The dashboard button's label: "back" when the lost page was in the app. */
 export function dashboardLabel(pathname: string): string {
   return under(pathname, "/app") ? "Back to your dashboard" : "Open dashboard";
-}
-
-/**
- * A prefilled GitHub issue for a crashed page. The path never carries
- * its query string (it can hold tokens or personal filters).
- *
- * Example: `issueReportHref({ digest: "123", path: "/builds" })`
- * → ".../issues/new?title=Error%20123&body=Error%20reference%3A%20123%0APage%3A%20%2Fbuilds".
- */
-export function issueReportHref({ digest, path }: { digest?: string | null; path: string }): string {
-  const page = path.split(/[?#]/)[0] || "/";
-  const title = digest ? `Error ${digest}` : `Error on ${page}`;
-  const body = digest ? `Error reference: ${digest}\nPage: ${page}` : `Page: ${page}`;
-  return `${ISSUES_URL}/new?title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`;
 }

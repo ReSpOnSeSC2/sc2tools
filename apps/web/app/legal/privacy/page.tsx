@@ -9,6 +9,7 @@
  *   GET /legal/privacy  →  <PrivacyPage />
  */
 import type { ReactNode } from "react";
+import { ISSUES_URL } from "@/lib/siteLinks";
 
 export const metadata = {
   alternates: { canonical: "/legal/privacy" },
@@ -18,7 +19,6 @@ export const metadata = {
 };
 
 const LAST_UPDATED = "2026-10-23";
-const ISSUES_URL = "https://github.com/ReSpOnSeSC2/sc2tools/issues";
 /** Settings tab with export, history deletion and account deletion. */
 const DATA_SETTINGS_HREF = "/settings?tab=backups";
 const LIST_CLASS = "list-disc space-y-2 pl-6";

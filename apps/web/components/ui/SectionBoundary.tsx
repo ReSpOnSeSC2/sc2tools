@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import { AlertTriangle, Flag, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { ReportIssueModal } from "@/components/feedback/ReportIssueModal";
+import { LazyReportIssueModal } from "@/components/feedback/LazyReportIssueModal";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
-import { HELP_SUPPORT_EMAIL } from "@/lib/help/support";
+import { supportMailto } from "@/lib/feedback/errorReport";
 import { captureException } from "@/lib/sentry";
 import { isTokenAuthRoute } from "@/lib/tokenAuthRoutes";
 
@@ -192,10 +192,9 @@ function ReportProblemForAccount({
 
   // Sending a report needs an account; everyone else can email.
   if (!isLoaded || !isSignedIn) {
-    const mailto = `mailto:${HELP_SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(details)}`;
     return (
       <a
-        href={mailto}
+        href={supportMailto(subject, details)}
         className="inline-flex min-h-9 items-center gap-1.5 rounded-md text-caption font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         <Flag className="h-4 w-4" aria-hidden />
@@ -215,10 +214,12 @@ function ReportProblemForAccount({
       >
         Report this problem
       </Button>
-      <ReportIssueModal
+      {/* Loaded on first open: the form carries the help search index,
+          which must not ride along with every page that has a section. */}
+      <LazyReportIssueModal
         open={open}
         onClose={() => setOpen(false)}
-        prefill={{ subject, message: details }}
+        prefill={{ type: "problem", subject, message: details }}
       />
     </>
   );

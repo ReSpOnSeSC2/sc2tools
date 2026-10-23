@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ISSUES_URL } from "@/lib/siteLinks";
-import { dashboardLabel, issueReportHref, nearestHubLinks, notFoundLinks } from "../recoveryLinks";
+import { dashboardLabel, nearestHubLinks, notFoundLinks } from "../recoveryLinks";
 
 const ALL_ON = { tryPage: true, guides: true };
 
@@ -24,14 +23,5 @@ describe("recovery links", () => {
   it("names the dashboard by where the visitor was", () => {
     expect(dashboardLabel("/app/opponents/x")).toBe("Back to your dashboard");
     expect(dashboardLabel("/apples")).toBe("Open dashboard");
-  });
-
-  it("files a report with the reference and the bare path", () => {
-    const href = issueReportHref({ digest: "998", path: "/settings?tab=overlay&token=secret#x" });
-    expect(href.startsWith(`${ISSUES_URL}/new?`)).toBe(true);
-    const params = new URL(href).searchParams;
-    expect(params.get("title")).toBe("Error 998");
-    expect(params.get("body")).toBe("Error reference: 998\nPage: /settings");
-    expect(href).not.toContain("secret");
   });
 });

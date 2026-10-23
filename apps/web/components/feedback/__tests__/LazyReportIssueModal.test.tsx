@@ -14,7 +14,7 @@ describe("LazyReportIssueModal", () => {
     const { rerender } = render(<LazyReportIssueModal open={false} onClose={vi.fn()} />);
     expect(screen.queryByRole("dialog")).toBeNull();
 
-    rerender(<LazyReportIssueModal open onClose={vi.fn()} initialType="idea" />);
+    rerender(<LazyReportIssueModal open onClose={vi.fn()} prefill={{ type: "idea" }} />);
     expect(await screen.findByRole("dialog", { name: "Suggest a feature" })).toBeTruthy();
   });
 });

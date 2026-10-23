@@ -376,7 +376,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
       <SignedIn>
         <LazyReportIssueModal
           open={report.open}
-          initialType={report.type}
+          prefill={{ type: report.type }}
           onClose={closeReport}
         />
       </SignedIn>

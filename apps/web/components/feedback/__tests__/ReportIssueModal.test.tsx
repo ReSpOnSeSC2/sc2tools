@@ -130,7 +130,7 @@ describe("ReportIssueModal", () => {
   });
 
   it("starts on the type it was opened with", () => {
-    renderModal({ initialType: "question" });
+    renderModal({ prefill: { type: "question" } });
     expect(screen.getByRole("dialog", { name: "Ask a question" })).toBeTruthy();
     expect((screen.getByRole("radio", { name: "Question" }) as HTMLInputElement).checked).toBe(true);
   });
@@ -183,9 +183,25 @@ describe("ReportIssueModal", () => {
   });
 
   it("starts in the details when the subject comes prefilled", async () => {
-    renderModal({ initialSubject: "Error on /app (ref 42)" });
+    renderModal({ prefill: { subject: "Error on /app (ref 42)" } });
     expect((screen.getByLabelText("Subject") as HTMLInputElement).value).toBe("Error on /app (ref 42)");
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "What happened?" })));
+  });
+
+  it("prefills the details too, cut to the field limits", () => {
+    renderModal({ prefill: { subject: "x".repeat(200), message: "Page: /app\nError ID: evt_1" } });
+    expect((screen.getByLabelText("Subject") as HTMLInputElement).value).toHaveLength(140);
+    expect((screen.getByRole("textbox", { name: "What happened?" }) as HTMLTextAreaElement).value).toBe(
+      "Page: /app\nError ID: evt_1",
+    );
+  });
+
+  it("keeps what was typed when the parent re-renders with a new prefill object", () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<ReportIssueModal open onClose={onClose} prefill={{ type: "idea" }} />);
+    fireEvent.change(screen.getByLabelText("Subject"), { target: { value: "My draft" } });
+    rerender(<ReportIssueModal open onClose={onClose} prefill={{ type: "idea" }} />);
+    expect((screen.getByLabelText("Subject") as HTMLInputElement).value).toBe("My draft");
   });
 
   it("uses the Button primitive for its footer, with a loading send", async () => {

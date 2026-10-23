@@ -70,6 +70,11 @@ interface Snapshot {
   now: number;
 }
 
+/** A prefilled field, cut to the field's limit. */
+function prefilledText(value: string | undefined, max: number): string {
+  return (value ?? "").slice(0, max);
+}
+
 function takeSnapshot(): Snapshot {
   if (typeof window === "undefined") {
     return { pathname: "", userAgent: "", viewport: { width: 0, height: 0 }, failedRequests: [], now: 0 };
@@ -83,19 +88,28 @@ function takeSnapshot(): Snapshot {
   };
 }
 
+/**
+ * What the form starts with each time it opens. The user can change or
+ * clear all of it before sending. Read once per opening, so a parent
+ * re-render never resets what has been typed.
+ *
+ * Examples:
+ *   - the ? menu's "Suggest a feature": `{ type: "idea" }`
+ *   - an error page: `{ type: "problem", subject: "Error on /app (ref 123)" }`
+ *   - a crashed section (SectionBoundary): `{ subject, message }` with the
+ *     page, the error and its Sentry event id in the details.
+ */
+export interface ReportPrefill {
+  /** The kind of report (default "problem"). */
+  type?: ReportType;
+  subject?: string;
+  message?: string;
+}
+
 export interface ReportIssueModalProps {
   open: boolean;
   onClose: () => void;
-  /** The kind of report the form starts on (default "problem"). */
-  initialType?: ReportType;
-  /** A subject to start with, e.g. "Error on /app (ref 123)" from an error screen. */
-  initialSubject?: string;
-  /**
-   * A subject and details to start with, e.g. a crashed section's "Report
-   * this problem" (SectionBoundary) passes the page and error id. The
-   * user can edit or clear both before sending.
-   */
-  prefill?: { subject?: string; message?: string };
+  prefill?: ReportPrefill;
 }
 
 /**
@@ -111,13 +125,7 @@ export interface ReportIssueModalProps {
  *     when the form opens, so they describe the moment of the problem.
  *   - After sending, a thank-you state offers "Send another" or "Close".
  */
-export function ReportIssueModal({
-  open,
-  onClose,
-  initialType = "problem",
-  initialSubject = "",
-  prefill,
-}: ReportIssueModalProps) {
+export function ReportIssueModal({ open, onClose, prefill }: ReportIssueModalProps) {
   const { getToken } = useAuth();
   const formId = useId();
   const subjectId = useId();
@@ -131,11 +139,10 @@ export function ReportIssueModal({
   // the user has typed.
   const prefillRef = useRef(prefill);
   prefillRef.current = prefill;
-  const startSubject = (prefill?.subject ?? initialSubject).slice(0, SUBJECT_MAX);
 
-  const [type, setType] = useState<ReportType>(initialType);
-  const [subject, setSubject] = useState(startSubject);
-  const [message, setMessage] = useState("");
+  const [type, setType] = useState<ReportType>(prefill?.type ?? "problem");
+  const [subject, setSubject] = useState(() => prefilledText(prefill?.subject, SUBJECT_MAX));
+  const [message, setMessage] = useState(() => prefilledText(prefill?.message, MESSAGE_MAX));
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
   const [excluded, setExcluded] = useState<ReadonlySet<ReportContextItemId>>(() => new Set());
@@ -143,17 +150,18 @@ export function ReportIssueModal({
   // SWR shares /v1/me with the app chrome, so this is normally cached.
   const { data: me } = useApi<ReportMeProbe>(open ? "/v1/me" : null);
 
-  // Start clean each time the form opens.
+  // Start clean (or from the prefill) each time the form opens.
   useEffect(() => {
     if (!open) return;
-    setType(initialType);
-    setSubject((prefillRef.current?.subject ?? initialSubject).slice(0, SUBJECT_MAX));
-    setMessage((prefillRef.current?.message ?? "").slice(0, MESSAGE_MAX));
+    const start = prefillRef.current;
+    setType(start?.type ?? "problem");
+    setSubject(prefilledText(start?.subject, SUBJECT_MAX));
+    setMessage(prefilledText(start?.message, MESSAGE_MAX));
     setStatus("idle");
     setError(null);
     setExcluded(new Set());
     setSnapshot(takeSnapshot());
-  }, [open, initialType, initialSubject]);
+  }, [open]);
 
   // Modal focuses its first control (the close button) on a zero-delay
   // timer; this one is scheduled after it (a parent's effects run after
@@ -162,11 +170,10 @@ export function ReportIssueModal({
   useEffect(() => {
     if (!open) return;
     const timer = window.setTimeout(() => {
-      const prefilled = Boolean(prefillRef.current?.subject ?? initialSubject);
-      (prefilled ? messageRef.current : subjectRef.current)?.focus();
+      (prefillRef.current?.subject ? messageRef.current : subjectRef.current)?.focus();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [open, initialSubject]);
+  }, [open]);
 
   useEffect(() => {
     if (status === "sent") thanksRef.current?.focus();

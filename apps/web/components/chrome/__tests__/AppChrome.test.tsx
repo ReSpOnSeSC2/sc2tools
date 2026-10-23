@@ -65,9 +65,9 @@ vi.mock("../SiteStats", () => ({
 }));
 // The real form has its own tests; here it only has to open with a type.
 vi.mock("@/components/feedback/LazyReportIssueModal", () => ({
-  LazyReportIssueModal: ({ open, initialType, onClose }: { open: boolean; initialType?: string; onClose: () => void }) =>
+  LazyReportIssueModal: ({ open, prefill, onClose }: { open: boolean; prefill?: { type?: string }; onClose: () => void }) =>
     open ? (
-      <div role="dialog" aria-label="Report form" data-type={initialType}>
+      <div role="dialog" aria-label="Report form" data-type={prefill?.type}>
         <button type="button" onClick={onClose}>Close form</button>
       </div>
     ) : null,

@@ -17,10 +17,10 @@ vi.mock("@clerk/nextjs", () => ({
 }));
 vi.mock("@/lib/sentry", () => ({ captureException: vi.fn(async () => undefined) }));
 vi.mock("@/components/feedback/LazyReportIssueModal", () => ({
-  LazyReportIssueModal: (props: { open: boolean; initialType?: string; initialSubject?: string }) =>
+  LazyReportIssueModal: (props: { open: boolean; prefill?: { type?: string; subject?: string } }) =>
     props.open ? (
-      <div role="dialog" aria-label="Report form" data-type={props.initialType}>
-        {props.initialSubject}
+      <div role="dialog" aria-label="Report form" data-type={props.prefill?.type}>
+        {props.prefill?.subject}
       </div>
     ) : null,
 }));

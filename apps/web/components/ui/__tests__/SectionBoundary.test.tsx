@@ -83,9 +83,11 @@ describe("SectionBoundary", () => {
   it("opens the report form prefilled with the page, error and event id", async () => {
     await renderCrashed();
     fireEvent.click(screen.getByRole("button", { name: "Report this problem" }));
+    // The form loads on first open (LazyReportIssueModal).
     const subject = (await screen.findByLabelText("Subject")) as HTMLInputElement;
     expect(subject.value).toBe("Error in the Daily Pulse strip on /app/opponents");
-    const message = screen.getByLabelText("Details", { selector: "textarea" }) as HTMLTextAreaElement;
+    expect((screen.getByRole("radio", { name: "Problem" }) as HTMLInputElement).checked).toBe(true);
+    const message = screen.getByRole("textbox", { name: "What happened?" }) as HTMLTextAreaElement;
     expect(message.value).toContain("Page: /app/opponents");
     expect(message.value).toContain("Error ID: evt_0123456789abcdef");
   });
