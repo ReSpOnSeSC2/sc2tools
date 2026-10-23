@@ -18,6 +18,7 @@ import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { RequestError } from "@/components/ui/RequestError";
 import { useToast } from "@/components/ui/Toast";
 import { CommunityBuildSignatureTimeline } from "@/components/community/CommunityBuildSignatureTimeline";
 import { apiCall, useApi } from "@/lib/clientApi";
@@ -31,7 +32,6 @@ import {
 } from "@/lib/race";
 import { BuildDossier } from "./BuildDossier";
 import { BuildEditorSheet } from "./BuildEditorSheet";
-import { BuildLoadError } from "./BuildLoadError";
 import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildPublishModal } from "./BuildPublishModal";
 import { RulesSummary } from "./RulesSummary";
@@ -130,19 +130,10 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Back to library
         </Link>
-        <BuildLoadError
+        <RequestError
           title="Couldn’t load this build"
           error={buildSwr.error}
           onRetry={() => buildSwr.mutate()}
-          actions={
-            <Link
-              href="/builds"
-              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 text-body font-semibold text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <Library className="h-4 w-4" aria-hidden />
-              Back to library
-            </Link>
-          }
         />
       </div>
     );

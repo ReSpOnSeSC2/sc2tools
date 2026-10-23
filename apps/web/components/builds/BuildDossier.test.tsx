@@ -299,10 +299,11 @@ describe("BuildDossier load errors", () => {
 
     render(<BuildDossier apiPath="/v1/custom-builds/dt-rush/matches" showMacro={false} />);
 
+    expect(screen.getByRole("heading", { name: "Couldn't load this build's games and stats" })).toBeTruthy();
     const alert = screen.getByRole("alert");
-    expect(alert.textContent).toContain("Couldn't load this build's games and stats");
-    expect(alert.textContent).toContain("The server had a problem.");
-    expect(alert.textContent).toContain("req-fixture-9");
+    expect(alert.getAttribute("data-testid")).toBe("request-error");
+    expect(alert.textContent).toContain("Something went wrong on our side");
+    expect(alert.textContent).toContain("req-fixt");
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(harness.retryDossier).toHaveBeenCalledOnce();
 

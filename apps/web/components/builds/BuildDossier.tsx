@@ -3,6 +3,7 @@
 import { type ReactNode, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, EmptyState, Skeleton, Stat } from "@/components/ui/Card";
+import { RequestError } from "@/components/ui/RequestError";
 import { fmtAgo, fmtDate, fmtMinutes, pct1, wrColor } from "@/lib/format";
 import { Last5GamesTimeline } from "@/components/analyzer/Last5GamesTimeline";
 import type { ProfileGame } from "@/components/analyzer/Last5GamesTimeline";
@@ -29,7 +30,6 @@ import { checkinsText } from "@/lib/buildIntent";
 import { BreakdownCard, TopOpponentsCard } from "./BuildBreakdownCards";
 import { BuildGamesTable } from "./BuildGamesTable";
 import { BuildCompositionExplorer } from "./BuildCompositionExplorer";
-import { BuildLoadError } from "./BuildLoadError";
 import { BuildWinRateTrend } from "./BuildWinRateTrend";
 import type {
   BuildDetailRow,
@@ -151,7 +151,7 @@ export function BuildDossier({
     return (
       <div className="space-y-4">
         {headerSlot ? headerSlot(null) : null}
-        <BuildLoadError
+        <RequestError
           title="Couldn't load this build's games and stats"
           error={error}
           onRetry={() => mutate()}

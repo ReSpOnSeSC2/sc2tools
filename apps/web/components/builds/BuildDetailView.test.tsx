@@ -109,18 +109,18 @@ describe("BuildDetailView editor routing", () => {
 });
 
 describe("BuildDetailView states", () => {
-  it("a failed load (not a 404) shows the error card, and Retry calls mutate", async () => {
+  it("a failed load (not a 404) shows the shared error panel, and Retry calls mutate", async () => {
     harness.error = { status: 500, message: "The server had a problem.", requestId: "req-fixture-1" };
 
     render(<BuildDetailView slug="proxy-gateway" />);
 
+    expect(screen.getByRole("heading", { name: "Couldn’t load this build" })).toBeTruthy();
     const alert = screen.getByRole("alert");
-    expect(alert.textContent).toContain("Couldn’t load this build");
-    expect(alert.textContent).toContain("The server had a problem.");
-    expect(alert.textContent).toContain("req-fixture-1");
+    expect(alert.getAttribute("data-testid")).toBe("request-error");
+    expect(alert.textContent).toContain("Something went wrong on our side");
+    expect(alert.textContent).toContain("req-fixt");
     expect(screen.queryByText("Build not found")).toBeNull();
-    const backLinks = screen.getAllByRole("link", { name: /Back to library/ });
-    expect(backLinks.every((link) => link.getAttribute("href") === "/builds")).toBe(true);
+    expect(screen.getByRole("link", { name: /Back to library/ }).getAttribute("href")).toBe("/builds");
 
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(harness.mutate).toHaveBeenCalledTimes(1));
