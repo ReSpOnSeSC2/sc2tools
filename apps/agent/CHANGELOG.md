@@ -4,6 +4,12 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+- Dashboard shows the last game, locally tracked Today record/MMR, persistent
+  upload facts and history-import progress. Recent games keeps 200 private local
+  outcomes, with filters, exact-file actions, narrow retries and skipped reasons.
+  Optional every-game notifications stay quiet during history imports. Re-sync
+  is in Settings Maintenance; Check for updates is beside the sidebar version.
+
 - Desktop check-in previews use local sample data, remember dragged positions and
   reset every card kind. Search Enter picks the top result, Down/Up moves between
   search and results, and Ctrl+Enter confirms without automatic focus changes.

@@ -82,6 +82,8 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             own, opponent = races.get("own"), races.get("opponent")
             matchup = own[0] + "v" + opponent[0] if own and opponent else "—"
             status = {"uploaded": "Uploaded", "problem": "Needs attention", "skipped": "Skipped"}.get(row.get("status"), "—")
+            if row.get("status") in {"problem", "skipped"} and row.get("errorTitle"):
+                status = row["errorTitle"]
             return (relative_time(row.get("dateIso") or row.get("updatedAt")), row.get("result") or "—", matchup,
                     row.get("oppName") or "—", row.get("map") or "—", _length(row.get("durationSec")),
                     str(row["mmr"]) if row.get("mmr") is not None else "—", status)[column]
@@ -144,6 +146,7 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
         def __init__(self):
             super().__init__(parent)
             self.model = GamesModel()
+            self.unknown_skipped = 0
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(28, 24, 28, 24)
             title = QtWidgets.QLabel("Recent games")
@@ -175,6 +178,29 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             layout.addLayout(controls)
             self.table = QtWidgets.QTableView()
             self.table.setModel(self.model)
+            class ResultDelegate(QtWidgets.QStyledItemDelegate):
+                def paint(delegate, painter, option, index):
+                    row = index.data(QtCore.Qt.UserRole) or {}
+                    result = row.get("result")
+                    if result not in {"Victory", "Defeat", "Tie"} or row.get("_group"):
+                        return super().paint(painter, option, index)
+                    background = QtWidgets.QStyleOptionViewItem(option)
+                    delegate.initStyleOption(background, index)
+                    background.text = ""
+                    option.widget.style().drawControl(QtWidgets.QStyle.CE_ItemViewItem, background, painter, option.widget)
+                    color = QtGui.QColor("#57c793" if result == "Victory" else "#e77777" if result == "Defeat" else "#c4c9d4")
+                    fill = QtGui.QColor(color)
+                    fill.setAlpha(32)
+                    rect = option.rect.adjusted(4, 3, -4, -3)
+                    painter.save()
+                    painter.setRenderHint(QtGui.QPainter.Antialiasing)
+                    painter.setPen(QtCore.Qt.NoPen)
+                    painter.setBrush(fill)
+                    painter.drawRoundedRect(rect, 5, 5)
+                    painter.setPen(color)
+                    painter.drawText(rect, QtCore.Qt.AlignCenter, result)
+                    painter.restore()
+            self.table.setItemDelegateForColumn(1, ResultDelegate(self.table))
             self.table.setAccessibleName("Recent games")
             self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
             self.table.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
@@ -200,11 +226,15 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
 
         def refresh_counts(self):
             counts = self.model.counts()
+            if self.model.days is None:
+                counts["all"] += self.unknown_skipped
+                counts["skipped"] += self.unknown_skipped
             for key, button in self.filters.items():
                 button.setText(f"{button.property('filterLabel')} ({counts[key]})")
-            self.empty.setVisible(self.model.rowCount() == 0)
+            self.empty.setVisible(self.model.rowCount() == 0 and not (
+                self.unknown_skipped and self.model.days is None and self.model.status in {"all", "skipped"}))
             self.table.setVisible(self.model.rowCount() > 0)
-            self.skip_panel.setVisible(self.model.status in {"all", "skipped"})
+            self.skip_panel.setVisible(self.model.status in {"all", "skipped"} and self.model.days is None)
 
         def set_filter(self, status):
             self.model.status = status
@@ -219,6 +249,11 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
 
         def set_rows(self, rows, skipped=()):
             self.model.set_rows(rows)
+            known_paths = {row.get("path") for row in self.model.rows}
+            skipped = [{**group, "count": len([path for path in group.get("paths", []) if path not in known_paths])}
+                       for group in skipped]
+            skipped = [group for group in skipped if group["count"]]
+            self.unknown_skipped = sum(group["count"] for group in skipped)
             self.refresh_counts()
             while self.skip_layout.count():
                 item = self.skip_layout.takeAt(0)
@@ -227,7 +262,8 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             for group in skipped:
                 line = QtWidgets.QWidget()
                 row = QtWidgets.QHBoxLayout(line)
-                label = QtWidgets.QLabel(f"{group['count']} skipped · {group['title']} → {group['action']}")
+                label = QtWidgets.QLabel(f"{group['count']} skipped (date unknown) · {group['title']} → {group['action']}")
+                label.setTextFormat(QtCore.Qt.PlainText)
                 label.setWordWrap(True)
                 row.addWidget(label, 1)
                 if group.get("retryable"):
@@ -271,7 +307,7 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             failures = [item["path"] for item in self.selected_rows() if item.get("status") == "problem" and item.get("path")]
             if len(failures) > 1:
                 menu.addAction("Retry failed", lambda: retry(failures, None))
-            menu.addAction("Help", lambda: open_help("desktop-app-sync-problems"))
+            menu.addAction("Help", lambda: open_help("desktop-app-sync-problems", row.get("errorKind", "rejected")))
             return menu
 
         def _context(self, point):

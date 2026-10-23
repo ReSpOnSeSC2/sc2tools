@@ -21,6 +21,8 @@ SKIP_REASONS = {
     "resumed_replay": ("A replay resumed with Take Command", "Synthetic results are excluded from records"),
     "no_result": ("No final game result was recorded", "A completed match is needed"),
     "unsupported_replay": ("This replay format isn't supported", "Check for an agent update"),
+    "analysis_failed": ("Analysis stopped while reading this replay", "Check the Activity log and agent updates"),
+    "playback_budget_exceeded": ("Detailed playback exceeded its resource limit", "Review Map replay capture in Settings and the Activity log"),
 }
 RACES = {"Protoss", "Terran", "Zerg", "Random"}
 REGIONS = {"1": "NA", "2": "EU", "3": "KR", "5": "CN", "6": "SEA"}
@@ -76,7 +78,7 @@ def today_summary(rows, *, now=None):
     now = now or datetime.now().astimezone()
     local_zone = now.tzinfo or datetime.now().astimezone().tzinfo
     dated = [(parse_time(row.get("dateIso")), row) for row in rows
-             if row.get("status") == "uploaded" and not row.get("isResumed")]
+             if (row.get("status") == "uploaded" or row.get("accepted") is True) and not row.get("isResumed")]
     played = sorted(((date, row) for date, row in dated if date and date.astimezone(local_zone).date() == now.date()
                      and date <= now), key=lambda pair: (pair[0], str(pair[1].get("gameId"))))
     wins = sum(row.get("result") == "Victory" for _, row in played)
@@ -180,6 +182,31 @@ class RecentGamesStore:
                 self.rows = before
                 raise
         return copy.deepcopy(row)
+
+    def record_many(self, entries):
+        """One durable write for a burst; retain the newest actual game dates."""
+        with self.lock:
+            before = self.rows
+            rows = list(before)
+            for entry in entries:
+                identifier, path = entry.get("gameId"), entry.get("path")
+                previous = next((row for row in rows if row.get("path") == path), {})
+                merged = {**previous, **entry, "owner": self.owner}
+                if entry.get("status") == "uploaded":
+                    merged["accepted"] = True
+                    merged.pop("error", None)
+                rows = [row for row in rows if row.get("path") != path
+                        and not (identifier and row.get("gameId") == identifier)]
+                rows.append(merged)
+            minimum = datetime.min.replace(tzinfo=timezone.utc)
+            rows.sort(key=lambda row: parse_time(row.get("dateIso") if row.get("status") == "uploaded" else row.get("updatedAt"))
+                      or parse_time(row.get("updatedAt")) or minimum)
+            self.rows = rows[-MAX_RECENT_GAMES:]
+            try:
+                self._save()
+            except OSError:
+                self.rows = before
+                raise
 
     def _save(self):
         # Same-directory durable replacement keeps a crash from truncating the

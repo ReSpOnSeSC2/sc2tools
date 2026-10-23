@@ -33,7 +33,7 @@ def recent(monkeypatch):
                                open_game=lambda identifier: events.append(("game", identifier)),
                                reveal=lambda path: events.append(("reveal", path)),
                                retry=lambda paths, reason: events.append(("retry", paths, reason)),
-                               open_help=lambda slug: events.append(("help", slug)))
+                               open_help=lambda slug, *anchor: events.append(("help", slug, *anchor)))
     yield widget, events
     widget.deleteLater()
     APP.processEvents()
@@ -114,3 +114,17 @@ def test_legacy_rows_without_game_id_reveal_the_local_file_without_inventing_met
     assert widget.model.data(widget.model.index(0, 1)) == "—"
     widget.table.doubleClicked.emit(widget.model.index(0, 0))
     assert events == [("reveal", "C:/legacy.SC2Replay")]
+
+
+def test_unknown_date_skip_groups_do_not_masquerade_as_today_or_double_count(recent):
+    from sc2tools_agent.recent_games import skipped_groups
+    widget, events = recent
+    markers = {"old": "skipped:player_unresolved", "known": "skipped:player_unresolved"}
+    widget.set_rows([example(1, path="known", status="skipped")], skipped_groups(markers))
+    assert widget.filters["skipped"].text() == "Skipped (2)"
+    assert "1 skipped (date unknown)" in widget.skip_panel.findChild(QtWidgets.QLabel).text()
+    widget.skip_panel.findChildren(QtWidgets.QPushButton)[0].click()
+    assert events[-1] == ("retry", [], "player_unresolved")
+    widget.date.setCurrentIndex(1)
+    assert widget.filters["skipped"].text() == "Skipped (1)"
+    assert widget.skip_panel.isHidden()

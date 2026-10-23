@@ -40,9 +40,10 @@ window keeps the app running in the tray; use **Quit** to stop it.
 
 During an outage, the Dashboard shows the number of waiting replays and a
 retry countdown. **Retry now** starts another attempt. Temporary connection
-problems do not add error rows to Recent uploads. Permanent replay outcomes
-show a plain-language message, technical details on hover, **Copy details**,
-and a help link. Read [Pairing problems](https://sc2tools.com/help/pairing-troubleshooting)
+problems explain the connection hold. Recent games keeps the latest per-file
+outcome with friendly text: link this PC again for 401/403, wait for the rate
+limit for 429, or wait/retry when the service is busy for 5xx. Right-click a
+failed row for **Retry**, **Copy error**, and Help. Read [Pairing problems](https://sc2tools.com/help/pairing-troubleshooting)
 or [Sync problems](https://sc2tools.com/help/desktop-app-sync-problems).
 
 ## For developers - the source-install path
@@ -107,8 +108,8 @@ agent falls back gracefully to tray+console.
 
 | Tab | Contents |
 | --- | -------- |
-| Dashboard | Shared status card (Starting / Connecting / Link this PC / Unlinked / Watching / Syncing / Paused / Needs attention / Error), its cause and next action, pairing code and recovery; green pairing confirmation for four seconds, upload totals when linked, separate update card and release notes. Status matches the sidebar and tray dot. Pause, Re-sync, Add folder, Check for updates, and Open dashboard actions. |
-| Recent uploads | Last ~100 replays the agent has handled, with timestamps and per-row status. Double-click reveals the replay in Explorer. |
+| Dashboard | Shared status and recovery; Last game and locally tracked Today W–L/MMR; Synced with today's uploads, Waiting, persistent relative Last upload, Failed (24 h), and history-import progress. Pause and Open dashboard remain here; Re-sync is in Settings → Maintenance and Check for updates is beside the sidebar version. |
+| Recent games | Latest 200 local outcomes, kept across restarts. When, result, matchup, opponent, map, length, own MMR and status; status/date filters and collapsed history imports. Double-click opens game analysis. Right-click selects the exact replay in Explorer, copies its path/error, retries or re-analyzes; select failed rows for Retry failed. |
 | Activity log | Incremental tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log`, with complete tracebacks, readable level filters, Ctrl+F search, follow/pause, copy selection or last 200 lines, and Open log folder. |
 | Settings | Replay folders and sync date range, start-up, updates, capture, build check-in and OBS. Save confirms what applied; API address, log level and import speed name their restart requirement. The API field supports Reset to default and Test. |
 | Streams | Shared stream title and YouTube description, connected channels, and verified or accepted per-platform save results. |
@@ -117,6 +118,35 @@ Closing the window hides it in the tray while syncing continues. A one-time remi
 explains where it went. Launching the shortcut again brings that same window forward.
 Without a tray, Close offers Quit or Minimize and remembers the choice.
 Use **Quit** in the tray or **Quit SC2 Tools** below sidebar Help to fully exit.
+
+### Recent games and replay history
+
+The first launch seeds up to 100 dated upload entries. Those entries do not
+invent results from filenames; **Today** counts locally tracked game details,
+using the played date in your local timezone. Net MMR compares consecutive
+ladder games only when region, ladder race and both ratings are known. Synced
+**+N today** uses upload time, so an old history import can increase that number
+without changing today's W–L. The private `recent_games.jsonl` holds at most 200
+rows in the agent state directory and only displays the currently linked account.
+
+**Waiting** includes eligible replays still on disk, counted in the background;
+queued files are already part of that inventory and are not counted twice.
+The import card shows counts and measured throughput; ETA appears only after
+enough samples and is hidden while paused or waiting for a connection. **Only
+import this season** applies just that saved filter. **View on website** opens
+your dashboard. Manual **Settings → Maintenance → Re-sync replay library…**
+uses the same progress card, including when cloud progress reporting is offline.
+
+In **Recent games → Skipped**, older markers have an unknown date and appear
+only under All dates. **Retry these** for an unresolved player, unreadable replay,
+unfinished file or date-filtered replay clears only that reason. Fix the cause
+first; the saved date filter still applies. AI games, incomplete matches and
+resumed/synthetic results do not become ordinary ladder records by retrying.
+
+To see a local result message such as **Victory vs Opponent (Z) on Alcyone LE**,
+enable **Settings → Notify me after every new game syncs** and Save. This is off
+by default and history imports stay quiet. See [Your recent games](https://sc2tools.com/help/desktop-app-recent-games)
+and [Importing your replay history](https://sc2tools.com/help/desktop-app-import).
 
 ### Streams
 

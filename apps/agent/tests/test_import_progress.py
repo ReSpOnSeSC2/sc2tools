@@ -64,3 +64,64 @@ def test_controller_snapshot_is_local_nonblocking_and_change_callback_runs_witho
         release.set()
         worker.join(timeout=2)
     assert not worker.is_alive()
+
+
+def test_manual_resync_below_cloud_threshold_tracks_and_completes_offline(monkeypatch):
+    from pathlib import Path
+    from tests.test_import_controller import FakeApi, FakeWatcher, wait_for
+    monkeypatch.setattr("sc2tools_agent.import_controller._REPORT_INTERVAL_SEC", .02)
+    api, watcher = FakeApi(), FakeWatcher(pending=2)
+    def offline(_body):
+        raise ConnectionError("offline fixture")
+    monkeypatch.setattr(api, "import_agent_start", offline)
+    controller = ImportController(api=api, watcher=watcher)
+    try:
+        controller.maybe_start_auto_backfill(force_display=True)
+        assert controller.snapshot()["total"] == 2
+        assert controller.snapshot()["phase"] == "importing"
+        controller.on_upload_success(Path("a"))
+        controller.on_upload_success(Path("b"))
+        watcher.pending = 0
+        assert wait_for(lambda: controller.snapshot()["phase"] == "done")
+        assert controller.snapshot()["completed"] == 2
+        assert api.progress_calls == []  # Local job IDs are never sent to API.
+    finally:
+        controller.stop()
+
+
+def test_empty_offline_manual_resync_finishes_without_an_indefinite_spinner(monkeypatch):
+    from tests.test_import_controller import FakeApi, FakeWatcher
+    api = FakeApi()
+    def offline(_body):
+        raise ConnectionError("offline fixture")
+    monkeypatch.setattr(api, "import_agent_start", offline)
+    controller = ImportController(api=api, watcher=FakeWatcher(pending=0))
+    controller.maybe_start_auto_backfill(force_display=True)
+    assert controller.snapshot()["phase"] == "done"
+    assert controller.snapshot()["remaining"] == 0
+    assert not api.progress_calls
+
+
+def test_controller_hold_excludes_pause_and_outage_from_rate_samples():
+    from tests.test_import_controller import FakeApi, FakeWatcher
+    now = [0]
+    controller = ImportController(api=FakeApi(), watcher=FakeWatcher())
+    controller._rate = ImportRate(clock=lambda: now[0])
+    body = {"phase": "import", "completed": 0, "remaining": 100}
+    controller._publish_local(body)
+    now[0] = 10
+    body.update(completed=10, remaining=90)
+    controller._publish_local(body)
+    assert controller.snapshot()["ratePerMinute"] == 60
+    controller.set_hold(paused=True)
+    now[0] = 610
+    controller._publish_local(body)
+    assert controller.snapshot()["ratePerMinute"] is None
+    controller.set_hold(paused=False, connection="offline")
+    now[0] = 1210
+    controller._publish_local(body)
+    assert controller.snapshot()["ratePerMinute"] is None
+    controller.set_hold(connection="online")
+    now[0] = 1220
+    controller._publish_local({**body, "completed": 20, "remaining": 80})
+    assert controller.snapshot()["ratePerMinute"] == 60

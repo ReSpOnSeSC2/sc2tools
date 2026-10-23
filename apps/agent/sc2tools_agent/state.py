@@ -114,6 +114,9 @@ class AgentState:
     """When True, the GUI starts hidden - only the tray icon shows.
     Useful when the agent is set to launch on login."""
 
+    notify_every_game: bool = False
+    """Opt-in local notification for newly synced live games; never history imports."""
+
     parse_concurrency_override: Optional[int] = None
     """How many parse threads the watcher's ThreadPoolExecutor runs.
     None = use the config default (4). The Settings tab exposes this
@@ -414,6 +417,7 @@ def load_state(state_dir: Path) -> AgentState:
         log_level_override=_coerce_str(raw.get("log_level_override")),
         autostart_enabled=bool(raw.get("autostart_enabled") or False),
         start_minimized=bool(raw.get("start_minimized") or False),
+        notify_every_game=raw.get("notify_every_game") is True,
         parse_concurrency_override=_coerce_int(
             raw.get("parse_concurrency_override"),
         ),

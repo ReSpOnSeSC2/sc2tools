@@ -1,75 +1,73 @@
 # Desktop recent games and import progress checkpoint
 
-Branch `codex/wave4-agent-dashboard`, isolated worktree
-`C:/SC2TOOLS/.worktrees/wave4-agent-dashboard`, based on main
-`71d003376c8187d5cff126362e2a193b43b5c109`. Root explicitly assigned
-`agent-dashboard-games` while stream-title provider integration awaits human
-authorization. Read the full final-plan specification, both augments, folded
-audit and howto. Root merged urgent Archon repair #696 as `72b345d0`; integrate
-that newer main before the final PR.
+Isolated branch `codex/wave4-agent-dashboard`, worktree
+`C:/SC2TOOLS/.worktrees/wave4-agent-dashboard`. Original base main
+`71d003376c8187d5cff126362e2a193b43b5c109`; root merged the urgent Archon repair
+#696 and newer work since. Fetch now reports main `939964979c1374b060fc44e6846360bdba65760b`;
+integrate before the final draft. Read the exact `agent-dashboard-games` spec,
+both augments, folded audit and howto in final-plan.json.
 
-## Implemented foundations — not yet wired into the main desktop window
+## Implemented
 
-- `recent_games.py`: accepted canonical ID and whitelisted CloudGame summary;
-  own MMR only; private JSONL capped at 200 rows, first-start newest-100 dated
-  cursor seeding, restart/deduplication and account-specific display. Seeded
-  uploads do not invent replay results or dates. Existing Windows sharing-lock
-  replacement retry is reused; failed durable writes keep disk and visible rows.
-- Local Today math uses the actual replay date in the local timezone and only
-  valid adjacent same-region/same-race ladder ratings. Missing MMR, custom games
-  and region/race switches break the chain. Upload-time counts remain separate
-  from played-time W–L. Skipped markers have plain-English grouped explanations
-  and only the four specified retryable reasons are marked retryable.
-- `import_progress.py`: five-minute time-weighted EWMA; ETA hidden until at least
-  three positive samples, five processed replays and 15 elapsed seconds.
-- `ImportController.snapshot()` and `on_change` expose cached local counts,
-  Scanning/Importing/Done phases, rates and ETA without disk/network in the read.
-  Callbacks run outside its lock; existing cloud request bodies are unchanged.
-- `ui/recent_games.py`: real QAbstractTableModel/QTableView with eight requested
-  columns, absolute tooltips, status/date filter counts, collapsed history group,
-  game activation, qualified-path/error actions and multi-select Retry failed.
-  Updates use insert/remove ranges rather than model resets, including at cap.
+- Accepted canonical ID plus whitelisted CloudGame summary on every successful
+  queue path. Existing live-only check-in callbacks retain their scope. Callback
+  failures cannot repeat accepted uploads; an account change during the request
+  fences local metadata, and delayed GUI/disk snapshots also verify the owner.
+- `recent_games.jsonl` retains 200 private local outcomes; first creation seeds
+  the newest 100 dated cursor uploads without inventing game metadata. A bounded
+  history worker owns all JSONL/state scans and durable writes; history bursts
+  cannot evict the latest live game. Failed writes retain prior durable rows,
+  show an explanation and keep a bounded background retry.
+- Real QAbstractTableModel/QTableView uses incremental insert/remove ranges,
+  coloured result pills, eight requested columns, absolute time tooltips,
+  collapsed history imports, All/Uploaded/Problems/Skipped counts/date filters,
+  canonical game activation, exact-file Explorer selection, path/error copying,
+  single and multi-failed retry. Unknown-date legacy skip groups are excluded
+  from date-filtered views and not counted twice with known local rows.
+- Last game, locally tracked Today W-L and adjacent same-region/same-ladder-race
+  MMR math; upload-time Synced +N today, persistent relative Last upload,
+  Failed24h action and Waiting. `count_pending` already includes queued files,
+  so Waiting uses max(queue, remaining inventory) instead of double-counting.
+  Metadata limits are visible rather than inventing an all-history W-L.
+- Cached ImportController snapshots/signals, Scanning/Importing/Done and UI hold
+  phases, five-minute EWMA with minimum-sample ETA, Pause, Only this season and
+  website actions. Manual Re-sync shows determinate progress below the cloud
+  threshold and while cloud reporting is offline; zero finishes. Holds exclude
+  idle time from rate samples. Inventory/fsync stay off Qt and summary repaint
+  is throttled at four per second.
+- Reason/path retries clear only chosen existing, non-pending cursor entries;
+  durable failure rolls them back. Saved date filters still apply. Only-this-
+  season saves that filter asynchronously without saving unrelated form drafts.
+- Opt-in local every-game result notifications default off, suppress history and
+  resumed outcomes and deduplicate game IDs. No provider publication is involved.
+- Re-sync moved to Settings Maintenance; Check for updates sits beside the
+  sidebar version. README, both changelogs and the two complete help leaves
+  `desktop-app-recent-games` and `desktop-app-import` describe actual behavior.
 
-## Local evidence
+## Verification so far (pre-integration)
 
-- Store/Today/summary/import progress plus all existing ImportController checks:
-  **45 passed**.
-- Real offscreen Qt component tests: **5 passed**. They exercise 500 incremental
-  inserts without resets, preserve a persistent index while trimming the cap,
-  check columns/tooltips/group/filter behavior and invoke menu/activation signals.
-- All native component actions use fakes; browser/network calls are prohibited.
-  No Explorer, provider, installer, release, tag or production operation ran.
-- First 205-row writer stress exposed a real transient Windows replace lock.
-  Reusing the existing bounded replacement helper fixed it; no test weakened.
+- Full affected dashboard/queue-callback/import/controller/settings/status scope:
+  **111 passed** in 17.12 seconds (`apps/agent/dashboard-focused-tests.log`).
+- Earlier queue hook plus all existing queue tests: **70 passed** before the
+  final retry/owner additions. Full agent suite must run after integration.
+- Earlier foundation/state/native checks: 89 passed; current targeted Qt/runner/
+  retry/import suite includes meaningful async-save, owner-change, burst-coalescing,
+  exact-file arguments, unknown-date filters and offline-zero regressions.
+- Native action tests use fakes, not system Explorer/browser/provider calls.
+  No installer, sign, release, tag or production operation ran.
 
-## Remaining full pack requirements
+## Remaining before a draft PR
 
-1. Wire UploadQueue `on_game_synced(path, summary)` for both batch/history and
-   live/single accepted paths. Queue local persistence on its own bounded worker;
-   do not add fsync or a whole-state scan to the Qt or upload thread. Preserve
-   existing live-only check-in callback semantics, upload admission and archives.
-2. Route metadata/initial history/import snapshots over GuiUI signals; replace the
-   main window's old QTableWidget with this component. Keep summary stats refresh
-   at most four per second. Preserve all earlier preview/recovery/settings fixes.
-3. Last game, Today, Synced +N today, persistent relative Last upload, Failed24h
-   action and Waiting = queue plus remaining inventory. Legacy metadata cannot
-   honestly produce a full W–L; make that limit visible instead of inventing data.
-4. Import card/progress for organic history and manual Re-sync, rate/ETA/phase,
-   Pause, Only this season, View on website. Disk inventory stays off Qt. Pause
-   and connection holds must hide misleading ETA/rate and use the existing lane.
-5. Narrow reason/path retry under queue/state locks, requeue only selected failed
-   files or one specified reason; active date filter still applies. Never clear
-   unrelated uploaded markers. Explorer reveal must select the exact file.
-6. Complete skip/date behavior: legacy skip markers have unknown dates; do not
-   pretend they occurred today. Add actual timestamped new skip rows as appropriate.
-7. Every-game opt-in game-summary notification (currently no general notification
-   preference exists); maintenance/update placement augments; README, agent/root
-   changelogs, two help leaves `desktop-app-recent-games` and `desktop-app-import`.
-8. Meaningful queue/runner/full-window/actual native checks, full agent suite,
-   package diagnostic, help index/types/lint/budgets, latest main integration,
-   fully described attached draft PR. No shipping claim before those are complete.
+1. Integrate latest origin/main, preserve additive shared changes, regenerate
+   help index; run help lint/types/tests and affected native checks again.
+2. Review changed source for runtime lifecycle/edge cases. Run full agent suite
+   and actual unsigned frozen package diagnostic. Capture and inspect actual
+   offscreen Dashboard/Recent/Settings screenshots; fix geometry or copy issues.
+3. Commit explicit paths, push and create a fully described attached **draft**
+   PR. Report exact head, complete test/package evidence and truthful limitations.
+   Root owns final review/integration/merge; no canonical version bump or tag.
 
-Stream-title integration is independently held after automatic approval rejection.
-Its local-only helpers are clean at `2f511edc` in `wave4-stream-titles`; do not
-work around that hold. Root owns final merges. No AI features/API calls or new
-infrastructure; canonical release bump/tag/signing/installation remain manual.
+Stream-title provider integration remains independently held after automatic
+approval rejection. Local-only helpers are clean at `2f511edc` in
+`wave4-stream-titles`. No human answer has been relayed, so do not retry/bypass
+that hold. No AI features/API calls or new infrastructure.

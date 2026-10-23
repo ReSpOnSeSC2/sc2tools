@@ -232,6 +232,7 @@ class UploadQueue:
         on_game_accepted: Optional[
             Callable[[Path, CloudGame, str, Dict[str, Any]], None]
         ] = None,
+        on_game_synced: Optional[Callable[[Path, Dict[str, Any]], None]] = None,
     ) -> None:
         self._connection_callback = on_connection_state or (lambda *_args: None)
         self._on_auth_failure = on_auth_failure or (lambda _exc: None)
@@ -322,6 +323,7 @@ class UploadQueue:
         # post-game build check-in. Fired once per gameId, after
         # ``on_success`` and outside ``_lock``.
         self._on_game_accepted = on_game_accepted
+        self._on_game_synced = on_game_synced
         self._lock = threading.Lock()
         # Preserve notification order across parser + uploader threads.
         # The callback itself stays outside ``_lock`` so UI work cannot
@@ -1001,6 +1003,32 @@ class UploadQueue:
             self._retry_at = 0.0
         self._retry_wake.set()
 
+    def retry_selected(self, paths=(), *, reason=None):
+        """Clear only an explicit replay selection or one retryable skip reason."""
+        from ..recent_games import RETRYABLE_SKIPS
+        if reason is not None and reason not in RETRYABLE_SKIPS:
+            raise ValueError("This skip reason cannot be retried.")
+        selected = {str(path) for path in paths}
+        if reason is None and not selected:
+            return []
+        with self._lock:
+            chosen = {}
+            for path, marker in self._state.uploaded.items():
+                wanted = "filtered" if reason == "filtered" else "skipped:" + str(reason)
+                matches = marker == wanted if reason else path in selected
+                if matches and path not in self._pending_paths and Path(path).is_file():
+                    chosen[path] = marker
+            for path in chosen:
+                del self._state.uploaded[path]
+            if chosen:
+                try:
+                    save_state(self._cfg.state_dir, self._state)
+                except OSError:
+                    self._state.uploaded.update(chosen)
+                    raise
+        self.retry_now()
+        return list(chosen)
+
     def _defer_connection(self, exc: Exception) -> None:
         error = classify(exc)
         try:
@@ -1520,6 +1548,7 @@ class UploadQueue:
             if self.is_paused():
                 raise _PausedBeforeNetwork()
             try:
+                summary_owner = self._state.user_id
                 result = self._api.upload_games_batch(payloads)
             except ApiError as exc:
                 if 400 <= exc.status < 500 and exc.status not in (401, 403, 408, 429):
@@ -1592,6 +1621,7 @@ class UploadQueue:
             self._archive_journal.enqueue_many(archive_tasks)
 
         accepted_jobs: List[UploadJob] = []
+        accepted_summaries: List[Tuple[UploadJob, Dict[str, Any]]] = []
         accepted_live: List[Tuple[UploadJob, str, Dict[str, Any]]] = []
         rejected_jobs: List[Tuple[UploadJob, str]] = []
         retryable_jobs: List[Tuple[UploadJob, str]] = []
@@ -1614,6 +1644,7 @@ class UploadQueue:
                     if isinstance(gid, str) and gid:
                         self._state.path_by_game_id[gid] = path_str
                     accepted_jobs.append(job)
+                    accepted_summaries.append((job, acc))
                     if job.priority and live_job is None:
                         live_job = job
                 if live_job is not None and isinstance(gid, str):
@@ -1655,6 +1686,8 @@ class UploadQueue:
         # User-facing callbacks + the sticky-MMR push happen OUTSIDE
         # the lock — they may take a network round-trip and we don't
         # want to hold the state lock that long.
+        for job, accepted_row in accepted_summaries:
+            self._notify_game_synced(job, accepted_row, summary_owner)
         for job in accepted_jobs:
             try:
                 self._on_success(job.file_path)
@@ -1891,6 +1924,7 @@ class UploadQueue:
         with self._network_gate.hold(0 if job.priority else 1):
             if self.is_paused():
                 raise _PausedBeforeNetwork()
+            summary_owner = self._state.user_id
             result = self._api.upload_game(self._payload_for_job(job))
         accepted_rows = result.get("accepted") or []
         accepted_row = accepted_rows[0] if accepted_rows else {}
@@ -1944,6 +1978,7 @@ class UploadQueue:
         if task is not None:
             self._schedule_archive_task(task)
             self._notify_archive_pending()
+        self._notify_game_synced(job, accepted_row, summary_owner)
         try:
             self._on_success(job.file_path)
         finally:
@@ -1962,6 +1997,19 @@ class UploadQueue:
         # otherwise re-syncing 12k old replays would reset the sticky
         # MMR to whatever the streamer's rating was three seasons ago.
         self._maybe_push_last_mmr(job)
+
+    def _notify_game_synced(self, job: UploadJob, accepted_row: Dict[str, Any], owner=None) -> None:
+        if self._on_game_synced is None or owner != self._state.user_id:
+            return
+        try:
+            from ..recent_games import build_game_summary
+            summary = build_game_summary(job.game, accepted_row, history=not job.priority)
+            summary["_owner"] = owner  # Local handoff fence, never a cloud field.
+            self._on_game_synced(job.file_path, summary)
+        except Exception:
+            # Local desktop history is advisory, unlike the replay archive.
+            # A UI/persistence sink must not retry an already accepted upload.
+            log.warning("upload_game_summary_callback_failed")
 
     def _notify_game_accepted(
         self,
