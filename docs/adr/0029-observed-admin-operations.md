@@ -34,3 +34,11 @@ Coverage: this change completes `ops-console`, its folded
 `admin/tools-user-lookup` augment and its how-to. `admin-polish-4`, `-5`, `-6`
 and `-7` remain separate packs; their URL/table, game browser, inbox read controls
 and triage dashboard are not claimed here.
+
+Validation uses a local Mongo replica set and actual HTTP routes, including
+concurrent role removal, a client disconnected during a completed wipe,
+shared audit leases versus erasure, late-write anonymization, cohort limits and
+same-time cursor ties. Rendered component fixtures use production CSS and
+intercept all network traffic; phone lookup, typed confirmation, results and
+activation stay within 390 px. No production account, job or database operation
+was used for this verification.
