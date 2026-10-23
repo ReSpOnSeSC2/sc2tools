@@ -942,6 +942,10 @@ function buildGamesRouter(deps) {
         );
         deps.io.to(`user:${userId}`).emit("games:changed", {
           count: accepted.length,
+          // Quarantined replay-resume markers are excluded from /me stats.
+          inserted: competitiveAccepted.filter((item) => item.created === true).length,
+          bulk: !freshGame,
+          reason: "ingest",
         });
         // Recompute the session card immediately only for a genuinely new,
         // just-finished match. Existing-row reuploads do not change W-L, and

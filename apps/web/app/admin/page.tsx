@@ -1,4 +1,5 @@
 "use client";
+import { AdminLiveStatus } from "./components/AdminLiveStatus";
 import { RequestError } from "@/components/ui/RequestError";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { Button } from "@/components/ui/Button";
@@ -95,6 +96,7 @@ export default function AdminDashboardPage() {
 
       <RecentActivityCard
         events={merged}
+        data={recent.data}
         isLoading={recent.isLoading && merged.length === 0}
         error={recent.error ?? null}
         onRetry={() => recent.mutate()}
@@ -179,21 +181,24 @@ function ActivitySection({
 
 function RecentActivityCard({
   events,
+  data,
   isLoading,
   error,
   onRetry,
 }: {
   events: AdminEvent[];
+  data: AdminEventsListResp | undefined;
   isLoading: boolean;
   error: ClientApiError | null;
   onRetry: () => unknown;
 }) {
   return (
     <Card padded={false}>
-      <Card.Header>
+      <Card.Header className="flex-wrap">
         <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
           Recent activity
         </h3>
+        <AdminLiveStatus onRefresh={onRetry} data={data} />
         <Link
           href="/admin/notifications"
           className="text-caption text-accent-cyan underline-offset-2 hover:underline"

@@ -232,7 +232,7 @@ describe("POST /games ladder-map + player-count stamping", () => {
       quarantineResumedReplay: jest
         .fn()
         .mockResolvedValueOnce({
-          created: false,
+          created: true,
           newlyFlaggedExisting: 3,
           gameIds: ["resume-3", "resume-1", "resume-2"],
         })
@@ -298,7 +298,7 @@ describe("POST /games ladder-map + player-count stamping", () => {
     expect(opponents.refreshMetadata).not.toHaveBeenCalled();
     expect(users.addPulseId).not.toHaveBeenCalled();
     expect(customBuilds.tagSingleGame).not.toHaveBeenCalled();
-    expect(roomEmit).toHaveBeenCalledWith("games:changed", { count: 1 });
+    expect(roomEmit).toHaveBeenCalledWith("games:changed", { count: 1, inserted: 0, bulk: true, reason: "ingest" });
     expect(io.in).not.toHaveBeenCalled();
   });
 

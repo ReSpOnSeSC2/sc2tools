@@ -186,7 +186,7 @@ describe("GET /v1/custom-builds/:slug/matches matchup gate", () => {
     expect(io.to).toHaveBeenCalledWith(`user:${userId}`);
     expect(roomEmit).toHaveBeenCalledWith(
       "games:changed",
-      expect.objectContaining({ count: 1 }),
+      { count: 1, inserted: 0, bulk: true, reason: "reclassify" },
     );
 
     const res = await withAuth(
