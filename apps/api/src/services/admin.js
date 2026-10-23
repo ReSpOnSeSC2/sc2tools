@@ -708,6 +708,7 @@ class AdminService {
    * @param {string} userId
    * @returns {Promise<{
    *   userId: string,
+   *   games: number, opponents: number, macroJobs: number,
    *   droppedRows: number,
    *   pulseBackfill: {
    *     scanned: number,
@@ -720,7 +721,9 @@ class AdminService {
   async rebuildOpponentsForUser(userId) {
     if (!userId) throw new Error("userId required");
     const result = await this.gdpr.rebuildOpponentsAndHealForUser(userId);
+    const [games, opponents, macroJobs] = await Promise.all([this.db.games.countDocuments({ userId }), this.db.opponents.countDocuments({ userId }), this.db.macroJobs.countDocuments({ userId })]);
     return {
+      games, opponents, macroJobs,
       userId,
       droppedRows: result.droppedRows,
       pulseBackfill: result.pulseBackfill,

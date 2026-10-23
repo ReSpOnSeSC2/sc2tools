@@ -15,9 +15,9 @@ export const NAV_GROUPS = [
   { label: "Community", items: [item("/admin/users", "Users", "Accounts and data tools", Users), item("/admin/player-identities", "Player identities", "Review identity submissions", Fingerprint), item("/admin/player-channels", "Player channels", "Shared channel directory", Tv), item("/admin/moderation", "Moderation", "Open community reports", ShieldAlert)] },
   { label: "Insights", items: [item("/admin/global", "Global players", "Platform-wide players", Globe), item("/admin/global-trends", "Global trends", "All-player trends", TrendingUp), item("/admin/analytics", "Web analytics", "Google Analytics traffic", BarChart3)] },
   { label: "Content", items: [item("/admin/guides", "Guides", "Notes, videos and stats runs", BookOpen)] },
-  { label: "Operations", items: [item("/admin/tools", "Tools", "Repair account data", Wrench), item("/admin/health", "Infrastructure", "Costs, capacity and health", Server)] },
+  { label: "Operations", items: [item("/admin/audit", "Audit log", "Administrator actions", ShieldAlert), item("/admin/tools", "Tools", "Repair account data", Wrench), item("/admin/health", "Infrastructure", "Costs, capacity and health", Server)] },
 ] as const;
-// Future slots: Audit log and Design gallery under Operations; Announcements
+// Future slots: Design gallery under Operations; Announcements
 // under Content; Classifier under Insights.
 const NAV: ReadonlyArray<NavItem> = NAV_GROUPS.flatMap((group) => [...group.items]);
 

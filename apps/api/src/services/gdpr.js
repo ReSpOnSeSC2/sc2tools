@@ -427,6 +427,15 @@ class GdprService {
       "_gdprMutation.id": gdprFence.id,
     });
     counts.users = userRes.deletedCount || 0;
+    // Retained operational history cannot keep an erased user's identity.
+    // Compare literal IDs; the audit payload contains counters only.
+    if (this.db.adminAudit) await this.db.adminAudit.updateMany(
+      { $or: [{ actorUserId: userId }, { target: userId }] },
+      [{ $set: {
+        actorUserId: { $cond: [{ $eq: ["$actorUserId", { $literal: userId }] }, null, "$actorUserId"] },
+        target: { $cond: [{ $eq: ["$target", { $literal: userId }] }, null, "$target"] },
+      } }],
+    );
     return counts;
     } catch (err) {
       await this._releaseMutationFence(userId, gdprFence);

@@ -36,6 +36,7 @@ export interface ReplayPublicIdentity {
 export interface UsersService {
   ensureFromClerk(clerkUserId: string): Promise<{ userId: string }>;
   touch(userId: string): Promise<void>;
+  recordDownload(userId: string): Promise<void>;
   getProfile(userId: string): Promise<UserProfile>;
   updateProfile(
     userId: string,

@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 // Session-refresher worker.
 //
@@ -34,6 +35,7 @@ const MIN_INTERVAL_MS = 60 * 1000;
 
 /**
  * @param {{
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   io: import('socket.io').Server | null | undefined,
  *   games: { todaySession: (userId: string, tz?: string) => Promise<any> } | null | undefined,
  *   intervalMs?: number,
@@ -93,7 +95,7 @@ function buildSessionRefresher(opts) {
    *
    * @returns {Promise<number>}
    */
-  function tickNow() {
+  function tickNowWork() {
     if (!io || !games) return Promise.resolve(0);
     if (inFlight) return inFlight;
     inFlight = runTick(io, games, logger).finally(() => {
@@ -101,6 +103,7 @@ function buildSessionRefresher(opts) {
     });
     return inFlight;
   }
+  const tickNow = observeJob(opts, "session-refresher", intervalMs, tickNowWork, { disabled: !io || !games, envFlag: "always enabled" });
 
   return { start, stop, isRunning, tickNow };
 }

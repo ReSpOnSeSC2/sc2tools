@@ -41,6 +41,8 @@ const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndex
  *   userBackups: import('mongodb').Collection,
  *   arcadeLeaderboard: import('mongodb').Collection,
  *   adminEvents: import('mongodb').Collection,
+ *   jobRuns: import('mongodb').Collection<any>,
+ *   adminAudit: import('mongodb').Collection<any>,
  *   supportEmailSync: import('mongodb').Collection<any>,
  *   sitePresence: import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>,
  *   pulseAccounts: import('mongodb').Collection,
@@ -96,6 +98,8 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
   }
   await client.connect();
   const db = client.db(dbName);
+  try { await db.createCollection(COLLECTIONS.JOB_RUNS, { capped: true, size: 8 * 1024 * 1024, max: 5000 }); }
+  catch (error) { if (/** @type {any} */ (error).code !== 48) throw error; }
   const ctx = {
     client,
     db,
@@ -130,6 +134,8 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     userBackups: db.collection(COLLECTIONS.USER_BACKUPS),
     arcadeLeaderboard: db.collection(COLLECTIONS.ARCADE_LEADERBOARD),
     adminEvents: db.collection(COLLECTIONS.ADMIN_EVENTS),
+    jobRuns: db.collection(COLLECTIONS.JOB_RUNS),
+    adminAudit: db.collection(COLLECTIONS.ADMIN_AUDIT),
     supportEmailSync: db.collection(COLLECTIONS.SUPPORT_EMAIL_SYNC),
     sitePresence: /** @type {import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>} */ (
       db.collection(COLLECTIONS.SITE_PRESENCE)
@@ -302,6 +308,12 @@ async function ensureBuildIntentIndexes(ctx) {
  * @returns {Promise<import('./guideIndexes').BackgroundIndexBuilds>}
  */
 async function ensureIndexes(ctx, opts = {}) {
+  await Promise.all([
+    ctx.jobRuns.createIndex({ job: 1, startedAt: -1 }),
+    ctx.adminAudit.createIndex({ createdAt: 1 }, { expireAfterSeconds: 400 * 86400 }),
+    ctx.adminAudit.createIndex({ target: 1, createdAt: -1 }),
+    ctx.adminAudit.createIndex({ action: 1, createdAt: -1 }),
+  ]);
   await ctx.playerIdentities.createIndex({ sourceKeys: 1 }, { unique: true, sparse: true });
   await ctx.playerIdentities.createIndex({ targetKeys: 1, active: 1 });
   await ctx.playerIdentities.createIndex({ kind: 1 }, { unique: true, partialFilterExpression: { kind: "graph-revision" } });

@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 // Keep-alive worker.
 //
@@ -45,6 +46,7 @@ const REQUEST_TIMEOUT_MS = 15 * 1000;
  * setInterval handle doesn't keep the process alive past SIGTERM.
  *
  * @param {{
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   targets: ReadonlyArray<string>,
  *   intervalMs?: number,
  *   logger: import('pino').Logger,
@@ -119,7 +121,7 @@ function buildKeepaliveWorker(opts) {
    *
    * @returns {Promise<KeepaliveResult[]>}
    */
-  function pingNow() {
+  function pingNowWork() {
     if (typeof fetchImpl !== "function") return Promise.resolve([]);
     if (inFlight) return inFlight;
     inFlight = (async () => {
@@ -129,6 +131,7 @@ function buildKeepaliveWorker(opts) {
         );
         const failures = results.filter((r) => !r.ok);
         if (failures.length > 0) {
+          pingNow.failed({ code: "keepalive_partial_failure" });
           logger.warn(
             {
               failures: failures.map((f) => ({
@@ -149,6 +152,7 @@ function buildKeepaliveWorker(opts) {
     })();
     return inFlight;
   }
+  const pingNow = observeJob(opts, "keepalive", intervalMs, pingNowWork, { disabled: targets.length === 0 || typeof fetchImpl !== "function", envFlag: "KEEPALIVE_TARGETS" });
 
   return { start, stop, isRunning, pingNow };
 }

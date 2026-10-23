@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 /**
  * Nightly guide_stats rebuild (services/guideStats.js) + ISR revalidation.
@@ -58,6 +59,8 @@ const LEASE_MS = 45 * MINUTE_MS;
  * @property {import('../db/connect').DbContext} db
  * @property {Pick<import('../services/guideStats').GuideStatsService, "recompute"|"readRun">} guideStats
  * @property {import('pino').Logger} logger
+ * @property {import("../util/jobLedger").JobLedger} [jobLedger]
+ * @property {boolean} [enabled]
  * @property {number} [intervalMs]   default 24 h (env SC2TOOLS_GUIDE_STATS_INTERVAL_SEC), floor 1 h
  * @property {number} [startDelayMs] default 15 min (env SC2TOOLS_GUIDE_STATS_START_DELAY_SEC)
  * @property {() => number} [nowFn]
@@ -117,6 +120,7 @@ class GuideStatsRecomputeJob {
     this.checkTimer = null;
     /** @type {Promise<GuideStatsJobSummary>|null} */
     this.inflight = null;
+    this.observedRun = observeJob(deps, "guide-stats", Math.min(this.schedule.intervalMs, CHECK_EVERY_MS), (opts) => this.runOnceWork(opts), { disabled: this.schedule.disabled, scheduleDisabled: deps.enabled === false, envFlag: "GUIDES_ENABLED / SC2TOOLS_GUIDE_STATS_DISABLED" });
   }
 
   /** Schedule the checks (no-op when already started or disabled). */
@@ -156,6 +160,12 @@ class GuideStatsRecomputeJob {
    * @returns {Promise<GuideStatsJobSummary>}
    */
   runOnce(opts = {}) {
+    if (this.schedule.disabled) return Promise.resolve({ ran: false, reason: "disabled" });
+    return this.observedRun(opts);
+  }
+
+  /** @param {{force?:boolean}} [opts] */
+  runOnceWork(opts = {}) {
     if (this.schedule.disabled) return Promise.resolve({ ran: false, reason: "disabled" });
     if (this.inflight) return this.inflight;
     this.inflight = this._execute(Boolean(opts.force)).finally(() => {
