@@ -1,38 +1,16 @@
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { CommunityShell } from "../CommunityShell";
-
-vi.mock("next/navigation", () => ({
-  usePathname: () => "/community",
-  useRouter: () => ({ push: () => undefined }),
-}));
-
-describe("CommunityShell", () => {
-  afterEach(() => cleanup());
-
-  test("renders both tabs (Community + Leaderboard)", () => {
-    render(
-      <CommunityShell active="builds">
-        <div>builds-body</div>
-      </CommunityShell>,
-    );
-    // Community tab label is "Community" (not "Community Builds"); use an
-    // exact match so the regex doesn't accidentally also catch a stray
-    // "Community Builds" if one returns.
-    expect(
-      screen.getByRole("tab", { name: (name) => name.trim() === "Community" }),
-    ).toBeTruthy();
-    expect(screen.getByRole("tab", { name: /leaderboard/i })).toBeTruthy();
-    expect(screen.getByText("builds-body")).toBeTruthy();
-  });
-
-  test("marks the leaderboard tab selected when active=leaderboard", () => {
-    render(
-      <CommunityShell active="leaderboard">
-        <div>lb-body</div>
-      </CommunityShell>,
-    );
-    const lbTrigger = screen.getByRole("tab", { name: /leaderboard/i });
-    expect(lbTrigger.getAttribute("aria-selected")).toBe("true");
-  });
+afterEach(cleanup);
+it("exposes ordinary section links and the active page", () => {
+  render(<CommunityShell active="builds" buildCount={57}><div>builds-body</div></CommunityShell>);
+  const builds=screen.getByRole("link",{name:"Builds · 57"});
+  expect(builds.getAttribute("href")).toBe("/community"); expect(builds.getAttribute("aria-current")).toBe("page");
+  expect(screen.getByRole("link",{name:"Stock Market leaderboard"}).getAttribute("href")).toBe("/community/leaderboard");
+  expect(screen.queryByRole("tab")).toBeNull(); expect(screen.getByText("builds-body")).toBeTruthy();
+});
+it("marks the leaderboard route current", () => {
+  render(<CommunityShell active="leaderboard"><div>board</div></CommunityShell>);
+  expect(screen.getByRole("link",{name:"Stock Market leaderboard"}).getAttribute("aria-current")).toBe("page");
+  expect(screen.getByRole("link",{name:"Builds"}).hasAttribute("aria-current")).toBe(false);
 });

@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Community and public sharing
+
+- Community votes show your saved vote, support undo and keep their score correct during simultaneous voting. Reports use readable categories and optional details; Controversial favors divided votes. Public author and player names are escaped safely in structured data.
+- The Stock Market leaderboard opens on the last settled week, distinguishes locked portfolios from results, highlights your own rank and provides shareable week navigation. Player names remain visible only to signed-in players.
+- Public profiles keep temporary outages out of their page cache. Shared replay pages recover expired page links, retry busy services within a limit, share metadata reads and provide a public-friendly private-or-missing page.
+
 ### Review recovery
 
 - Failed request closure and reviewer preference saves show recovery actions; preferences roll back when saving fails.

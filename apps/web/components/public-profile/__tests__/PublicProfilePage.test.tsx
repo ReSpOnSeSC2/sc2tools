@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { PublicProfile } from "../PublicProfile";
+import { PublicFetchError } from "@/lib/publicFetchError";
 import type { PublicPlayerProfile } from "../types";
 
 // next/image needs the Next runtime; a bare <img> is equivalent here.
@@ -94,6 +95,7 @@ describe("PublicProfilePage (SSR data flow)", () => {
     expect(screen.getByText("Reaver")).toBeTruthy();
     expect(getJsonWithStatusMock).toHaveBeenCalledWith(
       "/v1/public/profile/u_a",
+      { revalidateSec: 300 },
     );
   });
 
@@ -104,20 +106,16 @@ describe("PublicProfilePage (SSR data flow)", () => {
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
-  test("calls notFound() when the API returns an empty envelope", async () => {
+  test("throws a temporary error when a successful response has no profile", async () => {
     getJsonWithStatusMock.mockResolvedValue({ data: {}, status: 200 });
     await expect(
       PublicProfilePage({ params: Promise.resolve({ handle: "u_a" }) }),
-    ).rejects.toThrow("NEXT_NOT_FOUND");
+    ).rejects.toThrow(PublicFetchError);
   });
 
-  test("renders the transient unavailable state (NOT a 404) when the API is unreachable", async () => {
-    getJsonWithStatusMock.mockResolvedValue({ data: null, status: null });
-    const ui = await PublicProfilePage({
-      params: Promise.resolve({ handle: "u_a" }),
-    });
-    render(ui);
-    expect(screen.getByText(/temporarily unavailable/i)).toBeTruthy();
+  test.each([null, 429, 500])("throws temporary failure %s instead of caching a noindex page", async (status) => {
+    getJsonWithStatusMock.mockResolvedValue({ data: null, status });
+    await expect(PublicProfilePage({ params: Promise.resolve({ handle: "u_a" }) })).rejects.toBeInstanceOf(PublicFetchError);
   });
 });
 
@@ -148,13 +146,8 @@ describe("generateMetadata", () => {
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
-  test("noindex, neutral metadata when the API is unreachable", async () => {
-    getJsonWithStatusMock.mockResolvedValue({ data: null, status: null });
-    const md = await generateMetadata({
-      params: Promise.resolve({ handle: "u_a" }),
-    });
-    expect(md.robots).toMatchObject({ index: false });
-    expect(md.alternates?.canonical).toBe("/p/u_a");
-    expect(String(md.description)).toMatch(/unavailable right now/i);
+  test.each([null, 429, 500])("throws temporary failure %s before metadata can de-index a real profile", async (status) => {
+    getJsonWithStatusMock.mockResolvedValue({ data: null, status });
+    await expect(generateMetadata({ params: Promise.resolve({ handle: "u_a" }) })).rejects.toMatchObject({ name: "PublicFetchError", status });
   });
 });

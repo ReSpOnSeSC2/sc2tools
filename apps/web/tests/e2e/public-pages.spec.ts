@@ -35,6 +35,24 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
     : []),
 ];
 
+test("missing shared replay archives return a real public-friendly 404", async ({ page }) => {
+  const response = await page.goto("/players/missing-shared-player/replays");
+  expect(response?.status()).toBe(404);
+  await expect(page.getByRole("heading", { name: "This page is private or no longer shared" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Browse community builds", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open dashboard", exact: true })).toHaveCount(0);
+});
+
+test("public profiles keep missing and temporary server statuses distinct", async ({ page }) => {
+  const missing = await page.goto("/p/missing-shared-player");
+  expect(missing?.status()).toBe(404);
+  await expect(page.getByRole("heading", { name: "This page is private or no longer shared" })).toBeVisible();
+  const unavailable = await page.goto("/p/unavailable-shared-player");
+  expect(unavailable?.status()).toBeGreaterThanOrEqual(500);
+  await expect(page.getByRole("heading", { name: "Profile temporarily unavailable" })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Try again", exact: true })).toBeVisible();
+});
+
 for (const { path, expectText } of PAGES) {
   test(`${path} renders without horizontal scroll`, async ({ page }) => {
     const response = await page.goto(path);

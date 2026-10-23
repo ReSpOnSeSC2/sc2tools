@@ -1,3 +1,4 @@
+import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import type { Metadata } from "next";
 import { LandingPageContent } from "@/components/landing/LandingPageContent";
 
@@ -40,11 +41,11 @@ export default function LandingPage() {
     <div className="mx-auto max-w-6xl">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(ORGANIZATION_JSON_LD) }}
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_JSON_LD) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(WEBSITE_JSON_LD) }}
       />
       <LandingPageContent />
     </div>

@@ -227,12 +227,24 @@ describe("GET /v1/public/profile/:handle", () => {
     expect(res.body.profile.games).toBeUndefined();
   });
 
-  test("per-IP rate limit fires", async () => {
+  test("one hot profile cannot exhaust another handle's rate-limit bucket", async () => {
     const limited = mountApp(3); // 3 requests / minute ceiling
     await request(limited).get("/v1/public/profile/u_a").expect(200);
     await request(limited).get("/v1/public/profile/u_a").expect(200);
     await request(limited).get("/v1/public/profile/u_a").expect(200);
     const fourth = await request(limited).get("/v1/public/profile/u_a");
     expect(fourth.status).toBe(429);
+    await request(limited).get("/v1/public/profile/u_priv").expect(404);
+    // Handle casing shares a bucket, preventing an easy limit bypass.
+    await request(limited).get("/v1/public/profile/U_A").expect(429);
+  });
+
+  test("the default sixty-request budget is independent for two public handles", async () => {
+    const limited = express();
+    const publicProfile = { getPublicProfile: jest.fn(async (handle) => ({ handle })) };
+    limited.use("/v1", buildPublicProfileRouter({ publicProfile }));
+    for (let i = 0; i < 60; i++) await request(limited).get("/v1/public/profile/player-a").expect(200);
+    await request(limited).get("/v1/public/profile/player-a").expect(429);
+    await request(limited).get("/v1/public/profile/player-b").expect(200);
   });
 });
