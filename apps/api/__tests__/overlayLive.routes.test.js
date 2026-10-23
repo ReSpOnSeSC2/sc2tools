@@ -369,6 +369,21 @@ describe("POST /v1/games triggers overlay:live broadcast", () => {
     }
   });
 
+  test("counts actual inserts and uses the overlay freshness gate for reuploads and history", async () => {
+    const game = { gameId: "insert-count", date: new Date().toISOString(), result: "Victory", myRace: "Protoss", map: "Goldenaura", durationSec: 720, opponent: { displayName: "Foe", race: "Zerg" } };
+    const upload = (games) => request(app).post("/v1/games").set("authorization", "Bearer user-overlay-live").send({ games });
+    const me = await request(app).get("/v1/me").set("authorization", "Bearer user-overlay-live");
+    const userId = me.body.userId;
+    expect((await upload([game])).status).toBe(202);
+    expect(captured.gamesChanged.at(-1)).toEqual({ room: `user:${userId}`, payload: { count: 1, inserted: 1, bulk: false, reason: "ingest" } });
+    expect((await upload([game])).status).toBe(202);
+    expect(captured.gamesChanged.at(-1).payload).toEqual({ count: 1, inserted: 0, bulk: true, reason: "ingest" });
+    const historical = { ...game, gameId: "historical-insert", date: "2025-01-01T12:00:00Z" };
+    expect((await upload([game, historical])).status).toBe(202);
+    expect(captured.gamesChanged.at(-1).payload).toEqual({ count: 2, inserted: 1, bulk: true, reason: "ingest" });
+    expect(await db.games.countDocuments({ userId })).toBe(2);
+  });
+
   test("a rejected ingest does not broadcast overlay:live", async () => {
     await request(app)
       .post("/v1/overlay-tokens")
