@@ -79,7 +79,13 @@ ui.show_update_state(release,"ready","");app.processEvents()
 ui.show_transient_notice("Recording a replay");app.processEvents()
 assert win._update_card.title.text()=="Version 0.20.0 is ready"
 assert win._transient_notice.text()=="Recording a replay"
-win._update_card.notes_button.click();assert "Better syncing" in win._update_card.notes.toPlainText()
+from sc2tools_agent.ui import palette
+for expanded in (False, True):
+    win._update_card.notes_button.setChecked(expanded)
+    arrow=win._update_card.notes_button.icon().pixmap(12,12).toImage()
+    assert arrow.pixelColor(6,6).name()==palette.CYAN
+win._update_card.notes_button.setChecked(True)
+assert "Better syncing" in win._update_card.notes.toPlainText()
 win._update_card.install_button.click();assert installed.wait(1)
 win._update_card.later_button.click();assert later.wait(1)
 ui.show_update_state(release,"failed","Checksum mismatch");app.processEvents()

@@ -20,6 +20,7 @@ type Connection = {
 let connections: Connection[];
 
 beforeEach(() => {
+  vi.useFakeTimers();
   vi.clearAllMocks();
   connections = [];
   Object.assign(auth, { isLoaded: true, isSignedIn: true, userId: "admin-a" });
@@ -31,7 +32,7 @@ beforeEach(() => {
       on: (event: string, handler: (payload?: unknown) => void) => connection.listeners.set(event, handler) };
   });
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); act(() => vi.runOnlyPendingTimers()); vi.useRealTimers(); });
 
 describe("admin activity socket lifecycle", () => {
   it("refreshes durable resources on the initial connect and reconnect with a fresh Clerk token", async () => {
@@ -55,6 +56,7 @@ describe("admin activity socket lifecycle", () => {
     const old = connections[0];
     auth.userId = "admin-b";
     rerender();
+    act(() => vi.advanceTimersByTime(0));
     expect(old.disconnect).toHaveBeenCalledOnce();
     act(() => {
       old.listeners.get("admin:event")?.({ eventId: "stale" } as AdminEvent);

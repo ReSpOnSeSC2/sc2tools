@@ -1,6 +1,20 @@
 """A persistent update card whose notes and actions survive transient notices."""
 
 def build_update_card(parent, *, QtCore, QtWidgets, install, later, download, help_button):
+    from PySide6 import QtGui
+    from . import palette
+
+    def arrow_icon(expanded):
+        pixmap = QtGui.QPixmap(12, 12)
+        pixmap.fill(QtCore.Qt.transparent)
+        painter = QtGui.QPainter(pixmap)
+        painter.setPen(QtCore.Qt.NoPen)
+        painter.setBrush(QtGui.QColor(palette.CYAN))
+        points = ((2, 3), (10, 3), (6, 9)) if expanded else ((3, 2), (9, 6), (3, 10))
+        painter.drawPolygon(QtGui.QPolygon([QtCore.QPoint(x, y) for x, y in points]))
+        painter.end()
+        return QtGui.QIcon(pixmap)
+
     class UpdateCard(QtWidgets.QFrame):
         def __init__(self):
             super().__init__(parent)
@@ -15,9 +29,8 @@ def build_update_card(parent, *, QtCore, QtWidgets, install, later, download, he
             row = QtWidgets.QHBoxLayout()
             self.notes_button = QtWidgets.QPushButton("What's new")
             self.notes_button.setCheckable(True)
-            self.notes_button.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_ArrowRight))
-            self.notes_button.toggled.connect(lambda shown: self.notes_button.setIcon(
-                self.style().standardIcon(QtWidgets.QStyle.SP_ArrowDown if shown else QtWidgets.QStyle.SP_ArrowRight)))
+            self.notes_button.setIcon(arrow_icon(False))
+            self.notes_button.toggled.connect(lambda shown: self.notes_button.setIcon(arrow_icon(shown)))
             row.addWidget(self.notes_button)
             self.install_button = QtWidgets.QPushButton("Install now")
             self.install_button.setObjectName("primary")

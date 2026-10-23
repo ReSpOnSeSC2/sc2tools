@@ -1,4 +1,6 @@
 "use client";
+import { AdminLiveStatus } from "../components/AdminLiveStatus";
+import { useRealtimeStatus } from "@/components/realtime/RealtimeProvider";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { RequestError } from "@/components/ui/RequestError";
 import { AdminPagination } from "@/app/admin/components/AdminPagination";
@@ -39,6 +41,7 @@ const FILTER_LABEL: Record<Filter, string> = {
  */
 export default function AdminNotificationsPage() {
   const { getToken } = useAuth();
+  const realtime = useRealtimeStatus();
   const [filter, setFilter] = useState<Filter>("all");
   const [unreadOnly, setUnreadOnly] = useState(true);
   const [before, setBefore] = useState<string | null>(null);
@@ -114,7 +117,7 @@ export default function AdminNotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <AdminPageHeader anchor="notifications-and-support-inbox" title="Notifications" description="Triage activity and support messages." actions={<><Button variant="secondary" size="sm"
+      <AdminPageHeader anchor="notifications-and-support-inbox" title="Notifications" description="Triage activity and support messages." actions={<><AdminLiveStatus onRefresh={() => { void mutate(); void counts.mutate(); }} data={data} /><Button variant="secondary" size="sm"
           type="button"
 
           onClick={markAllRead}
@@ -128,7 +131,7 @@ export default function AdminNotificationsPage() {
         </Button></>} />
       <details className="text-caption text-text-muted"><summary>Learn more</summary><p className="text-text-muted">
             Live feed of new signups, agent downloads, confirmed installs, and user messages.
-            Updates in real time while this page is open.
+            {realtime.status === "connected" ? "Updates in real time while this page is open." : "Refresh now or wait for the next automatic check while live updates reconnect."}
           </p></details>
       <p className="text-caption text-text-muted">{unread} unread across all activity.</p>
 
