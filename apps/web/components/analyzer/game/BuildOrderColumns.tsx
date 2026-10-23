@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
@@ -12,6 +12,8 @@ import {
 import type { GameBuildOrderEvent } from "./types";
 
 export interface BuildOrderColumnsProps {
+  onSeek?: (time: number) => void;
+  currentTime?: number;
   error?: unknown;
   onRetry?: () => unknown;
   myEvents?: GameBuildOrderEvent[] | null;
@@ -58,7 +60,10 @@ export function BuildOrderColumns({
   opponentHeadingLabel = "Opponent",
   loading,
   myAction,
+  onSeek,
+  currentTime,
 }: BuildOrderColumnsProps) {
+  const [autoScroll, setAutoScroll] = useState(false);
   const myRows = useMemo(() => normalizeBuildEvents(myEvents), [myEvents]);
   const oppRows = useMemo(() => normalizeBuildEvents(oppEvents), [oppEvents]);
 
@@ -87,7 +92,7 @@ export function BuildOrderColumns({
   }
 
   return (
-    <Card title="Build orders" data-testid="build-order-columns">
+    <Card title="Build orders" right={onSeek ? <label className="inline-flex min-h-11 items-center gap-2 text-caption"><input type="checkbox" checked={autoScroll} onChange={(event) => setAutoScroll(event.target.checked)} />Follow current step</label> : undefined} data-testid="build-order-columns">
       <div className="grid gap-4 md:grid-cols-2">
         <BuildColumn
           heading={`${myHeadingLabel} — ${(myLabel || "").trim() || "Unclassified"}`}
@@ -95,12 +100,14 @@ export function BuildOrderColumns({
           status={myStatus}
           testId="build-column-me"
           action={myAction}
+          onSeek={onSeek} currentTime={currentTime} autoScroll={autoScroll}
         />
         <BuildColumn
           heading={`${opponentHeadingLabel} — ${(oppLabel || "").trim() || "Unknown"}`}
           rows={oppRows}
           status={oppStatus}
           testId="build-column-opp"
+          onSeek={onSeek} currentTime={currentTime} autoScroll={autoScroll}
         />
       </div>
     </Card>
@@ -113,16 +120,31 @@ function BuildColumn({
   status,
   testId,
   action,
+  onSeek,
+  currentTime,
+  autoScroll,
 }: {
   heading: string;
   rows: BuildEventRow[];
   status?: "ok" | "empty" | "not_extracted";
   testId: string;
   action?: ReactNode;
+  onSeek?: (time: number) => void;
+  currentTime?: number;
+  autoScroll: boolean;
 }) {
   // Collapsed state only applies below md — the body keeps `md:block`
   // so desktop always shows both columns expanded.
   const [collapsed, setCollapsed] = useState(false);
+  const list = useRef<HTMLOListElement>(null);
+  const active = currentTime == null ? null : rows.filter((row) => row.time <= currentTime).at(-1)?.key;
+  useEffect(() => {
+    const container = list.current; const row = container?.querySelector<HTMLElement>('[aria-current="step"]');
+    if (!autoScroll || !container || !row) return;
+    const outer = container.getBoundingClientRect(); const inner = row.getBoundingClientRect();
+    if (inner.top >= outer.top && inner.bottom <= outer.bottom) return;
+    container.scrollTop += inner.top - outer.top - Math.max(0, (outer.height - inner.height) / 2);
+  }, [active, autoScroll, collapsed]);
 
   return (
     <section
@@ -163,12 +185,23 @@ function BuildColumn({
               : "No build events were parsed from this replay."}
           </p>
         ) : (
-          <ol className="max-h-96 space-y-0.5 overflow-y-auto pr-1">
+          <ol ref={list} className="max-h-96 space-y-0.5 overflow-y-auto pr-1">
             {rows.map((row) => (
               <li
                 key={row.key}
-                className="flex items-center gap-2 rounded px-1 py-0.5 text-caption"
               >
+                {onSeek ? <button type="button" aria-label={`Jump to ${row.timeDisplay} ${row.displayName}`} aria-current={active === row.key ? "step" : undefined} onClick={() => onSeek(row.time)} className={`flex min-h-11 w-full items-center gap-2 rounded px-1 py-0.5 text-left text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${active === row.key ? "bg-accent/10" : "hover:bg-bg-elevated"}`}><BuildEventContent row={row} /></button> : <span className="flex items-center gap-2 rounded px-1 py-0.5 text-caption"><BuildEventContent row={row} /></span>}
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function BuildEventContent({ row }: { row: BuildEventRow }) {
+  return <>
                 <span className="w-11 flex-shrink-0 text-right font-mono text-micro tabular-nums text-text-dim">
                   {row.timeDisplay}
                 </span>
@@ -191,11 +224,5 @@ function BuildColumn({
                 <span className="truncate text-text" title={row.rawName}>
                   {row.displayName}
                 </span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
-    </section>
-  );
+  </>;
 }

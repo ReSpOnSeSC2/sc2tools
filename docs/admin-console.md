@@ -125,5 +125,28 @@ Follow the publishing and maintenance instructions in [Guides](guides.md).
 
 ## Sharing views
 
-Admin URLs require an admin account. Sharing a URL does not grant access. More
-sharing controls will be documented when they ship.
+Copy the current URL to share the Users, account-opponent, Global players,
+Notifications or game-browser view. Search, filters, sorting and pagination
+survive refresh. Defaults are omitted; unrelated parameters such as `debug`
+are preserved. Searches settle after 300 ms without losing typing focus; use
+the clear button or Escape to clear and refocus Search.
+
+Filter and sort changes replace the current view and reset its page. Next and
+Previous add history entries, so browser Back restores your earlier page and
+selected game. A shared cursor cannot reconstruct its preceding pages; its
+**First page** button returns to the beginning instead of guessing a Previous
+cursor. Retained rows dim and say **Updating…** during a fresh request.
+
+Sortable table headers show their direction. On phones the same columns become
+cards with a Sort by control and type-specific order labels. A row's main link
+opens its detail; other buttons and links remain independently usable.
+
+Game links include `game`; global-player game links also include `owner`, the
+internal ID of the user who owns that replay. An off-page selection loads from
+the existing owner-scoped detail endpoint and explains that it is not on the
+current page. A missing game offers **Clear selection** without discarding the
+other filters. Do not remove `owner` from a global game link or substitute a
+different account's ID.
+
+Admin URLs still require an admin account. Sharing a URL does not grant access;
+send it only through an appropriate private support channel.

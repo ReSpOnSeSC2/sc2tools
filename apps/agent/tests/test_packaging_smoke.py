@@ -79,6 +79,7 @@ raise SystemExit(__main__.main())
     assert report["qt_platform"] == "offscreen"
     assert report["page_count"] == 5
     assert report["streams_painted"] is True
+    assert report["checkin_previews_painted"] is True
     assert set(tmp_path.iterdir()) == {destination}
 
 

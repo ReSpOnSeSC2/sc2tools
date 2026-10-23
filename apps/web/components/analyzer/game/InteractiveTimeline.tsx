@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo } from "react";
+import { useId, useMemo, type ReactNode } from "react";
 import {
   CartesianGrid,
   ComposedChart,
@@ -23,6 +23,7 @@ import {
   type BattleMarker,
 } from "@/lib/gameTimeline";
 import { formatGameClock } from "@/lib/macro";
+import { RECOMPUTE_ANALYSIS_HINT } from "@/lib/analysisRecompute";
 
 // Design tokens only — the chart must be correct in both themes.
 const COLOR_MY_ARMY = "rgb(var(--accent-cyan))";
@@ -35,6 +36,8 @@ const COLOR_CURSOR = "rgb(var(--text))";
 const COLOR_BATTLE = "rgb(var(--danger))";
 
 export interface InteractiveTimelineProps {
+  recomputeAction?: ReactNode;
+  onSeek?: (time: number) => void;
   error?: unknown;
   onRetry?: () => unknown;
   loading?: boolean;
@@ -63,7 +66,7 @@ export interface InteractiveTimelineProps {
  * prefers-reduced-motion needs no special casing.
  */
 export function InteractiveTimeline({
-  error, onRetry, loading,
+  error, onRetry, loading, recomputeAction, onSeek,
   statsEvents,
   oppStatsEvents,
   gameLengthSec,
@@ -114,7 +117,8 @@ export function InteractiveTimeline({
         <EmptyStatePanel
           size="md"
           title="No timeline samples for this game"
-          description="The per-10-second stat stream comes from agent uploads (v0.5+). Open the game's macro breakdown and click Recompute, or resync from the agent, to backfill it."
+          description={RECOMPUTE_ANALYSIS_HINT}
+          action={recomputeAction}
         />
       </Card>
     );
@@ -316,6 +320,7 @@ export function InteractiveTimeline({
 
         {battles.length > 0 ? (
           <BattleStrip
+            onSeek={onSeek}
             battles={battles}
             onScrub={onScrub}
             perspectiveName={perspectiveName}
@@ -431,10 +436,12 @@ function BattleStrip({
   battles,
   onScrub,
   perspectiveName,
+  onSeek,
 }: {
   battles: BattleMarker[];
   onScrub: (time: number) => void;
   perspectiveName: string | null;
+  onSeek?: (time: number) => void;
 }) {
   return (
     <div
@@ -446,8 +453,8 @@ function BattleStrip({
         <button
           key={`battle-btn-${b.start}`}
           type="button"
-          onClick={() => onScrub(b.start)}
-          aria-label={`Jump to fight at ${formatGameClock(b.start)} — ${perspectiveName || "you"} lost ${b.myLoss} army value, opponent lost ${b.oppLoss}`}
+          onClick={() => (onSeek ?? onScrub)(b.start)}
+          aria-label={onSeek ? `Watch the replay at ${formatGameClock(b.start)}` : `Jump to fight at ${formatGameClock(b.start)} — ${perspectiveName || "you"} lost ${b.myLoss} army value, opponent lost ${b.oppLoss}`}
           className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-border bg-bg-elevated px-3 text-caption text-text-muted transition-colors hover:border-border-strong hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <Swords className="h-3.5 w-3.5 text-danger" aria-hidden />

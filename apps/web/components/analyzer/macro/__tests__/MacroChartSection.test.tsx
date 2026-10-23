@@ -71,6 +71,7 @@ function expectSelection(clock: string, army: string) {
 }
 
 beforeEach(() => {
+  localStorage.removeItem("sc2tools:timeline-metrics:v1");
   useApiMock.mockReturnValue({ data: null, error: null, isLoading: false });
   // jsdom does not provide the browser's PointerEvent or ResizeObserver APIs.
   vi.stubGlobal("PointerEvent", class extends MouseEvent {
@@ -362,13 +363,13 @@ describe("Match timeline tabs and read-out", () => {
     const all = screen.getByRole("button", { name: "All" });
     fireEvent.click(all);
     expect(all.getAttribute("aria-pressed")).toBe("true");
-    for (const name of ["Army", "Workers", "Supply", "Income"]) expect(pressed(name)).toBe("true");
+    for (const name of ["Army", "Workers", "Supply", "Income", "Bank"]) expect(pressed(name)).toBe("true");
     expect(
-      screen.getByRole("img", { name: /^Army value, Workers, Supply used and Income/ }),
+      screen.getByRole("img", { name: /^Army value, Workers, Supply used, Income .* and Unspent minerals and gas/ }),
     ).toBeTruthy();
 
     fireEvent.click(all);
-    for (const name of ["Army", "Workers", "Supply", "Income", "All"]) expect(pressed(name)).toBe("false");
+    for (const name of ["Army", "Workers", "Supply", "Income", "Bank", "All"]) expect(pressed(name)).toBe("false");
     const chart = screen.getByRole("img", { name: /no metric selected/ });
     expect(chart.querySelectorAll("path[fill='none']")).toHaveLength(0);
     expect(screen.getByText("Pick a metric above to plot it")).toBeTruthy();

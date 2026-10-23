@@ -113,6 +113,8 @@ class BuildCheckinHost:
         on_moved: Optional[Callable[[str, int, int], None]] = None,
         settings: Optional[Any] = None,
         window_factory: Optional[Callable[[str, "BuildCheckinHost"], Any]] = None,
+        preview_race: Optional[Callable[[], Optional[str]]] = None,
+        on_reset_positions: Optional[Callable[[], None]] = None,
     ) -> None:
         self._controller = controller
         self._positions: Dict[str, Point] = {}
@@ -124,6 +126,8 @@ class BuildCheckinHost:
         self._window_factory = window_factory or _qt_card_window
         self._windows: Dict[str, Any] = {}
         self._closed = False
+        self._preview_race = preview_race or (lambda: None)
+        self._on_reset_positions = on_reset_positions
 
     # ---------------------------------------------------------- dispatch
 
@@ -137,6 +141,7 @@ class BuildCheckinHost:
             log.exception("build_checkin_view_failed method=%s", method)
 
     def _show_loading(self, model: Any) -> None:
+        self._dismiss_previews()
         self.window(LOADING).show_model(model)
 
     def _update_loading(self, model: Any) -> None:
@@ -150,6 +155,7 @@ class BuildCheckinHost:
             window.dismiss(reason)
 
     def _show_postgame(self, model: Any) -> None:
+        self._dismiss_previews()
         self.window(POSTGAME).show_model(model)
 
     def _update_postgame(self, model: Any) -> None:
@@ -193,6 +199,33 @@ class BuildCheckinHost:
             fn(*args)
         except Exception:  # noqa: BLE001
             log.exception("build_checkin_action_failed action=%s", action)
+
+    def show_preview(self, kind: str) -> bool:
+        """Show an inert local sample; an actual visible card has priority."""
+        if self._closed or kind not in (LOADING, POSTGAME):
+            return False
+        if any(window.isVisible() and not getattr(window, "is_preview", False)
+               for window in self._windows.values()):
+            return False
+        from ..build_checkin.preview import sample_loading_model, sample_postgame_model
+        self._dismiss_previews()
+        factory = sample_loading_model if kind == LOADING else sample_postgame_model
+        self.window(kind).show_model(factory(self._preview_race()), preview=True)
+        return True
+
+    def _dismiss_previews(self) -> None:
+        for window in self._windows.values():
+            if getattr(window, "is_preview", False):
+                window.dismiss("preview_replaced")
+
+    def reset_positions(self) -> None:
+        """Reset every card kind, including future HUD kinds."""
+        self._positions.clear()
+        if self._on_reset_positions is not None:
+            self._on_reset_positions()
+        for window in self._windows.values():
+            if window.isVisible():
+                window.reset_position()
 
     def saved_position(self, kind: str) -> Optional[Point]:
         return self._positions.get(kind)

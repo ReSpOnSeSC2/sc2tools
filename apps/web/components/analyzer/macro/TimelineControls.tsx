@@ -33,7 +33,7 @@ const PHONE_ICON_SEGMENTS = 4;
 const KEY_PX = 22;
 
 const SEGMENT =
-  "relative flex h-8 min-w-0 items-center justify-center gap-1 rounded-full px-1 text-micro font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:gap-1.5 sm:px-4 sm:text-caption";
+  "relative flex min-h-11 shrink-0 items-center justify-center gap-1 rounded-full px-2 text-micro font-semibold transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent sm:min-h-8 sm:gap-1.5 sm:px-4 sm:text-caption";
 const SEGMENT_ON = "bg-accent text-white shadow-sm";
 const SEGMENT_OFF = "text-text-muted hover:bg-bg-elevated hover:text-text";
 
@@ -75,8 +75,8 @@ export function LineKey({
 /**
  * One rounded track of toggles, one per metric, then "All". Any mix can
  * be on; with two or more on, each lit segment also shows its line
- * pattern so the switch doubles as the chart's legend. Full width on
- * phones (equal segments), sized to its labels from ``sm`` up.
+ * pattern so the switch doubles as the chart's legend. Wrap full labels
+ * when the Bank/APM choices cannot fit on one phone row.
  */
 export function MetricSwitch({
   selected,
@@ -112,8 +112,7 @@ export function MetricSwitch({
     <div
       role="group"
       aria-label="Chart metrics"
-      className="grid gap-0.5 rounded-full border border-border bg-bg-subtle p-1 sm:inline-grid"
-      style={{ gridTemplateColumns: `repeat(${metrics.length}, minmax(0, 1fr)) auto` }}
+      className="flex max-w-full flex-wrap gap-0.5 rounded-2xl border border-border bg-bg-subtle p-1 sm:rounded-full"
     >
       {metrics.map((m) => {
         const pressed = on.has(m.key);
@@ -138,7 +137,7 @@ export function MetricSwitch({
             ) : Glyph ? (
               <Glyph aria-hidden className={`h-4 w-4 flex-shrink-0 ${iconHide}`} />
             ) : null}
-            <span className="truncate">{m.label}</span>
+            <span className="whitespace-nowrap">{m.label}</span>
             {pressed && keyed ? (
               // Under the label on phones, beside it from ``sm`` up.
               <LineKey

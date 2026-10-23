@@ -54,6 +54,21 @@ Existing saved labels will need normal replay reanalysis to apply the corrected
 detector; screenshots alone cannot establish whether these two reported games
 meet the new condition. No reanalysis or production write was performed here.
 
+## Main integration
+
+Integrated main `71d003376c8187d5cff126362e2a193b43b5c109`, including admin
+history #692, replay workspace/clock #693 and desktop preview #694. Only the two
+Unreleased changelog insertions conflicted; both sides' entries were preserved.
+The API completion projection and both completion-clock regressions remain intact.
+
+Revalidation after integration: full engine **1,018 passed, 4 skipped**;
+desktop Instant Analysis + actual card preview/runner **87 passed**; built
+Pyodide and all CPython goldens **9 passed, no skips**; web catalog + replay
+page/stage integration **72 passed**; API compute **56 passed**. Full web and
+API typechecks passed. Help index regeneration left no content diff. The initial
+repair head passed every GitHub workflow and Vercel; final merged-head CI is
+required again before the parent merges #696.
+
 The later all-preset runtime policy work belongs to the API agent and must retain
 these defaults. Stream-title automation remains queued in its isolated worktree.
 No release, version bump, tag, signing, installation or production operation is
