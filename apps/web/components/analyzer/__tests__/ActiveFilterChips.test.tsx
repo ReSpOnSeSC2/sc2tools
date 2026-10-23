@@ -77,8 +77,8 @@ describe("ActiveFilterChips", () => {
     expect(chipNames()).toEqual([
       "Remove filter Date range: All time",
       "Remove filter Regions: EU",
-      "Remove filter Maps: Custom",
-      "Remove filter Players: All",
+      "Remove filter Game type: Custom games",
+      "Remove filter Game size: All",
       "Remove filter Length: 20+ min",
       "Remove filter Too-short games: Shown",
       "Remove filter Your race: Terran",

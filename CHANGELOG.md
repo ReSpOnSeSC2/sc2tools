@@ -27,6 +27,12 @@ corresponding GitHub Release.
   and recovers an unlinked PC without discarding queued replays or settings.
 - Desktop sync retains temporary failures with a retry countdown instead of
   repeating error rows; final replay outcomes have readable details and help.
+### Analyzer filters and Trends
+
+- Filters have a readable summary, a full phone editor and focused desktop controls. Today explains its scope and remembers whether its editor is open; Arcade keeps its own scope.
+- Trends remembers grouping without hydration mismatches, provides section links and persistent collapsible chart groups, and keeps summary loading/errors in place.
+- Date, length and filter popovers share dialog keyboard behavior, respect hidden controls and return focus. Touch controls use larger targets and plain labels.
+
 ### Setup health and replay imports
 
 - Settings checks profile, desktop connection, updates, games and replay archive independently, with source-specific Retry and safe diagnostics for support.

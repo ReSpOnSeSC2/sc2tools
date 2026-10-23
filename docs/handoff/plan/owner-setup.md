@@ -1,5 +1,9 @@
 # Owner setup notes (accumulated)
 
+## Wave 2: analyzer-home-polish-2 / analyzer-home-polish-3
+
+No new secrets, environment variables or infrastructure. Filter wire values and request scopes stay compatible. Today stores its editor visibility at `analyzer.today.showFilters`; Trends keeps `analyzer.trends.bucket` and adds `analyzer.trends.collapsed`. These preferences stay on the current browser. Invalid stored values fall back safely. Help describes the summary, the phone editor and the scope of Today/Arcade. No account data migration or production data modification is needed.
+
 ## Wave 2: settings-onboarding-polish-2
 
 No new environment variables or infrastructure. Deploy after the pairing API and atomic onboarding preference merge in #659/#663. Desktop import is available for every signed-in account; browser import still follows its existing flag. Setup health reuses the existing doctor, account, overlay-token and release endpoints. Copy diagnostics excludes emails, credentials and token-bearing URLs. Verify a recent PC connection, a history import and checklist dismissal/Undo; no production import or account modification was performed during implementation.

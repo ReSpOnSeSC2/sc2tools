@@ -21,6 +21,9 @@ import {
 import { coerceRace } from "@/lib/race";
 import type { LogicalSeason } from "@/lib/useSeasons";
 
+/** Matches GAME_TOO_SHORT_THRESHOLD_SECONDS in replay-engine/core/strategy_detector_helpers.py. */
+export const TOO_SHORT_SECONDS = 45;
+
 export type AnalyzerFilters = {
   since?: string;
   until?: string;
@@ -263,8 +266,8 @@ export const FILTER_LABELS: Readonly<Record<string, string>> = {
   macro_min: "Minimum macro",
   macro_max: "Maximum macro",
   regions: "Regions",
-  map_pool: "Maps",
-  game_size: "Players",
+  map_pool: "Game type",
+  game_size: "Game size",
   exclude_too_short: "Too-short games",
   leak: "Leak filter",
 };
@@ -435,7 +438,7 @@ export function describeActiveFilters(
   }
 
   if (filters.map_pool === "nonladder" || filters.map_pool === "all") {
-    add("map_pool", filters.map_pool === "all" ? "All" : "Custom", {
+    add("map_pool", filters.map_pool === "all" ? "Both" : "Custom games", {
       map_pool: DEFAULT_ANALYZER_FILTERS.map_pool,
     });
   }
@@ -471,6 +474,23 @@ export function describeActiveFilters(
   if (mmr) add("mmr", mmr, { mmr_min: undefined, mmr_max: undefined });
 
   return out;
+}
+
+/** Plain summary in the same fixed facet order on every analyzer page. */
+export function summarizeFilters(filters: AnalyzerFilters, seasons?: LogicalSeason[]): string {
+  const preset = filters.preset || "all";
+  const regions = activeRegionCodes(filters.regions);
+  const labels = [
+    preset === DEFAULT_PRESET ? "Current patch" : presetValue(preset, filters, seasons),
+    filters.map_pool === "nonladder" ? "Custom games" : filters.map_pool === "all" ? "Ranked ladder and custom games" : "Ranked ladder",
+    filters.game_size === "team" ? "Team games" : filters.game_size === "all" ? "All game sizes" : "1v1",
+    regions.length === ANALYZER_REGIONS.length ? "All regions" : regions.join(", "),
+    gameLengthLabel(filters.min_minutes, filters.max_minutes) || "Any length",
+  ];
+  const race = normalizeRaceCode(filters.race);
+  const opponent = normalizeRaceCode(filters.opp_race);
+  if (race || opponent) labels.push(`${race || "Any race"} vs ${opponent || "any race"}`);
+  return labels.join(" · ");
 }
 
 function presetValue(
