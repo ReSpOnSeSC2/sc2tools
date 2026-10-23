@@ -62,7 +62,7 @@ describe("searchHelp on the shipped articles", () => {
   it("finds articles by title words, keywords and prefixes", () => {
     expect(top("build check-in")).toBe("build-check-in");
     expect(top("browser source")).toBe("obs-overlay-setup");
-    expect(top("pair")).toBe("getting-started");
+    expect(top("pair")).toBe("pairing-troubleshooting");
     expect(top("tikt")).toBe("multi-platform-chat");
     expect(top("stream dock")).toBe("stream-dock");
     expect(top("!rank")).toBe("viewer-engagement");
