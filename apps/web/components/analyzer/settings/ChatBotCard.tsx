@@ -19,6 +19,7 @@ import { apiCall, useApi } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
 import { Toggle } from "@/components/ui/Toggle";
 import { useToast } from "@/components/ui/Toast";
+import { usePublishDirty } from "./SettingsContext";
 
 interface BotView {
   enabled: boolean;
@@ -61,6 +62,8 @@ export function ChatBotCard({ twitchChannel }: { twitchChannel: string }) {
   const [hasToken, setHasToken] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  // Its own Save button: unsaved bot edits guard a tab switch too.
+  usePublishDirty("overlay", dirty);
 
   useEffect(() => {
     if (!data || dirty) return;

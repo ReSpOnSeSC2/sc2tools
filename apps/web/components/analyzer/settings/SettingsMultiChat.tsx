@@ -74,6 +74,7 @@ import { SettingsMultiChatTts } from "./SettingsMultiChatTts";
 import { ChatCommandsCard } from "./ChatCommandsCard";
 import { ChatBotCard } from "./ChatBotCard";
 import { OfficialPlatformConnections } from "./OfficialPlatformConnections";
+import { usePublishDirty } from "./SettingsContext";
 
 /**
  * Inline chat-translation settings — stored under `translate` in the
@@ -231,6 +232,8 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
 
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [dirty, setDirty] = useState(false);
+  // Switching Settings tabs unmounts this form: ask before dropping edits.
+  usePublishDirty("overlay", dirty);
   const [saving, setSaving] = useState(false);
   const [detecting, setDetecting] = useState(false);
   const [kickManualOpen, setKickManualOpen] = useState(false);
