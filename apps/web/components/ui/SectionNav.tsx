@@ -42,7 +42,7 @@ export function SectionNav({ items, "aria-label": label = "On this page" }: Sect
     const el = scroller.current;
     if (el && el.getBoundingClientRect().top < window.innerHeight) el.querySelector<HTMLElement>('[aria-current="location"]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
   }, [active]);
-  return <nav aria-label={label} className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 min-w-0 self-start border-y border-border bg-bg/95 py-2 supports-[backdrop-filter]:backdrop-blur-sm sm:top-[calc(4rem+env(safe-area-inset-top))] lg:col-start-2 lg:row-start-1 lg:top-24 lg:border-0 lg:bg-transparent print:hidden">
+  return <nav aria-label={label} className="sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 min-w-0 self-start border-y border-border bg-bg/95 py-0.5 supports-[backdrop-filter]:backdrop-blur-sm sm:top-[calc(4rem+env(safe-area-inset-top))] lg:col-start-2 lg:row-start-1 lg:top-24 lg:border-0 lg:bg-transparent print:hidden">
     <h2 className="sr-only mb-2 text-caption font-semibold lg:not-sr-only">{label}</h2>
     <div className="relative"><div ref={scroller} onScroll={measure} className="flex gap-2 overflow-x-auto lg:block lg:space-y-1 lg:overflow-visible">
       {items.map((item) => <a key={item.id} href={`#${item.id}`} aria-current={active === item.id ? "location" : undefined} onClick={(event) => {

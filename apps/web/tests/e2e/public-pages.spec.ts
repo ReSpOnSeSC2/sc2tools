@@ -208,9 +208,17 @@ test.describe("guide pages at 375 and 1440 px", () => {
       const headerBottom = await header.evaluate((node) => node.getBoundingClientRect().bottom);
       expect(sectionTop).toBeGreaterThanOrEqual(headerBottom - 1);
       const contents = page.getByRole("navigation", { name: "On this page", exact: true });
+      if (width < 1024) expect(sectionTop).toBeGreaterThanOrEqual(await contents.evaluate((node) => node.getBoundingClientRect().bottom) - 1);
       await contents.getByRole("link", { name: "Army", exact: true }).click();
       await expect(page).toHaveURL(/#army$/);
       await expect(page.getByRole("heading", { name: "Army at 6, 8 and 10 minutes", exact: true })).toBeInViewport();
+      if (width < 768) {
+        await page.getByRole("tab", { name: "10:00", exact: true }).click();
+        await expect(page.getByRole("tabpanel").getByRole("heading", { name: "At 10:00", exact: true })).toBeVisible();
+      } else {
+        const army = page.getByRole("table", { name: "Typical count in games that built it · how often it appears" });
+        await expect(army.getByRole("columnheader")).toHaveText(["Unit", "6:00", "8:00", "10:00"]);
+      }
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
       expect(overflow).toBeLessThanOrEqual(1);
     }
@@ -232,6 +240,25 @@ test.describe("guide pages at 375 and 1440 px", () => {
     await page.getByRole("button", { name: "Enlarge map: Fixture Station LE" }).click();
     await expect(page.getByRole("dialog", { name: "Fixture Station LE map preview" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  });
+
+  test("hub race headers meet text contrast in light and dark themes", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop-1280", "theme check runs once");
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.goto("/guides");
+      const paints = await page.locator('[data-race-icon]').evaluateAll((icons) => icons.map((icon) => {
+        const heading = icon.closest("h3")!;
+        const canvas = document.createElement("canvas"); canvas.width = canvas.height = 1;
+        const context = canvas.getContext("2d")!;
+        context.fillStyle = getComputedStyle(heading).color; context.fillRect(0, 0, 1, 1);
+        const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+        const surface = `rgb(${getComputedStyle(heading).getPropertyValue("--bg-surface").trim().split(/\s+/).join(", ")})`;
+        return { race: icon.getAttribute("data-race-icon"), ink: `rgb(${r}, ${g}, ${b})`, surface };
+      }));
+      expect(paints).toHaveLength(3);
+      for (const paint of paints) expect(contrastRatio(paint.ink, paint.surface), `${colorScheme} ${paint.race} header contrast`).toBeGreaterThanOrEqual(4.5);
+    }
   });
 
   test("filtered opener controls stay inside a 375px page", async ({ page }, testInfo) => {

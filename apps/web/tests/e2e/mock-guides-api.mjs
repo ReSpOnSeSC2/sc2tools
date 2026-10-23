@@ -149,6 +149,22 @@ const BUILD = {
         { unit: "Oracle", presence: 0.71, median: 1, games: 241 },
       ],
     },
+    480: {
+      samples: 260, users: 43,
+      units: [
+        { unit: "Adept", presence: 0.85, median: 10, games: 221 },
+        { unit: "Stalker", presence: 0.8, median: 6, games: 208 },
+        { unit: "Oracle", presence: 0.5, median: 1, games: 130 },
+      ],
+    },
+    600: {
+      samples: 180, users: 35,
+      units: [
+        { unit: "Stalker", presence: 0.9, median: 12, games: 162 },
+        { unit: "Immortal", presence: 0.6, median: 3, games: 108 },
+        { unit: "Adept", presence: 0.55, median: 8, games: 99 },
+      ],
+    },
   },
   vsStrategy: [
     { ...cell(120, 30, 70), strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool", name: "12 Pool", published: true },

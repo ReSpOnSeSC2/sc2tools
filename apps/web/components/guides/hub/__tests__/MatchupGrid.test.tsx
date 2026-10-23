@@ -38,7 +38,7 @@ describe("MatchupGrid", () => {
     expect(screen.getByText("408 games")).toBeTruthy();
     expect(container.querySelectorAll("[data-stretched-guide-link]")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Robo First" }).className).toContain("z-10");
-    expect(screen.getByRole("link", { name: "All 1 openers →" }).getAttribute("href")).toBe("/guides/pvt");
+    expect(screen.getByRole("link", { name: "All 1 opener →" }).getAttribute("href")).toBe("/guides/pvt");
     expect(screen.getByRole("link", { name: "How to beat Terran openers →" }).getAttribute("href")).toBe("/guides/pvt/counter");
     expect(screen.getByText(/too close to call/).className).toContain("sr-only");
     expect(container.querySelector('[data-race-icon="Protoss"]')?.getAttribute("src")).toContain("protoss.svg");

@@ -4,7 +4,7 @@ import { TrendBadge } from "@/components/guides/TrendBadge";
 import { MatchupLabel } from "@/components/guides/MatchupLabel";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS, verdictTextClass, verdictMeta, cellVerdict, oppRaceWord } from "@/components/guides/guideUi";
-import { fmtCount, fmtPct } from "@/lib/guides/format";
+import { fmtCount, fmtCountNoun, fmtPct } from "@/lib/guides/format";
 import { GUIDE_MATCHUPS } from "@/lib/guides/slugs";
 import { raceTint, type Race } from "@/lib/race";
 import { getIconPath } from "@/lib/sc2-icons";
@@ -22,7 +22,7 @@ function MatchupTile({ row }: { row: GuideIndexMatchup }) {
   return <li className={`${GUIDE_PANEL_CLASS} relative min-w-0 space-y-3 p-4 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-accent`}>
     <div className="flex items-baseline justify-between gap-2"><h4 className="font-display text-h3 font-bold"><Link href={guidePaths.matchup(row.slug)} className={`${GUIDE_LINK_CLASS} after:absolute after:inset-0`} data-stretched-guide-link><MatchupLabel matchup={row.matchup} /></Link></h4>{row.published && row.games !== null ? <span className="text-micro tabular-nums text-text-dim">{fmtCount(row.games)} games</span> : null}</div>
     <TopBuilds row={row} />
-    <div className="relative z-10 flex flex-col items-start gap-2 border-t border-border pt-3 text-caption">{row.publishedBuilds > 0 ? <Link href={guidePaths.matchup(row.slug)} className={GUIDE_LINK_CLASS}>All {row.publishedBuilds} openers →</Link> : null}{row.published ? <Link href={guidePaths.counters(row.slug)} className={GUIDE_LINK_CLASS}>How to beat {oppRaceWord(row.matchup)} openers →</Link> : null}</div>
+    <div className="relative z-10 flex flex-col items-start gap-2 border-t border-border pt-3 text-caption">{row.publishedBuilds > 0 ? <Link href={guidePaths.matchup(row.slug)} className={GUIDE_LINK_CLASS}>All {fmtCountNoun(row.publishedBuilds, "opener")} →</Link> : null}{row.published ? <Link href={guidePaths.counters(row.slug)} className={GUIDE_LINK_CLASS}>How to beat {oppRaceWord(row.matchup)} openers →</Link> : null}</div>
   </li>;
 }
 export function MatchupGrid({ matchups }: { matchups: readonly GuideIndexMatchup[]; period?: string }) {
