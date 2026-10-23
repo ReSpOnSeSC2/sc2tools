@@ -55,7 +55,7 @@ const article: HelpArticle = {
       text: "Stuck on a step? Search Help for the words on your screen, or see [Troubleshooting & support](/help/troubleshooting-and-support).",
     },
   ],
-  related: ["how-to-use-help", "dashboard-and-analyzer", "obs-overlay-setup"],
+  related: ["how-to-use-help", "settings-overview", "dashboard-and-analyzer", "obs-overlay-setup"],
 };
 
 export default article;
