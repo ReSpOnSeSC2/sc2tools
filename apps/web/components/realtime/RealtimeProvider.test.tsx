@@ -2,12 +2,12 @@ import { StrictMode } from "react";
 import { act, cleanup, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { ioMock, auth } = vi.hoisted(() => ({ ioMock: vi.fn(), auth: {
+const { ioMock, auth, apiMe } = vi.hoisted(() => ({ ioMock: vi.fn(), apiMe: { agentPaired: true, agentLastSeenAt: "2026-10-23T12:00:00Z", games: { total: 10, latest: "2026-10-23T11:59:30Z" } }, auth: {
   isLoaded: true, isSignedIn: true, userId: "u1", getToken: vi.fn(),
 } }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
 vi.mock("socket.io-client", () => ({ io: (...args: unknown[]) => ioMock(...args) }));
-vi.mock("@/lib/clientApi", () => ({ API_BASE: "https://api.example.test" }));
+vi.mock("@/lib/clientApi", async () => { const { default: useSWR } = await import("swr"); return { API_BASE: "https://api.example.test", useApi: () => useSWR("/v1/me", async () => ({ ...apiMe }), { fallbackData: { ...apiMe } }) }; });
 import { RealtimeProvider, useRealtimeState } from "./RealtimeProvider";
 import { useUserSocket } from "@/lib/useUserSocket";
 import { SyncStatus } from "@/components/SyncStatus";
@@ -17,6 +17,7 @@ type Options = { auth: (done: (value: unknown) => void) => Promise<void> };
 type Connection = { connected: boolean; on: ReturnType<typeof vi.fn>; off: ReturnType<typeof vi.fn>; connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; io: { on: ReturnType<typeof vi.fn> }; fire: (event: string, value?: unknown) => void; options: Options };
 let sockets: Connection[];
 beforeEach(() => {
+  apiMe.games = { total: 10, latest: "2026-10-23T11:59:30Z" };
   vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-23T12:00:00Z")); vi.clearAllMocks();
   Object.assign(auth, { isLoaded: true, isSignedIn: true, userId: "u1" }); auth.getToken.mockResolvedValue("token");
   Object.defineProperty(navigator, "onLine", { configurable: true, value: true }); sockets = [];
@@ -78,13 +79,19 @@ describe("shared authenticated realtime lifecycle", () => {
     expect(ioMock).toHaveBeenCalledTimes(2);
   });
 
-  it("updates inserted counters immediately, ignores rewrites, and ticks relative and absolute sync time", () => {
-    render(<RealtimeProvider><SyncStatus total={10} latest="2026-10-23T11:59:30Z" userId="u1" /></RealtimeProvider>);
-    const socket = sockets[0]; act(() => socket.fire("connect")); expect(screen.getByText("Live")).toBeTruthy();
+  it("updates the shared SWR game count without another connection and ticks upload time", async () => {
+    render(<RealtimeProvider><SyncStatus /></RealtimeProvider>);
+    const socket = sockets[0]; await act(async () => socket.fire("connect"));
+    expect(screen.getByRole("button", { name: /Agent online · 10 games/ })).toBeTruthy();
     act(() => socket.fire("games:changed", { count: 5, inserted: 0, bulk: true, reason: "reclassify" }));
-    expect(screen.getByText("10")).toBeTruthy(); expect(screen.getByText("Syncing — charts refresh every 30 s")).toBeTruthy();
-    act(() => socket.fire("games:changed", { count: 4, inserted: 2, reason: "ingest" })); expect(screen.getByText("12")).toBeTruthy();
-    act(() => vi.advanceTimersByTime(30000)); const relative = screen.getByText(/last 30s ago/); expect(relative.getAttribute("title")).toBe(new Date("2026-10-23T12:00:00Z").toLocaleString());
+    expect(screen.getByRole("button", { name: /10 games/ })).toBeTruthy(); expect(screen.getByText("Syncing — charts refresh every 30 s")).toBeTruthy();
+    apiMe.games = { total: 12, latest: "2026-10-23T12:00:00Z" };
+    await act(async () => socket.fire("games:changed", { count: 4, inserted: 2, reason: "ingest" }));
+    expect(screen.getByRole("button", { name: /12 games/ })).toBeTruthy();
+    await act(async () => vi.advanceTimersByTime(30000));
+    const pill = screen.getByRole("button", { name: /last upload 30s ago/ });
+    expect(pill.querySelector("[title]")?.getAttribute("title")).toBe(new Date("2026-10-23T12:00:00Z").toLocaleString());
+    expect(ioMock).toHaveBeenCalledTimes(1);
   });
 
   it("renders all admin status states and refreshes durable data while disconnected", () => {

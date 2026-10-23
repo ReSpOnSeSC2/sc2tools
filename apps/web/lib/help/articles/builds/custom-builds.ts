@@ -2,9 +2,9 @@ import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
   slug: "custom-builds",
-  title: "Detected builds vs custom builds",
+  title: "Detected builds and your Build library",
   summary:
-    "Every game gets a build label from fixed rules that come with SC2 Tools. Custom builds are your own definitions, saved privately in your library, with their own record.",
+    "Every game gets a build label from fixed rules that come with SC2 Tools. Your Build library keeps your own definitions privately, each with its own record.",
   category: "builds",
   audience: "player",
   keywords: [
@@ -27,7 +27,7 @@ const article: HelpArticle = {
   body: [
     {
       type: "paragraph",
-      text: "SC2 Tools names the build in every game two ways. **Detected builds** are the labels that come with the app, like *PvZ - Stargate into Glaives*. **Custom builds** are the ones you define yourself and keep in [your library](/builds).",
+      text: "SC2 Tools names the build in every game two ways. **Detected builds** are the labels that come with the app, like *PvZ - Stargate into Glaives*. Your **Build library** holds the builds you define yourself and save privately.",
     },
     { type: "heading", text: "Detected builds" },
     {
@@ -44,10 +44,10 @@ const article: HelpArticle = {
         "Each definition has a link button to share it, and a **Guide** link when a community guide for that build is published.",
       ],
     },
-    { type: "heading", text: "Custom builds" },
+    { type: "heading", text: "Your Build library" },
     {
       type: "paragraph",
-      text: "A custom build is your own version of an opener: a short list of rules such as *At least 1 Stargate before 3:30* or *No Robotics Facility before 6:00*. A game matches when every rule passes, and the build's page then shows its record, matchups, maps and recent games. Custom builds are private until you publish one. [How build rules are counted](/help/rules-explained) explains each kind of rule.",
+      text: "A custom build is your own version of an opener: a short list of rules such as *At least 1 Stargate before 3:30* or *No Robotics Facility before 6:00*. A game matches when every rule passes, and the build's page then shows its record, matchups, maps and recent games. Builds in your library are private until you publish one. [How build rules are counted](/help/rules-explained) explains each kind of rule.",
     },
     { type: "heading", text: "Make a custom build" },
     {

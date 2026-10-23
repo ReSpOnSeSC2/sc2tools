@@ -384,3 +384,22 @@ test("an impossible guide URL is a real 404 (the pages render per request)", asy
   const response = await request.get("/guides/not-a-matchup");
   expect(response.status()).toBe(404);
 });
+
+
+test("installed-app navigation has a self-contained offline fallback", async ({ page, context }, testInfo) => {
+  await page.goto("/help");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) await new Promise<void>((resolve) => navigator.serviceWorker.addEventListener("controllerchange", () => resolve(), { once: true }));
+  });
+  const cachedPaths = await page.evaluate(async () => (await (await caches.open("sc2tools-offline-v1")).keys()).map((request) => new URL(request.url).pathname));
+  expect(cachedPaths).toEqual(["/offline.html"]);
+  await context.setOffline(true);
+  try {
+    await page.goto("/help?offline-check=1");
+    await expect(page.getByRole("heading", { name: "You're offline" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+    await expect(page.getByText(/desktop app keeps your replays/)).toBeVisible();
+    await testInfo.attach("offline-page", { body: await page.screenshot(), contentType: "image/png" });
+  } finally { await context.setOffline(false); }
+});

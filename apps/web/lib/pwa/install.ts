@@ -14,7 +14,7 @@ export function isStandalone(): boolean {
 export function detectInstallPlatform(): InstallPlatform {
   if (typeof navigator === "undefined") return "unsupported";
   const ua = navigator.userAgent;
-  const ios = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && (navigator.maxTouchPoints > 1 || "ontouchend" in document));
+  const ios = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
   if (ios) return /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua) ? "ios-safari" : "ios-other";
   if (/Android/i.test(ua)) return "android";
   return /Chrome|Chromium|Edg\//i.test(ua) ? "desktop-chromium" : "unsupported";

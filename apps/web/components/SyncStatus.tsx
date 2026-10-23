@@ -19,8 +19,11 @@ export function AgentSyncPill({ compact = false }: Props = {}) {
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(timer); }, []);
   const immediate = useMemo(() => ({ "games:changed": (payload: unknown) => {
     const value = gamesChanged(payload);
-    if (value.inserted > 0) void mutate((current) => current?.games ? { ...current, games: { ...current.games, total: current.games.total + value.inserted, latest: new Date().toISOString() } } : current, { revalidate: false });
-  } }), [mutate]);
+    if (value.inserted > 0) void mutate((current) => {
+      const known = current ?? me;
+      return known?.games ? { ...known, games: { ...known.games, total: known.games.total + value.inserted, latest: new Date().toISOString() } } : known;
+    }, { revalidate: false });
+  } }), [mutate, me]);
   const coalesced = useMemo(() => ({ "games:changed": (payload: unknown) => { if (gamesChanged(payload).inserted > 0) void mutate(); }, connect: () => { void mutate(); } }), [mutate]);
   const realtime = useRealtimeState(immediate, true);
   useRealtimeEvents(coalesced);
@@ -34,7 +37,7 @@ export function AgentSyncPill({ compact = false }: Props = {}) {
   }, [open]);
   if (!me) return error ? <p className="text-caption text-text-muted">Desktop app status unavailable <button type="button" className="underline" onClick={() => { void mutate(); }}>Retry</button></p> : <span role="status" aria-label="Loading desktop app status" className="inline-block h-5 w-40 rounded-full bg-bg-elevated motion-safe:animate-pulse" />;
   const online = me.agentPaired && agentPresence(me.agentLastSeenAt, now) === "online";
-  const total = typeof me.games?.total === "number" ? new Intl.NumberFormat("en-US").format(me.games.total) : "—";
+  const total = typeof me.games?.total === "number" && Number.isFinite(me.games.total) ? new Intl.NumberFormat("en-US").format(me.games.total) : "—";
   const lastUpload = me.games?.latest;
   const uploadText = lastUpload ? formatRelative(lastUpload, now) : me.games?.total === 0 ? "none yet" : "unavailable";
   const presence = !me.agentPaired ? "No desktop app linked" : online ? "Agent online" : "Agent offline";

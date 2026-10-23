@@ -20,3 +20,33 @@ actual browser checks and production budgets remain unverified/incomplete.
 
 No AI features/API calls, infrastructure additions, account mutation, release,
 tag/install/sign or canonical version bump. Verification is not complete yet.
+
+Regression progress: 121 navigation/PWA/site-activity tests pass, plus13 actual
+SWR/shared-realtime tests (including no extra useLiveGame connection, optimistic
+inserted-only count, authoritative revalidation/remount and30s relative clock).
+A fallback-data race was fixed by using the visible /v1/me value if the SWR cache
+has not yet been populated, while still mutating only its authenticated bound key.
+Typecheck and strict changed-file lint pass. Full suite and exact-CI build running.
+Help/howto and labels updated; index regenerated62articles. More/PWA/offline actual
+browser verification and final release-grade evidence remain pending.
+
+Full web suite passed6301 tests,1 skipped across658 suites. Exact-CI production
+build/all unchanged budgets pass (home205.4/215 kB, /app234.6/240, opponents175.9/180,
+settings177.7/260). Actual production Chromium service-worker regression passes:
+only/offline.html cached, offline navigation serves its standalone page.
+
+Actual component Chromium checks pass desktop1440, touch iPad1024, phones320/390:
+pin/tooltip/Escape/push width/preference, labelled touch default, More keyboard walk,
+Light/Dark/support links, nested install/report lock and focus return, responsive
+activity and one-shot early native-install fixture. No browser errors; no actual
+account/native/desktop installation action. Screenshots reviewed; final refresh pending.
+
+Shared-helper follow-up for root before final integration: Modal/useFocusTrap
+currently schedules initial focus with setTimeout(0). An Escape in the first frame
+before a nested Install dialog receives focus can close the parent More dialog.
+The normal path after initial focus settles passes. The protected root-owned
+useFocusTrap/Modal source was not edited. Repro: open More, choose Install app on
+iOS, issue Escape immediately when the child becomes visible without waiting for
+focus. Root should consider synchronous initial focus/topmost dialog scoping;
+retain all current focus/filter regressions. Do not treat this scoped draft as
+permission to merge before that shared-helper review and final main integration.
