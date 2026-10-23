@@ -92,8 +92,15 @@ def test_preview_escape_and_timeout_are_local_and_real_card_replaces_immediately
     assert elapsed.wait(1000), "the real Qt preview timeout was not delivered"
     assert not preview.isVisible() and recorder.calls == []
     host.show_preview(LOADING); preview = host.window(LOADING)
-    preview._preview_escape.activated.emit()
+    # Loading cards retain their no-focus native flags. Escape is app-local:
+    # it works while the user remains in Settings without a global game hotkey.
+    settings_input = QtWidgets.QLineEdit()
+    settings_input.show(); settings_input.activateWindow(); settings_input.setFocus()
+    app.processEvents()
+    QtTest.QTest.keyClick(settings_input, QtCore.Qt.Key_Escape)
+    app.processEvents()
     assert not preview.isVisible() and recorder.calls == []
+    settings_input.close(); settings_input.deleteLater()
     host.show_preview(LOADING)
     real = postgame_model()
     host.dispatch("show_postgame", (real,)); app.processEvents()
