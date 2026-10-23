@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CloudOff, MessageSquareText } from "lucide-react";
-import { SignedIn } from "@clerk/nextjs";
+import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { ReviewCard } from "@/components/reviews/ReviewCard";
 import { ReviewBoardFilters } from "@/components/reviews/ReviewBoardFilters";
 import { HelpWithList, ReviewLeaderboard } from "@/components/reviews/ReviewBoardSidebar";
 import { ReviewBoardLoader } from "@/components/reviews/ReviewBoardLoader";
+import { ReviewExchangeIntro } from "@/components/reviews/ReviewExchangeIntro";
 import { getJsonWithStatus } from "@/lib/serverApi";
 import {
   boardQuery,
@@ -23,7 +24,9 @@ import { siteTitle } from "@/lib/siteTitle";
  * /reviews — the public Review Board. Server-rendered from the public,
  * unpersonalised board API (Cache-Control s-maxage=60) so every filtered
  * view is a crawlable page; the personalised "Requests you can help
- * with" list and the leaderboard opt-in hydrate client-side.
+ * with" list and the leaderboard opt-in hydrate client-side. Signed-out
+ * visitors also get the three-step "How the Review Exchange works"
+ * strip with the sign-up CTA.
  */
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -93,6 +96,9 @@ export default async function ReviewsBoardPage({ searchParams }: { searchParams:
   return (
     <div className="space-y-6">
       {header}
+      <SignedOut>
+        <ReviewExchangeIntro />
+      </SignedOut>
       <ReviewBoardFilters filters={filters} />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-4">
