@@ -36,9 +36,14 @@ test("review board renders signed out without horizontal scroll", async ({ page 
 });
 
 test("review board race filters, chips and older-page recovery stay usable at every width", async ({ page }, testInfo) => {
+  // A dummy Clerk key can hold the first client navigation until its
+  // external script times out. Keep real URL/content assertions after it.
+  test.setTimeout(60_000);
   const response = await page.goto("/reviews?sort=new&race=P&cursor=fixture-older");
   expect(response?.status()).toBe(200);
   await expect(page.getByRole("heading", { name: "Replay reviews", exact: true })).toBeVisible();
+  const race = page.getByRole("combobox", { name: "Race (asker race)" });
+  await expect(race).toBeEnabled();
   const reject = page.locator("[data-cookie-banner]").getByRole("button", { name: "Reject" });
   if (await reject.isVisible()) await reject.click();
   await expect(page.getByRole("navigation", { name: "Review board pages" }).getByText("Showing older requests")).toBeVisible();
@@ -46,10 +51,10 @@ test("review board race filters, chips and older-page recovery stay usable at ev
   await expect(newest).toHaveAttribute("href", "/reviews?sort=new&race=P");
   await expect(newest).toHaveAttribute("rel", "nofollow");
   await newest.click();
+  await expect(page).toHaveURL(/\/reviews\?sort=new&race=P$/, { timeout: 20_000 });
   await expect(page.getByTestId("review-card").first()).toBeVisible();
-  const race = page.getByRole("combobox", { name: "Race (asker race)" });
   await race.selectOption("T");
-  await expect(page).toHaveURL(/sort=new&race=T$/);
+  await expect(page).toHaveURL(/sort=new&race=T$/, { timeout: 20_000 });
   await expect(page.getByText("No requests match these filters", { exact: true })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Matchup", exact: true }).getByRole("option")).toHaveText(["All", "TvP", "TvT", "TvZ"]);
   const chip = page.getByRole("link", { name: "Remove filter Race: Terran", exact: true });
@@ -61,7 +66,7 @@ test("review board race filters, chips and older-page recovery stay usable at ev
   await chip.focus();
   await expect(chip).toBeFocused();
   await chip.press("Enter");
-  await expect(page).toHaveURL(/\/reviews\?sort=new$/);
+  await expect(page).toHaveURL(/\/reviews\?sort=new$/, { timeout: 20_000 });
   await expect(page.getByTestId("review-card").first()).toBeVisible();
 });
 
