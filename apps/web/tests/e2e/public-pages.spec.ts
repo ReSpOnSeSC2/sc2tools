@@ -181,15 +181,20 @@ test.describe("primary CTA link on hover", () => {
   });
 });
 
-test("/p/<missing> is a real 404, not a soft-404", async ({ page }) => {
+test("public profile network outages return a recoverable server error without overflow", async ({ page }) => {
   const response = await page.goto("/p/definitely-not-a-real-handle");
   expect(response).not.toBeNull();
-  // The API is down in this harness (status null path) → the page
-  // renders the transient unavailable state with a 200. When the API
-  // IS up and positively 404s, the status must be 404. Accept either
-  // here but require the page not to crash and not to overflow.
-  expect([200, 404]).toContain(response!.status());
-  await expect(page.locator("main").first()).toBeVisible();
+  // This unhandled fixture deliberately drops the API connection. A
+  // network failure must remain a server error, distinct from the
+  // positively missing-profile fixture tested above.
+  expect(response!.status()).toBe(500);
+  await expect(page.getByRole("heading", { name: "Profile temporarily unavailable" })).toHaveCount(1);
+  await expect(page.getByText("We couldn't reach the service just now. Try again in a moment.", { exact: true })).toBeVisible();
+  const retry = page.getByRole("button", { name: "Try again", exact: true });
+  await expect(retry).toBeVisible();
+  await expect(retry).toBeEnabled();
+  const overflow = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth }));
+  expect(overflow.width).toBeLessThanOrEqual(overflow.viewport + 1);
 });
 
 /**
