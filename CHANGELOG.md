@@ -17,6 +17,13 @@ corresponding GitHub Release.
 - Desktop import controls and the last ten jobs are available to every signed-in user. Browser import keeps its account flag; offline PCs cannot receive start commands.
 - Pair from the dashboard checklist, see setup progress, undo dismissal for five seconds, or restore the checklist from Settings.
 
+- Share one authenticated realtime connection across user and admin surfaces; count newly inserted games accurately, coalesce chart refreshes during imports, and show admin connection recovery status.
+
+### Build editor safety
+
+- Both build editors ask before discarding unsaved work. Save failures keep their complete message visible, and editor notifications use the shared toast layer.
+- The rich editor includes private notes, preserves notes and legacy signatures during metadata edits, and opens from every Edit action. Dossiers show authored rules, strategy notes and skill level beside personal notes.
+
 ### Resumable setup
 
 - Setup remembers its step in the URL, recognizes paired PCs and existing games, and keeps browser import on its own Back path. Completed steps can be revisited.

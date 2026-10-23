@@ -37,6 +37,8 @@ export const TIME_LT_MAX = 1800;
 export const COUNT_MIN = 0;
 export const COUNT_MAX = 200;
 export const DESC_MAX_CHARS = 500;
+/** Mirrors the private-notes bound in apps/api/src/validation/customBuild.js. */
+export const BUILD_NOTES_MAX_CHARS = 8000;
 export const NAME_MIN_CHARS = 3;
 export const NAME_MAX_CHARS = 120;
 export const STRATEGY_NOTE_MAX_CHARS = 280;
@@ -162,6 +164,7 @@ export type VsRaceLite = RaceLite | "Any";
 export interface BuildEditorDraft {
   name: string;
   description: string;
+  notes: string;
   race: RaceLite;
   vsRace: VsRaceLite;
   skillLevel: SkillLevelId | null;
@@ -189,6 +192,7 @@ export interface SanitisedDraft {
   payload: {
     name: string;
     description: string;
+    notes: string;
     race: RaceLite;
     vsRace: VsRaceLite;
     skillLevel: SkillLevelId | null;
@@ -443,7 +447,7 @@ export function slugifyRuleName(name: string): string {
 /* Draft sanitisation                                                 */
 /* ------------------------------------------------------------------ */
 
-export function sanitiseDraft(draft: BuildEditorDraft): SanitisedDraft {
+export function sanitiseDraft(draft: BuildEditorDraft, { allowEmptyRules = false } = {}): SanitisedDraft {
   const errors: BuildEditorErrors = {};
   const name = String(draft.name || "").trim();
   if (name.length < NAME_MIN_CHARS) {
@@ -461,7 +465,7 @@ export function sanitiseDraft(draft: BuildEditorDraft): SanitisedDraft {
     .filter((r): r is BuildRule => r !== null);
   if (invalidProxyRule) {
     errors.rules = "“Only count proxied” needs a building token, for example BuildPylon or BuildBarracks.";
-  } else if (rules.length === 0) {
+  } else if (rules.length === 0 && (!allowEmptyRules || draftRules.length > 0)) {
     errors.rules = "Need at least one rule.";
   } else if (rules.length > RULES_MAX_PER_BUILD) {
     errors.rules = `At most ${RULES_MAX_PER_BUILD} rules.`;
@@ -488,6 +492,7 @@ export function sanitiseDraft(draft: BuildEditorDraft): SanitisedDraft {
     payload: {
       name,
       description,
+      notes: String(draft.notes || "").trim().slice(0, BUILD_NOTES_MAX_CHARS),
       race: draft.race || "Protoss",
       vsRace: draft.vsRace || "Random",
       skillLevel,

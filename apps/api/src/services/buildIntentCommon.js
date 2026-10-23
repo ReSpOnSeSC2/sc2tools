@@ -190,7 +190,7 @@ class BuildIntentNotifier {
   gamesChanged(userId) {
     if (!this.io) return;
     try {
-      this.io.to(`user:${userId}`).emit("games:changed", { count: 1 });
+      this.io.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "build_intent" });
     } catch {
       // See ``changed``.
     }

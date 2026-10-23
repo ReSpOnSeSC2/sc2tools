@@ -5,7 +5,7 @@
  * pin down the props each section receives so the orchestrator can
  * pass a single state object around without leaking concerns.
  */
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, RefObject, SetStateAction } from "react";
 import type {
   BuildEditorDraft,
   BuildEditorErrors,
@@ -128,6 +128,8 @@ export interface BuildEditorState {
 
   /** True when the draft differs from the pristine snapshot. */
   isDirty: boolean;
+  /** Hydrate an automatic author default without counting it as an edit. */
+  seedAuthorName: (name: string) => void;
 
   /** Persist the draft. `andReclassify` wires through to backend. */
   save: (andReclassify: boolean) => Promise<void>;
@@ -168,6 +170,8 @@ export interface BuildEditorBasicsProps {
   draft: BuildEditorDraft;
   setDraft: Dispatch<SetStateAction<BuildEditorDraft>>;
   errors: BuildEditorErrors;
+  notesRef?: RefObject<HTMLTextAreaElement | null>;
+  onAuthorDefault?: (name: string) => void;
   /**
    * The source game's matchup when the build must fit it: the race is
    * shown read-only and the vs race offers only that race or Any.
@@ -190,6 +194,7 @@ export interface BuildEditorRulesProps {
 }
 
 export interface BuildEditorPreviewProps {
+  focusRef?: RefObject<HTMLElement | null>;
   preview: BuildEditorPreviewResult | null;
   loading: boolean;
   error: string | null;
