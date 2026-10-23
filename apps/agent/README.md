@@ -379,7 +379,7 @@ SignPath Foundation signing and verifies trusted timestamped signatures; absent
 credentials do not turn an unsigned build into a signed one. The installer drops a Start Menu
 shortcut and optional desktop shortcut. Installation options default Windows
 startup on for a first install; installer and Settings share the per-user
-`HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run\\SC2ToolsAgent`
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\SC2ToolsAgent`
 value with `--start-minimized`. Legacy Startup shortcuts migrate to this value,
 and silent upgrades preserve the existing choice. The Finish page offers Launch
 now. Uninstall keeps pairing/settings/logs unless local-data removal is explicitly
