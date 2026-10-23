@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import {
   FiltersContext,
@@ -13,7 +13,8 @@ vi.mock("@/lib/clientApi", () => ({
   useApi: () => ({ data: undefined, isLoading: false, error: null }),
 }));
 
-afterEach(cleanup);
+beforeEach(() => { vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const DEFAULTS = defaultAnalyzerFilters();
 
@@ -52,21 +53,21 @@ async function openSheet(): Promise<HTMLElement> {
 }
 
 describe("FilterBar phone sheet", () => {
-  it("labels the button with the number of non-default filters, date aside", () => {
+  it("counts every non-default facet, including the date now edited inside the sheet", () => {
     render(
       <Harness
         initial={{ ...DEFAULTS, preset: "all", since: undefined, opp_race: "Z", regions: "EU" }}
       />,
     );
     // Accessible name skips the decorative dot: "Filters 2 active".
-    expect(sheetButton().textContent).toBe("Filters·2 active");
+    expect(sheetButton().textContent).toBe("Filters·3 active");
     expect(sheetButton().getAttribute("aria-haspopup")).toBe("dialog");
     expect(sheetButton().getAttribute("aria-expanded")).toBe("false");
   });
 
-  it("says just Filters when everything but the date is default", () => {
+  it("counts a changed date when the other facets are default", () => {
     render(<Harness initial={{ ...DEFAULTS, preset: "last_7d" }} />);
-    expect(sheetButton().textContent).toBe("Filters");
+    expect(sheetButton().textContent).toBe("Filters·1 active");
   });
 
   it("opens a labelled modal dialog holding the filter controls", async () => {
@@ -79,7 +80,7 @@ describe("FilterBar phone sheet", () => {
     expect(within(dialog).getByRole("group", { name: "Filter by ladder or custom games" })).toBeTruthy();
     expect(within(dialog).getByRole("group", { name: "Filter by game size" })).toBeTruthy();
     expect(within(dialog).getByRole("group", { name: "Filter by game length" })).toBeTruthy();
-    expect(within(dialog).getByRole("checkbox", { name: "Hide too-short games, under 45 seconds" })).toBeTruthy();
+    expect(within(dialog).getByRole("checkbox", { name: "Hide games under 45 seconds" })).toBeTruthy();
     // Focus starts inside the sheet.
     expect(dialog.contains(document.activeElement)).toBe(true);
   });
@@ -129,8 +130,9 @@ describe("FilterBar phone sheet", () => {
     expect(screen.queryByRole("dialog", { name: "Filters" })).toBeNull();
   });
 
-  it("opens the phone date picker above the app's tab bar", () => {
+  it("opens the phone date picker from the full editor above the app's tab bar", async () => {
     render(<Harness />);
+    await openSheet();
     // The date range button sits right after its "Date range" label.
     const label = screen.getByText("Date range");
     const trigger = within(label.nextElementSibling as HTMLElement).getByRole("button");
@@ -143,7 +145,8 @@ describe("FilterBar phone sheet", () => {
 
   it("links the filters help article from the bar", async () => {
     render(<Harness />);
-    const help = await screen.findByRole("link", { name: "Help: Filters: date, matchup, region and more" });
+    await openSheet();
+    const help = await screen.findByRole("link", { name: "How filters work" });
     expect(help.getAttribute("href")).toBe("/help/analyzer-filters");
   });
 });

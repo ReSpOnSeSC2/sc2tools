@@ -32,7 +32,7 @@ export function PillButton({
       aria-pressed={active}
       title={title}
       className={[
-        "inline-flex min-h-[28px] items-center rounded-full border px-2 py-0.5",
+        "analyzer-filter-pill inline-flex min-h-8 items-center rounded-full border px-2 py-0.5",
         "text-micro font-medium uppercase tracking-wider tabular-nums",
         "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         active
