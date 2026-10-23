@@ -60,7 +60,20 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "**Save build** keeps your changes. **Save & Reclassify** also checks your past games against the new rules, so the build's record includes them. Matching a large library can take a minute.",
+      text: "**Save build** keeps your changes. **Save & re-match** also checks your past games against the new rules for that build, so its record includes matching replays.",
+    },
+    { type: "heading", text: "Re-match replays" },
+    {
+      type: "paragraph",
+      text: "Use **Re-match replays** in your library to check every saved replay against your current build rules again. It runs in the cloud, so you can leave the page while it works. The progress line shows replays checked, and the completion message tells you how many games matched and how many old matches were removed.",
+    },
+    {
+      type: "paragraph",
+      text: "Some games may wait for replay data. Their existing matches stay safe: re-sync the desktop app to repair missing analysis, then try re-matching again. A stopped job has a **Try again** button; an Error ID helps support find the failure.",
+    },
+    {
+      type: "paragraph",
+      text: "Search and matchup filters stay in the page URL. **Clear filters** widens the list, while keeping your chosen sort. Returning from a build restores the library page when its saved cursor is still valid; an expired cursor starts safely at page one.",
     },
     { type: "heading", text: "Which one to use" },
     {

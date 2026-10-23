@@ -1,4 +1,5 @@
 "use client";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -35,7 +36,7 @@ export default function AdminPlayerIdentitiesPage() {
   if (error?.status === 403) return <ForbiddenCard />;
 
   return <div className="space-y-6">
-    <header className="space-y-2"><h1 className="text-3xl font-bold">Player identities</h1><p className="max-w-3xl text-body text-text-muted">Review community submissions that identify barcode accounts. Check the suggested player and the submitter&apos;s replays before confirming a shared identity.</p></header>
+    <AdminPageHeader anchor="identity-and-channel-review" title="Player identities" description="Review the submitted evidence before confirming shared identities." />
     <Card><div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <Field label="Submission status" className="sm:min-w-60"><Select value={status} onChange={(event) => { setStatus(event.target.value as IdentityProposal["status"]); setCursors([null]); }}><option value="pending">Awaiting review</option><option value="approved">Approved</option><option value="rejected">Not approved</option><option value="removed">Identity removed</option></Select></Field>
       <Button variant="secondary" iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={() => void mutate()}>Refresh submissions</Button>

@@ -20,6 +20,7 @@ function fakeDb({ contributors = 0, pulseCharacterId = null } = {}) {
   return {
     calls,
     db: {
+      communityReports: { findOne: jest.fn(async () => null) },
       opponents: {
         findOne: jest.fn(async () => {
           calls.findOne += 1;

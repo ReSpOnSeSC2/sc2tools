@@ -98,7 +98,7 @@ describe("SettingsHelp", () => {
     expect(text).toContain("Add “…” as a new build…");
     expect(text).toContain("Save as new build");
     expect(text).toContain("Save build");
-    expect(text).toContain("Save & Reclassify");
+    expect(text).toContain("Save & re-match");
     expect(text).toContain("Saved to your library and checked in");
     expect(text).toContain("Available once your replay uploads");
   });

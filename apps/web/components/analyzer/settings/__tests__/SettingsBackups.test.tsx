@@ -64,7 +64,7 @@ describe("SettingsBackups copy", () => {
 
 describe("SettingsBackups restore", () => {
   it("says what a restore replaces, then confirms it finished", async () => {
-    apiCallMock.mockResolvedValue({ restoredAt: "2026-08-11T10:00:00.000Z", counts: {} });
+    apiCallMock.mockResolvedValue({ restoredAt: "2026-08-11T10:00:00.000Z", counts: { games: 3402 } });
     renderBackups();
 
     fireEvent.click(screen.getByRole("button", { name: "Restore" }));
@@ -73,12 +73,30 @@ describe("SettingsBackups restore", () => {
     expect(within(dialog).getByText(/click Re-sync in the desktop app/)).toBeTruthy();
 
     fireEvent.click(within(dialog).getByRole("button", { name: "Restore" }));
-    await waitFor(() => expect(screen.getByText("Snapshot restored")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("Restored 3,402 games")).toBeTruthy());
     expect(apiCallMock).toHaveBeenCalledWith(
       expect.any(Function),
       `/v1/me/backups/${SNAPSHOT.id}/restore`,
       { method: "POST", body: "{}" },
     );
     expect(screen.queryByText("Restore queued")).toBeNull();
+  });
+});
+
+describe("SettingsBackups game history", () => {
+  it("rejects a reversed calendar range before any request", () => {
+    renderBackups([]);
+    fireEvent.change(screen.getByLabelText("Wipe games on or after this date"), { target: { value: "2025-10-15" } });
+    fireEvent.change(screen.getByLabelText("Wipe games through this date (inclusive)"), { target: { value: "2025-10-01" } });
+    expect(screen.getByRole("alert").textContent).toContain("From must be on or before Through.");
+    expect(screen.getByRole("button", { name: "Delete games in range" }).hasAttribute("disabled")).toBe(true); expect(apiCallMock).not.toHaveBeenCalled();
+  });
+  it("previews the count without deletion, and blocks confirmation for an empty range", async () => {
+    apiCallMock.mockResolvedValue({ dryRun: true, counts: { games: 0 } }); renderBackups([]);
+    fireEvent.click(screen.getByRole("button", { name: "Delete all games" }));
+    await screen.findByText("No games in this range");
+    expect(JSON.parse(apiCallMock.mock.calls[0][2].body)).toEqual({ dryRun: true });
+    fireEvent.change(screen.getByLabelText("Type DELETE to confirm"), { target: { value: "DELETE" } });
+    expect(screen.getByRole("button", { name: "Delete games" }).hasAttribute("disabled")).toBe(true);
   });
 });

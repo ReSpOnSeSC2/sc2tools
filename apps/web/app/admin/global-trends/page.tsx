@@ -1,7 +1,8 @@
 "use client";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { useCallback, useMemo, useState } from "react";
-import { ChartNoAxesCombined, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { useGlobalTrendsApi } from "@/lib/globalTrendsApi";
 import { FiltersContext, filtersToQuery, type AnalyzerFilters } from "@/lib/filterContext";
@@ -24,7 +25,7 @@ export default function AdminGlobalTrendsPage() {
   if (access.error?.status === 403 || (access.data && access.data.isAdmin !== true)) return <ForbiddenCard />;
   if (access.error) return (
     <div className="space-y-4">
-      <h1 className="text-3xl font-bold tracking-tight">Global Trends</h1>
+      <AdminPageHeader anchor="global-trends" title="Global trends" description="Explore aggregate ladder trends across the platform." />
       <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-5">
         <p className="font-medium text-danger">Could not verify admin access.</p>
         <p className="mt-1 text-sm text-text-muted">{access.error.message}</p>
@@ -34,7 +35,7 @@ export default function AdminGlobalTrendsPage() {
   );
   if (!access.data) return (
     <div className="space-y-4">
-      <h1 className="text-3xl font-bold tracking-tight">Global Trends</h1>
+      <AdminPageHeader anchor="global-trends" title="Global trends" description="Explore aggregate ladder trends across the platform." />
       <div role="status" aria-label="Checking admin access"><p className="mb-3 text-sm text-text-muted">Checking admin access…</p><Skeleton rows={3} /></div>
     </div>
   );
@@ -58,17 +59,7 @@ function GlobalTrendsContent() {
 
   return (
     <div className="min-w-0 space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-3xl">
-          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-accent"><ChartNoAxesCombined className="h-4 w-4" aria-hidden />Platform analytics</div>
-          <h1 className="text-3xl font-bold tracking-tight">Global Trends</h1>
-          <p className="mt-2 text-sm leading-relaxed text-text-muted">Explore combined results from every uploaded player history. Start with everyone, then narrow the players and games behind every chart.</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <a href="#global-trend-charts" className="text-sm font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">View trend charts</a>
-          <Button variant="secondary" size="sm" iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={bumpRev} disabled={options.isLoading}>Refresh data</Button>
-        </div>
-      </header>
+      <AdminPageHeader anchor="global-trends" title="Global trends" description="Explore aggregate ladder trends across the platform." actions={<><a href="#global-trend-charts" className="text-sm font-semibold text-accent underline">View trend charts</a><Button variant="secondary" size="sm" iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />} onClick={bumpRev} disabled={options.isLoading}>Refresh data</Button></>} />
 
       {options.error ? (
         <div role="alert" className="rounded-xl border border-danger/30 bg-danger/5 p-5">

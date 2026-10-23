@@ -14,6 +14,8 @@ vi.mock("@/lib/guides/api", () => ({
   fetchPublishedGuidePaths: mocks.fetchPublishedGuidePaths,
 }));
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+  usePathname: () => "/guides/pvz/stargate-into-glaives",
   notFound: () => {
     throw Object.assign(new Error("NEXT_NOT_FOUND"), { digest: "NEXT_NOT_FOUND" });
   },
@@ -135,7 +137,7 @@ describe("/guides/[matchup]/[build] metadata", () => {
     const md = await generateMetadata(PARAMS);
     expect(md.robots).toEqual({ index: false, follow: false });
     await expect(BuildGuidePage(PARAMS)).rejects.toBeInstanceOf(GuideUnavailableError);
-    const { container } = render(<GuidesError error={new GuideUnavailableError("/guides/pvz/stargate-into-glaives")} />);
+    const { container } = render(<GuidesError error={new GuideUnavailableError("/guides/pvz/stargate-into-glaives")} reset={vi.fn()} />);
     expect(screen.getByText("This guide is temporarily unavailable")).toBeTruthy();
     const robots = container.ownerDocument.querySelector('meta[name="robots"]');
     expect(robots?.getAttribute("content")).toBe("noindex, nofollow");
@@ -159,7 +161,10 @@ describe("/guides/[matchup]/[build] page", () => {
       `${HEADLINE_PCT} win rate over 146 games vs Diamond opponents with 12 starting workers`,
     );
     expect(screen.getByText(FIXTURE_BUILD_PUBLISHED.description)).toBeTruthy();
-    expect(screen.getByText(/n = 412 games from 63 players · Stats updated Sep 27, 2026/)).toBeTruthy();
+    expect(screen.getByText(/Overall:.*412 games from 63 players · updated Sep 27, 2026/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "All PvZ openers" }).getAttribute("href")).toBe("/guides/pvz");
+    expect(screen.getByRole("link", { name: "How to beat Zerg openers" }).getAttribute("href")).toBe("/guides/pvz/counter");
+    expect(screen.getByTestId("guide-headline").parentElement?.textContent).not.toContain("n =");
     for (const entry of [...buildIntro(FIXTURE_BUILD_PUBLISHED), ...buildTimingsBlurb(FIXTURE_BUILD_PUBLISHED)]) {
       expect(document.querySelector(`[data-copy-id="${entry.id}"]`)?.textContent).toContain(entry.text);
     }
@@ -203,7 +208,7 @@ describe("/guides/[matchup]/[build] page", () => {
     expect(screen.queryByRole("heading", { level: 2, name: "Key timings" })).toBeNull();
     expect(screen.getByRole("heading", { level: 2, name: "Your record with this build" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Sign in to compare your win rate" }).getAttribute("href")).toBe(
-      "/sign-in",
+      "/sign-in?redirect_url=%2Fguides%2Fpvz%2Fstargate-into-glaives",
     );
   });
 

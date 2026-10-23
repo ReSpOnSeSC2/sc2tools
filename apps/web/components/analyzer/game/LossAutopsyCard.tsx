@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { Card } from "@/components/ui/Card";
+import { RequestError } from "@/components/ui/RequestError";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import {
   lossAutopsy,
@@ -11,6 +12,9 @@ import {
 import { parseClockToSeconds } from "@/lib/gameTimeline";
 
 export interface LossAutopsyCardProps {
+  error?: unknown;
+  onRetry?: () => unknown;
+  loading?: boolean;
   /** The lost game with its client-side payloads attached. */
   game: AutopsyGame;
   personalMedians?: PersonalMedians;
@@ -29,6 +33,7 @@ export interface LossAutopsyCardProps {
  * instead of a blank card.
  */
 export function LossAutopsyCard({
+  error, onRetry, loading,
   game,
   personalMedians,
   onSeek,
@@ -41,6 +46,8 @@ export function LossAutopsyCard({
   const isLoss = game.result === "Loss" || game.result === "Defeat";
   if (!isLoss) return null;
 
+  if (error) return <RequestError title="Couldn't load the loss analysis" error={error} onRetry={onRetry} />;
+  if (loading) return <div role="status" aria-label="Loading loss analysis" className="space-y-3">{[0,1,2].map((row) => <div key={row} className="h-8 animate-pulse rounded bg-bg-elevated" />)}</div>;
   return (
     <Card title="Why you lost" data-testid="loss-autopsy-card">
       {causes.length === 0 ? (
@@ -64,10 +71,10 @@ export function LossAutopsyCard({
                   {cause.title}
                 </h4>
                 <span
-                  className="ml-auto text-micro tabular-nums text-text-dim"
-                  title="Severity, 0–100"
+                  className={`ml-auto rounded-full border px-2 py-1 text-micro tabular-nums ${cause.severityScore >= 67 ? "border-danger/40 text-danger" : cause.severityScore >= 34 ? "border-warning/40 text-warning" : "border-success/40 text-success"}`}
+                  aria-label={`Severity ${cause.severityScore} out of 100, ${cause.severityScore >= 67 ? "high" : cause.severityScore >= 34 ? "medium" : "low"}`}
                 >
-                  {cause.severityScore}
+                  {cause.severityScore >= 67 ? "High" : cause.severityScore >= 34 ? "Medium" : "Low"} · {cause.severityScore}
                 </span>
               </div>
               <div
@@ -102,7 +109,7 @@ export function LossAutopsyCard({
                             : undefined
                         }
                         aria-label={`Jump timeline to ${clock}`}
-                        className="inline-flex min-h-[32px] items-center rounded-full border border-border bg-bg-elevated px-2.5 font-mono text-micro tabular-nums text-text-muted transition-colors enabled:hover:border-border-strong enabled:hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default"
+                        className="inline-flex min-h-[44px] items-center rounded-full border border-border bg-bg-elevated px-2.5 font-mono text-micro tabular-nums text-text-muted transition-colors enabled:hover:border-border-strong enabled:hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default"
                       >
                         {clock}
                       </button>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, StickyNote, X } from "lucide-react";
+import { ChevronDown, ChevronRight, StickyNote } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { Toggle } from "@/components/ui/Toggle";
@@ -32,11 +32,6 @@ interface BuildOrderResp {
  * drilldown. Desktop renders a sortable-style table; mobile collapses
  * to stacked cards with the same data and the same expand action.
  *
- * When ``filterGameIds`` is set, the table narrows ``games`` to that
- * set and surfaces a dismissable chip naming the filter — used by the
- * Phase compositions panel to drill from a clicked signature into the
- * contributing games without leaving the dossier.
- *
  * Games on the build through a confirmed check-in carry a "Planned"
  * marker (naming the replay's own label) and show the player's check-in
  * notes when expanded.
@@ -45,27 +40,14 @@ export function BuildGamesTable({
   games,
   resumedGames = [],
   resumedCount = 0,
-  filterGameIds,
-  filterLabel,
-  onClearFilter,
 }: {
   games: BuildRecentGame[];
   resumedGames?: BuildRecentGame[];
   resumedCount?: number;
-  filterGameIds?: string[];
-  filterLabel?: string;
-  onClearFilter?: () => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showResumedGames, setShowResumedGames] = useState(false);
   const resumeNoteId = useId();
-  const filterSet = useMemo(
-    () =>
-      filterGameIds && filterGameIds.length > 0
-        ? new Set(filterGameIds)
-        : null,
-    [filterGameIds],
-  );
   const groupedGames = useMemo(() => {
     const resumedById = new Map<string, BuildRecentGame>();
 
@@ -92,22 +74,8 @@ export function BuildGamesTable({
       resumed: Array.from(resumedById.values()),
     };
   }, [games, resumedGames]);
-  const filteredCompetitive = useMemo(
-    () =>
-      filterSet
-        ? groupedGames.competitive.filter((game) =>
-            filterSet.has(game.gameId),
-          )
-        : groupedGames.competitive,
-    [filterSet, groupedGames.competitive],
-  );
-  const filteredResumed = useMemo(
-    () =>
-      filterSet
-        ? groupedGames.resumed.filter((game) => filterSet.has(game.gameId))
-        : groupedGames.resumed,
-    [filterSet, groupedGames.resumed],
-  );
+  const filteredCompetitive = groupedGames.competitive;
+  const filteredResumed = groupedGames.resumed;
   const displayedGames = useMemo(
     () =>
       [
@@ -130,19 +98,10 @@ export function BuildGamesTable({
       </Card>
     );
   }
-  const chip =
-    filterSet ? (
-      <FilterChip
-        label={filterLabel}
-        count={filteredCompetitive.length}
-        onClear={onClearFilter}
-      />
-    ) : null;
   return (
     <Card
       title={`Recent games · ${filteredCompetitive.length}${hasResumedGames ? " counted" : ""}`}
     >
-      {chip}
       {hasResumedGames ? (
         <div className="mb-3 flex flex-col gap-2 rounded-lg border border-border bg-bg-elevated/40 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <p id={resumeNoteId} className="text-micro text-text-muted">
@@ -165,11 +124,7 @@ export function BuildGamesTable({
       ) : null}
       {displayedGames.length === 0 ? (
         <EmptyState
-          sub={
-            filterSet
-              ? "No counted games match this phase filter."
-              : "No counted games using this build yet."
-          }
+          sub="No counted games using this build yet."
         />
       ) : (
         <>
@@ -230,38 +185,6 @@ function compareNewestFirst(a: BuildRecentGame, b: BuildRecentGame): number {
     return bTime - aTime;
   }
   return b.date.localeCompare(a.date) || a.gameId.localeCompare(b.gameId);
-}
-
-function FilterChip({
-  label,
-  count,
-  onClear,
-}: {
-  label?: string;
-  count: number;
-  onClear?: () => void;
-}) {
-  return (
-    <div
-      className="mb-2 inline-flex items-center gap-2 rounded-full border border-border bg-bg-elevated px-3 py-1 text-caption text-text-muted"
-      data-testid="build-games-filter-chip"
-    >
-      <span className="tabular-nums text-text">
-        Filtered to {count} game{count === 1 ? "" : "s"}
-      </span>
-      {label ? <span className="text-text-dim">from {label}</span> : null}
-      {onClear ? (
-        <button
-          type="button"
-          aria-label="Clear game filter"
-          onClick={onClear}
-          className="-mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full text-text-muted hover:bg-bg-surface hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <X className="h-3 w-3" aria-hidden />
-        </button>
-      ) : null}
-    </div>
-  );
 }
 
 function GameRow({

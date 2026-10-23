@@ -14,6 +14,7 @@ import { SaveBar } from "@/components/ui/SaveBar";
 import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { usePublishDirty } from "./SettingsContext";
+import { SettingsLoadError } from "./SettingsLoadError";
 import {
   classifyAvailability,
   describeVoice,
@@ -88,7 +89,7 @@ const EVENT_DEFAULTS: Record<(typeof EVENT_KEYS)[number], boolean> = {
 
 export function SettingsVoice() {
   const { getToken } = useAuth();
-  const { data, isLoading, mutate } = useApi<VoicePrefs>(
+  const { data, error, isLoading, mutate } = useApi<VoicePrefs>(
     "/v1/me/preferences/voice",
   );
   const { toast } = useToast();
@@ -313,6 +314,7 @@ export function SettingsVoice() {
   const groupedVoices = useMemo(() => groupVoices(offered), [offered]);
 
   if (isLoading) return <Skeleton rows={4} />;
+  if (error && data === undefined) return <SettingsLoadError tab="Voice settings" error={error} retry={mutate} />;
 
   return (
     <>

@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({ fetchGuideIndex: vi.fn() }));
 
 vi.mock("@/lib/guides/api", () => ({ fetchGuideIndex: mocks.fetchGuideIndex }));
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+  usePathname: () => "/guides/pvz/stargate-into-glaives",
   notFound: () => {
     throw Object.assign(new Error("NEXT_NOT_FOUND"), { digest: "NEXT_NOT_FOUND" });
   },
@@ -216,3 +218,5 @@ describe("/guides/maps", () => {
     expect(screen.getByText("No map guides yet")).toBeTruthy();
   });
 });
+
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false }) }));

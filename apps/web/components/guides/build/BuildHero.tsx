@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GuideCopyText } from "@/components/guides/GuideCopyText";
@@ -57,9 +58,10 @@ export function BuildHero({
         {headlineSentence(payload)}
       </p>
       <p className="text-caption tabular-nums text-text-dim">
-        n = {fmtCount(overall.games)} games from {fmtCountNoun(overall.users, "player")}
-        {payload.computedAt ? ` · Stats updated ${fmtGuideDate(payload.computedAt)}` : ""}
+        {payload.headline?.scope === "league" ? `Overall: ${fmtPct(overall.winRate)} over` : "Based on"} {fmtCount(overall.games)} games from {fmtCountNoun(overall.users, "player")}
+        {payload.computedAt ? ` · updated ${fmtGuideDate(payload.computedAt)}` : ""}
       </p>
+      <div className="flex flex-wrap gap-3 text-caption"><Link href={guidePaths.matchup(payload.matchupSlug)} className="text-accent-cyan underline">All {payload.matchup} openers</Link><Link href={guidePaths.counters(payload.matchupSlug)} className="text-accent-cyan underline">How to beat {payload.matchup[2] === "P" ? "Protoss" : payload.matchup[2] === "T" ? "Terran" : "Zerg"} openers</Link></div>
       <GuideCopyText lines={intro} />
       <GuideCtas
         matchup={payload.matchup}

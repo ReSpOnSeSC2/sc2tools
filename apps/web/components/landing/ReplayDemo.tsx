@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useDropTarget } from "@/components/instant/useDropTarget";
+import { useReplayAccept } from "@/components/instant/useReplayAccept";
+import { isReplayFileName } from "@/lib/instant/fileIntake";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -128,6 +131,12 @@ function PrivateTryLink() {
 
 export function ReplayDemo() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const inFlight = useRef(false);
+  const dropRef = useRef<HTMLButtonElement>(null);
+  const errorRef = useRef<HTMLHeadingElement>(null);
+  const accept = useReplayAccept();
+  const [intakeMessage, setIntakeMessage] = useState("");
+  const [fileSize, setFileSize] = useState(0);
   const [busy, setBusy] = useState(false);
   const [filename, setFilename] = useState<string | null>(null);
   const [dossier, setDossier] = useState<PreviewDossier | null>(null);
@@ -138,6 +147,17 @@ export function ReplayDemo() {
   // first player (index 0) — the visitor can swap sides via the
   // floating perspective chip rendered above the modal scrim.
   const [perspective, setPerspective] = useState<0 | 1>(0);
+  const { dragging, handlers } = useDropTarget(busy, (files) => {
+    const replays = files.filter((file) => isReplayFileName(file.name));
+    if (!replays.length) { setIntakeMessage("That isn't a .SC2Replay file. Drop a replay from your StarCraft II Replays folder."); return; }
+    setIntakeMessage(replays.length > 1 ? `Using ${replays[0].name}. The demo reads one replay at a time.` : "");
+    void onPick(replays[0]);
+  });
+  useEffect(() => {
+    if (!statusOpen || !error) return;
+    const timer = window.setTimeout(() => errorRef.current?.focus(), 0);
+    return () => window.clearTimeout(timer);
+  }, [statusOpen, error]);
 
   const me = dossier?.players[perspective] ?? null;
   const opp = dossier?.players[perspective === 0 ? 1 : 0] ?? null;
@@ -149,7 +169,10 @@ export function ReplayDemo() {
   const editorVsRace: VsRaceLite = coerceVsRace(opp?.race);
 
   async function onPick(file: File | null) {
-    if (!file) return;
+    if (!file || inFlight.current) return;
+    if (!isReplayFileName(file.name)) { setIntakeMessage("That isn't a .SC2Replay file. Drop a replay from your StarCraft II Replays folder."); return; }
+    setFileSize(file.size);
+    dropRef.current?.focus();
     setFilename(file.name);
     setDossier(null);
     setError(null);
@@ -164,6 +187,7 @@ export function ReplayDemo() {
       setError({ code: "too_large", message: "" });
       return;
     }
+    inFlight.current = true;
     setBusy(true);
     try {
       const buf = await file.arrayBuffer();
@@ -205,31 +229,30 @@ export function ReplayDemo() {
       const message = err instanceof Error ? err.message : "network error";
       setError({ code: "network", message });
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
 
   return (
     <section className="mx-auto max-w-5xl">
-      <Card padded={false} className="overflow-hidden !rounded-md">
+      <Card {...handlers} padded={false} className={`relative overflow-hidden !rounded-md ${dragging ? "ring-2 ring-accent" : ""}`}>
+        {dragging ? <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-bg/90 text-h3 text-accent">Drop to analyze</div> : null}
         <div className="grid items-center gap-6 p-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:gap-10 md:p-10">
           <div className="space-y-4">
             <p className="kicker flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              Try it on a real replay
+              Build editor demo
             </p>
             <h2 className="font-serif text-[28px] font-semibold tracking-[-0.01em] text-text md:text-[36px]">
-              Drop a <em className="font-serif not-italic text-editorial">.SC2Replay</em>{" "}
-              file — build a custom build from it.
+              Turn a replay into a custom build
             </h2>
             <p className="text-body-lg text-text-muted">
-              Pick any replay from your StarCraft II folder. We&rsquo;ll read it
-              on our server, discard it, and open the build editor with that
-              game loaded — so you can see exactly how saving a custom build
-              works before you sign up.
+              Drop one 1v1 replay and we open the build editor on your build order.
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
               <Button
+                ref={dropRef}
                 variant="primary"
                 size="lg"
                 onClick={() => inputRef.current?.click()}
@@ -240,9 +263,9 @@ export function ReplayDemo() {
               <input
                 ref={inputRef}
                 type="file"
-                accept=".SC2Replay"
+                accept={accept}
                 className="sr-only"
-                onChange={(e) => void onPick(e.target.files?.[0] ?? null)}
+                onChange={(e) => { const file = e.currentTarget.files?.[0] ?? null; e.currentTarget.value = ""; void onPick(file); }}
               />
               <Link
                 href="/sign-up"
@@ -253,19 +276,20 @@ export function ReplayDemo() {
               </Link>
             </div>
             <p className="text-caption text-text-dim">
-              The file is sent to our server, parsed once and discarded —
-              nothing about your replay is stored.
+              Uploaded once to our server, parsed, then deleted.
             </p>
             <PrivateTryLink />
           </div>
 
-          <ReplayDropPreview onActivate={() => inputRef.current?.click()} />
+          <div><ReplayDropPreview onActivate={() => inputRef.current?.click()} /><p className="mt-2 text-caption text-text-muted">Drag a replay here or click to choose</p></div>
         </div>
+        {intakeMessage ? <p role="alert" className="px-6 pb-4 text-caption text-text-muted">{intakeMessage}</p> : null}
       </Card>
 
       <Modal
         open={statusOpen}
-        onClose={() => setStatusOpen(false)}
+        onClose={() => { setStatusOpen(false); dropRef.current?.focus(); }}
+        footer={error && !busy ? <div className="flex flex-wrap gap-2"><Button onClick={() => inputRef.current?.click()}>Choose another replay</Button>{getInstantImportMode() === "all" && PRIVATE_RETRY_CODES.has(error.code) ? <Link href="/try" className="inline-flex min-h-11 items-center rounded-full border border-border px-4 font-semibold text-accent">Analyze it in your browser</Link> : null}</div> : undefined}
         size="lg"
         title={
           <span className="flex flex-wrap items-center gap-2">
@@ -290,9 +314,9 @@ export function ReplayDemo() {
         }
       >
         {busy ? (
-          <DossierLoading />
+          <div><p className="text-caption text-text-muted">{filename} · {(fileSize / 1024 / 1024).toFixed(2)} MB</p><DossierLoading /></div>
         ) : error ? (
-          <DossierError error={error} />
+          <DossierError error={error} headingRef={errorRef} />
         ) : (
           <DossierLoading />
         )}
@@ -407,7 +431,9 @@ function DossierLoading() {
   );
 }
 
-function DossierError({ error }: { error: PreviewError }) {
+const PRIVATE_RETRY_CODES = new Set(["parse_failed", "python_error", "parser_no_output", "extract_failed", "parser_import_failed", "preview_timeout", "parser_overflow", "preview_unavailable", "replay_too_new", "too_large"]);
+
+function DossierError({ error, headingRef }: { error: PreviewError; headingRef: RefObject<HTMLHeadingElement | null> }) {
   const friendly = FRIENDLY_ERRORS[error.code] || error.message ||
     "We couldn't parse that replay.";
   return (
@@ -415,15 +441,12 @@ function DossierError({ error }: { error: PreviewError }) {
       <div className="flex items-start gap-3 rounded-lg border border-danger/40 bg-danger/10 p-4 text-body text-danger">
         <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" aria-hidden />
         <div className="space-y-1">
-          <p className="font-medium">Couldn&apos;t parse that replay</p>
+          <h2 ref={headingRef} tabIndex={-1} role="alert" className="font-medium focus:outline-none">Couldn&apos;t parse that replay</h2>
           <p className="text-text-muted">{friendly}</p>
         </div>
       </div>
       <ErrorTechnicalDetails error={error} />
-      <p className="text-caption text-text-muted">
-        Sign up and the agent will parse every replay automatically — even
-        the ones the public demo can&rsquo;t handle.
-      </p>
+      {/sign up|agent/i.test(friendly) ? <p className="text-caption text-text-muted"><Link href="/sign-up" className="inline-flex min-h-11 items-center rounded-full border border-border px-4 font-semibold text-accent">Create a free account</Link></p> : null}
     </div>
   );
 }

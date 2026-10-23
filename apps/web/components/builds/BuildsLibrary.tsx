@@ -5,6 +5,9 @@ import { useAuth } from "@clerk/nextjs";
 import { Plus, Library, BookOpen, RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import { activeBuildFilters, buildFiltersQuery, readBuildFilters } from "./buildLibraryFilters";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
@@ -60,8 +63,10 @@ type ReclassifyStatus = {
     tagged?: number;
     cleared?: number;
     deferred?: number;
+    total?: number;
   };
   error?: string;
+  requestId?: string;
 };
 
 const DEFAULT_FILTERS: BuildFilterState = {
@@ -92,7 +97,35 @@ export function BuildsLibrary() {
 function BuildsLibraryInner() {
   const { getToken } = useAuth();
   const { toast } = useToast();
-  const [filters, setFilters] = useState<BuildFilterState>(DEFAULT_FILTERS);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryString = searchParams.toString();
+  const [filters, setFilters] = useState<BuildFilterState>(() => readBuildFilters(searchParams));
+  const [searchInput, setSearchInput] = useState(filters.search);
+  const latestFilters = useRef(filters);
+  latestFilters.current = filters;
+  const debouncedSearch = useDebouncedValue(searchInput, 250);
+  const gridHeading = useRef<HTMLHeadingElement>(null);
+  const commitFilters = useCallback((next: BuildFilterState) => {
+    setFilters(next);
+    const query = buildFiltersQuery(next);
+    router.replace(`/builds${query ? `?${query}` : ""}`, { scroll: false });
+  }, [router]);
+  useEffect(() => {
+    const next = readBuildFilters(new URLSearchParams(queryString));
+    setFilters(next); setSearchInput(next.search);
+  }, [queryString]);
+  useEffect(() => {
+    if (debouncedSearch === searchInput && debouncedSearch !== latestFilters.current.search)
+      commitFilters({ ...latestFilters.current, search: debouncedSearch });
+  }, [debouncedSearch, searchInput, commitFilters]);
+  const clearFilters = () => { setSearchInput(""); commitFilters({ ...DEFAULT_FILTERS, sort: filters.sort }); };
+  const pageChanged = (action: () => void) => {
+    action(); requestAnimationFrame(() => {
+      gridHeading.current?.focus({ preventScroll: true });
+      gridHeading.current?.scrollIntoView?.({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    });
+  };
   const builds = useCustomBuildPage(filters);
   // The custom-build endpoint reads the durable provenance slug written by
   // replay matching, so it is the only authoritative source. Display names
@@ -312,7 +345,7 @@ function BuildsLibraryInner() {
         ).catch(() => undefined);
       } catch (err) {
         initiatedReclassifyRef.current = false;
-        toast.error("Couldn’t reclassify replays", {
+        toast.error("Couldn’t re-match replays", {
           description: extractErr(err),
         });
         setReclassifyingSlug(null);
@@ -343,7 +376,7 @@ function BuildsLibraryInner() {
       ).catch(() => undefined);
     } catch (err) {
       initiatedReclassifyRef.current = false;
-      toast.error("Couldn’t reclassify replays", {
+      toast.error("Couldn’t re-match replays", {
         description: extractErr(err),
       });
       setReclassifyAllPending(false);
@@ -364,7 +397,7 @@ function BuildsLibraryInner() {
       <PageHeader
         eyebrow="Custom builds"
         title="Your build library"
-        description="Custom openers synced across devices. Save them privately, share them publicly, classify your replays automatically."
+        description="Custom openers synced across devices. Save them privately, share them publicly, and match your replays automatically."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
@@ -381,9 +414,8 @@ function BuildsLibraryInner() {
                 loading={reclassifyAllPending || replayMatchingActive}
                 disabled={replayMatchingActive}
                 iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />}
-                title="Re-evaluate every saved build's rules against your stored replays and update build tags. Runs in the cloud — no agent required."
               >
-                {replayMatchingActive ? "Matching replays…" : "Reclassify replays"}
+                {replayMatchingActive ? "Matching replays…" : "Re-match replays"}
               </Button>
             ) : null}
             <Button
@@ -396,8 +428,9 @@ function BuildsLibraryInner() {
         }
       />
 
-      {replayMatchingActive || showReclassifyFailure ? (
-        <ReclassifyStatusPanel status={reclassifyStatus.data} />
+      <p className="my-3 text-caption text-text-muted">Re-match checks every saved replay against your build rules again. It runs in the cloud, so you can leave this page.</p>
+      {replayMatchingActive || showReclassifyFailure || reclassifyStatus.data?.status === "failed" ? (
+        <ReclassifyStatusPanel status={reclassifyStatus.data} onRetry={reclassifyAll} />
       ) : null}
 
       {builds.error ? (
@@ -431,17 +464,27 @@ function BuildsLibraryInner() {
 
       {showFilters ? (
         <BuildFilterBar
-          value={filters}
-          onChange={setFilters}
+          value={{ ...filters, search: searchInput }}
+          onChange={(next) => {
+            setSearchInput(next.search);
+            if (next.search !== searchInput && next.search) return;
+            commitFilters({ ...next, search: next.search ? filters.search : "" });
+          }}
+          onSearchCommit={() => commitFilters({ ...filters, search: searchInput })}
+          updating={!!builds.data && builds.isValidating}
+          onClearFilters={clearFilters}
           total={totalCount}
-          shown={filteredCount}
+          libraryTotal={builds.data?.libraryTotal}
         />
       ) : null}
+      <h2 ref={gridHeading} tabIndex={-1} className="my-3 text-h3 font-semibold focus:outline-none">Saved builds</h2>
       {isInitialLoad ? (
         <div className="space-y-4">
           <Skeleton rows={1} />
           <Skeleton rows={4} />
         </div>
+      ) : filteredCount === 0 && builds.isValidating ? (
+        <p role="status" className="py-6 text-caption text-text-muted">Updating build matches…</p>
       ) : libraryCount === 0 && !filters.search && filters.matchup === "All" && !filters.hideEmpty ? (
         builds.error ? null : <FirstRunEmptyState onCreate={openCreate} />
       ) : (
@@ -451,10 +494,11 @@ function BuildsLibraryInner() {
               size="md"
               icon={<Library className="h-5 w-5" aria-hidden />}
               title="No builds match these filters"
-              description="Clear the matchup pill, lower the search, or untoggle Hide empty."
+              description={activeBuildFilters(filters).join(" · ")}
+              action={<Button variant="secondary" onClick={clearFilters}>Clear filters</Button>}
             />
           ) : (
-            <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <ul aria-busy={builds.isValidating || undefined} className={`grid gap-4 transition-opacity motion-reduce:transition-none sm:grid-cols-2 lg:grid-cols-3 ${builds.isValidating ? "opacity-60" : ""}`}>
               {filtered.map((b) => (
                 <li key={b.slug}>
                   <BuildCard
@@ -482,8 +526,8 @@ function BuildsLibraryInner() {
         count={items.length}
         total={builds.data?.total}
         loading={builds.isValidating}
-        onPrevious={builds.previousPage}
-        onNext={builds.nextPage}
+        onPrevious={() => pageChanged(builds.previousPage)}
+        onNext={() => pageChanged(builds.nextPage)}
       />
 
       {dossierBuild ? (
@@ -533,27 +577,6 @@ function BuildsLibraryInner() {
   );
 }
 
-function describeReclassify({
-  tagged,
-  cleared,
-  matched,
-}: {
-  tagged: number;
-  cleared: number;
-  matched: number;
-}): string {
-  if (tagged === 0 && cleared === 0) {
-    return matched > 0
-      ? `${matched} game${matched === 1 ? "" : "s"} already tagged — nothing to update.`
-      : "No games matched. Try adjusting your rules and saving the build again.";
-  }
-  const parts: string[] = [];
-  if (tagged > 0) parts.push(`Tagged ${tagged} game${tagged === 1 ? "" : "s"}`);
-  if (cleared > 0)
-    parts.push(`cleared ${cleared} stale tag${cleared === 1 ? "" : "s"}`);
-  return parts.join(" · ");
-}
-
 function isReclassifyActive(
   status: ReclassifyStatus | undefined,
 ): boolean {
@@ -565,26 +588,25 @@ function isReclassifyActive(
 function describeCompletedReclassify(
   progress: NonNullable<ReclassifyStatus["progress"]>,
 ): string {
-  const scanned = Math.max(0, Number(progress.scanned) || 0);
   const tagged = Math.max(0, Number(progress.tagged) || 0);
   const cleared = Math.max(0, Number(progress.cleared) || 0);
   const deferred = Math.max(0, Number(progress.deferred) || 0);
-  const applied = `${scanned.toLocaleString()} replay${scanned === 1 ? "" : "s"} checked · ${tagged.toLocaleString()} tagged · ${cleared.toLocaleString()} stale tag${cleared === 1 ? "" : "s"} cleared.`;
+  const applied = `${tagged.toLocaleString()} games matched · ${cleared.toLocaleString()} old matches removed.`;
   return deferred > 0
-    ? `${applied} ${deferred.toLocaleString()} replay${deferred === 1 ? " was" : "s were"} left unchanged because analysis data was unavailable; re-sync the agent to repair ${deferred === 1 ? "it" : "them"}.`
+    ? `${applied} ${deferred.toLocaleString()} replay${deferred === 1 ? " was" : "s were"} left unchanged because analysis data was unavailable; re-sync the desktop app to repair ${deferred === 1 ? "it" : "them"}.`
     : applied;
 }
 
 function ReclassifyStatusPanel({
-  status,
+  status, onRetry,
 }: {
   status: ReclassifyStatus | undefined;
+  onRetry: () => unknown;
 }) {
   if (!status) return null;
   const progress = status.progress || {};
+  const total = Math.max(0, Number(progress.total) || 0);
   const scanned = Math.max(0, Number(progress.scanned) || 0);
-  const tagged = Math.max(0, Number(progress.tagged) || 0);
-  const cleared = Math.max(0, Number(progress.cleared) || 0);
   const deferred = Math.max(0, Number(progress.deferred) || 0);
   const failed = status.status === "failed";
   const retrying = status.status === "retry"
@@ -618,15 +640,21 @@ function ReclassifyStatusPanel({
         <p className="text-caption text-text-muted">
           {failed
             ? describeReclassifyFailure(status.error)
-            : `${scanned.toLocaleString()} checked · ${tagged.toLocaleString()} tag changes found · ${cleared.toLocaleString()} stale removals planned${deferred > 0 ? ` · ${deferred.toLocaleString()} awaiting replay data` : ""}`}
+            : `${scanned.toLocaleString()}${total > 0 ? ` of ${total.toLocaleString()}` : ""} replays checked${total > 0 ? "" : " so far"}${deferred > 0 ? ` · ${deferred.toLocaleString()} waiting for replay data` : ""}`}
         </p>
+        {!failed && total > 0 ? <div role="progressbar" aria-label="Replays checked" aria-valuemin={0} aria-valuemax={total} aria-valuenow={Math.min(scanned, total)} className="mt-2 h-2 rounded bg-bg-elevated"><div className="h-2 rounded bg-accent" style={{ width: `${Math.min(100, scanned / total * 100)}%` }} /></div> : null}
+        {status.requestId ? <p className="text-caption">Error ID: {status.requestId}</p> : null}
       </div>
+      {failed ? <Button variant="secondary" onClick={onRetry}>Try again</Button> : null}
     </section>
   );
 }
 
-function describeReclassifyFailure(_error?: string): string {
-  return "Your saved builds and existing replay tags are safe. Try reclassifying again in a moment.";
+function describeReclassifyFailure(error?: string): string {
+  if (error === "reclassify_queue_failed") return "Replay matching couldn't join the queue. Your saved builds are safe. Try again.";
+  if (error === "reclassify_unavailable") return "Replay matching is temporarily unavailable. Your saved builds are safe. Try again in a moment.";
+  if (error && /timeout|timed_out/i.test(error)) return "Replay matching took too long. Your saved builds are safe. Try again.";
+  return "Your saved builds and existing replay tags are safe. Try re-matching again in a moment.";
 }
 
 function extractErr(err: unknown): string {
@@ -645,7 +673,7 @@ function FirstRunEmptyState({ onCreate }: { onCreate: () => void }) {
           size="lg"
           icon={<Sparkles className="h-6 w-6" aria-hidden />}
           title="No custom builds yet"
-          description="Save your favourite openers so the classifier learns them. From any game’s build order, click ‘Save as new build’ to capture an opener from a real game."
+          description="Save your favourite openers so your replays can be matched to them. From any game’s build order, click ‘Save as new build’ to capture an opener from a real game."
           action={
             <Button
               size="lg"

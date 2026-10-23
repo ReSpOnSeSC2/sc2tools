@@ -98,16 +98,16 @@ describe("ReplayIntake: picking and dropping files", () => {
     const replay = new File(["r"], "a.SC2Replay");
     const notes = new File(["t"], "notes.txt");
     const zone = dropZone();
-    fireEvent.dragEnter(zone, { dataTransfer: { files: [replay, notes], dropEffect: "none" } });
+    fireEvent.dragEnter(zone, { dataTransfer: { types: ["Files"], files: [replay, notes], dropEffect: "none" } });
     expect(zone.getAttribute("data-dragging")).toBe("true");
-    fireEvent.drop(zone, { dataTransfer: { files: [replay, notes] } });
+    fireEvent.drop(zone, { dataTransfer: { types: ["Files"], files: [replay, notes] } });
     expect(props.onFiles).toHaveBeenCalledWith([replay, notes], "drop");
     expect(zone.hasAttribute("data-dragging")).toBe(false);
   });
 
   it("ignores drops while disabled", () => {
     const { props } = renderIntake({ disabled: true });
-    fireEvent.drop(dropZone(), { dataTransfer: { files: [new File(["r"], "a.SC2Replay")] } });
+    fireEvent.drop(dropZone(), { dataTransfer: { types: ["Files"], files: [new File(["r"], "a.SC2Replay")] } });
     expect(props.onFiles).not.toHaveBeenCalled();
   });
 
@@ -169,7 +169,7 @@ describe("ReplayIntake: dropping a folder", () => {
     ]);
     const folderPseudoFile = new File([], "Accounts");
     fireEvent.drop(dropZone(), {
-      dataTransfer: { files: [folderPseudoFile], items: [{ kind: "file", webkitGetAsEntry: () => root }] },
+      dataTransfer: { types: ["Files"], files: [folderPseudoFile], items: [{ kind: "file", webkitGetAsEntry: () => root }] },
     });
     expect(screen.getByText("Reading the dropped folder…")).toBeTruthy();
     await waitFor(() => expect(props.onFiles).toHaveBeenCalledTimes(1));
@@ -188,7 +188,7 @@ describe("ReplayIntake: dropping a folder", () => {
     const { props } = renderIntake();
     const replay = new File(["r"], "a.SC2Replay");
     const entry = fakeFile("/a.SC2Replay");
-    fireEvent.drop(dropZone(), { dataTransfer: { files: [replay], items: [{ kind: "file", webkitGetAsEntry: () => entry }] } });
+    fireEvent.drop(dropZone(), { dataTransfer: { types: ["Files"], files: [replay], items: [{ kind: "file", webkitGetAsEntry: () => entry }] } });
     expect(props.onFiles).toHaveBeenCalledWith([replay], "drop");
   });
 });
@@ -200,7 +200,7 @@ describe("ReplayIntake: warm-up intent and focus", () => {
     expect(onIntent).not.toHaveBeenCalled();
     fireEvent.pointerDown(screen.getByRole("button", { name: "Choose replays" }));
     fireEvent.keyDown(screen.getByRole("button", { name: "Choose a folder" }), { key: "Enter" });
-    fireEvent.dragEnter(dropZone());
+    fireEvent.dragEnter(dropZone(), { dataTransfer: { types: ["Files"] } });
     fireEvent.focus(screen.getByRole("button", { name: "Choose replays" }));
     expect(onIntent).toHaveBeenCalledTimes(4);
   });
@@ -208,7 +208,7 @@ describe("ReplayIntake: warm-up intent and focus", () => {
   it("stays quiet while disabled", () => {
     const onIntent = vi.fn();
     renderIntake({ onIntent, disabled: true });
-    fireEvent.dragEnter(dropZone());
+    fireEvent.dragEnter(dropZone(), { dataTransfer: { types: ["Files"] } });
     fireEvent.pointerDown(screen.getByRole("button", { name: "Choose replays" }));
     expect(onIntent).not.toHaveBeenCalled();
   });

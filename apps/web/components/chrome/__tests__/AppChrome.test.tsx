@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { AppChrome } from "../AppChrome";
+import { useChromeBreadcrumb } from "../ChromeContext";
 
 const harness = vi.hoisted(() => ({
   pathname: "/app",
@@ -12,10 +14,12 @@ const harness = vi.hoisted(() => ({
     | { role: "admin" | "coach" | "student" | "none" }
     | undefined,
   signedIn: true,
+  loaded: true,
   getToken: vi.fn(async () => null),
 }));
 
 vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
   usePathname: () => harness.pathname,
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
@@ -40,10 +44,11 @@ vi.mock("@clerk/nextjs", () => ({
       ),
     },
   ),
+  ClerkLoading: ({ children }: { children: ReactNode }) => harness.loaded ? null : <>{children}</>,
   SignedIn: ({ children }: { children: ReactNode }) =>
-    harness.signedIn ? <>{children}</> : null,
+    harness.loaded && harness.signedIn ? <>{children}</> : null,
   SignedOut: ({ children }: { children: ReactNode }) =>
-    harness.signedIn ? null : <>{children}</>,
+    harness.loaded && !harness.signedIn ? <>{children}</> : null,
 }));
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string) => ({
@@ -80,6 +85,7 @@ afterEach(() => {
   harness.me = { userId: "u1", isAdmin: false, games: { total: 50, latest: null } };
   harness.coachingMe = { role: "none" };
   harness.signedIn = true;
+  harness.loaded = true;
 });
 
 const railHrefs = () =>
@@ -90,6 +96,31 @@ const railHrefs = () =>
   ).map((a) => a.getAttribute("href"));
 
 describe("AppChrome navigation", () => {
+  it("reserves navigation and account space while Clerk loads", () => {
+    harness.loaded = false; render(<AppChrome>Content</AppChrome>);
+    const rail = screen.getByRole("navigation", { name: "App navigation" });
+    expect(rail.querySelectorAll("a")).toHaveLength(1);
+    expect(rail.querySelector("div[aria-hidden]")?.children).toHaveLength(8);
+    const mobile = screen.getByRole("navigation", { name: "Quick sections" });
+    expect(mobile.querySelectorAll("div[aria-hidden]")).toHaveLength(5);
+    expect(screen.queryByTestId("user-button")).toBeNull();
+  });
+  it.each(["/app/opponents/123", "/app/game/abc"])("leaves the page's heading as the only h1 on %s", (pathname) => {
+    harness.pathname = pathname;
+    render(<AppChrome><h1>Detail page</h1></AppChrome>);
+    expect(screen.getAllByRole("heading", { level: 1 }).map((heading) => heading.textContent)).toEqual(["Detail page"]);
+  });
+  it("uses the page's opponent context for both back controls and the breadcrumb", () => {
+    harness.pathname = "/app/game/abc";
+    function Game() {
+      useChromeBreadcrumb({ backHref: "/app/opponents/123", backLabel: "Back to Serral", trail: [{ label: "Opponents", href: "/app/opponents" }, { label: "Serral", href: "/app/opponents/123" }, { label: "PvZ on Test map" }] });
+      return <><h1>PvZ on Test map</h1><Link href="/app/opponents/123">Back to Serral</Link></>;
+    }
+    render(<AppChrome><Game /></AppChrome>);
+    const back = screen.getAllByRole("link", { name: "Back to Serral" });
+    expect(back).toHaveLength(2); expect(back.every((link) => link.getAttribute("href") === "/app/opponents/123")).toBe(true);
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" }).querySelector('[aria-current="page"]')?.textContent).toBe("PvZ on Test map");
+  });
   it("carries every product destination in one rail", () => {
     vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "");
     harness.pathname = "/app/macro";

@@ -765,6 +765,7 @@ function matchupLabel(myRace, opponentRace) {
 }
 
 module.exports = {
+  resultMatchClause,
   ReplayLibraryService,
   REPLAY_LIBRARY_LIST_DEFAULT,
   REPLAY_LIBRARY_LIST_LIMIT,
