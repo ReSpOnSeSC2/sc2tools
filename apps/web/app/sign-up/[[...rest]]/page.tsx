@@ -16,7 +16,6 @@ import { AuthShell } from "@/components/auth/AuthShell";
 import { appearanceFor } from "@/lib/clerk-appearance";
 import { safeAuthRedirect } from "@/lib/instant/authRedirect";
 import { getInstantImportMode } from "@/lib/instant/flag";
-import { PRODUCT_FACTS } from "@/lib/productFacts";
 import type { Theme } from "@/lib/theme";
 
 /** Where new accounts go unless /try asked to come back (see authRedirect). */
@@ -72,15 +71,15 @@ interface MarketingBullet {
 const BULLETS: ReadonlyArray<MarketingBullet> = [
   {
     icon: Layers,
-    text: "Eight cloud features wired into one workflow — replays, dossiers, overlays, all from one sign-in.",
+    text: "Every replay analyzed automatically",
   },
   {
     icon: Tv,
-    text: `Broadcast-ready overlay with ${PRODUCT_FACTS.overlayWidgets} widgets and per-widget URLs for OBS.`,
+    text: "Stream overlays that update themselves",
   },
   {
     icon: ShieldCheck,
-    text: "Per-opener W-L, per-map veto data, and dossiers that survive opponent name changes.",
+    text: "Scouting on your opponent before the game",
   },
 ];
 

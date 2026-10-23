@@ -1,6 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSWRConfig } from "swr";
+import { localDayStartIso, localNextDayStartIso } from "@/lib/localDateRange";
+import { SettingsLoadError } from "./SettingsLoadError";
 import { useAuth } from "@clerk/nextjs";
 import {
   Database,
@@ -34,8 +37,11 @@ type BackupsResp = { items: Backup[] };
 
 export function SettingsBackups() {
   const { getToken } = useAuth();
+  const tokenRef = useRef(getToken);
+  tokenRef.current = getToken;
   const backups = useApi<BackupsResp>("/v1/me/backups");
   const { toast } = useToast();
+  const { mutate: refresh } = useSWRConfig();
   const [snapping, setSnapping] = useState(false);
   const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
   const [restoring, setRestoring] = useState(false);
@@ -46,6 +52,33 @@ export function SettingsBackups() {
   const [wipeUntil, setWipeUntil] = useState("");
   const [pendingWipe, setPendingWipe] = useState(false);
   const [wiping, setWiping] = useState(false);
+  const [count, setCount] = useState<number | null>(null);
+  const [counting, setCounting] = useState(false);
+  const [countFailed, setCountFailed] = useState(false);
+  const invalidRange = Boolean(wipeSince && wipeUntil && wipeSince > wipeUntil);
+  const range = {
+    ...(wipeSince ? { since: localDayStartIso(wipeSince) } : {}),
+    ...(wipeUntil ? { until: localNextDayStartIso(wipeUntil) } : {}),
+  };
+  const rangeKey = JSON.stringify(range);
+  useEffect(() => {
+    if (!pendingWipe) return;
+    let cancelled = false;
+    setCounting(true); setCount(null); setCountFailed(false);
+    void apiCall<{ counts: { games: number } }>(tokenRef.current, "/v1/me/games/wipe", {
+      method: "POST", body: JSON.stringify({ ...JSON.parse(rangeKey), dryRun: true }),
+    }).then((answer) => { if (!cancelled) setCount(answer.counts.games); })
+      .catch(() => { if (!cancelled) setCountFailed(true); })
+      .finally(() => { if (!cancelled) setCounting(false); });
+    return () => { cancelled = true; };
+  }, [pendingWipe, rangeKey]);
+
+  async function refreshHistory() {
+    try { await refresh((key) => {
+      const path = Array.isArray(key) ? key.find((part) => typeof part === "string" && part.startsWith("/v1/")) : key;
+      return typeof path === "string" && /^\/v1\/(?:me(?:\?|$|\/doctor)|games|opponents|timeseries|streak|matchups|builds|macro|maps|trends|strategies|dashboard)/.test(path);
+    }); } catch { /* A refresh failure must not turn a completed wipe or restore into a reported failure. */ }
+  }
 
   async function snap() {
     if (snapping) return;
@@ -71,13 +104,13 @@ export function SettingsBackups() {
     if (!target || restoring) return;
     setRestoring(true);
     try {
-      await apiCall(
+      const result = await apiCall<{ counts?: { games?: number } }>(
         getToken,
         `/v1/me/backups/${encodeURIComponent(target.id)}/restore`,
         { method: "POST", body: "{}" },
       );
-      await backups.mutate();
-      toast.success("Snapshot restored", {
+      await Promise.allSettled([backups.mutate(), refreshHistory()]);
+      toast.success(`Restored ${(result.counts?.games ?? 0).toLocaleString()} games`, {
         description:
           "Click Re-sync in the desktop app to bring back build orders, charts and replay files.",
       });
@@ -133,18 +166,10 @@ export function SettingsBackups() {
   }
 
   async function confirmWipeGames() {
-    if (wiping) return;
+    if (wiping || counting || count === 0 || invalidRange) return;
     setWiping(true);
     try {
-      const body: Record<string, string> = {};
-      if (wipeSince) {
-        const d = new Date(wipeSince);
-        if (!Number.isNaN(d.getTime())) body.since = d.toISOString();
-      }
-      if (wipeUntil) {
-        const d = new Date(wipeUntil);
-        if (!Number.isNaN(d.getTime())) body.until = d.toISOString();
-      }
+      const body = range;
       const res = await apiCall<{
         deleted: boolean;
         counts: {
@@ -158,6 +183,7 @@ export function SettingsBackups() {
         { method: "POST", body: JSON.stringify(body) },
       );
       const c = res.counts;
+      await refreshHistory();
       toast.success(
         `Deleted ${c.games} game${c.games === 1 ? "" : "s"}`,
         {
@@ -206,7 +232,7 @@ export function SettingsBackups() {
         }
       >
         <Card padded={items.length === 0}>
-          {items.length === 0 ? (
+          {backups.error && backups.data === undefined ? <SettingsLoadError tab="snapshots" error={backups.error} retry={backups.mutate} /> : items.length === 0 ? (
             <EmptyStatePanel
               icon={<Database className="h-6 w-6" aria-hidden />}
               title="No snapshots yet"
@@ -249,7 +275,7 @@ export function SettingsBackups() {
           <div className="space-y-3">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="space-y-1 text-caption text-text-muted">
-                <span>From (optional)</span>
+                <span>From</span>
                 <Input
                   type="date"
                   value={wipeSince}
@@ -258,22 +284,24 @@ export function SettingsBackups() {
                 />
               </label>
               <label className="space-y-1 text-caption text-text-muted">
-                <span>Until (optional, exclusive)</span>
+                <span>Through (inclusive)</span>
                 <Input
                   type="date"
                   value={wipeUntil}
                   onChange={(e) => setWipeUntil(e.target.value)}
-                  aria-label="Wipe games before this date"
+                  aria-label="Wipe games through this date (inclusive)"
                 />
               </label>
             </div>
             <p className="text-caption text-text-muted">
-              Leave both empty to wipe every game.
+              Dates use your local time. Leave both empty to wipe every game.
             </p>
+            {invalidRange ? <p role="alert" className="text-caption text-danger">From must be on or before Through.</p> : null}
             <div>
               <Button
                 variant="danger"
-                onClick={() => setPendingWipe(true)}
+                disabled={invalidRange}
+                onClick={() => { setCount(null); setCounting(true); setCountFailed(false); setPendingWipe(true); }}
                 iconLeft={<Trash2 className="h-4 w-4" aria-hidden />}
               >
                 {wipeSince || wipeUntil
@@ -341,12 +369,10 @@ export function SettingsBackups() {
         onConfirm={confirmWipeGames}
         title="Delete game history?"
         description={
-          wipeSince || wipeUntil
-            ? `Wipes every game ${wipeSince ? `on or after ${wipeSince}` : ""}${
-                wipeSince && wipeUntil ? " and " : ""
-              }${wipeUntil ? `before ${wipeUntil}` : ""}, plus the matching opponent counters. Re-sync your agent afterwards to repopulate.`
-            : "Wipes every game, opponent record, and macro job tied to your account. Custom builds and device pairings are preserved. Re-sync your agent afterwards to repopulate."
+          counting ? "Counting games…" : count === 0 ? "No games in this range" :
+          `${countFailed ? "Couldn't count the games in this range. " : ""}This deletes ${!wipeSince && !wipeUntil ? "all " : ""}${count === null ? "the matching" : count.toLocaleString()} games${wipeSince || wipeUntil ? ` ${wipeSince ? `from ${new Date(localDayStartIso(wipeSince)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}${wipeUntil ? ` through ${new Date(localDayStartIso(wipeUntil)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""} (your time)` : ""}. Opponent records and macro data for those games go too. Custom builds, devices and overlay tokens are kept.`
         }
+        confirmDisabled={counting || count === 0 || invalidRange}
         confirmWord="DELETE"
         confirmLabel="Delete games"
         loading={wiping}

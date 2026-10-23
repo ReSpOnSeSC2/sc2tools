@@ -6,6 +6,7 @@ import { ReportIssueLauncher } from "@/components/feedback/ReportIssueLauncher";
 import { guidesEnabled } from "@/lib/guides/flags";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import { LogoMark } from "./LogoMark";
+import { CookieSettingsButton } from "@/components/legal/CookieSettingsButton";
 
 /**
  * Footer — three-column site footer.
@@ -98,6 +99,7 @@ export function Footer() {
           <FooterColumn
             title="Legal"
             links={LEGAL_LINKS}
+            trailing={<CookieSettingsButton />}
             extra={<StatusBadge />}
           />
         </div>

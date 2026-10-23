@@ -722,6 +722,15 @@ function buildMeRouter(deps) {
         });
         return;
       }
+      if (since && until && since >= until) {
+        res.status(400).json({ error: { code: "bad_request", message: "since must be before until" } });
+        return;
+      }
+      if (body.dryRun === true) {
+        const games = await deps.gdpr.countGamesForWipe(auth.userId, { since, until });
+        res.json({ dryRun: true, counts: { games } });
+        return;
+      }
       const counts = await deps.gdpr.wipeGames(auth.userId, { since, until });
       res.json({ deleted: true, counts });
     } catch (err) {

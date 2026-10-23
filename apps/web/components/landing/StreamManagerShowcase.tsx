@@ -52,7 +52,6 @@ export function StreamManagerShowcase({
           <p className="inline-flex flex-wrap items-center gap-2 text-micro font-semibold uppercase tracking-[0.1em]">
             <Radio className="h-4 w-4 text-accent-cyan" aria-hidden />
             <span className="text-accent-cyan">Stream Studio preview</span>
-            <span className="rounded border border-border-strong px-2 py-1 text-text-muted">Agent 0.18</span>
           </p>
           <h2
             id={`${id}-title`}
@@ -67,8 +66,7 @@ export function StreamManagerShowcase({
             and YouTube sessions together, alongside the OBS setup you already use.
           </p>
           <p className="mt-5 border-l-2 border-accent-cyan/40 pl-4 text-caption text-text-muted">
-            Coming with desktop agent 0.18. The current public download includes
-            the existing overlays and Stream Dock.
+            Available now in the desktop agent.
           </p>
           <Link
             href="/download"

@@ -15,7 +15,6 @@ import {
   Users,
   Wand2,
 } from "lucide-react";
-import { Banner } from "@/components/Banner";
 import {
   HeroCarousel,
   type HeroCarouselSlide,
@@ -43,9 +42,9 @@ export function LandingPageContent() {
       <OutcomeRail />
       <ImprovementChapter />
       <PracticeChapter />
+      <ReplaySection />
       <StreamChapter />
       <IncludedChapter />
-      <ReplaySection />
       <LandingHowItWorks />
       <MobileInstallSection />
       <SupportTeaser />
@@ -75,8 +74,8 @@ function LandingMasthead() {
 function LandingHero() {
   return (
     <section className="pt-10 md:pt-16">
-      <div className="grid items-start gap-x-10 gap-y-10 lg:grid-cols-12">
-        <div className="lg:col-span-5 lg:pr-2">
+      <div className="grid grid-cols-1 items-start gap-x-10 gap-y-10 lg:grid-cols-12">
+        <div className="min-w-0 lg:col-span-5 lg:pr-2">
           {/* The kicker line is part of the H1 so the page's main heading
               carries the terms people search for ("sc2 replay analyzer",
               "starcraft 2 overlay"); visually it stays a kicker above the
@@ -91,7 +90,7 @@ function LandingHero() {
           <p className="drop-initial mt-6 max-w-prose text-body-lg text-text-muted">
             Play normally. SC2 Tools reads every replay, reconstructs the
             match, learns the opponents you face, coaches the builds you
-            practise, and powers a complete stream production suite.
+            practice, and powers a complete stream production suite.
           </p>
           <HeroCtas />
           <LandingTrustStrip />
@@ -99,12 +98,11 @@ function LandingHero() {
             href="#stream-sessions"
             className="mt-5 inline-flex min-h-11 items-center gap-2 text-caption font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
           >
-            <span className="rounded border border-accent-cyan/30 bg-accent-cyan/5 px-2 py-1 text-micro">Preview</span>
-            Shared titles. Two YouTube formats.
+            New: shared stream titles and two YouTube formats
             <ArrowRight className="h-4 w-4 shrink-0" aria-hidden />
           </Link>
         </div>
-        <div className="order-first lg:order-none lg:col-span-7">
+        <div className="min-w-0 lg:col-span-7">
           <LandingCarousel />
         </div>
       </div>
@@ -136,16 +134,10 @@ function HeroCtas() {
             variant="secondary"
             size="touch"
             iconLeft={<MonitorSmartphone className="h-5 w-5" aria-hidden />}
-            className="text-balance"
+            className="max-w-full text-balance"
           >
             No download — analyze your replays in your browser
           </CtaLink>
-          <Link
-            href="#replay-demo"
-            className="inline-flex min-h-[44px] items-center font-semibold text-text-muted underline-offset-4 hover:text-text hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-          >
-            Try a replay
-          </Link>
         </>
       ) : (
         <CtaLink href="#replay-demo" variant="secondary">
@@ -173,13 +165,7 @@ function LandingCarousel() {
   return <HeroCarousel slides={slides} ariaLabel="SC2 Tools product highlights" />;
 }
 
-function HeroBannerSlide() {
-  return (
-    <div className="relative">
-      <Banner variant="hero" />
-    </div>
-  );
-}
+function HeroBannerSlide() { return <HeroPeekSlide id="opponent-dna" eyebrow="Opponent DNA" title="Every opponent's openings and timings before the game" body="Scouting built from your replay history." imageSrc="/landing/opponent-dna.png" imageAlt="Opponent DNA showing opening strategies and unit timings" />; }
 
 interface HeroPeek {
   id: string;
@@ -191,6 +177,7 @@ interface HeroPeek {
 }
 
 const HERO_PEEK_SLIDES: ReadonlyArray<HeroPeek> = [
+  { id: "builds", eyebrow: "Your build library", title: "Build orders you can practice", body: "Keep your custom builds together and practice your next opening.", imageSrc: "/landing/builds.png", imageAlt: "Custom build library with matchup filters and saved build orders" },
   {
     id: "peek-overlay-live",
     eyebrow: "Live in OBS",
@@ -204,7 +191,7 @@ const HERO_PEEK_SLIDES: ReadonlyArray<HeroPeek> = [
     id: "peek-overlay-rematch",
     eyebrow: "Know the rematch",
     title: "Familiar-opponent intel, on stream",
-    body: "See your record against this player, the openings they favour, and what happened the last time you met.",
+    body: "See your record against this player, the openings they favor, and what happened the last time you met.",
     imageSrc: "/landing/overlay-rematch.png",
     imageAlt:
       "SC2 Tools rematch overlay showing opponent MMR, familiar-opponent status, and recent games",
@@ -331,7 +318,7 @@ function ImprovementChapter() {
         folio="A"
         kicker="Analyze"
         title="Watch the whole match unfold—not just the final score."
-        standfirst="Replay Theatre reconstructs the game on the real map with 3D units, fog, exact spell casts, terrain-following paths, production rails, music and fullscreen controls—then keeps the original replay ready in your private vault."
+        standfirst="Replay Theater reconstructs the game on the real map with 3D units, fog, exact spell casts, terrain-following paths, production rails, music and fullscreen controls—then keeps the original replay ready in your private vault."
       />
       <div className="mt-10">
         <ReplayTheaterPreview />
@@ -418,7 +405,7 @@ function StreamChapter() {
         <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="kicker">Built-in virtual sets</p>
-            <h3 className="mt-2 font-serif text-h3 font-semibold text-text">Seven broadcast backdrops, ready at 1080p and 4K.</h3>
+            <h3 className="mt-2 font-serif text-h3 font-semibold text-text">{numberWord(PRODUCT_FACTS.virtualSets)} broadcast backdrops, ready at 1080p and 4K.</h3>
           </div>
           <p className="max-w-md text-caption text-text-muted">One-click OBS layouts, automatic scene switching, and synchronized landscape or portrait B-roll keep every canvas in step.</p>
         </div>
@@ -525,7 +512,7 @@ function LandingHowItWorks() {
         {[
           { num: "01", title: "Install the agent", body: "Sign in and install the small Windows agent. Setup takes about a minute." },
           { num: "02", title: "Play normally", body: "Every finished replay is read, classified and synced automatically in the background." },
-          { num: "03", title: "Review, practise, stream", body: "Your dashboard, coaching views and OBS sources update between games." },
+          { num: "03", title: "Review, practice, stream", body: "Your dashboard, coaching views and OBS sources update between games." },
         ].map((step) => (
           <div key={step.num} className="border-t-2 border-line pt-5">
             <span className="block font-serif text-display-lg font-normal leading-none text-editorial">{step.num}</span>
@@ -675,3 +662,5 @@ function CtaLink({
     </Link>
   );
 }
+
+function numberWord(value: number): string { return ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"][value] ?? String(value); }

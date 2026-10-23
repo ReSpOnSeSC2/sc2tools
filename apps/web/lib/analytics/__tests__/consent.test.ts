@@ -34,6 +34,13 @@ describe("analytics consent store", () => {
     expect(readConsent()).toBe("denied");
   });
 
+  it("honors a new session choice when writes fail but old storage is readable", () => {
+    setConsent("granted");
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota exceeded"); });
+    setConsent("denied");
+    expect(readConsent()).toBe("denied");
+  });
+
   it("notifies subscribers when consent changes", () => {
     const cb = vi.fn();
     const unsubscribe = subscribeConsent(cb);
@@ -44,11 +51,12 @@ describe("analytics consent store", () => {
     expect(cb).toHaveBeenCalledTimes(1); // no further calls after unsubscribe
   });
 
-  it("treats unreadable storage as 'unset' (never assume consent)", () => {
+  it("uses this session's explicit choice when storage is unreadable", () => {
+    setConsent("denied");
     vi.spyOn(window.localStorage.__proto__, "getItem").mockImplementation(() => {
       throw new Error("blocked");
     });
-    expect(readConsent()).toBe("unset");
+    expect(readConsent()).toBe("denied");
   });
 });
 

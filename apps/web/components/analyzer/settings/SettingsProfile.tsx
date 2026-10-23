@@ -23,6 +23,7 @@ import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { usePublishDirty } from "./SettingsContext";
 import { SettingsPlayerChannels } from "./SettingsPlayerChannels";
 import { SettingsPublicProfile } from "./SettingsPublicProfile";
+import { SettingsLoadError } from "./SettingsLoadError";
 
 type ProfileRead = {
   battleTag?: string;
@@ -102,13 +103,13 @@ function toDraft(read: ProfileRead | undefined): Draft {
 
 export function SettingsProfile() {
   const { getToken } = useAuth();
-  const { data, isLoading, mutate } = useApi<ProfileRead>("/v1/me/profile");
+  const { data, error, isLoading, mutate } = useApi<ProfileRead>("/v1/me/profile");
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [channelsDirty, setChannelsDirty] = useState(false);
 
-  const serverDraft = useMemo(() => toDraft(data), [data]);
-  const { draft, setDraft, dirty, reset, markSaved } = useDirtyForm<Draft>(
+  const serverDraft = useMemo(() => data ? toDraft(data) : undefined, [data]);
+  const { draft, setDraft, dirty, hydrated, reset, markSaved } = useDirtyForm<Draft>(
     serverDraft,
     DEFAULT_DRAFT,
   );
@@ -156,7 +157,7 @@ export function SettingsProfile() {
   }, [data?.detectedPulseIds, draft.pulseIds]);
 
   async function save() {
-    if (saving) return;
+    if (saving || !hydrated) return;
     setSaving(true);
     const previous = data;
     try {
@@ -228,6 +229,7 @@ export function SettingsProfile() {
   }
 
   if (isLoading) return <Skeleton rows={4} />;
+  if (error && data === undefined) return <SettingsLoadError tab="Profile settings" error={error} retry={mutate} />;
 
   return (
     <>
