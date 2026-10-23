@@ -149,6 +149,7 @@ describe("/v1/admin", () => {
     const probes = [
       ["GET", "/v1/admin/storage-stats"],
       ["GET", "/v1/admin/infrastructure"],
+      ["GET", "/v1/admin/backups"],
       ["GET", "/v1/admin/users"],
       ["GET", "/v1/admin/users/u_1"],
       ["GET", "/v1/admin/users/u_1/opponents"],
@@ -228,6 +229,28 @@ describe("/v1/admin", () => {
     expect(JSON.stringify(res.body)).not.toMatch(
       /mongodb:\/\/|srv-|rnd_|accountId|projectId|clusterName/,
     );
+  });
+
+  test("backups reports Atlas as not set up plus the in-app snapshot counts", async () => {
+    await db.userBackups.deleteMany({});
+    const anon = await request(app).get("/v1/admin/backups");
+    expect(anon.status).toBe(401);
+
+    await services.gdpr.snapshot(adminUserId);
+    const res = await asAdmin(request(app).get("/v1/admin/backups"));
+    expect(res.status).toBe(200);
+    expect(res.headers["cache-control"]).toBe("private, no-store");
+    expect(res.body.thresholds).toEqual({ freshMaxHours: 26, agingMaxHours: 50 });
+    expect(res.body.atlas).toMatchObject({
+      configured: false,
+      available: false,
+      errorCode: "not_configured",
+      freshness: "unknown",
+      lastSnapshotAt: null,
+    });
+    expect(res.body.inApp).toMatchObject({ snapshotCount: 1, userCount: 1 });
+    expect(typeof res.body.inApp.newestAt).toBe("string");
+    expect(JSON.stringify(res.body)).not.toContain(adminUserId);
   });
 
   test("listUsers aggregates game counts and joins user identity", async () => {

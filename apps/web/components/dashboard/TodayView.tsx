@@ -6,14 +6,14 @@ import { DailyPulse } from "@/components/analyzer/DailyPulse";
 import { DashboardKpiStrip } from "@/components/analyzer/DashboardKpiStrip";
 import { LadderPulse } from "@/components/analyzer/LadderPulse";
 import {
+  defaultTabRedirect,
   hrefForTab,
-  isTabId,
   opponentDossierHref,
 } from "@/components/analyzer/tabs";
 import { AgentUpgradeNotice } from "@/components/dashboard/AgentUpgradeNotice";
 import { LiveGamePanel } from "@/components/dashboard/LiveGamePanel";
 import { useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
-import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { SectionBoundary } from "@/components/ui/SectionBoundary";
 import { useApi } from "@/lib/clientApi";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
 
@@ -33,6 +33,7 @@ const DEFAULT_TAB_APPLIED_KEY = "sc2tools.defaultTabApplied";
  * Also honours Settings → "Default tab": users who chose a section as
  * their landing spot are redirected there once per session, preserving
  * the old dashboard's behaviour now that sections are real routes.
+ * "Today (default)" and no choice at all both stay here.
  */
 export function TodayView() {
   const router = useRouter();
@@ -45,8 +46,8 @@ export function TodayView() {
   const redirected = useRef(false);
   useEffect(() => {
     if (redirected.current) return;
-    const pref = misc?.defaultTab;
-    if (!isTabId(pref)) return;
+    const target = defaultTabRedirect(misc?.defaultTab);
+    if (!target) return;
     try {
       if (window.sessionStorage.getItem(DEFAULT_TAB_APPLIED_KEY)) return;
       window.sessionStorage.setItem(DEFAULT_TAB_APPLIED_KEY, "1");
@@ -54,7 +55,7 @@ export function TodayView() {
       /* storage unavailable — apply once per mount instead */
     }
     redirected.current = true;
-    router.replace(hrefForTab(pref));
+    router.replace(hrefForTab(target));
   }, [misc, router]);
 
   return (
@@ -72,24 +73,24 @@ export function TodayView() {
           subscription and renders only while the desktop agent reports
           a non-idle phase. Boundary keeps a malformed live envelope
           from taking Today down. */}
-      <ErrorBoundary label="the live game panel">
+      <SectionBoundary label="the live game panel">
         <LiveGamePanel />
-      </ErrorBoundary>
+      </SectionBoundary>
 
       <DashboardKpiStrip />
 
-      <ErrorBoundary label="the Daily Pulse strip">
+      <SectionBoundary label="the Daily Pulse strip">
         <DailyPulse
           onNavigate={(tab) => router.push(hrefForTab(tab))}
           onOpenOpponent={(pulseId) =>
             router.push(opponentDossierHref(pulseId))
           }
         />
-      </ErrorBoundary>
+      </SectionBoundary>
 
-      <ErrorBoundary label="Ladder Pulse">
+      <SectionBoundary label="Ladder Pulse">
         <LadderPulse />
-      </ErrorBoundary>
+      </SectionBoundary>
     </div>
   );
 }

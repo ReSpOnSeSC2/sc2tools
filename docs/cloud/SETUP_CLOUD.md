@@ -235,6 +235,14 @@ deployed with the R2 stores enabled.
    the final 30 days, but no credential or provider identifier is returned by
    the public infrastructure-cost endpoint.
 
+   The same service account powers the **Database backups** card on Admin
+   Health (age of the newest Cloud Backup snapshot, schedule, retention and
+   point-in-time restore) and an hourly check that posts one admin
+   notification a day while the newest snapshot is 50 hours old or missing.
+   Project Read Only is enough; set `SC2TOOLS_BACKUP_ALERT_DISABLED=1` to
+   turn the check off. Restore steps live in
+   [`docs/runbooks/restore-database.md`](../runbooks/restore-database.md).
+
    Other vars (`NODE_ENV`, `MONGODB_DB`, `LOG_LEVEL`, `RATE_LIMIT_PER_MINUTE`)
    already have sane defaults from `render.yaml`.
 

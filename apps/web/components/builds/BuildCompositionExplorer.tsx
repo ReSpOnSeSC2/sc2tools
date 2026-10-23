@@ -7,16 +7,11 @@ import { PhaseTrajectoryStrip } from "@/components/analyzer/PhaseTrajectoryStrip
 import { UnitCompositionTable, compositionTime, unitLabel, type UnitSummary } from "@/components/analyzer/UnitCompositionTable";
 import { EmptyState } from "@/components/ui/Card";
 import { useApi } from "@/lib/clientApi";
+import { FILTER_LABELS } from "@/lib/filterContext";
 import type { BuildPhasePayload, CompositionGame } from "@/lib/serverApi";
 
 const focus = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
 const phases: Record<Phase, string> = { early: "Early", earlyMid: "Early/Mid", mid: "Mid", midLate: "Mid/Late", late: "Late" };
-const filterLabels: Record<string, string> = {
-  since: "From", until: "Until", race: "Your race", opp_race: "Opponent race", map: "Map",
-  mmr_min: "Minimum MMR", mmr_max: "Maximum MMR", opp_strategy: "Opponent strategy", build: "Build",
-  min_minutes: "Minimum minutes", max_minutes: "Maximum minutes", macro_min: "Minimum macro", macro_max: "Maximum macro",
-  regions: "Regions", map_pool: "Map pool", game_size: "Game size", exclude_too_short: "Exclude short games", leak: "Leak filter",
-};
 
 export function compositionComparisonPath(apiPath: string, gameId: string) {
   const url = new URL(apiPath, "https://sc2tools.invalid");
@@ -68,7 +63,7 @@ export function BuildCompositionExplorer({ payload, apiPath, onOpenGames }: {
     { ...row, unitSummary: row.unitSummary ? cleanSummary(row.unitSummary) : undefined }])) as Record<Phase, PhaseCompositionRow>;
   const hasComparison = Boolean(checkpoint?.unitSummary.comparison?.gameId === selectedId && selectedId)
     || Object.values(perPhase).some((phase) => phase.unitSummary?.comparison?.gameId === selectedId && selectedId);
-  const filters = [...new URL(apiPath, "https://sc2tools.invalid").searchParams.entries()].filter(([key]) => filterLabels[key]);
+  const filters = [...new URL(apiPath, "https://sc2tools.invalid").searchParams.entries()].filter(([key]) => FILTER_LABELS[key]);
   const dated = games.map((game) => game.date).filter((date): date is string => !!date && Number.isFinite(new Date(date).getTime())).sort();
   const matchups = new Map<string, number>();
   games.forEach((game) => {
@@ -89,7 +84,7 @@ export function BuildCompositionExplorer({ payload, apiPath, onOpenGames }: {
         <summary className={`flex min-h-11 cursor-pointer list-none items-center gap-2 rounded ${focus}`}>Selection &amp; matchups{filters.length ? ` · ${filters.length} active filter${filters.length === 1 ? "" : "s"}` : ""}<ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" aria-hidden /></summary>
         <div className="space-y-2 rounded-lg border border-border bg-bg-elevated/50 p-3 text-micro leading-relaxed">
           <p>This build’s matched games, using the current page filters. {dated.length < games.length ? `${games.length - dated.length} games have no recorded date. ` : ""}Dates describe this sample, not when the data was processed.</p>
-          <p>{filters.length ? filters.map(([key, value]) => `${filterLabels[key]}: ${value}`).join(" · ") : "No additional page filters."}</p>
+          <p>{filters.length ? filters.map(([key, value]) => `${FILTER_LABELS[key]}: ${value}`).join(" · ") : "No additional page filters."}</p>
           <p>{[...matchups].map(([name, count]) => `${name}: ${count}`).join(" · ") || "No matched games available."}</p>
         </div>
       </details>

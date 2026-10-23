@@ -1,7 +1,37 @@
+import type { Metadata } from "next";
 import { GameDetailPage } from "@/components/analyzer/game/GameDetailPage";
+import { gameTitle } from "@/components/analyzer/game/gameTitle";
+import type { GameSummary } from "@/components/analyzer/game/types";
+import { apiFetch } from "@/lib/api";
 import { newBuildSideFromQuery } from "@/lib/buildIntentLinks";
 import { opponentContextFromQuery } from "@/lib/opponentNavigation";
 import { replayTimeFromQuery } from "@/lib/replayLink";
+
+/**
+ * Longest the title lookup may take. Metadata streams separately from
+ * the page, but a Render cold start should still not hold it for long:
+ * past this the tab just says "Game details".
+ */
+const TITLE_LOOKUP_TIMEOUT_MS = 2500;
+
+/**
+ * Tab title from the game's slim summary row (the same small record the
+ * page header loads): "Defeat · PvZ on Alcyone LE".
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ gameId: string }>;
+}): Promise<Metadata> {
+  const { gameId } = await params;
+  const id = safeDecode(gameId || "");
+  if (!id) return { title: "Game details" };
+  const res = await apiFetch<GameSummary>(`/v1/games/${encodeURIComponent(id)}`, {
+    signal: AbortSignal.timeout(TITLE_LOOKUP_TIMEOUT_MS),
+  });
+  if (!res.ok) return { title: res.status === 404 ? "Game not found" : "Game details" };
+  return { title: gameTitle(res.data) ?? "Game details" };
+}
 
 /**
  * /app/game/[gameId] — per-replay deep dive. Opponent-profile entry points

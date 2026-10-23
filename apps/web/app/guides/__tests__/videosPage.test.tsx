@@ -57,7 +57,7 @@ describe("/guides/videos", () => {
     mocks.fetchGuideVideos.mockResolvedValue(ok(payload()));
     expect(dynamic).toBe("force-dynamic");
     const metadata = await generateMetadata();
-    expect(metadata.title).toBe("StarCraft II build order videos | SC2 Tools");
+    expect(metadata.title).toEqual({ absolute: "StarCraft II build order videos | SC2 Tools" });
     expect(metadata.alternates?.canonical).toBe("/guides/videos");
     expect(metadata.description).toContain("all build order videos");
     expect(metadata.robots).toBeUndefined();

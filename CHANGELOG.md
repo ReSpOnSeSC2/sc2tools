@@ -13,6 +13,36 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Help & support menu:** a ? menu in the top bar (under More on phones,
+  plus Help and Report a problem in your avatar menu) has help search, the
+  Stream Studio course, the desktop app download and a new report form for
+  problems, ideas and questions. As you type, the form suggests matching
+  help articles, and it lists exactly what it attaches (page, browser,
+  window size, desktop app state, recent errors) so you can untick anything
+  before sending. Visitors who aren't signed in get the support email
+  instead. New help article: "Report a problem or suggest a feature".
+
+- **Analyzer filters:** every active filter now shows as a removable chip
+  under the filter bar, with one-click "Reset to defaults". Filters picked
+  in Strategies are marked and can be cleared from any section. A new
+  Matchup picker (All · vs P · vs T · vs Z, plus My race if you play more
+  than one race) is remembered between visits. On phones the filters open
+  from a "Filters · N active" button. New help article: "Filters: date,
+  matchup, region and more".
+
+- **Install SC2 Tools as an app:** the installed app now opens on Today and
+  has shortcuts to Opponents, Replays and Stream settings, and the update
+  prompt has a "Later" option. If you installed it before this release,
+  remove it and install it again to get the shortcuts. New help article:
+  "Install SC2 Tools as an app".
+
+- **Database backups:** admins can see backup health on Admin →
+  Infrastructure (age of the newest snapshot, schedule, retention,
+  point-in-time restore and in-app snapshot counts) and get a daily
+  notification if the backup is overdue. Settings → Backups & data, the
+  privacy policy and a new help article ("Backups, snapshots and export")
+  now describe exactly what is backed up and how restores work.
+
 - **Help center:** every how-to now lives at [sc2tools.com/help](https://sc2tools.com/help),
   searchable and readable without signing in, and the same articles open
   inside Settings → Help. Links to a section (`/settings?tab=help#<article>`)
@@ -21,6 +51,56 @@ corresponding GitHub Release.
   use Help".
 
 ### Fixed
+
+- **When something can't load:** a section that can't load now says why and
+  offers Retry, with an Error ID you can copy, instead of wrongly showing
+  "no data". A "Reconnecting to SC2 Tools… your data is safe" bar appears
+  while the server wakes up, changing a filter keeps your current results on
+  screen, and an empty filtered view lists your active filters with
+  one-click ways to widen them. New help article: "Something went wrong".
+
+- **Phones and browser tabs:** on phones the Save button, notifications, the
+  update prompt, the cookie banner and the date range picker now sit above
+  the bottom tab bar, and the installed iPhone app no longer puts the header
+  under the notch. Every page and Settings tab has its own browser-tab
+  title, game pages are titled like "Defeat · PvZ on Alcyone LE", and the
+  app loads less code on each page.
+
+- **Settings links:** "Set up profile", the Overlay quick link, the old
+  /streaming page, the Stream Dock and the return page after connecting
+  Twitch, Kick or YouTube (which lands on Connected accounts) now open the
+  right tab, and old /settings#tab links still work. Switching tabs asks
+  before throwing away unsaved Multi-platform chat or chat bot edits. In
+  Misc, two switches that did nothing are now a "Run setup again" link and
+  an "Analytics cookies" control showing your browser's real setting, and
+  the Default tab picker starts on Today, which is where you actually land.
+  New help article: "Finding things in Settings".
+
+- **Build pages:** rule-based community builds list what they must and must
+  not have (an "At most 0" rule no longer looks like a step to build) plus
+  the author's game plan. Save to my library no longer makes duplicates, and
+  visitors can sign up to save. Build pages recover from errors with Retry,
+  and the win-rate trend is a real 10-game rolling line. Build definitions
+  lists every label the analyzer uses, with share links and guide links. New
+  help articles: "How build rules are counted", "Publish and reuse community
+  builds" and "Detected builds vs custom builds".
+
+- **Visitors:** the header shows the pages you can use without an account,
+  custom builds explain themselves instead of loading forever, and community
+  pages say when the server is waking up instead of showing "no builds". The
+  404 and error pages point you somewhere useful, and "Report this problem"
+  on an error page opens the report form (or an email if you aren't signed
+  in). The opponent scouting profile has been rebuilt, and your opponent
+  page links to it only once it exists. New help article: "Which pages are
+  public?".
+
+- **Stream overlay scouting:** the Favourite opening, Best answer, Cheese
+  alert and Scouting report widgets now work for desktop-app users, so
+  expect them to start appearing on stream. They are built from your own
+  games against that opponent in that matchup, show how many games each
+  number comes from ("3 of last 5 games"), and the scouting card now adds
+  where your games against them usually end. New help article: "Opponent
+  scouting: what the overlay shows and where the numbers come from".
 
 - Primary buttons such as "Get started" and "Download the agent" no longer
   lose their label when you hover them, and focused round buttons stay

@@ -22,6 +22,7 @@ import {
 import { helpCategory } from "@/lib/help/categories";
 import { helpInlinePlainText } from "@/lib/help/inline";
 import { helpArticleCrumbs, helpArticleJsonLd } from "@/lib/help/jsonLd";
+import { siteTitle } from "@/lib/siteTitle";
 
 const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://sc2tools.com").replace(/\/+$/, "");
 
@@ -37,8 +38,11 @@ export function generateStaticParams(): Array<{ slug: string }> {
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const article = getArticle(slug);
-  if (!article) return { title: "Help article not found · SC2 Tools" };
-  const title = `${article.title} · SC2 Tools Help`;
+  if (!article) return { title: "Help article not found" };
+  // "Getting started · Help · SC2 Tools" in the tab (root template);
+  // social cards get no template, so they carry the brand themselves.
+  const title = `${article.title} · Help`;
+  const shareTitle = siteTitle(title);
   const description = helpInlinePlainText(article.summary);
   const canonical = helpArticlePath(article.slug);
   return {
@@ -49,12 +53,12 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       type: "article",
       siteName: "SC2 Tools",
       url: canonical,
-      title,
+      title: shareTitle,
       description,
       modifiedTime: article.updated,
       images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "SC2 Tools Help" }],
     },
-    twitter: { card: "summary_large_image", title, description, images: ["/og.jpg"] },
+    twitter: { card: "summary_large_image", title: shareTitle, description, images: ["/og.jpg"] },
   };
 }
 

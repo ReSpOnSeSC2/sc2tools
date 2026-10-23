@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { X } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import {
   useFilters,
@@ -14,11 +13,14 @@ import {
   useLocalStorageState,
 } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
+import { Button } from "@/components/ui/Button";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { usePersistentSort } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { AllGamesTable } from "./AllGamesTable";
+import { NoFilterMatches } from "./EmptyStates";
 import { StrategyMmrPanel } from "./mmr/StrategyMmrPanel";
 import { BuildMatchupHeatmap } from "./mmr/BuildMatchupHeatmap";
 import type { ProfileGame } from "./Last5GamesTimeline";
@@ -157,16 +159,21 @@ function ByOppStrategyView({
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN, 3);
   const sort = usePersistentSort(LS_OPP_SORT, "winRate", "desc");
 
-  const { data, isLoading } = useApi<StratRow[]>(
+  const strategiesApi = useApi<StratRow[]>(
     `/v1/opp-strategies${filtersToQuery(filters)}#${dbRev}`,
   );
+  const { data } = strategiesApi;
 
-  const rows = useMemo(() => {
+  const { rows, hiddenByMinGames } = useMemo(() => {
     let r = data || [];
     const s = search.trim().toLowerCase();
     if (s) r = r.filter((x) => (x.name || "").toLowerCase().includes(s));
+    const searched = r.length;
     if (minGames > 1) r = r.filter((x) => (x.total || 0) >= minGames);
-    return sort.sortRows(r, (row, col) => (row as Record<string, unknown>)[col]);
+    return {
+      rows: sort.sortRows(r, (row, col) => (row as Record<string, unknown>)[col]),
+      hiddenByMinGames: searched - r.length,
+    };
   }, [data, search, minGames, sort]);
 
   const kpis = useMemo<Kpi[]>(() => {
@@ -204,7 +211,9 @@ function ByOppStrategyView({
     ];
   }, [data, minGames]);
 
-  if (isLoading) return <Skeleton rows={6} />;
+  if (!hasQueryData(strategiesApi)) {
+    return <QueryState q={strategiesApi} skeleton={<Skeleton rows={6} />} filtered />;
+  }
 
   return (
     <div className="space-y-4">
@@ -229,12 +238,17 @@ function ByOppStrategyView({
 
       {rows.length === 0 ? (
         <Card>
-          <EmptyState
-            title="No strategies match"
-            sub={
-              (data || []).length > 0
-                ? `No strategies match your filter (search / min games ${minGames}).`
-                : undefined
+          <NoFilterMatches
+            title="No strategies match these filters"
+            minGames={minGames}
+            hiddenByMinGames={hiddenByMinGames}
+            onLowerMinGames={() => setMinGames(1)}
+            extraAction={
+              search.trim() ? (
+                <Button variant="secondary" size="sm" onClick={() => setSearch("")}>
+                  Clear search
+                </Button>
+              ) : null
             }
           />
         </Card>
@@ -302,7 +316,9 @@ function StrategyGamesView({
     [filters, drill, dbRev],
   );
 
-  const { data, isLoading, error } = useApi<GamesListResp>(apiPath);
+  const gamesApi = useApi<GamesListResp>(apiPath);
+  const { data } = gamesApi;
+  const loaded = hasQueryData(gamesApi);
 
   const games = useMemo<ProfileGame[]>(() => {
     const raw = data?.games || [];
@@ -367,7 +383,7 @@ function StrategyGamesView({
         <h2 className="truncate text-base font-semibold text-text">
           {titleText}
         </h2>
-        {!isLoading && summary.total > 0 ? (
+        {loaded && summary.total > 0 ? (
           // ``w-full md:w-auto`` forces the stats line onto its own row
           // on mobile (so it left-aligns under the title) and lets it
           // slot back into the flex row with ``md:ml-auto`` on desktop,
@@ -392,12 +408,8 @@ function StrategyGamesView({
           strategy={drill.opp_strategy}
         />
       ) : null}
-      {isLoading ? (
-        <Skeleton rows={6} />
-      ) : error ? (
-        <Card>
-          <EmptyState title="Couldn't load games" sub={error.message} />
-        </Card>
+      {!loaded ? (
+        <QueryState q={gamesApi} skeleton={<Skeleton rows={6} />} errorTitle="Games" filtered />
       ) : games.length === 0 ? (
         <Card>
           <EmptyState sub="No games match this filter combination." />
@@ -427,7 +439,10 @@ function StrategyGamesView({
  * all read from the same source of truth. They also propagate to
  * other tabs once set — that's intentional: a user who narrows to
  * "PvP — DT vs Stargate" wants their Trends, Maps, and Activity tabs
- * to reflect the same scope.
+ * to reflect the same scope. The Active filters chip row under the
+ * global filter bar shows each one (build and strategy marked "set in
+ * Strategies") and is where they are cleared; the races are the same
+ * values the bar's Matchup picker edits.
  */
 export function StrategyFiltersBar() {
   const { filters, setFilters, dbRev } = useFilters();
@@ -471,43 +486,8 @@ export function StrategyFiltersBar() {
     setFilters(next);
   };
 
-  const clearAll = () => {
-    const { build, opp_strategy, race, opp_race, ...rest } = filters;
-    setFilters(rest);
-  };
-
-  const activeChips: Array<{ key: string; label: string; clear: () => void }> = [];
-  if (filters.race) {
-    activeChips.push({
-      key: "race",
-      label: `My race · ${labelFromCode(filters.race)}`,
-      clear: () => update({ race: undefined }),
-    });
-  }
-  if (filters.build) {
-    activeChips.push({
-      key: "build",
-      label: `My build · ${truncateLabel(filters.build)}`,
-      clear: () => update({ build: undefined }),
-    });
-  }
-  if (filters.opp_race) {
-    activeChips.push({
-      key: "opp_race",
-      label: `Opp race · ${labelFromCode(filters.opp_race)}`,
-      clear: () => update({ opp_race: undefined }),
-    });
-  }
-  if (filters.opp_strategy) {
-    activeChips.push({
-      key: "opp_strategy",
-      label: `Opp strategy · ${truncateLabel(filters.opp_strategy)}`,
-      clear: () => update({ opp_strategy: undefined }),
-    });
-  }
-
   return (
-    <div className="space-y-3 rounded-xl border-2 border-line bg-bg-surface p-3 shadow-hard">
+    <div className="rounded-xl border-2 border-line bg-bg-surface p-3 shadow-hard">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <FilterSelect
           label="My race"
@@ -556,32 +536,6 @@ export function StrategyFiltersBar() {
           disabled={stratsResp.isLoading}
         />
       </div>
-      {activeChips.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-micro uppercase tracking-wider text-text-dim">
-            Active
-          </span>
-          {activeChips.map((c) => (
-            <button
-              key={c.key}
-              type="button"
-              onClick={c.clear}
-              title="Clear this filter"
-              className="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-3 text-xs text-accent transition hover:bg-accent/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <span>{c.label}</span>
-              <X className="h-3 w-3" aria-hidden />
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={clearAll}
-            className="ml-auto min-h-[32px] rounded px-2 text-micro uppercase tracking-wider text-text-muted transition hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            Clear all
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -627,21 +581,6 @@ function sortedDistinct(
   return [...rows]
     .filter((r) => r && typeof r.name === "string" && r.name.length > 0)
     .sort((a, b) => (b.total || 0) - (a.total || 0));
-}
-
-function labelFromCode(code: string): string {
-  switch (String(code).toUpperCase()[0]) {
-    case "P":
-      return "Protoss";
-    case "T":
-      return "Terran";
-    case "Z":
-      return "Zerg";
-    case "R":
-      return "Random";
-    default:
-      return code;
-  }
 }
 
 function truncateLabel(s: string, n = 28): string {

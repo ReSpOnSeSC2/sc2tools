@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { player, gameId } = await params;
   const canonical = `/players/${encodeURIComponent(player)}/replays/${encodeURIComponent(gameId)}`;
   return {
-    title: "Shared replay analysis · SC2 Tools",
+    title: "Shared replay analysis",
     description: "Sign in to view this shared replay analysis and macro breakdown.",
     robots: { index: false, follow: false },
     alternates: { canonical },

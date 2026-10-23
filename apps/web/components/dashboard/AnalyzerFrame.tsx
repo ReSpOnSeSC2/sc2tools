@@ -11,6 +11,7 @@ import {
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { AnalyzerProvider } from "@/components/AnalyzerProvider";
+import { ActiveFilterChips } from "@/components/analyzer/ActiveFilterChips";
 import { DoctorBanner } from "@/components/analyzer/DoctorBanner";
 import { NoGamesYet } from "@/components/analyzer/EmptyStates";
 import { FilterBar } from "@/components/analyzer/FilterBar";
@@ -38,7 +39,9 @@ const FolderSyncAutoRunner = dynamic(
  *
  *   - AnalyzerProvider: shared filter state + the dbRev counter, with
  *     the full replay corpus enabled only while Arcade is open.
- *   - The doctor banner and the global date FilterBar.
+ *   - The doctor banner, the global FilterBar and, under it, the
+ *     Active filters chip row (every route here except the game page,
+ *     which shows one game and ignores filters).
  *   - The onboarding gate: the checklist until pairing + first games
  *     complete, then the zero-games empty state, then the section.
  *     With browser import enabled (Instant Analysis flag) games alone
@@ -131,6 +134,7 @@ export function AnalyzerFrame({
 
             <div className="rounded-xl border-2 border-line bg-bg-surface px-3 py-3 shadow-hard sm:py-2">
               <FilterBar />
+              <ActiveFilterChips className="mt-3 border-t border-border pt-3 sm:mt-2 sm:pt-2" />
             </div>
 
             {view.checklist ? (

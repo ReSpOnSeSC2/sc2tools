@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 export const metadata = {
-  title: "Streaming · SC2 Tools",
+  title: "Streaming",
 };
 
 /**
@@ -11,5 +11,5 @@ export const metadata = {
  * /streaming gets bounced to the new home.
  */
 export default function StreamingPage(): never {
-  redirect("/settings#overlay");
+  redirect("/settings?tab=overlay");
 }

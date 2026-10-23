@@ -7,6 +7,7 @@ import { ReviewPageLoader } from "@/components/reviews/ReviewPageLoader";
 import { getJsonWithStatus } from "@/lib/serverApi";
 import { reviewJsonLd, serializeJsonLd } from "@/lib/reviewJsonLd";
 import { reviewHeadline, reviewPageTitle, reviewsRollout, type ReviewPageData } from "@/lib/reviews";
+import { siteTitle } from "@/lib/siteTitle";
 
 /**
  * /reviews/[id] — a public, server-rendered replay review.
@@ -44,13 +45,13 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   if (rollout === "off") notFound();
   const canonical = `/reviews/${id}`;
   if (rollout === "admins") {
-    return { title: "Replay review · SC2 Tools", robots: { index: false, follow: false }, alternates: { canonical } };
+    return { title: "Replay review", robots: { index: false, follow: false }, alternates: { canonical } };
   }
   const { data, status } = await fetchReview(id);
   if (!data?.request) {
     if (status === 404) notFound();
     return {
-      title: "Replay review · SC2 Tools",
+      title: "Replay review",
       description: "This replay review is temporarily unavailable.",
       robots: { index: false, follow: false },
       alternates: { canonical },
@@ -58,6 +59,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   }
   const r = data.request;
   const title = reviewPageTitle(r.question, r.game.matchup);
+  // Social cards get no title template, so they carry the brand themselves.
+  const shareTitle = siteTitle(title);
   const count = r.stats.reviewCount;
   const description = `${reviewHeadline(r.question, r.game.matchup)} — ${count === 1 ? "1 timestamped review" : `${count} timestamped reviews`} on ${r.game.map ?? "the replay"}. Asked by ${r.asker.label}${r.asker.band ? ` (${r.asker.band.label})` : ""}.`.slice(0, 300);
   return {
@@ -67,8 +70,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     robots: data.seo.indexable
       ? { index: true, follow: true }
       : { index: false, follow: r.visibility === "public" },
-    openGraph: { type: "article", title, description, url: `${SITE_URL}${canonical}` },
-    twitter: { card: "summary_large_image", title, description },
+    openGraph: { type: "article", title: shareTitle, description, url: `${SITE_URL}${canonical}` },
+    twitter: { card: "summary_large_image", title: shareTitle, description },
   };
 }
 

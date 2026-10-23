@@ -7,6 +7,7 @@ import {
 import { PublicReplayUnavailable } from "@/components/public-profile/PublicReplayUnavailable";
 import type { ReplayLibraryResponse } from "@/components/analyzer/replays/types";
 import { getJsonWithStatus } from "@/lib/serverApi";
+import { siteTitle } from "@/lib/siteTitle";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -35,21 +36,23 @@ export async function generateMetadata({ params }: Pick<PageProps, "params">): P
   if (!data?.profile) {
     if (status === 404) notFound();
     return {
-      title: "Shared replays · SC2 Tools",
+      title: "Shared replays",
       description: "This shared replay archive is temporarily unavailable.",
       robots: { index: false, follow: false },
       alternates: { canonical },
     };
   }
-  const title = `${data.profile.displayName}'s StarCraft II replays · SC2 Tools`;
+  const title = `${data.profile.displayName}'s StarCraft II replays`;
+  // Social cards get no title template, so they carry the brand themselves.
+  const shareTitle = siteTitle(title);
   const description = `Browse and download ${data.profile.displayName}'s shared StarCraft II replays without an account. Replay analysis and macro breakdowns are available after signing in.`;
   return {
     title,
     description,
     robots: { index: false, follow: false },
     alternates: { canonical },
-    openGraph: { type: "website", title, description, url: canonical },
-    twitter: { card: "summary_large_image", title, description },
+    openGraph: { type: "website", title: shareTitle, description, url: canonical },
+    twitter: { card: "summary_large_image", title: shareTitle, description },
   };
 }
 

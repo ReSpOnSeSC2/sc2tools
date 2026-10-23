@@ -9,14 +9,14 @@
  * that to the Settings scene preview, which frames an overlay route.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 
 const pathname = vi.hoisted(() => ({ current: "/app" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname.current,
 }));
 
-import { ServiceWorkerRegister } from "../ServiceWorkerRegister";
+import { ServiceWorkerRegister, UPDATE_LATER_KEY } from "../ServiceWorkerRegister";
 
 /** What Chrome does inside sandbox="allow-scripts" (no same-origin). */
 function makeContainerThrow() {
@@ -53,8 +53,31 @@ function installStubContainer() {
   return register;
 }
 
+/** A registration with a new build's worker already waiting (an update). */
+function installWaitingWorker() {
+  const waiting = { postMessage: vi.fn() };
+  Object.defineProperty(window.navigator, "serviceWorker", {
+    configurable: true,
+    value: {
+      register: vi.fn().mockResolvedValue({
+        waiting,
+        installing: null,
+        addEventListener: vi.fn(),
+        update: vi.fn(),
+      }),
+      controller: {},
+      getRegistration: vi.fn().mockResolvedValue(undefined),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    },
+  });
+  return waiting;
+}
+
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
+  window.sessionStorage.clear();
   pathname.current = "/app";
   delete (window.navigator as { serviceWorker?: unknown }).serviceWorker;
 });
@@ -92,5 +115,74 @@ describe("overlay routes", () => {
     const register = installStubContainer();
     render(<ServiceWorkerRegister />);
     expect(register).toHaveBeenCalledWith("/sw.js", { scope: "/" });
+  });
+});
+
+describe("update prompt", () => {
+  const prompt = () => screen.queryByRole("status", { name: "Update available" });
+
+  it("floats above the mobile tab bar on the banner layer", async () => {
+    installWaitingWorker();
+    render(<ServiceWorkerRegister />);
+    const shown = await screen.findByRole("status", { name: "Update available" });
+    expect(shown.className).toContain("bottom-above-chrome");
+    expect(shown.className).toContain("z-banner");
+  });
+
+  it("Reload hands control to the waiting worker", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    try {
+      const waiting = installWaitingWorker();
+      render(<ServiceWorkerRegister />);
+      await act(async () => {});
+      fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+      expect(waiting.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+      expect(screen.getByRole("button", { name: "Updating…" })).toBeTruthy();
+    } finally {
+      // Drop the 3 s reload fallback without running it.
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it("'Later' hides the prompt for the session and leaves the worker waiting", async () => {
+    const waiting = installWaitingWorker();
+    const view = render(<ServiceWorkerRegister />);
+    fireEvent.click(await screen.findByRole("button", { name: "Later" }));
+    expect(prompt()).toBeNull();
+    expect(waiting.postMessage).not.toHaveBeenCalled();
+    expect(window.sessionStorage.getItem(UPDATE_LATER_KEY)).toBe("1");
+
+    // Moving between the app and the public pages remounts it: still hidden.
+    view.unmount();
+    render(<ServiceWorkerRegister />);
+    await act(async () => {});
+    expect(prompt()).toBeNull();
+  });
+
+  it("comes back in the next session while the update is still waiting", async () => {
+    installWaitingWorker();
+    window.sessionStorage.setItem(UPDATE_LATER_KEY, "1");
+    const view = render(<ServiceWorkerRegister />);
+    await act(async () => {});
+    expect(prompt()).toBeNull();
+    view.unmount();
+
+    window.sessionStorage.clear(); // a new tab or browser session
+    render(<ServiceWorkerRegister />);
+    expect(await screen.findByRole("status", { name: "Update available" })).toBeTruthy();
+  });
+
+  it("still works when session storage is blocked", async () => {
+    installWaitingWorker();
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("blocked", "SecurityError");
+    });
+    render(<ServiceWorkerRegister />);
+    fireEvent.click(await screen.findByRole("button", { name: "Later" }));
+    expect(prompt()).toBeNull();
   });
 });

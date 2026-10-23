@@ -38,7 +38,7 @@
     "name": "Protoss - DT Rush",
     "race": "Protoss",
     "matchup": null,
-    "description": "Detected if a Dark Shrine is built before 7:30.",
+    "description": "Detected if a Dark Shrine is built before 5:00 AND at least one real (non-hallucinated) Dark Templar is on the field by 6:00 -- a true DT harass opener. Mid-game DT-tech additions (Shrine going down after a Stargate or Robo opener) and Sentry-hallucinated Dark Templars are excluded.",
     "opener": true
   },
   {
@@ -150,7 +150,7 @@
     "name": "PvP - 4 Stalker Oracle into DT",
     "race": "Protoss",
     "matchup": "PvP",
-    "description": "Detected if 3+ Stalkers by 6:30, 1+ Oracle by 7:30, and a Dark Shrine is built by 9:00 -- Stalker / Oracle harass transitioning into Dark Templar.",
+    "description": "Detected if a Stargate is built, 3+ Stalkers by 6:30, 1+ Oracle by 7:30, and a Dark Shrine is built by 9:00 -- Stalker / Oracle harass transitioning into Dark Templar.",
     "opener": true
   },
   {
@@ -164,7 +164,7 @@
     "name": "PvP - AlphaStar (4 Adept/Oracle)",
     "race": "Protoss",
     "matchup": "PvP",
-    "description": "Detected if a Stargate is built, 4+ Adepts have been produced by 6:00 AND 1+ Oracle is on the field by 6:30 -- the AlphaStar 4-Adept / Oracle pressure opener. Hallucinated Oracles from a Sentry do not count.",
+    "description": "Detected if a Stargate is built, 4+ Adepts have been produced by 6:00 AND 1+ Oracle is on the field by 6:30 -- the AlphaStar 4-Adept / Oracle pressure opener. Oracles without a Stargate are treated as hallucinations.",
     "opener": true
   },
   {
@@ -374,14 +374,14 @@
     "name": "PvT - Robo First",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if a Robotics Facility is built before 6:30 AND it is the FIRST tech building — Robo lands before any Twilight Council AND before any Stargate. The label describes the OPENER, not the entire composition: a Robo opener that transitions into Stargate tech later in the midgame (Skytoss tech-switch, end-game Tempests) still classifies as Robo First because the opening was Robo. Stargate-led openers are caught earlier by Phoenix into Robo / Phoenix Opener / Stargate Opener so they don't fall into this bucket.",
+    "description": "Detected if a Robotics Facility is built before 6:30 AND it is the FIRST tech building (before any Stargate or Twilight Council). The label describes the OPENER, not the entire composition: a Robo opener that transitions into Stargate tech later in the midgame (Skytoss tech-switch, end-game Tempests) still classifies as Robo First because the opening was Robo. Stargate-led openers are caught earlier by Phoenix into Robo / Phoenix Opener / Stargate Opener so they don't fall into this bucket.",
     "opener": true
   },
   {
     "name": "PvT - Standard Charge Macro",
     "race": "Protoss",
     "matchup": "PvT",
-    "description": "Detected if Charge is the first completed Twilight upgrade and finishes by 9:00, the player has taken 3+ Nexuses, the third Nexus is started at 6:00 or later, AND Twilight Council is the FIRST tech building — Twilight goes down before any Robotics Facility AND before any Stargate. The label describes the OPENER, not the entire composition: a Twilight-first Charge macro that later adds Robo (Observer / Immortal support) or transitions into Stargate tech in the midgame (Skytoss tech-switch, end-game Tempests, late Phoenix harass) still classifies as Standard Charge Macro because the opening was Twilight + Charge. A third Nexus started before 6:00 uses Charge First (Fast 3rd Nexus); later Blink does not turn either Charge-first opening into a Blink build. Robo-first openers (Robo before Twilight) are caught by Robo First instead; Stargate-led openers are caught earlier by Stargate into Charge / Phoenix into Robo.",
+    "description": "Detected if Charge is the first completed Twilight upgrade and finishes by 9:00, the player has taken 3+ Nexuses, the third Nexus is started at 6:00 or later, AND Twilight Council is the FIRST tech building -- Twilight goes down before any Robotics Facility AND before any Stargate. The label describes the OPENER, not the entire composition: a Twilight-first Charge macro that later adds Robo (Observer / Immortal support) or transitions into Stargate tech in the midgame (Skytoss tech-switch, end-game Tempests, late Phoenix harass) still classifies as Standard Charge Macro because the opening was Twilight + Charge. A third Nexus started before 6:00 uses Charge First (Fast 3rd Nexus); later Blink does not turn either Charge-first opening into a Blink build. Robo-first openers (Robo before Twilight) are caught by Robo First instead; Stargate-led openers are caught earlier by Stargate into Charge / Phoenix into Robo.",
     "opener": true
   },
   {
@@ -416,21 +416,21 @@
     "name": "PvZ - 2 Stargate Phoenix",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), EXACTLY 2 Stargates and 2+ Nexuses are up by 10:00, 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations), AND the build did NOT commit to a tech-switch -- Glaives was NOT the first Twilight upgrade AND no Robotics Facility was built by 10:00. 3+ Stargates falls under PvZ - 3 Stargate Phoenix instead. A Stargate-into-Glaives hybrid (Phoenix as Glaive Adept support) tags as PvZ - Stargate into Glaives; a Stargate-into-Robo hybrid (Phoenix + Robo for Immortal / Observer / Disruptor) tags as PvZ - Stargate into Robo. The Glaives-first signal and the Robo presence are both strong intent markers -- the Phoenix count alone isn't enough to claim the pure 2 SG Phoenix label.",
+    "description": "Stargate-first opening with exactly 2 Stargates, 2+ Nexuses and 4+ real Phoenix by 10:00 or the first capital ship, whichever comes first. Later Carrier/Tempest transitions preserve the Phoenix label. Glaives-first Twilight or Robotics Facility by 10:00 reroutes to the matching transition.",
     "opener": true
   },
   {
     "name": "PvZ - 2 Stargate Void Ray",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), 2+ Stargates and 2+ Nexuses are up by 10:00, 4+ Void Rays have been produced by 10:00 (Void Rays without a Stargate are ignored as hallucinations), AND the build did NOT commit to a tech-switch -- Glaives was NOT the first Twilight upgrade AND no Robotics Facility was built before 6:00. A 4+ Void Ray commitment that adds a LATER Robo (after 6:00) for Observer / Immortal support still counts as Void Ray; only an EARLY Robo (before 6:00) reroutes to PvZ - Stargate into Robo. A Stargate-into-Glaives hybrid tags as PvZ - Stargate into Glaives.",
+    "description": "Stargate-first opening with 2+ Stargates, 2+ Nexuses and 4+ real Void Rays by 10:00 or the first capital ship, whichever comes first. Later Carrier/Tempest transitions preserve the Void Ray label. Glaives-first Twilight or Robotics Facility by 6:00 reroutes to the matching transition; a later Robo is support.",
     "opener": true
   },
   {
     "name": "PvZ - 3 Stargate Phoenix",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), 3+ Stargates and 2+ Nexuses are up by 10:00, 4+ Phoenix have been produced by 10:00 (Phoenix without a Stargate are ignored as hallucinations), AND the build did NOT commit to a tech-switch -- Glaives was NOT the first Twilight upgrade AND no Robotics Facility was built by 10:00. A Stargate-into-Glaives hybrid tags as PvZ - Stargate into Glaives; a Stargate-into-Robo hybrid tags as PvZ - Stargate into Robo.",
+    "description": "Stargate-first opening with 3+ Stargates, 2+ Nexuses and 4+ real Phoenix by 10:00 or the first capital ship, whichever comes first. Later Carrier/Tempest transitions preserve the Phoenix label. Glaives-first Twilight or Robotics Facility by 10:00 reroutes to the matching transition.",
     "opener": true
   },
   {
@@ -486,7 +486,7 @@
     "name": "PvZ - Carrier Rush",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), a Fleet Beacon is up by 10:00, and at least 1 Carrier has been produced by 10:00 -- a true Stargate-opener Carrier rush. A DT or Glaives opener that adds a Stargate / Fleet Beacon / Carrier late tags as PvZ - DT Opener or PvZ - Adept Glaives instead. Carriers without a Stargate + Fleet Beacon are treated as hallucinations.",
+    "description": "Stargate-first opening with Fleet Beacon before Twilight/Robo/Dark Shrine and the first real capital ship a Carrier by 10:00. An established 2+ Stargate / 2+ Nexus force of 4+ Void Rays or Phoenix before the first capital ship keeps its opening label. Hallucinated units do not count.",
     "opener": true
   },
   {
@@ -549,14 +549,14 @@
     "name": "PvZ - Standard Blink Macro",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Blink is the FIRST Twilight upgrade and completes by 10:00, and any Robotics Facility follows the Twilight -- standard 3-base Blink macro rather than AlphaStar.",
+    "description": "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Blink is the first Twilight upgrade and completes by 10:00, and any Robotics Facility follows the Twilight -- standard 3-base Blink macro rather than AlphaStar.",
     "opener": true
   },
   {
     "name": "PvZ - Standard charge Macro",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Charge is the FIRST Twilight upgrade and completes by 10:00, and any Robotics Facility follows the Twilight -- standard 3-base Chargelot macro rather than AlphaStar.",
+    "description": "Detected if a Stargate opener is followed by a third Nexus by 9:00 (the third starts before Twilight or within four minutes after it), Charge is the first Twilight upgrade and completes by 10:00, and any Robotics Facility follows the Twilight -- standard 3-base Chargelot macro rather than AlphaStar.",
     "opener": true
   },
   {
@@ -584,7 +584,7 @@
     "name": "PvZ - Tempest Rush",
     "race": "Protoss",
     "matchup": "PvZ",
-    "description": "Detected if the Stargate is the FIRST tech building (built before any Twilight Council / Dark Shrine / Robotics Facility), a Fleet Beacon is up by 10:00, and at least 1 Tempest has been produced by 10:00 -- long-range Tempest harass / siege opened off a Stargate.",
+    "description": "Stargate-first opening with Fleet Beacon before Twilight/Robo/Dark Shrine and the first real capital ship a Tempest by 10:00. Later Carriers do not overwrite it, and an established 2+ Stargate / 2+ Nexus force of 4+ Void Rays or Phoenix keeps its opening label. Hallucinated units do not count.",
     "opener": true
   },
   {
@@ -633,7 +633,7 @@
     "name": "Terran - BC Rush",
     "race": "Terran",
     "matchup": null,
-    "description": "Detected if a Fusion Core is built before 6:30.",
+    "description": "Detected if a Fusion Core is built before 5:30 AND at least one Battlecruiser is on the field by 7:30 -- a Starport-into-FC BC commitment. A Fusion Core alone is not enough; mech-into-late-game-BC macro games build FC for end-game composition and are excluded by the unit-presence requirement.",
     "opener": true
   },
   {
@@ -668,7 +668,7 @@
     "name": "Terran - Ghost Rush",
     "race": "Terran",
     "matchup": null,
-    "description": "Detected if Ghost Academy is built within first 6:30 of the game.",
+    "description": "Detected if Ghost Academy is built within first 5:30 of the game -- a true 1-2 base Ghost commitment. Standard Bio macro builds usually add the Academy after 6:00 for mid-game snipes / EMPs and are excluded.",
     "opener": true
   },
   {

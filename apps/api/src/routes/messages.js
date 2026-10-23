@@ -7,6 +7,7 @@ const {
   MESSAGE_SUBJECT_MAX,
   MESSAGE_BODY_MAX,
 } = require("../services/adminEvents");
+const { validateReportExtras } = require("../validation/userMessage");
 
 // express-rate-limit ships as either a default or a named export
 // depending on the bundler/version — mirror app.js's resolution.
@@ -21,7 +22,11 @@ const rateLimit =
  * separate collection or admin surface required.
  *
  * Identity (userId, clerkUserId, email) is attached server-side from
- * the auth context; the client only supplies subject + message.
+ * the auth context; the client supplies subject + message, plus an
+ * optional report ``type`` (problem / idea / question) and a
+ * ``context`` object of diagnostics (page path, web build, browser,
+ * viewport, desktop app state, recent failed requests), validated in
+ * validation/userMessage.js and capped at 2 KB.
  *
  * @param {{
  *   adminEvents: import('../services/adminEvents').AdminEventsService,
@@ -74,28 +79,31 @@ function buildMessagesRouter(deps) {
   });
 
   router.use("/messages", deps.auth);
+  router.post("/messages", sendLimiter, buildSendHandler(deps));
 
-  router.post("/messages", sendLimiter, async (req, res, next) => {
+  return router;
+}
+
+/**
+ * POST /v1/messages: validate, attach the sender's identity and record
+ * the report in the admin inbox.
+ *
+ * @param {{
+ *   adminEvents: import('../services/adminEvents').AdminEventsService,
+ *   users: import('../services/users').UsersService,
+ * }} deps
+ * @returns {import('express').RequestHandler}
+ */
+function buildSendHandler(deps) {
+  return async (req, res, next) => {
     try {
       const auth = requireAuth(req);
       const { subject, message } = normalizeBody(req.body);
-
-      if (!subject) {
-        throw badRequest("A subject is required.");
-      }
-      if (subject.length > MESSAGE_SUBJECT_MAX) {
-        throw badRequest(
-          `Subject must be ${MESSAGE_SUBJECT_MAX} characters or fewer.`,
-        );
-      }
-      if (!message) {
-        throw badRequest("A message is required.");
-      }
-      if (message.length > MESSAGE_BODY_MAX) {
-        throw badRequest(
-          `Message must be ${MESSAGE_BODY_MAX} characters or fewer.`,
-        );
-      }
+      checkLengths(subject, message);
+      const extras = validateReportExtras(
+        req.body && typeof req.body === "object" ? req.body : {},
+      );
+      if (!extras.valid) throw badRequest(extras.message);
 
       // Resolve the sender's cached email so the admin row shows who to
       // reply to. Best-effort: a missing summary still records the
@@ -114,6 +122,10 @@ function buildMessagesRouter(deps) {
         email,
         subject,
         message,
+        // What kind of report it is and the diagnostics the sender chose
+        // to include; both optional. Paths are re-sanitised on record.
+        ...(extras.type ? { type: extras.type } : {}),
+        ...(extras.context ? { context: extras.context } : {}),
       });
       if (!doc) {
         const err = new Error("Your message could not be saved. Please try again.");
@@ -125,9 +137,30 @@ function buildMessagesRouter(deps) {
     } catch (err) {
       next(err);
     }
-  });
+  };
+}
 
-  return router;
+/**
+ * @param {string} subject
+ * @param {string} message
+ */
+function checkLengths(subject, message) {
+  if (!subject) {
+    throw badRequest("A subject is required.");
+  }
+  if (subject.length > MESSAGE_SUBJECT_MAX) {
+    throw badRequest(
+      `Subject must be ${MESSAGE_SUBJECT_MAX} characters or fewer.`,
+    );
+  }
+  if (!message) {
+    throw badRequest("A message is required.");
+  }
+  if (message.length > MESSAGE_BODY_MAX) {
+    throw badRequest(
+      `Message must be ${MESSAGE_BODY_MAX} characters or fewer.`,
+    );
+  }
 }
 
 /** @param {unknown} body */

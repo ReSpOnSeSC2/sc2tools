@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
-import { ChevronLeft, MoreHorizontal, X } from "lucide-react";
+import { Bug, ChevronLeft, LifeBuoy, MoreHorizontal, X } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { SyncStatus } from "@/components/SyncStatus";
+import { LazyReportIssueModal } from "@/components/feedback/LazyReportIssueModal";
 import { useApi } from "@/lib/clientApi";
+import type { ReportType } from "@/lib/feedback/reportContext";
 import {
   MOBILE_TAB_KEYS,
   NAV_ENTRIES,
@@ -19,12 +20,17 @@ import {
   type NavIcon,
 } from "./appNav";
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
+import { ConnectionBanner, ConnectionStatusProvider } from "./ConnectionStatus";
+import { HelpMenu } from "./HelpMenu";
+import { helpMenuItems, type HelpMenuItem } from "./helpMenu";
 import { BuildCheckInAlert } from "@/components/build-checkin/BuildCheckInAlert";
 import { BuildCheckInProvider } from "@/components/build-checkin/BuildCheckInProvider";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { reviewsVisible } from "@/lib/reviews";
 import { guidesEnabled } from "@/lib/guides/flags";
 import { SiteStats } from "./SiteStats";
+import { useChromeBottomInset } from "./chromeInsets";
+import { LogoMark } from "./LogoMark";
 
 /* ------------------------------------------------------------------
  * AppChrome — the shell every signed-in surface renders inside:
@@ -40,10 +46,21 @@ import { SiteStats } from "./SiteStats";
  *   - Mobile: a bottom tab bar with the four highest-traffic
  *     destinations and a More sheet for the rest. No hamburger.
  *   - Both: a slim sticky context bar carrying the section name, a
- *     back control on detail pages, theme and account. The activity bar
- *     immediately below groups live sync state with the public site counts.
+ *     back control on detail pages, theme, Help & support and account.
+ *     The activity bar immediately below groups live sync state with the
+ *     public site counts.
+ *   - Help & support: the "?" menu in the context bar (desktop; on
+ *     phones the same items sit in the More sheet), plus Help and Report
+ *     a problem in the avatar menu. All of them open one report form.
  *   - BuildCheckInProvider wraps the shell so the header's check-in chip
  *     and every page's check-in surfaces share one realtime revision.
+ *   - ConnectionStatusProvider wraps everything in the app's SWRConfig;
+ *     its banner sits at the foot of the sticky bar, so "Reconnecting
+ *     to SC2 Tools…" stays in view while the API wakes up.
+ *   - Safe areas: the context bar pads below the notch / status bar
+ *     (installed iOS app), and the tab bar's measured height is published
+ *     as --chrome-bottom so floating bottom surfaces (Save bar, toasts,
+ *     the update prompt, the cookie banner) sit above it, never under it.
  *
  * /community is reachable signed-out (shared links), so the
  * shell's structure is identical either way and only its contents swap:
@@ -64,9 +81,11 @@ type CoachingMeProbe = {
 
 export function AppChrome({ children }: { children: ReactNode }) {
   return (
-    <BuildCheckInProvider>
-      <AppChromeShell>{children}</AppChromeShell>
-    </BuildCheckInProvider>
+    <ConnectionStatusProvider>
+      <BuildCheckInProvider>
+        <AppChromeShell>{children}</AppChromeShell>
+      </BuildCheckInProvider>
+    </ConnectionStatusProvider>
   );
 }
 
@@ -83,6 +102,26 @@ function AppChromeShell({ children }: { children: ReactNode }) {
   const ownsHeading = match?.entry.group !== "utility";
   const backHref = match?.backHref ?? "/app";
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [report, setReport] = useState<{ open: boolean; type: ReportType }>({
+    open: false,
+    type: "problem",
+  });
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  const openReport = useCallback((type: ReportType) => {
+    setReport({ open: true, type });
+  }, []);
+  const closeReport = useCallback(() => {
+    setReport((current) => ({ ...current, open: false }));
+  }, []);
+  // From the More sheet: the sheet closes first, so park focus on its
+  // More button for the form to hand back when it closes.
+  const reportFromSheet = useCallback((type: ReportType) => {
+    setSheetOpen(false);
+    moreButtonRef.current?.focus();
+    setReport({ open: true, type });
+  }, []);
+  const tabBarRef = useRef<HTMLElement>(null);
+  useChromeBottomInset(tabBarRef);
 
   // useApi gates on isSignedIn internally and SWR dedupes it against the
   // rest of the app, so this costs nothing extra and is a no-op for
@@ -125,8 +164,8 @@ function AppChromeShell({ children }: { children: ReactNode }) {
         <nav
           aria-label="App navigation"
           className={[
-            "group/rail fixed inset-y-0 left-0 z-40 flex w-16 flex-col gap-1 overflow-y-auto overflow-x-hidden",
-            "border-r-2 border-border bg-bg-surface px-2 py-3",
+            "group/rail fixed inset-y-0 left-0 z-nav flex w-16 flex-col gap-1 overflow-y-auto overflow-x-hidden",
+            "border-r-2 border-border bg-bg-surface px-2 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]",
             "motion-safe:transition-[width] motion-safe:duration-150",
             "hover:w-56 focus-within:w-56 hover:shadow-hard",
           ].join(" ")}
@@ -136,14 +175,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             aria-label="SC2 Tools — home"
             className="mb-1 flex h-11 items-center gap-3 rounded-lg px-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <Image
-              src="/logo.png"
-              alt=""
-              width={30}
-              height={30}
-              className="shrink-0 rounded-full"
-              priority
-            />
+            <LogoMark size={30} className="shrink-0" priority />
             <RailLabel>SC2&nbsp;Tools</RailLabel>
           </Link>
 
@@ -180,20 +212,16 @@ function AppChromeShell({ children }: { children: ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 border-b-2 border-border bg-bg/90 supports-[backdrop-filter]:backdrop-blur-md">
+        {/* pt: in the installed iOS app the status bar overlays the page
+            (black-translucent), so the bar starts below the notch. */}
+        <header className="sticky top-0 z-30 border-b-2 border-border bg-bg/90 pt-[env(safe-area-inset-top)] supports-[backdrop-filter]:backdrop-blur-md">
           <div className="mx-auto flex h-12 w-full max-w-[1680px] items-center gap-3 px-4 sm:px-6 lg:px-8">
             <Link
               href="/"
               aria-label="SC2 Tools — home"
               className="shrink-0 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent md:hidden"
             >
-              <Image
-                src="/logo.png"
-                alt=""
-                width={24}
-                height={24}
-                className="rounded-full"
-              />
+              <LogoMark size={24} />
             </Link>
 
             {showBack ? (
@@ -220,12 +248,31 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               </SignedIn>
               <ThemeToggle />
               <SignedIn>
+                {/* Phones reach the same items from the More sheet. */}
+                <HelpMenu signedIn onReport={openReport} className="hidden md:block" />
                 <UserButton
                   afterSignOutUrl="/"
                   appearance={{ elements: { avatarBox: "h-8 w-8" } }}
-                />
+                >
+                  {/* Ours first; listing Clerk's two defaults after keeps them below. */}
+                  <UserButton.MenuItems>
+                    <UserButton.Link
+                      label="Help"
+                      labelIcon={<LifeBuoy className="h-4 w-4" aria-hidden />}
+                      href="/help"
+                    />
+                    <UserButton.Action
+                      label="Report a problem"
+                      labelIcon={<Bug className="h-4 w-4" aria-hidden />}
+                      onClick={() => openReport("problem")}
+                    />
+                    <UserButton.Action label="manageAccount" />
+                    <UserButton.Action label="signOut" />
+                  </UserButton.MenuItems>
+                </UserButton>
               </SignedIn>
               <SignedOut>
+                <HelpMenu signedIn={false} />
                 <Link
                   href="/sign-in"
                   className="hard-press hidden h-8 items-center rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:inline-flex"
@@ -241,6 +288,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               </SignedOut>
             </div>
           </div>
+          <ConnectionBanner />
         </header>
 
         <SiteStats
@@ -268,8 +316,9 @@ function AppChromeShell({ children }: { children: ReactNode }) {
       {/* Mobile: tab bar + More sheet. Signed-out visitors on /community
           get the same bar with just the public destinations. */}
       <nav
+        ref={tabBarRef}
         aria-label="Quick sections"
-        className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-border bg-bg/95 pb-[env(safe-area-inset-bottom,0px)] supports-[backdrop-filter]:backdrop-blur-md md:hidden"
+        className="fixed inset-x-0 bottom-0 z-nav border-t-2 border-border bg-bg/95 pb-[env(safe-area-inset-bottom,0px)] supports-[backdrop-filter]:backdrop-blur-md md:hidden"
       >
         <div className="mx-auto flex max-w-md items-stretch px-2 py-1.5">
           <SignedIn>
@@ -281,6 +330,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               />
             ))}
             <button
+              ref={moreButtonRef}
               type="button"
               onClick={() => setSheetOpen(true)}
               aria-haspopup="dialog"
@@ -319,8 +369,17 @@ function AppChromeShell({ children }: { children: ReactNode }) {
           entries={sheetEntries}
           activeKey={activeKey}
           onClose={() => setSheetOpen(false)}
+          onReport={reportFromSheet}
         />
       ) : null}
+
+      <SignedIn>
+        <LazyReportIssueModal
+          open={report.open}
+          prefill={{ type: report.type }}
+          onClose={closeReport}
+        />
+      </SignedIn>
     </div>
   );
 }
@@ -400,10 +459,12 @@ function MoreSheet({
   entries,
   activeKey,
   onClose,
+  onReport,
 }: {
   entries: readonly NavEntry[];
   activeKey: string | null;
   onClose: () => void;
+  onReport: (type: ReportType) => void;
 }) {
   // Esc closes; body scroll locks while open.
   useEffect(() => {
@@ -424,7 +485,7 @@ function MoreSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 md:hidden"
+      className="fixed inset-0 z-sheet md:hidden"
       role="dialog"
       aria-modal="true"
       aria-label="More sections"
@@ -472,10 +533,23 @@ function MoreSheet({
             active={activeKey === entry.key}
           />
         ))}
+        <div className="px-2 pb-1 pt-3">
+          <span className="text-micro font-bold uppercase tracking-[0.14em] text-text-dim">
+            Help &amp; support
+          </span>
+        </div>
+        {helpMenuItems(true).map((item) => (
+          <SheetHelpItem key={item.key} item={item} onReport={onReport} />
+        ))}
       </div>
     </div>
   );
 }
+
+const SHEET_ROW_CLASS = [
+  "flex min-h-[44px] w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-body font-semibold",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+].join(" ");
 
 function SheetLink({ entry, active }: { entry: NavEntry; active: boolean }) {
   const Icon: NavIcon = entry.icon;
@@ -484,13 +558,43 @@ function SheetLink({ entry, active }: { entry: NavEntry; active: boolean }) {
       href={entry.href}
       aria-current={active ? "page" : undefined}
       className={[
-        "flex min-h-[44px] items-center gap-3 rounded-xl px-2.5 py-2 text-body font-semibold",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+        SHEET_ROW_CLASS,
         active ? "bg-accent-cyan/10 text-accent" : "text-text hover:bg-bg-elevated",
       ].join(" ")}
     >
       <Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
       {entry.label}
+    </Link>
+  );
+}
+
+function SheetHelpItem({
+  item,
+  onReport,
+}: {
+  item: HelpMenuItem;
+  onReport: (type: ReportType) => void;
+}) {
+  const Icon: NavIcon = item.icon;
+  const className = `${SHEET_ROW_CLASS} text-text hover:bg-bg-elevated`;
+  if (item.report) {
+    const type = item.report;
+    return (
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        onClick={() => onReport(type)}
+        className={className}
+      >
+        <Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
+        {item.label}
+      </button>
+    );
+  }
+  return (
+    <Link href={item.href} className={className}>
+      <Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
+      {item.label}
     </Link>
   );
 }

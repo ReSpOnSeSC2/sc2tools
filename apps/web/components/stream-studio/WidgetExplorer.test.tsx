@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { WidgetExplorer } from "./WidgetExplorer";
 import { WIDGET_GUIDES } from "@/lib/streamStudioLearn";
 
+// The help sheet's support line reads the signed-in state.
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false }) }));
+
 beforeEach(() => window.history.replaceState(null, "", "/stream-studio/learn"));
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -111,6 +114,20 @@ describe("widget learning explorer", () => {
     const relatedGuide = screen.getByRole("article", { name: "Post-game build guide" });
     expect(document.activeElement).toBe(relatedGuide);
     expect((screen.getByRole("combobox", { name: "Category" }) as HTMLSelectElement).value).toBe("all");
+  });
+
+  it("links the scouting widgets to the article that explains their numbers", async () => {
+    render(<WidgetExplorer />);
+    const opponent = screen.getByRole("article", { name: "Opponent identity guide" });
+    expect(within(opponent).queryByRole("link", { name: "Where these numbers come from" })).toBeNull();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Choose a widget" }), { target: { value: "fav-opening" } });
+    const guide = screen.getByRole("article", { name: "Favourite opening guide" });
+    const help = () => within(guide).getByRole("link", { name: "Where these numbers come from" });
+    expect(help().getAttribute("href")).toBe("/help/opponent-scouting");
+    await vi.waitFor(() => expect(help().getAttribute("aria-haspopup")).toBe("dialog"), { timeout: 10_000 });
+    fireEvent.click(help());
+    expect(screen.getByRole("dialog", { name: /Opponent scouting/ })).toBeTruthy();
   });
 
   it("ignores an invalid widget id and handles clipboard failure", async () => {

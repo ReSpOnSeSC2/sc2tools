@@ -23,6 +23,7 @@ import {
 } from "@/lib/netMmrOpponents";
 import { EmptyState, Skeleton } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 
 const PAGE_SIZE = 25;
 
@@ -120,7 +121,9 @@ export function NetMmrRaceOpponentsModal({
     rankingConfig.sort,
   ]);
 
-  const { data, isLoading, error } = useApi<NetMmrOpponentsResponse>(path);
+  const opponentsApi = useApi<NetMmrOpponentsResponse>(path);
+  const { data } = opponentsApi;
+  const loaded = hasQueryData(opponentsApi);
 
   if (!race) return null;
 
@@ -203,9 +206,11 @@ export function NetMmrRaceOpponentsModal({
 
       <div className="mt-3 flex min-h-5 items-center justify-between gap-3 text-micro text-text-dim" aria-live="polite">
         <span>
-          {isLoading && !data
-            ? "Loading opponents…"
-            : `${totalOpponents.toLocaleString()} opponent${totalOpponents === 1 ? "" : "s"}`}
+          {loaded
+            ? `${totalOpponents.toLocaleString()} opponent${totalOpponents === 1 ? "" : "s"}`
+            : opponentsApi.error
+              ? null
+              : "Loading opponents…"}
         </span>
         {totalOpponents > PAGE_SIZE ? (
           <span className="tabular-nums">
@@ -214,12 +219,10 @@ export function NetMmrRaceOpponentsModal({
         ) : null}
       </div>
 
-      {error ? (
-        <div role="alert" className="mt-3 rounded-lg border border-danger/40 bg-danger/10 p-3 text-sm text-danger">
-          Could not load opponent MMR impact — {error.message}
+      {!loaded ? (
+        <div className="mt-3">
+          <QueryState q={opponentsApi} skeleton={<Skeleton rows={7} />} filtered />
         </div>
-      ) : isLoading && !data ? (
-        <div className="mt-3"><Skeleton rows={7} /></div>
       ) : items.length === 0 ? (
         <EmptyState
           title="No opponents match these filters"

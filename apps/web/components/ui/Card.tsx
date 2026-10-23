@@ -1,6 +1,8 @@
 "use client";
 
 import type { HTMLAttributes, ReactNode } from "react";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+import { EmptyStatePanel } from "./EmptyState";
 
 /**
  * Card primitive — surface container with variants.
@@ -24,10 +26,19 @@ const VARIANT_CLASSES: Record<CardVariant, string> = {
     "bg-bg-surface border-2 border-line shadow-hard hover:border-accent hover:bg-bg-elevated transition-colors cursor-pointer",
 };
 
+/** Heading level for the legacy inline `title`. */
+export type CardHeadingLevel = 2 | 3 | 4;
+
 interface CardBaseProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   variant?: CardVariant;
   /** Legacy: render header inline. Prefer composing <Card.Header>. */
   title?: ReactNode;
+  /**
+   * Level of the `title` heading (default 3). Use 2 for a card that sits
+   * directly under the page's <h1>, so headings never skip a level.
+   * The look stays the same at every level.
+   */
+  headingLevel?: CardHeadingLevel;
   /** Legacy: right slot in inline header. */
   right?: ReactNode;
   /** Legacy: when both title/right omitted, body still gets default padding. */
@@ -37,6 +48,7 @@ interface CardBaseProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
 export function Card({
   variant = "default",
   title,
+  headingLevel = 3,
   right,
   padded = true,
   className = "",
@@ -44,6 +56,7 @@ export function Card({
   ...rest
 }: CardBaseProps) {
   const hasInlineHeader = title !== undefined || right !== undefined;
+  const Heading = `h${headingLevel}` as const;
   return (
     <section
       className={[
@@ -58,7 +71,7 @@ export function Card({
       {hasInlineHeader ? (
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           {title ? (
-            <h3 className="text-caption font-semibold text-text">{title}</h3>
+            <Heading className="text-caption font-semibold text-text">{title}</Heading>
           ) : (
             <span />
           )}
@@ -158,18 +171,39 @@ export function Stat({
   );
 }
 
+/**
+ * The analyzer's inline "nothing here" message, drawn by EmptyStatePanel
+ * so every empty state shares one look. `helpSlug` adds a "Learn how"
+ * link to that help article; `action` adds a button next to it.
+ */
 export function EmptyState({
   title = "Nothing here yet",
   sub,
+  helpSlug,
+  action,
+  icon,
 }: {
-  title?: string;
-  sub?: string;
+  title?: ReactNode;
+  sub?: ReactNode;
+  helpSlug?: string;
+  action?: ReactNode;
+  icon?: ReactNode;
 }) {
+  const help = helpSlug ? <LazyHelpLink slug={helpSlug}>Learn how</LazyHelpLink> : null;
   return (
-    <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
-      <div className="text-sm font-medium text-text-muted">{title}</div>
-      {sub ? <div className="text-xs text-text-dim">{sub}</div> : null}
-    </div>
+    <EmptyStatePanel
+      title={title}
+      description={sub}
+      icon={icon}
+      action={
+        action || help ? (
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-caption">
+            {action}
+            {help}
+          </div>
+        ) : undefined
+      }
+    />
   );
 }
 

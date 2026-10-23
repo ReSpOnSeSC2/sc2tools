@@ -114,17 +114,17 @@ describe("guideMetadata", () => {
   });
 
   it("titles the unfiltered matchup page with the opener count", () => {
-    expect(matchupMetadata(FIXTURE_MATCHUP).title).toBe(
-      `PvZ build orders — ${FIXTURE_MATCHUP.openers.length} openers ranked by win rate (12 workers) | SC2 Tools`,
-    );
+    expect(matchupMetadata(FIXTURE_MATCHUP).title).toEqual({
+      absolute: `PvZ build orders — ${FIXTURE_MATCHUP.openers.length} openers ranked by win rate (12 workers) | SC2 Tools`,
+    });
   });
 
   it("names the fixed 8-worker patch on a previous-era page, never the live patch", () => {
     const before = { ...FIXTURE_MATCHUP, era: "before" as const };
     const md = matchupMetadata(before);
-    expect(md.title).toBe(
-      `PvZ build orders — ${FIXTURE_MATCHUP.openers.length} openers ranked by win rate (8-worker patch 5.0.16) | SC2 Tools`,
-    );
+    expect(md.title).toEqual({
+      absolute: `PvZ build orders — ${FIXTURE_MATCHUP.openers.length} openers ranked by win rate (8-worker patch 5.0.16) | SC2 Tools`,
+    });
     expect(String(md.description)).toContain("on the 8-worker patch 5.0.16.");
     expect(`${md.title} ${md.description}`).not.toMatch(/5\.0\.17|12-worker/);
     expect(matchupOgCard(before)?.subtitle).toMatch(/· 8 workers · 5\.0\.16$/);
@@ -140,16 +140,16 @@ describe("guideMetadata", () => {
 
   it("pluralizes counts of one in titles and descriptions", () => {
     const one = { ...FIXTURE_MATCHUP, openers: FIXTURE_MATCHUP.openers.slice(0, 1) };
-    expect(matchupMetadata(one).title).toBe("PvZ build orders — 1 opener ranked by win rate (12 workers) | SC2 Tools");
+    expect(matchupMetadata(one).title).toEqual({ absolute: "PvZ build orders — 1 opener ranked by win rate (12 workers) | SC2 Tools" });
     expect(String(matchupMetadata(one).description)).toMatch(/^1 PvZ opener ranked /);
     expect(matchupOgCard(one)?.subtitle).toMatch(/^1 opener ranked /);
     const oneCounter = {
       ...FIXTURE_MATCHUP,
       counters: FIXTURE_MATCHUP.counters.map((row, i) => ({ ...row, published: i === 0 && row.games !== null })),
     };
-    expect(String(counterListMetadata(oneCounter).title)).toContain("— 1 counter guide (12 workers)");
+    expect(counterListMetadata(oneCounter).title).toEqual({ absolute: expect.stringContaining("— 1 counter guide (12 workers)") });
     const oneMap = { ...FIXTURE_INDEX, maps: FIXTURE_INDEX.maps.slice(0, 1) };
-    expect(String(mapsListMetadata(oneMap).title)).toContain("— 1 map with openers");
+    expect(mapsListMetadata(oneMap).title).toEqual({ absolute: expect.stringContaining("— 1 map with openers") });
     expect(String(mapsListMetadata(oneMap).description)).toContain("on 1 ladder map,");
   });
 
@@ -174,11 +174,11 @@ describe("guideMetadata", () => {
       videos: [VIDEO_PVZ_CRACKING_8_POOLS],
     };
     const md = hubMetadata(videosOnly);
-    expect(md.title).toBe("StarCraft II build order guides — 1 build-order video (12 workers) | SC2 Tools");
+    expect(md.title).toEqual({ absolute: "StarCraft II build order guides — 1 build-order video (12 workers) | SC2 Tools" });
     expect(md.robots).toBeUndefined();
-    expect(hubMetadata({ ...videosOnly, videos: [] }).title).toBe(
-      "StarCraft II build order guides (12 workers) | SC2 Tools",
-    );
+    expect(hubMetadata({ ...videosOnly, videos: [] }).title).toEqual({
+      absolute: "StarCraft II build order guides (12 workers) | SC2 Tools",
+    });
   });
 });
 

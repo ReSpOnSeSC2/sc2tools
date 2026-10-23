@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { isAppSurfacePath, isProtectedSurfacePath } from "@/components/chrome/appNav";
 import { ALL_HELP_ARTICLES } from "@/lib/help";
+import { HELP_CATEGORIES } from "@/lib/help/categories";
 
 const auth = vi.hoisted(() => ({ signedIn: false }));
 
@@ -52,8 +53,13 @@ describe("/help", () => {
     const builds = document.getElementById("builds") as HTMLElement;
     expect(within(builds).getByRole("heading", { level: 3, name: "Builds" })).toBeTruthy();
     expect(within(builds).getByRole("link", { name: /Build check-in/ }).getAttribute("href")).toBe("/help/build-check-in");
-    // Topics without articles yet stay hidden.
-    expect(document.getElementById("account-data")).toBeNull();
+    // Topics with articles get a card; topics without articles yet stay hidden.
+    expect(document.getElementById("account-data")).not.toBeNull();
+    expect(document.getElementById("desktop-app")).toBeNull();
+    for (const category of HELP_CATEGORIES) {
+      const hasArticles = ALL_HELP_ARTICLES.some((article) => article.category === category.id);
+      expect(document.getElementById(category.id) !== null, category.id).toBe(hasArticles);
+    }
 
     expect(screen.getByRole("link", { name: "responsecoaching@gmail.com" }).getAttribute("href")).toBe(
       "mailto:responsecoaching@gmail.com",
@@ -78,7 +84,9 @@ describe("/help/[slug]", () => {
   it("sets a canonical URL, title and description", async () => {
     const meta = await generateMetadata({ params: Promise.resolve({ slug: "getting-started" }) });
     expect(meta.alternates?.canonical).toBe("/help/getting-started");
-    expect(meta.title).toBe("Getting started (5 minutes) · SC2 Tools Help");
+    // The root template adds " · SC2 Tools"; the social card carries it itself.
+    expect(meta.title).toBe("Getting started (5 minutes) · Help");
+    expect(meta.openGraph?.title).toBe("Getting started (5 minutes) · Help · SC2 Tools");
     expect(meta.description).toContain("pair the desktop app");
     expect(meta.openGraph?.images).toEqual([expect.objectContaining({ url: "/og.jpg" })]);
     expect(meta.twitter).toEqual(expect.objectContaining({ card: "summary_large_image" }));
@@ -90,7 +98,7 @@ describe("/help/[slug]", () => {
     expect(within(crumbs).getByRole("link", { name: "Help center" }).getAttribute("href")).toBe("/help");
     expect(within(crumbs).getByRole("link", { name: "Getting started" }).getAttribute("href")).toBe("/help#getting-started");
     expect(screen.getByRole("heading", { level: 1, name: "Getting started (5 minutes)" })).toBeTruthy();
-    expect(screen.getByText("October 22, 2026").closest("time")?.getAttribute("dateTime")).toBe("2026-10-22");
+    expect(screen.getByText("October 23, 2026").closest("time")?.getAttribute("dateTime")).toBe("2026-10-23");
     expect(screen.getByRole("link", { name: "Download" }).getAttribute("href")).toBe("/download");
     expect(screen.getByRole("link", { name: "Devices" }).getAttribute("href")).toBe("/devices");
 

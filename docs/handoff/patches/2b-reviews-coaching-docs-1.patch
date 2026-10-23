@@ -1,0 +1,1536 @@
+From 80b7829df63d8be9249dd96dcf63cd92d8748346 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 23 Oct 2026 02:19:07 +0000
+Subject: [PATCH] feat(help): Replay reviews and Coaching guides, linked from
+ each page
+
+Add the "Reviews & coaching" help topic with two articles:
+/help/replay-reviews (public: how it works, asking, writing a review,
+who can review, karma and badges, closing and sharing, blocking and
+reporting) and /help/coaching (signed-in and noindex: roles and
+linking, the Locker, practice sharing, practice plans, sessions).
+
+The help system gains section anchors (a heading `id`, rendered as the
+element id on /help/<slug> and focused inside the HelpLink sheet via
+`anchor`), and a `noindex` flag that adds a robots noindex tag and
+keeps the article out of the sitemap.
+
+Entry points: "How it works" in the /reviews and /reviews/mine
+headers (visible signed out too), "How to ask" beside "Ask about one
+of your games" in place of its hover-only title, "How coaching works"
+in the Coaching tab row and on the invite-only screen, and a "Why?"
+link plus "Get the desktop app" on the review page's comment gates.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01KG8e5a59qtUDJJY3Fm1hxC
+---
+ apps/web/app/__tests__/sitemap.test.ts        |   7 +-
+ .../app/coaching/CoachingWorkspace.test.tsx   |  21 ++-
+ apps/web/app/coaching/CoachingWorkspace.tsx   |  64 +++++---
+ apps/web/app/help/[slug]/page.tsx             |   2 +
+ apps/web/app/help/__tests__/pages.test.tsx    |  28 ++++
+ apps/web/app/reviews/(board)/page.test.tsx    |  20 +++
+ apps/web/app/reviews/(board)/page.tsx         |  21 ++-
+ apps/web/app/reviews/mine/page.test.tsx       |  29 ++++
+ apps/web/app/reviews/mine/page.tsx            |  12 +-
+ apps/web/components/help/HelpArticleBody.tsx  |  20 ++-
+ apps/web/components/help/HelpLink.tsx         |  30 +++-
+ apps/web/components/help/LazyHelpLink.tsx     |  18 ++-
+ .../help/__tests__/HelpArticleBody.test.tsx   |  24 +++
+ .../help/__tests__/HelpLink.test.tsx          |  44 ++++++
+ apps/web/components/reviews/ReviewPage.tsx    |  63 ++++++--
+ .../__tests__/ReviewComposerGate.test.tsx     |  87 +++++++++++
+ apps/web/lib/help/__tests__/articles.test.ts  |  66 +++++++-
+ .../lib/help/__tests__/helpLinkUsage.test.ts  |  74 +++++++++
+ apps/web/lib/help/__tests__/jsonLd.test.ts    |  10 ++
+ apps/web/lib/help/__tests__/registry.test.ts  |  17 ++
+ apps/web/lib/help/articles/index.generated.ts |   4 +
+ .../articles/reviews-coaching/coaching.ts     | 117 ++++++++++++++
+ .../reviews-coaching/replay-reviews.ts        | 146 ++++++++++++++++++
+ apps/web/lib/help/categories.ts               |   5 +
+ apps/web/lib/help/index.ts                    |  21 ++-
+ apps/web/lib/help/sitemap.ts                  |  11 +-
+ apps/web/lib/help/types.ts                    |  16 +-
+ docs/reviews.md                               |   4 +
+ 28 files changed, 911 insertions(+), 70 deletions(-)
+ create mode 100644 apps/web/app/reviews/mine/page.test.tsx
+ create mode 100644 apps/web/components/reviews/__tests__/ReviewComposerGate.test.tsx
+ create mode 100644 apps/web/lib/help/__tests__/helpLinkUsage.test.ts
+ create mode 100644 apps/web/lib/help/articles/reviews-coaching/coaching.ts
+ create mode 100644 apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts
+
+diff --git a/apps/web/app/__tests__/sitemap.test.ts b/apps/web/app/__tests__/sitemap.test.ts
+index 61dbeded..df146dd3 100644
+--- a/apps/web/app/__tests__/sitemap.test.ts
++++ b/apps/web/app/__tests__/sitemap.test.ts
+@@ -98,14 +98,17 @@ describe("sitemap", () => {
+     expect(list).not.toContain(`${SITE}/reviews/short`);
+   });
+ 
+-  it("lists the help center and every help article, dated by the article", async () => {
++  it("lists the help center and every indexable help article, dated by the article", async () => {
+     const rows = await sitemap();
+     const list = rows.map((row) => row.url);
+     expect(list).toContain(`${SITE}/help`);
+     for (const article of ALL_HELP_ARTICLES) {
+       const row = rows.find((entry) => entry.url === `${SITE}/help/${article.slug}`);
+-      expect(row?.lastModified, article.slug).toEqual(new Date(article.updated));
++      if (article.noindex) expect(row, article.slug).toBeUndefined();
++      else expect(row?.lastModified, article.slug).toEqual(new Date(article.updated));
+     }
++    // The invite-only coaching guide stays out of search engines.
++    expect(list).not.toContain(`${SITE}/help/coaching`);
+   });
+ 
+   it("dates static pages by their last content change, never the request time", async () => {
+diff --git a/apps/web/app/coaching/CoachingWorkspace.test.tsx b/apps/web/app/coaching/CoachingWorkspace.test.tsx
+index 54d4cbd7..a75ae2e8 100644
+--- a/apps/web/app/coaching/CoachingWorkspace.test.tsx
++++ b/apps/web/app/coaching/CoachingWorkspace.test.tsx
+@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
+ import { afterEach, describe, expect, it, vi } from "vitest";
+ 
+ const harness = vi.hoisted(() => ({
++  role: "coach",
+   search: "",
+   replace: vi.fn(),
+   mutate: vi.fn(async () => undefined),
+@@ -13,7 +14,7 @@ vi.mock("next/navigation", () => ({
+ }));
+ vi.mock("@/lib/clientApi", () => ({
+   useApi: () => ({
+-    data: { role: "coach", coachId: "coach-1", studentId: null },
++    data: { role: harness.role, coachId: harness.role === "coach" ? "coach-1" : null, studentId: null },
+     error: undefined,
+     isLoading: false,
+     mutate: harness.mutate,
+@@ -37,6 +38,7 @@ import CoachingWorkspace from "./CoachingWorkspace";
+ 
+ afterEach(() => {
+   cleanup();
++  harness.role = "coach";
+   harness.search = "";
+   harness.replace.mockClear();
+   harness.mutate.mockClear();
+@@ -76,4 +78,21 @@ describe("CoachingWorkspace", () => {
+     await waitFor(() => expect(screen.getByTestId("sessions-view")).toBeTruthy());
+     expect(screen.getByTestId("locker-host").parentElement?.getAttribute("aria-hidden")).toBe("true");
+   });
++
++  it("links the guide from the tab row", async () => {
++    render(<CoachingWorkspace />);
++    const help = await screen.findByRole("link", { name: "How coaching works" });
++    expect(help.getAttribute("href")).toBe("/help/coaching");
++    const nav = screen.getByRole("navigation", { name: "Coaching workspace" });
++    expect(nav.parentElement?.contains(help)).toBe(true);
++  });
++
++  it("explains the invite-only screen to an account no coach has attached", async () => {
++    harness.role = "none";
++    render(<CoachingWorkspace />);
++    expect(screen.getByRole("heading", { name: "Private coaching" })).toBeTruthy();
++    const help = await screen.findByRole("link", { name: "How coaching access works" });
++    expect(help.getAttribute("href")).toBe("/help/coaching#roles-and-linking");
++    expect(screen.queryByRole("navigation", { name: "Coaching workspace" })).toBeNull();
++  });
+ });
+diff --git a/apps/web/app/coaching/CoachingWorkspace.tsx b/apps/web/app/coaching/CoachingWorkspace.tsx
+index c3b7f18c..93c6b500 100644
+--- a/apps/web/app/coaching/CoachingWorkspace.tsx
++++ b/apps/web/app/coaching/CoachingWorkspace.tsx
+@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
+ import { CalendarClock, LockKeyhole, PanelsTopLeft, Target } from "lucide-react";
+ import { useApi } from "@/lib/clientApi";
+ import { Card } from "@/components/ui/Card";
++import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+ import LockerHost from "./LockerHost";
+ import CoachingPractice from "./CoachingPractice";
+ import CoachingSchedule from "./CoachingSchedule";
+@@ -80,6 +81,13 @@ export default function CoachingWorkspace() {
+             This workspace is invite-only. Ask your coach to attach the
+             sc2tools.com account you are currently signed in with.
+           </p>
++          <LazyHelpLink
++            slug="coaching"
++            anchor="roles-and-linking"
++            className="mt-3 inline-flex min-h-11 items-center text-caption font-semibold"
++          >
++            How coaching access works
++          </LazyHelpLink>
+         </div>
+       </Card>
+     );
+@@ -100,32 +108,40 @@ export default function CoachingWorkspace() {
+   return (
+     <div className="space-y-5">
+       <h1 className="sr-only">Coaching</h1>
+-      <nav
+-        aria-label="Coaching workspace"
+-        className="flex w-full gap-1 rounded-xl border-2 border-line bg-bg-surface p-1 shadow-hard sm:w-fit"
+-      >
+-        <WorkspaceTab
+-          active={view === "locker"}
+-          onClick={() => selectView("locker")}
+-          icon={<PanelsTopLeft className="h-4 w-4" aria-hidden />}
+-        >
+-          Locker
+-        </WorkspaceTab>
+-        <WorkspaceTab
+-          active={view === "practice"}
+-          onClick={() => selectView("practice")}
+-          icon={<Target className="h-4 w-4" aria-hidden />}
++      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
++        <nav
++          aria-label="Coaching workspace"
++          className="flex w-full gap-1 rounded-xl border-2 border-line bg-bg-surface p-1 shadow-hard sm:w-fit"
+         >
+-          Practice
+-        </WorkspaceTab>
+-        <WorkspaceTab
+-          active={view === "sessions"}
+-          onClick={() => selectView("sessions")}
+-          icon={<CalendarClock className="h-4 w-4" aria-hidden />}
++          <WorkspaceTab
++            active={view === "locker"}
++            onClick={() => selectView("locker")}
++            icon={<PanelsTopLeft className="h-4 w-4" aria-hidden />}
++          >
++            Locker
++          </WorkspaceTab>
++          <WorkspaceTab
++            active={view === "practice"}
++            onClick={() => selectView("practice")}
++            icon={<Target className="h-4 w-4" aria-hidden />}
++          >
++            Practice
++          </WorkspaceTab>
++          <WorkspaceTab
++            active={view === "sessions"}
++            onClick={() => selectView("sessions")}
++            icon={<CalendarClock className="h-4 w-4" aria-hidden />}
++          >
++            Sessions
++          </WorkspaceTab>
++        </nav>
++        <LazyHelpLink
++          slug="coaching"
++          className="inline-flex min-h-11 items-center self-end text-caption font-semibold sm:self-auto"
+         >
+-          Sessions
+-        </WorkspaceTab>
+-      </nav>
++          How coaching works
++        </LazyHelpLink>
++      </div>
+ 
+       {/* The legacy Locker script declares global lexical bindings. Keep its
+           host mounted while switching sections so returning to Locker never
+diff --git a/apps/web/app/help/[slug]/page.tsx b/apps/web/app/help/[slug]/page.tsx
+index 77d93872..f1ba048a 100644
+--- a/apps/web/app/help/[slug]/page.tsx
++++ b/apps/web/app/help/[slug]/page.tsx
+@@ -49,6 +49,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
+     title,
+     description,
+     alternates: { canonical },
++    // Invite-only features stay out of search engines (and the sitemap).
++    ...(article.noindex ? { robots: { index: false, follow: true } } : {}),
+     openGraph: {
+       type: "article",
+       siteName: "SC2 Tools",
+diff --git a/apps/web/app/help/__tests__/pages.test.tsx b/apps/web/app/help/__tests__/pages.test.tsx
+index 8e2d4127..7427ac9d 100644
+--- a/apps/web/app/help/__tests__/pages.test.tsx
++++ b/apps/web/app/help/__tests__/pages.test.tsx
+@@ -123,6 +123,34 @@ describe("/help/[slug]", () => {
+     expect(screen.getByRole("link", { name: "Settings → Build check-in" }).getAttribute("href")).toBe("/settings?tab=checkin");
+   });
+ 
++  it("gives sections stable anchors: /help/replay-reviews#who-can-review lands on its heading", async () => {
++    await renderArticle("replay-reviews");
++    const heading = screen.getByRole("heading", { level: 2, name: "Who can review" });
++    expect(heading.id).toBe("who-can-review");
++    expect(screen.getByRole("link", { name: "desktop app" }).getAttribute("href")).toBe("/download");
++  });
++
++  it("keeps the invite-only coaching article out of search engines", async () => {
++    const coaching = await generateMetadata({ params: Promise.resolve({ slug: "coaching" }) });
++    expect(coaching.robots).toEqual({ index: false, follow: true });
++    const reviews = await generateMetadata({ params: Promise.resolve({ slug: "replay-reviews" }) });
++    expect(reviews.robots).toBeUndefined();
++
++    await renderArticle("coaching");
++    expect(screen.getByRole("heading", { level: 1, name: "Coaching workspace (coaches & students)" })).toBeTruthy();
++    expect(screen.getByText(/The steps in this article happen in your account/)).toBeTruthy();
++  });
++
++  it("files both under Reviews & coaching on the hub", () => {
++    render(<HelpHubPage />);
++    const card = document.getElementById("reviews-coaching") as HTMLElement;
++    expect(within(card).getByRole("heading", { level: 3, name: "Reviews & coaching" })).toBeTruthy();
++    expect(within(card).getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual([
++      "/help/replay-reviews",
++      "/help/coaching",
++    ]);
++  });
++
+   it("hides the sign-in note once signed in", async () => {
+     auth.signedIn = true;
+     await renderArticle("build-check-in");
+diff --git a/apps/web/app/reviews/(board)/page.test.tsx b/apps/web/app/reviews/(board)/page.test.tsx
+index 50808a35..b9cf52c7 100644
+--- a/apps/web/app/reviews/(board)/page.test.tsx
++++ b/apps/web/app/reviews/(board)/page.test.tsx
+@@ -63,4 +63,24 @@ describe("/reviews for a signed-out visitor", () => {
+     expect(screen.queryByRole("region", { name: "How the Review Exchange works" })).toBeNull();
+     expect(screen.getByRole("link", { name: "My reviews" })).toBeTruthy();
+   });
++
++  it("links the header to the full guide", async () => {
++    await renderBoard();
++    const link = await screen.findByRole("link", { name: "How it works" });
++    expect(link.getAttribute("href")).toBe("/help/replay-reviews");
++    expect(link.closest("header")).not.toBeNull();
++  });
++});
++
++describe("/reviews for a signed-in player", () => {
++  it("explains where asking starts, without a hover-only hint", async () => {
++    harness.signedIn = true;
++    await renderBoard();
++    const ask = screen.getByRole("link", { name: "Ask about one of your games" });
++    expect(ask.getAttribute("href")).toBe("/app/replays");
++    expect(ask.hasAttribute("title")).toBe(false);
++    const howTo = await screen.findByRole("link", { name: "How to ask" });
++    expect(howTo.getAttribute("href")).toBe("/help/replay-reviews#asking-for-a-review");
++    expect((await screen.findByRole("link", { name: "How it works" })).getAttribute("href")).toBe("/help/replay-reviews");
++  });
+ });
+diff --git a/apps/web/app/reviews/(board)/page.tsx b/apps/web/app/reviews/(board)/page.tsx
+index 470fbd6b..b34ffbe0 100644
+--- a/apps/web/app/reviews/(board)/page.tsx
++++ b/apps/web/app/reviews/(board)/page.tsx
+@@ -3,6 +3,7 @@ import Link from "next/link";
+ import { notFound } from "next/navigation";
+ import { CloudOff, MessageSquareText } from "lucide-react";
+ import { SignedIn, SignedOut } from "@clerk/nextjs";
++import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+ import { PageHeader } from "@/components/ui/PageHeader";
+ import { EmptyStatePanel } from "@/components/ui/EmptyState";
+ import { ReviewCard } from "@/components/reviews/ReviewCard";
+@@ -60,8 +61,12 @@ export default async function ReviewsBoardPage({ searchParams }: { searchParams:
+       title="Replay reviews"
+       description="Players post a game with a question; reviewers answer with comments pinned to exact moments on the replay and the map. Reviewer leagues are verified from their own synced games."
+       actions={
+-        <SignedIn>
+-          <div className="flex flex-wrap gap-2">
++        <>
++          {/* Outside SignedIn: visitors deciding whether to sign up need it most. */}
++          <LazyHelpLink slug="replay-reviews" className="inline-flex min-h-11 items-center text-caption font-semibold">
++            How it works
++          </LazyHelpLink>
++          <SignedIn>
+             <Link href="/reviews/mine" className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated">
+               My reviews
+             </Link>
+@@ -69,13 +74,19 @@ export default async function ReviewsBoardPage({ searchParams }: { searchParams:
+                 games (the "Ask for a review" button sits in its actions). */}
+             <Link
+               href="/app/replays"
+-              title="Opens your replays: pick a 1v1 game, then click “Ask for a review”"
+               className="hard-press inline-flex min-h-[44px] items-center rounded-full border-2 border-line bg-accent px-5 font-display text-body font-bold text-white hover:bg-accent-hover"
+             >
+               Ask about one of your games
+             </Link>
+-          </div>
+-        </SignedIn>
++            <LazyHelpLink
++              slug="replay-reviews"
++              anchor="asking-for-a-review"
++              className="inline-flex min-h-11 items-center text-caption font-semibold"
++            >
++              How to ask
++            </LazyHelpLink>
++          </SignedIn>
++        </>
+       }
+     />
+   );
+diff --git a/apps/web/app/reviews/mine/page.test.tsx b/apps/web/app/reviews/mine/page.test.tsx
+new file mode 100644
+index 00000000..c5399c60
+--- /dev/null
++++ b/apps/web/app/reviews/mine/page.test.tsx
+@@ -0,0 +1,29 @@
++import { cleanup, render, screen } from "@testing-library/react";
++import { afterEach, describe, expect, it, vi } from "vitest";
++
++/** "My reviews" links its header to the Replay reviews guide. */
++vi.mock("next/navigation", () => ({
++  notFound: () => {
++    throw new Error("NEXT_NOT_FOUND");
++  },
++}));
++vi.mock("@/components/reviews/MyReviews", () => ({ MyReviews: () => null }));
++
++import MyReviewsPage from "@/app/reviews/mine/page";
++
++afterEach(() => {
++  cleanup();
++  vi.unstubAllEnvs();
++});
++
++describe("/reviews/mine", () => {
++  it("offers the guide next to the way back to the board", async () => {
++    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
++    render(<MyReviewsPage />);
++    const header = screen.getByRole("heading", { level: 1, name: "My reviews" }).closest("header") as HTMLElement;
++    const help = await screen.findByRole("link", { name: "How it works" });
++    expect(help.getAttribute("href")).toBe("/help/replay-reviews");
++    expect(header.contains(help)).toBe(true);
++    expect(screen.getByRole("link", { name: "Review board" }).getAttribute("href")).toBe("/reviews");
++  });
++});
+diff --git a/apps/web/app/reviews/mine/page.tsx b/apps/web/app/reviews/mine/page.tsx
+index 2bc323d2..70694917 100644
+--- a/apps/web/app/reviews/mine/page.tsx
++++ b/apps/web/app/reviews/mine/page.tsx
+@@ -2,6 +2,7 @@ import type { Metadata } from "next";
+ import Link from "next/link";
+ import { notFound } from "next/navigation";
+ import { MessageSquareText } from "lucide-react";
++import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+ import { PageHeader } from "@/components/ui/PageHeader";
+ import { MyReviews } from "@/components/reviews/MyReviews";
+ import { reviewsRollout } from "@/lib/reviews";
+@@ -26,9 +27,14 @@ export default function MyReviewsPage() {
+         title="My reviews"
+         description="The replays you've asked about, the reviews you've written, and the reviewers you've blocked."
+         actions={
+-          <Link href="/reviews" className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated">
+-            Review board
+-          </Link>
++          <>
++            <LazyHelpLink slug="replay-reviews" className="inline-flex min-h-11 items-center text-caption font-semibold">
++              How it works
++            </LazyHelpLink>
++            <Link href="/reviews" className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated">
++              Review board
++            </Link>
++          </>
+         }
+       />
+       <MyReviews />
+diff --git a/apps/web/components/help/HelpArticleBody.tsx b/apps/web/components/help/HelpArticleBody.tsx
+index fc30c6ec..4d4ccde8 100644
+--- a/apps/web/components/help/HelpArticleBody.tsx
++++ b/apps/web/components/help/HelpArticleBody.tsx
+@@ -29,6 +29,12 @@ const HEADING_CLASS: Record<HelpArticleBodyVariant, string> = {
+   compact: "pt-1 text-body font-semibold text-text",
+ };
+ 
++/** Section headings: clear the sticky site header; no ring on script focus. */
++const ANCHOR_CLASS: Record<HelpArticleBodyVariant, string> = {
++  page: "scroll-mt-24",
++  compact: "focus:outline-none",
++};
++
+ function Block({
+   block,
+   variant,
+@@ -47,8 +53,20 @@ function Block({
+       );
+     case "heading": {
+       const Heading = variant === "page" ? "h2" : "h3";
++      // A section anchor is the element id on the article page, so the
++      // browser handles /help/<slug>#<id>. Compact surfaces can show many
++      // articles at once (Settings → Help), so they mark it with a data
++      // attribute instead; <HelpLink anchor> focuses it inside its sheet.
++      const anchorProps = !block.id
++        ? {}
++        : variant === "page"
++          ? { id: block.id }
++          : { "data-help-anchor": block.id, tabIndex: -1 };
+       return (
+-        <Heading className={HEADING_CLASS[variant]}>
++        <Heading
++          {...anchorProps}
++          className={block.id ? `${HEADING_CLASS[variant]} ${ANCHOR_CLASS[variant]}` : HEADING_CLASS[variant]}
++        >
+           <HelpInline text={block.text} links={links} />
+         </Heading>
+       );
+diff --git a/apps/web/components/help/HelpLink.tsx b/apps/web/components/help/HelpLink.tsx
+index 9ed63a16..aacc80c1 100644
+--- a/apps/web/components/help/HelpLink.tsx
++++ b/apps/web/components/help/HelpLink.tsx
+@@ -1,6 +1,6 @@
+ "use client";
+ 
+-import { useState, type MouseEvent, type ReactNode } from "react";
++import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+ import Link from "next/link";
+ import { ArrowUpRight, CircleHelp } from "lucide-react";
+ import { Modal } from "@/components/ui/Modal";
+@@ -21,25 +21,47 @@ import { HelpSupportLine } from "./HelpSupportLine";
+  * It is a real link to the article, so a middle-click or Ctrl/Cmd-click
+  * still opens the page in a new tab, and it works before hydration.
+  *
++ * `anchor` points at one section (a heading `id` in the article): the
++ * link goes to /help/<slug>#<anchor> and the sheet opens scrolled to
++ * that heading, with focus on it.
++ *
+  *   variant="inline" (default): text link; children default to the title.
+  *   variant="icon": a small "?" button for tight spots next to a setting;
+  *     its accessible name is "Help: <article title>".
+  */
+ export interface HelpLinkProps {
+   slug: string;
++  /** A section of the article: the `id` of one of its headings. */
++  anchor?: string;
+   children?: ReactNode;
+   variant?: "inline" | "icon";
+   className?: string;
+ }
+ 
+-export function HelpLink({ slug, children, variant = "inline", className = "" }: HelpLinkProps) {
++export function HelpLink({ slug, anchor, children, variant = "inline", className = "" }: HelpLinkProps) {
+   const [open, setOpen] = useState(false);
++  const bodyRef = useRef<HTMLDivElement>(null);
+   const article = getArticle(slug);
++
++  // Open the sheet at the section. Runs after Modal's own initial focus
++  // (child effects run first, so its 0 ms timer is queued before this one).
++  useEffect(() => {
++    if (!open || !anchor) return;
++    const timer = window.setTimeout(() => {
++      const headings = bodyRef.current?.querySelectorAll<HTMLElement>("[data-help-anchor]") ?? [];
++      const heading = Array.from(headings).find((element) => element.dataset.helpAnchor === anchor);
++      if (!heading) return;
++      heading.scrollIntoView?.({ block: "start" });
++      heading.focus({ preventScroll: true });
++    }, 0);
++    return () => window.clearTimeout(timer);
++  }, [open, anchor]);
++
+   // An unknown slug is a content bug (the help tests catch it); never
+   // render a link that leads nowhere.
+   if (!article) return children ? <>{children}</> : null;
+ 
+-  const href = helpArticlePath(article.slug);
++  const href = helpArticlePath(article.slug, anchor);
+   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
+     if (!isPlainClick(event)) return;
+     event.preventDefault();
+@@ -91,7 +113,7 @@ export function HelpLink({ slug, children, variant = "inline", className = "" }:
+           </Link>
+         }
+       >
+-        <div className="space-y-5">
++        <div ref={bodyRef} className="space-y-5">
+           <HelpArticleBody article={article} variant="compact" />
+           <HelpSupportLine className="border-t border-border pt-4 text-caption" />
+         </div>
+diff --git a/apps/web/components/help/LazyHelpLink.tsx b/apps/web/components/help/LazyHelpLink.tsx
+index a628e426..1f943857 100644
+--- a/apps/web/components/help/LazyHelpLink.tsx
++++ b/apps/web/components/help/LazyHelpLink.tsx
+@@ -18,18 +18,28 @@ const HelpLink = lazy(() =>
+  * instead; until then the reader sees a plain link to the article page,
+  * so it works before the chunk arrives and without JavaScript.
+  *
+- * Feature code that already links to help can keep importing HelpLink.
++ * Feature code that already links to help can keep importing HelpLink;
++ * pages that would otherwise ship no help text (the review board, a
++ * review, Coaching) use this one too.
+  */
+-export function LazyHelpLink({ slug, children, className = "" }: Pick<HelpLinkProps, "slug" | "children" | "className">) {
++export function LazyHelpLink({
++  slug,
++  anchor,
++  children,
++  className = "",
++}: Pick<HelpLinkProps, "slug" | "anchor" | "children" | "className">) {
+   return (
+     <Suspense
+       fallback={
+-        <a href={`/help/${slug}`} className={[HELP_TEXT_LINK_CLASS, className].filter(Boolean).join(" ")}>
++        <a
++          href={anchor ? `/help/${slug}#${anchor}` : `/help/${slug}`}
++          className={[HELP_TEXT_LINK_CLASS, className].filter(Boolean).join(" ")}
++        >
+           {children}
+         </a>
+       }
+     >
+-      <HelpLink slug={slug} className={className}>
++      <HelpLink slug={slug} anchor={anchor} className={className}>
+         {children}
+       </HelpLink>
+     </Suspense>
+diff --git a/apps/web/components/help/__tests__/HelpArticleBody.test.tsx b/apps/web/components/help/__tests__/HelpArticleBody.test.tsx
+index 79c5e682..1ac34abe 100644
+--- a/apps/web/components/help/__tests__/HelpArticleBody.test.tsx
++++ b/apps/web/components/help/__tests__/HelpArticleBody.test.tsx
+@@ -82,4 +82,28 @@ describe("HelpArticleBody", () => {
+     fireEvent.click(link);
+     expect(onOpenArticle).toHaveBeenCalledWith("getting-started");
+   });
++
++  it("gives anchored headings an id on the page and a data anchor when compact", () => {
++    const article: HelpArticle = {
++      ...ARTICLE,
++      body: [
++        { type: "heading", id: "who-can-review", text: "Who can review" },
++        { type: "heading", text: "No anchor" },
++      ],
++    };
++    const { unmount } = render(<HelpArticleBody article={article} />);
++    const page = screen.getByRole("heading", { level: 2, name: "Who can review" });
++    expect(page.id).toBe("who-can-review");
++    expect(page.className).toContain("scroll-mt-24");
++    expect(screen.getByRole("heading", { level: 2, name: "No anchor" }).id).toBe("");
++    unmount();
++
++    // Settings → Help shows many articles at once: no ids that could clash.
++    render(<HelpArticleBody article={article} variant="compact" />);
++    const compact = screen.getByRole("heading", { level: 3, name: "Who can review" });
++    expect(compact.id).toBe("");
++    expect(compact.getAttribute("data-help-anchor")).toBe("who-can-review");
++    expect(compact.getAttribute("tabindex")).toBe("-1");
++    expect(screen.getByRole("heading", { level: 3, name: "No anchor" }).hasAttribute("data-help-anchor")).toBe(false);
++  });
+ });
+diff --git a/apps/web/components/help/__tests__/HelpLink.test.tsx b/apps/web/components/help/__tests__/HelpLink.test.tsx
+index 5fe75ee2..bd096c4a 100644
+--- a/apps/web/components/help/__tests__/HelpLink.test.tsx
++++ b/apps/web/components/help/__tests__/HelpLink.test.tsx
+@@ -74,6 +74,50 @@ describe("HelpLink", () => {
+     expect(screen.getByRole("dialog", { name: "OBS overlay setup" })).toBeTruthy();
+   });
+ 
++  it("links to a section and opens the sheet at that heading", () => {
++    vi.useFakeTimers();
++    const original = HTMLElement.prototype.scrollIntoView;
++    const scrolled: Element[] = [];
++    HTMLElement.prototype.scrollIntoView = vi.fn(function (this: Element) {
++      scrolled.push(this);
++    });
++    try {
++      render(
++        <HelpLink slug="replay-reviews" anchor="who-can-review">
++          Why?
++        </HelpLink>,
++      );
++      const link = screen.getByRole("link", { name: "Why?" });
++      expect(link.getAttribute("href")).toBe("/help/replay-reviews#who-can-review");
++      fireEvent.click(link);
++      flushFocus();
++
++      const dialog = screen.getByRole("dialog", { name: /Replay reviews/ });
++      const heading = within(dialog).getByRole("heading", { level: 3, name: "Who can review" });
++      expect(document.activeElement).toBe(heading);
++      expect(scrolled).toEqual([heading]);
++    } finally {
++      HTMLElement.prototype.scrollIntoView = original;
++      vi.useRealTimers();
++    }
++  });
++
++  it("keeps Modal's own focus when the anchor is missing", () => {
++    vi.useFakeTimers();
++    try {
++      render(
++        <HelpLink slug="replay-reviews" anchor="no-such-section">
++          Help
++        </HelpLink>,
++      );
++      fireEvent.click(screen.getByRole("link", { name: "Help" }));
++      flushFocus();
++      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
++    } finally {
++      vi.useRealTimers();
++    }
++  });
++
+   it("renders plain children for an unknown slug instead of a dead link", () => {
+     render(<HelpLink slug="does-not-exist">Some text</HelpLink>);
+     expect(screen.getByText("Some text")).toBeTruthy();
+diff --git a/apps/web/components/reviews/ReviewPage.tsx b/apps/web/components/reviews/ReviewPage.tsx
+index fff90659..210b139b 100644
+--- a/apps/web/components/reviews/ReviewPage.tsx
++++ b/apps/web/components/reviews/ReviewPage.tsx
+@@ -6,6 +6,7 @@ import { useAuth } from "@clerk/nextjs";
+ import { ArrowLeft, Lock, MessageSquarePlus, Pin, PinOff } from "lucide-react";
+ import { Badge } from "@/components/ui/Badge";
+ import { Button } from "@/components/ui/Button";
++import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+ import { MapArtwork } from "@/components/maps/MapArtwork";
+ import { apiCall } from "@/lib/clientApi";
+ import { usePublicApi } from "@/lib/usePublicApi";
+@@ -16,6 +17,7 @@ import {
+   formatClock,
+   levelLabel,
+   pinNumbers,
++  REVIEW_LIMITS,
+   reviewHeadline,
+   reviewsRollout,
+   tagLabel,
+@@ -318,7 +320,24 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
+   );
+ }
+ 
+-function ComposerGate({
++const GATE_CLASS = "rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted";
++const GATE_LINK_CLASS = "inline-flex min-h-9 items-center text-caption font-semibold";
++
++/** "Why?" next to a gate: the article section on who can review. */
++function WhyLink() {
++  return (
++    <LazyHelpLink slug="replay-reviews" anchor="who-can-review" className={GATE_LINK_CLASS}>
++      Why?<span className="sr-only"> Who can review replays</span>
++    </LazyHelpLink>
++  );
++}
++
++/**
++ * What sits above the thread: Sign in, the reason you can't comment yet
++ * (with the way to fix it and a "Why?" into the help article), or the
++ * "Comment at 5:12" button. Exported for tests.
++ */
++export function ComposerGate({
+   data,
+   signedIn,
+   currentTime,
+@@ -341,20 +360,40 @@ function ComposerGate({
+     );
+   }
+   if (!v.canComment) {
+-    const reason = v.reason === "min_games"
+-      ? `Sync at least ${v.requiredGames ?? 20} games with the desktop agent to review replays (you have ${v.syncedGames ?? 0}).`
+-      : v.reason === "blocked"
+-        ? "The asker isn't accepting comments from you."
+-        : v.reason === "browser_session_required"
+-          ? "Sign in on the website to comment."
+-          : "Comments are closed.";
+-    return <p role="status" className="rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted">{reason}</p>;
++    if (v.reason === "min_games") {
++      return (
++        <div role="status" className={GATE_CLASS}>
++          <p>
++            Sync at least {v.requiredGames ?? REVIEW_LIMITS.MIN_SYNCED_GAMES} games with the desktop app to review replays (you have {v.syncedGames ?? 0}).
++          </p>
++          <p className="mt-1 flex flex-wrap items-center gap-x-4">
++            <Link href="/download" className={`${GATE_LINK_CLASS} text-accent-cyan underline underline-offset-2 hover:text-accent-hover`}>
++              Get the desktop app
++            </Link>
++            <WhyLink />
++          </p>
++        </div>
++      );
++    }
++    const reason = v.reason === "blocked"
++      ? "The asker isn't accepting comments from you."
++      : v.reason === "browser_session_required"
++        ? "Sign in on the website to comment."
++        : "Comments are closed.";
++    return <p role="status" className={GATE_CLASS}>{reason}</p>;
+   }
+   if (!v.isAsker && v.canReview === false) {
++    const level = data.request.desiredLevel;
++    const wanted = level === "my_league_or_higher" ? "players at their league or higher" : `${levelLabel(level)} players`;
+     return (
+-      <p role="status" className="rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted">
+-        The asker wants reviews from verified {levelLabel(data.request.desiredLevel)} players, so you can reply to existing reviews but not start a new one.
+-      </p>
++      <div role="status" className={GATE_CLASS}>
++        <p>
++          The asker wants reviews from verified {wanted}, so you can reply to existing reviews but not start a new one.
++        </p>
++        <p className="mt-1">
++          <WhyLink />
++        </p>
++      </div>
+     );
+   }
+   if (composing !== null) return null;
+diff --git a/apps/web/components/reviews/__tests__/ReviewComposerGate.test.tsx b/apps/web/components/reviews/__tests__/ReviewComposerGate.test.tsx
+new file mode 100644
+index 00000000..5f4a1f15
+--- /dev/null
++++ b/apps/web/components/reviews/__tests__/ReviewComposerGate.test.tsx
+@@ -0,0 +1,87 @@
++import { cleanup, render, screen } from "@testing-library/react";
++import { afterEach, describe, expect, it, vi } from "vitest";
++
++/**
++ * The gate above a review thread says why you can't comment yet, how to
++ * fix it, and links "Why?" into the Replay reviews guide. The page's
++ * heavy children are stubbed; only the gate renders.
++ */
++vi.mock("@clerk/nextjs", () => ({
++  useAuth: () => ({ getToken: async () => "token", isSignedIn: true, isLoaded: true, userId: "viewer" }),
++}));
++vi.mock("@/lib/clientApi", () => ({ apiCall: vi.fn(async () => ({})) }));
++vi.mock("@/lib/usePublicApi", () => ({ usePublicApi: () => ({ data: undefined, mutate: vi.fn() }) }));
++vi.mock("@/components/maps/MapArtwork", () => ({ MapArtwork: () => null }));
++vi.mock("../ReviewComposer", () => ({ ReviewComposer: () => null }));
++vi.mock("../ReviewReplayDownload", () => ({ ReviewReplayDownload: () => null }));
++vi.mock("../ReviewReplayPanel", () => ({ ReviewReplayPanel: () => null }));
++vi.mock("../ReviewShareMenu", () => ({ ReviewShareMenu: () => null }));
++vi.mock("../ReviewThread", () => ({ ReviewThread: () => null }));
++
++import { ComposerGate } from "../ReviewPage";
++import type { ReviewPageData } from "@/lib/reviews";
++
++const ID = "AAAAAAAAAAAAAAAA";
++
++function data(
++  viewer: Partial<ReviewPageData["viewer"]>,
++  desiredLevel: ReviewPageData["request"]["desiredLevel"] = "anyone",
++): ReviewPageData {
++  return {
++    request: {
++      id: ID, url: `/reviews/${ID}`, question: "Why did my blink all-in fail against roaches?",
++      tags: [], timeRange: null, desiredLevel, visibility: "public", status: "open", closedReason: null, hidden: false,
++      asker: { label: "Anonymous Protoss", anonymous: true, band: null, mmr: null, isYou: false },
++      game: { matchup: "PvZ", myRace: "Protoss", oppRace: "Zerg", map: "Alcyone LE", result: "Loss", durationSec: 640, myBuild: null, oppStrategy: null, macroScore: null, hasPlayback: false },
++      opponent: { label: "Opponent (Zerg, ~4,100 MMR)", race: "Zerg", band: null, mmr: 4100 },
++      stats: { reviewCount: 0, commentCount: 0, helpfulCount: 0, upvoteTotal: 0 },
++      bestCommentId: null, createdAt: "2026-09-27T10:00:00.000Z", lastActivityAt: null,
++    },
++    comments: [],
++    viewer: { signedIn: true, isAsker: false, isAdmin: false, canComment: true, reason: null, ...viewer },
++    seo: { indexable: false, answerCount: 0, acceptedAnswerId: null, suggestedAnswerIds: [] },
++  };
++}
++
++function renderGate(page: ReviewPageData) {
++  render(<ComposerGate data={page} signedIn currentTime={312} composing={null} onStart={() => {}} />);
++}
++
++afterEach(() => cleanup());
++
++describe("review composer gate", () => {
++  it("tells a new player how many games to sync, where to get the app, and why", async () => {
++    renderGate(data({ canComment: false, reason: "min_games", syncedGames: 3, requiredGames: 20 }));
++    const gate = screen.getByRole("status");
++    expect(gate.textContent).toContain("Sync at least 20 games with the desktop app to review replays (you have 3).");
++    expect(screen.getByRole("link", { name: "Get the desktop app" }).getAttribute("href")).toBe("/download");
++    const why = await screen.findByRole("link", { name: "Why? Who can review replays" });
++    expect(why.getAttribute("href")).toBe("/help/replay-reviews#who-can-review");
++  });
++
++  it("falls back to the standard threshold when the API leaves it out", () => {
++    renderGate(data({ canComment: false, reason: "min_games" }));
++    expect(screen.getByRole("status").textContent).toContain("Sync at least 20 games with the desktop app to review replays (you have 0).");
++  });
++
++  it("explains a league requirement in plain words, with the same Why? link", async () => {
++    renderGate(data({ canReview: false, reason: "level_required" }, "my_league_or_higher"));
++    expect(screen.getByRole("status").textContent).toContain(
++      "The asker wants reviews from verified players at their league or higher, so you can reply to existing reviews but not start a new one.",
++    );
++    const why = await screen.findByRole("link", { name: "Why? Who can review replays" });
++    expect(why.getAttribute("href")).toBe("/help/replay-reviews#who-can-review");
++    expect(screen.queryByRole("link", { name: "Get the desktop app" })).toBeNull();
++  });
++
++  it("names Masters+ as it appears in the request", () => {
++    renderGate(data({ canReview: false, reason: "level_required" }, "masters_plus"));
++    expect(screen.getByRole("status").textContent).toContain("The asker wants reviews from verified Masters+ players");
++  });
++
++  it("offers the comment button when nothing stands in the way", () => {
++    renderGate(data({}));
++    expect(screen.getByRole("button", { name: "Comment at 5:12" })).toBeTruthy();
++    expect(screen.queryByRole("status")).toBeNull();
++  });
++});
+diff --git a/apps/web/lib/help/__tests__/articles.test.ts b/apps/web/lib/help/__tests__/articles.test.ts
+index 2ff09748..f92caf84 100644
+--- a/apps/web/lib/help/__tests__/articles.test.ts
++++ b/apps/web/lib/help/__tests__/articles.test.ts
+@@ -9,7 +9,8 @@ import path from "node:path";
+ import { describe, expect, it } from "vitest";
+ import { defaultTabVisibility, isSettingsTabId } from "@/components/analyzer/settings/SettingsShell";
+ import { listHelpArticleFiles } from "@/scripts/gen-help-index.mjs";
+-import { ALL_HELP_ARTICLES, getArticle, resolveLegacyAnchor } from "../index";
++import { ALL_HELP_ARTICLES, getArticle, helpArticleAnchors, resolveLegacyAnchor } from "../index";
++import { helpSitemapRows } from "../sitemap";
+ import { helpArticleLinks, helpBlockText } from "../articleText";
+ import { isHelpCategoryId } from "../categories";
+ import { helpArticleSlugFromHref, helpHrefKind } from "../inline";
+@@ -44,7 +45,12 @@ function routeExists(segments: string[], dir = APP_DIR): boolean {
+ function brokenInternalLink(href: string): string | null {
+   const url = new URL(href, "https://sc2tools.com");
+   const slug = helpArticleSlugFromHref(url.pathname);
+-  if (slug) return getArticle(slug) ? null : `no help article "${slug}"`;
++  if (slug) {
++    const article = getArticle(slug);
++    if (!article) return `no help article "${slug}"`;
++    const anchor = url.hash.slice(1);
++    return anchor && !helpArticleAnchors(article).includes(anchor) ? `no section #${anchor} in "${slug}"` : null;
++  }
+   if (!routeExists(url.pathname.split("/").filter(Boolean))) return `no page at ${url.pathname}`;
+   if (url.pathname === "/settings") {
+     const tab = url.searchParams.get("tab");
+@@ -136,10 +142,10 @@ describe("help articles", () => {
+   });
+ 
+   it("has a link checker that catches broken links", () => {
+-    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/help/getting-started"]) {
++    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/help/getting-started", "/help/replay-reviews#who-can-review"]) {
+       expect(brokenInternalLink(ok), ok).toBeNull();
+     }
+-    for (const broken of ["/nope", "/settings?tab=nope", "/settings?tab=import", "/settings?tab=help#nope", "/help/nope"]) {
++    for (const broken of ["/nope", "/settings?tab=nope", "/settings?tab=import", "/settings?tab=help#nope", "/help/nope", "/help/replay-reviews#nope"]) {
+       expect(brokenInternalLink(broken), broken).not.toBeNull();
+     }
+   });
+@@ -185,4 +191,56 @@ describe("help articles", () => {
+   it("lists only existing articles as Popular", () => {
+     for (const slug of POPULAR_HELP_SLUGS) expect(getArticle(slug), slug).toBeDefined();
+   });
++
++  it("keeps section anchors well-formed and unique within each article", () => {
++    for (const article of ALL_HELP_ARTICLES) {
++      const anchors = helpArticleAnchors(article);
++      expect(new Set(anchors).size, article.slug).toBe(anchors.length);
++      for (const anchor of anchors) expect(anchor, article.slug).toMatch(SLUG_RE);
++    }
++  });
++});
++
++describe("reviews and coaching articles", () => {
++  it("explains replay reviews publicly, section by section", () => {
++    const article = getArticle("replay-reviews");
++    expect(article?.category).toBe("reviews-coaching");
++    expect(article?.audience).toBe("all");
++    expect(article?.signedInOnly).toBeFalsy();
++    expect(article?.noindex).toBeFalsy();
++    // Other pages and later articles link to these; never rename one.
++    expect(helpArticleAnchors(article!)).toEqual([
++      "how-it-works",
++      "asking-for-a-review",
++      "writing-a-review",
++      "who-can-review",
++      "karma-and-badges",
++      "closing-and-sharing",
++      "blocking-and-reporting",
++    ]);
++    const text = allTextFields(article!).join(" ");
++    expect(text).toContain("20 to 500 characters");
++    expect(text).toContain("all of the game's chat");
++    expect(text).toContain("20 games synced");
++    expect(text).toContain("15 minutes");
++    expect(helpArticleLinks(article!)).toEqual(expect.arrayContaining(["/download", "/reviews", "/reviews/mine"]));
++  });
++
++  it("keeps the invite-only coaching article signed-in, unindexed and out of the sitemap", () => {
++    const article = getArticle("coaching");
++    expect(article?.category).toBe("reviews-coaching");
++    expect(article?.signedInOnly).toBe(true);
++    expect(article?.noindex).toBe(true);
++    expect(helpArticleAnchors(article!)).toEqual([
++      "roles-and-linking",
++      "locker",
++      "practice-sharing",
++      "practice-plans",
++      "sessions",
++    ]);
++    expect(allTextFields(article!).join(" ")).toContain("the workspace never grades or scores your play");
++    const urls = helpSitemapRows("https://sc2tools.com").map((row) => row.url);
++    expect(urls).not.toContain("https://sc2tools.com/help/coaching");
++    expect(urls).toContain("https://sc2tools.com/help/replay-reviews");
++  });
+ });
+diff --git a/apps/web/lib/help/__tests__/helpLinkUsage.test.ts b/apps/web/lib/help/__tests__/helpLinkUsage.test.ts
+new file mode 100644
+index 00000000..2e64425c
+--- /dev/null
++++ b/apps/web/lib/help/__tests__/helpLinkUsage.test.ts
+@@ -0,0 +1,74 @@
++/**
++ * Every literal help link in the app resolves: <HelpLink> and
++ * <LazyHelpLink> slugs (and section anchors), and `helpSlug` props on
++ * empty states. A renamed article or heading id fails here instead of
++ * leaving a link that renders as plain text.
++ */
++import { readdirSync, readFileSync } from "node:fs";
++import path from "node:path";
++import { describe, expect, it } from "vitest";
++import { getArticle, helpArticleAnchors } from "../index";
++
++const WEB_ROOT = path.resolve(__dirname, "../../..");
++const SOURCE_DIRS = ["app", "components"];
++const HELP_LINK_RE = /<(?:Lazy)?HelpLink\b([^>]*)>/g;
++const HELP_SLUG_PROP_RE = /\bhelpSlug="([^"]+)"/g;
++
++function sourceFiles(dir: string): string[] {
++  const out: string[] = [];
++  for (const entry of readdirSync(dir, { withFileTypes: true })) {
++    if (entry.name === "node_modules" || entry.name === "__tests__") continue;
++    const full = path.join(dir, entry.name);
++    if (entry.isDirectory()) out.push(...sourceFiles(full));
++    else if (/\.tsx$/.test(entry.name) && !/\.test\.tsx$/.test(entry.name)) out.push(full);
++  }
++  return out;
++}
++
++interface Usage {
++  file: string;
++  slug: string;
++  anchor: string | null;
++}
++
++function literalHelpLinks(): Usage[] {
++  const usages: Usage[] = [];
++  for (const dir of SOURCE_DIRS) {
++    for (const file of sourceFiles(path.join(WEB_ROOT, dir))) {
++      const source = readFileSync(file, "utf8");
++      const name = path.relative(WEB_ROOT, file);
++      for (const match of source.matchAll(HELP_LINK_RE)) {
++        const slug = /\bslug="([^"]+)"/.exec(match[1])?.[1];
++        if (slug) usages.push({ file: name, slug, anchor: /\banchor="([^"]+)"/.exec(match[1])?.[1] ?? null });
++      }
++      for (const match of source.matchAll(HELP_SLUG_PROP_RE)) usages.push({ file: name, slug: match[1], anchor: null });
++    }
++  }
++  return usages;
++}
++
++describe("help links in the app", () => {
++  const usages = literalHelpLinks();
++
++  it("finds the links pages make", () => {
++    expect(usages).toEqual(
++      expect.arrayContaining([
++        { file: path.join("app", "reviews", "(board)", "page.tsx"), slug: "replay-reviews", anchor: null },
++        { file: path.join("app", "reviews", "(board)", "page.tsx"), slug: "replay-reviews", anchor: "asking-for-a-review" },
++        { file: path.join("app", "reviews", "mine", "page.tsx"), slug: "replay-reviews", anchor: null },
++        { file: path.join("components", "reviews", "ReviewPage.tsx"), slug: "replay-reviews", anchor: "who-can-review" },
++        { file: path.join("app", "coaching", "CoachingWorkspace.tsx"), slug: "coaching", anchor: null },
++      ]),
++    );
++  });
++
++  it("points every literal slug and anchor at a real article section", () => {
++    for (const { file, slug, anchor } of usages) {
++      const article = getArticle(slug);
++      expect(article, `${file}: no help article "${slug}"`).toBeDefined();
++      if (article && anchor) {
++        expect(helpArticleAnchors(article), `${file}: no section #${anchor} in "${slug}"`).toContain(anchor);
++      }
++    }
++  });
++});
+diff --git a/apps/web/lib/help/__tests__/jsonLd.test.ts b/apps/web/lib/help/__tests__/jsonLd.test.ts
+index 1a07f9dd..fa54134c 100644
+--- a/apps/web/lib/help/__tests__/jsonLd.test.ts
++++ b/apps/web/lib/help/__tests__/jsonLd.test.ts
+@@ -82,4 +82,14 @@ describe("helpSitemapRows", () => {
+     ]);
+     expect(helpSitemapRows(SITE, [])).toEqual([]);
+   });
++
++  it("leaves noindex articles out, and dates the hub by the listed ones", () => {
++    const rows = helpSitemapRows(SITE, [
++      { ...article("stream-dock"), updated: "2026-01-02" },
++      { ...article("getting-started"), updated: "2026-03-04", noindex: true },
++    ]);
++    expect(rows.map((row) => row.url)).toEqual([`${SITE}/help`, `${SITE}/help/stream-dock`]);
++    expect(rows[0].lastModified).toEqual(new Date("2026-01-02"));
++    expect(helpSitemapRows(SITE, [{ ...article("stream-dock"), noindex: true }])).toEqual([]);
++  });
+ });
+diff --git a/apps/web/lib/help/__tests__/registry.test.ts b/apps/web/lib/help/__tests__/registry.test.ts
+index 0843874a..e3a556e3 100644
+--- a/apps/web/lib/help/__tests__/registry.test.ts
++++ b/apps/web/lib/help/__tests__/registry.test.ts
+@@ -4,6 +4,7 @@ import {
+   articlesByCategory,
+   formatHelpDate,
+   getArticle,
++  helpArticleAnchors,
+   helpArticlePath,
+   helpAudienceLabel,
+   helpSettingsPath,
+@@ -39,11 +40,13 @@ describe("help categories", () => {
+       "game-page",
+       "opponents",
+       "builds",
++      "reviews-coaching",
+       "stream-studio",
+       "account-data",
+       "troubleshooting",
+     ]);
+     expect(helpCategory("account-data").name).toBe("Account & data");
++    expect(helpCategory("reviews-coaching").name).toBe("Reviews & coaching");
+     expect(isHelpCategoryId("builds")).toBe(true);
+     expect(isHelpCategoryId("nope")).toBe(false);
+   });
+@@ -54,9 +57,23 @@ describe("help registry", () => {
+     expect(getArticle("getting-started")?.title).toBe("Getting started (5 minutes)");
+     expect(getArticle("nope")).toBeUndefined();
+     expect(helpArticlePath("stream-dock")).toBe("/help/stream-dock");
++    expect(helpArticlePath("replay-reviews", "who-can-review")).toBe("/help/replay-reviews#who-can-review");
+     expect(helpSettingsPath("stream-dock")).toBe("/settings?tab=help#stream-dock");
+   });
+ 
++  it("lists an article's section anchors in reading order", () => {
++    const article = fixture("anchored", {
++      body: [
++        { type: "heading", text: "Plain heading" },
++        { type: "heading", id: "first", text: "First" },
++        { type: "paragraph", text: "p" },
++        { type: "heading", id: "second", text: "Second" },
++      ],
++    });
++    expect(helpArticleAnchors(article)).toEqual(["first", "second"]);
++    expect(helpArticleAnchors(fixture("none"))).toEqual([]);
++  });
++
+   it("groups articles by topic in display order, skipping empty topics", () => {
+     const groups = articlesByCategory();
+     expect(groups[0].category.id).toBe("getting-started");
+diff --git a/apps/web/lib/help/articles/index.generated.ts b/apps/web/lib/help/articles/index.generated.ts
+index b1775b89..3a7c8d22 100644
+--- a/apps/web/lib/help/articles/index.generated.ts
++++ b/apps/web/lib/help/articles/index.generated.ts
+@@ -16,6 +16,8 @@ import gettingStarted_gettingStarted from "./getting-started/getting-started";
+ import gettingStarted_howToUseHelp from "./getting-started/how-to-use-help";
+ import gettingStarted_installApp from "./getting-started/install-app";
+ import gettingStarted_settingsOverview from "./getting-started/settings-overview";
++import reviewsCoaching_coaching from "./reviews-coaching/coaching";
++import reviewsCoaching_replayReviews from "./reviews-coaching/replay-reviews";
+ import streamStudio_multiPlatformChat from "./stream-studio/multi-platform-chat";
+ import streamStudio_obsOverlaySetup from "./stream-studio/obs-overlay-setup";
+ import streamStudio_opponentScouting from "./stream-studio/opponent-scouting";
+@@ -38,6 +40,8 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
+   gettingStarted_howToUseHelp,
+   gettingStarted_installApp,
+   gettingStarted_settingsOverview,
++  reviewsCoaching_coaching,
++  reviewsCoaching_replayReviews,
+   streamStudio_multiPlatformChat,
+   streamStudio_obsOverlaySetup,
+   streamStudio_opponentScouting,
+diff --git a/apps/web/lib/help/articles/reviews-coaching/coaching.ts b/apps/web/lib/help/articles/reviews-coaching/coaching.ts
+new file mode 100644
+index 00000000..79eb1fc4
+--- /dev/null
++++ b/apps/web/lib/help/articles/reviews-coaching/coaching.ts
+@@ -0,0 +1,117 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "coaching",
++  title: "Coaching workspace (coaches & students)",
++  summary:
++    "The private workspace a coach shares with their students: linking accounts, the Locker, practice plans counted from synced replays, and booking sessions.",
++  category: "reviews-coaching",
++  audience: "all",
++  signedInOnly: true,
++  // Invite-only: explained to the people who use it, not advertised.
++  noindex: true,
++  keywords: [
++    "coach",
++    "coaching",
++    "student",
++    "lesson",
++    "locker",
++    "private coaching",
++    "invite",
++    "practice",
++    "practice plan",
++    "assignment",
++    "homework",
++    "practice sharing",
++    "booking",
++    "book a session",
++    "availability",
++    "schedule",
++    "time zone",
++  ],
++  updated: "2026-10-23",
++  order: 20,
++  body: [
++    {
++      type: "paragraph",
++      text: "[Coaching](/coaching) is a private workspace for a coach and their students, with three tabs: **Locker** (the coach's notes, builds and materials for each student), **Practice** (practice plans) and **Sessions** (booking lessons). Practice progress is counted from synced replays with fixed rules, and the workspace never grades or scores your play: every judgement is your coach's.",
++    },
++    { type: "heading", id: "roles-and-linking", text: "Who can use it" },
++    {
++      type: "list",
++      items: [
++        "Coaching is **invite-only**; there's no sign-up for it. A coach adds each student in the Locker by picking the student's sc2tools.com account, found by the email the student signed up with. Coaches themselves are added by the site's admin.",
++        "Everyone signs in with their normal sc2tools.com account. Students need the [desktop app](/download) for their games to sync and count; without it, games can still be sent to the coach with **Submit replays** in the Locker.",
++        "**Seeing a “Private coaching” screen?** The account you're signed in with isn't attached to a coach. Check that you're signed in with the account your coach added, or send your coach the email you signed up with.",
++      ],
++    },
++    { type: "heading", id: "locker", text: "The Locker" },
++    {
++      type: "paragraph",
++      text: "Each student has a private locker that only they and their coach can see. Questions and chat stay wherever you already talk to your coach.",
++    },
++    {
++      type: "list",
++      items: [
++        "**Students:** *This week* leads with one focus from your coach: one thing to do and one question to ask yourself after each game. *My builds* holds the openers your coach assigned, with build orders and benchmark timings. *My shelf* collects session notes, voice memos, videos and marked-up screenshots, newest first. Answer any waiting worksheet before your next session.",
++        "**Coaches:** pick a student in the left rail, then use **Weekly focus**, **Performance**, **Worksheets**, **Builds**, **Shelf** and **Inbox**. The Inbox lists the games your student picked or sent for review. The Locker's **?** button reopens its walkthrough and its own help, including backups of the whole Locker.",
++      ],
++    },
++    { type: "heading", id: "practice-sharing", text: "Practice sharing (the student's consent)" },
++    {
++      type: "paragraph",
++      text: "Before a coach can assign practice plans or look at a student's games, the student has to agree.",
++    },
++    {
++      type: "steps",
++      items: [
++        "The coach opens **Practice**, picks the student and presses **Request approval**. The student's account must be attached in the Locker first.",
++        "The student opens **Practice** and sees **Review practice sharing** with the coach's name. **Allow sharing** agrees; **Not now** declines, and the coach can ask again later.",
++        "With sharing on, the coach can assign plans and see the student's ranked 1v1 record in the Locker's **Performance** view. For each game that counts toward a plan, the coach sees its map, opponent, result and detected build, and can download the archived replay.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "To stop, the student presses **Revoke access** on the Practice tab, and the coach loses access right away. Allowing again later starts a new sharing period; games from the earlier plans stay private.",
++    },
++    { type: "heading", id: "practice-plans", text: "Practice plans" },
++    {
++      type: "paragraph",
++      text: "The coach sets a plan with **Assign games**. Each plan counts games from the student's synced replays with fixed rules, so nobody types in a number and nothing is self-reported.",
++    },
++    {
++      type: "table",
++      head: ["Plan", "What counts", "When"],
++      rows: [
++        [
++          "**A specific build**",
++          "Games where the replay matched that build: one of the student's custom builds, or an exact detected style name",
++          "One target across the dates you pick",
++        ],
++        ["**Total 1v1 games**", "Every 1v1 game that qualifies", "A target per day, week or month, repeated across the dates you pick"],
++      ],
++    },
++    {
++      type: "list",
++      items: [
++        "**Only 1v1 replays count**, ladder or custom. Team games, FFA and resumed replays are left out automatically.",
++        "**The player's time zone.** The coach picks it when assigning. Days, weeks and months start and end on the player's local calendar, so a late-night game counts on the day the player played it.",
++        "**Progress** updates as the desktop app syncs each replay and shows *Starts soon*, *In progress*, *Complete* or *Window ended*. A plan asks for 1 to 1,000 games and can span up to 366 days.",
++        "**Cancelling.** The coach presses **Cancel plan**. Its progress and game list stay visible, marked *Cancelled*, and new games stop counting.",
++      ],
++    },
++    { type: "heading", id: "sessions", text: "Booking sessions" },
++    {
++      type: "steps",
++      items: [
++        "**Coach:** in **Sessions**, choose your **Coaching timezone**, the **Session lengths** you offer (30 minutes to 8 hours) and your **Weekly hours**, then press **Save availability**. Sessions already booked stay booked when you change your hours later.",
++        "**Coach:** **Pause new bookings** stops new bookings without touching booked sessions. **Resume bookings** opens them again.",
++        "**Student:** in **Sessions**, pick a **Session length** and an open time under **Available times**. Times are shown in your local time, with your coach's time alongside. Press **Confirm booking**, and the session appears under **Your upcoming sessions**.",
++        "**Either side** can press **Cancel session** on an upcoming session. The other person sees the change, and the time opens up for booking again.",
++      ],
++    },
++  ],
++  related: ["install-app", "replay-reviews"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts b/apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts
+new file mode 100644
+index 00000000..5798de17
+--- /dev/null
++++ b/apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts
+@@ -0,0 +1,146 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "replay-reviews",
++  title: "Replay reviews: ask about a moment, answer with pinned comments",
++  summary:
++    "Post one of your 1v1 games with a question and get answers pinned to exact moments on the replay and the map, from players whose league is checked against their own games. Anyone can read reviews; asking and answering need a free account.",
++  category: "reviews-coaching",
++  audience: "all",
++  keywords: [
++    "review",
++    "feedback",
++    "coach me",
++    "karma",
++    "verified",
++    "league",
++    "replay review",
++    "review exchange",
++    "review board",
++    "ask for a review",
++    "best review",
++    "helpful",
++    "upvote",
++    "leaderboard",
++    "digest",
++    "block reviewer",
++    "report comment",
++    "my reviews",
++    "unverified",
++  ],
++  updated: "2026-10-23",
++  order: 10,
++  body: [
++    {
++      type: "paragraph",
++      text: "The [review board](/reviews) is where players help each other with real games. You post one of your games with a question. Reviewers watch it right on the site and answer with comments pinned to the exact moment, and to a spot on the map when the game has map playback. Anyone can read reviews. Asking and answering need a free account.",
++    },
++    { type: "heading", id: "how-it-works", text: "How it works" },
++    {
++      type: "steps",
++      items: [
++        "**Ask about a moment.** Open one of your synced 1v1 games and ask a specific question, like *Why did my push at 7:30 fail?*",
++        "**Get answers on the replay.** Reviewers comment at an exact time or over a short range, and can pin a spot on the map. A time written in a comment, like 5:40, jumps the replay there.",
++        "**Know who is answering.** Every reviewer shows a league checked against their own ranked games, never typed in by hand. Mark the reviews that helped you, and pick the best one.",
++      ],
++    },
++    { type: "heading", id: "asking-for-a-review", text: "Ask for a review" },
++    {
++      type: "steps",
++      items: [
++        "Open one of your 1v1 games: from [Replays](/app/replays), from the game's own page, or from an opponent's list of games. Press **Ask for a review**. On the review board, **Ask about one of your games** takes you to Replays.",
++        "Write **your question**, 20 to 500 characters. Name the moment and what you tried: *Why did my blink all-in fail? I hit at 6:00 but the roaches were already out* gets better answers than *What did I do wrong?*",
++        "Optionally pick **Focus** tags (build order, macro, scouting, army control, decision making, micro, specific timing) and a **Time range of interest**, like 5:00 to 6:30.",
++        "Choose **Who should review**: **Anyone**, **My league or higher** or **Masters+**. *My league or higher* is checked against each reviewer's league, verified from their own ranked games, and compared with the league you played at in this game. Anyone who can review may still reply under a review.",
++        "Choose the **Visibility**. **Public board** lists your request on the board. **Link only (not listed)** keeps it off the board and out of search engines, so only people you send the link to can find it.",
++        "Choose how you appear. You post as *Anonymous* and your race unless you tick **Show my display name** (set it in [Settings → Profile](/settings?tab=profile) first). Your opponent is never named: they appear as their race and approximate MMR.",
++        "Press **Post request**. You land on the request's page, and the bell in the header tells you when reviews arrive.",
++      ],
++    },
++    {
++      type: "callout",
++      tone: "warning",
++      title: "Sharing the replay file",
++      text: "**Let reviewers download the replay file** is off by default. The .SC2Replay file contains both players' in-game names and all of the game's chat, yours included, even when you post anonymously. Turn it on only if you're fine with that. You can turn it off later on the request's page, which stops new downloads.",
++    },
++    {
++      type: "list",
++      items: [
++        "You can post your own 1v1 games only. The game needs its macro breakdown; if the form says it has none yet, resync the game with the desktop app and try again.",
++        "You can have up to **3 open requests** at a time and post up to 3 new ones a day, one per game.",
++      ],
++    },
++    { type: "heading", id: "writing-a-review", text: "Write a review" },
++    {
++      type: "steps",
++      items: [
++        "Open a request from the [review board](/reviews), or from the board's **Requests you can help with** list. Play or scrub the replay to the moment you want to talk about.",
++        "Press **Comment at 5:12** (the button shows the replay's current time). The moment is saved when you start: **Use current time** moves it to where the replay is now, and **End range here** turns it into a range, like 5:12 to 5:40. A range can be up to 5 minutes long.",
++        "When the game has map playback, press **Pin a spot on the map** and click the map. The pin shows as a number on the map and next to your comment.",
++        "Say what happened and what to do instead, in 10 to 2,000 characters with up to 5 links. **Bold**, *italic*, lists and links work; the comment box shows how. A time like 5:40 becomes a link that jumps the replay there.",
++        "Press **Comment at …** to post it. You can **Edit** your comment for 15 minutes after posting, and **Delete** it at any time (deleting also takes back the karma it earned).",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Replies go one level deep: press **Reply** under a review to answer it. The asker's own notes and replies are marked **Asker**.",
++    },
++    { type: "heading", id: "who-can-review", text: "Who can review" },
++    {
++      type: "list",
++      items: [
++        "**Reading** is open to everyone, signed in or not.",
++        "**Commenting** needs a free account, signed in on the website, and at least **20 games synced** with the [desktop app](/download). Synced games show you really play, and they're what your league is verified from. The asker can always comment on their own request.",
++        "**Your league** is verified from your own ranked 1v1 games this season and last. A race needs at least 10 of them, and one lucky game can't lift you a league. Your comments then show it, like *Diamond Zerg (EU)*. Until then they show **Unverified**.",
++        "**Requests that ask for a level.** When the asker chose *My league or higher* or *Masters+*, only reviewers whose verified league qualifies can start a review. Everyone who can comment may still reply under one.",
++        "**Requests you can help with**, on the board page, lists open requests in your verified race's matchups at or below your league.",
++      ],
++    },
++    { type: "heading", id: "karma-and-badges", text: "Karma, badges and the leaderboard" },
++    {
++      type: "paragraph",
++      text: "Reviews earn karma when they help. There are no downvotes: if a review is wrong, say why in a reply, and report it only if it breaks the rules.",
++    },
++    {
++      type: "table",
++      head: ["What happens", "Karma"],
++      rows: [
++        ["The asker marks your review **Helpful**", "+5"],
++        ["The asker picks it as the **Best review** (one per request; the request shows as *Answered*)", "+15"],
++        ["Another player upvotes it", "+1 each, up to +10 per comment"],
++        ["A moderator removes it", "−20, and the karma it earned is taken back"],
++      ],
++    },
++    {
++      type: "list",
++      items: [
++        "**Badges:** *First Review* after your first review, *Helpful ×10* and *Mentor* at 10 and 50 helpful marks, *Best Answer ×10* at 10 best reviews. Your flair combines your verified league with your top title, like *Masters Mentor*.",
++        "**This week's top reviewers** on the board ranks the karma earned this week (Monday to Sunday, UTC). You're listed only if you tick **Show my name on the leaderboard** under it. Your karma counts toward your badges either way.",
++        "**Weekly digest of open requests in my matchups** sends one notification each Monday listing open requests you could answer. It's on by default once your league is verified; untick it under the leaderboard to stop it. Notifications arrive in the bell in the header; there's no email.",
++      ],
++    },
++    { type: "heading", id: "closing-and-sharing", text: "Close a request, stop sharing" },
++    {
++      type: "list",
++      items: [
++        "Press **Close request** at the top of your request when you're done. Closing stops new comments and stops sharing your game's analysis (the build order, macro breakdown and map playback reviewers watch). The question and every comment stay readable.",
++        "A closed request can't be reopened. To get more answers, ask about the same game again with a new request.",
++        "Removing the game from your history closes its request on its own.",
++        "To stop sharing the replay file without closing, untick **Let reviewers download my replay file** on the request. New downloads stop right away; files people already downloaded stay with them.",
++      ],
++    },
++    { type: "heading", id: "blocking-and-reporting", text: "Block or report" },
++    {
++      type: "list",
++      items: [
++        "Every comment has a **⋯** menu (**More actions**). **Report…** sends it to a moderator with a reason: spam, abusive or hateful, off-topic, reveals someone's identity, or other. When three different people report the same comment or request, it's hidden until a moderator looks at it.",
++        "Report anything that names or links to the opponent. Reviews must never reveal who they were. A disagreement about strategy isn't a reason to report: reply, or upvote the review you agree with.",
++        "**Block reviewer** hides that person's comments from you everywhere and stops notifications about them. They can't reply to your comments or comment on requests you post under your name.",
++        "To undo a block, open [My reviews](/reviews/mine), find **Blocked reviewers** and press **Unblock**.",
++      ],
++    },
++  ],
++  related: ["install-app", "coaching", "getting-started"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/categories.ts b/apps/web/lib/help/categories.ts
+index 94eacff1..404f4f35 100644
+--- a/apps/web/lib/help/categories.ts
++++ b/apps/web/lib/help/categories.ts
+@@ -42,6 +42,11 @@ export const HELP_CATEGORIES: readonly HelpCategory[] = [
+     name: "Builds",
+     description: "Custom builds, build check-in and how games are matched to builds.",
+   },
++  {
++    id: "reviews-coaching",
++    name: "Reviews & coaching",
++    description: "Ask other players about a moment in your game, review theirs, and the private coaching workspace.",
++  },
+   {
+     id: "stream-studio",
+     name: "Stream Studio",
+diff --git a/apps/web/lib/help/index.ts b/apps/web/lib/help/index.ts
+index 2fcc7c06..12f88958 100644
+--- a/apps/web/lib/help/index.ts
++++ b/apps/web/lib/help/index.ts
+@@ -26,9 +26,24 @@ export function getArticle(slug: string): HelpArticle | undefined {
+   return BY_SLUG.get(slug);
+ }
+ 
+-/** Public URL of an article. Example: `helpArticlePath("stream-dock")` → "/help/stream-dock". */
+-export function helpArticlePath(slug: string): string {
+-  return `/help/${slug}`;
++/**
++ * Public URL of an article, optionally at one of its section anchors.
++ *
++ * Example: `helpArticlePath("stream-dock")` → "/help/stream-dock";
++ * `helpArticlePath("replay-reviews", "who-can-review")` → "/help/replay-reviews#who-can-review".
++ */
++export function helpArticlePath(slug: string, anchor?: string): string {
++  return anchor ? `/help/${slug}#${anchor}` : `/help/${slug}`;
++}
++
++/**
++ * The section anchors an article defines: the `id` of each heading
++ * block, in reading order.
++ *
++ * Example: `helpArticleAnchors(getArticle("replay-reviews")!)[0]` → "how-it-works".
++ */
++export function helpArticleAnchors(article: HelpArticle): string[] {
++  return article.body.flatMap((block) => (block.type === "heading" && block.id ? [block.id] : []));
+ }
+ 
+ /** In-app URL that opens an article in Settings → Help. */
+diff --git a/apps/web/lib/help/sitemap.ts b/apps/web/lib/help/sitemap.ts
+index 53b179e3..53f3716a 100644
+--- a/apps/web/lib/help/sitemap.ts
++++ b/apps/web/lib/help/sitemap.ts
+@@ -6,17 +6,18 @@ const HUB_PRIORITY = 0.6;
+ const ARTICLE_PRIORITY = 0.5;
+ 
+ /**
+- * Sitemap rows for the public help center: the hub plus every article,
+- * dated by the article's own `updated` field (the hub by its newest
+- * article), never by the request time.
++ * Sitemap rows for the public help center: the hub plus every article
++ * not marked `noindex`, dated by the article's own `updated` field (the
++ * hub by its newest listed article), never by the request time.
+  *
+  * Example: `helpSitemapRows("https://sc2tools.com")` →
+  * `[{ url: "https://sc2tools.com/help", lastModified, … }, { url: ".../help/getting-started", … }, …]`.
+  */
+ export function helpSitemapRows(
+   siteUrl: string,
+-  articles: ReadonlyArray<HelpArticle> = ALL_HELP_ARTICLES,
++  allArticles: ReadonlyArray<HelpArticle> = ALL_HELP_ARTICLES,
+ ): MetadataRoute.Sitemap {
++  const articles = allArticles.filter((article) => !article.noindex);
+   if (articles.length === 0) return [];
+   const newest = articles.reduce((latest, article) => (article.updated > latest ? article.updated : latest), "");
+   return [
+@@ -26,7 +27,7 @@ export function helpSitemapRows(
+       changeFrequency: "weekly",
+       priority: HUB_PRIORITY,
+     },
+-    ...[...articles]
++    ...articles
+       .sort((a, b) => (a.slug < b.slug ? -1 : a.slug > b.slug ? 1 : 0))
+       .map((article) => ({
+         url: `${siteUrl}/help/${article.slug}`,
+diff --git a/apps/web/lib/help/types.ts b/apps/web/lib/help/types.ts
+index c5a3d72d..ba40649c 100644
+--- a/apps/web/lib/help/types.ts
++++ b/apps/web/lib/help/types.ts
+@@ -24,6 +24,7 @@ export type HelpCategoryId =
+   | "game-page"
+   | "opponents"
+   | "builds"
++  | "reviews-coaching"
+   | "stream-studio"
+   | "account-data"
+   | "troubleshooting";
+@@ -46,8 +47,13 @@ export type HelpWidgetId = "chat-commands";
+ export type HelpBlock =
+   /** A paragraph of text. */
+   | { type: "paragraph"; text: string }
+-  /** A sub-heading inside the article. */
+-  | { type: "heading"; text: string }
++  /**
++   * A sub-heading inside the article. `id` makes it a stable section
++   * anchor: /help/<slug>#<id> opens the article there, as does
++   * <HelpLink slug anchor>. Lowercase words joined by hyphens, unique
++   * within the article; never rename one that links point to.
++   */
++  | { type: "heading"; text: string; id?: string }
+   /** A numbered sequence the reader follows in order. */
+   | { type: "steps"; items: string[] }
+   /** A bulleted list. */
+@@ -76,6 +82,12 @@ export interface HelpArticle {
+    * renders for everyone; signed-out readers see a sign-in note.
+    */
+   signedInOnly?: boolean;
++  /**
++   * Keep the public page out of search engines: a noindex robots tag
++   * and no sitemap row. For features only invited accounts can use. The
++   * article still shows in the help center, search and Settings → Help.
++   */
++  noindex?: boolean;
+   /** Extra search terms: the words a reader might type that the text doesn't use. */
+   keywords: string[];
+   updated: HelpDate;
+diff --git a/docs/reviews.md b/docs/reviews.md
+index 90bb34cb..f7249b4b 100644
+--- a/docs/reviews.md
++++ b/docs/reviews.md
+@@ -28,6 +28,10 @@ own synced games, and helpful reviewers earn karma.
+     `lib/replayMarkers.ts`
+ - **Thresholds:** every number below lives in `REVIEWS` in
+   `apps/api/src/config/constants.js` (web mirrors in `lib/reviews.ts`).
++- **Player guide:** the help article `/help/replay-reviews`
++  (`apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts`)
++  repeats these rules and numbers in plain words. Update it with them;
++  the board, My reviews and the review page link its section anchors.
+ 
+ ## Rollout
+ 
+-- 
+2.43.0
+

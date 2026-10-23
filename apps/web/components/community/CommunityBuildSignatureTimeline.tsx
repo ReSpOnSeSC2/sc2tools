@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { signatureToRows } from "@/lib/build-events";
@@ -39,7 +40,8 @@ const CATEGORY_TEXT_CLASSES = {
  * derived from the persisted `signature` shape rather than per-event
  * stream — each signature entry shows a "×N" qty annotation since one
  * row represents the cumulative production of that unit before its
- * timestamp.
+ * timestamp. Times read "before 4:20" (a deadline, not a timing), and
+ * proxy steps carry a Proxy badge.
  */
 export function CommunityBuildSignatureTimeline({
   signature,
@@ -71,12 +73,10 @@ export function CommunityBuildSignatureTimeline({
         </div>
       ) : (
         <ul role="list" className="flex flex-col">
-          {signature?.map((item, index) => {
-            const row = rows[index];
-            if (!row) return null;
-            const count = Number.isFinite(item.count)
-              ? Math.max(1, Math.floor(item.count))
-              : 1;
+          {/* Iterate the rows, never signature[index]: signatureToRows
+              skips blank units, so index pairing would misalign them. */}
+          {rows.map((row) => {
+            const count = row.count ?? 1;
             return (
               <li key={row.key} role="listitem">
                 <div
@@ -88,11 +88,11 @@ export function CommunityBuildSignatureTimeline({
                     RAIL_CLASSES[row.category],
                   ].join(" ")}
                 >
-                  <span
-                    className="font-mono tabular-nums text-caption text-text-muted shrink-0 w-12 pt-0.5"
-                    aria-label={`Before ${row.timeDisplay}`}
-                  >
-                    {row.timeDisplay}
+                  <span className="min-w-[5.5rem] shrink-0 whitespace-nowrap pt-0.5 text-caption text-text-muted">
+                    before{" "}
+                    <span className="font-mono tabular-nums text-text">
+                      {row.timeDisplay}
+                    </span>
                   </span>
                   <span className="shrink-0 pt-0.5">
                     {row.iconPath && row.iconName ? (
@@ -118,6 +118,16 @@ export function CommunityBuildSignatureTimeline({
                         <span className="ml-2 text-caption text-text-muted">
                           ×{count}
                         </span>
+                      ) : null}
+                      {row.isProxy ? (
+                        <Badge
+                          size="sm"
+                          variant="warning"
+                          className="ml-2 align-middle"
+                          title="Only counts buildings placed away from the main base"
+                        >
+                          Proxy
+                        </Badge>
                       ) : null}
                     </span>
                   </span>

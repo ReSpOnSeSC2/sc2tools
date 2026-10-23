@@ -28,7 +28,8 @@ function tryMetadata(mode: InstantImportMode): Metadata {
   return {
     // Leads with the query people search ("sc2 replay analyzer"); the page's
     // H1 carries the same phrase.
-    title: "SC2 Replay Analyzer: free StarCraft II replay stats | SC2 Tools",
+    // Already branded, so it skips the root title template.
+    title: { absolute: "SC2 Replay Analyzer: free StarCraft II replay stats | SC2 Tools" },
     description:
       "Free StarCraft II replay analyzer: drop your .SC2Replay files and get your record by matchup, openers, macro and why you lost, analyzed privately in your browser. No download, no account.",
     alternates: { canonical: "/try" },

@@ -60,7 +60,8 @@ describe("help registry", () => {
   it("groups articles by topic in display order, skipping empty topics", () => {
     const groups = articlesByCategory();
     expect(groups[0].category.id).toBe("getting-started");
-    expect(groups[0].articles.map((article) => article.slug)).toEqual(["getting-started", "how-to-use-help"]);
+    // Ordered by `order`: the 5-minute setup first, then how Help works.
+    expect(groups[0].articles.map((article) => article.slug).slice(0, 2)).toEqual(["getting-started", "how-to-use-help"]);
     expect(groups.every((group) => group.articles.length > 0)).toBe(true);
     const order = HELP_CATEGORIES.map((category) => category.id);
     const shown = groups.map((group) => order.indexOf(group.category.id));

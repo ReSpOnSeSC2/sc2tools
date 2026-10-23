@@ -2,6 +2,7 @@
 
 import { Fragment } from "react";
 import { ChevronDown, CircleHelp, TriangleAlert } from "lucide-react";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { RULES_LEGEND, RULES_LEGEND_FOOTER } from "@/lib/build-rules-copy";
 import type { NameCountWarning } from "@/lib/build-rules-name-check";
 
@@ -12,8 +13,9 @@ const CALLOUT_CLASSES =
  * "How rules count" — the rules vocabulary as a native <details>,
  * collapsed by default. The terms are the editor's own words (At least
  * 2, Exactly 2, At most 2, None, before 4:20, Only count proxied).
+ * `withHelpLink` adds a link to the help article with worked examples.
  */
-export function RulesLegend() {
+export function RulesLegend({ withHelpLink = false }: { withHelpLink?: boolean } = {}) {
   return (
     <details className="group rounded-lg border border-border bg-bg-subtle/30 px-3 text-caption">
       <summary className="flex min-h-9 cursor-pointer list-none items-center gap-1.5 font-medium text-text-muted hover:text-text [&::-webkit-details-marker]:hidden">
@@ -33,6 +35,11 @@ export function RulesLegend() {
         ))}
       </dl>
       <p className="pb-3 text-micro text-text-dim">{RULES_LEGEND_FOOTER}</p>
+      {withHelpLink ? (
+        <p className="pb-3 text-micro text-text-muted">
+          Worked examples: <LazyHelpLink slug="rules-explained">How build rules are counted</LazyHelpLink>
+        </p>
+      ) : null}
     </details>
   );
 }

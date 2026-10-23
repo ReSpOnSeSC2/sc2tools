@@ -13,7 +13,8 @@ const TITLE = "SC2 Overlay for OBS: free StarCraft II Stream Studio | SC2 Tools"
 const DESCRIPTION = `Free StarCraft II overlays for OBS and Streamlabs: opponent scouting, MMR, match results, your session record and ${PRODUCT_FACTS.overlayWidgets} copy-and-paste widgets, plus merged Twitch, Kick, YouTube and TikTok chat.`;
 
 export const metadata: Metadata = {
-  title: TITLE,
+  // Search-tuned and already branded, so it skips the title template.
+  title: { absolute: TITLE },
   description: DESCRIPTION,
   alternates: { canonical: "/stream-studio" },
   openGraph: {

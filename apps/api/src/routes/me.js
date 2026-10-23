@@ -555,7 +555,7 @@ function buildMeRouter(deps) {
           severity: "warn",
           message:
             "Your SC2 profile isn't set up yet. Add your BattleTag or a Pulse ID to see opponent matchup stats.",
-          cta: { label: "Set up profile", href: "/settings#profile" },
+          cta: { label: "Set up profile", href: "/settings?tab=profile" },
         });
       }
 

@@ -4,9 +4,12 @@ import { useMemo, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { pct1, wrColor } from "@/lib/format";
+import { Button } from "@/components/ui/Button";
 import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { usePersistentSort, SortableTh, type SortState } from "@/components/ui/SortableTh";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
+import { NoFilterMatches } from "./EmptyStates";
 import { PhaseTrajectoryStrip } from "./PhaseTrajectoryStrip";
 import {
   PhaseCompositionTabs,
@@ -76,11 +79,12 @@ export function BuildVsStrategyView({
   const setMinGames = onMinGamesChange;
   const sort = usePersistentSort(LS_BVS_SORT, "total", "desc");
 
-  const { data, isLoading } = useApi<BvsCell[]>(
+  const cellsApi = useApi<BvsCell[]>(
     `/v1/build-vs-strategy${filtersToQuery(filters)}#${dbRev}`,
   );
+  const { data } = cellsApi;
 
-  const filtered = useMemo(() => {
+  const { filtered, hiddenByMinGames } = useMemo(() => {
     let r = data || [];
     const s = search.trim().toLowerCase();
     if (s) {
@@ -90,8 +94,9 @@ export function BuildVsStrategyView({
           (x.opp_strat || "").toLowerCase().includes(s),
       );
     }
+    const searched = r.length;
     if (minGames > 1) r = r.filter((x) => (x.total || 0) >= minGames);
-    return r;
+    return { filtered: r, hiddenByMinGames: searched - r.length };
   }, [data, search, minGames]);
 
   const rows = useMemo(
@@ -100,7 +105,9 @@ export function BuildVsStrategyView({
     [filtered, sort],
   );
 
-  if (isLoading) return <Skeleton rows={8} />;
+  if (!hasQueryData(cellsApi)) {
+    return <QueryState q={cellsApi} skeleton={<Skeleton rows={8} />} filtered />;
+  }
 
   return (
     <div className="space-y-4">
@@ -142,7 +149,19 @@ export function BuildVsStrategyView({
 
       {filtered.length === 0 ? (
         <Card>
-          <EmptyState title="Not enough samples" />
+          <NoFilterMatches
+            title="No build and strategy pairs match these filters"
+            minGames={minGames}
+            hiddenByMinGames={hiddenByMinGames}
+            onLowerMinGames={() => setMinGames(1)}
+            extraAction={
+              search.trim() ? (
+                <Button variant="secondary" size="sm" onClick={() => setSearch("")}>
+                  Clear search
+                </Button>
+              ) : null
+            }
+          />
         </Card>
       ) : view === "heatmap" ? (
         <BvsHeatmap rows={filtered} onOpenBvs={onOpenBvs} />

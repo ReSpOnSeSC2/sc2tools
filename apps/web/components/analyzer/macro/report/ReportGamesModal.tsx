@@ -6,6 +6,7 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import { Modal } from "@/components/ui/Modal";
 import { EmptyState, Skeleton } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { AllGamesTable } from "../../AllGamesTable";
 import type { ProfileGame } from "../../Last5GamesTimeline";
 import type { ReportDrill } from "./types";
@@ -64,9 +65,10 @@ export function ReportGamesModal({
     });
   }, [filters, drill]);
 
-  const { data, isLoading, error } = useApi<GamesListResp>(
+  const gamesApi = useApi<GamesListResp>(
     open && query ? `/v1/games-list${query}#${dbRev}` : null,
   );
+  const { data } = gamesApi;
 
   const games = useMemo<ProfileGame[]>(
     () =>
@@ -100,10 +102,8 @@ export function ReportGamesModal({
       title={drill.title}
       description={drill.description}
     >
-      {isLoading ? (
-        <Skeleton rows={5} />
-      ) : error ? (
-        <p className="text-sm text-danger">{error.message}</p>
+      {!hasQueryData(gamesApi) ? (
+        <QueryState q={gamesApi} skeleton={<Skeleton rows={5} />} filtered />
       ) : games.length === 0 ? (
         <EmptyState
           title="No matching games"

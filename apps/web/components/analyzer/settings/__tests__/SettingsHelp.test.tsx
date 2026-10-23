@@ -42,9 +42,10 @@ describe("SettingsHelp", () => {
     ]) {
       expect(screen.getByText(heading, { selector: "summary" })).toBeTruthy();
     }
-    expect(
-      screen.getByRole("link", { name: "responsecoaching@gmail.com" }),
-    ).toBeTruthy();
+    // "Still stuck?" ends the page with the support email (articles may
+    // mention it too).
+    const emails = screen.getAllByRole("link", { name: "responsecoaching@gmail.com" });
+    expect(emails[emails.length - 1].closest("p")?.textContent).toMatch(/include what you clicked/);
     expect(
       screen.getByRole("link", { name: "Stream Studio crash course & widget guides" }).getAttribute("href"),
     ).toBe("/stream-studio/learn");

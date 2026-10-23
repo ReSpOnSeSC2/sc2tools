@@ -28,8 +28,9 @@ import {
  * to, so the banner stays hidden entirely.
  *
  * Layout:
- *   - Mobile: full-width sheet pinned to the bottom, inset by
- *     safe-area-inset-bottom so it clears the iOS home indicator.
+ *   - Mobile: full-width sheet near the bottom, clear of the iOS home
+ *     indicator and, inside the app, above the tab bar
+ *     (`bottom-above-chrome`), so its buttons are never covered.
  *   - ≥sm: floats as a card in the bottom-right corner.
  */
 export function CookieBanner() {
@@ -49,9 +50,8 @@ export function CookieBanner() {
       aria-labelledby="cookie-title"
       aria-describedby="cookie-body"
       className={[
-        "fixed inset-x-0 bottom-0 z-50 px-3",
-        "pb-[max(env(safe-area-inset-bottom,0px),12px)]",
-        "sm:bottom-4 sm:left-auto sm:right-4 sm:inset-x-auto sm:max-w-md sm:px-0 sm:pb-4",
+        "fixed inset-x-0 bottom-above-chrome z-banner px-3",
+        "sm:left-auto sm:right-4 sm:inset-x-auto sm:max-w-md sm:px-0",
       ].join(" ")}
     >
       <Card variant="elevated" padded={false}>

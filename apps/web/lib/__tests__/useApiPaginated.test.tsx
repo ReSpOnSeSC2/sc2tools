@@ -100,3 +100,38 @@ describe("useApiPaginated account changes", () => {
     expect(signals.get("Bearer token-user-b")?.aborted).toBe(true);
   });
 });
+
+describe("useApiPaginated failures", () => {
+  it("reports the API's error envelope, never its raw body, and retries on mutate", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { code: "internal_error", message: "internal_error", requestId: "req-9" } }), {
+          status: 500,
+        }),
+      )
+      .mockResolvedValueOnce(pageResponse([{ id: "o-1" }]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const view = renderHook(() => useApiPaginated<{ id: string }>("/v1/opponents", 1));
+    await waitFor(() => expect(view.result.current.error).not.toBeNull());
+    expect(view.result.current.error).toMatchObject({
+      status: 500,
+      code: "internal_error",
+      requestId: "req-9",
+      message: "Something went wrong on our side. Try again in a moment.",
+    });
+
+    act(() => view.result.current.mutate());
+    expect(view.result.current.isLoading).toBe(true);
+    await waitFor(() => expect(view.result.current.items).toEqual([{ id: "o-1" }]));
+    expect(view.result.current.error).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("turns a request that never got an answer into a network error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    const view = renderHook(() => useApiPaginated<{ id: string }>("/v1/opponents", 1));
+    await waitFor(() => expect(view.result.current.error).toMatchObject({ status: 0, code: "network_unavailable" }));
+  });
+});

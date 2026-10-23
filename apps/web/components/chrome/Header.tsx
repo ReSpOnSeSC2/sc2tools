@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Menu } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { useApi } from "@/lib/clientApi";
 import { MobileNav } from "./MobileNav";
+import { NavAuthGate } from "./NavAuthGate";
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { reviewsVisible } from "@/lib/reviews";
 import { guidesEnabled } from "@/lib/guides/flags";
+import { getInstantImportMode } from "@/lib/instant/flag";
 import { headerNavLinks } from "./headerNav";
+import { LogoMark } from "./LogoMark";
 
 /**
  * Header — sticky site chrome shared by every authed and public page.
@@ -27,6 +29,9 @@ import { headerNavLinks } from "./headerNav";
  *   - The "Admin" link is appended only when /v1/me reports the
  *     signed-in user is on SC2TOOLS_ADMIN_USER_IDS. SWR dedupes the
  *     /me call against the rest of the SPA so this costs nothing.
+ *   - Signed-out visitors get the public pages plus Sign in / Get
+ *     started; signed-in players get their own links plus an
+ *     "Open app" pill to /app.
  */
 
 type MeAdminProbe = { isAdmin?: boolean };
@@ -47,6 +52,7 @@ export function Header() {
     guides: guidesEnabled(),
     reviews: reviewsVisible(me?.isAdmin),
     isAdmin: me?.isAdmin === true,
+    tryPage: getInstantImportMode() === "all",
   });
 
   useEffect(() => {
@@ -80,21 +86,16 @@ export function Header() {
             className="hidden items-center gap-0.5 lg:flex"
             aria-label="Primary"
           >
-            {navLinks.map((link) => {
-              const active = isActiveLink(link.href, pathname);
-              const node = (
+            {navLinks.map((link) => (
+              <NavAuthGate key={`${link.auth}:${link.href}`} auth={link.auth}>
                 <NavLink
-                  key={link.href}
                   href={link.href}
                   label={link.label}
-                  active={active}
+                  active={isActiveLink(link.href, pathname)}
+                  wideOnly={link.wideOnly}
                 />
-              );
-              if (link.auth === "in" || link.auth === "admin") {
-                return <SignedIn key={link.href}>{node}</SignedIn>;
-              }
-              return node;
-            })}
+              </NavAuthGate>
+            ))}
           </nav>
           <div className="ml-auto flex items-center gap-2">
             <SignedIn>
@@ -115,6 +116,11 @@ export function Header() {
               </div>
             </SignedOut>
             <SignedIn>
+              <div className="hidden lg:block">
+                <Link href="/app" className={PRIMARY_LINK_CLS}>
+                  Open app
+                </Link>
+              </div>
               <UserButton
                 afterSignOutUrl="/"
                 appearance={{
@@ -175,12 +181,9 @@ function Brand() {
       aria-label="SC2 Tools — home"
       className="group flex items-center gap-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
     >
-      <Image
-        src="/logo.png"
-        alt=""
-        width={28}
-        height={28}
-        className="rounded-full motion-safe:transition-shadow motion-safe:duration-150 group-hover:shadow-[0_0_18px_var(--halo-cyan)] group-focus-visible:shadow-[0_0_18px_var(--halo-cyan)]"
+      <LogoMark
+        size={28}
+        className="motion-safe:transition-shadow motion-safe:duration-150 group-hover:shadow-[0_0_18px_var(--halo-cyan)] group-focus-visible:shadow-[0_0_18px_var(--halo-cyan)]"
         priority
       />
       {/* Display-face wordmark + a brand accent tick. */}
@@ -199,15 +202,18 @@ interface NavLinkProps {
   href: string;
   label: string;
   active: boolean;
+  /** Hidden below xl, where the row has no room for it. */
+  wideOnly?: boolean;
 }
 
-function NavLink({ href, label, active }: NavLinkProps) {
+function NavLink({ href, label, active, wideOnly = false }: NavLinkProps) {
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
       className={[
-        "relative inline-flex h-9 items-center whitespace-nowrap rounded-full px-2.5 font-display text-caption font-bold xl:px-3.5",
+        "relative h-9 items-center whitespace-nowrap rounded-full px-2.5 font-display text-caption font-bold xl:px-3.5",
+        wideOnly ? "hidden xl:inline-flex" : "inline-flex",
         "motion-safe:transition-colors motion-safe:duration-150",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
         active

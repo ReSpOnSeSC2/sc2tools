@@ -3,7 +3,8 @@
 
 const {
   opponentPhaseProfile,
-  last5GamesScouting,
+  opponentTendencies,
+  TENDENCY_SCAN_CAP,
 } = require("../src/services/overlayLiveAggregations");
 
 const USER_ID = "u_overlay_bounds";
@@ -86,44 +87,25 @@ describe("overlay replay-detail bounds", () => {
     expect(JSON.stringify(out)).not.toContain("legacyUnknown");
   });
 
-  test("last-five scouting reads one projected detail at a time", async () => {
-    const rows = Array.from({ length: 5 }, (_, i) => ({
-      gameId: `scout-${i}`,
-      date: new Date(Date.UTC(2026, 0, 1, 0, 0, i)),
-      result: "Victory",
-      map: "Bounded LE",
-      myRace: "Protoss",
-      myBuild: "Gateway Expand",
+  test("opponent tendencies read one bounded metadata page and no replay detail", async () => {
+    const rows = Array.from({ length: 80 }, (_, i) => ({
+      date: new Date(Date.UTC(2026, 0, 1, 0, 0, 80 - i)),
       durationSec: 300,
-      opponent: { displayName: "Bounded", race: "Zerg", strategy: "Macro" },
+      myRace: "Protoss",
+      opponent: { race: "Zerg", strategy: i % 2 ? "Zerg - 12 Pool" : "Zerg - Hatch First" },
     }));
-    const details = detailStore({
-      buildLog: ["[0:20] Pylon"],
-      oppBuildLog: ["[0:17] SpawningPool"],
-      macroBreakdown: {
-        bases: [],
-        production_buildings: [],
-        stats_events: [],
-        unit_timeline: [],
-      },
-    });
     const games = fakeGames(rows);
 
-    const out = await last5GamesScouting(
-      games, details, USER_ID, OPP, "Protoss", "Zerg",
-    );
+    const matchup = { myRace: "Protoss", oppRace: "Zerg" };
+    const out = await opponentTendencies(games, USER_ID, OPP, matchup);
 
-    expect(out).toHaveLength(5);
-    expect(details.calls).toHaveLength(5);
-    expect(details.maxActive).toBe(1);
-    for (const call of details.calls) {
-      expect(call.ids).toHaveLength(1);
-      expect(call.options).toMatchObject({
-        fields: ["buildLog", "oppBuildLog", "macroBreakdown"],
-        concurrency: 1,
-      });
+    expect(out.window).toBe(TENDENCY_SCAN_CAP);
+    expect(fakeGames.projections).toHaveLength(1);
+    const projection = fakeGames.projections[0];
+    for (const heavy of ["buildLog", "oppBuildLog", "macroBreakdown", "opponent"]) {
+      expect(projection).not.toHaveProperty(heavy);
     }
-    expect(fakeGames.projections[0]).not.toHaveProperty("opponent");
-    expect(fakeGames.projections[0]).not.toHaveProperty("buildLog");
+    expect(projection).toMatchObject({ "opponent.strategy": 1, "buildIntent.opponent.build": 1 });
+    expect(games.findOne).not.toHaveBeenCalled();
   });
 });

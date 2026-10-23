@@ -265,10 +265,12 @@ to `apps/web/components/analyzer/` as proper TypeScript ES modules.
   Foundation, Profile, Folders, Import (with progress bar), Builds,
   Overlay (with widget toggles), Voice, Backups (snapshots + GDPR),
   Misc. Mounted at [/settings](../../apps/web/app/settings/page.tsx).
-- [x] **First-run wizard** under
-  [`components/analyzer/wizard/`](../../apps/web/components/analyzer/wizard/):
-  shell + Foundation, Account, Integrations, Streamlabs, Apply-import
-  steps. Mounted at [/welcome](../../apps/web/app/welcome/page.tsx).
+- [x] **First-run setup guide** under
+  [`components/onboarding/`](../../apps/web/components/onboarding/):
+  welcome, download, pair and import steps. Mounted at
+  [/welcome](../../apps/web/app/welcome/page.tsx); Settings → Misc links
+  back to it ("Run setup again"). (The older
+  `components/analyzer/wizard/` steps were never mounted and are gone.)
 - [x] **Analyzer shell** ties it all together —
   [`AnalyzerShell.tsx`](../../apps/web/components/analyzer/AnalyzerShell.tsx)
   exposes 10 tabs with a per-tab navigation bar and the opponent

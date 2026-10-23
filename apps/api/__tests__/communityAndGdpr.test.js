@@ -1086,7 +1086,7 @@ describe("community + gdpr integration", () => {
             pulseId: opp,
             displayName: "x",
             race: "Protoss",
-            opening: "Phoenix",
+            strategy: "Protoss - Phoenix Opener",
           },
         });
       }
@@ -1095,7 +1095,35 @@ describe("community + gdpr integration", () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.contributors).toBeGreaterThanOrEqual(5);
-      expect(res.body.openings.Phoenix).toBeGreaterThan(0);
+      expect(res.body.strategies["Protoss - Phoenix Opener"]).toBe(6);
+      // Nothing produces ``opponent.opening``; the aggregate no longer
+      // ships an always-empty openings map.
+      expect(res.body).not.toHaveProperty("openings");
+      // No opponents row resolved a character id for this toon.
+      expect(res.body.pulseCharacterId).toBeNull();
+    });
+
+    test("names the resolved SC2Pulse character id in the aggregate", async () => {
+      const opp = "1-S2-2-66666";
+      for (let i = 0; i < 5; i++) {
+        await services.games.upsert(`user_pc_${i}`, {
+          gameId: `gpc_${i}`,
+          date: new Date().toISOString(),
+          result: "Victory",
+          myRace: "Terran",
+          map: "Goldenaura",
+          durationSec: 600,
+          opponent: { pulseId: opp, displayName: "x", race: "Zerg" },
+        });
+      }
+      await db.opponents.insertOne({ userId: "user_pc_0", pulseId: opp, pulseCharacterId: "994428" });
+      const res = await request(app).get(
+        `/v1/community/opponents/${encodeURIComponent(opp)}`,
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.pulseCharacterId).toBe("994428");
+      expect(res.body.losses).toBe(5);
+      await expect(services.community.opponentProfileAvailable(opp)).resolves.toBe(true);
     });
 
     test("does not publish a capped sample dominated by one prolific user", async () => {

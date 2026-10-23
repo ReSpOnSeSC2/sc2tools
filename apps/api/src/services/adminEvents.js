@@ -5,17 +5,22 @@ const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { supportEmailStateId } = require("./supportEmailScope");
 const { adminEventCursor, adminEventPageFilter } = require("./adminEventCursor");
+const { REPORT_TYPES, sanitiseReportContext } = require("./reportContext");
 
 const EVENT_TYPES = Object.freeze({
   USER_SIGNUP: "user_signup",
   AGENT_DOWNLOAD: "agent_download",
   AGENT_CONNECTED: "agent_connected",
   USER_MESSAGE: "user_message",
+  BACKUP_STALE: "backup_stale",
 });
 
 /** @type {Set<string>} */
 const VALID_TYPES = new Set(Object.values(EVENT_TYPES));
 const VALID_PLATFORMS = new Set(["windows", "macos", "linux"]);
+const BACKUP_SNAPSHOT_STATUSES = new Set([
+  "queued", "inProgress", "completed", "failed", "unknown",
+]);
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const FEED_LIMIT_DEFAULT = 50;
 const FEED_LIMIT_MAX = 200;
@@ -30,7 +35,8 @@ const MESSAGE_BODY_MAX = 4000;
 
 /**
  * AdminEventsService — durable, queryable feed of admin-facing
- * notifications. Records signups, downloads, agent connections and messages:
+ * notifications. Records signups, downloads, agent connections, messages
+ * and backup alerts:
  *
  *   - ``user_signup``     — fired when a Clerk webhook delivers a
  *                            ``user.created`` event OR a first-touch
@@ -44,6 +50,13 @@ const MESSAGE_BODY_MAX = 4000;
  *   - ``agent_connected`` — confirmed by an authenticated agent heartbeat,
  *                            once per paired device, including installs that
  *                            bypassed the website download hand-off.
+ *   - ``user_message``    — a signed-in user's report from the web app
+ *                            (with an optional type and diagnostics
+ *                            context, see reportContext.js) or a
+ *                            support email picked up by supportEmail.js.
+ *   - ``backup_stale``    — the newest Atlas Cloud Backup snapshot is
+ *                            overdue or missing; raised at most once per
+ *                            UTC day by jobs/backupHealthJob.js.
  *
  * Reads serve the admin dashboard's counters and notification feed.
  * Writes are real-time: when a Socket.io ``io`` is wired, each event
@@ -613,13 +626,19 @@ function sanitisePayload(type, raw) {
   if (type === EVENT_TYPES.USER_MESSAGE) {
     // A logged-in user's bug report / message. Identity (userId,
     // clerkUserId, email) is attached server-side from the auth
-    // context, never trusted from the client body.
+    // context, never trusted from the client body. The optional report
+    // type and diagnostics context are whitelisted and credential-free.
+    const reportType = typeof payload.type === "string" && REPORT_TYPES.includes(payload.type)
+      ? payload.type : null;
+    const context = sanitiseReportContext(payload.context);
     return {
       userId: toCleanString(payload.userId, 64) || null,
       clerkUserId: toCleanString(payload.clerkUserId, 64) || null,
       email: toCleanString(payload.email, 254) || null,
       subject: toCleanString(payload.subject, MESSAGE_SUBJECT_MAX),
       message: toCleanString(payload.message, MESSAGE_BODY_MAX),
+      ...(reportType ? { type: reportType } : {}),
+      ...(context ? { context } : {}),
       ...(payload.source === "email" ? {
         source: "email",
         mailbox: toCleanString(payload.mailbox, 254),
@@ -628,7 +647,35 @@ function sanitisePayload(type, raw) {
       } : {}),
     };
   }
+  if (type === EVENT_TYPES.BACKUP_STALE) return backupStalePayload(payload);
   return payload;
+}
+
+/**
+ * System alert: timestamps and allowlisted states only, no identity.
+ *
+ * @param {Record<string, unknown>} payload
+ * @returns {Record<string, unknown>}
+ */
+function backupStalePayload(payload) {
+  // Number(null) is 0; a missing snapshot must keep a null age.
+  const ageHours = typeof payload.ageHours === "number" ? payload.ageHours : NaN;
+  const latestStatus = toCleanString(payload.latestStatus, 16);
+  return {
+    reason: payload.reason === "missing" ? "missing" : "stale",
+    lastSnapshotAt: isoOrNull(payload.lastSnapshotAt),
+    ageHours: Number.isFinite(ageHours) && ageHours >= 0
+      ? Math.round(ageHours * 10) / 10
+      : null,
+    latestStatus: BACKUP_SNAPSHOT_STATUSES.has(latestStatus) ? latestStatus : null,
+  };
+}
+
+/** @param {unknown} raw */
+function isoOrNull(raw) {
+  const text = toCleanString(raw, 40);
+  const date = text ? new Date(text) : null;
+  return date && Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
 /** @param {unknown} raw */

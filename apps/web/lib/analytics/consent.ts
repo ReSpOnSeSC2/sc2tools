@@ -52,7 +52,13 @@ export function readConsent(): ConsentState {
 
 /**
  * Persist a decision and notify subscribers. Passing ``"granted"`` or
- * ``"denied"`` records the choice; the banner calls this on click.
+ * ``"denied"`` records the choice; the banner and Settings → Misc call
+ * this on click.
+ *
+ * gtag.js may already be running this visit (consent was granted, then
+ * changed in Settings → Misc), so it gets the new choice too. Turning
+ * analytics off also deletes the Google Analytics cookies, so it takes
+ * effect without a reload.
  */
 export function setConsent(state: Exclude<ConsentState, "unset">): void {
   try {
@@ -66,6 +72,39 @@ export function setConsent(state: Exclude<ConsentState, "unset">): void {
   } catch {
     // Older browsers without CustomEvent constructor — ignore; the
     // value is persisted and will be read on the next navigation.
+  }
+  try {
+    window.gtag?.("consent", "update", { analytics_storage: state });
+  } catch {
+    // gtag threw: the stored choice still decides the next page load.
+  }
+  if (state === "denied") clearAnalyticsCookies();
+}
+
+/** Google Analytics' own cookies: ``_ga``, ``_ga_<stream>``, ``_gid``, ``_gat*``. */
+const GA_COOKIE_RE = /^_(?:ga(?:_.+)?|gid|gat.*)$/;
+
+/**
+ * Delete the Google Analytics cookies in this browser. GA writes them
+ * on the widest domain it can (``.sc2tools.com``), so each is expired on
+ * the host and every parent domain.
+ */
+export function clearAnalyticsCookies(): void {
+  if (typeof document === "undefined") return;
+  const names = document.cookie
+    .split(";")
+    .map((pair) => pair.split("=")[0].trim())
+    .filter((name) => GA_COOKIE_RE.test(name));
+  if (names.length === 0) return;
+  const labels = window.location.hostname.split(".");
+  const domains = [""];
+  for (let i = 0; i < labels.length - 1; i += 1) {
+    domains.push(`; domain=.${labels.slice(i).join(".")}`);
+  }
+  for (const name of names) {
+    for (const domain of domains) {
+      document.cookie = `${name}=; Max-Age=0; path=/${domain}`;
+    }
   }
 }
 

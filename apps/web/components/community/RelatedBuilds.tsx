@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getJson } from "@/lib/serverApi";
+import { getJsonWithStatus } from "@/lib/serverApi";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
@@ -17,10 +17,10 @@ export interface RelatedBuildsProps {
 /**
  * RelatedBuilds — top 4 community builds in the same matchup.
  *
- * Server component: fetched at request time and revalidated alongside
- * the surrounding page (1-minute revalidate via getJson). Renders a
- * compact link list rather than full cards so the sidebar stays
- * lightweight.
+ * Server component: fetched at request time alongside the surrounding
+ * page. Renders a compact link list rather than full cards so the
+ * sidebar stays lightweight. When the list can't be fetched (API down
+ * or failing) it renders nothing, never a false "no related builds".
  */
 export async function RelatedBuilds({
   matchup,
@@ -29,10 +29,13 @@ export async function RelatedBuilds({
   if (!matchup) {
     return null;
   }
-  const data = await getJson<CommunityBuildListResponse>(
+  const { data } = await getJsonWithStatus<CommunityBuildListResponse>(
     `/v1/community/builds?matchup=${encodeURIComponent(matchup)}&sort=top&limit=6`,
   );
-  const items = (data?.items ?? [])
+  if (!data) {
+    return null;
+  }
+  const items = (data.items ?? [])
     .filter((b) => b.slug !== currentSlug)
     .slice(0, 4);
   if (items.length === 0) {

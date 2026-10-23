@@ -85,9 +85,9 @@ describe("/guides/[matchup]/[build] metadata", () => {
     mocks.fetchGuideBuild.mockResolvedValue(ok(FIXTURE_BUILD_PUBLISHED));
     const md = await generateMetadata(PARAMS);
     expect(HEADLINE_PCT).toBe("56.5%");
-    expect(md.title).toBe(
-      `Stargate into Glaives PvZ — ${HEADLINE_PCT} win rate vs Diamond (12 workers) | SC2 Tools`,
-    );
+    expect(md.title).toEqual({
+      absolute: `Stargate into Glaives PvZ — ${HEADLINE_PCT} win rate vs Diamond (12 workers) | SC2 Tools`,
+    });
     expect(md.alternates?.canonical).toBe("/guides/pvz/stargate-into-glaives");
     expect(md.robots).toBeUndefined();
     expect(String(md.description)).toContain("412 ladder games");
@@ -104,7 +104,7 @@ describe("/guides/[matchup]/[build] metadata", () => {
     };
     mocks.fetchGuideBuild.mockResolvedValue(ok(payload));
     const md = await generateMetadata(PARAMS);
-    expect(md.title).toBe("Stargate into Glaives PvZ — 53.9% ladder win rate (12 workers) | SC2 Tools");
+    expect(md.title).toEqual({ absolute: "Stargate into Glaives PvZ — 53.9% ladder win rate (12 workers) | SC2 Tools" });
   });
 
   it("marks an unpublished guide noindex", async () => {

@@ -8,6 +8,7 @@ import { fmtDate, fmtMinutes, raceColour } from "@/lib/format";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { MapLabel } from "@/components/maps/MapArtwork";
 import { useSort, SortableTh } from "@/components/ui/SortableTh";
 import type { ProfileGame } from "./Last5GamesTimeline";
@@ -834,23 +835,23 @@ function BuildOrderRow({
   gameId: string;
   game: GameRowData;
 }) {
-  const { data, isLoading, error } = useApi<BuildOrderResp>(
+  const buildOrder = useApi<BuildOrderResp>(
     `/v1/games/${encodeURIComponent(gameId)}/build-order`,
   );
-  if (isLoading) {
+  if (!hasQueryData(buildOrder)) {
     return (
-      <Card title="Loading build order…">
-        <div className="h-4 animate-pulse rounded bg-bg-elevated" />
-      </Card>
+      <QueryState
+        q={buildOrder}
+        errorTitle="Build order"
+        skeleton={
+          <Card title="Loading build order…">
+            <div className="h-4 animate-pulse rounded bg-bg-elevated" />
+          </Card>
+        }
+      />
     );
   }
-  if (error) {
-    return (
-      <Card title="Build order">
-        <p className="text-xs text-danger">{error.message}</p>
-      </Card>
-    );
-  }
+  const { data } = buildOrder;
   if (!data) return null;
   return (
     <BuildOrderDualTimeline

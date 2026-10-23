@@ -320,8 +320,13 @@ export function reviewHeadline(question: string, matchup: string | null): string
   return matchup ? `[${matchup}] ${short}` : short;
 }
 
+/**
+ * "[PvZ] Why did my blink all-in fail? — Replay Review". The root title
+ * template adds " · SC2 Tools" in the browser tab; social cards add it
+ * with `siteTitle`.
+ */
 export function reviewPageTitle(question: string, matchup: string | null): string {
-  return `${reviewHeadline(question, matchup)} — Replay Review · SC2 Tools`;
+  return `${reviewHeadline(question, matchup)} — Replay Review`;
 }
 
 export function validateQuestion(question: string): string | null {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { Bell } from "lucide-react";
+import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { useUserSocket } from "@/lib/useUserSocket";
 import { reviewsVisible } from "@/lib/reviews";
@@ -300,7 +301,15 @@ function Bell_({ compact }: { compact: boolean }) {
             </p>
           ) : null}
           {(!scopeReady || !list.data || list.isLoading || list.isValidating) && !list.error && items.length === 0 ? (
-            <p className="p-3 text-caption text-text-muted">Loading…</p>
+            <SkeletonRegion label="Loading notifications" className="space-y-1">
+              {[0, 1, 2].map((i) => (
+                <div key={i} aria-hidden className="space-y-1.5 rounded-lg p-2.5">
+                  <SkeletonBar className="h-3.5 w-3/5" />
+                  <SkeletonBar className="h-3 w-4/5" />
+                  <SkeletonBar className="h-2.5 w-24" />
+                </div>
+              ))}
+            </SkeletonRegion>
           ) : items.length === 0 ? (
             !list.error ? <p className="p-3 text-caption text-text-muted">
               {view === "unread" ? "No unread notifications." : "No notifications yet."}

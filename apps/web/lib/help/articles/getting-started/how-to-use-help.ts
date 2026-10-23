@@ -45,10 +45,10 @@ const article: HelpArticle = {
     { type: "heading", text: "Still stuck?" },
     {
       type: "paragraph",
-      text: "Help pages end with our support email, and with a **Report a problem** button when you're signed in. Tell us what you clicked and add a screenshot if you can.",
+      text: "Help pages end with our support email, and with a **Report a problem** button when you're signed in. Inside the app, the **?** button in the top bar has it too. Tell us what you clicked and add a screenshot if you can; see [Report a problem or suggest a feature](/help/report-a-problem) for what else goes with a report.",
     },
   ],
-  related: ["getting-started", "troubleshooting-and-support"],
+  related: ["getting-started", "troubleshooting-and-support", "report-a-problem"],
 };
 
 export default article;

@@ -29,7 +29,7 @@ import {
 
 export const metadata = {
   alternates: { canonical: "/donate" },
-  title: "Support SC2 Tools — Donate",
+  title: "Donate",
   description:
     "SC2 Tools is free for everyone. If it's helping your ladder grind, you can chip in via Streamlabs or PayPal.",
 };

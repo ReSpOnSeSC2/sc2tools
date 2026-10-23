@@ -7,6 +7,8 @@
  * call site at the type-checker level.
  */
 
+import type { ReportContext, ReportType } from "@/lib/feedback/reportContext";
+
 export type StorageStatsResp = {
   totalDocs: number;
   totalDataBytes: number;
@@ -533,7 +535,12 @@ export type GlobalPlayerGamesResp = {
   nextBefore: string | null;
 };
 
-export type AdminEventType = "user_signup" | "agent_download" | "agent_connected" | "user_message";
+export type AdminEventType =
+  | "user_signup"
+  | "agent_download"
+  | "agent_connected"
+  | "user_message"
+  | "backup_stale";
 
 export type AdminEventSignupPayload = {
   clerkUserId: string | null;
@@ -548,6 +555,10 @@ export type AdminEventUserMessagePayload = {
   email: string | null;
   subject: string;
   message: string;
+  /** Sent from the in-app report form; absent on older reports and emails. */
+  type?: ReportType;
+  /** The diagnostics the sender chose to include (lib/feedback/reportContext.ts). */
+  context?: ReportContext;
   source?: "email";
   mailbox?: string;
   gmailMessageId?: string;
@@ -574,6 +585,14 @@ export type AdminEventAgentConnectedPayload = {
   source: "heartbeat";
 };
 
+/** System alert: the newest Atlas Cloud Backup snapshot is overdue or missing. */
+export type AdminEventBackupStalePayload = {
+  reason: "stale" | "missing";
+  lastSnapshotAt: string | null;
+  ageHours: number | null;
+  latestStatus: AtlasSnapshotStatus | null;
+};
+
 export type AdminEvent = {
   eventId: string;
   type: AdminEventType;
@@ -581,7 +600,8 @@ export type AdminEvent = {
     | AdminEventSignupPayload
     | AdminEventDownloadPayload
     | AdminEventAgentConnectedPayload
-    | AdminEventUserMessagePayload;
+    | AdminEventUserMessagePayload
+    | AdminEventBackupStalePayload;
   createdAt: string;
   readAt: string | null;
   anonymizedAt?: string;
@@ -620,4 +640,66 @@ export type AdminEventCountsResp = {
     active7d: number;
   };
   generatedAt: string;
+};
+
+/** State of an Atlas Cloud Backup snapshot, as Atlas reports it. */
+export type AtlasSnapshotStatus =
+  | "queued"
+  | "inProgress"
+  | "completed"
+  | "failed"
+  | "unknown";
+
+/**
+ * Age band of the newest completed Atlas snapshot: fresh under 26 h,
+ * aging under 50 h, stale from 50 h (raises the admin alert), missing
+ * when there is none, unknown when Atlas couldn't be read.
+ */
+export type BackupFreshness = "fresh" | "aging" | "stale" | "missing" | "unknown";
+
+export type BackupRetentionItem = {
+  frequency: "hourly" | "daily" | "weekly" | "monthly" | "yearly";
+  /** Hours between snapshots; set for hourly items only. */
+  everyHours: number | null;
+  keep: number;
+  unit: "days" | "weeks" | "months" | "years";
+};
+
+export type AtlasBackupStatus = {
+  configured: boolean;
+  available: boolean;
+  /** True when this is the last good result and the latest check failed. */
+  stale: boolean;
+  checkedAt: string | null;
+  errorCode:
+    | "not_configured"
+    | "atlas_backup_forbidden"
+    | "atlas_backup_unavailable"
+    | null;
+  freshness: BackupFreshness;
+  ageHours: number | null;
+  lastSnapshotAt: string | null;
+  latestStatus: AtlasSnapshotStatus | null;
+  completedSnapshotCount: number;
+  nextSnapshotAt: string | null;
+  retention: BackupRetentionItem[];
+  cloudBackupEnabled: boolean | null;
+  pointInTime: { enabled: boolean | null; windowDays: number | null };
+};
+
+/** Snapshots people take in Settings → Backups (`user_backups`). */
+export type InAppSnapshotCounts = {
+  snapshotCount: number;
+  userCount: number;
+  newestAt: string | null;
+  storageBytes: number | null;
+};
+
+/** GET /v1/admin/backups */
+export type AdminBackupsResp = {
+  asOf: string;
+  thresholds: { freshMaxHours: number; agingMaxHours: number };
+  atlas: AtlasBackupStatus;
+  /** Null when the counts couldn't be read this time. */
+  inApp: InAppSnapshotCounts | null;
 };

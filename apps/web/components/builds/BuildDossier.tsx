@@ -2,7 +2,8 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 import Link from "next/link";
-import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
+import { Card, EmptyState, Skeleton, Stat } from "@/components/ui/Card";
+import { RequestError } from "@/components/ui/RequestError";
 import { fmtAgo, fmtDate, fmtMinutes, pct1, wrColor } from "@/lib/format";
 import { Last5GamesTimeline } from "@/components/analyzer/Last5GamesTimeline";
 import type { ProfileGame } from "@/components/analyzer/Last5GamesTimeline";
@@ -29,6 +30,7 @@ import { checkinsText } from "@/lib/buildIntent";
 import { BreakdownCard, TopOpponentsCard } from "./BuildBreakdownCards";
 import { BuildGamesTable } from "./BuildGamesTable";
 import { BuildCompositionExplorer } from "./BuildCompositionExplorer";
+import { BuildWinRateTrend } from "./BuildWinRateTrend";
 import type {
   BuildDetailRow,
   BuildPhasePayload,
@@ -119,7 +121,7 @@ export function BuildDossier({
   showMacro = true,
   phasePerspective,
 }: BuildDossierProps) {
-  const { data, error, isLoading } = useApi<BuildDossierData>(apiPath);
+  const { data, error, isLoading, mutate } = useApi<BuildDossierData>(apiPath);
 
   const phasePaths = phaseApiPaths(apiPath, phasePerspective);
   const compositions = useApi<BuildPhasePayload>(
@@ -145,14 +147,16 @@ export function BuildDossier({
       </div>
     );
   }
-  if (error) {
+  if (error && !data) {
     return (
-      <Card>
-        <EmptyState
-          title="Couldn't load this build"
-          sub={error.message}
+      <div className="space-y-4">
+        {headerSlot ? headerSlot(null) : null}
+        <RequestError
+          title="Couldn't load this build's games and stats"
+          error={error}
+          onRetry={() => mutate()}
         />
-      </Card>
+      </div>
     );
   }
   if (!data) {
@@ -190,6 +194,14 @@ export function BuildDossier({
   return (
     <div className="space-y-5">
       {headerSlot ? headerSlot(data) : null}
+      {error ? (
+        // SWR keeps the last good response when a refresh fails.
+        <PhaseLoadError
+          title="Build stats"
+          stale
+          onRetry={() => { void mutate(); }}
+        />
+      ) : null}
       <PerformanceTiles totals={data.totals} />
       {phasePaths.compositions ? (
         <PhaseAndTransitions
@@ -453,8 +465,11 @@ function Last5AndRecent({
         <Card title="Last 5 games">
           <Last5GamesTimeline games={last5} />
         </Card>
-        <Card title="Win-rate trend (per-game record)">
-          <WinRateTrend rows={data.byMatchup ?? []} />
+        <Card
+          title="Win-rate trend"
+          right={<span className="text-micro text-text-muted">Rolling 10 games</span>}
+        >
+          <BuildWinRateTrend recent={data.recent ?? []} />
         </Card>
       </div>
       {filterGameIds?.length ? (
@@ -716,32 +731,5 @@ function PhaseSection({
         }}
       />
     </div>
-  );
-}
-
-function WinRateTrend({ rows }: { rows: BuildDetailRow[] }) {
-  if (!rows || rows.length === 0) {
-    return <EmptyState sub="No matchup data yet" />;
-  }
-  return (
-    <ul className="space-y-2 text-sm">
-      {rows.slice(0, 6).map((m) => {
-        const wr = m.winRate ?? (m.total ? m.wins / m.total : 0);
-        return (
-          <li key={m.name}>
-            <div className="flex justify-between">
-              <span className="text-text">{m.name || "Unknown"}</span>
-              <span
-                className="tabular-nums"
-                style={{ color: wrColor(wr, m.total) }}
-              >
-                {m.wins}–{m.losses} · {pct1(wr)}
-              </span>
-            </div>
-            <WrBar wins={m.wins} losses={m.losses} />
-          </li>
-        );
-      })}
-    </ul>
   );
 }

@@ -246,12 +246,19 @@ not announced as new again.
     with `MONGODB_URI` and `MONGODB_DB` set. Then run it without `--dry-run` and
     press **Recompute now**. It covers games and guide samples, and it moves the
     8 Pool guides' admin notes and pins to the 12 Pool guides.
-- **After editing `apps/web/lib/build-definitions`:**
+- **After a label changes in `apps/replay-engine/core/build_definitions.py`**
+  (or a wording override in `apps/web/lib/build-definitions/wording.ts`):
 
   ```bash
-  cd apps/web && npm run guides:catalog   # re-exports apps/api/src/config/guideCatalog.json
+  cd apps/web && npm run definitions:gen  # rewrites lib/build-definitions.generated.json
+  npm run guides:catalog                  # re-exports apps/api/src/config/guideCatalog.json
   # then regenerate the lock (command in the header of apps/api/src/config/guideSlugs.js)
   ```
+
+  A new label reaches /definitions straight away but only gets a guide page
+  once it leaves `GUIDE_PENDING_NAMES` in `apps/web/lib/guides/catalog.ts`;
+  check the slug lock diff when it does, since a matchup label can take a
+  race label's slug.
 
 ## YouTube videos
 

@@ -32,14 +32,15 @@ type Route = {
 // Public, indexable routes only. Auth/token-gated routes (/app, /devices,
 // /streaming, /overlay, /admin, /settings, /welcome) are intentionally
 // excluded — crawlers just get bounced to sign-in there. (/meta and
-// /optimizer are gone: they redirect to /guides.)
+// /optimizer are gone: they redirect to /guides.) /builds is left out
+// too until its signed-out intro is server-rendered: today a crawler
+// gets an empty client shell there.
 const ROUTES: Route[] = [
   { path: "/", priority: 1.0, changeFrequency: "weekly", lastModified: "2026-09-29" },
   { path: "/download", priority: 0.9, changeFrequency: "weekly", lastModified: "2026-09-29" },
   { path: "/stream-studio", priority: 0.9, changeFrequency: "monthly", lastModified: "2026-10-16" },
   { path: "/stream-studio/learn", priority: 0.8, changeFrequency: "monthly", lastModified: "2026-10-16" },
   { path: "/community", priority: 0.8, changeFrequency: "daily" },
-  { path: "/builds", priority: 0.7, changeFrequency: "daily", lastModified: "2026-06-01" },
   { path: "/definitions", priority: 0.5, changeFrequency: "monthly", lastModified: "2026-09-04" },
   { path: "/donate", priority: 0.4, changeFrequency: "monthly", lastModified: "2026-08-11" },
   { path: "/legal/privacy", priority: 0.2, changeFrequency: "yearly", lastModified: "2026-09-28" },

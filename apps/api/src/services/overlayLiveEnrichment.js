@@ -155,11 +155,18 @@ function pickEnvelopeRegion(opp, profile) {
  * so the writer (``enrichEnvelope``) and the invalidator
  * (``invalidateEnrichmentForOpponent``) agree on the prefix shape:
  *
- *   * ``${userId}|pulse:<pulse_character_id>|<myRace>`` — preferred,
- *     globally unique per Battle.net character.
+ *   * ``${userId}|pulse:<pulse_character_id>|<lcoppRace>|<myRace>`` —
+ *     preferred, globally unique per Battle.net character.
  *   * ``${userId}|name:<lcname>|region:<NA|EU|...|?>|<lcoppRace>|<myRace>``
  *     — fallback when no Pulse id is available; region prevents a
  *     cross-server display-name collision (NA "Maru" vs EU "Maru").
+ *
+ * Both schemes carry both races: every scouting field (recent games,
+ * favourite opening, predictions, cheese) is matchup-scoped, and one
+ * Battle.net character can queue as any race. Without the opponent's
+ * race in the pulse key, a Random opponent whose race resolves mid-
+ * match, or a player who switches race between games, would be served
+ * the other matchup's history from cache.
  *
  * The unknown-region sentinel ``?`` keeps the key length stable
  * across servers so the LRU eviction order stays sensible.
@@ -176,7 +183,7 @@ function pickEnvelopeRegion(opp, profile) {
  */
 function buildEnrichmentKey(parts) {
   if (parts.pulseCharacterId !== null) {
-    return `${parts.userId}|pulse:${parts.pulseCharacterId}|${parts.myRace || ""}`;
+    return `${parts.userId}|pulse:${parts.pulseCharacterId}|${parts.race.toLowerCase()}|${parts.myRace || ""}`;
   }
   const region = parts.region || "?";
   return `${parts.userId}|name:${parts.name.toLowerCase()}|region:${region}|${parts.race.toLowerCase()}|${parts.myRace || ""}`;

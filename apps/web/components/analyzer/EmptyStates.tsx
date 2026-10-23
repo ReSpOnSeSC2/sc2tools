@@ -3,7 +3,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
-  Activity,
   Download,
   Filter,
   Gamepad2,
@@ -13,6 +12,12 @@ import {
 import { Button } from "@/components/ui/Button";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { GlowHalo } from "@/components/ui/GlowHalo";
+import { longLabelFor } from "@/lib/datePresets";
+import {
+  applyFilterPatch,
+  describeActiveFilters,
+  useFilters,
+} from "@/lib/filterContext";
 
 /**
  * Specialised empty-state cards for the analyzer. Each one explains
@@ -22,8 +27,8 @@ import { GlowHalo } from "@/components/ui/GlowHalo";
  *   (full-bleed, with a cyan halo to draw the eye). With browser import
  *   enabled it offers two paths side by side (stacked on mobile): the
  *   desktop agent or importing in the browser.
- * - The rest are inline empties used to indicate filters returned
- *   nothing.
+ * - {@link NoFilterMatches} is the shared "nothing matches" state for
+ *   filtered views; the rest are inline empties for specific gaps.
  */
 
 export function NoGamesYet({
@@ -144,15 +149,116 @@ function ChoiceCard({
   );
 }
 
-export function NoOpponentsMatch() {
+export interface NoFilterMatchesProps {
+  /** Defaults to "Nothing matches these filters". */
+  title?: string;
+  /** The view's Min games value, when it has a picker. */
+  minGames?: number;
+  /** Rows the Min games picker is hiding right now. */
+  hiddenByMinGames?: number;
+  /** Sets the view's Min games to 1. */
+  onLowerMinGames?: () => void;
+  /** A view-specific way out, e.g. "Clear search". Shown first. */
+  extraAction?: ReactNode;
+  size?: "sm" | "md";
+}
+
+/**
+ * "Nothing matches" for a filtered analyzer view. Says what is applied
+ * (the date range plus every other facet describeActiveFilters reports,
+ * the same list as the chip row under the filter bar) and offers only
+ * the ways out that would change the answer:
+ *   - "Lower Min games to 1" when the Min games picker hid rows,
+ *   - "Reset filters" when any filter beyond the defaults is on (keeps
+ *     the date range),
+ *   - "Widen to All time" when the date range is narrower than all time.
+ */
+export function NoFilterMatches({
+  title = "Nothing matches these filters",
+  minGames,
+  hiddenByMinGames = 0,
+  onLowerMinGames,
+  extraAction,
+  size = "md",
+}: NoFilterMatchesProps) {
+  const { filters, setFilters, seasons } = useFilters();
+  // The date range is always listed, with its own "Widen" action, so it
+  // is left out of the facets "Reset filters" clears.
+  const active = describeActiveFilters(filters, { seasons }).filter((filter) => filter.key !== "preset");
+  const preset = filters.preset ?? "all";
+  const canLowerMinGames =
+    Boolean(onLowerMinGames) && (minGames ?? 1) > 1 && hiddenByMinGames > 0;
+
+  const resetFilters = () => {
+    setFilters(active.reduce((next, filter) => applyFilterPatch(next, filter.clearPatch), filters));
+  };
+
+  const actions = (
+    <div className="flex flex-wrap items-center justify-center gap-2">
+      {extraAction}
+      {canLowerMinGames ? (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={onLowerMinGames}
+          className="!h-auto min-h-9 flex-wrap py-1.5"
+        >
+          Lower Min games to 1
+          <span className="font-sans font-normal text-text-muted">
+            ({hiddenByMinGames} hidden by Min games)
+          </span>
+        </Button>
+      ) : null}
+      {active.length > 0 ? (
+        <Button variant="secondary" size="sm" onClick={resetFilters}>
+          Reset filters
+        </Button>
+      ) : null}
+      {preset !== "all" ? (
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setFilters({ ...filters, preset: "all", since: undefined, until: undefined })}
+        >
+          Widen to All time
+        </Button>
+      ) : null}
+    </div>
+  );
+
   return (
     <EmptyStatePanel
-      size="md"
+      size={size}
       icon={<Filter className="h-5 w-5" aria-hidden />}
-      title="No opponents match these filters"
-      description="Try lowering Min games, clearing the season filter, or searching by partial name."
+      title={title}
+      description={
+        <span className="block space-y-1">
+          <span className="block">Applied now:</span>
+          <span className="flex flex-wrap justify-center gap-1.5" data-testid="no-filter-matches-applied">
+            <AppliedFilter label="Dates" value={longLabelFor(preset, seasons)} />
+            {active.map((filter) => (
+              <AppliedFilter key={filter.key} label={filter.label} value={filter.value} />
+            ))}
+          </span>
+        </span>
+      }
+      action={actions}
     />
   );
+}
+
+function AppliedFilter({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex max-w-full items-center gap-1 rounded-full border border-border bg-bg-elevated px-2.5 py-0.5 text-caption text-text">
+      <span className="text-text-muted">{label}:</span>
+      <span className="truncate">{value}</span>
+    </span>
+  );
+}
+
+/** The Opponents list's empty state (kept as its own name for the opponent views). */
+export function NoOpponentsMatch(props: Omit<NoFilterMatchesProps, "title">) {
+  return <NoFilterMatches title="No opponents match these filters" {...props} />;
 }
 
 export function NoBuildOrder({
@@ -177,23 +283,6 @@ export function NoBuildOrder({
         <Button variant="secondary" size="sm" onClick={onRecompute}>
           Ask the agent to recompute
         </Button>
-      }
-    />
-  );
-}
-
-export function NeedReplays({ count = 0 }: { count?: number }) {
-  return (
-    <EmptyStatePanel
-      size="md"
-      icon={<Activity className="h-5 w-5" aria-hidden />}
-      title="Need more replays"
-      description={
-        <>
-          You have <strong className="text-text">{count}</strong> games on file.
-          Most charts work best with 30+. The agent will keep the cloud copy
-          current as you play.
-        </>
       }
     />
   );

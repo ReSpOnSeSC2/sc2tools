@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   TABS,
+  TODAY_DEFAULT_TAB,
+  defaultTabRedirect,
   hrefForTab,
   isTabId,
   opponentDossierHref,
@@ -48,5 +50,18 @@ describe("routed section slugs", () => {
     expect(opponentDossierHref("1-S2-1-42/alt")).toBe(
       "/app/opponents/1-S2-1-42%2Falt",
     );
+  });
+});
+
+describe("Settings default tab", () => {
+  it("sends Today to a chosen section", () => {
+    for (const tab of TABS) expect(defaultTabRedirect(tab.id)).toBe(tab.id);
+  });
+
+  it("stays on Today for Today, no choice or a removed section", () => {
+    expect(TODAY_DEFAULT_TAB).toBe("today");
+    for (const pref of [TODAY_DEFAULT_TAB, undefined, null, "", "ml"]) {
+      expect(defaultTabRedirect(pref)).toBeNull();
+    }
   });
 });

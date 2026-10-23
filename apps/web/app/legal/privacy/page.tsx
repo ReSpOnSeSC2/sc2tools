@@ -9,16 +9,16 @@
  *   GET /legal/privacy  →  <PrivacyPage />
  */
 import type { ReactNode } from "react";
+import { ISSUES_URL } from "@/lib/siteLinks";
 
 export const metadata = {
   alternates: { canonical: "/legal/privacy" },
-  title: "Privacy Policy — SC2 Tools",
+  title: "Privacy Policy",
   description:
     "How SC2 Tools processes replay data, connected streaming accounts, and private StarCraft II replay files.",
 };
 
-const LAST_UPDATED = "2026-10-08";
-const ISSUES_URL = "https://github.com/ReSpOnSeSC2/sc2tools/issues";
+const LAST_UPDATED = "2026-10-23";
 /** Settings tab with export, history deletion and account deletion. */
 const DATA_SETTINGS_HREF = "/settings?tab=backups";
 const LIST_CLASS = "list-disc space-y-2 pl-6";
@@ -46,6 +46,7 @@ export default function PrivacyPage() {
       <WhatWeCollect />
       <WhatWeDoNotCollect />
       <WhereDataLives />
+      <Backups />
       <ConnectedStreamAccounts />
       <BrowserStoredData />
       <Sharing />
@@ -244,6 +245,42 @@ function WhereDataLives() {
   );
 }
 
+function Backups() {
+  return (
+    <PolicySection title="Backups">
+      <ul className={LIST_CLASS}>
+        <li>
+          <strong>Daily database backups.</strong> MongoDB Atlas takes
+          automatic snapshots of the whole SC2 Tools database every day.
+          They are encrypted, stay with MongoDB Atlas, and are deleted
+          automatically when their
+          retention period in our backup schedule ends. We use them only to
+          recover the service after a failure or data loss; they are not a
+          way to restore one account on request.
+        </li>
+        <li>
+          <strong>Snapshots you take.</strong> A snapshot you take in{" "}
+          <DataSettingsLink /> is a copy of your own account data, stored in
+          the same database, that you can restore yourself. It stays until
+          you delete your account. Snapshots do not contain original replay
+          files or replay-detail payloads.
+        </li>
+        <li>
+          <strong>Your export.</strong> The JSON export is the copy you keep
+          yourself. We do not keep a copy of the file you download.
+        </li>
+      </ul>
+      <p>
+        Original replay files and replay-detail payloads in Cloudflare R2
+        are not part of the database backups. When you delete data or your
+        account, it is removed from the live database and from R2 straight
+        away. Copies already inside database backups are not edited; they
+        are deleted when those backups expire.
+      </p>
+    </PolicySection>
+  );
+}
+
 function ConnectedStreamAccounts() {
   return (
     <PolicySection title="Connected accounts and stream controls">
@@ -406,7 +443,9 @@ function YourRights() {
         You can export your structured account data as a JSON archive,
         download stored replay originals from replay history, or delete your
         replay history or account permanently from <DataSettingsLink />.
-        Deletion is hard — there is no recovery. If you live in the EU, UK,
+        Deletion is hard — there is no recovery. Copies in our daily database
+        backups expire on their own, as described under Backups. If you live
+        in the EU, UK,
         or California, you have additional rights under GDPR and CCPA; open a
         ticket at <IssuesLink /> to exercise them.
       </p>

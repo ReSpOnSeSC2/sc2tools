@@ -86,6 +86,25 @@ export function isTabId(value: string | null | undefined): value is TabId {
   return TABS.some((t) => t.id === value);
 }
 
+/**
+ * The Settings "Default tab" value for staying on Today (/app). It is
+ * not a TabId: Today is the landing page, not a routed section.
+ */
+export const TODAY_DEFAULT_TAB = "today";
+
+/**
+ * The section a saved "Default tab" preference sends Today to, or null
+ * to stay on Today (no choice, "today", or a tab that no longer exists).
+ *
+ * Example:
+ *   defaultTabRedirect("battlefield"); // -> "battlefield"
+ *   defaultTabRedirect("today"); // -> null
+ */
+export function defaultTabRedirect(pref: string | null | undefined): TabId | null {
+  if (pref === TODAY_DEFAULT_TAB) return null;
+  return isTabId(pref) ? pref : null;
+}
+
 export function slugForTab(id: TabId): SectionSlug {
   return TAB_TO_SLUG[id];
 }

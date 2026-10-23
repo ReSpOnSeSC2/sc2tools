@@ -4,9 +4,9 @@
 //
 // The API image does not ship apps/web, so the guide catalog it needs at
 // require time (apps/api/src/config/guideCatalog.json) is generated from
-// the web's BUILD_DEFINITIONS here and committed. The build-definitions
-// chunks use two authoring styles (object literals and helper calls), so
-// the catalog is BUNDLED with the esbuild that ships in apps/web's
+// the web's BUILD_DEFINITIONS here and committed. The definitions are
+// assembled in TypeScript (generated engine labels plus wording overrides),
+// so the catalog is BUNDLED with the esbuild that ships in apps/web's
 // node_modules rather than scraped with a regex. Entry point is
 // lib/guides/catalog.ts, which imports lib/build-definitions.ts and owns
 // GUIDE_NON_OPENER_IDS. The vitest drift test in

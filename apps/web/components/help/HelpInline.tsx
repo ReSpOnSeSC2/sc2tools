@@ -20,6 +20,10 @@ export interface HelpLinkOptions {
 export const HELP_TEXT_LINK_CLASS =
   "rounded-sm font-medium text-accent-cyan underline decoration-accent-cyan/40 underline-offset-2 hover:decoration-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
+/** The round "?" button of `<HelpLink variant="icon">`. */
+export const HELP_ICON_LINK_CLASS =
+  "inline-flex h-8 w-8 items-center justify-center rounded-full text-text-dim hover:bg-bg-elevated hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
+
 /** A click that should open in place: plain left click, no modifier keys. */
 export function isPlainClick(event: MouseEvent): boolean {
   return event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;

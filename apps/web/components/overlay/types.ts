@@ -83,16 +83,33 @@ export type LiveGamePayload = {
   opponentNotes?: { text: string; readAloud: boolean };
   /** Current win/loss streak. */
   streak?: { kind: "win" | "loss"; count: number };
-  /** Cheese-likelihood score (0..1). */
+  /**
+   * Cheese-likelihood score (0..1): the recency-weighted share of this
+   * opponent's games in this matchup that opened with cheese. Only
+   * sent at 0.4 or above.
+   */
   cheeseProbability?: number;
-  /** Predicted opponent strategies. */
+  /**
+   * The games behind ``cheeseProbability``: ``samples`` opened with
+   * cheese out of the last ``of`` games in this matchup ("2 of last 5").
+   * Absent when the alert comes from the just-played game alone.
+   */
+  cheeseHistory?: { samples: number; of: number };
+  /**
+   * Predicted opponent strategies, top 3 — the same recency-weighted
+   * numbers the opponent dossier shows (last 10 games count double).
+   */
   predictedStrategies?: { name: string; weight: number }[];
   /** Top builds the player likes vs this matchup. */
   topBuilds?: { name: string; total: number; winRate: number }[];
   /** Best answer vs this opponent's most-likely opening. */
   bestAnswer?: { build: string; winRate: number; total: number } | null;
-  /** Favorite opening this opponent has shown. */
-  favOpening?: { name: string; share: number; samples: number } | null;
+  /**
+   * The opening this opponent has shown most often in this matchup:
+   * ``samples`` games out of the last ``of`` ("3 of last 5"). ``of`` is
+   * missing only on payloads cached before it was added.
+   */
+  favOpening?: { name: string; share: number; samples: number; of?: number } | null;
   /** Scouting tells. */
   scouting?: { label: string; tellAt?: number; confidence?: number }[];
   /**
@@ -150,39 +167,23 @@ export type LiveGamePayload = {
    * Pre-summarised phase forecast for the opponent. Computed cloud-
    * side from up to 50 of the streamer's recent games against this
    * opponent — see ``OverlayLiveService`` for the aggregation. Drives
-   * the scouting card's "Usually reaches Mid/Late" strip.
+   * the scouting card's one-line "Games usually end" footer.
    *
    * Absent when the opponent is too sparse (first meeting, or < 3
    * prior games with macroBreakdown). The widget renders NOTHING in
    * that slot rather than a placeholder — better silent than wrong
    * on stream.
-   *
-   * @deprecated The scouting overlay no longer renders medians — the
-   *   per-game ``last5GamesScouting`` field below replaces this slot.
-   *   Kept on the type for one release so cached payloads continue to
-   *   type-check; remove after the rollout window closes.
    */
   opponentPhases?: OpponentPhases;
-  /**
-   * Per-game scouting envelopes for the last 5 games against this
-   * opponent. Drives the scouting card's "Last 5 games" block —
-   * real build-order events + real phase transitions + real
-   * composition-by-phase snapshots, no medians.
-   *
-   * Newest first. Absent when this is a first meeting (no prior
-   * games). The cloud computes each entry on the same per-game
-   * macroBreakdown + oppBuildLog the dossier reads, so the wire
-   * shape stays free of the heavy raw blob.
-   */
-  last5GamesScouting?: PerGameScoutingEnvelope[];
 };
 
 /**
  * Per-game scouting envelope. Mirror of the API's
  * ``PerGameScoutingEnvelope`` shape in
- * ``apps/api/src/services/scouting/perGameScouting.js``. The two
- * MUST agree field-for-field — the wire payload is consumed by the
- * widget without further reshape.
+ * ``apps/api/src/services/scouting/perGameScouting.js`` (served on the
+ * opponent dossier; the live overlay no longer carries it). The two
+ * MUST agree field-for-field — the wire payload is consumed without
+ * further reshape.
  */
 export interface PerGameScoutingEnvelope {
   gameId: string;
@@ -530,6 +531,7 @@ export interface LiveGameEnvelope {
     | "opponentNotes"
     | "streak"
     | "cheeseProbability"
+    | "cheeseHistory"
     | "predictedStrategies"
     | "topBuilds"
     | "bestAnswer"
@@ -541,7 +543,6 @@ export interface LiveGameEnvelope {
     | "rival"
     | "rematch"
     | "opponentPhases"
-    | "last5GamesScouting"
   >;
 }
 

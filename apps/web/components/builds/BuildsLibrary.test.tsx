@@ -5,6 +5,8 @@ const harness = vi.hoisted(() => ({
   apiCall: vi.fn(),
   getToken: vi.fn(async () => "test-token"),
   userId: "test-user",
+  isLoaded: true,
+  isSignedIn: true,
   mutateBuilds: vi.fn(async () => undefined),
   mutateStats: vi.fn(async () => undefined),
   mutateStatus: vi.fn(async () => undefined),
@@ -22,7 +24,12 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: harness.getToken, userId: harness.userId }),
+  useAuth: () => ({
+    getToken: harness.getToken,
+    userId: harness.userId,
+    isLoaded: harness.isLoaded,
+    isSignedIn: harness.isSignedIn,
+  }),
 }));
 
 vi.mock("@/lib/clientApi", () => ({
@@ -148,11 +155,17 @@ vi.mock("./EditCustomBuildLauncher", () => ({
 }));
 vi.mock("./BuildPublishModal", () => ({ BuildPublishModal: () => null }));
 vi.mock("@/components/ui/ConfirmDialog", () => ({ ConfirmDialog: () => null }));
+vi.mock("next/image", () => ({
+  // eslint-disable-next-line @next/next/no-img-element
+  default: (props: { src: string; alt: string }) => <img src={props.src} alt={props.alt} />,
+}));
 
 import { BuildsLibrary } from "./BuildsLibrary";
 
 beforeEach(() => {
   harness.userId = "test-user";
+  harness.isLoaded = true;
+  harness.isSignedIn = true;
   harness.apiCall.mockReset();
   harness.getToken.mockClear();
   harness.mutateBuilds.mockReset();
@@ -276,6 +289,45 @@ describe("BuildsLibrary pagination", () => {
   });
 });
 
+describe("BuildsLibrary signed out", () => {
+  beforeEach(() => {
+    harness.isSignedIn = false;
+    // Signed out, useApi has no key: the list never loads.
+    harness.listData = undefined;
+  });
+
+  it("explains custom builds instead of loading a library forever", () => {
+    const { container } = render(<BuildsLibrary />);
+    expect(screen.getByRole("heading", { level: 1, name: "Your own build library" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "How custom builds work" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: /build editor/ }).getAttribute("src")).toBe("/landing/build-editor.png");
+    // Never a skeleton: nothing on this page is waiting for data.
+    expect(container.querySelector(".animate-pulse")).toBeNull();
+    expect(harness.paths).toEqual([]);
+  });
+
+  it("offers an account (returning to /builds) and the public build pages, never the editor", () => {
+    render(<BuildsLibrary />);
+    expect(screen.getByRole("link", { name: "Create account" }).getAttribute("href")).toBe("/sign-up?redirect_url=%2Fbuilds");
+    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/sign-in?redirect_url=%2Fbuilds");
+    expect(screen.getByRole("link", { name: "Browse community builds" }).getAttribute("href")).toBe("/community");
+    expect(screen.getByRole("link", { name: "Build definitions" }).getAttribute("href")).toBe("/definitions");
+    expect(screen.getByRole("link", { name: "Which pages are public?" }).getAttribute("href")).toBe(
+      "/help/a-page-asked-me-to-sign-in",
+    );
+    expect(screen.queryByRole("button", { name: "New build" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Reclassify/ })).toBeNull();
+    expect(screen.queryByLabelText("Search")).toBeNull();
+  });
+
+  it("renders nothing until Clerk has loaded", () => {
+    harness.isLoaded = false;
+    const { container } = render(<BuildsLibrary />);
+    expect(container.innerHTML).toBe("");
+    expect(harness.paths).toEqual([]);
+  });
+});
+
 describe("BuildsLibrary loading failures", () => {
   it("shows a retryable load error instead of claiming the library is empty", async () => {
     harness.listData = undefined;
@@ -346,6 +398,9 @@ describe("BuildsLibrary loading failures", () => {
 
     expect(screen.getByText("No custom builds yet")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create your first build" })).toBeTruthy();
+    // Points at the real entry point (a game's build order), not opponent profiles.
+    expect(screen.getByText(/From any game’s build order, click ‘Save as new build’/)).toBeTruthy();
+    expect(screen.queryByText(/opponent profile/)).toBeNull();
   });
 });
 

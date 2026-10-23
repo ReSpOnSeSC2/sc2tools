@@ -48,6 +48,12 @@ describe("sitemap", () => {
     expect(await urls()).not.toContain(`${SITE}/meta`);
   });
 
+  it("leaves out /builds, whose signed-out intro is client-rendered", async () => {
+    const list = await urls();
+    expect(list.some((url) => url === `${SITE}/builds` || url.startsWith(`${SITE}/builds/`))).toBe(false);
+    expect(list).toContain(`${SITE}/definitions`);
+  });
+
   it("lists published guide pages (API paths, hub included) when guides are on", async () => {
     vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");
     const rows = await sitemap();

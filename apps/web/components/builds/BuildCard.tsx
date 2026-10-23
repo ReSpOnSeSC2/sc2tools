@@ -25,6 +25,7 @@ import {
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
+import { SkeletonBar } from "@/components/ui/Skeleton";
 import { fmtAgo, pct1, wrColor } from "@/lib/format";
 import { checkinsText } from "@/lib/buildIntent";
 import {
@@ -201,7 +202,10 @@ function BuildStatsRow({
           </dt>
           <dd className="text-body tabular-nums text-text">
             {statsPending ? (
-              <span className="text-text-dim">Loading…</span>
+              <span role="status" className="inline-flex h-6 items-center">
+                <span className="sr-only">Loading record</span>
+                <SkeletonBar className="h-4 w-16" />
+              </span>
             ) : statsUnavailable ? (
               <span className="text-warning">Temporarily unavailable</span>
             ) : total > 0 ? (

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -13,6 +13,12 @@ import {
   type AnalyzerFilters,
 } from "@/lib/filterContext";
 import { FilterBar } from "../FilterBar";
+
+// The bar's Matchup picker asks which races you have played; these tests
+// cover other controls, so it answers "none yet".
+vi.mock("@/lib/clientApi", () => ({
+  useApi: () => ({ data: undefined, isLoading: false, error: null }),
+}));
 
 afterEach(cleanup);
 

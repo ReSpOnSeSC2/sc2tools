@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { ALL_WIDGETS } from "@/components/overlay/widgetLifecycle";
+import { getArticle } from "@/lib/help";
 import { WIDGET_GROUPS, WIDGET_GUIDES } from "@/lib/streamStudioLearn";
 
 function source(path: string) {
@@ -79,5 +80,18 @@ describe("Stream Studio learning catalog", () => {
     expect(byId.get("chat-poll")?.explanation).toContain("Close poll");
     expect(byId.get("scouting")?.explanation).toContain("suppressed");
     expect(byId.get("cheese")?.explanation).toContain("40%");
+  });
+
+  it("tells streamers how much opponent history the scouting intel needs", () => {
+    const byId = new Map(WIDGET_GUIDES.map((guide) => [guide.id, guide]));
+    for (const id of ["fav-opening", "best-answer", "cheese", "scouting"] as const) {
+      const guide = byId.get(id);
+      expect(guide?.needs.join(" "), id).toMatch(/at least 2 earlier games vs this opponent in this matchup/i);
+      expect(guide?.helpSlug, id).toBe("opponent-scouting");
+    }
+    expect(byId.get("fav-opening")?.example.lines.join(" ")).toContain("3 of last 5 games");
+    for (const guide of WIDGET_GUIDES) {
+      if (guide.helpSlug) expect(getArticle(guide.helpSlug), guide.id).toBeDefined();
+    }
   });
 });

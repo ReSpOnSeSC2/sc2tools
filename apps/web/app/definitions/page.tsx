@@ -5,16 +5,23 @@ import {
   DefinitionsCatalog,
   DefinitionsHeaderHint,
 } from "@/components/definitions/DefinitionsCatalog";
-import { DEFINITIONS_TOTAL } from "@/lib/build-definitions";
+import { BUILD_DEFINITIONS, DEFINITIONS_TOTAL } from "@/lib/build-definitions";
+import { fetchPublishedGuidePaths } from "@/lib/guides/api";
+import { definitionGuideLinks } from "@/lib/guides/definitionLinks";
+import { guidesEnabled } from "@/lib/guides/flags";
 
 export const metadata = {
   alternates: { canonical: "/definitions" },
-  title: "Build & Strategy Definitions · SC2 Tools",
+  title: "Build & Strategy Definitions",
   description:
     "The detection rules used by the SC2 Tools analyzer to label opponent strategies and your own builds.",
 };
 
-export default function DefinitionsPage() {
+export default async function DefinitionsPage() {
+  // The guide sitemap is a cached read (6 h, purged when guides publish);
+  // with guides off or the API down, cards simply show no Guide link.
+  const published = guidesEnabled() ? await fetchPublishedGuidePaths() : null;
+  const guideLinks = definitionGuideLinks(BUILD_DEFINITIONS, published);
   return (
     <div className="space-y-6">
       <Link
@@ -37,7 +44,7 @@ export default function DefinitionsPage() {
         }
       />
       <DefinitionsHeaderHint />
-      <DefinitionsCatalog />
+      <DefinitionsCatalog guideLinks={guideLinks} />
     </div>
   );
 }

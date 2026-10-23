@@ -15,7 +15,7 @@
  *   {props ? <LazyMacroChart {...props} /> : null}
  */
 import dynamic from "next/dynamic";
-import { ErrorBoundary } from "@/components/ui/ErrorBoundary";
+import { SectionBoundary } from "@/components/ui/SectionBoundary";
 import type { OfflineMacroChartProps } from "@/lib/instant/reportGameDetail";
 
 /*
@@ -59,8 +59,8 @@ const OfflineMacroChart = dynamic(() => import("./OfflineMacroChart").then((mod)
  */
 export function LazyMacroChart(props: OfflineMacroChartProps) {
   return (
-    <ErrorBoundary label="the macro timeline">
+    <SectionBoundary label="the macro timeline">
       <OfflineMacroChart {...props} />
-    </ErrorBoundary>
+    </SectionBoundary>
   );
 }

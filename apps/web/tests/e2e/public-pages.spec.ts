@@ -107,8 +107,8 @@ async function paint(target: Locator): Promise<{ color: string; background: stri
  *
  * The header 'Get started' sits inside Clerk's <SignedOut>, which never
  * mounts here (the dummy key can't load Clerk), so the 404 page's
- * 'Open dashboard' stands in: the same `bg-accent text-white
- * hover:bg-accent-hover` link-button, rendered with no auth or API.
+ * 'Go home' stands in: the same `bg-accent text-white
+ * hover:bg-accent-hover` pill, rendered with no auth or API.
  * Reduced motion zeroes the colour transitions, so the computed styles
  * are final as soon as the pointer lands.
  */
@@ -117,7 +117,7 @@ test.describe("primary CTA link on hover", () => {
     test.skip(testInfo.project.name !== "desktop-1280", "the viewport doesn't matter here; run it once");
     await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
     await page.goto("/this-page-does-not-exist");
-    const cta = page.getByRole("main").getByRole("link", { name: "Open dashboard" });
+    const cta = page.getByRole("main").getByRole("link", { name: "Go home" });
     await expect(cta).toBeVisible();
     const rest = await paint(cta);
     await cta.hover();

@@ -65,6 +65,25 @@ export const GUIDE_NON_OPENER_NAME_PATTERNS: ReadonlyArray<RegExp> = [
   /Game Too Short$/,
 ];
 
+/**
+ * Engine labels on /definitions that don't have guide pages yet. They
+ * reached the definitions catalog when it started following the replay
+ * engine (lib/build-definitions.generated.json) and stay out of the guide
+ * catalog until guideCatalog.json and guideSlugs.lock.json are regenerated
+ * together on purpose: "TvP - 1-1-1 One Base" takes the plain
+ * "1-1-1-one-base" slug in TvP builds and PvT counters, which moves the
+ * existing "Terran - 1-1-1 One Base" pages to "terran-1-1-1-one-base"
+ * (see apps/api/src/config/guideSlugs.js).
+ */
+export const GUIDE_PENDING_NAMES: ReadonlySet<string> = new Set([
+  "TvP - 1-1-1 One Base",
+  "Zerg - Hatch First",
+]);
+
+/** The definitions the guide catalog and guide slugs are built from. */
+export const GUIDE_CATALOG_DEFINITIONS: ReadonlyArray<BuildDefinition> =
+  BUILD_DEFINITIONS.filter((def) => !GUIDE_PENDING_NAMES.has(def.name));
+
 /** One row of `apps/api/src/config/guideCatalog.json`. */
 export interface GuideCatalogEntry {
   /** Exact catalog name — the join key with stored `myBuild` / `opponent.strategy`. */
@@ -109,7 +128,7 @@ function compareByName(a: GuideCatalogEntry, b: GuideCatalogEntry): number {
  * `{ name: "Protoss - 4 Gate Rush", race: "Protoss", matchup: null, … }`.
  */
 export function buildGuideCatalog(
-  defs: ReadonlyArray<BuildDefinition> = BUILD_DEFINITIONS,
+  defs: ReadonlyArray<BuildDefinition> = GUIDE_CATALOG_DEFINITIONS,
 ): GuideCatalogEntry[] {
   return defs
     .map((def) => ({

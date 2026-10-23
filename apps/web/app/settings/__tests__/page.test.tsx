@@ -1,7 +1,8 @@
 /**
  * /settings — `?tab=` deep links: the Import tab opens only while the
  * Instant Analysis flag is on. Every tab body is a MOCK stub; the flag
- * hook and search params are mocked.
+ * hook and search params are mocked. Tabs other than Foundation load as
+ * their own chunks (next/dynamic), so their bodies are awaited.
  */
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,11 +37,11 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("SettingsPage ?tab=", () => {
-  it("opens the Import tab when browser import is enabled", () => {
+  it("opens the Import tab when browser import is enabled", async () => {
     mocks.tab = "import";
     mocks.gate = { enabled: true, mode: "all", loading: false };
     render(<SettingsPage />);
-    expect(screen.getByText("import body")).toBeTruthy();
+    expect(await screen.findByText("import body")).toBeTruthy();
     expect(screen.getAllByRole("tab", { name: "Import" })).toHaveLength(2);
   });
 
@@ -52,31 +53,56 @@ describe("SettingsPage ?tab=", () => {
     expect(screen.getByText("foundation body")).toBeTruthy();
   });
 
-  it("deep-links the Build check-in tab", () => {
+  it("deep-links the Build check-in tab", async () => {
     mocks.tab = "checkin";
     render(<SettingsPage />);
-    expect(screen.getByText("checkin body")).toBeTruthy();
+    expect(await screen.findByText("checkin body")).toBeTruthy();
     expect(screen.getAllByRole("tab", { name: "Build check-in" })).toHaveLength(2);
   });
 
-  it("follows a ?tab= change while Settings stays mounted", () => {
+  it("follows a ?tab= change while Settings stays mounted", async () => {
     mocks.tab = "checkin";
     const view = render(<SettingsPage />);
-    expect(screen.getByText("checkin body")).toBeTruthy();
+    expect(await screen.findByText("checkin body")).toBeTruthy();
     // e.g. "How build check-in works" links to ?tab=help#build-check-in.
     mocks.tab = "help";
     view.rerender(<SettingsPage />);
-    expect(screen.getByText("help body")).toBeTruthy();
+    expect(await screen.findByText("help body")).toBeTruthy();
     expect(screen.queryByText("checkin body")).toBeNull();
   });
 
-  it("opens any other known tab and ignores unknown ones", () => {
+  it("opens a tab through a registered alias", async () => {
+    mocks.tab = "streaming";
+    render(<SettingsPage />);
+    expect(await screen.findByText("overlay body")).toBeTruthy();
+  });
+
+  it("links the help article about the tabs", () => {
+    render(<SettingsPage />);
+    expect(
+      screen.getByRole("link", { name: "What each tab is for" }).getAttribute("href"),
+    ).toBe("/help/settings-overview");
+  });
+
+  it("opens any other known tab and ignores unknown ones", async () => {
     mocks.tab = "voice";
     render(<SettingsPage />);
-    expect(screen.getByText("voice body")).toBeTruthy();
+    expect(await screen.findByText("voice body")).toBeTruthy();
     cleanup();
     mocks.tab = "nope";
     render(<SettingsPage />);
     expect(screen.getByText("foundation body")).toBeTruthy();
+  });
+
+  it("ships Foundation with the page and names the open tab in the browser tab", async () => {
+    render(<SettingsPage />);
+    // The default tab is eager: no loading state on the first paint.
+    expect(screen.getByText("foundation body")).toBeTruthy();
+    expect(document.title).toBe("Foundation · Settings · SC2 Tools");
+    cleanup();
+    mocks.tab = "voice";
+    render(<SettingsPage />);
+    expect(await screen.findByText("voice body")).toBeTruthy();
+    expect(document.title).toBe("Voice · Settings · SC2 Tools");
   });
 });

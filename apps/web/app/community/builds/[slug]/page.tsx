@@ -1,8 +1,9 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Calendar, Users } from "lucide-react";
-import { getJson } from "@/lib/serverApi";
+import { getJsonWithStatus } from "@/lib/serverApi";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -10,7 +11,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { fmtAgo, fmtDate } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorChip } from "@/components/community/AuthorChip";
+import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import { CommunityBuildSignatureTimeline } from "@/components/community/CommunityBuildSignatureTimeline";
+import { CommunityGamePlan } from "@/components/community/CommunityGamePlan";
 import { CommunityVotePanel } from "@/components/community/CommunityVotePanel";
 import { CommunityBuildOwnerControls } from "@/components/community/CommunityBuildOwnerControls";
 import { RelatedBuilds } from "@/components/community/RelatedBuilds";
@@ -18,24 +21,44 @@ import { CommunityGuideLink } from "@/components/guides/CommunityGuideLink";
 import { SaveToLibraryButton } from "@/components/community/SaveToLibraryButton";
 import { ShareLinkButton } from "@/components/community/ShareLinkButton";
 import type { CommunityBuildDetail } from "@/components/community/types";
-import { rulesToSignature, type BuildRuleLike } from "@/lib/build-events";
+import { RulesSummary } from "@/components/builds/RulesSummary";
+import { SKILL_LEVELS, coerceSavedRules } from "@/lib/build-rules";
 import { serializeJsonLd } from "@/lib/reviewJsonLd";
+
+/**
+ * The published build. A 404 from the API is the only "doesn't exist";
+ * an unreachable API or a 5xx leaves `data` null with any other status,
+ * and the page then says it is temporarily unavailable instead of
+ * 404ing a build that exists. generateMetadata and the page make the
+ * same request, which Next dedupes within one render.
+ */
+function loadBuild(slug: string) {
+  return getJsonWithStatus<CommunityBuildDetail>(
+    `/v1/community/builds/${encodeURIComponent(slug)}`,
+  );
+}
+
+const UNAVAILABLE_TITLE = "This build is temporarily unavailable";
 
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
-}) {
+}): Promise<Metadata> {
   const { slug } = await params;
-  const data = await getJson<CommunityBuildDetail>(
-    `/v1/community/builds/${encodeURIComponent(slug)}`,
-  );
-  if (!data) return { title: "Build not found — SC2 Tools" };
+  const { data, status } = await loadBuild(slug);
+  if (status === 404) notFound();
+  if (!data) {
+    return {
+      title: UNAVAILABLE_TITLE,
+      robots: { index: false, follow: false },
+    };
+  }
   const description =
     data.description?.slice(0, 200) ||
     `Player-published StarCraft II build for ${data.matchup || "any matchup"}.`;
   return {
-    title: `${data.title} — community build — SC2 Tools`,
+    title: `${data.title} · Community build`,
     description,
     openGraph: {
       title: `${data.title} — SC2 Tools community build`,
@@ -52,36 +75,44 @@ export async function generateMetadata({
  */
 type LegacyStep = { supply?: number; time?: string; action?: string };
 
+/** The snapshot's skill level as its display label ("Diamond"), or null. */
+function skillLevelLabel(value: unknown): string | null {
+  return SKILL_LEVELS.find((level) => level.id === value)?.label ?? null;
+}
+
 export default async function CommunityBuildPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const data = await getJson<CommunityBuildDetail>(
-    `/v1/community/builds/${encodeURIComponent(slug)}`,
-  );
-  if (!data) notFound();
+  const { data, status } = await loadBuild(slug);
+  if (status === 404) notFound();
+  if (!data) {
+    return (
+      <CommunityUnavailable
+        title={UNAVAILABLE_TITLE}
+        retryHref={`/community/builds/${encodeURIComponent(slug)}`}
+        standalone
+      />
+    );
+  }
 
   const build = data.build || {};
+  // The snapshot's v3 fields aren't on the legacy CustomBuild type.
+  const snapshot = build as Record<string, unknown>;
   const race = coerceRace(build.race);
   const tint = raceTint(race);
-  const rawSignature = Array.isArray(build.signature) ? build.signature : [];
-  // v3 builds persist `rules` instead of `signature`; convert so the
-  // existing timeline renders the build order. Falls back to the v2
-  // signature when both are present.
-  const rawRules = Array.isArray(
-    (build as Record<string, unknown>).rules,
-  )
-    ? ((build as Record<string, unknown>).rules as BuildRuleLike[])
+  // v3 builds persist `rules`, read back as Must have / Must not have
+  // (RulesSummary) so None and At most 0 rules are never shown as
+  // something to build. Rules are what games are matched on, so they win
+  // over a v2 `signature` (a step timeline) when a build has both.
+  const signature = Array.isArray(build.signature) ? build.signature : [];
+  const rules = coerceSavedRules(snapshot.rules);
+  const legacySteps: LegacyStep[] = Array.isArray(snapshot.steps)
+    ? (snapshot.steps as LegacyStep[])
     : [];
-  const signature =
-    rawSignature.length > 0 ? rawSignature : rulesToSignature(rawRules);
-  const legacySteps: LegacyStep[] = Array.isArray(
-    (build as Record<string, unknown>).steps,
-  )
-    ? ((build as Record<string, unknown>).steps as LegacyStep[])
-    : [];
+  const skillLevel = skillLevelLabel(snapshot.skillLevel);
 
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
@@ -141,6 +172,23 @@ export default async function CommunityBuildPage({
                 {data.matchup}
               </Badge>
             ) : null}
+            {skillLevel ? (
+              <Badge
+                variant="neutral"
+                size="sm"
+                title="The level the author wrote this build for"
+                iconLeft={
+                  <Icon
+                    name={String(snapshot.skillLevel)}
+                    kind="league"
+                    size={14}
+                    decorative
+                  />
+                }
+              >
+                {skillLevel}
+              </Badge>
+            ) : null}
             <AuthorChip build={data} size="sm" />
             <span className="inline-flex items-center gap-1 text-micro uppercase tracking-wider text-text-dim">
               <Calendar className="h-3 w-3" aria-hidden />
@@ -159,7 +207,9 @@ export default async function CommunityBuildPage({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
-          {signature.length > 0 ? (
+          {rules.length > 0 ? (
+            <RulesSummary rules={rules} />
+          ) : signature.length > 0 ? (
             <CommunityBuildSignatureTimeline signature={signature} />
           ) : legacySteps.length > 0 ? (
             <LegacyStepsTable steps={legacySteps} />
@@ -172,13 +222,11 @@ export default async function CommunityBuildPage({
             </Card>
           )}
 
-          {build.notes ? (
-            <Card title="Author notes">
-              <pre className="whitespace-pre-wrap break-words font-sans text-body text-text">
-                {build.notes}
-              </pre>
-            </Card>
-          ) : null}
+          <CommunityGamePlan
+            winConditions={snapshot.winConditions}
+            losesTo={snapshot.losesTo}
+            transitionsInto={snapshot.transitionsInto}
+          />
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
@@ -190,7 +238,12 @@ export default async function CommunityBuildPage({
           </Card>
           <Card>
             <div className="space-y-3">
-              <SaveToLibraryButton build={data.build} title={data.title} />
+              <SaveToLibraryButton
+                build={data.build}
+                title={data.title}
+                communitySlug={data.slug}
+                version={data.updatedAt || data.publishedAt}
+              />
               <ShareLinkButton path={`/community/builds/${data.slug}`} />
               <CommunityBuildOwnerControls
                 slug={data.slug}

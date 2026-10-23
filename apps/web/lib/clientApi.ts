@@ -1,10 +1,20 @@
 "use client";
 
 // Client-side fetch helpers + SWR fetcher. Pulls Clerk JWT via the
-// hook so it works inside React effects.
+// hook so it works inside React effects. Every failed request is also
+// remembered (credentials stripped) so a bug report can include the
+// last few: see lib/feedback/failedRequests.ts.
 
+import { useLayoutEffect, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
-import useSWR, { type SWRConfiguration } from "swr";
+import useSWR, {
+  unstable_serialize,
+  useSWRConfig,
+  type SWRConfiguration,
+  type SWRResponse,
+} from "swr";
+import { recordFailedRequest } from "@/lib/feedback/failedRequests";
+import { networkUnavailableError } from "./requestErrors";
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080";
@@ -26,12 +36,23 @@ export type ClientApiRequestOptions = {
   timeoutMs?: number;
 };
 
+/** What {@link useApi} returns: SWR's response plus two extras. */
+export type ApiResponse<T> = SWRResponse<T, ClientApiError> & {
+  /**
+   * True while `data` is the answer to this hook's previous request: a
+   * filter just changed and the new answer is on its way.
+   */
+  readonly isPreviousData: boolean;
+  /** Send a request to the same resource with the same credentials. */
+  request: <R = unknown>(init: RequestInit) => Promise<R>;
+};
+
 /** SWR-style hook that auto-attaches the Clerk JWT. */
 export function useApi<T>(
   path: string | null,
   config?: SWRConfiguration<T, ClientApiError>,
   requestOptions?: ClientApiRequestOptions,
-) {
+): ApiResponse<T> {
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   // An authenticated response belongs to one Clerk account. Keeping userId in
   // the SWR identity prevents a late response or warm cache from account A
@@ -46,12 +67,12 @@ export function useApi<T>(
       const fetchResource = async (signal?: AbortSignal) => {
         const token = await getToken();
         signal?.throwIfAborted();
-        const res = await fetch(`${API_BASE}${requestPath}`, {
+        const res = await trackedFetch(requestPath, `${API_BASE}${requestPath}`, {
           headers: token ? { authorization: `Bearer ${token}` } : undefined,
           cache: "no-store",
           ...(signal ? { signal } : {}),
         });
-        if (!res.ok) throw await buildApiError(res);
+        if (!res.ok) throw noteFailure(requestPath, await buildApiError(res));
         return res.json();
       };
       return requestOptions?.timeoutMs
@@ -60,9 +81,14 @@ export function useApi<T>(
     },
     config,
   );
+  const resolvePrevious = usePreviousDataScope(
+    key,
+    key ? `${key[1]} ${resourcePath(key[2])}` : null,
+    config,
+  );
   // Reuse the same authenticated resource path for explicit refresh actions.
   // Keeping the token closure here avoids duplicating auth in data consumers.
-  return Object.assign(result, {
+  return Object.assign(scopePreviousData(result, resolvePrevious), {
     request: <R = unknown>(init: RequestInit): Promise<R> => {
       if (!path) return Promise.reject(new Error("No resource selected."));
       if (!key) return Promise.reject(new Error("You need to sign in again."));
@@ -73,6 +99,86 @@ export function useApi<T>(
   });
 }
 
+type ScopedData = { data: unknown; isPreviousData: boolean };
+
+/**
+ * The app shell turns on SWR's `keepPreviousData`
+ * (components/chrome/ConnectionStatus.tsx), so changing a filter keeps
+ * the last answer on screen instead of flashing a skeleton. That is only
+ * honest while the answer is about the same thing. Previous data is
+ * kept while the account and the resource path (everything before "?"
+ * or "#") stay the same, so a filter, page or revision change keeps it.
+ * It is dropped when the account changes, the user signs out, or the
+ * hook moves to another record (another opponent, another game).
+ *
+ * Returns a resolver for the data SWR hands back this render: data for
+ * a key with no cache entry of its own is the previous key's, and is
+ * only passed through when that key had the same scope.
+ */
+function usePreviousDataScope(
+  key: readonly unknown[] | null,
+  scope: string | null,
+  config: SWRConfiguration | undefined,
+): (data: unknown) => ScopedData {
+  const { cache } = useSWRConfig();
+  const hasOwnData = key !== null && cache.get(unstable_serialize(key))?.data !== undefined;
+  // Scope of the last key this hook rendered its own data for. SWR moves
+  // its "previous data" ref in a layout effect; this follows it. A null
+  // key (a closed modal, a signed-out user) forgets it, so reopening on
+  // another record of the same resource starts from the skeleton.
+  const lastScope = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    if (key === null) lastScope.current = null;
+    else if (hasOwnData) lastScope.current = scope;
+  });
+  // fallbackData is the caller's own answer for this key, never stale.
+  const ownsFallback = config?.fallbackData !== undefined;
+  const sameScope = scope !== null && lastScope.current === scope;
+  return (data) => {
+    if (data === undefined || hasOwnData || ownsFallback) {
+      return { data, isPreviousData: false };
+    }
+    return sameScope
+      ? { data, isPreviousData: true }
+      : { data: undefined, isPreviousData: false };
+  };
+}
+
+/**
+ * Point `data` at the scoped value and add `isPreviousData`, keeping
+ * SWR's lazy getters (a consumer that never reads `data` must not
+ * re-render when it changes) and the response object itself.
+ */
+function scopePreviousData<T>(
+  result: SWRResponse<T, ClientApiError>,
+  resolve: (data: unknown) => ScopedData,
+): SWRResponse<T, ClientApiError> & { readonly isPreviousData: boolean } {
+  const swrData = Object.getOwnPropertyDescriptor(result, "data");
+  const readSwrData = (): unknown =>
+    swrData?.get ? swrData.get.call(result) : swrData?.value;
+  Object.defineProperty(result, "data", {
+    configurable: true,
+    enumerable: true,
+    get: () => resolve(readSwrData()).data,
+  });
+  Object.defineProperty(result, "isPreviousData", {
+    configurable: true,
+    enumerable: true,
+    get: () => resolve(readSwrData()).isPreviousData,
+  });
+  return result as SWRResponse<T, ClientApiError> & { readonly isPreviousData: boolean };
+}
+
+/**
+ * The resource a request path names, without its query or hash.
+ *
+ * Example: `resourcePath("/v1/matchups?since=2026-01-01#3")` → "/v1/matchups".
+ */
+export function resourcePath(path: string): string {
+  const end = path.search(/[?#]/);
+  return end < 0 ? path : path.slice(0, end);
+}
+
 /** For mutations. Returns the JSON or throws ClientApiError. */
 export async function apiCall<T>(
   getToken: () => Promise<string | null>,
@@ -81,7 +187,7 @@ export async function apiCall<T>(
 ): Promise<T> {
   const token = await getToken();
   init.signal?.throwIfAborted();
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await trackedFetch(path, `${API_BASE}${path}`, {
     ...init,
     headers: {
       "content-type": "application/json",
@@ -90,9 +196,28 @@ export async function apiCall<T>(
     },
     cache: "no-store",
   });
-  if (!res.ok) throw await buildApiError(res);
+  if (!res.ok) throw noteFailure(path, await buildApiError(res));
   if (res.status === 204) return null as unknown as T;
   return res.json();
+}
+
+/** Remember a failed response for bug reports, then hand the error back to throw. */
+function noteFailure(path: string, error: ClientApiError): ClientApiError {
+  recordFailedRequest({ path, status: error.status, code: error.code, requestId: error.requestId });
+  return error;
+}
+
+/**
+ * fetch() that also remembers a request that never got a response
+ * (offline, DNS, CORS). Aborts are the caller's choice, not failures.
+ */
+async function trackedFetch(path: string, url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (error) {
+    if (error instanceof TypeError) recordFailedRequest({ path, status: 0, code: "network_error" });
+    throw error;
+  }
 }
 
 /** A scoped deadline also settles a stalled token lookup or response body. */
@@ -124,13 +249,7 @@ async function boundedApiRequest<T>(
     return await Promise.race([operation(controller.signal), deadline]);
   } catch (error) {
     if (timedOut) throw timeoutError;
-    if (error instanceof TypeError) {
-      throw {
-        status: 0,
-        code: "network_unavailable",
-        message: "The API is unavailable or your connection was interrupted. Try again in a moment.",
-      } satisfies ClientApiError;
-    }
+    if (error instanceof TypeError) throw networkUnavailableError();
     throw error;
   } finally {
     clearTimeout(timer);
@@ -143,7 +262,7 @@ async function boundedApiRequest<T>(
  * human-friendly `message`. Recognizes the `{ error: { code, message,
  * requestId } }` envelope our API uses and falls back to status text.
  */
-async function buildApiError(res: Response): Promise<ClientApiError> {
+export async function buildApiError(res: Response): Promise<ClientApiError> {
   const raw = await safeReadText(res);
   const parsed = tryParseEnvelope(raw);
   if (parsed) {

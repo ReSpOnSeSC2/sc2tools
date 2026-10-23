@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
+import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { useApi, apiCall } from "@/lib/clientApi";
 
 type Device = {
@@ -32,10 +34,31 @@ function deviceLabel(d: Device): string {
   return parts.length > 0 ? parts.join(" · ") : "Unknown device";
 }
 
+/** Two device rows' worth of placeholder, the shape of the list below. */
+function DeviceRowsSkeleton() {
+  return (
+    <SkeletonRegion label="Loading devices" className="space-y-2">
+      {[0, 1].map((i) => (
+        <div
+          key={i}
+          aria-hidden
+          className="flex items-center justify-between gap-3 rounded border border-border p-3"
+        >
+          <div className="min-w-0 flex-1 space-y-2">
+            <SkeletonBar className="h-4 w-48 max-w-full" />
+            <SkeletonBar className="h-3 w-64 max-w-full" />
+          </div>
+          <SkeletonBar className="h-8 w-20 rounded-lg" />
+        </div>
+      ))}
+    </SkeletonRegion>
+  );
+}
+
 export function DevicesPanel() {
   const { getToken } = useAuth();
-  const { data, error, isLoading, mutate } =
-    useApi<DevicesResponse>("/v1/devices");
+  const devices = useApi<DevicesResponse>("/v1/devices");
+  const { data, mutate } = devices;
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
@@ -141,10 +164,8 @@ export function DevicesPanel() {
 
       <section className="rounded-xl border border-border bg-bg-surface space-y-4 p-6">
         <h2 className="text-lg font-semibold">Connected devices</h2>
-        {isLoading ? (
-          <p className="text-text-muted">Loading…</p>
-        ) : error ? (
-          <p className="text-danger">Failed to load: {error.message}</p>
+        {!hasQueryData(devices) ? (
+          <QueryState q={devices} skeleton={<DeviceRowsSkeleton />} />
         ) : !data || data.items.length === 0 ? (
           <p className="text-text-muted">
             No devices paired yet. The agent shows up here once you submit

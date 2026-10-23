@@ -6,12 +6,16 @@ import {
   describeRule,
   describeRuleFailure,
   duplicateRuleToast,
+  groupRulesForSummary,
   humanizeRuleEntity,
   pluralizeEntity,
   ruleContexts,
   ruleEntity,
   ruleReadout,
   ruleReadoutText,
+  ruleSummaryGroup,
+  ruleSummaryParts,
+  ruleSummaryText,
 } from "./build-rules-copy";
 
 const GLYPHS = /[≥≤=✓✗⚙★▶]/;
@@ -345,5 +349,59 @@ describe("review follow-ups", () => {
       rule("count_min", "BuildBarracks", 120, 2, true),
     ];
     expect(ruleContexts(rax)[0].higherFloorElsewhere).toBe(false);
+  });
+});
+
+describe("read-only rules summary", () => {
+  test("each rule type lands in the right list with the legend's words", () => {
+    const cases: Array<[BuildRule, string, string]> = [
+      [rule("before", "BuildVoidRay", 400), "must", "At least 1 Void Ray before 6:40"],
+      [rule("count_min", "BuildVoidRay", 600, 4), "must", "At least 4 Void Rays before 10:00"],
+      [rule("count_exact", "BuildStargate", 300, 2), "must", "Exactly 2 Stargates before 5:00"],
+      [rule("count_exact", "BuildStargate", 300, 0), "mustNot", "No Stargate before 5:00"],
+      [rule("not_before", "BuildRoboticsFacility", 240), "mustNot", "No Robotics Facility before 4:00"],
+      [rule("count_max", "BuildRoboticsFacility", 260, 0), "mustNot", "No Robotics Facility before 4:20"],
+      [rule("count_max", "BuildStargate", 360, 1), "limit", "At most 1 Stargate before 6:00"],
+      [rule("count_max", "TrainPhoenix", 300, 2), "limit", "At most 2 Phoenixes before 5:00"],
+      [rule("before", "ResearchBlink", 425), "must", "Blink research before 7:05"],
+      [rule("before", "BuildGateway", 105, 1, true), "must", "At least 1 Gateway before 1:45, proxied"],
+    ];
+    for (const [r, group, text] of cases) {
+      expect({ text: ruleSummaryText(r), group: ruleSummaryGroup(r) }).toEqual({ text, group });
+      expect(ruleSummaryText(r)).not.toMatch(GLYPHS);
+    }
+  });
+
+  test("count_max 0 is listed under Must not have, never as a count of 1", () => {
+    const parts = ruleSummaryParts(rule("count_max", "BuildRoboticsFacility", 260, 0));
+    expect(parts).toEqual({ quantity: "No", entity: "Robotics Facility", time: "4:20" });
+    expect(ruleSummaryText(rule("count_max", "BuildRoboticsFacility", 260, 0))).not.toContain("1");
+  });
+
+  test("proxy rules never repeat 'proxied' in the entity (the badge says it)", () => {
+    expect(ruleSummaryParts(rule("count_min", "BuildGateway", 120, 2, true))).toEqual({
+      quantity: "At least 2",
+      entity: "Gateways",
+      time: "2:00",
+    });
+  });
+
+  test("groups keep not_before rules and sort each list by deadline", () => {
+    const rules = [
+      rule("count_min", "BuildVoidRay", 600, 4),
+      rule("not_before", "BuildRoboticsFacility", 240),
+      rule("before", "BuildStargate", 210),
+      rule("count_max", "BuildStargate", 360, 1),
+      rule("count_max", "BuildTwilightCouncil", 300, 0),
+      rule("before", "", 100),
+    ];
+    const groups = groupRulesForSummary(rules);
+    expect(groups.must.map((r) => r.name)).toEqual(["BuildStargate", "BuildVoidRay"]);
+    expect(groups.mustNot.map((r) => r.name)).toEqual([
+      "BuildRoboticsFacility",
+      "BuildTwilightCouncil",
+    ]);
+    expect(groups.limit.map((r) => r.name)).toEqual(["BuildStargate"]);
+    expect(ruleSummaryGroup(rule("before", "", 100))).toBeNull();
   });
 });

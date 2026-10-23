@@ -197,3 +197,19 @@ describe("admin unread activity", () => {
     expect(screen.getByText("Report 50")).toBeTruthy();
   });
 });
+
+describe("admin backup alerts", () => {
+  it("has a Backups filter for overdue-snapshot alerts", () => {
+    const overdue: AdminEvent = {
+      eventId: "backup-1", type: "backup_stale", readAt: null, createdAt: "2026-10-18T12:00:00Z",
+      payload: { reason: "stale", lastSnapshotAt: "2026-10-16T08:00:00Z", ageHours: 52, latestStatus: "completed" },
+    };
+    scenario.items = [installed, overdue];
+    scenario.unreadCount = 2;
+    render(<AdminNotificationsPage />);
+    fireEvent.click(screen.getByRole("button", { name: "Backups" }));
+    expect(lastFeedPath()).toBe("/v1/admin/events?limit=50&unread=true&type=backup_stale");
+    expect(screen.getByText("Database backup is overdue")).toBeTruthy();
+    expect(screen.queryByText("installed@example.com · confirmed by agent")).toBeNull();
+  });
+});

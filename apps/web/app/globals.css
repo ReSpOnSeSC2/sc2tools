@@ -290,6 +290,27 @@ h4 {
 }
 
 /* ============================================================
+ * Section highlight — a Settings link to a section
+ * (`/settings?tab=overlay#platform-connections`) outlines the section
+ * it scrolls to for a moment, then fades the outline out
+ * (components/analyzer/settings/revealSectionAnchor.ts). Under reduced
+ * motion the outline still shows; only the fade is dropped.
+ * ============================================================ */
+[data-section-flash] {
+  scroll-margin-top: 5rem;
+  outline: 2px solid rgb(var(--accent-cyan));
+  outline-offset: 4px;
+  box-shadow: 0 0 0 8px var(--halo-cyan);
+  transition:
+    outline-color 400ms var(--ease-out),
+    box-shadow 400ms var(--ease-out);
+}
+[data-section-flash="fading"] {
+  outline-color: transparent;
+  box-shadow: 0 0 0 8px transparent;
+}
+
+/* ============================================================
  * Halos + glows — brand cyan / accent radial backdrops
  * ============================================================ */
 .halo-cyan {

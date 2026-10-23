@@ -19,8 +19,12 @@ export interface SaveBarProps {
 
 /**
  * SaveBar — sticky bottom action bar shown only while there are unsaved
- * changes. Responsive: full-width sheet ≤640px (respecting safe-area),
- * floating pill on larger viewports. Pairs with `useDirtyForm`.
+ * changes. Responsive: full-width sheet ≤640px, floating pill on larger
+ * viewports. Pairs with `useDirtyForm`.
+ *
+ * It floats `bottom-above-chrome`: above the app's mobile tab bar (and
+ * the home indicator), so Save is never hidden under the nav on a phone.
+ * Not for modals: a dialog's own footer (BuildEditorSaveBar) stays put.
  */
 export function SaveBar({
   visible,
@@ -48,7 +52,7 @@ export function SaveBar({
     <div
       role="region"
       aria-label="Unsaved changes"
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2"
+      className="pointer-events-none fixed inset-x-0 bottom-above-chrome z-banner flex justify-center px-4"
     >
       <div className="pointer-events-auto flex w-full max-w-3xl items-center justify-between gap-3 rounded-xl border border-accent-cyan/40 bg-bg-surface px-4 py-3 shadow-[var(--shadow-card)] sm:gap-4">
         <div className="flex min-w-0 items-center gap-2 text-caption text-text">

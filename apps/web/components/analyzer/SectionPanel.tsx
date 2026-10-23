@@ -1,13 +1,44 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import type { TabId } from "@/components/analyzer/tabs";
-import { ArcadeTab } from "./ArcadeTab";
-import { BattlefieldTab } from "./BattlefieldTab";
-import { BuildsTab } from "./BuildsTab";
-import { MacroTab } from "./MacroTab";
-import { ReplayLibrary } from "./replays/ReplayLibrary";
-import { StrategiesTab } from "./StrategiesTab";
-import { TrendsTab } from "./TrendsTab";
+import { Skeleton } from "@/components/ui/Card";
+
+/*
+ * Each section is its own chunk: /app/macro no longer downloads the
+ * replay library, the Arcade games or the trend charts. While a
+ * section's code arrives it shows the same skeleton as the route's
+ * loading.tsx, so a client-side switch between sections looks the same
+ * as a fresh load.
+ */
+const ReplayLibrary = dynamic(
+  () => import("./replays/ReplayLibrary").then((mod) => mod.ReplayLibrary),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const StrategiesTab = dynamic(
+  () => import("./StrategiesTab").then((mod) => mod.StrategiesTab),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const TrendsTab = dynamic(
+  () => import("./TrendsTab").then((mod) => mod.TrendsTab),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const MacroTab = dynamic(
+  () => import("./MacroTab").then((mod) => mod.MacroTab),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const BattlefieldTab = dynamic(
+  () => import("./BattlefieldTab").then((mod) => mod.BattlefieldTab),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const BuildsTab = dynamic(
+  () => import("./BuildsTab").then((mod) => mod.BuildsTab),
+  { loading: () => <Skeleton rows={6} /> },
+);
+const ArcadeTab = dynamic(
+  () => import("./ArcadeTab").then((mod) => mod.ArcadeTab),
+  { loading: () => <Skeleton rows={6} /> },
+);
 
 /**
  * SectionPanel — renders one analyzer section for its /app/<section>

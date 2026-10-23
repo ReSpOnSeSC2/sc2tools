@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { AdminShell } from "./components/AdminShell";
+
+// Admin pages are client components; they share this tab title.
+export const metadata: Metadata = {
+  title: "Admin",
+};
 
 /**
  * /admin layout — wraps every admin page in the responsive shell.

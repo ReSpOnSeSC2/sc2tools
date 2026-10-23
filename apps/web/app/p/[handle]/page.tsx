@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getJsonWithStatus } from "@/lib/serverApi";
+import { SITE_NAME, siteTitle } from "@/lib/siteTitle";
 import { PublicProfile } from "@/components/public-profile/PublicProfile";
 import { ProfileUnavailable } from "@/components/public-profile/ProfileUnavailable";
 import type { PublicProfileResponse } from "@/components/public-profile/types";
@@ -31,8 +32,6 @@ interface PageParams {
   params: Promise<{ handle: string }>;
 }
 
-const SITE_NAME = "SC2 Tools";
-
 function fetchProfile(handle: string) {
   return getJsonWithStatus<PublicProfileResponse>(
     `/v1/public/profile/${encodeURIComponent(handle)}`,
@@ -53,7 +52,7 @@ export async function generateMetadata({
     // API unreachable: neutral, non-indexable metadata; page renders a
     // transient "unavailable" state rather than 404ing real profiles.
     return {
-      title: `Player profile — ${SITE_NAME}`,
+      title: "Player profile",
       description: "This SC2 Tools player profile is unavailable right now.",
       robots: { index: false, follow: false },
       alternates: { canonical },
@@ -65,20 +64,22 @@ export async function generateMetadata({
     totals.games > 0
       ? `${displayName} — StarCraft II ${raceLabel}. ${totals.games} games, ${totals.wins}–${totals.losses}, ${Math.round(totals.winRate * 100)}% win rate. See their signature builds on ${SITE_NAME}.`
       : `${displayName} — StarCraft II ${raceLabel} on ${SITE_NAME}.`;
-  const title = `${displayName} — StarCraft II player profile — ${SITE_NAME}`;
+  const title = `${displayName} — StarCraft II player profile`;
+  // Social cards get no title template, so they carry the brand themselves.
+  const shareTitle = siteTitle(title);
   return {
     title,
     description,
     alternates: { canonical },
     openGraph: {
       type: "profile",
-      title,
+      title: shareTitle,
       description,
       url: canonical,
     },
     twitter: {
       card: "summary_large_image",
-      title,
+      title: shareTitle,
       description,
     },
   };

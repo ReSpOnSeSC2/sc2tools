@@ -6,11 +6,12 @@ import {
   DEFAULT_ANALYZER_FILTERS,
   FiltersContext,
   PTR_REGION,
+  defaultAnalyzerFilters,
   normalizeGameLengthBounds,
+  normalizeRaceCode,
   type AnalyzerFilters,
 } from "@/lib/filterContext";
 import {
-  DEFAULT_PRESET,
   normalizePresetId,
   resolvePreset,
   type PresetId,
@@ -38,6 +39,9 @@ export type StoredFilters = {
   preset?: PresetId;
   since?: string;
   until?: string;
+  /** Matchup picker: your race and the opponent's, as race letters. */
+  race?: string;
+  opp_race?: string;
   regions?: string;
   /** `REGIONS_REV` when written; storage-only, never part of the filters. */
   regions_rev?: number;
@@ -48,24 +52,25 @@ export type StoredFilters = {
   max_minutes?: number;
 };
 
-// Only the globally-visible FilterBar controls persist across reloads.
+// The filter bar's own controls persist across reloads: date range,
+// matchup (race / opp_race, from the Matchup picker), regions, maps,
+// players, length and "Hide too-short". Each one is visible in the bar
+// and, when it differs from the default, as a removable chip in the
+// Active filters row under it, so a remembered choice is never a hidden
+// one.
 //
-// The drill-down filters (race, opp_race, map, mmr_min, mmr_max, build,
-// opp_strategy) are deliberately NOT persisted. They get set by clicking
-// into a chart / build / MMR bucket / strategy, but the FilterBar has no
-// UI to display or clear them — so persisting them silently hid data
-// across sessions: an opponent would vanish from the Opponents tab (which
-// then runs the filtered aggregation path) because a stale opp_strategy /
-// mmr / build filter from an earlier drill-down stuck in localStorage,
-// with no visible indication and no way to reset short of clearing site
-// data. They still apply for the active session via the in-memory filter
-// state; they just reset on reload instead of becoming an invisible,
-// permanent constraint. Stripping on BOTH read and write also self-heals
-// any session that already has a stale value persisted.
+// The drill-down filters (build, opp_strategy, map, mmr_min, mmr_max) are
+// session-only. Strategies and the charts set them by clicking into a
+// build, strategy or bucket; they show in the chip row and apply to every
+// section until cleared, but reset on reload instead of quietly narrowing
+// the next visit. Stripping on BOTH read and write also self-heals a
+// session that persisted one before this rule existed.
 const PERSISTED_KEYS = [
   "preset",
   "since",
   "until",
+  "race",
+  "opp_race",
   "regions",
   "regions_rev",
   "exclude_too_short",
@@ -120,17 +125,12 @@ function writeStored(value: Partial<AnalyzerFilters>): void {
 
 function initialFilters(): AnalyzerFilters {
   // "Hide too-short games" defaults ON: a brand-new analyzer session
-  // automatically excludes the < 30 s no-build-order cohort so the
+  // automatically excludes the < 45 s no-build-order cohort so the
   // KPI strip / opponent profile / aggregates aren't polluted by
   // disconnects + insta-quits. The user can flip it off via the
   // FilterBar toggle, which writes ``exclude_too_short: false`` to
   // localStorage so their choice persists on subsequent visits.
-  const range = resolvePreset(DEFAULT_PRESET);
-  return {
-    ...DEFAULT_ANALYZER_FILTERS,
-    since: range.since?.toISOString(),
-    until: range.until?.toISOString(),
-  };
+  return defaultAnalyzerFilters();
 }
 
 /** True when a stored blob was written at the current `REGIONS_REV` or later. */
@@ -186,6 +186,11 @@ export function hydrateStoredFilters(
   next.preset = normalizePresetId(next.preset);
   // A selection saved before PTR could be picked gains PTR.
   next.regions = migrateStoredRegions(next.regions, regionsRev);
+  // The matchup is user-writable storage too: keep only a race letter.
+  next.race = normalizeRaceCode(next.race);
+  next.opp_race = normalizeRaceCode(next.opp_race);
+  if (next.race === undefined) delete next.race;
+  if (next.opp_race === undefined) delete next.opp_race;
   if (next.preset !== "custom") {
     const range = resolvePreset(next.preset, undefined, logicalSeasons);
     next.since = range.since ? range.since.toISOString() : undefined;

@@ -31,10 +31,11 @@ const article: HelpArticle = {
         "**No sound or voice?** Browsers can block audio until a click — open the source with Interact and click once, then TTS/sounds run normally.",
         "**Kick won't auto-detect?** Use the guided manual flow in the Kick row — open the shown URL in your own browser and paste what you see; the id is extracted for you.",
         "**Widget blank?** Check the widget is enabled for your token in Settings → Overlay, and use its Test button to confirm placement.",
+        "**Still stuck?** Press the **?** button in the top bar and choose **Report a problem**. See [Report a problem or suggest a feature](/help/report-a-problem) for what goes with it.",
       ],
     },
   ],
-  related: ["obs-overlay-setup", "multi-platform-chat", "getting-started"],
+  related: ["report-a-problem", "something-went-wrong", "obs-overlay-setup", "multi-platform-chat", "getting-started"],
 };
 
 export default article;

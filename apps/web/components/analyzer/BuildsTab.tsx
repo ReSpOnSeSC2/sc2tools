@@ -9,11 +9,13 @@ import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
 import { checkinsText } from "@/lib/buildIntent";
-import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
+import { Card, Skeleton, WrBar } from "@/components/ui/Card";
+import { RequestError } from "@/components/ui/RequestError";
 import { usePersistentSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { BuildEditorModal } from "./BuildEditorModal";
+import { NoFilterMatches } from "./EmptyStates";
 import { BuildMmrPanel } from "./mmr/BuildMmrPanel";
 import { BuildAgingCurve } from "./mmr/BuildAgingCurve";
 import { MmrProgressionByBuild } from "./mmr/MmrProgressionByBuild";
@@ -67,13 +69,15 @@ export function BuildsTab() {
 
   return (
     <div className="space-y-4">
-      {error ? (
+      {error && data ? (
         <Card role="alert">
           <p className="text-caption text-text-muted">
-            {data ? "Couldn't refresh builds. Showing the last loaded results for these filters." : "Couldn't load builds for these filters."}
+            Couldn&apos;t refresh builds. Showing the last loaded results for these filters.
           </p>
           <Button variant="secondary" size="sm" className="mt-3" onClick={() => void mutate()}>Retry</Button>
         </Card>
+      ) : error ? (
+        <RequestError error={error} onRetry={() => mutate()} filtered />
       ) : null}
       <ReclassifyBanner rows={data || []} />
       <div className="flex flex-wrap items-center gap-3">
@@ -96,12 +100,17 @@ export function BuildsTab() {
 
       {data || !error ? <Card>
         {rows.length === 0 ? (
-          <EmptyState
-            title="No builds match"
-            sub={
-              hiddenByMinGames > 0
-                ? `${hiddenByMinGames} build${hiddenByMinGames === 1 ? "" : "s"} hidden by Min games ≥ ${minGames}. Drop the filter to 1 to see every build.`
-                : undefined
+          <NoFilterMatches
+            title="No builds match these filters"
+            minGames={minGames}
+            hiddenByMinGames={hiddenByMinGames}
+            onLowerMinGames={() => setMinGames(1)}
+            extraAction={
+              search.trim() ? (
+                <Button variant="secondary" size="sm" onClick={() => setSearch("")}>
+                  Clear search
+                </Button>
+              ) : null
             }
           />
         ) : (

@@ -1,0 +1,24 @@
+{
+  "$comment": "First-load JavaScript budgets per route, in kB (1 kB = 1000 bytes) of gzip, the same measure as the \"First Load JS\" column of `next build`. Checked in CI by `npm run perf:budget` after the build. Routes not listed are held to `default`. Raise a number only with a reason in the PR; see apps/web/README.md (Performance budget).",
+  "default": 520,
+  "routes": {
+    "/": 215,
+    "/app": 240,
+    "/app/[section]": 260,
+    "/app/opponents": 180,
+    "/app/opponents/[pulseId]": 500,
+    "/app/game/[gameId]": 440,
+    "/settings": 260,
+    "/builds": 270,
+    "/community": 190,
+    "/help": 185,
+    "/help/[slug]": 200,
+    "/try": 240,
+    "/welcome": 245,
+    "/guides/[matchup]/[build]": 175,
+    "/stream-studio": 130,
+    "/dock/[token]": 225,
+    "/overlay/[token]": 240,
+    "/overlay/[token]/widget/[name]": 325
+  }
+}

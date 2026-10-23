@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import Link from "next/link";
-import { ChevronLeft, ExternalLink } from "lucide-react";
+import { ChevronLeft, ExternalLink, Users } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import {
   filtersToQuery,
@@ -17,8 +17,11 @@ import {
   type MergedIdentity,
   type GlobalPlayerIdentity,
 } from "@/lib/opponentGroups";
-import { Card, EmptyState, Skeleton, Stat, WrBar } from "@/components/ui/Card";
+import { Card, EmptyState, Stat, WrBar } from "@/components/ui/Card";
+import { QueryState, hasQueryData } from "@/components/ui/QueryState";
+import { isNotFoundError } from "@/lib/requestErrors";
 import { pct1, wrColor } from "@/lib/format";
+import { OPPONENT_PROFILE_MIN_PLAYERS } from "@/lib/communityOpponent";
 import {
   isBarcodeName,
   pickPulseLabel,
@@ -51,6 +54,11 @@ import { OpponentIdentityCandidates } from "./OpponentIdentityCandidates";
 import { PlayerChannelLinks } from "./PlayerChannelLinks";
 import { usePlayerChannels } from "./usePlayerChannels";
 import { OpponentIdentitySubmission } from "./OpponentIdentitySubmission";
+import {
+  DOSSIER_ERROR_COPY,
+  DossierSkeleton,
+  OpponentNotFound,
+} from "./OpponentDossierStates";
 
 type OpponentProfileResp = {
   globalIdentity?: GlobalPlayerIdentity | null;
@@ -100,6 +108,12 @@ type OpponentProfileResp = {
   transitions?: BuildTransitionsPayload;
   gamesTruncated?: boolean;
   games?: ProfileGame[];
+  /**
+   * The public community profile (/community/opponents/<id>) exists:
+   * enough different players have faced this opponent. Absent from
+   * older API builds, which hides the link.
+   */
+  communityAvailable?: boolean;
 };
 
 /**
@@ -166,9 +180,10 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
     (raw): raw is boolean => typeof raw === "boolean",
   );
   const profileQuery = buildProfileQuery(filters, groupByPlayer);
-  const { data, isLoading, mutate } = useApi<OpponentProfileResp>(
+  const profile = useApi<OpponentProfileResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}`,
   );
+  const { data, mutate } = profile;
   // Per-race SC2Pulse breakdown — fetched in parallel (live, cached
   // server-side) so it doesn't block the main profile render. Drives
   // the header MMR chip + the "Ladder MMR by race" panel.
@@ -221,8 +236,20 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   };
   const channelsFor = usePlayerChannels([channelProfileIdentity]);
 
-  if (isLoading) return <Skeleton rows={6} />;
-  if (!data) return <EmptyState title="Opponent not found" sub={pulseId} />;
+  // A 404 means "not in your history"; a 503, 5xx or dropped connection
+  // means the dossier couldn't be built right now, and gets Retry.
+  if (!hasQueryData(profile)) {
+    return (
+      <QueryState
+        q={profile}
+        skeleton={<DossierSkeleton />}
+        filtered
+        errorCopy={DOSSIER_ERROR_COPY}
+        renderError={(error) => (isNotFoundError(error) ? <OpponentNotFound /> : undefined)}
+      />
+    );
+  }
+  if (!data) return <OpponentNotFound />;
   const filterActive = !!selectedMap || !!selectedBuildMatchup;
   const t = filterActive
     ? totalsFromGames(filteredGames)
@@ -298,12 +325,9 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
             identities={data.mergedIdentities}
             mainName={data.name}
           />
-          <Link
-            href={publicHref}
-            className="text-caption text-accent hover:underline"
-          >
-            community profile →
-          </Link>
+          {data.communityAvailable ? (
+            <PublicProfileLink href={publicHref} />
+          ) : null}
         </div>
         <div className="grid w-full grid-cols-2 gap-3 sm:w-auto sm:grid-cols-4">
           <Stat label="Games" value={t.total || 0} />
@@ -689,6 +713,28 @@ function RevealedChip({
  * the toon_handle (the value from the user's replay folder name) and
  * label it accordingly.
  */
+const PUBLIC_PROFILE_TIP = `Anyone can see this opponent's public profile: games from every SC2 Tools player who has faced them, combined. It only exists once at least ${OPPONENT_PROFILE_MIN_PLAYERS} different players have, and it never shows names or battle tags.`;
+
+/** Link to /community/opponents/<id>, shown only once that profile exists. */
+function PublicProfileLink({ href }: { href: string }) {
+  return (
+    <>
+      <Link
+        href={href}
+        title={PUBLIC_PROFILE_TIP}
+        aria-describedby="public-profile-tip"
+        className="mt-1 inline-flex min-h-[32px] items-center gap-1.5 rounded-sm text-caption font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        <Users className="h-3.5 w-3.5" aria-hidden />
+        Public profile
+      </Link>
+      <span id="public-profile-tip" className="sr-only">
+        {PUBLIC_PROFILE_TIP}
+      </span>
+    </>
+  );
+}
+
 function ProfilePulseLine({
   pulseCharacterId,
   toonHandle,

@@ -6,7 +6,8 @@
 # which bundles the Python replay engine for Instant Analysis. That bundle
 # embeds apps/replay-engine + apps/agent/sc2tools_agent, so changes there run
 # this workflow too, and the build job gets a Python for the wheel build venv.
-# (The Pyodide-vs-CPython parity check lives in python-tests.yml.)
+# (The Pyodide-vs-CPython parity check lives in python-tests.yml.) The same
+# job checks the build's first-load JS against apps/web/perf-budget.json.
 
 name: web-ci
 
@@ -100,6 +101,11 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Build
         run: npm run build
+      # First-load JS per route against perf-budget.json (gzip, the build
+      # table's "First Load JS" measure). Fails on growth past a budget or
+      # a budgeted route that no longer exists. See README "Performance budget".
+      - name: Bundle budget
+        run: npm run perf:budget
       # TEMPORARY proof-of-diagnosis probe (remove once green): a
       # browser-shaped curl records whether the middleware issues the
       # Clerk dev-browser redirect that killed the suite under pk_test

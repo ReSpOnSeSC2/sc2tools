@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import {
   ArrowLeft,
@@ -17,8 +18,12 @@ import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { RequestError } from "@/components/ui/RequestError";
 import { useToast } from "@/components/ui/Toast";
+import { CommunityBuildSignatureTimeline } from "@/components/community/CommunityBuildSignatureTimeline";
 import { apiCall, useApi } from "@/lib/clientApi";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
+import { coerceSavedRules } from "@/lib/build-rules";
 import {
   coerceRace,
   matchupLabel,
@@ -30,19 +35,45 @@ import { BuildDossier } from "./BuildDossier";
 import { BuildEditorSheet } from "./BuildEditorSheet";
 import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildPublishModal } from "./BuildPublishModal";
+import { RulesSummary } from "./RulesSummary";
+import { BuildSignInPrompt } from "./BuildSignInPrompt";
 import type { CustomBuild } from "./types";
+
+const BACK_LINK_CLASS =
+  "inline-flex min-h-[44px] items-center gap-1.5 text-caption font-medium text-text-muted hover:text-text";
+
+/**
+ * The tab title once the build has loaded (the server title is generic),
+ * before the site name the root template adds.
+ *
+ * Example: `buildDocumentTitle("Proxy Gateway")` → "Proxy Gateway · Custom build".
+ */
+export function buildDocumentTitle(name: string): string {
+  return `${name} · Custom build`;
+}
 
 export interface BuildDetailViewProps {
   slug: string;
 }
 
-/** Toast context comes from the app-wide provider in the root layout. */
+/**
+ * Toast context comes from the app-wide provider in the root layout.
+ *
+ * Auth is settled first: while signed out useApi has no key, so the
+ * build request never starts and the skeleton below would never clear.
+ * Nothing renders until Clerk loads; a signed-out visitor is asked to
+ * sign in and comes back to this build afterwards.
+ */
 export function BuildDetailView(props: BuildDetailViewProps) {
+  const { isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded) return null;
+  if (!isSignedIn) return <BuildSignInPrompt slug={props.slug} />;
   return <BuildDetailInner {...props} />;
 }
 
 function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const { getToken } = useAuth();
+  const router = useRouter();
   const { toast } = useToast();
   const buildSwr = useApi<CustomBuild>(
     `/v1/custom-builds/${encodeURIComponent(slug)}`,
@@ -57,6 +88,11 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const [publishOpen, setPublishOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+
+  // The server title is generic (and noindex): build names are private.
+  // "Proxy Gateway · Custom build · SC2 Tools", like every other tab title.
+  const loadedName = buildSwr.data?.name?.trim();
+  useDocumentTitle(loadedName ? buildDocumentTitle(loadedName) : null);
 
   const handleSaved = useCallback(
     async (saved: CustomBuild) => {
@@ -75,7 +111,8 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         { method: "DELETE" },
       );
       toast.success("Build deleted.");
-      window.location.assign("/builds");
+      // Client navigation keeps the app shell (and its toast) mounted.
+      router.push("/builds");
     } catch (err: unknown) {
       const message =
         err && typeof err === "object" && "message" in err
@@ -85,10 +122,26 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
       setDeletePending(false);
       setDeleteOpen(false);
     }
-  }, [slug, toast, getToken]);
+  }, [slug, toast, getToken, router]);
 
   if (buildSwr.error?.status === 404) {
     return <NotFoundView slug={slug} />;
+  }
+
+  if (!buildSwr.data && buildSwr.error) {
+    return (
+      <div className="space-y-6">
+        <Link href="/builds" className={BACK_LINK_CLASS}>
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          Back to library
+        </Link>
+        <RequestError
+          title="Couldn’t load this build"
+          error={buildSwr.error}
+          onRetry={() => buildSwr.mutate()}
+        />
+      </div>
+    );
   }
 
   if (!buildSwr.data) {
@@ -100,13 +153,12 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const tint = raceTint(race);
   const mu = matchupLabel(race, (build.vsRace as VsRace) ?? "Any");
   const fromOpponent = build.perspective === "opponent";
+  const rules = coerceSavedRules(build.rules);
+  const signature = Array.isArray(build.signature) ? build.signature : [];
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/builds"
-        className="inline-flex min-h-[44px] items-center gap-1.5 text-caption font-medium text-text-muted hover:text-text"
-      >
+      <Link href="/builds" className={BACK_LINK_CLASS}>
         <ArrowLeft className="h-4 w-4" aria-hidden />
         Back to library
       </Link>
@@ -156,6 +208,12 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
           </div>
         }
       />
+
+      {rules.length > 0 ? (
+        <RulesSummary rules={rules} />
+      ) : signature.length > 0 ? (
+        <CommunityBuildSignatureTimeline signature={signature} />
+      ) : null}
 
       {dossierPath ? (
         <BuildDossier
@@ -237,10 +295,7 @@ function NotesPanel({
 function NotFoundView({ slug }: { slug: string }) {
   return (
     <div className="space-y-6">
-      <Link
-        href="/builds"
-        className="inline-flex min-h-[44px] items-center gap-1.5 text-caption font-medium text-text-muted hover:text-text"
-      >
+      <Link href="/builds" className={BACK_LINK_CLASS}>
         <ArrowLeft className="h-4 w-4" aria-hidden />
         Back to library
       </Link>

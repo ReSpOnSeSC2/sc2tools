@@ -1,6 +1,8 @@
 /**
  * Guide slugs (web mirror) — the per-matchup URL keys of the community
- * build guides, computed from `BUILD_DEFINITIONS` with exactly the rule in
+ * build guides, computed from the guide catalog's definitions
+ * (`GUIDE_CATALOG_DEFINITIONS`: /definitions minus the labels still
+ * pending a guide) with exactly the rule in
  * `apps/api/src/config/guideSlugs.js`. The vitest suite asserts this
  * mapping deep-equals the API's committed `guideSlugs.lock.json`, so the
  * links the web builds always resolve on the API.
@@ -16,11 +18,11 @@
  * "-", trimmed. On a collision the matchup-prefixed name keeps the plain
  * slug and the race-generic one becomes "<race>-<slug>".
  */
+import type { StrategyMatchup } from "@/lib/build-definitions";
 import {
-  BUILD_DEFINITIONS,
-  type StrategyMatchup,
-} from "@/lib/build-definitions";
-import { isGuideOpenerDefinition } from "@/lib/guides/catalog";
+  GUIDE_CATALOG_DEFINITIONS,
+  isGuideOpenerDefinition,
+} from "@/lib/guides/catalog";
 
 export type GuideMatchup = NonNullable<StrategyMatchup>;
 export type GuideSlugKind = "builds" | "counters";
@@ -189,7 +191,7 @@ function buildNamespace(
   return { names, bySlug, byName };
 }
 
-const OPENER_NAMES: ReadonlyArray<string> = BUILD_DEFINITIONS.filter(
+const OPENER_NAMES: ReadonlyArray<string> = GUIDE_CATALOG_DEFINITIONS.filter(
   isGuideOpenerDefinition,
 ).map((def) => def.name);
 

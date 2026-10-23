@@ -8,7 +8,7 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { handle, gameId } = await params;
   return {
-    title: "Shared replay analysis · SC2 Tools",
+    title: "Shared replay analysis",
     description: "Sign in to view this shared replay analysis and macro breakdown.",
     robots: { index: false, follow: false },
     alternates: {

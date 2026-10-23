@@ -470,6 +470,55 @@ describe("admin browser replay backup card: failed, neutral and unreported", () 
   });
 });
 
+describe("admin database backups card", () => {
+  it("sits between provider costs and operational health", () => {
+    const backups = {
+      asOf: new Date().toISOString(),
+      thresholds: { freshMaxHours: 26, agingMaxHours: 50 },
+      atlas: {
+        configured: true,
+        available: true,
+        stale: false,
+        checkedAt: new Date().toISOString(),
+        errorCode: null,
+        freshness: "fresh",
+        ageHours: 4,
+        lastSnapshotAt: new Date(Date.now() - 4 * 60 * 60_000).toISOString(),
+        latestStatus: "completed",
+        completedSnapshotCount: 30,
+        nextSnapshotAt: null,
+        retention: [],
+        cloudBackupEnabled: true,
+        pointInTime: { enabled: false, windowDays: null },
+        clusterName: "must-never-render",
+      },
+      inApp: { snapshotCount: 3, userCount: 2, newestAt: null, storageBytes: 0 },
+    };
+    useApiMock.mockImplementation((path: string) => ({
+      data: path === "/v1/admin/infrastructure"
+        ? INFRASTRUCTURE
+        : path === "/v1/admin/backups" ? backups : HEALTH,
+      error: null,
+      isLoading: false,
+      mutate: vi.fn(),
+    }));
+
+    const { container } = render(<AdminHealthPage />);
+
+    expect(useApiMock).toHaveBeenCalledWith("/v1/admin/backups", {
+      refreshInterval: 5 * 60_000,
+    });
+    const providers = screen.getByRole("heading", { name: "Provider costs & capacity" });
+    const backupsHeading = screen.getByRole("heading", { name: "Database backups" });
+    const operational = screen.getByRole("heading", { name: "Operational health" });
+    expect(providers.compareDocumentPosition(backupsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(backupsHeading.compareDocumentPosition(operational) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("4 h ago")).toBeTruthy();
+    expect(screen.getByText("Off")).toBeTruthy();
+    expect(container.textContent || "").not.toContain("must-never-render");
+  });
+});
+
 describe("admin dashboard storage", () => {
   it("separates whole app dbStats and the planning estimate from collections", () => {
     useApiMock.mockImplementation((path: string) => {

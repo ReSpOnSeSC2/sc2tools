@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   ServerCog,
   UserRound,
@@ -15,10 +15,12 @@ import {
 } from "lucide-react";
 import { Tabs } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import {
   SettingsContextProvider,
   useSettingsContext,
 } from "./SettingsContext";
+import { revealSectionAnchor } from "./revealSectionAnchor";
 
 type IconComponent = typeof ServerCog;
 
@@ -82,6 +84,44 @@ export function isSettingsTabId(value: unknown): value is SettingsTabId {
 }
 
 /**
+ * Other names that still open a tab, as `?tab=<alias>` or an old
+ * `/settings#<alias>` link. Add the old id here when a tab is renamed.
+ */
+export const SETTINGS_TAB_ALIASES: Readonly<Record<string, SettingsTabId>> = {
+  // The old /streaming page, now the Overlay tab.
+  streaming: "overlay",
+};
+
+const TAB_BY_ALIAS: ReadonlyMap<string, SettingsTabId> = new Map(
+  Object.entries(SETTINGS_TAB_ALIASES),
+);
+
+/**
+ * The tab a `?tab=` value names: a tab id or a registered alias.
+ *
+ * Example:
+ *   settingsTabFromParam("streaming"); // -> "overlay"
+ *   settingsTabFromParam("nope"); // -> null
+ */
+export function settingsTabFromParam(value: string | null | undefined): SettingsTabId | null {
+  if (!value) return null;
+  if (isSettingsTabId(value)) return value;
+  return TAB_BY_ALIAS.get(value) ?? null;
+}
+
+/**
+ * The tab an old hash-only link (`/settings#overlay`, from before
+ * `?tab=`) points at, or null when the hash names a section instead.
+ *
+ * Example:
+ *   settingsTabForLegacyHash("#profile"); // -> "profile"
+ *   settingsTabForLegacyHash("#platform-connections"); // -> null
+ */
+export function settingsTabForLegacyHash(hash: string): SettingsTabId | null {
+  return settingsTabFromParam(hash.replace(/^#/, "").toLowerCase());
+}
+
+/**
  * Tab ids shown for a visibility rule, in sidebar order.
  *
  * Example:
@@ -98,6 +138,11 @@ export interface SettingsShellProps {
    * The tab the URL asks for (`?tab=`). A later change (a link to another
    * tab while Settings is open) switches tabs too, through the same
    * unsaved-changes guard as a click.
+   *
+   * With no `?tab=` in the URL, an old `/settings#<tab>` link opens that
+   * tab and the URL is rewritten to `?tab=<tab>`. Any other `#anchor`
+   * names a section: once its tab is showing, the page scrolls to it and
+   * highlights it.
    */
   initialTab?: SettingsTabId;
   renderTab: (id: SettingsTabId) => ReactNode;
@@ -137,6 +182,11 @@ function SettingsShellInner({
   );
   const ctx = useSettingsContext();
   const lastRequested = useRef(initialTab);
+  // "Overlay · Settings · SC2 Tools": the browser tab (and a bookmark of
+  // the ?tab= URL) names the settings tab that is open.
+  const activeLabel = tabs.find((t) => t.id === active)?.label;
+  useDocumentTitle(activeLabel ? `${activeLabel} · Settings` : null);
+  const previousInitialTab = useRef(initialTab);
 
   const activate = (tab: SettingsTabId, fromUrl: boolean) => {
     setActive(tab);
@@ -160,12 +210,54 @@ function SettingsShellInner({
   // link to another tab arrives as a new `initialTab`. Don't remount the
   // shell for it: that would drop unsaved edits without asking.
   useEffect(() => {
+    // Only a new value is a new request; the mount run is not (an old
+    // `#tab` link may already have opened another tab by then).
+    if (initialTab === previousInitialTab.current) return;
+    previousInitialTab.current = initialTab;
     if (initialTab === lastRequested.current) return;
     lastRequested.current = initialTab;
     if (tabs.some((t) => t.id === initialTab)) requestSwitch(initialTab, true);
     // Only a changed request matters; the guard reads the current tab.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialTab]);
+
+  // Old `/settings#overlay` links (from before `?tab=`): open the tab
+  // and rewrite the URL to `?tab=overlay` before the first paint. Checks
+  // again on later renders until it has decided, because a tab can
+  // appear late (Import waits on a feature flag).
+  const legacyHashHandled = useRef(false);
+  useLayoutEffect(() => {
+    if (legacyHashHandled.current) return;
+    const url = new URL(window.location.href);
+    const legacyTab = url.searchParams.has("tab") ? null : settingsTabForLegacyHash(url.hash);
+    if (legacyTab === null) {
+      legacyHashHandled.current = true;
+      return;
+    }
+    if (!tabs.some((t) => t.id === legacyTab)) return;
+    legacyHashHandled.current = true;
+    url.searchParams.set("tab", legacyTab);
+    url.hash = "";
+    window.history.replaceState(null, "", url);
+    // When the rewritten URL comes back as `initialTab`, the tab is
+    // already the last one asked for.
+    lastRequested.current = legacyTab;
+    requestSwitch(legacyTab, true);
+  });
+
+  // `#section` anchors: once the tab is showing, scroll to the section
+  // and highlight it, and again whenever the anchor changes. Help opens
+  // its own article anchors.
+  const [anchorChanges, setAnchorChanges] = useState(0);
+  useEffect(() => {
+    const onHashChange = () => setAnchorChanges((n) => n + 1);
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+  useEffect(() => {
+    if (active === "help") return undefined;
+    return revealSectionAnchor(window.location.hash);
+  }, [active, anchorChanges]);
 
   const confirmDiscard = () => {
     if (pending) {

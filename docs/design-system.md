@@ -164,6 +164,42 @@ lowest one that still establishes the elevation you need. The overlay
 widgets reuse `--shadow-overlay-card`, `--shadow-overlay-tile`, and
 `--shadow-overlay-streak` to preserve the existing OBS-friendly drop.
 
+## Layers and the bottom edge
+
+Everything pinned to the viewport uses a named layer from
+`apps/web/tailwind.config.ts`, never a raw `z-40` / `z-50` / `z-[60]`:
+
+| Class      | z  | Use                                                                 |
+| ---------- | -- | ------------------------------------------------------------------- |
+| `z-nav`    | 40 | The app rail and the mobile tab bar.                                |
+| `z-sheet`  | 50 | Sheets and drawers opened from the nav (More sheet, install steps). |
+| `z-banner` | 50 | Bars that float over content: Save bar, update prompt, cookie banner. |
+| `z-toast`  | 60 | Toasts, above everything except the skip link (`z-[100]`).          |
+
+The sticky context bar stays at `z-30`, under the nav. Sheets and banners
+share 50: a sheet opened later is later in the DOM, so it paints on top.
+Modals manage their own stacking and are not part of this scale.
+
+**Bottom edge.** On a phone the app has a tab bar along the bottom.
+AppChrome measures it (safe-area padding included) and publishes the
+height as `--chrome-bottom` on `<html>`: 0 on `md+`, where the bar is
+hidden, and unset outside the app. A surface that floats at the bottom
+uses `bottom-above-chrome` instead of `bottom-0`:
+
+```css
+bottom: calc(max(var(--chrome-bottom, 0px), env(safe-area-inset-bottom, 0px)) + 0.75rem);
+```
+
+So it sits 12 px above the tab bar in the app, and 12 px above the home
+indicator everywhere else. Don't use it inside a modal (a dialog's own
+footer, like the build editor's save bar, stays put) or on the overlay
+and dock routes, which have no chrome.
+
+**Top edge.** The installed iOS app draws the page under the status bar,
+so the app's sticky context bar pads itself with
+`pt-[env(safe-area-inset-top)]`. Anything else pinned to the top needs the
+same.
+
 ## Motion
 
 Three durations:
@@ -300,6 +336,77 @@ ring, and what that means when you style one yourself.
   hover and focused pills turned square.
   `apps/web/app/__tests__/globalsCascade.test.ts` fails if one comes
   back; put the rule in `@layer base` behind `:where()`.
+
+## Data states
+
+Every section that loads data has four states, always checked in this
+order: **loading, failed, empty, ready**. The order is the rule. The
+API runs on one free-tier instance that sleeps when idle, so failed
+requests are normal; a failed request must show Retry, never an empty
+state. "No matchups match" while the server is down tells the player
+something false about their games.
+
+- **Use `QueryState`** (`apps/web/components/ui/QueryState.tsx`) for
+  anything read with `useApi`:
+
+  ```tsx
+  <QueryState
+    q={useApi<Row[]>(path)}
+    skeleton={<Skeleton rows={4} />}
+    isEmpty={(rows) => rows.length === 0}
+    empty={<NoFilterMatches />}
+    filtered
+  >
+    {(rows) => <Table rows={rows} />}
+  </QueryState>
+  ```
+
+  A view that computes a lot from the data can return early instead:
+  `if (!hasQueryData(q)) return <QueryState q={q} skeleton={…} />;`.
+- **Failed** is `RequestError` (`components/ui/RequestError.tsx`):
+  plain copy chosen from the error (can't reach the server, busy,
+  timed out, signed out, server error), a Retry button that calls
+  `mutate()` and stays focusable with `aria-busy` while it runs, and the
+  API's Error ID with a Copy button. Pass `filtered` on analyzer views
+  to add "Your filters are still applied." Override the copy for one
+  kind of failure with `copy` (the dossier's "busy" message does).
+  Waiting-type failures use the warning tone, the rest danger.
+- **A 404 is usually not an error.** Use `renderError` to show an
+  empty state instead, e.g. the dossier's "We couldn't find this
+  opponent in your replays" with a way back.
+- **A background refresh that fails keeps the data on screen.** Only a
+  request with nothing current to show renders RequestError. The
+  connection banner covers a dropped connection.
+- **Loading** is a skeleton shaped like the content (see
+  `components/ui/Skeleton.tsx`: `SkeletonBar`, `SkeletonCard`,
+  `SkeletonRows`, `SkeletonPageHeader`, wrapped in `SkeletonRegion` so
+  screen readers hear one "Loading …"). Not the text "Loading…", and
+  not a spinner for a whole section. Route-level skeletons live in
+  `loading.tsx` next to the page.
+- **Changing a filter keeps the last answer on screen** while the new
+  one loads (`keepPreviousData`, set app-wide in
+  `components/chrome/ConnectionStatus.tsx`). `useApi` only keeps it
+  within the same account and resource path; another opponent or game
+  starts from the skeleton. `children` gets `{ isPreviousData }` if a
+  view wants to dim stale content.
+- **Empty** in a filtered analyzer view is `NoFilterMatches`
+  (`components/analyzer/EmptyStates.tsx`). It lists the applied filters
+  and offers only the ways out that would change the answer: lower Min
+  games, reset filters, widen to all time. Elsewhere use `EmptyState`
+  (`Card.tsx`) or `EmptyStatePanel`; `helpSlug` adds a "Learn how" link.
+- **Render crashes** are caught by `SectionBoundary`
+  (`components/ui/SectionBoundary.tsx`): "Couldn't show …", Try again,
+  Report this problem (prefilled with the page and Sentry event id) and
+  Details. Wrap independent sections so one bad payload can't blank the
+  page.
+- **Connection banner.** `ConnectionBanner` in the app chrome says
+  "Reconnecting to SC2 Tools… your data is safe" when the browser is
+  offline or after three connection failures in a row, pings the API
+  while it shows, and retries failed requests when it answers. It never
+  renders on the overlay or dock pages.
+
+The player-facing explanation is the help article
+`something-went-wrong`; link it from new error surfaces.
 
 ## Adding a new token
 

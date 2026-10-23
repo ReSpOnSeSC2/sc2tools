@@ -16,6 +16,7 @@ const { parseFilters } = require("../util/parseQuery");
  *   pulseLinks?: import('../services/pulseCharacterLinks').PulseCharacterLinkService,
  *   listPulseCharacterIds?: (userId: string) => Promise<string[]>,
  *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
+ *   community?: Pick<import('../services/community').CommunityService, 'opponentProfileAvailable'>,
  * }} deps
  */
 function buildOpponentsRouter(deps) {
@@ -282,19 +283,25 @@ function buildOpponentsRouter(deps) {
       // same player into this one profile (the deep dive behind the
       // Opponents tab's grouped rows).
       const filters = parseFilters(req.query);
-      const opp = await deps.opponents.get(
-        auth.userId,
-        String(req.params.pulseId),
-        {
+      const pulseId = String(req.params.pulseId);
+      // ``communityAvailable``: whether the public k-anonymous profile at
+      // /community/opponents/:pulseId exists, so the dossier links to it
+      // only when it does. Cached in the community service and run in
+      // parallel with the profile; a failure just hides the link.
+      const [opp, communityAvailable] = await Promise.all([
+        deps.opponents.get(auth.userId, pulseId, {
           filters,
           mergeLinked: req.query.mergeLinked === "1",
-        },
-      );
+        }),
+        deps.community
+          ? deps.community.opponentProfileAvailable(pulseId).catch(() => false)
+          : Promise.resolve(false),
+      ]);
       if (!opp) {
         res.status(404).json({ error: { code: "not_found" } });
         return;
       }
-      res.json(opp);
+      res.json({ ...opp, communityAvailable });
     } catch (err) {
       next(err);
     }

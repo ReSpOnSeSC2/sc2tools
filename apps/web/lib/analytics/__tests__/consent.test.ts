@@ -49,3 +49,43 @@ describe("analytics consent store", () => {
     expect(readConsent()).toBe("unset");
   });
 });
+
+/**
+ * Changing the choice after gtag.js has loaded this visit (Settings →
+ * Misc): gtag hears about it, and turning analytics off deletes the
+ * Google Analytics cookies without a reload.
+ */
+describe("changing consent mid-visit", () => {
+  afterEach(() => {
+    window.localStorage.clear();
+    delete window.gtag;
+    for (const name of ["_ga", "_ga_TEST123", "_gid", "theme"]) {
+      document.cookie = `${name}=; Max-Age=0; path=/`;
+    }
+  });
+
+  it("passes the new choice to a running gtag", () => {
+    const gtag = vi.fn();
+    window.gtag = gtag;
+    setConsent("denied");
+    expect(gtag).toHaveBeenLastCalledWith("consent", "update", { analytics_storage: "denied" });
+    setConsent("granted");
+    expect(gtag).toHaveBeenLastCalledWith("consent", "update", { analytics_storage: "granted" });
+  });
+
+  it("deletes only the Google Analytics cookies when turned off", () => {
+    document.cookie = "_ga=GA1.1.123; path=/";
+    document.cookie = "_ga_TEST123=GS1.1.456; path=/";
+    document.cookie = "_gid=GA1.1.789; path=/";
+    document.cookie = "theme=dark; path=/";
+    setConsent("denied");
+    expect(document.cookie).not.toMatch(/_ga|_gid/);
+    expect(document.cookie).toContain("theme=dark");
+  });
+
+  it("leaves cookies alone when turned on, and works before gtag loads", () => {
+    document.cookie = "_ga=GA1.1.123; path=/";
+    expect(() => setConsent("granted")).not.toThrow();
+    expect(document.cookie).toContain("_ga=GA1.1.123");
+  });
+});

@@ -14,9 +14,9 @@ export async function generateMetadata({
 }) {
   const { section } = await params;
   const tab = tabForSlug(section);
-  if (!tab) return { title: "SC2 Tools" };
+  if (!tab) return { title: "Page not found" };
   return {
-    title: `${tab.label} · SC2 Tools`,
+    title: tab.label,
     description: tab.description,
   };
 }
