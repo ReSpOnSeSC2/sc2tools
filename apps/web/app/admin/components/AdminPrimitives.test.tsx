@@ -21,11 +21,11 @@ describe("admin navigation and page primitives", () => {
     render(<AdminShell>Page</AdminShell>);
     expect(mocks.scroll.mock.calls.every(([options]) => options.behavior === "auto")).toBe(true);
   });
-  it("has five labelled groups, thirteen unique icons, longest-prefix selection and mobile scrolling", () => {
+  it("has five labelled groups, fifteen unique icons, longest-prefix selection and mobile scrolling", () => {
     expect(NAV_GROUPS).toHaveLength(5);
     const items = NAV_GROUPS.flatMap((group) => [...group.items]);
-    expect(items).toHaveLength(14);
-    expect(new Set(items.map((item) => item.icon)).size).toBe(14);
+    expect(items).toHaveLength(15);
+    expect(new Set(items.map((item) => item.icon)).size).toBe(15);
     const { rerender } = render(<AdminShell>Page</AdminShell>);
     expect(screen.getByRole("list", { name: "Community" })).toBeTruthy();
     const mobile = screen.getByRole("navigation", { name: "Admin sections" });

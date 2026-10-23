@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { apiMessage, fieldClass, formatDay, formatDuration, formatTime, groupSlots, useLocalTimeZone, useZoneClock } from "./coachingTime";
+import { apiMessage, formatDay, formatDuration, formatTime, groupSlots, useLocalTimeZone, useZoneClock } from "./coachingTime";
 import { CoachSchedule } from "./CoachSchedule";
 import { BookingCard, BookingSummary, ChoiceChip, EmptySchedule, ScheduleSkeleton } from "./CoachingScheduleParts";
 import type { Booking, CalendarPayload, Slot } from "./coachingScheduleModel";

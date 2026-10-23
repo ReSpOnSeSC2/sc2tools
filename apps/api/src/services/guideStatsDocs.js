@@ -253,10 +253,14 @@ function shapeMatchupDoc(result, era, docs) {
     }))
     .sort((a, b) => compareByCiLow(a, b, a.buildKey, b.buildKey));
   const counters = docs.counters
-    .map((doc) => ({
-      strategyKey: doc.strategyKey, strategySlug: doc.strategySlug, published: doc.published,
-      games: doc.overall ? doc.overall.games : null,
-    }))
+    .map((doc) => {
+      const cell = doc.overall && (doc.published || meetsCellFloor(doc.overall)) ? doc.overall : null;
+      return {
+        strategyKey: doc.strategyKey, strategySlug: doc.strategySlug, published: doc.published,
+        games: cell ? cell.games : null, users: cell ? cell.users : null,
+        winRate: cell ? cell.winRate : null, ci: cell ? cell.ci : null,
+      };
+    })
     .sort(compareCounters);
   const hasTotal = Boolean(total) && meetsCellFloor(total);
   return {
@@ -314,6 +318,9 @@ function shapeMapDocs(results, canonicalMaps, computedAt) {
       kind: "map", key: `map:${era}:${slug}`, era, map, mapSlug: slug,
       published: games >= GUIDE_PAGE_MIN_GAMES && maxUsers >= GUIDE_PAGE_MIN_USERS,
       games, matchups, computedAt,
+      cells: matchups.filter((cell) => cell.matchup[0] !== cell.matchup[2]).map((cell) => ({
+        matchup: cell.matchup, games: cell.games, users: cell.users, winRate: cell.winRate, ci: cell.ci,
+      })),
     });
   }
   return docs;
