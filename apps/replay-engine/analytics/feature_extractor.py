@@ -3,10 +3,8 @@
 This module is the SINGLE source of truth for game-level features that all
 downstream analytics consumers depend on, including:
 
-  * Macro-score model           (analytics/macro_score.py — to be added)
-  * Win-probability model       (analytics/win_probability.py — to be added)
-  * Build clustering / similarity search   (analytics/clustering.py — to be added)
-  * Future replay-based ML pipelines
+  * Fixed-rule replay measurements
+  * Statistical summaries
 
 When a new feature is needed (e.g. "first-pylon time", "supply-blocked
 seconds", "workers at 5 minutes", "saturation rate"), add it to `GameFeatures`
@@ -93,7 +91,7 @@ def extract_features(replay, my_pid: int) -> GameFeatures:
     """Extract canonical `GameFeatures` from a loaded sc2reader replay.
 
     This is currently a placeholder. As features are needed by downstream
-    consumers (macro-score, win-probability, clustering), implement them here
+    consumers (macro scores and statistical summaries), implement them here
     so every consumer pulls from the same extraction pass.
 
     Parameters

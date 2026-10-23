@@ -54,7 +54,10 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
-          cache-dependency-path: apps/replay-engine/requirements.txt
+          cache-dependency-path: |
+            apps/replay-engine/requirements.txt
+            apps/replay-engine/requirements-server.txt
+            apps/replay-engine/requirements-desktop.txt
       - name: Create clean venv (avoids system-setuptools mpyq break)
         run: |
           python -m venv .venv

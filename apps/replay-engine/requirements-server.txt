@@ -1,0 +1,4 @@
+# API replay parsing and statistical spatial density. Exact, reproducible pins.
+sc2reader==1.8.0
+numpy==2.1.3
+scipy==1.14.1

@@ -14,6 +14,7 @@ import analyzer_analyzerFilters from "./analyzer/analyzer-filters";
 import analyzer_arcade from "./analyzer/arcade";
 import analyzer_builds from "./analyzer/builds";
 import analyzer_dashboardAndAnalyzer from "./analyzer/dashboard-and-analyzer";
+import analyzer_howAnalysisWorks from "./analyzer/how-analysis-works";
 import analyzer_macro from "./analyzer/macro";
 import analyzer_maps from "./analyzer/maps";
 import analyzer_opponents from "./analyzer/opponents";
@@ -34,6 +35,7 @@ import builds_rulesExplained from "./builds/rules-explained";
 import desktopApp_desktopAppActivityLog from "./desktop-app/desktop-app-activity-log";
 import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
 import desktopApp_desktopAppSyncRange from "./desktop-app/desktop-app-sync-range";
+import desktopApp_pairingTroubleshooting from "./desktop-app/pairing-troubleshooting";
 import desktopApp_replayFolders from "./desktop-app/replay-folders";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
 import gamePage_gamePageReplay from "./game-page/game-page-replay";
@@ -71,6 +73,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_arcade,
   analyzer_builds,
   analyzer_dashboardAndAnalyzer,
+  analyzer_howAnalysisWorks,
   analyzer_macro,
   analyzer_maps,
   analyzer_opponents,
@@ -91,6 +94,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   desktopApp_desktopAppActivityLog,
   desktopApp_desktopAppOverview,
   desktopApp_desktopAppSyncRange,
+  desktopApp_pairingTroubleshooting,
   desktopApp_replayFolders,
   gamePage_gamePageAccuratePlayback,
   gamePage_gamePageReplay,

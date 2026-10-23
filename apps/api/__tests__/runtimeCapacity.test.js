@@ -24,7 +24,6 @@ const { OpponentsService } = require("../src/services/opponents");
 const { OverlayLiveService } = require("../src/services/overlayLive");
 const { GameDetailsService } = require("../src/services/gameDetails");
 const { R2DetailsStore } = require("../src/services/gameDetailsStore");
-const { MLService } = require("../src/services/ml");
 const {
   _internals: { registerRuntimeCapacityProviders },
 } = require("../src/app");
@@ -159,13 +158,6 @@ describe("runtime capacity monitor", () => {
           maxWaiters: 32,
         }),
       },
-      ml: {
-        trainingCapacitySnapshot: () => ({
-          active: 1,
-          reserved: 0,
-          maxActive: 1,
-        }),
-      },
     });
 
     expect(registry.snapshot()).toEqual({
@@ -190,7 +182,6 @@ describe("runtime capacity monitor", () => {
           maxActive: 2,
           maxWaiters: 32,
         },
-        mlTraining: { active: 1, reserved: 0, maxActive: 1 },
       },
       providerErrors: 0,
     });
@@ -325,17 +316,6 @@ describe("capacity snapshot providers", () => {
     queuedDetailRelease();
     detailReleases.forEach((release) => release());
 
-    const ml = new MLService({});
-    ml._activeJobs.set("private-user-id", { cancelled: false });
-    ml._trainingReservations.add("another-private-user-id");
-    expect(ml.trainingCapacitySnapshot()).toEqual({
-      active: 1,
-      reserved: 1,
-      maxActive: 1,
-    });
-    ml._activeJobs.clear();
-    ml._trainingReservations.clear();
-
     finishSession({ games: 0 });
     await Promise.all([first, second]);
 
@@ -349,7 +329,6 @@ describe("capacity snapshot providers", () => {
       opponents: opponents.profileAnalysisCapacitySnapshot(),
       liveEnrichment: overlayLive.enrichmentCapacitySnapshot(),
       gameDetails: gameDetails.bulkReadCapacitySnapshot(),
-      mlTraining: ml.trainingCapacitySnapshot(),
     });
     expect(serialized).not.toContain("private-user-id");
     expect(serialized).not.toContain("private-token-hash");

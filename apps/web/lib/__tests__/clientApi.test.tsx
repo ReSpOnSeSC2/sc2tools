@@ -49,6 +49,16 @@ afterEach(() => {
 });
 
 describe("opt-in API deadlines", () => {
+  it.each([
+    [404, "pairing_not_found", "Codes last 10 minutes"],
+    [409, "pairing_already_claimed", "already been linked"],
+    [400, "pairing_failed", "Couldn't link this PC"],
+    [400, "unpair_failed", "Couldn't unpair this PC"],
+  ])("explains pairing error %s/%s", async (status, code, message) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: { code } }), { status, headers: { "content-type": "application/json" } })));
+    await expect(apiCall(harness.auth.getToken, "/v1/device-pairings/claim")).rejects.toMatchObject({ message: expect.stringContaining(message) });
+  });
+
   function boundedFetcher(timeoutMs = 1000) {
     const view = renderHook(() => useApi("/v1/admin/global-trends/timeseries", undefined, { timeoutMs }));
     const swr = view.result.current as unknown as MockSWRResult;
