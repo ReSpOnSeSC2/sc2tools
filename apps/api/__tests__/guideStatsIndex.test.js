@@ -9,6 +9,7 @@
  */
 
 const { GuideStatsService } = require("../src/services/guideStats");
+const { GuidesService } = require("../src/services/guides");
 const { guideGamesMatch } = require("../src/services/guideRules");
 const {
   GUIDE_GAMES_INDEX_NAME,
@@ -158,4 +159,18 @@ describe("guide_stats query plans and scale", () => {
     expect(run.counts.builds).toBeGreaterThan(0);
     expect(await db.guideStats.countDocuments({ kind: "build" })).toBeGreaterThan(400);
   }, 120000);
+
+  test("nightly map cells reach the index as six bounded aggregate-only matchup columns", async () => {
+    const out = await new GuidesService(db).index();
+    expect(out.maps.length).toBeGreaterThan(0);
+    for (const map of out.maps) {
+      expect(map.cells.length).toBeGreaterThan(0);
+      expect(map.cells.length).toBeLessThanOrEqual(6);
+      for (const cell of map.cells) {
+        expect(cell.matchup[0]).not.toBe(cell.matchup[2]);
+        expect(cell.games).toBeGreaterThanOrEqual(30);
+        expect(Object.keys(cell).sort()).toEqual(["ci", "games", "matchup", "winRate"]);
+      }
+    }
+  });
 });

@@ -15,6 +15,11 @@ corresponding GitHub Release.
 
 - The desktop Dashboard shows game summaries, local Today W–L/MMR and replay-history progress. Recent games survives restarts with 200 private local outcomes, status/date filters, skipped reasons and selective retries. Re-sync moves to Settings Maintenance; optional game-result notifications exclude history imports.
 
+### Guide comparisons and browsing
+
+- Find and sort openers without losing their original rank, browse phone cards, and group a build's opponent matchups by their likely-range verdict. Complete map lists stay available on demand.
+- Compare your own build timings and record with the guide in one table. Counter lists show your race's aggregate win rates, and the map pool offers a sortable race-specific table when new stats are available.
+
 ### Coaching forms
 
 - Practice plans show inline field errors, focus the first field to fix, remember each student's time zone and summarize the actual target before assignment. Failed saves retain the draft for Retry.
