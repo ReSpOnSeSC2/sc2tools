@@ -42,7 +42,9 @@ invent a new played time. A regression covers that case. No API was added.
 - Full web suite: **6,316 passed, 1 skipped**, across 661 suites. Final narrow
   regression run after the played-time correction: **84 passed** across 8 suites,
   including real SWR mutation/remount, all realtime consumers, navigation progress,
-  bootstrap, install cooldown, accessible steps and help content.
+  bootstrap, install cooldown, accessible steps and help content. Final shared
+  realtime/agent-pill regression run: **14 passed** after correcting a stale
+  upload-wording assertion identified by remote CI (all other 6,316 tests passed).
 - Final typecheck and changed-file strict ESLint pass. Exact CI production build
   and every existing budget pass; no budget was raised. Final sizes are recorded
   in the PR description and ignored `apps/web/chrome-final-budgets.log`.

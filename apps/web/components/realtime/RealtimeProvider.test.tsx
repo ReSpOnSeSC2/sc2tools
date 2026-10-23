@@ -79,7 +79,7 @@ describe("shared authenticated realtime lifecycle", () => {
     expect(ioMock).toHaveBeenCalledTimes(2);
   });
 
-  it("updates the shared SWR game count without another connection and ticks upload time", async () => {
+  it("updates the shared SWR game count without another connection and ticks latest played time", async () => {
     render(<RealtimeProvider><SyncStatus /></RealtimeProvider>);
     const socket = sockets[0]; await act(async () => socket.fire("connect"));
     expect(screen.getByRole("button", { name: /Agent online · 10 games/ })).toBeTruthy();
@@ -89,7 +89,7 @@ describe("shared authenticated realtime lifecycle", () => {
     await act(async () => socket.fire("games:changed", { count: 4, inserted: 2, reason: "ingest" }));
     expect(screen.getByRole("button", { name: /12 games/ })).toBeTruthy();
     await act(async () => vi.advanceTimersByTime(30000));
-    const pill = screen.getByRole("button", { name: /last upload 30s ago/ });
+    const pill = screen.getByRole("button", { name: /latest game 30s ago/ });
     expect(pill.querySelector("[title]")?.getAttribute("title")).toBe(new Date("2026-10-23T12:00:00Z").toLocaleString());
     expect(ioMock).toHaveBeenCalledTimes(1);
   });
