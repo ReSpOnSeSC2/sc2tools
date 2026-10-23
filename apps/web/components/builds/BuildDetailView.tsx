@@ -20,10 +20,8 @@ import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { RequestError } from "@/components/ui/RequestError";
 import { useToast } from "@/components/ui/Toast";
-import { CommunityBuildSignatureTimeline } from "@/components/community/CommunityBuildSignatureTimeline";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
-import { coerceSavedRules } from "@/lib/build-rules";
 import {
   coerceRace,
   matchupLabel,
@@ -32,10 +30,9 @@ import {
   type VsRace,
 } from "@/lib/race";
 import { BuildDossier } from "./BuildDossier";
-import { BuildEditorSheet } from "./BuildEditorSheet";
+import { BuildDefinitionCard } from "./BuildDefinitionCard";
 import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildPublishModal } from "./BuildPublishModal";
-import { RulesSummary } from "./RulesSummary";
 import { BuildSignInPrompt } from "./BuildSignInPrompt";
 import type { CustomBuild } from "./types";
 
@@ -84,6 +81,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
     : null;
 
   const [editorOpen, setEditorOpen] = useState(false);
+  const [editorFocus, setEditorFocus] = useState<"notes" | "preview" | undefined>();
   const [publishOpen, setPublishOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
@@ -94,11 +92,10 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   useDocumentTitle(loadedName ? buildDocumentTitle(loadedName) : null);
 
   const handleSaved = useCallback(
-    async (saved: CustomBuild) => {
-      toast.success(`Saved “${saved.name}”.`);
+    async (_saved: CustomBuild) => {
       await buildSwr.mutate();
     },
-    [toast, buildSwr],
+    [buildSwr],
   );
 
   const handleDelete = useCallback(async () => {
@@ -152,8 +149,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const tint = raceTint(race);
   const mu = matchupLabel(race, (build.vsRace as VsRace) ?? "Any");
   const fromOpponent = build.perspective === "opponent";
-  const rules = coerceSavedRules(build.rules);
-  const signature = Array.isArray(build.signature) ? build.signature : [];
+  const openEditor = (focus?: "notes" | "preview") => { setEditorFocus(focus); setEditorOpen(true); };
 
   return (
     <div className="space-y-6">
@@ -185,7 +181,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
-              onClick={() => setEditorOpen(true)}
+              onClick={() => openEditor()}
               iconLeft={<Pencil className="h-4 w-4" aria-hidden />}
             >
               Edit
@@ -208,39 +204,25 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         }
       />
 
-      {rules.length > 0 ? (
-        <RulesSummary rules={rules} />
-      ) : signature.length > 0 ? (
-        <CommunityBuildSignatureTimeline signature={signature} />
-      ) : null}
-
       {dossierPath ? (
         <BuildDossier
           apiPath={dossierPath}
           phasePerspective={
             build.perspective === "opponent" ? "opponent" : undefined
           }
-          headerSlot={() => <NotesPanel notes={build.notes} accent={tint.text} />}
+          headerSlot={() => <div className="grid min-w-0 gap-4 lg:grid-cols-2"><BuildDefinitionCard build={build} onEdit={() => openEditor()} /><NotesPanel notes={build.notes} accent={tint.text} onEdit={() => openEditor("notes")} /></div>}
         />
       ) : null}
 
-      {Array.isArray(build.rules) && build.rules.length > 0 ? (
         <EditCustomBuildLauncher
           build={editorOpen ? build : null}
+          initialFocus={editorFocus}
           onClose={() => setEditorOpen(false)}
           onSaved={async (saved) => {
             await handleSaved(saved);
             setEditorOpen(false);
           }}
         />
-      ) : (
-        <BuildEditorSheet
-          open={editorOpen}
-          onClose={() => setEditorOpen(false)}
-          build={build}
-          onSaved={handleSaved}
-        />
-      )}
       <BuildPublishModal
         open={publishOpen}
         onClose={() => setPublishOpen(false)}
@@ -266,15 +248,17 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
 function NotesPanel({
   notes,
   accent,
+  onEdit,
 }: {
   notes?: string;
   accent: string;
+  onEdit: () => void;
 }) {
   if (!notes || !notes.trim()) {
     return (
       <Card title="Personal notes">
         <p className="text-caption text-text-muted">
-          No notes yet. Use the Edit button to capture scouting tells, transitions,
+          No notes yet. <button type="button" onClick={onEdit} className="font-semibold text-accent underline">Edit the build</button> to capture scouting tells, transitions,
           or punishment timings — they stay private to your account.
         </p>
       </Card>

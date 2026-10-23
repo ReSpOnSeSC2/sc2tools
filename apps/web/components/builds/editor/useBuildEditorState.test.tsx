@@ -29,6 +29,7 @@ import { SLUG_TAKEN_NAME_ERROR, useBuildEditorState } from "./useBuildEditorStat
 const initialDraft: BuildEditorDraft = {
   name: "PvT test build",
   description: "",
+  notes: "",
   race: "Protoss",
   vsRace: "Terran",
   skillLevel: null,
@@ -200,6 +201,31 @@ describe("useBuildEditorState preview requests", () => {
 });
 
 describe("useBuildEditorState save", () => {
+  it("trims and bounds private notes, preserving their initial value and clearing dirty state after each save", async () => {
+    harness.apiCall.mockResolvedValue({ ok: true, reclassify: null });
+    const { result } = renderHook(() => useBuildEditorState({ open: true, context, lockedSlug: "legacy", initialDraft: { ...initialDraft, rules: [], notes: "Existing private note" } }));
+    expect(result.current.draft.notes).toBe("Existing private note");
+    expect(result.current.isDirty).toBe(false);
+    act(() => result.current.setDraft((draft) => ({ ...draft, notes: `  ${"x".repeat(9000)}  ` })));
+    expect(result.current.isDirty).toBe(true);
+    await act(async () => { await result.current.save(false); });
+    const body = JSON.parse(harness.apiCall.mock.calls[0][2].body);
+    expect(body.notes).toBe("x".repeat(8000));
+    expect(body.rules).toEqual([]);
+    expect(result.current.isDirty).toBe(false);
+    act(() => result.current.setDraft((draft) => ({ ...draft, notes: "Second note" })));
+    await act(async () => { await result.current.save(false); });
+    expect(result.current.isDirty).toBe(false);
+  });
+
+  it("does not make automatic author defaults dirty or hide actual edits", () => {
+    const { result } = renderHook(() => useBuildEditorState({ open: true, context, initialDraft }));
+    act(() => result.current.seedAuthorName("Profile name"));
+    expect(result.current.isDirty).toBe(false);
+    act(() => result.current.setDraft((draft) => ({ ...draft, name: "Edited opener" })));
+    act(() => result.current.seedAuthorName("Another automatic value"));
+    expect(result.current.isDirty).toBe(true);
+  });
   it("cancels an active preview and saves without waiting for it", async () => {
     const pendingPreview = deferred<BuildEditorPreviewResult>();
     harness.apiCall

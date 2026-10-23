@@ -90,4 +90,19 @@ describe("PUT /v1/custom-builds/:slug createOnly", () => {
     expect(invalid.body.error.code).toBe("bad_request");
     expect(await stored(owner, "bad-one")).toBeNull();
   });
+
+  test("metadata-only edits preserve the existing signature and private notes", async () => {
+    const owner = await newUser();
+    const signature = [{ unit: "Gateway", count: 1, beforeSec: 120 }];
+    await save(owner, "legacy-build", { name: "Legacy build", signature, notes: "Private scouting tell" }).expect(200);
+    await save(owner, "legacy-build", { name: "Legacy build, edited", description: "Public description" }).expect(200);
+    const result = await stored(owner, "legacy-build");
+    expect(result.signature).toEqual(signature);
+    expect(result.notes).toBe("Private scouting tell");
+    expect(result.description).toBe("Public description");
+    await save(owner, "legacy-build", { name: "Legacy metadata", rules: [], schemaVersion: 3 }).expect(200);
+    const afterRichEdit = await stored(owner, "legacy-build");
+    expect(afterRichEdit.signature).toEqual(signature);
+    expect(afterRichEdit.notes).toBe("Private scouting tell");
+  });
 });
