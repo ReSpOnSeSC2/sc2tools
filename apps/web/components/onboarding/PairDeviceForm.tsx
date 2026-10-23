@@ -106,7 +106,7 @@ function PairForm({ compact = false, onPaired, onConnected }: Props) {
     <label htmlFor={inputId} className="block text-caption font-medium text-text">Pairing code</label>
     <Input id={inputId} value={code} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" placeholder="123456" disabled={busy} aria-label="6-digit pairing code" onChange={(event) => { typed.current = true; setPreview(null); setError(""); setCode(normalizePairingCode(event.target.value)); }} className="font-mono text-2xl tracking-widest" />
     {preview ? <div className="space-y-2 rounded-lg border border-border bg-bg-elevated p-3"><p className="break-all font-medium">Link {name}{details ? ` (${details})` : ""}?</p>{!preview.sameNetwork ? <p className="text-caption text-warning">Only pair a code shown by SC2 Tools on your own PC.</p> : null}</div> : null}
-    <Button ref={action} type="submit" className="max-w-full" disabled={busy || code.length !== 6} loading={busy}><span className="min-w-0 break-all">{preview ? `Link ${name}` : "Link this PC"}</span></Button>
+    <Button ref={action} type="submit" className="h-auto min-h-11 max-w-full py-2" disabled={busy || code.length !== 6} loading={busy}><span className="min-w-0 break-all">{preview ? `Link ${name}` : "Link this PC"}</span></Button>
     {preview ? <Button variant="ghost" type="button" disabled={busy} onClick={() => setPreview(null)}>Use another code</Button> : null}
     {error ? <p role="alert" className="text-caption text-danger">{error}</p> : null}
     <div className="flex flex-wrap gap-3 text-caption"><LazyHelpLink slug="install-and-pair">Install and link the desktop app</LazyHelpLink><LazyHelpLink slug="pairing-troubleshooting">Pairing problems</LazyHelpLink></div>
