@@ -181,6 +181,12 @@ class TrayUI:
             self._status = f"pairing — code {code}"
         self._refresh()
 
+    def on_unlinked(self) -> None:
+        with self._lock:
+            self._paired = False
+            self._status = "This PC was unlinked - link again in SC2 Tools"
+        self._refresh()
+
     def on_paired(self, user_id: str) -> None:  # noqa: ARG002
         with self._lock:
             self._paired = True

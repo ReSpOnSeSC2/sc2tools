@@ -12,6 +12,7 @@ from __future__ import annotations
 import itertools
 import logging
 import queue
+import random
 import threading
 import time
 from contextlib import contextmanager
@@ -22,10 +23,12 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from ..api_client import (
     ApiClient,
+    ApiError,
     ReplayArchiveSourceUnavailable,
     ReplayIngestBusy,
     replay_file_matches_archive_marker,
 )
+from ..errors import classify
 from ..config import AgentConfig
 from ..replay_pipeline import CloudGame
 from ..state import AgentState, save_state
@@ -221,11 +224,24 @@ class UploadQueue:
         on_success: Optional[Callable[[Path], None]] = None,
         on_failure: Optional[Callable[[Path, Exception], None]] = None,
         on_pending_changed: Optional[Callable[[int], None]] = None,
+        on_connection_state: Optional[Callable[[str, float, float, int], None]] = None,
+        on_auth_failure: Optional[Callable[[Exception], None]] = None,
+        on_auth_success: Optional[Callable[[], None]] = None,
         on_archive_pending_changed: Optional[Callable[[int], None]] = None,
         on_game_accepted: Optional[
             Callable[[Path, CloudGame, str, Dict[str, Any]], None]
         ] = None,
     ) -> None:
+        self._connection_callback = on_connection_state or (lambda *_args: None)
+        self._on_auth_failure = on_auth_failure or (lambda _exc: None)
+        self._on_auth_success = on_auth_success or (lambda: None)
+        self._retry_wake = threading.Event()
+        self._connection_lock = threading.Lock()
+        self._connection_failures = 0
+        self._connection_since = 0.0
+        self._connection_kind = "online"
+        self._retry_at = 0.0
+        self._auth_held = False
         self._cfg = cfg
         self._state = state
         self._api = api
@@ -361,6 +377,7 @@ class UploadQueue:
             self._ingest_stop.set()
             self._archive_stop.set()
             self._archive_wake.set()
+            self._retry_wake.set()
             # Join in order; any thread already idle inside the
             # ``q.get(timeout=1.0)`` will exit on its next iteration.
             # A thread mid-upload finishes the in-flight request
@@ -844,6 +861,7 @@ class UploadQueue:
                     self._archive_journal_error = exc
                 log.exception("replay_archive_journal_suspended")
             except Exception as exc:  # noqa: BLE001
+                self._on_auth_failure(exc)
                 # A non-poisoning checkpoint error is still lane-wide: until
                 # acknowledgements work, uploading another file can only
                 # repeat bytes without making durable progress. Back off the
@@ -962,7 +980,55 @@ class UploadQueue:
 
     def is_paused(self) -> bool:
         with self._lock:
-            return self._paused
+            return self._paused or self._auth_held
+
+    def hold_auth(self, held: bool) -> None:
+        with self._lock:
+            self._auth_held = held
+        self.retry_now()
+        self._archive_wake.set()
+
+    def replace_api(self, api: ApiClient) -> None:
+        self._api = api
+
+    def retry_now(self) -> None:
+        with self._connection_lock:
+            self._retry_at = 0.0
+        self._retry_wake.set()
+
+    def _defer_connection(self, exc: Exception) -> None:
+        error = classify(exc)
+        try:
+            self._on_auth_failure(exc)
+        except Exception:
+            log.exception("upload_auth_callback_failed")
+        with self._connection_lock:
+            self._connection_failures += 1
+            self._connection_since = self._connection_since or time.time()
+            self._connection_kind = error.kind
+            base = min(300.0, 2.0 * 2 ** min(self._connection_failures - 1, 8))
+            delay = min(300.0, max(getattr(exc, "retry_after_seconds", 0), base * random.uniform(0.8, 1.0)))
+            self._retry_at = time.monotonic() + delay
+            since = self._connection_since
+        try:
+            self._connection_callback(error.kind, since, time.time() + delay, self.pending_count())
+        except Exception:
+            log.exception("upload_connection_callback_failed")
+
+    def _connection_success(self) -> None:
+        with self._connection_lock:
+            self._connection_failures = 0
+            self._retry_at = 0.0
+            # Keep the banner until the retained backlog really clears.
+            if not self._connection_since or self.pending_count():
+                return
+            since = self._connection_since
+            self._connection_since = 0.0
+            self._connection_kind = "online"
+        try:
+            self._connection_callback("online", since, 0.0, 0)
+        except Exception:
+            log.exception("upload_connection_callback_failed")
 
     def request_full_resync(self) -> None:
         """Signal the watcher / runner that every replay should be
@@ -1159,7 +1225,17 @@ class UploadQueue:
                     # unbounded retry lane; pause must never become data loss.
                     self._retry_q.put_nowait(self._queue_item(first_job))
                 source_q.task_done()
-                time.sleep(1.0)
+                self._ingest_stop.wait(0.1)
+                continue
+            with self._connection_lock:
+                delayed = self._retry_at > time.monotonic()
+            if delayed and (source_q is self._retry_q or not first_job.priority):
+                self._retry_q.put_nowait(self._queue_item(first_job))
+                source_q.task_done()
+                # Short event waits let a fresh rank-0 job keep its lane;
+                # retry work never makes another network call before due.
+                self._retry_wake.wait(0.1)
+                self._retry_wake.clear()
                 continue
             # Drain additional ready jobs into the batch. Historical jobs
             # from the primary lane get one small coalescing window because
@@ -1226,6 +1302,7 @@ class UploadQueue:
             try:
                 self._upload_batch(batch)
                 self._grow_batch_size_after_success(len(batch))
+                self._connection_success()
             except _PausedBeforeNetwork:
                 # Pause was clicked after batch assembly while this worker
                 # waited for the global request gate. Retain every still-live
@@ -1247,7 +1324,7 @@ class UploadQueue:
                     "upload_batch_deferred size=%d retry_after=%.3f",
                     len(retry_jobs), exc.retry_after_seconds,
                 )
-                self._ingest_stop.wait(exc.retry_after_seconds)
+                self._defer_connection(exc)
                 for job in retry_jobs:
                     self._retry_q.put_nowait(self._queue_item(job))
             except _ServerRejectedError as exc:
@@ -1276,19 +1353,12 @@ class UploadQueue:
                     log.exception(
                         "upload_rejection_state_save_failed; retaining"
                     )
-                    time.sleep(2.0)
+                    self._defer_connection(persist_exc)
                     for job in batch:
                         self._retry_q.put_nowait(self._queue_item(job))
-                    for job in batch:
-                        try:
-                            self._on_failure(job.file_path, persist_exc)
-                        except Exception:  # noqa: BLE001
-                            log.exception(
-                                "upload_retry_callback_failed %s",
-                                job.file_path.name,
-                            )
                 else:
                     self._notify_pending()
+                    self._connection_success()
                     for job in batch:
                         try:
                             self._on_failure(job.file_path, exc)
@@ -1303,33 +1373,9 @@ class UploadQueue:
                     len(batch), exc,
                 )
                 self._shrink_batch_size_after_failure(len(batch))
-                # ``exc`` here is a TRANSIENT transport error (read
-                # timeout, 5xx, connection reset) — a bare exception, not
-                # a ``TerminalUploadError``. We still fire ``_on_failure``
-                # so the GUI's Recent-uploads feed reflects the hiccup,
-                # but because it isn't terminal ``ImportController`` skips
-                # counting it: the jobs below get re-enqueued and will
-                # report a real outcome (success or a terminal error) on
-                # the retry. Counting here would double-count the file and
-                # spam the import card with retry noise.
-                retry_jobs = [
-                    job for job in batch if self.is_pending(job.file_path)
-                ]
-                for job in retry_jobs:
-                    try:
-                        self._on_failure(job.file_path, exc)
-                    except Exception:  # noqa: BLE001
-                        log.exception(
-                            "upload_retry_callback_failed %s",
-                            job.file_path.name,
-                        )
-                # Park briefly, then retain only still-nonterminal jobs
-                # in the unbounded retry lane. Filtered/malformed jobs may
-                # already have reached a terminal outcome inside
-                # ``_upload_batch`` before a remaining valid POST failed;
-                # checking their reservation prevents resurrecting them.
+                retry_jobs = [job for job in batch if self.is_pending(job.file_path)]
                 if retry_jobs:
-                    time.sleep(2.0)
+                    self._defer_connection(exc)
                     for job in retry_jobs:
                         self._retry_q.put_nowait(self._queue_item(job))
             finally:
@@ -1467,7 +1513,16 @@ class UploadQueue:
         with self._network_gate.hold(ingest_priority):
             if self.is_paused():
                 raise _PausedBeforeNetwork()
-            result = self._api.upload_games_batch(payloads)
+            try:
+                result = self._api.upload_games_batch(payloads)
+            except ApiError as exc:
+                if 400 <= exc.status < 500 and exc.status not in (401, 403, 408, 429):
+                    raise _ServerRejectedError(str(exc)) from exc
+                raise
+        try:
+            self._on_auth_success()
+        except Exception:
+            log.exception("upload_auth_success_callback_failed")
         accepted = result.get("accepted") or []
         rejected = result.get("rejected") or []
 

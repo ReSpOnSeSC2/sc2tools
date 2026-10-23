@@ -940,8 +940,9 @@ def test_transient_retry_survives_saturated_primary_queue(
         cfg=_cfg(tmp_path, upload_concurrency=1, upload_batch_size=1),
         state=state,
         api=api,
-        on_failure=lambda path, _exc: (
-            first_failure.set() if path == retried.file_path else None
+        # Retry state replaces transient per-file failure notifications.
+        on_connection_state=lambda kind, *_args: (
+            first_failure.set() if kind != "online" else None
         ),
     )
     # A tiny primary lane makes the saturation boundary deterministic.
@@ -1041,8 +1042,7 @@ def test_mixed_terminal_job_is_not_resurrected_by_valid_job_retry(
     assert state.uploaded[str(invalid.file_path)] == "rejected"
     assert len(invalid_failures) == 1
     assert isinstance(invalid_failures[0], TerminalUploadError)
-    assert len(valid_failures) == 1
-    assert not isinstance(valid_failures[0], TerminalUploadError)
+    assert valid_failures == []  # Transient attempts never become recent outcomes.
     assert successes == [valid.file_path]
     assert q.is_pending(invalid.file_path) is False
     assert q.is_pending(valid.file_path) is False

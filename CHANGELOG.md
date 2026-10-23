@@ -11,6 +11,13 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Desktop pairing keeps trying through connection failures, refreshes codes,
+  and recovers an unlinked PC without discarding queued replays or settings.
+- Desktop sync retains temporary failures with a retry countdown instead of
+  repeating error rows; final replay outcomes have readable details and help.
+
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.

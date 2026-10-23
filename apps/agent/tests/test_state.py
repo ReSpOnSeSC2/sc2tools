@@ -695,3 +695,56 @@ def test_snapshot_copies_build_checkin_prefs() -> None:
     snapshot = state_module._snapshot(state)
     snapshot["build_checkin_prefs"]["enabled"] = False
     assert state.build_checkin_prefs == {"enabled": True}
+
+
+def test_windows_reader_retries_same_fsynced_atomic_snapshot(tmp_path, monkeypatch):
+    from sc2tools_agent import state as module
+    save_state(tmp_path, AgentState(device_token="old"))
+    replace = module.os.replace
+    calls = []
+    sleeps = []
+    def briefly_locked(source, target):
+        calls.append((source, target))
+        if len(calls) < 3:
+            error = PermissionError("reader holds destination")
+            error.winerror = 5
+            raise error
+        replace(source, target)
+    monkeypatch.setattr(module.os, "replace", briefly_locked)
+    monkeypatch.setattr(module.time, "sleep", sleeps.append)
+    save_state(tmp_path, AgentState(device_token="new"))
+    assert load_state(tmp_path).device_token == "new"
+    assert sleeps == [.01, .02]
+    assert len({source for source, _ in calls}) == 1
+    assert not list(tmp_path.glob("agent.*.tmp"))
+
+
+def test_permanent_windows_replace_failure_preserves_target_and_cleans_temp(tmp_path, monkeypatch):
+    from sc2tools_agent import state as module
+    save_state(tmp_path, AgentState(device_token="old"))
+    calls = []
+    def locked(*args):
+        calls.append(args)
+        error = PermissionError("access denied")
+        error.winerror = 5
+        raise error
+    monkeypatch.setattr(module.os, "replace", locked)
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+    with pytest.raises(PermissionError):
+        save_state(tmp_path, AgentState(device_token="new"))
+    assert len(calls) == 6
+    assert load_state(tmp_path).device_token == "old"
+    assert not list(tmp_path.glob("agent.*.tmp"))
+
+
+def test_unrelated_replace_permission_error_is_not_retried(tmp_path, monkeypatch):
+    from sc2tools_agent import state as module
+    calls = []
+    def denied(*args):
+        calls.append(args)
+        raise PermissionError("read-only filesystem")
+    monkeypatch.setattr(module.os, "replace", denied)
+    with pytest.raises(PermissionError):
+        save_state(tmp_path, AgentState())
+    assert len(calls) == 1
+    assert not list(tmp_path.glob("agent.*.tmp"))
