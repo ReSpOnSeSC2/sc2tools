@@ -27,6 +27,11 @@ corresponding GitHub Release.
 
 - Account deletion now removes token-owned stream data and private sound files, ends the sign-in identity with durable retries, and offers an export-first inventory and confirmation flow. Review comments on other requests are anonymized; service backup retention follows the current configured schedule.
 
+### Navigation and installed app
+
+- Pin the labelled sidebar, find Build stats and Build library by clear names, and use the phone More sheet for navigation, support and theme controls.
+- The app status pill describes your desktop connection and latest upload; community counts stay in an optional desktop disclosure. Install the web app from More or Settings and get a clear offline page when the network is unavailable.
+
 ### Added
 
 - Read curated updates in What's New, the public changelog and RSS. Service notices explain active incidents and expire automatically; installer release notes are easier to read.

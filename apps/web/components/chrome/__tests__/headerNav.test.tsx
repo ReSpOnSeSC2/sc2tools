@@ -141,7 +141,7 @@ describe("Header", () => {
     // No room for it in the lg row: it joins the nav from xl.
     expect(download.className).toContain("hidden");
     expect(download.className).toContain("xl:inline-flex");
-    expect(within(nav).queryByRole("link", { name: "Custom builds" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Build library" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Settings" })).toBeNull();
     expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe("/sign-in");
     expect(screen.getByRole("link", { name: "Get started" }).getAttribute("href")).toBe("/sign-up");
@@ -160,7 +160,7 @@ describe("Header", () => {
     render(<Header />);
     const nav = screen.getByRole("navigation", { name: "Primary" });
     expect(within(nav).queryByRole("link", { name: "Dashboard" })).toBeNull();
-    expect(within(nav).getByRole("link", { name: "Custom builds" }).getAttribute("href")).toBe("/builds");
+    expect(within(nav).getByRole("link", { name: "Build library" }).getAttribute("href")).toBe("/builds");
     expect(within(nav).queryByRole("link", { name: "Stream Studio" })).toBeNull();
     expect(within(nav).queryByRole("link", { name: "Download" })).toBeNull();
     expect(screen.getByRole("link", { name: "Open app" }).getAttribute("href")).toBe("/app");

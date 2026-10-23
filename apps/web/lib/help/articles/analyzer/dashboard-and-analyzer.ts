@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "dashboard-and-analyzer",
   title: "Dashboard & analyzer",
   summary:
-    "What the analyzer shows from your replays, section by section: Today, Opponents, Strategies, Trends, Macro, Maps, Builds, Replays and Arcade.",
+    "What the analyzer shows from your replays, section by section: Today, Opponents, Strategies, Trends, Macro, Maps, Build stats, Replays and Arcade.",
   category: "analyzer",
   audience: "player",
   order: 0,
@@ -32,6 +32,8 @@ const article: HelpArticle = {
   ],
   updated: "2026-10-23",
   body: [
+    { type: "heading", text: "Getting around", anchor: "getting-around" },
+    { type: "paragraph", text: "Pin the sidebar with the button at its bottom to keep its labels visible and push content beside it. **Analysis** holds your stats sections, including **Build stats**. **Your setup** holds **Build library**, Community, Stream Studio, Devices and Settings. On phones, **More** holds everything else, **Help & support**, **Install app** when supported and the Light/Dark theme switch." },
     {
       type: "paragraph",
       text: "Everything in the analyzer comes from your own replays, with no manual tagging. Each replay is read with fixed rules, never AI: the opening you and your opponent played is named from more than 100 known builds, and your record, MMR, macro and timings are counted from the replay itself. The same games always give the same numbers.",
@@ -47,7 +49,7 @@ const article: HelpArticle = {
         ["[Trends](/help/trends)", "Am I improving, in which matchup, and when do I play best?"],
         ["[Macro](/help/macro)", "Which macro mistake costs me the most, and does fixing it win games?"],
         ["[Maps](/help/maps)", "Which maps and matchups go my way?"],
-        ["[Builds](/help/builds)", "How does each of my builds perform, and am I getting better with it?"],
+        ["[Build stats](/help/builds)", "How does each of my builds perform, and am I getting better with it?"],
         ["[Replays](/help/replays)", "Where is that game I want to review?"],
         ["[Arcade](/help/arcade)", "What don't I know about my own play?"],
       ],

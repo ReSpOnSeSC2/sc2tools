@@ -63,7 +63,7 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "**Save as new build** on your build order turns this game's opening into a custom build: pick the steps that define it, name it and save. See [Detected builds vs custom builds](/help/custom-builds).",
+        "**Save as new build** on your build order turns this game's opening into a custom build: pick the steps that define it, name it and save. See [Detected builds and your Build library](/help/custom-builds).",
         "**Use as Ghost Build target** keeps this game's timed build as a practice target for later games in its matchup. This source game itself is not graded.",
       ],
     },

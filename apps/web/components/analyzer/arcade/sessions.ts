@@ -136,7 +136,7 @@ export function buildUniverse(
       source: "community",
     });
   }
-  // Custom builds: every build the user has AUTHORED enters the
+  // Build library: every build the user has AUTHORED enters the
   // universe — even at zero plays. Untradeable until they accumulate
   // ≥3 plays in the rolling 14-day window (rolling14DayWr returns
   // null below that floor), which the Stock Market UI surfaces as

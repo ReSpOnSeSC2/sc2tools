@@ -140,7 +140,7 @@ export function SettingsBackups() {
 
       <Section
         title="Delete game history"
-        description="Wipes your replays, opponent records, and macro jobs. Custom builds, device pairings, overlay tokens, and your account stay intact. Use this before a fresh agent re-sync."
+        description="Wipes your replays, opponent records, and macro jobs. Your Build library, device pairings, overlay tokens, and your account stay intact. Use this before a fresh agent re-sync."
       >
         <Card>
           <div className="space-y-3">
@@ -217,7 +217,7 @@ export function SettingsBackups() {
         title="Delete game history?"
         description={
           counting ? "Counting games…" : count === 0 ? "No games in this range" :
-          `${countFailed ? "Couldn't count the games in this range. " : ""}This deletes ${!wipeSince && !wipeUntil ? "all " : ""}${count === null ? "the matching" : count.toLocaleString()} games${wipeSince || wipeUntil ? ` ${wipeSince ? `from ${new Date(localDayStartIso(wipeSince)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}${wipeUntil ? ` through ${new Date(localDayStartIso(wipeUntil)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""} (your time)` : ""}. Opponent records and macro data for those games go too. Custom builds, devices and overlay tokens are kept.`
+          `${countFailed ? "Couldn't count the games in this range. " : ""}This deletes ${!wipeSince && !wipeUntil ? "all " : ""}${count === null ? "the matching" : count.toLocaleString()} games${wipeSince || wipeUntil ? ` ${wipeSince ? `from ${new Date(localDayStartIso(wipeSince)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}${wipeUntil ? ` through ${new Date(localDayStartIso(wipeUntil)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""} (your time)` : ""}. Opponent records and macro data for those games go too. Your Build library, devices and overlay tokens are kept.`
         }
         confirmDisabled={counting || count === 0 || invalidRange}
         confirmWord="DELETE"

@@ -101,7 +101,7 @@ it("mounts every current user and admin consumer on one socket and fans out reco
   });
   expect(h.resources.get("/v1/me/notifications/unread-count")!.mutate).toHaveBeenCalledTimes(6);
   expect(h.resources.get("/v1/coaching/alerts")!.mutate).toHaveBeenCalledOnce();
-  expect(screen.getByTestId("import").textContent).toBe("4"); expect(screen.getByText("6")).toBeTruthy();
+  expect(screen.getByTestId("import").textContent).toBe("4"); expect(h.resources.get("/v1/me")!.mutate).toHaveBeenCalledWith(expect.any(Function), { revalidate: false });
   expect(screen.getByTestId("analyzer").textContent).toBe("0"); expect(h.refresh).not.toHaveBeenCalled();
   await act(async () => { vi.advanceTimersByTime(2000); });
   await act(async () => { vi.advanceTimersByTime(1); });
@@ -109,7 +109,7 @@ it("mounts every current user and admin consumer on one socket and fans out reco
   expect(h.resources.get("/v1/coaching/assignments?page=1&limit=20")!.mutate).toHaveBeenCalledOnce();
   expect(screen.getByTestId("analyzer").textContent).toBe("1"); expect(screen.getByTestId("checkin").textContent).toBe("1"); expect(h.refresh).toHaveBeenCalledOnce();
   act(() => h.handlers.get("games:changed")?.({ count: 25, inserted: 2, bulk: true, reason: "ingest" }));
-  expect(screen.getByText("8")).toBeTruthy();
+  expect(h.resources.get("/v1/me")!.mutate.mock.calls.filter(([update]) => typeof update === "function")).toHaveLength(2);
   await act(async () => { vi.advanceTimersByTime(29999); });
   expect(corpusCalls()).toHaveLength(2);
   expect(screen.getByTestId("analyzer").textContent).toBe("1");

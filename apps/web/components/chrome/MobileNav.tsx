@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createPortal } from "react-dom";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { X } from "lucide-react";
+import { lockBodyScroll } from "@/lib/bodyScrollLock";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { LogoMark } from "./LogoMark";
 import { NavAuthGate } from "./NavAuthGate";
@@ -66,8 +67,7 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
     if (!open) return;
     previouslyFocusedRef.current = document.activeElement;
 
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlock = lockBodyScroll();
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -86,7 +86,7 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
 
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
+      unlock();
       window.clearTimeout(initFocus);
       const prev = previouslyFocusedRef.current as HTMLElement | null;
       if (prev && typeof prev.focus === "function") {

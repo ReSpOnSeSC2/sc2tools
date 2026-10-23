@@ -2,7 +2,7 @@ import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
   slug: "builds",
-  title: "Builds: how each of your builds performs",
+  title: "Build stats: how each of your builds performs",
   summary:
     "Your record with every build you play, how each build does at different MMRs, how you get better at a build with practice, and where to edit or publish one.",
   category: "analyzer",
@@ -27,7 +27,7 @@ const article: HelpArticle = {
   body: [
     {
       type: "paragraph",
-      text: "The [Builds](/app/builds) section of the analyzer lists every build you've played in the games the filter bar lets through: the openings SC2 Tools detects and the custom builds you've defined. It answers: which builds win, which don't, and which ones I'm getting better at.",
+      text: "The [Build stats](/app/builds) section of the analyzer lists every build you've played in the games the filter bar lets through: the openings SC2 Tools detects and the custom builds you've defined. It answers: which builds win, which don't, and which ones I'm getting better at.",
     },
     { type: "heading", text: "The build table", anchor: "table" },
     {
@@ -64,7 +64,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Want to define your own version of an opener, with its own record? See [Detected builds vs custom builds](/help/custom-builds). Every number here is counted from your replays with fixed rules, never AI.",
+      text: "Want to define your own version of an opener, with its own record? See [Detected builds and your Build library](/help/custom-builds). Every number here is counted from your replays with fixed rules, never AI.",
     },
   ],
   related: ["custom-builds", "strategies", "build-check-in", "reading-the-charts"],

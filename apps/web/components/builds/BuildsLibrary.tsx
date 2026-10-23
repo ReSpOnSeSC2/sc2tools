@@ -409,7 +409,7 @@ function BuildsLibraryInner() {
   return (
     <>
       <PageHeader
-        eyebrow="Custom builds"
+        eyebrow="Build library"
         title="Your build library"
         description="Custom openers synced across devices. Save them privately, share them publicly, and match your replays automatically."
         actions={
