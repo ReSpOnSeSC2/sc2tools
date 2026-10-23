@@ -11,7 +11,7 @@ afterEach(cleanup);
 describe("route loading skeletons", () => {
   it.each<[string, ComponentType, string]>([
     ["/builds", BuildsLoading, "Loading your build library"],
-    ["/community", CommunityLoading, "Loading community builds"],
+    ["/community", CommunityLoading, "Loading community builds…"],
     ["/devices", DevicesLoading, "Loading devices"],
     ["/settings", SettingsLoading, "Loading settings"],
   ])("%s announces one loading message instead of plain text", (_route, Loading, label) => {
