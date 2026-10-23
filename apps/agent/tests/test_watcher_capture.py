@@ -235,3 +235,20 @@ def test_skipped_replay_never_starts_capture(setup):
     s.watcher._handle_replay(s.path)
     s.capture.assert_not_called()
     assert s.uploaded == []
+
+
+def test_automatic_capture_waits_for_match_gate_without_losing_reservation(setup):
+    from sc2tools_agent.game_activity import GameActivityGate
+    clock=[1000.0]
+    gate=GameActivityGate(clock=lambda:clock[0])
+    gate.on_event("match_started")
+    s=setup
+    s.watcher._activity_gate=gate
+    s.watcher._inflight.add(str(s.path))
+    s.watcher._handle_replay(s.path)
+    assert not s.uploaded_event.wait(.25)
+    s.capture.assert_not_called()
+    assert str(s.path) in s.watcher._inflight
+    gate.on_event("match_ended");clock[0]+=20
+    assert s.uploaded_event.wait(3)
+    s.capture.assert_called_once()

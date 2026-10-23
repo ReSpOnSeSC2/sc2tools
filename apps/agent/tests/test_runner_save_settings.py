@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
@@ -233,7 +232,8 @@ def test_gui_boot_wires_capture_notice_to_runtime_cell(tmp_path: Path, monkeypat
     monkeypatch.setattr(runner, "_discover_replay_folders", lambda *_: [])
     monkeypatch.setattr(runner, "_ensure_player_handle", lambda *_: None)
     monkeypatch.setattr(runner, "make_recompute_handlers", register)
-    cell = SimpleNamespace(tray=Mock(), console=Mock(), gui=Mock())
+    cell = runner._RuntimeCell()
+    cell.tray, cell.console, cell.gui = Mock(), Mock(), Mock()
     with pytest.raises(HandlersReached):
         runner._gui_boot_worker(
             cfg=_cfg(tmp_path), state=AgentState(device_token="t", user_id="u"),
@@ -241,7 +241,8 @@ def test_gui_boot_wires_capture_notice_to_runtime_cell(tmp_path: Path, monkeypat
             log=logging.getLogger("test"), no_live=True, no_obs=True,
         )
     callbacks["notify_capture_start"]("Capture is using CPU")
-    cell.gui.show_update_notice.assert_called_once_with("Capture is using CPU", sticky=False)
+    cell.gui.show_transient_notice.assert_called_once_with("Capture is using CPU")
+    cell.gui.show_update_notice.assert_not_called()
     cell.tray.show_notice.assert_called_once_with("Capture is using CPU", title="Accurate replay capture")
     cell.console.on_status.assert_called_once_with("Capture is using CPU")
 
@@ -767,39 +768,24 @@ def test_save_filter_to_all_clears_filtered_and_drains_queue(
     assert upload.resync_calls == 1
 
 
-def test_filter_save_completes_in_under_50ms(tmp_path: Path) -> None:
-    """SLA: the user clicks Save and gets control back within 50 ms.
-    Heavy work (queue drain, watcher sweep) is dispatched to other
-    threads so the GUI thread isn't blocked. Stub callees here just
-    increment counters, so any time spent inside _handle_save_settings
-    is pure runner overhead."""
+def test_filter_save_worker_commits_before_return_and_requests_each_service(tmp_path: Path) -> None:
+    """The Settings worker may return success only after the atomic commit.
+
+    Native event-loop responsiveness during a blocked durable save is covered by
+    test_gui_settings_polish; the handler itself intentionally waits for fsync.
+    """
     state = AgentState(
-        device_token="t",
-        sync_filter_preset=None,
-        uploaded={
-            f"/replays/old-{i:04d}.SC2Replay": "filtered"
-            for i in range(1000)
-        },
+        device_token="t", sync_filter_preset=None,
+        uploaded={f"/replays/old-{i:04d}.SC2Replay": "filtered" for i in range(1000)},
     )
-    upload = _StubUpload(drop_count=50)
-    watcher = _StubWatcher()
-    payload = SettingsPayload(sync_filter_preset="season:67")
-    t0 = time.perf_counter()
+    upload, watcher = _StubUpload(drop_count=50), _StubWatcher()
     _handle_save_settings(
-        _cfg(tmp_path), state, payload, _cell(upload, watcher),
-        logging.getLogger("test"),
+        _cfg(tmp_path), state, SettingsPayload(sync_filter_preset="season:67"),
+        _cell(upload, watcher), logging.getLogger("test"),
     )
-    elapsed_ms = (time.perf_counter() - t0) * 1000
-    # Generous ceiling at 200 ms because save_state on Windows fsyncs
-    # the JSON to disk, and a busy CI runner can take longer than
-    # 50 ms for that alone. The contract we're really protecting is
-    # "doesn't block on a 30-second sweep" — anything under 200 ms
-    # comfortably feels instant.
-    assert elapsed_ms < 200, (
-        f"_handle_save_settings took {elapsed_ms:.1f} ms — over the "
-        "feels-instant SLA. Heavy work should be dispatched to "
-        "worker threads, not run inline on the GUI thread."
-    )
+    persisted = load_state(tmp_path)
+    assert persisted.sync_filter_preset == "season:67" and persisted.uploaded == {}
+    assert upload.drain_calls == 1 and upload.resync_calls == 1 and watcher.sweep_calls == 1
 
 
 def test_save_with_no_watcher_in_cell_does_not_crash(

@@ -297,7 +297,7 @@ export function OpponentsTab({
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="search opponent name or ID…"
+          placeholder="Search by name or Pulse ID"
           aria-label="Search opponents"
           className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[44px]"
         />
@@ -352,7 +352,7 @@ export function OpponentsTab({
             </span>
           ) : null}
           <span className="hidden text-xs text-text-dim sm:inline">
-            click any column to sort · click a row to open deep dive →
+            Select a column to sort or a row to view the opponent
           </span>
         </div>
       </div>

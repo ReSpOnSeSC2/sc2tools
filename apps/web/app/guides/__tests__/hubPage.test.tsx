@@ -66,6 +66,27 @@ describe("/guides hub", () => {
     expect(String(md.description)).toContain("Sep 27, 2026");
   });
 
+  it("previews the six busiest map cards, keeps the total and omits empty maps", async () => {
+    const maps = Array.from({ length: 8 }, (_, index) => ({ map: `Map ${index}`, slug: `map-${index}`, games: 800 - index * 50 }));
+    mocks.fetchGuideIndex.mockResolvedValue(ok({ ...FIXTURE_INDEX, maps }));
+    const { container, unmount } = render(await GuidesHubPage());
+    const section = container.querySelector("#maps") as HTMLElement;
+    expect(within(section).getAllByRole("listitem")).toHaveLength(6);
+    expect(within(section).getAllByRole("link").slice(0, 6).map((link) => link.getAttribute("href"))).toEqual(maps.slice(0, 6).map((map) => `/guides/maps/${map.slug}`));
+    expect(within(section).getByRole("link", { name: "All 8 map guides" }).getAttribute("href")).toBe("/guides/maps");
+    expect(section.querySelectorAll("[data-map-artwork]")).toHaveLength(6);
+    expect(screen.getByText("What's winning with 12 starting workers, from ranked 1v1 games uploaded to SC2 Tools.")).toBeTruthy();
+    expect(container.querySelectorAll("[data-race-icon]")).toHaveLength(3);
+    expect(container.querySelectorAll("[data-stretched-guide-link]")).toHaveLength(9);
+    const topRow = screen.getByRole("link", { name: "Stargate into Glaives" }).closest("li")!;
+    expect(topRow.textContent).toMatch(/[▲●▼]/);
+    expect(topRow.querySelector(".sr-only")?.textContent).toMatch(/clearly above 50%|too close to call|clearly below 50%/);
+    unmount();
+    mocks.fetchGuideIndex.mockResolvedValue(ok({ ...FIXTURE_INDEX, maps: [] }));
+    render(await GuidesHubPage());
+    expect(document.getElementById("maps")).toBeNull();
+  });
+
   it("renders the 3×3 grid with this week's top openers, arrows and links", async () => {
     mocks.fetchGuideIndex.mockResolvedValue(ok(FIXTURE_INDEX));
     render(await GuidesHubPage());
@@ -105,7 +126,7 @@ describe("/guides hub", () => {
     // 8-worker patch videos are not in the prominent row.
     expect(within(row).queryByRole("link", { name: /PvZ Cracking 8 Pools/ })).toBeNull();
     expect(container.querySelector("iframe")).toBeNull();
-    expect(screen.getByRole("link", { name: /Browse map guides/ }).getAttribute("href")).toBe("/guides/maps");
+    expect(screen.getByRole("link", { name: "All 3 map guides" }).getAttribute("href")).toBe("/guides/maps");
   });
 
   it.each([5, 8])("keeps all %i videos in a four-column grid as new videos arrive", async (count) => {
@@ -123,7 +144,7 @@ describe("/guides hub", () => {
     );
   });
 
-  it("caps the hub at eight videos and opens the full library in a new tab", async () => {
+  it("caps the hub at eight videos and opens the full library in the same tab", async () => {
     const videos = previewVideos(10);
     mocks.fetchGuideIndex.mockResolvedValue(ok({ ...FIXTURE_INDEX, videos }));
     render(await GuidesHubPage());
@@ -136,8 +157,9 @@ describe("/guides hub", () => {
     expect(within(section).queryByText(videos[9].title)).toBeNull();
     const allVideos = within(section).getByRole("link", { name: /View all videos/ });
     expect(allVideos.getAttribute("href")).toBe("/guides/videos");
-    expect(allVideos.getAttribute("target")).toBe("_blank");
-    expect(allVideos.getAttribute("rel")).toContain("noopener");
+    expect(allVideos.getAttribute("target")).toBeNull();
+    expect(allVideos.getAttribute("rel")).toBeNull();
+    expect(allVideos.textContent).not.toContain("new tab");
   });
 
   it("lists the 8-worker patch videos last, collapsed, as plain links to YouTube", async () => {

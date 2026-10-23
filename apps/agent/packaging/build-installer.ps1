@@ -19,9 +19,14 @@
     Build the NSIS installer in addition to the bare .exe. Defaults to
     $true on the build server, $false during quick local iteration.
 
+.PARAMETER PackageOnly
+    Reuse the existing one-folder bundle and build only NSIS (for signing the
+    inner executable before packaging). Requires -Installer; excludes -Clean.
+
 .PARAMETER SigningCert
-    Path to the .pfx EV code-signing certificate. When set, signtool is
-    invoked on the final installer with /tr (timestamp) + SHA256.
+    Path to a trusted .pfx code-signing certificate. When set, signtool is
+    invoked on the inner executable before NSIS and final installer after,
+    with /tr (timestamp) + SHA256.
 
 .PARAMETER Clean
     Wipe build/, dist/, and .build-venv/ before starting. Use this for
@@ -41,6 +46,7 @@ param(
     [string]$Version,
     [string]$BuildVenvPath,
     [switch]$Installer,
+    [switch]$PackageOnly,
     [string]$SigningCert,
     [string]$SigningCertPasswordEnv = "SC2TOOLS_SIGNING_PASSWORD",
     [string]$TimestampUrl = "http://timestamp.sectigo.com",
@@ -77,6 +83,32 @@ function Invoke-Step($Label, [scriptblock]$Body) {
     }
 }
 
+function Sign-AgentFile([string]$FilePath) {
+    if (-not $SigningCert) { return }
+    Invoke-Step "Code-signing $FilePath" {
+        $signtool = (Get-Command signtool -ErrorAction SilentlyContinue).Source
+        if (-not $signtool) {
+            throw "signtool.exe not found on PATH. Install the Windows SDK."
+        }
+        $password = [System.Environment]::GetEnvironmentVariable($SigningCertPasswordEnv)
+        if (-not $password) {
+            throw "No signing password in env var '$SigningCertPasswordEnv'."
+        }
+        & $signtool sign `
+            /fd SHA256 `
+            /tr $TimestampUrl `
+            /td SHA256 `
+            /f $SigningCert `
+            /p $password `
+            $FilePath
+    }
+    & (Join-Path $PSScriptRoot "verify-signature.ps1") -Path $FilePath
+}
+
+if ($PackageOnly -and (-not $Installer -or $Clean)) {
+    throw '-PackageOnly requires -Installer and cannot be combined with -Clean.'
+}
+
 if ($Clean) {
     Invoke-Step "Cleaning build artefacts" {
         $cleanPaths = @($DistDir, $BuildDir)
@@ -95,51 +127,54 @@ if ($Clean) {
 $AgentVersion = Resolve-AgentVersion
 Write-Host "Building SC2 Tools Agent v$AgentVersion" -ForegroundColor Green
 
-if (-not (Test-Path $VenvDir)) {
-    Invoke-Step "Creating virtualenv at $VenvDir" {
-        py -3.12 -m venv $VenvDir
+if (-not $PackageOnly) {
+    if (-not (Test-Path $VenvDir)) {
+        Invoke-Step "Creating virtualenv at $VenvDir" {
+            py -3.12 -m venv $VenvDir
+        }
     }
-}
 
-$VenvPython = Join-Path $VenvDir "Scripts\python.exe"
-$VenvPip    = Join-Path $VenvDir "Scripts\pip.exe"
+    $VenvPython = Join-Path $VenvDir "Scripts\python.exe"
+    $VenvPip    = Join-Path $VenvDir "Scripts\pip.exe"
 
-Invoke-Step "Upgrading build tooling" {
-    & $VenvPython -m pip install --upgrade pip wheel setuptools
-}
-
-Invoke-Step "Installing agent requirements" {
-    & $VenvPip install -r (Join-Path $AgentRoot "requirements.txt")
-}
-
-Invoke-Step "Installing PyInstaller" {
-    & $VenvPip install pyinstaller==6.11.0
-}
-
-Invoke-Step "Running PyInstaller" {
-    $basePythonDir = (& $VenvPython -c "import sys; print(sys.base_prefix)").Trim()
-    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $basePythonDir -PathType Container)) {
-        throw "Could not resolve the build Python's base runtime directory."
+    Invoke-Step "Upgrading build tooling" {
+        & $VenvPython -m pip install --upgrade pip wheel setuptools
     }
-    $windowsDir = [System.Environment]::GetEnvironmentVariable("SystemRoot")
-    if (-not $windowsDir) { throw "Windows SystemRoot is unavailable." }
-    $callerBuildPath = [System.Environment]::GetEnvironmentVariable("PATH")
-    Push-Location $AgentRoot
-    try {
-        # PyInstaller resolves dependent native DLLs using PATH. Desktop tools
-        # can add incompatible ICU/CRT DLLs (for example Poppler's) ahead of Qt.
-        # Keep dependency collection inside the build runtime and Windows only.
-        $env:PATH = @(
-            [System.IO.Path]::GetFullPath((Join-Path $VenvDir "Scripts")),
-            [System.IO.Path]::GetFullPath($basePythonDir),
-            [System.IO.Path]::GetFullPath((Join-Path $windowsDir "System32")),
-            [System.IO.Path]::GetFullPath($windowsDir)
-        ) -join [System.IO.Path]::PathSeparator
-        & $VenvPython -m PyInstaller --noconfirm --clean $Spec
-    } finally {
-        $env:PATH = $callerBuildPath
-        Pop-Location
+
+    Invoke-Step "Installing agent requirements" {
+        & $VenvPip install -r (Join-Path $AgentRoot "requirements.txt")
     }
+
+    Invoke-Step "Installing PyInstaller" {
+        & $VenvPip install pyinstaller==6.11.0
+    }
+
+    Invoke-Step "Running PyInstaller" {
+        $basePythonDir = (& $VenvPython -c "import sys; print(sys.base_prefix)").Trim()
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $basePythonDir -PathType Container)) {
+            throw "Could not resolve the build Python's base runtime directory."
+        }
+        $windowsDir = [System.Environment]::GetEnvironmentVariable("SystemRoot")
+        if (-not $windowsDir) { throw "Windows SystemRoot is unavailable." }
+        $callerBuildPath = [System.Environment]::GetEnvironmentVariable("PATH")
+        Push-Location $AgentRoot
+        try {
+            # PyInstaller resolves dependent native DLLs using PATH. Desktop tools
+            # can add incompatible ICU/CRT DLLs (for example Poppler's) ahead of Qt.
+            # Keep dependency collection inside the build runtime and Windows only.
+            $env:PATH = @(
+                [System.IO.Path]::GetFullPath((Join-Path $VenvDir "Scripts")),
+                [System.IO.Path]::GetFullPath($basePythonDir),
+                [System.IO.Path]::GetFullPath((Join-Path $windowsDir "System32")),
+                [System.IO.Path]::GetFullPath($windowsDir)
+            ) -join [System.IO.Path]::PathSeparator
+            & $VenvPython -m PyInstaller --noconfirm --clean $Spec
+        } finally {
+            $env:PATH = $callerBuildPath
+            Pop-Location
+        }
+    }
+
 }
 
 # Locate the freshly-built exe. The spec file's ONE_FILE flag changes
@@ -160,6 +195,8 @@ if (Test-Path $ExePathFolder) {
     throw "PyInstaller did not produce sc2tools-agent.exe in either layout (looked at $ExePathFolder and $ExePathSingle) - check the build log."
 }
 Write-Host "Build layout: $BuildLayout (exe at $ExePath)" -ForegroundColor DarkGray
+
+Sign-AgentFile $ExePath
 
 Invoke-Step "Checking the packaged GUI offline" {
     $guiSmokeDir = Join-Path $BuildDir ("gui-smoke-" + [guid]::NewGuid().ToString("N"))
@@ -217,25 +254,7 @@ if ($Installer) {
         throw "NSIS did not emit $InstallerExe."
     }
 
-    if ($SigningCert) {
-        Invoke-Step "Code-signing $InstallerExe" {
-            $signtool = (Get-Command signtool -ErrorAction SilentlyContinue).Source
-            if (-not $signtool) {
-                throw "signtool.exe not found on PATH. Install the Windows SDK."
-            }
-            $password = [System.Environment]::GetEnvironmentVariable($SigningCertPasswordEnv)
-            if (-not $password) {
-                throw "No signing password in env var '$SigningCertPasswordEnv'."
-            }
-            & $signtool sign `
-                /fd SHA256 `
-                /tr $TimestampUrl `
-                /td SHA256 `
-                /f $SigningCert `
-                /p $password `
-                $InstallerExe
-        }
-    }
+    Sign-AgentFile $InstallerExe
 
     Write-Host ""
     Write-Host "Installer:    $InstallerExe" -ForegroundColor Green

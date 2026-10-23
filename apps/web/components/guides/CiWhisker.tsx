@@ -1,4 +1,4 @@
-import { cellVerdict } from "@/components/guides/guideUi";
+import { cellVerdict, verdictMeta } from "@/components/guides/guideUi";
 import type { GuideCell } from "@/lib/guides/types";
 
 /**
@@ -26,10 +26,11 @@ const VERDICT_FILL = {
   even: "fill-accent-cyan stroke-accent-cyan",
 } as const;
 
-export function CiWhisker({ cell }: { cell: Pick<GuideCell, "winRate" | "ci"> }) {
+export function CiWhisker({ cell, showVerdict = true }: { cell: Pick<GuideCell, "winRate" | "ci">; showVerdict?: boolean }) {
   const tone = VERDICT_FILL[cellVerdict(cell)];
+  const verdict = verdictMeta(cellVerdict(cell));
   return (
-    <svg
+    <span className="inline-flex items-center gap-1"><svg
       width={WIDTH}
       height={HEIGHT}
       aria-hidden="true"
@@ -56,6 +57,6 @@ export function CiWhisker({ cell }: { cell: Pick<GuideCell, "winRate" | "ci"> })
         strokeLinecap="round"
       />
       <circle cx={toPct(cell.winRate)} cy={MID_Y} r={DOT_RADIUS} className="fill-text stroke-bg" strokeWidth={1} />
-    </svg>
+    </svg>{showVerdict ? <><span aria-hidden>{verdict.glyph}</span><span className="sr-only">{verdict.phrase}</span></> : null}</span>
   );
 }

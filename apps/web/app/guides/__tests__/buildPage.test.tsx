@@ -173,7 +173,7 @@ describe("/guides/[matchup]/[build] page", () => {
   it("orders the sections as the brief does", async () => {
     mocks.fetchGuideBuild.mockResolvedValue(ok(FIXTURE_BUILD_PUBLISHED));
     await renderPage();
-    const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+    const headings = screen.getAllByRole("heading", { level: 2 }).filter((h) => !h.closest("nav")).map((h) => h.textContent);
     expect(headings).toEqual([
       "Video guide",
       "Win rate by league and MMR",
@@ -186,6 +186,10 @@ describe("/guides/[matchup]/[build] page", () => {
       "Related",
       "Coach's notes",
     ]);
+    const nav = screen.getByRole("navigation", { name: "On this page" });
+    const linkedIds = within(nav).getAllByRole("link").map((link) => link.getAttribute("href")?.slice(1));
+    expect(linkedIds).toEqual(Array.from(document.querySelectorAll("article section[id]")).map((section) => section.id));
+    expect(document.querySelectorAll("[data-guide-stats-legend]")).toHaveLength(1);
   });
 
   it("renders timings with started/done wording and the winners-vs-losers column", async () => {

@@ -102,6 +102,7 @@ def fake_winreg(monkeypatch: pytest.MonkeyPatch):
     # selection and triggers pytest INTERNALERRORs).
     from sc2tools_agent import autostart
     monkeypatch.setattr(autostart, "_platform_is_windows", lambda: True)
+    monkeypatch.setattr(autostart, "_legacy_startup_link", lambda: None)
     return fake
 
 
@@ -177,3 +178,43 @@ def test_set_enabled_no_op_on_unsupported_os(monkeypatch: pytest.MonkeyPatch) ->
     assert autostart.is_supported() is False
     assert autostart.set_enabled(True) is False
     assert autostart.is_enabled() is False
+
+
+def test_legacy_shortcut_is_detected_and_enable_migrates_after_run_write(fake_winreg,monkeypatch,tmp_path):
+    from sc2tools_agent import autostart
+    legacy=tmp_path/"Startup"/"SC2 Tools Agent.lnk";legacy.parent.mkdir();legacy.write_bytes(b"legacy shortcut")
+    exe=tmp_path/"agent with spaces.exe";exe.write_bytes(b"fixture")
+    monkeypatch.setattr(autostart,"_legacy_startup_link",lambda:legacy)
+    monkeypatch.setattr(autostart,"get_executable_path",lambda:exe)
+    monkeypatch.setattr(sys,"frozen",True,raising=False)
+    assert autostart.is_enabled()
+    original=fake_winreg.SetValueEx
+    def write(*args):
+        assert legacy.exists()
+        original(*args)
+    monkeypatch.setattr(sys.modules["winreg"],"SetValueEx",write)
+    assert autostart.set_enabled(True) and not legacy.exists()
+    key=("HKCU\\"+autostart._WIN_RUN_KEY,autostart._WIN_VALUE_NAME)
+    assert fake_winreg.values[key][0]==f'"{exe}" --start-minimized'
+    assert autostart.is_enabled()
+
+
+def test_disabling_legacy_only_shortcut_stops_startup_without_creating_run_key(fake_winreg,monkeypatch,tmp_path):
+    from sc2tools_agent import autostart
+    legacy=tmp_path/"SC2 Tools Agent.lnk";legacy.write_bytes(b"legacy")
+    monkeypatch.setattr(autostart,"_legacy_startup_link",lambda:legacy)
+    assert autostart.is_enabled()
+    assert autostart.set_enabled(False)
+    assert not legacy.exists() and not autostart.is_enabled() and not fake_winreg.values
+
+
+def test_failed_registry_migration_keeps_legacy_startup_choice(fake_winreg,monkeypatch,tmp_path):
+    from sc2tools_agent import autostart
+    legacy=tmp_path/"SC2 Tools Agent.lnk";legacy.write_bytes(b"legacy")
+    exe=tmp_path/"agent.exe";exe.write_bytes(b"fixture")
+    monkeypatch.setattr(autostart,"_legacy_startup_link",lambda:legacy)
+    monkeypatch.setattr(autostart,"get_executable_path",lambda:exe)
+    def denied(*args):raise PermissionError("registry unavailable")
+    monkeypatch.setattr(sys.modules["winreg"],"CreateKey",denied)
+    assert not autostart.set_enabled(True)
+    assert legacy.exists() and autostart.is_enabled()

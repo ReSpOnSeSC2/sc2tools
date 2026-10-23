@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type DragEvent } from "react";
+import { useEffect, useState, type DragEvent } from "react";
+import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import {
   Play,
@@ -23,9 +24,12 @@ import { fmtAgo } from "@/lib/format";
 import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
 import {
   importJobBlocksStart,
+  ERROR_CODE_COPY,
   useImportStatus,
   type ImportJob,
 } from "@/components/imports/useImportStatus";
+import { SettingsLoadError } from "./SettingsLoadError";
+import { setupAgentOnline, type SetupMe } from "./setupHealth";
 
 // NOTE: this panel previously parsed a `{current: {...}}` envelope and
 // `id`/`totalReplays`/`scanned` fields that the API never returned —
@@ -61,9 +65,12 @@ const STATUS_ICON: Record<string, typeof Clock> = {
 export function SettingsImportPanel() {
   const { getToken } = useAuth();
   const importStatus = useImportStatus();
+  const me = useApi<SetupMe>("/v1/me", { refreshInterval: 30_000 });
   const jobs = useApi<{ ok: boolean; items: ImportJob[] }>("/v1/import/jobs");
   const { toast } = useToast();
   const [busy, setBusy] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(timer); }, []);
 
   async function call(path: string, action: string) {
     if (busy) return;
@@ -85,24 +92,32 @@ export function SettingsImportPanel() {
     }
   }
 
-  if (importStatus.isLoading) return <Skeleton rows={3} />;
+  if (me.error && !me.data) return <SettingsLoadError tab="Desktop app connection" error={me.error} retry={me.mutate} />;
+  if (importStatus.error && !importStatus.job) return <SettingsLoadError tab="Desktop import status" error={importStatus.error} retry={importStatus.refresh} />;
+  if (importStatus.isLoading || !me.data) return <Skeleton rows={3} />;
   const job = importStatus.job;
   const isRunning = importStatus.active;
   const importBlocked = importJobBlocksStart(job?.status);
-  const items = jobs.data?.items ?? [];
+  const items = (jobs.data?.items ?? []).slice(0, 10);
+  const paired = Boolean(me.data.agentPaired);
+  const online = setupAgentOnline(me.data, Math.max(now, Date.now()));
+  const unavailable = !paired || !online || Boolean(me.error);
 
   return (
     <div className="space-y-6">
       <Section
-        title="Bulk import"
+        title="Desktop agent import"
         description="Pull every replay from your local SC2 install into the cloud. Useful on first run, after switching machines, or to refresh the cloud copy from scratch."
       >
         <Card>
+          {!paired ? <p className="mb-3 text-caption">Pair the desktop app to import your replay history. <Link href="/devices" className="text-accent underline">Pair a PC</Link></p> : !online ? <p role="status" className="mb-3 text-caption text-warning">SC2 Tools on your PC is offline. Open it to start an import.</p> : null}
+          {me.error ? <SettingsLoadError tab="Desktop app connection" error={me.error} retry={me.mutate} /> : null}
+          {importStatus.error ? <SettingsLoadError tab="Desktop import status" error={importStatus.error} retry={importStatus.refresh} /> : null}
           <div className="flex flex-wrap items-center gap-2">
             <Button
               variant="primary"
               onClick={() => call("/v1/import/start", "Import started")}
-              disabled={busy || importBlocked}
+              disabled={busy || importBlocked || unavailable}
               loading={busy && !isRunning}
               iconLeft={<Play className="h-4 w-4" aria-hidden />}
             >
@@ -111,14 +126,14 @@ export function SettingsImportPanel() {
             <Button
               variant="secondary"
               onClick={() => call("/v1/import/scan", "Scan started")}
-              disabled={busy}
+              disabled={busy || unavailable}
               iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />}
             >
               Re-scan only
             </Button>
           </div>
           <ImportDropZone
-            disabled={busy || importBlocked}
+            disabled={busy || importBlocked || unavailable}
             onActivate={() =>
               call(
                 "/v1/import/pick-folder",
@@ -147,10 +162,11 @@ export function SettingsImportPanel() {
 
       <Section
         title="Recent jobs"
-        description="The last few import runs and their outcome."
+        description="Your last 10 import runs and their outcome."
       >
         <Card padded={items.length === 0}>
-          {items.length === 0 ? (
+          {jobs.error ? <SettingsLoadError tab="Import history" error={jobs.error} retry={jobs.mutate} /> : null}
+          {!jobs.data && jobs.error ? null : !jobs.data ? <Skeleton rows={3} /> : items.length === 0 ? (
             <EmptyStatePanel
               icon={<Inbox className="h-6 w-6" aria-hidden />}
               title="No previous imports"
@@ -229,11 +245,10 @@ function ImportDropZone({
       />
       <div className="space-y-0.5">
         <div className="text-body font-medium text-text">
-          Drop replays or click to browse
+          Choose a replay folder
         </div>
         <p className="text-caption text-text-muted">
-          The desktop agent reads files from your machine — drop here to ask
-          it which folders it&apos;s watching.
+          Opens a folder picker in SC2 Tools on your gaming PC.
         </p>
       </div>
     </button>
@@ -241,6 +256,9 @@ function ImportDropZone({
 }
 
 function JobRow({ job }: { job: ImportJob }) {
+  const seconds = job.finishedAt && job.startedAt ? Math.round((Date.parse(job.finishedAt) - Date.parse(job.startedAt)) / 1000) : NaN;
+  const duration = Number.isFinite(seconds) && seconds >= 0 ? seconds >= 60 ? `${Math.round(seconds / 60)} min` : `${seconds} sec` : null;
+  const reasons = Object.entries(job.errorBreakdown || {}).filter(([, count]) => count > 0);
   return (
     <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-caption">
       <div className="flex min-w-0 items-center gap-2">
@@ -259,12 +277,9 @@ function JobRow({ job }: { job: ImportJob }) {
         ) : null}
       </div>
       <span className="text-text-dim">
-        {job.finishedAt
-          ? `finished ${fmtAgo(job.finishedAt)}`
-          : job.startedAt
-            ? `started ${fmtAgo(job.startedAt)}`
-            : "—"}
+        {job.startedAt ? `started ${fmtAgo(job.startedAt)}` : "Start time not reported"}{duration ? ` · took ${duration}` : ""}
       </span>
+      {reasons.length ? <details className="basis-full"><summary className="cursor-pointer text-text-muted">Files that couldn&apos;t be imported</summary><ul className="mt-2 space-y-1">{reasons.map(([code, count]) => <li key={code}><span className="font-medium">{count.toLocaleString()}</span> · {ERROR_CODE_COPY[code] || code.replaceAll("_", " ")}</li>)}</ul></details> : null}
     </li>
   );
 }

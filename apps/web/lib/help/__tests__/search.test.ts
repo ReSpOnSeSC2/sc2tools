@@ -53,8 +53,8 @@ describe("withinOneEdit", () => {
 });
 
 describe("searchHelp on the shipped articles", () => {
-  it("ranks the pairing walkthrough first for 'code expired'", () => {
-    expect(top("code expired")).toBe("install-and-pair");
+  it("ranks the recovery article for an expired code and the walkthrough for pairing", () => {
+    expect(top("code expired")).toBe("pairing-troubleshooting");
     expect(top("pairing code")).toBe("install-and-pair");
     expect(slugs("pairing code")).toContain("getting-started");
   });
@@ -89,7 +89,7 @@ describe("searchHelp on the shipped articles", () => {
       sync: ["upload"],
     });
     expect(top("obs")).toBe("obs-overlay-setup");
-    expect(slugs("tray")).toContain("getting-started");
+    expect(slugs("tray")).toContain("desktop-app-tray");
     expect(slugs("tray")).toContain("desktop-app-overview");
     expect(slugs("sync")).toContain("desktop-app-overview");
     expect(slugs("sync")).toContain("my-game-didnt-show-up");

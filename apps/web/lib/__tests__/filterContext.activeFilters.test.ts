@@ -81,8 +81,8 @@ describe("describeActiveFilters", () => {
     expect(byKey).toEqual({
       preset: "Date range: Last 30 days",
       regions: "Regions: NA, EU",
-      map_pool: "Maps: All",
-      game_size: "Players: Team",
+      map_pool: "Game type: Both",
+      game_size: "Game size: Team",
       length: "Length: 10–20 min",
       exclude_too_short: "Too-short games: Shown",
       race: "Your race: Protoss",
@@ -145,7 +145,7 @@ describe("describeActiveFilters", () => {
 
   it("describes custom-only games and open-ended lengths and MMR", () => {
     const values = (f: AnalyzerFilters) => describeActiveFilters(f).map((d) => d.value);
-    expect(values({ ...DEFAULTS, map_pool: "nonladder" })).toEqual(["Custom"]);
+    expect(values({ ...DEFAULTS, map_pool: "nonladder" })).toEqual(["Custom games"]);
     expect(values({ ...DEFAULTS, game_size: "all" })).toEqual(["All"]);
     expect(values({ ...DEFAULTS, min_minutes: 20 })).toEqual(["20+ min"]);
     expect(values({ ...DEFAULTS, max_minutes: 10 })).toEqual(["< 10 min"]);

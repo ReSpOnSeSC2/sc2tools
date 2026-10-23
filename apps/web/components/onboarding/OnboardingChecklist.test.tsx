@@ -9,6 +9,7 @@ import { OnboardingChecklist, checklistVisible, type ChecklistMe } from "./Onboa
 
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token" }) }));
 vi.mock("@/lib/clientApi", () => ({ apiCall: vi.fn() }));
+vi.mock("./PairDeviceForm", () => ({ PairDeviceForm: () => <p>Inline pairing form</p> }));
 vi.mock("@/components/imports/useImportStatus", () => ({
   useImportStatus: () => ({ job: null, active: false, pct: 0, etaSeconds: null, isLoading: false, refresh: vi.fn() }),
 }));

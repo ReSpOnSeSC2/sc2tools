@@ -57,6 +57,7 @@ export function DownloadInteractive() {
       <section className="space-y-4">
         {mobile ? null : <OsTabs active={os} onChange={setActive} detected={detected} />}
         <DownloadCard os={os} />
+        <InstallOptions />
         <ManualInstall />
       </section>
 
@@ -113,6 +114,23 @@ function OsTabs({
   );
 }
 
+export function InstallOptions() {
+  return (
+    <details className="group rounded-xl border border-border bg-bg-surface">
+      <summary className="cursor-pointer p-4 text-body-lg font-semibold text-text sm:p-5">
+        Install, start-up and uninstall
+      </summary>
+      <div className="space-y-3 border-t border-border px-4 py-4 text-caption text-text-muted sm:px-5">
+        <p>The installer offers <strong>Start SC2 Tools when Windows starts</strong> and <strong>Create desktop shortcut</strong>. Both start on for a first install; silent updates keep your choices.</p>
+        <p>Change <strong>Run on Windows startup</strong> later in the desktop Settings. The app and installer share one switch, including migration from older Startup shortcuts.</p>
+        <p>Uninstall keeps pairing, settings and logs unless you explicitly select the local-data removal checkbox. Your original StarCraft II replay folders and cloud games are kept.</p>
+        <p>For a signed build, check Windows Properties → Digital Signatures for a valid publisher signature. A matching SHA-256 confirms file integrity.</p>
+        <Link href="/help/desktop-app-install" className="inline-block text-accent-cyan underline underline-offset-2">Installation and uninstall guide</Link>
+      </div>
+    </details>
+  );
+}
+
 function ManualInstall() {
   return (
     <details className="group rounded-xl border border-border bg-bg-surface">
@@ -122,7 +140,7 @@ function ManualInstall() {
             Manual install + verification
           </h3>
           <p className="text-caption text-text-muted">
-            Run from source or verify the signed binary by hand.
+            Run from source or check the installer hash and signature.
           </p>
         </div>
         <ChevronRight
@@ -154,7 +172,7 @@ py -m sc2tools_agent`}
             On Windows PowerShell:
           </p>
           <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
-            {`Get-FileHash .\\sc2tools-agent.exe -Algorithm SHA256`}
+            {`Get-FileHash .\\SC2ToolsAgent-Setup-*.exe -Algorithm SHA256`}
           </pre>
           <p className="text-caption text-text-muted">On macOS / Linux:</p>
           <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">

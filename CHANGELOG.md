@@ -16,6 +16,44 @@ corresponding GitHub Release.
 - Read curated updates in What's New, the public changelog and RSS. Service notices explain active incidents and expire automatically; installer release notes are easier to read.
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
 
+### Fixed
+
+- Desktop installation and Settings share one Windows startup switch; upgrades
+  preserve choices and uninstall offers explicit local-data removal. Signing
+  preparation verifies both executables before release checksums are generated.
+- Saving desktop settings keeps the window responsive while the durable write
+  finishes; completion and errors return to the window without losing edits.
+
+- Desktop shortcuts restore the existing window, tray pause actions match the
+  window, and replay folder changes apply immediately with Undo and clear labels.
+- Desktop history imports and updates wait through games; performance profiles
+  reduce worker priority, and update notes and retry actions remain visible.
+- Desktop status cards and tray lights share the same state, cause and action,
+  including startup errors, disconnected queues and recent failed uploads.
+
+- Desktop pairing keeps trying through connection failures, refreshes codes,
+  and recovers an unlinked PC without discarding queued replays or settings.
+- Desktop sync retains temporary failures with a retry countdown instead of
+  repeating error rows; final replay outcomes have readable details and help.
+
+### Guide reading and map navigation
+
+- Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
+- Win rates include verdict symbols, charts use one keyboard Tab stop with pinnable details, and a shared legend plus Help article explains ranges, publishing floors and trends.
+- The guide hub previews busy map cards and links to all openers and counters. Map guides show a race matrix with honest mirror cells, enlarged artwork and neighboring maps.
+
+### Analyzer filters and Trends
+
+- Filters have a readable summary, a full phone editor and focused desktop controls. Today explains its scope and remembers whether its editor is open; Arcade keeps its own scope.
+- Trends remembers grouping without hydration mismatches, provides section links and persistent collapsible chart groups, and keeps summary loading/errors in place.
+- Date, length and filter popovers share dialog keyboard behavior, respect hidden controls and return focus. Touch controls use larger targets and plain labels.
+
+### Setup health and replay imports
+
+- Settings checks profile, desktop connection, updates, games and replay archive independently, with source-specific Retry and safe diagnostics for support.
+- Desktop import controls and the last ten jobs are available to every signed-in user. Browser import keeps its account flag; offline PCs cannot receive start commands.
+- Pair from the dashboard checklist, see setup progress, undo dismissal for five seconds, or restore the checklist from Settings.
+
 - Share one authenticated realtime connection across user and admin surfaces; count newly inserted games accurately, coalesce chart refreshes during imports, and show admin connection recovery status.
 
 ### Build editor safety
