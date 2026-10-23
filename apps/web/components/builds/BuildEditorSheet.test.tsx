@@ -62,7 +62,7 @@ describe("BuildEditorSheet proxy requirements", () => {
   it("does not treat hydrated Community identity as a user edit", async () => {
     harness.apiCall.mockResolvedValue({ published: true, authorName: "Profile name", publishAnonymously: false });
     const onClose = vi.fn();
-    render(<BuildEditorSheet open build={{ slug: "saved", name: "Saved opener", race: "Protoss", isPublic: true }} onClose={onClose} onSaved={vi.fn()} />);
+    render(<BuildEditorSheet open build={{ slug: "saved", name: "Saved opener", race: "Protoss", isPublic: true, signature: [{ unit: "Gateway", count: 1, beforeSec: 100 }] }} onClose={onClose} onSaved={vi.fn()} />);
     await waitFor(() => expect(harness.apiCall).toHaveBeenCalled());
     await waitFor(() => expect((screen.getByLabelText("Name shown publicly") as HTMLInputElement).value).toBe("Profile name"));
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));

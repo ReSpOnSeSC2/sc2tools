@@ -218,9 +218,9 @@ export function BuildEditorModal({
         });
       }
       onSaved?.(slug, draft, result);
-      // Auto-close shortly after a successful save so the user sees
-      // the toast confirm before the modal disappears.
-      window.setTimeout(() => onClose(), 700);
+      // Global notifications survive the editor. Close this instance now;
+      // a stale delayed callback could discard a newly opened editor.
+      onClose();
     },
   });
 

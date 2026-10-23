@@ -125,7 +125,7 @@ export function BuildEditorSheet({
   const profileDisplayName = useMyDisplayName();
   const isEdit = !!build;
   const [state, setState] = useState(() => fromBuild(build));
-  const [pristine, setPristine] = useState(() => JSON.stringify(fromBuild(build)));
+  const [pristine, setPristine] = useState(() => JSON.stringify(state));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [identityLoading, setIdentityLoading] = useState(false);
@@ -138,8 +138,9 @@ export function BuildEditorSheet({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    setState(fromBuild(build));
-    setPristine(JSON.stringify(fromBuild(build)));
+    const initial = fromBuild(build);
+    setState(initial);
+    setPristine(JSON.stringify(initial));
     setError(null);
     setSaving(false);
     setIdentityUnavailable(false);

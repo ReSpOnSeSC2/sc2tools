@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ComponentProps } from "react";
+import { useState, type ComponentProps } from "react";
 
 const harness = vi.hoisted(() => ({
   apiCall: vi.fn(),
@@ -29,6 +29,21 @@ afterEach(() => {
 });
 
 describe("BuildEditorModal safeguards", () => {
+  it("cannot close a newly opened draft through a previous save's delayed callback", async () => {
+    harness.apiCall.mockResolvedValue({ saved: true, reclassify: null });
+    function Parent() {
+      const [open, setOpen] = useState(true);
+      const [version, setVersion] = useState(1);
+      return <><button onClick={() => { setVersion(2); setOpen(true); }}>Open another draft</button><BuildEditorModal open={open} onClose={() => setOpen(false)} onSaved={() => setOpen(false)} events={[]} race="Protoss" vsRace="Zerg" mode="edit" lockedSlug="legacy" initialDraft={{ name: `Draft ${version}` }} /></>;
+    }
+    render(<Parent />);
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Save changes" })).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Open another draft" }));
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Second unsaved draft" } });
+    await new Promise((resolve) => window.setTimeout(resolve, 800));
+    expect((screen.getByLabelText(/^Name/) as HTMLInputElement).value).toBe("Second unsaved draft");
+  });
   it("closes a clean draft immediately and never registers beforeunload", () => {
     const add = vi.spyOn(window, "addEventListener");
     const onClose = vi.fn();
