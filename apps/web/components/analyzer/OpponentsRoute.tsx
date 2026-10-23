@@ -2,8 +2,16 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
-import { OpponentsTab } from "./OpponentsTab";
+import dynamic from "next/dynamic";
+import { Skeleton } from "@/components/ui/Card";
 import { SectionHeader } from "./SectionHeader";
+
+// Keep the page header available while its interactive, authenticated table
+// loads. Subsequent refreshes stay inside the mounted table and retain rows.
+const OpponentsTab = dynamic(() => import("./OpponentsTab").then((module) => module.OpponentsTab), {
+  ssr: false,
+  loading: () => <div role="status" aria-label="Loading opponent list"><Skeleton rows={8} /></div>,
+});
 
 /**
  * Route wrapper: the section header, then the opponent list, with rows
