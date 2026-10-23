@@ -40,6 +40,10 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Desktop check-in previews use local sample data, remember dragged positions and
+  reset every card kind. Search Enter picks the top result, Down/Up moves between
+  search and results, and Ctrl+Enter confirms without automatic focus changes.
+
 - Community search restores correctly with Back and Forward after clearing filters, including when cached server props lag behind the address bar.
 
 - Account deletion now removes token-owned stream data and private sound files, ends the sign-in identity with durable retries, and offers an export-first inventory and confirmation flow. Review comments on other requests are anonymized; service backup retention follows the current configured schedule.

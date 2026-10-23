@@ -54,6 +54,9 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         clock: Callable[[], float] = time.monotonic,
         parent: Optional[QtWidgets.QWidget] = None,
         on_help: Optional[Callable[[], None]] = None,
+        on_preview: Optional[Callable[[str], Any]] = None,
+        on_reset_positions: Optional[Callable[[], None]] = None,
+        on_open_queue: Optional[Callable[[], None]] = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("card")
@@ -63,6 +66,8 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         self._prefs: Optional[Any] = None
         self._expected: Optional[Any] = None
         self._changed_at = 0.0
+        self._on_preview = on_preview
+        self._on_reset_positions = on_reset_positions
 
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(20, 18, 20, 18)
@@ -120,7 +125,54 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         )
         self.scouting_box.toggled.connect(self._scouting_changed)
 
+        cards_title = QtWidgets.QLabel("Cards")
+        cards_title.setObjectName("h2")
+        layout.addWidget(cards_title)
+        previews = QtWidgets.QHBoxLayout()
+        self.preview_loading = QtWidgets.QPushButton("Preview loading card")
+        self.preview_postgame = QtWidgets.QPushButton("Preview after-game card")
+        for widget, kind in ((self.preview_loading, "loading"), (self.preview_postgame, "postgame")):
+            widget.setEnabled(on_preview is not None)
+            widget.clicked.connect(lambda _checked=False, kind=kind: self._preview(kind))
+            previews.addWidget(widget)
+        previews.addStretch(1)
+        layout.addLayout(previews)
+        positions = QtWidgets.QHBoxLayout()
+        self.reset_positions = QtWidgets.QPushButton("Reset card positions")
+        self.reset_positions.setEnabled(on_reset_positions is not None)
+        self.reset_positions.clicked.connect(self._reset_positions)
+        positions.addWidget(self.reset_positions)
+        self.positions_status = QtWidgets.QLabel("")
+        self.positions_status.setObjectName("muted")
+        positions.addWidget(self.positions_status); positions.addStretch(1)
+        layout.addLayout(positions)
+        self._position_feedback = QtCore.QTimer(self)
+        self._position_feedback.setSingleShot(True)
+        self._position_feedback.setInterval(3000)
+        self._position_feedback.timeout.connect(lambda: self.positions_status.clear())
+        self.queue_link = QtWidgets.QPushButton("Open check-in queue on sc2tools.com")
+        self.queue_link.setObjectName("checkinLink")
+        self.queue_link.setFlat(True)
+        self.queue_link.setEnabled(on_open_queue is not None)
+        if on_open_queue is not None:
+            self.queue_link.clicked.connect(on_open_queue)
+        layout.addWidget(self.queue_link, 0, QtCore.Qt.AlignLeft)
+        self.preview_hint = QtWidgets.QLabel("")
+        self.preview_hint.setObjectName("muted")
+        self.preview_hint.setWordWrap(True)
+        self.preview_hint.setTextFormat(QtCore.Qt.PlainText)
+        layout.addWidget(self.preview_hint)
         self._paint(None)
+
+    def _preview(self, kind: str) -> None:
+        if self._on_preview is not None and self._on_preview(kind) is False:
+            self.preview_hint.setText("Your current check-in is already open.")
+
+    def _reset_positions(self) -> None:
+        if self._on_reset_positions is not None:
+            self._on_reset_positions()
+            self.positions_status.setText("Positions reset")
+            self._position_feedback.start()
 
     # ------------------------------------------------------ host in
 
@@ -186,6 +238,8 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
             "ready": HINT_READY,
         }[state]
         self.hint.setText(hint)
+        off = prefs is not None and not getattr(prefs, "enabled", True)
+        self.preview_hint.setText("Check-ins are off; this is only a preview" if off else "Previews do not save a build or contact the server. Dragging remembers the card position.")
 
     # ------------------------------------------------------ player out
 

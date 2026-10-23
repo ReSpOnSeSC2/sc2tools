@@ -47,6 +47,20 @@ const article: HelpArticle = {
         "The desktop app's Settings tab has the same three switches, kept in sync with the website. Every card also has a quick link to stop asking (**Don't ask at loading**, **Turn off check-ins after games**).",
       ],
     },
+    { type: "heading", text: "Preview and move the cards", anchor: "preview-and-move" },
+    {
+      type: "steps",
+      items: [
+        "In the desktop app, open **Settings → Build check-in → Cards**. Choose **Preview loading card** or **Preview after-game card**. They work even when check-ins are off. The **Preview - nothing is saved** chip marks fixed sample data, including a sample scouting strip; no game, build choice or private note is sent to the server.",
+        "Drag the card by its header into place. Its position is remembered for real cards too. Any answer button closes a preview locally; Esc or 90 seconds also closes it. A real game card replaces the preview immediately.",
+        "Press **Reset card positions** to return visible cards to their default spot and clear their remembered positions. **Positions reset** confirms the reset. **Open check-in queue on sc2tools.com** opens the website when you want to handle real games.",
+      ],
+    },
+    { type: "heading", text: "Keyboard check-in", anchor: "keyboard" },
+    {
+      type: "paragraph",
+      text: "Click into the after-game card's search and type a build name. **Enter** picks and focuses the top visible match (your featured builds first, then More builds). **Ctrl+Enter** confirms the selected build. With no matches, Enter leaves your choice unchanged. **Down** moves from search to the first row without picking it; **Up** on that row returns to search. **Esc** closes the opponent's build list first, then means Later. Cards never request focus from the game automatically; these keys apply after you choose to interact with a card.",
+    },
     { type: "heading", text: "How a game goes" },
     {
       type: "steps",

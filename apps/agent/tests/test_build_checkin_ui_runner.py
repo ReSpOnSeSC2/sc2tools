@@ -120,3 +120,52 @@ def test_gui_gets_the_check_in_wiring(gui_run, tmp_path, monkeypatch) -> None:
 def test_no_live_gui_marks_check_in_unavailable(gui_run) -> None:
     gui_kwargs, _tray_kwargs = gui_run(no_live=True)
     assert gui_kwargs["build_checkin_available"] is False
+
+
+def test_reset_clears_all_card_kinds_and_persists_without_waiting_for_disk(tmp_path, monkeypatch):
+    from threading import Event
+    entered, release, finished = Event(), Event(), Event()
+    state = AgentState(device_token="keep", build_checkin_card_positions={"loading": [1, 2], "future-hud": [3, 4]})
+    save_state(tmp_path, state)
+    def blocked_save(directory, current):
+        entered.set()
+        assert release.wait(5), "test never released the state writer"
+        save_state(directory, current)
+        finished.set()
+    monkeypatch.setattr(runner, "save_state", blocked_save)
+    runner._reset_build_checkin_positions(tmp_path, state)
+    try:
+        assert state.build_checkin_card_positions == {}
+        assert entered.wait(3) and not finished.is_set()
+    finally:
+        release.set()
+    assert finished.wait(3)
+    loaded = load_state(tmp_path)
+    assert loaded.build_checkin_card_positions == {} and loaded.device_token == "keep"
+
+
+def test_latest_accepted_replay_race_is_persisted_and_history_cannot_replace_it(tmp_path):
+    from tests.build_checkin_fakes import cloud_game
+    state = AgentState(last_known_race_at="bad old state")
+    cell = runner._RuntimeCell(); cell.build_checkin = Mock()
+    newest = cloud_game("new", started=1790000000, my_race="Terran")
+    runner._handle_checkin_game_accepted(tmp_path, state, cell, Path("new.SC2Replay"), newest, "new", {"accepted": True})
+    cell.build_checkin.on_game_accepted.assert_called_once_with(Path("new.SC2Replay"), newest, "new", {"accepted": True})
+    older = cloud_game("old", started=1780000000, my_race="Zerg")
+    runner._handle_checkin_game_accepted(tmp_path, state, cell, Path("old.SC2Replay"), older, "old", {})
+    random = cloud_game("random", started=1800000000, my_race="Random")
+    runner._handle_checkin_game_accepted(tmp_path, state, cell, Path("random.SC2Replay"), random, "random", {})
+    loaded = load_state(tmp_path)
+    assert loaded.last_known_race == "Terran" and loaded.last_known_race_at == newest.date_iso
+    assert cell.build_checkin.on_game_accepted.call_count == 3
+
+
+def test_preview_race_save_failure_does_not_lose_checkin_callback(tmp_path, monkeypatch):
+    from tests.build_checkin_fakes import cloud_game
+    state = AgentState(); cell = runner._RuntimeCell(); cell.build_checkin = Mock()
+    def fail(*_): raise OSError("disk full")
+    monkeypatch.setattr(runner, "save_state", fail)
+    game = cloud_game("new", started=1790000000, my_race="Protoss")
+    runner._handle_checkin_game_accepted(tmp_path, state, cell, Path("new.SC2Replay"), game, "new", {})
+    assert state.last_known_race == "Protoss"
+    cell.build_checkin.on_game_accepted.assert_called_once()
