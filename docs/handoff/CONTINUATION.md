@@ -10,16 +10,19 @@ The owner requested the entire handoff program, including waves 2–6, and no AI
 - All 25 Wave 1 phase 2b packs are merged with green applicable CI and Vercel: #649 (three supplied patches), #650 (reviews), #651 (guides 1/2), #652 (settings, landing, consent, navigation), #653 (game/opponents/builds), #654 (admin), #656 (streamer), #658 (desktop GUI 1/2), #657 (community/public sharing).
 - Completed Wave 1 main: 3368867dffc7837734cdb202f0204159b2460992. Replay history remains directly above opponent notes.
 
+## Wave 2 shipped
+
+- #655 retired unused server model training. Squash d51e07b0. All applicable CI, the Docker dependency/spatial smoke and Vercel passed. The approved collection migration remains manual and has not run in production.
+- #659 completed web pairing and device management. Squash e36cd9cb. All applicable CI and Vercel passed. Deploy its API before the web; existing agent token polling stays compatible.
+
 ## Wave 2 prepared
 
 Each remains a draft until final integration and CI are green; a branch is not completion.
 
-- #655, codex/retire-server-ml, b15987cf: unused server model training retired; one-release authenticated 410 stub, split Python manifests, real Docker dependency guard/spatial smoke, help and runbook. Latest Wave 1 integrated. Earlier full CI passed; latest integrated run is in progress. New post-integration API run: 88 tests in five suites and full API TypeScript pass.
-- #659, codex/wave2-pairing-web, dac07e50: shared normalized code form, explicit PC preview/claim, bounded exact-device heartbeat confirmation, device labels/status/unpair recovery, atomic claim/consume and API response allowlist, help and phone/desktop renders. Final Wave 1 integrated. Prior head passed all remote checks; latest run is in progress. Deploy API before web.
 - #660, codex/wave2-realtime, 54644dc3: one authenticated user/admin connection, accurate inserted counts, immediate status counters and batched expensive refreshes. All eight user consumers and three admin consumers tested together. 331 web tests, 71 API tests, types/lint/build/budgets and screenshots passed before final Wave 1 integration; remote rerun pending.
 - #661, codex/wave2-agent-recovery, 6cd944c0: non-quitting pairing recovery, credential refresh/upload hold and calm queue retries. Full exact-head local suite: 2,006 passed, one skipped, 78 subtests. All remote gates passed at that head. Still needs #659 and current main integrated before rollout.
 - #662, codex/wave2-guides-polish, ce4efa57: guide packs 3/4/5; 448 tests, types/lint, all budgets, 21 production browser checks and four inspected screenshots. Completed Wave 1 integrated; latest remote rerun pending.
-- codex/wave2-welcome builds on #659: resumable five-step setup, goal choices saved via atomic onboarding-field merge, honest completed chips, browser Back path, live Done step and goal-specific actions. Local affected web run before the last tiny recovery-copy change: 120 tests; ten real-Mongo/HTTP API tests; types/strict web lint pass. Import and Done code are deferred: production /welcome 167.4/245 kB, all budgets unchanged. Final render/integration work precedes draft creation.
+- #663, codex/wave2-welcome: resumable five-step setup, atomic goal patches, honest completed chips, browser Back path, live Done step and goal-specific actions. 122 affected web tests, ten real-Mongo/HTTP API tests, types/strict web lint and phone/desktop fixture renders passed. Production /welcome 167.4/245 kB, all budgets unchanged. All remote checks passed at a024c7fa; current main integration is being verified.
 
 ## Approval scope
 

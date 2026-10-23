@@ -570,21 +570,14 @@ describe("HTTP integration", () => {
   });
 
   describe("/v1/ml", () => {
-    test("/ml/status returns hasModel=false initially", async () => {
-      const res = await withAuth(request(app).get("/v1/ml/status"));
-      expect(res.status).toBe(200);
-      expect(res.body.hasModel).toBe(false);
+    test.each(["status", "options", "predict", "pregame"])("/ml/%s is retired", async (route) => {
+      const res = await withAuth(request(app).get(`/v1/ml/${route}`));
+      expect(res.status).toBe(410);
+      expect(res.body.error.code).toBe("ml_retired");
     });
-
-    test("/ml/options returns empty arrays without a model", async () => {
-      const res = await withAuth(request(app).get("/v1/ml/options"));
-      expect(res.status).toBe(200);
-      expect(res.body.races).toEqual([]);
-    });
-
-    test("/ml/train returns 503 when python is unavailable", async () => {
+    test("training is retired without starting Python", async () => {
       const res = await withAuth(request(app).post("/v1/ml/train")).send({});
-      expect(res.status).toBe(503);
+      expect(res.status).toBe(410);
     });
   });
 

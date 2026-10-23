@@ -706,7 +706,7 @@ function buildMeRouter(deps) {
 
   // Scoped wipe: clears the user's replay history (games, opponents,
   // macro jobs) but keeps their account, custom builds, device pairings,
-  // overlay tokens, and ML models. Optional ISO `since` / `until` bound
+  // and overlay tokens. Optional ISO `since` / `until` bound
   // the wipe to a date range. Used by Settings → "Delete game history"
   // before a fresh agent re-sync.
   router.post("/me/games/wipe", deps.auth, async (req, res, next) => {
