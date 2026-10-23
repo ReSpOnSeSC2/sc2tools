@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { io } from "socket.io-client";
-import { API_BASE } from "@/lib/clientApi";
-import { clientTimezone } from "@/lib/timeseries";
+import { useEffect, useRef, useState } from "react";
+import { createOverlaySocket, type OverlayConnectionStatus } from "@/components/overlay/overlayResilience";
 import { sanitizeStudioState, type StudioState } from "./useStudioState";
 
 /** Timestamp ordering shared by the two manual control surfaces. */
@@ -21,19 +19,15 @@ export function newestStudioSnapshot(current: StudioState | null, next: StudioSt
  * their existing GET fallback; this connection supplies immediate saved-state
  * updates without reconnecting when drafts or callback identities change.
  */
-export function useStudioUpdates(token: string, onUpdate: (state: StudioState) => void): void {
+export function useStudioUpdates(token: string, onUpdate: (state: StudioState) => void, enabled = true): { status: OverlayConnectionStatus } {
+  const [connection, setConnection] = useState<{ token: string; status: OverlayConnectionStatus }>({ token, status: "connecting" });
   const callbackRef = useRef({ token, onUpdate });
   callbackRef.current = { token, onUpdate };
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
-    const socket = io(API_BASE, {
-      auth: { overlayToken: token, timezone: clientTimezone() },
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 5000,
-    });
+    const connection = createOverlaySocket(token, { surface: "dock", onStatus: (status) => setConnection({ token, status }) });
+    const socket = connection.socket;
     const receive = (raw: unknown) => {
       // A late callback from the previous token can occur before effect
       // cleanup. Never forward it into the new token's latest callback.
@@ -44,7 +38,8 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
     return () => {
       cancelled = true;
       socket.off("overlay:multichat", receive);
-      socket.disconnect();
+      connection.dispose();
     };
-  }, [token]);
+  }, [token, enabled]);
+  return { status: connection.token === token ? connection.status : "connecting" };
 }

@@ -5,6 +5,8 @@ import type { WidgetId } from "../overlay/widgetLifecycle";
 
 type Handler = (...args: unknown[]) => void;
 class FakeSocket {
+  connect() {}
+  off() {}
   handlers = new Map<string, Handler>();
   on(event: string, handler: Handler) { this.handlers.set(event, handler); }
   emit() {}

@@ -76,6 +76,9 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Stream overlays recover refused handshakes and temporary outages automatically. Revoked or mistyped links show a clear setup notice; `?check=1` shows a short connection check in OBS.
+- Stream Dock editors wait for saved controls before enabling writes. Failed saves keep drafts, and Retry uses current edits instead of replaying an older goal or b-roll list.
+
 - **When something can't load:** a section that can't load now says why and
   offers Retry, with an Error ID you can copy, instead of wrongly showing
   "no data". A "Reconnecting to SC2 Tools… your data is safe" bar appears

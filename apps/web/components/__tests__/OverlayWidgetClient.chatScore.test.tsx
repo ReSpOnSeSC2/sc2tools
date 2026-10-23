@@ -6,6 +6,8 @@ import type { SessionSummary } from "../overlay/widgets/SessionWidget";
 type SocketHandler = (...args: unknown[]) => void;
 
 class FakeSocket {
+  connect() {}
+  off() {}
   handlers = new Map<string, SocketHandler>();
   on(event: string, handler: SocketHandler) { this.handlers.set(event, handler); }
   emit() {}

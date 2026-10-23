@@ -1,8 +1,14 @@
 "use client";
 
-import type { Socket } from "socket.io-client";
+import { io, type Socket } from "socket.io-client";
+import { API_BASE } from "@/lib/clientApi";
+import { clientTimezone } from "@/lib/timeseries";
 
-export type OverlayConnectionStatus = "connected" | "reconnecting";
+export type OverlayConnectionStatus = "connecting" | "connected" | "reconnecting" | "invalid";
+
+export function hasActiveOverlayGame(game: { phase: string } | null): boolean {
+  return game?.phase === "match_loading" || game?.phase === "match_started" || game?.phase === "match_in_progress";
+}
 
 const DEFAULT_HEARTBEAT_MS = 30_000;
 // Socket.io reconnects most transient drops within a second or two;
@@ -10,6 +16,59 @@ const DEFAULT_HEARTBEAT_MS = 30_000;
 // scene-switch flash a dot. Only report "reconnecting" after the drop
 // has persisted past this debounce.
 const DEFAULT_STATUS_DEBOUNCE_MS = 5_000;
+
+/** Namespace handshake failures do not enter Socket.io's transport retry loop. */
+export function createOverlaySocket(token: string, opts: {
+  surface: "all-in-one" | "widget" | "scene" | "dock";
+  widget?: string;
+  auth?: Record<string, unknown>;
+  onStatus: (status: OverlayConnectionStatus) => void;
+}) {
+  const socket = io(API_BASE, {
+    autoConnect: false,
+    auth: { ...opts.auth, overlayToken: token, timezone: clientTimezone(), surface: opts.surface, ...(opts.widget ? { widget: opts.widget } : {}) },
+    transports: ["websocket", "polling"],
+    reconnection: true, reconnectionAttempts: Infinity,
+    reconnectionDelay: 500, reconnectionDelayMax: 5000,
+  });
+  let stopped = false;
+  let attempt = 0;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let statusTimer: ReturnType<typeof setTimeout> | undefined;
+  const clearRetry = () => { clearTimeout(retryTimer); retryTimer = undefined; };
+  const clearStatus = () => { clearTimeout(statusTimer); statusTimer = undefined; };
+  const pending = () => {
+    if (stopped || statusTimer !== undefined) return;
+    statusTimer = setTimeout(() => { statusTimer = undefined; if (!stopped) opts.onStatus("reconnecting"); }, DEFAULT_STATUS_DEBOUNCE_MS);
+  };
+  const connected = () => { if (stopped) return; attempt = 0; clearRetry(); clearStatus(); opts.onStatus("connected"); };
+  const retry = () => {
+    if (stopped || socket.connected || retryTimer !== undefined) return;
+    pending();
+    const delay = Math.min(30_000, 1000 * 2 ** Math.min(attempt++, 5)) * (0.8 + Math.random() * 0.4);
+    retryTimer = setTimeout(() => { retryTimer = undefined; if (!stopped) socket.connect(); }, delay);
+  };
+  const failed = (error: Error) => {
+    if (error?.message === "invalid_overlay_token") {
+      stopped = true; clearRetry(); clearStatus(); socket.disconnect(); opts.onStatus("invalid");
+    } else retry();
+  };
+  const online = () => { if (!stopped && !socket.connected) { clearRetry(); socket.connect(); } };
+  opts.onStatus("connecting");
+  socket.on("connect", connected);
+  socket.on("connect_error", failed);
+  socket.on("disconnect", retry);
+  window.addEventListener("online", online);
+  // A StrictMode probe is disposed before this task runs, so it never opens
+  // a second connection. Consumers can bind data handlers before connecting.
+  const startTimer = setTimeout(() => { if (!stopped) socket.connect(); }, 0);
+  return { socket, dispose: () => {
+    stopped = true; clearTimeout(startTimer); clearRetry(); clearStatus();
+    window.removeEventListener("online", online);
+    socket.off("connect", connected); socket.off("connect_error", failed); socket.off("disconnect", retry);
+    socket.disconnect();
+  } };
+}
 
 /**
  * Attach the overlay socket's resilience behaviours — extracted from
@@ -58,28 +117,25 @@ export function attachOverlayResilience(
     opts.onStatus?.("connected");
   };
 
-  socket.on("connect", () => {
+  const resyncConnected = () => {
     // ``connect`` fires for every successful (re-)connection,
     // including the first. Resync on first connect is safe — the
     // cloud emits the same data the initial connect replay would,
     // just slightly later.
     socket.emit("overlay:resync");
     reportConnected();
-  });
-  socket.on("reconnect", () => {
-    // Some socket.io versions emit ``reconnect`` instead of
-    // ``connect`` on a re-establishment; bind both to be safe.
-    socket.emit("overlay:resync");
-    reportConnected();
-  });
-  socket.on("disconnect", () => {
+  };
+  const disconnected = () => {
     if (!opts.onStatus) return;
     clearStatusTimer();
     statusTimer = window.setTimeout(() => {
       statusTimer = null;
       opts.onStatus?.("reconnecting");
     }, debounceMs);
-  });
+  };
+  socket.on("connect", resyncConnected);
+  socket.on("reconnect", resyncConnected);
+  socket.on("disconnect", disconnected);
 
   // Heartbeat + gameKey drift detection. The cloud replies with
   // ``{gameKey, ts}``; a mismatch against our latest means envelopes
@@ -102,9 +158,7 @@ export function attachOverlayResilience(
     // ``false`` skips (test fakes may not define the property).
     if (socket.connected !== false) socket.emit("overlay:heartbeat");
   }, heartbeatMs);
-  socket.on(
-    "overlay:heartbeat",
-    (reply: { gameKey?: string | null } | undefined) => {
+  const heartbeat = (reply: { gameKey?: string | null } | undefined) => {
       const cloudKey =
         reply && typeof reply.gameKey === "string" ? reply.gameKey : null;
       if (!cloudKey || cloudKey === opts.latestGameKey()) {
@@ -114,11 +168,15 @@ export function attachOverlayResilience(
       if (resyncedForCloudKey === cloudKey) return;
       resyncedForCloudKey = cloudKey;
       socket.emit("overlay:resync");
-    },
-  );
+    };
+  socket.on("overlay:heartbeat", heartbeat);
 
   return () => {
     window.clearInterval(heartbeatInterval);
     clearStatusTimer();
+    socket.off?.("connect", resyncConnected);
+    socket.off?.("reconnect", resyncConnected);
+    socket.off?.("disconnect", disconnected);
+    socket.off?.("overlay:heartbeat", heartbeat);
   };
 }

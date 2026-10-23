@@ -28,6 +28,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { StudioGoal } from "@/lib/multichat/useStudioState";
 import { DockButton } from "./DockClient";
+import type { DockPost } from "./dockActions";
+import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
 const GOALS_MAX = 4;
 
@@ -45,11 +47,13 @@ function toPostGoals(rows: ReadonlyArray<StudioGoal>): StudioGoal[] {
 export function DockGoals({
   goals,
   busy,
+  studioReady = true,
   onPost,
 }: {
   goals: ReadonlyArray<StudioGoal>;
   busy: boolean;
-  onPost: (patch: Record<string, unknown>) => Promise<void>;
+  studioReady?: boolean;
+  onPost: DockPost;
 }) {
   const [draft, setDraft] = useState<StudioGoal[]>([...goals]);
   const [dirty, setDirty] = useState(false);
@@ -77,15 +81,15 @@ export function DockGoals({
     markDirty();
   };
 
-  const save = async () => {
-    await onPost({ goals: toPostGoals(draft) });
-    clearDirty();
-  };
+  const { run, notice, pending } = useDockPanelActions(studioReady, busy, onPost, {
+    save: () => ({ patch: { goals: toPostGoals(draft) }, message: "Goals saved", after: clearDirty }),
+  });
 
   // ✕ — delete NOW, not on the next Save. Blank in-progress rows are
   // draft-only (never persisted), so removing one skips the POST; any
   // labeled row's removal must reach the stream immediately.
   const remove = async (i: number) => {
+    if (!studioReady || busy) return;
     const next = draft.filter((_, j) => j !== i);
     const payload = toPostGoals(next);
     setDraft(next);
@@ -93,18 +97,21 @@ export function DockGoals({
     // flight — a re-hydrate mid-flight would resurrect the row.
     markDirty();
     if (JSON.stringify(payload) !== JSON.stringify(toPostGoals([...goals]))) {
-      await onPost({ goals: payload });
+      const saved = await onPost({ goals: payload }, () => run("save"));
+      if (!saved) return;
     }
     // Hand control back to server hydration unless blank in-progress
     // rows remain (sanitization drops them — hydrating would eat the
-    // row being typed). On a failed POST the parent kept the old
-    // state, so hydration restores the row next to the error banner —
-    // the dock never silently disagrees with the stream.
+    // row being typed). A failed POST returns above, preserving the dirty
+    // draft for the global Retry to save the current list.
     if (next.every((g) => g.label.trim())) clearDirty();
   };
 
+  if (!studioReady) return <DockSnapshotState />;
+
   return (
-    <div className="space-y-2.5">
+    <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2.5">
+      <DockActionNotice message={notice} />
       {draft.length === 0 ? (
         <p className="text-caption text-text-dim">
           No goals yet — add one (e.g. "Followers 120 / 150").
@@ -182,7 +189,7 @@ export function DockGoals({
             + Add goal
           </DockButton>
         ) : null}
-        <DockButton disabled={busy || !dirty} onClick={() => void save()}>
+        <DockButton disabled={busy || !dirty} onClick={() => void run("save")}>
           Save goals
         </DockButton>
         {dirty ? (
@@ -191,6 +198,6 @@ export function DockGoals({
           </span>
         ) : null}
       </div>
-    </div>
+    </div></fieldset>
   );
 }
