@@ -5,6 +5,9 @@ import Dashboard from "./page";
 const mocks = vi.hoisted(() => ({ loading: true, failed: false, counts: vi.fn(), recent: vi.fn(), storage: vi.fn() }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ userId: "admin" }) }));
 vi.mock("./components/useAdminEventsSocket", () => ({ useAdminEventsSocket: () => undefined }));
+// Article loading has its own integration coverage. Keep this test focused on
+// independent dashboard requests, including simultaneous failures.
+vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: () => null }));
 vi.mock("@/lib/clientApi", () => ({ useApi: (url: string) => ({
   data: undefined,
   isLoading: mocks.loading,
