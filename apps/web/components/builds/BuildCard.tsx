@@ -334,11 +334,14 @@ export function BuildKebab({
   }
 
   const closeMenu = useCallback((restoreTriggerFocus = false) => {
+    const focusAtClose = document.activeElement;
     setOpen(false);
     setMenuPosition(null);
     if (restoreTriggerFocus) {
       window.requestAnimationFrame(() => {
-        if (triggerRef.current?.isConnected) triggerRef.current.focus();
+        // A menu action can open a dialog before this frame. Preserve its
+        // chosen focus instead of pulling the keyboard back to the menu.
+        if (triggerRef.current?.isConnected && (document.activeElement === document.body || document.activeElement === focusAtClose)) triggerRef.current.focus();
       });
     }
   }, []);
