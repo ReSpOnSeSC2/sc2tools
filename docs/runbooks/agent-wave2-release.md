@@ -1,8 +1,8 @@
 # Coordinated Wave 2 desktop release
 
 Pairing recovery and calm sync ship in the same installer as the other accepted
-Wave 2 desktop changes. This PR prepares source and help only; it does not build,
-publish, tag, or execute an installer.
+Wave 2 desktop changes. Preparation PRs can run unsigned verification builds and
+the offline packaged Qt diagnostic. They do not publish, tag, or execute setup.
 
 1. Merge the pairing website/devices dependency and all accepted desktop Wave 2
    PRs. Keep the existing device poll response: `ready` includes `deviceToken`
@@ -20,14 +20,24 @@ publish, tag, or execute an installer.
    `apps/agent/sc2tools_agent/__init__.py` and the matching web fallback in
    `apps/web/lib/agentNotice.ts`. Move the agent Unreleased notes under that
    version and update the release notes. Version-check CI must pass.
-4. After that PR merges and integrated CI passes, the **owner** creates and
+4. Before creating a tag, the owner obtains the approved SignPath Foundation
+   project/certificate and configures `SIGNPATH_API_TOKEN` plus the repository
+   variables listed in `apps/agent/packaging/README.md`. A real signed workflow
+   run must verify trusted timestamped signatures on the inner executable and
+   setup. Tagged builds fail closed while signing is unconfigured. Local unsigned
+   build success does not prove certificate issuance or publisher trust.
+5. After that PR merges and integrated CI passes, the **owner** creates and
    pushes `agent-vX.Y.Z` using the chosen package version. Follow
    `apps/agent/packaging/README.md` for the existing installer workflow,
    checksum, signature, GUI smoke check, and release verification.
-5. Verify that Download and the update feed resolve the new stable installer.
+6. Verify that Download and the update feed resolve the new stable installer.
    Existing PCs keep their settings, queued work, and replay cursor when they
-   update. No new environment variables, secrets, services, or infrastructure
-   are required.
+   update. No application-server environment or infrastructure changes are
+   required. The release workflow does require the owner-managed signing secret
+   and repository variables above. Before publishing, test fresh/upgrade options,
+   legacy startup migration, silent opt-out preservation, and both uninstall-data
+   choices on a disposable Windows test profile. Never use real replay folders as
+   a deletion fixture.
 
 Do not push a release tag from a preparation branch. To roll back the source,
 revert the affected PR; to change the published stable installer, follow the

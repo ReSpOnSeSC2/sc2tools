@@ -373,10 +373,18 @@ pwsh packaging\build-installer.ps1 -Installer
 
 The script reads the canonical version from
 `sc2tools_agent\__init__.py` and outputs
-`dist\SC2ToolsAgent-Setup-<version>.exe` (signed when `-SigningCert` is
-supplied). The installer drops a Start Menu
-shortcut, a desktop shortcut, and a per-user startup-folder shortcut
-(launched with `--start-minimized` so logging in does not pop a
-window). See [packaging/README.md](packaging/README.md) for the full
+`dist\SC2ToolsAgent-Setup-<version>.exe`. Local `-SigningCert` signs both
+the inner executable and setup. The release workflow uses owner-configured
+SignPath Foundation signing and verifies trusted timestamped signatures; absent
+credentials do not turn an unsigned build into a signed one. The installer drops a Start Menu
+shortcut and optional desktop shortcut. Installation options default Windows
+startup on for a first install; installer and Settings share the per-user
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\SC2ToolsAgent`
+value with `--start-minimized`. Legacy Startup shortcuts migrate to this value,
+and silent upgrades preserve the existing choice. The Finish page offers Launch
+now. Uninstall keeps pairing/settings/logs unless local-data removal is explicitly
+selected; original replay folders and cloud games are kept. See [packaging/README.md](packaging/README.md) for the full
 build pipeline including code signing and the release-feed publish
 step.
+
+Read [Install, start-up and uninstall](https://sc2tools.com/help/desktop-app-install).

@@ -4,6 +4,9 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+- Desktop installation and Settings share one Windows startup switch; upgrades
+  preserve choices and uninstall offers explicit local-data removal. Signing
+  preparation verifies both executables before release checksums are generated.
 - Saving desktop settings keeps the window responsive while the durable write
   finishes; completion and errors return to the window without losing edits.
 
