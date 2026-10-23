@@ -10,6 +10,7 @@ import { StrategyTendencyChart } from "@/components/analyzer/StrategyTendencyCha
 
 const router = vi.hoisted(() => ({ replace: vi.fn(), params: "" }));
 vi.mock("next/navigation", () => ({ useRouter: () => router, useSearchParams: () => new URLSearchParams(router.params) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: vi.fn(), userId: "definitions-test-user" }) }));
 vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: undefined, isLoading: false }) }));
 beforeEach(() => { router.params = ""; window.history.replaceState({}, "", "/definitions"); });
 
@@ -170,7 +171,8 @@ describe("DefinitionsCatalog", () => {
     expect(screen.queryByRole("link", { name: "What is My unknown private strategy?" })).toBeNull();
     const row = container.querySelector('[data-game-row-id="definition-game"]') as HTMLElement;
     fireEvent.click(within(row).getByRole("link", { name: `What is ${label}?` }), { cancelable: true });
-    expect(within(row).getByRole("button").getAttribute("aria-expanded")).toBe("false");
+    expect(within(row).getByRole("button", { name: /^Build order from / }).getAttribute("aria-expanded")).toBe("false");
+    expect(within(row).getByRole("button", { name: "Use replay as Ghost reference" })).toBeTruthy();
   });
 });
 
