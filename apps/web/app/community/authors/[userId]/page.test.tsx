@@ -39,7 +39,8 @@ describe("/community/authors/[userId]", () => {
     expect(screen.getByRole("link", { name: "Back to community" }).getAttribute("href")).toBe("/community");
     const metadata = await generateMetadata({ params: params() });
     expect(metadata.robots).toEqual({ index: false, follow: false });
-    expect(metadata.title).toBe("This profile is temporarily unavailable — SC2 Tools");
+    // The root title template adds " · SC2 Tools".
+    expect(metadata.title).toBe("This profile is temporarily unavailable");
   });
 
   it("renders a public profile", async () => {
