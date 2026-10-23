@@ -313,7 +313,7 @@ export function RequestHeader({ data, onChanged }: { data: ReviewPageData; onCha
           <Badge variant="neutral" size="sm">Wants: {levelLabel(r.desiredLevel)}</Badge>
           {r.game.myBuild ? <Badge variant="neutral" size="sm">{r.game.myBuild}</Badge> : null}
         </div>
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+        <div className="flex min-w-0 items-center gap-2 pt-1">
           {r.replay?.shared ? (
             <ReviewReplayDownload requestId={r.id} requestUrl={r.url} variant="page" available={r.replay.available} />
           ) : null}

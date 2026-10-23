@@ -83,7 +83,12 @@ test("review share menu works with a keyboard and keeps a clipboard fallback ins
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("Synthetic clipboard denial"); } } });
   });
   const response = await page.goto(REVIEW); expect(response?.status()).toBe(200);
+  const reject = page.locator("[data-cookie-banner]").getByRole("button", { name: "Reject" });
+  if (await reject.isVisible()) await reject.click();
   const share = page.getByRole("button", { name: "Share this review" }); await expect(share).toBeEnabled();
+  const download = page.getByRole("link", { name: "Sign in to download replay", exact: true });
+  const downloadBox = await download.boundingBox(); const shareBox = await share.boundingBox();
+  expect(Math.abs(downloadBox!.y + downloadBox!.height / 2 - shareBox!.y - shareBox!.height / 2)).toBeLessThanOrEqual(1);
   await share.press("ArrowDown");
   const menu = page.getByRole("menu", { name: "Share this review" });
   const reddit = menu.getByRole("menuitem", { name: "Post to Reddit" }); await expect(reddit).toBeFocused();
