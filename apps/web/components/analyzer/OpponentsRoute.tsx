@@ -1,9 +1,17 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { OpponentsTab } from "./OpponentsTab";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
+import dynamic from "next/dynamic";
+import { Skeleton } from "@/components/ui/Card";
 import { SectionHeader } from "./SectionHeader";
-import { opponentDossierHref } from "./tabs";
+
+// Keep the page header available while its interactive, authenticated table
+// loads. Subsequent refreshes stay inside the mounted table and retain rows.
+const OpponentsTab = dynamic(() => import("./OpponentsTab").then((module) => module.OpponentsTab), {
+  ssr: false,
+  loading: () => <div role="status" aria-label="Loading opponent list"><Skeleton rows={8} /></div>,
+});
 
 /**
  * Route wrapper: the section header, then the opponent list, with rows
@@ -11,11 +19,17 @@ import { opponentDossierHref } from "./tabs";
  */
 export function OpponentsRoute() {
   const router = useRouter();
+  const pathname = usePathname() || "/app/opponents";
+  const params = useSearchParams();
+  const query = params?.toString() || "";
+  const location = useMemo(() => ({ pathname, query, replace: (href: string) => router.replace(href, { scroll: false }), prefetch: (href: string) => router.prefetch(href), navigate: (href: string) => router.push(href) }), [pathname, query, router]);
+  const [count, setCount] = useState<number | null>(null);
   return (
     <div className="space-y-5">
-      <SectionHeader tab="opponents" />
+      <SectionHeader tab="opponents" description="Everyone you've faced, keyed to their SC2Pulse ID" actions={count === null ? null : <span className="rounded-full border border-line px-2 py-1 text-caption tabular-nums">{count.toLocaleString()} results</span>} />
       <OpponentsTab
-        onOpen={(pulseId) => router.push(opponentDossierHref(pulseId))}
+        location={location}
+        onResultCount={setCount}
       />
     </div>
   );

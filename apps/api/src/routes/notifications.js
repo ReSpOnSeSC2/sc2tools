@@ -11,8 +11,7 @@ const express = require("express");
  *
  * Auth is applied per route (not ``router.use``) so mounting this router
  * on the shared /v1 prefix never intercepts public routes. The bell only
- * exists for the Replay Review Exchange, so while its rollout is "off"
- * every route 404s before auth runs.
+ * exists for every authenticated user; Reviews only gate their producers.
  *
  * @param {{
  *   notifications: import('../services/notifications').NotificationsService,
@@ -22,14 +21,7 @@ const express = require("express");
  */
 function buildNotificationsRouter(deps) {
   const router = express.Router();
-  /** @type {import('express').RequestHandler} */
-  const enabled = (req, res, next) => {
-    if (deps.rollout !== "off") return next();
-    res.set("Cache-Control", "no-store");
-    res.status(404).json({ error: { code: "not_found", message: "Not found." } });
-  };
-
-  router.get("/me/notifications", enabled, deps.auth, async (req, res, next) => {
+  router.get("/me/notifications", deps.auth, async (req, res, next) => {
     try {
       const userId = requireUser(req);
       res.set("Cache-Control", "private, no-store");
@@ -37,13 +29,14 @@ function buildNotificationsRouter(deps) {
         limit: req.query.limit,
         before: req.query.before,
         unread: req.query.unread === "true",
+        kind: req.query.kind,
       }));
     } catch (err) {
       next(err);
     }
   });
 
-  router.get("/me/notifications/unread-count", enabled, deps.auth, async (req, res, next) => {
+  router.get("/me/notifications/unread-count", deps.auth, async (req, res, next) => {
     try {
       const userId = requireUser(req);
       res.set("Cache-Control", "private, no-store");
@@ -53,7 +46,7 @@ function buildNotificationsRouter(deps) {
     }
   });
 
-  router.post("/me/notifications/read", enabled, deps.auth, async (req, res, next) => {
+  router.post("/me/notifications/read", deps.auth, async (req, res, next) => {
     try {
       const userId = requireUser(req);
       res.json(await deps.notifications.markRead(userId, req.body || {}));

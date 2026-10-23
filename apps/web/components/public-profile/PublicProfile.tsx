@@ -250,7 +250,7 @@ function MatchupSplits({ rows }: { rows: PublicProfileMatchupSplit[] }) {
             {rows.map((m) => (
               <li key={m.matchup} className="space-y-1">
                 <div className="flex items-baseline justify-between gap-3 text-body">
-                  <span className="font-medium text-text">{m.matchup}</span>
+                  <ProfileMatchupLabel value={m.matchup} />
                   <span className="tabular-nums text-text-muted">
                     <span className="text-success">{m.wins}</span>
                     <span className="text-text-dim">–</span>
@@ -271,6 +271,12 @@ function MatchupSplits({ rows }: { rows: PublicProfileMatchupSplit[] }) {
       </div>
     </Card>
   );
+}
+
+function ProfileMatchupLabel({ value }: { value: string }) {
+  const token = value.replace(/^vs\s*/i, "").trim().toLowerCase();
+  const race = token === "p" || token === "protoss" ? "Protoss" : token === "t" || token === "terran" ? "Terran" : token === "z" || token === "zerg" ? "Zerg" : token === "r" || token === "random" ? "Random" : null;
+  return <span className="inline-flex items-center gap-1.5 font-medium text-text">{race ? <Icon name={raceIconName(coerceRace(race))} kind="race" size={14} decorative /> : null}vs {race || "Unknown race"}</span>;
 }
 
 function SignatureBuilds({ rows }: { rows: PublicProfileSignatureBuild[] }) {

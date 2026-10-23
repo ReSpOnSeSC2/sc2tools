@@ -81,9 +81,14 @@ const {
 const { ImportService } = require("./services/import");
 const { SpatialService } = require("./services/spatial");
 const { CatalogService } = require("./services/catalog");
-const { AgentVersionService } = require("./services/agentVersion");
+const { AgentVersionService, compareVersions } = require("./services/agentVersion");
 const { GithubReleaseFeed } = require("./services/agentGithubReleases");
 const { GdprService } = require("./services/gdpr");
+const { UserBackupsService } = require("./services/userBackups");
+const { buildUserBackupsStore } = require("./services/userBackupsStore");
+const { DataRepairsService } = require("./services/dataRepairs");
+const { IdentityDeletionsService } = require("./services/identityDeletions");
+const { withUserDataWriteFence } = require("./middleware/userDataWriteFence");
 const { GuideSamplesService } = require("./services/guideSamples");
 const { buildGuideSamplesBackfillJob } = require("./jobs/guideSamplesBackfillJob");
 const { GuideStatsService } = require("./services/guideStats");
@@ -135,6 +140,9 @@ const { buildPlayerChannelsRouter } = require("./routes/playerChannels");
 const { PlayerIdentitiesService } = require("./services/playerIdentities");
 const { buildPlayerIdentitiesRouter } = require("./routes/playerIdentities");
 const { NotificationsService } = require("./services/notifications");
+const { SupportMessagesService } = require("./services/supportMessages");
+const { AnnouncementsService } = require("./services/announcements");
+const { buildAnnouncementsRouter } = require("./routes/announcements");
 const { buildNotificationsRouter } = require("./routes/notifications");
 const { ReviewerReputationService } = require("./services/reviewerReputation");
 const { ReviewsService } = require("./services/reviews");
@@ -254,6 +262,8 @@ function isCoachingStateJson(req) {
  *   runtimeCapacityRegistry?: import('./services/runtimeCapacity').RuntimeCapacityRegistry,
  *   reviewSeasonWindowStart?: () => Promise<Date>,
  *   guideVideos?: import('./services/guideVideos').GuideVideosService,
+ *   userBackupsStore?: import('./services/userBackupsStore').UserBackupsStore,
+ *   clerkClient?: import('./services/clerkClient').ClerkClient,
  * }} AppDeps
  */
 
@@ -275,24 +285,24 @@ function buildApp(deps) {
   // (or test harnesses calling buildApp many times in one process)
   // skip duplicate registrations.
   loadAllMigrations();
-  const services = makeServices(deps);
-  registerRuntimeCapacityProviders(deps.runtimeCapacityRegistry, services);
-  const clerk = deps.config.clerkSecretKey
+  const clerk = deps.clerkClient || (deps.config.clerkSecretKey
     ? buildClerkClient({
         secretKey: deps.config.clerkSecretKey,
         logger: deps.logger,
       })
-    : noopClerkClient();
+    : noopClerkClient());
+  const services = makeServices(deps, clerk);
+  registerRuntimeCapacityProviders(deps.runtimeCapacityRegistry, services);
   const app = express();
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
-  const auth = buildAuth({
+  const auth = withUserDataWriteFence(buildAuth({
     secretKey: deps.config.clerkSecretKey,
     issuer: deps.config.clerkJwtIssuer,
     audience: deps.config.clerkJwtAudience,
     getDeviceToken: (hash) => services.pairings.findTokenByHash(hash),
     ensureUser: (clerkUserId) => services.users.ensureFromClerk(clerkUserId),
-  });
+  }), deps.db.users);
   applyBaseMiddleware(app, deps, auth, services.siteStats);
   // Live admin allowlist — seeded from SC2TOOLS_ADMIN_USER_IDS and
   // mutated in place by the email-allowlist + admin-grant paths. The
@@ -306,8 +316,9 @@ function buildApp(deps) {
 
 /**
  * @param {AppDeps} deps
+ * @param {import('./services/clerkClient').ClerkClient} clerk
  */
-function makeServices(deps) {
+function makeServices(deps, clerk) {
   // Admin notification stream — wired BEFORE UsersService so the
   // user-creation paths (ensureFromClerk first-touch, webhook upsert)
   // can fire signup events without a forward reference.
@@ -317,7 +328,14 @@ function makeServices(deps) {
     logger: deps.logger,
     supportEmail: deps.config.supportEmail,
   });
-  const users = new UsersService(deps.db, { adminEvents });
+  const notifications = new NotificationsService(deps.db, {
+    io: deps.io,
+    logger: deps.logger,
+  });
+  const supportMessages = new SupportMessagesService(deps.db, notifications, adminEvents);
+  const announcements = new AnnouncementsService(deps.db, { notifications, io: deps.io, logger: deps.logger });
+  const identityDeletions = new IdentityDeletionsService(deps.db, { clerk, secret: deps.config.serverPepper, logger: deps.logger });
+  const users = new UsersService(deps.db, { adminEvents, identityDeletions });
   // Pluggable backend for the per-game heavy blob. Defaults to
   // ``MongoDetailsStore`` (in-database); flips to ``R2DetailsStore``
   // when ``GAME_DETAILS_STORE=r2`` is set with the R2 connection
@@ -636,7 +654,7 @@ function makeServices(deps) {
   customBuilds.onDefinitionsChanged = (userId) => buildIntents.invalidateOptions(userId);
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
-  const imports = new ImportService(deps.db, { io: deps.io });
+  const imports = new ImportService(deps.db, { io: deps.io, notifications, logger: deps.logger });
   const spatial = new SpatialService(deps.db);
   // The GitHub feed makes an `agent-v*` tag push a complete release:
   // the updater's /v1/agent/version poll then sees the newest GitHub
@@ -663,6 +681,14 @@ function makeServices(deps) {
           logger: deps.logger,
         });
   const agentVersion = new AgentVersionService(deps.db, { githubFeed });
+  pairings.onHeartbeat = async (userId, metadata) => {
+    if (typeof metadata.version !== "string") return;
+    const release = await agentVersion.latest({ platform: /mac/i.test(metadata.os) ? "macos" : /linux/i.test(metadata.os) ? "linux" : "windows" });
+    if (!release?.minSupportedVersion || compareVersions(metadata.version, release.minSupportedVersion) >= 0) return;
+    await notifications.notify(userId, { kind: "agent.update_required", title: `Update SC2 Tools Agent to ${release.minSupportedVersion}`,
+      body: "Your desktop app needs an update to keep syncing.", href: "/download",
+      groupKey: `agent-update:${release.minSupportedVersion}`, eventKey: `agent-update:${release.minSupportedVersion}` });
+  };
   const siteStats = new SiteStatsService(deps.db, {
     secret: deps.config.serverPepper,
     logger: deps.logger,
@@ -713,6 +739,7 @@ function makeServices(deps) {
   const guideNotes = new GuideNotesService(deps.db);
   const guides = new GuidesService(deps.db, { guideNotes, guideVideos, logger: deps.logger });
   const gdpr = new GdprService(deps.db, {
+    siteStats,
     opponents,
     logger: deps.logger,
     // Store-aware heavy-blob deleter: without it, delete-account and
@@ -722,10 +749,17 @@ function makeServices(deps) {
     playbackArtifacts,
     customBuilds,
     guideSamples,
+    identityDeletions,
+    overlayTokens,
+    io: deps.io,
   });
+  identityDeletions.retryDataPurge = (userId, clerkUserId) => gdpr.deleteAll(userId, { clerkUserId });
   const community = new CommunityService(deps.db, {
     slugSecret: deps.config.serverPepper,
+    notifications,
   });
+  gdpr.backups = new UserBackupsService(deps.db, { gdpr, store: deps.userBackupsStore || buildUserBackupsStore(deps.config), logger: deps.logger });
+  const dataRepairs = new DataRepairsService(deps.db, { gdpr, notifications, logger: deps.logger });
   // Opt-in public player pages (/p/:handle). Derives entirely from
   // existing services — a public profile exists iff the user published
   // a community build under a public authorName (the community opt-in),
@@ -741,10 +775,7 @@ function makeServices(deps) {
   // REVIEWS_ENABLED only gates the routes — so GDPR export/deletion and
   // wipes always cover review data. ``reviewSeasonWindowStart`` is a
   // test-injected stand-in so suites never reach live SC2Pulse.
-  const notifications = new NotificationsService(deps.db, {
-    io: deps.io,
-    logger: deps.logger,
-  });
+
   // ``pulse`` reads each reviewer account's current-season league
   // (Grandmaster is a region's top 200, not an MMR line). Tests inject a
   // PulseMmrService with fetch disabled, or a stand-in.
@@ -853,6 +884,8 @@ function makeServices(deps) {
     agentVersion,
     siteStats,
     gdpr,
+    identityDeletions,
+    dataRepairs,
     community,
     seasons,
     arcade,
@@ -885,6 +918,8 @@ function makeServices(deps) {
     playerChannels,
     playerIdentities,
     notifications,
+    supportMessages,
+    announcements,
     reviewerReputation,
     reviews,
   };
@@ -1051,6 +1086,7 @@ function registerRuntimeCapacityProviders(registry, services) {
  * @param {import('express').RequestHandler} auth
  */
 function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
+  app.use(SERVICE.ROUTE_PREFIX, buildAnnouncementsRouter({ announcements: services.announcements }));
 
   // Public routers (no `router.use(auth)` — public endpoints OR per-route
   // auth) MUST mount before any auth-using router. Express runs every
@@ -1128,6 +1164,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAgentVersionRouter({
+      announcements: services.announcements,
       agentVersion: services.agentVersion,
       adminToken: deps.config.agentReleaseAdminToken,
       adminEvents: services.adminEvents,
@@ -1210,6 +1247,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       aggregations: services.aggregations,
       coaching: buildCoachingService({
         db: deps.db,
+        notifications: services.notifications,
         io: deps.io,
         logger: deps.logger,
       }),
@@ -1220,9 +1258,12 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMeRouter({
+      announcements: services.announcements,
       users: services.users,
       games: services.games,
       gdpr: services.gdpr,
+      backupStatus: services.backupStatus,
+      dataRepairs: services.dataRepairs,
       pairings: services.pairings,
       imports: services.imports,
       multichatSounds: services.multichatSounds,
@@ -1245,6 +1286,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildClerkWebhookRouter({
       users: services.users,
+      gdpr: services.gdpr,
       secret: deps.config.clerkWebhookSecret,
       logger: deps.logger,
     }),
@@ -1300,7 +1342,6 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildNotificationsRouter({
       notifications: services.notifications,
       auth,
-      rollout: deps.config.reviewsEnabled || "off",
     }),
   );
   // Multichat overlay relays — overlay-token auth (path segment), no
@@ -1308,6 +1349,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMultichatRouter({
+      dataUsers: deps.db.users,
       overlayTokens: services.overlayTokens,
       users: services.users,
       auth,
@@ -1333,6 +1375,8 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAdminRouter({
+      announcements: services.announcements,
+      supportMessages: services.supportMessages,
       admin: services.admin,
       adminGlobal: services.adminGlobal,
       adminGlobalTrends: services.adminGlobalTrends,
@@ -1368,6 +1412,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMessagesRouter({
+      supportMessages: services.supportMessages,
       adminEvents: services.adminEvents,
       users: services.users,
       auth,
@@ -1454,6 +1499,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       auth,
       browserIngestQuota: services.browserIngestQuota,
       runtimeCapacityRegistry: deps.runtimeCapacityRegistry,
+      weeklyBackup: async (userId) => { await services.gdpr.backups?.weekly(userId); },
     }),
   );
   // Build check-in routes (per-route auth; /games/:gameId/build-intent does
@@ -1481,6 +1527,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildOverlayTokensRouter({
       overlayTokens: services.overlayTokens,
       overlayLive: services.overlayLive,
+      liveGameBroker: services.liveGameBroker,
       auth,
       io: deps.io,
     }),

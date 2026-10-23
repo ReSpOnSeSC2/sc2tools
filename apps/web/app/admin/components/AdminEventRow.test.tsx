@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "fixture-token" }) }));
 import { cleanup, render, screen } from "@testing-library/react";
 
 import { AdminEventRow } from "./AdminEventRow";

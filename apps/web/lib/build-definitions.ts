@@ -32,6 +32,8 @@ import type { Race } from "@/lib/race";
 import generatedCatalog from "./build-definitions.generated.json";
 import { TOO_SHORT_DEFINITIONS } from "./build-definitions/too-short";
 import { DEFINITION_WORDING } from "./build-definitions/wording";
+import { definitionId } from "./definition-links";
+export { definitionId, definitionHref } from "./definition-links";
 
 export type StrategyMatchup =
   | "PvP"
@@ -105,14 +107,6 @@ function compareDefinitions(
   return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
 }
 
-function slugifyDef(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80);
-}
-
 const WORDING_BY_NAME: ReadonlyMap<string, string> = new Map(
   Object.entries(DEFINITION_WORDING),
 );
@@ -131,7 +125,7 @@ const RAW_DEFINITIONS: ReadonlyArray<Omit<BuildDefinition, "id">> = [
 export const BUILD_DEFINITIONS: ReadonlyArray<BuildDefinition> =
   RAW_DEFINITIONS.map((d) => ({
     ...d,
-    id: slugifyDef(d.name),
+    id: definitionId(d.name),
   }));
 
 export const DEFINITIONS_TOTAL = BUILD_DEFINITIONS.length;

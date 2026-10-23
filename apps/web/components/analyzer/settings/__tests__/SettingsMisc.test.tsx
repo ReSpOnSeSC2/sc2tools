@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token" }) }));
 
 vi.mock("@/lib/clientApi", () => ({
-  useApi: () => ({ data: mocks.misc, isLoading: false, error: null, mutate: async () => mocks.misc }),
+  useApi: (url: string) => ({ data: url.endsWith("/notifications") ? { muted: [] } : mocks.misc, isLoading: false, error: null, mutate: async () => mocks.misc }),
   apiCall: mocks.apiCall,
 }));
 

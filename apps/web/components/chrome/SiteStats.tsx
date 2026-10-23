@@ -15,12 +15,24 @@ async function fetchActivity(url: string) {
 }
 
 /** Public aggregates, shared by the marketing site and the app shell. */
-export function SiteStats({ wide = false, syncStatus }: {
+export function SiteStats({ wide = false, syncStatus, variant = "marketing", signedIn = false, analyzer = false }: {
+  variant?: "marketing" | "app";
+  signedIn?: boolean;
+  analyzer?: boolean;
   wide?: boolean;
   syncStatus?: ReactNode;
 }) {
   const detailsId = useId();
   const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (variant !== "app") return;
+    try { setExpanded(localStorage.getItem("sc2tools:activity-details:v1") === "expanded"); } catch { /* Default collapsed. */ }
+  }, [variant]);
+  const toggle = () => setExpanded((current) => {
+    const next = !current;
+    if (variant === "app") try { localStorage.setItem("sc2tools:activity-details:v1", next ? "expanded" : "collapsed"); } catch { /* Keep the view. */ }
+    return next;
+  });
   const [now, setNow] = useState(() => Date.now());
   const { data, error, isLoading } = useSWR("/api/site/stats", fetchActivity, {
     refreshInterval: REFRESH_MS,
@@ -55,6 +67,11 @@ export function SiteStats({ wide = false, syncStatus }: {
         ? "Some counts unavailable"
         : "Updates every 30 seconds";
 
+  if (variant === "app") return <section aria-label="App activity" className={`border-b border-border bg-bg-surface/40 ${signedIn ? analyzer ? "block" : "hidden md:block" : "hidden xl:block"}`}>
+    <div className="mx-auto w-full max-w-[1680px] px-4 sm:px-6 lg:px-8"><div className="flex min-h-9 items-center justify-between gap-2">{signedIn ? <div className="min-w-0">{syncStatus}</div> : <span />}
+      <button type="button" aria-expanded={expanded} aria-controls={detailsId} onClick={toggle} className="ml-auto hidden min-h-9 shrink-0 items-center gap-2 rounded-lg px-2 text-caption text-text-muted hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent xl:inline-flex">Community · {unavailable || data?.activeUsers == null ? "unavailable" : `${COMPACT_NUMBER_FORMAT.format(data.activeUsers)} online`}<ChevronDown className={`h-3 w-3 ${expanded ? "rotate-180" : ""}`} aria-hidden /></button>
+    </div><div id={detailsId} hidden={!expanded} className="border-t border-border py-3"><div className="hidden xl:block"><p className="mb-2 text-caption text-text-muted">{status}</p><dl className="flex flex-wrap gap-6">{values.map(({ label, value }) => <div key={label}><dt className="text-caption text-text-muted">{label}</dt><dd className="font-mono text-caption text-text">{value == null || unavailable ? "—" : NUMBER_FORMAT.format(value)}</dd></div>)}</dl></div></div></div>
+  </section>;
   return (
     <section aria-label="SC2 Tools community activity" className="border-b border-border bg-bg-surface/40">
       <div className={`mx-auto w-full px-4 sm:px-6 lg:px-8 ${wide ? "max-w-[1680px]" : "max-w-7xl"}`}>
@@ -91,7 +108,7 @@ export function SiteStats({ wide = false, syncStatus }: {
             aria-label="About these activity counts"
             aria-expanded={expanded}
             aria-controls={detailsId}
-            onClick={() => setExpanded((open) => !open)}
+            onClick={toggle}
             className="col-start-2 row-start-1 ml-auto flex h-5 min-w-8 shrink-0 items-center justify-center gap-2 rounded-md px-1 text-caption font-normal text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent xl:h-8 xl:px-2"
           >
             <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${!isLoading && !unavailable && !partial ? "bg-success" : "bg-text-dim"}`} />

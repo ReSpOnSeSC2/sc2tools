@@ -15,8 +15,9 @@ What is and isn't backed up:
   schedule set in Atlas (cluster → Backup → Backup Policy). That covers
   every collection, including the in-app `user_backups` snapshots.
 - **In-app snapshots** (`user_backups`, Settings → Backups & data) are
-  per-user JSON copies of the collections in `USER_SCOPED_COLLECTIONS`
-  (`apps/api/src/services/gdpr.js`). They don't hold replay-detail blobs
+  private, streamed gzip NDJSON copies with metadata in Mongo. See
+  [User snapshots](user-snapshots.md) for format, migration, retention and
+  rollback compatibility. They don't hold replay-detail blobs
   (`buildLog`, `macroBreakdown`, `apmCurve`, `mapPlayback`) or original
   replay files.
 - **Cloudflare R2** (original replays, and replay details when
@@ -40,9 +41,11 @@ What is and isn't backed up:
 The user can do this themselves, and that is the preferred path: Settings
 → Backups & data → Snapshots → **Restore**. It replaces their games list,
 opponents, notes, custom builds and settings with the snapshot's copy and
-clears their replay-detail data and R2 replay files. Afterwards they press
-**Re-sync** in the desktop app to upload replays, build orders and charts
-again.
+keeps current replay-detail data and R2 replay files for game IDs present
+in both lists. The verified preview shows games kept, removed and added.
+Only games absent from the snapshot lose their current files. A fresh
+pre-action snapshot is saved before changes. Re-sync is needed for files
+that were already absent from current data, not for every retained game.
 
 If you must do it for them (for example they can't sign in):
 
@@ -66,8 +69,9 @@ If you must do it for them (for example they can't sign in):
    ' <userId>
    ```
 
-3. Restore one through the same service the app uses, so R2 objects and
-   detail blobs are cleaned up exactly as the Settings button does:
+3. With explicit authorization to restore that account, first preview it
+   through the same service as Settings. The following command is read-only
+   for account data (it validates through temporary staging):
 
    ```sh
    cd apps/api
@@ -80,16 +84,23 @@ If you must do it for them (for example they can't sign in):
      const config = loadConfig();
      const db = await connect({ uri: config.mongoUri, dbName: config.mongoDb });
      const { services } = buildApp({ db, logger: pino({ level: "warn" }), config });
-     console.log(await services.gdpr.restoreSnapshot(process.argv[1], process.argv[2]));
+     console.log(await services.gdpr.backups.preview(process.argv[1], process.argv[2]));
      await db.close();
      process.exit(0);
    })().catch((err) => { console.error(err); process.exit(1); });
    ' <userId> <snapshotId>
    ```
 
-   It prints `restoredAt` and per-collection counts. A
-   `snapshot_not_found` error means the id doesn't belong to that user.
-4. Tell the user to press **Re-sync** in the desktop app.
+   Review the full diff and record `currentRevision`. A `snapshot_not_found`
+   means the ID is not owned by that user; `backup_migration_required` means
+   the legacy payload needs the separately authorized migration first.
+4. Only after reviewing the preview and obtaining any needed authorization,
+   repeat the command with its service call replaced by
+   `services.gdpr.restoreSnapshot(process.argv[1], process.argv[2], process.argv[3])`
+   and pass `<userId> <snapshotId> <currentRevision>`. It prints `restoredAt`
+   and final counts. If `backup_preview_changed` occurs, preview again and
+   review the updated diff; do not omit the revision to bypass it.
+5. Explain which games/files survived and which need desktop **Re-sync**.
 
 ## Atlas restore (whole cluster)
 

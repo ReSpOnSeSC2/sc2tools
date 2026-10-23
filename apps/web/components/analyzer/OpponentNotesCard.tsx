@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Save, StickyNote, Volume2, VolumeX } from "lucide-react";
 import { apiCall, type ClientApiError } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
-import { Card } from "@/components/ui/Card";
+import { Card, Skeleton } from "@/components/ui/Card";
 import { Toggle } from "@/components/ui/Toggle";
 import { useToastOptional } from "@/components/ui/Toast";
+import { useOpponentNoteDraft } from "./useOpponentNoteDraft";
 
 export const OPPONENT_NOTES_MAX_LENGTH = 500;
 
@@ -30,12 +31,19 @@ type OpponentNotesCardProps = {
  * them to the browser-speech readout; the global Voice switch remains the
  * master safety control for every spoken overlay event.
  */
-export function OpponentNotesCard({
+export function OpponentNotesCard(props: OpponentNotesCardProps) {
+  const { userId, isLoaded } = useAuth();
+  if (isLoaded === false) return <Skeleton rows={3} />;
+  return <OpponentNotesEditor key={`${userId || "local"}:${props.pulseId}`} ownerId={userId || null} {...props} />;
+}
+
+function OpponentNotesEditor({
   pulseId,
   initialNotes,
   initialNotesReadAloud = false,
   onSaved,
-}: OpponentNotesCardProps) {
+  ownerId,
+}: OpponentNotesCardProps & { ownerId: string | null }) {
   const { getToken } = useAuth();
   const toastContext = useToastOptional();
   const serverValue = useMemo<OpponentNotesValue>(
@@ -46,22 +54,17 @@ export function OpponentNotesCard({
     }),
     [initialNotes, initialNotesReadAloud],
   );
-  const [draft, setDraft] = useState<OpponentNotesValue>(serverValue);
-  const [baseline, setBaseline] = useState<OpponentNotesValue>(serverValue);
+  const editor = useOpponentNoteDraft(pulseId, ownerId, serverValue);
+  const { draft, dirty, restored, setDraft, discard } = editor;
   const [saving, setSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState("");
   const [saveFailed, setSaveFailed] = useState(false);
+  const [macShortcut, setMacShortcut] = useState(false);
+  useEffect(() => { setMacShortcut(/Mac|iPhone|iPad/.test(navigator.platform)); }, []);
 
-  useEffect(() => {
-    setDraft(serverValue);
-    setBaseline(serverValue);
-    setSavedMessage("");
-    setSaveFailed(false);
-  }, [pulseId, serverValue]);
-
-  const dirty =
-    draft.notes !== baseline.notes
-    || draft.notesReadAloud !== baseline.notesReadAloud;
+  const active = useRef(true);
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => { active.current = true; return () => { active.current = false; request.current?.abort(); }; }, []);
   const remaining = OPPONENT_NOTES_MAX_LENGTH - draft.notes.length;
 
   async function save() {
@@ -69,26 +72,30 @@ export function OpponentNotesCard({
     setSaving(true);
     setSavedMessage("");
     setSaveFailed(false);
+    const submitted = { ...draft };
+    const controller = new AbortController(); request.current = controller;
     try {
-      const saved = await apiCall<OpponentNotesValue>(
+      const saved = await apiCall<OpponentNotesValue & { updatedAt?: string }>(
         getToken,
         `/v1/opponents/${encodeURIComponent(pulseId)}/notes`,
         {
           method: "PUT",
-          body: JSON.stringify(draft),
+          body: JSON.stringify(submitted),
+          signal: controller.signal,
         },
       );
+      if (!active.current) return;
       const canonical: OpponentNotesValue = {
         notes: typeof saved.notes === "string" ? saved.notes : "",
         notesReadAloud: saved.notesReadAloud === true,
       };
-      setDraft(canonical);
-      setBaseline(canonical);
-      setSavedMessage("Saved to scouting");
+      const newer = editor.saved(canonical, submitted);
+      setSavedMessage(newer ? "Saved. You have newer unsaved changes." : "Saved just now");
       setSaveFailed(false);
       onSaved?.(canonical);
       toastContext?.toast.success("Opponent notes saved");
     } catch (error) {
+      if (!active.current || controller.signal.aborted) return;
       const message =
         (error as ClientApiError | undefined)?.message ?? "Please try again.";
       toastContext?.toast.error("Couldn't save opponent notes", {
@@ -97,7 +104,7 @@ export function OpponentNotesCard({
       setSavedMessage(message);
       setSaveFailed(true);
     } finally {
-      setSaving(false);
+      if (active.current) setSaving(false);
     }
   }
 
@@ -122,8 +129,7 @@ export function OpponentNotesCard({
             </span>
           </div>
           <p className="mt-1 text-xs text-text-muted">
-            Keep the read short and actionable. It appears only on your private
-            overlay when this opponent is detected.
+            {serverValue.notes ? "Keep the read short and actionable." : "Write a note about this opponent."} These private notes appear on your scouting widget when this opponent is detected.
           </p>
         </div>
 
@@ -158,6 +164,7 @@ export function OpponentNotesCard({
       </div>
 
       <div className="mt-4">
+        {restored ? <p role="status" className="mb-2 text-caption text-warning">Unsaved draft restored · <button type="button" className="underline" onClick={discard}>Discard restored draft</button></p> : null}
         <label
           htmlFor={`opponent-notes-${pulseId}`}
           className="sr-only"
@@ -169,6 +176,9 @@ export function OpponentNotesCard({
           value={draft.notes}
           maxLength={OPPONENT_NOTES_MAX_LENGTH}
           rows={4}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void save(); }
+          }}
           placeholder="Example: Hides tech after early pressure. Check dead air behind the natural at 3:30."
           onChange={(event) => {
             const notes = event.target.value;
@@ -187,9 +197,10 @@ export function OpponentNotesCard({
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 text-xs text-text-dim">
-          <span className="tabular-nums">
+          {remaining < 100 ? <span className={`tabular-nums ${remaining === 0 ? "text-danger" : ""}`}>
             {remaining.toLocaleString()} characters left
-          </span>
+          </span> : null}
+          <span>{macShortcut ? "⌘+Enter" : "Ctrl+Enter"} to save</span>
           <span
             role={saveFailed ? "alert" : "status"}
             aria-live="polite"
@@ -205,7 +216,7 @@ export function OpponentNotesCard({
               size="sm"
               disabled={saving}
               onClick={() => {
-                setDraft(baseline);
+                discard();
                 setSavedMessage("");
                 setSaveFailed(false);
               }}
@@ -220,7 +231,7 @@ export function OpponentNotesCard({
             onClick={save}
             iconLeft={<Save className="h-4 w-4" aria-hidden />}
           >
-            Save notes
+            {saveFailed ? "Retry" : "Save notes"}
           </Button>
         </div>
       </div>

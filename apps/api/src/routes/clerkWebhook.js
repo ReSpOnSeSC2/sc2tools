@@ -16,9 +16,8 @@ const MAX_TIMESTAMP_SKEW_SEC = 5 * 60;
  * `v1,<sig>` token in the `svix-signature` header (multiple tokens may
  * be present during secret rotation — any one matching is sufficient).
  *
- * We only handle two events here: `user.created` and `user.updated`.
- * Both upsert the user's primary email onto the users collection so the
- * Settings → Foundation card has it without needing a Clerk round-trip.
+ * Created/updated deliveries refresh primary email; deleted deliveries run
+ * the same erasure as DELETE /me. Late events cannot recreate deleted IDs.
  *
  * If `secret` is empty (e.g. local dev without a webhook configured),
  * the route returns 503 — it's still mounted so the failure is visible
@@ -26,6 +25,7 @@ const MAX_TIMESTAMP_SKEW_SEC = 5 * 60;
  *
  * @param {{
  *   users: import('../services/types').UsersService,
+ *   gdpr?: import('../services/gdpr').GdprService,
  *   secret: string|null,
  *   logger?: import('pino').Logger,
  * }} deps
@@ -70,7 +70,7 @@ function buildClerkWebhookRouter(deps) {
         return;
       }
       const type = typeof evt.type === "string" ? evt.type : "";
-      if (type !== "user.created" && type !== "user.updated") {
+      if (type !== "user.created" && type !== "user.updated" && type !== "user.deleted") {
         // Other events (session.created, organization.*, etc.) get a
         // 200 so Clerk doesn't keep retrying — we just don't do
         // anything with them.
@@ -82,8 +82,17 @@ function buildClerkWebhookRouter(deps) {
         res.status(400).json({ error: { code: "bad_user_payload" } });
         return;
       }
+      if (type === "user.deleted") {
+        if (!deps.gdpr) throw new Error("erasure_unavailable");
+        await deps.gdpr.deleteForClerkUser(user.id);
+        res.status(200).json({ ok: true }); return;
+      }
       const email = pickPrimaryEmail(user);
-      await deps.users.upsertFromWebhook(user.id, email, { eventType: type });
+      try { await deps.users.upsertFromWebhook(user.id, email, { eventType: type }); }
+      catch (error) {
+        if (/** @type {any} */ (error)?.code !== "account_deleted") throw error;
+        res.status(200).json({ ignored: "deleted_identity" }); return;
+      }
       if (deps.logger) {
         deps.logger.info(
           { type, clerkUserId: user.id, hasEmail: Boolean(email) },

@@ -1,7 +1,7 @@
 # Admin operations
 
-This covers the existing account repair tools. Later operations-console controls
-will extend these procedures.
+This covers the existing account repair tools and service notices. Later
+operations-console controls will extend these procedures.
 
 ## Identify the account
 
@@ -37,3 +37,24 @@ Keep the outcome and any Error ID with the support issue. Refresh the account
 before retrying an operation whose outcome is uncertain. For a reported-content
 decision, the moderation queue explicitly handles an already-resolved report;
 see [Moderation](../admin-console.md#moderation).
+
+## Posting an incident notice
+
+Open **Admin → Announcements**. This edits the one public `site_config` document with `_id: 'banner'`; a saved notice is visible to its selected audience. Draft previews stay in the browser until Save.
+
+1. Choose a template or write a short impact statement (maximum 240 characters). Explain what users should do and whether their local files or saved data are affected. Verify those claims before publishing.
+2. Choose the narrowest audience. **All** reaches web and agent; **Website** reaches the app; **Agent** is returned by the version feed; **Stream Studio** and **Guides** reach matching web goals/surfaces.
+3. Choose **info**, **warning** or **critical**. Critical notices cannot be dismissed. Other notices can be dismissed in that browser for that notice identity.
+4. Set the start and required end time in your local time. The API stores UTC. A scheduled notice stays hidden until its start; expiry is enforced by both the API and web component. Only same-site More information links are accepted.
+5. Check the live preview, then Save. Connected authenticated tabs receive a text-free `site:banner` refresh hint. The public endpoint uses `max-age=60` and ETags; cached copies can take one minute to refresh. The agent reads applicable notices through its existing version check, even when no newer installer is available.
+6. End the current notice early when the issue is resolved. This expires it and keeps its revision. If another admin saved first, reload and review the current notice before making another edit. A failed save keeps your draft and offers Retry.
+
+`GET /v1/site/banner` is public and returns only the active notice, never admin identity. Admin GET/PUT/DELETE `/v1/admin/announcements` require existing admin authorization. The version feed includes only `all` or `agent` notices. No email, push provider or scheduled job is added.
+
+## Curating product updates
+
+Add reviewed entries to `apps/api/src/data/whatsNew.json`; `apps/web/lib/whatsNew.ts` exports the shared catalogue. Keep stable lowercase IDs, dates in descending order, short highlights, an accurate audience and a resolving help slug. Only set `major` for changes that deserve a personal notification. Do not announce unfinished functionality or invent a desktop version; `agentVersion` is optional.
+
+The public changelog/RSS and signed-in sheet use the same entries. A signed-in `/v1/me` visit lazily delivers recent major entries; the existing notification delivery index prevents repeat delivery after retries or reads. There is no all-users fan-out job. Notification muting and the existing 90-day retention apply.
+
+Before merging, run the curated-catalogue, RSS, Markdown, banner, editor and updater tests, regenerate the help index, and check the production route budgets. Normal startup creates the global configuration collection on its first save. No production save or notice was executed as part of development verification.

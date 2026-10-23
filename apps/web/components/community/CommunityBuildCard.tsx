@@ -1,125 +1,43 @@
 import Link from "next/link";
-import { ArrowUpDown, MessageSquare } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { fmtAgo } from "@/lib/format";
+import { SKILL_LEVELS } from "@/lib/build-rules";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorChip } from "./AuthorChip";
 import { CommunityBuildOwnerControls } from "./CommunityBuildOwnerControls";
 import { CommunityOwnerReplayCount } from "./CommunityOwnerReplayCount";
+import { KeySteps } from "./KeySteps";
+import { VoteScore } from "./VoteScore";
 import type { CommunityBuildListItem } from "./types";
 
-export interface CommunityBuildCardProps {
-  build: CommunityBuildListItem;
-}
+export interface CommunityBuildCardProps { build: CommunityBuildListItem; hideAuthor?: boolean }
 
-/**
- * CommunityBuildCard — one row in the public /community grid.
- *
- * The card body is a Link to /community/builds/{slug}. The author chip
- * is rendered as a sibling (NOT inside the card link) so the chip's
- * own anchor-to-author can fire without being intercepted by the
- * outer click target. Race-tinted left rail mirrors the private
- * library card to keep the visual language consistent.
- */
-export function CommunityBuildCard({ build }: CommunityBuildCardProps) {
+/** Stretched title link, with independently reachable author and owner actions. */
+export function CommunityBuildCard({ build, hideAuthor = false }: CommunityBuildCardProps) {
   const race = coerceRace(build.build?.race);
   const tint = raceTint(race);
-  const matchup = build.matchup || "—";
-  const votes = Number.isFinite(build.votes) ? build.votes : 0;
-  const description = (build.description || "").trim();
-
-  return (
-    <Card
-      variant="interactive"
-      padded={false}
-      className="group relative h-full overflow-hidden"
-    >
-      <span
-        aria-hidden
-        className={["absolute left-0 top-0 h-full w-1", tint.rail].join(" ")}
-      />
-      {/* Author chip lives outside the wrapping link so it can navigate
-          independently to the author profile. */}
-      <div className="absolute right-3 top-3 z-10">
-        <AuthorChip build={build} size="sm" />
+  const level = SKILL_LEVELS.find((item) => item.id === build.build?.skillLevel);
+  return <Card variant="interactive" padded={false} className="group relative h-full overflow-hidden">
+    <span aria-hidden className={`absolute left-0 top-0 h-full w-1 ${tint.rail}`} />
+    <div className="flex h-full min-w-0 flex-col gap-3 p-5 pl-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="neutral" size="sm" className={`${tint.bg} ${tint.border} ${tint.text}`} iconLeft={<Icon name={raceIconName(race)} kind="race" size={14} decorative />}>{build.matchup || "—"}</Badge>
+        {level ? <Badge size="sm" variant="neutral">{level.label}</Badge> : null}
       </div>
-      <div className="absolute bottom-3 right-3 z-10">
-        <CommunityBuildOwnerControls
-          slug={build.slug}
-          title={build.title}
-          compact
-        />
-      </div>
-      <Link
-        href={`/community/builds/${encodeURIComponent(build.slug)}`}
-        className="flex h-full flex-col gap-3 p-5 pl-6 pr-3 focus-visible:bg-bg-elevated focus-visible:outline-none"
-      >
-        <div className="flex flex-wrap items-center gap-2 pr-24">
-          <Badge
-            variant="neutral"
-            size="sm"
-            className={[tint.bg, tint.border, tint.text].join(" ")}
-            iconLeft={
-              <Icon
-                name={raceIconName(race)}
-                kind="race"
-                size={14}
-                decorative
-              />
-            }
-          >
-            {matchup}
-          </Badge>
-          <span className="text-micro uppercase tracking-wider text-text-dim">
-            Published {fmtAgo(build.publishedAt)}
-          </span>
-        </div>
-        <h3 className="break-words text-h4 font-semibold leading-tight text-text">
-          {build.title}
-        </h3>
-        {description ? (
-          <p className="line-clamp-2 text-caption text-text-muted">
-            {description}
-          </p>
-        ) : null}
-        <div className="mt-auto flex items-baseline justify-between gap-3 pr-24 pt-2">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <VoteScore votes={votes} />
-            <CommunityOwnerReplayCount
-              publicSlug={build.slug}
-            />
-          </div>
-          <span className="inline-flex items-center gap-1 text-micro text-text-dim">
-            <MessageSquare className="h-3 w-3" aria-hidden />
-            <span>Open</span>
-          </span>
-        </div>
-      </Link>
-    </Card>
-  );
-}
-
-function VoteScore({ votes }: { votes: number }) {
-  const tone =
-    votes > 0
-      ? "text-success"
-      : votes < 0
-        ? "text-danger"
-        : "text-text-dim";
-  const sign = votes > 0 ? "▲" : votes < 0 ? "▼" : "·";
-  const label = `${Math.abs(votes)} ${Math.abs(votes) === 1 ? "vote" : "votes"}`;
-  return (
-    <span
-      className={[
-        "inline-flex items-center gap-1.5 font-mono text-caption tabular-nums",
-        tone,
-      ].join(" ")}
-      aria-label={`${votes} net votes`}
-    >
-      <ArrowUpDown className="h-3 w-3" aria-hidden />
-      {sign} {label}
-    </span>
-  );
+      <h3 className="break-words text-h4 font-semibold leading-tight text-text">
+        <Link href={`/community/builds/${encodeURIComponent(build.slug)}`} className="after:absolute after:inset-0 focus-visible:outline-none after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-accent">{build.title}</Link>
+      </h3>
+      {build.description?.trim() ? <p className="line-clamp-2 break-words text-caption text-text-muted">{build.description.trim()}</p> : null}
+      <KeySteps build={build.build} />
+      <footer className="relative z-10 mt-auto flex flex-wrap items-center gap-x-3 gap-y-2 pt-2">
+        {!hideAuthor ? <span className="min-w-0 max-w-[50%]"><AuthorChip build={build} size="sm" /></span> : null}
+        <VoteScore votes={build.votes} />
+        <span className="text-micro text-text-dim">Updated {fmtAgo(build.updatedAt || build.publishedAt)}</span>
+        <CommunityBuildOwnerControls slug={build.slug} title={build.title} compact />
+        <CommunityOwnerReplayCount publicSlug={build.slug} />
+      </footer>
+    </div>
+  </Card>;
 }

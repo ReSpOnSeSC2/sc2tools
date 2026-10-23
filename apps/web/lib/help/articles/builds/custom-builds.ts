@@ -2,9 +2,9 @@ import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
   slug: "custom-builds",
-  title: "Detected builds vs custom builds",
+  title: "Detected builds and your Build library",
   summary:
-    "Every game gets a build label from fixed rules that come with SC2 Tools. Custom builds are your own definitions, saved privately in your library, with their own record.",
+    "Every game gets a build label from fixed rules that come with SC2 Tools. Your Build library keeps your own definitions privately, each with its own record.",
   category: "builds",
   audience: "player",
   keywords: [
@@ -27,7 +27,7 @@ const article: HelpArticle = {
   body: [
     {
       type: "paragraph",
-      text: "SC2 Tools names the build in every game two ways. **Detected builds** are the labels that come with the app, like *PvZ - Stargate into Glaives*. **Custom builds** are the ones you define yourself and keep in [your library](/builds).",
+      text: "SC2 Tools names the build in every game two ways. **Detected builds** are the labels that come with the app, like *PvZ - Stargate into Glaives*. Your **Build library** holds the builds you define yourself and save privately.",
     },
     { type: "heading", text: "Detected builds" },
     {
@@ -44,10 +44,10 @@ const article: HelpArticle = {
         "Each definition has a link button to share it, and a **Guide** link when a community guide for that build is published.",
       ],
     },
-    { type: "heading", text: "Custom builds" },
+    { type: "heading", text: "Your Build library" },
     {
       type: "paragraph",
-      text: "A custom build is your own version of an opener: a short list of rules such as *At least 1 Stargate before 3:30* or *No Robotics Facility before 6:00*. A game matches when every rule passes, and the build's page then shows its record, matchups, maps and recent games. Custom builds are private until you publish one. [How build rules are counted](/help/rules-explained) explains each kind of rule.",
+      text: "A custom build is your own version of an opener: a short list of rules such as *At least 1 Stargate before 3:30* or *No Robotics Facility before 6:00*. A game matches when every rule passes, and the build's page then shows its record, matchups, maps and recent games. Builds in your library are private until you publish one. [How build rules are counted](/help/rules-explained) explains each kind of rule.",
     },
     { type: "heading", text: "Make a custom build" },
     {
@@ -67,6 +67,15 @@ const article: HelpArticle = {
     { type: "paragraph", text: "Closing either editor with unsaved changes asks first. **Keep editing** returns to your draft; **Discard** closes it. Saving keeps your changes, and a failed save leaves the draft available to fix or retry." },
     { type: "heading", text: "Strategy notes and skill level", anchor: "strategy-notes" },
     { type: "paragraph", text: "The **Build definition** card beside Personal notes shows your match rules, **Wins by**, **Loses to**, **Transitions into** and **Skill level**. Empty rows stay hidden. Its pencil opens the editor. Older signature builds keep matching by their signature until you add rules from their timeline." },
+    { type: "heading", text: "Reading a build's page", anchor: "reading-a-build" },
+    { type: "paragraph", text: "The full page's **Overview**, **Army**, **Matchups & maps** and **Games** links jump between its sections. Overview shows your record and average macro; Army shows your compositions and transitions; Matchups & maps compares the opponents and maps you faced. **Recent form** shows your latest results from oldest to newest and a rolling 10-game win rate once enough games exist. Private notes and your definition stay at the top." },
+    { type: "paragraph", text: "A new build can show **No games matched this build yet** until matching finishes. Use **Re-match replays** to check your saved replays, **Edit rules** to review the definition, or **Review check-ins** when games await your input. Matching runs in the background; its completion refreshes the page." },
+    { type: "paragraph", text: "With fewer than five games, percentages are early signals: **Low sample** on a card and the caution on the page mark that small sample. The games list shows the latest 50; every stat above still uses all matched games. Use the result and race filters, sortable table headings, the date disclosure for a build order, or **Open game** for its full analysis. Replay-resume tests stay in a separate optional group and never count in stats." },
+    { type: "paragraph", text: "Click any strategy label to see the rule that produced it, or browse [Build definitions](/definitions). The catalog groups rules by race and matchup; search and filter links keep their selections, and a link to a specific rule reveals and focuses that entry." },
+    { type: "heading", text: "Make a variant with Duplicate", anchor: "duplicate" },
+    { type: "paragraph", text: "Open a build's **⋯** menu and choose **Duplicate**. A new private draft keeps the original's rules, strategy notes, private notes and source replay. Its name ends in **(copy)**; change it before saving if you like. Saving creates a separate build with its own record. If that name already exists, choose another name and save again; the original is preserved." },
+    { type: "heading", text: "Publish, update and unpublish a Community listing", anchor: "community-listing" },
+    { type: "paragraph", text: "Choose **Publish…** for a private build or **Update listing** for one already shared. The **⋯** menu has **View on Community**, **Copy public link** and **Unpublish** for a public build. Unpublish removes its Community listing while keeping your private copy, stats and notes. **Delete** removes the private build and its Community listing. See [Publish and reuse community builds](/help/publish-community-builds)." },
     { type: "heading", text: "Re-match replays" },
     {
       type: "paragraph",

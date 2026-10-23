@@ -21,6 +21,7 @@ const { eraForGame } = require("../util/patchEra");
 const { BUILD_INTENT_LABEL_PROJECTION, detectorView } = require("./buildIntentShape");
 const { detectorLabelMatch } = require("./buildIntentReaders");
 const { randomUUID } = require("node:crypto");
+const { deliverCoachingNotification } = require("./notificationDelivery");
 
 const DOC_ID = "locker";
 const CALENDAR_PREFIX = "calendar:";
@@ -57,12 +58,13 @@ class CoachingService {
    *   devicePairings: import('mongodb').Collection,
    *   deviceTokens: import('mongodb').Collection,
    * }, io?: import('socket.io').Server|null, logger?: import('pino').Logger,
-   * now?: () => Date}} deps
+   * notifications?: import('./notifications').NotificationsService, now?: () => Date}} deps
    */
   constructor(deps) {
     this.db = deps.db;
     this.io = deps.io || null;
     this.logger = deps.logger || null;
+    this.notifications = deps.notifications || null;
     this.assignmentClock = typeof deps.now === "function" ? deps.now : () => new Date();
   }
 
@@ -752,8 +754,9 @@ class CoachingService {
       [userId, student.userId, coach.userId],
     );
     if (!result.ok) throw practiceSharingConflict(result.rev);
-    this._notifyAssignment(student.userId, {
+    await this._notifyAssignment(student.userId, {
       kind: "practice_sharing_requested",
+      shareId: `${student.id}:${coach.id}:${new Date(practiceSharing.requestedAt).toISOString()}`,
       coachName: safeAssignmentName(coach.name, "Coach"),
     });
     return {
@@ -817,8 +820,9 @@ class CoachingService {
       [userId, student.userId, coach.userId],
     );
     if (!result.ok) throw practiceSharingConflict(result.rev);
-    this._notifyAssignment(coach.userId, {
+    await this._notifyAssignment(coach.userId, {
       kind: `practice_sharing_${decision}`,
+      shareId: `${student.id}:${coach.id}:${new Date(practiceSharing.requestedAt).toISOString()}`,
       studentName: safeAssignmentName(student.name, "Student"),
     });
     return {
@@ -877,8 +881,9 @@ class CoachingService {
       [userId, student.userId, coach.userId],
     );
     if (!result.ok) throw practiceSharingConflict(result.rev);
-    this._notifyAssignment(coach.userId, {
+    await this._notifyAssignment(coach.userId, {
       kind: "practice_sharing_revoked",
+      shareId: `${student.id}:${coach.id}:${new Date(practiceSharing.requestedAt).toISOString()}`,
       studentName: safeAssignmentName(student.name, "Student"),
     });
     return {
@@ -997,7 +1002,7 @@ class CoachingService {
       this._authorizeAssignment(winner, context);
       return this._assignmentResponse(winner, context.roster, this._assignmentNow());
     }
-    this._notifyAssignment(student.userId, {
+    await this._notifyAssignment(student.userId, {
       kind: "assigned",
       assignmentId: id,
       coachName: doc.coachName,
@@ -1158,7 +1163,7 @@ class CoachingService {
       throw coachingError(409, "assignment_conflict", `Assignment changed in another tab (current revision ${latest.rev || 0}).`);
     }
     const next = { ...current, ...update };
-    this._notifyAssignment(current.studentUserId, {
+    await this._notifyAssignment(current.studentUserId, {
       kind: "cancelled",
       assignmentId: current.id,
       coachName: current.coachName,
@@ -1391,13 +1396,14 @@ class CoachingService {
   }
 
   /** @param {string|undefined|null} userId @param {Record<string,unknown>} payload */
-  _notifyAssignment(userId, payload) {
-    if (!this.io || !userId) return;
+  async _notifyAssignment(userId, payload) {
+    if (!userId) return;
     try {
-      this.io.to(`user:${userId}`).emit("coaching:assignment", payload);
+      this.io?.to(`user:${userId}`).emit("coaching:assignment", payload);
     } catch (err) {
       if (this.logger) this.logger.warn({ err, userId }, "coaching_assignment_notification_failed");
     }
+    await deliverCoachingNotification(this.notifications, userId, payload, this.logger);
   }
 
   /**
@@ -1666,7 +1672,7 @@ class CoachingService {
       if (committed) return { booking: publicBooking(committed) };
       throw coachingError(409, "slot_unavailable", "That time was just booked. Choose another opening.");
     }
-    this._notify(actor.coach.userId, {
+    await this._notify(actor.coach.userId, {
       bookingId: booking.id,
       kind: "booked",
       startAt: booking.startAt.toISOString(),
@@ -1735,7 +1741,7 @@ class CoachingService {
       throw coachingError(409, "booking_cancelled", "That booking was already changed.");
     }
     const recipient = isCoach ? booking.studentUserId : actor.coach.userId;
-    this._notify(recipient, {
+    await this._notify(recipient, {
       bookingId,
       kind: "cancelled",
       startAt: toDate(booking.startAt).toISOString(),
@@ -1858,13 +1864,14 @@ class CoachingService {
   }
 
   /** @param {string|undefined|null} userId @param {Record<string,unknown>} payload */
-  _notify(userId, payload) {
-    if (!this.io || !userId) return;
+  async _notify(userId, payload) {
+    if (!userId) return;
     try {
-      this.io.to(`user:${userId}`).emit("coaching:booking", payload);
+      this.io?.to(`user:${userId}`).emit("coaching:booking", payload);
     } catch (err) {
       if (this.logger) this.logger.warn({ err, userId }, "coaching_notification_failed");
     }
+    await deliverCoachingNotification(this.notifications, userId, payload, this.logger);
   }
 }
 

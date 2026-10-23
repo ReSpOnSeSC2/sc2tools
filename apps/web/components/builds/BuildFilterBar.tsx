@@ -8,15 +8,15 @@ import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Toggle } from "@/components/ui/Toggle";
+import { FilterPill } from "@/components/ui/FilterPill";
 import {
   COMMON_MATCHUPS,
   raceIconName,
   raceLetter,
-  raceTint,
   type Race,
 } from "@/lib/race";
 
-export type BuildSortKey = "updated" | "winRate" | "games" | "name";
+export type BuildSortKey = "updated" | "winRate" | "games" | "name" | "lastPlayed";
 
 export interface BuildFilterState {
   search: string;
@@ -39,6 +39,7 @@ export interface BuildFilterBarProps {
 
 const SORT_OPTIONS: ReadonlyArray<{ value: BuildSortKey; label: string }> = [
   { value: "updated", label: "Recently edited" },
+  { value: "lastPlayed", label: "Last played" },
   { value: "winRate", label: "Win rate" },
   { value: "games", label: "Most games" },
   { value: "name", label: "Name (A→Z)" },
@@ -148,74 +149,29 @@ interface MatchupPillsProps {
 function MatchupPills({ value, onChange }: MatchupPillsProps) {
   return (
     <div
-      role="radiogroup"
+      role="group"
       aria-label="Filter by matchup"
       className="-mx-1 flex flex-wrap gap-1.5 overflow-x-auto px-1"
     >
-      <PillButton
+      <FilterPill
         active={value === "All"}
         onClick={() => onChange("All")}
       >
         All
-      </PillButton>
+      </FilterPill>
       {COMMON_MATCHUPS.map(({ my, vs }) => {
         const key = matchupKey(my, vs);
-        const tint = raceTint(my);
         return (
-          <PillButton
+          <FilterPill
             key={key}
             active={value === key}
             onClick={() => onChange(key)}
-            tintBg={tint.bg}
-            tintBorder={tint.border}
-            tintText={tint.text}
           >
             <Icon name={raceIconName(my)} kind="race" size={14} decorative />
             <span className="font-mono">{key}</span>
-          </PillButton>
+          </FilterPill>
         );
       })}
     </div>
-  );
-}
-
-interface PillButtonProps {
-  active: boolean;
-  onClick: () => void;
-  tintBg?: string;
-  tintBorder?: string;
-  tintText?: string;
-  children: React.ReactNode;
-}
-
-function PillButton({
-  active,
-  onClick,
-  tintBg,
-  tintBorder,
-  tintText,
-  children,
-}: PillButtonProps) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={active}
-      onClick={onClick}
-      className={[
-        "inline-flex min-h-[36px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-caption font-medium",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-        active
-          ? [
-              "border-accent-cyan/60 bg-accent-cyan/15 text-accent-cyan",
-              tintBg ?? "",
-              tintBorder ?? "",
-              tintText ?? "",
-            ].join(" ")
-          : "border-border bg-bg-elevated text-text-muted hover:border-border-strong hover:text-text",
-      ].join(" ")}
-    >
-      {children}
-    </button>
   );
 }

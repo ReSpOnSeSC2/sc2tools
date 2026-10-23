@@ -9,9 +9,12 @@ import {
   Heart,
   Server,
   ShieldCheck,
-  Sparkles,
+  Wallet,
+  HelpCircle,
   Tv,
 } from "lucide-react";
+import { CostBar } from "@/components/donate/CostBar";
+import { CopyPaypalEmail } from "@/components/donate/CopyPaypalEmail";
 import type { LucideIcon } from "lucide-react";
 import { Badge, Card, GlowHalo, Section } from "@/components/ui";
 import {
@@ -73,9 +76,7 @@ const CHANNELS: ReadonlyArray<DonationChannel> = [
     detail: (
       <>
         Or send directly to{" "}
-        <code className="rounded bg-bg-elevated px-1.5 py-0.5 font-mono text-caption">
-          {PAYPAL_EMAIL}
-        </code>{" "}
+        <CopyPaypalEmail email={PAYPAL_EMAIL} />{" "}
         from your PayPal app.
       </>
     ),
@@ -124,29 +125,10 @@ function HeroBlock({ costs }: { costs: InfrastructureCosts | null }) {
         Support SC2 Tools
       </Badge>
       <h1 className="mt-3 text-h1 font-bold tracking-tight md:text-display-lg">
-        SC2 Tools is free.
-        <br />
-        <span className="text-accent-cyan">Donations keep it that way.</span>
+        Running SC2 Tools costs about {formatUsd(summary?.totalUsd ?? FIXED_MONTHLY_FALLBACK_USD)} a month. Every feature stays free.
       </h1>
       <p className="mx-auto mt-4 max-w-2xl text-body-lg text-text-muted">
-        Every feature ships free for every player. A one-time tip helps cover
-        the infrastructure behind it.{" "}
-        {summary ? (
-          <>
-            The current estimated monthly run rate is{" "}
-            {formatUsd(summary.totalUsd)}:{" "}
-            {summary.mode === "atlas_projected"
-              ? `${formatUsd(costs!.site.nonMongoFixedMonthlyUsd)} non-Mongo fixed costs + ${formatUsd(summary.atlasUsd)} projected Atlas + ${formatUsd(summary.r2Usd)} estimated R2.`
-              : `${formatUsd(FIXED_MONTHLY_FALLBACK_USD)} planning fallback + ${formatUsd(summary.r2Usd)} live R2 estimate.`}
-          </>
-        ) : (
-          <>
-            The {formatUsd(FIXED_MONTHLY_FALLBACK_USD)}/month public-list
-            planning baseline covers one Render-hosted API, MongoDB Atlas M10
-            and the domain. Live usage is temporarily unavailable, so no R2
-            amount is being guessed.
-          </>
-        )}
+        Donations pay for the servers, database and storage.
       </p>
     </section>
   );
@@ -164,7 +146,7 @@ function DonationCard({ channel }: { channel: DonationChannel }) {
             {channel.id === "streamlabs" ? (
               <Tv className="h-5 w-5" />
             ) : (
-              <Sparkles className="h-5 w-5" />
+              <Wallet className="h-5 w-5" />
             )}
           </span>
           <div>
@@ -210,7 +192,7 @@ const COST_LINES: ReadonlyArray<CostLine> = [
   {
     id: "render",
     icon: Server,
-    label: "Render — Starter API instance",
+    label: "Render — API instance",
     detail:
       "One always-on instance runs the Express + Socket.io API, replay sync, parser jobs and live overlays. The Next.js website is hosted separately on Vercel.",
     approxMonthlyUsd: 7,
@@ -288,6 +270,7 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
       description="No ads and no investor money. Live provider measurements, posted charges and projected monthly costs are shown separately."
       className="mx-auto max-w-5xl"
     >
+      <CostBar lines={displayedLines} />
       <Card padded={false}>
         <ul className="divide-y divide-border">
           {displayedLines.map((line) => (
@@ -331,7 +314,9 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
           </div>
         </div>
       </Card>
-      <div className="mt-7 max-w-3xl space-y-4 text-caption leading-relaxed text-text-muted">
+      <details className="mt-7 max-w-3xl rounded-md border border-border p-4 text-caption leading-relaxed text-text-muted">
+        <summary className="cursor-pointer text-body font-semibold text-text">How these numbers are measured</summary>
+        <div className="mt-4 space-y-4">
         {costs ? (
           <>
             <p>
@@ -389,7 +374,8 @@ function CostBreakdown({ costs }: { costs: InfrastructureCosts | null }) {
           alone does not add API CPU or memory. Capacity changes come from the
           web service&rsquo;s Starter, Standard or Pro instance type.
         </p>
-      </div>
+        </div>
+      </details>
     </Section>
   );
 }
@@ -414,6 +400,7 @@ function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
           : "Atlas disk telemetry unavailable";
       return {
         ...line,
+        approxMonthlyUsd: projected ?? costs.mongo.planning.monthlyUsd,
         detail:
           `${cluster?.tier ?? "Dedicated Atlas"} stores searchable replay metadata, opponent histories and aggregates. `
           + `SC2 Tools database allocation: ${allocated}; ${disk}.`,
@@ -426,6 +413,10 @@ function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
             ? "public-list planning estimate"
             : "projected monthly run rate",
       };
+    }
+    if (line.id === "render" && costs) {
+      const domain = COST_LINES.find((item) => item.id === "domain")!.approxMonthlyUsd;
+      return { ...line, approxMonthlyUsd: Math.max(0, costs.site.nonMongoFixedMonthlyUsd - domain) };
     }
     if (line.id !== "r2") return line;
     if (!costs) {
@@ -440,6 +431,7 @@ function costLines(costs: InfrastructureCosts | null): ReadonlyArray<CostLine> {
     );
     return {
       ...line,
+      approxMonthlyUsd: costs.r2.estimatedCostUsd.currentMonthly,
       detail:
         `Stores ${replayCount} verified original ${costs.archive.verifiedOriginalReplays === 1 ? "replay" : "replays"} `
         + "plus detailed analysis objects. Standard storage includes the first 10 GB-month; the estimate also includes classified Class A and Class B operations from the current cycle.",
@@ -626,7 +618,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
       <Card padded={false}>
         <div className="space-y-1.5 p-4">
           <p className="flex items-center gap-2 text-body font-semibold text-text">
-            <ShieldCheck className="h-4 w-4 text-accent-cyan" aria-hidden />
+            <HelpCircle className="h-4 w-4 text-accent-cyan" aria-hidden />
             {q}
           </p>
           <p className="text-caption text-text-muted">{a}</p>

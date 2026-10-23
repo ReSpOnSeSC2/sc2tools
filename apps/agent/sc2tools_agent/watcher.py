@@ -73,7 +73,7 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 from watchdog.observers.api import ObservedWatch
 
-from .config import AgentConfig
+from .config import AgentConfig, PARSE_CONCURRENCY_USEFUL_MAX
 from .replay_finder import (
     all_multiplayer_dirs,
     drop_nested_folders,
@@ -86,6 +86,7 @@ from .replay_pipeline import (
     AnalyzerImportError,
     parse_replay_for_cloud_ex,
 )
+from .game_activity import GameActivityGate, background_workers, lower_worker_priority as _lower_worker_priority, on_battery
 from .state import AgentState, save_state
 from .sync_filter import SyncFilter
 from .uploader.queue import UploadJob, UploadQueue
@@ -419,8 +420,10 @@ class ReplayWatcher:
         upload: UploadQueue,
         on_replay_skipped: Optional[Callable[[Path, Optional[str]], None]] = None,
         on_capture_notice: Optional[Callable[[str], None]] = None,
+        activity_gate=None,
         on_roots_changed: Optional[Callable[[list[Path]], None]] = None,
     ) -> None:
+        self._activity_gate = activity_gate or GameActivityGate(enabled=False)
         self._cfg = cfg
         self._state = state
         self._upload = upload
@@ -575,7 +578,8 @@ class ReplayWatcher:
         Returns ``(executor, uses_processes)``. The ``uses_processes``
         flag drives the result-handling fork in ``_submit_parse``.
         """
-        workers = self._cfg.parse_concurrency
+        mode = getattr(self._state, "background_import_speed", None)
+        workers = background_workers(mode, PARSE_CONCURRENCY_USEFUL_MAX) if mode else self._cfg.parse_concurrency
         if not _parse_pool_use_processes_env():
             log.info(
                 "parse_pool_mode=thread workers=%d reason=env_opt_out",
@@ -585,6 +589,7 @@ class ReplayWatcher:
                 ThreadPoolExecutor(
                     max_workers=workers,
                     thread_name_prefix="sc2tools-parse",
+                    initializer=_lower_worker_priority, initargs=(mode or "balanced", False),
                 ),
                 False,
             )
@@ -602,13 +607,15 @@ class ReplayWatcher:
                 ThreadPoolExecutor(
                     max_workers=workers,
                     thread_name_prefix="sc2tools-parse",
+                    initializer=_lower_worker_priority, initargs=(mode or "balanced", False),
                 ),
                 False,
             )
         ctx = multiprocessing.get_context("spawn")
         log.info("parse_pool_mode=process workers=%d", workers)
         return (
-            ProcessPoolExecutor(max_workers=workers, mp_context=ctx),
+            ProcessPoolExecutor(max_workers=workers, mp_context=ctx,
+                                initializer=_lower_worker_priority, initargs=(mode or "balanced", True)),
             True,
         )
 
@@ -1009,13 +1016,21 @@ class ReplayWatcher:
             return int(counter())
         return int(self._upload.pending_count())
 
+    def _background_held(self):
+        return (getattr(self._state, "pause_history_in_game", True) and self._activity_gate.busy
+                or getattr(self._state, "pause_on_battery", False) and on_battery())
+
+    @property
+    def capture_running(self):
+        return self._capture_active
+
     def _drain_history_inventory(self) -> None:
         """Fill free parse slots while retaining all pressure ceilings."""
         if not self._history_drain_lock.acquire(blocking=False):
             return
         try:
             while not self._stop.is_set():
-                if getattr(self._state, "paused", False):
+                if getattr(self._state, "paused", False) or self._background_held():
                     return
                 pending_depth = self._ingest_pending_count()
                 if pending_depth >= _UPLOAD_QUEUE_SOFT_LIMIT:
@@ -1505,6 +1520,9 @@ class ReplayWatcher:
 
     def _drain_capture_queue(self) -> None:
         while True:
+            if not self._stop.is_set() and (self._activity_gate.busy or (getattr(self._state, "pause_on_battery", False) and on_battery())):
+                self._stop.wait(0.25)
+                continue
             with self._capture_queue_lock:
                 if not self._capture_queue or self._stop.is_set():
                     self._capture_draining = False
@@ -1527,7 +1545,7 @@ class ReplayWatcher:
         from .socket_client import _ENGINE_REBUILD_LOCK
 
         def cancelled():
-            return self._stop.is_set() or bool(self._state.paused)
+            return self._stop.is_set() or bool(self._state.paused) or self._activity_gate.busy
 
         if cancelled():
             return

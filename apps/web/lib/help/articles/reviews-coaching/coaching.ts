@@ -37,6 +37,7 @@ const article: HelpArticle = {
       text: "[Coaching](/coaching) is a private workspace for a coach and their students, with three tabs: **Locker** (the coach's notes, builds and materials for each student), **Practice** (practice plans) and **Sessions** (booking lessons). Practice progress is counted from synced replays with fixed rules, and the workspace never grades or scores your play: every judgement is your coach's.",
     },
     { type: "heading", anchor: "roles-and-linking", text: "Who can use it" },
+    { type: "paragraph", text: "The header shows your role and your coach or students. A badge on **Practice** marks sharing requests waiting for a student's answer. **Sessions** shows unread booking alerts, and a warning dot marks unpublished availability changes. Use the arrow keys, Home or End to move through the workspace tabs." },
     {
       type: "list",
       items: [
@@ -104,12 +105,13 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "**Coach:** in **Sessions**, choose your **Coaching timezone**, the **Session lengths** you offer (30 minutes to 8 hours) and your **Weekly hours**, then press **Save availability**. Sessions already booked stay booked when you change your hours later.",
+        "**Coach:** in **Sessions**, choose your **Coaching timezone**, the **Session lengths** you offer (30 minutes to 8 hours) and your **Weekly hours**, then press **Publish availability** in the bar at the bottom. Sessions already booked stay booked when you change your hours later.",
         "**Coach:** **Pause new bookings** stops new bookings without touching booked sessions. **Resume bookings** opens them again.",
         "**Student:** in **Sessions**, pick a **Session length** and an open time under **Available times**. Times are shown in your local time, with your coach's time alongside. Press **Confirm booking**, and the session appears under **Your upcoming sessions**.",
         "**Either side** can press **Cancel session** on an upcoming session. The other person sees the change, and the time opens up for booking again.",
       ],
     },
+    { type: "paragraph", text: "Unpublished changes are kept while you switch tabs. **Publish availability** saves them; **Reset** restores the published hours. The warning dot on Sessions stays until you publish or reset. Booked sessions always show in your saved coaching time zone, so changing the draft zone does not move existing bookings." },
   ],
   related: ["install-app", "replay-reviews"],
 };

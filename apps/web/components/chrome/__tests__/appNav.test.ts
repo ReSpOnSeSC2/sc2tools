@@ -84,7 +84,7 @@ describe("app surface matching", () => {
     expect(surfaceTitle("/app/replays")).toBe("Replays");
     expect(surfaceTitle("/settings")).toBe("Settings");
     expect(surfaceTitle("/devices")).toBe("Devices");
-    expect(surfaceTitle("/builds/anything")).toBe("Custom builds");
+    expect(surfaceTitle("/builds/anything")).toBe("Build library");
     expect(surfaceTitle("/admin/users")).toBe("Admin");
     expect(surfaceTitle("/coaching")).toBe("Coaching");
   });

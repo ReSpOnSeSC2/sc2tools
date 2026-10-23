@@ -405,7 +405,7 @@ function sanitizeGoals(raw) {
   return out;
 }
 
-const SCENE_MODES = ["brb", "starting"];
+const SCENE_MODES = ["brb", "starting", "intermission", "ending"];
 const SCENE_MESSAGE_MAX = 80;
 /** Countdown targets clamp to now+24h — a fat-fingered year-long
  * countdown shouldn't persist. */

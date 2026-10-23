@@ -57,7 +57,7 @@ describe("opponent profile channel placement", () => {
     expect(twitch.getAttribute("href")).toBe("https://www.twitch.tv/harstem");
     expect(youtube.getAttribute("href")).toBe("https://www.youtube.com/@Harstem");
     expect(within(header).getByRole("group", { name: "Harstem channels" })).toBeTruthy();
-    expect(within(header).getByTitle("Revealed on SC2Pulse as Harstem")).toBeTruthy();
+    expect(within(header).getByTitle("Revealed on SC2Pulse")).toBeTruthy();
     expect(screen.getAllByRole("link", { name: /Visit Harstem's .* channel/ })).toHaveLength(2);
     expect(header.compareDocumentPosition(screen.getByLabelText("Opponent notes")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(header.compareDocumentPosition(screen.getByLabelText("Replay history")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -92,8 +92,8 @@ describe("opponent profile channel placement", () => {
     expect(screen.getByLabelText("Player identity review")).toBeTruthy();
     expect(within(header).getByRole("heading", { name: "IIIIllll" })).toBeTruthy();
     expect(within(header).queryByRole("heading", { name: "Strange" })).toBeNull();
-    const aka = within(header).getByTitle("Confirmed by an admin as Strange");
-    expect(within(aka).getByText("AKA")).toBeTruthy();
+    const aka = within(header).getByTitle("Confirmed by an admin");
+    expect(within(aka).getByText("Confirmed as Strange")).toBeTruthy();
     expect(aka.textContent).toContain("Strange");
     expect(within(header).getByText("Played account · Pulse ID")).toBeTruthy();
     expect(within(header).getByRole("link", { name: "8703807" }).getAttribute("href")).toContain("id=8703807");
@@ -120,7 +120,7 @@ describe("opponent profile channel placement", () => {
     }));
     const { rerender } = render(<ProfileView pulseId="8703807" onBack={vi.fn()} />);
     expect(screen.getByRole("heading", { name: "IIIIllll" })).toBeTruthy();
-    expect(screen.getByTitle("Confirmed by an admin as Strange")).toBeTruthy();
+    expect(screen.getByTitle("Confirmed by an admin")).toBeTruthy();
     expect(screen.queryByRole("note")).toBeNull();
     expect(screen.queryByText("MMR by race")).toBeNull();
     expect(screen.queryByText("5,275")).toBeNull();
@@ -145,7 +145,7 @@ describe("opponent profile channel placement", () => {
     render(<ProfileView pulseId="8703807" onBack={vi.fn()} />);
     const header = screen.getByLabelText("Opponent profile");
     expect(within(header).getByRole("heading", { name: "IIIIllll" })).toBeTruthy();
-    expect(within(header).getByTitle("Confirmed by an admin as Strange")).toBeTruthy();
+    expect(within(header).getByTitle("Confirmed by an admin")).toBeTruthy();
     expect(within(header).getByRole("note", { name: "Latest recorded SC2Pulse MMR 6305 for Strange's main profile" })).toBeTruthy();
     expect(screen.queryByText("5,275")).toBeNull();
     expect(useApiMock).toHaveBeenCalledWith("/v1/opponents/8703807/pulse-intel", { revalidateOnFocus: false });

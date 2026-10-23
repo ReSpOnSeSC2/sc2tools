@@ -35,7 +35,7 @@ export const TABS: readonly TabDef[] = [
   { id: "trends", label: "Trends", icon: TrendsIcon, description: "Win-rate trajectory across periods." },
   { id: "macro", label: "Macro", icon: MacroIcon, description: "Your macro report: leaks priced in minerals, and where macro wins games." },
   { id: "battlefield", label: "Maps", icon: MapsIcon, description: "Maps and matchup performance." },
-  { id: "builds", label: "Builds", icon: BuildsIcon, description: "Your builds, performance, and editor." },
+  { id: "builds", label: "Build stats", icon: BuildsIcon, description: "Win rates and trends for the builds you play." },
   { id: "replays", label: "Replays", icon: ReplaysIcon, description: "Browse, filter, and share your replay history." },
   { id: "arcade", label: "Arcade", icon: ArcadeIcon, description: "Quizzes and games that go deeper than the charts." },
 ] as const;

@@ -54,9 +54,9 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "Open one of your 1v1 games: from [Replays](/app/replays), from the game's own page, or from an opponent's list of games. Press **Ask for a review**. On the review board, **Ask about one of your games** takes you to Replays.",
+        "On the [review board](/reviews) or in [My reviews](/reviews/mine), press **Ask about one of your games**. Search the game picker, load more if needed, then choose a synced 1v1 game to open the question form here. You can also open a game from [Replays](/app/replays), its own page or an opponent's games and press **Ask for a review**.",
         "Write **your question**, 20 to 500 characters. Name the moment and what you tried: *Why did my blink all-in fail? I hit at 6:00 but the roaches were already out* gets better answers than *What did I do wrong?*",
-        "Optionally pick **Focus** tags (build order, macro, scouting, army control, decision making, micro, specific timing) and a **Time range of interest**, like 5:00 to 6:30.",
+        "Optionally pick **Focus** tags (build order, macro, scouting, army control, decision making, micro, specific timing) and a **Time range of interest**. **Early**, **Mid** and **Late** fill a range inside this game's length; **Whole game** clears it. You can type your own range, like 5:00 to 6:30. All digits mean seconds: **500** means **8:20**. The form offers **Use 5:00** if that is the clock time you intended.",
         "Choose **Who should review**: **Anyone**, **My league or higher** or **Masters+**. *My league or higher* is checked against each reviewer's league, verified from their own ranked games, and compared with the league you played at in this game. Anyone who can review may still reply under a review.",
         "Choose the **Visibility**. **Public board** lists your request on the board. **Link only (not listed)** keeps it off the board and out of search engines, so only people you send the link to can find it.",
         "Choose how you appear. You post as *Anonymous* and your race unless you tick **Show my display name** (set it in [Settings → Profile](/settings?tab=profile) first). Your opponent is never named: they appear as their race and approximate MMR.",
@@ -76,6 +76,17 @@ const article: HelpArticle = {
         "You can have up to **3 open requests** at a time and post up to 3 new ones a day, one per game.",
       ],
     },
+    { type: "heading", anchor: "finding-requests", text: "Find requests you can answer" },
+    {
+      type: "list",
+      items: [
+        "The [review board](/reviews) filters are shareable links. **Race (asker race)** selects the player's side of the matchup; **Matchup** narrows it to one opponent race. **League** filters the asker's league and **Focus** picks a topic. **Unanswered** keeps requests with no reviews.",
+        "**Hot** balances recent activity and interest, **New** shows the newest requests first, and **Top** favors requests with helpful answers. Remove an active filter using its chip, or **Clear all** to keep your sort and reset the filters.",
+        "**Older requests** moves through the filtered results. **Newest** returns to the start with those same filters. An empty filtered view offers **Clear filters**; it does not mean the whole board is empty.",
+        "When signed in, **Requests you can help with** lists games in your verified race's matchups at or below your league. On phones, open the panel above the board; this browser remembers whether you left it open. **See all … requests** opens that race's unanswered board. Until your league is verified, sync ranked games with the [desktop app](/download).",
+        "If the game picker has no synced games, install the desktop app and [pair a device](/devices). It offers 1v1 games only. A failed load has a retry action, and asking about a game you already posted explains where its existing request is.",
+      ],
+    },
     { type: "heading", anchor: "writing-a-review", text: "Write a review" },
     {
       type: "steps",
@@ -90,6 +101,10 @@ const article: HelpArticle = {
     {
       type: "paragraph",
       text: "Replies go one level deep: press **Reply** under a review to answer it. The asker's own notes and replies are marked **Asker**.",
+    },
+    {
+      type: "paragraph",
+      text: "Comment text and its time range are saved as a draft in this browser until you post or discard them. Reopen the comment box to restore it; **Use current time** moves its start, and **Discard** clears it. Drafts expire after 14 days, and this browser keeps the 20 most recent. Press **Ctrl+Enter** (**⌘+Enter** on Mac) to post. You can edit a comment for **15 minutes**; the editor shows how long remains and keeps your text visible if that window closes.",
     },
     { type: "heading", anchor: "who-can-review", text: "Who can review" },
     {
@@ -129,10 +144,11 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "Press **Close request** at the top of your request when you're done. Closing stops new comments and stops sharing your game's analysis (the build order, macro breakdown and map playback reviewers watch). The question and every comment stay readable.",
+        "Open **Asker tools** below the action row on your request, then press **Close request** when you're done. Only you see these tools. Closing stops new comments and stops sharing your game's analysis (the build order, macro breakdown and map playback reviewers watch). The question and every comment stay readable. The confirmation explains that closing cannot be undone.",
         "A closed request can't be reopened. To get more answers, ask about the same game again with a new request.",
         "Removing the game from your history closes its request on its own.",
-        "To stop sharing the replay file without closing, untick **Let reviewers download my replay file** on the request. New downloads stop right away; files people already downloaded stay with them.",
+        "To stop sharing the replay file without closing, turn off **Let reviewers download my replay file** in **Asker tools**. The file contains both players' in-game names and in-game chat, even when the request is anonymous. New downloads stop right away; files people already downloaded stay with them.",
+        "**Share** offers a Reddit post, a Discord message or a link. Phones with system sharing can open their share sheet directly. If copying is blocked, select and copy the text shown inside the menu.",
       ],
     },
     { type: "heading", anchor: "blocking-and-reporting", text: "Block or report" },
@@ -140,6 +156,7 @@ const article: HelpArticle = {
       type: "list",
       items: [
         "Every comment has a **⋯** menu (**More actions**). **Report…** sends it to a moderator with a reason: spam, abusive or hateful, off-topic, reveals someone's identity, or other. When three different people report the same comment or request, it's hidden until a moderator looks at it.",
+        "You can also report a whole request from its **⋯** menu (**Request actions**) beside **Share**. Pick **Report request…**, then the reason. Reporting the same request or comment again says that you already reported it.",
         "Report anything that names or links to the opponent. Reviews must never reveal who they were. A disagreement about strategy isn't a reason to report: reply, or upvote the review you agree with.",
         "**Block reviewer** hides that person's comments from you everywhere and stops notifications about them. They can't reply to your comments or comment on requests you post under your name.",
         "To undo a block, open [My reviews](/reviews/mine), find **Blocked reviewers** and press **Unblock**.",

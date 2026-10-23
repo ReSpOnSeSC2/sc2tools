@@ -69,6 +69,7 @@ function buildAuth(deps) {
       };
       next();
     } catch (err) {
+      if (/** @type {any} */ (err)?.code === "account_deleted") { next(httpError(401, "account_deleted")); return; }
       next(httpError(401, "auth_failed", err instanceof Error ? err : undefined));
     }
   };

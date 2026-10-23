@@ -8,8 +8,8 @@
  */
 export { Badge } from "./Badge";
 export type { BadgeProps, BadgeVariant, BadgeSize } from "./Badge";
-export { Button } from "./Button";
-export type { ButtonProps, ButtonVariant, ButtonSize } from "./Button";
+export { Button, LinkButton, buttonClasses } from "./Button";
+export type { ButtonProps, LinkButtonProps, ButtonVariant, ButtonSize } from "./Button";
 export { Card } from "./Card";
 export type { CardVariant } from "./Card";
 export { ConfirmDialog } from "./ConfirmDialog";

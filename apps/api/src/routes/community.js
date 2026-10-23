@@ -12,7 +12,7 @@ const rateLimit =
  *
  * Public reads (no auth):
  *   GET /community/builds              — list published builds
- *                                        (matchup, sort, q, limit, offset)
+ *                                        (race, vsRace, skill, matchup, sort, q, limit, offset)
  *   GET /community/builds/:slug        — detail
  *   GET /community/arcade-universe     — balanced top-N-per-matchup list
  *                                        used by the Arcade Stock Market
@@ -92,14 +92,17 @@ function buildCommunityRouter(deps) {
         ? Number.parseInt(String(req.query.offset), 10)
         : undefined;
       const sortRaw = req.query.sort ? String(req.query.sort) : "top";
-      const sort = ["top", "new", "controversial"].includes(sortRaw)
-        ? /** @type {'top'|'new'|'controversial'} */ (sortRaw)
+      const sort = ["top", "new", "controversial", "updated"].includes(sortRaw)
+        ? /** @type {'top'|'new'|'controversial'|'updated'} */ (sortRaw)
         : "top";
       const search = req.query.q
         ? String(req.query.q).trim().slice(0, 80)
         : undefined;
       const result = await deps.community.listPublic({
         matchup,
+        race: req.query.race ? String(req.query.race) : undefined,
+        vsRace: req.query.vsRace ? String(req.query.vsRace) : undefined,
+        skill: req.query.skill ? String(req.query.skill) : undefined,
         limit,
         offset,
         sort,
@@ -128,6 +131,18 @@ function buildCommunityRouter(deps) {
       next(err);
     }
   });
+
+  router.get(
+    "/community/my-builds",
+    deps.auth,
+    async (req, res, next) => {
+      res.set("Cache-Control", "private, no-store");
+      try {
+        if (!req.auth) throw new Error("auth_required");
+        res.json({ items: await deps.community.listOwnerBuilds(req.auth.userId) });
+      } catch (err) { next(err); }
+    },
+  );
 
   router.get(
     "/community/my-build-stats",

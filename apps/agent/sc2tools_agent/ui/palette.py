@@ -1,0 +1,7 @@
+"""Shared status colors; this module is Qt-free."""
+GREEN = "#55ce89"
+CYAN = "#3bc3ca"
+AMBER = "#e9b24a"
+RED = "#f16d6d"
+BLUE = "#7c8cff"
+RING = "#101319"

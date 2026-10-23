@@ -39,6 +39,7 @@ const article: HelpArticle = {
       ],
     },
     { type: "heading", text: "Drill in", anchor: "drill-in" },
+    { type: "paragraph", text: "Click any linked strategy label to see the rule that produced it, or browse [Build definitions](/definitions). Definitions are grouped by race and matchup; filters stay in the URL, and a direct link reveals the selected rule even if your filters hid it." },
     {
       type: "list",
       items: [

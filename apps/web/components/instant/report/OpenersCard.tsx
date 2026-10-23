@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Openers — two cards with the same shape, side by side in the report:
  *
@@ -14,8 +16,10 @@
  *   <OpenersCard rows={report.openers} />
  *   <OpponentOpenersCard rows={report.opponentOpeners} />
  */
+import { useId, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import type { OpenerRow } from "@/lib/instant/report";
-import { ReportCard, WinLoss, WinrateText, gamesLabel } from "./ReportBits";
+import { ReportCard, WinLoss, WinrateText, WinrateBar, gamesLabel } from "./ReportBits";
 
 /** Openers listed before the "+N more" note. */
 export const OPENERS_SHOWN = 5;
@@ -32,12 +36,13 @@ interface OpenerListCardProps extends OpenersCardProps {
 
 /** The shared list: name, games, W-L and win rate per row. */
 function OpenerListCard({ rows, title, subtitle, testId }: OpenerListCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
   if (!rows || rows.length === 0) return null;
-  const shown = rows.slice(0, OPENERS_SHOWN);
-  const hidden = rows.length - shown.length;
+  const shown = expanded ? rows : rows.slice(0, OPENERS_SHOWN);
   return (
     <ReportCard title={title} subtitle={subtitle} testId={testId}>
-      <ul className="divide-y divide-border">
+      <ul id={listId} className="divide-y divide-border">
         {shown.map((row) => (
           <li key={row.name} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 py-2 first:pt-0 last:pb-0">
             <span className="min-w-0 break-words font-semibold text-text">{row.name}</span>
@@ -46,13 +51,14 @@ function OpenerListCard({ rows, title, subtitle, testId }: OpenerListCardProps) 
               <WinLoss wins={row.wins} losses={row.losses} />
               <WinrateText wins={row.wins} losses={row.losses} />
             </span>
+            {row.wins + row.losses > 0 ? <WinrateBar wins={row.wins} losses={row.losses} /> : null}
           </li>
         ))}
       </ul>
-      {hidden > 0 ? (
-        <p className="pt-3 text-caption text-text-muted">
-          +{hidden} more {hidden === 1 ? "opener" : "openers"} — save your games to see them all.
-        </p>
+      {rows.length > OPENERS_SHOWN ? (
+        <Button variant="ghost" className="mt-3 min-h-11" aria-expanded={expanded} aria-controls={listId} onClick={() => setExpanded((value) => !value)}>
+          {expanded ? "Show fewer" : `Show all ${rows.length} openers`}
+        </Button>
       ) : null}
     </ReportCard>
   );

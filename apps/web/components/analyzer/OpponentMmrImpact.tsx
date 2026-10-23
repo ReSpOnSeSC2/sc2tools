@@ -41,12 +41,12 @@ export function MmrImpactLeaders({
     <section aria-labelledby="opponent-mmr-impact-heading">
       <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
         <div>
-          <h3
+          <h2
             id="opponent-mmr-impact-heading"
             className="text-sm font-semibold text-text"
           >
             Opponent MMR impact
-          </h3>
+          </h2>
           <p className="text-xs text-text-dim">
             Verified game-time MMR from consecutive ranked 1v1 replay pairs.
           </p>

@@ -35,6 +35,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useOverlayPreview } from "@/lib/overlayPreviewContext";
 import { API_BASE } from "@/lib/clientApi";
 import {
   DEFAULT_APPEARANCE,
@@ -121,6 +122,7 @@ export interface LoadedConfig {
  * the fetch/split/identity logic.
  */
 export function useMultichatConfig(token: string): LoadedConfig {
+  const preview = useOverlayPreview();
   const [platforms, setPlatforms] = useState<MultichatConfig | null>(null);
   const [appearance, setAppearance] = useState<ChatAppearance>(DEFAULT_APPEARANCE);
   const [tts, setTts] = useState<Record<string, unknown> | null>(null);
@@ -131,9 +133,10 @@ export function useMultichatConfig(token: string): LoadedConfig {
   // the previous token's channels and moderation config until the new token's
   // authoritative response succeeds.
   const [loadedToken, setLoadedToken] = useState<string | null>(null);
-  const loaded = loadedToken === token;
+  const loaded = preview || loadedToken === token;
 
   useEffect(() => {
+    if (preview) return;
     let cancelled = false;
     // Identity is tracked PER SECTION: useMultiChat tears down and
     // reconnects every chat engine when its config object changes, so
@@ -205,7 +208,7 @@ export function useMultichatConfig(token: string): LoadedConfig {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [token]);
+  }, [token, preview]);
 
   return {
     platforms: loaded ? platforms : null,

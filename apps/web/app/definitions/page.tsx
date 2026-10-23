@@ -1,11 +1,9 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import {
   DefinitionsCatalog,
-  DefinitionsHeaderHint,
 } from "@/components/definitions/DefinitionsCatalog";
-import { BUILD_DEFINITIONS, DEFINITIONS_TOTAL } from "@/lib/build-definitions";
+import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
+import { DefinitionsBackLink } from "@/components/definitions/DefinitionsBackLink";
 import { fetchPublishedGuidePaths } from "@/lib/guides/api";
 import { definitionGuideLinks } from "@/lib/guides/definitionLinks";
 import { guidesEnabled } from "@/lib/guides/flags";
@@ -28,26 +26,12 @@ export default async function DefinitionsPage() {
   const guideLinks = definitionGuideLinks(BUILD_DEFINITIONS, published);
   return (
     <div className="space-y-6">
-      <Link
-        href="/builds"
-        className="inline-flex min-h-[44px] items-center gap-1.5 text-caption font-medium text-text-muted hover:text-text"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-        Back to library
-      </Link>
+      <DefinitionsBackLink />
       <PageHeader
         eyebrow="Reference"
         title="Build & Strategy Definitions"
-        description={
-          <>
-            <span className="block">
-              {DEFINITIONS_TOTAL} of {DEFINITIONS_TOTAL} entries · Search,
-              filter by race, drill into per-matchup detection rules.
-            </span>
-          </>
-        }
+        description="How SC2 Tools labels builds and strategies. Every label comes from fixed replay rules, never AI."
       />
-      <DefinitionsHeaderHint />
       <DefinitionsCatalog guideLinks={guideLinks} />
     </div>
   );

@@ -140,14 +140,30 @@ describe("reviews: create eligibility and caps", () => {
 });
 
 describe("reviews: rollout flag", () => {
-  test("off hides every route; admins-only exposes them to admins alone", async () => {
+  test("off hides every Reviews route; the inbox stays authenticated and admins-only Reviews stays restricted", async () => {
     const off = await createHarness({ rollout: "off" });
     try {
-      expect((await request(off.app).get("/v1/reviews")).status).toBe(404);
-      // Signed-in routes 404 too (not 401), so nothing hints the feature exists.
-      expect((await request(off.app).post("/v1/reviews").send({})).status).toBe(404);
-      expect((await request(off.app).get("/v1/me/reviewer")).status).toBe(404);
-      expect((await request(off.app).get("/v1/me/notifications")).status).toBe(404);
+      await off.seedUser("ann"); await off.seedUser("admin");
+      const id = "abcdefghijklmnop";
+      const routes = [
+        ["get", "/reviews"], ["get", "/reviews/leaderboard"], ["get", "/reviews/sitemap"], ["get", "/reviews/for-me"],
+        ...["", "/og", "/analysis", "/analysis/map-playback", "/analysis/map-playback/manifest", `/analysis/map-playback/artifacts/${"a".repeat(64)}/segments/0`, "/replay"].map((tail) => ["get", `/reviews/${id}${tail}`]),
+        ["post", "/reviews"], ...["/replay-sharing", "/close", "/report", "/comments"].map((tail) => ["post", `/reviews/${id}${tail}`]),
+        ["patch", `/reviews/${id}/comments/${id}`], ["delete", `/reviews/${id}/comments/${id}`],
+        ...["helpful", "best", "upvote", "report", "block"].map((action) => ["post", `/reviews/${id}/comments/${id}/${action}`]),
+        ["get", "/me/reviews"], ["get", "/me/reviewer"], ["patch", "/me/reviewer"], ["get", "/me/review-blocks"], ["delete", `/me/review-blocks/${id}`],
+      ];
+      for (const [method, path] of routes) {
+        // Signed-out, regular and admin viewers see the same hidden route.
+        for (const viewer of [null, "ann", "admin"]) {
+          const probe = request(off.app)[method](`/v1${path}`);
+          if (viewer) probe.set("authorization", off.bearer(viewer));
+          expect((await probe).status).toBe(404);
+        }
+      }
+      // The personal inbox is available independently of the Reviews rollout.
+      await request(off.app).get("/v1/me/notifications").expect(401);
+      await request(off.app).get("/v1/me/notifications").set("authorization", off.bearer("ann")).expect(200);
     } finally {
       await off.close();
     }
@@ -160,6 +176,8 @@ describe("reviews: rollout flag", () => {
       const boss = await request(admins.app).get("/v1/reviews").set("authorization", admins.bearer("boss"));
       expect(boss.status).toBe(200);
       expect(boss.body.items).toEqual([]);
+      await request(admins.app).get("/v1/me/notifications").expect(401);
+      for (const viewer of ["boss", "pleb"]) await request(admins.app).get("/v1/me/notifications").set("authorization", admins.bearer(viewer)).expect(200);
     } finally {
       await admins.close();
     }

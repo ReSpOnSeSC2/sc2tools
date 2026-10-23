@@ -64,7 +64,7 @@ ICON_DIR = HERE / "sc2tools_agent" / "ui"
 # the custom_builds schema under ``data/`` that the parser reads at
 # startup. ``replay_pipeline._ensure_analyzer_on_path`` adds the engine
 # root to sys.path at runtime.
-DATAS = []
+DATAS = [(str(HERE / "CHANGELOG.md"), ".")]
 # Optional bot source is data, never a PyInstaller import target. Torch/JAX,
 # checkpoints and replay corpora stay in a separate opt-in local environment.
 BOT_RUNTIME = REPO_ROOT / "apps" / "bot-runtime"

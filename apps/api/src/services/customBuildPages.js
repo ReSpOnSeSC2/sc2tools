@@ -26,7 +26,7 @@ function parseBuildPageOptions(raw = {}) {
     throw invalidPage(`Page size must be between 1 and ${CUSTOM_BUILD_MAX_PAGE_SIZE}.`);
   }
   const sort = textOption(raw.sort, "sort", 20) || "updated";
-  if (!["updated", "name", "games", "winRate"].includes(sort)) throw invalidPage("Invalid build sort.");
+  if (!["updated", "name", "games", "winRate", "lastPlayed"].includes(sort)) throw invalidPage("Invalid build sort.");
   const matchup = textOption(raw.matchup, "matchup", 10);
   if (matchup && matchup !== "All" && !/^[PTZ]v[PTZ]$/.test(matchup)) throw invalidPage("Invalid matchup.");
   const hideEmpty = raw.hideEmpty === true || raw.hideEmpty === "true";
@@ -41,6 +41,7 @@ function parseBuildPageOptions(raw = {}) {
   return {
     limit, sort, matchup: matchup === "All" ? "" : matchup, hideEmpty, view, includeGeneric, forkedFrom,
     search: textOption(raw.search, "search", 200),
+    nameSearch: textOption(raw.nameSearch, "name search", 120),
     name: textOption(raw.name, "name", 200),
     normalizedName: textOption(raw.normalizedName, "normalizedName", 200),
     cursor: textOption(raw.cursor, "cursor", 2048),
@@ -91,6 +92,7 @@ function buildStatsStages(games, userId) {
           } },
           { $group: {
             _id: null, total: { $sum: 1 },
+            lastPlayed: { $max: { $convert: { input: "$date", to: "date", onError: null, onNull: null } } },
             wins: { $sum: { $cond: [{ $in: [bucket, ["win", "victory"]] }, 1, 0] } },
             losses: { $sum: { $cond: [{ $in: [bucket, ["loss", "defeat"]] }, 1, 0] } },
           } },
@@ -106,26 +108,12 @@ function buildStatsStages(games, userId) {
   ];
 }
 
-/**
- * Pagination, searching and ordering happen in Mongo; only a bounded page of
- * bounded build documents reaches the API process. A cursor belongs to one
- * account/filter/sort scope and uses the unique slug as its final tie breaker.
- * @param {any} collection
- * @param {any} games
- * @param {string} userId
- * @param {Record<string, any>} raw
- * @param {Record<string, any>} projection
- */
-async function listBuildPage(collection, games, userId, raw, projection) {
-  const opts = parseBuildPageOptions(raw);
-  const scope = pageScope(userId, opts);
-  const cursor = decodePageCursor(opts.cursor, scope, opts.sort);
-  const match = { userId, deletedAt: { $exists: false } };
-  /** @type {Record<string, any>[]} */
-  const stages = [{ $match: match }, { $project: projection }];
+/** @param {ReturnType<typeof parseBuildPageOptions>} opts */
+function buildPageConditions(opts) {
   /** @type {Record<string, any>[]} */
   const conditions = [];
   if (opts.name) conditions.push({ $or: [{ name: opts.name }, { slug: opts.name }] });
+  if (opts.nameSearch) conditions.push({ name: { $regex: escapeRegex(opts.nameSearch), $options: "i" } });
   if (opts.forkedFrom) conditions.push({ "forkedFrom.communitySlug": opts.forkedFrom });
   if (opts.normalizedName) conditions.push({ $or: ["name", "slug"].map((field) => ({ [field]: { $regex: normalizedNameRegex(opts.normalizedName), $options: "i" } })) });
   if (opts.matchup) {
@@ -146,14 +134,36 @@ async function listBuildPage(collection, games, userId, raw, projection) {
       ] }, regex: query, options: "i" } } },
     ] });
   }
+  return conditions;
+}
+
+/**
+ * Pagination, searching and ordering happen in Mongo; only a bounded page of
+ * bounded build documents reaches the API process. A cursor belongs to one
+ * account/filter/sort scope and uses the unique slug as its final tie breaker.
+ * @param {any} collection
+ * @param {any} games
+ * @param {string} userId
+ * @param {Record<string, any>} raw
+ * @param {Record<string, any>} projection
+ */
+async function listBuildPage(collection, games, userId, raw, projection) {
+  const opts = parseBuildPageOptions(raw);
+  const scope = pageScope(userId, opts);
+  const cursor = decodePageCursor(opts.cursor, scope, opts.sort);
+  const match = { userId, deletedAt: { $exists: false } };
+  /** @type {Record<string, any>[]} */
+  const stages = [{ $match: match }, { $project: projection }];
+  const conditions = buildPageConditions(opts);
   if (conditions.length) stages.push({ $match: { $and: conditions } });
   const filteredStages = [...stages];
-  if (opts.hideEmpty || opts.sort === "games" || opts.sort === "winRate") {
+  if (opts.hideEmpty || ["games", "winRate", "lastPlayed"].includes(opts.sort)) {
     stages.push(...buildStatsStages(games, userId));
     if (opts.hideEmpty) stages.push({ $match: { "_stats.total": { $gt: 0 } } });
   }
   const order = opts.sort === "name" ? { $toLower: { $ifNull: ["$name", ""] } }
     : opts.sort === "games" ? "$_stats.total"
+      : opts.sort === "lastPlayed" ? { $convert: { input: "$_stats.lastPlayed", to: "long", onError: 0, onNull: 0 } }
       : opts.sort === "winRate" ? { $cond: [
         { $gt: [{ $add: ["$_stats.wins", "$_stats.losses"] }, 0] },
         { $divide: ["$_stats.wins", { $add: ["$_stats.wins", "$_stats.losses"] }] }, 0,

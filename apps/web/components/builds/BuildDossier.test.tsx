@@ -21,6 +21,7 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/clientApi", () => ({
+  apiCall: vi.fn(),
   useApi: (path: string | null) => {
     harness.paths.push(path);
     if (path && /\/(compositions|phases)([?#]|$)/.test(path)) {
@@ -62,6 +63,7 @@ vi.mock("@/lib/clientApi", () => ({
     };
   },
 }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: vi.fn() }) }));
 
 vi.mock("@/components/analyzer/Last5GamesTimeline", () => ({ Last5GamesTimeline: () => null }));
 vi.mock("@/components/analyzer/PredictedStrategiesList", () => ({ PredictedStrategiesList: () => null }));
@@ -377,7 +379,32 @@ describe("BuildDossier win-rate trend", () => {
       recent: [game(1, "Win"), game(2, "Loss"), game(3, "Tie")],
     };
     render(<BuildDossier apiPath="/v1/custom-builds/dt-rush/matches" showMacro={false} />);
-    expect(screen.getByText("Not enough games for a trend")).toBeTruthy();
-    expect(screen.getByText(/2 so far/)).toBeTruthy();
+    expect(screen.getByText("Not enough games for a trend yet")).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Recent game results, oldest to newest" }).children).toHaveLength(3);
+  });
+});
+
+describe("BuildDossier guided state and sections", () => {
+  it("retains the definition and notes but hides every stats panel and nav at zero games", () => {
+    harness.data = { ...harness.data!, totals: { total: 0, wins: 0, losses: 0, winRate: 0 } };
+    render(<BuildDossier apiPath="/v1/custom-builds/new/matches" sectionNavigation onEditRules={() => undefined} headerSlot={() => <div>My private notes and rules</div>} />);
+    expect(screen.getByText("My private notes and rules")).toBeTruthy();
+    expect(screen.getByText("No games matched this build yet")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Edit rules" })).toBeTruthy();
+    expect(screen.queryByText("Performance")).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Build sections" })).toBeNull();
+    expect(screen.queryByTestId("filtered-games")).toBeNull();
+  });
+
+  it("shows a low-sample caution, native section anchors, and only the latest 20 result dots", () => {
+    vi.stubGlobal("ResizeObserver", class { observe() {} unobserve() {} disconnect() {} });
+    harness.data = { ...harness.data!, recent: Array.from({ length: 24 }, (_, i) => ({ gameId: `r${i}`, date: new Date(Date.UTC(2026, 8, i + 1)).toISOString(), result: i % 2 ? "win" : "draw" })) };
+    const { container } = render(<BuildDossier apiPath="/v1/custom-builds/new/matches" sectionNavigation />);
+    expect(screen.getByText("Only 1 games so far: treat percentages as early signals.")).toBeTruthy();
+    for (const id of ["overview", "army", "matchups", "games"]) expect(container.querySelector(`section#${id}`)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Matchups & maps" }).getAttribute("href")).toBe("#matchups");
+    expect(container.querySelectorAll("[data-form-result]")).toHaveLength(20);
+    expect(screen.getByRole("list", { name: "Recent game results, oldest to newest" }).children).toHaveLength(20);
+    vi.unstubAllGlobals();
   });
 });

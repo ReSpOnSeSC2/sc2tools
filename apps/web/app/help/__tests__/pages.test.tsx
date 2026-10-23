@@ -127,7 +127,10 @@ describe("/help/[slug]", () => {
     await renderArticle("replay-reviews");
     const heading = screen.getByRole("heading", { level: 2, name: "Who can review" });
     expect(heading.id).toBe("who-can-review");
-    expect(screen.getByRole("link", { name: "desktop app" }).getAttribute("href")).toBe("/download");
+    const desktopLinks = screen.getAllByRole("link", { name: "desktop app" });
+    expect(desktopLinks.length).toBeGreaterThan(0);
+    desktopLinks.forEach((link) => expect(link.getAttribute("href")).toBe("/download"));
+    expect(screen.getByRole("heading", { name: /Find requests you can answer/ }).id).toBe("finding-requests");
   });
 
   it("keeps the invite-only coaching article out of search engines", async () => {

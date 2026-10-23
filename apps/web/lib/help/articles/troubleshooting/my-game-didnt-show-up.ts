@@ -36,12 +36,12 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "A game normally appears a few seconds after it ends: the desktop app reads the replay, syncs it, and every open page updates on its own. If it doesn't, go through these checks in order.",
     },
-    { type: "heading", text: "What the header sync pill means", anchor: "header-sync-pill" },
+    { type: "heading", text: "What the agent pill at the top means", anchor: "header-sync-pill" },
     {
       type: "list",
       items: [
-        "**Live** means this browser has an authenticated connection for updates. **Connecting**, **Reconnecting**, or **Offline** describes the browser connection, not whether your gaming PC is running. Check [Devices](/devices) for your desktop app.",
-        "**Games synced** increases for newly saved games. Re-syncing an existing game or changing its build label doesn't add another game. The latest sync time updates every 30 seconds; hover it for the exact time.",
+        "**Agent online** means your linked desktop app has a recent heartbeat. **Agent offline** shows when it was last seen; **No desktop app linked** means you need to link a PC. Click the pill for exact last-seen and latest-game times, your total games and **Open Devices**. The separate **Realtime updates** detail describes this browser connection.",
+        "The game count increases for newly saved games. Re-syncing an existing game or changing its build label doesn't add another game. The latest game time is when you played, not when its replay uploaded. Its relative label updates every 30 seconds; hover it for the exact time.",
         "During a large import, **Syncing — charts refresh every 30 s** means the count can move before the charts. Ordinary game updates refresh the charts after about two quiet seconds. You can also reload the page to fetch the current data.",
       ],
     },

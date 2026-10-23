@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { AppChrome } from "../AppChrome";
+import { lockBodyScroll } from "@/lib/bodyScrollLock";
 import { useChromeBreadcrumb } from "../ChromeContext";
 
 const harness = vi.hoisted(() => ({
@@ -65,6 +66,11 @@ vi.mock("../CoachingBookingAlert", () => ({
 vi.mock("@/components/build-checkin/BuildCheckInAlert", () => ({
   BuildCheckInAlert: () => <div data-testid="build-checkin-alert-slot" />,
 }));
+// Shell layout owns the slot; the real bell and shared socket have their
+// own consumer integration tests.
+vi.mock("@/components/notifications/NotificationBell", () => ({ NotificationBell: () => <div data-testid="notifications-bell-slot" /> }));
+vi.mock("@/components/announcements/WhatsNewButton", () => ({ WhatsNewButton: () => <div data-testid="whats-new-slot" /> }));
+vi.mock("@/components/announcements/SiteIncidentBanner", () => ({ SiteIncidentBanner: () => <div data-testid="incident-banner-slot" /> }));
 vi.mock("../SiteStats", () => ({
   SiteStats: ({ syncStatus }: { syncStatus?: ReactNode }) => <div data-testid="site-stats">{syncStatus}</div>,
 }));
@@ -80,6 +86,8 @@ vi.mock("@/components/feedback/LazyReportIssueModal", () => ({
 
 afterEach(() => {
   cleanup();
+  localStorage.clear(); document.documentElement.removeAttribute("data-rail");
+  vi.restoreAllMocks(); vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   harness.pathname = "/app";
   harness.me = { userId: "u1", isAdmin: false, games: { total: 50, latest: null } };
@@ -154,7 +162,7 @@ describe("AppChrome navigation", () => {
     expect(railHrefs()).not.toContain("/coaching");
   });
 
-  it("links the build guides after Custom builds while their flag is on", () => {
+  it("links the build guides after Build library while their flag is on", () => {
     vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "on");
     harness.pathname = "/app/opponents/1-S2-1-99";
     render(<AppChrome>content</AppChrome>);
@@ -214,7 +222,7 @@ describe("AppChrome navigation", () => {
     ["/app/replays", "/app/replays", "Replays"],
     ["/settings", "/settings", "Settings"],
     ["/devices", "/devices", "Devices"],
-    ["/builds", "/builds", "Custom builds"],
+    ["/builds", "/builds", "Build library"],
     ["/community/builds/some-slug", "/community", "Community"],
     ["/admin/users", "/admin", "Admin"],
     ["/coaching", "/coaching", "Coaching"],
@@ -255,7 +263,7 @@ describe("AppChrome navigation", () => {
     expect(chip.nextElementSibling?.getAttribute("data-testid")).toBe("coaching-alert-slot");
   });
 
-  it("shows live sync only on analyzer routes", () => {
+  it("shows desktop status on every signed-in app surface", () => {
     harness.pathname = "/app/trends";
     const analyzer = render(<AppChrome>content</AppChrome>);
     expect(screen.getByTestId("sync-status")).toBeTruthy();
@@ -263,7 +271,7 @@ describe("AppChrome navigation", () => {
     analyzer.unmount();
     harness.pathname = "/settings";
     render(<AppChrome>content</AppChrome>);
-    expect(screen.queryByTestId("sync-status")).toBeNull();
+    expect(screen.getByTestId("sync-status")).toBeTruthy();
   });
 });
 
@@ -420,6 +428,8 @@ describe("AppChrome help & support", () => {
     render(<AppChrome>content</AppChrome>);
     const menu = within(screen.getByTestId("user-button")).getByRole("list", { name: "Account menu" });
     expect(Array.from(menu.querySelectorAll("li")).map((li) => li.textContent)).toEqual([
+      "Settings",
+      "Devices",
       "Help",
       "Report a problem",
       "manageAccount",
@@ -469,5 +479,61 @@ describe("AppChrome help & support", () => {
     expect(screen.queryByRole("dialog", { name: "More sections" })).toBeNull();
     expect(reportForm()?.getAttribute("data-type")).toBe("problem");
     expect(document.activeElement).toBe(screen.getByRole("button", { name: /More/ }));
+  });
+});
+
+
+describe("pinned rail and accessible More", () => {
+  beforeEach(() => { vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))); });
+  it("persists a pin and exposes groups and tooltip descriptions without native titles", () => {
+    const view = render(<AppChrome>Content</AppChrome>); const rail = screen.getByRole("navigation", { name: "App navigation" });
+    expect(within(rail).getByRole("group", { name: "Analysis" })).toBeTruthy(); expect(within(rail).getByRole("group", { name: "Your setup" })).toBeTruthy();
+    const link = within(rail).getByRole("link", { name: "Build stats" }); expect(link.hasAttribute("title")).toBe(false);
+    expect(document.getElementById(link.getAttribute("aria-describedby")!)?.textContent).toContain("Win rates and trends");
+    fireEvent.click(screen.getByRole("button", { name: "Pin sidebar" })); expect(localStorage.getItem("sc2tools:rail:v1")).toBe("pinned"); expect(document.documentElement.dataset.rail).toBe("pinned");
+    expect(screen.getByRole("button", { name: "Unpin sidebar" }).getAttribute("aria-pressed")).toBe("true");
+    view.unmount(); render(<AppChrome>Content</AppChrome>); expect(screen.getByRole("button", { name: "Unpin sidebar" })).toBeTruthy();
+  });
+  it("defaults to pinned without hover and tolerates blocked storage", () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query === "(hover: none)", addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("private"); });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("private"); });
+    render(<AppChrome>Content</AppChrome>); expect(screen.getByRole("button", { name: "Unpin sidebar" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Unpin sidebar" })); expect(screen.getByRole("button", { name: "Pin sidebar" })).toBeTruthy();
+  });
+  it("traps the More dialog and returns focus while preserving another scroll lock", async () => {
+    document.body.style.overflow = "auto"; const unlock = lockBodyScroll();
+    render(<AppChrome>Content</AppChrome>); const more = screen.getByRole("button", { name: "More" }); more.focus(); fireEvent.click(more);
+    const dialog = screen.getByRole("dialog", { name: "More sections" });
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    const radios = within(dialog).getAllByRole("radio"); radios.at(-1)!.focus(); fireEvent.keyDown(document, { key: "Tab" });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(within(dialog).getByRole("link", { name: "System status" }).getAttribute("rel")).toBe("noopener noreferrer");
+    fireEvent.keyDown(document, { key: "Escape" }); expect(screen.queryByRole("dialog")).toBeNull(); expect(document.activeElement).toBe(more);
+    expect(document.body.style.overflow).toBe("hidden"); unlock(); expect(document.body.style.overflow).toBe("auto"); document.body.style.overflow = "";
+  });
+  it("keeps short Builds mobile labels and complete avatar destinations", () => {
+    render(<AppChrome>Content</AppChrome>);
+    expect(within(screen.getByRole("navigation", { name: "Quick sections" })).getByRole("link", { name: "Builds" })).toBeTruthy();
+    const account = screen.getByRole("list", { name: "Account menu" }); for (const name of ["Settings", "Devices", "Help"]) expect(within(account).getByRole("link", { name })).toBeTruthy();
+  });
+});
+
+
+describe("responsive More and install availability", () => {
+  it("closes More when the desktop breakpoint starts matching", () => {
+    const callbacks = new Set<() => void>(); const media = { matches: false, addEventListener: (_: string, callback: () => void) => callbacks.add(callback), removeEventListener: (_: string, callback: () => void) => callbacks.delete(callback) };
+    vi.stubGlobal("matchMedia", vi.fn(() => media)); render(<AppChrome>Content</AppChrome>); fireEvent.click(screen.getByRole("button", { name: "More" })); expect(screen.getByRole("dialog")).toBeTruthy();
+    act(() => { media.matches = true; callbacks.forEach((callback) => callback()); }); expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("uses the LogIn icon for the signed-out sign-in tab", () => {
+    harness.signedIn = false; render(<AppChrome>Content</AppChrome>);
+    const link = within(screen.getByRole("navigation", { name: "Quick sections" })).getByRole("link", { name: "Sign in" }); expect(link.querySelector("svg")?.classList.contains("lucide-log-in")).toBe(true);
+  });
+  it("hides the install row in an already installed app", () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone Version/17 Mobile Safari/604");
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query === "(display-mode: standalone)", addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    render(<AppChrome>Content</AppChrome>); fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(within(screen.getByRole("dialog", { name: "More sections" })).queryByRole("button", { name: "Install app" })).toBeNull();
   });
 });

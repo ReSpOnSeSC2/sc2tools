@@ -9,14 +9,22 @@ import {
   Tv,
   type LucideIcon,
 } from "lucide-react";
+import { LatestUpdate } from "@/components/auth/LatestUpdate";
+import { TrySavePanel } from "@/components/auth/TrySavePanel";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { appearanceFor } from "@/lib/clerk-appearance";
-import { safeAuthRedirect } from "@/lib/instant/authRedirect";
+import { isTryResumeRedirect, safeAuthRedirect } from "@/lib/instant/authRedirect";
 import type { Theme } from "@/lib/theme";
 
 export default function SignInPage() {
+  return <Suspense fallback={<WidgetPlaceholder />}><SignInContent /></Suspense>;
+}
+
+function SignInContent() {
+  const searchParams = useSearchParams();
+  const tryResume = isTryResumeRedirect(searchParams.get("redirect_url"));
   return (
-    <AuthShell marketing={<SignInMarketing />}>
+    <AuthShell lead={tryResume ? "Save your /try report" : "Welcome back to your replay history."} marketing={tryResume ? <TrySavePanel /> : <SignInMarketing />}>
       {(theme) => (
         // useSearchParams needs a Suspense boundary for the static build.
         <Suspense fallback={<WidgetPlaceholder />}>
@@ -98,6 +106,7 @@ function SignInMarketing() {
           </li>
         ))}
       </ul>
+      <LatestUpdate />
     </div>
   );
 }

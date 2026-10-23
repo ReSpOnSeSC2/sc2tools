@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CheckCircle2, Film, MessageSquare, Star } from "lucide-react";
 import { MapArtwork } from "@/components/maps/MapArtwork";
 import { Badge } from "@/components/ui/Badge";
-import { formatClock, tagLabel, type ReviewCard as ReviewCardData } from "@/lib/reviews";
+import { age, formatClock, tagLabel, type ReviewCard as ReviewCardData } from "@/lib/reviews";
 import { ReviewReplayDownload } from "./ReviewReplayDownload";
 
 /**
@@ -10,7 +10,11 @@ import { ReviewReplayDownload } from "./ReviewReplayDownload";
  * the question, age, review count and the "best review" tick. Server-
  * safe (no hooks), so the board ships real HTML to crawlers.
  */
-export function ReviewCard({ card, now }: { card: ReviewCardData; now: number }) {
+export function ReviewCard({ card, now, variant = "full" }: { card: ReviewCardData; now: number; variant?: "full" | "compact" }) {
+  if (variant === "compact") return <li className="relative space-y-2 rounded-xl border border-border bg-bg-surface p-3">
+    <div className="flex flex-wrap items-center gap-2 text-micro text-text-muted">{card.matchup ? <Badge variant="accent" size="sm">{card.matchup}</Badge> : null}{card.askerBand ? <span>{card.askerBand.label}</span> : null}<span>{age(card.createdAt, now)}</span><span>{card.reviewCount} {card.reviewCount === 1 ? "review" : "reviews"}</span>{card.replayShared ? <span className="relative z-10 ml-auto"><ReviewReplayDownload requestId={card.id} requestUrl={card.url} variant="card" contextLabel={`${card.matchup ? `[${card.matchup}] ` : ""}${card.question.slice(0, 60)}`} /></span> : null}</div>
+    <Link href={card.url} data-testid="review-card" className="font-semibold text-text after:absolute after:inset-0 hover:text-link focus-visible:outline-none focus-visible:after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-accent"><p className="line-clamp-2 break-words">{card.question}</p></Link>
+  </li>;
   return (
     <li className="relative">
       <Link
@@ -67,20 +71,4 @@ export function ReviewCard({ card, now }: { card: ReviewCardData; now: number })
   );
 }
 
-/**
- * Coarse, deterministic age ("3h ago"). ``now`` is passed in from the
- * server render so client hydration never disagrees with it.
- */
-export function age(iso: string | null, now: number): string {
-  if (!iso) return "";
-  const ms = now - new Date(iso).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return "just now";
-  const min = Math.floor(ms / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
-  return `${Math.floor(d / 30)}mo ago`;
-}
+export { age } from "@/lib/reviews";

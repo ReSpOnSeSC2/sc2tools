@@ -26,7 +26,7 @@ import {
   withQuantifier,
   type RuleQuantifier,
 } from "@/lib/build-rules-quantity";
-import type { BuildOrderEvent } from "@/lib/build-events";
+import type { BuildOrderEvent, BuildSignatureItem } from "@/lib/build-events";
 import type {
   BuildEditorContext,
   BuildEditorPreviewResult,
@@ -73,6 +73,9 @@ export interface UseBuildEditorStateOptions {
    * error. Ignored with `lockedSlug` (an edit targets an existing build).
    */
   createOnly?: boolean;
+  /** A duplicated signature-only build keeps its existing matching definition. */
+  sourceSignature?: BuildSignatureItem[];
+  saveIntent?: "duplicate";
 }
 
 interface BuildOrderApiResp {
@@ -114,7 +117,7 @@ interface SaveBuildResponse {
 export function useBuildEditorState(
   opts: UseBuildEditorStateOptions,
 ): BuildEditorState {
-  const { open, context, initialDraft, lockedSlug, onSaved, demoMode, createOnly } = opts;
+  const { open, context, initialDraft, lockedSlug, onSaved, demoMode, createOnly, sourceSignature, saveIntent } = opts;
   const { sourceRows, countRepeats = true } = context;
   const { getToken } = useAuth();
   const globalToast = useToastOptional()?.toast;
@@ -481,7 +484,7 @@ export function useBuildEditorState(
 
   const save = useCallback(
     async (andReclassify: boolean) => {
-      const sanitised = sanitiseDraft(draft, { allowEmptyRules: !!lockedSlug });
+      const sanitised = sanitiseDraft(draft, { allowEmptyRules: !!lockedSlug || !!sourceSignature?.length });
       if (!sanitised.ok) {
         setErrors(sanitised.errors);
         pushToast("error", "Fix the highlighted fields before saving.");
@@ -528,6 +531,7 @@ export function useBuildEditorState(
         schemaVersion: 3,
         reclassify: andReclassify,
         ...(createOnly && !lockedSlug ? { createOnly: true } : {}),
+        ...(!lockedSlug && sourceSignature?.length && sanitised.payload.rules.length === 0 ? { signature: sourceSignature } : {}),
       };
       try {
         const resp = await apiCall<SaveBuildResponse | null>(
@@ -565,7 +569,7 @@ export function useBuildEditorState(
         setSavedOk(true);
         pushToast(
           "success",
-          `Saved "${sanitised.payload.name}".`,
+          saveIntent === "duplicate" ? `Duplicated as “${sanitised.payload.name}”.` : `Saved "${sanitised.payload.name}".`,
           { label: "View build", href: `/builds/${slug}` },
         );
         // Save-only and Save & Reclassify are distinct server actions.
@@ -641,7 +645,7 @@ export function useBuildEditorState(
         pushToast("error", `Save failed: ${message}`);
       }
     },
-    [draft, context.gameId, context.perspective, createOnly, demoMode, getToken, globalToast, lockedSlug, onSaved, pushToast],
+    [draft, context.gameId, context.perspective, createOnly, demoMode, getToken, globalToast, lockedSlug, onSaved, pushToast, sourceSignature, saveIntent],
   );
 
   return {

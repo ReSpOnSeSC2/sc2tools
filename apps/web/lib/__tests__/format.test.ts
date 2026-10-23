@@ -1,9 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   fmtPlaytime,
+  fmtDateCompact,
   PLAYTIME_FORMAT_OPTIONS,
   type PlaytimeFormat,
 } from "../format";
+
+it("formats compact replay dates in en-US with the year for older games", () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 23, 12));
+  try {
+    expect(fmtDateCompact(new Date(2026, 9, 21, 20, 42).toISOString())).toBe("Oct 21, 8:42 PM");
+    expect(fmtDateCompact(new Date(2025, 2, 3, 20, 42).toISOString())).toBe("Mar 3, 2025, 8:42 PM");
+    for (const value of [null, undefined, "", "invalid-date", Number.NaN]) expect(fmtDateCompact(value)).toBe("—");
+  } finally { vi.useRealTimers(); }
+});
 
 describe("fmtPlaytime", () => {
   it("exposes the five stable dropdown values and human-readable labels", () => {

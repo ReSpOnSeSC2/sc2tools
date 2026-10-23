@@ -2,9 +2,8 @@
 
 On Windows we toggle a per-user entry under
 ``HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run``. The NSIS
-installer also drops a Startup-folder shortcut, so this module is the
-*post-install* path: the GUI's Settings tab calls these helpers when
-the user toggles the checkbox after installation.
+installer uses the same value. Legacy Startup-folder shortcuts are detected
+and migrated when the GUI changes the setting.
 
 On macOS / Linux we don't try to manage launchd / systemd-user units
 from the GUI - the dependencies are too varied. The functions return
@@ -81,8 +80,41 @@ def get_executable_path() -> Optional[Path]:
     return exe
 
 
+def _legacy_startup_link() -> Optional[Path]:
+    """Resolve the current user's Windows Startup folder, including redirection."""
+    try:
+        import ctypes
+        path = ctypes.create_unicode_buffer(32768)
+        if ctypes.windll.shell32.SHGetFolderPathW(None, 7, None, 0, path) == 0 and path.value:
+            return Path(path.value) / "SC2 Tools Agent.lnk"
+    except (AttributeError, OSError):
+        pass
+    roaming = os.environ.get("APPDATA")
+    return Path(roaming) / "Microsoft/Windows/Start Menu/Programs/Startup/SC2 Tools Agent.lnk" if roaming else None
+
+
+def _legacy_enabled() -> bool:
+    path = _legacy_startup_link()
+    try:
+        return bool(path and path.is_file())
+    except OSError:
+        log.debug("autostart_legacy_probe_failed", exc_info=True)
+        return False
+
+
+def _remove_legacy() -> bool:
+    path = _legacy_startup_link()
+    try:
+        if path:
+            path.unlink(missing_ok=True)
+        return True
+    except OSError:
+        log.warning("autostart_legacy_shortcut_remove_failed", exc_info=True)
+        return False
+
+
 def is_enabled() -> bool:
-    """Return True iff our Run-key entry exists.
+    """Return True iff our Run-key entry or legacy shortcut exists.
 
     Treats winreg errors (key missing, ACL denial) as "not enabled".
     """
@@ -95,13 +127,13 @@ def is_enabled() -> bool:
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _WIN_RUN_KEY) as key:
             value, _ = winreg.QueryValueEx(key, _WIN_VALUE_NAME)
-            return bool(value)
+            return bool(value) or _legacy_enabled()
     except FileNotFoundError:
-        return False
+        return _legacy_enabled()
     except OSError:
         # Permission denied or registry hive corrupt - treat as off.
         log.debug("autostart_probe_failed", exc_info=True)
-        return False
+        return _legacy_enabled()
 
 
 def set_enabled(enabled: bool) -> bool:
@@ -129,6 +161,8 @@ def set_enabled(enabled: bool) -> bool:
                 winreg.SetValueEx(
                     key, _WIN_VALUE_NAME, 0, winreg.REG_SZ, command,
                 )
+            if not _remove_legacy():
+                return False
             log.info("autostart_enabled command=%s", command)
             return True
         except OSError:
@@ -147,12 +181,14 @@ def set_enabled(enabled: bool) -> bool:
                 winreg.DeleteValue(key, _WIN_VALUE_NAME)
             except FileNotFoundError:
                 pass
+        if not _remove_legacy():
+            return False
         log.info("autostart_disabled")
         return True
     except FileNotFoundError:
         # The Run subkey doesn't exist - nothing to remove.
         log.debug("autostart_disable_no_subkey")
-        return True
+        return _remove_legacy()
     except OSError:
         log.exception("autostart_disable_failed")
         return False

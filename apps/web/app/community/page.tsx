@@ -1,251 +1,86 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Sparkles, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { getJsonWithStatus } from "@/lib/serverApi";
 import { Banner } from "@/components/Banner";
 import { Card } from "@/components/ui/Card";
+import { LinkButton } from "@/components/ui/Button";
+import { buttonClassName } from "@/components/ui/buttonStyles";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { CommunityBuildCard } from "@/components/community/CommunityBuildCard";
 import { CommunityFilterBar } from "@/components/community/CommunityFilterBar";
+import { CommunityFilterProvider, CommunityResults } from "@/components/community/CommunityFilterContext";
+import { CommunityActiveFilters } from "@/components/community/CommunityActiveFilters";
 import { CommunityShell } from "@/components/community/CommunityShell";
 import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
-import {
-  COMMUNITY_SORTS,
-  type CommunityBuildListResponse,
-  type CommunitySort,
-} from "@/components/community/types";
+import { PublishCta } from "@/components/community/PublishCta";
+import { LazyMyPublishedBuilds } from "@/components/community/LazyMyPublishedBuilds";
+import type { CommunityBuildListResponse } from "@/components/community/types";
+import { clearCommunityFilters, communityEmptyTitle, communityHref, COMMUNITY_PAGE_SIZE, parseCommunityQuery, type CommunityQuery } from "@/lib/communityQuery";
 
 const METADATA: Metadata = {
-  alternates: { canonical: "/community" },
-  title: "Community builds",
-  description:
-    "Player-published StarCraft II build orders + the Stock Market weekly P&L leaderboard. Filter by matchup, sort by top, new, or controversial, and save any build to your private library.",
-  openGraph: {
-    title: "Community builds — SC2 Tools",
-    description:
-      "Player-published StarCraft II build orders + the Stock Market weekly P&L leaderboard.",
-    images: [{ url: "/og.jpg", width: 1200, height: 630 }],
-  },
+  alternates: { canonical: "/community" }, title: "Community builds",
+  description: "Player-published StarCraft II builds and the Stock Market weekly leaderboard. Filter by race, opponent and skill level, search or sort by votes, publication or updates, and save builds to your private library.",
+  openGraph: { title: "Community builds — SC2 Tools", description: "Player-published StarCraft II build orders + the Stock Market weekly P&L leaderboard.", images: [{ url: "/og.jpg", width: 1200, height: 630 }] },
 };
+type CommunitySearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-const PAGE_SIZE = 24;
-
-function isSort(value: string | undefined): value is CommunitySort {
-  return COMMUNITY_SORTS.some((s) => s.value === value);
-}
-
-type CommunitySearchParams = Promise<{
-  matchup?: string;
-  sort?: string;
-  q?: string;
-  offset?: string;
-}>;
-
-interface CommunityQuery {
-  matchup: string;
-  sort: CommunitySort;
-  search: string;
-  offset: number;
-}
-
-function parseQuery(sp: Awaited<CommunitySearchParams>): CommunityQuery {
-  return {
-    matchup: (sp.matchup || "").trim(),
-    sort: isSort(sp.sort) ? sp.sort : "top",
-    search: (sp.q || "").trim(),
-    offset: Math.max(0, Number.parseInt(sp.offset || "0", 10) || 0),
-  };
-}
-
-/**
- * One page of published builds. `data` is null when the API was
- * unreachable or failed: that is an outage, never an empty list.
- * generateMetadata and the page make the same request, which Next
- * dedupes within one render.
- */
+/** Every filter is part of the request URL; outages remain distinct from empty results. */
 function loadBuilds(query: CommunityQuery) {
   const params = new URLSearchParams();
-  if (query.matchup) params.set("matchup", query.matchup);
+  if (query.race) params.set("race", query.race);
+  if (query.vs) params.set("vsRace", query.vs);
+  if (query.skill) params.set("skill", query.skill);
   params.set("sort", query.sort);
   if (query.search) params.set("q", query.search);
-  params.set("limit", String(PAGE_SIZE));
-  params.set("offset", String(query.offset));
-  return getJsonWithStatus<CommunityBuildListResponse>(
-    `/v1/community/builds?${params.toString()}`,
-  );
-}
-
-/** The /community URL for a query (pagination, "Try again"). */
-function communityHref(query: CommunityQuery): string {
-  const sp = new URLSearchParams();
-  if (query.matchup) sp.set("matchup", query.matchup);
-  if (query.sort && query.sort !== "top") sp.set("sort", query.sort);
-  if (query.search) sp.set("q", query.search);
-  if (query.offset > 0) sp.set("offset", String(query.offset));
-  const qs = sp.toString();
-  return qs ? `/community?${qs}` : "/community";
+  params.set("limit", String(COMMUNITY_PAGE_SIZE)); params.set("offset", String(query.offset));
+  return getJsonWithStatus<CommunityBuildListResponse>("/v1/community/builds?" + params.toString());
 }
 
 export async function generateMetadata({ searchParams }: { searchParams: CommunitySearchParams }): Promise<Metadata> {
-  const { data } = await loadBuilds(parseQuery(await searchParams));
-  // An outage page is not the community page: keep it out of the index.
+  const query = parseCommunityQuery(await searchParams);
+  if (query.mine) return { ...METADATA, robots: { index: false, follow: false } };
+  const { data } = await loadBuilds(query);
   return data ? METADATA : { ...METADATA, robots: { index: false, follow: true } };
 }
 
-export default async function CommunityPage({
-  searchParams,
-}: {
-  searchParams: CommunitySearchParams;
-}) {
-  const query = parseQuery(await searchParams);
-  const { matchup, sort, search, offset } = query;
-  const { data } = await loadBuilds(query);
-  const items = data?.items || [];
-  const total = data?.total ?? 0;
-  const hasMore = data?.hasMore ?? false;
-
-  const showingTo = offset + items.length;
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow={
-          <span className="inline-flex items-center gap-1.5">
-            <Users className="h-3 w-3" aria-hidden />
-            Community
-          </span>
-        }
-        title="Community builds"
-        description="Player-published builds and the weekly Stock Market leaderboard. Vote, save to your private library, or publish your own."
-        actions={
-          <Link
-            href="/builds"
-            className="inline-flex min-h-[44px] items-center gap-2 hard-press rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-          >
-            <Sparkles className="h-4 w-4 text-accent-cyan" aria-hidden />
-            Publish a build
-          </Link>
-        }
-      />
-
-      <Banner variant="divider" />
-
-      <CommunityShell active="builds">
-      <CommunityFilterBar
-        initialMatchup={matchup}
-        initialSort={sort}
-        initialSearch={search}
-      />
-
-      {!data ? (
-        <CommunityUnavailable
-          title="Community builds are temporarily unavailable"
-          retryHref={communityHref(query)}
-        />
-      ) : items.length === 0 ? (
-        <Card>
-          <EmptyStatePanel
-            size="lg"
-            title={search ? "No builds match your search" : "No builds yet"}
-            description={
-              search
-                ? `Nothing matched "${search}". Try a different keyword or remove the matchup filter.`
-                : matchup
-                  ? `No published ${matchup} builds yet. Be the first — publish from your library.`
-                  : "Be the first to publish a build to the community."
-            }
-            action={
-              <Link
-                href={search || matchup ? "/community" : "/builds"}
-                className="inline-flex min-h-[44px] items-center gap-2 hard-press rounded-full border-2 border-line bg-bg-surface px-5 font-display text-body font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-              >
-                {search || matchup ? "Reset filters" : "Open my library"}
-              </Link>
-            }
-          />
-        </Card>
-      ) : (
-        <>
-          <div className="flex items-baseline justify-between text-caption text-text-muted">
-            <span>
-              Showing{" "}
-              <span className="font-mono tabular-nums text-text">
-                {offset + 1}–{showingTo}
-              </span>{" "}
-              of <span className="font-mono tabular-nums text-text">{total}</span>
-              {matchup ? ` · ${matchup}` : ""}
-            </span>
-          </div>
-          <ul
-            role="list"
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
-          >
-            {items.map((b) => (
-              <li key={b.slug} role="listitem" className="h-full">
-                <CommunityBuildCard build={b} />
-              </li>
-            ))}
-          </ul>
-          <Pagination
-            query={query}
-            limit={PAGE_SIZE}
-            total={total}
-            hasMore={hasMore}
-          />
-        </>
-      )}
-      </CommunityShell>
-    </div>
-  );
+export default async function CommunityPage({ searchParams }: { searchParams: CommunitySearchParams }) {
+  const query = parseCommunityQuery(await searchParams);
+  const { data } = query.mine ? { data: null } : await loadBuilds(query);
+  const items = data?.items ?? []; const total = data?.total ?? 0;
+  const filtered = !!(query.race || query.vs || query.skill || query.search);
+  const pastEnd = total > 0 && query.offset >= total;
+  return <div className="space-y-6">
+    <PageHeader eyebrow={<span className="inline-flex items-center gap-1.5"><Users className="h-3 w-3" aria-hidden />Community</span>} title="Community builds"
+      description="Player-published builds and the weekly Stock Market leaderboard. Vote, save to your private library, or publish your own."
+      actions={<PublishCta />} />
+    <Banner variant="divider" />
+    <CommunityShell active="builds"><CommunityFilterProvider>
+      <CommunityFilterBar initialRace={query.race} initialVs={query.vs} initialSkill={query.skill} initialSort={query.sort} initialSearch={query.search} initialMine={query.mine} />
+      <CommunityResults>
+        {query.mine ? <LazyMyPublishedBuilds /> : <>
+        <div className="space-y-2">
+          {data && !pastEnd ? <p className="text-caption text-text-muted">Showing <span className="font-mono tabular-nums text-text">{items.length ? (query.offset + 1) + "–" + (query.offset + items.length) : "0"}</span> of <span className="font-mono tabular-nums text-text">{total}</span></p> : null}
+          <CommunityActiveFilters query={query} />
+        </div>
+        {!data ? <CommunityUnavailable title="Community builds are temporarily unavailable" retryHref={communityHref(query)} /> : pastEnd ? <Card><EmptyStatePanel size="lg" title="No more results" description="This page is past the end of the list." action={<LinkButton href={communityHref({ ...query, offset: 0 })} variant="secondary">Back to page 1</LinkButton>} /></Card> : !items.length ? <Card><EmptyStatePanel size="lg" title={communityEmptyTitle(query)} description={filtered ? "Try a different keyword or clear a filter to see more published builds." : "Be the first to publish a build to the community."} action={<LinkButton href={filtered ? communityHref(clearCommunityFilters(query)) : "/builds"} variant="secondary">{filtered ? "Reset filters" : "Open my library"}</LinkButton>} /></Card> : <>
+          <ul role="list" aria-label="Community builds" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{items.map((build) => <li key={build.slug} role="listitem" className="h-full"><CommunityBuildCard build={build} /></li>)}</ul>
+          <Pagination query={query} limit={COMMUNITY_PAGE_SIZE} total={total} hasMore={data.hasMore} />
+        </>}
+        </>}
+      </CommunityResults>
+    </CommunityFilterProvider></CommunityShell>
+  </div>;
 }
 
-function Pagination({
-  query,
-  limit,
-  total,
-  hasMore,
-}: {
-  query: CommunityQuery;
-  limit: number;
-  total: number;
-  hasMore: boolean;
-}) {
-  const { offset } = query;
-  const prev = Math.max(0, offset - limit);
-  const next = offset + limit;
-  const urlFor = (o: number) => communityHref({ ...query, offset: o });
+function Pagination({ query, limit, total, hasMore }: { query: CommunityQuery; limit: number; total: number; hasMore: boolean }) {
   if (total <= limit) return null;
-  return (
-    <nav
-      aria-label="Pagination"
-      className="flex items-center justify-between gap-2 pt-2"
-    >
-      <Link
-        href={urlFor(prev)}
-        aria-disabled={offset === 0}
-        className={[
-          "inline-flex min-h-[44px] items-center gap-2 rounded-full border-2 border-line px-5 font-display text-body font-bold transition-colors",
-          offset === 0
-            ? "pointer-events-none opacity-40"
-            : "bg-bg-elevated text-text hover:border-border-strong hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        ].join(" ")}
-      >
-        ← Previous
-      </Link>
-      <Link
-        href={urlFor(next)}
-        aria-disabled={!hasMore}
-        className={[
-          "inline-flex min-h-[44px] items-center gap-2 rounded-full border-2 border-line px-5 font-display text-body font-bold transition-colors",
-          !hasMore
-            ? "pointer-events-none opacity-40"
-            : "bg-bg-elevated text-text hover:border-border-strong hover:bg-bg-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        ].join(" ")}
-      >
-        Next →
-      </Link>
-    </nav>
-  );
+  const className = "min-h-11 px-3";
+  const disabledClass = buttonClassName({ variant: "secondary", size: "sm", className: className + " opacity-40" });
+  return <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-2 pt-2">
+    {query.offset === 0 ? <span aria-disabled="true" className={disabledClass}>← Previous</span> : <LinkButton href={communityHref({ ...query, offset: Math.max(0, query.offset - limit) })} variant="secondary" size="sm" className={className}>← Previous</LinkButton>}
+    <span className="text-caption tabular-nums text-text-muted">Page {Math.floor(query.offset / limit) + 1} of {Math.ceil(total / limit)}</span>
+    {!hasMore ? <span aria-disabled="true" className={disabledClass}>Next →</span> : <LinkButton href={communityHref({ ...query, offset: query.offset + limit })} variant="secondary" size="sm" className={className}>Next →</LinkButton>}
+  </nav>;
 }
 

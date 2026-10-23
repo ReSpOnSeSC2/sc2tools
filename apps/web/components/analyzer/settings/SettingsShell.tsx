@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
@@ -300,7 +301,7 @@ function SettingsShellInner({
               </span>
             </Tabs.Trigger>
           ))}
-        </Tabs.List><Link href="/devices" className="flex min-h-11 items-center rounded-lg px-4 py-2 text-caption font-medium text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Devices</Link></div>
+        </Tabs.List><Link href="/devices" className="flex min-h-11 items-center rounded-lg px-4 py-2 text-caption font-medium text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Devices</Link><InstallAppButton className="w-full" /></div>
 
         {tabs.map((t) => (
           <Tabs.Content

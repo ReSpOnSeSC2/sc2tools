@@ -9,7 +9,7 @@ const h = vi.hoisted(() => ({
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "admin", getToken: h.token }) }));
 vi.mock("socket.io-client", () => ({ io: (...args: unknown[]) => h.io(...args) }));
-vi.mock("next/navigation", () => ({ usePathname: () => "/app", useRouter: () => ({ refresh: h.refresh }) }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/app", useSearchParams: () => new URLSearchParams(), useRouter: () => ({ refresh: h.refresh }) }));
 vi.mock("next/dynamic", () => ({ default: () => () => null }));
 vi.mock("@/lib/clientApi", () => ({ API_BASE: "https://api.example.test", apiCall: h.apiCall,
   useApi: (path: string | null) => {
@@ -53,13 +53,16 @@ import { AdminShell } from "@/app/admin/components/AdminShell";
 import Dashboard from "@/app/admin/page";
 import Notifications from "@/app/admin/notifications/page";
 import CoachingPractice from "@/app/coaching/CoachingPractice";
+import NotificationsCenter from "@/app/notifications/page";
+import { SiteIncidentBanner } from "@/components/announcements/SiteIncidentBanner";
+import { WhatsNewButton } from "@/components/announcements/WhatsNewButton";
 
 function CheckIn() { return <output data-testid="checkin">{useBuildCheckInRevision().revision}</output>; }
 function AnalyzerRevision() { return <output data-testid="analyzer">{useFilters().dbRev}</output>; }
 function Import() { return <output data-testid="import">{useImportStatus().job?.completed}</output>; }
 beforeEach(() => {
   vi.useFakeTimers(); vi.clearAllMocks(); h.resources.clear(); h.handlers.clear();
-  h.apiCall.mockResolvedValue({ items: [], nextCursor: null });
+  h.apiCall.mockImplementation(async (_token, path) => String(path).startsWith("/v1/site/banner") ? { banner: null } : { items: [], nextCursor: null });
   h.io.mockImplementation(() => ({ connected: false, connect: vi.fn(), disconnect: h.disconnect,
     on: (event: string, callback: (value?: unknown) => void) => h.handlers.set(event, callback), off: () => h.handlers.clear(),
   }));
@@ -67,9 +70,11 @@ beforeEach(() => {
 afterEach(() => { cleanup(); act(() => vi.runOnlyPendingTimers()); vi.useRealTimers(); });
 
 it("mounts every current user and admin consumer on one socket and fans out reconnects, live events and one shared chart refresh", async () => {
+  const corpusCalls = () => h.apiCall.mock.calls.filter(([, path]) => String(path).startsWith("/v1/games/analysis-corpus?"));
   const view = render(<RealtimeProvider>
     <SyncStatus total={5} latest={null} userId="admin" />
     <NotificationBell /><CoachingBookingAlert />
+    <NotificationsCenter /><SiteIncidentBanner /><WhatsNewButton />
     <BuildCheckInProvider><CheckIn /></BuildCheckInProvider>
     <AnalyzerProvider analysisGamesEnabled><AnalyzerRevision /></AnalyzerProvider>
     <AnalyzerFrame me={{ userId: "admin", source: "cloud", games: { total: 0, latest: null }, agentPaired: false }}><span>Analyzer content</span></AnalyzerFrame>
@@ -77,7 +82,7 @@ it("mounts every current user and admin consumer on one socket and fans out reco
     <AdminShell><Dashboard /><Notifications /></AdminShell>
   </RealtimeProvider>);
   await act(async () => {});
-  expect(h.apiCall).toHaveBeenCalledTimes(1);
+  expect(corpusCalls()).toHaveLength(1);
   expect(h.io).toHaveBeenCalledTimes(1);
   const counts = h.resources.get("/v1/admin/events/counts")!.mutate;
   const dashboard = h.resources.get("/v1/admin/events?limit=8")!.mutate;
@@ -94,25 +99,28 @@ it("mounts every current user and admin consumer on one socket and fans out reco
     h.handlers.get("import:progress")?.({ jobId: "job", completed: 4 });
     h.handlers.get("games:changed")?.({ count: 2, inserted: 1, bulk: false, reason: "ingest" });
   });
-  expect(h.resources.get("/v1/me/notifications/unread-count")!.mutate).toHaveBeenCalledTimes(3);
+  expect(h.resources.get("/v1/me/notifications/unread-count")!.mutate).toHaveBeenCalledTimes(6);
   expect(h.resources.get("/v1/coaching/alerts")!.mutate).toHaveBeenCalledOnce();
-  expect(screen.getByTestId("import").textContent).toBe("4"); expect(screen.getByText("6")).toBeTruthy();
+  expect(screen.getByTestId("import").textContent).toBe("4"); expect(h.resources.get("/v1/me")!.mutate).toHaveBeenCalledWith(expect.any(Function), { revalidate: false });
   expect(screen.getByTestId("analyzer").textContent).toBe("0"); expect(h.refresh).not.toHaveBeenCalled();
   await act(async () => { vi.advanceTimersByTime(2000); });
   await act(async () => { vi.advanceTimersByTime(1); });
-  expect(h.apiCall).toHaveBeenCalledTimes(2);
+  expect(corpusCalls()).toHaveLength(2);
   expect(h.resources.get("/v1/coaching/assignments?page=1&limit=20")!.mutate).toHaveBeenCalledOnce();
   expect(screen.getByTestId("analyzer").textContent).toBe("1"); expect(screen.getByTestId("checkin").textContent).toBe("1"); expect(h.refresh).toHaveBeenCalledOnce();
   act(() => h.handlers.get("games:changed")?.({ count: 25, inserted: 2, bulk: true, reason: "ingest" }));
-  expect(screen.getByText("8")).toBeTruthy();
+  expect(h.resources.get("/v1/me")!.mutate.mock.calls.filter(([update]) => typeof update === "function")).toHaveLength(2);
   await act(async () => { vi.advanceTimersByTime(29999); });
-  expect(h.apiCall).toHaveBeenCalledTimes(2);
+  expect(corpusCalls()).toHaveLength(2);
   expect(screen.getByTestId("analyzer").textContent).toBe("1");
   await act(async () => { vi.advanceTimersByTime(1); });
   await act(async () => { vi.advanceTimersByTime(1); });
-  expect(h.apiCall).toHaveBeenCalledTimes(3);
+  expect(corpusCalls()).toHaveLength(3);
   expect(screen.getByTestId("analyzer").textContent).toBe("2");
   expect(screen.getByTestId("checkin").textContent).toBe("2");
   expect(h.refresh).toHaveBeenCalledTimes(2);
+  await act(async () => { h.handlers.get("site:banner")?.({ hash: "notice-2" }); });
+  expect(h.apiCall.mock.calls.filter(([, path]) => path === "/v1/site/banner?v=notice-2")).toHaveLength(1);
+  expect(corpusCalls()).toHaveLength(3);
   expect(h.io).toHaveBeenCalledTimes(1); view.unmount(); act(() => vi.advanceTimersByTime(0)); expect(h.disconnect).toHaveBeenCalledOnce();
 });

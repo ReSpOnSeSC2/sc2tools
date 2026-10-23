@@ -30,6 +30,31 @@ export function fmtDate(iso: string | number | Date | null | undefined): string 
   return d.toLocaleString();
 }
 
+const UTC_DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const UTC_MONTH = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+
+export function fmtDay(iso: string | null | undefined): string {
+  const date = iso ? new Date(iso) : null;
+  return date && Number.isFinite(date.getTime()) ? UTC_DAY.format(date) : "—";
+}
+
+export function fmtMonthYear(iso: string | null | undefined): string {
+  const date = iso ? new Date(iso) : null;
+  return date && Number.isFinite(date.getTime()) ? UTC_MONTH.format(date) : "—";
+}
+
+const compactDateOptions: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
+const compactDateFormatter = new Intl.DateTimeFormat("en-US", compactDateOptions);
+const compactDateYearFormatter = new Intl.DateTimeFormat("en-US", { ...compactDateOptions, year: "numeric" });
+
+/** Short replay date, with the year retained for older games. */
+export function fmtDateCompact(iso: string | number | Date | null | undefined): string {
+  if (iso === null || iso === undefined || iso === "") return "—";
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "—";
+  return (date.getFullYear() === new Date().getFullYear() ? compactDateFormatter : compactDateYearFormatter).format(date);
+}
+
 /**
  * Win-rate colour ramp. Severe scheme: deep red below 30%, deep green
  * above 65%, with a smooth red → amber → green gradient between so a

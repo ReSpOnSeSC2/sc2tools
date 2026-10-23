@@ -5,17 +5,19 @@ import PrivacyPage from "../page";
 afterEach(cleanup);
 
 describe("privacy policy backups", () => {
-  it("explains the daily Atlas backups, user snapshots and export", () => {
+  it("explains configured service backups, private snapshot retention and export", () => {
     render(<PrivacyPage />);
 
     const heading = screen.getByRole("heading", { name: "Backups" });
     const section = heading.closest("section");
     expect(section).not.toBeNull();
     const text = section!.textContent || "";
-    expect(text).toMatch(/MongoDB Atlas takes\s+automatic snapshots of the whole SC2 Tools database every day/);
-    expect(text).toMatch(/deleted\s+automatically when their retention period/);
+    expect(text).toMatch(/MongoDB Atlas keeps whole-database snapshots under our configured backup schedule/);
+    expect(text).toMatch(/Current database backup retention window is unavailable/);
     expect(text).toMatch(/not a\s+way to restore one account on request/);
-    expect(text).toMatch(/stays until\s+you delete your account/);
+    expect(text).toMatch(/5 manual snapshots,\s+2 weekly automatic snapshots, and 3 snapshots/);
+    expect(text).toMatch(/private Cloudflare R2 storage/);
+    expect(text).toMatch(/All private snapshots are removed when you delete your account/);
     expect(text).toMatch(/Copies already inside database backups are not edited/);
     expect(section!.querySelector('a[href="/settings?tab=backups"]')).not.toBeNull();
   });
@@ -23,6 +25,9 @@ describe("privacy policy backups", () => {
   it("points the deletion promise at the backup expiry", () => {
     render(<PrivacyPage />);
     const rights = screen.getByRole("heading", { name: "Your rights" }).closest("section");
-    expect(rights?.textContent).toMatch(/Copies in our daily database\s+backups expire on their own/);
+    expect(rights?.textContent).toMatch(/Copies already inside database backups are not edited individually/);
+    expect(rights?.textContent).toMatch(/\[deleted user\]/);
+    expect(rights?.textContent).toMatch(/keyed guard for 30 days/);
+    expect(rights?.textContent).toMatch(/private support message text and replies are removed/);
   });
 });

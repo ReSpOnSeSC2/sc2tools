@@ -222,3 +222,26 @@ describe("ReplayIntake: warm-up intent and focus", () => {
     expect(onIntent).not.toHaveBeenCalled();
   });
 });
+
+
+describe("date window before file selection", () => {
+  it("puts the window and cap inside the drop zone, before Choose, without picker or parent key events", () => {
+    const parentClick = vi.fn(); const parentKey = vi.fn();
+    const props: ReplayIntakeProps = { onFiles: vi.fn(), dateWindow: { kind: "days90" }, onDateWindowChange: vi.fn(), fileCount: 0, maxFiles: 25 };
+    const { container } = render(<div onClick={parentClick} onKeyDown={parentKey}><ReplayIntake {...props} /></div>);
+    const group = screen.getByRole("group", { name: "Replays from" }); const choose = screen.getByRole("button", { name: "Choose replays" });
+    expect(dropZone().contains(group)).toBe(true);
+    expect(group.compareDocumentPosition(choose) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText("Applies to the replays you add next")).toBeTruthy(); expect(screen.getByText("newest 25 replays")).toBeTruthy();
+    const click = vi.spyOn(pickerInput(container), "click");
+    fireEvent.click(screen.getByRole("radio", { name: "All time" })); fireEvent.keyDown(group, { key: " " });
+    expect(props.onDateWindowChange).toHaveBeenCalledWith({ kind: "all" }); expect(click).not.toHaveBeenCalled();
+    expect(parentClick).not.toHaveBeenCalled(); expect(parentKey).not.toHaveBeenCalled();
+  });
+  it("disables the entire date choice while analysis is busy", () => {
+    renderIntake({ disabled: true });
+    const group = screen.getByRole("group", { name: "Replays from" });
+    expect(group.getAttribute("aria-disabled")).toBe("true");
+    for (const input of group.querySelectorAll<HTMLInputElement>("input")) expect(input.matches(":disabled")).toBe(true);
+  });
+});

@@ -32,6 +32,21 @@ class ConsoleUI:
             f"{bar}\n"
         )
 
+    def on_phase(self, phase, detail=""):
+        self.on_status(detail if phase=="boot_error" else phase)
+
+    def on_analyzer_probe(self, ok, diag):
+        if not ok:
+            self.on_status("Replay analyzer unavailable: " + diag)
+
+    def on_paused(self, paused, until=None):
+        from datetime import datetime
+        label = "Paused until " + datetime.fromtimestamp(until).strftime("%H:%M") if paused and until else "Sync paused" if paused else "Sync resumed"
+        self.on_status(label)
+
+    def on_status_view(self, view):
+        self._status = view.headline
+
     def on_pairing_state(self, state) -> None:
         if state.kind in ("requesting", "unreachable", "expired"):
             self.on_status({"requesting": "Getting your code...",
