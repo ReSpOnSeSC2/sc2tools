@@ -33,6 +33,7 @@
  */
 
 const express = require("express");
+const { analyticsRange } = require("../services/analytics");
 const { buildAdminGlobalTrendsRouter } = require("./adminGlobalTrends");
 const { buildAdminGuidesRouter } = require("./adminGuides");
 const {
@@ -515,12 +516,13 @@ function buildAdminRouter(deps) {
   // service-side to 1..365).
   router.get("/admin/analytics/summary", async (req, res, next) => {
     try {
+      const options = { days: parseLimit(req.query.days), from: req.query.from, to: req.query.to };
+      analyticsRange(options);
       if (!deps.analytics.isEnabled()) {
         res.json({ configured: false });
         return;
       }
-      const days = parseLimit(req.query.days);
-      res.json(await deps.analytics.summary({ days }));
+      res.json(await deps.analytics.summary(options));
     } catch (err) {
       next(err);
     }

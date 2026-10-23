@@ -6,7 +6,7 @@
  * loads.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { useEffect, useState } from "react";
 import { SettingsShell, defaultTabVisibility, type SettingsTabId } from "../SettingsShell";
 import { SECTION_FLASH_ATTR, SECTION_FLASH_MS } from "../revealSectionAnchor";
@@ -48,7 +48,7 @@ const originalScroll = HTMLElement.prototype.scrollIntoView;
 
 beforeEach(() => {
   scrollIntoView = vi.fn();
-  HTMLElement.prototype.scrollIntoView = scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = function(options) { if (typeof options === "object" && options.block === "nearest") return; scrollIntoView.call(this, options); };
 });
 
 afterEach(() => {
@@ -119,6 +119,17 @@ describe("SettingsShell legacy #tab links", () => {
 });
 
 describe("SettingsShell #section anchors", () => {
+  it("gives mobile triggers real panel IDs and keyboard activation", () => {
+    render(shell("backups"));
+    const mobile = screen.getAllByRole("tablist", { name: "Settings sections" })[0];
+    const active = within(mobile).getByRole("tab", { name: /Backups/ });
+    const panel = screen.getByRole("tabpanel");
+    expect(active.getAttribute("aria-controls")).toBe(panel.id);
+    expect(active.tabIndex).toBe(0);
+    fireEvent.keyDown(active, { key: "Home" });
+    expect(document.activeElement?.getAttribute("aria-selected")).toBe("true");
+    expect(activePanel()).toContain("panel foundation");
+  });
   it("scrolls to and highlights the section once its tab is showing", () => {
     vi.useFakeTimers();
     window.history.replaceState(null, "", "/settings?tab=overlay#platform-connections");

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { ToastProvider } from "@/components/ui/Toast";
 import { ArmGhostFromLogButton, GhostGradeCard } from "../GhostGradeCard";
 import {
   assignGhostTarget,
@@ -136,7 +137,7 @@ describe("ArmGhostFromLogButton", () => {
         {...GRADE_PROPS}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /save for pvt/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Use as Ghost Build target/i }));
     const armed = selectGhostTarget(
       readArmedGhostConfig(),
       GRADE_PROPS.myRace,
@@ -165,7 +166,7 @@ describe("ArmGhostFromLogButton", () => {
       </>,
     );
     expect(screen.queryByTestId("ghost-grade-card")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /save for pvt/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Use as Ghost Build target/i }));
     // Arming this game's own log grades it against itself — a perfect S.
     expect(screen.getByTestId("ghost-grade-card")).toBeTruthy();
     expect(screen.getByLabelText("Grade S")).toBeTruthy();
@@ -179,7 +180,7 @@ describe("ArmGhostFromLogButton", () => {
         {...GRADE_PROPS}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: /save for pvt/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Use as Ghost Build target/i }));
     expect(readArmedGhostConfig()).toBeNull();
   });
 
@@ -200,4 +201,33 @@ describe("ArmGhostFromLogButton", () => {
     ).toBe(true);
     expect(readArmedGhostConfig()).toBeNull();
   });
+});
+
+it("does not grade the source replay against itself", () => {
+  armFixture({ ...TARGET, sourceGameId: "source-game" });
+  render(<GhostGradeCard buildLog={FIXTURE_LOG} gameId="source-game" {...GRADE_PROPS} />);
+  expect(screen.queryByTestId("ghost-grade-card")).toBeNull();
+  expect(screen.getByText(/This game is your armed PvT target/)).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Disarm" }));
+  expect(readArmedGhostConfig()).toBeNull();
+});
+
+it("confirms a replacement and Undo restores the previous matchup loadout", () => {
+  armFixture(TARGET);
+  render(<ToastProvider><ArmGhostFromLogButton name="New target" lines={FIXTURE_LOG} gameId="new-source" {...GRADE_PROPS} /></ToastProvider>);
+  fireEvent.click(screen.getByRole("button", { name: "Use as Ghost Build target" }));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  expect(selectGhostTarget(readArmedGhostConfig(), "P", "T")?.name).toBe(TARGET.name);
+  fireEvent.click(screen.getByRole("button", { name: "Replace target" }));
+  expect(selectGhostTarget(readArmedGhostConfig(), "P", "T")?.sourceGameId).toBe("new-source");
+  fireEvent.click(screen.getByRole("button", { name: "Undo" }));
+  expect(selectGhostTarget(readArmedGhostConfig(), "P", "T")).toEqual(TARGET);
+});
+
+it("confirms before replacing a legacy target without source ids", () => {
+  armFixture(TARGET);
+  render(<ArmGhostFromLogButton name="Other target" lines={FIXTURE_LOG} {...GRADE_PROPS} />);
+  fireEvent.click(screen.getByRole("button", { name: "Use as Ghost Build target" }));
+  expect(screen.getByRole("dialog")).toBeTruthy();
+  expect(selectGhostTarget(readArmedGhostConfig(), "P", "T")).toEqual(TARGET);
 });

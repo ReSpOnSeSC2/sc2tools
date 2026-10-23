@@ -5,10 +5,12 @@ import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { ArrowRight } from "lucide-react";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
+import { SettingsLoadError } from "./SettingsLoadError";
 import {
   isAnalyticsConfigured,
   readConsent,
   setConsent,
+  withdrawConsent,
   subscribeConsent,
   type ConsentState,
 } from "@/lib/analytics/consent";
@@ -67,7 +69,7 @@ const DEFAULT_TABS: ReadonlyArray<{ value: string; label: string }> = [
 
 export function SettingsMisc() {
   const { getToken } = useAuth();
-  const { data, isLoading, mutate } = useApi<Misc>(
+  const { data, error, isLoading, mutate } = useApi<Misc>(
     "/v1/me/preferences/misc",
   );
   const { toast } = useToast();
@@ -105,6 +107,7 @@ export function SettingsMisc() {
   }
 
   if (isLoading) return <Skeleton rows={3} />;
+  if (error && data === undefined) return <SettingsLoadError tab="Misc settings" error={error} retry={mutate} />;
 
   return (
     <>
@@ -193,7 +196,7 @@ function AnalyticsCookiesRow() {
     : { label: "Not used", variant: "neutral" as const };
 
   const keepOff = () => {
-    setConsent("denied");
+    withdrawConsent();
     // "Keep off" goes away with the choice; keep focus in the row.
     turnOnRef.current?.focus();
   };
@@ -226,7 +229,7 @@ function AnalyticsCookiesRow() {
                 variant="secondary"
                 size="sm"
                 aria-label="Turn off analytics cookies"
-                onClick={() => setConsent("denied")}
+                onClick={withdrawConsent}
               >
                 Turn off
               </Button>

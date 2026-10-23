@@ -94,6 +94,7 @@ export interface GhostTarget {
   /** Display name of the build ("PvZ 2 SG Void Ray (5.0.14)"). */
   name: string;
   steps: GhostStep[];
+  sourceGameId?: string;
 }
 
 /** Only concrete races can select homework. Random, unknown and empty values
@@ -253,7 +254,10 @@ export function normalizeGhostTarget(input: unknown): GhostTarget | null {
     steps.push(step);
   }
   steps.sort((a, b) => a.t - b.t);
-  return { v: GHOST_BUILD_VERSION, name, steps };
+  const sourceGameId = typeof raw.sourceGameId === "string" && raw.sourceGameId.length > 0
+    && raw.sourceGameId.length <= 64 && !/[\u0000-\u001f\u007f]/.test(raw.sourceGameId)
+    ? raw.sourceGameId : undefined;
+  return { v: GHOST_BUILD_VERSION, name, steps, ...(sourceGameId ? { sourceGameId } : {}) };
 }
 
 export function emptyGhostBuildConfig(): GhostBuildConfig {
@@ -420,17 +424,20 @@ export function decodeGhostTarget(
 type CompactGhostTarget = [
   string,
   Array<[number | null, number, string]>,
+  string?,
 ];
 
 function compactTarget(target: GhostTarget): CompactGhostTarget {
-  return [
+  const compact: CompactGhostTarget = [
     target.name,
     target.steps.map((step) => [step.supply, step.t, step.name]),
   ];
+  if (target.sourceGameId) compact.push(target.sourceGameId);
+  return compact;
 }
 
 function expandCompactTarget(input: unknown): GhostTarget | null {
-  if (!Array.isArray(input) || input.length !== 2 || !Array.isArray(input[1])) {
+  if (!Array.isArray(input) || (input.length !== 2 && input.length !== 3) || !Array.isArray(input[1])) {
     return null;
   }
   const rawSteps = input[1] as unknown[];
@@ -442,6 +449,7 @@ function expandCompactTarget(input: unknown): GhostTarget | null {
   return normalizeGhostTarget({
     v: GHOST_BUILD_VERSION,
     name: input[0],
+    sourceGameId: input[2],
     steps,
   });
 }
@@ -590,6 +598,7 @@ const BUILD_LOG_LINE_RE = /^\[(\d+):(\d{2})\]\s+(.+?)\s*$/;
 export function fromBuildLog(
   name: string,
   lines: ReadonlyArray<string>,
+  options: { sourceGameId?: string } = {},
 ): GhostTarget | null {
   const steps: GhostStep[] = [];
   for (const line of lines) {
@@ -604,7 +613,7 @@ export function fromBuildLog(
     steps.push({ supply: null, t: minutes * 60 + seconds, name: entity });
     if (steps.length >= MAX_GHOST_STEPS) break;
   }
-  return normalizeGhostTarget({ v: GHOST_BUILD_VERSION, name, steps });
+  return normalizeGhostTarget({ v: GHOST_BUILD_VERSION, name, steps, sourceGameId: options.sourceGameId });
 }
 
 /* ------------------------------------------------------------------ */

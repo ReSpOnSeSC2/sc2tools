@@ -681,6 +681,22 @@ class GdprService {
    * @returns {Promise<{ games: number, opponents: number, macroJobs: number, guideSamples?: number, range: { since: string|null, until: string|null } }>}
    *   ``guideSamples`` is reported only when the guide samples service is wired.
    */
+  /** @param {string} userId @param {{since?: Date|null, until?: Date|null}} [opts] @returns {Record<string, any>} */
+  _gamesWipeFilter(userId, opts = {}) {
+    const since = opts.since instanceof Date && !Number.isNaN(opts.since.getTime()) ? opts.since : null;
+    const until = opts.until instanceof Date && !Number.isNaN(opts.until.getTime()) ? opts.until : null;
+    if (since && until && since >= until) throw new Error("since must be before until");
+    return { userId, ...(since || until ? { date: { ...(since ? { $gte: since } : {}), ...(until ? { $lt: until } : {}) } } : {}) };
+  }
+
+  /** A read-only preview; deliberately does not take a mutation fence.
+   * @param {string} userId @param {{since?: Date|null, until?: Date|null}} [opts] @returns {Promise<number>}
+   */
+  async countGamesForWipe(userId, opts = {}) {
+    return this.db.games.countDocuments(this._gamesWipeFilter(userId, opts));
+  }
+
+  /** @param {string} userId @param {{since?: Date|null, until?: Date|null}} [opts] */
   async wipeGames(userId, opts = {}) {
     const gdprFence = await this._acquireMutationFence(userId, "wipe_games");
     try {
@@ -694,14 +710,7 @@ class GdprService {
       : null;
 
     /** @type {Record<string, any>} */
-    const filter = { userId };
-    if (since || until) {
-      /** @type {Record<string, Date>} */
-      const range = {};
-      if (since) range.$gte = since;
-      if (until) range.$lt = until;
-      filter.date = range;
-    }
+    const filter = this._gamesWipeFilter(userId, opts);
 
     if (this.customBuilds) {
       await this.customBuilds.cancelUserReclassifications(userId);

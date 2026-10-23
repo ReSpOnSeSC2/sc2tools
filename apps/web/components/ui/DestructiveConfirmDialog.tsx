@@ -20,6 +20,7 @@ export interface DestructiveConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   loading?: boolean;
+  confirmDisabled?: boolean;
   /**
    * Extra content rendered between the description and the type-to-
    * confirm input — useful for date pickers, size warnings, etc.
@@ -50,6 +51,7 @@ export function DestructiveConfirmDialog({
   confirmLabel = "Delete",
   cancelLabel = "Cancel",
   loading = false,
+  confirmDisabled = false,
   children,
 }: DestructiveConfirmDialogProps) {
   const [typed, setTyped] = useState("");
@@ -84,7 +86,7 @@ export function DestructiveConfirmDialog({
             variant="danger"
             onClick={onConfirm}
             loading={loading}
-            disabled={!matches}
+            disabled={!matches || confirmDisabled}
           >
             {confirmLabel}
           </Button>

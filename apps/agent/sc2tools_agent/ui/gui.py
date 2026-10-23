@@ -46,6 +46,9 @@ log = logging.getLogger(__name__)
 # private name used inside this module. Authoritative definition
 # lives in ``config.py`` so the runner and GUI share a single
 # ceiling — see the comment block there for why 12.
+from .qt_helpers import guard_value_widgets, validate_api_base, probe_api_health
+from .help_links import help_url, help_button
+from ..config import _DEFAULT_API_BASE
 from ..config import PARSE_CONCURRENCY_USEFUL_MAX as _PARSE_CONCURRENCY_USEFUL_MAX  # noqa: E402
 
 # The switcher's default phase → scene map. The settings panel shows it
@@ -130,6 +133,9 @@ QWidget {{
 QLabel {{
     background: transparent;
 }}
+QLabel#settingsToastOk {{ color: {_SUCCESS}; }}
+QLabel#settingsToastErr, QLabel#fieldError {{ color: {_DANGER}; }}
+QToolButton#helpLink {{ border: 1px solid {_BORDER_STRONG}; border-radius: 10px; color: {_TEXT_MUTED}; }}
 QCheckBox {{
     background: transparent;
 }}
@@ -641,7 +647,13 @@ class GuiUI:
         build_checkin_available: bool = False,
         build_checkin_positions: Optional[dict] = None,
         on_build_checkin_moved: Optional[Callable[[str, int, int], None]] = None,
+        window_geometry: Optional[str] = None,
+        window_page: Optional[str] = None,
+        on_window_state: Optional[Callable[[str, str], None]] = None,
     ) -> None:
+        self._window_geometry = window_geometry
+        self._window_page = window_page
+        self._on_window_state = on_window_state
         self._version = version
         self._dashboard_url = dashboard_url
         self._pairing_url = pairing_url
@@ -1072,10 +1084,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         # Cap the in-memory recent uploads. Anything past this falls off
         # the table; the cloud is the source of truth for the full list.
+        _PAGE_KEYS = ("dashboard", "recent", "log", "settings", "streams")
+        apiTestDone = QtCore.Signal(str, int, str)
         MAX_RECENT = 100
-        # Cap the live log buffer — the file on disk keeps everything;
-        # this is just a tail.
-        MAX_LOG_LINES = 800
+        # Tail parsing and its record cap live in activity_log.py.
         LOG_TAIL_INTERVAL_MS = 1500
 
         def __init__(self) -> None:
@@ -1101,7 +1113,6 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._recent: Deque[tuple[datetime, str, bool, str]] = deque(
                 maxlen=self.MAX_RECENT,
             )
-            self._log_offset = 0
             # Active sync-filter chip on the status card. Sourced from
             # ``_initial_settings`` at boot and refreshed every time
             # the user clicks Save; never read from the live combo
@@ -1115,6 +1126,26 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
 
             self._build_layout()
+            self._refresh_recent()
+            self._settings_toast_timer = QtCore.QTimer(self)
+            self._settings_toast_timer.setSingleShot(True)
+            self._settings_toast_timer.timeout.connect(self._settings_status.clear)
+            self._save_ack = False
+            self._settings_restart_notice = ""
+            self.apiTestDone.connect(self._on_api_test_done)
+            self._window_state_timer = QtCore.QTimer(self)
+            self._window_state_timer.setSingleShot(True)
+            self._window_state_timer.setInterval(1000)
+            self._window_state_timer.timeout.connect(self._save_window_state)
+            self._stats_refresh_timer = QtCore.QTimer(self)
+            self._stats_refresh_timer.setSingleShot(True)
+            self._stats_refresh_timer.setInterval(250)
+            self._stats_refresh_timer.timeout.connect(self._refresh_stats)
+            self._find_log_shortcut = QtGui.QShortcut(QtGui.QKeySequence("Ctrl+F"), self)
+            self._find_log_shortcut.setContext(QtCore.Qt.WindowShortcut)
+            self._find_log_shortcut.activated.connect(self._focus_log_search)
+            self._stack.currentChanged.connect(lambda _index: self._schedule_window_state())
+            guard_value_widgets(self._stack.widget(3), QtCore, QtWidgets)
             from .build_checkin_window import BuildCheckinHost
 
             self._checkin_host = BuildCheckinHost(
@@ -1128,6 +1159,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._refresh_stats()
             self._refresh_pairing_card()
             self._populate_settings()
+            self._saved_api_base = self._api_input.text().strip().rstrip("/")
+            self._loaded_restart_values = (
+                self._saved_api_base, self._log_combo.currentText(),
+                int(self._concurrency_slider.value()),
+            )
+            self._restore_window_state()
             # Unlike the other draft fields, this is a live safety switch: a
             # streamer who unchecks it expects the agent to stop driving OBS
             # now, not after finding and pressing Save at the bottom of the
@@ -1212,7 +1249,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 if index == 0:
                     btn.setChecked(True)
                 btn.clicked.connect(
-                    lambda _checked=False, i=index: self._stack.setCurrentIndex(i),
+                    lambda _checked=False, key=self._PAGE_KEYS[index]: self._go_to_page(key),
                 )
                 self._nav_group.addButton(btn, index)
                 layout.addWidget(btn)
@@ -1223,6 +1260,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._sidebar_status.setObjectName("muted")
             self._sidebar_status.setWordWrap(True)
             layout.addWidget(self._sidebar_status)
+
+            help_btn = QtWidgets.QPushButton("Help & support")
+            help_btn.setFlat(True)
+            help_btn.clicked.connect(lambda: self._open_help("desktop-app-overview"))
+            layout.addWidget(help_btn)
 
             version_lbl = QtWidgets.QLabel(f"v{ui._version}")
             version_lbl.setObjectName("dim")
@@ -1588,44 +1630,31 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         # ---- Logs tab ----
 
         def _build_logs_tab(self) -> QtWidgets.QWidget:
-            page = QtWidgets.QWidget()
-            v = QtWidgets.QVBoxLayout(page)
-            v.setContentsMargins(28, 24, 28, 24)
-            v.setSpacing(14)
-
-            top = QtWidgets.QHBoxLayout()
-            top.setSpacing(10)
-
-            title = QtWidgets.QLabel("Activity log")
-            title.setObjectName("h1")
-            top.addWidget(title)
-
-            top.addStretch(1)
-
-            self._log_filter_combo = QtWidgets.QComboBox()
-            self._log_filter_combo.addItems(
-                ["All", "INFO+", "WARNING+", "ERROR only"],
+            from .activity_log import build_activity_log
+            self._activity_log = build_activity_log(
+                self, log_file=ui._log_file, QtCore=QtCore, QtGui=QtGui,
+                QtWidgets=QtWidgets, open_folder=self._open_log_folder,
+                open_help=lambda: self._open_help("desktop-app-activity-log"),
+                palette={"error": _DANGER, "warning": _WARNING,
+                         "muted": _TEXT_MUTED, "text": _TEXT, "accent": _ACCENT},
             )
-            self._log_filter_combo.currentIndexChanged.connect(
-                lambda _i: self._render_log(),
-            )
-            top.addWidget(QtWidgets.QLabel("Filter:"))
-            top.addWidget(self._log_filter_combo)
+            self._log_view = self._activity_log.view
+            self._log_filter_combo = self._activity_log.filter_combo
+            return self._activity_log
 
-            open_dir_btn = QtWidgets.QPushButton("Open log folder")
-            open_dir_btn.clicked.connect(self._open_log_folder)
-            top.addWidget(open_dir_btn)
+        def _focus_log_search(self):
+            self._go_to_page("log")
+            self._activity_log.search.setFocus()
+            self._activity_log.search.selectAll()
 
-            v.addLayout(top)
-
-            self._log_view = QtWidgets.QPlainTextEdit()
-            self._log_view.setObjectName("log")
-            self._log_view.setReadOnly(True)
-            self._log_view.setLineWrapMode(QtWidgets.QPlainTextEdit.NoWrap)
-            v.addWidget(self._log_view, stretch=1)
-
-            self._log_lines: Deque[str] = deque(maxlen=self.MAX_LOG_LINES)
-            return page
+        def show_log(self, filter="errors", jump_to_last=True):
+            self._go_to_page("log")
+            combo = self._activity_log.filter_combo
+            index = combo.findData(filter)
+            combo.setCurrentIndex(max(0, index))
+            self._tail_log_now()
+            if jump_to_last:
+                self._activity_log.jump_to_latest()
 
         # ---- Settings tab ----
 
@@ -1659,10 +1688,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             form.setVerticalSpacing(14)
             form.setLabelAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
 
+            self._api_test_generation = 0
             self._api_input = QtWidgets.QLineEdit()
-            self._api_input.setPlaceholderText(
-                "e.g. https://api.sc2tools.com  (leave blank for default)",
-            )
+            self._api_input.setPlaceholderText(_DEFAULT_API_BASE)
             self._api_input.setToolTip(
                 "Where the agent uploads parsed replays and fetches your "
                 "profile. Leave blank to use the production cloud API "
@@ -1670,7 +1698,36 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "you're running a private API instance — e.g. local dev "
                 "or a self-hosted ingest endpoint.",
             )
-            form.addRow("API base URL", self._api_input)
+            api_block = QtWidgets.QWidget()
+            api_v = QtWidgets.QVBoxLayout(api_block)
+            api_v.setContentsMargins(0, 0, 0, 0)
+            api_row = QtWidgets.QHBoxLayout()
+            api_row.addWidget(self._api_input, 1)
+            api_actions = QtWidgets.QHBoxLayout()
+            self._api_reset_btn = QtWidgets.QPushButton("Reset to default")
+            self._api_reset_btn.clicked.connect(self._reset_api_address)
+            api_actions.addWidget(self._api_reset_btn)
+            self._api_test_btn = QtWidgets.QPushButton("Test")
+            self._api_test_btn.clicked.connect(self._test_api_address)
+            api_actions.addWidget(self._api_test_btn)
+            api_v.addLayout(api_row)
+            api_actions.addStretch(1)
+            api_v.addLayout(api_actions)
+            api_hint = QtWidgets.QLabel("Leave blank to use sc2tools.com")
+            api_hint.setObjectName("muted")
+            api_v.addWidget(api_hint)
+            self._api_error = QtWidgets.QLabel("")
+            self._api_error.setObjectName("fieldError")
+            self._api_error.setWordWrap(True)
+            api_v.addWidget(self._api_error)
+            self._api_test_status = QtWidgets.QLabel("")
+            self._api_test_status.setObjectName("muted")
+            self._api_test_status.setWordWrap(True)
+            api_v.addWidget(self._api_test_status)
+            self._api_input.editingFinished.connect(self._validate_api_address)
+            self._api_input.textChanged.connect(self._on_api_text_changed)
+            api_label = QtWidgets.QLabel(f"API base URL<br/><span style='color:{_TEXT_MUTED}'>Needs restart</span>")
+            form.addRow(api_label, api_block)
 
             self._handle_input = QtWidgets.QLineEdit()
             self._handle_input.setPlaceholderText(
@@ -1907,8 +1964,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 f"build_logs run ~150 KB each, so the default of "
                 f"{_DEFAULT_UPLOAD_BATCH_SIZE} leaves margin for "
                 f"outliers. Bigger batches × the 120 req/min rate "
-                f"limit = more throughput. Takes effect on next "
-                f"agent restart."
+                f"limit = more throughput. Applies to the next batch."
             )
             self._upload_batch_value_label = QtWidgets.QLabel()
             self._upload_batch_value_label.setMinimumWidth(96)
@@ -1989,7 +2045,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             _toggle_custom_visibility()
 
-            form.addRow("Sync date range", filter_block)
+            form.addRow(self._help_label("Sync date range", "desktop-app-sync-range"), filter_block)
 
             self._log_combo = QtWidgets.QComboBox()
             self._log_combo.addItems(["INFO", "DEBUG", "WARNING", "ERROR"])
@@ -2054,7 +2110,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             folder_btns.addStretch(1)
             folder_v.addLayout(folder_btns)
 
-            form.addRow("Replay folders", folder_block)
+            form.addRow(self._help_label("Replay folders", "replay-folders"), folder_block)
 
             from .. import autostart as autostart_mod  # local import keeps import-time safe
 
@@ -2119,6 +2175,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._checkin_settings = CheckinSettingsGroup(
                 controller=ui._build_checkin_controller,
                 available=ui._build_checkin_available,
+                on_help=lambda: self._open_help("build-check-in"),
             )
             v.addWidget(self._checkin_settings)
             v.addWidget(self._build_obs_card())
@@ -2219,7 +2276,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             heading = QtWidgets.QLabel("OBS scene switching")
             heading.setObjectName("h2")
-            outer.addWidget(heading)
+            heading_row = QtWidgets.QHBoxLayout()
+            heading_row.addWidget(heading)
+            heading_row.addWidget(help_button(QtWidgets, "OBS scene switching", lambda: self._open_help("obs-auto-scene-switching")))
+            heading_row.addStretch(1)
+            outer.addLayout(heading_row)
 
             blurb = QtWidgets.QLabel(
                 "Switch OBS scenes automatically when a game starts and "
@@ -2599,27 +2660,27 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 return default
 
         def _on_upload_success(self, filename: str) -> None:
-            self._uploaded_count = self._query_synced_count(
-                default=self._uploaded_count + 1,
-            )
+            self._uploaded_count += 1
             self._pending_count = max(0, self._pending_count - 1)
             self._last_upload = (filename, datetime.now())
             self._recent.appendleft(
                 (datetime.now(), filename, True, "Uploaded"),
             )
             self._refresh_status_card()
-            self._refresh_stats()
-            self._refresh_recent()
+            self._paint_stats()
+            self._request_stats_refresh()
+            self._insert_recent(self._recent[0])
 
         def _on_upload_failed(self, filename: str, reason: str) -> None:
             self._recent.appendleft(
                 (datetime.now(), filename, False, reason or "Failed"),
             )
-            self._refresh_recent()
+            self._insert_recent(self._recent[0])
 
         def _on_pending_changed(self, count: int) -> None:
             self._pending_count = int(count)
-            self._refresh_stats()
+            self._paint_stats()
+            self._request_stats_refresh()
 
         def _on_update_available(self, latest: str) -> None:
             self._update_pending = latest
@@ -2682,10 +2743,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             """Render the runner's post-Save toast in the Settings tab
             and refresh the dashboard's status card so the filter chip
             picks up the new state."""
-            self._settings_status.setText(status)
-            QtCore.QTimer.singleShot(
-                5000, lambda: self._settings_status.setText(""),
-            )
+            self._save_ack = True
+            self._show_settings_toast(status + self._settings_restart_notice, "success")
             # Filter chip lives in ``_format_status_lines`` — repaint
             # the status card so the user sees "Filter: Season 67"
             # within the same tick as the toast.
@@ -2747,7 +2806,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 settings_button = self._nav_group.button(3)
                 if settings_button is not None:
                     settings_button.setChecked(True)
-                self._stack.setCurrentIndex(3)
+                self._go_to_page("settings")
                 QtWidgets.QMessageBox.information(
                     self,
                     "Select All time first",
@@ -2839,7 +2898,130 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 target=_worker, name="sc2tools-gui-update-check", daemon=True,
             ).start()
 
+        def _help_url(self, slug):
+            return help_url(ui._dashboard_url, slug)
+
+        def _open_help(self, slug):
+            webbrowser.open(self._help_url(slug), new=2)
+
+        def _help_label(self, topic, slug):
+            label = QtWidgets.QWidget()
+            row = QtWidgets.QHBoxLayout(label)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.addWidget(QtWidgets.QLabel(topic))
+            row.addWidget(help_button(QtWidgets, topic, lambda: self._open_help(slug)))
+            row.addStretch(1)
+            return label
+
+        def _show_settings_toast(self, text, tone="info", ms=6000):
+            self._settings_toast_timer.stop()
+            self._settings_status.setObjectName({"success": "settingsToastOk", "error": "settingsToastErr"}.get(tone, "muted"))
+            self._settings_status.style().unpolish(self._settings_status)
+            self._settings_status.style().polish(self._settings_status)
+            self._settings_status.setText(text)
+            if ms > 0:
+                self._settings_toast_timer.start(ms)
+
+        def _validate_api_address(self):
+            error = validate_api_base(self._api_input.text())
+            self._api_error.setText(error or "")
+            return error is None
+
+        def _reset_api_address(self):
+            self._api_input.clear()
+            self._validate_api_address()
+
+        def _on_api_text_changed(self, _text):
+            self._api_test_generation += 1
+            self._api_test_status.clear()
+
+        def _test_api_address(self):
+            if not self._validate_api_address():
+                self._api_input.setFocus()
+                return
+            requested = self._api_input.text().strip().rstrip("/")
+            self._api_test_btn.setEnabled(False)
+            self._api_test_status.setText("Testing…")
+            done = self.apiTestDone
+            generation = self._api_test_generation
+
+            class Probe(QtCore.QRunnable):
+                def run(self):
+                    done.emit(requested, generation, probe_api_health(requested or _DEFAULT_API_BASE))
+
+            QtCore.QThreadPool.globalInstance().start(Probe())
+
+        def _on_api_test_done(self, requested, generation, message):
+            self._api_test_btn.setEnabled(True)
+            if self._api_test_generation == generation and self._api_input.text().strip().rstrip("/") == requested:
+                self._api_test_status.setText(message)
+
+        def _go_to_page(self, key):
+            index = self._PAGE_KEYS.index(key) if key in self._PAGE_KEYS else 0
+            self._stack.setCurrentIndex(index)
+            button = self._nav_group.button(index)
+            if button is not None:
+                button.setChecked(True)
+            self._schedule_window_state()
+
+        def _schedule_window_state(self):
+            timer = getattr(self, "_window_state_timer", None)
+            if timer is not None and self.isVisible() and not self.isMinimized():
+                timer.start()
+
+        def _save_window_state(self):
+            if not self.isVisible() or self.isMinimized() or not ui._on_window_state:
+                return
+            try:
+                ui._on_window_state(bytes(self.saveGeometry().toBase64()).decode("ascii"), self._PAGE_KEYS[self._stack.currentIndex()])
+            except Exception:
+                log.exception("gui_window_state_save_failed")
+
+        def moveEvent(self, event):
+            super().moveEvent(event)
+            self._schedule_window_state()
+
+        def resizeEvent(self, event):
+            super().resizeEvent(event)
+            self._schedule_window_state()
+
+        def _restore_window_state(self):
+            from .build_checkin_window import clamp_card_position, screen_rects
+            if ui._window_geometry:
+                self.restoreGeometry(QtCore.QByteArray.fromBase64(ui._window_geometry.encode("ascii")))
+            screens = QtWidgets.QApplication.screens()
+            if screens:
+                rects = screen_rects(screens)
+                frame = self.frameGeometry()
+                point = clamp_card_position((frame.x(), frame.y()), (frame.width(), frame.height()), rects, min_visible=120)
+                target = QtWidgets.QApplication.primaryScreen().availableGeometry()
+                if point is not None:
+                    target = next((screen.availableGeometry() for screen in screens if screen.availableGeometry().contains(QtCore.QPoint(*point))), target)
+                self.setMinimumSize(min(820, target.width()), min(540, target.height()))
+                if point is None:
+                    self.resize(min(960, target.width()), min(640, target.height()))
+                    point = (target.x() + (target.width() - self.width()) // 2, target.y() + (target.height() - self.height()) // 2)
+                else:
+                    self.resize(min(self.width(), target.width()), min(self.height(), target.height()))
+                self.move(*point)
+            self._go_to_page(ui._window_page if self._paired and ui._window_page in self._PAGE_KEYS else "dashboard")
+
         def _click_save_settings(self) -> None:
+            if not self._validate_api_address():
+                self._show_settings_toast("Fix the API address before saving.", "error")
+                self._api_input.setFocus()
+                return
+            api_base = self._api_input.text().strip().rstrip("/")
+            loaded_api, loaded_log, loaded_parse = self._loaded_restart_values
+            changed = []
+            if self._log_combo.currentText() != loaded_log:
+                changed.append("Log level")
+            if int(self._concurrency_slider.value()) != loaded_parse:
+                changed.append("Parse concurrency")
+            if api_base != loaded_api:
+                changed.append("API address")
+            fields = (", ".join(changed[:-1]) + " and " + changed[-1]) if len(changed) > 1 else "".join(changed)
+            self._settings_restart_notice = f" {fields} {'changes' if len(changed) == 1 else 'change'} after you restart SC2 Tools." if fields else ""
             folders: List[Path] = []
             for i in range(self._folder_list.count()):
                 raw = self._folder_list.item(i).text().strip()
@@ -2861,7 +3043,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if checked_upload_conc <= 0:
                 checked_upload_conc = self._upload_conc_last_saved
             payload = SettingsPayload(
-                api_base=self._api_input.text().strip() or None,
+                api_base=api_base if api_base != self._saved_api_base else None,
                 log_level=self._log_combo.currentText(),
                 replay_folders=folders,
                 replay_folders_removed=[
@@ -2897,7 +3079,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._folders_removed = []
             self._folders_dirty = False
             try:
+                self._save_ack = False
                 ui._on_save_settings(payload)
+                self._saved_api_base = api_base
                 # Refresh the dashboard's filter chip immediately —
                 # the runner-side ``show_settings_status`` will also
                 # repaint, but updating now means the chip is correct
@@ -2910,21 +3094,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                     until_iso=until_iso,
                 )
                 self._refresh_status_card()
-                # Default toast — the runner may overwrite this with
-                # a richer apply summary via ``show_settings_status``,
-                # but that signal arrives a few ms later so leave a
-                # baseline acknowledgement here too.
-                self._settings_status.setText(
-                    "Saved · changes apply on next start",
-                )
-                QtCore.QTimer.singleShot(
-                    4000, lambda: self._settings_status.setText(""),
-                )
+                if not self._save_ack:
+                    self._show_settings_toast("Saved." + self._settings_restart_notice, "success")
             except Exception as exc:  # noqa: BLE001
                 log.exception("gui_save_settings_failed")
                 self._folders_removed = unsaved_removals
                 self._folders_dirty = unsaved_edits
-                self._settings_status.setText(f"Save failed: {exc}")
+                self._show_settings_toast(f"Couldn't save settings: {exc}", "error")
 
         def _refresh_capture_notice(self) -> None:
             self._replay_capture_notice.setVisible(
@@ -2965,13 +3141,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                     self._replay_capture_last_saved,
                 )
                 self._replay_capture_check.blockSignals(False)
-                self._settings_status.setText(
-                    f"Could not save replay capture setting: {exc}",
+                self._show_settings_toast(
+                    f"Could not save replay capture setting: {exc}", "error",
                 )
                 return
             self._replay_capture_last_saved = desired
             self._refresh_capture_notice()
-            self._settings_status.setText(
+            self._show_settings_toast(
                 "Automatic replay capture on — new and re-synced replays record automatically"
                 if desired
                 else "Automatic replay capture off — stopping automatic capture",
@@ -2995,13 +3171,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                     self._obs_enable_last_saved,
                 )
                 self._obs_enable_check.blockSignals(False)
-                self._settings_status.setText(
+                self._show_settings_toast(
                     f"Could not {'enable' if desired else 'disable'} "
-                    f"automatic scene switching: {exc}",
+                    f"automatic scene switching: {exc}", "error",
                 )
                 return
             self._obs_enable_last_saved = desired
-            self._settings_status.setText(
+            self._show_settings_toast(
                 "Automatic scene switching on"
                 if desired
                 else "Automatic scene switching off",
@@ -3146,18 +3322,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             if new_entries:
                 self._folders_dirty = True
-                self._settings_status.setText(
+                self._show_settings_toast(
                     f"Auto-detect added {len(new_entries)} folder"
                     f"{'s' if len(new_entries) != 1 else ''} · "
                     "click Save settings to apply",
                 )
             else:
-                self._settings_status.setText(
+                self._show_settings_toast(
                     "Auto-detect: no new folders found",
                 )
-            QtCore.QTimer.singleShot(
-                6000, lambda: self._settings_status.setText(""),
-            )
 
         def _reveal_replay(
             self, item: "QtWidgets.QTableWidgetItem",
@@ -3191,6 +3364,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             # Default behaviour: hide-to-tray. Quitting only happens
             # through the tray's Quit action (which calls
             # signals.quitRequested).
+            self._save_window_state()
+            self._window_state_timer.stop()
             if self._really_quit:
                 event.accept()
                 return
@@ -3287,6 +3462,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             # dashboard's hero spot is freed up for the live stats.
             self._pairing_card.setVisible(not self._paired)
 
+        def _request_stats_refresh(self):
+            if not self._stats_refresh_timer.isActive():
+                self._stats_refresh_timer.start()
+
         def _refresh_stats(self) -> None:
             # Re-query on every repaint so a mid-session Re-sync (which
             # wipes the uploaded cursor) is reflected without waiting
@@ -3294,6 +3473,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._uploaded_count = self._query_synced_count(
                 default=self._uploaded_count,
             )
+            self._paint_stats()
+
+        def _paint_stats(self):
             self._stat_synced["value"].setText(str(self._uploaded_count))
             self._stat_queued["value"].setText(str(self._pending_count))
             if self._last_upload:
@@ -3302,29 +3484,31 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             else:
                 self._stat_last["value"].setText("—")
 
+        def _insert_recent(self, record):
+            self._recent_empty.hide()
+            self._recent_table.show()
+            self._recent_table.insertRow(0)
+            self._paint_recent_row(0, record)
+            while self._recent_table.rowCount() > self.MAX_RECENT:
+                self._recent_table.removeRow(self.MAX_RECENT)
+
+        def _paint_recent_row(self, row, record):
+            ts, name, ok, detail = record
+            ts_item = QtWidgets.QTableWidgetItem(ts.strftime("%Y-%m-%d %H:%M:%S"))
+            ts_item.setForeground(QtGui.QColor(_TEXT_MUTED))
+            status_item = QtWidgets.QTableWidgetItem("✓ " + detail if ok else "✗ " + detail)
+            status_item.setForeground(QtGui.QColor(_SUCCESS if ok else _DANGER))
+            self._recent_table.setItem(row, 0, ts_item)
+            self._recent_table.setItem(row, 1, QtWidgets.QTableWidgetItem(name))
+            self._recent_table.setItem(row, 2, status_item)
+
         def _refresh_recent(self) -> None:
             has_rows = bool(self._recent)
             self._recent_empty.setVisible(not has_rows)
             self._recent_table.setVisible(has_rows)
             self._recent_table.setRowCount(len(self._recent))
-            for row, (ts, name, ok, detail) in enumerate(self._recent):
-                ts_item = QtWidgets.QTableWidgetItem(
-                    ts.strftime("%Y-%m-%d %H:%M:%S"),
-                )
-                ts_item.setForeground(QtGui.QColor(_TEXT_MUTED))
-
-                name_item = QtWidgets.QTableWidgetItem(name)
-
-                status_item = QtWidgets.QTableWidgetItem(
-                    "✓ " + detail if ok else "✗ " + detail,
-                )
-                status_item.setForeground(
-                    QtGui.QColor(_SUCCESS if ok else _DANGER),
-                )
-
-                self._recent_table.setItem(row, 0, ts_item)
-                self._recent_table.setItem(row, 1, name_item)
-                self._recent_table.setItem(row, 2, status_item)
+            for row, record in enumerate(self._recent):
+                self._paint_recent_row(row, record)
 
         def _populate_settings(self) -> None:
             initial = ui._initial_settings
@@ -3427,37 +3611,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         # ---- log tail ----
 
         def _tail_log_now(self) -> None:
-            try:
-                if not ui._log_file.exists():
-                    return
-                size = ui._log_file.stat().st_size
-                if size < self._log_offset:
-                    # Log was rotated — start over.
-                    self._log_offset = 0
-                if size == self._log_offset:
-                    return
-                with ui._log_file.open("r", encoding="utf-8", errors="replace") as fh:
-                    fh.seek(self._log_offset)
-                    chunk = fh.read()
-                    self._log_offset = fh.tell()
-                for line in chunk.splitlines():
-                    self._log_lines.append(line)
-                self._render_log()
-            except OSError:
-                # File temporarily unavailable (rotation, permission).
-                # We'll catch up on the next tick.
-                log.debug("log_tail_failed", exc_info=True)
+            self._activity_log.tail()
 
         def _render_log(self) -> None:
-            level = self._log_filter_combo.currentText()
-            visible = [line for line in self._log_lines if _matches_level(line, level)]
-            scrollbar = self._log_view.verticalScrollBar()
-            at_bottom = (
-                scrollbar.value() >= scrollbar.maximum() - 4
-            )
-            self._log_view.setPlainText("\n".join(visible))
-            if at_bottom:
-                scrollbar.setValue(scrollbar.maximum())
+            self._activity_log.rebuild()
 
     return MainWindow()
 

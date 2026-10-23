@@ -490,3 +490,24 @@ describe("OpponentsTab MMR impact", () => {
     expect(within(table).queryByText("MainAccount")).toBeNull();
   });
 });
+
+describe("opponents progressive list", () => {
+  it("windows large lists, preserves the expanded window on refresh, and resets it for search", () => {
+    const rows = Array.from({ length: 450 }, (_, i) => ({ ...opponents[0], pulseId: `p-${i}`, name: `Player ${i}` }));
+    useApiPaginatedMock.mockReturnValue({ items: rows, isLoading: false, isRefreshing: false, isLoadingMore: true,
+      isStale: false, error: null, pagesFetched: 1, hitMaxPages: false, mutate: vi.fn() });
+    const view = render(<OpponentsTab onOpen={vi.fn()} />);
+    const table = screen.getByRole("table", { name: "Opponent history" });
+    expect(within(table).getAllByRole("row")).toHaveLength(201);
+    const more = screen.getByRole("button", { name: "Show 200 more (of 450)" });
+    more.focus(); fireEvent.click(more);
+    expect(document.activeElement).toBe(more);
+    expect(within(table).getAllByRole("row")).toHaveLength(401);
+    useApiPaginatedMock.mockReturnValue({ ...useApiPaginatedMock.mock.results.at(-1)!.value, items: [...rows], isRefreshing: true });
+    view.rerender(<OpponentsTab onOpen={vi.fn()} />);
+    expect(within(table).getAllByRole("row")).toHaveLength(401);
+    expect(screen.getByText(/Updating…/)).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "Search opponents" }), { target: { value: "Player" } });
+    expect(within(table).getAllByRole("row")).toHaveLength(201);
+  });
+});

@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, FileQuestion } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
-import { Card, Skeleton } from "@/components/ui/Card";
+import { Card } from "@/components/ui/Card";
+import { RequestError } from "@/components/ui/RequestError";
+import { SectionBoundary } from "@/components/ui/SectionBoundary";
+import { GameDetailSkeleton } from "./GameDetailSkeleton";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
@@ -148,26 +151,18 @@ function GameDetailContent({
     );
   }
 
-  if (gameReq.error) {
-    return (
-      <GameNotFound
-        title="Couldn't load this game"
-        description={gameReq.error.message}
-        opponentContext={opponentContext}
-      />
-    );
+  if (gameReq.error && !game) {
+    return <div className="space-y-4"><RequestError title="Couldn't load this game" error={gameReq.error} onRetry={() => gameReq.mutate()} />
+      <Link href={opponentProfileHref(opponentContext)}>Back to dashboard</Link></div>;
   }
+  if (!game) return <GameDetailSkeleton />;
 
-  if (gameReq.isLoading || !game) {
-    return (
-      <div className="space-y-6" aria-busy="true" aria-label="Loading game">
-        <div className="h-4 w-40 animate-pulse rounded bg-bg-elevated" />
-        <div className="h-8 w-72 animate-pulse rounded bg-bg-elevated" />
-        <div className="h-64 animate-pulse rounded-xl border-2 border-line bg-bg-surface shadow-hard" />
-        <Skeleton rows={4} />
-      </div>
-    );
-  }
+  const macroStatus = macroReq.data ? "ready" : macroReq.error
+    ? macroReq.error.status === 404 || macroReq.error.code === "macro_not_computed" ? "notComputed" : "error"
+    : "loading";
+  const buildStatus = buildReq.data ? "ready" : buildReq.error
+    ? buildReq.error.status === 404 || buildReq.error.code === "build_not_computed" ? "notComputed" : "error"
+    : "loading";
 
   const loss = isLossResult(game.result);
   const myName = breakdown?.player_stats?.me?.name ?? null;
@@ -219,7 +214,8 @@ function GameDetailContent({
         onNewBuildOpened={initialNewBuild ? dropNewBuildParam : undefined}
       />
 
-      <InteractiveTimeline
+      <SectionBoundary key={`the timeline:${game.gameId}`} label="the timeline" title="The timeline hit a problem"><InteractiveTimeline
+        loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()}
         statsEvents={breakdown?.stats_events}
         oppStatsEvents={breakdown?.opp_stats_events}
         gameLengthSec={game.durationSec ?? breakdown?.game_length_sec ?? null}
@@ -227,12 +223,12 @@ function GameDetailContent({
         onScrub={setScrubTime}
         myName={myName}
         oppName={oppName}
-      />
+      /></SectionBoundary>
 
       {/* Vespene-style map replay — directly under the timeline.
           Renders a one-line hint for games synced before the agent
           computed playback data. */}
-      <MapReplaySection
+      <SectionBoundary key={`the replay player:${game.gameId}`} label="the replay player" title="The replay player hit a problem"><MapReplaySection
         gameId={game.gameId}
         initialTimeSec={initialTimeSec}
         myName={myName}
@@ -240,17 +236,18 @@ function GameDetailContent({
         myRace={ghostMyRace}
         oppRace={ghostOpponentRace}
         patchEra={patchEraForGame(game)}
-      />
+      /></SectionBoundary>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <SectionBoundary key={`mechanics:${game.gameId}`} label="mechanics" title="Mechanics hit a problem"><div className="grid gap-6 md:grid-cols-2">
         <MechanicsPanel
           breakdown={breakdown}
           game={game}
-          loading={macroReq.isLoading}
+          loading={macroStatus === "loading"}
+          error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()}
           onSeek={setScrubTime}
         />
         {loss && autopsyGame ? (
-          <LossAutopsyCard game={autopsyGame} onSeek={setScrubTime} />
+          <LossAutopsyCard game={autopsyGame} onSeek={setScrubTime} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} />
         ) : (
           <Card title="Result">
             <p className="text-caption text-text-muted">
@@ -260,30 +257,33 @@ function GameDetailContent({
             </p>
           </Card>
         )}
-      </div>
+      </div></SectionBoundary>
 
       {/* Ghost Build loop closer — grades this game's executed build
           against the armed practice target. Renders nothing unless a
           target is armed on this device AND a my-side log exists. */}
-      <GhostGradeCard
+      <SectionBoundary key={`the Ghost Build grade:${game.gameId}`} label="the Ghost Build grade" title="The Ghost Build grade hit a problem"><GhostGradeCard
+        gameId={game.gameId}
         buildLog={buildLogLines}
         myRace={ghostMyRace}
         opponentRace={ghostOpponentRace}
-      />
+      /></SectionBoundary>
 
-      <BuildOrderColumns
+      <SectionBoundary key={`build orders:${game.gameId}`} label="build orders" title="Build orders hit a problem"><BuildOrderColumns
+        error={buildStatus === "error" ? buildReq.error : undefined} onRetry={() => buildReq.mutate()}
         myEvents={buildReq.data?.events}
         oppEvents={buildReq.data?.opp_events}
         myLabel={checkinBuild?.label ?? buildReq.data?.my_build ?? game.myBuild}
         oppLabel={
           checkinOpponent?.label ?? buildReq.data?.opp_strategy ?? game.opponent?.strategy
         }
-        myStatus={buildReq.data?.my_status}
-        oppStatus={buildReq.data?.opp_status}
-        loading={buildReq.isLoading}
+        myStatus={buildStatus === "notComputed" ? "not_extracted" : buildReq.data?.my_status}
+        oppStatus={buildStatus === "notComputed" ? "not_extracted" : buildReq.data?.opp_status}
+        loading={buildStatus === "loading"}
         myAction={
           buildLogLines && buildLogLines.length > 0 ? (
             <ArmGhostFromLogButton
+              gameId={game.gameId}
               name={
                 buildReq.data?.my_build
                 ?? game.myBuild
@@ -295,7 +295,7 @@ function GameDetailContent({
             />
           ) : null
         }
-      />
+      /></SectionBoundary>
     </GameDetailShell>
   );
 }

@@ -15,6 +15,14 @@ corresponding GitHub Release.
 
 - Retired the unused server model-training and prediction endpoints. Replay analysis continues to use fixed rules and statistics; the API image now installs only its server analysis dependencies.
 
+### Experience polish
+
+- Settings show recoverable load failures, protect saved profile IDs, preview game-history deletion counts, and include both selected days in local time. Mobile tabs scroll into view and support arrow keys.
+- The landing page puts its headline first on phones and offers a stable swipe strip, slideshow pause controls, and current product screenshots and availability.
+- The build editor demo accepts replay drops and iPhone file picks, supports choosing the same replay again, and offers a clear next step after parsing fails.
+- Cookie settings can be reopened from the footer or Privacy Policy, including when storage is blocked. Legal pages have section navigation, and the crash screen follows your theme with retry, reload, home and report controls.
+- Detail pages have one main heading, consistent back links and breadcrumbs. Navigation shows delayed progress, with loading placeholders while pages and sign-in resolve.
+
 ### Phase 2b: build guides
 
 - Guide outages offer a working Retry and report action. Signed-in players can open their own record, builds, or upload games; signing in returns to the guide.
@@ -46,6 +54,9 @@ corresponding GitHub Release.
 
 
 ### Added
+
+- **Admin console guide:** every admin tab has a matching Help link, a clear page title, grouped navigation and shared pagination. The guide covers moderation, account repairs, infrastructure and GA4 setup.
+- **Web analytics:** custom date ranges up to 365 days, share percentages, links to public pages and CSV exports for top pages and acquisition channels.
 
 - **Help & support menu:** a Help & support menu (life-buoy icon) in the app top bar (under More on phones,
   plus Help and Report a problem in your avatar menu) has help search, the
@@ -85,6 +96,11 @@ corresponding GitHub Release.
   use Help".
 
 ### Fixed
+
+- Stream overlays recover refused handshakes and temporary outages automatically. Revoked or mistyped links show a clear setup notice; `?check=1` shows a short connection check in OBS.
+- Stream Dock editors wait for saved controls before enabling writes. Failed saves keep drafts, and Retry uses current edits instead of replaying an older goal or b-roll list.
+- Moderation groups reports by target, confirms removals, records notes and shows failures with Retry. One decision clears every open report on the target; opponent removals now hide the public profile.
+- Infrastructure keeps provider checks and backups visible when an operational probe fails, with independent Retry and Refresh controls. Charts follow the selected theme and status indicators include text and icons.
 
 - **When something can't load:** a section that can't load now says why and
   offers Retry, with an Error ID you can copy, instead of wrongly showing

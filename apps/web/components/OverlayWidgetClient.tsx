@@ -9,15 +9,13 @@ import {
   type CSSProperties,
   type RefObject,
 } from "react";
-import { io, type Socket } from "socket.io-client";
-import { API_BASE } from "@/lib/clientApi";
+import type { Socket } from "socket.io-client";
 import type {
   LiveGameEnvelope,
   LiveGamePayload,
   RandomizerIntentGate,
   RandomizerSpinEvent,
 } from "@/components/overlay/types";
-import { clientTimezone } from "@/lib/timeseries";
 import {
   extendStartWindow,
   payloadTargetsWidget,
@@ -42,8 +40,11 @@ import {
 } from "@/components/overlay/mergeLiveGameStreamerHistory";
 import {
   attachOverlayResilience,
+  createOverlaySocket,
+  hasActiveOverlayGame,
   type OverlayConnectionStatus,
 } from "@/components/overlay/overlayResilience";
+import { OverlaySetupCard, OverlayCheckBadge } from "@/components/overlay/OverlaySetupCard";
 import { ReconnectDot } from "@/components/overlay/ReconnectDot";
 import { VoiceGestureBanner } from "@/components/overlay/VoiceGestureBanner";
 import {
@@ -114,7 +115,11 @@ import {
  *    `TEST_DURATION_MS` so the persistent panels don't sit on the
  *    scene forever after a Test click.
  */
-export function OverlayWidgetClient({
+export function OverlayWidgetClient(props: Parameters<typeof ConnectedOverlayWidgetClient>[0]) {
+  return <ConnectedOverlayWidgetClient key={`${props.token}:${props.widget}`} {...props} />;
+}
+
+function ConnectedOverlayWidgetClient({
   token,
   widget,
   themeParam = null,
@@ -163,7 +168,7 @@ export function OverlayWidgetClient({
     null,
   );
   const [connectionStatus, setConnectionStatus] =
-    useState<OverlayConnectionStatus>("connected");
+    useState<OverlayConnectionStatus>("connecting");
   // Build check-in state only matters to the randomizer source.
   const [buildIntents, onBuildIntent] = useOverlayBuildIntents();
 
@@ -274,10 +279,13 @@ export function OverlayWidgetClient({
   // Hiding the randomizer must retain its consumed match identities and
   // running sequence through a brief loading/menu/reconnect transition.
   const retainRandomizer = widget === "randomizer";
+  if (connectionStatus === "invalid") return <><OverlaySetupCard reason="invalid-token" /><OverlayCheckBadge status="invalid" /></>;
   if (!effectiveEnabled || (!visible && !ghostArmed && !alwaysVisible && !retainRandomizer)) {
     return (
       <>
         <div style={{ background: "transparent" }} />
+        <OverlayCheckBadge status={connectionStatus} live={hasActiveOverlayGame(liveGame)} />
+        {connectionStatus === "reconnecting" ? <ReconnectDot /> : null}
         {voice.needsGesture ? (
           <VoiceGestureBanner onClick={voice.onUserGesture} />
         ) : null}
@@ -312,6 +320,7 @@ export function OverlayWidgetClient({
           transform: none !important;
         }
       `}</style>
+      <OverlayCheckBadge status={connectionStatus} live={hasActiveOverlayGame(liveGame)} />
       <WidgetRenderer
         widget={widget as WidgetId}
         token={token}
@@ -587,18 +596,8 @@ function useOverlayWidgetSocket(
   // history.
   const stickyHistoryRef = useRef<StickyStreamerHistory | null>(null);
   useEffect(() => {
-    const socket: Socket = io(API_BASE, {
-      // The OBS Browser Source carries no Clerk session; the token IS
-      // the auth. We also send the browser's IANA timezone so the
-      // server's session-record aggregation anchors "today" to the
-      // streamer's wall clock instead of UTC.
-      auth: { overlayToken: token, timezone: clientTimezone() },
-      transports: ["websocket", "polling"],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 5000,
-    });
+    const connection = createOverlaySocket(token, { surface: "widget", widget, onStatus: setConnectionStatus });
+    const socket = connection.socket;
     socketRef.current = socket;
     socket.on("overlay:live", (msg: LiveGamePayload) => {
       // A token's Browser Sources all share this room. Per-widget Test
@@ -723,11 +722,10 @@ function useOverlayWidgetSocket(
     // debounced status for the broadcast-safe reconnect dot).
     const detachResilience = attachOverlayResilience(socket, {
       latestGameKey: () => gameKeyRef.current,
-      onStatus: setConnectionStatus,
     });
     return () => {
       detachResilience();
-      socket.disconnect();
+      connection.dispose();
       if (socketRef.current === socket) socketRef.current = null;
     };
   }, [

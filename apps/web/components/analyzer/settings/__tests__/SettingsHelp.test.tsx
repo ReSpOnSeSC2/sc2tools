@@ -98,7 +98,7 @@ describe("SettingsHelp", () => {
     expect(text).toContain("Add “…” as a new build…");
     expect(text).toContain("Save as new build");
     expect(text).toContain("Save build");
-    expect(text).toContain("Save & Reclassify");
+    expect(text).toContain("Save & re-match");
     expect(text).toContain("Saved to your library and checked in");
     expect(text).toContain("Available once your replay uploads");
   });
@@ -142,6 +142,10 @@ describe("SettingsHelp", () => {
       fireEvent.change(screen.getByRole("searchbox", { name: "Search help" }), {
         target: { value: "stream dock" },
       });
+      // The article index is intentionally loaded on the first search.
+      // Wait for that import (including its article modules) before the
+      // normal DOM assertion, even on a busy two-core CI worker.
+      await act(async () => { await vi.dynamicImportSettled(); });
       const results = await screen.findByRole("list", { name: "Search results" });
       const first = within(results).getAllByRole("link")[0];
       expect(first.getAttribute("href")).toBe("/settings?tab=help#stream-dock");

@@ -17,17 +17,21 @@ import type {
 } from "@/lib/multichat/useStudioState";
 import { BrollLibraryEditor } from "./BrollLibraryEditor";
 import { DockButton } from "./DockClient";
+import type { DockPost } from "./dockActions";
+import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
 const QUICK_MINUTES = [5, 10, 15] as const;
 
 export function DockTimer({
   timer,
   busy,
+  studioReady = true,
   onPost,
 }: {
   timer: StudioTimer | null;
   busy: boolean;
-  onPost: (patch: Record<string, unknown>) => Promise<void>;
+  studioReady?: boolean;
+  onPost: DockPost;
 }) {
   const [label, setLabel] = useState("");
   const [minutes, setMinutes] = useState<number>(5);
@@ -40,9 +44,15 @@ export function DockTimer({
   }, [timer?.endsAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const remainMs = timer ? Math.max(0, timer.endsAt - nowMs) : null;
+  const { run, notice, pending } = useDockPanelActions(studioReady, busy, onPost, {
+    clear: () => ({ patch: { timer: null }, message: "Timer cleared" }),
+    start: () => ({ patch: { timer: { label: label.trim(), endsAt: Date.now() + Math.round(minutes) * 60_000 } }, message: "Timer started", after: () => { setLabel(""); setMinutes(5); } }),
+  });
+  if (!studioReady) return <DockSnapshotState />;
 
   return (
-    <div className="space-y-2.5">
+    <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2.5">
+      <DockActionNotice message={notice} />
       {timer ? (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-accent-cyan/40 bg-accent-cyan/10 px-2.5 py-2">
           <span className="text-micro font-bold uppercase tracking-widest text-accent-cyan">
@@ -56,7 +66,7 @@ export function DockTimer({
           <DockButton
             disabled={busy}
             danger
-            onClick={() => void onPost({ timer: null })}
+            onClick={() => void run("clear")}
           >
             Clear
           </DockButton>
@@ -105,18 +115,13 @@ export function DockTimer({
         <DockButton
           disabled={busy}
           onClick={() =>
-            void onPost({
-              timer: {
-                label: label.trim(),
-                endsAt: Date.now() + Math.round(minutes) * 60_000,
-              },
-            })
+            void run("start")
           }
         >
           ⏱ Start timer
         </DockButton>
       </div>
-    </div>
+    </div></fieldset>
   );
 }
 
@@ -124,6 +129,7 @@ export function DockScenes({
   scene,
   broll,
   busy,
+  studioReady = true,
   streamStartMs = null,
   onPost,
 }: {
@@ -132,7 +138,8 @@ export function DockScenes({
   busy: boolean;
   /** Existing go-live mark — when set, "Go live" won't overwrite it. */
   streamStartMs?: number | null;
-  onPost: (patch: Record<string, unknown>) => Promise<void>;
+  studioReady?: boolean;
+  onPost: DockPost;
 }) {
   const [message, setMessage] = useState("");
   const [minutes, setMinutes] = useState<number>(5);
@@ -155,24 +162,21 @@ export function DockScenes({
     return () => clearInterval(timer);
   }, [scene?.countdownEndsAt]);
 
-  const start = (mode: "brb" | "starting") =>
-    onPost({
-      scene: {
-        mode,
-        message: message.trim(),
-        countdownEndsAt:
-          minutes > 0 ? Date.now() + Math.round(minutes) * 60_000 : null,
-      },
-    });
+  const { run, notice, pending } = useDockPanelActions(studioReady, busy, onPost, {
+    start: (mode: "brb" | "starting") => ({ patch: { scene: { mode, message: message.trim(), countdownEndsAt: minutes > 0 ? Date.now() + Math.round(minutes) * 60_000 : null } }, message: mode === "brb" ? "Scene set to BRB" : "Scene set to Starting Soon", after: () => { setMessage(""); setMinutes(5); } }),
+    live: () => ({ patch: { scene: null, ...(scene?.mode === "starting" && !streamStartMs ? { streamStartMs: Date.now() } : {}) }, message: "Stream is live" }),
+    shuffle: () => ({ patch: { broll: { shuffle: !broll.shuffle } }, message: "B-roll order saved" }),
+    mute: () => ({ patch: { broll: { muted: !broll.muted } }, message: "B-roll audio saved" }),
+    skip: () => ({ patch: { broll: { skipNonce: Math.max(0, broll.skipNonce) + 1 } }, message: "Highlight skipped" }),
+    volume: () => ({ patch: { broll: { volume: Math.max(0, Math.min(100, Math.round(volumeDraft))) } }, message: "B-roll volume saved" }),
+  });
 
   const remainMs = scene?.countdownEndsAt
     ? Math.max(0, scene.countdownEndsAt - nowMs)
     : null;
 
-  const updateBroll = (patch: Partial<StudioBrollConfig>) =>
-    onPost({ broll: patch });
-
   const commitVolume = (next = volumeDraft) => {
+    if (!studioReady || busy) return;
     const volume = Math.max(0, Math.min(100, Math.round(next)));
     if (
       volume === broll.volume ||
@@ -181,7 +185,7 @@ export function DockScenes({
       return;
     }
     volumeInFlightRef.current = volume;
-    void updateBroll({ volume }).finally(() => {
+    void run("volume").finally(() => {
       if (volumeInFlightRef.current === volume) {
         volumeInFlightRef.current = null;
       }
@@ -190,9 +194,11 @@ export function DockScenes({
 
   const clipCount = broll.clips.length;
   const brollActive = Boolean(scene && clipCount > 0);
+  if (!studioReady) return <DockSnapshotState />;
 
   return (
-    <div className="space-y-2.5">
+    <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2.5">
+      <DockActionNotice message={notice} />
       {scene ? (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-accent-cyan/40 bg-accent-cyan/10 px-2.5 py-2">
           <span className="text-micro font-bold uppercase tracking-widest text-accent-cyan">
@@ -210,12 +216,7 @@ export function DockScenes({
               // Going live off "Starting Soon" is the natural stream
               // start — auto-mark it for the clip log's VOD offsets,
               // but never overwrite a mark the streamer set by hand.
-              void onPost({
-                scene: null,
-                ...(scene.mode === "starting" && !streamStartMs
-                  ? { streamStartMs: Date.now() }
-                  : {}),
-              })
+              void run("live")
             }
           >
             Go live
@@ -258,7 +259,7 @@ export function DockScenes({
             type="button"
             disabled={busy || clipCount < 2}
             aria-pressed={broll.shuffle}
-            onClick={() => void updateBroll({ shuffle: !broll.shuffle })}
+            onClick={() => void run("shuffle")}
             className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text transition-colors hover:border-accent disabled:opacity-50"
           >
             {broll.shuffle ? "🔀 Shuffle" : "→ In order"}
@@ -268,7 +269,7 @@ export function DockScenes({
             disabled={busy || clipCount === 0}
             aria-label={broll.muted ? "Unmute b-roll" : "Mute b-roll"}
             aria-pressed={broll.muted}
-            onClick={() => void updateBroll({ muted: !broll.muted })}
+            onClick={() => void run("mute")}
             className="rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text transition-colors hover:border-accent disabled:opacity-50"
           >
             {broll.muted ? "🔇 Muted" : "🔊 Sound"}
@@ -294,9 +295,7 @@ export function DockScenes({
           <DockButton
             disabled={busy || !scene || clipCount === 0}
             onClick={() =>
-              void updateBroll({
-                skipNonce: Math.max(0, broll.skipNonce) + 1,
-              })
+              void run("skip")
             }
           >
             ⏭ Skip
@@ -306,6 +305,7 @@ export function DockScenes({
         <BrollLibraryEditor
           broll={broll}
           busy={busy}
+          studioReady={studioReady}
           onPost={onPost}
         />
       </div>
@@ -351,13 +351,13 @@ export function DockScenes({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <DockButton disabled={busy} onClick={() => void start("starting")}>
+        <DockButton disabled={busy} onClick={() => void run("start", "starting")}>
           ▶ Starting soon
         </DockButton>
-        <DockButton disabled={busy} onClick={() => void start("brb")}>
+        <DockButton disabled={busy} onClick={() => void run("start", "brb")}>
           ⏸ BRB
         </DockButton>
       </div>
-    </div>
+    </div></fieldset>
   );
 }

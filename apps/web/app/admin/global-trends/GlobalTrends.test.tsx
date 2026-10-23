@@ -36,7 +36,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe("Global Trends", () => {
   it("starts with all histories and displays source-aware player ratings", () => {
     render(<AdminGlobalTrendsPage />);
-    expect(screen.getByRole("heading", { name: "Global Trends" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Global trends" })).toBeTruthy();
     expect(screen.getByText("5,210")).toBeTruthy();
     expect(screen.getByText("Unavailable")).toBeTruthy();
     expect(screen.getByText(/SC2Pulse ·/)).toBeTruthy();

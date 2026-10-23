@@ -16,6 +16,7 @@ const {
 const { canonicalRaceLetter } = require("./oppMmrStamp");
 const TimingCatalog = require("./timingCatalog");
 const Dna = require("./dnaTimings");
+const { resultMatchClause } = require("./replayLibrary");
 const {
   computeCompositions,
   prepareCompositionGame,
@@ -1238,7 +1239,7 @@ class OpponentsService {
    *   filters?: import('../util/parseQuery').GlobalFilters,
    *   mergeLinked?: boolean,
    *   limit?: number,
-   *   cursor?: string,
+   *   cursor?: string, result?: unknown,
    * }} [opts]
    * @returns {Promise<{items: object[], nextCursor: string|null}|null>}
    */
@@ -1273,6 +1274,8 @@ class OpponentsService {
       gamesMatchStage(userId, opts.filters || {}),
       identityFilter,
     ];
+    const resultClause = resultMatchClause(opts.result);
+    if (resultClause) clauses.push(resultClause);
     if (cursor) {
       clauses.push({
         $or: [

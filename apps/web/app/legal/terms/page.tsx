@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { LegalLayout, LegalHeading, legalSectionId } from "@/components/legal/LegalLayout";
+import { ISSUES_URL } from "@/lib/siteLinks";
 
 export const metadata = {
   alternates: { canonical: "/legal/terms" },
@@ -6,15 +8,11 @@ export const metadata = {
   description: "Terms governing use of SC2 Tools.",
 };
 
-const LAST_UPDATED = "August 11, 2026";
+const LAST_UPDATED = "2026-08-11";
 
 export default function TermsPage() {
   return (
-    <article className="prose prose-invert mx-auto max-w-3xl space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold">Terms of Service</h1>
-        <p className="text-text-muted">Last updated: {LAST_UPDATED}</p>
-      </header>
+    <LegalLayout title="Terms of Service" updated={LAST_UPDATED} sections={[{"title":"1. The service","id":"the-service"},{"title":"2. Your account","id":"your-account"},{"title":"3. Acceptable use","id":"acceptable-use"},{"title":"4. Donations","id":"donations"},{"title":"5. Content you post","id":"content-you-post"},{"title":"6. Termination","id":"termination"},{"title":"7. Warranties","id":"warranties"},{"title":"8. Liability","id":"liability"},{"title":"9. Changes","id":"changes"},{"title":"10. Governing law","id":"governing-law"},{"title":"Contact","id":"contact"}]}>
 
       <p>
         SC2 Tools is provided free of charge as a community service. By using
@@ -22,7 +20,7 @@ export default function TermsPage() {
       </p>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">1. The service</h2>
+        <LegalHeading id={legalSectionId("1. The service")}>{"1. The service"}</LegalHeading>
         <p>
           We parse the StarCraft II replays your local agent finds and present
           you with analytics. The agent also stores originals in your private
@@ -34,7 +32,7 @@ export default function TermsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">2. Your account</h2>
+        <LegalHeading id={legalSectionId("2. Your account")}>{"2. Your account"}</LegalHeading>
         <p>
           You&apos;re responsible for the security of your sign-in credentials.
           One human, one account; bot accounts and ladder-spoofing accounts
@@ -43,7 +41,7 @@ export default function TermsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">3. Acceptable use</h2>
+        <LegalHeading id={legalSectionId("3. Acceptable use")}>{"3. Acceptable use"}</LegalHeading>
         <p>
           You will not (a) try to scrape or extract data about other users, (b)
           publish a build that contains profanity or harassment, (c) abuse the
@@ -54,7 +52,7 @@ export default function TermsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">4. Donations</h2>
+        <LegalHeading id={legalSectionId("4. Donations")}>{"4. Donations"}</LegalHeading>
         <p>
           SC2 Tools accepts voluntary donations through Streamlabs. Donations
           are gifts, not purchases — they do not entitle the donor to any
@@ -63,10 +61,10 @@ export default function TermsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">5. Content you post</h2>
+        <LegalHeading id={legalSectionId("5. Content you post")}>{"5. Content you post"}</LegalHeading>
         <p>
           When you publish a build, comment, or other content to the community,
-          you grant SC2 Tools a non-exclusive, royalty-free licence to display
+          you grant SC2 Tools a non-exclusive, royalty-free license to display
           and distribute it through the service. You retain ownership; you can
           retract published content from{" "}
           <Link href="/builds" className="underline">
@@ -77,7 +75,7 @@ export default function TermsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">6. Termination</h2>
+        <LegalHeading id={legalSectionId("6. Termination")}>{"6. Termination"}</LegalHeading>
         <p>
           You can delete your account at any time. We may close accounts that
           breach these terms or for prolonged inactivity (24 months). On
@@ -86,7 +84,7 @@ export default function TermsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">7. Warranties</h2>
+        <LegalHeading id={legalSectionId("7. Warranties")}>{"7. Warranties"}</LegalHeading>
         <p>
           The service is provided &quot;as is&quot;. We make no guarantees that
           analytics are accurate, that uploads will always succeed, or that
@@ -97,7 +95,7 @@ export default function TermsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">8. Liability</h2>
+        <LegalHeading id={legalSectionId("8. Liability")}>{"8. Liability"}</LegalHeading>
         <p>
           To the extent permitted by law, our liability for any claim arising
           out of your use of the service is capped at the amount you have paid
@@ -107,7 +105,7 @@ export default function TermsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">9. Changes</h2>
+        <LegalHeading id={legalSectionId("9. Changes")}>{"9. Changes"}</LegalHeading>
         <p>
           We may update these terms; when we do, we&apos;ll bump the &quot;last
           updated&quot; date and notify signed-in users on next visit. Material
@@ -116,7 +114,7 @@ export default function TermsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">10. Governing law</h2>
+        <LegalHeading id={legalSectionId("10. Governing law")}>{"10. Governing law"}</LegalHeading>
         <p>
           These terms are governed by the laws of the State of Delaware, USA.
           Disputes are resolved in the state or federal courts in Delaware.
@@ -124,10 +122,10 @@ export default function TermsPage() {
       </section>
 
       <section className="space-y-3">
-        <h2 className="text-xl font-semibold">Contact</h2>
+        <LegalHeading id={legalSectionId("Contact")}>{"Contact"}</LegalHeading>
         <p>
           <a
-            href="https://github.com/ReSpOnSeSC2/sc2tools/issues"
+            href={ISSUES_URL}
             rel="noopener"
             className="underline"
           >
@@ -135,6 +133,6 @@ export default function TermsPage() {
           </a>
         </p>
       </section>
-    </article>
+    </LegalLayout>
   );
 }

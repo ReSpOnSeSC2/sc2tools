@@ -3,6 +3,8 @@
 import type { ReactNode } from "react";
 
 import { Card } from "@/components/ui/Card";
+import { RequestError } from "@/components/ui/RequestError";
+import type { ClientApiError } from "@/lib/clientApi";
 import {
   formatBinaryBytes,
   formatBytes,
@@ -18,11 +20,12 @@ import type {
 
 type Props = {
   data: AdminInfrastructureResp | null;
-  error: string | null;
+  error: string | ClientApiError | null;
   isLoading: boolean;
+  onRetry?: () => unknown;
 };
 
-export function InfrastructureOverview({ data, error, isLoading }: Props) {
+export function InfrastructureOverview({ data, error, isLoading, onRetry = () => undefined }: Props) {
   if (isLoading && !data) {
     return (
       <section aria-labelledby="provider-capacity-heading" className="space-y-3">
@@ -43,17 +46,7 @@ export function InfrastructureOverview({ data, error, isLoading }: Props) {
     return (
       <section aria-labelledby="provider-capacity-heading" className="space-y-3">
         <SectionHeading status={null} asOf={null} />
-        <Card padded>
-          <div role="alert" className="space-y-1">
-            <p className="font-semibold text-warning">
-              Capacity monitoring is unavailable
-            </p>
-            <p className="text-body text-text-muted">
-              No provider cost or upgrade recommendation has been inferred
-              {error ? `: ${error}` : "."}
-            </p>
-          </div>
-        </Card>
+        <RequestError title="Capacity monitoring is unavailable" error={typeof error === "string" ? { status: -1, message: error } : error ?? { status: -1, message: "No provider cost or upgrade recommendation has been inferred." }} onRetry={onRetry} />
       </section>
     );
   }

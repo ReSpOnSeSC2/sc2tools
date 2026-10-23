@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { ClerkLoading, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
 import { Bug, ChevronLeft, LifeBuoy, MoreHorizontal, X } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { SyncStatus } from "@/components/SyncStatus";
@@ -30,6 +30,8 @@ import { reviewsVisible } from "@/lib/reviews";
 import { guidesEnabled } from "@/lib/guides/flags";
 import { SiteStats } from "./SiteStats";
 import { useChromeBottomInset } from "./chromeInsets";
+import { ChromeProvider, useChromeContext } from "./ChromeContext";
+import { NavProgress, startNavProgress } from "./NavProgress";
 import { LogoMark } from "./LogoMark";
 
 /* ------------------------------------------------------------------
@@ -66,7 +68,7 @@ import { LogoMark } from "./LogoMark";
  * shell's structure is identical either way and only its contents swap:
  * signed-out visitors get the public destinations plus the sign-in
  * CTAs instead of the section rail and account button. Structure stays
- * put, so there is no layout jump while Clerk resolves.
+ * put; placeholders reserve navigation space while Clerk resolves.
  * ------------------------------------------------------------------ */
 
 type MeProbe = {
@@ -83,7 +85,7 @@ export function AppChrome({ children }: { children: ReactNode }) {
   return (
     <ConnectionStatusProvider>
       <BuildCheckInProvider>
-        <AppChromeShell>{children}</AppChromeShell>
+        <ChromeProvider><AppChromeShell>{children}</AppChromeShell></ChromeProvider>
       </BuildCheckInProvider>
     </ConnectionStatusProvider>
   );
@@ -99,8 +101,11 @@ function AppChromeShell({ children }: { children: ReactNode }) {
   // context bar is their <h1>. Settings, the build library, community
   // and admin all render their own heading below, so there the bar
   // is a breadcrumb label and must not compete for the h1.
-  const ownsHeading = match?.entry.group !== "utility";
-  const backHref = match?.backHref ?? "/app";
+  const ownsHeading = !match?.isDetail && match?.entry.group !== "utility";
+  const breadcrumb = useChromeContext()?.breadcrumb;
+  const [navPending, setNavPending] = useState(false);
+  const backHref = breadcrumb?.backHref ?? match?.backHref ?? "/app";
+  const backLabel = breadcrumb?.backLabel ?? `Back to ${match?.backEntry.label ?? "Today"}`;
   const [sheetOpen, setSheetOpen] = useState(false);
   const [report, setReport] = useState<{ open: boolean; type: ReportType }>({
     open: false,
@@ -179,6 +184,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             <RailLabel>SC2&nbsp;Tools</RailLabel>
           </Link>
 
+          <ClerkLoading><div aria-hidden className="space-y-1">{Array.from({ length: 8 }, (_, index) => <div key={index} className="flex h-10 items-center px-2.5"><span className="h-[18px] w-[18px] rounded bg-bg-elevated motion-safe:animate-pulse" /></div>)}</div></ClerkLoading>
           <SignedIn>
             {sections.map((entry) => (
               <RailLink
@@ -227,18 +233,19 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             {showBack ? (
               <Link
                 href={backHref}
-                aria-label={`Back to ${title}`}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full border-2 border-border text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                onNavigate={() => beginNavigation(backHref)}
+                aria-label={backLabel}
+                className="grid h-11 w-11 shrink-0 place-items-center md:h-8 md:w-8 rounded-full border-2 border-border text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <ChevronLeft className="h-4 w-4" aria-hidden />
               </Link>
             ) : null}
 
-            <TitleTag
+            {breadcrumb?.trail.length ? <nav aria-label="Breadcrumb" className="min-w-0 flex-1"><ol className="flex min-w-0 items-center gap-2">{breadcrumb.trail.map((crumb, index) => <li key={index} className={`${index < breadcrumb.trail.length - 1 ? "hidden sm:flex" : "flex"} min-w-0 items-center gap-2`}>{index ? <span aria-hidden>›</span> : null}{index === breadcrumb.trail.length - 1 ? <span aria-current="page" title={crumb.label} className="truncate font-semibold">{crumb.label}</span> : <Link href={crumb.href || "#"} title={crumb.label} className="truncate text-caption text-text-muted hover:text-text">{crumb.label}</Link>}</li>)}</ol></nav> : <TitleTag
               as={ownsHeading ? "h1" : "p"}
               icon={showBack ? undefined : match?.entry.icon}
               title={title}
-            />
+            />}
 
             <div className="ml-auto flex shrink-0 items-center gap-2">
               <SignedIn>
@@ -247,6 +254,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
                 <NotificationBell compact />
               </SignedIn>
               <ThemeToggle />
+              <ClerkLoading><span aria-hidden className="h-8 w-8 rounded-full bg-bg-elevated motion-safe:animate-pulse" /></ClerkLoading>
               <SignedIn>
                 {/* Phones reach the same items from the More sheet. */}
                 <HelpMenu signedIn onReport={openReport} className="hidden md:block" />
@@ -289,6 +297,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <ConnectionBanner />
+          <Suspense fallback={null}><NavProgress onPendingChange={setNavPending} /></Suspense>
         </header>
 
         <SiteStats
@@ -305,6 +314,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
 
         <main
           id="main-content"
+          aria-busy={navPending || undefined}
           tabIndex={-1}
           className="mx-auto w-full max-w-[1680px] flex-1 px-4 pb-24 pt-5 sm:px-6 md:pb-10 lg:px-8"
           data-testid="app-chrome-main"
@@ -321,6 +331,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
         className="fixed inset-x-0 bottom-0 z-nav border-t-2 border-border bg-bg/95 pb-[env(safe-area-inset-bottom,0px)] supports-[backdrop-filter]:backdrop-blur-md md:hidden"
       >
         <div className="mx-auto flex max-w-md items-stretch px-2 py-1.5">
+          <ClerkLoading>{Array.from({ length: 5 }, (_, index) => <div key={index} aria-hidden className="flex flex-1 flex-col items-center gap-1 py-1.5"><span className="h-5 w-5 rounded bg-bg-elevated motion-safe:animate-pulse" /><span className="h-2 w-7 rounded bg-bg-elevated" /></div>)}</ClerkLoading>
           <SignedIn>
             {mobileTabs.map((entry) => (
               <TabBarLink
@@ -388,6 +399,11 @@ function AppChromeShell({ children }: { children: ReactNode }) {
  * Pieces
  * ------------------------------------------------------------------ */
 
+function beginNavigation(href: string) {
+  const target = new URL(href, window.location.href);
+  if (target.pathname + target.search !== window.location.pathname + window.location.search) startNavProgress();
+}
+
 function TitleTag({
   as: Tag,
   icon: Icon,
@@ -420,6 +436,7 @@ function RailLink({ entry, active }: { entry: NavEntry; active: boolean }) {
   return (
     <Link
       href={entry.href}
+      onNavigate={() => beginNavigation(entry.href)}
       aria-current={active ? "page" : undefined}
       title={entry.label}
       className={[
@@ -442,6 +459,7 @@ function TabBarLink({ entry, active }: { entry: NavEntry; active: boolean }) {
   return (
     <Link
       href={entry.href}
+      onNavigate={() => beginNavigation(entry.href)}
       aria-current={active ? "page" : undefined}
       className={[
         "flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-micro font-bold",
@@ -558,6 +576,7 @@ function SheetLink({ entry, active, onClose }: { entry: NavEntry; active: boolea
   return (
     <Link
       href={entry.href}
+      onNavigate={() => beginNavigation(entry.href)}
       aria-current={active ? "page" : undefined}
       onClick={onClose}
       className={[

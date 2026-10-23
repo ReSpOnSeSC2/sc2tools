@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { RequestError } from "@/components/ui/RequestError";
 import { Icon } from "@/components/ui/Icon";
 import {
   normalizeBuildEvents,
@@ -11,6 +12,8 @@ import {
 import type { GameBuildOrderEvent } from "./types";
 
 export interface BuildOrderColumnsProps {
+  error?: unknown;
+  onRetry?: () => unknown;
   myEvents?: GameBuildOrderEvent[] | null;
   oppEvents?: GameBuildOrderEvent[] | null;
   myLabel?: string | null;
@@ -44,6 +47,7 @@ const CATEGORY_DOT: Record<string, string> = {
  * page.
  */
 export function BuildOrderColumns({
+  error, onRetry,
   myEvents,
   oppEvents,
   myLabel,
@@ -58,6 +62,7 @@ export function BuildOrderColumns({
   const myRows = useMemo(() => normalizeBuildEvents(myEvents), [myEvents]);
   const oppRows = useMemo(() => normalizeBuildEvents(oppEvents), [oppEvents]);
 
+  if (error) return <RequestError title="Couldn't load build orders" error={error} onRetry={onRetry} />;
   if (loading) {
     return (
       <Card title="Build orders">
@@ -128,7 +133,7 @@ function BuildColumn({
         type="button"
         onClick={() => setCollapsed((c) => !c)}
         aria-expanded={!collapsed}
-        className="flex min-h-[44px] w-full items-center justify-between gap-2 px-3 py-2 text-left md:pointer-events-none"
+        className="flex min-h-[44px] w-full items-center justify-between gap-2 px-3 py-2 text-left md:hidden"
       >
         <h4 className="truncate text-caption font-semibold text-text">
           {heading}
@@ -141,6 +146,7 @@ function BuildColumn({
           )}
         </span>
       </button>
+      <h4 className="hidden min-h-[44px] items-center px-3 py-2 text-caption font-semibold text-text md:flex">{heading}</h4>
       <div
         className={[
           "border-t border-border px-3 py-2",

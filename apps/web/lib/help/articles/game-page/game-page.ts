@@ -64,7 +64,7 @@ const article: HelpArticle = {
       type: "list",
       items: [
         "**Save as new build** on your build order turns this game's opening into a custom build: pick the steps that define it, name it and save. See [Detected builds vs custom builds](/help/custom-builds).",
-        "**Save for** and the matchup, such as **Save for PvZ**, keeps this game's timed build as a practice target for Ghost Build in that matchup.",
+        "**Use as Ghost Build target** keeps this game's timed build as a practice target for later games in its matchup. This source game itself is not graded.",
       ],
     },
     { type: "heading", text: "When a card is empty", anchor: "empty-cards" },
@@ -80,6 +80,8 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "Every number on this page comes from the replay with fixed rules, never AI.",
     },
+    {"type": "heading", "text": "When a section doesn't load", "anchor": "section-recovery"},
+    {"type": "paragraph", "text": "A ‘Couldn't load …’ message with Retry means a temporary connection or server problem. Your replay is safe; retry that section without leaving the rest of the page. ‘Not computed yet’ or a missing-analysis explanation means this game has no analysis for that section yet. Loading placeholders mean the request is still running. If a section crashes, its Try again button remounts it while the rest of the page stays available."},
   ],
   related: ["game-page-replay", "game-page-accurate-playback", "macro", "build-check-in"],
 };

@@ -22,7 +22,7 @@ const article: HelpArticle = {
     "contact",
     "email",
   ],
-  updated: "2026-10-22",
+  updated: "2026-10-23",
   body: [
     {
       type: "list",
@@ -31,6 +31,7 @@ const article: HelpArticle = {
         "**No sound or voice?** Browsers can block audio until a click — open the source with Interact and click once, then TTS/sounds run normally.",
         "**Kick won't auto-detect?** Use the guided manual flow in the Kick row — open the shown URL in your own browser and paste what you see; the id is extracted for you.",
         "**Widget blank?** Check the widget is enabled for your token in Settings → Overlay, and use its Test button to confirm placement.",
+        "**The source says its link no longer works?** The token was revoked or rotated, or the URL was mistyped. Copy a fresh URL from **Settings → Overlay**, then replace the Browser Source or Dock URL. Overlays reconnect themselves after a temporary outage. Add **?check=1** (or **&check=1** after an existing query) for a 10-second connection badge in OBS.",
         "**Still stuck?** Inside the app, open **Help & support** (the life-buoy icon in the desktop top bar; **More → Help & support** on a phone), then **Report a problem**. On a help page, use **Report a problem** at the end of the article. See [Report a problem or suggest a feature](/help/report-a-problem) for what goes with it.",
       ],
     },

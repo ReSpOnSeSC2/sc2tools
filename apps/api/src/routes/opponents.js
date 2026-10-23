@@ -211,6 +211,7 @@ function buildOpponentsRouter(deps) {
           mergeLinked: req.query.mergeLinked === "1",
           limit: parseLimit(req.query.limit),
           cursor: parseCursor(req.query.cursor),
+          result: req.query.result,
         },
       );
       if (!result) {

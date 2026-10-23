@@ -337,6 +337,21 @@ ring, and what that means when you style one yourself.
   `apps/web/app/__tests__/globalsCascade.test.ts` fails if one comes
   back; put the rule in `@layer base` behind `:where()`.
 
+## Admin page anatomy
+
+Admin tabs use `AdminPageHeader` (the shared `PageHeader` with an Admin eyebrow
+and a Help link to the matching section of `docs/admin-console.md`). Keep the
+same title while loading, after a failure and after data arrives. A forbidden
+page shows `ForbiddenCard` before rendering header actions.
+
+Follow the header with a filter card, then the table or cards and
+`AdminPagination`. Use `Field` with labelled `Input` and `Select` controls and
+shared `Button` variants for actions. Render `EmptyStatePanel` with Clear filters
+or Refresh when no rows match; render `RequestError` with the original error and
+the request's mutate function when it fails. Independent requests retain their
+own loading, failure and Retry states. Status uses text and an icon as well as
+colour. Metadata titles identify the tab and Admin, never an account's email.
+
 ## Data states
 
 Every section that loads data has four states, always checked in this

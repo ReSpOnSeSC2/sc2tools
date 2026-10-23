@@ -26,10 +26,11 @@ export function OpponentReplayHistory({
   targetGameId,
   targetGameSeq,
   myName,
-  opponentContext,
+  opponentContext, maps = [], selectedMap, onSelectMap,
 }: {
   /** Base endpoint with analyzer/merge filters, but without a cursor. */
   path: string;
+  maps?: string[]; selectedMap?: string | null; onSelectMap?: (map: string | null) => void;
   /** Capped profile rows shown while the first compact page arrives. */
   initialGames: ProfileGame[];
   profileTruncated?: boolean;
@@ -38,14 +39,16 @@ export function OpponentReplayHistory({
   myName?: string | null;
   opponentContext: OpponentNavigationContext;
 }) {
+  const [result, setResult] = useState("");
+  const [sortBy, setSortBy] = useState("date");
   const [cursor, setCursor] = useState<string | null>(null);
   const [newerCursors, setNewerCursors] = useState<Array<string | null>>([]);
-  const pagePath = appendReplayPageQuery(path, cursor);
+  const pagePath = `${appendReplayPageQuery(path, cursor)}${result ? `&result=${result}` : ""}`;
   const { data, error, isValidating, mutate } =
-    useApi<ReplayHistoryPage>(pagePath, { revalidateOnFocus: false });
+    useApi<ReplayHistoryPage>(pagePath, { revalidateOnFocus: false, keepPreviousData: false });
 
   const firstPageFallback = cursor === null
-    ? initialGames.slice(0, OPPONENT_REPLAY_PAGE_SIZE)
+    ? initialGames.filter((game) => !result || (result === "win" ? /^(win|victory)$/i : /^(loss|defeat)$/i).test(game.result || "")).slice(0, OPPONENT_REPLAY_PAGE_SIZE)
     : [];
   const games = data?.items ?? firstPageFallback;
   const pageIndex = newerCursors.length;
@@ -62,7 +65,7 @@ export function OpponentReplayHistory({
   } else if (pageIndex === 0 && data && !data.nextCursor) {
     title = `All replays (${games.length}) · newest first`;
   } else if (games.length > 0) {
-    title = `All replays · showing ${start}–${end} newest first`;
+    title = `All replays · showing ${start}–${end} · ${sortBy === "date" ? "newest first" : `sorted by ${sortBy === "map" ? "Map" : sortBy} (this page)`}`;
   } else {
     title = "All replays";
   }
@@ -81,10 +84,20 @@ export function OpponentReplayHistory({
 
   return (
     <Card title={title}>
+      <div className="mb-3 flex flex-wrap gap-3 text-caption">
+        <label>Show: <select aria-label="Filter replay results" className="min-h-11 rounded border border-border bg-bg-surface px-2" value={result}
+          onChange={(event) => { setResult(event.target.value); setCursor(null); setNewerCursors([]); }}>
+          <option value="">All results</option><option value="win">Wins</option><option value="loss">Losses</option>
+        </select></label>
+        {onSelectMap ? <label>Map: <select aria-label="Filter dossier map" className="min-h-11 rounded border border-border bg-bg-surface px-2" value={selectedMap || ""}
+          onChange={(event) => onSelectMap(event.target.value || null)}><option value="">All maps</option>{maps.map((map) => <option key={map}>{map}</option>)}</select></label> : null}
+      </div>
       {waitingWithoutRows ? (
         <Skeleton rows={3} />
-      ) : (
+      ) : !error && games.length === 0 && result === "loss" ? <p>No losses in this view</p> : (
         <AllGamesTable
+          pageLocalSort={newerCursors.length > 0 || !!data?.nextCursor}
+          onSortChange={setSortBy}
           games={games.map((game) => ({
             ...game,
             opponent: game.opponent || opponentContext.displayName || null,

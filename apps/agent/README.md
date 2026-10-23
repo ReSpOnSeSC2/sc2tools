@@ -93,8 +93,9 @@ agent falls back gracefully to tray+console.
 | --- | -------- |
 | Dashboard | Status badge (Active / Paused / Pairing / Error), pairing code card (only visible until paired), Synced / Queued / Last-upload stats, action buttons (Pause, Re-sync, Choose folder, Check for updates, Open dashboard). |
 | Recent uploads | Last ~100 replays the agent has handled, with timestamps and per-row status. Double-click reveals the replay in Explorer. |
-| Activity log | Live tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log` with a level filter (All / INFO+ / WARNING+ / ERROR only) and an Open Log Folder button. |
-| Settings | API base URL, log level, replay folder override, auto-start on Windows login, start-minimised checkbox. Edits persist atomically; most apply on next start. |
+| Activity log | Incremental tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log`, with complete tracebacks, readable level filters, Ctrl+F search, follow/pause, copy selection or last 200 lines, and Open log folder. |
+| Settings | Replay folders and sync date range, start-up, updates, capture, build check-in and OBS. Save confirms what applied; API address, log level and parse concurrency name their restart requirement. The API field supports Reset to default and Test. |
+| Streams | Shared stream title and YouTube description, connected channels, and verified or accepted per-platform save results. |
 
 Closing the window minimises it to the tray (the agent keeps running).
 **Quit** lives on the tray menu - that fully exits the process.
@@ -168,6 +169,8 @@ scope and enough shared project quota; packaging alone does not deploy the API.
 
 The controller prepares metadata and sessions; OBS/Aitum sends the video.
 It never starts a stream when the agent launches or when a game changes scenes.
+
+The sidebar **Help & support** link opens the desktop guide. The round **?** buttons beside sync range, replay folders, OBS, build check-in and Activity log open their matching how-to. Closing the window keeps syncing in the tray; use the tray **Quit** action to stop it.
 
 ## Tray menu (right-click the indicator)
 

@@ -19,7 +19,7 @@ function Probe({ token, onUpdate }: { token: string; onUpdate: (state: StudioSta
 beforeEach(() => {
   sockets.length = 0;
   socketFactory.mockReset().mockImplementation(() => {
-    const socket = { on: vi.fn(), off: vi.fn(), disconnect: vi.fn(), receive: undefined as ((value: unknown) => void) | undefined };
+    const socket = { on: vi.fn(), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), receive: undefined as ((value: unknown) => void) | undefined };
     socket.on.mockImplementation((_event, callback) => { socket.receive = callback; });
     sockets.push(socket);
     return socket;
