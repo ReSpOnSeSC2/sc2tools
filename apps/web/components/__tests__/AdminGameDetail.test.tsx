@@ -61,6 +61,11 @@ function show() {
 }
 
 describe("AdminGameDetail replay availability", () => {
+  it("does not invent a loss when an off-page selection has no result metadata", () => {
+    render(<AdminGameDetail userId="owner/test" game={{ ...game, result: null }} onBack={vi.fn()} />);
+    expect(screen.getByTitle("Result not recorded").textContent).toBe("—");
+    expect(screen.queryByText("Loss")).toBeNull();
+  });
   it("explains a saved score with absent details without inventing an upload failure", () => {
     show();
     expect(screen.getByText("Macro 74")).toBeTruthy();
