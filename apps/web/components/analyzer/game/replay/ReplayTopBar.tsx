@@ -122,7 +122,7 @@ function StatCell({
             : stat.from === "xl"
               ? "hidden xl:flex"
               : "flex"
-      } ${mirrored ? "items-end" : "items-start"}`}
+      } items-center ${mirrored ? "xl:items-end" : "xl:items-start"}`}
       title={`${label} — ${stat.label}`}
     >
       <span
@@ -164,13 +164,13 @@ function SideBlock({
   const ordered = mirrored ? [...stats].reverse() : stats;
   return (
     <div
-      className={`flex min-w-0 items-center gap-3 sm:gap-4 ${
-        mirrored ? "flex-row-reverse" : ""
+      className={`flex min-w-0 flex-col items-center gap-1.5 xl:gap-4 ${
+        mirrored ? "xl:flex-row-reverse" : "xl:flex-row"
       }`}
       aria-label={`${label} live stats`}
     >
       <span
-        className={`flex min-w-0 items-center gap-2 ${
+        className={`flex w-full min-w-0 items-center justify-center gap-1.5 xl:w-auto xl:justify-start ${
           mirrored ? "flex-row-reverse" : ""
         }`}
       >
@@ -185,14 +185,15 @@ function SideBlock({
           />
         )}
         <span
-          className="min-w-[2.5rem] truncate text-body font-semibold leading-tight tracking-tight"
+          className="min-w-0 truncate text-caption font-semibold leading-tight tracking-tight xl:text-body"
+          title={label}
           style={{ color: SIDE_COLOR[side] }}
         >
           {label}
         </span>
       </span>
       <span
-        className={`flex min-w-0 items-start gap-2.5 overflow-hidden sm:gap-4 ${
+        className={`flex w-full min-w-0 items-start justify-center gap-2 overflow-hidden xl:w-auto xl:gap-4 ${
           mirrored ? "flex-row-reverse" : ""
         }`}
       >
@@ -213,6 +214,7 @@ function ReplayTopBarImpl({
   oppName,
   myRace,
   oppRace,
+  upgrades,
 }: {
   t: number;
   gameLength: number;
@@ -222,11 +224,12 @@ function ReplayTopBarImpl({
   oppName?: string | null;
   myRace?: string | null;
   oppRace?: string | null;
+  upgrades?: Record<ReplaySide, readonly { time: number; name: string }[]>;
 }) {
   return (
     <div
       data-testid="replay-top-bar"
-      className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-border bg-bg-surface/60 px-3 py-2.5"
+      className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-border bg-bg-surface/60 px-2 py-2.5 sm:gap-3 sm:px-3"
     >
       <SideBlock
         side="me"
@@ -235,14 +238,14 @@ function ReplayTopBarImpl({
         race={myRace}
         mirrored
       />
-      <div className="flex flex-col items-center px-1 leading-none">
+      <div className="flex w-20 min-w-0 flex-col items-center px-1 leading-none sm:w-auto sm:max-w-48">
         <span
           className="font-display text-h3 font-bold tabular-nums leading-none text-text"
           aria-label={`Game clock ${formatClock(t)} of ${formatClock(gameLength)}`}
         >
           {formatClock(t)}
         </span>
-        <span className="mt-1 max-w-[12rem] truncate text-micro font-medium text-text-dim">
+        <span className="mt-1 max-w-full break-words text-center text-micro font-medium text-text-dim" title={mapName || undefined}>
           {mapName || "—"}
         </span>
       </div>
@@ -253,6 +256,9 @@ function ReplayTopBarImpl({
         race={oppRace}
         mirrored={false}
       />
+      {upgrades && (upgrades.me.length || upgrades.opp.length) ? <div className="col-span-3 grid min-w-0 grid-cols-2 gap-3 border-t border-border pt-1.5">
+        {(["me", "opp"] as const).map((side) => <div key={side} role="group" aria-label={`${sideLabel(side, myName, oppName)} completed upgrades`} className={`flex min-w-0 gap-1 overflow-x-auto ${side === "opp" ? "justify-end" : ""}`}>{upgrades[side].map((row, index) => <span key={`${row.name}:${row.time}:${index}`} title={`Completed at ${formatClock(row.time)}`} className="shrink-0 rounded-full border border-border px-2 py-0.5 text-micro text-text-muted">{row.name}</span>)}</div>)}
+      </div> : null}
     </div>
   );
 }

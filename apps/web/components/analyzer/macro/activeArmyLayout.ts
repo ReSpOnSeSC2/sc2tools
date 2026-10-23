@@ -128,6 +128,8 @@ export interface SeriesPoint {
   supplyCap?: number;
   /** Minerals + gas collected per minute (the collection rate). */
   income?: number;
+  /** Measured unspent minerals and gas; absent when either field is missing. */
+  bank?: number;
   /**
    * Actions per minute around ``t`` from the game's APM curve (see
    * lib/apm.ts); absent when the game has no trusted curve.
@@ -316,8 +318,8 @@ export function buildSeries(
 /** Supply and collection rate off a stats sample, when it carries them. */
 function economyFields(
   sample: StatsEvent,
-): Pick<SeriesPoint, "supply" | "supplyCap" | "income"> {
-  const out: Pick<SeriesPoint, "supply" | "supplyCap" | "income"> = {};
+): Pick<SeriesPoint, "supply" | "supplyCap" | "income" | "bank"> {
+  const out: Pick<SeriesPoint, "supply" | "supplyCap" | "income" | "bank"> = {};
   const num = (v: unknown) =>
     typeof v === "number" && Number.isFinite(v) ? v : undefined;
   const used = num(sample.food_used);
@@ -329,6 +331,9 @@ function economyFields(
   if (minerals !== undefined || gas !== undefined) {
     out.income = (minerals ?? 0) + (gas ?? 0);
   }
+  const mineralBank = num(sample.minerals_current);
+  const gasBank = num(sample.vespene_current);
+  if (mineralBank !== undefined && gasBank !== undefined && mineralBank >= 0 && gasBank >= 0) out.bank = mineralBank + gasBank;
   return out;
 }
 

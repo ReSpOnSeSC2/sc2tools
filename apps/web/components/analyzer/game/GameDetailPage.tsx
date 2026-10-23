@@ -1,6 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useGameClock } from "./useGameClock";
+import { GameClockControls } from "./GameClockControls";
+import { GameClockLink } from "./GameClockLink";
+import type { StatsEvent } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, FileQuestion } from "lucide-react";
@@ -11,13 +15,17 @@ import { SectionBoundary } from "@/components/ui/SectionBoundary";
 import { GameDetailSkeleton } from "./GameDetailSkeleton";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
-import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import type { AutopsyGame } from "@/lib/lossAutopsy";
 import { GameDetailShell } from "./GameDetailShell";
-import { InteractiveTimeline } from "./InteractiveTimeline";
+import dynamic from "next/dynamic";
+import { GameWorkspaceNav } from "./GameWorkspaceNav";
+import { RecomputeAnalysisAction, useRecomputeAvailability } from "./RecomputeAnalysisAction";
+import { useMacroRecompute } from "@/components/analyzer/macro/useMacroRecompute";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { MapReplaySection } from "./MapReplaySection";
 import { MechanicsPanel } from "./MechanicsPanel";
-import { BuildOrderColumns } from "./BuildOrderColumns";
+const BuildOrderColumns = dynamic(() => import("./BuildOrderColumns").then((value) => value.BuildOrderColumns), { loading: () => <div role="status" aria-label="Loading build orders" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
+const GameMacroSection = dynamic(() => import("./GameMacroSection").then((value) => value.GameMacroSection), { loading: () => <div role="status" aria-label="Loading macro breakdown" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
 import { LossAutopsyCard } from "./LossAutopsyCard";
 import { ArmGhostFromLogButton, GhostGradeCard } from "./GhostGradeCard";
 import {
@@ -68,14 +76,14 @@ type GameDetailPageProps = {
 };
 
 export function GameDetailPage(props: GameDetailPageProps) {
-  // A new replay or timestamp is a new navigation. Ordinary data refreshes
-  // retain the user's cursor, while client-side links reset it immediately.
+  // Only a different replay remounts. Timestamp navigation seeks the mounted
+  // player, while ordinary data refreshes retain the user's clock.
   // The one-shot `newBuild` link stays out of the key: dropping it from the
   // URL must not remount the page (and close the editor it opened).
   const initialTimeSec = clampReplayTime(props.initialTimeSec);
   return (
     <GameDetailContent
-      key={JSON.stringify([props.gameId, initialTimeSec])}
+      key={props.gameId}
       {...props}
       initialTimeSec={initialTimeSec}
     />
@@ -93,10 +101,8 @@ function GameDetailContent({
   const gameReq = useApi<GameSummary>(gameId ? `/v1/games/${enc}` : null, {
     revalidateOnFocus: false,
   });
-  const macroReq = useApi<MacroBreakdownData>(
-    gameId ? `/v1/games/${enc}/macro-breakdown` : null,
-    { revalidateOnFocus: false },
-  );
+  const macroReq = useMacroRecompute(gameId || null);
+  const recomputeDisabledReason = useRecomputeAvailability(gameId || null);
   const buildReq = useApi<GameBuildOrderResponse>(
     gameId ? `/v1/games/${enc}/build-order` : null,
     { revalidateOnFocus: false },
@@ -110,21 +116,32 @@ function GameDetailContent({
   const { revision: checkinRevision } = useBuildCheckInRevision(false);
   const intentReq = useGameBuildIntent(gameId || null, checkinRevision);
 
-  // Timeline scrub cursor — shared so the loss-autopsy timestamps and
-  // the mechanics panel's supply-block chips can jump the chart.
-  const [scrubTime, setScrubTime] = useState<number | null>(null);
+  // Every timestamp seeks the mounted player; playback also drives the page.
+  const clock = useGameClock(gameId, initialTimeSec, gameReq.data?.durationSec ?? macroReq.data?.game_length_sec);
+  const setScrubTime = clock.seek;
 
   const game = gameReq.data ?? null;
   // The macro endpoint 404s with `macro_not_computed` when the agent
   // never uploaded a breakdown — that's a degrade, not an error page.
   const breakdown = macroReq.data ?? null;
 
+  const banked = useMemo(() => {
+    const rows = (samples?: StatsEvent[]) => (samples ?? []).filter((sample) => [sample.time, sample.minerals_current, sample.vespene_current].every((value) => typeof value === "number" && Number.isFinite(value))).map((sample) => [sample.time, sample.minerals_current!, sample.vespene_current!] as const);
+    const me = rows(breakdown?.stats_events); const opp = rows(breakdown?.opp_stats_events);
+    return me.length || opp.length ? { me, opp } : undefined;
+  }, [breakdown?.stats_events, breakdown?.opp_stats_events]);
+  const upgrades = useMemo(() => {
+    if (!buildReq.data) return undefined;
+    const rows = (events: GameBuildOrderResponse["events"] | undefined) => (events ?? []).flatMap((event) => event.category === "upgrade" && typeof event.complete_time === "number" && Number.isFinite(event.complete_time) && event.complete_time >= 0 ? [{ time: event.complete_time, name: event.display || event.name }] : []);
+    return { me: rows(buildReq.data.events), opp: rows(buildReq.data.opp_events) };
+  }, [buildReq.data]);
+
   // Raw `[m:ss] Name` lines rebuilt from the parsed build-order events —
   // lossAutopsy's late-expansion rule parses this exact shape.
   const buildLogLines = useMemo(() => {
     const events = buildReq.data?.events;
     if (!Array.isArray(events)) return null;
-    return events.map((ev) => `[${ev.time_display ?? clock(ev.time)}] ${ev.name}`);
+    return events.map((ev) => `[${ev.time_display ?? logClock(ev.time)}] ${ev.name}`);
   }, [buildReq.data?.events]);
 
   const autopsyGame = useMemo<AutopsyGame | null>(() => {
@@ -158,7 +175,7 @@ function GameDetailContent({
   if (!game) return <GameDetailSkeleton />;
 
   const macroStatus = macroReq.data ? "ready" : macroReq.error
-    ? macroReq.error.status === 404 || macroReq.error.code === "macro_not_computed" ? "notComputed" : "error"
+    ? macroReq.error.status === 404 && macroReq.error.code === "macro_not_computed" ? "notComputed" : "error"
     : "loading";
   const buildStatus = buildReq.data ? "ready" : buildReq.error
     ? buildReq.error.status === 404 || buildReq.error.code === "build_not_computed" ? "notComputed" : "error"
@@ -191,6 +208,7 @@ function GameDetailContent({
     intentReq.data && intentReq.data.opponent !== undefined
       ? effectiveOpponentBuild(intentReq.data.opponent, game.opponent?.strategy)
       : null;
+  const recomputeAction = macroStatus === "ready" || macroStatus === "notComputed" ? <RecomputeAnalysisAction onRecompute={() => void macroReq.recompute()} busy={macroReq.recomputing} message={macroReq.recomputeMsg} disabledReason={recomputeDisabledReason} /> : undefined;
   // Once the editor opened, a refresh or a copied link mustn't reopen it.
   const dropNewBuildParam = () => {
     const { pathname, search, hash } = window.location;
@@ -207,36 +225,13 @@ function GameDetailContent({
       oppStrategyLabel={checkinOpponent ? checkinOpponent.label : undefined}
       oppCorrected={checkinOpponent ? checkinOpponent.corrected : undefined}
     >
+      <GameWorkspaceNav />
       <BuildCheckInCard
         gameId={gameId}
         onChanged={() => void gameReq.mutate()}
         initialNewBuild={initialNewBuild}
         onNewBuildOpened={initialNewBuild ? dropNewBuildParam : undefined}
       />
-
-      <SectionBoundary key={`the timeline:${game.gameId}`} label="the timeline" title="The timeline hit a problem"><InteractiveTimeline
-        loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()}
-        statsEvents={breakdown?.stats_events}
-        oppStatsEvents={breakdown?.opp_stats_events}
-        gameLengthSec={game.durationSec ?? breakdown?.game_length_sec ?? null}
-        scrubTime={scrubTime ?? clampReplayTime(initialTimeSec, game.durationSec ?? breakdown?.game_length_sec)}
-        onScrub={setScrubTime}
-        myName={myName}
-        oppName={oppName}
-      /></SectionBoundary>
-
-      {/* Vespene-style map replay — directly under the timeline.
-          Renders a one-line hint for games synced before the agent
-          computed playback data. */}
-      <SectionBoundary key={`the replay player:${game.gameId}`} label="the replay player" title="The replay player hit a problem"><MapReplaySection
-        gameId={game.gameId}
-        initialTimeSec={initialTimeSec}
-        myName={myName}
-        oppName={oppName}
-        myRace={ghostMyRace}
-        oppRace={ghostOpponentRace}
-        patchEra={patchEraForGame(game)}
-      /></SectionBoundary>
 
       <SectionBoundary key={`mechanics:${game.gameId}`} label="mechanics" title="Mechanics hit a problem"><div className="grid gap-6 md:grid-cols-2">
         <MechanicsPanel
@@ -245,9 +240,10 @@ function GameDetailContent({
           loading={macroStatus === "loading"}
           error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()}
           onSeek={setScrubTime}
+          recomputeAction={recomputeAction} seekTarget="replay" currentTime={clock.t}
         />
         {loss && autopsyGame ? (
-          <LossAutopsyCard game={autopsyGame} onSeek={setScrubTime} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} />
+          <LossAutopsyCard game={autopsyGame} seekTarget="replay" recomputeAction={recomputeAction} onSeek={setScrubTime} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} />
         ) : (
           <Card title="Result">
             <p className="text-caption text-text-muted">
@@ -259,6 +255,30 @@ function GameDetailContent({
         )}
       </div></SectionBoundary>
 
+      <section ref={clock.stageRef} tabIndex={-1} id="replay" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]" aria-labelledby="game-replay-heading">
+        <h2 id="game-replay-heading" className="font-display text-h3 font-bold">Map replay <LazyHelpLink slug="game-page" anchor="replay-controls">Help</LazyHelpLink></h2>
+        <GameClockControls time={clock.t} duration={game.durationSec ?? breakdown?.game_length_sec} onSeek={(time) => clock.seek(time, { reveal: false })} getHref={clock.linkAtCurrentTime} />
+      {/* Vespene-style map replay — directly under the timeline.
+          Renders a one-line hint for games synced before the agent
+          computed playback data. */}
+      <SectionBoundary key={`the replay player:${game.gameId}`} label="the replay player" title="The replay player hit a problem"><MapReplaySection
+        gameId={game.gameId}
+        initialTimeSec={initialTimeSec}
+        seekRequest={clock.seekRequest} onPlaybackTimeChange={clock.onPlaybackTimeChange} onPlaybackStateChange={clock.onPlaybackStateChange} onStageSeek={clock.onStageSeek} banked={banked} upgrades={upgrades} clockLink={<GameClockLink time={clock.t} getHref={clock.linkAtCurrentTime} />}
+        buildName={checkinBuild?.label ?? game.myBuild}
+        myName={myName}
+        oppName={oppName}
+        myRace={ghostMyRace}
+        oppRace={ghostOpponentRace}
+        patchEra={patchEraForGame(game)}
+      /></SectionBoundary>
+
+      </section>
+      <section id="macro" className="scroll-mt-[var(--game-section-offset,8rem)]" aria-label="Macro breakdown">
+        <SectionBoundary key={`macro:${game.gameId}`} label="the macro breakdown" title="The macro breakdown hit a problem"><GameMacroSection inspectionTime={clock.t} onSeek={setScrubTime} gameId={game.gameId} data={breakdown} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} action={recomputeAction} onRecompute={() => void macroReq.recompute()} recomputing={macroReq.recomputing} headerMeta={{ playerName: myName, opponentName: oppName, myRace: ghostMyRace, opponentRace: ghostOpponentRace, dateIso: game.date, gameVersion: game.gameVersion, gameBuild: game.gameBuild }} /></SectionBoundary>
+      </section>
+      <section id="builds" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]" aria-labelledby="game-builds-heading">
+        <h2 id="game-builds-heading" className="font-display text-h3 font-bold">Builds <LazyHelpLink slug="game-page" anchor="build-orders">Help</LazyHelpLink></h2>
       {/* Ghost Build loop closer — grades this game's executed build
           against the armed practice target. Renders nothing unless a
           target is armed on this device AND a my-side log exists. */}
@@ -270,6 +290,7 @@ function GameDetailContent({
       /></SectionBoundary>
 
       <SectionBoundary key={`build orders:${game.gameId}`} label="build orders" title="Build orders hit a problem"><BuildOrderColumns
+        onSeek={clock.seek} currentTime={clock.t}
         error={buildStatus === "error" ? buildReq.error : undefined} onRetry={() => buildReq.mutate()}
         myEvents={buildReq.data?.events}
         oppEvents={buildReq.data?.opp_events}
@@ -296,6 +317,7 @@ function GameDetailContent({
           ) : null
         }
       /></SectionBoundary>
+      </section>
     </GameDetailShell>
   );
 }
@@ -334,7 +356,7 @@ function GameNotFound({
   );
 }
 
-function clock(seconds: number): string {
+function logClock(seconds: number): string {
   const total = Math.max(0, Math.round(seconds));
   const m = Math.floor(total / 60);
   const s = total % 60;

@@ -3,7 +3,6 @@
 import {
   useEffect,
   useId,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -12,33 +11,17 @@ import {
 import { createPortal } from "react-dom";
 import { AlertCircle, RefreshCcw, X } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
-import { useMapReplay, type MapReplayController } from "@/lib/useMapReplay";
+import { useMapReplay } from "@/lib/useMapReplay";
 import { fmtDate } from "@/lib/format";
-import {
-  computeEffectiveRace,
-  computePenaltyRows,
-  computeWins,
-  formatGameClock,
-  getRaceDetail,
-  isMissingChartSamples,
-  scoreToneTextClass,
-  selectLeaks,
-} from "@/lib/macro";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { matchupFromRaces } from "@/lib/reviews";
 import { lockBodyScroll } from "@/lib/bodyScrollLock";
-import { MapReplaySection } from "@/components/analyzer/game/MapReplaySection";
-import { MacroChartSection } from "./MacroChartSection";
-import { MacroLeaksList } from "./MacroLeaksList";
-import { MacroPenaltyBars } from "./MacroPenaltyBars";
-import { MacroKpiRow } from "./MacroKpiRow";
-import { readGameApm, type ApmCurveResponse } from "@/lib/apm";
-import { patchEraForGame } from "@/lib/ladderPulse";
+import Link from "next/link";
+import { MacroBreakdownBody } from "./MacroBreakdownBody";
+import { useMacroRecompute } from "./useMacroRecompute";
 import type {
-  LeakItem,
-  MacroBreakdownData,
   MacroBreakdownPanelProps,
   PanelHeaderMeta,
 } from "./MacroBreakdownPanel.types";
@@ -77,38 +60,9 @@ export function MacroBreakdownPanel({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  const { data, error, isLoading, mutate, request } = useApi<MacroBreakdownData>(
-    open ? `/v1/games/${encodeURIComponent(gameId)}/macro-breakdown` : null,
-    { revalidateOnFocus: false },
-  );
-
-  // Routine analysis reparses the replay. Engine recording is a separate,
-  // explicit action above the map and requires consent in the desktop agent.
+  const { data, error, isLoading, mutate, recompute, recomputing, recomputeMsg } = useMacroRecompute(open ? gameId : null);
+  // Recording stays a separate consented action from routine replay analysis.
   const replayController = useMapReplay(open ? gameId : null);
-  const scope = useRef({ gameId, open, generation: 0, requesting: false });
-  if (scope.current.gameId !== gameId || scope.current.open !== open) {
-    scope.current = { gameId, open, generation: scope.current.generation + 1, requesting: false };
-  }
-  const generation = scope.current.generation;
-  const [analysis, setAnalysis] = useState({ generation: -1, pending: false, requested: false, message: "" });
-  const recomputing = analysis.generation === generation && analysis.pending;
-  const recomputeMsg = analysis.generation === generation ? analysis.message || null : null;
-  const recompute = async () => {
-    if (!open || scope.current.requesting) return;
-    scope.current.requesting = true;
-    const current = () => scope.current.generation === generation;
-    setAnalysis({ generation, pending: true, requested: false, message: "Requesting analysis recompute…" });
-    try {
-      await request({ method: "POST", body: JSON.stringify({}) });
-      if (current()) setAnalysis({ generation, pending: false, requested: true,
-        message: "Analysis recompute requested. Keep your desktop agent connected; results will refresh shortly. This does not start a StarCraft recording." });
-    } catch (failure) {
-      if (current()) setAnalysis({ generation, pending: false, requested: false,
-        message: (failure as { message?: string })?.message || "Could not request analysis. Please try again." });
-    } finally {
-      if (current()) scope.current.requesting = false;
-    }
-  };
   const completedRequest = useRef<string | null>(null);
   const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
 
@@ -117,16 +71,6 @@ export function MacroBreakdownPanel({
       setHighlightedKey(null);
     }
   }, [open]);
-
-  useEffect(() => {
-    if (!open || analysis.generation !== generation || !analysis.requested) return;
-    // The legacy analysis endpoint has no job status. Refresh at bounded
-    // intervals without reporting an upload as complete from a stale record.
-    const timers = [3000, 10000, 30000, 60000].map(delay => window.setTimeout(() => {
-      void mutate().catch(() => undefined);
-    }, delay));
-    return () => timers.forEach(timer => window.clearTimeout(timer));
-  }, [open, generation, analysis, mutate]);
 
   useEffect(() => {
     const requestId = replayController.completedRequestId;
@@ -233,7 +177,7 @@ export function MacroBreakdownPanel({
               onRecompute={recompute}
             />
           ) : !data ? null : (
-            <BreakdownBody
+            <MacroBreakdownBody
               data={data}
               gameId={gameId}
               initialScore={initialScore}
@@ -343,6 +287,7 @@ function PanelHeader({
           </p>
         </div>
         <div className="flex flex-shrink-0 items-center gap-2">
+          <Link href={`/app/game/${encodeURIComponent(gameId)}#macro`} onClick={onClose} className="inline-flex min-h-11 items-center text-caption font-semibold text-accent hover:underline">Open full game page →</Link>
           {action}
           <button
             type="button"
@@ -406,296 +351,6 @@ function PanelFooter({
 /* ============================================================
  * Body
  * ============================================================ */
-
-function BreakdownBody({
-  data,
-  gameId,
-  initialScore,
-  highlightedKey,
-  onHighlight,
-  headerMeta,
-  replayController,
-  onRecompute,
-  recomputing,
-}: {
-  data: MacroBreakdownData;
-  gameId: string;
-  initialScore?: number | null;
-  highlightedKey: string | null;
-  onHighlight: (key: string | null, leak: LeakItem | null) => void;
-  headerMeta?: PanelHeaderMeta;
-  replayController: MapReplayController;
-  onRecompute: () => void;
-  recomputing: boolean;
-}) {
-  const score =
-    typeof data.macro_score === "number"
-      ? data.macro_score
-      : (initialScore ?? null);
-  const raw = data.raw || {};
-  const effectiveRace = computeEffectiveRace(data.race, raw);
-  const detail = getRaceDetail(effectiveRace);
-  const leaks = useMemo(() => selectLeaks(data), [data]);
-  const wins = useMemo(() => computeWins(raw, detail), [raw, detail]);
-  const penaltyRows = useMemo(
-    () => computePenaltyRows(raw, detail),
-    [raw, detail],
-  );
-  const headlineColour = scoreToneTextClass(score);
-  const samplesMissing = isMissingChartSamples(data);
-  // One read of the APM curve feeds both the timeline's APM view and the
-  // APM tile; pre-v2 curves (misattributed, commands only) read as null.
-  const apmReq = useApi<ApmCurveResponse>(
-    `/v1/games/${encodeURIComponent(gameId)}/apm-curve`,
-    { revalidateOnFocus: false, shouldRetryOnError: false },
-  );
-  const gameApm = useMemo(() => readGameApm(apmReq.data), [apmReq.data]);
-  // The calling row's version decides the era that prices units; a row
-  // without one falls back to patchEraForGame's date rule.
-  const patchEra = patchEraForGame({
-    gameVersion: headerMeta?.gameVersion,
-    gameBuild: headerMeta?.gameBuild,
-    date: headerMeta?.dateIso,
-  });
-
-  return (
-    <div className="space-y-5 sm:space-y-6">
-      <section
-        aria-label="Match timeline"
-        // Edge to edge on phones (the chart uses the full screen width);
-        // a card on larger screens.
-        className="-mx-4 sm:mx-0 sm:rounded-lg sm:border sm:border-border sm:bg-bg-elevated/40 sm:p-4"
-      >
-        {samplesMissing ? (
-          <div className="px-4 sm:px-0">
-            <ChartSamplesMissingHint />
-          </div>
-        ) : (
-          <MacroChartSection
-            samples={data.stats_events || []}
-            oppSamples={data.opp_stats_events || []}
-            unitTimeline={data.unit_timeline}
-            casualtyEvents={data.casualty_events}
-            onRecompute={onRecompute}
-            recomputing={recomputing}
-            myProductionBuildings={data.production_buildings}
-            oppProductionBuildings={data.opp_production_buildings}
-            gameLengthSec={data.game_length_sec}
-            leaks={leaks}
-            supplyBlockWindows={raw.supply_block_windows || []}
-            oppSupplyBlockWindows={raw.opp_supply_block_windows || []}
-            highlightedKey={highlightedKey}
-            myName={headerMeta?.playerName ?? null}
-            oppName={headerMeta?.opponentName ?? null}
-            myRace={headerMeta?.myRace ?? data.race ?? null}
-            oppRace={headerMeta?.opponentRace ?? null}
-            gameId={gameId}
-            apm={gameApm}
-            patchEra={patchEra}
-          />
-        )}
-      </section>
-
-      <MapReplaySection
-        gameId={gameId}
-        compact
-        controller={replayController}
-        myRace={headerMeta?.myRace ?? data.race ?? null}
-        patchEra={patchEra}
-      />
-
-      <Headline score={score} colourClass={headlineColour} />
-
-      <MacroKpiRow raw={raw} apm={gameApm} apmLoading={apmReq.isLoading} />
-
-      <section
-        aria-labelledby="penalty-heading"
-        className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-4"
-      >
-        <h3
-          id="penalty-heading"
-          className="text-caption font-semibold uppercase tracking-wider text-text-muted"
-        >
-          Where the score went
-        </h3>
-        <MacroPenaltyBars
-          rows={penaltyRows}
-          caption="Each bar shows how much that discipline shaved off the headline. Empty bars mean the penalty was zero."
-        />
-        {detail &&
-        raw[detail.actualKey] != null &&
-        raw[detail.expectedKey] != null ? (
-          <RaceDisciplineCallout
-            title={detail.title}
-            actual={Number(raw[detail.actualKey] || 0)}
-            expected={Number(raw[detail.expectedKey] || 0)}
-            unitPlural={detail.unitPlural}
-          />
-        ) : null}
-        {typeof raw.creep_tumors_total === "number" ? (
-          <CreepTumorCallout
-            total={raw.creep_tumors_total}
-            queen={Number(raw.creep_tumors_queen || 0)}
-            spread={Number(raw.creep_tumors_spread || 0)}
-            lost={Number(raw.creep_tumors_lost || 0)}
-            firstSec={
-              typeof raw.first_tumor_sec === "number"
-                ? raw.first_tumor_sec
-                : null
-            }
-          />
-        ) : null}
-      </section>
-
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <section
-          aria-labelledby="leaks-heading"
-          className="space-y-2 rounded-lg border border-border bg-bg-elevated/40 p-4"
-        >
-          <h3
-            id="leaks-heading"
-            className="text-caption font-semibold uppercase tracking-wider text-danger"
-          >
-            Where you lost economy
-          </h3>
-          <MacroLeaksList
-            leaks={leaks}
-            highlightedKey={highlightedKey}
-            onSelect={onHighlight}
-          />
-        </section>
-
-        {wins.length > 0 ? (
-          <section
-            aria-labelledby="wins-heading"
-            className="space-y-2 rounded-lg border border-border bg-bg-elevated/40 p-4"
-          >
-            <h3
-              id="wins-heading"
-              className="text-caption font-semibold uppercase tracking-wider text-success"
-            >
-              What you did well
-            </h3>
-            <ul className="list-disc space-y-1 pl-5 text-caption text-text">
-              {wins.map((w, i) => (
-                <li key={i}>{w}</li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-      </div>
-
-    </div>
-  );
-}
-
-function Headline({
-  score,
-  colourClass,
-}: {
-  score: number | null;
-  colourClass: string;
-}) {
-  return (
-    <div className="flex flex-wrap items-baseline gap-3">
-      <span className="text-caption uppercase tracking-wider text-text-dim">
-        Macro Score
-      </span>
-      <span
-        className={`text-display-lg font-bold tabular-nums ${colourClass}`}
-        aria-label={
-          typeof score === "number"
-            ? `Score ${score} of 100`
-            : "Score not computed"
-        }
-      >
-        {typeof score === "number" ? score : "—"}
-        <span className="ml-1 text-body-lg font-normal text-text-dim">
-          / 100
-        </span>
-      </span>
-    </div>
-  );
-}
-
-function RaceDisciplineCallout({
-  title,
-  actual,
-  expected,
-  unitPlural,
-}: {
-  title: string;
-  actual: number;
-  expected: number;
-  unitPlural: string;
-}) {
-  const pct = Math.round((100 * actual) / Math.max(1, expected));
-  return (
-    <div className="rounded-md bg-bg-subtle p-3">
-      <div className="text-micro uppercase tracking-wider text-text-dim">
-        {title}
-      </div>
-      <div className="mt-1 text-caption text-accent">
-        {actual} of ~{expected} expected ({pct}% {unitPlural})
-      </div>
-    </div>
-  );
-}
-
-/**
- * Zerg creep tracking summary. Rendered only when the breakdown carries
- * the creep fields (engine 1.5.6+) — older payloads omit them and the
- * box stays hidden rather than claiming "0 tumors" it never measured.
- */
-function CreepTumorCallout({
-  total,
-  queen,
-  spread,
-  lost,
-  firstSec,
-}: {
-  total: number;
-  queen: number;
-  spread: number;
-  lost: number;
-  firstSec: number | null;
-}) {
-  return (
-    <div className="rounded-md bg-bg-subtle p-3">
-      <div className="text-micro uppercase tracking-wider text-text-dim">
-        Creep spread
-      </div>
-      <div className="mt-1 text-caption text-accent">
-        {total === 0 ? (
-          "No creep tumors planted"
-        ) : (
-          <>
-            {total} tumor{total === 1 ? "" : "s"} planted ({queen} queen /{" "}
-            {spread} spread)
-            {firstSec !== null ? ` · first at ${formatGameClock(firstSec)}` : ""}
-            {lost > 0 ? ` · ${lost} lost` : ""}
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ChartSamplesMissingHint() {
-  return (
-    <div className="rounded-md border border-border bg-bg-subtle p-3 text-caption text-text-muted">
-      <div className="inline-flex items-center gap-2 font-semibold text-accent-cyan">
-        <AlertCircle className="h-4 w-4" aria-hidden />
-        Per-second samples not available
-      </div>
-      <p className="mt-1">
-        This game's stored breakdown is the slim variant — the time-series
-        chart needs the full sample stream from your SC2 agent. Click
-        Recompute to ask the agent to re-parse the replay.
-      </p>
-    </div>
-  );
-}
 
 /* ============================================================
  * Loading / error / fallback states

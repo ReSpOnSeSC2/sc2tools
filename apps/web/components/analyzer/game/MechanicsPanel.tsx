@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
@@ -14,6 +14,7 @@ import {
 } from "@/lib/macro";
 import type { GameSummary } from "./types";
 import { formatApm } from "@/lib/apm";
+import { RECOMPUTE_ANALYSIS_HINT } from "@/lib/analysisRecompute";
 
 export interface MechanicsPanelProps {
   error?: unknown;
@@ -21,10 +22,13 @@ export interface MechanicsPanelProps {
   breakdown?: MacroBreakdownData | null;
   game?: GameSummary | null;
   loading?: boolean;
-  /** Scrubs the timeline — supply-block window chips jump the cursor. */
+  /** Optional shared clock; other hosts retain their timeline-only behaviour. */
   onSeek?: (timeSec: number) => void;
+  currentTime?: number;
   /** Neutral public copy can replace the owner-only backfill instruction. */
   emptyDescription?: string;
+  recomputeAction?: ReactNode;
+  seekTarget?: "replay" | "timeline";
   /** Public analysis can share its archive score bands without changing analyzer defaults. */
   macroScoreToneClassName?: string;
 }
@@ -46,7 +50,10 @@ export function MechanicsPanel({
   game,
   loading,
   onSeek,
+  currentTime,
   emptyDescription,
+  recomputeAction,
+  seekTarget = "timeline",
   macroScoreToneClassName,
 }: MechanicsPanelProps) {
   const raw = breakdown?.raw;
@@ -123,7 +130,7 @@ export function MechanicsPanel({
   if (error) return <RequestError title="Couldn't load mechanics" error={error} onRetry={onRetry} />;
   if (loading) {
     return (
-      <Card title="Mechanics">
+      <Card title="Mechanics" right={recomputeAction}>
         <div className="space-y-2" aria-busy="true" aria-label="Loading mechanics">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-5 animate-pulse rounded bg-bg-elevated" />
@@ -145,13 +152,13 @@ export function MechanicsPanel({
 
   if (!breakdown && !hasAnything) {
     return (
-      <Card title="Mechanics">
+      <Card title="Mechanics" right={recomputeAction}>
         <EmptyStatePanel
           size="sm"
           title="No macro breakdown for this game"
           description={
             emptyDescription ||
-            "Ask the desktop agent to recompute (Macro tab → backfill) and this panel fills in."
+            RECOMPUTE_ANALYSIS_HINT
           }
         />
       </Card>
@@ -161,7 +168,7 @@ export function MechanicsPanel({
   const sqTier = tierFromSq(sq);
 
   return (
-    <Card title="Mechanics" data-testid="mechanics-panel">
+    <Card title="Mechanics" right={recomputeAction} data-testid="mechanics-panel">
       <dl className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <MechanicStat
@@ -206,10 +213,12 @@ export function MechanicsPanel({
                     type="button"
                     onClick={onSeek ? () => onSeek(w.start) : undefined}
                     disabled={!onSeek}
-                    aria-label={`Jump timeline to supply block at ${formatGameClock(w.start)}`}
-                    className="inline-flex min-h-[44px] items-center rounded-full border border-border bg-bg-elevated px-2.5 font-mono text-micro tabular-nums text-text-muted transition-colors enabled:hover:border-border-strong enabled:hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default"
+                    aria-label={seekTarget === "replay" ? `Watch the replay at ${formatGameClock(w.start)}` : `Jump timeline to supply block at ${formatGameClock(w.start)}`}
+                    aria-current={currentTime != null && currentTime >= w.start && currentTime < w.end ? "step" : undefined}
+                    title={`Supply block ${formatGameClock(w.start)}–${formatGameClock(w.end)}`}
+                    className="inline-flex min-h-[44px] items-center rounded-full border border-border bg-bg-elevated px-2.5 font-mono text-micro tabular-nums text-text-muted transition-colors aria-[current=step]:border-accent aria-[current=step]:bg-accent/10 enabled:hover:border-border-strong enabled:hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-default"
                   >
-                    {formatGameClock(w.start)}–{formatGameClock(w.end)}
+                    {seekTarget === "replay" ? `Watch at ${formatGameClock(w.start)}` : `${formatGameClock(w.start)}–${formatGameClock(w.end)}`}
                   </button>
                 ))}
               </div>
