@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { useUserSocket } from "@/lib/useUserSocket";
@@ -12,6 +12,8 @@ export function SiteIncidentBanner() {
   const query = useSWR(`/v1/site/banner${revision ? `?v=${encodeURIComponent(revision)}` : ""}`, readBanner, { refreshInterval: 60000, keepPreviousData: true });
   const { data: me } = useApi<{ onboarding?: { goals?: string[] } }>("/v1/me");
   const pathname = usePathname();
+  const params = useSearchParams();
+  const streamSurface = pathname?.startsWith("/stream-studio") || (pathname === "/settings" && params.get("tab") === "overlay");
   const [dismissed, setDismissed] = useState<string | null>(null);
   const [clockTick, setClockTick] = useState(0);
   const now = Date.now();
@@ -26,7 +28,7 @@ export function SiteIncidentBanner() {
     const timer = setTimeout(() => setClockTick((tick) => tick + 1), Math.min(2147483647, deadline - Date.now() + 1)); return () => clearTimeout(timer);
   }, [banner, clockTick]);
   if (!banner || Date.parse(banner.startsAt) > now || Date.parse(banner.endsAt) <= now || banner.audience === "agent"
-    || (banner.audience === "stream-studio" && !me?.onboarding?.goals?.includes("stream") && !pathname?.startsWith("/stream-studio"))
+    || (banner.audience === "stream-studio" && !me?.onboarding?.goals?.includes("stream") && !streamSurface)
     || (banner.audience === "guides" && !me?.onboarding?.goals?.includes("improve") && !pathname?.startsWith("/guides"))
     || (banner.severity !== "critical" && dismissed === banner.hash)) return null;
   return <Banner notice={banner} onDismiss={() => { setDismissed(banner.hash); try { localStorage.setItem("sc2tools:notice-dismissed", banner.hash); } catch { /* Optional browser persistence. */ } }} />;

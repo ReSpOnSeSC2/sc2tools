@@ -300,7 +300,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <ConnectionBanner />
-          <SiteIncidentBanner />
+          <Suspense fallback={null}><SiteIncidentBanner /></Suspense>
           <Suspense fallback={null}><NavProgress onPendingChange={setNavPending} /></Suspense>
         </header>
 

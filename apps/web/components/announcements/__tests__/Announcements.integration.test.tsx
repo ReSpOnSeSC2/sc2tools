@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import type { ReactNode } from "react";
 import type { SiteNotice } from "@/components/ui/Banner";
-const harness = vi.hoisted(() => ({ userId: "ann" as string | null, handlers: null as Record<string, (value: unknown) => void> | null }));
+const harness = vi.hoisted(() => ({ userId: "ann" as string | null, pathname: "/app", search: "", handlers: null as Record<string, (value: unknown) => void> | null }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: !!harness.userId, userId: harness.userId, getToken: async () => "fixture-token" }) }));
-vi.mock("next/navigation", () => ({ usePathname: () => "/app" }));
+vi.mock("next/navigation", () => ({ usePathname: () => harness.pathname, useSearchParams: () => new URLSearchParams(harness.search) }));
 vi.mock("@/lib/useUserSocket", () => ({ useUserSocket: (handlers: typeof harness.handlers) => { harness.handlers = handlers; } }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ slug, children }: { slug: string; children?: ReactNode }) => <a href={`/help/${slug}`}>{children || "Help"}</a> }));
 import { WhatsNewButton } from "../WhatsNewButton";
@@ -20,7 +20,7 @@ const response = (value: unknown, status = 200) => new Response(JSON.stringify(v
 const makeNotice = (patch: Partial<SiteNotice> = {}): SiteNotice => ({ severity: "warning", message: "Uploads are delayed.", audience: "all", href: "/help/desktop-app-overview", startsAt: new Date(Date.now() - 60000).toISOString(), endsAt: new Date(Date.now() + 3600000).toISOString(), revision: 1, hash: "fixture-warning", ...patch });
 const mount = (children: ReactNode) => render(<SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0, shouldRetryOnError: false }}>{children}</SWRConfig>);
 beforeEach(() => {
-  harness.userId = "ann"; harness.handlers = null; localStorage.clear(); banner = null; failSave = false; failEnd = false; failSeen = false; onboarding = { goals: ["improve"], dismissedAt: "keep-this-field" };
+  harness.userId = "ann"; harness.pathname = "/app"; harness.search = ""; harness.handlers = null; localStorage.clear(); banner = null; failSave = false; failEnd = false; failSeen = false; onboarding = { goals: ["improve"], dismissedAt: "keep-this-field" };
   fetcher = vi.fn(async (raw: string, init?: RequestInit) => {
     const url = new URL(raw, "http://localhost");
     if (url.pathname === "/v1/me") return response({ onboarding });
@@ -34,7 +34,7 @@ beforeEach(() => {
     return response({});
   }); vi.stubGlobal("fetch", fetcher);
 });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("announcement consumers with real client requests", () => {
   it("opens the goal-filtered sheet, retries saving only its seen field, and returns focus on close", async () => {
@@ -57,9 +57,11 @@ describe("announcement consumers with real client requests", () => {
 
   it("dismisses only the current non-critical notice, refreshes on socket changes, and expires critical notices", async () => {
     banner = makeNotice(); mount(<SiteIncidentBanner />); await screen.findByText("Uploads are delayed."); fireEvent.click(screen.getByRole("button", { name: "Dismiss notice" })); expect(screen.queryByRole("status")).toBeNull();
-    banner = makeNotice({ severity: "critical", hash: "new-critical", message: "Maintenance in progress.", endsAt: new Date(Date.now() + 300).toISOString() });
-    act(() => harness.handlers?.["site:banner"]({ hash: "new-critical" })); await screen.findByText("Maintenance in progress."); expect(screen.queryByRole("button", { name: "Dismiss notice" })).toBeNull();
-    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+    vi.useFakeTimers();
+    banner = makeNotice({ severity: "critical", hash: "new-critical", message: "Maintenance in progress.", endsAt: new Date(Date.now() + 10000).toISOString() });
+    await act(async () => { harness.handlers?.["site:banner"]({ hash: "new-critical" }); });
+    expect(screen.getByText("Maintenance in progress.")).toBeTruthy(); expect(screen.queryByRole("button", { name: "Dismiss notice" })).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(10001); }); expect(screen.queryByRole("status")).toBeNull();
     expect(fetcher.mock.calls.some(([url]) => String(url).includes("?v=new-critical"))).toBe(true);
   });
 
@@ -72,5 +74,10 @@ describe("announcement consumers with real client requests", () => {
     await screen.findByRole("alert"); fireEvent.keyDown(document, { key: "Escape" }); failEnd = false; fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     await waitFor(() => expect(fetcher.mock.calls.filter(([, init]) => init?.method === "DELETE")).toHaveLength(2));
     expect(fetcher.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(2);
+  });
+
+  it("shows a Stream Studio notice on the overlay settings tab without requiring streaming onboarding goals", async () => {
+    harness.pathname = "/settings"; harness.search = "tab=overlay"; banner = makeNotice({ audience: "stream-studio", message: "Stream controls are recovering." });
+    mount(<SiteIncidentBanner />); expect(await screen.findByText("Stream controls are recovering.")).toBeTruthy();
   });
 });
