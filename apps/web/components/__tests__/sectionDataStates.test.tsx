@@ -28,8 +28,6 @@ import { NetMmrRaceOpponentsModal } from "@/components/analyzer/charts/NetMmrRac
 import { ReportGamesModal } from "@/components/analyzer/macro/report/ReportGamesModal";
 import { SettingsFoundation } from "@/components/analyzer/settings/SettingsFoundation";
 import { ReplayArchiveStatusCard } from "@/components/analyzer/settings/ReplayArchiveStatusCard";
-import { WizardStepsEarly } from "@/components/analyzer/wizard/WizardStepsEarly";
-import { WizardApplyImport } from "@/components/analyzer/wizard/WizardApplyImport";
 import { DevicesPanel } from "@/components/DevicesPanel";
 
 const SERVER_ERROR = { status: 500, code: "internal_error", message: "x", requestId: "abcdef12-3456" };
@@ -86,8 +84,6 @@ const SECTIONS: Array<[string, () => ReactElement, RegExp | null]> = [
   ],
   ["Settings account", () => <SettingsFoundation />, /Couldn.t load your account/],
   ["Replay archive status", () => <ReplayArchiveStatusCard />, null],
-  ["Wizard account check", () => <WizardStepsEarly />, /Games synced|No games yet/],
-  ["Wizard import", () => <WizardApplyImport />, /Start import/],
   ["Devices", () => <DevicesPanel />, /No devices paired yet|Failed to load/],
 ];
 

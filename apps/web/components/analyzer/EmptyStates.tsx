@@ -3,7 +3,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import {
-  Activity,
   Download,
   Filter,
   Gamepad2,
@@ -283,23 +282,6 @@ export function NoBuildOrder({
         <Button variant="secondary" size="sm" onClick={onRecompute}>
           Ask the agent to recompute
         </Button>
-      }
-    />
-  );
-}
-
-export function NeedReplays({ count = 0 }: { count?: number }) {
-  return (
-    <EmptyStatePanel
-      size="md"
-      icon={<Activity className="h-5 w-5" aria-hidden />}
-      title="Need more replays"
-      description={
-        <>
-          You have <strong className="text-text">{count}</strong> games on file.
-          Most charts work best with 30+. The agent will keep the cloud copy
-          current as you play.
-        </>
       }
     />
   );
