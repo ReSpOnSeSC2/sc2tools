@@ -1,4 +1,5 @@
 import { DevicesPanel } from "@/components/DevicesPanel";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { Banner } from "@/components/Banner";
 
 export const metadata = {
@@ -8,13 +9,7 @@ export const metadata = {
 export default function DevicesPage() {
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Devices</h1>
-        <p className="text-text-muted">
-          Pair the SC2 Tools Agent installed on your gaming PC. Your
-          replays will start syncing automatically.
-        </p>
-      </header>
+      <PageHeader eyebrow="Account" title="Devices" description="Link SC2 Tools on your gaming PC to sync your replays automatically." />
       <Banner variant="divider" />
       <DevicesPanel />
     </div>
