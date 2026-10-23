@@ -73,6 +73,7 @@ function Bell_({ compact }: { compact: boolean }) {
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [scopeReady, setScopeReady] = useState(false);
+  const [scopeMerged, setScopeMerged] = useState(false);
   const [scopeVersion, setScopeVersion] = useState(0);
   const [readError, setReadError] = useState(false);
   const failedMarkAll = useRef(false);
@@ -162,6 +163,7 @@ function Bell_({ compact }: { compact: boolean }) {
       return [...rows.values()].sort((a, b) =>
         b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
     });
+    setScopeMerged(true);
     if (view !== "all" || cursor || !loadedHistoryTail.current) {
       setNextCursor(page.nextCursor);
     }
@@ -200,6 +202,7 @@ function Bell_({ compact }: { compact: boolean }) {
   function selectView(next: NotificationView) {
     loadedHistoryTail.current = false;
     setScopeReady(false);
+    setScopeMerged(false);
     setScopeVersion((value) => value + 1);
     setItems([]);
     setCursor(null);
@@ -280,7 +283,7 @@ function Bell_({ compact }: { compact: boolean }) {
           </span>
         ) : null}
       </button>
-      {open ? <NotificationPanel items={items} style={panelStyle} ready={scopeReady} loading={!!(list.isLoading || list.isValidating)}
+      {open ? <NotificationPanel items={items} style={panelStyle} ready={scopeReady && scopeMerged} loading={!!(list.isLoading || list.isValidating)}
         listError={!!list.error} unreadError={!!unread.error} readError={readError} view={view} selectView={selectView} onClose={closePanel}
         retryList={() => { if (!scopeReady) setScopeVersion((value) => value + 1); else void list.mutate(); }}
         retryUnread={() => void mutateUnread()} retryRead={() => { if (failedMarkAll.current) { void markAllRead(); return; } failedReads.current.clear(); setReadError(false); setReadRetry((value) => value + 1); }}
