@@ -45,12 +45,12 @@ describe("SettingsPage ?tab=", () => {
     expect(screen.getAllByRole("tab", { name: "Import" })).toHaveLength(2);
   });
 
-  it("keeps the Import tab hidden and falls back to Foundation when disabled", () => {
+  it("opens desktop Import even while browser import is disabled", async () => {
     mocks.tab = "import";
     render(<SettingsPage />);
-    expect(screen.queryByText("import body")).toBeNull();
-    expect(screen.queryAllByRole("tab", { name: "Import" })).toHaveLength(0);
-    expect(screen.getByText("foundation body")).toBeTruthy();
+    expect(await screen.findByText("import body")).toBeTruthy();
+    expect(screen.queryAllByRole("tab", { name: "Import" })).toHaveLength(2);
+    expect(screen.queryByText("foundation body")).toBeNull();
   });
 
   it("deep-links the Build check-in tab", async () => {

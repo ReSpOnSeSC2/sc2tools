@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { SlidersHorizontal } from "lucide-react";
-import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -12,14 +11,13 @@ import {
 } from "@/lib/filterContext";
 
 /**
- * Phone layout of the analyzer filter bar. Below `sm` the bar keeps the
- * date range and swaps every other control for a "Filters · N active"
+ * Phone layout of the analyzer filter bar. Below `md` the bar keeps the
+ * summary and swaps every control for a "Filters · N active"
  * button that opens them in a bottom sheet (Modal's phone layout: focus
  * stays inside, Esc or Done closes it and focus returns to the button).
  * Changes apply as they are made, exactly as on the desktop bar.
  *
- * N counts the filters that differ from the defaults, other than the
- * date range, which keeps its own button beside this one.
+ * N counts all filters that differ from the defaults, including the date.
  */
 export function FilterSheet({
   children,
@@ -34,7 +32,7 @@ export function FilterSheet({
     () => describeActiveFilters(filters, { seasons }),
     [filters, seasons],
   );
-  const count = active.filter((f) => f.key !== "preset").length;
+  const count = active.length;
 
   return (
     <>
@@ -43,7 +41,7 @@ export function FilterSheet({
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
         aria-expanded={open}
-        className="inline-flex min-h-11 items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-3 py-2 text-sm text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:hidden"
+        className="inline-flex min-h-11 items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-3 py-2 text-sm text-text transition-colors hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
         <SlidersHorizontal className="h-4 w-4 text-text-muted" aria-hidden />
         <span className="font-medium">Filters</span>
@@ -81,11 +79,8 @@ export function FilterSheet({
           </>
         }
       >
-        <div className="flex flex-col items-start gap-5">
+        <div className="analyzer-filter-sheet flex flex-col items-start gap-5">
           {children}
-          <LazyHelpLink slug="analyzer-filters" className="text-caption">
-            How filters work
-          </LazyHelpLink>
         </div>
       </Modal>
     </>

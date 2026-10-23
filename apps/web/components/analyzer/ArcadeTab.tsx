@@ -12,7 +12,7 @@ import { MyStatsSurface } from "./arcade/surfaces/MyStats";
 type Sub = "today" | "quick-play" | "collection" | "my-stats";
 
 const SUBS: Array<{ id: Sub; label: string }> = [
-  { id: "today", label: "Today" },
+  { id: "today", label: "Daily" },
   { id: "quick-play", label: "Quick Play" },
   { id: "collection", label: "Collection" },
   { id: "my-stats", label: "My Stats" },

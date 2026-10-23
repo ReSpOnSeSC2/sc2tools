@@ -108,7 +108,7 @@ describe("DashboardKpiStrip game scope", () => {
     expect(screen.getByText("Games in range")).toBeTruthy();
     expect(screen.getByText("10")).toBeTruthy();
     // The region and length filters narrow the count too, and say so.
-    expect(screen.getByText("Season 68 · 2 more filters")).toBeTruthy();
+    expect(screen.getByText("Uses filters · Season 68 · 2 more filters")).toBeTruthy();
     expect(screen.queryByText("Lifetime synced replays")).toBeNull();
 
     const rangeUrl = requestedUrls.find(
@@ -146,12 +146,12 @@ describe("DashboardKpiStrip labels", () => {
 
   it("names only the date range on Games in range when nothing else narrows it", () => {
     renderStrip({ ...DEFAULT_ANALYZER_FILTERS, preset: "last_7d" });
-    expect(screen.getByText("7d")).toBeTruthy();
+    expect(screen.getByText("Uses filters · 7d")).toBeTruthy();
   });
 
   it("counts a matchup or Strategies pick on Games in range", () => {
     renderStrip({ ...DEFAULT_ANALYZER_FILTERS, opp_race: "Z" });
-    expect(screen.getByText("12-worker patch · 1 more filter")).toBeTruthy();
+    expect(screen.getByText("Uses filters · 12-worker patch · 1 more filter")).toBeTruthy();
   });
 });
 

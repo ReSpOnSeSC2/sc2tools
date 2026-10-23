@@ -221,7 +221,7 @@ function ByOppStrategyView({
       <div className="flex flex-wrap items-center gap-3">
         <input
           className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
-          placeholder="search strategy name…"
+          placeholder="Search strategies"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -286,7 +286,7 @@ function ByOppStrategyView({
               <div className="mt-2 flex items-center justify-between text-micro tabular-nums text-text-dim">
                 <span>{s.total} games</span>
                 <span className="opacity-0 transition group-hover:opacity-100">
-                  view games →
+                  View games
                 </span>
               </div>
             </button>

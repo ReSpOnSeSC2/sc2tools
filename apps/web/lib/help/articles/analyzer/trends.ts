@@ -29,6 +29,8 @@ const article: HelpArticle = {
   ],
   updated: "2026-10-23",
   body: [
+    { type: "heading", text: "Getting around", anchor: "getting-around" },
+    { type: "paragraph", text: "Use the section links to jump to Overview, Performance & MMR, Time & activity, Explorer or your Fingerprint. Collapse chart groups from their headings; that choice stays on this device and collapsed charts stop loading. Jumping to a collapsed group opens it. **Group charts by** sets day, week or month buckets for activity, matchup, MMR and map charts." },
     {
       type: "paragraph",
       text: "[Trends](/app/trends) shows how your results move over time, for the games the filter bar lets through. It answers: am I improving, in which matchup, at what time of day do I play best, and do long games go my way.",
@@ -55,7 +57,7 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "Use **Activity grouping** at the top to switch between **Day**, **Week** and **Month**. Days show detail; months smooth out the noise.",
+        "Use **Group charts by** at the top to switch between **Day**, **Week** and **Month**. Days show detail; months smooth out the noise.",
         "Hover or tap a point to see its numbers. Where a chart offers it, click a bar or a cell to list the games behind it.",
         "Narrow the date range, matchup or region in the filter bar and every chart follows.",
       ],

@@ -5,7 +5,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   type ReactNode,
 } from "react";
 import dynamic from "next/dynamic";
@@ -14,7 +13,6 @@ import { AnalyzerProvider } from "@/components/AnalyzerProvider";
 import { ActiveFilterChips } from "@/components/analyzer/ActiveFilterChips";
 import { DoctorBanner } from "@/components/analyzer/DoctorBanner";
 import { NoGamesYet } from "@/components/analyzer/EmptyStates";
-import { FilterBar } from "@/components/analyzer/FilterBar";
 import { Card } from "@/components/ui/Card";
 import {
   OnboardingChecklist,
@@ -26,6 +24,7 @@ import { useImportStatus } from "@/components/imports/useImportStatus";
 import { markAppSession } from "@/lib/appSession";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
 import { useUserSocket } from "@/lib/useUserSocket";
+import { useLocalStorageState } from "@/lib/useLocalStorageState";
 
 // Loaded only when browser import is enabled, so the flag-off /app bundle
 // does not carry the Folder Sync runner and the engine client.
@@ -33,6 +32,12 @@ const FolderSyncAutoRunner = dynamic(
   () => import("@/components/instant/FolderSyncAutoRunner").then((mod) => mod.FolderSyncAutoRunner),
   { ssr: false },
 );
+
+// Today starts with its scope note. Load the complete editor when requested
+// or when visiting a filtered section, keeping the dashboard bundle small.
+const FilterBar = dynamic(() => import("@/components/analyzer/FilterBar").then((mod) => mod.FilterBar), {
+  loading: () => <div className="min-h-11" role="status">Loading filters…</div>,
+});
 
 /* ------------------------------------------------------------------
  * AnalyzerFrame — the concerns that belong to /app specifically, as
@@ -141,10 +146,7 @@ export function AnalyzerFrame({
 
             {browserImportEnabled ? <FolderSyncAutoRunner /> : null}
 
-            {!isArcade ? <div className="rounded-xl border-2 border-line bg-bg-surface px-3 py-3 shadow-hard sm:py-2">
-              <FilterBar />
-              <ActiveFilterChips className="mt-3 border-t border-border pt-3 sm:mt-2 sm:pt-2" />
-            </div> : null}
+            {!isArcade ? <FrameFilters today={pathname === "/app"} /> : null}
 
             {view.checklist ? (
               <OnboardingChecklist
@@ -167,6 +169,15 @@ export function AnalyzerFrame({
   );
 }
 
+function FrameFilters({ today }: { today: boolean }) {
+  const [show, setShow] = useLocalStorageState<boolean>("analyzer.today.showFilters", false, (value): value is boolean => typeof value === "boolean");
+  return <div className="rounded-xl border-2 border-line bg-bg-surface px-3 py-3 shadow-hard sm:py-2">
+    {today ? <div className="flex flex-wrap items-center gap-2"><p className="min-w-0 flex-1 text-caption text-text-muted">Filters shape the analysis sections. Today shows your live session.</p><button type="button" aria-expanded={show} onClick={() => setShow(!show)} className="min-h-11 rounded-full px-3 text-caption text-accent underline">{show ? "Hide filters" : "Show filters"}</button></div> : null}
+    {!today || show ? <FilterBar /> : null}
+    <ActiveFilterChips className="mt-3 border-t border-border pt-3 sm:mt-2 sm:pt-2" />
+  </div>;
+}
+
 /**
  * The layout handed us a server snapshot of /v1/me; the onboarding
  * funnel changes it (pairing completes, first imported games land —
@@ -176,31 +187,12 @@ export function AnalyzerFrame({
  */
 function useRefreshWhileOnboarding(needsRefreshOnGames: boolean): void {
   const router = useRouter();
-  const refreshTimer = useRef<number | null>(null);
   const socketHandlers = useMemo(
-    () =>
-      needsRefreshOnGames
-        ? {
-            "games:changed": () => {
-              if (refreshTimer.current != null) return;
-              refreshTimer.current = window.setTimeout(() => {
-                refreshTimer.current = null;
-                router.refresh();
-              }, 1500);
-            },
-          }
-        : null,
+    () => needsRefreshOnGames ? { "games:changed": () => router.refresh() } : null,
     [needsRefreshOnGames, router],
   );
+  // The shared realtime client already coalesces every chart refresh.
   useUserSocket(socketHandlers);
-  useEffect(
-    () => () => {
-      if (refreshTimer.current != null) {
-        window.clearTimeout(refreshTimer.current);
-      }
-    },
-    [],
-  );
 }
 
 /**

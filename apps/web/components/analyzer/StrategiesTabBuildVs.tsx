@@ -114,7 +114,7 @@ export function BuildVsStrategyView({
       <div className="flex flex-wrap items-center gap-3">
         <input
           className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
-          placeholder="search build or strategy…"
+          placeholder="Search builds or strategies"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
