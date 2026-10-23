@@ -24,7 +24,7 @@
     inner executable before packaging). Requires -Installer; excludes -Clean.
 
 .PARAMETER SigningCert
-    Path to the .pfx EV code-signing certificate. When set, signtool is
+    Path to a trusted .pfx code-signing certificate. When set, signtool is
     invoked on the inner executable before NSIS and final installer after,
     with /tr (timestamp) + SHA256.
 
@@ -85,24 +85,24 @@ function Invoke-Step($Label, [scriptblock]$Body) {
 
 function Sign-AgentFile([string]$FilePath) {
     if (-not $SigningCert) { return }
-        Invoke-Step "Code-signing $FilePath" {
-            $signtool = (Get-Command signtool -ErrorAction SilentlyContinue).Source
-            if (-not $signtool) {
-                throw "signtool.exe not found on PATH. Install the Windows SDK."
-            }
-            $password = [System.Environment]::GetEnvironmentVariable($SigningCertPasswordEnv)
-            if (-not $password) {
-                throw "No signing password in env var '$SigningCertPasswordEnv'."
-            }
-            & $signtool sign `
-                /fd SHA256 `
-                /tr $TimestampUrl `
-                /td SHA256 `
-                /f $SigningCert `
-                /p $password `
-                $FilePath
+    Invoke-Step "Code-signing $FilePath" {
+        $signtool = (Get-Command signtool -ErrorAction SilentlyContinue).Source
+        if (-not $signtool) {
+            throw "signtool.exe not found on PATH. Install the Windows SDK."
         }
-        & (Join-Path $PSScriptRoot "verify-signature.ps1") -Path $FilePath
+        $password = [System.Environment]::GetEnvironmentVariable($SigningCertPasswordEnv)
+        if (-not $password) {
+            throw "No signing password in env var '$SigningCertPasswordEnv'."
+        }
+        & $signtool sign `
+            /fd SHA256 `
+            /tr $TimestampUrl `
+            /td SHA256 `
+            /f $SigningCert `
+            /p $password `
+            $FilePath
+    }
+    & (Join-Path $PSScriptRoot "verify-signature.ps1") -Path $FilePath
 }
 
 if ($PackageOnly -and (-not $Installer -or $Clean)) {

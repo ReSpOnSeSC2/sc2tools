@@ -1,8 +1,8 @@
 # Coordinated Wave 2 desktop release
 
 Pairing recovery and calm sync ship in the same installer as the other accepted
-Wave 2 desktop changes. This PR prepares source and help only; it does not build,
-publish, tag, or execute an installer.
+Wave 2 desktop changes. Preparation PRs can run unsigned verification builds and
+the offline packaged Qt diagnostic. They do not publish, tag, or execute setup.
 
 1. Merge the pairing website/devices dependency and all accepted desktop Wave 2
    PRs. Keep the existing device poll response: `ready` includes `deviceToken`

@@ -40,7 +40,9 @@ global writer lock is held; geometry persistence defers until that Save finishes
 The handler still returns only after the real durable commit. The old handler
 wall-clock test is replaced by actual durability plus this native responsiveness
 contract, rather than excluding a UI stall from its measurement. Settings/state
-focused checks passed 103; final full-suite verification is pending this fix.
+focused checks passed 103. The full suite after the persistence fix passed
+2,076 tests, 1 skipped, 78 subtests (151.33 s); 11 focused native checks cover
+the final competing-write guards at abc15202. Final remote CI runs that head.
 
 No canonical version bump, release tag, signed installer claim, or publication.
 The owner coordinates the final accepted Wave 2 version and pushes the tag after
