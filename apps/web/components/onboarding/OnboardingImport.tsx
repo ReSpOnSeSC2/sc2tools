@@ -45,7 +45,8 @@ function BrowserModeImport({ onContinue }: { onContinue?: () => void }) {
           Choose replays from your StarCraft II folder — they&apos;re analyzed
           right here in your browser, then the results are uploaded to your
           account (plus a private copy of each replay file if the backup box
-          below is ticked).
+          below is ticked). Keep this step open while the browser analyzes
+          and uploads your files.
         </p>
       </header>
 

@@ -25,10 +25,10 @@ export function OnboardingDone({ me, goals }: { me?: WelcomeMe; goals: Onboardin
   const latest = games.data?.items[0]?.gameId;
   const improve = goals.length === 0 || goals.includes("improve");
   return <section aria-labelledby="onboarding-step-heading" className="space-y-6">
-    <header className="space-y-2"><h1 id="onboarding-step-heading" tabIndex={-1} className="text-display-lg font-semibold outline-none">You&apos;re set</h1><p className="text-body-lg text-text-muted">Your account is ready. Imports can keep running while you explore.</p></header>
+    <header className="space-y-2"><h1 id="onboarding-step-heading" tabIndex={-1} className="text-display-lg font-semibold outline-none">You&apos;re set</h1><p className="text-body-lg text-text-muted">Your account is ready. Desktop imports can keep running while you explore.</p></header>
     {me?.agentPaired ? <p role="status" className="break-words text-caption">{connected ? `Connected: ${connected.label || connected.hostname || "Your PC"}${connected.agentVersion ? `, v${connected.agentVersion}` : ""}` : "PC paired — waiting for the app to check in"}</p> : <p className="text-caption text-text-muted">You can link a desktop app later from <Link href="/devices" className="text-accent underline">Devices</Link>.</p>}
-    {devices.error ? <p role="alert" className="text-caption">Couldn&apos;t check the desktop connection. <button type="button" className="text-accent underline" onClick={() => { void devices.mutate(); }}>Retry</button></p> : null}
-    {games.error ? <p role="alert" className="text-caption">Couldn&apos;t load your latest game. <button type="button" className="text-accent underline" onClick={() => { void games.mutate(); }}>Retry</button></p> : null}
+    {devices.error ? <p role="alert" className="text-caption">Couldn&apos;t check the desktop connection. <button type="button" aria-label="Retry desktop connection" className="text-accent underline" onClick={() => { void devices.mutate(); }}>Retry</button></p> : null}
+    {games.error ? <p role="alert" className="text-caption">Couldn&apos;t load your latest game. <button type="button" aria-label="Retry latest game" className="text-accent underline" onClick={() => { void games.mutate(); }}>Retry</button></p> : null}
     {progress.job ? <ImportProgressCard job={progress.job} active={progress.active} pct={progress.pct} etaSeconds={progress.etaSeconds} onCancelled={progress.refresh} /> : null}
     <div className="grid gap-3 sm:grid-cols-2">
       {improve ? <>

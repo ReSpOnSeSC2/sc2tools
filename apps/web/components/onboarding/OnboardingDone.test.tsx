@@ -5,7 +5,7 @@ import type { PairedDevice } from "./pairingTypes";
 import { getArticle } from "@/lib/help";
 
 const h = vi.hoisted(() => ({ devices: [] as PairedDevice[], error: null as Error | null, mutate: vi.fn(), progress: { job: null as object | null, active: false, pct: 0, etaSeconds: null, refresh: vi.fn() } }));
-vi.mock("@/lib/clientApi", () => ({ useApi: (path: string | null) => path?.includes("games") ? { data: { items: [{ gameId: "game/1" }] } } : { data: path ? { items: h.devices } : undefined, error: h.error, mutate: h.mutate } }));
+vi.mock("@/lib/clientApi", () => ({ useApi: (path: string | null) => path?.includes("games") ? { data: { items: [{ gameId: "game/1" }] } } : { data: path ? { items: h.devices } : undefined, error: path ? h.error : null, mutate: h.mutate } }));
 vi.mock("@/components/imports/useImportStatus", () => ({ useImportStatus: () => h.progress }));
 vi.mock("@/components/imports/ImportProgressCard", () => ({ ImportProgressCard: ({ pct }: { pct: number }) => <p>Live import {pct}%</p> }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ slug, children }: { slug: string; children: React.ReactNode }) => <a href={`/help/${slug}`} data-help-slug={slug}>{children}</a> }));
@@ -35,6 +35,6 @@ describe("welcome completion", () => {
     h.devices[0].lastSeenAt = new Date().toISOString(); view.rerender(<OnboardingDone me={me} goals={[]} />);
     expect(screen.getByRole("status").textContent).toBe("Connected: GAMING-PC, v0.20.0");
     h.error = new Error("offline"); view.rerender(<OnboardingDone me={me} goals={[]} />);
-    fireEvent.click(screen.getByRole("button", { name: "Retry" })); expect(h.mutate).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Retry desktop connection" })); expect(h.mutate).toHaveBeenCalledTimes(1);
   });
 });

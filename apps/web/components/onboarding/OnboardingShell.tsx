@@ -40,7 +40,7 @@ export interface OnboardingShellProps {
 
 /**
  * Five-step onboarding wizard shell. Exposes the active step and
- * helpers to children, and renders a sticky bottom action bar that
+ * helpers to children, and renders a footer action bar that
  * respects iOS `safe-area-inset-bottom`.
  *
  * Responsive behaviour:
@@ -121,7 +121,7 @@ export function OnboardingShell({
       {!hideDefaultNav ? (
         <nav
           aria-label="Onboarding navigation"
-          className="sticky bottom-0 z-10 border-t border-border bg-bg-surface/95 px-4 backdrop-blur sm:px-6"
+          className="border-t border-border bg-bg-surface/95 px-4 backdrop-blur sm:px-6"
           style={{
             paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
             paddingTop: "0.75rem",
@@ -139,9 +139,9 @@ export function OnboardingShell({
             <Button
               variant="ghost"
               onClick={onClose}
-              aria-label="Skip onboarding for now"
+              aria-label={helpers.isLast ? "Finish setup" : "Skip onboarding for now"}
             >
-              Skip for now
+              {helpers.isLast ? "Finish setup" : "Skip for now"}
             </Button>
           </div>
         </nav>
