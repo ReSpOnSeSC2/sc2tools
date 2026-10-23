@@ -103,7 +103,7 @@ const article: HelpArticle = {
       text: "The app checks for new versions on its own and, with automatic updates on, installs them and restarts minimised. **Check for updates** checks right away; the result shows on the Dashboard page. [Settings → Foundation](/settings?tab=foundation) shows which version your PC is running.",
     },
   ],
-  related: ["install-and-pair", "replay-folders", "my-game-didnt-show-up", "build-check-in"],
+  related: ["desktop-scouting", "install-and-pair", "replay-folders", "my-game-didnt-show-up", "build-check-in"],
 };
 
 export default article;

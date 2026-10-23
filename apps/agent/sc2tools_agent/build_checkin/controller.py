@@ -88,6 +88,7 @@ from .models import (
     parse_prefs,
     sanitize_notes,
 )
+from .scouting_controller import ScoutingControllerMixin
 from .records import (
     ACTIVE_PHASES,
     CARD_DONE,
@@ -193,7 +194,7 @@ class _Failure:
                 self.game_id = game_id
 
 
-class BuildCheckinController:
+class BuildCheckinController(ScoutingControllerMixin):
     """Single-threaded actor behind the build check-in cards."""
 
     def __init__(
@@ -211,6 +212,8 @@ class BuildCheckinController:
         open_url: Callable[[str], Any] = webbrowser.open,
         prefs: Optional[CheckinPrefs] = None,
         on_prefs_changed: Optional[Callable[[CheckinPrefs], None]] = None,
+        show_scouting_at_loading: bool = True,
+        on_scouting_changed: Optional[Callable[[bool], None]] = None,
     ) -> None:
         """``prefs`` is the last preference the server confirmed (kept in
         ``AgentState``): the cards follow it until this session's first
@@ -232,6 +235,8 @@ class BuildCheckinController:
         self._dashboard_url = dashboard_url
         self._open_url = open_url
         self._on_prefs_changed = on_prefs_changed
+        self._show_scouting = bool(show_scouting_at_loading)
+        self._on_scouting_changed = on_scouting_changed
 
         self._inbox: "queue.Queue[Optional[Tuple[Callable[..., None], tuple]]]" = (
             queue.Queue()
@@ -583,7 +588,9 @@ class BuildCheckinController:
     # ================================================================
 
     def _loading_allowed(self) -> bool:
-        return self._supported is not False and self._prefs.loading_cards
+        game = self._current_game()
+        scouting_ready = self._show_scouting and game is not None and game.scouting is not None
+        return self._supported is not False and self._prefs.enabled and (self._prefs.ask_at_loading or scouting_ready)
 
     def _postgame_allowed(self) -> bool:
         return self._supported is not False and self._prefs.postgame_cards
@@ -781,6 +788,7 @@ class BuildCheckinController:
                     self._sync_loading(game)
         elif self._loading_may_show(game):
             self._show_loading(game)
+        self._ensure_scouting(game)
         # After the card's register (its answer carries the current
         # prefs), so three list fetches never queue in front of it.
         self._maybe_prefetch(game.my_race)
@@ -811,8 +819,10 @@ class BuildCheckinController:
         self._sync_loading(game, show=True)
 
     def _sync_loading(self, game: LiveGame, *, show: bool = False) -> None:
-        self._ensure_registered(game)
-        self._ensure_options(game.matchup)
+        if self._prefs.loading_cards:
+            self._ensure_registered(game)
+            self._ensure_options(game.matchup)
+        self._ensure_scouting(game)
         self._render_loading(game, show=show)
 
     def _render_loading(self, game: LiveGame, *, show: bool = False) -> None:
@@ -834,6 +844,7 @@ class BuildCheckinController:
             declared_elsewhere=self._declared_elsewhere(game),
             show_intro=not self._intro_seen,
         )
+        model = self._with_scouting(model, game)
         if show:
             card.model = model
             self._view_call("show_loading", model)
@@ -847,6 +858,7 @@ class BuildCheckinController:
         if card is None or not card.visible:
             return
         card.visible = False
+        card.hidden_reason = reason
         card.model = None
         self._view_call("hide_loading", game.game_key, reason)
         _log.info("build_checkin_loading_hidden reason=%s", reason)
@@ -1285,6 +1297,7 @@ class BuildCheckinController:
             return True
         self._bind_game(game, game_id)
         card = self._cards.get(game.card_id) if game.card_id else None
+        self._bind_scouting_identity(game, card, game_obj)
         if self._supported is False or not self._prefs.enabled:
             return True
         if card is None:
@@ -1435,6 +1448,8 @@ class BuildCheckinController:
 
     def _new_card(self, game: LiveGame) -> PostgameCard:
         seq = next(self._card_seq)
+        pulse_id = game.opponent_pulse_id or (game.scouting.pulse_id if game.scouting is not None else None)
+        private_note = game.scouting.note if game.scouting is not None and game.scouting.pulse_id == pulse_id else ""
         card = PostgameCard(
             card_id=f"checkin-{seq}",
             seq=seq,
@@ -1446,6 +1461,8 @@ class BuildCheckinController:
             result=game.result,
             local_declared=game.declared,
             game_id=game.game_id,
+            opponent_note=private_note,
+            opponent_pulse_id=pulse_id,
         )
         game.card_id = card.card_id
         self._cards[card.card_id] = card
@@ -2149,6 +2166,8 @@ class BuildCheckinController:
         game = self._current_game()
         if game is not None and not self._loading_allowed():
             self._hide_loading(game, HIDE_DISABLED)
+        elif game is not None:
+            self._render_loading(game)
         if not self._postgame_allowed():
             card = self._visible_card()
             if card is not None:

@@ -3,6 +3,7 @@
 const { verifyToken } = require("@clerk/backend");
 const { sha256 } = require("../util/hash");
 const { updatePlaybackJob } = require("../services/replayPlaybackJobs");
+const { scoutingDeviceRoom } = require("../services/agentScouting");
 
 /** Min interval (ms) between accepted ``overlay:resync`` requests on
  * one socket. Tighter than 2 s would let a misbehaving client trigger
@@ -425,7 +426,10 @@ function attachSocketAuth(io, opts) {
     }
     if (socket.data.kind === "device") {
       const u = socket.data.userId;
-      if (u) socket.join(`user:${u}`);
+      if (u) {
+        socket.join(`user:${u}`);
+        socket.join(scoutingDeviceRoom(u));
+      }
       socket.on("map-playback:status", (payload) => {
         if (!u || !payload || typeof payload.gameId !== "string" || typeof payload.requestId !== "string") return;
         // A device can only update an existing request in its authenticated

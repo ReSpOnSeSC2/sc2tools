@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 from ..live.types import normalise_live_race
+from .scouting import ScoutingStripModel
 
 NOTES_MAX_LENGTH = 1000
 """Same cap as the API's ``sanitizeNotes``."""
@@ -656,6 +657,8 @@ class LoadingCardModel:
     intro_text: str = INTRO_TEXT
     status: str = ""
     saving: bool = False
+    scouting: Optional[ScoutingStripModel] = None
+    scouting_only: bool = False
 
 
 @dataclass(frozen=True)
@@ -758,6 +761,11 @@ class PostgameCardModel:
     intro_text: str = INTRO_TEXT
     opponent: Optional[OpponentRowModel] = None
     can_add_build: bool = False
+    opponent_note: str = ""
+    opponent_note_touched: bool = False
+    opponent_note_status: str = ""
+    opponent_note_busy: bool = False
+    opponent_pulse_id: Optional[str] = None
     """The replay is in, so **Add new build…** can open it on the web."""
     add_build_label: str = ADD_NEW_BUILD
     add_build_hint: str = ADD_NEW_BUILD_UNAVAILABLE
