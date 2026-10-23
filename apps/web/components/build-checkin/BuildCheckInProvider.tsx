@@ -27,8 +27,6 @@ import { useUserSocket } from "@/lib/useUserSocket";
 
 /** A check-in write elsewhere: refresh almost immediately. */
 const INTENT_PING_DELAY_MS = 150;
-/** Ingest pings arrive in bursts during backfills: at most one refresh per window. */
-const GAMES_PING_DELAY_MS = 1500;
 
 interface BuildCheckInContextValue {
   revision: number;
@@ -83,10 +81,10 @@ export function BuildCheckInProvider({ children }: { children: ReactNode }) {
               if (isPrefsPing(payload)) setPrefsRevision((value) => value + 1);
               schedule(INTENT_PING_DELAY_MS);
             },
-            "games:changed": () => schedule(GAMES_PING_DELAY_MS),
+            "games:changed": bump,
           }
         : null,
-    [live, schedule],
+    [live, schedule, bump],
   );
   useUserSocket(handlers);
 

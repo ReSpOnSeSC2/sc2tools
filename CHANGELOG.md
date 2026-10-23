@@ -15,6 +15,7 @@ corresponding GitHub Release.
 
 - Coaching shows your role, coach or students, with keyboard tab navigation and badges for waiting practice requests and unread session alerts.
 - Availability drafts survive tab switches and can be published or reset from the save bar. Booked session times keep their published time zone, and a failed Locker load offers a safe retry.
+- Share one authenticated realtime connection across user and admin surfaces; count newly inserted games accurately, coalesce chart refreshes during imports, and show admin connection recovery status.
 
 ### Build editor safety
 
