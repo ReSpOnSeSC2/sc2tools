@@ -58,7 +58,8 @@ export function useAdminQueryState<T extends Values>(defaults: T, options: Optio
         if (valueParsed === current.defaults[name]) params.delete(name); else params.set(name, typeof valueParsed === "boolean" ? valueParsed ? "1" : "0" : String(valueParsed));
       }
       state.params = params; state.expected = `${state.path}${params.size ? `?${params}` : ""}`;
-      state.pending.add(state.expected); state.known.add(state.expected); if (state.known.size > 16) state.known.delete(state.known.values().next().value!);
+      state.pending.add(state.expected); state.known.add(state.expected);
+      if (state.known.size > 16) { const oldest = state.known.values().next().value!; state.known.delete(oldest); state.pending.delete(oldest); }
       const history = settings.history || (changed.every(name => ["page", "before"].includes(name)) ? "push" : "replace"); current.router[history](state.expected, { scroll: false });
     };
     const immediate: Partial<QueryState<T>> = {};

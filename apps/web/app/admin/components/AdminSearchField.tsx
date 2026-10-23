@@ -13,8 +13,8 @@ export function AdminSearchField({ value, onChange, placeholder }: { value: stri
   // An acknowledgement of our last submitted value must not replace newer typing.
   // Other search changes synchronize during render, before any old timer can fire.
   if (key !== observed.current.key || value !== observed.current.value) {
-    if (value !== submitted.current && value !== observed.current.value) setDraft(value);
-    observed.current = { key, value }; submitted.current = null;
+    if (value !== observed.current.value) { if (value !== submitted.current) setDraft(value); submitted.current = null; }
+    observed.current = { key, value };
   }
   useEffect(() => {
     const history = () => { submitted.current = null; observed.current.key = "history-navigation"; setDraft(new URLSearchParams(window.location.search).get("q") || ""); };

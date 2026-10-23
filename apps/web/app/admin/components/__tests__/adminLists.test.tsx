@@ -37,7 +37,8 @@ describe("admin URLs", () => {
     act(() => vi.advanceTimersByTime(300));
     expect(router.replace).toHaveBeenCalledTimes(1); expect(result.current[0].q).toBe("playe");
     act(() => result.current[1]({ q: "stale" }));
-    act(() => navigation.visit("/admin/users?q=restored&page=2"));
+    act(() => vi.advanceTimersByTime(299));
+    act(() => { navigation.visit("/admin/users?q=restored&page=2"); vi.advanceTimersByTime(1); });
     act(() => vi.advanceTimersByTime(500));
     expect(result.current[0]).toMatchObject({ q: "restored", page: 2 }); expect(router.replace).toHaveBeenCalledTimes(1);
     act(() => result.current[1]({ q: "wrong-page" })); act(() => navigation.visit("/admin/global?q=restored&page=2"));
