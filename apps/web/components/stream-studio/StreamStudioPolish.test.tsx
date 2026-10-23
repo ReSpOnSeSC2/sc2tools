@@ -65,7 +65,7 @@ it("updates aria-current from intersections and disconnects without animated scr
   vi.spyOn(next, "getBoundingClientRect").mockReturnValue({ top: 112.125 } as DOMRect);
   act(() => callback([
     { target: prior, isIntersecting: true }, { target: next, isIntersecting: true },
-  ] as IntersectionObserverEntry[], {} as IntersectionObserver));
+  ] as unknown as IntersectionObserverEntry[], {} as IntersectionObserver));
   expect(screen.getByRole("link", { name: "Widget guide" }).getAttribute("aria-current")).toBe("true");
   view.unmount(); expect(disconnect).toHaveBeenCalled();
 });
