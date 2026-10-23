@@ -137,3 +137,17 @@ describe("createEngineWorkerHost: files", () => {
     expect(zipErrorKind("zip_too_many_entries")).toBe("too_large");
   });
 });
+
+it("waits for the latest policy before parsing, and keeps parsing with a prior policy after refresh failure", async () => {
+  const runtime = fakeRuntime(); const events: WorkerEvent[] = [];
+  let release!: () => void;
+  const refresh = vi.fn<((runtime: EngineRuntime) => Promise<void>)>().mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve; })).mockRejectedValueOnce(new Error("offline"));
+  const handle = createEngineWorkerHost({ post: event => events.push(event) }, { boot: async () => ({ runtime, info: INFO }), refreshPolicy: refresh });
+  await handle({ type: "boot", pointerUrl: POINTER_URL });
+  const first = handle(parseRequest()); await vi.waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  expect(runtime.calls).toEqual([]); release(); await first;
+  expect(runtime.calls).toHaveLength(1);
+  await handle(parseRequest({ id: 8 }));
+  expect(runtime.calls).toHaveLength(2); expect(events.filter(event => event.type === "parsed")).toHaveLength(2);
+  expect(refresh).toHaveBeenNthCalledWith(1, runtime); expect(refresh).toHaveBeenNthCalledWith(2, runtime);
+});

@@ -108,17 +108,20 @@ test("expired erasure locks remain authoritative; held owner edit excludes exclu
   const hold = new Promise((resolve) => { release = () => resolve(undefined); });
   const realSave = services.customBuilds.upsert.bind(services.customBuilds);
   const spy = jest.spyOn(services.customBuilds, "upsert").mockImplementation(async (...args) => { entered(); await hold; return realSave(...args); });
-  // Exercise the real owner-fenced service directly here. Audit middleware
-  // has its own separately tested leases; it can conservatively defer a
-  // simultaneous erasure after this operation's HTTP response has finished.
-  const saving = services.buildStudio.save("custom", privateId, { expectedRevision: 3, build: original });
+  // A fresh owner isolates this held-save lease from asynchronous audit
+  // leases belonging to earlier real HTTP saves. No production fence is
+  // removed or weakened to make the assertion pass.
+  const isolatedOwner = "studio-held-save-owner";
+  await db.users.insertOne({ userId: isolatedOwner, clerkUserId: "studio-held-save-clerk" });
+  const isolatedId = String((await db.customBuilds.insertOne({ ...original, userId: isolatedOwner, slug: "held-save", definitionRevision: 0 })).insertedId);
+  const saving = services.buildStudio.save("custom", isolatedId, { expectedRevision: 0, build: original });
   await started;
-  expect((await db.users.findOne({ userId: owner }))._dataMutations).toHaveLength(1);
+  expect((await db.users.findOne({ userId: isolatedOwner }))._dataMutations).toHaveLength(1);
   let acquired = false;
-  const exclusive = services.gdpr._acquireMutationFence(owner, "test-only").then((/** @type {any} */ fence) => { acquired = true; return fence; });
+  const exclusive = services.gdpr._acquireMutationFence(isolatedOwner, "test-only").then((/** @type {any} */ fence) => { acquired = true; return fence; });
   await new Promise((resolve) => setTimeout(resolve, 30)); expect(acquired).toBe(false);
-  release(); expect((await saving).revision).toBe(4); spy.mockRestore();
-  const fence = await exclusive; expect(acquired).toBe(true); await services.gdpr._releaseMutationFence(owner, fence);
+  release(); expect((await saving).revision).toBe(1); spy.mockRestore();
+  const fence = await exclusive; expect(acquired).toBe(true); await services.gdpr._releaseMutationFence(isolatedOwner, fence);
 });
 
 test("active preset changes are transactional/versioned, visible through the public policy, and immutable-revertable", async () => {
@@ -149,4 +152,75 @@ test("unsaved shared-runtime preview makes no policy change and rejects executab
   expect((await services.presetPolicies.current(true)).hash).toBe(before.hash);
   const invalid = { ...replacement, anyOf: [[{ ...replacement.anyOf[0][0], execute: "process.exit()" }]] };
   expect((await admin(request(app).put(`${root}/preset/${encodeURIComponent(replacement.name)}`).send({ expectedHash: before.hash, replacement: invalid }))).status).toBe(400);
+});
+
+test("real ingest re-evaluates complete stale policy evidence, preserves custom names, and never stores raw evidence on slim rows", async () => {
+  const current = await services.presetPolicies.current(true);
+  const name = replacement.name;
+  const disabled = { name, enabled: false, priority: 0, anyOf: [] };
+  const active = await services.presetPolicies.save(current.hash, [disabled]);
+  const account = await db.users.findOne({ clerkUserId: "admin-clerk" });
+  const axis = { custom: false, baseline: name, complete: true, events: shared.cases[0].events };
+  const evidence = { schemaVersion: 1, evaluatorVersion: 1, policyHash: current.hash, you: axis, opponent: { custom: false, baseline: "Zerg - 12 Pool", complete: true, events: [] } };
+  const base = { date: "2026-10-23T12:00:00.000Z", result: "Victory", myRace: "Protoss", map: "SyntheticStudioMap", durationSec: 600, myBuild: name, opponent: { race: "Zerg", strategy: "Zerg - 12 Pool" }, buildLog: [], oppBuildLog: [], presetEvidence: evidence };
+  /** @param {string} id @param {any} [overrides] */
+  const put = async (id, overrides = {}) => {
+    const response = await admin(request(app).post("/v1/games").send({ ...base, ...overrides, gameId: id }));
+    expect(response.status).toBe(202); expect(response.body.rejected).toEqual([]);
+    return db.games.findOne({ userId: account.userId, gameId: id });
+  };
+  const classified = await put("studio-policy-stale");
+  expect(classified.myBuild).toBe("Unclassified - Protoss"); expect(classified.presetEvidence).toBeUndefined();
+  const custom = await put("studio-policy-native-custom", { presetEvidence: { ...evidence, you: { ...axis, custom: true, baseline: null } } });
+  expect(custom.myBuild).toBe(name);
+  const incomplete = await put("studio-policy-incomplete", { presetEvidence: { ...evidence, you: { ...axis, complete: false } } });
+  expect(incomplete.myBuild).toBe(name);
+  const legacy = await put("studio-policy-legacy", { presetEvidence: undefined }); expect(legacy.myBuild).toBe(name);
+  const incompatible = await put("studio-policy-future", { presetEvidence: { ...evidence, evaluatorVersion: 2 } }); expect(incompatible.myBuild).toBe(name);
+  // The same write boundary keeps declared check-ins and stores the active
+  // policy's detector label separately; an upload can never overwrite intent.
+  await db.games.updateOne({ userId: account.userId, gameId: "studio-policy-stale" }, { $set: { myBuild: "Declared opener", buildIntent: { status: "confirmed", applied: true, build: { name: "Declared opener", source: "preset" }, detected: { name, slug: null } } } });
+  const checked = await put("studio-policy-stale");
+  expect(checked.myBuild).toBe("Declared opener"); expect(checked.buildIntent.detected).toEqual({ name: "Unclassified - Protoss", slug: null });
+  const invalid = await admin(request(app).post("/v1/games").send({ ...base, gameId: "studio-policy-bad", presetEvidence: { ...evidence, you: { ...axis, events: [{ name: "WarpPrism", type: "unit", time: 360, token: "forbidden" }] } } }));
+  expect(invalid.status).toBe(202); expect(invalid.body.rejected).toHaveLength(1);
+  expect(JSON.stringify(invalid.body.rejected)).toContain("additional properties");
+  expect(await db.games.findOne({ userId: account.userId, gameId: "studio-policy-bad" })).toBeNull();
+  expect((await services.presetPolicies.current()).hash).toBe(active.hash);
+  await services.customBuilds.upsert(account.userId, { ...original, slug: "cloud-winner", name: "Cloud private winner" });
+  const privateWinner = await put("studio-policy-cloud-custom", { buildLog: ["[1:40] Gateway"] });
+  expect(privateWinner.myBuild).toBe("Cloud private winner"); expect(privateWinner._customBuildSlug).toBe("cloud-winner");
+  const observed = [{ type: "building", name: "Gateway", time: 100 }];
+  const matching = { priority: 0, enabled: true, anyOf: [[{ kind: "exists", name: "Gateway", category: "building", clock: "recorded", beforeSeconds: 200 }]] };
+  await services.presetPolicies.save(active.hash, [{ ...matching, name }, { ...matching, name: "Protoss - DT Rush" }]);
+  const personal = await put("studio-policy-personal-surface", { presetEvidence: { ...evidence, you: { ...axis, events: observed } } });
+  expect(personal.myBuild).toBe(name);
+  const opposing = await put("studio-policy-opponent-surface", { myRace: "Zerg", myBuild: "Zerg - 12 Pool", opponent: { race: "Protoss", strategy: "Protoss - DT Rush" }, presetEvidence: { ...evidence, you: { ...axis, baseline: "Zerg - 12 Pool", events: [] }, opponent: { ...axis, baseline: "Unclassified - Protoss", events: observed } } });
+  expect(opposing.opponent.strategy).toBe("Protoss - DT Rush");
+  expect(opposing.opponent.strategy).not.toBe(name);
+});
+
+test("legacy definitions exceeding valid array bounds cannot be silently truncated by an admin save", async () => {
+  const tooMany = { ...original, userId: owner, slug: "legacy-oversized", steps: Array.from({ length: 201 }, (_, i) => ({ time: `0:${String(i % 60).padStart(2, "0")}`, supply: 10, action: "Gateway" })) };
+  const id = String((await db.customBuilds.insertOne(tooMany)).insertedId);
+  const detail = await admin(request(app).get(`${root}/custom/${id}`));
+  expect(detail.status).toBe(200); expect(detail.body.truncated).toBe(true); expect(detail.body.definitionCounts.steps).toBe(201); expect(detail.body.build.steps).toHaveLength(200);
+  const blocked = await admin(request(app).put(`${root}/custom/${id}`).send({ expectedRevision: 0, build: detail.body.build }));
+  expect(blocked.status).toBe(409); expect(blocked.body.error.code).toBe("legacy_definition_requires_repair");
+  expect((await db.customBuilds.findOne({ slug: "legacy-oversized" })).steps).toHaveLength(201);
+});
+
+test("owner-filtered catalog pages use bounded compound keyset indexes instead of scanning other owners", async () => {
+  await db.customBuilds.insertMany(Array.from({ length: 2000 }, (_, i) => ({ userId: `unrelated-${i}`, slug: `unrelated-${i}`, name: "Unrelated" })));
+  await db.customBuilds.insertMany(Array.from({ length: 120 }, (_, i) => ({ userId: "catalog-index-owner", slug: `indexed-${i}`, name: `Indexed ${i}` })));
+  const first = await admin(request(app).get(`${root}?scope=custom&owner=catalog-index-owner`));
+  const second = await admin(request(app).get(`${root}?scope=custom&owner=catalog-index-owner&after=${first.body.nextAfter}`));
+  const third = await admin(request(app).get(`${root}?scope=custom&owner=catalog-index-owner&after=${second.body.nextAfter}`));
+  expect([first.body.items.length, second.body.items.length, third.body.items.length]).toEqual([50, 50, 20]);
+  expect(third.body.nextAfter).toBeNull();
+  const explained = await db.customBuilds.find({ userId: "catalog-index-owner", deletedAt: { $exists: false } }).sort({ _id: 1 }).limit(51).explain("executionStats");
+  expect(JSON.stringify(explained.queryPlanner.winningPlan)).toContain("admin_custom_build_catalog");
+  expect(explained.executionStats.totalKeysExamined).toBeLessThanOrEqual(51);
+  expect(explained.executionStats.totalDocsExamined).toBeLessThanOrEqual(51);
+  expect((await db.communityBuilds.indexes()).some((/** @type {any} */ index) => index.name === "admin_community_build_catalog")).toBe(true);
 });

@@ -17,16 +17,17 @@ class AdminBuildStudioService {
     if (scope === "preset") {
       const policy = await this.policies.current();
       const rows = catalog.definitions.filter((entry) => !options.after || entry.name > options.after).slice(0, 51);
-      return { items: rows.slice(0, 50).map((entry) => ({ id: entry.name, name: entry.name, race: entry.race, scope, owner: null, source: catalog.source, mode: "procedural", replaced: policy.entries.some((/** @type {any} */ candidate) => candidate.name === entry.name) })), nextAfter: rows.length > 50 ? rows[49].name : null };
+      return { items: rows.slice(0, 50).map((entry) => ({ id: entry.name, name: entry.name, race: entry.race, scope, owner: null, source: catalog.source, mode: entry.implementation, surfaces: entry.surfaces, replaced: policy.entries.some((/** @type {any} */ candidate) => candidate.name === entry.name) })), nextAfter: rows.length > 50 ? rows[49].name : null };
     }
     const collection = this.collection(scope);
     const filter = { ...(scope === "custom" ? { deletedAt: { $exists: false } } : {}), ...(options.after ? { _id: { $gt: objectId(options.after) } } : {}), ...(options.owner ? { [scope === "custom" ? "userId" : "ownerUserId"]: options.owner } : {}) };
     const content = scope === "custom" ? "$$ROOT" : "$build";
     const rows = await collection.aggregate([{ $match: filter }, { $sort: { _id: 1 } }, { $limit: 51 }, { $project: {
       _id: 1, slug: bounded("$slug", 80), owner: bounded(scope === "custom" ? "$userId" : "$ownerUserId", 200), sourceSlug: bounded("$sourceSlug", 80), removed: { $eq: ["$removed", true] },
-      build: publicBuildMongoExpression(content), updatedAt: 1,
+      // Catalog rows never hydrate rule/step arrays just to show their name.
+      build: { name: bounded(`${content}.name`, 120), race: bounded(`${content}.race`, 16), hasSteps: { $cond: [{ $isArray: `${content}.steps` }, { $gt: [{ $size: `${content}.steps` }, 0] }, false] } }, updatedAt: 1,
     } }]).toArray();
-    return { items: rows.slice(0, 50).map((row) => ({ id: String(row._id), scope, owner: row.owner, sourceSlug: row.sourceSlug, slug: row.slug, name: row.build.name || row.slug, race: row.build.race || null, removed: row.removed, mode: row.build.steps?.length ? "steps" : "rule-only", updatedAt: row.updatedAt })), nextAfter: rows.length > 50 ? String(rows[49]._id) : null };
+    return { items: rows.slice(0, 50).map((row) => ({ id: String(row._id), scope, owner: row.owner, sourceSlug: row.sourceSlug, slug: row.slug, name: row.build.name || row.slug, race: row.build.race || null, removed: row.removed, mode: row.build.hasSteps ? "steps" : "rule-only", updatedAt: row.updatedAt })), nextAfter: rows.length > 50 ? String(rows[49]._id) : null };
   }
 
   /** @param {string} scope @param {string} id @returns {Promise<Record<string,any>>} */
@@ -36,17 +37,19 @@ class AdminBuildStudioService {
       if (!released) throw problem(404, "build_definition_not_found");
       const policy = await this.policies.current(true);
       const replacement = policy.entries.find((/** @type {any} */ entry) => entry.name === id) || null;
-      return { id, scope, owner: null, released, source: catalog.source, mode: replacement?.steps?.length ? "steps" : "rule-only", replacement, expectedHash: policy.hash, policyRevision: policy.revision, evaluatorVersion: policy.evaluatorVersion, schemaVersion: policy.schemaVersion };
+      return { id, scope, owner: null, released, source: catalog.source, mode: replacement?.steps?.length ? "steps" : "rule-only", replacement, expectedHash: policy.hash, policyRevision: policy.revision, evaluatorVersion: policy.evaluatorVersion, schemaVersion: policy.schemaVersion, releaseHash: catalog.releaseHash, runtime: { protocol: "preset-policy-v1", cacheSeconds: 60, eventCapPerAxis: 5000, legacy: "released client labels retained; update/reanalyse to use active policy", existingGames: "unchanged until reanalysed" } };
     }
     const content = scope === "custom" ? "$$ROOT" : "$build";
     const row = await this.collection(scope).aggregate([{ $match: { _id: objectId(id), ...(scope === "custom" ? { deletedAt: { $exists: false } } : {}) } }, { $limit: 1 }, { $project: {
       _id: 0, slug: bounded("$slug", 80), owner: bounded(scope === "custom" ? "$userId" : "$ownerUserId", 200), sourceSlug: bounded("$sourceSlug", 80), title: bounded("$title", 120), description: bounded("$description", 4000),
-      removed: { $eq: ["$removed", true] }, build: publicBuildMongoExpression(content),
+      removed: { $eq: ["$removed", true] }, build: publicBuildMongoExpression(content), definitionCounts: definitionCounts(content),
       revision: { $ifNull: [scope === "custom" ? "$definitionRevision" : "$publicationSequence", 0] }, updatedAt: 1,
       history: { $map: { input: { $slice: [{ $cond: [{ $isArray: "$_definitionHistory" }, "$_definitionHistory", []] }, -10] }, as: "revision", in: { revision: "$$revision.revision", savedAt: "$$revision.savedAt", build: publicBuildMongoExpression("$$revision.build") } } },
     } }]).next();
     if (!row) throw problem(404, "build_definition_not_found");
-    return { id, scope, ...row, build: publicBuildSnapshot(row.build), history: row.history.map((/** @type {any} */ revision) => ({ ...revision, build: publicBuildSnapshot(revision.build) })), mode: row.build.steps?.length ? "steps" : "rule-only" };
+    const clean = publicBuildSnapshot(row.build);
+    const truncated = Object.entries(row.definitionCounts || {}).some(([field, count]) => count !== (Array.isArray(clean[field]) ? clean[field].length : 0));
+    return { id, scope, ...row, truncated, name: row.build.name || row.slug, build: clean, history: row.history.map((/** @type {any} */ revision) => ({ ...revision, build: publicBuildSnapshot(revision.build) })), mode: row.build.steps?.length ? "steps" : "rule-only" };
   }
 
   /** @param {string} scope @param {string} id @param {any} input */
@@ -68,6 +71,7 @@ class AdminBuildStudioService {
     if (!input || Object.keys(input).some((key) => !["expectedRevision", "build", "title", "description", "reclassify"].includes(key)) || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0 || input.reclassify !== undefined && typeof input.reclassify !== "boolean") throw problem(400, "invalid_build_definition");
     const current = await this.detail(scope, id);
     if (!current.owner) throw problem(409, "build_owner_unavailable");
+    if (current.truncated) throw problem(409, "legacy_definition_requires_repair");
     const build = editableBuild(input.build, current.slug);
     const lease = await claimUserDataLease(this.db.users, current.owner);
     try {
@@ -107,7 +111,7 @@ class AdminBuildStudioService {
     const policy = validatePolicy({ schemaVersion: 1, evaluatorVersion: 1, revision: 0, entries: [replacement] }, false);
     const [race, partner] = presetScope(name);
     if (baseline !== undefined && (typeof baseline !== "string" || baseline.length > 200 || baseline !== `Unclassified - ${race}` && !catalog.definitions.some((entry) => entry.name === baseline))) throw problem(400, "invalid_policy_preview_baseline");
-    return { label: applyPolicy(policy, baseline || name, race || "Unknown", partner, events), hash: policy.hash, evaluatorVersion: policy.evaluatorVersion };
+    return { label: applyPolicy(policy, baseline || name, race || "Unknown", partner, events, undefined, /** @type {"you"|"opponent"} */ (catalog.definitions.find((entry) => entry.name === name)?.surfaces[0])), hash: policy.hash, evaluatorVersion: policy.evaluatorVersion };
   }
   /** @param {string} scope */
   collection(scope) {
@@ -115,6 +119,12 @@ class AdminBuildStudioService {
     if (scope === "community") return this.db.communityBuilds;
     throw problem(400, "invalid_build_scope");
   }
+}
+/** Legacy documents exceeding valid definition bounds must never be silently
+ * truncated by an edit. Scalars/unknown private children remain excluded.
+ * @param {string} path */
+function definitionCounts(path) {
+  return Object.fromEntries(["signature", "rules", "steps", "winConditions", "losesTo", "transitionsInto"].map(field => [field, { $size: { $cond: [{ $isArray: `${path}.${field}` }, `${path}.${field}`, []] } }]));
 }
 /** @param {any} input @param {string} slug */
 function editableBuild(input, slug) {

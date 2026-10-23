@@ -43,7 +43,7 @@ const CORE_MODULES = [
   "sc2_observation_export", "sc2_replay_parser", "strategy_detector", "strategy_detector_base",
   "strategy_detector_helpers", "strategy_detector_matchups", "strategy_detector_opponent",
   "strategy_detector_pvp", "strategy_detector_pvt", "strategy_detector_pvz", "strategy_detector_race",
-  "strategy_detector_user", "preset_policy", "timebase",
+  "strategy_detector_user", "preset_policy", "preset_defaults", "timebase",
 ];
 
 /** Every shipped repo file, repo-relative with `/` separators. */

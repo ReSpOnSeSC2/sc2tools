@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- Admin Build Studio lists and versions all preset, private custom and community definitions. Preset replacements use one validated policy across compatible server, desktop and browser engines, with explicit completion clocks, custom-rule precedence, reviewed restores and offline fallback.
+
 ### Build detection
 
 - Both PvZ Archon Drop labels require a real Warp Prism completed by 6:00 and observed Archons. Ordinary or late Templar transitions keep their opener label instead of being counted as drops.

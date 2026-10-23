@@ -1121,6 +1121,444 @@
       ],
       "expected": "Unclassified - Protoss",
       "name": "disabled procedural label requires no fabricated conditions"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "exists",
+                  "name": "TemplarArchive",
+                  "category": "building",
+                  "clock": "recorded",
+                  "beforeSeconds": 540
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Archon Drop",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "name": "TemplarArchive",
+          "type": "building",
+          "time": 530,
+          "subtype": "born"
+        }
+      ],
+      "expected": "PvZ - Archon Drop",
+      "name": "recorded building presence accepts born-only observation"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "first",
+                  "names": [
+                    "Stargate",
+                    "TwilightCouncil"
+                  ],
+                  "category": "building",
+                  "clock": "recorded"
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Archon Drop",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "name": "Stargate",
+          "type": "building",
+          "time": 100
+        },
+        {
+          "name": "TwilightCouncil",
+          "type": "building",
+          "time": 100
+        }
+      ],
+      "expected": "Unclassified - Protoss",
+      "name": "strict first tech does not accept tied observations"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "first",
+                  "names": [
+                    "Stargate",
+                    "TwilightCouncil"
+                  ],
+                  "category": "building",
+                  "clock": "recorded",
+                  "allowTies": true
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Archon Drop",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "name": "Stargate",
+          "type": "building",
+          "time": 100
+        },
+        {
+          "name": "TwilightCouncil",
+          "type": "building",
+          "time": 100
+        }
+      ],
+      "expected": "PvZ - Archon Drop",
+      "name": "explicit co-first tech accepts tied observations"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "priority": 10,
+            "enabled": true,
+            "anyOf": [
+              [
+                {
+                  "kind": "count",
+                  "name": "Gateway",
+                  "category": "building",
+                  "clock": "start",
+                  "beforeSeconds": 300,
+                  "min": 2
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "PvZ - Archon Drop",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "name": "Gateway",
+          "type": "building",
+          "time": 80,
+          "subtype": "init"
+        },
+        {
+          "name": "Gateway",
+          "type": "building",
+          "time": 120,
+          "subtype": "born"
+        }
+      ],
+      "expected": "Unclassified - Protoss",
+      "name": "building start count excludes born duplicate"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "PvZ - Archon Drop",
+            "enabled": true,
+            "priority": 0,
+            "anyOf": [
+              [
+                {
+                  "kind": "exists",
+                  "name": "Gateway",
+                  "category": "building",
+                  "clock": "recorded",
+                  "beforeSeconds": 200
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "Unclassified - Protoss",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "name": "Gateway",
+          "type": "building",
+          "time": 100
+        }
+      ],
+      "expected": "Unclassified - Protoss",
+      "name": "personal PvZ policy cannot label opponent Protoss",
+      "surface": "opponent"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "Protoss - DT Rush",
+            "enabled": true,
+            "priority": 0,
+            "anyOf": [
+              [
+                {
+                  "kind": "exists",
+                  "name": "Gateway",
+                  "category": "building",
+                  "clock": "recorded",
+                  "beforeSeconds": 200
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "Unclassified - Protoss",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "name": "Gateway",
+          "type": "building",
+          "time": 100
+        }
+      ],
+      "expected": "Unclassified - Protoss",
+      "name": "generic opponent Protoss policy cannot label own PvZ",
+      "surface": "you"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "Protoss - DT Rush",
+            "enabled": true,
+            "priority": 0,
+            "anyOf": [
+              [
+                {
+                  "kind": "exists",
+                  "name": "Gateway",
+                  "category": "building",
+                  "clock": "recorded",
+                  "beforeSeconds": 200
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "Unclassified - Protoss",
+      "race": "Protoss",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "name": "Gateway",
+          "type": "building",
+          "time": 100
+        }
+      ],
+      "expected": "Protoss - DT Rush",
+      "name": "generic opponent Protoss policy remains eligible",
+      "surface": "opponent"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "Terran - Fast 3 CC",
+            "enabled": true,
+            "priority": 0,
+            "anyOf": [
+              [
+                {
+                  "kind": "exists",
+                  "name": "Barracks",
+                  "category": "building",
+                  "clock": "recorded",
+                  "beforeSeconds": 200
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "Unclassified - Terran",
+      "race": "Terran",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "name": "Barracks",
+          "type": "building",
+          "time": 100
+        }
+      ],
+      "expected": "Terran - Fast 3 CC",
+      "name": "Terran matchup taxonomy remains shared own",
+      "surface": "you"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "Terran - Fast 3 CC",
+            "enabled": true,
+            "priority": 0,
+            "anyOf": [
+              [
+                {
+                  "kind": "exists",
+                  "name": "Barracks",
+                  "category": "building",
+                  "clock": "recorded",
+                  "beforeSeconds": 200
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "Unclassified - Terran",
+      "race": "Terran",
+      "opponentRace": "Zerg",
+      "events": [
+        {
+          "name": "Barracks",
+          "type": "building",
+          "time": 100
+        }
+      ],
+      "expected": "Terran - Fast 3 CC",
+      "name": "Terran matchup taxonomy remains shared opponent",
+      "surface": "opponent"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "Zerg - 12 Pool",
+            "enabled": true,
+            "priority": 0,
+            "anyOf": [
+              [
+                {
+                  "kind": "exists",
+                  "name": "SpawningPool",
+                  "category": "building",
+                  "clock": "recorded",
+                  "beforeSeconds": 200
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "Unclassified - Zerg",
+      "race": "Zerg",
+      "opponentRace": "Protoss",
+      "events": [
+        {
+          "name": "SpawningPool",
+          "type": "building",
+          "time": 100
+        }
+      ],
+      "expected": "Zerg - 12 Pool",
+      "name": "Zerg matchup taxonomy remains shared own",
+      "surface": "you"
+    },
+    {
+      "policy": {
+        "schemaVersion": 1,
+        "evaluatorVersion": 1,
+        "revision": 1,
+        "entries": [
+          {
+            "name": "Zerg - 12 Pool",
+            "enabled": true,
+            "priority": 0,
+            "anyOf": [
+              [
+                {
+                  "kind": "exists",
+                  "name": "SpawningPool",
+                  "category": "building",
+                  "clock": "recorded",
+                  "beforeSeconds": 200
+                }
+              ]
+            ]
+          }
+        ]
+      },
+      "baseline": "Unclassified - Zerg",
+      "race": "Zerg",
+      "opponentRace": "Protoss",
+      "events": [
+        {
+          "name": "SpawningPool",
+          "type": "building",
+          "time": 100
+        }
+      ],
+      "expected": "Zerg - 12 Pool",
+      "name": "Zerg matchup taxonomy remains shared opponent",
+      "surface": "opponent"
     }
   ]
 }

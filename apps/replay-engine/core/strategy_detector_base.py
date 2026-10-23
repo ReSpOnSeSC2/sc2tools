@@ -39,6 +39,8 @@ class BaseStrategyDetector:
 
     def __init__(self, custom_builds: List[Dict], preset_policy=None):
         self.custom_builds = custom_builds or []
+        self.custom_match = False
+        self.released_label = None
         # Each parse owns one immutable policy snapshot. A concurrent policy
         # refresh cannot mix versions across the two sides of this detector.
         from .preset_policy import policy_snapshot, validate_policy

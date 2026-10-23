@@ -2,10 +2,14 @@
 
 const { createHash } = require("crypto");
 const { toStartSeconds } = require("./buildDurations");
-const { UNIT_TECH_PREREQUISITES } = require("./buildRulesEvaluator");
-const { isProxyEligibleBuilding } = require("./knownBuildings");
 const catalog = require("../config/presetCatalog.json");
+/** @type {Record<string,string[][]>} */
+const UNIT_TECH_PREREQUISITES = catalog.unitTechPrerequisites;
+const SURFACES = new Map(catalog.definitions.map((entry) => [entry.name, entry.surfaces]));
 const NAMES = new Set(catalog.definitions.map((entry) => entry.name));
+const PROXY_BUILDINGS = new Set(catalog.proxyEligibleBuildings);
+/** @param {string} name */
+function isProxyEligibleBuilding(name) { return PROXY_BUILDINGS.has(name); }
 const SCHEMA_VERSION = 1;
 const EVALUATOR_VERSION = 1;
 
@@ -36,20 +40,23 @@ function text(value, max, min = 0) {
 function identifier(value) { if (typeof value !== "string" || !/^[A-Za-z][A-Za-z0-9]{0,79}$/.test(value)) invalid("invalid_policy_entity"); }
 /** @param {any} rule */
 function validateCondition(rule) {
-  if (rule?.kind === "count") {
+  if (rule?.kind === "count" || rule?.kind === "exists") {
     keys(rule, ["kind", "name", "category", "clock", "beforeSeconds"], ["min", "max", "proxy"]);
     identifier(rule.name); integer(rule.beforeSeconds);
-    if (!Object.hasOwn(rule, "min") && !Object.hasOwn(rule, "max")) invalid("missing_policy_count");
+    if (rule.kind === "exists" && (Object.hasOwn(rule, "min") || Object.hasOwn(rule, "max"))) invalid("invalid_policy_count");
+    if (rule.kind === "count" && !Object.hasOwn(rule, "min") && !Object.hasOwn(rule, "max")) invalid("missing_policy_count");
     for (const key of ["min", "max"]) if (Object.hasOwn(rule, key)) integer(rule[key], 1000);
     if ((rule.min ?? 0) > (rule.max ?? 1000)) invalid("invalid_policy_count");
     if (Object.hasOwn(rule, "proxy") && (rule.proxy !== true || rule.category !== "building" || !isProxyEligibleBuilding(rule.name))) invalid("invalid_policy_proxy");
   } else if (rule?.kind === "order" || rule?.kind === "first") {
-    keys(rule, ["kind", "names", "category", "clock"]);
+    keys(rule, ["kind", "names", "category", "clock"], rule.kind === "first" ? ["allowTies"] : []);
+    if (Object.hasOwn(rule, "allowTies") && typeof rule.allowTies !== "boolean") invalid("invalid_policy_order");
     if (!Array.isArray(rule.names) || rule.names.length < 2 || rule.names.length > 8 || new Set(rule.names).size !== rule.names.length) invalid("invalid_policy_order");
     rule.names.forEach(identifier);
   } else invalid("unknown_policy_condition");
-  if (!["building", "unit", "upgrade"].includes(rule.category) || !["start", "completion"].includes(rule.clock)) invalid("invalid_policy_clock");
+  if (!["building", "unit", "upgrade"].includes(rule.category) || !["start", "completion", "recorded"].includes(rule.clock)) invalid("invalid_policy_clock");
   if (rule.clock === "completion" && rule.category === "building") invalid("building_completion_unavailable");
+  if (rule.kind === "count" && rule.category === "building" && rule.clock === "recorded") invalid("building_recorded_count_ambiguous");
 }
 /** @param {any} value @param {boolean} [verifyHash] @returns {any} */
 function validatePolicy(value, verifyHash = true) {
@@ -69,7 +76,7 @@ function validatePolicy(value, verifyHash = true) {
       for (const step of entry.steps) {
         keys(step, ["timeSeconds", "action"], ["supply"]);
         integer(step.timeSeconds); text(step.action, 280, 1);
-        if (Object.hasOwn(step, "supply")) integer(step.supply, 1000);
+        if (Object.hasOwn(step, "supply")) integer(step.supply, 200);
       }
     }
     if (entry.mode !== undefined && !["replacement", "released"].includes(entry.mode)) invalid("invalid_policy_mode");
@@ -96,13 +103,12 @@ function prepare(events, game) {
   /** @type {Map<string,number>} */ const earliest = new Map();
   for (const event of buildings) {
     if (!Number.isFinite(event.time) || event.time < 0) continue;
-    const started = toStartSeconds(event.name, event.time, { isBuilding: true, game });
+    const started = event.time;
     earliest.set(event.name, Math.min(earliest.get(event.name) ?? Infinity, started));
   }
   for (const event of events) {
     if (!event || typeof event.name !== "string" || !Number.isFinite(event.time) || event.time < 0) continue;
     const category = event.is_building === true ? "building" : event.type === "worker" ? "unit" : event.type || event.category;
-    if (category === "building" && event.subtype && !["init", "morph"].includes(event.subtype) && !(event.time === 0 && ["Nexus", "CommandCenter", "Hatchery"].includes(event.name))) continue;
     if (category === "unit") {
       if (event.hallucinated === true) continue;
       const prereqs = UNIT_TECH_PREREQUISITES[event.name];
@@ -119,6 +125,7 @@ function prepare(events, game) {
     if (!cache.has(key)) {
       const moments = [];
       for (const event of index.get(`${rule.category}:${name}`) || []) {
+        if (rule.category === "building" && rule.clock === "start" && event.subtype !== undefined && !["init", "morph"].includes(event.subtype) && !(event.time === 0 && ["Nexus", "CommandCenter", "Hatchery"].includes(name))) continue;
         if (rule.proxy) {
           let proxy = event.is_proxy;
           if (typeof proxy !== "boolean") {
@@ -128,7 +135,7 @@ function prepare(events, game) {
           }
           if (!isProxyEligibleBuilding(name) || !proxy) continue;
         }
-        moments.push(rule.clock === "completion" ? event.time : toStartSeconds(name, event.time, { isBuilding: rule.category === "building", category: rule.category, game }));
+        moments.push(rule.clock === "start" ? toStartSeconds(name, event.time, { isBuilding: rule.category === "building", category: rule.category, game }) : event.time);
       }
       cache.set(key, moments);
     }
@@ -138,16 +145,16 @@ function prepare(events, game) {
 /** @param {any[]} conditions @param {ReturnType<typeof prepare>} times */
 function evaluateConditions(conditions, times) {
   for (const rule of conditions) {
-    if (rule.kind === "count") {
+    if (rule.kind === "count" || rule.kind === "exists") {
       const moments = times(rule, rule.name); if (moments === null) return false;
       const got = moments.filter((time) => time <= rule.beforeSeconds).length;
-      if (got < (rule.min ?? 0) || got > (rule.max ?? Infinity)) return false;
+      if (got < (rule.min ?? (rule.kind === "exists" ? 1 : 0)) || got > (rule.max ?? Infinity)) return false;
     } else {
       const moments = rule.names.map((/** @type {string} */ name) => times(rule, name));
       if (moments.some((/** @type {number[]|null} */ values) => values === null)) return false;
       const earliest = moments.map((/** @type {number[]} */ values) => Math.min(...values));
       if (rule.kind === "first") {
-        if (!Number.isFinite(earliest[0]) || earliest.slice(1).some((/** @type {number} */ value) => earliest[0] > value)) return false;
+        if (!Number.isFinite(earliest[0]) || earliest.slice(1).some((/** @type {number} */ value) => rule.allowTies ? earliest[0] > value : earliest[0] >= value)) return false;
       } else if (earliest.some((/** @type {number} */ value) => !Number.isFinite(value)) || earliest.slice(1).some((/** @type {number} */ value, /** @type {number} */ i) => earliest[i] >= value)) return false;
     }
   }
@@ -162,16 +169,17 @@ function presetScope(name) {
   return [prefix, null];
 }
 /** Call after private custom-rule precedence, using the detector label (never a check-in's display label).
- * @param {any} policy @param {string} baseline @param {string} race @param {string|null} opponentRace @param {any[]} events @param {any} [game] */
-function applyPolicy(policy, baseline, race, opponentRace, events, game) {
+ * @param {any} policy @param {string} baseline @param {string} race @param {string|null} opponentRace @param {any[]} events @param {any} [game] @param {"you"|"opponent"} [surface] */
+function applyPolicy(policy, baseline, race, opponentRace, events, game, surface = "you") {
   const times = prepare(events, game);
-  const entries = [...policy.entries].sort((a, b) => a.priority - b.priority || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  if (!["you", "opponent"].includes(surface)) invalid("invalid_policy_surface");
+  const entries = policy.entries.filter((/** @type {any} */ entry) => SURFACES.get(entry.name)?.includes(surface)).sort((/** @type {any} */ a, /** @type {any} */ b) => a.priority - b.priority || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   for (const entry of entries) {
     const [holder, partner] = presetScope(entry.name);
     if (holder !== race || partner !== null && partner !== opponentRace || !entry.enabled || entry.mode === "released") continue;
     if (entry.anyOf.some((/** @type {any[]} */ group) => evaluateConditions(group, times))) return entry.name;
   }
-  return entries.some((entry) => entry.name === baseline && entry.mode !== "released") ? `Unclassified - ${race}` : baseline;
+  return entries.some((/** @type {any} */ entry) => entry.name === baseline && entry.mode !== "released") ? `Unclassified - ${race}` : baseline;
 }
 const BUNDLED_POLICY = validatePolicy({ schemaVersion: 1, evaluatorVersion: 1, revision: 0, entries: [] }, false);
 module.exports = { SCHEMA_VERSION, EVALUATOR_VERSION, BUNDLED_POLICY, catalog, policyHash, validatePolicy, applyPolicy, evaluateConditions, prepare, presetScope };

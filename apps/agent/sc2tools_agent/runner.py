@@ -502,7 +502,7 @@ def _run_headless(
                       on_check=lambda release: _announce_updated_version(cfg,state,recovery_cell,release))
     recovery_cell.updater = updater
     heartbeat = Heartbeat(api, on_success=recovery.connected,
-                          on_failure=recovery.watchdog.failure)
+                          on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir)
     recovery_cell.watcher = watcher
     recovery_cell.heartbeat = heartbeat
     recovery_cell.import_ctl = import_ctl
@@ -1003,7 +1003,7 @@ def _gui_boot_worker(
         updater = Updater(cfg=cfg,state=state,on_update_available=cell.update_scheduler.offer,
                           on_check=lambda release: _announce_updated_version(cfg,state,cell,release))
         heartbeat = Heartbeat(api, on_success=recovery.connected,
-                              on_failure=recovery.watchdog.failure)
+                              on_failure=recovery.watchdog.failure, state_dir=cfg.state_dir)
 
         cell.upload = upload
         cell.watcher = watcher

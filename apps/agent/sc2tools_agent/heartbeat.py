@@ -17,6 +17,7 @@ import socket
 import threading
 import time
 from typing import Optional, Callable
+from pathlib import Path
 
 from . import __version__
 from .api_client import ApiClient
@@ -53,10 +54,16 @@ class Heartbeat:
         interval_sec: float = DEFAULT_INTERVAL_SEC,
         on_success: Optional[Callable[[], None]] = None,
         on_failure: Optional[Callable[[Exception], None]] = None,
+        state_dir: Optional[Path] = None,
     ) -> None:
         self._on_success = on_success or (lambda: None)
         self._on_failure = on_failure or (lambda _exc: None)
         self._api = api
+        if state_dir is not None:
+            from .preset_policy import PresetPolicyRefresh
+            self._preset_policy = PresetPolicyRefresh(api, state_dir)
+        else:
+            self._preset_policy = None
         self._interval = interval_sec
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -109,3 +116,6 @@ class Heartbeat:
         except Exception as exc:  # noqa: BLE001
             self._on_failure(exc)
             self._log.debug("heartbeat_attempt_failed: %s", exc)
+            return
+        if self._preset_policy is not None:
+            self._preset_policy.refresh()

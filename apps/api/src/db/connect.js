@@ -471,6 +471,7 @@ async function ensureIndexes(ctx, opts = {}) {
 
   await ctx.customBuilds.createIndex({ userId: 1, slug: 1 }, { unique: true });
   await ctx.customBuilds.createIndex({ userId: 1, updatedAt: -1 });
+  await ctx.customBuilds.createIndex({ userId: 1, _id: 1 }, { name: "admin_custom_build_catalog" });
   await ctx.customBuildJobs.createIndex({ userId: 1 }, { unique: true });
   await ctx.customBuildJobs.createIndex({ status: 1, leaseUntil: 1 });
 
@@ -613,6 +614,7 @@ async function ensureIndexes(ctx, opts = {}) {
   // dedupe + the publish/unpublish toggle.
   await ctx.communityBuilds.createIndex({ slug: 1 }, { unique: true });
   await ctx.communityBuilds.createIndex({ ownerUserId: 1, slug: 1 });
+  await ctx.communityBuilds.createIndex({ ownerUserId: 1, _id: 1 }, { name: "admin_community_build_catalog" });
   await ctx.communityBuilds.createIndex({ removed: 1, votes: -1 });
   await ctx.communityBuilds.createIndex({ matchup: 1, removed: 1, votes: -1 });
   await ctx.communityBuilds.createIndex({ removed: 1, "build.race": 1, "build.vsRace": 1, votes: -1 });

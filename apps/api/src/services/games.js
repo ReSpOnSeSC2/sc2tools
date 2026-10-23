@@ -267,6 +267,8 @@ class GamesService {
     if (Number.isNaN(date.getTime())) throw new Error("invalid game.date");
     /** @type {Record<string, any>} */
     const doc = { ...game, userId, date };
+    // Raw policy evidence is evaluated by ingest only, never a slim-row field.
+    delete doc.presetEvidence;
     delete doc._id;
     delete doc._schemaVersion;
     // Reclassification staging is server-owned and invalidated by any fresh

@@ -621,7 +621,9 @@ function makeServices(deps, clerk) {
     gameDetails,
     users: deps.db.users,
   });
+  const presetPolicies = new PresetPoliciesService(deps.db);
   const customBuilds = new CustomBuildsService(deps.db, {
+    presetPolicies,
     perGame,
     logger: deps.logger,
     onReclassified: (userId, result) => {
@@ -632,7 +634,6 @@ function makeServices(deps, clerk) {
       }
     },
   });
-  const presetPolicies = new PresetPoliciesService(deps.db);
   const buildStudio = new AdminBuildStudioService(deps.db, { customBuilds, policies: presetPolicies });
   // Opponent-log recomputes replace data consumed by opponent-perspective
   // custom rules. Coalesce a fresh all-build pass after the detail write so a

@@ -42,6 +42,7 @@ export interface BootedRuntime {
 export interface EngineHostDeps {
   boot(pointerUrl: string): Promise<BootedRuntime>;
   now?: () => number;
+  refreshPolicy?: (runtime: EngineRuntime) => Promise<void>;
 }
 
 type FileRequest = PlayersRequest | ParseWorkerRequest | UnzipRequest;
@@ -177,6 +178,8 @@ class EngineWorkerHost {
     const base = { phase: request.type, index: request.index, total: request.total, fileName: request.fileName };
     const started = this.now();
     this.progress(base);
+    // Refresh is advisory: the runtime retains its last validated policy.
+    if (request.type === "parse") await this.deps.refreshPolicy?.(booted.runtime).catch(() => undefined);
     const result = runSafely(booted.runtime, request, started, this.now);
     const done: EngineProgress = { ...base, ms: this.elapsed(started), ok: result.ok };
     if (result.errorKind) done.errorKind = result.errorKind;

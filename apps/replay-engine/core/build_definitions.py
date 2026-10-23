@@ -578,3 +578,15 @@ def get_active_build_definitions() -> Dict[str, Dict[str, object]]:
             continue
         merged[build_id] = _v2_to_signature_entry(winner)
     return merged
+
+
+# Detection surfaces reflect the actual released dispatch: personal Protoss
+# uses PvX trees, opponent Protoss uses the generic race tree. Terran/Zerg
+# share their generic and matchup trees on both axes. Never infer this from
+# an uploaded baseline label (which may be Unclassified).
+PRESET_SURFACES = {
+    name: (["you"] if name.startswith(("PvP - ", "PvT - ", "PvZ - "))
+           else ["opponent"] if name.startswith("Protoss - ")
+           else ["you", "opponent"])
+    for name in BUILD_DEFINITIONS
+}

@@ -7,7 +7,7 @@ const { validatePolicy, policyHash, applyPolicy, BUNDLED_POLICY } = require("../
 describe("active preset policy shared runtime contract", () => {
   test.each(fixture.cases)("$name", (row) => {
     const policy = validatePolicy(row.policy, false);
-    const actual = applyPolicy(policy, row.baseline, row.race, row.opponentRace, row.events, row.eightWorker ? { gameVersion: "5.0.16.97425" } : null);
+    const actual = applyPolicy(policy, row.baseline, row.race, row.opponentRace, row.events, row.eightWorker ? { gameVersion: "5.0.16.97425" } : null, /** @type {"you"|"opponent"} */ (row.surface || "you"));
     expect(actual).toBe(row.expected);
   });
 
@@ -18,13 +18,13 @@ sys.path.insert(0,sys.argv[1])
 from core.preset_policy import validate_policy,apply_policy
 from core.strategy_detector import UserBuildDetector
 rows=json.load(sys.stdin)
-print(json.dumps([dict(hash=(p:=validate_policy(r['policy'],verify_hash=False))['hash'],result=apply_policy(p,r['baseline'],r['race'],r['opponentRace'],r['events'],UserBuildDetector([]),r.get('eightWorker',False))) for r in rows]))
+print(json.dumps([dict(hash=(p:=validate_policy(r['policy'],verify_hash=False))['hash'],result=apply_policy(p,r['baseline'],r['race'],r['opponentRace'],r['events'],UserBuildDetector([]),r.get('eightWorker',False),r.get('surface','you'))) for r in rows]))
 `, path.resolve(__dirname, "../../replay-engine")], { input: JSON.stringify(fixture.cases), encoding: "utf8", env: { ...process.env, PYTHONIOENCODING: "utf-8" }, timeout: 15000 });
     expect(run.status).toBe(0);
     expect(run.stderr).toBe("");
     expect(JSON.parse(run.stdout)).toEqual(fixture.cases.map((row) => ({
       hash: validatePolicy(row.policy, false).hash,
-      result: applyPolicy(validatePolicy(row.policy, false), row.baseline, row.race, row.opponentRace, row.events, row.eightWorker ? { gameVersion: "5.0.16.97425" } : null),
+      result: applyPolicy(validatePolicy(row.policy, false), row.baseline, row.race, row.opponentRace, row.events, row.eightWorker ? { gameVersion: "5.0.16.97425" } : null, /** @type {"you"|"opponent"} */ (row.surface || "you")),
     })));
   });
 

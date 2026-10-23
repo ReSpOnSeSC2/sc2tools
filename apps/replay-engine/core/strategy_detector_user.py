@@ -37,6 +37,8 @@ class UserBuildDetector(BaseStrategyDetector):
         game_length_seconds: float = None,
         eight_worker: bool = False,
     ) -> str:
+        self.custom_match = False
+        self.released_label = None
         # ``eight_worker`` (the replay was played on the 8-worker patch
         # 5.0.16) only picks the build durations custom v3 rules rewind
         # by; see BaseStrategyDetector.check_custom_rules.
@@ -89,9 +91,11 @@ class UserBuildDetector(BaseStrategyDetector):
                 rules, buildings, units, upgrades, main_loc,
                 eight_worker=eight_worker,
             ):
+                self.custom_match = True
                 return cb["name"]
 
         def finish(label):
+            self.released_label = label
             return apply_policy(
                 self.preset_policy, label, my_race, _matchup_to_vs_race(matchup),
                 my_events, self, eight_worker,

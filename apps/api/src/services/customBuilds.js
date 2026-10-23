@@ -1,5 +1,6 @@
 "use strict";
 
+const { policyLabelForGame } = require("./presetIngest");
 const { createHash, randomUUID } = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { expectedVersion, stampVersion } = require("../db/schemaVersioning");
@@ -359,6 +360,7 @@ class CustomBuildsService {
    * }} db
    * @param {{
    *   perGame?: import('./types').PerGameComputeService,
+   *   presetPolicies?: import('./presetPolicies').PresetPoliciesService,
    *   logger?: {warn?: Function, error?: Function},
    *   onReclassified?: (userId: string, result: Record<string, any>) => void|Promise<void>,
    *   onGamesChanged?: (userId: string, count: number) => void,
@@ -377,6 +379,7 @@ class CustomBuildsService {
     this.reclassifyJobs = db.customBuildJobs
       || /** @type {any} */ (db.customBuilds).s.db.collection("custom_build_jobs");
     this.perGame = opts.perGame || null;
+    this.presetPolicies = opts.presetPolicies || null;
     this.logger = opts.logger || null;
     this.onReclassified = opts.onReclassified || null;
     this.onGamesChanged = opts.onGamesChanged || null;
@@ -2409,6 +2412,8 @@ class CustomBuildsService {
    *
    * @param {string} userId
    * @param {{
+   *   presetEvidence?: any,
+   *   durationSec?: number,
    *   gameId?: string,
    *   myRace?: string|null,
    *   myBuild?: string|null,
@@ -2535,6 +2540,9 @@ class CustomBuildsService {
     // per axis: an overridden axis keeps the declared build and takes the
     // classifier's outcome as its detected label; other axes get the plain
     // classification (buildIntentGuards).
+    const policy = game.presetEvidence && this.presetPolicies ? await this.presetPolicies.current() : null;
+    const policyBuild = policy ? policyLabelForGame(policy, game, "you") : null;
+    const policyStrategy = policy ? policyLabelForGame(policy, game, "opponent") : null;
     const fenced = typeof opts.expectedRevision === "string";
     const payloadBuild = typeof game.myBuild === "string" ? game.myBuild : null;
     const payloadStrategy = game.opponent && typeof game.opponent === "object"
@@ -2549,7 +2557,10 @@ class CustomBuildsService {
           gameId: probe.gameId,
           ...(fenced ? { _customBuildRevision: opts.expectedRevision } : {}),
         },
-        tagClassificationPipeline({ ...decision, payloadBuild, payloadStrategy }),
+        tagClassificationPipeline({ ...decision,
+          payloadBuild: decision.you.mode === "unset" ? policyBuild ?? payloadBuild : payloadBuild,
+          payloadStrategy: decision.opponent.mode === "unset" ? policyStrategy ?? payloadStrategy : payloadStrategy,
+          policyBuild, policyStrategy }),
         { projection: { _id: 1 } },
       );
       if (fenced && !written) {
