@@ -15,6 +15,11 @@ corresponding GitHub Release.
 
 - Account deletion now removes token-owned stream data and private sound files, ends the sign-in identity with durable retries, and offers an export-first inventory and confirmation flow. Review comments on other requests are anonymized; service backup retention follows the current configured schedule.
 
+- Desktop pairing keeps trying through connection failures, refreshes codes,
+  and recovers an unlinked PC without discarding queued replays or settings.
+- Desktop sync retains temporary failures with a retry countdown instead of
+  repeating error rows; final replay outcomes have readable details and help.
+
 ### Added
 
 - Operations console adds bounded background-job history and safe Run now controls, a 400-day admin audit log, per-user support snapshots, first-party activation cohorts, and resolved-user repair actions with typed wipe confirmation and game-count conflict protection.
@@ -22,6 +27,7 @@ corresponding GitHub Release.
 - Streamed account snapshots with labels, downloads and retention; verified restore previews preserve existing game details/replays, and self-service repairs save a snapshot before running.
 
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
+
 
 ### Guide reading and map navigation
 

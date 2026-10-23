@@ -9,9 +9,13 @@ for power users, and a console fallback for headless / CI runs.
 
 1. Download `SC2ToolsAgent-Setup-X.Y.Z.exe` from the releases page.
 2. Double-click the installer.
-3. The agent launches and opens the **main window**. The 6-digit
-   pairing code is shown in a large, readable card - click **Open
-   pairing page**, sign in to SC2 Tools on the web, paste the code.
+3. The agent launches and opens the **main window**. The
+   pairing card says **Getting your code…**, then shows a large 6-digit
+   code and its expiry countdown. Click **Link this PC in your browser**,
+   sign in to SC2 Tools, and confirm the PC. The code is already filled in.
+   Use **Copy code** for another browser or **Get a new code** to refresh it.
+   If the internet is unavailable, leave the window open: it keeps trying.
+   **Retry now**, **Open activity log**, and **Need help?** are there to help.
 4. Done. The agent keeps running in the system tray. To open the
    window again, click the Start Menu shortcut **SC2 Tools Agent**
    or the desktop icon.
@@ -28,6 +32,18 @@ already synced, use **Re-sync** once; compatible saved recordings are reused.
 Leave the setting off to sync standard analysis only. The website's
 **Generate accurate playback** button can record one game on demand with
 either setting, using agent 0.16.11 or newer.
+
+If you unpair this PC on the website, the desktop window says **This PC was
+unlinked from your account**. Click **Link again** and confirm the new code.
+Your settings, queued replays, and sync history stay on the PC. Closing the
+window keeps the app running in the tray; use **Quit** to stop it.
+
+During an outage, the Dashboard shows the number of waiting replays and a
+retry countdown. **Retry now** starts another attempt. Temporary connection
+problems do not add error rows to Recent uploads. Permanent replay outcomes
+show a plain-language message, technical details on hover, **Copy details**,
+and a help link. Read [Pairing problems](https://sc2tools.com/help/pairing-troubleshooting)
+or [Sync problems](https://sc2tools.com/help/desktop-app-sync-problems).
 
 ## For developers - the source-install path
 
@@ -91,7 +107,7 @@ agent falls back gracefully to tray+console.
 
 | Tab | Contents |
 | --- | -------- |
-| Dashboard | Status badge (Active / Paused / Pairing / Error), pairing code card (only visible until paired), Synced / Queued / Last-upload stats, action buttons (Pause, Re-sync, Choose folder, Check for updates, Open dashboard). |
+| Dashboard | Status badge (Active / Paused / Pairing / Error), pairing card with requesting, code countdown, offline, expired, and unlinked recovery states; green pairing confirmation for four seconds, Synced / Queued / Last-upload stats, action buttons (Pause, Re-sync, Choose folder, Check for updates, Open dashboard). |
 | Recent uploads | Last ~100 replays the agent has handled, with timestamps and per-row status. Double-click reveals the replay in Explorer. |
 | Activity log | Incremental tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log`, with complete tracebacks, readable level filters, Ctrl+F search, follow/pause, copy selection or last 200 lines, and Open log folder. |
 | Settings | Replay folders and sync date range, start-up, updates, capture, build check-in and OBS. Save confirms what applied; API address, log level and parse concurrency name their restart requirement. The API field supports Reset to default and Test. |
