@@ -16,6 +16,12 @@ corresponding GitHub Release.
 - Coaching shows your role, coach or students, with keyboard tab navigation and badges for waiting practice requests and unread session alerts.
 - Availability drafts survive tab switches and can be published or reset from the save bar. Booked session times keep their published time zone, and a failed Locker load offers a safe retry.
 
+### Guide reading and map navigation
+
+- Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
+- Win rates include verdict symbols, charts use one keyboard Tab stop with pinnable details, and a shared legend plus Help article explains ranges, publishing floors and trends.
+- The guide hub previews busy map cards and links to all openers and counters. Map guides show a race matrix with honest mirror cells, enlarged artwork and neighboring maps.
+
 ### Analyzer filters and Trends
 
 - Filters have a readable summary, a full phone editor and focused desktop controls. Today explains its scope and remembers whether its editor is open; Arcade keeps its own scope.

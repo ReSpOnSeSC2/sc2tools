@@ -3,7 +3,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { MapGuide } from "@/components/guides/map/MapGuide";
 import { guidePaths, mapMetadata } from "@/components/guides/guideMetadata";
 import { guideUnavailableMetadata } from "@/components/guides/guideSeo";
-import { fetchGuideMap, fetchPublishedGuidePaths } from "@/lib/guides/api";
+import { fetchGuideIndex, fetchGuideMap, fetchPublishedGuidePaths } from "@/lib/guides/api";
 import { lowercaseGuidePath } from "@/lib/guides/canonicalPath";
 import { GuideUnavailableError } from "@/lib/guides/guideErrors";
 import { guidesEnabled } from "@/lib/guides/flags";
@@ -51,6 +51,8 @@ export default async function MapGuidePage({ params }: MapPageProps) {
   const { result, canonical } = await loadMap(params);
   if (result.kind === "unavailable") throw new GuideUnavailableError(canonical);
   // Map openers carry no published flag of their own; gate their build links on the published list.
-  const publishedPaths = result.data.published ? await fetchPublishedGuidePaths() : null;
-  return <MapGuide payload={result.data} publishedPaths={publishedPaths} />;
+  const [publishedPaths, index] = result.data.published ? await Promise.all([
+    fetchPublishedGuidePaths(), fetchGuideIndex().catch(() => null),
+  ]) : [null, null];
+  return <MapGuide payload={result.data} publishedPaths={publishedPaths} mapIndex={index?.kind === "ok" ? index.data.maps : null} />;
 }

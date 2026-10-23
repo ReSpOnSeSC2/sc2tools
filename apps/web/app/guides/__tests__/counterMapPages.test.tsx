@@ -1,9 +1,10 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   fetchGuideCounter: vi.fn(),
   fetchGuideMap: vi.fn(),
+  fetchGuideIndex: vi.fn(),
   fetchPublishedGuidePaths: vi.fn(async (): Promise<ReadonlySet<string> | null> => null),
   permanentRedirect: vi.fn((path: string) => {
     throw Object.assign(new Error("NEXT_REDIRECT"), { path });
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/guides/api", () => ({
   fetchGuideCounter: mocks.fetchGuideCounter,
   fetchGuideMap: mocks.fetchGuideMap,
+  fetchGuideIndex: mocks.fetchGuideIndex,
   fetchPublishedGuidePaths: mocks.fetchPublishedGuidePaths,
 }));
 vi.mock("next/navigation", () => ({
@@ -29,6 +31,7 @@ import MapGuidePage, { generateMetadata as mapMetadata } from "@/app/guides/maps
 import { buildCounterIntro, buildMapIntro } from "@/lib/guides/guideCopy";
 import { GuideUnavailableError } from "@/lib/guides/guideErrors";
 import {
+  FIXTURE_INDEX,
   FIXTURE_COUNTER_PUBLISHED,
   FIXTURE_COUNTER_UNPUBLISHED,
   FIXTURE_MAP,
@@ -43,12 +46,16 @@ function ok<T>(data: T) {
   return { kind: "ok" as const, data };
 }
 
-beforeEach(() => vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "1"));
+beforeEach(() => {
+  vi.stubEnv("NEXT_PUBLIC_GUIDES_ENABLED", "1");
+  mocks.fetchGuideIndex.mockResolvedValue({ kind: "unavailable" });
+});
 afterEach(() => {
   cleanup();
   vi.unstubAllEnvs();
   mocks.fetchGuideCounter.mockReset();
   mocks.fetchGuideMap.mockReset();
+  mocks.fetchGuideIndex.mockReset();
   mocks.fetchPublishedGuidePaths.mockReset();
   mocks.fetchPublishedGuidePaths.mockResolvedValue(null);
   mocks.permanentRedirect.mockClear();
@@ -83,6 +90,7 @@ describe("/guides/[matchup]/counter/[strategy]", () => {
   it("ranks the openers with n and their catalog descriptions, plus the video", async () => {
     mocks.fetchGuideCounter.mockResolvedValue(ok(FIXTURE_COUNTER_PUBLISHED));
     const { container } = render(await CounterGuidePage(COUNTER_PARAMS));
+    expect(container.querySelectorAll("[data-guide-stats-legend]")).toHaveLength(1);
     expect(screen.getByRole("heading", { level: 1, name: "How to beat 12 Pool" })).toBeTruthy();
     expect(screen.getByText(FIXTURE_COUNTER_PUBLISHED.description)).toBeTruthy();
     const list = screen.getByRole("heading", { level: 2, name: /Best Protoss openers against 12 Pool/ })
@@ -168,17 +176,54 @@ describe("/guides/maps/[map]", () => {
     expect(md.alternates?.canonical).toBe("/guides/maps/old-sun-temple");
   });
 
-  it("renders the matchup table and best openers per matchup", async () => {
+  it("enlarges the map and offers ordered neighbors without repeating the current map", async () => {
     mocks.fetchGuideMap.mockResolvedValue(ok(FIXTURE_MAP));
+    const maps = [
+      { map: "First Map", slug: "first-map", games: 3000 },
+      { map: FIXTURE_MAP.map, slug: FIXTURE_MAP.mapSlug, games: FIXTURE_MAP.games },
+      { map: "Next Map", slug: "next-map", games: 1800 },
+    ];
+    mocks.fetchGuideIndex.mockResolvedValue(ok({ ...FIXTURE_INDEX, maps }));
+    render(await MapGuidePage(MAP_PARAMS));
+    const other = document.getElementById("other-maps")!;
+    expect(within(other).queryByRole("link", { name: /Old Sun Temple/ })).toBeNull();
+    expect(within(other).getByRole("link", { name: "Previous map: First Map" }).getAttribute("href")).toBe("/guides/maps/first-map");
+    expect(within(other).getByRole("link", { name: "Next map: Next Map" }).getAttribute("href")).toBe("/guides/maps/next-map");
+    expect(screen.getByRole("navigation", { name: "On this page" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Enlarge map: Old Sun Temple" }));
+    expect(await screen.findByRole("dialog", { name: "Old Sun Temple map preview" })).toBeTruthy();
+  });
+
+  it("keeps the map usable when its optional index fails and ranks opener cards in matrix order", async () => {
+    mocks.fetchGuideMap.mockResolvedValue(ok(FIXTURE_MAP));
+    mocks.fetchGuideIndex.mockRejectedValue(new Error("index outage"));
+    const { container } = render(await MapGuidePage(MAP_PARAMS));
+    expect(screen.getByRole("table", { name: "Win rate by matchup on this map" })).toBeTruthy();
+    expect(container.querySelector("#other-maps")).toBeNull();
+    const section = document.getElementById("best-openers")!;
+    expect(within(section).getAllByRole("heading", { level: 3 }).map((node) => node.textContent)).toEqual(["PvZ", "TvZ", "ZvP"]);
+    expect(screen.queryByRole("navigation", { name: "On this page" })).toBeNull();
+  });
+
+  it("renders the race matrix and best openers per matchup", async () => {
+    mocks.fetchGuideMap.mockResolvedValue(ok(FIXTURE_MAP));
+    mocks.fetchGuideIndex.mockResolvedValue(ok(FIXTURE_INDEX));
     const { container } = render(await MapGuidePage(MAP_PARAMS));
     expect(screen.getByRole("heading", { level: 1, name: "Old Sun Temple" })).toBeTruthy();
     expect(container.querySelector("[data-map-artwork]")).toBeTruthy();
     const table = screen.getByRole("table", { name: "Win rate by matchup on this map" });
-    expect(within(table).getByRole("link", { name: "PvZ" }).getAttribute("href")).toBe("/guides/pvz");
+    expect(within(table).getAllByRole("rowheader").map((cell) => cell.textContent)).toEqual(["Protoss", "Terran", "Zerg"]);
+    expect(within(table).getAllByRole("columnheader").map((cell) => cell.textContent)).toEqual(["vs Protoss", "vs Terran", "vs Zerg"]);
     const pvz = FIXTURE_MAP.matchups[0];
-    expect(within(table).getByRole("link", { name: "PvZ" }).closest("tr")?.textContent).toContain(
+    expect(within(table).getByRole("rowheader", { name: "Protoss" }).closest("tr")?.textContent).toContain(
       `${(pvz.winRate * 100).toFixed(1)}%`,
     );
+    const mirror = within(table).getAllByRole("row")[1].querySelectorAll("td")[0];
+    expect(mirror.textContent).toContain("208 gamesmirror");
+    expect(mirror.textContent).not.toContain("%");
+    expect(mirror.textContent).not.toMatch(/[▲●▼]/);
+    expect(within(table).getAllByText("Not enough games").length).toBeGreaterThan(0);
+    expect(container.querySelectorAll("[data-guide-stats-legend]")).toHaveLength(1);
     expect(screen.getByRole("link", { name: "3 CC Bio" }).getAttribute("href")).toBe("/guides/tvz/3-cc-bio");
     for (const entry of buildMapIntro(FIXTURE_MAP)) {
       expect(document.querySelector(`[data-copy-id="${entry.id}"]`)?.textContent).toBe(entry.text);

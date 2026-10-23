@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import type { ReactNode } from "react";
-import { Section } from "@/components/ui/Section";
+import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { GUIDE_PANEL_CLASS } from "@/components/guides/guideUi";
 import { safeVideoUrls } from "@/components/guides/youtubeUrls";
 import { fmtGuideDate } from "@/lib/guides/format";

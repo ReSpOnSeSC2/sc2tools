@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Section } from "@/components/ui/Section";
+import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { GuideMarkdown } from "@/lib/guides/markdown";
 import { WinRateCell } from "@/components/guides/WinRateCell";
 import { guidePaths } from "@/components/guides/guideMetadata";
