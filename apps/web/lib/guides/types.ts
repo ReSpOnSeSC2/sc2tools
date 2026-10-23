@@ -131,10 +131,19 @@ export interface GuideIndexMatchup {
   publishedBuilds: number;
 }
 
+export interface GuideIndexMapCell {
+  matchup: GuideMatchup;
+  games: number;
+  winRate: number;
+  ci: GuideCi;
+}
+
 export interface GuideIndexMap {
   map: string;
   slug: string;
   games: number;
+  /** Non-mirror, floor-clearing cells; absent before the next stats run. */
+  cells?: GuideIndexMapCell[];
 }
 
 export interface GuideIndexPayload {
@@ -202,6 +211,8 @@ export interface GuideCounterLink {
   name: string;
   published: boolean;
   games: number | null;
+  winRate?: number | null;
+  ci?: GuideCi | null;
 }
 
 export interface GuideMatchupPayload {

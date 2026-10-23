@@ -242,7 +242,9 @@ const GUIDE_STATS: Array<{ path: string; locate: (page: Page) => Locator; stat: 
   // Fixture Diamond band: 88 wins / 150 games → 58.7%.
   { path: "/guides/pvz/stargate-into-glaives", locate: (page) => page.getByTestId("guide-headline"), stat: "58.7%" },
   // Fixture PvZ ranking: Stargate into Glaives 238 / 420 → 56.7%.
-  { path: "/guides/pvz", locate: (page) => page.getByRole("row", { name: /Stargate into Glaives/ }), stat: "56.7%" },
+  { path: "/guides/pvz", locate: (page) => page.viewportSize()!.width < 640
+    ? page.getByRole("list", { name: "Opener cards" }).getByRole("listitem").filter({ has: page.getByRole("link", { name: "Stargate into Glaives", exact: true }) })
+    : page.getByRole("row", { name: /Stargate into Glaives/ }), stat: "56.7%" },
   {
     path: "/guides",
     locate: (page) =>

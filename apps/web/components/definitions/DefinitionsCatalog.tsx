@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { BookOpen, Check, Link2, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
@@ -55,7 +55,6 @@ export function DefinitionsCatalog({
 }: {
   guideLinks?: DefinitionGuideLinks;
 } = {}) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const encodedParams = searchParams.toString();
   const initial = readFilters(new URLSearchParams(encodedParams));
@@ -67,6 +66,9 @@ export function DefinitionsCatalog({
   const previousParams = useRef(encodedParams);
   const incomingNavigation = previousParams.current !== encodedParams;
   useEffect(() => {
+    // Ignore a superseded router snapshot while the current address bar
+    // already reflects a newer filter or hash reveal.
+    if (encodedParams !== new URLSearchParams(window.location.search).toString()) return;
     previousParams.current = encodedParams;
     const next = readFilters(new URLSearchParams(encodedParams));
     setQuery(next.query); setRace(next.race); setMatchup(next.matchup);
@@ -78,8 +80,12 @@ export function DefinitionsCatalog({
     if (race !== "All") params.set("race", race[0]);
     if (matchup && matchup !== "All") params.set("matchup", matchup);
     const search = params.toString();
-    if (search !== window.location.search.slice(1)) router.replace(`/definitions${search ? `?${search}` : ""}${window.location.hash}`, { scroll: false });
-  }, [query, race, matchup, router, incomingNavigation]);
+    // Filtering is entirely local. Avoid an RSC navigation whose delayed
+    // response could restore old filters over a newer hash reveal.
+    if (search !== window.location.search.slice(1)) {
+      window.history.replaceState(null, "", `/definitions${search ? `?${search}` : ""}${window.location.hash}`);
+    }
+  }, [query, race, matchup, incomingNavigation]);
 
   const filtered = useMemo(
     () => filterDefinitions(BUILD_DEFINITIONS, query, race, matchup),

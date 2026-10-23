@@ -16,6 +16,11 @@ corresponding GitHub Release.
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
 - Your reviewer profile shows verified leagues, badges, karma and synced-game eligibility. Leaderboard and weekly digest preferences live together there and restore their previous value if saving fails.
 
+### Guide comparisons and browsing
+
+- Find and sort openers without losing their original rank, browse phone cards, and group a build's opponent matchups by their likely-range verdict. Complete map lists stay available on demand.
+- Compare your own build timings and record with the guide in one table. Counter lists show your race's aggregate win rates, and the map pool offers a sortable race-specific table when new stats are available.
+
 ### Coaching forms
 
 - Practice plans show inline field errors, focus the first field to fix, remember each student's time zone and summarize the actual target before assignment. Failed saves retain the draft for Retry.
