@@ -6,6 +6,7 @@ import { buttonClassName, type ButtonSize, type ButtonVariant } from "./buttonSt
 
 /** Button — variants × sizes × loading/disabled, with optional icon slots. */
 export type { ButtonSize, ButtonVariant };
+export { buttonClassName } from "./buttonStyles";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;

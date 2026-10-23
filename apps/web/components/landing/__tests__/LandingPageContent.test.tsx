@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import { STREAMS_MIN_AGENT_VERSION } from "@/lib/agentNotice";
 import { LandingPageContent } from "../LandingPageContent";
 const mocks = vi.hoisted(() => ({ mode: "all" }));
 vi.mock("@/lib/instant/flag", () => ({ getInstantImportMode: () => mocks.mode }));
@@ -18,5 +19,6 @@ it("puts the headline before product slides and gives the hero one browser try p
   expect(container.querySelectorAll("#replay-demo")).toHaveLength(1);
   const practice = container.querySelector("#practice")!; const demo = container.querySelector("#replay-demo")!;
   expect(practice.compareDocumentPosition(demo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(container.textContent).not.toMatch(/0\.18|Coming with/);
+  expect(container.textContent).not.toMatch(/Coming with/);
+  expect(container.textContent).toContain(`Included in the desktop app since ${STREAMS_MIN_AGENT_VERSION}`);
 });

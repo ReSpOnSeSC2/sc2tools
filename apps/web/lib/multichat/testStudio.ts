@@ -122,9 +122,9 @@ export const TEST_GOALS: ReadonlyArray<StudioGoal> = [
  * short live countdown so placement/typography can be judged for
  * real.
  */
-export function testScene(nowMs: number): StudioScene {
+export function testScene(nowMs: number, mode: StudioScene["mode"] = "starting"): StudioScene {
   return {
-    mode: "starting",
+    mode,
     message: "Test: ranked ladder grind — 1v1 vs the world",
     countdownEndsAt: nowMs + 4 * 60 * 1000 + 59 * 1000,
     setAtMs: nowMs,

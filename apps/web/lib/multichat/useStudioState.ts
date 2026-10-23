@@ -1,5 +1,7 @@
 "use client";
 
+import { STUDIO_SCENE_HEADLINES, type StudioSceneMode } from "./sceneModes";
+
 // useStudioState — client mirror of the server's multichat "stream
 // studio" state (highlight pin, chat poll, stream goals, blocklist,
 // recap trigger). One state blob per overlay TOKEN, served by
@@ -42,7 +44,7 @@ export interface StudioGoal {
 }
 
 export interface StudioScene {
-  mode: "brb" | "starting";
+  mode: StudioSceneMode;
   message: string;
   /** Epoch ms the countdown targets, or null for no countdown. */
   countdownEndsAt: number | null;
@@ -321,10 +323,10 @@ function sanitizeGoals(raw: unknown): StudioGoal[] {
 function sanitizeScene(raw: unknown): StudioScene | null {
   if (!raw || typeof raw !== "object") return null;
   const s = raw as Record<string, unknown>;
-  if (s.mode !== "brb" && s.mode !== "starting") return null;
+  if (typeof s.mode !== "string" || !Object.hasOwn(STUDIO_SCENE_HEADLINES, s.mode)) return null;
   const ends = Number(s.countdownEndsAt);
   return {
-    mode: s.mode,
+    mode: s.mode as StudioSceneMode,
     message: typeof s.message === "string" ? s.message.slice(0, 80) : "",
     countdownEndsAt: Number.isFinite(ends) && ends > 0 ? ends : null,
     setAtMs: Number.isFinite(Number(s.setAtMs)) ? Number(s.setAtMs) : 0,

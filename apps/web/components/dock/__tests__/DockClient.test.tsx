@@ -202,11 +202,11 @@ describe("DockClient", () => {
     await drain();
     expect(studioPosts().at(-1)?.goals).toEqual([{ label: "Latest draft", current: 1, target: 10 }]);
   });
-  it("does not render a standalone build-vote section", async () => {
+  it("offers build voting inside the Poll card", async () => {
     render(<DockClient token="tok_test" />);
     await screen.findByText("Live chat");
     expect(screen.queryByText("Chat picks the build")).toBeNull();
-    expect(screen.queryByRole("button", { name: "Build vote" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Build vote" }).getAttribute("aria-pressed")).toBe("false");
   });
 
   it("renders the merged chat feed with platform status", async () => {
@@ -538,7 +538,7 @@ describe("DockClient", () => {
       );
     });
     expect(screen.queryByText("BLOCKEDUSER")).toBeNull();
-    expect(screen.queryByText("@blockeduser")).toBeNull();
+    expect(within(screen.getByTestId("dock-chat-list")).queryByText("@blockeduser")).toBeNull();
     expect(screen.getByText("FriendlyFollower")).toBeTruthy();
   });
 
@@ -595,7 +595,7 @@ describe("DockClient", () => {
       );
     });
     expect(screen.queryByText("should stay out of engagement")).toBeNull();
-    expect(screen.queryByText("@settingsblocked")).toBeNull();
+    expect(within(screen.getByTestId("dock-chat-list")).queryByText("@settingsblocked")).toBeNull();
     expect(screen.getByText("FriendlyFollower")).toBeTruthy();
   });
 
@@ -720,7 +720,7 @@ describe("DockClient", () => {
       { target: { value: "grabbing water" } },
     );
     const before = Date.now();
-    fireEvent.click(screen.getByRole("button", { name: "▶ Starting soon" }));
+    fireEvent.click(screen.getByRole("button", { name: "Starting Soon" }));
     await waitFor(() => {
       expect(studioPosts()).toHaveLength(1);
     });

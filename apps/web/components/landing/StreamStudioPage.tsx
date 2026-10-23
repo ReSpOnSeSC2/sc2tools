@@ -11,65 +11,65 @@
  * honest by lib/__tests__/productFacts.test.ts), and the setup steps
  * follow the real Settings flow.
  */
-import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, BookOpen, Download, MessagesSquare, MonitorPlay, Swords, Trophy } from "lucide-react";
+import { ArrowRight, BookOpen, MessagesSquare, MonitorPlay, Swords, Trophy } from "lucide-react";
 import { PRODUCT_FACTS } from "@/lib/productFacts";
 import { OVERLAY_CREDIT_TEXT } from "@/lib/overlayCredit";
+import { StreamStudioCtas } from "./StreamStudioCtas";
 import { StreamManagerShowcase } from "@/components/landing/StreamManagerShowcase";
 
 interface FeatureGroup {
   title: string;
   icon: typeof Swords;
-  items: ReadonlyArray<{ name: string; body: string }>;
+  items: ReadonlyArray<{ name: string; body: string; guideId?: string }>;
 }
 
-const FEATURE_GROUPS: ReadonlyArray<FeatureGroup> = [
+export const FEATURE_GROUPS: ReadonlyArray<FeatureGroup> = [
   {
     title: "Before and during the game",
     icon: Swords,
     items: [
-      { name: "Opponent identity", body: "Race, MMR and your head-to-head record, on screen while the game loads." },
-      { name: "Scouting tells", body: "The strategies this opponent is likely to open with, and when to look for them." },
-      { name: "Favourite opening and best answer", body: "Their most-shown opening and your best counter to it." },
-      { name: "Cheese alert", body: "A warning when the opponent's history points to an early all-in." },
-      { name: "Rematch and rival", body: "Flags opponents you've played recently or keep meeting." },
-      { name: "Rank, meta snapshot and top builds", body: "League, tier and MMR, the openings this matchup sees most, and your best builds in it." },
+      { name: "Opponent identity", guideId: "opponent", body: "Race, MMR and your head-to-head record, on screen while the game loads." },
+      { name: "Scouting tells", guideId: "scouting", body: "The strategies this opponent is likely to open with, and when to look for them." },
+      { name: "Favourite opening and best answer", guideId: "fav-opening", body: "Their most-shown opening and your best counter to it." },
+      { name: "Cheese alert", guideId: "cheese", body: "A warning when the opponent's history points to an early all-in." },
+      { name: "Rematch and rival", guideId: "rematch", body: "Flags opponents you've played recently or keep meeting." },
+      { name: "Rank, meta snapshot and top builds", guideId: "rank", body: "League, tier and MMR, the openings this matchup sees most, and your best builds in it." },
     ],
   },
   {
     title: "After the game",
     icon: Trophy,
     items: [
-      { name: "Match result, MMR change and streak", body: "Victory or defeat, the points it cost or earned, and any run of three or more." },
-      { name: "Post-game build", body: "A build summary for the game just played." },
-      { name: "Broadcast lower third", body: "An esports-style bar with the result, MMR change, head-to-head and session record." },
-      { name: "Session record", body: "Today's wins, losses and MMR, always on screen." },
-      { name: "Session recap", body: "A win-loss and net-MMR card you fire on demand from the Stream Dock." },
+      { name: "Match result, MMR change and streak", guideId: "match-result", body: "Victory or defeat, the points it cost or earned, and any run of three or more." },
+      { name: "Post-game build", guideId: "post-game", body: "A build summary for the game just played." },
+      { name: "Broadcast lower third", guideId: "lower-third", body: "An esports-style bar with the result, MMR change, head-to-head and session record." },
+      { name: "Session record", guideId: "session", body: "Today's wins, losses and MMR, always on screen." },
+      { name: "Session recap", guideId: "session-recap", body: "A win-loss and net-MMR card you fire on demand from the Stream Dock." },
     ],
   },
   {
     title: "Chat and community",
     icon: MessagesSquare,
     items: [
-      { name: "Multi-platform chat", body: `Twitch, Kick, YouTube and TikTok chat merged into one feed (${PRODUCT_FACTS.chatPlatforms} platforms).` },
-      { name: "Event alerts", body: "Subs, raids, gifts and superchats as an alert toaster." },
-      { name: "Polls and highlights", body: "Viewer polls with !1 / !2 voting, and pinned chat messages." },
-      { name: "Crystal Ball predictions", body: "Chat calls !win or !loss before each game and climbs a leaderboard." },
-      { name: "Supporter wall", body: "Cross-platform loyalty ranks, from Probe to Mothership." },
-      { name: "Goals, ticker, timer and clip flags", body: "Goal bars, a scrolling stats line, a countdown, and a CLIP THAT! pulse when chat spikes." },
+      { name: "Multi-platform chat", guideId: "multichat", body: `Twitch, Kick, YouTube and TikTok chat merged into one feed (${PRODUCT_FACTS.chatPlatforms} platforms).` },
+      { name: "Event alerts", guideId: "chat-alerts", body: "Subs, raids, gifts and superchats as an alert toaster." },
+      { name: "Polls and highlights", guideId: "chat-poll", body: "Viewer polls with !1 / !2 voting, and pinned chat messages." },
+      { name: "Crystal Ball predictions", guideId: "chat-oracle", body: "Chat calls !win or !loss before each game and climbs a leaderboard." },
+      { name: "Supporter wall", guideId: "supporter-wall", body: "Cross-platform loyalty ranks, from Probe to Mothership." },
+      { name: "Goals, ticker, timer and clip flags", guideId: "stream-goals", body: "Goal bars, a scrolling stats line, a countdown, and a CLIP THAT! pulse when chat spikes." },
     ],
   },
   {
     title: "Scenes and practice",
     icon: MonitorPlay,
     items: [
-      { name: "Starting Soon, BRB and Intermission", body: "Full-screen scenes with a countdown, switched from the Stream Dock." },
+      { name: "Starting Soon, BRB, Intermission and Stream ending", guideId: "stream-scene", body: "Full-screen scenes with a countdown, switched from the Stream Dock." },
       { name: "Between Games scene", body: "The desktop agent can build it and switch to it automatically when a game ends." },
       { name: "Virtual sets", body: `${PRODUCT_FACTS.virtualSets} broadcast backdrops, ready at 1080p and 4K.` },
-      { name: "Ghost Build coach", body: "Your chosen build's next steps, synced to the live game." },
-      { name: "Build randomizer", body: "Spins a weighted random build for each new matchup." },
+      { name: "Ghost Build coach", guideId: "ghost-build", body: "Your chosen build's next steps, synced to the live game." },
+      { name: "Build randomizer", guideId: "randomizer", body: "Spins a weighted random build for each new matchup." },
       { name: "Voice readout", body: "The scouting report read aloud as the game loads." },
     ],
   },
@@ -117,22 +117,6 @@ const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   },
 ];
 
-function PageCta({ href, primary, children }: { href: string; primary?: boolean; children: ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className={[
-        "inline-flex min-h-12 min-w-[44px] items-center justify-center gap-2.5 rounded-md px-5 py-2 text-center text-body-lg font-semibold",
-        "transition-colors duration-100",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-        primary ? "bg-accent text-white hover:brightness-90" : "border-2 border-line bg-bg-elevated text-text hover:bg-bg-subtle",
-      ].join(" ")}
-    >
-      {children}
-    </Link>
-  );
-}
-
 function SectionTitle({ kicker, title }: { kicker: string; title: string }) {
   return (
     <div className="max-w-3xl">
@@ -160,11 +144,7 @@ function Hero() {
           {PRODUCT_FACTS.overlayWidgets} copy-and-paste widgets, merged chat and full-screen scenes.
         </p>
         <div className="mt-7 flex flex-wrap items-center gap-3">
-          <PageCta href="/download" primary>
-            <Download className="h-5 w-5" aria-hidden />
-            Download the free agent
-          </PageCta>
-          <PageCta href="/sign-up">Create a free account</PageCta>
+          <StreamStudioCtas />
         </div>
         <p className="mt-4 text-caption text-text-dim">Free forever · OBS Studio and Streamlabs · The agent runs on Windows</p>
         <Link
@@ -207,7 +187,7 @@ function Features() {
             <ul className="mt-4 space-y-3">
               {items.map((item) => (
                 <li key={item.name} className="text-body text-text-muted">
-                  <strong className="font-semibold text-text">{item.name}.</strong> {item.body}
+                  {item.guideId ? <Link href={`/stream-studio/learn?widget=${item.guideId}`} className="font-semibold text-text underline decoration-accent/40 underline-offset-4 hover:text-accent">{item.name}</Link> : <strong className="font-semibold text-text">{item.name}</strong>}. {item.body}
                 </li>
               ))}
             </ul>
@@ -287,10 +267,7 @@ function FinalCta({ tryEnabled }: { tryEnabled: boolean }) {
         Put your opponent on screen before the game starts.
       </h2>
       <div className="mt-6 flex flex-wrap items-center gap-3">
-        <PageCta href="/download" primary>
-          <Download className="h-5 w-5" aria-hidden />
-          Download the free agent
-        </PageCta>
+        <StreamStudioCtas />
         {tryEnabled ? (
           <Link
             href="/try"

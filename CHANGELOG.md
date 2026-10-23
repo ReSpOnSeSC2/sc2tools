@@ -47,6 +47,11 @@ corresponding GitHub Release.
 - Coaching shows your role, coach or students, with keyboard tab navigation and badges for waiting practice requests and unread session alerts.
 - Availability drafts survive tab switches and can be published or reset from the save bar. Booked session times keep their published time zone, and a failed Locker load offers a safe retry.
 
+### Stream Dock and learning pages
+
+- Run build votes, switch all four stream scenes and undo or manage chat blocks; blocked authors do not vote in polls. Refresh existing scene Browser Sources once to recognize Intermission and Stream ending.
+- Stream Studio links features to their guides, offers signed-in setup shortcuts, opens the desktop preview gallery and lets you undo a course-progress reset.
+
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
