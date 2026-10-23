@@ -50,7 +50,7 @@ describe("help structured data", () => {
     expect(blocks.map((block) => block["@type"])).toEqual(["BreadcrumbList", "HowTo"]);
     const howTo = blocks[1] as { step: Array<{ name: string; text: string; position: number }>; url: string };
     expect(howTo.url).toBe(`${SITE}/help/getting-started`);
-    expect(howTo.step[0]).toMatchObject({ position: 1, name: "Create your account" });
+    expect(howTo.step[0]).toMatchObject({ position: 1, name: "Welcome: choose your goals" });
     expect(howTo.step[0].text).not.toMatch(/\*\*|\]\(/);
   });
 

@@ -84,6 +84,7 @@ describe("SectionBoundary", () => {
     await renderCrashed();
     fireEvent.click(screen.getByRole("button", { name: "Report this problem" }));
     // The form loads on first open (LazyReportIssueModal).
+    await act(async () => { await vi.dynamicImportSettled(); });
     const subject = (await screen.findByLabelText("Subject")) as HTMLInputElement;
     expect(subject.value).toBe("Error in the Daily Pulse strip on /app/opponents");
     expect((screen.getByRole("radio", { name: "Problem" }) as HTMLInputElement).checked).toBe(true);

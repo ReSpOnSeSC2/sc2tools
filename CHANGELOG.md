@@ -25,6 +25,30 @@ corresponding GitHub Release.
 - Desktop sync retains temporary failures with a retry countdown instead of
   repeating error rows; final replay outcomes have readable details and help.
 
+### Build editor safety
+
+- Both build editors ask before discarding unsaved work. Save failures keep their complete message visible, and editor notifications use the shared toast layer.
+- The rich editor includes private notes, preserves notes and legacy signatures during metadata edits, and opens from every Edit action. Dossiers show authored rules, strategy notes and skill level beside personal notes.
+
+### Resumable setup
+
+- Setup remembers its step in the URL, recognizes paired PCs and existing games, and keeps browser import on its own Back path. Completed steps can be revisited.
+- Choose play or streaming goals, then see live import progress and relevant next actions on the new Done step. Goal saves merge with checklist preferences.
+
+### Pairing and devices
+
+- Link a PC through one shared form, normalize pasted codes, check the PC details before confirming, and watch for its first connection. Prefilled codes never submit automatically.
+- Devices show online/offline and update status, support optional labels, and confirm before unpairing. Pairing failures explain expired or already-used codes and preserve the entered code.
+
+### Removed
+
+- Retired the unused server model-training and prediction endpoints. Replay analysis continues to use fixed rules and statistics; the API image now installs only its server analysis dependencies.
+
+### Community and public sharing
+
+- Community votes show your saved vote, support undo and keep their score correct during simultaneous voting. Reports use readable categories and optional details; Controversial favors divided votes. Public author and player names are escaped safely in structured data.
+- The Stock Market leaderboard opens on the last settled week, distinguishes locked portfolios from results, highlights your own rank and provides shareable week navigation. Player names remain visible only to signed-in players.
+- Public profiles keep temporary outages out of their page cache. Shared replay pages recover expired page links, retry busy services within a limit, share metadata reads and provide a public-friendly private-or-missing page.
 
 ### Experience polish
 

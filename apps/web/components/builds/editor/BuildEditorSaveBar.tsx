@@ -63,17 +63,17 @@ export function BuildEditorSaveBar({
   const requiresRule = mode !== "edit";
   const saveDisabled = saving || (requiresRule && ruleCount === 0);
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="space-y-3">
       {saveError ? (
-        <span
+        <div
           role="alert"
-          className="flex-1 truncate text-caption text-danger"
+          className="max-h-28 overflow-y-auto break-words rounded-lg border border-danger/40 bg-danger/10 p-3 text-caption text-danger"
         >
           {saveError}
-        </span>
+        </div>
       ) : null}
 
-      <div className="ml-auto flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <Button
           variant="ghost"
           onClick={onCancel}

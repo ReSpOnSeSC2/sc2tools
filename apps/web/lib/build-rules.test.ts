@@ -93,6 +93,7 @@ describe("proxy build rules", () => {
     const result = sanitiseDraft({
       name: "Proxy marine",
       description: "",
+      notes: "",
       race: "Terran",
       vsRace: "Protoss",
       skillLevel: null,

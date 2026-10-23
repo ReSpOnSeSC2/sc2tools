@@ -24,7 +24,7 @@ export interface AgentVersionResp {
 
 /** Shape returned by `POST /v1/device-pairings/start`. */
 export interface DevicePairingStartResp {
-  /** 6-character user-facing code, e.g. "AB12CD". */
+  /** 6-digit user-facing code, e.g. "123456". */
   code: string;
   /** Server-side expiry timestamp; agent uses this to drop stale handshakes. */
   expiresAt: string;
@@ -37,5 +37,5 @@ export interface DevicePairingPollResp {
   userId?: string;
 }
 
-/** Step ids for the 4-step onboarding wizard. */
-export type OnboardingStepId = "welcome" | "download" | "pair" | "import";
+/** Step ids for the resumable five-step onboarding wizard. */
+export type OnboardingStepId = "welcome" | "download" | "pair" | "import" | "done";

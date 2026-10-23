@@ -231,6 +231,7 @@ function Render({
       body: JSON.stringify({
         weekKey: prior.weekKey,
         pnlPct,
+        settled: true,
         displayName: state.leaderboardDisplayName,
       }),
     }).catch((err: unknown) => {
@@ -330,6 +331,7 @@ function Render({
           body: JSON.stringify({
             weekKey: ctx.question.weekKey,
             pnlPct: 0,
+            settled: false,
             displayName: submittedName,
           }),
         });

@@ -71,6 +71,12 @@ function buildPublicReplaysRouter(deps) {
       );
       if (!shared) return neutralNotFound(res);
 
+      if (req.query.fields === "profile") {
+        publicNoStore(res);
+        res.json({ profile: publicProfile(shared.profile), items: [], page: { hasMore: false } });
+        return;
+      }
+
       // Detector view: a visitor sees, filters and searches the labels the
       // classifier gave each replay, never the owner's build check-in or
       // opponent correction.
