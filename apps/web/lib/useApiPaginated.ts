@@ -9,7 +9,7 @@
 // MAX_PAGES) and concatenate. Re-fetches on dbRev / path changes.
 
 import { useAuth } from "@clerk/nextjs";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE, buildApiError, type ClientApiError } from "@/lib/clientApi";
 import { toClientApiError } from "@/lib/requestErrors";
 
@@ -22,15 +22,19 @@ const BEFORE_PARAM = "before";
 export type UsePaginatedResult<T> = {
   items: T[];
   isLoading: boolean;
+  isRefreshing: boolean;
+  isLoadingMore: boolean;
+  isStale: boolean;
   /** Same shape as useApi's errors, so RequestError can explain it. */
   error: ClientApiError | null;
   pagesFetched: number;
   hitMaxPages: boolean;
   /** Fetch every page again (a Retry button). */
   mutate: () => void;
+  retry: () => void;
 };
 
-type AccountBoundState<T> = Omit<UsePaginatedResult<T>, "mutate"> & {
+type AccountBoundState<T> = Omit<UsePaginatedResult<T>, "mutate" | "retry"> & {
   requestKey: string | null;
 };
 
@@ -42,6 +46,9 @@ function emptyState<T>(
     requestKey,
     items: [],
     isLoading,
+    isRefreshing: false,
+    isLoadingMore: false,
+    isStale: false,
     error: null,
     pagesFetched: 0,
     hitMaxPages: false,
@@ -70,13 +77,15 @@ export function useApiPaginated<T>(
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const requestKey = useMemo(
     () => isLoaded && isSignedIn && userId && path
-      ? JSON.stringify([userId, path, dbRev, pageLimit, maxPages])
+      ? JSON.stringify([userId, path, pageLimit, maxPages])
       : null,
-    [dbRev, isLoaded, isSignedIn, maxPages, pageLimit, path, userId],
+    [isLoaded, isSignedIn, maxPages, pageLimit, path, userId],
   );
   const [state, setState] = useState<AccountBoundState<T>>(() =>
     emptyState(requestKey, !isLoaded || requestKey !== null),
   );
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
   useEffect(() => {
     if (!requestKey || !path) {
@@ -87,10 +96,12 @@ export function useApiPaginated<T>(
     const ctrl = new AbortController();
     let cancelled = false;
 
-    setState((current) => ({
-      ...emptyState<T>(requestKey, true),
-      error: current.requestKey === requestKey ? current.error : null,
-    }));
+    const previous = stateRef.current;
+    const refreshing = previous.requestKey === requestKey
+      && ((!previous.isLoading && !previous.error) || previous.items.length > 0);
+    setState(refreshing
+      ? { ...previous, isRefreshing: true, isLoadingMore: false }
+      : { ...emptyState<T>(requestKey, true), error: previous.requestKey === requestKey ? previous.error : null });
 
     (async () => {
       try {
@@ -111,11 +122,18 @@ export function useApiPaginated<T>(
           // request id, never the raw response body.
           if (!res.ok) throw await buildApiError(res);
           const body: CursorPage<T> | T[] = await res.json();
+          if (cancelled) return;
           const page: CursorPage<T> = Array.isArray(body)
             ? { items: body, nextBefore: null }
             : body;
           all.push(...(page.items || []));
           pages = i + 1;
+          if (!refreshing) setState({
+            requestKey, items: [...all], isLoading: false,
+            isRefreshing: false, isLoadingMore: !!page.nextBefore && i < maxPages - 1,
+            isStale: false, error: null, pagesFetched: pages,
+            hitMaxPages: !!page.nextBefore && i === maxPages - 1,
+          });
           if (!page.nextBefore) {
             cursor = null;
             break;
@@ -128,6 +146,9 @@ export function useApiPaginated<T>(
           requestKey,
           items: all,
           isLoading: false,
+          isRefreshing: false,
+          isLoadingMore: false,
+          isStale: false,
           error: null,
           pagesFetched: pages,
           hitMaxPages: hit,
@@ -137,11 +158,16 @@ export function useApiPaginated<T>(
         if (err && typeof err === "object" && (err as { name?: string }).name === "AbortError") {
           return;
         }
-        setState({
-          ...emptyState<T>(requestKey, false),
-          isLoading: false,
-          error: toClientApiError(err),
-        });
+        const apiError = toClientApiError(err);
+        const message = apiError.status === 401 ? "Your session expired. Sign in again."
+          : apiError.status === 503 || apiError.code?.endsWith("_busy") ? "The server is busy. Try again in a moment."
+            : apiError.code === "network_unavailable" ? "Can't reach SC2 Tools. Check your connection."
+              : "We couldn't load your opponents.";
+        setState((current) => ({
+          ...(current.requestKey === requestKey ? current : emptyState<T>(requestKey, false)),
+          isLoading: false, isRefreshing: false, isLoadingMore: false,
+          isStale: refreshing, error: { ...apiError, message },
+        }));
       }
     })();
 
@@ -149,15 +175,15 @@ export function useApiPaginated<T>(
       cancelled = true;
       ctrl.abort();
     };
-  }, [attempt, getToken, isLoaded, maxPages, pageLimit, path, requestKey]);
+  }, [attempt, dbRev, getToken, isLoaded, maxPages, pageLimit, path, requestKey]);
 
   // Effects clean up after a render commits. Fail closed during that one
   // render: if Clerk's account changed, never expose pages tagged for the old
   // request while its AbortController is being retired.
   if (state.requestKey !== requestKey) {
-    return { ...emptyState<T>(requestKey, !isLoaded || requestKey !== null), mutate: retry };
+    return { ...emptyState<T>(requestKey, !isLoaded || requestKey !== null), mutate: retry, retry };
   }
-  return { ...state, mutate: retry };
+  return { ...state, mutate: retry, retry };
 }
 
 function appendQuery(path: string, cursor: string | null, pageLimit: number): string {

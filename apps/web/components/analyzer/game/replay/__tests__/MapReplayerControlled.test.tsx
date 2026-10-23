@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MapReplayer } from "../../MapReplayer";
@@ -86,4 +86,22 @@ describe("MapReplayer playback props", () => {
     expect(screen.getByRole("button", { name: /❚❚ Pause/ })).toBeTruthy();
     expect((screen.getByRole("button", { name: "1×" })).getAttribute("aria-pressed")).toBe("true");
   });
+});
+
+it("lets plain wheel scroll and reserves zoom for modifier or focused-map gestures", () => {
+  render(<MapReplayer playback={payload()} />);
+  const canvas = screen.getByTestId("map-replayer").querySelector("canvas")!;
+  expect(canvas.style.touchAction).toBe("pan-y");
+  const plain = new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true });
+  act(() => { canvas.dispatchEvent(plain); });
+  expect(plain.defaultPrevented).toBe(false); expect(canvas.style.touchAction).toBe("pan-y");
+  expect(screen.getByText("Hold Ctrl to zoom")).toBeTruthy();
+  const modified = new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, bubbles: true, cancelable: true });
+  act(() => { canvas.dispatchEvent(modified); });
+  expect(modified.defaultPrevented).toBe(true); expect(canvas.style.touchAction).toBe("none");
+  fireEvent.doubleClick(canvas); expect(canvas.style.touchAction).toBe("pan-y");
+  canvas.focus(); const focused = new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true });
+  act(() => { canvas.dispatchEvent(focused); });
+  expect(focused.defaultPrevented).toBe(true); expect(canvas.style.touchAction).toBe("none");
+  fireEvent.keyDown(canvas, { key: "Escape" }); expect(document.activeElement).not.toBe(canvas);
 });

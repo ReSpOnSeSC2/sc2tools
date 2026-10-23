@@ -54,7 +54,7 @@ describe("OpponentReplayHistory", () => {
 
     expect(useApiMock).toHaveBeenCalledWith(
       "/v1/opponents/opp-a/games?map_pool=ladder&limit=200",
-      { revalidateOnFocus: false },
+      { revalidateOnFocus: false, keepPreviousData: false },
     );
     expect(screen.getByTestId("replay-rows").textContent).toBe(
       "2:new-1,new-2",
@@ -63,7 +63,7 @@ describe("OpponentReplayHistory", () => {
     fireEvent.click(screen.getByRole("button", { name: "Older replays" }));
     expect(useApiMock).toHaveBeenLastCalledWith(
       "/v1/opponents/opp-a/games?map_pool=ladder&limit=200&cursor=cursor%2Ftwo",
-      { revalidateOnFocus: false },
+      { revalidateOnFocus: false, keepPreviousData: false },
     );
     expect(screen.getByTestId("replay-rows").textContent).toBe("1:older-1");
     expect(screen.getByText("Showing 201–201")).toBeTruthy();
@@ -130,7 +130,7 @@ describe("OpponentReplayHistory", () => {
 
     expect(useApiMock).toHaveBeenLastCalledWith(
       "/v1/opponents/opp-a/games?map=Ghost+River&limit=200",
-      { revalidateOnFocus: false },
+      { revalidateOnFocus: false, keepPreviousData: false },
     );
     expect(screen.getByTestId("replay-rows").textContent).toBe("1:page-one");
     expect(
@@ -185,6 +185,14 @@ describe("OpponentReplayHistory", () => {
     fireEvent.click(newer);
     expect(screen.getByTestId("replay-rows").textContent).toBe("1:newest");
   });
+});
+
+it("resets replay pagination when the result filter changes", () => {
+  useApiMock.mockReturnValue({ data: { items: [{ id: "one", result: "Victory" }], nextCursor: "older" }, mutate: vi.fn(), isValidating: false });
+  render(<OpponentReplayHistory {...BASE_PROPS} />);
+  fireEvent.click(screen.getByRole("button", { name: "Older replays" }));
+  fireEvent.change(screen.getByRole("combobox", { name: "Filter replay results" }), { target: { value: "loss" } });
+  expect(useApiMock).toHaveBeenLastCalledWith("/v1/opponents/opp-a/games?map_pool=ladder&limit=200&result=loss", expect.anything());
 });
 
 describe("appendReplayPageQuery", () => {

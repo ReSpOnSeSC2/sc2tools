@@ -164,6 +164,7 @@ export interface OpponentsService {
       mergeLinked?: boolean;
       limit?: number;
       cursor?: string;
+      result?: unknown;
     },
   ): Promise<{ items: object[]; nextCursor: string | null } | null>;
   recordGame(

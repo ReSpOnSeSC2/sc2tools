@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { Swords } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { RequestError } from "@/components/ui/RequestError";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import type { StatsEvent } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import {
@@ -34,6 +35,9 @@ const COLOR_CURSOR = "rgb(var(--text))";
 const COLOR_BATTLE = "rgb(var(--danger))";
 
 export interface InteractiveTimelineProps {
+  error?: unknown;
+  onRetry?: () => unknown;
+  loading?: boolean;
   /** Macro-breakdown sample streams. Either may be missing (older agents). */
   statsEvents?: StatsEvent[] | null;
   oppStatsEvents?: StatsEvent[] | null;
@@ -59,6 +63,7 @@ export interface InteractiveTimelineProps {
  * prefers-reduced-motion needs no special casing.
  */
 export function InteractiveTimeline({
+  error, onRetry, loading,
   statsEvents,
   oppStatsEvents,
   gameLengthSec,
@@ -101,6 +106,8 @@ export function InteractiveTimeline({
     ? `${possessiveName(perspectiveName)} army`
     : "My army";
 
+  if (error) return <RequestError title="Couldn't load the timeline" error={error} onRetry={onRetry} />;
+  if (loading) return <div role="status" aria-label="Loading timeline" className="h-64 animate-pulse rounded-xl border-b border-l border-line bg-bg-elevated/50" />;
   if (points.length === 0) {
     return (
       <Card title="Game timeline">

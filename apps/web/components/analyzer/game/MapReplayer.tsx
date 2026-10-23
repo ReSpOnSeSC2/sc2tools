@@ -30,68 +30,24 @@
  * rendering this at all).
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  buildingVisibleAt,
-  buildingPositionAt,
-  gasTappedAt,
-  isGasStructure,
-  isTownHall,
-  isWorkerUnit,
-  resourceAliveAt,
-  projectX,
-  projectY,
-  statsAt,
-  unitAliveAt,
-  unitNameAt,
-  unitVisibleAt,
-  unitMaxSpeed,
-  worldProjection,
-  type MapPlayback,
-  type PlaybackBuilding,
-} from "@/lib/mapReplay";
-import {
-  animFrameIndex,
-  motionSample,
-  phaseOffset,
-  sampleTrack,
-  type MotionSample,
-} from "@/lib/replayMotion";
-import {
-  beginSpriteFrame,
-  drawSprite,
-  endSpriteFrame,
-  hasWalk,
-  resolveSprite,
-  spriteAnim,
-  spriteAssetsVersion,
-  type SpriteAnimHandle,
-  type SpriteColor,
-} from "@/lib/spriteSheets";
-import {
-  computeLosses,
-  morphConsumedIndices,
-  statsHaveWorkers,
-  tradeEfficiency,
-  workerCountAt,
-  type LossSummary,
-} from "@/lib/mapReplayLosses";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { statsAt, worldProjection, type MapPlayback } from "@/lib/mapReplay";
+
+import { spriteAssetsVersion } from "@/lib/spriteSheets";
+import { computeLosses, morphConsumedIndices, statsHaveWorkers, tradeEfficiency, workerCountAt, type LossSummary } from "@/lib/mapReplayLosses";
 import type { PatchEra } from "@/lib/meta";
-import { drawSpellEffects, spellEffectsVersion } from "@/lib/spellEffects";
-import { collectCreepSources, drawEstimatedCreep, type CreepSource } from "@/lib/replayCreep";
-import { drawObservedCreep } from "@/lib/replayObservedCreep";
-import { attackAt, attackFrame, drawWeaponEffects, unitFacingAt } from "@/lib/replayCombat";
+import { spellEffectsVersion } from "@/lib/spellEffects";
+
+
+
 import { Maximize2, Minimize2, Minus, Plus, RotateCcw } from "lucide-react";
 import { getMapLayoutUrl } from "@/lib/map-images";
-import { getIconPath, type IconKind } from "@/lib/sc2-icons";
+import { getIconPath } from "@/lib/sc2-icons";
 import { REPLAY_SCOPE_CLASS } from "./replay/replayTheme";
-import { drawMarkers, markerAt, type ReplayMapMarker } from "@/lib/replayMarkers";
+import { markerAt, type ReplayMapMarker } from "@/lib/replayMarkers";
+
+import { renderFrame } from "./replay/mapCanvasRenderer";
+import { ME_ARMY, OPP_ARMY, STAGE_VIEWPORT_FRACTION, STAGE_MIN_H_PX, STAGE_MAX_H_PX, STAGE_PAD_PX, derivedOf, assetsVersion, bumpReplayAssetsVersion } from "./replay/mapCanvasAssets";
 
 export type { ReplayMapMarker };
 
@@ -103,212 +59,6 @@ const TAP_SLOP_PX = 6;
  *  at any terrain colour without a hard panel cutting into the map. */
 const VIEW_BUTTON_CLASS =
   "inline-flex h-8 w-8 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3ee0d6]";
-const ME_ARMY = "#3ec0c7";
-const ME_WORKER = "rgba(62,192,199,0.45)";
-const OPP_ARMY = "#e05656";
-const OPP_WORKER = "rgba(224,86,86,0.45)";
-/** Owner → team-coloured sheet variant. */
-const ME_SHEET: SpriteColor = "blue";
-const OPP_SHEET: SpriteColor = "red";
-/** How long a battle marker pulses around its timestamp. */
-const BATTLE_WINDOW_SEC = 12;
-/* Map furniture, in WORLD units so it keeps its size relative to the
- * terrain at every stage size and zoom — the same rule the sprites
- * follow. (These were raw canvas px before, which meant a spawn ring
- * covered a third of a base on a small stage and a hair on a big one.)
- */
-const RESOURCE_GLYPH_WORLD = 1.8;
-const ROCKS_GLYPH_WORLD = 2.3;
-const SPAWN_RING_WORLD = 6;
-const BATTLE_RING_MIN_WORLD = 4.5;
-const BATTLE_RING_GROW_WORLD = 6.5;
-/** Floor for the furniture above, in on-screen CSS px, so a compact
- * stage doesn't render them sub-pixel. */
-const MIN_FURNITURE_SCREEN_PX = 9;
-
-/* ──────────────── stage sizing ────────────────
- *
- * The old ``CANVAS_MAX_H_PX = 720`` ceiling is gone: the replay is the
- * centrepiece of the page, so the stage is sized like a video player —
- * as wide as its column, as tall as the viewport comfortably allows,
- * and always at the MAP's own aspect so nothing is letterboxed and the
- * whole canvas is playable ground.
- */
-/** Fraction of the viewport height a full-size stage may occupy. */
-const STAGE_VIEWPORT_FRACTION = 0.78;
-/** Absolute floor/ceiling so tiny and huge viewports both stay sane. */
-const STAGE_MIN_H_PX = 260;
-const STAGE_MAX_H_PX = 1080;
-/** Padding, in canvas px, between the playable bounds and the canvas
- * edge. Tight: nearly every pixel of the stage shows map. */
-const STAGE_PAD_PX = 4;
-
-/* ──────────────── sprite scale ────────────────
- *
- * ONE transform drives everything. ``worldProjection`` yields ``k``
- * pixels per world unit for the current canvas; a sprite's draw width
- * is ``worldUnitsPerCell × k``, full stop. That is what makes relative
- * unit sizes correct — and it is why nothing here has a hard-coded
- * per-unit or town-hall size any more.
- */
-/** Global gain on sprite size. 1.0 is geometrically exact. Raising it
- * trades scale fidelity for legibility on small stages; do not. */
-const SPRITE_WORLD_GAIN = 1.0;
-/** Floor on a sprite's on-SCREEN cell size, in CSS px. Only binds on
- * very small stages (a compact drilldown at k ≈ 3 would draw a Marine
- * 3.9 px wide); above it, relative scale is untouched. */
-const MIN_SPRITE_SCREEN_PX = 9;
-/** Cell size in world units for names with no sprite sheet, so the
- * fallback icons stay in scale with the sprites around them. */
-const FALLBACK_UNIT_WORLD = 1.7;
-const FALLBACK_WORKER_WORLD = 1.5;
-const FALLBACK_BUILDING_WORLD = 3.7;
-/** Top of the shared worldUnitsPerCell ladder (the Mothership's cell).
- * Used as the culling margin — no sprite can be wider than this. */
-const WIDEST_SPRITE_WORLD = 13.7;
-
-/* ──────────────── motion tuning ──────────────── */
-/** Above this world-units/second a unit plays its Walk cycle. */
-const WALK_SPEED_THRESHOLD = 0.45;
-/* ──────────────── fog of war ──────────────── */
-const FOG_ALPHA = 0.5;
-/** Sight radii in world cells, loosely matching in-game vision. */
-const SIGHT_UNIT = 11;
-const SIGHT_WORKER = 9;
-const SIGHT_HALL = 13;
-const SIGHT_BUILDING = 10;
-/**
- * Fog is a soft mask, so it is rendered at a FRACTION of stage
- * resolution and upscaled on composite — invisible on a gradient,
- * and it cuts the fog's fill rate by 1/scale². The reveal discs are
- * the single largest fill in the frame (a 500-unit frame stamps ~14
- * megapixels of soft disc at full resolution), so this is the
- * difference between fog being free and fog being the frame.
- */
-const FOG_RENDER_SCALE = 0.4;
-/** Ceiling on the fog buffer's device-pixel ratio, on top of the
- * render scale — a 4K stage gains nothing from a 4K fog. */
-const FOG_MAX_DPR = 2;
-
-/** Cover sprite footprints and vision for off-screen tracks. */
-const CULL_MARGIN_WORLD = Math.max(WIDEST_SPRITE_WORLD, SIGHT_UNIT);
-/**
- * Sight sources are deduped on a spatial grid. The cell is a fraction
- * of the reveal RADIUS rather than a fixed pixel count, so the dedupe
- * gets no weaker as the stage grows or the view zooms.
- *
- * The fraction is bounded: two sources sharing a cell of side ``c``
- * are at most ``c·√2`` apart, and the kept source is fully opaque out
- * to ``FOG_MASK_INNER · r``. So any fraction ≤ 0.55/√2 = 0.389
- * guarantees a dropped source still sits inside a kept source's solid
- * core and the union is visually unchanged. 0.35 keeps margin.
- */
-const FOG_DEDUPE_RADIUS_FRACTION = 0.35;
-/** Resolution of the cached reveal mask. The falloff is smooth, so a
- * 128 px stamp scales to any sight radius invisibly — and blitting a
- * stamp costs a fraction of building a radial gradient per reveal
- * (measured: ~2.5 ms/frame on a 600-source frame). */
-const FOG_MASK_PX = 128;
-/** Where the reveal starts fading, as a fraction of the radius. */
-const FOG_MASK_INNER = 0.55;
-
-/** Edge vignette. Replaces the old flat ``LAYOUT_VEIL`` global dim:
- * the terrain now shows at full colour, and only the outer edge is
- * darkened so the stage separates from the page chrome. */
-const VIGNETTE_ALPHA = 0.42;
-/** Fraction of the half-diagonal at which the vignette starts. */
-const VIGNETTE_INNER = 0.62;
-
-/* ──────────────── fallback icon caches ────────────────
- *
- * Module-level so every replayer instance (game page + macro
- * drilldown) shares one decoded image per icon. ``null`` marks a
- * failed load; entries are only drawn once fully decoded, so a frame
- * rendered before an icon arrives falls back to the dot marker and
- * picks the icon up on a later frame. Only names with NO sprite sheet
- * reach this path.
- */
-
-const iconElementCache = new Map<string, HTMLImageElement | null>();
-/** Memoized ``getIconPath`` — name→path resolution does string
- * normalization, too hot to repeat per marker per rAF frame. */
-const iconPathCache = new Map<string, string | null>();
-/** Bumped whenever an icon or the layout render finishes (or fails)
- * loading. The draw loop uses it as a dirty flag so a PAUSED replay
- * stops re-rendering every frame — a real battery cost on mobile —
- * while still picking up late-decoding assets. */
-let assetsVersion = 0;
-
-function resolveIconPath(name: string, kind: IconKind): string | null {
-  const key = `${kind}:${name}`;
-  let path = iconPathCache.get(key);
-  if (path === undefined) {
-    path = getIconPath(name, kind);
-    iconPathCache.set(key, path);
-  }
-  return path;
-}
-
-function readyIcon(name: string, kind: IconKind): HTMLImageElement | null {
-  const path = resolveIconPath(name, kind);
-  if (!path) return null;
-  let img = iconElementCache.get(path);
-  if (img === undefined) {
-    if (typeof Image === "undefined") return null; // non-DOM test envs
-    img = new Image();
-    img.decoding = "async";
-    img.onload = () => {
-      assetsVersion += 1;
-    };
-    img.onerror = () => {
-      iconElementCache.set(path, null);
-      assetsVersion += 1;
-    };
-    img.src = path;
-    iconElementCache.set(path, img);
-  }
-  return img && img.complete && img.naturalWidth > 0 ? img : null;
-}
-
-/** Team-tinted flat icons — the fallback for names with no sprite
- * sheet. Bare unit art (the PNGs carry real transparency) washed
- * toward the owner colour via source-atop, no ring, box, or backing.
- * Pre-rendered once per (icon, tint, size, dpr). */
-const unitTokenCache = new Map<string, HTMLCanvasElement>();
-/** How strongly the owner colour washes the icon art. */
-const TINT_ALPHA = 0.42;
-
-function iconToken(
-  name: string,
-  kind: IconKind,
-  tint: string,
-  sizePx: number,
-  dpr: number,
-): HTMLCanvasElement | null {
-  const icon = readyIcon(name, kind);
-  if (!icon) return null;
-  const path = resolveIconPath(name, kind);
-  const key = `${path}|${tint}|${sizePx}|${dpr}`;
-  const cached = unitTokenCache.get(key);
-  if (cached) return cached;
-  if (typeof document === "undefined") return null;
-  const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(sizePx * dpr));
-  c.height = c.width;
-  const g = c.getContext("2d");
-  if (!g) return null;
-  g.scale(dpr, dpr);
-  g.drawImage(icon, 0, 0, sizePx, sizePx);
-  // source-atop confines the fill to the icon's own alpha, so only
-  // the unit art itself takes the team colour.
-  g.globalCompositeOperation = "source-atop";
-  g.globalAlpha = TINT_ALPHA;
-  g.fillStyle = tint;
-  g.fillRect(0, 0, sizePx, sizePx);
-  unitTokenCache.set(key, c);
-  return c;
-}
-
 export function MapReplayer({
   playback,
   playbackWindow,
@@ -449,6 +199,8 @@ export function MapReplayer({
   // wheel/pinch zooms toward the pointer, drag pans, buttons/dblclick
   // reset. Held in a ref so the rAF loop reads it without re-binding.
   const viewRef = useRef({ z: 1, ox: 0, oy: 0 });
+  const [zoomHint, setZoomHint] = useState(false);
+  const mapControlsId = useId();
 
   const applyZoom = useCallback((cx: number, cy: number, factor: number) => {
     const canvas = canvasRef.current;
@@ -463,10 +215,12 @@ export function MapReplayer({
     ox = Math.min(0, Math.max(w - w * z, ox));
     oy = Math.min(0, Math.max(h - h * z, oy));
     viewRef.current = { z, ox, oy };
+    canvas.style.touchAction = z <= 1 ? "pan-y" : "none";
   }, []);
 
   const resetView = useCallback(() => {
     viewRef.current = { z: 1, ox: 0, oy: 0 };
+    if (canvasRef.current) canvasRef.current.style.touchAction = "pan-y";
   }, []);
 
   /* ── Fullscreen ────────────────────────────────────────────────
@@ -563,7 +317,7 @@ export function MapReplayer({
     img.onload = () => {
       if (!cancelled) {
         layoutImageRef.current = img;
-        assetsVersion += 1;
+        bumpReplayAssetsVersion();
       }
     };
     img.src = url;
@@ -782,7 +536,16 @@ export function MapReplayer({
       const rect = canvas.getBoundingClientRect();
       return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     };
+    let hintTimer: ReturnType<typeof setTimeout> | undefined;
+    let lastHint = 0;
     const onWheel = (e: WheelEvent) => {
+      if (!fullscreenRef.current && !e.ctrlKey && !e.metaKey && document.activeElement !== canvas) {
+        if (Date.now() - lastHint > 1500) {
+          lastHint = Date.now(); setZoomHint(true);
+          clearTimeout(hintTimer); hintTimer = setTimeout(() => setZoomHint(false), 1500);
+        }
+        return;
+      }
       e.preventDefault();
       const pt = local(e);
       applyZoom(pt.x, pt.y, Math.pow(1.0015, -e.deltaY));
@@ -832,6 +595,7 @@ export function MapReplayer({
     };
     const onDblClick = () => resetView();
     const onClick = (e: MouseEvent) => {
+      canvas.focus({ preventScroll: true });
       const moved = tapMoved;
       tapStart = null;
       tapMoved = false;
@@ -864,6 +628,20 @@ export function MapReplayer({
       handler(worldX, worldY, timeRef.current);
     };
 
+    const releaseFocus = () => { if (document.activeElement === canvas) canvas.blur(); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") releaseFocus(); };
+    let gestureScale = 1;
+    const onGestureStart = (event: Event) => { event.preventDefault(); gestureScale = 1; };
+    const onGestureChange = (event: Event) => {
+      event.preventDefault(); const gesture = event as Event & { scale: number; clientX: number; clientY: number };
+      if (Number.isFinite(gesture.scale) && gesture.scale > 0) {
+        const pt = local(gesture); applyZoom(pt.x, pt.y, gesture.scale / gestureScale); gestureScale = gesture.scale;
+      }
+    };
+    canvas.addEventListener("pointerleave", releaseFocus);
+    canvas.addEventListener("keydown", onKey);
+    canvas.addEventListener("gesturestart", onGestureStart, { passive: false });
+    canvas.addEventListener("gesturechange", onGestureChange, { passive: false });
     canvas.addEventListener("wheel", onWheel, { passive: false });
     canvas.addEventListener("pointerdown", onPointerDown);
     canvas.addEventListener("pointermove", onPointerMove);
@@ -873,6 +651,11 @@ export function MapReplayer({
     canvas.addEventListener("click", onClick);
     return () => {
       canvas.removeEventListener("click", onClick);
+      clearTimeout(hintTimer);
+      canvas.removeEventListener("pointerleave", releaseFocus);
+      canvas.removeEventListener("keydown", onKey);
+      canvas.removeEventListener("gesturestart", onGestureStart);
+      canvas.removeEventListener("gesturechange", onGestureChange);
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("pointerdown", onPointerDown);
       canvas.removeEventListener("pointermove", onPointerMove);
@@ -998,9 +781,14 @@ export function MapReplayer({
           ref={frameRef}
           className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
         >
+          <p id={mapControlsId} className="sr-only">Hold Ctrl or Command while scrolling to zoom, or click the map first. Drag when zoomed. Escape releases map focus. Double-click resets the view.</p>
+          {zoomHint ? <span aria-hidden className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded bg-black/80 px-3 py-2 text-caption text-white">{typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "Hold ⌘ to zoom" : "Hold Ctrl to zoom"}</span> : null}
           <canvas
             ref={canvasRef}
-            className="block h-full w-full touch-none rounded-lg bg-[#0a0d13] shadow-[0_10px_40px_-16px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-white/[0.14]"
+            tabIndex={0}
+            style={{ touchAction: "pan-y" }}
+            aria-describedby={mapControlsId}
+            className="block h-full w-full rounded-lg bg-[#0a0d13] shadow-[0_10px_40px_-16px_rgba(0,0,0,0.9)] ring-1 ring-inset ring-white/[0.14]"
             aria-label={`Map playback of ${playback.mapName || "this game"}`}
           />
           <div
@@ -1227,684 +1015,6 @@ function formatEfficiency(eff: number | null): string {
  * matching the classic minimap language: blue crystals, green gas,
  * gray rocks.
  */
-const glyphCache = new Map<string, HTMLCanvasElement>();
-
-function resourceGlyph(kind: string, dpr: number): HTMLCanvasElement | null {
-  const key = `${kind}|${dpr}`;
-  const cached = glyphCache.get(key);
-  if (cached) return cached;
-  if (typeof document === "undefined") return null;
-  const S = 14;
-  const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(S * dpr));
-  c.height = c.width;
-  const g = c.getContext("2d");
-  if (!g) return null;
-  g.scale(dpr, dpr);
-  const diamond = (cx: number, cy: number, w: number, h: number, fill: string, top: string) => {
-    g.beginPath();
-    g.moveTo(cx, cy - h / 2);
-    g.lineTo(cx + w / 2, cy);
-    g.lineTo(cx, cy + h / 2);
-    g.lineTo(cx - w / 2, cy);
-    g.closePath();
-    g.fillStyle = fill;
-    g.fill();
-    g.beginPath();
-    g.moveTo(cx, cy - h / 2);
-    g.lineTo(cx + w / 2, cy);
-    g.lineTo(cx - w / 2, cy);
-    g.closePath();
-    g.fillStyle = top;
-    g.fill();
-  };
-  if (kind === "minerals" || kind === "gold") {
-    const base = kind === "gold" ? "#c9992e" : "#3f7fd6";
-    const glint = kind === "gold" ? "#ffd97a" : "#9cc8ff";
-    diamond(4.4, 8.6, 6, 8, base, glint);
-    diamond(9.8, 8.2, 6.5, 9, base, glint);
-    diamond(7, 5.4, 5, 6.5, base, glint);
-  } else if (kind === "gas") {
-    g.beginPath();
-    g.ellipse(7, 8, 5.6, 4.2, 0, 0, Math.PI * 2);
-    g.fillStyle = "#3a4a41";
-    g.fill();
-    g.beginPath();
-    g.ellipse(7, 7.4, 3.1, 2.3, 0, 0, Math.PI * 2);
-    g.fillStyle = "#57c785";
-    g.fill();
-    g.beginPath();
-    g.ellipse(6.2, 6.8, 1.1, 0.8, 0, 0, Math.PI * 2);
-    g.fillStyle = "#b6f0cd";
-    g.fill();
-  } else if (kind === "rocks") {
-    g.beginPath();
-    g.moveTo(2.5, 9.5);
-    g.lineTo(4.5, 4.5);
-    g.lineTo(8, 3.4);
-    g.lineTo(11.6, 5.6);
-    g.lineTo(11.2, 10);
-    g.lineTo(6.5, 11.4);
-    g.closePath();
-    g.fillStyle = "#6e6a5e";
-    g.fill();
-    g.beginPath();
-    g.moveTo(4.5, 4.5);
-    g.lineTo(8, 3.4);
-    g.lineTo(9.4, 6.8);
-    g.lineTo(5.6, 7.6);
-    g.closePath();
-    g.fillStyle = "#8d887a";
-    g.fill();
-  } else {
-    // Xel'Naga tower: watch ring.
-    g.beginPath();
-    g.arc(7, 7, 4.4, 0, Math.PI * 2);
-    g.strokeStyle = "#cfcab2";
-    g.lineWidth = 1.4;
-    g.stroke();
-    g.beginPath();
-    g.arc(7, 7, 1.5, 0, Math.PI * 2);
-    g.fillStyle = "#cfcab2";
-    g.fill();
-  }
-  glyphCache.set(key, c);
-  return c;
-}
-
-/* ──────────────── per-payload derived data ──────────────── */
-
-interface Derived {
-  creepSources: CreepSource[];
-  /** Track bounding box per unit, in world units — lets a zoomed-in
-   * frame skip interpolating a unit that can never be on screen. */
-  trackBox: Float32Array;
-  /** Per-unit facing, carried across frames so the hysteresis in
-   * ``facingFromVelocity`` has something to be sticky about. */
-  /** Per-unit animation phase, so a pack of Zerglings never marches
-   * in lockstep. Deterministic in the payload index. */
-  phase: Float32Array;
-  /** Sheet handles resolved ONCE per payload. Name → sheet resolution
-   * and URL building are string work; doing them per unit per frame
-   * would be 60 000 string operations a second for nothing. Null means
-   * no sheet ships for that name → the flat-icon fallback. */
-  unitStand: Array<SpriteAnimHandle | null>;
-  unitWalk: Array<SpriteAnimHandle | null>;
-  unitWorker: Uint8Array;
-  buildingStand: Array<SpriteAnimHandle | null>;
-  buildingHall: Uint8Array;
-  buildingPhase: Float32Array;
-  /** Just the vespene structures, so the per-frame "is this geyser
-   *  tapped?" guard rescans ~1% of the building list instead of all of
-   *  it, once per gas node, every frame. */
-  gasBuildings: PlaybackBuilding[];
-}
-
-const derivedCache = new WeakMap<MapPlayback, Derived>();
-
-function derivedOf(playback: MapPlayback): Derived {
-  let d = derivedCache.get(playback);
-  if (!d) {
-    const n = playback.units.length;
-    const trackBox = new Float32Array(n * 4);
-    const phase = new Float32Array(n);
-    const unitStand: Array<SpriteAnimHandle | null> = new Array(n);
-    const unitWalk: Array<SpriteAnimHandle | null> = new Array(n);
-    const unitWorker = new Uint8Array(n);
-    for (let i = 0; i < n; i += 1) {
-      const u = playback.units[i];
-      const worker = isWorkerUnit(u.name);
-      unitWorker[i] = worker ? 1 : 0;
-      const sprite = resolveSprite(u.name, "unit");
-      unitStand[i] = sprite ? spriteAnim(sprite, "Stand") : null;
-      // Carrier, SiegeTank and Tempest have no walk cycle; spriteAnim
-      // already falls back to Stand, so this is never null when the
-      // sprite exists and the Walk/Stand switch is a plain pick.
-      unitWalk[i] = sprite ? spriteAnim(sprite, hasWalk(sprite) ? "Walk" : "Stand") : null;
-      phase[i] = phaseOffset(i);
-      let minX = Infinity;
-      let minY = Infinity;
-      let maxX = -Infinity;
-      let maxY = -Infinity;
-      const wp = u.wp;
-      for (let j = 1; j + 1 < wp.length; j += 3) {
-        const x = wp[j];
-        const y = wp[j + 1];
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      }
-      trackBox[i * 4] = minX;
-      trackBox[i * 4 + 1] = minY;
-      trackBox[i * 4 + 2] = maxX;
-      trackBox[i * 4 + 3] = maxY;
-    }
-    const bn = playback.buildings.length;
-    const buildingStand: Array<SpriteAnimHandle | null> = new Array(bn);
-    const buildingHall = new Uint8Array(bn);
-    const buildingPhase = new Float32Array(bn);
-    const gasBuildings: PlaybackBuilding[] = [];
-    for (let i = 0; i < bn; i += 1) {
-      const b = playback.buildings[i];
-      const sprite = resolveSprite(b.name, "building");
-      buildingStand[i] = sprite ? spriteAnim(sprite, "Stand") : null;
-      buildingHall[i] = isTownHall(b.name) ? 1 : 0;
-      buildingPhase[i] = phaseOffset(i * 2654435761);
-      if (isGasStructure(b.name)) gasBuildings.push(b);
-    }
-    d = {
-      creepSources: collectCreepSources(playback),
-      trackBox,
-      phase,
-      unitStand,
-      unitWalk,
-      unitWorker,
-      buildingStand,
-      buildingHall,
-      buildingPhase,
-      gasBuildings,
-    };
-    derivedCache.set(playback, d);
-  }
-  return d;
-}
-
-/** Reusable offscreen fog canvas — resized on demand, redrawn each
- * rendered frame (the draw loop is already dirty-checked). */
-let fogCanvas: HTMLCanvasElement | null = null;
-/** One cached reveal stamp, blitted at whatever radius each sight
- * source needs. The falloff profile is a ratio, so it is the same
- * shape for every radius and every zoom — one canvas covers all. */
-let fogMaskCanvas: HTMLCanvasElement | null = null;
-
-function fogMask(): HTMLCanvasElement | null {
-  if (fogMaskCanvas) return fogMaskCanvas;
-  if (typeof document === "undefined") return null;
-  const c = document.createElement("canvas");
-  c.width = FOG_MASK_PX;
-  c.height = FOG_MASK_PX;
-  const g = c.getContext("2d");
-  if (!g) return null;
-  const r = FOG_MASK_PX / 2;
-  const grad = g.createRadialGradient(r, r, r * FOG_MASK_INNER, r, r, r);
-  grad.addColorStop(0, "rgba(0,0,0,1)");
-  grad.addColorStop(1, "rgba(0,0,0,0)");
-  g.fillStyle = grad;
-  g.beginPath();
-  g.arc(r, r, r, 0, Math.PI * 2);
-  g.fill();
-  fogMaskCanvas = c;
-  return c;
-}
-
-interface ViewTransform {
-  z: number;
-  ox: number;
-  oy: number;
-}
-
-/* ──────────────── draw entities ────────────────
- *
- * Units and buildings go into ONE list and are painted back-to-front
- * by their ground point's screen Y, so a Marine standing in front of a
- * Barracks draws over it — the whole reason the sprites read as 3D.
- * The list is a pooled array of mutable records: a 500-unit frame
- * allocates nothing after the first.
- */
-interface DrawEntity {
-  x: number;
-  y: number;
-  cellPx: number;
-  handle: SpriteAnimHandle | null;
-  color: SpriteColor;
-  facing: number;
-  frame: number;
-  /** Fallback icon path data when ``handle`` is null. */
-  name: string;
-  iconKind: IconKind;
-  tint: string;
-  dot: string;
-  alpha: number;
-  worker: boolean;
-}
-
-const entityPool: DrawEntity[] = [];
-let entityCount = 0;
-const drawOrder: number[] = [];
-
-function pushEntity(): DrawEntity {
-  let e = entityPool[entityCount];
-  if (!e) {
-    e = {
-      x: 0, y: 0, cellPx: 0, handle: null, color: "red", facing: 0, frame: 0,
-      name: "", iconKind: "unit", tint: "", dot: "", alpha: 1, worker: false,
-    };
-    entityPool[entityCount] = e;
-  }
-  entityCount += 1;
-  return e;
-}
-
-/** Scratch motion samples — module-level so the hot loop allocates
- * nothing per unit per frame. */
-const trackSample: MotionSample = motionSample();
-
-/** Fog reveal sources, pooled the same way as the entity list. */
-const fogX: number[] = [];
-const fogY: number[] = [];
-const fogR: number[] = [];
-let fogCount = 0;
-
-function pushFog(x: number, y: number, r: number): void {
-  fogX[fogCount] = x;
-  fogY[fogCount] = y;
-  fogR[fogCount] = r;
-  fogCount += 1;
-}
-
-function renderFrame(
-  ctx: CanvasRenderingContext2D,
-  canvas: HTMLCanvasElement,
-  playback: MapPlayback,
-  t: number,
-  layout: HTMLImageElement | null,
-  view: ViewTransform,
-  markers?: readonly ReplayMapMarker[],
-) {
-  const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-  const w = canvas.width / dpr;
-  const h = canvas.height / dpr;
-  const { bounds } = playback;
-
-  /* ── THE transform ──────────────────────────────────────────────
-   * ``worldProjection`` is the single authority for world → canvas.
-   * ``k`` is PIXELS PER WORLD UNIT; every length on screen derives
-   * from it — terrain rect, sprite cell width, effect and fog
-   * radii. Nothing in this file may size anything in
-   * raw pixels that represents a world quantity.
-   *
-   *   canvasX = proj.ox + (worldX - bounds.minX) * k
-   *   canvasY = proj.oy + (bounds.maxY - worldY) * k      (Y flipped)
-   *   spriteCellPx = worldUnitsPerCell * k
-   */
-  const proj = worldProjection(bounds, w, h, STAGE_PAD_PX);
-  const k = proj.k;
-
-  // Device px per scene px this frame: the view zoom times the device
-  // pixel ratio. Sprite atlases and icon tokens rasterise against it,
-  // so they stay crisp under zoom instead of magnifying a 1× raster.
-  const rasterScale = view.z * dpr;
-  // Icon tokens keep the old power-of-two quantisation so their cache
-  // stays tiny (≤3 sizes); sprite atlases bucket internally.
-  const iconDpr = dpr * Math.min(4, Math.pow(2, Math.ceil(Math.log2(Math.max(1, view.z)))));
-  beginSpriteFrame(rasterScale);
-
-  // Visible scene rect, for culling. A scene point p is drawn at
-  // ox + p*z, so the visible range is [-ox/z, (w-ox)/z].
-  const cullX0 = -view.ox / view.z;
-  const cullY0 = -view.oy / view.z;
-  const cullX1 = cullX0 + w / view.z;
-  const cullY1 = cullY0 + h / view.z;
-
-  ctx.clearRect(0, 0, w, h);
-  // Zoom/pan: scale the whole scene (sprites included — true zoom).
-  ctx.save();
-  ctx.translate(view.ox, view.oy);
-  ctx.scale(view.z, view.z);
-
-  // Real map layout under everything, at FULL COLOUR, stretched to the
-  // projected playable rect — the same rect every sprite projects into,
-  // so terrain and unit positions share one coordinate mapping. The
-  // old flat dark veil is gone; contrast comes from the edge vignette
-  // drawn at the very end instead.
-  const rectW = (bounds.maxX - bounds.minX) * k;
-  const rectH = (bounds.maxY - bounds.minY) * k;
-  if (layout) {
-    ctx.drawImage(layout, proj.ox, proj.oy, rectW, rectH);
-  }
-
-  // Neutral terrain furniture (v2 payloads): mineral lines, geysers,
-  // rocks, towers — mined-out patches and broken rocks disappear at
-  // their recorded death time.
-  const derived = derivedOf(playback);
-  if (playback.creep) drawObservedCreep(ctx, bounds, proj, playback.creep, t);
-  else drawEstimatedCreep(ctx, bounds, proj, derived.creepSources, t);
-  const minFurniturePx = MIN_FURNITURE_SCREEN_PX / view.z;
-  const glyphPx = Math.max(minFurniturePx, RESOURCE_GLYPH_WORLD * k);
-  const rocksPx = Math.max(minFurniturePx, ROCKS_GLYPH_WORLD * k);
-  for (const r of playback.resources) {
-    if (!resourceAliveAt(r, t)) continue;
-    // A TAPPED geyser is not drawn at all: the structure standing on it
-    // IS its presentation, exactly as in SC2, where a built
-    // Refinery/Extractor/Assimilator hides the geyser completely.
-    //
-    // This is the gas-placement fix. The two are recorded at the same
-    // map coordinate (measured: Δ = 0 on every gas structure in ten
-    // real payloads), but they are PLACED by different conventions —
-    // the glyph is centred on the coordinate, while the sprite is
-    // anchored at its model's ground origin, which sits below the
-    // bitmap's centre. The sprite's cell therefore lands ~0.5–0.7 world
-    // units up-screen of the glyph (see the harness in
-    // ``lib/__tests__/gasPlacement.test.ts``), and the green pool fringed
-    // out from under the structure's downhill edge — most visibly in
-    // the compact host, where ``MIN_FURNITURE_SCREEN_PX`` floors the
-    // glyph at 9 px while an Assimilator is only 9.8 px wide.
-    //
-    // The anchor convention is not the thing to change: it is what puts
-    // every unit's feet and every structure's footprint on its
-    // coordinate. Removing the duplicate marker is.
-    if (r.kind === "gas" && gasTappedAt(derived.gasBuildings, r, t)) continue;
-    const glyph = resourceGlyph(r.kind, iconDpr);
-    if (!glyph) continue;
-    const size = r.kind === "rocks" ? rocksPx : glyphPx;
-    ctx.drawImage(
-      glyph,
-      projectX(bounds, proj, r.x) - size / 2,
-      projectY(bounds, proj, r.y) - size / 2,
-      size,
-      size,
-    );
-  }
-
-  const trackBox = derived.trackBox;
-  entityCount = 0;
-  fogCount = 0;
-
-  // Margin for the cheap track-bbox reject, in canvas px — see
-  // CULL_MARGIN_WORLD for what it has to cover.
-  const pad = CULL_MARGIN_WORLD * k;
-  // A sprite's on-screen floor, expressed in scene px so the ctx zoom
-  // turns it back into a constant screen size.
-  const minCellScenePx = MIN_SPRITE_SCREEN_PX / view.z;
-
-  /* ── Units ─────────────────────────────────────────────────────── */
-  const units = playback.units;
-  for (let idx = 0; idx < units.length; idx += 1) {
-    const u = units[idx];
-    if (!unitVisibleAt(u, t)) continue;
-    // Cheap reject: a unit whose whole track sits off screen can never
-    // be visible, so skip the interpolation entirely.
-    const bx0 = trackBox[idx * 4];
-    if (bx0 !== Infinity) {
-      const sx0 = projectX(bounds, proj, bx0) - pad;
-      const sx1 = projectX(bounds, proj, trackBox[idx * 4 + 2]) + pad;
-      // Y is flipped by the projection, so maxY maps to the smaller
-      // canvas coordinate.
-      const sy0 = projectY(bounds, proj, trackBox[idx * 4 + 3]) - pad;
-      const sy1 = projectY(bounds, proj, trackBox[idx * 4 + 1]) + pad;
-      if (sx1 < cullX0 || sx0 > cullX1 || sy1 < cullY0 || sy0 > cullY1) continue;
-    }
-
-    const name = unitNameAt(u, t);
-    const pos = sampleTrack(u.wp, t, unitMaxSpeed(name, playback.fidelity?.positions === "engine"), trackSample);
-    if (!pos) continue;
-    const { x: wx, y: wy, vx, vy } = pos;
-    const worker = isWorkerUnit(name);
-
-    const sx = projectX(bounds, proj, wx);
-    const sy = projectY(bounds, proj, wy);
-    pushFog(sx, sy, worker ? SIGHT_WORKER : SIGHT_UNIT);
-
-    // Actual weapon cycles trigger a single Attack clip. Otherwise use
-    // observed movement to choose Walk or Stand.
-    const walking = vx * vx + vy * vy > WALK_SPEED_THRESHOLD * WALK_SPEED_THRESHOLD;
-    const formSprite = name !== u.name ? resolveSprite(name, "unit") : null;
-    const sprite = name !== u.name ? formSprite : derived.unitStand[idx]?.sprite;
-    const attackHandle = sprite?.meta.anims.Attack ? spriteAnim(sprite, "Attack") : null;
-    const attack = attackAt(u, t, attackHandle ? Math.min(1, attackHandle.anim.frames / attackHandle.anim.fps) : 0.6);
-    const handle = attack && attackHandle ? attackHandle : name !== u.name
-      ? formSprite ? spriteAnim(formSprite, walking && hasWalk(formSprite) ? "Walk" : "Stand") : null
-      : walking ? derived.unitWalk[idx] : derived.unitStand[idx];
-    let cellPx = handle
-      ? handle.anim.wupc * k * SPRITE_WORLD_GAIN
-      : (worker ? FALLBACK_WORKER_WORLD : FALLBACK_UNIT_WORLD) * k;
-    if (cellPx < minCellScenePx) cellPx = minCellScenePx;
-
-    if (sx + cellPx < cullX0 || sx - cellPx > cullX1) continue;
-    if (sy + cellPx < cullY0 || sy - cellPx > cullY1) continue;
-
-    const facing = unitFacingAt(u, t, pos, attack);
-
-    const e = pushEntity();
-    e.x = sx;
-    e.y = sy;
-    e.cellPx = cellPx;
-    e.handle = handle;
-    e.color = u.owner === "me" ? ME_SHEET : OPP_SHEET;
-    e.facing = facing;
-    e.frame = handle
-      ? attack && handle === attackHandle ? attackFrame(attack.age, handle.anim.fps, handle.anim.frames)
-        : animFrameIndex(t, handle.anim.fps, handle.anim.frames, derived.phase[idx])
-      : 0;
-    e.name = name;
-    e.iconKind = "unit";
-    e.tint = u.owner === "me" ? ME_ARMY : OPP_ARMY;
-    e.dot = u.owner === "me" ? (worker ? ME_WORKER : ME_ARMY) : worker ? OPP_WORKER : OPP_ARMY;
-    e.alpha = handle ? 1 : worker ? 0.75 : 1;
-    e.worker = worker;
-  }
-
-  /* ── Buildings ─────────────────────────────────────────────────── */
-  const buildings = playback.buildings;
-  for (let bi = 0; bi < buildings.length; bi += 1) {
-    const b = buildings[bi];
-    if (!buildingVisibleAt(b, t)) continue;
-    const bpos = buildingPositionAt(b, t, playback.fidelity?.positions === "engine");
-    const sx = projectX(bounds, proj, bpos.x);
-    const sy = projectY(bounds, proj, bpos.y);
-    pushFog(sx, sy, derived.buildingHall[bi] === 1 ? SIGHT_HALL : SIGHT_BUILDING);
-
-    // Buildings have facings: 1 — they never rotate — and their draw
-    // size comes from the same worldUnitsPerCell ladder as units, so
-    // the old hard-coded town-hall size bump is gone.
-    const name = unitNameAt(b, t);
-    const formSprite = name !== b.name ? resolveSprite(name, "building") : null;
-    const sprite = name !== b.name ? formSprite : derived.buildingStand[bi]?.sprite;
-    const attackHandle = sprite?.meta.anims.Attack ? spriteAnim(sprite, "Attack") : null;
-    const attack = attackAt(b, t, attackHandle ? Math.min(1, attackHandle.anim.frames / attackHandle.anim.fps) : 0.6);
-    const handle = attack && attackHandle ? attackHandle : name !== b.name ? formSprite ? spriteAnim(formSprite, "Stand") : null : derived.buildingStand[bi];
-    let cellPx = handle
-      ? handle.anim.wupc * k * SPRITE_WORLD_GAIN
-      : FALLBACK_BUILDING_WORLD * k;
-    if (cellPx < minCellScenePx) cellPx = minCellScenePx;
-    if (sx + cellPx < cullX0 || sx - cellPx > cullX1) continue;
-    if (sy + cellPx < cullY0 || sy - cellPx > cullY1) continue;
-
-    const e = pushEntity();
-    e.x = sx;
-    e.y = sy;
-    e.cellPx = cellPx;
-    e.handle = handle;
-    e.color = b.owner === "me" ? ME_SHEET : OPP_SHEET;
-    e.facing = 0;
-    e.frame = handle
-      ? attack && handle === attackHandle ? attackFrame(attack.age, handle.anim.fps, handle.anim.frames)
-        : animFrameIndex(t, handle.anim.fps, handle.anim.frames, derived.buildingPhase[bi])
-      : 0;
-    e.name = name;
-    e.iconKind = "building";
-    e.tint = b.owner === "me" ? ME_ARMY : OPP_ARMY;
-    e.dot = b.owner === "me" ? "rgba(62,192,199,0.75)" : "rgba(224,86,86,0.75)";
-    e.alpha = 1;
-    e.worker = false;
-
-  }
-
-  /* ── Fog of war ────────────────────────────────────────────────
-   * Union of BOTH sides' vision (matching the replay viewer
-   * convention) — a dark layer with soft reveals punched out around
-   * every unit and standing building. Unscouted map stays dim. Drawn
-   * over terrain but UNDER the entities, so units are never hidden.
-   */
-  const mask = fogCount > 0 ? fogMask() : null;
-  if (typeof document !== "undefined" && mask) {
-    if (!fogCanvas) fogCanvas = document.createElement("canvas");
-    const fscale = Math.min(FOG_MAX_DPR, dpr) * FOG_RENDER_SCALE;
-    const fw = Math.max(1, Math.round(w * fscale));
-    const fh = Math.max(1, Math.round(h * fscale));
-    if (fogCanvas.width !== fw || fogCanvas.height !== fh) {
-      fogCanvas.width = fw;
-      fogCanvas.height = fh;
-    }
-    const fg = fogCanvas.getContext("2d");
-    if (fg) {
-      // Fog is built in SCREEN space, not scene space: the reveals are
-      // projected through the view transform so the mask stays at a
-      // constant fraction of screen resolution at every zoom (a
-      // scene-space fog blurs 8× when you zoom 8×) and off-screen
-      // sources cost nothing.
-      fg.setTransform(fscale, 0, 0, fscale, 0, 0);
-      fg.clearRect(0, 0, w, h);
-      fg.globalCompositeOperation = "source-over";
-      fg.fillStyle = `rgba(3,6,11,${FOG_ALPHA})`;
-      fg.fillRect(0, 0, w, h);
-      fg.globalCompositeOperation = "destination-out";
-      // Integer grid keys (12 bits per axis, biased for negatives)
-      // avoid 600 template strings per frame.
-      const seen = new Set<number>();
-      const z = view.z;
-      for (let i = 0; i < fogCount; i += 1) {
-        const worldR = fogR[i];
-        const r = worldR * k * z;
-        const cx = fogX[i] * z + view.ox;
-        const cy = fogY[i] * z + view.oy;
-        if (cx + r < 0 || cx - r > w || cy + r < 0 || cy - r > h) continue;
-        const cell = Math.max(6, r * FOG_DEDUPE_RADIUS_FRACTION);
-        const gx = (Math.round(cx / cell) + 2048) & 0xfff;
-        const gy = (Math.round(cy / cell) + 2048) & 0xfff;
-        const key = (gx << 20) | (gy << 8) | (worldR & 0xff);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        fg.drawImage(mask, cx - r, cy - r, r * 2, r * 2);
-      }
-      // Composite in screen space too, then hand the transform back.
-      ctx.save();
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.drawImage(fogCanvas, 0, 0, w, h);
-      ctx.restore();
-    }
-  }
-
-  // Spawn anchors — subtle rings labeled by side colour.
-  const spawnR = Math.max(minFurniturePx, SPAWN_RING_WORLD * k);
-  for (const s of playback.spawns) {
-    ctx.beginPath();
-    ctx.arc(projectX(bounds, proj, s.x), projectY(bounds, proj, s.y), spawnR, 0, Math.PI * 2);
-    ctx.strokeStyle = s.owner === "me" ? "rgba(62,192,199,0.35)" : "rgba(224,86,86,0.35)";
-    ctx.lineWidth = 1.5 / view.z;
-    ctx.stroke();
-  }
-
-  drawSpellEffects(ctx, playback, t, proj, view, w, h, "ground");
-
-  /* ── Painter's pass ────────────────────────────────────────────
-   * Back to front by ground-point Y. Sorting an index array keeps the
-   * pooled entity records stable and allocates nothing after warmup.
-   */
-  drawOrder.length = entityCount;
-  for (let i = 0; i < entityCount; i += 1) drawOrder[i] = i;
-  drawOrder.sort((a, b) => entityPool[a].y - entityPool[b].y);
-
-  let alpha = 1;
-  for (let i = 0; i < entityCount; i += 1) {
-    const e = entityPool[drawOrder[i]];
-    if (e.alpha !== alpha) {
-      ctx.globalAlpha = e.alpha;
-      alpha = e.alpha;
-    }
-    if (
-      e.handle &&
-      drawSprite(ctx, e.handle, e.color, e.facing, e.frame, e.x, e.y, e.cellPx)
-    ) {
-      continue;
-    }
-    // Retain the loaded model while its first attack atlas is decoding.
-    if (e.handle?.name === "Attack") {
-      const idle = spriteAnim(e.handle.sprite, "Stand");
-      const idleSize = Math.max(minCellScenePx, idle.anim.wupc * k * SPRITE_WORLD_GAIN);
-      if (drawSprite(ctx, idle, e.color, e.facing, animFrameIndex(t, idle.anim.fps, idle.anim.frames, 0), e.x, e.y, idleSize)) continue;
-    }
-    // No sheet for this name (or it hasn't decoded yet): the flat
-    // team-tinted icon, then a bare dot.
-    const size = e.cellPx;
-    const token = iconToken(e.name, e.iconKind, e.tint, size, iconDpr);
-    if (token) {
-      ctx.drawImage(token, e.x - size / 2, e.y - size / 2, size, size);
-    } else {
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, Math.max(1.4, size * 0.18), 0, Math.PI * 2);
-      ctx.fillStyle = e.dot;
-      ctx.fill();
-    }
-  }
-  if (alpha !== 1) ctx.globalAlpha = 1;
-  endSpriteFrame();
-
-  drawSpellEffects(ctx, playback, t, proj, view, w, h, "overlay");
-  drawWeaponEffects(ctx, playback, t, proj, view);
-
-  // Battle pulses near their marker time — drawn last so the amber
-  // ring reads over the sprites it is calling attention to.
-  for (const m of playback.battles) {
-    const d = Math.abs(m.t - t);
-    if (d > BATTLE_WINDOW_SEC) continue;
-    const f = 1 - d / BATTLE_WINDOW_SEC;
-    ctx.beginPath();
-    ctx.arc(
-      projectX(bounds, proj, m.x),
-      projectY(bounds, proj, m.y),
-      Math.max(minFurniturePx, (BATTLE_RING_MIN_WORLD + BATTLE_RING_GROW_WORLD * f) * k),
-      0,
-      Math.PI * 2,
-    );
-    ctx.strokeStyle = `rgba(230,180,80,${0.15 + 0.5 * f})`;
-    ctx.lineWidth = 2 / view.z;
-    ctx.stroke();
-  }
-
-  ctx.restore();
-
-  // Edge vignette, OUTSIDE the view transform so it hugs the stage
-  // rather than the map. This replaces the old global dark wash: the
-  // terrain keeps its real colour, and only the border darkens enough
-  // to separate the stage from the page.
-  const vignette = vignetteFor(w, h, ctx);
-  if (vignette) {
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, w, h);
-  }
-
-  if (markers && markers.length) {
-    drawMarkers(ctx, bounds, worldProjection(bounds, w, h, STAGE_PAD_PX), t, view, w, h, markers);
-  }
-}
-
-/** Cached vignette gradient, per context — rebuilt only when the
- * stage resizes, so the per-frame cost is one fillRect. */
-const vignetteCache = new WeakMap<
-  CanvasRenderingContext2D,
-  { w: number; h: number; grad: CanvasGradient }
->();
-
-function vignetteFor(
-  w: number,
-  h: number,
-  ctx: CanvasRenderingContext2D,
-): CanvasGradient | null {
-  const hit = vignetteCache.get(ctx);
-  if (hit && hit.w === w && hit.h === h) return hit.grad;
-  if (!(w > 0 && h > 0)) return null;
-  const cx = w / 2;
-  const cy = h / 2;
-  const outer = Math.hypot(cx, cy);
-  const grad = ctx.createRadialGradient(cx, cy, outer * VIGNETTE_INNER, cx, cy, outer);
-  grad.addColorStop(0, "rgba(6,9,14,0)");
-  grad.addColorStop(1, `rgba(6,9,14,${VIGNETTE_ALPHA})`);
-  vignetteCache.set(ctx, { w, h, grad });
-  return grad;
-}
-
 function formatTime(sec: number): string {
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);

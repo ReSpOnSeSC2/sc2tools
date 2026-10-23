@@ -12,7 +12,7 @@ export interface BuildEditorSaveBarProps {
   /** When "edit", primary button reads "Save changes" instead of "Save build". */
   mode?: "create" | "edit";
   /**
-   * Landing-page demo mode: replaces Save build / Save & Reclassify
+   * Landing-page demo mode: replaces Save build / Save & re-match
    * with a sign-up CTA. Cancel still closes the modal so the visitor
    * isn't trapped.
    */
@@ -22,7 +22,7 @@ export interface BuildEditorSaveBarProps {
 /**
  * BuildEditorSaveBar — sticky save footer for the BuildEditor modal.
  *
- * Hosts Cancel + Save build + Save & Reclassify buttons. Save is
+ * Hosts Cancel + Save build + Save & re-match buttons. Save is
  * disabled when there are no rules or while a save call is in flight.
  * Preview is advisory and either save action may cancel it.
  */
@@ -99,7 +99,7 @@ export function BuildEditorSaveBar({
           disabled={saveDisabled}
           title="Save and match your replay history against this rule set in the background."
         >
-          Save & Reclassify
+          Save & re-match
         </Button>
       </div>
     </div>

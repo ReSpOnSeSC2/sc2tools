@@ -20,11 +20,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Crosshair } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { useToastOptional } from "@/components/ui/Toast";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { GHOST_ARMED_EVENT, useArmGhostTarget } from "./useArmGhostTarget";
+export { GHOST_ARMED_EVENT } from "./useArmGhostTarget";
 import {
-  armGhostTargetForMatchup,
   clearGhostTarget,
-  fromBuildLog,
   ghostMatchupKey,
   readArmedGhostConfig,
   selectGhostTarget,
@@ -43,7 +43,7 @@ import {
  * "storage" events only fire in OTHER tabs, so the arm affordances
  * dispatch this custom event locally.
  */
-export const GHOST_ARMED_EVENT = "sc2tools:ghost-build-armed";
+
 
 const GRADE_CLASS: Record<GhostGradeLetter, string> = {
   S: "text-success",
@@ -62,10 +62,11 @@ const GRADE_HINT: Record<GhostGradeLetter, string> = {
 };
 
 export function GhostGradeCard({
-  buildLog,
+  gameId, buildLog,
   myRace,
   opponentRace,
 }: {
+  gameId?: string;
   /** Raw my-side ``[m:ss] Name`` lines for THIS game. */
   buildLog: ReadonlyArray<string> | null;
   myRace?: string | null;
@@ -91,9 +92,9 @@ export function GhostGradeCard({
   }, [myRace, opponentRace]);
 
   const grade = useMemo<GhostGradeResult | null>(() => {
-    if (!target || !buildLog || buildLog.length === 0) return null;
+    if (!target || (gameId && target.sourceGameId === gameId) || !buildLog || buildLog.length === 0) return null;
     return gradeExecution(target, buildLog);
-  }, [target, buildLog]);
+  }, [target, buildLog, gameId]);
 
   const onDisarm = useCallback(() => {
     const matchup = ghostMatchupKey(myRace, opponentRace);
@@ -105,6 +106,10 @@ export function GhostGradeCard({
     }
   }, [myRace, opponentRace]);
 
+  if (target && gameId && target.sourceGameId === gameId) return <Card title="Ghost Build target">
+    <p>This game is your armed {ghostMatchupKey(myRace, opponentRace)} target. Your next {ghostMatchupKey(myRace, opponentRace)} games will be graded against it.</p>
+    <Button variant="ghost" onClick={onDisarm}>Disarm</Button>
+  </Card>;
   if (!target || !grade) return null;
 
   return (
@@ -173,7 +178,7 @@ export function GhostGradeCard({
             type="button"
             onClick={() => setShowSteps((s) => !s)}
             aria-expanded={showSteps}
-            className="inline-flex min-h-[32px] items-center gap-1 rounded text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="inline-flex min-h-[44px] items-center gap-1 rounded text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             {showSteps ? (
               <ChevronDown className="h-4 w-4" aria-hidden />
@@ -244,71 +249,27 @@ export function GhostGradeCard({
  * Ghost Build target (fromBuildLog) so "play like that game again" is
  * one click.
  */
-export function ArmGhostFromLogButton({
-  name,
-  lines,
-  myRace,
-  opponentRace,
-}: {
-  /** Display name for the target (my build label / map fallback). */
-  name: string;
-  /** Raw my-side ``[m:ss] Name`` lines. */
-  lines: ReadonlyArray<string>;
-  myRace?: string | null;
-  opponentRace?: string | null;
+export function ArmGhostFromLogButton(props: {
+  name: string; lines: ReadonlyArray<string>; myRace?: string | null; opponentRace?: string | null; gameId?: string;
 }) {
-  const toastCtx = useToastOptional();
-  const [armed, setArmed] = useState(false);
-  const matchup = ghostMatchupKey(myRace, opponentRace);
-  const opponentIsRandom =
-    typeof opponentRace === "string"
-    && ["r", "random"].includes(opponentRace.trim().toLowerCase());
-
-  const onArm = () => {
-    const target = fromBuildLog(name, lines);
-    if (
-      !target
-      || !matchup
-      || !armGhostTargetForMatchup(myRace, opponentRace, target)
-    ) {
-      toastCtx?.toast.error("Couldn't arm this build", {
-        description:
-          "A concrete matchup and timed build steps are required, and browser storage must be available.",
-      });
-      return;
-    }
-    window.dispatchEvent(new Event(GHOST_ARMED_EVENT));
-    setArmed(true);
-    window.setTimeout(() => setArmed(false), 1500);
-    toastCtx?.toast.success(`Saved “${target.name}” for ${matchup}`, {
-      description: `${target.steps.length} timed steps were assigned only to ${matchup}. Copy the updated Ghost Build widget URL from Settings → Overlay.`,
-    });
-  };
-
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={onArm}
-      disabled={!matchup}
-      iconLeft={<Crosshair className="h-4 w-4" aria-hidden />}
-      title={
-        opponentIsRandom
-          ? "Ghost Build is disabled against Random opponents"
-          : matchup
-            ? `Save this game's build for ${matchup}`
-            : "Ghost Build requires two concrete races"
-      }
-    >
-      {armed
-        ? "Saved!"
-        : opponentIsRandom
-          ? "No build vs Random"
-          : matchup
-            ? `Save for ${matchup}`
-            : "Matchup unavailable"}
+  const ghost = useArmGhostTarget(props);
+  const random = ["r", "random"].includes((props.opponentRace || "").toLowerCase());
+  return <>
+    <Button variant="ghost" size="sm" onClick={ghost.armed ? ghost.disarm : ghost.arm}
+      aria-label={ghost.armed ? `Armed for ${ghost.matchup} · Disarm` : ghost.matchup ? "Use as Ghost Build target" : undefined}
+      disabled={!ghost.matchup} iconLeft={<Crosshair className="h-4 w-4" aria-hidden />}
+      title={random ? "Ghost Build is disabled against Random opponents" : ghost.matchup
+        ? `Your next ${ghost.matchup} games are graded against this build, and the Ghost Build overlay shows its steps while you play.`
+        : "Ghost Build requires two concrete races"}>
+      {ghost.armed ? `Armed for ${ghost.matchup} · Disarm` : !ghost.matchup
+        ? random ? "No build vs Random" : "Matchup unavailable"
+        : <><span className="hidden sm:inline">Use as Ghost Build target</span><span className="sm:hidden">Ghost target</span></>}
     </Button>
-  );
+    <ConfirmDialog open={!!ghost.replacement} onClose={ghost.cancel} onConfirm={ghost.confirm}
+      title={`Replace “${ghost.replacement?.name || ""}” with this game's build?`}
+      description="Later games in this matchup will use the new target. You can undo this from the confirmation toast."
+      confirmLabel="Replace target" />
+  </>;
 }
 
 function clock(seconds: number): string {
