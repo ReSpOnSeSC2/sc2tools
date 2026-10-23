@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import type { ReplayLibraryItem } from "../replays/types";
 import { ReplayList } from "../replays/ReplayList";
 
@@ -9,6 +9,8 @@ const { downloadMock, macroPanelMock, publicDownloadMock, askMock } = vi.hoisted
   publicDownloadMock: vi.fn(),
   askMock: vi.fn(),
 }));
+const auth = vi.hoisted(() => ({ isLoaded: true, isSignedIn: false }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
 
 vi.mock("@/components/reviews/AskForReviewButton", () => ({
   AskForReviewButton: (props: { gameId: string; matchup: string | null; label?: string; ariaLabel?: string }) => {
@@ -117,6 +119,7 @@ const REPLAY: ReplayLibraryItem = {
 };
 
 afterEach(() => {
+  auth.isLoaded = true; auth.isSignedIn = false;
   cleanup();
   downloadMock.mockClear();
   macroPanelMock.mockClear();
@@ -125,6 +128,18 @@ afterEach(() => {
 });
 
 describe("ReplayList", () => {
+  it("shows one public action in each layout, with no account flash before auth resolves", () => {
+    auth.isLoaded = false;
+    const view = render(<ReplayList items={[{ ...REPLAY, result: "draw" }]} owner={false} playerName="Reaver" publicHandle="shared" />);
+    expect(screen.queryByText("Free account")).toBeNull(); expect(screen.getAllByRole("link", { name: /Open replay analysis for/ })).toHaveLength(2); expect(screen.getAllByText("Tie")).toHaveLength(2);
+    const table = screen.getByRole("table"); expect(table.parentElement?.classList.contains("xl:block")).toBe(true); expect(table.classList.contains("min-w-[1040px]")).toBe(true); expect(within(table).queryByRole("columnheader", { name: "Streams" })).toBeNull();
+    const streams = screen.getByLabelText(/Streams for Rival/); expect(streams.closest("td")?.textContent).toContain("Reaver"); expect(streams.textContent).toContain("POV ×1");
+    auth.isLoaded = true; view.rerender(<ReplayList items={[REPLAY]} owner={false} playerName="Reaver" publicHandle="shared" />);
+    expect(screen.getAllByText("Free account")).toHaveLength(2); expect(screen.getAllByRole("link", { name: "Timeline, macro breakdown and both build orders. Sign in free to open." })).toHaveLength(2);
+    for (const link of screen.getAllByRole("link", { name: /Timeline, macro/ })) expect(link.previousElementSibling?.querySelector("button")?.textContent).toBe("Download shared replay");
+    auth.isSignedIn = true; view.rerender(<ReplayList items={[REPLAY]} owner={false} playerName="Reaver" publicHandle="shared" />);
+    expect(screen.queryByText("Free account")).toBeNull(); expect(screen.getAllByRole("link", { name: /Open replay analysis for/ })).toHaveLength(2);
+  });
   it("maps a replay-library row into owner review, macro, download, and VOD actions", () => {
     const { container } = render(
       <ReplayList items={[REPLAY]} owner playerName="Reaver" />,
@@ -190,19 +205,16 @@ describe("ReplayList", () => {
 
     const detailHref = "/players/coach%20name/replays/game%2F42";
     const analysisLinks = screen.getAllByRole("link", {
-      name: /Sign in to open replay analysis/i,
+      name: "Timeline, macro breakdown and both build orders. Sign in free to open.",
     });
-    expect(analysisLinks).toHaveLength(3);
+    expect(analysisLinks).toHaveLength(2);
     expect(analysisLinks.map((link) => link.getAttribute("href"))).toEqual(
-      Array(3).fill(detailHref),
+      Array(2).fill(detailHref),
     );
-    const macroLinks = screen.getAllByRole("link", {
+    const macroLinks = screen.queryAllByRole("link", {
       name: /Sign in to open macro breakdown/i,
     });
-    expect(macroLinks).toHaveLength(2);
-    expect(macroLinks.map((link) => link.getAttribute("href"))).toEqual(
-      Array(2).fill(`${detailHref}#macro-breakdown`),
-    );
+    expect(macroLinks).toHaveLength(0);
     expect(screen.getAllByRole("button", { name: "Download shared replay" })).toHaveLength(2);
     expect(downloadMock).not.toHaveBeenCalled();
     expect(publicDownloadMock).toHaveBeenCalledWith(expect.objectContaining({
@@ -250,7 +262,7 @@ describe("ReplayList", () => {
       <ReplayList items={[channelOnlyReplay]} owner={owner} playerName="Reaver" publicHandle="shared" />,
     );
 
-    expect(screen.getByLabelText("No matching stream recording")).toBeTruthy();
+    expect(screen.queryByLabelText(/Streams for/)).toBeNull();
     expect(screen.queryByLabelText("Game streams")).toBeNull();
     expect(screen.queryByRole("link", { name: /YouTube|Twitch/i })).toBeNull();
     expect(container.querySelectorAll('a[href*="youtube.com"], a[href*="twitch.tv"]')).toHaveLength(0);

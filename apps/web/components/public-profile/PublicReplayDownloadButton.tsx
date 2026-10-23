@@ -23,6 +23,7 @@ export function PublicReplayDownloadButton({
   sizeBytes,
   mobile = false,
   showLabel = false,
+  primary = false,
   contextLabel,
 }: {
   handle: string;
@@ -31,6 +32,7 @@ export function PublicReplayDownloadButton({
   sizeBytes?: number | null;
   mobile?: boolean;
   showLabel?: boolean;
+  primary?: boolean;
   /** Extra replay context for screen-reader action lists. */
   contextLabel?: string;
 }) {
@@ -105,15 +107,15 @@ export function PublicReplayDownloadButton({
         className={[
           "inline-flex items-center justify-center rounded-md border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed",
           mobile
-            ? "min-h-[44px] w-full gap-2 border-border-strong bg-bg-elevated/60 px-3 py-2 text-caption"
+            ? "min-h-[44px] w-full gap-2 px-3 py-2 text-caption"
             : showLabel
-              ? "min-h-11 gap-2 border-border-strong bg-bg-elevated/60 px-4 text-caption"
-              : "h-8 w-8 border-border bg-bg-elevated/60",
+              ? "min-h-11 gap-2 px-4 text-caption"
+              : "h-8 w-8",
           !canDownload
-            ? "text-text-dim opacity-55"
+            ? "border-border bg-bg-elevated/60 text-text-dim opacity-55"
             : state === "error"
-              ? "border-danger/50 text-danger hover:bg-danger/10"
-              : "text-text-muted hover:border-accent hover:bg-bg-elevated hover:text-accent",
+              ? "border-danger/50 bg-bg-elevated/60 text-danger hover:bg-danger/10"
+              : primary ? "border-accent bg-accent text-white hover:bg-accent/85" : `${mobile || showLabel ? "border-border-strong" : "border-border"} bg-bg-elevated/60 text-text-muted hover:border-accent hover:bg-bg-elevated hover:text-accent`,
         ].join(" ")}
       >
         {state === "loading" ? (

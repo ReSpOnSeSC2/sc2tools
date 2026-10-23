@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Shared replay browsing
+
+- Replay archives combine instant search, matchup, result, map and rolling date filters with removable links, a filtered record and directional page navigation. Apply remains available without JavaScript.
+- Public replay cards fit laptop widths and put downloads before one clear Analysis action. Dates stay compact, ties use one name, and shared-file privacy copy explains the original replay's names and chat.
+
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
