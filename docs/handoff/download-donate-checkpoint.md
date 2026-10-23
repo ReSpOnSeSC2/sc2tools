@@ -31,3 +31,9 @@ The INSTALLER_SIGNED flag stays false pending actual signed-artifact verificatio
 The draft targets codex/wave2-download-donate-deps (the dependency-only merge at
 8a046ec6) so its diff stays focused. Root must integrate #671 and #672 and their
 parents, then retarget this draft to main and rerun final remote integration CI.
+
+Remote CI found an inherited notification focus race (the panel could focus its
+empty header before returned rows were merged). Applied the notification owner's
+3a03620a fix as54ff57c6: readiness now waits for committed rows and layout-effect
+focus. All15 bell integration tests and the new deterministic panel regression
+pass. Responsive smoke/build/budgets were already green; remote web CI reruns.
