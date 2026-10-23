@@ -54,6 +54,10 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "Click a column header to sort by it; click again to reverse. Click a row to open that opponent's dossier.",
     },
+    { type: "heading", text: "Search, sort and share", anchor: "search-sort-share" },
+    { type: "paragraph", text: "Press **/** to focus search and **Esc** to clear it. **Reset** restores this page's search, minimum games, MMR impact, notes, grouping and sort without changing the global filters. Names sort naturally, ignoring case and accents; Pulse IDs sort numerically. Equal win rates put the larger sample first, then the name. Missing values stay last in either direction." },
+    { type: "paragraph", text: "Bookmark or share the address bar to keep the search, sort, MMR impact and **Has notes** choice. Ctrl/Cmd-click or middle-click a name or dossier arrow to open another tab. **All opponents** returns to the prior list, expanded rows and scroll position. A new tab uses the last list address when available." },
+    { type: "paragraph", text: "A note icon shows your private scouting preview on hover or keyboard focus. Grouped players show the first member's preview and how many more have notes. **Has notes** limits the list to players with a saved note." },
     { type: "heading", text: "Group same player", anchor: "group-same-player" },
     {
       type: "paragraph",

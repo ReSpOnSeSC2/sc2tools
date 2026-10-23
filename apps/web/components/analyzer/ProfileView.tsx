@@ -12,6 +12,8 @@ import { useToastOptional } from "@/components/ui/Toast";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { isOpponentKey } from "@/lib/opponentCache";
 import { useApi } from "@/lib/clientApi";
+import { RevealedChip } from "./RevealedChip";
+import { UnsavedNoteProvider, useUnsavedNote } from "./UnsavedNoteContext";
 import {
   filtersToQuery,
   useFilters,
@@ -150,26 +152,35 @@ export function hasUnrevealedBarcodeIdentity(
 export function ProfileView({
   pulseId,
   onBack,
+  backHref = "/app/opponents",
 }: {
   pulseId: string;
   onBack: () => void;
+  backHref?: string;
 }) {
+  return <UnsavedNoteProvider onLeaveList={onBack}><ProfileViewContent pulseId={pulseId} onBack={onBack} backHref={backHref} /></UnsavedNoteProvider>;
+}
+
+function ProfileViewContent({ pulseId, onBack, backHref }: { pulseId: string; onBack: () => void; backHref: string }) {
+  const guard = useUnsavedNote();
   return (
     <div className="space-y-3">
-      <button
-        type="button"
-        onClick={onBack}
+      <Link href={backHref}
+        onClick={(event) => {
+          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+          event.preventDefault(); guard?.navigate(onBack);
+        }}
         className="inline-flex min-h-[44px] items-center gap-1 rounded-md px-2 py-1 text-caption uppercase tracking-wider text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
         <ChevronLeft className="h-4 w-4" aria-hidden />
-        Back
-      </button>
-      <ProfileBody pulseId={pulseId} />
+        All opponents
+      </Link>
+      <ProfileBody pulseId={pulseId} backHref={backHref} />
     </div>
   );
 }
 
-function ProfileBody({ pulseId }: { pulseId: string }) {
+function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string }) {
   const { mutate: refreshCache } = useSWRConfig();
   // The shared analyzer scope applies to the profile as well as the
   // opponents list that led here. In particular, opening an opponent
@@ -251,10 +262,12 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
 
   // A 404 means "not in your history"; a 503, 5xx or dropped connection
   // means the dossier couldn't be built right now, and gets Retry.
-  useChromeBreadcrumb(profile.data ? { backHref: "/app/opponents", backLabel: "Back to Opponents", trail: [{ label: "Opponents", href: "/app/opponents" }, { label: profile.data.name || profile.data.pulseId || pulseId }] } : null);
+  const chromeBreadcrumb = useChromeBreadcrumb({ backHref, backLabel: "All opponents", trail: [{ label: "Opponents", href: backHref }, { label: profile.data?.name || (profile.data ? profile.data.pulseId || pulseId : "…") }] });
 
   if (!hasQueryData(profile)) {
     return (
+      <div className="space-y-3">
+      {!chromeBreadcrumb ? <nav aria-label="Breadcrumb" className="text-caption text-text-muted"><Link href={backHref}>Opponents</Link><span aria-hidden> / </span><span aria-current="page">…</span></nav> : null}
       <QueryState
         q={profile}
         skeleton={<DossierSkeleton />}
@@ -262,6 +275,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         errorCopy={DOSSIER_ERROR_COPY}
         renderError={(error) => (isNotFoundError(error) ? <OpponentNotFound /> : undefined)}
       />
+      </div>
     );
   }
   if (!data) return <OpponentNotFound />;
@@ -305,11 +319,13 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
 
   return (
     <div className="space-y-5">
+      {!chromeBreadcrumb ? <nav aria-label="Breadcrumb" className="text-caption text-text-muted"><Link href={backHref} className="underline">Opponents</Link><span aria-hidden> / </span><span aria-current="page">{opponentName}</span></nav> : null}
       <header aria-label="Opponent profile" className="flex flex-wrap items-end justify-between gap-4">
         <div className="w-full min-w-0 sm:w-auto sm:flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="break-words text-h2 font-semibold">{data.name || "unnamed"}</h1>
             <RevealedChip
+              size="md"
               name={data.globalIdentity?.displayName || data.revealedName}
               displayedName={data.name}
               confirmed={Boolean(data.globalIdentity)}
@@ -705,37 +721,6 @@ function MergedIdentitiesLine({
         );
       })}
     </div>
-  );
-}
-
-/**
- * Confirmed or SC2Pulse-revealed identity pill for the profile heading. For a
- * barcode opponent the heading is unreadable bars; the revealed pro/main
- * name is the real identity. Renders nothing when not revealed — or
- * when the heading already IS the revealed name (a merged profile led
- * by the pro name; repeating it is clutter).
- */
-function RevealedChip({
-  name,
-  displayedName,
-  confirmed = false,
-}: {
-  name?: string | null;
-  displayedName?: string;
-  confirmed?: boolean;
-}) {
-  const tag = typeof name === "string" ? name.trim() : "";
-  if (!tag || tag === (displayedName || "").trim()) return null;
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full bg-accent-cyan/15 px-2.5 py-0.5 text-caption font-semibold text-accent-cyan"
-      title={confirmed ? `Confirmed by an admin as ${tag}` : `Revealed on SC2Pulse as ${tag}`}
-    >
-      <span className="text-micro font-medium uppercase tracking-wider opacity-70">
-        AKA
-      </span>
-      {tag}
-    </span>
   );
 }
 
