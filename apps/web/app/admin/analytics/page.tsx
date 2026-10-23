@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ActivationPanel } from "../components/ActivationPanel";
 
 import { useApi } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
@@ -44,6 +45,11 @@ import type {
 const REALTIME_REFRESH_MS = 60_000;
 
 export default function AdminAnalyticsPage() {
+  const [tab,setTab]=useState<"traffic"|"activation">("traffic");
+  return <div className="space-y-4"><div role="group" aria-label="Analytics view" className="flex gap-2"><Button variant={tab==="traffic"?"primary":"secondary"} aria-pressed={tab==="traffic"} onClick={()=>setTab("traffic")}>Web traffic</Button><Button variant={tab==="activation"?"primary":"secondary"} aria-pressed={tab==="activation"} onClick={()=>setTab("activation")}>Activation</Button></div>{tab==="activation"?<ActivationPanel/>:<TrafficAnalytics/>}</div>;
+}
+
+function TrafficAnalytics() {
   const [days, setDays] = useState<number | "custom">(28);
   const [rangeQuery, setRangeQuery] = useState("days=28");
   const summary = useApi<AnalyticsSummaryResp>(

@@ -48,6 +48,7 @@ export function PublicReplayLibrary({ data, query }: { data: ReplayLibraryRespon
       <section id="replay-results" tabIndex={-1} aria-label="Replay results" className="scroll-mt-24 focus:outline-none">
         <ArchiveSummary data={data} query={query} />
         <ReplayList items={items} owner={false} playerName={profile.displayName} publicHandle={profile.handle}
+          listQuery={archiveHref("", query).replace(/^\?/, "")}
           emptyTitle={hasLocalFilters ? "No replays match these filters" : "No shared replays yet"}
           emptyDescription={hasLocalFilters ? "Clear or broaden the replay filters to see more games." : `When ${profile.displayName} syncs a replay, it will appear here automatically.`} />
       </section>

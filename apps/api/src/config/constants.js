@@ -119,6 +119,8 @@ const COLLECTIONS = Object.freeze({
   // Per-user in-app notifications (the header bell). Distinct from the
   // admin-only ``admin_events`` feed above.
   NOTIFICATIONS: "notifications",
+  JOB_RUNS: "job_runs",
+  ADMIN_AUDIT: "admin_audit",
   // Per-user, per-UTC-day counter of games accepted from browser ingest.
   // Short-lived (TTL) rows; see ``services/browserIngestQuota.js``.
   BROWSER_INGEST_DAILY: "browser_ingest_daily",

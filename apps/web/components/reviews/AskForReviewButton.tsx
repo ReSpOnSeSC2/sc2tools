@@ -44,9 +44,6 @@ type ButtonProps = Props & {
   iconClassName?: string;
 };
 
-const DEFAULT_CLASS =
-  "hard-press inline-flex h-9 items-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-3.5 font-display text-caption font-bold text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
-
 /**
  * "Ask for a review" for one of your games: the game page, your replay
  * list, an opponent dossier's replays and the macro breakdown. Only
@@ -54,7 +51,7 @@ const DEFAULT_CLASS =
  * re-checks everything (own game, 1v1, macro breakdown, caps).
  */
 export function AskForReviewButton({
-  className = DEFAULT_CLASS,
+  className,
   label = "Ask for a review",
   ariaLabel,
   iconClassName = "h-4 w-4",
@@ -75,9 +72,9 @@ export function AskForReviewButton({
   };
   return (
     <>
-      <button type="button" onClick={onClick} aria-label={ariaLabel} title={ariaLabel} className={className}>
+      {className !== undefined ? <button type="button" onClick={onClick} aria-label={ariaLabel} title={ariaLabel} className={className}>
         <MessageSquarePlus className={iconClassName} aria-hidden /> {label}
-      </button>
+      </button> : <Button variant="secondary" size="sm" onClick={onClick} aria-label={ariaLabel} title={ariaLabel} iconLeft={<MessageSquarePlus className={iconClassName} aria-hidden />}>{label}</Button>}
       {open ? (
         // The dialog is portalled, but React still bubbles its pointer
         // events through this spot in the tree — into clickable table rows.

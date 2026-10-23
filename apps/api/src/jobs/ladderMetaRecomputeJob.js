@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 /**
  * Ladder-meta recompute worker.
@@ -25,6 +26,7 @@ const MIN_INTERVAL_MS = 60 * 60 * 1000; // hourly floor — it's a full scan
 
 /**
  * @param {{
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   ladderMeta: import('../services/ladderMeta').LadderMetaService,
  *   logger: import('pino').Logger,
  *   intervalMs?: number,
@@ -55,13 +57,14 @@ function buildLadderMetaRecomputeJob(deps) {
   /** @type {Promise<void> | null} */
   let inflight = null;
 
-  async function tick() {
+  async function tickWork() {
     if (inflight) return;
     inflight = (async () => {
       try {
         const res = await deps.ladderMeta.recompute();
         logger.info({ bands: res.bands }, "ladder_meta_recomputed");
       } catch (err) {
+        tick.failed(err);
         logger.warn(
           { err: err instanceof Error ? err.message : String(err) },
           "ladder_meta_recompute_error",
@@ -72,6 +75,7 @@ function buildLadderMetaRecomputeJob(deps) {
     })();
     await inflight;
   }
+  const tick = observeJob(deps, "ladder-meta", interval, tickWork, { disabled: disabled, envFlag: "SC2TOOLS_LADDER_META_RECOMPUTE_DISABLED" });
 
   return {
     start() {

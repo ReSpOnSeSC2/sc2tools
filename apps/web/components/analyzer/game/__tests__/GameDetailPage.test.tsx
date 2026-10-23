@@ -193,12 +193,41 @@ function mockEndpoints({
 }
 
 describe("GameDetailPage", () => {
+  it("links only the opponent metadata while the descriptive heading stays plain", () => {
+    mockEndpoints({ slim: { ...SLIM, opponent: { ...SLIM.opponent, pulseId: "1-S2-1-99" } } });
+    render(<GameDetailPage gameId="g1" />);
+    const heading = screen.getByRole("heading", { level: 1, name: "ZvT vs Foe on Ephemeron" });
+    expect(heading.querySelector("a")).toBeNull();
+    const link = within(heroHeader()).getByRole("link", { name: "Terran Foe" });
+    expect(link.getAttribute("href")).toBe("/app/opponents/1-S2-1-99");
+    const time = heroHeader().querySelector("time");
+    expect(time?.getAttribute("datetime")).toBe(SLIM.date);
+    expect(time?.getAttribute("title")).toBe(new Date(SLIM.date!).toLocaleString());
+  });
+
+  it("omits absent header facts and keeps the fallback title", () => {
+    mockEndpoints({ slim: { gameId: "g1" } });
+    render(<GameDetailPage gameId="g1" />);
+    const header = heroHeader();
+    expect(within(header).getByRole("heading", { level: 1, name: "Game details" })).toBeTruthy();
+    expect(within(header).queryByText("Length")).toBeNull();
+    expect(within(header).queryByText("MMR")).toBeNull();
+    expect(within(header).queryByText("Opponent", { exact: true })).toBeNull();
+  });
+
+  it("shows the known MMR with an honest missing opponent value", () => {
+    mockEndpoints({ slim: { ...SLIM, opponent: { ...SLIM.opponent, mmr: null } } });
+    render(<GameDetailPage gameId="g1" />);
+    const mmr = within(heroHeader()).getByText("MMR").parentElement;
+    expect(mmr?.textContent).toMatch(/4100\s*vs\s*—/);
+  });
+
   it("opens a review request for the current owner's 1v1 game", () => {
     vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
     mockEndpoints({ slim: { ...SLIM, matchFormat: "1v1", playerCount: 2 } });
     render(<GameDetailPage gameId="g1" />);
     const review = screen.getByRole("button", { name: "Ask for a review" });
-    expect(screen.getByRole("group", { name: "Game actions" }).contains(review)).toBe(true);
+    expect(screen.getByRole("toolbar", { name: "Game actions" }).contains(review)).toBe(true);
     fireEvent.click(review);
     expect(screen.getByRole("dialog", { name: "Ask for a replay review" })).toBeTruthy();
     expect(screen.getByText("Game length 11:40")).toBeTruthy();
@@ -214,7 +243,7 @@ describe("GameDetailPage", () => {
     mockEndpoints({ slim: { ...SLIM, ...format } });
     render(<GameDetailPage gameId="g1" />);
     expect(screen.queryByRole("button", { name: "Ask for a review" })).toBeNull();
-    expect(screen.getByRole("group", { name: "Game actions" })).toBeTruthy();
+    expect(screen.getByRole("toolbar", { name: "Game actions" })).toBeTruthy();
   });
 
   it("applies a deep-link time after async game data loads without resetting later scrubs", () => {
@@ -249,7 +278,7 @@ describe("GameDetailPage", () => {
 
     // Header facts.
     expect(screen.getByText("Defeat")).toBeTruthy();
-    expect(screen.getByText("Ephemeron")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "ZvT vs Foe on Ephemeron" })).toBeTruthy();
     const heroArtwork = container.querySelector(
       'header [data-map-artwork="image"] img',
     );
@@ -367,21 +396,20 @@ describe("GameDetailPage", () => {
     render(<GameDetailPage gameId="g1" />);
 
     const link = screen.getByRole("link", {
-      name: /Watch Opponent POV on Twitch at 1:05 - Foe/i,
+      name: "Watch VOD",
     });
     expect(link.getAttribute("href")).toBe(
       "https://www.twitch.tv/videos/99?t=0h1m5s",
     );
-    expect(link.className).toContain("text-[#9146ff]");
-    expect(link.className).toContain("hover:bg-[#9146ff]/15");
-    expect(link.className).toContain("focus-visible:ring-[#9146ff]");
+    expect(link.getAttribute("title")).toBe("Opponent · Twitch · 1:05 · Foe");
+    expect(link.className).toContain("h-9");
 
     const download = screen.getByRole("button", { name: "Download replay" });
     expect(download.textContent).toContain("Download replay");
     expect(download.getAttribute("title")).toContain("125 KB");
-    const actionLine = screen.getByRole("group", { name: "Game actions" });
+    const actionLine = screen.getByRole("toolbar", { name: "Game actions" });
     const actions = Array.from(actionLine.querySelectorAll("a,button"));
-    expect(actions).toEqual([link, download]);
+    expect(actions).toEqual([screen.getByRole("button", { name: "Share this game as an image" }), download, link]);
     expect(useApiMock).toHaveBeenCalledWith(
       "/v1/games/vod-links?gameId=g1",
       { revalidateOnFocus: false, shouldRetryOnError: false },
@@ -396,8 +424,7 @@ describe("GameDetailPage", () => {
     expect(within(header).getByText("Roach Ling Flood")).toBeTruthy();
     const planned = within(header).getByTestId("planned-badge");
     expect(planned.getAttribute("title")).toBe("Replay classified as Roach Allin");
-    expect(screen.getByTestId("build-checkin-card")).toBeTruthy();
-    expect(screen.getByText("Checked in")).toBeTruthy();
+    expect(screen.getByTestId("build-checkin-summary").textContent).toContain("Checked in: Roach Ling Flood");
   });
 
   it("falls back to the slim row's planned flag before the check-in loads", () => {
@@ -509,7 +536,7 @@ describe("GameDetailPage", () => {
     });
     render(<GameDetailPage gameId="g1" />);
 
-    const actionLine = screen.getByRole("group", { name: "Game actions" });
+    const actionLine = screen.getByRole("toolbar", { name: "Game actions" });
     const download = screen.getByRole("button", { name: "Download replay" });
     expect(actionLine.contains(download)).toBe(true);
     expect(actionLine.querySelectorAll("a")).toHaveLength(0);

@@ -30,6 +30,19 @@ export function fmtDate(iso: string | number | Date | null | undefined): string 
   return d.toLocaleString();
 }
 
+/** Game header date without seconds, plus a short recent-game age. */
+export function fmtGameDate(iso: string | number | Date | null | undefined, now = Date.now()): string {
+  if (iso === null || iso === undefined || iso === "") return "—";
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "—";
+  const day = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(date);
+  const time = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date);
+  const elapsed = Math.max(0, now - date.getTime());
+  const minute = 60_000; const hour = 60 * minute; const days = Math.floor(elapsed / (24 * hour));
+  const age = elapsed < minute ? "just now" : elapsed < hour ? `${Math.floor(elapsed / minute)}m ago` : elapsed < 24 * hour ? `${Math.floor(elapsed / hour)}h ago` : days === 1 ? "yesterday" : elapsed <= 30 * 24 * hour ? `${days} days ago` : "";
+  return `${day} · ${time}${age ? ` (${age})` : ""}`;
+}
+
 const UTC_DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const UTC_MONTH = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 
@@ -53,6 +66,12 @@ export function fmtDateCompact(iso: string | number | Date | null | undefined): 
   const date = new Date(iso);
   if (!Number.isFinite(date.getTime())) return "—";
   return (date.getFullYear() === new Date().getFullYear() ? compactDateFormatter : compactDateYearFormatter).format(date);
+}
+
+/** Shared macro score bands; unavailable scores keep a neutral tone. */
+export function macroScoreTone(score?: number | null): string {
+  if (score == null || !Number.isFinite(score)) return "text-text-dim";
+  return score >= 80 ? "text-success" : score >= 60 ? "text-warning" : "text-danger";
 }
 
 /**

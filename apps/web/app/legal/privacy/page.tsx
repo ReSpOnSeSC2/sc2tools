@@ -171,6 +171,15 @@ function BuildsDeviceAndTelemetryItems() {
         store a hashed device token, the agent version, and the OS string.
       </li>
       <li>
+        <strong>Account setup and support.</strong> Signed-in installer hand-offs,
+        pairing, saved game counts and an observed visit during the second week
+        after signup help us diagnose setup problems. These first-party account
+        milestones are separate from optional Google Analytics. Administrator
+        actions are retained for up to 400 days with allowlisted result counters;
+        account deletion anonymizes their account identifiers. Background-job
+        history contains no user identifiers and is capped at 5,000 records.
+      </li>
+      <li>
         <strong>Operational telemetry.</strong> Standard request logs (IP,
         user-agent, timestamp), retained for 30 days for security and
         debugging. If Sentry crash reporting is enabled (opt-in via

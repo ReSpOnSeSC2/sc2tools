@@ -1,9 +1,9 @@
 "use strict";
 
-const { ObjectId } = require("mongodb");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { REGION_LABELS } = require("../util/regionFromToonHandle");
 const { readArchiveOverview } = require("./replayArchiveSummary");
+const { decodeReplayLibraryCursor, encodeReplayLibraryCursor, replayCursorContinuationBranches, replayNeighborBranches, invalidReplayLibraryCursor } = require("./replayLibraryCursor");
 const {
   BUILD_INTENT_LABEL_PROJECTION,
   OPP_INTENT_LABEL_PROJECTION,
@@ -21,7 +21,6 @@ const {
 // hand-edited URL from turning the endpoint into a complete-history export.
 const REPLAY_LIBRARY_LIST_DEFAULT = 50;
 const REPLAY_LIBRARY_LIST_LIMIT = 100;
-const REPLAY_LIBRARY_CURSOR_MAX_CHARS = 512;
 const REPLAY_LIBRARY_SEARCH_MAX_CHARS = 100;
 
 const RACE_LETTERS = new Set(["P", "T", "Z", "R"]);
@@ -135,33 +134,8 @@ class ReplayLibraryService {
     const cursor = decodeReplayLibraryCursor(opts.cursor);
     if (cursor && cursor.sort !== sort) throw invalidReplayLibraryCursor();
     const view = replayLibraryView(opts.view);
-    const filters = sanitizeGlobalFilters(opts.filters);
-    const detectorBuild = view === "detector" ? filters.build : undefined;
-    const detectorStrategy = view === "detector" ? filters.oppStrategy : undefined;
-    if (detectorBuild !== undefined) delete filters.build;
-    if (detectorStrategy !== undefined) delete filters.oppStrategy;
-    /** @type {Array<Record<string, any>>} */
-    const clauses = [gamesMatchStage(ownerId, filters)];
-    if (detectorBuild !== undefined) clauses.push(detectorLabelMatch("name", detectorBuild));
-    if (detectorStrategy !== undefined) {
-      clauses.push(opponentDetectorLabelMatch("name", detectorStrategy));
-    }
-
-    const resultClause = resultMatchClause(opts.result);
-    if (resultClause) clauses.push(resultClause);
-
-    const matchupClause = matchupMatchClause(opts.matchup);
-    if (matchupClause) clauses.push(matchupClause);
-
-    const searchClause = replaySearchClause(opts.search, view);
-    if (searchClause) clauses.push(searchClause);
-
-    const summaryMatch = clauses.length === 1 ? clauses[0] : { $and: [...clauses] };
-    if (cursor) {
-      clauses.push({ $or: replayCursorContinuationBranches(cursor) });
-    }
-
-    const match = clauses.length === 1 ? clauses[0] : { $and: clauses };
+    const summaryMatch = buildReplayLibraryMatch(ownerId, opts);
+    const match = cursor ? { $and: [summaryMatch, { $or: replayCursorContinuationBranches(cursor) }] } : summaryMatch;
     /** @type {[Array<Record<string, any>>, Record<string, any>]} */
     const [rows, overview] = await Promise.all([this.db.games
       .find(match, { projection: REPLAY_LIBRARY_PROJECTION })
@@ -171,7 +145,7 @@ class ReplayLibraryService {
           : { date: -1, _id: -1 },
       )
       .limit(limit + 1)
-      .toArray(), opts.withSummary ? readArchiveOverview(this.db.games, ownerId, summaryMatch, this.archiveFacets) : Promise.resolve({})]);
+      .toArray(), opts.withSummary ? readArchiveOverview(this.db.games, ownerId, summaryMatch, this.archiveFacets, buildReplayLibraryMatch(ownerId, { view })) : Promise.resolve({})]);
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
@@ -220,6 +194,39 @@ class ReplayLibraryService {
       }
       : null;
   }
+
+  /** Two indexed directional reads after verifying the current filtered position.
+   * @param {string} userId @param {string} gameId
+   * @param {{filters?:import('../util/parseQuery').GlobalFilters,result?:unknown,matchup?:unknown,search?:unknown}} [opts] */
+  async neighbors(userId, gameId, opts = {}) {
+    const ownerId = cleanOwnerId(userId); const replayId = cleanGameId(gameId);
+    const empty = { olderGameId: null, newerGameId: null };
+    if (!ownerId || !replayId) return empty;
+    const match = buildReplayLibraryMatch(ownerId, { ...opts, view: "detector" });
+    const current = await this.db.games.findOne({ $and: [match, { gameId: replayId }] }, { projection: { _id: 1, date: 1 } });
+    if (!current) return empty;
+    const read = (/** @type {'date_desc'|'date_asc'} */ sort) => this.db.games.findOne(
+      { $and: [match, { $or: replayNeighborBranches(current.date, current._id, sort) }] },
+      { projection: { _id: 0, gameId: 1 }, sort: sort === "date_asc" ? { date: 1, _id: 1 } : { date: -1, _id: -1 } },
+    );
+    const [older, newer] = await Promise.all([read("date_desc"), read("date_asc")]);
+    return { olderGameId: cleanGameId(older?.gameId), newerGameId: cleanGameId(newer?.gameId) };
+  }
+}
+
+/** One eligibility/filter builder for pages, filtered summaries and neighbors.
+ * @param {string} ownerId @param {any} opts @returns {Record<string, any>} */
+function buildReplayLibraryMatch(ownerId, opts) {
+  const view = replayLibraryView(opts.view); const filters = sanitizeGlobalFilters(opts.filters);
+  const detectorBuild = view === "detector" ? filters.build : undefined;
+  const detectorStrategy = view === "detector" ? filters.oppStrategy : undefined;
+  if (detectorBuild !== undefined) delete filters.build;
+  if (detectorStrategy !== undefined) delete filters.oppStrategy;
+  const clauses = [gamesMatchStage(ownerId, filters)];
+  if (detectorBuild !== undefined) clauses.push(detectorLabelMatch("name", detectorBuild));
+  if (detectorStrategy !== undefined) clauses.push(opponentDetectorLabelMatch("name", detectorStrategy));
+  for (const clause of [resultMatchClause(opts.result), matchupMatchClause(opts.matchup), replaySearchClause(opts.search, view)]) if (clause) clauses.push(clause);
+  return clauses.length === 1 ? clauses[0] : { $and: clauses };
 }
 
 /**
@@ -492,159 +499,6 @@ function clampListLimit(raw) {
   const value = typeof raw === "number" ? raw : Number.parseInt(String(raw), 10);
   if (!Number.isFinite(value) || value <= 0) return REPLAY_LIBRARY_LIST_DEFAULT;
   return Math.min(Math.trunc(value), REPLAY_LIBRARY_LIST_LIMIT);
-}
-
-/**
- * Cursor v2 preserves the raw sortable BSON date type. Historical imports can
- * carry ISO strings, numeric epochs, or null; explicit lower-type branches
- * keep pagination gap-free when a page crosses one of those cohorts.
- *
- * @param {unknown} raw
- * @returns {{dateType:'date'|'string'|'number'|'null',date:Date|string|number|null,id:import('mongodb').ObjectId,sort:'date_asc'|'date_desc'}|null}
- */
-function decodeReplayLibraryCursor(raw) {
-  if (raw === undefined || raw === null || raw === "") return null;
-  if (typeof raw !== "string" || raw.length > REPLAY_LIBRARY_CURSOR_MAX_CHARS) {
-    throw invalidReplayLibraryCursor();
-  }
-  try {
-    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
-    if (
-      !parsed
-      || parsed.v !== 3
-      || (parsed.s !== "date_asc" && parsed.s !== "date_desc")
-    ) {
-      throw invalidReplayLibraryCursor();
-    }
-    const idText = typeof parsed.i === "string" ? parsed.i.toLowerCase() : "";
-    if (
-      !ObjectId.isValid(idText)
-      || new ObjectId(idText).toHexString() !== idText
-    ) {
-      throw invalidReplayLibraryCursor();
-    }
-    const decodedDate = decodeCursorDate(parsed.t, parsed.d);
-    const sort = /** @type {'date_asc'|'date_desc'} */ (parsed.s);
-    return { ...decodedDate, id: new ObjectId(idText), sort };
-  } catch (err) {
-    const known = /** @type {{code?:unknown}|null} */ (
-      err && typeof err === "object" ? err : null
-    );
-    if (known && known.code === "bad_request") {
-      throw err;
-    }
-    throw invalidReplayLibraryCursor();
-  }
-}
-
-/** @param {unknown} date @param {unknown} id @param {'date_asc'|'date_desc'} [sort] @returns {string} */
-function encodeReplayLibraryCursor(date, id, sort = "date_desc") {
-  const encodedDate = encodeCursorDate(date);
-  const objectId = id instanceof ObjectId ? id : new ObjectId(String(id));
-  return Buffer.from(
-    JSON.stringify({
-      v: 3,
-      s: sort === "date_asc" ? "date_asc" : "date_desc",
-      t: encodedDate.dateType,
-      d: encodedDate.value,
-      i: objectId.toHexString(),
-    }),
-    "utf8",
-  ).toString("base64url");
-}
-
-/** @param {{dateType:'date'|'string'|'number'|'null',date:Date|string|number|null,id:import('mongodb').ObjectId,sort:'date_asc'|'date_desc'}} cursor */
-function replayCursorContinuationBranches(cursor) {
-  if (cursor.sort === "date_asc") return replayCursorHigherBranches(cursor);
-  if (cursor.dateType === "null") {
-    return [{ date: null, _id: { $lt: cursor.id } }];
-  }
-  return [
-    { date: { $lt: cursor.date } },
-    { date: cursor.date, _id: { $lt: cursor.id } },
-    ...lowerDateTypeBranches(cursor.dateType),
-    { date: null },
-  ];
-}
-
-/** @param {{dateType:'date'|'string'|'number'|'null',date:Date|string|number|null,id:import('mongodb').ObjectId}} cursor */
-function replayCursorHigherBranches(cursor) {
-  if (cursor.dateType === "null") {
-    return [
-      { date: null, _id: { $gt: cursor.id } },
-      ...higherDateTypeBranches("null"),
-    ];
-  }
-  return [
-    { date: { $gt: cursor.date } },
-    { date: cursor.date, _id: { $gt: cursor.id } },
-    ...higherDateTypeBranches(cursor.dateType),
-  ];
-}
-
-/** @param {'date'|'string'|'number'} dateType */
-function lowerDateTypeBranches(dateType) {
-  const numbers = { date: { $type: ["double", "int", "long", "decimal"] } };
-  if (dateType === "date") return [{ date: { $type: "string" } }, numbers];
-  if (dateType === "string") return [numbers];
-  return [];
-}
-
-/** @param {'date'|'string'|'number'|'null'} dateType */
-function higherDateTypeBranches(dateType) {
-  const numbers = { date: { $type: ["double", "int", "long", "decimal"] } };
-  if (dateType === "null") {
-    return [numbers, { date: { $type: "string" } }, { date: { $type: "date" } }];
-  }
-  if (dateType === "number") {
-    return [{ date: { $type: "string" } }, { date: { $type: "date" } }];
-  }
-  if (dateType === "string") return [{ date: { $type: "date" } }];
-  return [];
-}
-
-/**
- * @param {unknown} rawType
- * @param {unknown} rawValue
- * @returns {{dateType:'date',date:Date}|{dateType:'string',date:string}|{dateType:'number',date:number}|{dateType:'null',date:null}}
- */
-function decodeCursorDate(rawType, rawValue) {
-  if (rawType === "date" && typeof rawValue === "string") {
-    const value = validDate(rawValue);
-    if (value) return { dateType: "date", date: value };
-  } else if (rawType === "string" && typeof rawValue === "string") {
-    return { dateType: "string", date: rawValue };
-  } else if (rawType === "number" && Number.isFinite(rawValue)) {
-    return { dateType: "number", date: Number(rawValue) };
-  } else if (rawType === "null" && rawValue === null) {
-    return { dateType: "null", date: null };
-  }
-  throw invalidReplayLibraryCursor();
-}
-
-/** @param {unknown} raw */
-function encodeCursorDate(raw) {
-  if (raw instanceof Date && !Number.isNaN(raw.getTime())) {
-    return { dateType: "date", value: raw.toISOString() };
-  }
-  if (typeof raw === "string") return { dateType: "string", value: raw };
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return { dateType: "number", value: raw };
-  }
-  if (raw === null || raw === undefined) {
-    return { dateType: "null", value: null };
-  }
-  throw new Error("replay_library_cursor_date_invalid");
-}
-
-/** @returns {Error & {status:number,code:string}} */
-function invalidReplayLibraryCursor() {
-  const error = /** @type {Error & {status:number,code:string}} */ (
-    new Error("invalid replay library cursor")
-  );
-  error.status = 400;
-  error.code = "bad_request";
-  return error;
 }
 
 /** @param {unknown} raw */

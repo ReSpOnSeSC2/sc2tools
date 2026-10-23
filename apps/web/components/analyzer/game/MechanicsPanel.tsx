@@ -25,6 +25,8 @@ export interface MechanicsPanelProps {
   onSeek?: (timeSec: number) => void;
   /** Neutral public copy can replace the owner-only backfill instruction. */
   emptyDescription?: string;
+  /** Public analysis can share its archive score bands without changing analyzer defaults. */
+  macroScoreToneClassName?: string;
 }
 
 /**
@@ -45,6 +47,7 @@ export function MechanicsPanel({
   loading,
   onSeek,
   emptyDescription,
+  macroScoreToneClassName,
 }: MechanicsPanelProps) {
   const raw = breakdown?.raw;
   const race = computeEffectiveRace(breakdown?.race ?? game?.myRace, raw);
@@ -164,7 +167,7 @@ export function MechanicsPanel({
           <MechanicStat
             label="Macro score"
             value={macroScore !== null ? Math.round(macroScore) : "—"}
-            valueClass={scoreToneTextClass(macroScore)}
+            valueClass={macroScoreToneClassName ?? scoreToneTextClass(macroScore)}
           />
           <MechanicStat
             label="SQ (Spending Quotient)"

@@ -5,14 +5,15 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
-import { Icon } from "@/components/ui/Icon";
+import { Card } from "@/components/ui/Card";
+import { OpponentLink } from "@/components/analyzer/OpponentLink";
 import { MapArtwork } from "@/components/maps/MapArtwork";
 import {
   GameStreamLinks,
   type GameStreamLink,
 } from "@/components/analyzer/GameStreamLinks";
 import { ReplayDownloadButton } from "@/components/analyzer/ReplayDownloadButton";
-import { fmtDate, fmtMinutes, fmtMmr, raceColour } from "@/lib/format";
+import { fmtGameDate, fmtMinutes, fmtMmr } from "@/lib/format";
 import { ShareGameButton } from "./ShareGameButton";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { isReviewableGame } from "@/lib/reviews";
@@ -60,7 +61,11 @@ export function GameDetailShell({
   oppCorrected?: { detected: string | null } | null;
 }) {
   const matchup = matchupLabel(game.myRace, game.opponent?.race);
-  const oppName = (game.opponent?.displayName || "").trim() || "Opponent";
+  const namedOpponent = (game.opponent?.displayName || "").trim();
+  const oppName = namedOpponent || "Opponent";
+  const title = matchup && namedOpponent
+    ? `${matchup} vs ${namedOpponent}${game.map ? ` on ${game.map}` : ""}`
+    : `${matchup ? `${matchup} ` : ""}${game.map ? `on ${game.map}` : "Game details"}`;
   const backName =
     (opponentContext?.displayName || "").trim() ||
     (game.opponent?.displayName || "").trim() ||
@@ -100,7 +105,7 @@ export function GameDetailShell({
           {backLabel}
         </Link>
 
-        <div className="group/map relative overflow-hidden rounded-xl border border-border bg-bg-elevated shadow-lg">
+        <Card variant="feature" padded={false} className="group/map relative">
           <MapArtwork
             mapName={game.map}
             size="hero"
@@ -109,67 +114,48 @@ export function GameDetailShell({
           />
           <span
             aria-hidden
-            className="absolute inset-0 bg-gradient-to-r from-bg-elevated via-bg-elevated/90 to-bg-elevated/55"
+            className="absolute inset-0 bg-gradient-to-r from-bg-surface via-bg-surface/90 to-bg-surface/55"
           />
           <span
             aria-hidden
-            className="absolute inset-0 bg-gradient-to-t from-bg-elevated/80 via-transparent to-bg-elevated/20"
+            className="absolute inset-0 bg-gradient-to-t from-bg-surface/80 via-transparent to-bg-surface/20"
           />
 
           <div className="relative space-y-3 p-4 sm:p-5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <ResultBadge result={game.result} />
-              <h1 className="font-display text-h2 font-bold text-text">
-                {matchup ? `${matchup} ` : ""}
-                {game.map ? (
-                  <>
-                    on <span className="text-accent-cyan">{game.map}</span>
-                  </>
-                ) : (
-                  "Game details"
-                )}
-              </h1>
-              <ShareGameButton game={game} className="ml-auto" />
+              <h1 className="min-w-0 break-words font-display text-h2 font-bold text-text">{title}</h1>
             </div>
 
             <dl className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-caption text-text-muted">
-              <MetaItem label="Played">{fmtDate(game.date)}</MetaItem>
-              <MetaItem label="Length">
-                {game.durationSec ? fmtMinutes(game.durationSec) : "—"}
-              </MetaItem>
-              <MetaItem label="MMR">
+              <MetaItem label="Played"><time dateTime={game.date || undefined} title={game.date && Number.isFinite(Date.parse(game.date)) ? new Date(game.date).toLocaleString() : undefined}>{fmtGameDate(game.date)}</time></MetaItem>
+              {game.durationSec ? <MetaItem label="Length">{fmtMinutes(game.durationSec)}</MetaItem> : null}
+              {game.myMmr != null || game.opponent?.mmr != null ? <MetaItem label="MMR">
                 <span className="tabular-nums">
                   {fmtMmr(game.myMmr)}{" "}
                   <span className="text-text-dim">vs</span>{" "}
                   {fmtMmr(game.opponent?.mmr)}
                 </span>
-              </MetaItem>
-              <MetaItem label="Opponent">
-                <span className="inline-flex items-center gap-1">
-                  {game.opponent?.race ? (
-                    <RaceChip race={game.opponent.race} />
-                  ) : null}
-                  <span className="max-w-[18ch] truncate" title={oppName}>
-                    {oppName}
-                  </span>
-                </span>
-              </MetaItem>
+              </MetaItem> : null}
+              {namedOpponent || game.opponent?.race ? <MetaItem label="Opponent">
+                <OpponentLink pulseId={game.opponent?.pulseId} name={oppName} race={game.opponent?.race} />
+              </MetaItem> : null}
             </dl>
 
             <div
-              role="group"
+              role="toolbar"
               aria-label="Game actions"
-              className="flex min-h-9 flex-wrap items-center gap-2"
+              className="flex min-h-9 w-full flex-wrap items-center justify-end gap-2"
             >
-              {streamLinks && streamLinks.length > 0 ? (
-                <GameStreamLinks links={streamLinks} />
-              ) : null}
+              <ShareGameButton game={game} />
               <ReplayDownloadButton
                 gameId={game.gameId}
                 available={replayAvailable}
                 filename={game.replayFilename}
                 sizeBytes={replaySizeBytes}
                 showLabel
+                size="sm"
+                variant="secondary"
               />
               {isReviewableGame(game) ? (
                 <AskForReviewButton
@@ -178,6 +164,7 @@ export function GameDetailShell({
                   matchup={matchup}
                 />
               ) : null}
+              {streamLinks && streamLinks.length > 0 ? <GameStreamLinks links={streamLinks} variant="toolbar" /> : null}
             </div>
 
             <div className="flex flex-wrap items-center gap-2 text-caption">
@@ -198,7 +185,7 @@ export function GameDetailShell({
               ) : null}
             </div>
           </div>
-        </div>
+        </Card>
       </header>
 
       <div className="space-y-6">{children}</div>
@@ -231,32 +218,4 @@ function ResultBadge({ result }: { result?: string | null }) {
       ? "danger"
       : "neutral";
   return <Badge variant={variant}>{result}</Badge>;
-}
-
-function RaceChip({ race }: { race: string }) {
-  const full = canonicalRaceName(race);
-  const colour = raceColour(race);
-  return (
-    <span className="inline-flex items-center" style={{ color: colour }}>
-      {full ? (
-        <Icon name={full} kind="race" size={14} fallback="" decorative />
-      ) : null}
-    </span>
-  );
-}
-
-function canonicalRaceName(input?: string | null): string | null {
-  const head = (input || "").trim().charAt(0).toUpperCase();
-  switch (head) {
-    case "T":
-      return "Terran";
-    case "P":
-      return "Protoss";
-    case "Z":
-      return "Zerg";
-    case "R":
-      return "Random";
-    default:
-      return null;
-  }
 }

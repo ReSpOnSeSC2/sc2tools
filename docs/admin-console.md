@@ -5,13 +5,13 @@
 Overview contains Dashboard and Notifications. Community contains Users, Player
 identities, Player channels and Moderation. Insights contains Global players,
 Global trends and Web analytics. Content contains Guides. Operations contains
-Tools and Infrastructure. Each page's Help link opens the relevant section here.
+Tools, Audit log and Infrastructure. Each page's Help link opens the relevant section here.
 
 ## Granting admin
 
 An existing admin opens Users, finds the account, opens its detail page and uses
 Grant admin. Server operators can also put the account's Clerk user ID in
-`SC2TOOLS_ADMIN_USER_IDS`. Use an individual account so actions stay attributable.
+`SC2TOOLS_ADMIN_USER_IDS`. Use an individual account so actions stay attributable. Revoke admin is available on the same user page; it cannot revoke your own role, the last administrator, or an account protected by the configured ID/email allowlists. Revocation uses a Mongo transaction; it requires a replica set such as Atlas. Remove an operator allowlist entry through the normal configuration process before revoking that account.
 
 ## Daily triage
 
@@ -48,14 +48,40 @@ Review the evidence before approving identity or channel claims. Follow
 
 ## Users and repairing data
 
-Find the exact account before running a repair. Read the action's confirmation
-and outcome. Follow the [admin operations runbook](runbooks/admin-operations.md)
-for the existing rebuild and wipe tools. Later operations tools will extend it.
+### Repairing a user's data
+
+Use the 300 ms debounced email/ID lookup in Tools, or open the user's detail page.
+An exact internal user ID resolves to a chip; an arbitrary pasted string cannot
+activate a repair. Verify email, game count, opponent count and recent activity.
+
+Rebuild derives opponent counters from saved games and heals identity lookups.
+It keeps games, the account and custom builds. Wipe is an all-history delete of
+replay-derived data; it keeps the account and custom builds. Type the resolved
+email, or internal user ID when no email exists, to confirm. The dialog states
+the resolved game count. If that count changes, the API refuses the wipe: dismiss,
+refresh the user or change/reselect the lookup, and confirm the new count.
+
+A wipe has no Undo and deleted replay/detail objects cannot be recovered from an
+account snapshot. Do not promise that it can be undone. Both entry points use
+the same result line, including games, opponents and macro jobs; Dismiss resets
+the card and Open user checks the outcome. Unknown IDs produce No user with that
+ID. Games-only legacy IDs still must pass the normal owner mutation fence; these
+records are not automatically turned into accounts.
+
+Support snapshot shows active devices and version/online state, the same doctor
+warnings shown to the owner, replay archive counts, the last five imports and
+recent audit rows. It excludes tokens, replay paths and message bodies. Refresh
+it before retrying an uncertain action. See the [operations runbook](runbooks/admin-operations.md)
+for job health, Run now, audit retention and cohort definitions.
 
 ## Notifications and support inbox
 
 Read the report, supplied context and Error ID. Mark activity read after triage;
 filter to the relevant activity type or use View all activity to clear filters.
+
+## Audit log
+
+Review administrator actions by action or target. Wipes include actual deleted game counts. Audit rows expire after 400 days and account deletion anonymizes their identifiers. Recording is best effort; follow the [operations runbook](runbooks/admin-operations.md#audit-log) for interpretation.
 
 ## Infrastructure
 

@@ -31,6 +31,7 @@ const FILTER_LABEL: Record<Filter, string> = {
   agent_connected: "Installs",
   user_message: "Messages",
   backup_stale: "Backups",
+  job_overdue: "Jobs",
 };
 
 /**
@@ -171,7 +172,7 @@ export default function AdminNotificationsPage() {
             Filter
           </span>
           {(
-            ["all", "user_signup", "agent_download", "agent_connected", "user_message", "backup_stale"] as Filter[]
+            ["all", "user_signup", "agent_download", "agent_connected", "user_message", "backup_stale", "job_overdue"] as Filter[]
           ).map((f) => {
             const isActive = filter === f;
             return (

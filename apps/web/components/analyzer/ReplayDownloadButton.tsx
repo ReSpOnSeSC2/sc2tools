@@ -5,6 +5,7 @@ import { useAuth } from "@clerk/nextjs";
 import { AlertCircle, Download, Loader2 } from "lucide-react";
 import { apiCall, type ClientApiError } from "@/lib/clientApi";
 import { useToastOptional } from "@/components/ui/Toast";
+import { buttonClassName, type ButtonSize, type ButtonVariant } from "@/components/ui/buttonStyles";
 
 type ReplayDownloadResponse = {
   url: string;
@@ -24,6 +25,8 @@ export function ReplayDownloadButton({
   contextLabel,
   downloadPath,
   unavailableMessage,
+  size,
+  variant,
 }: {
   gameId?: string | null;
   available?: boolean;
@@ -38,6 +41,9 @@ export function ReplayDownloadButton({
   downloadPath?: string;
   /** Context-specific guidance when the original replay has not been archived. */
   unavailableMessage?: string;
+  /** Opt into shared action-bar styling; legacy row controls retain their look. */
+  size?: ButtonSize;
+  variant?: ButtonVariant;
 }) {
   const { getToken } = useAuth();
   const toastContext = useToastOptional();
@@ -126,7 +132,7 @@ export function ReplayDownloadButton({
         aria-busy={loading || undefined}
         aria-describedby={statusId}
         title={title}
-        className={[
+        className={size || variant ? buttonClassName({ size, variant: variant ?? "secondary", className: `${!canDownload ? "opacity-55 aria-disabled:cursor-not-allowed" : ""} ${state === "error" ? "text-danger" : ""}` }) : [
           "inline-flex items-center justify-center rounded-md border font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed aria-disabled:cursor-not-allowed",
           mobile
             ? "min-h-[44px] w-full gap-2 border-border-strong bg-bg-elevated/60 px-3 py-2 text-caption"

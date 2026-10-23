@@ -128,6 +128,13 @@ afterEach(() => {
 });
 
 describe("ReplayList", () => {
+  it("carries archive context only on public analysis links", () => {
+    const listQuery = "result=loss&cursor=old&page=3";
+    const view = render(<ReplayList items={[REPLAY]} owner={false} playerName="Reaver" publicHandle="shared" listQuery={listQuery} />);
+    for (const link of screen.getAllByRole("link", { name: /Timeline, macro breakdown/ })) expect(link.getAttribute("href")).toBe(`/players/shared/replays/game%2F42?from=${encodeURIComponent(listQuery)}`);
+    view.rerender(<ReplayList items={[REPLAY]} owner playerName="Reaver" listQuery={listQuery} />);
+    for (const link of screen.getAllByRole("link", { name: /Open replay analysis/ })) expect(link.getAttribute("href")).toBe("/app/game/game%2F42");
+  });
   it("shows one public action in each layout, with no account flash before auth resolves", () => {
     auth.isLoaded = false;
     const view = render(<ReplayList items={[{ ...REPLAY, result: "draw" }]} owner={false} playerName="Reaver" publicHandle="shared" />);
