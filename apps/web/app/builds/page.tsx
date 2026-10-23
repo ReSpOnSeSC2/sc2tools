@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { BuildsLibrary } from "@/components/builds/BuildsLibrary";
 
 export const metadata = {
@@ -10,7 +11,7 @@ export const metadata = {
 export default function BuildsPage() {
   return (
     <div className="space-y-6">
-      <BuildsLibrary />
+      <Suspense fallback={<p role="status">Loading build library…</p>}><BuildsLibrary /></Suspense>
     </div>
   );
 }

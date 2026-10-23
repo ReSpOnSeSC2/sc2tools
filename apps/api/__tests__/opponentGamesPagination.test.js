@@ -239,6 +239,19 @@ describe("opponent replay-history cursor pages", () => {
     expect(page.items.map((row) => row.id)).toEqual(["main", "alias"]);
   });
 
+  test("filters losses by either stored result spelling and ignores unknown result filters", async () => {
+    await seedOpponentRows();
+    const now = new Date();
+    await db.games.insertMany([
+      { ...game({ id: "loss-1", date: now }), result: "Loss" },
+      { ...game({ id: "loss-2", date: now }), result: "Defeat" },
+      { ...game({ id: "win-1", date: now }), result: "Victory" },
+    ]);
+    const service = new OpponentsService(db, Buffer.alloc(32, 1));
+    expect((await service.listGames("u1", "opp-a", { result: "loss" })).items.map((row) => row.result).sort()).toEqual(["Defeat", "Loss"]);
+    expect((await service.listGames("u1", "opp-a", { result: "garbage" })).items).toHaveLength(3);
+  });
+
   test("rejects malformed cursors and returns null for a non-owner", async () => {
     await seedOpponentRows();
     const service = new OpponentsService(db, Buffer.alloc(32, 1));
@@ -269,7 +282,7 @@ describe("GET /opponents/:pulseId/games", () => {
     }));
     const res = await request(appWith(listGames)).get(
       "/opponents/opp-a/games?limit=75&cursor=opaque"
-      + "&mergeLinked=1&map_pool=ladder&opp_race=T",
+      + "&mergeLinked=1&map_pool=ladder&opp_race=T&result=loss",
     );
 
     expect(res.status).toBe(200);
@@ -279,6 +292,7 @@ describe("GET /opponents/:pulseId/games", () => {
       mergeLinked: true,
       limit: 75,
       cursor: "opaque",
+      result: "loss",
     });
     expect(res.body.nextCursor).toBe("next-opaque");
   });

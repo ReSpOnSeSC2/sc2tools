@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { BuildProfileChart } from "@/components/overlay/widgets/BuildProfileWidget";
+import type { DockPost } from "./dockActions";
+import { DockSnapshotState } from "./useDockPanelActions";
 import {
   BUILD_PROFILE_AXES,
   isBuildProfileComplete,
@@ -25,7 +27,7 @@ export function BuildProfileEditor({
   busy: boolean;
   ready?: boolean;
   /** null means no authoritative save response; keep the user's draft. */
-  onPost: (patch: Record<string, unknown>) => Promise<StudioState | null>;
+  onPost: DockPost;
 }) {
   const [draft, setDraft] = useState(() => copyProfile(profile));
   const [dirty, setDirty] = useState(false);
@@ -34,6 +36,11 @@ export function BuildProfileEditor({
   const dirtyRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 3000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   useEffect(() => {
     if (!dirtyRef.current) setDraft(copyProfile(profile));
@@ -60,9 +67,11 @@ export function BuildProfileEditor({
   // Hidden profiles can be saved in progress or cleared. A visible graph
   // must remain complete; Hide first before removing its title or a score.
   const canSave = draftValid && (!profile.visible || draftComplete);
+  const saveRef = useRef<() => Promise<StudioState | null>>(async () => null);
+  const visibilityRef = useRef<(visible: boolean) => Promise<StudioState | null>>(async () => null);
 
   const save = async () => {
-    if (disabled || !canSave) return;
+    if (disabled || !canSave) return null;
     setSaving(true);
     setNotice(null);
     try {
@@ -73,29 +82,33 @@ export function BuildProfileEditor({
           ratings: { ...draft.ratings },
           labels: Object.fromEntries(BUILD_PROFILE_AXES.map(({ key }) => [key, draft.labels[key].trim()])),
         },
-      });
+      }, () => saveRef.current());
       if (saved) {
         setDraft(copyProfile(saved.buildProfile));
         dirtyRef.current = false;
         setDirty(false);
         setNotice("Ratings saved.");
       }
+      return saved;
     } finally {
       setSaving(false);
     }
   };
 
   const setVisible = async (visible: boolean) => {
-    if (disabled || (visible && (!savedComplete || dirty))) return;
+    if (disabled || (visible && (!savedComplete || dirty))) return null;
     setSaving(true);
     setNotice(null);
     try {
-      const saved = await onPost({ buildProfile: { visible } });
+      const saved = await onPost({ buildProfile: { visible } }, () => visibilityRef.current(visible));
       if (saved) setNotice(saved.buildProfile.visible ? "Widget shown." : "Widget hidden.");
+      return saved;
     } finally {
       setSaving(false);
     }
   };
+  saveRef.current = save;
+  visibilityRef.current = setVisible;
 
   const discard = () => {
     dirtyRef.current = false;
@@ -103,6 +116,8 @@ export function BuildProfileEditor({
     setDraft(copyProfile(profile));
     setNotice(null);
   };
+
+  if (!ready) return <DockSnapshotState />;
 
   return (
     <div className="min-w-0 space-y-3">

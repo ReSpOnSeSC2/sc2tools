@@ -34,6 +34,7 @@ import { isTokenAuthRoute } from "@/lib/tokenAuthRoutes";
 type Props = {
   /** Names the section in the message, e.g. "the live game panel". */
   label?: string;
+  title?: string;
   children: ReactNode;
 };
 
@@ -67,6 +68,7 @@ export class SectionBoundary extends Component<Props, State> {
     return (
       <SectionCrash
         label={this.props.label}
+        title={this.props.title}
         error={error}
         eventId={eventId}
         onReset={this.reset}
@@ -77,11 +79,13 @@ export class SectionBoundary extends Component<Props, State> {
 
 function SectionCrash({
   label,
+  title,
   error,
   eventId,
   onReset,
 }: {
   label?: string;
+  title?: string;
   error: Error;
   eventId?: string | null;
   onReset: () => void;
@@ -97,7 +101,7 @@ function SectionCrash({
       <div className="flex items-start gap-3">
         <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden />
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="text-body font-semibold text-text">Couldn&apos;t show {section}</p>
+          <p className="text-body font-semibold text-text">{title || <>Couldn&apos;t show {section}</>}</p>
           <p className="text-caption text-text-muted">
             The rest of the page still works. Try again, and if it keeps happening, report it so we can fix it.
           </p>

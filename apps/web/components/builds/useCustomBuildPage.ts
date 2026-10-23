@@ -22,6 +22,13 @@ export interface CustomBuildQuery {
   includeGeneric?: boolean;
 }
 
+function restoredCursors(query: string): string[] {
+  try {
+    const value: unknown = JSON.parse(sessionStorage.getItem(`builds:cursors:${query}`) || "[]");
+    return Array.isArray(value) && value.length <= 100 && value.every((cursor) => typeof cursor === "string" && cursor.length <= 2048) ? value : [];
+  } catch { return []; }
+}
+
 /** Keep one page of definitions on screen; cursors never contain build data. */
 export function useCustomBuildPage(query: CustomBuildQuery = {}) {
   const { userId } = useAuth();
@@ -33,18 +40,28 @@ export function useCustomBuildPage(query: CustomBuildQuery = {}) {
   if (query.view) params.set("view", query.view);
   if (query.includeGeneric) params.set("includeGeneric", "true");
   const queryKey = `${userId ?? ""}:${params.toString()}`;
-  const [navigation, setNavigation] = useState<{ query: string; cursors: string[] }>({ query: queryKey, cursors: [] });
+  const [navigation, setNavigation] = useState<{ query: string; cursors: string[] }>({ query: queryKey, cursors: restoredCursors(queryKey) });
   useEffect(() => {
-    setNavigation((current) => current.query === queryKey ? current : { query: queryKey, cursors: [] });
+    setNavigation((current) => current.query === queryKey ? current : { query: queryKey, cursors: restoredCursors(queryKey) });
   }, [queryKey]);
+  useEffect(() => {
+    if (navigation.query !== queryKey) return;
+    try { sessionStorage.setItem(`builds:cursors:${queryKey}`, JSON.stringify(navigation.cursors)); } catch { /* Storage is optional. */ }
+  }, [navigation, queryKey]);
   // A changed filter always starts at the beginning, including the render
   // before effects run. Never request the new filter with an old cursor.
-  const cursors = navigation.query === queryKey ? navigation.cursors : [];
+  const cursors = navigation.query === queryKey ? navigation.cursors : restoredCursors(queryKey);
   const cursor = cursors.at(-1);
   if (cursor) params.set("cursor", cursor);
   const search = params.toString();
   const path = `/v1/custom-builds${search ? `?${search}` : ""}`;
-  const resource = useApi<CustomBuildPage>(path, { keepPreviousData: false, dedupingInterval: 0 });
+  const resource = useApi<CustomBuildPage>(path, { keepPreviousData: true, dedupingInterval: 0 });
+  useEffect(() => {
+    if (cursor && resource.error?.status === 400 && resource.error.code === "invalid_custom_build_page") {
+      try { sessionStorage.removeItem(`builds:cursors:${queryKey}`); } catch { /* Storage is optional. */ }
+      setNavigation({ query: queryKey, cursors: [] });
+    }
+  }, [cursor, queryKey, resource.error]);
   const resetPage = useCallback(() => setNavigation({ query: queryKey, cursors: [] }), [queryKey]);
   const nextPage = () => {
     if (resource.data?.nextCursor && !resource.isValidating) {
@@ -56,7 +73,7 @@ export function useCustomBuildPage(query: CustomBuildQuery = {}) {
   const pageSize = resource.data?.limit ?? 50;
   return {
     ...resource,
-    pageNumber,
+    pageNumber, pageSize,
     pageStart: (pageNumber - 1) * pageSize,
     hasPrevious: cursors.length > 0,
     hasNext: !!resource.data?.nextCursor,

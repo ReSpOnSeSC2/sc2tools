@@ -34,7 +34,7 @@ describe("BuildProfileEditor", () => {
     render(<BuildProfileEditor profile={TEST_PROFILE} busy={false} onPost={onPost} />);
     fireEvent.change(screen.getByRole("textbox", { name: "Build title" }), { target: { value: " Edited test build " } });
     fireEvent.click(screen.getByRole("button", { name: "Save ratings" }));
-    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { title: "Edited test build", ratings: TEST_PROFILE.ratings, labels: TEST_PROFILE.labels } }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { title: "Edited test build", ratings: TEST_PROFILE.ratings, labels: TEST_PROFILE.labels } }, expect.any(Function)));
     expect(await screen.findByRole("status")).toHaveProperty("textContent", "Ratings saved.");
     expect(onPost.mock.calls[0][0]).not.toHaveProperty("buildProfile.visible");
   });
@@ -58,7 +58,7 @@ describe("BuildProfileEditor", () => {
     const onPost = vi.fn(async () => state({ ...TEST_PROFILE, visible: true }));
     render(<BuildProfileEditor profile={TEST_PROFILE} busy={false} onPost={onPost} />);
     fireEvent.click(screen.getByRole("button", { name: "Show widget" }));
-    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { visible: true } }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { visible: true } }, expect.any(Function)));
     expect((await screen.findByRole("status")).textContent).toBe("Widget shown.");
   });
 
@@ -74,7 +74,7 @@ describe("BuildProfileEditor", () => {
       title: "Test build",
       labels: { ...TEST_PROFILE.labels, popularity: "How common it is" },
       ratings: { ...TEST_PROFILE.ratings, popularity: 4 },
-    } }));
+    } }, expect.any(Function)));
   });
 
   it("requires nonblank editable labels before saving", () => {
@@ -93,7 +93,7 @@ describe("BuildProfileEditor", () => {
     fireEvent.change(screen.getByRole("combobox", { name: "Micro required" }), { target: { value: "" } });
     expect((screen.getByRole("button", { name: "Save ratings" }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Save ratings" }));
-    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { title: "", ratings: partial.ratings, labels: partial.labels } }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { title: "", ratings: partial.ratings, labels: partial.labels } }, expect.any(Function)));
     rerender(<BuildProfileEditor profile={partial} busy={false} onPost={onPost} />);
     expect((screen.getByRole("button", { name: "Show widget" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("combobox", { name: "Micro required" }) as HTMLSelectElement).value).toBe("");
@@ -107,7 +107,7 @@ describe("BuildProfileEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save ratings" }));
     await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: {
       title: "", labels: DEFAULT_BUILD_PROFILE.labels, ratings: DEFAULT_BUILD_PROFILE.ratings,
-    } }));
+    } }, expect.any(Function)));
     rerender(<BuildProfileEditor profile={DEFAULT_BUILD_PROFILE} busy={false} onPost={onPost} />);
     expect(screen.getAllByRole("combobox").every((element) => (element as HTMLSelectElement).value === "")).toBe(true);
     expect((screen.getByRole("button", { name: "Show widget" }) as HTMLButtonElement).disabled).toBe(true);
@@ -123,7 +123,7 @@ describe("BuildProfileEditor", () => {
     expect(onPost).not.toHaveBeenCalled();
     expect(screen.getByText("Hide the widget before saving an empty title or an unset rating.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Hide widget" }));
-    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { visible: false } }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { visible: false } }, expect.any(Function)));
     rerender(<BuildProfileEditor profile={TEST_PROFILE} busy={false} onPost={onPost} />);
     expect((screen.getByRole("combobox", { name: "Aggressiveness" }) as HTMLSelectElement).value).toBe("");
     expect((screen.getByRole("button", { name: "Save ratings" }) as HTMLButtonElement).disabled).toBe(false);
@@ -136,7 +136,7 @@ describe("BuildProfileEditor", () => {
     const { rerender } = render(<BuildProfileEditor profile={visible} busy={false} onPost={onPost} />);
     fireEvent.change(screen.getByRole("textbox", { name: "Build title" }), { target: { value: "Next test build" } });
     fireEvent.click(screen.getByRole("button", { name: "Hide widget" }));
-    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { visible: false } }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledWith({ buildProfile: { visible: false } }, expect.any(Function)));
     rerender(<BuildProfileEditor profile={{ ...visible, visible: false }} busy={false} onPost={onPost} />);
     expect((screen.getByRole("textbox", { name: "Build title" }) as HTMLInputElement).value).toBe("Next test build");
     fireEvent.click(screen.getByRole("button", { name: "Discard edits" }));
@@ -146,9 +146,9 @@ describe("BuildProfileEditor", () => {
   it("locks all input and control actions without a server snapshot or while saving", () => {
     const onPost = vi.fn();
     const { rerender } = render(<BuildProfileEditor profile={TEST_PROFILE} busy={false} ready={false} onPost={onPost} />);
-    expect((screen.getByRole("textbox", { name: "Build title" }) as HTMLInputElement).disabled).toBe(true);
-    expect(screen.getAllByRole("combobox").every((element) => (element as HTMLSelectElement).disabled)).toBe(true);
-    expect((screen.getByRole("button", { name: "Show widget" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByRole("status").textContent).toBe("Loading your saved controls…");
+    expect(screen.queryByRole("textbox", { name: "Build title" })).toBeNull();
+    expect(onPost).not.toHaveBeenCalled();
     rerender(<BuildProfileEditor profile={TEST_PROFILE} busy onPost={onPost} />);
     expect((screen.getByRole("textbox", { name: "Build title" }) as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "Show widget" }) as HTMLButtonElement).disabled).toBe(true);

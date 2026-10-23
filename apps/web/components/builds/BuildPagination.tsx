@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 
 interface BuildPaginationProps {
   pageNumber: number;
+  pageSize?: number;
   pageStart: number;
   count: number;
   total?: number | null;
@@ -14,13 +15,13 @@ interface BuildPaginationProps {
   onNext: () => void;
 }
 
-export function BuildPagination({ pageNumber, pageStart, count, total, hasPrevious, hasNext, loading, onPrevious, onNext }: BuildPaginationProps) {
+export function BuildPagination({ pageNumber, pageSize = 50, pageStart, count, total, hasPrevious, hasNext, loading, onPrevious, onNext }: BuildPaginationProps) {
   if (!hasPrevious && !hasNext) return null;
   return (
     <nav aria-label="Custom build pages" className="mt-4 flex flex-wrap items-center justify-between gap-3">
       <p className="text-caption text-text-muted" aria-live="polite">
         {count > 0
-          ? `Showing ${(pageStart + 1).toLocaleString()}–${(pageStart + count).toLocaleString()}${total != null ? ` of ${total.toLocaleString()} builds` : " builds"}`
+          ? `Page ${pageNumber}${total != null ? ` of ${Math.ceil(total / pageSize)}` : ""} · builds ${(pageStart + 1).toLocaleString()}–${(pageStart + count).toLocaleString()}${total != null ? ` of ${total.toLocaleString()}` : ""}`
           : `Page ${pageNumber}`}
       </p>
       <div className="flex gap-2">

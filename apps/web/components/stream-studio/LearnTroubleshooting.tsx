@@ -3,6 +3,11 @@ import { ArrowUpRight } from "lucide-react";
 
 const PROBLEMS = [
   {
+    title: "The source says the link is no longer valid",
+    body: "The overlay token was revoked or rotated, or the URL was mistyped. Copy a fresh URL from Settings → Overlay and replace it in the Browser Source or Stream Dock. A temporary outage reconnects automatically. Add ?check=1 (or &check=1 after an existing query) to see a connection badge for 10 seconds inside OBS.",
+    href: "/settings?tab=overlay", action: "Copy a fresh overlay link",
+  },
+  {
     title: "Test works, but a real game shows nothing",
     body: "The test uses sample data; it confirms the Browser Source can display the widget. Check Devices for a paired, recently seen agent on your gaming PC and keep it running. Live widgets need a detected match; result widgets need the completed replay to finish syncing. Opponent-history cards also need usable history. Browser-only replay analysis does not replace the agent's live connection.",
     href: "/devices", action: "Check my agent",

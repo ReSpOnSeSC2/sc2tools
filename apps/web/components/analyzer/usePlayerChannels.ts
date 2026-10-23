@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import { useCallback, useMemo } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import type { PlayerChannels } from "./PlayerChannelLinks";
 
@@ -40,15 +41,18 @@ export function usePlayerChannels(players: readonly Identity[]) {
       }
       return results;
     }, { dedupingInterval: 30_000, errorRetryCount: 1, keepPreviousData: false });
-  const byIdentity = new Map<string, ResolvedPlayer>();
+  const byIdentity = useMemo(() => {
+    const map = new Map<string, ResolvedPlayer>();
   for (const player of data || []) {
     if (!player || typeof player !== "object") continue;
-    byIdentity.set(JSON.stringify(channelIdentity(player)), player);
+    map.set(JSON.stringify(channelIdentity(player)), player);
   }
-  return (player: Identity): PlayerChannels | undefined => {
+    return map;
+  }, [data]);
+  return useCallback((player: Identity): PlayerChannels | undefined => {
     // Retain the complete tuple: a contradictory toon/Pulse pair must never
     // borrow the result of a different row that happens to share one key.
     const channels = byIdentity.get(JSON.stringify(channelIdentity(player)))?.channels;
     return channels?.twitch || channels?.youtube ? channels : undefined;
-  };
+  }, [byIdentity]);
 }

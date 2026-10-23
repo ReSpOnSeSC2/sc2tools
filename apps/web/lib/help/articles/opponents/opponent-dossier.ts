@@ -57,7 +57,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Narrow it down", anchor: "drill-down" },
     {
       type: "paragraph",
-      text: "In **H2H trends**, open the **Maps** or **Builds** tab and pick a map or a pairing of your build and theirs. The replay history then lists only those games. Pick it again to go back to every game.",
+      text: "Click a map, their strategy, or a build pairing to narrow the dossier. The active filters stay visible under the header. ‘(filtered)’ labels mark the narrowed stats; remove one chip or use **Clear all** to widen the view. A selected strategy and build pairing replace one another. Build tendencies, Likely strategies next, and Where games end always show all games in your analyzer scope and say ‘All games, not filtered’. Large histories explain when the filtered summary uses the latest analyzed games; the replay card still searches the full history.",
     },
     { type: "heading", text: "Scouting notes and read-aloud", anchor: "notes" },
     {
@@ -77,10 +77,12 @@ const article: HelpArticle = {
       type: "steps",
       items: [
         "Open **Identity & MMR diagnostics** on the dossier. It shows whether their Pulse ID was found, their toon, region and when MMR was last fetched.",
-        "Press the **Retry** button there. It asks SC2Pulse again right away.",
+        "Press **Retry SC2Pulse** there. It asks SC2Pulse again right away, then refreshes the profile, ladder panels and channel links together.",
         "If it's found, the Pulse ID, MMR and ladder context fill in, and your older games against them are updated too. If it still isn't, SC2Pulse doesn't list the player yet, often because they haven't played enough ranked games this season. Try again later.",
       ],
     },
+    {"type": "paragraph", "text": "Open **Identity & MMR diagnostics** when the account link or ladder MMR looks missing. Its summary separates a profile SC2Pulse has not found from a profile with no current ladder rating. **Retry SC2Pulse** refreshes the profile, ladder panels and channel links together and reports whether past game metadata was updated. An unresolved profile may appear after that player completes more ranked games. Technical details are available in a separate disclosure."},
+    {"type": "paragraph", "text": "The replay card's Show filter selects all results, wins or losses without changing the header stats. Its Map selector shares the dossier's map filter. If older or newer pages exist, sorting by a field other than date applies only to the currently loaded page; the caption makes that limit explicit."},
     { type: "heading", text: "Barcodes and real identities", anchor: "barcode" },
     {
       type: "paragraph",

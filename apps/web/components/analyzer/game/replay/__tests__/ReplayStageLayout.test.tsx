@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MapReplayer } from "../../MapReplayer";
@@ -9,6 +9,7 @@ import { payload } from "./fixtures";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 /**
@@ -124,5 +125,41 @@ describe("replay stage colour scope", () => {
     expect(screen.getByTestId("map-replayer").className).not.toContain(
       REPLAY_SCOPE_CLASS,
     );
+  });
+});
+
+function viewport(width: number) {
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query.includes("1280") ? width >= 1280 : width < 768,
+    media: query, onchange: null, addListener() {}, removeListener() {},
+    addEventListener() {}, removeEventListener() {}, dispatchEvent: () => true,
+  }));
+}
+
+describe("replay responsive panels", () => {
+  it("puts one switchable panel after the map and dock on tablets", () => {
+    viewport(900); render(<ReplayStage playback={payload()} />);
+    const map = screen.getByTestId("map-replayer"); const dock = screen.getByTestId("replay-transport");
+    const panel = screen.getByTestId("replay-mobile-panel");
+    expect(map.compareDocumentPosition(dock) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(dock.compareDocumentPosition(panel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getAllByTestId("replay-production-rail")).toHaveLength(1);
+    expect(screen.queryByTestId("replay-build-order-rail")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Build order" }));
+    expect(screen.queryByTestId("replay-production-rail")).toBeNull();
+    expect(screen.getByTestId("replay-build-order-rail")).toBeTruthy();
+  });
+  it("starts phone panels collapsed and hides them for compact hosts", () => {
+    viewport(390); const view = render(<ReplayStage playback={payload()} />);
+    expect(screen.getByRole("button", { name: /Show production/ }).getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("tablist", { name: "Replay panels" })).toBeNull();
+    view.rerender(<ReplayStage playback={payload()} mobileCompact />);
+    expect(screen.queryByTestId("replay-mobile-panel")).toBeNull();
+  });
+  it("keeps both desktop rails", () => {
+    viewport(1400); render(<ReplayStage playback={payload()} />);
+    expect(screen.getByTestId("replay-production-rail")).toBeTruthy();
+    expect(screen.getByTestId("replay-build-order-rail")).toBeTruthy();
+    expect(screen.queryByTestId("replay-mobile-panel")).toBeNull();
   });
 });

@@ -513,3 +513,10 @@ describe("AllGamesTable build check-in marker", () => {
     );
   });
 });
+
+it("discloses that a non-date sort applies only to the current replay page", () => {
+  render(<AllGamesTable games={[{ id: "one", map: "Alcyone", date: "2026-10-22" }]} pageLocalSort />);
+  expect(screen.queryByText(/Sorting applies/)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /^Map/ }));
+  expect(screen.getByRole("status").textContent).toBe("Sorting applies to this game only");
+});

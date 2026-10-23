@@ -17,6 +17,8 @@ import { act, cleanup, render } from "@testing-library/react";
 type SocketHandler = (...args: unknown[]) => void;
 
 class FakeSocket {
+  connect() {}
+  off() {}
   handlers = new Map<string, SocketHandler>();
   emitted: Array<{ event: string; payload?: unknown }> = [];
   disconnected = false;

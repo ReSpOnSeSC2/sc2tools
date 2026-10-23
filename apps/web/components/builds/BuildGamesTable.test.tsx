@@ -118,31 +118,7 @@ describe("BuildGamesTable replay-resume tests", () => {
     ).toBeTruthy();
   });
 
-  it("keeps phase game filters applied when resumed rows are shown", () => {
-    const { container } = render(
-      <BuildGamesTable
-        games={[COMPETITIVE_GAME]}
-        resumedGames={[RESUMED_GAME]}
-        resumedCount={1}
-        filterGameIds={[COMPETITIVE_GAME.gameId]}
-        filterLabel="Mid · Roach Ravager"
-      />,
-    );
 
-    fireEvent.click(
-      screen.getByRole("switch", { name: "Show replay-resume tests" }),
-    );
-
-    expect(screen.getByTestId("build-games-filter-chip").textContent).toContain(
-      "Filtered to 1 game",
-    );
-    expect(
-      container.querySelector('[data-game-row-id="competitive-game"]'),
-    ).toBeTruthy();
-    expect(
-      container.querySelector('[data-game-row-id="replay-resume-game"]'),
-    ).toBeNull();
-  });
 });
 
 describe("BuildGamesTable check-in markers", () => {

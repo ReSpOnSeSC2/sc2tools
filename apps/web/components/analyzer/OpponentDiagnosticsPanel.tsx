@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { ChevronDown, ChevronRight, RefreshCcw } from "lucide-react";
+import { requestErrorCopy } from "@/lib/requestErrors";
 
 export type OpponentDiagnosticFinding = {
   code: string;
@@ -71,13 +74,17 @@ export function OpponentDiagnosticsPanel({
   diagnosticsPath,
   retryPath,
   collapsible = false,
+  initiallyExpanded = false, onRetried,
 }: {
   diagnosticsPath: string;
   retryPath: string;
   collapsible?: boolean;
+  initiallyExpanded?: boolean;
+  onRetried?: (response: OpponentRetryPulseResp) => unknown;
 }) {
   const { getToken } = useAuth();
-  const [open, setOpen] = useState(!collapsible);
+  const [open, setOpen] = useState(!collapsible || initiallyExpanded);
+  const contentId = useId();
   const { data, error, isLoading, mutate } = useApi<OpponentDiagnosticsResp>(
     open ? diagnosticsPath : null,
     { revalidateOnFocus: false },
@@ -98,8 +105,9 @@ export function OpponentDiagnosticsPanel({
       });
       setRetry({ kind: "done", resp });
       await mutate();
+      await onRetried?.(resp);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = requestErrorCopy(err).body;
       setRetry({ kind: "error", message });
     }
   }
@@ -114,9 +122,10 @@ export function OpponentDiagnosticsPanel({
             type="button"
             className="text-body font-semibold text-text hover:text-accent"
             aria-expanded={open}
+            aria-controls={contentId}
             onClick={() => setOpen((o) => !o)}
           >
-            {open ? "▾" : "▸"} Identity &amp; MMR diagnostics
+            {open ? <ChevronDown className="mr-1 inline h-4 w-4" aria-hidden /> : <ChevronRight className="mr-1 inline h-4 w-4" aria-hidden />} Identity &amp; MMR diagnostics
           </button>
         ) : (
           <h2 className="text-body font-semibold text-text">
@@ -124,14 +133,10 @@ export function OpponentDiagnosticsPanel({
           </h2>
         )}
         {open ? (
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={retry.kind === "busy" || isLoading}
-            onClick={runRetry}
-          >
-            {retry.kind === "busy" ? "Retrying…" : "Retry pulse resolve + MMR"}
-          </button>
+          <Button variant="secondary" size="sm" disabled={isLoading} loading={retry.kind === "busy"}
+            iconLeft={<RefreshCcw className="h-4 w-4" aria-hidden />} onClick={runRetry}>
+            {retry.kind === "busy" ? "Retrying…" : "Retry SC2Pulse"}
+          </Button>
         ) : null}
       </div>
 
@@ -140,7 +145,7 @@ export function OpponentDiagnosticsPanel({
           Why this opponent&apos;s Pulse ID or MMR is missing — open to see.
         </p>
       ) : (
-        <>
+        <div id={contentId}>
           <p className="mt-1 text-caption text-text-muted">
             Why the Pulse ID or MMR is missing for this opponent. Inferred from
             stored fields — Retry forces a fresh SC2Pulse lookup, bypassing the
@@ -153,10 +158,16 @@ export function OpponentDiagnosticsPanel({
             </div>
           ) : error ? (
             <p className="mt-3 text-caption text-danger">
-              Failed to load diagnostics: {error.message}
+              Couldn't load diagnostics. {requestErrorCopy(error).body}
             </p>
           ) : data ? (
             <div className="mt-3 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <DiagField label="SC2Pulse profile" value={data.pulseIdStatus === "resolved" ? "Found" : "Not found yet"} />
+                <DiagField label="Ladder MMR" value={data.mmr !== null ? `${data.mmr.toLocaleString()} ${data.region || ""}` : "Unknown"} />
+                <DiagField label="Games with in-replay MMR" value={`${data.inReplayMmrCount} of ${data.gameCount}`} />
+              </div>
+              <details><summary className="min-h-11 cursor-pointer py-3 text-caption">Technical details</summary>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-caption sm:grid-cols-3">
                 <DiagField label="Pulse ID" value={PULSE_ID_STATUS[data.pulseIdStatus]} />
                 <DiagField
@@ -179,7 +190,7 @@ export function OpponentDiagnosticsPanel({
                   label="Resolve attempted"
                   value={fmtDate(data.pulseResolveAttemptedAt)}
                 />
-              </div>
+              </div></details>
 
               <ul className="space-y-1.5">
                 {data.findings.map((f, i) => (
@@ -194,22 +205,14 @@ export function OpponentDiagnosticsPanel({
 
           {retry.kind === "done" ? (
             <p className="mt-3 rounded-md border border-success/40 bg-success/10 p-2 text-caption text-success">
-              {retry.resp.resolvedPulseCharacterId
-                ? `Resolved character id ${retry.resp.pulseCharacterId}. `
-                : ""}
-              {retry.resp.mmr !== null
-                ? `MMR ${retry.resp.mmr}${retry.resp.region ? ` (${retry.resp.region})` : ""}. `
-                : "SC2Pulse returned no current 1v1 MMR. "}
-              {retry.resp.gamesRestamped > 0
-                ? `Back-stamped ${retry.resp.gamesRestamped} game(s).`
-                : ""}
+              {pulseRetrySummary(retry.resp)}
             </p>
           ) : retry.kind === "error" ? (
             <p className="mt-3 rounded-md border border-danger/40 bg-danger/10 p-2 text-caption text-danger">
               Retry failed: {retry.message}
             </p>
           ) : null}
-        </>
+        </div>
       )}
     </Card>
   );
@@ -249,4 +252,10 @@ function SeverityDot({ severity }: { severity: "ok" | "warn" | "info" }) {
       aria-hidden
     />
   );
+}
+
+export function pulseRetrySummary(response: OpponentRetryPulseResp): string {
+  if (!response.resolvedPulseCharacterId) return "SC2Pulse doesn't list this player yet. Try again after they play a few ranked games.";
+  if (response.mmr === null) return "Found their SC2Pulse profile, but they have no current ladder MMR.";
+  return `Found their SC2Pulse profile · MMR ${response.mmr.toLocaleString()}${response.region ? ` (${response.region})` : ""} · Updated ${response.gamesRestamped} past games`;
 }

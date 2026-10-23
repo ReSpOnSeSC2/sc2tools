@@ -6,7 +6,7 @@ import { rawPayload } from "./fixtures";
 // vitest.config.ts sets globals:false, so React Testing Library never
 // registers its automatic cleanup -- without this every render stays
 // mounted and the next query matches the previous test's DOM too.
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 /**
  * The two presentations ``MapReplaySection`` picks between: the
@@ -34,6 +34,11 @@ const { MapReplaySection } = await import("../../MapReplaySection");
 describe("MapReplaySection hosts", () => {
   beforeEach(() => {
     api.result = { data: rawPayload(), isLoading: false };
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("min-width: 1280px"),
+      addEventListener() {},
+      removeEventListener() {},
+    }));
   });
 
   it("seeks when delayed playback arrives, stays paused, and preserves user scrubbing on refresh", () => {
