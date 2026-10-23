@@ -90,6 +90,10 @@ TRAY_ICON = ICON_DIR / "tray_icon.png"
 if TRAY_ICON.exists():
     DATAS.append((str(TRAY_ICON), "sc2tools_agent/ui"))
 
+COMPANION_ICONS = REPO_ROOT / "apps" / "web" / "public" / "icons" / "sc2"
+if COMPANION_ICONS.exists():
+    DATAS.append((str(COMPANION_ICONS), "sc2tools_agent/ui/assets/sc2"))
+
 # sc2reader internals + matplotlib pyplot lazy imports need explicit
 # hidden imports because PyInstaller can't statically detect them.
 # CRITICAL: sc2reader also ships CSV game-data files inside its wheel

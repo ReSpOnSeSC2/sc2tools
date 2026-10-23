@@ -97,9 +97,20 @@ def _exercise_gui(report):
                 if not card.is_preview or not card.isVisible() or card.grab().isNull():
                     raise RuntimeError("The bundled check-in preview did not paint.")
                 card._dismiss_preview()
+            companion_index = next(
+                (index for index in range(stack.count())
+                 if stack.widget(index).objectName() == "companionDesk"), None,
+            )
+            if companion_index is None:
+                raise RuntimeError("The bundled Companion page did not construct.")
+            window._nav_group.button(companion_index).setChecked(True)
+            stack.setCurrentIndex(companion_index)
+            app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+            if window.grab().isNull():
+                raise RuntimeError("The bundled Companion page did not paint.")
             report.update(qt_version=QtCore.qVersion(), qt_platform=app.platformName(),
-                          page_count=stack.count(), streams_painted=True, checkin_previews_painted=True,
-                          dashboard_recent_painted=True)
+                          page_count=stack.count(), streams_painted=True, companion_painted=True,
+                          checkin_previews_painted=True, dashboard_recent_painted=True)
         except Exception as error:
             callback["error"] = error
         finally:

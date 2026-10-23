@@ -117,6 +117,9 @@ class AgentState:
     notify_every_game: bool = False
     """Opt-in local notification for newly synced live games; never history imports."""
 
+    companion_preferences: Dict[str, bool] = field(default_factory=dict)
+    """Native Companion overlay switches. Missing switches default to off."""
+
     parse_concurrency_override: Optional[int] = None
     """How many parse threads the watcher's ThreadPoolExecutor runs.
     None = use the config default (4). The Settings tab exposes this
@@ -418,6 +421,14 @@ def load_state(state_dir: Path) -> AgentState:
         autostart_enabled=bool(raw.get("autostart_enabled") or False),
         start_minimized=bool(raw.get("start_minimized") or False),
         notify_every_game=raw.get("notify_every_game") is True,
+        companion_preferences={
+            key: value for key, value in (
+                raw.get("companion_preferences")
+                if isinstance(raw.get("companion_preferences"), dict) else {}
+            ).items()
+            if key in {"overlaysEnabled", "opponentOverlay", "scoutingOverlay"}
+            and type(value) is bool
+        },
         parse_concurrency_override=_coerce_int(
             raw.get("parse_concurrency_override"),
         ),
@@ -525,6 +536,7 @@ def _snapshot(state: AgentState) -> dict:
         window_page=_coerce_window_page(state.window_page),
         uploaded=dict(state.uploaded),
         path_by_game_id=dict(state.path_by_game_id),
+        companion_preferences=dict(state.companion_preferences),
         release_seen=dict(state.release_seen),
         replay_folders_override=list(state.replay_folders_override),
         replay_folders_excluded=list(state.replay_folders_excluded),
@@ -557,7 +569,7 @@ def _coerce_geometry(value: object) -> Optional[str]:
 
 def _coerce_window_page(value: object) -> Optional[str]:
     return value if isinstance(value, str) and value in {
-        "dashboard", "recent", "log", "settings", "streams",
+        "dashboard", "recent", "log", "settings", "streams", "companion",
     } else None
 
 

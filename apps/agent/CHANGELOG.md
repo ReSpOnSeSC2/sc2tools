@@ -4,6 +4,24 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+## 0.20.0
+
+### Added - Native Companion
+
+- Extends the existing paired agent with a clickable Companion for browsing
+  opponents, previous meetings, build comparisons, notes, and important tech
+  milestones for both players. Local SC2 icons ship with the installer.
+- Independent Opponent and Scouting panels can stay above the game while the
+  agent is in the tray. A master switch hides both and preserves individual
+  choices. Preferences persist across restarts; all panels default to off.
+- Uses the existing account and replay sync. Current opponent data is kept
+  separate from manually browsed history and older post-game payloads.
+- The matching API and scouting widget update supplies recorded tech timings,
+  explicitly labeled as construction starts or completions. Historical data
+  is not presented as observed enemy tech in the current game.
+
+### Improved - Desktop reliability and history
+
 - Dashboard shows the last game, locally tracked Today record/MMR, persistent
   upload facts and history-import progress. Recent games keeps 200 private local
   outcomes, with filters, exact-file actions, narrow retries and skipped reasons.
@@ -45,9 +63,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 - Sync retries use capped backoff and wake when the connection returns.
   Queued replays stay queued; Recent uploads shows terminal outcomes with
   readable errors and details to copy.
-- The coordinated Wave 2 release version and installer tag are assigned after
-  all accepted desktop changes have passed integrated checks. The owner pushes
-  the tag; see `docs/runbooks/agent-wave2-release.md` in the repository root.
+- Includes the coordinated desktop improvements merged since agent 0.19.0.
+  Installer signing and publication follow `docs/runbooks/agent-wave2-release.md`.
 
 ## 0.19.0
 

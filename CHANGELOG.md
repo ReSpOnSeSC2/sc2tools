@@ -11,6 +11,18 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.20.0 - Native Companion
+
+- The existing desktop agent gains an interactive **Companion** with opponent
+  browsing, meeting selection, build comparisons, private notes, and recorded
+  tech milestones for both players, with local SC2 icons and explicit start
+  and completion timings.
+- Independently pinned Opponent and Scouting panels follow the active match,
+  keep working while the agent is in the tray, and can be disabled together.
+  Pairing, replay sync, existing build check-in, and saved settings are retained.
+- Includes the desktop history, pairing recovery, safe update scheduling,
+  window restoration, and installer improvements merged since agent 0.19.0.
+
 ### Desktop game history
 
 - The desktop Dashboard shows game summaries, local Today W–L/MMR and replay-history progress. Recent games survives restarts with 200 private local outcomes, status/date filters, skipped reasons and selective retries. Re-sync moves to Settings Maintenance; optional game-result notifications exclude history imports.

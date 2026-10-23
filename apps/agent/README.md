@@ -104,10 +104,34 @@ multiplexer, so they are always in sync. PySide6 imports are guarded:
 on a source install without `pip install -r requirements.txt`, the
 agent falls back gracefully to tray+console.
 
+## Companion and in-game panels
+
+The **Companion** is part of the existing agent and is the initial page for
+paired installs without a saved page preference. Existing window and page
+preferences are retained. It uses the same account, replay library, updater,
+and tray icon. Choose an opponent, browse your meetings, and inspect each
+player's build and important tech milestones. Replay timings distinguish
+construction **started** from unit, upgrade, and morph **completed** times.
+Missing replay details stay unavailable; the app does not infer enemy tech
+during a live game.
+
+Enable **Opponent** or **Scouting** independently to keep a separate panel
+above the game. The master overlay switch hides both panels while preserving
+your individual choices. All switches start off on an upgraded install and
+persist with the agent's settings. Panels follow the active opponent even
+while you browse someone else, stay visible through the match, and hide in
+menus and replays. Closing the main window keeps enabled panels running;
+quitting the agent closes them all.
+
+The Companion requires the matching API update for account data. Update the
+installed agent through the existing update flow; a second installation or
+pairing is not needed. OBS browser sources and Build check-in remain available.
+
 ## Main window - what is where
 
 | Tab | Contents |
 | --- | -------- |
+| Companion | Searchable opponent directory, meetings, build comparisons, recorded tech timings, notes, and independent game panel switches. |
 | Dashboard | Shared status and recovery; Last game and locally tracked Today W–L/MMR; Synced with today's uploads, Waiting, persistent relative Last upload, Failed (24 h), and history-import progress. Pause and Open dashboard remain here; Re-sync is in Settings → Maintenance and Updates is beside the sidebar version. |
 | Recent games | Latest 200 local outcomes, kept across restarts. When, result, matchup, opponent, map, length, own MMR and status; status/date filters and collapsed history imports. Double-click opens game analysis. Right-click selects the exact replay in Explorer, copies its path/error, retries or re-analyzes; select failed rows for Retry failed. |
 | Activity log | Incremental tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log`, with complete tracebacks, readable level filters, Ctrl+F search, follow/pause, copy selection or last 200 lines, and Open log folder. |

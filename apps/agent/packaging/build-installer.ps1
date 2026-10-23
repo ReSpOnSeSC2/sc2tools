@@ -223,10 +223,11 @@ Invoke-Step "Checking the packaged GUI offline" {
         if ($guiSmokeResult.schema -ne 1 -or $guiSmokeResult.ok -ne $true `
             -or $guiSmokeResult.agent_version -ne $AgentVersion `
             -or $guiSmokeResult.qt_platform -ne "offscreen" `
-            -or $guiSmokeResult.streams_painted -ne $true) {
+            -or $guiSmokeResult.streams_painted -ne $true `
+            -or $guiSmokeResult.companion_painted -ne $true) {
             throw "The packaged GUI smoke report did not confirm the expected window/version. Report: $guiSmokeReport"
         }
-        Write-Host "Packaged Qt $($guiSmokeResult.qt_version): window and Streams page painted." -ForegroundColor Green
+        Write-Host "Packaged Qt $($guiSmokeResult.qt_version): window, Streams and Companion pages painted." -ForegroundColor Green
     } finally {
         $env:SC2TOOLS_GUI_SMOKE_REPORT = $previousSmokeReport
         $env:QT_QPA_PLATFORM = $previousQtPlatform

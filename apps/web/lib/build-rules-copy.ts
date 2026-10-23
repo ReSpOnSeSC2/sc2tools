@@ -44,6 +44,8 @@ const ENTITY_OVERRIDES: Readonly<Record<string, string>> = {
   vikingfighter: "Viking",
   helliontank: "Hellbat",
   blinktech: "Blink",
+  shieldwall: "Combat Shield",
+  punishergrenades: "Concussive Shells",
   warpgateresearch: "Warp Gate",
   zerglingmovementspeed: "Metabolic Boost",
   zerglingattackspeed: "Adrenal Glands",

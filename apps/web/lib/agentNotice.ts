@@ -2,7 +2,7 @@
  * Build-time safety net for the brief window before release metadata loads.
  * The live `/api/agent/version` response remains the source of truth.
  */
-export const FALLBACK_LATEST_AGENT_VERSION = "0.19.0";
+export const FALLBACK_LATEST_AGENT_VERSION = "0.20.0";
 export const STREAMS_MIN_AGENT_VERSION = "0.18.0";
 
 export function inactiveAgentMessage(

@@ -77,10 +77,11 @@ raise SystemExit(__main__.main())
     report = json.loads(destination.read_text(encoding="utf-8"))
     assert report["ok"] is True
     assert report["qt_platform"] == "offscreen"
-    assert report["page_count"] == 5
+    assert report["page_count"] == 6
     assert report["streams_painted"] is True
     assert report["checkin_previews_painted"] is True
     assert report["dashboard_recent_painted"] is True
+    assert report["companion_painted"] is True
     assert set(tmp_path.iterdir()) == {destination}
 
 

@@ -23,6 +23,7 @@ const {
 } = require("./buildCompositions");
 const { computeTransitions } = require("./buildTransitions");
 const { computePerGameScouting } = require("./scouting/perGameScouting");
+const { computeOpponentTendencies, computePlayerCard } = require("./scouting/playerCard");
 const {
   BUILD_INTENT_LABEL_PROJECTION,
   OPP_INTENT_LABEL_PROJECTION,
@@ -1431,6 +1432,7 @@ class OpponentsService {
           inDateScope: choice.inDateScope,
           recentScouting: choice.recentScouting,
           scouting,
+          opponentTendencies: scouting?.opponentTendencies || computeOpponentTendencies(hydrated),
           youGame: {
             ...compactBase,
             _phasePrepared: safePrepareComposition(hydrated, "you"),
@@ -1792,6 +1794,10 @@ class OpponentsService {
       last5Games,
       last5GamesScouting,
       gamesScouting,
+      playerCard: computePlayerCard(
+        analytical.filter((row) => row.inDateScope).map((row) => row.opponentTendencies),
+        { totalGames: gamesTruncated ? null : filteredGames.length, sampleLimit: OPPONENT_PROFILE_ANALYSIS_MAX_GAMES, sampled: gamesTruncated },
+      ),
       analysisSampleSize: analyticalFilteredGames.length,
       analysisSampleLimit: OPPONENT_PROFILE_ANALYSIS_MAX_GAMES,
       analysisSampleTruncated,

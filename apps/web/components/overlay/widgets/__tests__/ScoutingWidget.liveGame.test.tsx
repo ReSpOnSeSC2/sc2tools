@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { render } from "@testing-library/react";
+import { render, within } from "@testing-library/react";
 import { ScoutingWidget } from "../ScoutingWidget";
 import type {
   LiveGameEnvelope,
   LiveGamePayload,
   OpponentPhases,
+  PlayerCardProfile,
 } from "../../types";
 
 /**
@@ -21,6 +22,29 @@ function envelope(extra: Partial<LiveGameEnvelope> = {}): LiveGameEnvelope {
     phase: "match_started",
     capturedAt: 0,
     ...extra,
+  };
+}
+
+function playerCard(sampleSize = 5): PlayerCardProfile {
+  return {
+    version: 1,
+    sampleSize,
+    totalGames: sampleSize ? 12 : 0,
+    sampleLimit: 5,
+    sampled: sampleSize > 0,
+    axes: [
+      { key: "earlyFinish", label: "Early finish", value: 20 },
+      { key: "expansion", label: "Expansion", value: 100 },
+      { key: "economy", label: "Economy", value: 60 },
+      { key: "tech", label: "Tech", value: 40 },
+      { key: "air", label: "Air", value: null },
+    ].map((axis) => ({
+      ...axis,
+      value: sampleSize ? axis.value : null,
+      matches: sampleSize && axis.value !== null ? Math.round(axis.value * sampleSize / 100) : 0,
+      samples: sampleSize && axis.value !== null ? sampleSize : 0,
+      detail: `Observed ${axis.label.toLowerCase()} tendency`,
+    })),
   };
 }
 
@@ -341,6 +365,93 @@ describe("ScoutingWidget — live envelope path", () => {
     expect(container.textContent).toContain("YOUR BEST ANSWER");
     expect(container.textContent).toContain("66%");
     expect(container.textContent).toContain("CHEESE");
+  });
+
+  it("shows the replay radar, sample size, and missing evidence alongside the rich pre-game card", () => {
+    const { container } = render(
+      <ScoutingWidget
+        live={null}
+        liveGame={envelope({
+          opponent: { name: "Future", race: "Terran" },
+          streamerHistory: {
+            oppName: "Future",
+            oppMmr: 5123,
+            playerCard: playerCard(),
+            favOpening: { name: "Banshee Rush", share: 0.6, samples: 5 },
+            opponentNotes: { text: "Scout the natural early", readAloud: false },
+            recentGames: [{ result: "Win", lengthText: "12:34" }],
+          },
+        })}
+      />,
+    );
+    const panel = container.querySelector('[data-testid="scouting-radar-panel"]');
+    expect(panel).not.toBeNull();
+    expect(within(panel as HTMLElement).getByRole("img", { name: "Future replay tendencies" })).toBeTruthy();
+    expect(panel?.textContent).toContain("OBSERVED TENDENCIES");
+    expect(panel?.textContent).toContain("Latest 5 replays");
+    expect(panel?.textContent).toContain("missing data shown as —");
+    expect(panel?.textContent).toContain("Banshee Rush");
+    expect(panel?.textContent).toContain("5123 MMR");
+    expect(container.textContent).toContain("Scout the natural early");
+    expect(container.textContent).toContain("LAST GAMES");
+    expect(container.textContent).toContain("12:34");
+  });
+
+  it("shows the first-meeting radar with unknown evidence instead of skill ratings", () => {
+    const { container } = render(
+      <ScoutingWidget
+        live={null}
+        liveGame={envelope({
+          opponent: { name: "New opponent", race: "Zerg" },
+          streamerHistory: { oppName: "New opponent", playerCard: playerCard(0) },
+        })}
+      />,
+    );
+    const panel = container.querySelector('[data-testid="scouting-radar-panel"]');
+    expect(panel?.textContent).toContain("No replay history yet");
+    expect(panel?.textContent).toContain("Tendencies appear as replay evidence becomes available.");
+    expect(panel?.textContent).not.toContain("0%");
+    expect(panel?.textContent).not.toMatch(/micro|strategy|tactics/i);
+    expect(panel?.querySelector('[data-testid="radar-area"]')).toBeNull();
+    expect(panel?.querySelector('[data-testid="radar-point"]')).toBeNull();
+  });
+
+  it("clears the graph when the next opponent is still loading history", () => {
+    const { container, rerender } = render(
+      <ScoutingWidget
+        live={null}
+        liveGame={envelope({
+          gameKey: "old-game",
+          opponent: { name: "Future", race: "Terran" },
+          streamerHistory: { oppName: "Future", playerCard: playerCard() },
+        })}
+      />,
+    );
+    expect(container.querySelector('[data-testid="scouting-radar-panel"]')).not.toBeNull();
+    rerender(
+      <ScoutingWidget
+        live={null}
+        liveGame={envelope({
+          gameKey: "next-game",
+          opponent: { name: "Reynor", race: "Zerg" },
+        })}
+      />,
+    );
+    expect(container.querySelector('[data-testid="scouting-radar-panel"]')).toBeNull();
+    expect(container.textContent).toContain("Reynor");
+    expect(container.textContent).not.toContain("Future");
+  });
+
+  it("hides the replay radar on real post-game results but keeps it in settings previews", () => {
+    const live: LiveGamePayload = {
+      oppName: "Future",
+      result: "win",
+      playerCard: playerCard(),
+    };
+    const { container, rerender } = render(<ScoutingWidget live={live} />);
+    expect(container.textContent).toBe("");
+    rerender(<ScoutingWidget live={{ ...live, isTest: true }} />);
+    expect(container.querySelector('[data-testid="scouting-radar-panel"]')).not.toBeNull();
   });
 
   it("keeps the opponent notes panel visible when read-aloud is disabled", () => {

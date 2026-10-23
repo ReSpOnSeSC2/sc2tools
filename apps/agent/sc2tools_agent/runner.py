@@ -720,6 +720,23 @@ def _run_with_gui(
         obs_switch_on_replays=state.obs_switch_on_replays,
     )
 
+    from .companion import CompanionClient
+
+    def save_companion_preferences(preferences):
+        previous = state.companion_preferences
+        state.companion_preferences = dict(preferences)
+        try:
+            save_state(cfg.state_dir, state)
+        except OSError:
+            state.companion_preferences = previous
+            raise
+
+    companion = CompanionClient(
+        lambda: (cfg.api_base, state.device_token),
+        preferences_provider=lambda: state.companion_preferences,
+        save_preferences=save_companion_preferences,
+    )
+
     gui = GuiUI(
         on_restore_folders=lambda snapshot: _restore_folder_snapshot(cfg,state,cell,snapshot),
         on_install_update=lambda: cell.update_scheduler.tick(explicit=True) if cell.update_scheduler else None,
@@ -766,6 +783,7 @@ def _run_with_gui(
         on_recent_retry=lambda paths, reason: _retry_desktop_replays(cfg, state, cell, paths, reason, log),
         on_import_current_season=lambda: _handle_save_settings(cfg, state,
             SettingsPayload(sync_filter_preset="current_season", sync_filter_since="", sync_filter_until=""), cell, log),
+        on_companion_action=companion.action,
         on_save_settings=lambda payload: _handle_save_settings(
             cfg, state, payload, cell, log,
         ),

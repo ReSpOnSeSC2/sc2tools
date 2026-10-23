@@ -657,6 +657,7 @@ class GuiUI:
         on_obs_build: Optional[Callable[[dict], dict]] = None,
         stream_status_provider: Optional[Callable[[], dict]] = None,
         on_stream_action: Optional[Callable[[dict], dict]] = None,
+        on_companion_action: Optional[Callable[[dict], dict]] = None,
         start_minimized: bool = False,
         build_checkin_available: bool = False,
         build_checkin_positions: Optional[dict] = None,
@@ -739,6 +740,7 @@ class GuiUI:
         self._on_obs_build = on_obs_build
         self._stream_status_provider = stream_status_provider
         self._on_stream_action = on_stream_action
+        self._on_companion_action = on_companion_action
         # Build check-in cards (``build_checkin_window``). Unavailable
         # under --no-live, where no controller runs. The proxy is handed
         # to the controller on the boot worker; calls that arrive before
@@ -957,6 +959,7 @@ class GuiUI:
             QtWidgets=QtWidgets,
         )
         self._window = window
+        app.aboutToQuit.connect(window._companion_page.shutdown)
         if self._state_dir is not None:
             from ..activation import listen
             try:
@@ -1215,7 +1218,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         # Cap the in-memory recent uploads. Anything past this falls off
         # the table; the cloud is the source of truth for the full list.
-        _PAGE_KEYS = ("dashboard", "recent", "log", "settings", "streams")
+        _PAGE_KEYS = ("dashboard", "recent", "log", "settings", "streams", "companion")
         apiTestDone = QtCore.Signal(str, int, str)
         MAX_RECENT = 200
         # Tail parsing and its record cap live in activity_log.py.
@@ -1224,7 +1227,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def __init__(self) -> None:
             super().__init__()
             self.setWindowTitle(f"SC2 Tools Agent  ·  v{ui._version}")
-            self.resize(960, 640)
+            self.resize(1220, 800)
             self.setMinimumSize(820, 540)
 
             # Window icon — reuse the tray PNG so the alt-tab thumbnail
@@ -1368,6 +1371,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 handler=ui._on_stream_action, QtCore=QtCore,
                 QtWidgets=QtWidgets,
             ))
+            from .companion_page import build_companion_page
+            self._companion_page = build_companion_page(
+                self, handler=ui._on_companion_action, QtCore=QtCore,
+                QtGui=QtGui, QtWidgets=QtWidgets,
+            )
+            self._stack.addWidget(self._companion_page)
 
         def _build_sidebar(self) -> QtWidgets.QWidget:
             frame = QtWidgets.QFrame()
@@ -1382,7 +1391,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             brand.setObjectName("h2")
             layout.addWidget(brand)
 
-            tagline = QtWidgets.QLabel("Replays & streaming")
+            tagline = QtWidgets.QLabel("Your StarCraft companion")
             tagline.setObjectName("dim")
             layout.addWidget(tagline)
 
@@ -1391,9 +1400,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._nav_group = QtWidgets.QButtonGroup(self)
             self._nav_group.setExclusive(True)
 
-            for index, label in enumerate(
-                ["Dashboard", "Recent games", "Activity log", "Settings", "Streams"],
-            ):
+            for index, label in [
+                (5, "Companion"), (0, "Dashboard"), (1, "Recent games"),
+                (4, "Streams"), (2, "Activity log"), (3, "Settings"),
+            ]:
                 btn = QtWidgets.QPushButton(label)
                 btn.setObjectName("navItem")
                 btn.setCheckable(True)
@@ -2876,12 +2886,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self.raise_()
 
         def _on_paired(self, user_id: str) -> None:
+            was_paired = self._paired
             self._status_facts.unlinked = False
             self._paired = True
             self._user_id = user_id
             self._status = "paired"
             self._pairing_card.apply("paired")
             self._refresh_status_card()
+            if not was_paired:
+                self._go_to_page(self._preferred_paired_page())
+            self._companion_page.refresh()
 
         def _on_status(self, status: str) -> None:
             self._status = status
@@ -3363,7 +3377,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             button = self._nav_group.button(index)
             if button is not None:
                 button.setChecked(True)
+            self._companion_page.set_active(key == "companion")
             self._schedule_window_state()
+
+        def _preferred_paired_page(self):
+            if ui._window_page in self._PAGE_KEYS:
+                return ui._window_page
+            return "companion" if ui._window_page is None and callable(ui._on_companion_action) else "dashboard"
 
         def _schedule_window_state(self):
             timer = getattr(self, "_window_state_timer", None)
@@ -3408,7 +3428,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 else:
                     self.resize(min(self.width(), target.width()), min(self.height(), target.height()))
                 self.move(*point)
-            self._go_to_page(ui._window_page if self._paired and ui._window_page in self._PAGE_KEYS else "dashboard")
+            self._go_to_page(self._preferred_paired_page() if self._paired else "dashboard")
 
         def _click_save_settings(self) -> None:
             if self._settings_save_pending:

@@ -5,10 +5,12 @@ const {
   computeCompositions,
   prepareCompositionGame,
 } = require("./buildCompositions");
-const { compactAnalysisMacroBreakdown } = require("./boundedReplayDetail");
+const { compactAnalysisBuildLog, compactAnalysisMacroBreakdown } = require("./boundedReplayDetail");
+const { computePerGameScouting } = require("./scouting/perGameScouting");
 const { OPP_INTENT_LABEL_PROJECTION } = require("./buildIntentShape");
 const {
   summarizeOpponentTendencies,
+  personalOppStrategy,
 } = require("./scouting/opponentTendencies");
 
 /**
@@ -722,6 +724,79 @@ async function opponentTendencies(games, userId, identity, matchup = {}) {
   return summarizeOpponentTendencies(inMatchup);
 }
 
+/**
+ * @param {import('mongodb').Collection} games
+ * @param {import('./gameDetails').GameDetailsService|null} gameDetails
+ * @param {string} userId
+ * @param {{pulseId?:string|null,pulseCharacterId?:string|null}|null|undefined} identity
+ * @param {string|undefined} myRace
+ * @param {string|undefined} oppRace
+ */
+async function last5GamesScouting(games, gameDetails, userId, identity, myRace, oppRace) {
+  /** @type {Record<string, any>} */
+  const filter = { userId, isResumedFromReplay: { $ne: true } };
+  const attached = userId && identity
+    ? attachOpponentIdsToFilter(filter, identity)
+    : null;
+  if (!attached) return [];
+  if (myRace) {
+    filter.myRace = { $regex: `^${escapeRegex(myRace.charAt(0))}`, $options: "i" };
+  }
+  if (oppRace) {
+    filter["opponent.race"] = { $regex: `^${escapeRegex(oppRace.charAt(0))}`, $options: "i" };
+  }
+  const rows = await games.find(filter, { projection: {
+    _id: 1,
+    gameId: 1,
+    date: 1,
+    result: 1,
+    map: 1,
+    myRace: 1,
+    myBuild: 1,
+    durationSec: 1,
+    "opponent.displayName": 1,
+    "opponent.race": 1,
+    "opponent.strategy": 1,
+    ...OPP_INTENT_LABEL_PROJECTION,
+  } }).sort({ date: -1 }).limit(5).toArray().catch(() => []);
+  const fields = ["buildLog", "oppBuildLog", "macroBreakdown"];
+  const envelopes = [];
+  for (const row of rows) {
+    const gameId = String(row.gameId || "");
+    const detail = await readOneOverlayDetail(gameDetails, userId, gameId, fields);
+    const needsInline = !Array.isArray(detail?.buildLog)
+      || !Array.isArray(detail?.oppBuildLog)
+      || !detail?.macroBreakdown;
+    const inline = needsInline && row._id
+      ? await games.findOne({ userId, _id: row._id }, { projection: {
+          _id: 0, buildLog: 1, oppBuildLog: 1, macroBreakdown: 1,
+        } }).catch(() => null)
+      : null;
+    const sourceBuildLog = detail?.buildLog ?? row.buildLog ?? inline?.buildLog;
+    const sourceOppBuildLog = detail?.oppBuildLog ?? row.oppBuildLog ?? inline?.oppBuildLog;
+    const sourceMacro = detail?.macroBreakdown ?? row.macroBreakdown ?? inline?.macroBreakdown;
+    if (!Array.isArray(sourceBuildLog) && !Array.isArray(sourceOppBuildLog) && !sourceMacro) continue;
+    try {
+      envelopes.push(computePerGameScouting({
+        gameId,
+        date: row.date,
+        result: row.result,
+        map: row.map,
+        myRace: row.myRace,
+        myBuild: row.myBuild,
+        durationSec: row.durationSec,
+        opponent: { ...row.opponent, strategy: personalOppStrategy(row) },
+        buildLog: compactAnalysisBuildLog(sourceBuildLog),
+        oppBuildLog: compactAnalysisBuildLog(sourceOppBuildLog),
+        macroBreakdown: compactAnalysisMacroBreakdown(sourceMacro),
+      }));
+    } catch {
+      continue;
+    }
+  }
+  return envelopes;
+}
+
 module.exports = {
   bucketResult,
   chipResult,
@@ -735,6 +810,7 @@ module.exports = {
   metaForMatchup,
   opponentPhaseProfile,
   opponentTendencies,
+  last5GamesScouting,
   OPPONENT_PHASE_SCAN_CAP,
   TENDENCY_SCAN_CAP,
 };
