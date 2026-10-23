@@ -84,7 +84,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Press **Save settings** at the bottom of the page. The map replay and build check-in switches apply straight away.",
+      text: "Press **Save settings** at the bottom of the page. **Saving settings…** keeps the form briefly disabled while the durable save finishes; you can still use the sidebar and Activity log. **Saved** confirms completion, and a failure keeps your edits available to try again. The map replay and build check-in switches apply straight away.",
     },
     {
       type: "callout",

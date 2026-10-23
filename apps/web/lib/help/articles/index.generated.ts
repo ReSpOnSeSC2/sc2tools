@@ -37,8 +37,12 @@ import builds_readingGuideStats from "./builds/reading-guide-stats";
 import builds_rulesExplained from "./builds/rules-explained";
 import desktopApp_desktopAppActivityLog from "./desktop-app/desktop-app-activity-log";
 import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
+import desktopApp_desktopAppPerformance from "./desktop-app/desktop-app-performance";
+import desktopApp_desktopAppStatus from "./desktop-app/desktop-app-status";
 import desktopApp_desktopAppSyncProblems from "./desktop-app/desktop-app-sync-problems";
 import desktopApp_desktopAppSyncRange from "./desktop-app/desktop-app-sync-range";
+import desktopApp_desktopAppTray from "./desktop-app/desktop-app-tray";
+import desktopApp_desktopAppUpdates from "./desktop-app/desktop-app-updates";
 import desktopApp_pairingTroubleshooting from "./desktop-app/pairing-troubleshooting";
 import desktopApp_replayFolders from "./desktop-app/replay-folders";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
@@ -102,8 +106,12 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_rulesExplained,
   desktopApp_desktopAppActivityLog,
   desktopApp_desktopAppOverview,
+  desktopApp_desktopAppPerformance,
+  desktopApp_desktopAppStatus,
   desktopApp_desktopAppSyncProblems,
   desktopApp_desktopAppSyncRange,
+  desktopApp_desktopAppTray,
+  desktopApp_desktopAppUpdates,
   desktopApp_pairingTroubleshooting,
   desktopApp_replayFolders,
   gamePage_gamePageAccuratePlayback,

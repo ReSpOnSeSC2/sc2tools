@@ -10,7 +10,12 @@ publish, tag, or execute an installer.
 2. Run the complete Windows agent test suite with Qt offscreen, the web help
    suites and generator, and the existing production build and bundle budgets.
    Exercise first pairing, offline start, expiry renewal, unlink/relink, and
-   reconnection with a real pending replay on a test PC.
+   reconnection with a real pending replay on a test PC. Check relaunch activation,
+   close with and without a tray, timed pause, instant folder Undo, status/action
+   agreement, history/capture holds during a match, OBS-output update deferral,
+   manual install with auto-update off, and mandatory snooze persistence.
+   Installer signing and publication remain owner release steps; source tests do
+   not prove a published installer is signed.
 3. In the final coordinated release PR, set the chosen version in
    `apps/agent/sc2tools_agent/__init__.py` and the matching web fallback in
    `apps/web/lib/agentNotice.ts`. Move the agent Unreleased notes under that

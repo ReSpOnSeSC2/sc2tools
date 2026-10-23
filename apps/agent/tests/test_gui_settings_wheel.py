@@ -9,14 +9,14 @@ def test_value_controls_scroll_the_page_until_deliberately_focused(tmp_path):
         win._obs_enable_check.setChecked(True)
         win._filter_combo.setCurrentIndex(win._filter_combo.findData("custom"))
         win._log_combo.setCurrentIndex(1)
-        # Reproduce the four-worker ceiling seen on the Windows CI host.
-        win._concurrency_slider.setRange(1, 4)
-        win._concurrency_slider.setValue(4)
+        # Exercise a slider endpoint even on a small CI host. Parser workers
+        # now derive from the Performance profile and are read-only.
+        win._upload_batch_slider.setValue(win._upload_batch_slider.maximum())
         app.processEvents()
         settings = win._stack.currentWidget()
         scrollbar = settings.verticalScrollBar()
         controls = [win._log_combo, win._filter_since, win._filter_until,
-                    win._concurrency_slider, win._upload_batch_slider,
+                    win._speed_combo, win._upload_batch_slider,
                     win._obs_debounce_spin, *win._obs_scene_combos.values(), win._filter_combo]
         for combo in win._obs_scene_combos.values():
             combo.addItems(["Wheel A", "Wheel B", "Wheel C"])
@@ -50,8 +50,7 @@ def test_value_controls_scroll_the_page_until_deliberately_focused(tmp_path):
             app.processEvents()
             assert control.hasFocus()
             old_value = value(control)
-            # Small CI machines can start the parse slider at its CPU
-            # ceiling. Wheel toward the available range so the assertion
+            # A slider at its ceiling cannot move farther upward. Wheel toward the available range so the assertion
             # tests focused input, rather than clamping at that endpoint.
             angle = -120 if isinstance(control, QtWidgets.QAbstractSlider) and old_value == control.maximum() else 120
             wheel(control, angle)

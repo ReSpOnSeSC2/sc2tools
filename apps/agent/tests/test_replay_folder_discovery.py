@@ -410,7 +410,7 @@ def test_saving_an_empty_list_resets_to_detection(
         replay_folder_override=str(tmp_path / "gone"),
     )
 
-    _save(tmp_path, state, replay_folders=[], replay_folders_removed=[live])
+    _save(tmp_path, state, replay_folders=[], replay_folders_removed=[])
 
     assert state.replay_folders_override == []
     assert state.replay_folders_excluded == []
@@ -478,3 +478,12 @@ def test_picking_an_excluded_detected_folder_watches_it_again(
     # Detected already, so it is not stored as an addition.
     assert state.replay_folders_override == []
     assert _keys(_discover_replay_folders(cfg, state)) == _keys([live, ptr])
+
+
+def test_explicit_removal_of_the_last_folder_keeps_it_excluded(documents,tmp_path):
+    live=_toon(documents,LIVE_TOON)
+    ptr=_toon(documents,PTR_TOON)
+    state=AgentState(device_token="t",replay_folders_excluded=[str(ptr)])
+    _save(tmp_path,state,replay_folders=[],replay_folders_removed=[live])
+    assert set(state.replay_folders_excluded)=={str(ptr),str(live)}
+    assert watched_replay_folders(added=state.replay_folders_override,excluded=state.replay_folders_excluded)==[]

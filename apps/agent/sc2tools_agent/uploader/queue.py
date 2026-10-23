@@ -29,6 +29,7 @@ from ..api_client import (
     replay_file_matches_archive_marker,
 )
 from ..errors import classify
+from ..game_activity import on_battery
 from ..config import AgentConfig
 from ..replay_pipeline import CloudGame
 from ..state import AgentState, save_state
@@ -242,6 +243,7 @@ class UploadQueue:
         self._connection_kind = "online"
         self._retry_at = 0.0
         self._auth_held = False
+        self._activity_gate = None
         self._cfg = cfg
         self._state = state
         self._api = api
@@ -686,7 +688,7 @@ class UploadQueue:
                         ready_at=ready_at,
                     )
                     continue
-                if self.is_paused():
+                if self.is_paused() or (self._activity_gate is not None and self._activity_gate.busy) or (getattr(self._state,"pause_on_battery",False) and on_battery()):
                     self._requeue_archive_task(
                         task,
                         attempt=attempt,
@@ -982,6 +984,9 @@ class UploadQueue:
         with self._lock:
             return self._paused or self._auth_held
 
+    def set_activity_gate(self, gate):
+        self._activity_gate = gate
+
     def hold_auth(self, held: bool) -> None:
         with self._lock:
             self._auth_held = held
@@ -1229,7 +1234,8 @@ class UploadQueue:
                 continue
             with self._connection_lock:
                 delayed = self._retry_at > time.monotonic()
-            if delayed and (source_q is self._retry_q or not first_job.priority):
+            battery_hold = getattr(self._state,"pause_on_battery",False) and not first_job.priority and on_battery()
+            if battery_hold or delayed and (source_q is self._retry_q or not first_job.priority):
                 self._retry_q.put_nowait(self._queue_item(first_job))
                 source_q.task_done()
                 # Short event waits let a fresh rank-0 job keep its lane;
@@ -2065,26 +2071,9 @@ def _playback_failure_is_permanent(exc: Exception) -> bool:
     )
 
 
-# Map the leading region byte of an SC2 toon handle to a short
-# Blizzard-region label. Mirrors ``regionFromToonHandle`` in
-# ``apps/api/src/util/regionFromToonHandle.js`` so the agent and cloud
-# agree on which label belongs to which numeric prefix.
+# Compatibility alias for callers predating the shared folder/status helper.
+from ..regions import region_from_toon_handle as _region_from_toon_handle
 _PTR_REGION = "PTR"
-_TOON_HANDLE_REGION_BYTE = {
-    "1": "NA",
-    "2": "EU",
-    "3": "KR",
-    "5": "CN",
-    "6": "SEA",
-    "98": _PTR_REGION,
-}
-
-
-def _region_from_toon_handle(handle: Optional[str]) -> Optional[str]:
-    if not isinstance(handle, str) or not handle:
-        return None
-    head = handle.split("-", 1)[0]
-    return _TOON_HANDLE_REGION_BYTE.get(head)
 
 
 def _is_ptr_game(game: object) -> bool:

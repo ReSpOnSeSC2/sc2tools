@@ -24,6 +24,12 @@ app = QtWidgets.QApplication([])
 base = Path(sys.argv[1])
 saved = []
 window_states = []
+
+def wait_saved(win):
+    deadline = QtCore.QDeadlineTimer(5000)
+    while win._settings_save_pending and not deadline.hasExpired():
+        QtTest.QTest.qWait(10)
+    assert not win._settings_save_pending, "Settings worker did not deliver completion"
 def make_window(**overrides):
     args = dict(
         version="test", dashboard_url="https://example.test/app",

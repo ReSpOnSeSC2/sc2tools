@@ -6,7 +6,13 @@ AGENT_HELP_SLUGS = (
     "desktop-app-overview", "desktop-app-sync-range", "replay-folders",
     "obs-auto-scene-switching", "build-check-in", "desktop-app-activity-log",
     "pairing-troubleshooting", "desktop-app-sync-problems",
+    "desktop-app-tray", "desktop-app-performance", "desktop-app-updates", "desktop-app-status",
 )
+
+
+def site_url(dashboard_url, path):
+    parsed=urlsplit(dashboard_url)
+    return urlunsplit((parsed.scheme,parsed.netloc,path,"",""))
 
 
 def help_url(dashboard_url, slug):
