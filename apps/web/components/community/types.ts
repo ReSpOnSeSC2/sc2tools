@@ -9,8 +9,7 @@ import type { CustomBuild } from "@/components/builds/types";
 
 /**
  * Build summary returned by GET /v1/community/builds. The `build`
- * snapshot field is omitted in list responses but included on detail
- * responses.
+ * snapshot accompanies list responses so cards can preview key steps.
  */
 export interface CommunityBuildListItem {
   slug: string;

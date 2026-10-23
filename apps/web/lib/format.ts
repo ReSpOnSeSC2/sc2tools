@@ -30,6 +30,19 @@ export function fmtDate(iso: string | number | Date | null | undefined): string 
   return d.toLocaleString();
 }
 
+const UTC_DAY = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const UTC_MONTH = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+
+export function fmtDay(iso: string | null | undefined): string {
+  const date = iso ? new Date(iso) : null;
+  return date && Number.isFinite(date.getTime()) ? UTC_DAY.format(date) : "—";
+}
+
+export function fmtMonthYear(iso: string | null | undefined): string {
+  const date = iso ? new Date(iso) : null;
+  return date && Number.isFinite(date.getTime()) ? UTC_MONTH.format(date) : "—";
+}
+
 /**
  * Win-rate colour ramp. Severe scheme: deep red below 30%, deep green
  * above 65%, with a smooth red → amber → green gradient between so a

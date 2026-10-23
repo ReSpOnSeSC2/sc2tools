@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Community build cards and author pages
+
+- Community cards preview timed build steps, keep long author names in bounds, and share one signed score style. Authors manage their listings through a keyboard-accessible menu while keeping both removal confirmations.
+- Build pages put save, vote and share before the rules on phones, preserve long descriptions in an expandable About card, and keep reporting reachable. Author pages add Top/New sorting, search, matchup counts and accurate publishing dates and average scores.
+
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
