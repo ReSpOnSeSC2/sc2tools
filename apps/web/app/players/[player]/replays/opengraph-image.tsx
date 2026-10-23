@@ -69,7 +69,7 @@ export default async function ReplayOpenGraphImage({
 async function loadArchive(player: string): Promise<ReplayLibraryResponse | null> {
   try {
     const response = await fetch(
-      `${API_BASE}/v1/public/replays/${encodeURIComponent(player)}?limit=1`,
+      `${API_BASE}/v1/public/replays/${encodeURIComponent(player)}?limit=1&fields=profile`,
       { headers: { accept: "application/json" }, cache: "no-store" },
     );
     if (!response.ok) return null;

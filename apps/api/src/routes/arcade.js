@@ -51,7 +51,7 @@ function buildArcadeRouter(deps) {
 
   router.get("/arcade/leaderboard", async (req, res, next) => {
     try {
-      requireAuth(req); // auth required so we don't expose handles publicly
+      const { userId } = requireAuth(req); // handles remain private to members
       const weekKey = String(req.query.weekKey || "").trim();
       if (!weekKey) {
         res.status(400).json({ error: { code: "weekKey_required" } });
@@ -60,7 +60,7 @@ function buildArcadeRouter(deps) {
       const limit = req.query.limit
         ? Number.parseInt(String(req.query.limit), 10)
         : undefined;
-      const out = await deps.arcade.listLeaderboard(weekKey, { limit });
+      const out = await deps.arcade.listLeaderboard(weekKey, { limit, userId });
       res.json(out);
     } catch (err) {
       next(err);
