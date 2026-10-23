@@ -38,7 +38,7 @@ const opener = (buildKey, buildSlug, counts, published = true) => ({
   name: buildKey.slice(buildKey.indexOf(" - ") + 3),
   published,
   prevalence: round4(counts[0] / 2400),
-  trend: published ? { winRateDelta: 0.012, prevalenceDelta: 0.004, since: BASELINE } : null,
+  trend: published ? { winRateDelta: 0.012, prevalenceDelta: 0.021, since: BASELINE } : null,
   isNew: false,
 });
 
@@ -73,7 +73,11 @@ const INDEX = {
         publishedBuilds: PVZ_OPENERS.filter((row) => row.published).length,
       },
   ),
-  maps: [{ map: MAP, slug: MAP_SLUG, games: 640 }],
+  maps: [
+    { map: MAP, slug: MAP_SLUG, games: 640, cells: [{ matchup: "PvZ", games: 240, winRate: 0.5667, ci: { low: 0.5, high: 0.63 } }, { matchup: "PvT", games: 150, winRate: 0.46, ci: { low: 0.38, high: 0.54 } }] },
+    { map: "Fixture Canyon LE", slug: "fixture-canyon-le", games: 500, cells: [{ matchup: "PvZ", games: 220, winRate: 0.43, ci: { low: 0.36, high: 0.5 } }] },
+    { map: "Fixture Ridge LE", slug: "fixture-ridge-le", games: 200, cells: [] },
+  ],
   videos: [],
   eightWorkerVideos: [],
   channel: null,
@@ -93,8 +97,9 @@ const MATCHUP = {
   bandOptions: { league: [{ value: 4, label: "Diamond" }], mmr: [] },
   openers: PVZ_OPENERS,
   counters: [
-    { strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool", name: "12 Pool", published: true, games: 180 },
-    { strategyKey: "ZvP - 2 Base Nydus", strategySlug: "2-base-nydus", name: "2 Base Nydus", published: false, games: null },
+    { strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool", name: "12 Pool", published: true, games: 180, winRate: 0.6, ci: { low: 0.52, high: 0.68 } },
+    { strategyKey: "ZvP - Ling Bane Bust", strategySlug: "ling-bane-bust", name: "Ling Bane Bust", published: true, games: 140, winRate: 0.4, ci: { low: 0.32, high: 0.48 } },
+    { strategyKey: "ZvP - 2 Base Nydus", strategySlug: "2-base-nydus", name: "2 Base Nydus", published: false, games: null, winRate: null, ci: null },
   ],
   videos: [],
   eightWorkerVideos: [],
@@ -168,12 +173,13 @@ const BUILD = {
   },
   vsStrategy: [
     { ...cell(120, 30, 70), strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool", name: "12 Pool", published: true },
+    ...Array.from({ length: 7 }, (_, index) => ({ ...cell(100 + index, 20, 50), strategyKey: `Fixture even ${index}`, strategySlug: `fixture-even-${index}`, name: `Fixture even ${index}`, published: false })),
   ],
   lengths: [
     { ...cell(140, 40, 81), bucket: "6-10", minSec: 360, maxSec: 600 },
     { ...cell(160, 44, 88), bucket: "10-15", minSec: 600, maxSec: 900 },
   ],
-  maps: [{ ...cell(150, 36, 85), map: MAP, mapSlug: MAP_SLUG }],
+  maps: Array.from({ length: 7 }, (_, index) => ({ ...cell(150 + index, 36, 85 - index), map: index ? `Fixture map ${index} LE` : MAP, mapSlug: index ? `fixture-map-${index}-le` : MAP_SLUG })),
   macro: { avgScore: 71, games: 300, users: 50 },
   leaks: null,
   trend: SG.trend,
@@ -190,7 +196,7 @@ const BUILD = {
 
 const SITEMAP = {
   computedAt: NOW,
-  entries: ["/guides", "/guides/pvz", "/guides/pvz/stargate-into-glaives", "/guides/pvz/counter/12-pool"].map((path) => ({
+  entries: ["/guides", "/guides/pvz", "/guides/pvz/stargate-into-glaives", "/guides/pvz/counter/12-pool", `/guides/maps/${MAP_SLUG}`].map((path) => ({
     path, lastModified: NOW,
   })),
 };
