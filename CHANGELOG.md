@@ -16,6 +16,12 @@ corresponding GitHub Release.
 - Run build votes, switch all four stream scenes and undo or manage chat blocks; blocked authors do not vote in polls. Refresh existing scene Browser Sources once to recognize Intermission and Stream ending.
 - Stream Studio links features to their guides, offers signed-in setup shortcuts, opens the desktop preview gallery and lets you undo a course-progress reset.
 
+### Guide reading and map navigation
+
+- Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
+- Win rates include verdict symbols, charts use one keyboard Tab stop with pinnable details, and a shared legend plus Help article explains ranges, publishing floors and trends.
+- The guide hub previews busy map cards and links to all openers and counters. Map guides show a race matrix with honest mirror cells, enlarged artwork and neighboring maps.
+
 ### Analyzer filters and Trends
 
 - Filters have a readable summary, a full phone editor and focused desktop controls. Today explains its scope and remembers whether its editor is open; Arcade keeps its own scope.

@@ -1,5 +1,6 @@
-import { Section } from "@/components/ui/Section";
+import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { LazyCiBarChart } from "@/components/guides/LazyCiBarChart";
+import { GuideStatsLegend } from "@/components/guides/GuideStatsLegend";
 import type { CiBarDatum } from "@/components/guides/CiBarChart";
 import type { GuideBandCell, GuideBandCells, GuideLengthRow } from "@/lib/guides/types";
 
@@ -23,7 +24,7 @@ function bandData(cells: ReadonlyArray<GuideBandCell>, axis: "league" | "mmr"): 
   }));
 }
 
-export function BuildBandsSection({ bands }: { bands: GuideBandCells }) {
+export function BuildBandsSection({ bands, computedAt = null }: { bands: GuideBandCells; computedAt?: string | null }) {
   const league = bandData(bands.league, "league");
   const mmr = bandData(bands.mmr, "mmr");
   if (league.length === 0 && mmr.length === 0) return null;
@@ -33,7 +34,8 @@ export function BuildBandsSection({ bands }: { bands: GuideBandCells }) {
       title="Win rate by league and MMR"
       description="Grouped by the opponent's league and MMR band. Bands without enough games are left out."
     >
-      <div className="grid gap-6 lg:grid-cols-2">
+      <GuideStatsLegend computedAt={computedAt} />
+      <div className="mt-4 grid gap-6 lg:grid-cols-2">
         {league.length > 0 ? (
           <div className="min-w-0 space-y-2">
             <h3 className="text-caption font-semibold uppercase tracking-wider text-text-dim">

@@ -64,6 +64,7 @@ describe("/guides/[matchup]", () => {
     render(await MatchupGuidePage(props()));
     expect(screen.getByRole("heading", { level: 1, name: "PvZ build orders" })).toBeTruthy();
     const table = screen.getByRole("table", { name: /^Showing .* openers vs/ });
+    expect(document.querySelectorAll("[data-guide-stats-legend]")).toHaveLength(1);
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(FIXTURE_MATCHUP.openers.length);
     expect(within(table).getAllByTestId("ci-whisker")).toHaveLength(FIXTURE_MATCHUP.openers.length);
