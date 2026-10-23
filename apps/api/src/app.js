@@ -187,6 +187,7 @@ const {
   buildAgentLiveRouter,
   buildMeLiveRouter,
 } = require("./routes/agentLive");
+const { buildAgentScoutingRouter } = require("./routes/agentScouting");
 
 const REPLAY_JSON_LIMIT = `${LIMITS.REQUEST_BODY_BYTES}b`;
 const DEFAULT_JSON_LIMIT = "256kb";
@@ -1545,6 +1546,15 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   // their precedence; both endpoints here use the standard auth
   // middleware (device tokens for the agent push, Clerk session
   // for the web subscriber).
+  app.use(
+    SERVICE.ROUTE_PREFIX,
+    buildAgentScoutingRouter({
+      broker: services.liveGameBroker,
+      auth,
+      opponents: services.opponents,
+      overlayLive: services.overlayLive,
+    }),
+  );
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAgentLiveRouter({
