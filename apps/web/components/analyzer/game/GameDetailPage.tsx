@@ -314,6 +314,7 @@ function GameDetailContent({
         myAction={
           buildLogLines && buildLogLines.length > 0 ? (
             <ArmGhostFromLogButton
+              className="min-h-11 w-full justify-start"
               gameId={game.gameId}
               name={
                 checkinBuild?.label ?? buildReq.data?.my_build

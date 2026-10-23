@@ -14,6 +14,13 @@ vi.mock("next/image", () => ({
 afterEach(() => cleanup());
 
 describe("BuildOrderColumns", () => {
+  it("uses canonical entities when filtering prefixed or spaced workers and supply buildings", () => {
+    render(<BuildOrderColumns myEvents={[{ time: 10, name: "TrainSCV" }, { time: 20, name: "BuildSupplyDepot" }, { time: 30, name: "Supply Depot" }]} workspace={{ myMeta: { title: "Mine", sourceUrl: "/g" }, oppMeta: { title: "Theirs", sourceUrl: "/g" } }} />);
+    const mine = within(screen.getByTestId("build-column-me"));
+    expect(mine.queryByTitle("TrainSCV")).toBeNull(); expect(mine.getByTitle("BuildSupplyDepot")).toBeTruthy(); expect(mine.getByTitle("Supply Depot")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show workers" })); expect(mine.getByTitle("TrainSCV")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Supply buildings" })); expect(mine.queryByTitle("BuildSupplyDepot")).toBeNull(); expect(mine.queryByTitle("Supply Depot")).toBeNull();
+  });
   it("filters both workspace columns and shows prior measured supply without future guesses", () => {
     const seek = vi.fn();
     render(<BuildOrderColumns onSeek={seek} myEvents={[{ time: 1, name: "Pylon" }, { time: 30, name: "Probe" }, { time: 40, name: "Gateway" }, { time: 40, name: "Zealot", supply: 19 }]} oppEvents={[{ time: 40, name: "Marine" }]} workspace={{ myMeta: { title: "Mine", sourceUrl: "/g" }, oppMeta: { title: "Theirs", sourceUrl: "/g" }, myStats: [{ time: 20, food_used: 17 }], oppStats: [{ time: 60, food_used: 25 }] }} />);

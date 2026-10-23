@@ -50,7 +50,10 @@ const CATEGORY_DOT: Record<string, string> = {
 
 function visibleRows(rows: BuildEventRow[], workers: boolean, supplyBuildings: boolean, filter: string) {
   const query = filter.trim().toLowerCase();
-  return rows.filter(row => (workers || !/^(scv|drone|probe)$/i.test(row.rawName)) && (supplyBuildings || !/^(pylon|supplydepot(?:lowered)?|overlord)$/i.test(row.rawName)) && `${row.displayName} ${row.rawName}`.toLowerCase().includes(query));
+  return rows.filter(row => {
+    const entity = (row.iconName || row.rawName).replace(/[^a-z0-9]/gi, "").toLowerCase();
+    return (workers || !/^(scv|drone|probe)$/.test(entity)) && (supplyBuildings || !/^(pylon|supplydepot(?:lowered)?|overlord)$/.test(entity)) && `${row.displayName} ${row.rawName}`.toLowerCase().includes(query);
+  });
 }
 
 /**

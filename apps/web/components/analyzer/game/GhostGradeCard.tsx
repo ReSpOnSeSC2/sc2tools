@@ -250,12 +250,12 @@ export function GhostGradeCard({
  * one click.
  */
 export function ArmGhostFromLogButton(props: {
-  name: string; lines: ReadonlyArray<string>; myRace?: string | null; opponentRace?: string | null; gameId?: string;
+  name: string; lines: ReadonlyArray<string>; myRace?: string | null; opponentRace?: string | null; gameId?: string; className?: string;
 }) {
   const ghost = useArmGhostTarget(props);
   const random = ["r", "random"].includes((props.opponentRace || "").toLowerCase());
   return <>
-    <Button variant="ghost" size="sm" onClick={ghost.armed ? ghost.disarm : ghost.arm}
+    <Button variant="ghost" size="sm" className={props.className} onClick={ghost.armed ? ghost.disarm : ghost.arm}
       aria-label={ghost.armed ? `Armed for ${ghost.matchup} · Disarm` : ghost.matchup ? "Use as Ghost Build target" : undefined}
       disabled={!ghost.matchup} iconLeft={<Crosshair className="h-4 w-4" aria-hidden />}
       title={random ? "Ghost Build is disabled against Random opponents" : ghost.matchup

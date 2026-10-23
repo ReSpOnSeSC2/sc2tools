@@ -21,6 +21,7 @@ describe("build export formats", () => {
     const result = buildToSalt([...steps, { time: 80, name: "ShieldBattery", supply: 20 }, { time: 90, name: "Marine", supply: 150 }, { time: 5700, name: "Pylon", supply: 14 }], meta);
     expect(result.salt).toBe('$Gate expand  PvZ|Reaver|https://sc2tools.com/community/builds/gate|~* 1 ;, J 8');
     expect(result.skipped).toEqual(["Marine — supply is outside 5–98", "Pylon — time exceeds 94:59", "ShieldBattery"]);
+    expect(buildToSalt([{ time: 60, name: "Marine", count: 201 }], meta).skipped).toEqual(["201× Marine — count is outside 1–200 whole steps"]);
   });
   it("uses prior supply, keeps exact/fractional/zero values and leaves pre-sample steps unknown", () => {
     const input = [{ time: 1, name: "A" }, { time: 10, name: "B" }, { time: 20, name: "C", supply: 17 }];

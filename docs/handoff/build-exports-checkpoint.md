@@ -14,9 +14,9 @@ Scope: Wave3 `build-order-supply-export`, including both augments. No AI feature
 
 ## Validation so far
 
-- API:58 tests/2suites; full API types passed before final main integration.
-- Web:210 assertions/34actual consumer/formatter suites pass. Full types and strict changed-file lint pass.
-- Exact CI env production build and all unchanged budgets pass at the earlier implementation: landing213.4/215, app235.1/240, game313.1/440, opponent487.5/500, guide171.7/175, community182.4/190kB. Final source/integration build remains required before PR.
--39 real component browser checks at390/768/1440 with production CSS: prior supply/filtering, aligned scrolling/rows (also after clipboard denial), copy text/Markdown, rules-only output, real CSV/JSON downloads, one-page PDF print capture, no overflow or JS errors. Synthetic auth/API/Next boundaries; no live account tests or production writes.
+- API:59tests/2suites and full API types pass after main72b345d0 integration, including the Archon completion regression.
+- Web:213 assertions/34actual consumer/formatter suites pass. Another99Help/Ghost/formatter checks pass (counts overlap). Full types and strict changed-file lint pass.
+- Final reviewed feature source: exact CI env production build and all unchanged budgets pass: landing213.4/215, app235.1/240, game313.1/440, opponent487.5/500, guide171.7/175, community182.4/190kB.
+-65 real component browser checks at320/390/768/1440 with production CSS: prior supply/filtering, aligned scrolling/rows (also after clipboard denial), copy text/Markdown, deferred permission denial after dismissal without focus theft, rules-only and actual Community toolbar exports, real CSV/JSON downloads, one-page PDF print capture, actual Ghost replacement/Undo and the real Save-as-new-build editor. No overflow or JS errors. Synthetic auth/API/Next boundaries; no live account tests or production writes.
 - Reproduce after a production build from apps/web: `node tests/manual/build-exports.cjs`. It writes ignored .tmp fixtures/downloads/PDFs and screenshot evidence. Playwright Chromium must be available. Print-dialog invocation is captured locally and its actual HTML/CSS is rendered to PDF; this does not exercise a physical printer.
-- Screenshots: `docs/handoff/screenshots/build-exports-390.png`, `build-exports-1440.png`, and matching print captures. Final docs/tests/build/root integration and remote CI still pending; this file is a progress checkpoint, not a completion claim.
+- Screenshots: `docs/handoff/screenshots/build-exports-390.png`, `build-exports-1440.png`, and matching print captures. Independent review found canonical worker/depot filtering and delayed clipboard focus races; both are repaired with regression tests. Final main integration and exact-head remote CI remain required before merge.

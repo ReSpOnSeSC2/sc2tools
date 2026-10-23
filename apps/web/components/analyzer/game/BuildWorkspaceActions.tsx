@@ -11,7 +11,7 @@ export function BuildWorkspaceActions({ events, name, race, vsRace, gameId, oppo
 }) {
   const rows = normalizeBuildEvents(events);
   return <div className="flex flex-col items-stretch gap-1">
-    {ghost ? <ArmGhostFromLogButton name={name} lines={rows.map(row => `[${row.timeDisplay}] ${row.rawName}`)} myRace={race} opponentRace={vsRace} gameId={gameId} /> : null}
+    {ghost ? <ArmGhostFromLogButton name={name} lines={rows.map(row => `[${row.timeDisplay}] ${row.rawName}`)} myRace={race} opponentRace={vsRace} gameId={gameId} className="min-h-11 w-full justify-start" /> : null}
     <SaveAsBuildButton rows={rows} events={events} race={coerceRace(race)} vsRace={coerceVsRace(vsRace)} perspective={opponent ? "opponent" : "you"} defaultName={name} gameId={gameId} className="min-h-11 w-full" />
   </div>;
 }

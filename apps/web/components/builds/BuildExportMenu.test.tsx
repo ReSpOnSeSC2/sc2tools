@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BuildExportMenu } from "./BuildExportMenu";
 import { SavedBuildExportMenu } from "./SavedBuildExportMenu";
@@ -8,6 +8,17 @@ const steps = [{ time: 17, name: "Pylon", supply: 14 }, { time: 42, name: "Gatew
 function open() { const summary = screen.getByLabelText("Build actions for Gate expand"); (summary.closest("details") as HTMLDetailsElement).open = true; return summary; }
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe("build actions", () => {
+  it.each(["Escape", "outside"])("keeps focus after %s dismisses a pending clipboard permission request", async dismiss => {
+    let reject!: (error: Error) => void;
+    const pending = new Promise<void>((_resolve, fail) => { reject = fail; });
+    const writeText = vi.fn(() => pending); Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(<><BuildExportMenu steps={steps} meta={meta} /><button type="button">Another control</button></>);
+    const summary = open(); fireEvent.click(screen.getByRole("button", { name: "Copy build order" })); await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    const next = screen.getByRole("button", { name: "Another control" });
+    if (dismiss === "Escape") fireEvent.keyDown(summary, { key: "Escape" }); else fireEvent.pointerDown(next);
+    next.focus(); await act(async () => { reject(new Error("denied later")); await Promise.resolve(); });
+    expect(screen.queryByRole("textbox", { name: "Copy this build order" })).toBeNull(); expect(document.activeElement).toBe(next);
+  });
   it("copies actual formatted steps with absolute attribution and returns focus", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined); Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     render(<BuildExportMenu steps={steps} meta={meta} />); const summary = open();
