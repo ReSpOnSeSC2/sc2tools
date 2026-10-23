@@ -185,6 +185,27 @@ describe("complete account erasure (HTTP + Mongo)", () => {
     expect(await db.deviceTokens.countDocuments({ userId: "u_owner" })).toBe(0);
   });
 
+  test("private scouting notes use the real device write fence and cannot reappear after erasure", async () => {
+    const token = "s".repeat(43), pulseId = "1-S2-1-42";
+    await db.deviceTokens.insertOne({ userId: "u_owner", tokenHash: crypto.createHash("sha256").update(token).digest("hex"), revokedAt: null });
+    await db.opponents.insertOne({ userId: "u_owner", pulseId, displayNameSample: "Opponent", lastSeen: new Date() });
+    await db.opponentNotes.insertOne({ userId: "u_other", pulseId, notes: "Other owner's note", _schemaVersion: 1 });
+    const put = (notes) => request(app).put(`/v1/agent/opponents/${pulseId}/notes`).set("authorization", `Bearer ${token}`).send({ notes, notesReadAloud: false });
+    expect((await put("Private next-time note")).status).toBe(200);
+    expect(await db.opponentNotes.findOne({ userId: "u_owner", pulseId })).toMatchObject({ notes: "Private next-time note", notesReadAloud: false, _schemaVersion: 1 });
+    const fence = { kind: "delete", leaseUntil: new Date(Date.now() + 60_000) };
+    await db.users.updateOne({ userId: "u_owner" }, { $set: { _gdprMutation: fence } });
+    const blocked = await put("Must not write during erasure");
+    expect(blocked.status).toBe(409); expect(blocked.body.error.code).toBe("gdpr_operation_busy");
+    expect((await db.opponentNotes.findOne({ userId: "u_owner", pulseId })).notes).toBe("Private next-time note");
+    await db.users.updateOne({ userId: "u_owner" }, { $unset: { _gdprMutation: "" } });
+    await services.gdpr.deleteAll("u_owner");
+    expect((await put("Must not recreate after erasure")).status).toBe(401);
+    expect((await request(app).get("/v1/agent/live/scouting?gameKey=old").set("authorization", `Bearer ${token}`)).status).toBe(401);
+    expect(await db.opponentNotes.countDocuments({ userId: "u_owner" })).toBe(0);
+    expect((await db.opponentNotes.findOne({ userId: "u_other", pulseId })).notes).toBe("Other owner's note");
+  });
+
   test("a cached token cannot write Studio state after erasure", async () => {
     await tokenData();
     // Warm the ordinary resolution cache before deletion invalidates it.

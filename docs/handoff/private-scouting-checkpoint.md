@@ -64,3 +64,16 @@ local-only previews with no controller/API mutation; generic saved-position
 reset; Cards settings controls; search Enter/Down/Up/Ctrl+Enter behavior; actual
 Qt preview/reset/keyboard tests and help/README updates. Do not change controller
 business logic in that pack. Final release/tag remains coordinated by root/owner.
+
+## Final main integration for #691
+
+Green main `b86ca989` (ops #689 and header/Community #690) merged cleanly at
+`9a3467fe`. Both the shared wrapped auth and audit middleware remain in the
+additive route mount. A new real HTTP/device/Mongo regression proves that a
+private note retains schema version 1, uses the GDPR write fence (409 during
+erasure), preserves another owner's note, and cannot be read or recreated after
+erasure (401). Combined privacy/broker/socket/enrichment/notes/erasure/schema/
+collection-classification/ops checks: **133 passed across 12 suites**. API types
+and touched lint pass with baseline large-function warnings only. No agent source
+changed in this main integration, so the full native/package evidence above
+remains applicable. Root owns remote final CI/preview quota and merge.
