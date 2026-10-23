@@ -112,6 +112,7 @@ try:
     win._click_save_settings()
     assert entered.wait(3)
     assert win._settings_save_pending and not win._save_settings_btn.isEnabled()
+    assert not win._pause_btn.isEnabled() and not win._resync_btn.isEnabled() and not win._choose_btn.isEnabled()
     assert win._settings_status.text()=="Saving settings…"
     assert not (base/"agent.json").exists()
     assert writers==[writers[0]] and writers[0]!=main_thread

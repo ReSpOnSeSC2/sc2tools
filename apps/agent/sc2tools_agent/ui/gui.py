@@ -3046,6 +3046,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         # ---- click handlers ----
 
         def _click_pause(self) -> None:
+            if self._settings_save_pending:
+                self._show_transient_notice("Wait for the settings save to finish, then try again.")
+                return
             self._paused = not self._paused
             self._pause_btn.setText(
                 "Resume syncing" if self._paused else "Pause syncing",
@@ -3060,6 +3063,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._click_archive_resync()
 
         def _click_archive_resync(self) -> None:
+            if self._settings_save_pending:
+                self._show_transient_notice("Wait for the settings save to finish, then try again.")
+                return
             if self._paused:
                 QtWidgets.QMessageBox.information(
                     self,
@@ -3119,6 +3125,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             return True
 
         def _click_choose_folder(self) -> None:
+            if self._settings_save_pending:
+                self._show_transient_notice("Wait for the settings save to finish, then try again.")
+                return
             from .folder_rows import confirm_empty_folder
             while True:
                 picked = QtWidgets.QFileDialog.getExistingDirectory(
@@ -3764,6 +3773,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                       "open_log":"Open log","pair_again":"Link again","view_failed":"View failed uploads"}
             self._status_action.setText(labels.get(view.action,""))
             self._status_action.setVisible(view.action is not None)
+            self._status_action.setEnabled(not self._settings_save_pending or view.action != "resume")
             self._status_copy.setVisible(view.secondary_action=="copy_details")
             self._connection_help.setVisible(view.status==AgentStatus.NEEDS_ATTENTION and self._connection_kind!="online")
             needs_pairing = view.status in (AgentStatus.NEEDS_PAIRING, AgentStatus.UNLINKED)
@@ -3772,7 +3782,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             for name in ("_pause_btn","_resync_btn","_choose_btn"):
                 button=getattr(self,name,None)
                 if button:
-                    button.setEnabled(not needs_pairing and not (name == "_choose_btn" and self._settings_save_pending))
+                    button.setEnabled(not needs_pairing and not self._settings_save_pending)
 
         def _run_status_action(self):
             action = self._status_view.action
