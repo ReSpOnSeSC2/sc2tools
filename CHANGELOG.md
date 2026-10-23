@@ -36,6 +36,12 @@ corresponding GitHub Release.
 - Read curated updates in What's New, the public changelog and RSS. Service notices explain active incidents and expire automatically; installer release notes are easier to read.
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
 
+### Build library and definitions
+
+- Empty build dossiers explain replay matching and offer re-match, rule editing and pending check-ins. Recent form, section links, sortable game disclosures and retry actions make existing results easier to explore.
+- Build menus add Duplicate, public links and Unpublish; listing labels and delete warnings agree across every surface. Cards show last played and low-sample cues, with a Last played library sort.
+- Definitions group rules by race and matchup, keep filters in the URL, and reveal focused entries from strategy links in dossiers and check-ins.
+
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.

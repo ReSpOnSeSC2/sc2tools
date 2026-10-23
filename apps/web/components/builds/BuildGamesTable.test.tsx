@@ -5,8 +5,11 @@ import {
   render,
   screen,
   within,
+  waitFor,
 } from "@testing-library/react";
 import { BuildGamesTable } from "./BuildGamesTable";
+import { useApi } from "@/lib/clientApi";
+import { resultLabel } from "@/components/analyzer/game/types";
 import type { BuildRecentGame } from "./types";
 
 vi.mock("@/lib/clientApi", () => ({
@@ -59,7 +62,7 @@ describe("BuildGamesTable replay-resume tests", () => {
     );
 
     expect(
-      screen.getByRole("heading", { name: "Recent games · 1 counted" }),
+      screen.getByRole("heading", { name: "Recent games · 1" }),
     ).toBeTruthy();
     expect(
       screen.getByText("1 replay-resume test is excluded from all statistics."),
@@ -78,7 +81,7 @@ describe("BuildGamesTable replay-resume tests", () => {
     expect(screen.queryByText("Replay Zulrah")).toBeNull();
   });
 
-  it("merges resumed rows newest-first and replaces their fake result on desktop and mobile", () => {
+  it("keeps resumed rows grouped after competitive games and replaces their fake result", () => {
     const { container } = render(
       <BuildGamesTable
         games={[COMPETITIVE_GAME]}
@@ -96,9 +99,9 @@ describe("BuildGamesTable replay-resume tests", () => {
     );
     expect(
       desktopRows.map((row) => row.getAttribute("data-game-row-id")),
-    ).toEqual(["replay-resume-game", "competitive-game"]);
+    ).toEqual(["competitive-game", "replay-resume-game"]);
 
-    const resumedRow = desktopRows[0] as HTMLElement;
+    const resumedRow = desktopRows[1] as HTMLElement;
     expect(within(resumedRow).getByText("Replay resume")).toBeTruthy();
     expect(within(resumedRow).queryByText("Win")).toBeNull();
     expect(
@@ -114,11 +117,67 @@ describe("BuildGamesTable replay-resume tests", () => {
     expect(within(resumedCard).getByText("Replay resume")).toBeTruthy();
     expect(within(resumedCard).queryByText("Win")).toBeNull();
     expect(
-      screen.getByRole("heading", { name: "Recent games · 1 counted" }),
+      screen.getByRole("heading", { name: "Recent games · 1" }),
     ).toBeTruthy();
   });
 
 
+});
+
+describe("BuildGamesTable actions, sorting and recovery", () => {
+  it.each([["Tie", "Tie"], ["draw", "Tie"], ["VICTORY", "Win"], ["Defeat", "Loss"], ["unfinished", "Unknown"], [null, "Unknown"]])("labels %s as %s", (result, expected) => {
+    expect(resultLabel(result)).toBe(expected);
+  });
+
+  it("exposes a focusable native disclosure and keeps Open separate", () => {
+    const { container } = render(<BuildGamesTable games={[COMPETITIVE_GAME]} />);
+    const row = container.querySelector('[data-game-row-id="competitive-game"]') as HTMLElement;
+    const disclosure = within(row).getByRole("button", { name: /Build order from/ });
+    disclosure.focus();
+    expect(document.activeElement).toBe(disclosure);
+    fireEvent.click(disclosure);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById(disclosure.getAttribute("aria-controls")!)).toBeTruthy();
+    const open = within(row).getByRole("link", { name: "Open game vs Ladder Rival on Old Sun Temple LE" });
+    expect(open.getAttribute("href")).toBe("/app/game/competitive-game");
+    fireEvent.click(open);
+    expect(disclosure.getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("sorts length both ways, narrows by result and race, and explains the capped list", () => {
+    const games = [COMPETITIVE_GAME, { ...COMPETITIVE_GAME, gameId: "short", result: "win", opp_race: "Protoss", duration: 100 }, { ...COMPETITIVE_GAME, gameId: "tie", result: "draw", duration: 400 }];
+    const { container } = render(<BuildGamesTable games={games} total={90} />);
+    expect(screen.getByRole("heading", { name: "Latest 3 of 90 games" })).toBeTruthy();
+    expect(screen.getByText("Older games still count in every stat above.")).toBeTruthy();
+    const ids = () => [...container.querySelectorAll("tbody > tr[data-game-row-id]")].map((row) => row.getAttribute("data-game-row-id"));
+    fireEvent.click(screen.getByRole("button", { name: "Length" }));
+    expect(ids()).toEqual(["competitive-game", "tie", "short"]);
+    fireEvent.click(screen.getByRole("button", { name: "Length" }));
+    expect(ids()).toEqual(["short", "tie", "competitive-game"]);
+    fireEvent.click(screen.getByRole("button", { name: "Wins 1" }));
+    expect(ids()).toEqual(["short"]);
+    expect(screen.getByRole("button", { name: "Wins 1" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "vs Z 2" }));
+    expect(ids()).toEqual(["tie", "competitive-game"]);
+    expect(container.querySelector('[data-game-row-id="tie"]')?.textContent).toContain("Tie");
+    expect(screen.queryByRole("button", { name: /vs T/ })).toBeNull();
+  });
+
+  it("offers Clear for an empty filter and retries a build-order failure without leaking raw errors", async () => {
+    const retry = vi.fn();
+    vi.mocked(useApi).mockReturnValue({ data: undefined, isLoading: false, error: { message: "private raw failure", requestId: "req-build-order" }, mutate: retry } as never);
+    const { container } = render(<BuildGamesTable games={[COMPETITIVE_GAME]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Wins 0" }));
+    expect(screen.getByText("No games match this filter")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    fireEvent.click(within(container.querySelector('[data-game-row-id="competitive-game"]') as HTMLElement).getByRole("button"));
+    expect(screen.queryByText("private raw failure")).toBeNull();
+    expect(screen.getAllByText("Couldn't load this game's build order.")).toHaveLength(2);
+    expect(screen.getAllByText("Error ID: req-build-order")).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("button", { name: "Try again" })[0]);
+    await waitFor(() => expect(retry).toHaveBeenCalledOnce());
+    vi.mocked(useApi).mockReturnValue({ data: undefined, isLoading: false, error: null } as never);
+  });
 });
 
 describe("BuildGamesTable check-in markers", () => {

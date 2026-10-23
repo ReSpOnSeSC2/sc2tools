@@ -2,6 +2,7 @@
 
 import { Dices, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
+import { StrategyLabel } from "@/components/definitions/StrategyLabel";
 import {
   STATUS_LABEL,
   suggestionReasonLabel,
@@ -65,7 +66,7 @@ export function DetectedLine({
   return (
     <p className={["text-caption text-text-muted", className].filter(Boolean).join(" ")}>
       Replay classified as{" "}
-      <span className="font-semibold text-text">{detected?.trim() || "Unclassified"}</span>
+      <span className="font-semibold text-text"><StrategyLabel label={detected?.trim() || "Unclassified"} /></span>
       {executed ? <span className="text-success"> · matches your plan</span> : null}
     </p>
   );

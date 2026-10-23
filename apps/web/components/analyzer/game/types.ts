@@ -95,3 +95,13 @@ export function isWinResult(result: string | null | undefined): boolean {
 export function isLossResult(result: string | null | undefined): boolean {
   return result === "Loss" || result === "Defeat";
 }
+
+/** Replay services use both title-case and lower-case result aliases. */
+export function resultLabel(result: string | null | undefined): "Win" | "Loss" | "Tie" | "Unknown" {
+  switch (result?.trim().toLowerCase()) {
+    case "win": case "victory": return "Win";
+    case "loss": case "defeat": return "Loss";
+    case "tie": case "draw": return "Tie";
+    default: return "Unknown";
+  }
+}

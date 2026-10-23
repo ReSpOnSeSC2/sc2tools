@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BookOpen, Check, Link2, Search, X } from "lucide-react";
-import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { Field } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
+import { FilterPill } from "@/components/ui/FilterPill";
 import {
   BUILD_DEFINITIONS,
   DEFINITIONS_TOTAL,
@@ -31,31 +32,15 @@ const RACE_FILTERS: ReadonlyArray<{ value: Race | "All"; label: string }> = [
   { value: "Zerg", label: "Zerg" },
 ];
 
-const MATCHUP_FILTERS_BY_RACE: Record<
-  Race | "All",
-  ReadonlyArray<{ value: StrategyMatchup | "All"; label: string }>
-> = {
-  All: [{ value: "All", label: "All" }],
-  Protoss: [
-    { value: "All", label: "All" },
-    { value: "PvP", label: "PvP" },
-    { value: "PvT", label: "PvT" },
-    { value: "PvZ", label: "PvZ" },
-  ],
-  Terran: [
-    { value: "All", label: "All" },
-    { value: "TvP", label: "TvP" },
-    { value: "TvT", label: "TvT" },
-    { value: "TvZ", label: "TvZ" },
-  ],
-  Zerg: [
-    { value: "All", label: "All" },
-    { value: "ZvP", label: "ZvP" },
-    { value: "ZvT", label: "ZvT" },
-    { value: "ZvZ", label: "ZvZ" },
-  ],
-  Random: [{ value: "All", label: "All" }],
-};
+const MATCHUPS = ["PvP", "PvT", "PvZ", "TvP", "TvT", "TvZ", "ZvP", "ZvT", "ZvZ"] as const;
+const RACE_BY_LETTER = { P: "Protoss", T: "Terran", Z: "Zerg" } as const;
+const RACES = ["Protoss", "Terran", "Zerg"] as const;
+function readFilters(params: URLSearchParams): { query: string; race: Race | "All"; matchup: StrategyMatchup | "All" } {
+  const rawMatchup = params.get("matchup");
+  const matchup = MATCHUPS.find((item) => item === rawMatchup) ?? "All";
+  const race = matchup !== "All" ? RACE_BY_LETTER[matchup[0] as keyof typeof RACE_BY_LETTER] : RACE_BY_LETTER[params.get("race") as keyof typeof RACE_BY_LETTER] ?? "All";
+  return { query: (params.get("q") ?? "").slice(0, 200), race, matchup };
+}
 
 /**
  * DefinitionsCatalog — interactive list of every build / strategy
@@ -70,16 +55,65 @@ export function DefinitionsCatalog({
 }: {
   guideLinks?: DefinitionGuideLinks;
 } = {}) {
-  const [query, setQuery] = useState("");
-  const [race, setRace] = useState<Race | "All">("All");
-  const [matchup, setMatchup] = useState<StrategyMatchup | "All">("All");
-
-  const matchups = MATCHUP_FILTERS_BY_RACE[race];
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const encodedParams = searchParams.toString();
+  const initial = readFilters(new URLSearchParams(encodedParams));
+  const [query, setQuery] = useState(initial.query);
+  const [race, setRace] = useState<Race | "All">(initial.race);
+  const [matchup, setMatchup] = useState<StrategyMatchup | "All">(initial.matchup);
+  const [targetId, setTargetId] = useState<string | null>(null);
+  const [highlight, setHighlight] = useState<string | null>(null);
+  const previousParams = useRef(encodedParams);
+  const incomingNavigation = previousParams.current !== encodedParams;
+  useEffect(() => {
+    previousParams.current = encodedParams;
+    const next = readFilters(new URLSearchParams(encodedParams));
+    setQuery(next.query); setRace(next.race); setMatchup(next.matchup);
+  }, [encodedParams]);
+  useEffect(() => {
+    if (incomingNavigation) return;
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    if (race !== "All") params.set("race", race[0]);
+    if (matchup && matchup !== "All") params.set("matchup", matchup);
+    const search = params.toString();
+    if (search !== window.location.search.slice(1)) router.replace(`/definitions${search ? `?${search}` : ""}${window.location.hash}`, { scroll: false });
+  }, [query, race, matchup, router, incomingNavigation]);
 
   const filtered = useMemo(
     () => filterDefinitions(BUILD_DEFINITIONS, query, race, matchup),
     [query, race, matchup],
   );
+  const liveFilters = useRef({ query, race, matchup });
+  liveFilters.current = { query, race, matchup };
+  useEffect(() => {
+    const reveal = () => {
+      let id: string;
+      try { id = decodeURIComponent(window.location.hash.slice(1)); } catch { return; }
+      const target = BUILD_DEFINITIONS.find((def) => def.id === id);
+      if (!target) return;
+      const current = liveFilters.current;
+      if (!filterDefinitions([target], current.query, current.race, current.matchup).length) {
+        setQuery(""); setRace("All"); setMatchup("All");
+      }
+      setTargetId(id);
+    };
+    reveal(); window.addEventListener("hashchange", reveal);
+    return () => window.removeEventListener("hashchange", reveal);
+  }, []);
+  useEffect(() => {
+    if (!targetId || !filtered.some((def) => def.id === targetId)) return;
+    const target = document.getElementById(targetId);
+    target?.scrollIntoView?.({ block: "start", behavior: "auto" });
+    target?.querySelector<HTMLElement>("[data-definition-heading]")?.focus({ preventScroll: true });
+    setHighlight(targetId); setTargetId(null);
+  }, [targetId, filtered]);
+  useEffect(() => {
+    if (!highlight) return;
+    const timer = setTimeout(() => setHighlight(null), 2000);
+    return () => clearTimeout(timer);
+  }, [highlight]);
 
   function clear() {
     setQuery("");
@@ -106,6 +140,7 @@ export function DefinitionsCatalog({
                 placeholder="e.g. Glaive, Proxy Robo, 12 Pool…"
                 className="pl-9"
                 autoComplete="off"
+                maxLength={200}
               />
               {query ? (
                 <button
@@ -119,26 +154,17 @@ export function DefinitionsCatalog({
               ) : null}
             </div>
           </Field>
-          <div role="radiogroup" aria-label="Filter by race" className="flex flex-wrap gap-1.5">
+          <div role="group" aria-label="Filter by race" className="flex flex-wrap gap-1.5">
             {RACE_FILTERS.map(({ value, label }) => {
               const active = race === value;
               return (
-                <button
+                <FilterPill
                   key={value}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
+                  active={active}
                   onClick={() => {
                     setRace(value);
                     setMatchup("All");
                   }}
-                  className={[
-                    "inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 text-caption font-medium",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-                    active
-                      ? "border-accent-cyan/60 bg-accent-cyan/15 text-accent-cyan"
-                      : "border-border bg-bg-elevated text-text-muted hover:border-border-strong hover:text-text",
-                  ].join(" ")}
                 >
                   {value !== "All" ? (
                     <Icon
@@ -149,35 +175,25 @@ export function DefinitionsCatalog({
                     />
                   ) : null}
                   {label}
-                </button>
+                </FilterPill>
               );
             })}
           </div>
-          {matchups.length > 1 ? (
-            <div role="radiogroup" aria-label="Filter by matchup" className="flex flex-wrap gap-1.5">
-              {matchups.map(({ value, label }) => {
+            <div role="group" aria-label="Filter by matchup" className="flex flex-wrap gap-1.5">
+              {(["All", ...MATCHUPS] as const).map((value) => {
                 const active = matchup === value;
                 return (
-                  <button
+                  <FilterPill
                     key={String(value)}
-                    type="button"
-                    role="radio"
-                    aria-checked={active}
-                    onClick={() => setMatchup(value)}
-                    className={[
-                      "inline-flex min-h-[36px] items-center gap-1.5 whitespace-nowrap rounded-full border px-3 font-mono text-caption",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-                      active
-                        ? "border-accent/40 bg-accent/15 text-accent"
-                        : "border-border bg-bg-elevated text-text-muted hover:border-border-strong hover:text-text",
-                    ].join(" ")}
+                    active={active}
+                    onClick={() => { setMatchup(value); if (value !== "All") setRace(RACE_BY_LETTER[value[0] as keyof typeof RACE_BY_LETTER]); }}
+                    className="font-mono"
                   >
-                    {label}
-                  </button>
+                    {value}
+                  </FilterPill>
                 );
               })}
             </div>
-          ) : null}
           <div className="flex items-center justify-between gap-2 text-caption text-text-dim">
             <span aria-live="polite">
               <span className="text-text">{filtered.length}</span> of{" "}
@@ -204,13 +220,17 @@ export function DefinitionsCatalog({
           />
         </Card>
       ) : (
-        <ul className="space-y-2">
-          {filtered.map((def) => (
-            <li key={def.id}>
-              <DefinitionCard def={def} guides={guideLinks[def.id] ?? []} />
-            </li>
-          ))}
-        </ul>
+        <div className="space-y-6">{RACES.map((groupRace) => {
+          const entries = filtered.filter((def) => def.race === groupRace);
+          if (!entries.length) return null;
+          return <section key={groupRace} aria-label={`${groupRace} definitions`} className="space-y-4"><h2 className="text-h3 font-semibold text-text">{groupRace} ({entries.length})</h2>
+            {([null, ...MATCHUPS.filter((item) => item[0] === groupRace[0])] as const).map((groupMatchup) => {
+              const members = entries.filter((def) => def.matchup === groupMatchup);
+              if (!members.length) return null;
+              return <div key={groupMatchup ?? "general"} className="space-y-2"><h3 className="text-body font-semibold text-text-muted">{groupMatchup ?? `${groupRace} · general`} ({members.length})</h3><ul className="space-y-2">{members.map((def) => <li key={def.id}><DefinitionCard def={def} highlighted={highlight === def.id} guides={guideLinks[def.id] ?? []} /></li>)}</ul></div>;
+            })}
+          </section>;
+        })}</div>
       )}
     </div>
   );
@@ -219,9 +239,11 @@ export function DefinitionsCatalog({
 function DefinitionCard({
   def,
   guides,
+  highlighted,
 }: {
   def: BuildDefinition;
   guides: ReadonlyArray<DefinitionGuideLink>;
+  highlighted: boolean;
 }) {
   const tint = raceTint(def.race);
   return (
@@ -229,7 +251,7 @@ function DefinitionCard({
       id={def.id}
       variant="default"
       padded={false}
-      className="scroll-mt-24 target:border-accent-cyan"
+      className={`scroll-mt-24 target:border-accent-cyan ${highlighted ? "ring-2 ring-accent" : ""}`}
     >
       <article className="relative flex flex-col gap-2 px-5 py-4 pl-6 sm:flex-row sm:items-start sm:gap-4">
         <span
@@ -260,9 +282,9 @@ function DefinitionCard({
         </div>
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="min-w-0 break-words pt-1.5 text-body font-semibold text-text">
+            <h4 tabIndex={-1} data-definition-heading className="min-w-0 break-words pt-1.5 text-body font-semibold text-text focus:outline-none">
               {def.name}
-            </h3>
+            </h4>
             <CopyDefinitionLink id={def.id} name={def.name} />
           </div>
           <p className="text-caption text-text-muted">{def.description}</p>
@@ -331,19 +353,5 @@ function CopyDefinitionLink({ id, name }: { id: string; name: string }) {
         {copied ? "Link copied" : ""}
       </span>
     </button>
-  );
-}
-
-export function DefinitionsHeaderHint() {
-  return (
-    <p className="flex items-start gap-1.5 text-caption text-text-muted">
-      <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-accent-cyan" aria-hidden />
-      <span>
-        The detection rules used by the analyzer to label opponent strategies and
-        your own builds. Use these to interpret labels in the rest of the app.
-        Tracking your own version of an opener?{" "}
-        <LazyHelpLink slug="custom-builds">Detected builds vs custom builds</LazyHelpLink>
-      </span>
-    </p>
   );
 }

@@ -10,12 +10,14 @@ import { Input } from "@/components/ui/Input";
 import { Modal, ModalActions } from "@/components/ui/Modal";
 import { apiCall } from "@/lib/clientApi";
 import type { CustomBuild } from "./types";
+import { useBuildPublicationActions } from "./BuildPublicationActions";
 
 export interface BuildPublishModalProps {
   open: boolean;
   onClose: () => void;
   build: CustomBuild | null;
   onPublished: (slug: string, info?: { mirrorPending: boolean }) => void;
+  onUnpublished?: () => void | Promise<unknown>;
 }
 
 type OwnerPublicationSettings = {
@@ -37,6 +39,7 @@ export function BuildPublishModal({
   onClose,
   build,
   onPublished,
+  onUnpublished,
 }: BuildPublishModalProps) {
   const { getToken } = useAuth();
   const [title, setTitle] = useState("");
@@ -51,6 +54,9 @@ export function BuildPublishModal({
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [mirrorPending, setMirrorPending] = useState(false);
+  const [ownerPublication, setOwnerPublication] = useState<OwnerPublicationSettings | null>(null);
+  const actions = useBuildPublicationActions({ slug: build?.slug ?? "", name: build?.name ?? "Build", enabled: false, publicationOverride: ownerPublication, onChanged: async () => { await onUnpublished?.(); onClose(); } });
+  const alreadyPublic = ownerPublication?.published ?? !!build?.isPublic;
 
   useEffect(() => {
     if (!open) return;
@@ -67,6 +73,7 @@ export function BuildPublishModal({
     setDone(null);
     setMirrorPending(false);
     setPublishing(false);
+    setOwnerPublication(null);
     if (build) {
       void apiCall<OwnerPublicationSettings>(
         getToken,
@@ -75,6 +82,7 @@ export function BuildPublishModal({
         .then((settings) => {
           if (cancelled) return;
           setAuthorName(settings.authorName || "");
+          setOwnerPublication(settings);
           setPublishAnonymously(settings.publishAnonymously);
         })
         .catch(() => {
@@ -151,17 +159,18 @@ export function BuildPublishModal({
     }
   }
 
-  return (
+  return (<>
     <Modal
       open={open}
       onClose={publishing ? () => undefined : onClose}
       size="md"
-      title="Publish to community"
+      title={alreadyPublic ? "Update your Community listing" : "Publish to community"}
       description="Make this build visible at /community/builds. You can unpublish at any time."
       hideClose={publishing}
       disableScrimClose={publishing}
       footer={
         <ModalActions className="w-full justify-end">
+          {alreadyPublic && !done ? <Button variant="secondary" disabled={publishing || identityLoading || !actions.publicSlug} onClick={actions.requestUnpublish}>Unpublish</Button> : null}
           <Button
             variant="ghost"
             onClick={onClose}
@@ -177,7 +186,7 @@ export function BuildPublishModal({
               disabled={!confirmAck || identityLoading || identityUnavailable}
               type="button"
             >
-              Publish build
+              {alreadyPublic ? "Update listing" : "Publish…"}
             </Button>
           )}
         </ModalActions>
@@ -211,6 +220,7 @@ export function BuildPublishModal({
               View on the community page
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
             </Link>
+            <Button variant="secondary" onClick={() => { void actions.copy(done); }}>Copy link</Button>
             <Link
               href="/community"
               className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-border bg-bg-elevated px-3 py-2 text-caption font-semibold text-text hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -322,8 +332,8 @@ export function BuildPublishModal({
               <span className="mt-1 block">
                 The title, description, build metadata, signature, and the
                 author choice shown above are published. Source replays,
-                opponent identities, and personal notes stay private. You may
-                unpublish at any time from the build's edit panel.
+                opponent identities, and personal notes stay private. You can
+                unpublish any time from the build's ⋯ menu.
               </span>
             </span>
           </label>
@@ -338,5 +348,7 @@ export function BuildPublishModal({
         </div>
       )}
     </Modal>
+    {actions.dialogs}
+    </>
   );
 }

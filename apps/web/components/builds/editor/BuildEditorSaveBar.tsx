@@ -17,6 +17,7 @@ export interface BuildEditorSaveBarProps {
    * isn't trapped.
    */
   demoMode?: boolean;
+  hasSignature?: boolean;
 }
 
 /**
@@ -34,6 +35,7 @@ export function BuildEditorSaveBar({
   onSave,
   mode = "create",
   demoMode = false,
+  hasSignature = false,
 }: BuildEditorSaveBarProps) {
   if (demoMode) {
     return (
@@ -60,7 +62,7 @@ export function BuildEditorSaveBar({
   // skill level, strategy notes) without touching the rules — so don't
   // gate save on having at least one rule. Create mode still requires
   // a rule, otherwise the saved build is non-functional from the start.
-  const requiresRule = mode !== "edit";
+  const requiresRule = mode !== "edit" && !hasSignature;
   const saveDisabled = saving || (requiresRule && ruleCount === 0);
   return (
     <div className="space-y-3">

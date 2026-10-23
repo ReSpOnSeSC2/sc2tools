@@ -2,6 +2,7 @@
 
 import { EmptyState } from "@/components/ui/Card";
 import { pct } from "@/lib/format";
+import { StrategyLabel } from "@/components/definitions/StrategyLabel";
 
 export type Prediction = {
   strategy: string;
@@ -39,7 +40,7 @@ export function PredictedStrategiesList({
             />
           </div>
           <div className="min-w-[40%] flex-1 truncate text-sm text-text-muted">
-            {p.strategy}
+            <StrategyLabel label={p.strategy} />
           </div>
         </div>
       ))}

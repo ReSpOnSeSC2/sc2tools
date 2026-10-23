@@ -15,6 +15,7 @@ import {
 } from "@/lib/race";
 import { BuildDossier } from "./BuildDossier";
 import { BuildDefinitionCard } from "./BuildDefinitionCard";
+import { BuildKebab } from "./BuildCard";
 import type { CustomBuild } from "./types";
 
 /**
@@ -33,15 +34,22 @@ export function BuildDossierModal({
   onEdit,
   onPublish,
   onDelete,
+  onDuplicate,
+  onReclassify,
+  onChanged,
 }: {
   build: CustomBuild;
   onClose: () => void;
   onEdit: (slug: string, initialFocus?: "notes" | "preview") => void;
   onPublish: (slug: string) => void;
   onDelete: (slug: string) => void;
+  onDuplicate?: (slug: string) => void;
+  onReclassify?: (slug: string) => void;
+  onChanged?: () => void | Promise<unknown>;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || document.querySelector('[role="menu"]') || document.querySelectorAll('[role="dialog"][aria-modal="true"]').length > 1) return;
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
@@ -115,7 +123,7 @@ export function BuildDossierModal({
                 onClick={() => onPublish(build.slug)}
                 iconLeft={<Send className="h-4 w-4" aria-hidden />}
               >
-                {build.isPublic ? "Update" : "Publish"}
+                {build.isPublic ? "Update listing" : "Publish…"}
               </Button>
               <Button
                 size="sm"
@@ -134,6 +142,7 @@ export function BuildDossierModal({
                 Full page
                 <ExternalLink className="h-3 w-3" aria-hidden />
               </Link>
+              <BuildKebab slug={build.slug} name={build.name} isPublic={!!build.isPublic} onEdit={onEdit} onPublish={onPublish} onDelete={onDelete} onDuplicate={onDuplicate} onReclassify={onReclassify} onChanged={onChanged} />
               <button
                 type="button"
                 aria-label="Close build dossier"
@@ -148,6 +157,8 @@ export function BuildDossierModal({
 
         <BuildDossier
           apiPath={apiPath}
+          slug={build.slug}
+          onEditRules={() => onEdit(build.slug, "preview")}
           phasePerspective={
             build.perspective === "opponent" ? "opponent" : undefined
           }
