@@ -51,6 +51,10 @@ test("Back and Forward accept copied percent-encoded multiword definition filter
   await page.goto("/definitions");
   const search = page.getByRole("textbox", { name: "Search builds and strategies" });
   await expect(search).toBeVisible();
+  const terran = page.getByRole("group", { name: "Filter by race", exact: true }).getByRole("button", { name: "Terran", exact: true });
+  await terran.click();
+  await expect(terran).toHaveAttribute("aria-pressed", "true");
+  await expect(page).toHaveURL(/\/definitions\?race=T$/);
   // Retain the current entry's router state to emulate existing browser
   // history entries with copied URLs, without pre-normalizing their query.
   await page.evaluate(() => {

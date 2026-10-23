@@ -65,14 +65,17 @@ target; rendered and repeated production hash/focus regressions cover this.
 Shipped main `72b345d0` (#693 shared clock/phone HUD, #694 share previews and #696 detector/catalog correction)
 was integrated; only CHANGELOG conflicted and both entries were retained.
 
-The final repair passes all 172 production Playwright scenarios (38 intentional
+The integrated CI repair passes all 172 production Playwright scenarios (38 intentional
 skips, no retries or failures), including the existing true-404/308/ISR/outage
 contracts. Eighteen hash-focus checks at phone/tablet/desktop widths preserve
 filters, reveal hidden definitions and cause no document/RSC filter navigation.
-The 11 rendered DefinitionsCatalog tests also cover a superseded router snapshot
+The 12 rendered DefinitionsCatalog tests also cover a superseded router snapshot
 arriving after the newer hash. Copied `%20` multiword queries and unrelated
 Unicode parameters use canonical URLSearchParams comparison, preserving Back
 and Forward navigation. Both full typechecks and strict scoped lint pass.
+After #696 and that canonical-query follow-up, a fresh exact production build
+passes every unchanged budget again, and all 8 targeted production definition
+and phone/desktop headline cases pass (4 deliberate duplicate-width skips).
 The exact-CI final build passes every unchanged budget (guide 167.7/175 kB,
 game 311.9/440, app 235.1/240, landing 213.4/215). Remaining GuideUnavailable
 log entries are deliberate fixture outages (including the Robo opener cache
