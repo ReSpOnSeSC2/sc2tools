@@ -45,6 +45,8 @@ function buildPublicProfileRouter(deps) {
     max,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: (/** @type {import('express').Request} */ req) =>
+      `${req.ip}:${String(req.params.handle || "").toLowerCase()}`,
     message: { error: { code: "rate_limited", message: "rate_limited" } },
   });
 

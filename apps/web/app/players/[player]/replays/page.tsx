@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import { notFound, redirect } from "next/navigation";
 import {
   PublicReplayLibrary,
   type PublicReplayQuery,
 } from "@/components/public-profile/PublicReplayLibrary";
-import { PublicReplayUnavailable } from "@/components/public-profile/PublicReplayUnavailable";
+import { PublicUnavailable } from "@/components/public-profile/PublicUnavailable";
 import type { ReplayLibraryResponse } from "@/components/analyzer/replays/types";
 import { getJsonWithStatus } from "@/lib/serverApi";
 import { siteTitle } from "@/lib/siteTitle";
@@ -17,20 +18,37 @@ interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-function fetchReplays(player: string, query: PublicReplayQuery = {}) {
+const fetchReplays = cache((player: string, queryKey: string) =>
+  getJsonWithStatus<ReplayLibraryResponse>(`/v1/public/replays/${encodeURIComponent(player)}?${queryKey}`),
+);
+
+function queryKey(query: PublicReplayQuery): string {
   const params = new URLSearchParams({ limit: "25", sort: query.sort || "date_desc" });
   if (query.search) params.set("search", query.search);
   if (query.result) params.set("result", query.result);
   if (query.matchup) params.set("matchup", query.matchup);
   if (query.cursor) params.set("cursor", query.cursor);
-  return getJsonWithStatus<ReplayLibraryResponse>(
-    `/v1/public/replays/${encodeURIComponent(player)}?${params.toString()}`,
-  );
+  return params.toString();
 }
 
-export async function generateMetadata({ params }: Pick<PageProps, "params">): Promise<Metadata> {
-  const { player } = await params;
-  const { data, status } = await fetchReplays(player);
+async function readArchive(player: string, query: PublicReplayQuery) {
+  const result = await fetchReplays(player, queryKey(query));
+  if (result.status === 400 && query.cursor) {
+    // An invalid cursor response cannot carry the canonical handle. The
+    // exceptional recovery read asks only for the public profile, never VODs.
+    const canonical = await fetchReplays(player, "limit=1&fields=profile");
+    if (canonical.data?.profile) {
+      const href = replayListHref(canonical.data.profile.handle, { ...query, cursor: undefined });
+      redirect(`${href}${href.includes("?") ? "&" : "?"}notice=page-expired`);
+    }
+    if (canonical.status === 404 || canonical.status === 429 || canonical.status === null || (canonical.status ?? 0) >= 500) return canonical;
+  }
+  return result;
+}
+
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
+  const [{ player }, rawQuery] = await Promise.all([params, searchParams]);
+  const { data, status } = await readArchive(player, parseQuery(rawQuery));
   const canonicalPlayer = data?.profile.handle || player;
   const canonical = `/players/${encodeURIComponent(canonicalPlayer)}/replays`;
   if (!data?.profile) {
@@ -59,10 +77,11 @@ export async function generateMetadata({ params }: Pick<PageProps, "params">): P
 export default async function PlayerReplaysPage({ params, searchParams }: PageProps) {
   const [{ player }, rawQuery] = await Promise.all([params, searchParams]);
   const query = parseQuery(rawQuery);
-  const { data, status } = await fetchReplays(player, query);
+  const { data, status } = await readArchive(player, query);
   if (!data?.profile) {
     if (status === 404) notFound();
-    return <PublicReplayUnavailable />;
+    const filtered = Boolean(query.cursor || query.search || query.result || query.matchup || query.sort === "date_asc");
+    return <PublicUnavailable surface="archive" reason={status === 429 ? "busy" : "outage"} resetHref={filtered ? replayListHref(player, {}) : undefined} />;
   }
   // Legacy opaque share ids remain resolvable during migration, but every
   // successful response carries the canonical player slug. Normalize the
@@ -87,6 +106,7 @@ function parseQuery(raw: Record<string, string | string[] | undefined>): PublicR
     matchup: MATCHUP_RE.test(matchup || "") ? matchup : undefined,
     sort: sort === "date_asc" ? "date_asc" : "date_desc",
     cursor: read("cursor")?.slice(0, 512) || undefined,
+    notice: read("notice") === "page-expired" ? "page-expired" : undefined,
   };
 }
 

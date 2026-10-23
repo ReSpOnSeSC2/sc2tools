@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   ServerCog,
@@ -287,7 +289,7 @@ function SettingsShellInner({
         <MobileSettingsTabs tabs={tabs} active={active} isDirty={ctx.isDirty} requestSwitch={requestSwitch} />
 
         {/* Desktop sidebar */}
-        <Tabs.List ariaLabel="Settings sections" className="hidden lg:flex">
+        <div className="hidden space-y-2 lg:block"><Tabs.List ariaLabel="Settings sections" className="flex">
           {tabs.map((t) => (
             <Tabs.Trigger key={t.id} value={t.id}>
               <span className="inline-flex w-full items-center gap-2.5">
@@ -306,7 +308,7 @@ function SettingsShellInner({
               </span>
             </Tabs.Trigger>
           ))}
-        </Tabs.List>
+        </Tabs.List><Link href="/devices" className="flex min-h-11 items-center rounded-lg px-4 py-2 text-caption font-medium text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Devices</Link></div>
 
         {tabs.map((t) => (
           <Tabs.Content

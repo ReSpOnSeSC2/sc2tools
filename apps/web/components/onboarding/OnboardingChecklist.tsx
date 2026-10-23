@@ -303,7 +303,7 @@ function PairHint({ onPaired }: { onPaired?: () => void }) {
 
   return (
     <ol className="ml-5 list-decimal space-y-1 text-caption text-text-muted">
-      <li>Run the agent — a 6-digit code appears in its window.</li>
+      <li>Run the app — use the 6-digit code shown in the SC2 Tools window on your PC.</li>
       <li>
         Enter the code on the{" "}
         <Link href="/devices" className="font-medium text-accent hover:text-accent-hover">

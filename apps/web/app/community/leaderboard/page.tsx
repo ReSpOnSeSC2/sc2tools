@@ -1,11 +1,12 @@
 import { Trophy, Users } from "lucide-react";
+import { Suspense } from "react";
 import { Banner } from "@/components/Banner";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { CommunityShell } from "@/components/community/CommunityShell";
-import { LeaderboardTab } from "@/components/community/LeaderboardTab";
+import { LeaderboardTab, LeaderboardSkeleton } from "@/components/community/LeaderboardTab";
 
 export const metadata = {
-  title: "Leaderboard",
+  title: "Stock Market leaderboard",
   description:
     "Stock Market weekly P&L leaderboard. Players who opted into the public board, ranked by their weekly Arcade portfolio performance.",
 };
@@ -23,7 +24,7 @@ export default function CommunityLeaderboardPage() {
         title={
           <span className="inline-flex items-center gap-2">
             <Trophy className="h-6 w-6 text-warning" aria-hidden />
-            Leaderboard
+            Stock Market leaderboard
           </span>
         }
         description="Stock Market weekly P&L. Players who opted into the public board only — portfolios stay private."
@@ -32,7 +33,7 @@ export default function CommunityLeaderboardPage() {
       <Banner variant="divider" />
 
       <CommunityShell active="leaderboard">
-        <LeaderboardTab />
+        <Suspense fallback={<LeaderboardSkeleton />}><LeaderboardTab /></Suspense>
       </CommunityShell>
     </div>
   );

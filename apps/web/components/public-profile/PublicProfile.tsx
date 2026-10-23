@@ -1,3 +1,4 @@
+import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import Link from "next/link";
 import { MessageSquareText, Swords, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
@@ -58,7 +59,7 @@ export function PublicProfile({ profile }: PublicProfileProps) {
     <article className="space-y-6">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(personJsonLd) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(personJsonLd) }}
       />
 
       <Card variant="feature" padded={false} className="relative overflow-hidden">

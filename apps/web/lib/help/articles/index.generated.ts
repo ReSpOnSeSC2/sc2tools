@@ -14,16 +14,19 @@ import analyzer_analyzerFilters from "./analyzer/analyzer-filters";
 import analyzer_arcade from "./analyzer/arcade";
 import analyzer_builds from "./analyzer/builds";
 import analyzer_dashboardAndAnalyzer from "./analyzer/dashboard-and-analyzer";
+import analyzer_howAnalysisWorks from "./analyzer/how-analysis-works";
 import analyzer_macro from "./analyzer/macro";
 import analyzer_maps from "./analyzer/maps";
 import analyzer_opponents from "./analyzer/opponents";
 import analyzer_readingTheCharts from "./analyzer/reading-the-charts";
 import analyzer_replays from "./analyzer/replays";
+import analyzer_stockMarketLeaderboard from "./analyzer/stock-market-leaderboard";
 import analyzer_strategies from "./analyzer/strategies";
 import analyzer_today from "./analyzer/today";
 import analyzer_trends from "./analyzer/trends";
 import builds_buildCheckIn from "./builds/build-check-in";
 import builds_buildGuides from "./builds/build-guides";
+import builds_communityBuilds from "./builds/community-builds";
 import builds_customBuilds from "./builds/custom-builds";
 import builds_practiceGhostBuild from "./builds/practice-ghost-build";
 import builds_publishCommunityBuilds from "./builds/publish-community-builds";
@@ -71,16 +74,19 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_arcade,
   analyzer_builds,
   analyzer_dashboardAndAnalyzer,
+  analyzer_howAnalysisWorks,
   analyzer_macro,
   analyzer_maps,
   analyzer_opponents,
   analyzer_readingTheCharts,
   analyzer_replays,
+  analyzer_stockMarketLeaderboard,
   analyzer_strategies,
   analyzer_today,
   analyzer_trends,
   builds_buildCheckIn,
   builds_buildGuides,
+  builds_communityBuilds,
   builds_customBuilds,
   builds_practiceGhostBuild,
   builds_publishCommunityBuilds,

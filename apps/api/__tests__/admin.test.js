@@ -195,12 +195,7 @@ describe("/v1/admin", () => {
     const games = res.body.collections.find((c) => c.name === "games");
     expect(games).toBeTruthy();
     expect(games.count).toBe(1);
-    // Collections that were never touched (e.g. ml_models) come back
-    // as zero rows rather than missing — the dashboard still shows
-    // the row so an admin can see the cap is unused.
-    const mlModels = res.body.collections.find((c) => c.name === "ml_models");
-    expect(mlModels).toBeTruthy();
-    expect(mlModels.count).toBe(0);
+    expect(res.body.collections.some((c) => c.name === "ml_models")).toBe(false);
   });
 
   test("infrastructure returns private setup advisories without identifiers", async () => {

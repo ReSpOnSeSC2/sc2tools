@@ -1,3 +1,4 @@
+import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import { Banner } from "@/components/Banner";
 import { DownloadInteractive } from "@/components/onboarding/DownloadInteractive";
 
@@ -42,7 +43,7 @@ export default function DownloadPage() {
     <div className="space-y-10">
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(SOFTWARE_JSON_LD) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(SOFTWARE_JSON_LD) }}
       />
       <header className="space-y-3">
         <h1 className="text-display-lg font-semibold tracking-tight text-text">
