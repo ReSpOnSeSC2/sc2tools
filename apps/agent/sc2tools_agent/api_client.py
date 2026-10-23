@@ -131,11 +131,14 @@ class ApiClient:
 
     # ---------------- Pairing flow ----------------
     def start_pairing(self) -> Dict[str, Any]:
-        return self._post("/v1/device-pairings/start", auth=False)
+        from .pairing.flow import pairing_metadata
+        return self._request("POST", "/v1/device-pairings/start", auth=False,
+                             body=pairing_metadata(), attempts=1, interactive=True)
 
     def poll_pairing(self, code: str) -> Dict[str, Any]:
         url = f"/v1/device-pairings/{code}"
-        return self._get(url, auth=False, allow_202=True)
+        return self._request("GET", url, auth=False, allow_202=True,
+                             attempts=1, interactive=True)
 
     # ---------------- Profile (player handle, etc.) ----------------
     def get_profile(self) -> Dict[str, Any]:
@@ -182,6 +185,8 @@ class ApiClient:
             for index, chunk in enumerate(chunks):
                 try:
                     response = self.upload_games_batch(chunk)
+                except DeviceUnauthorized:
+                    raise
                 except (ReplayIngestBusy, _ApiError, requests.RequestException) as exc:
                     # Prior chunks may already be durable. Acknowledge those
                     # and retain only the remaining games in the retry lane.
@@ -205,11 +210,10 @@ class ApiClient:
             READ_TIMEOUT_SEC,
             BATCH_READ_TIMEOUT_PER_GAME_SEC * len(games),
         )
-        return self._post(
-            "/v1/games",
-            auth=True,
-            body={"games": games},
-            read_timeout=read_timeout,
+        # UploadQueue owns the interruptible batch backoff and Retry now.
+        return self._request(
+            "POST", "/v1/games", auth=True, body={"games": games},
+            read_timeout=read_timeout, attempts=1, interactive=True,
         )
 
     def upload_playback_artifact(self, game_id: str, manifest_path: Path) -> Dict[str, Any]:
@@ -424,7 +428,8 @@ class ApiClient:
             if 200 <= response.status_code < 300:
                 break
             if response.status_code in (408, 429) or response.status_code >= 500:
-                last_exc = _ApiError(response.status_code, response.text)
+                last_exc = _ApiError(response.status_code, response.text,
+                                     retry_after_seconds=_retry_after_seconds(response) or 0)
                 retry_after = _retry_after_seconds(response)
                 if retry_after is not None:
                     time.sleep(retry_after)
@@ -812,6 +817,8 @@ class ApiClient:
                 return _safe_json(response)
             if 200 <= response.status_code < 300:
                 return _safe_json(response)
+            if auth and response.status_code == 401:
+                raise DeviceUnauthorized(response.status_code, response.text)
             if (
                 response.status_code == 503
                 and _error_code(response) == "replay_ingest_busy"
@@ -826,7 +833,8 @@ class ApiClient:
                     or RETRY_BACKOFF_BASE_SEC
                 )
             if response.status_code in (408, 429) or response.status_code >= 500:
-                last_exc = _ApiError(response.status_code, response.text)
+                last_exc = _ApiError(response.status_code, response.text,
+                                     retry_after_seconds=_retry_after_seconds(response) or 0)
                 if interactive:
                     # A rate limit outlasts any wait a card can afford.
                     if final_attempt or response.status_code == 429:
@@ -856,10 +864,11 @@ class ApiClient:
 
 
 class _ApiError(Exception):
-    def __init__(self, status: int, body: str):
+    def __init__(self, status: int, body: str, *, retry_after_seconds: float = 0):
         super().__init__(f"http_{status}: {body[:300]}")
         self.status = status
         self.body = body
+        self.retry_after_seconds = retry_after_seconds
 
     @property
     def error(self) -> Dict[str, Any]:
@@ -880,6 +889,10 @@ class _ApiError(Exception):
 
 # Public name for callers that branch on an API status or error code.
 ApiError = _ApiError
+
+
+class DeviceUnauthorized(_ApiError):
+    """A device call returned 401; the watchdog still confirms revocation."""
 
 _CHECKIN_PREFS_PATH = "/v1/me/preferences/buildCheckin"
 

@@ -61,6 +61,9 @@ from .live.transport import (
     OverlayBackendTransport,
 )
 from .pairing import ensure_paired
+from .pairing.flow import PairingControls
+from .pairing.recovery import RuntimeRecovery
+from .errors import classify
 from .import_controller import ImportController
 from .socket_client import SocketClient, make_recompute_handlers
 from .bot_lab import BotLabController
@@ -402,12 +405,11 @@ def _run_headless(
             state=state,
             api=api,
             on_code=ui.show_pairing_code,
+            on_state=ui.on_pairing_state,
             stop_event=stop_event,
         )
         if not paired:
-            log.warning("not paired; exiting")
-            ui.on_status("not paired - exiting")
-            return 1
+            return 0  # ensure_paired returns only when stop was requested.
         api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
         ui.on_paired(state.user_id or "")
 
@@ -425,7 +427,14 @@ def _run_headless(
     # first) can late-bind it; assigned right after the watcher exists.
     import_ctl: Optional[ImportController] = None
 
+    recovery_cell = _RuntimeCell()
+    recovery_cell.api = api
+    recovery = RuntimeRecovery(cell=recovery_cell, cfg=cfg, state=state, ui=ui,
+                               stop_event=stop_event)
     upload = UploadQueue(
+        on_connection_state=ui.on_connection_state,
+        on_auth_failure=recovery.watchdog.failure,
+        on_auth_success=recovery.watchdog.success,
         cfg=cfg,
         state=state,
         api=api,
@@ -434,11 +443,12 @@ def _run_headless(
             import_ctl.on_upload_success(p) if import_ctl else None,
         ),
         on_failure=lambda p, exc: (
-            ui.on_upload_failed(p.name, str(exc)),
+            ui.on_upload_failed(p.name, classify(exc)),
             import_ctl.on_upload_failure(p, exc) if import_ctl else None,
         ),
         on_pending_changed=ui.on_pending,
     )
+    recovery_cell.upload = upload
     upload.set_paused(state.paused)
     watcher = ReplayWatcher(
         cfg=cfg,
@@ -474,7 +484,10 @@ def _run_headless(
         ),
     )
 
-    heartbeat = Heartbeat(api)
+    heartbeat = Heartbeat(api, on_success=recovery.connected,
+                          on_failure=recovery.watchdog.failure)
+    recovery_cell.heartbeat = heartbeat
+    recovery_cell.import_ctl = import_ctl
 
     if state.device_token:
         on_macro, on_opp, on_full_resync = make_recompute_handlers(
@@ -530,6 +543,8 @@ def _run_headless(
         state=state, bridge=live_bridge, log=log, no_obs=no_obs,
     )
     stream_service = _build_stream_service(cfg, state, no_obs=no_obs)
+    recovery_cell.socket_client = socket_client
+    recovery_cell.live_transport = live_transport
 
     try:
         if stream_service:
@@ -594,8 +609,8 @@ def _run_headless(
             live_bridge.stop()
         if live_transport:
             live_transport.shutdown()
-        if socket_client:
-            socket_client.stop()
+        if recovery_cell.socket_client:
+            recovery_cell.socket_client.stop()
         if import_ctl:
             import_ctl.stop()
         if heartbeat:
@@ -679,6 +694,10 @@ def _run_with_gui(
     )
 
     gui = GuiUI(
+        on_pairing_retry=cell.pairing_controls.retry_now.set,
+        on_pairing_refresh=cell.pairing_controls.request_new_code,
+        on_link_again=lambda: cell.recovery.link_again() if cell.recovery else None,
+        on_sync_retry=lambda: cell.upload.retry_now() if cell.upload else None,
         version=__version__,
         dashboard_url=_dashboard_url_from_api(cfg.api_base),
         pairing_url=_pairing_url_from_api(cfg.api_base),
@@ -847,14 +866,12 @@ def _gui_boot_worker(
                 state=state,
                 api=api,
                 on_code=ui.show_pairing_code,
+                on_state=ui.on_pairing_state,
+                controls=cell.pairing_controls,
                 stop_event=stop_event,
             )
             if not paired:
-                log.warning("not paired; exiting (gui)")
-                ui.on_status("not paired - exiting")
-                if cell.gui:
-                    cell.gui.request_quit()
-                return
+                return  # Pairing stops only when the application stops.
             api = ApiClient(
                 base_url=cfg.api_base, device_token=state.device_token,
             )
@@ -875,7 +892,14 @@ def _gui_boot_worker(
         # first) can late-bind it; assigned right after the watcher.
         import_ctl: Optional[ImportController] = None
 
+        cell.api = api
+        recovery = RuntimeRecovery(cell=cell, cfg=cfg, state=state, ui=ui,
+                                   stop_event=stop_event, controls=cell.pairing_controls)
+        cell.recovery = recovery
         upload = UploadQueue(
+            on_connection_state=ui.on_connection_state,
+            on_auth_failure=recovery.watchdog.failure,
+            on_auth_success=recovery.watchdog.success,
             cfg=cfg,
             state=state,
             api=api,
@@ -884,7 +908,7 @@ def _gui_boot_worker(
                 import_ctl.on_upload_success(p) if import_ctl else None,
             ),
             on_failure=lambda p, exc: (
-                ui.on_upload_failed(p.name, str(exc)),
+                ui.on_upload_failed(p.name, classify(exc)),
                 import_ctl.on_upload_failure(p, exc) if import_ctl else None,
             ),
             on_pending_changed=ui.on_pending,
@@ -935,7 +959,8 @@ def _gui_boot_worker(
                 request_stop=_request_stop_for_update,
             ),
         )
-        heartbeat = Heartbeat(api)
+        heartbeat = Heartbeat(api, on_success=recovery.connected,
+                              on_failure=recovery.watchdog.failure)
 
         cell.upload = upload
         cell.watcher = watcher
@@ -2886,6 +2911,7 @@ class _RuntimeCell:
     deepcopy the live thread/queue handles."""
 
     __slots__ = (
+        "api", "recovery", "pairing_controls",
         "gui",
         "tray",
         "console",
@@ -2909,6 +2935,9 @@ class _RuntimeCell:
     )
 
     def __init__(self) -> None:
+        self.api = None
+        self.recovery = None
+        self.pairing_controls = PairingControls()
         self.gui = None
         self.tray = None
         self.console = None
@@ -2943,11 +2972,50 @@ class _Multiplexer:
         tray: Optional[TrayUI] = None,
         gui: Optional[GuiUI] = None,
     ) -> None:
+        self._offline_since = 0.0
+        self._offline_toasted = False
+        self._recovered_count = 0
         self._sinks: List[Any] = [console]
         if tray:
             self._sinks.append(tray)
         if gui:
             self._sinks.append(gui)
+
+    def on_pairing_state(self, state) -> None:
+        for sink in self._sinks:
+            callback = getattr(sink, "on_pairing_state", None)
+            if callback:
+                callback(state)
+
+    def on_unlinked(self) -> None:
+        for sink in self._sinks:
+            callback = getattr(sink, "on_unlinked", None)
+            if callback:
+                callback()
+
+    def on_connection_state(self, kind, since, next_retry_at, waiting_count) -> None:
+        import time
+        if kind == "online":
+            if self._offline_since:
+                self._notice(f"Back online: {self._recovered_count:,} replays synced")
+            self._offline_since = 0.0
+            self._offline_toasted = False
+            self._recovered_count = 0
+        else:
+            self._offline_since = self._offline_since or since
+            if waiting_count and not self._offline_toasted and time.time() - self._offline_since >= 600:
+                self._notice(f"Sync is waiting for a connection. {waiting_count:,} replays are safely queued.")
+                self._offline_toasted = True
+        for sink in self._sinks:
+            callback = getattr(sink, "on_connection_state", None)
+            if callback:
+                callback(kind, since, next_retry_at, waiting_count)
+
+    def _notice(self, message):
+        for sink in self._sinks:
+            callback = getattr(sink, "show_notice", None)
+            if callback:
+                callback(message)
 
     def show_pairing_code(self, code: str) -> None:
         for s in self._sinks:
@@ -2962,10 +3030,12 @@ class _Multiplexer:
             s.on_status(status)
 
     def on_upload_success(self, name: str) -> None:
+        if self._offline_since:
+            self._recovered_count += 1
         for s in self._sinks:
             s.on_upload_success(name)
 
-    def on_upload_failed(self, name: str, reason: str) -> None:
+    def on_upload_failed(self, name: str, reason) -> None:
         for s in self._sinks:
             s.on_upload_failed(name, reason)
 

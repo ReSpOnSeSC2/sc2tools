@@ -75,8 +75,12 @@ def test_log_search_copy_follow_and_help_navigation(tmp_path):
         sidebar = next(button for button in win.findChildren(QtWidgets.QPushButton) if button.text() == "Help & support")
         sidebar.click()
         from sc2tools_agent.ui.help_links import AGENT_HELP_SLUGS
+        # Pairing and sync-error help are contextual actions on their cards.
+        win._pairing_card.help.click()
+        ui.on_connection_state("offline", 1, 1, 1); app.processEvents()
+        win._connection_help.click()
         assert {url.split("/help/")[1].split("?")[0] for url in opened} == set(AGENT_HELP_SLUGS)
-        assert all(url.startswith("https://example.test/help/") and url.endswith("?src=agent") for url in opened)
+        assert all(url.startswith("https://example.test/help/") and url.split("#")[0].endswith("?src=agent") for url in opened)
     ''')
 
 

@@ -32,6 +32,15 @@ class ConsoleUI:
             f"{bar}\n"
         )
 
+    def on_pairing_state(self, state) -> None:
+        if state.kind in ("requesting", "unreachable", "expired"):
+            self.on_status({"requesting": "Getting your code...",
+                            "unreachable": "Can't reach sc2tools.com; retrying automatically",
+                            "expired": "This code expired; requesting a fresh code"}[state.kind])
+
+    def on_unlinked(self) -> None:
+        self.on_status("This PC was unlinked from your account; link it again to resume")
+
     def on_paired(self, user_id: str) -> None:
         print(f"[agent] paired userId={user_id}")
 
@@ -47,7 +56,8 @@ class ConsoleUI:
         print(f"[agent] uploaded {filename} ({self._uploaded} total)")
 
     def on_upload_failed(self, filename: str, reason: str) -> None:
-        print(f"[agent] upload failed for {filename}: {reason}")
+        title = reason if isinstance(reason, str) else reason.title
+        print(f"[agent] upload failed for {filename}: {title}")
 
     def on_pending(self, count: int) -> None:
         with self._lock:

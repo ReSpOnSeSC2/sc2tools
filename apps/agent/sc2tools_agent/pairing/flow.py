@@ -1,15 +1,10 @@
-"""Pairing-flow state machine.
-
-Stages:
-  1. NEW       — agent has never paired. Call /start to get a code.
-  2. SHOWING   — show the code to the user; poll /poll until it's claimed.
-  3. PAIRED    — token persisted to state.json; everything else uses it.
-  4. REVOKED   — server says the token is gone. Wipe and restart.
-"""
-
+"""Stoppable device pairing, including code renewal and outage recovery."""
 from __future__ import annotations
 
 import logging
+import platform
+import random
+import socket
 import threading
 import time
 from dataclasses import dataclass
@@ -17,15 +12,13 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Callable, Optional
 
+from .. import __version__
 from ..api_client import ApiClient
-from ..state import AgentState, save_state
 from ..config import AgentConfig
+from ..state import AgentState, save_state
 
 log = logging.getLogger(__name__)
-
-
 POLL_INTERVAL_SEC = 3.0
-POLL_TIMEOUT_SEC = 600.0
 
 
 class PairingStatus(str, Enum):
@@ -42,78 +35,111 @@ class PairingState:
     code_expires_at: Optional[datetime] = None
 
 
-def ensure_paired(
-    *,
-    cfg: AgentConfig,
-    state: AgentState,
-    api: ApiClient,
-    on_code: Callable[[str], None],
-    stop_event: threading.Event,
-) -> bool:
-    """Block until the agent is paired or the user cancels.
+@dataclass(frozen=True)
+class PairingUiState:
+    kind: str
+    code: str = ""
+    expires_at: Optional[datetime] = None
+    retry_in: float = 0
 
-    Returns True if pairing completed and the agent state was mutated
-    in place. Returns False if the user closed the agent before pairing
-    completed.
-    """
+
+class PairingControls:
+    def __init__(self) -> None:
+        self.retry_now = threading.Event()
+        self.new_code = threading.Event()
+
+    def request_new_code(self) -> None:
+        self.new_code.set()
+        self.retry_now.set()
+
+    def wait(self, seconds: float, stop_event: threading.Event) -> None:
+        deadline = time.monotonic() + seconds
+        while not stop_event.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or self.retry_now.wait(min(remaining, 0.1)):
+                self.retry_now.clear()
+                return
+
+
+def ensure_paired(*, cfg: AgentConfig, state: AgentState, api: ApiClient,
+                  on_code: Callable[[str], None], stop_event: threading.Event,
+                  on_state: Optional[Callable[[PairingUiState], None]] = None,
+                  controls: Optional[PairingControls] = None,
+                  now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+                  jitter: Callable[[float, float], float] = random.uniform) -> bool:
+    """Wait until paired or stopped. Network failures never close the app."""
     if state.is_paired:
         return True
-    code, expires_at = _request_code(api)
-    if code is None:
-        return False
-    on_code(code)
-    deadline = time.monotonic() + POLL_TIMEOUT_SEC
-    while not stop_event.is_set() and time.monotonic() < deadline:
+    controls = controls or PairingControls()
+    emit = on_state or (lambda _state: None)
+    code = ""
+    expires_at = None
+    failures = 0
+    while not stop_event.is_set():
+        refresh = controls.new_code.is_set()
+        controls.new_code.clear()
+        expiring = expires_at is not None and (expires_at - now()).total_seconds() < 60
+        if not code or refresh or expiring:
+            previous_expiry = expires_at
+            code = ""
+            emit(PairingUiState("requesting"))
+            try:
+                result = api.start_pairing()
+                code = result.get("code")
+                expires_at = _parse_iso(result.get("expiresAt"))
+                if not isinstance(code, str) or not code or expires_at is None or expires_at <= now():
+                    raise ValueError("pairing response has no current code")
+                failures = 0
+                on_code(code)
+                emit(PairingUiState("showing", code, expires_at))
+            except Exception as exc:
+                log.warning("pairing_start_failed: %s", exc)
+                code = ""
+                failures += 1
+                delay = min(60.0, 2 ** min(failures, 6)) * jitter(0.8, 1.0)
+                kind = "expired" if previous_expiry is not None else "unreachable"
+                emit(PairingUiState(kind, retry_in=delay))
+                controls.wait(delay, stop_event)
+                continue
         try:
             result = api.poll_pairing(code)
-        except Exception as exc:  # noqa: BLE001
+            if result.get("status") == "ready":
+                token, user_id = result.get("deviceToken"), result.get("userId")
+                if not token or not user_id:
+                    raise ValueError("pairing ready response has no token or account")
+                state.device_token, state.user_id = str(token), str(user_id)
+                state.paired_at = now().isoformat()
+                save_state(cfg.state_dir, state)
+                emit(PairingUiState("paired"))
+                return True
+            if result.get("status") == "expired":
+                code = ""
+                continue
+            failures = 0
+            emit(PairingUiState("showing", code, expires_at))
+            delay = POLL_INTERVAL_SEC
+        except Exception as exc:
             log.warning("pairing_poll_failed: %s", exc)
-            time.sleep(POLL_INTERVAL_SEC)
-            continue
-        status = result.get("status")
-        if status == "ready":
-            token = result.get("deviceToken")
-            user_id = result.get("userId")
-            if not token or not user_id:
-                log.error("pairing_ready_but_payload_invalid: %r", result)
-                return False
-            state.device_token = str(token)
-            state.user_id = str(user_id)
-            state.paired_at = datetime.now(timezone.utc).isoformat()
-            save_state(cfg.state_dir, state)
-            log.info("paired userId=%s", user_id)
-            return True
-        if status == "expired":
-            log.info("pairing_code_expired; restarting")
-            code, expires_at = _request_code(api)
-            if code is None:
-                return False
-            on_code(code)
-            continue
-        time.sleep(POLL_INTERVAL_SEC)
+            failures += 1
+            delay = min(60.0, 2 ** min(failures, 6)) * jitter(0.8, 1.0)
+            emit(PairingUiState("unreachable", retry_in=delay))
+        controls.wait(delay, stop_event)
     return False
 
 
-def _request_code(api: ApiClient) -> tuple[Optional[str], Optional[datetime]]:
+def pairing_metadata() -> dict:
     try:
-        result = api.start_pairing()
-    except Exception as exc:  # noqa: BLE001
-        log.error("pairing_start_failed: %s", exc)
-        return None, None
-    code = result.get("code")
-    expires_raw = result.get("expiresAt")
-    expires_at = _parse_iso(expires_raw) if isinstance(expires_raw, str) else None
-    if not isinstance(code, str) or not code:
-        log.error("pairing_start_returned_no_code: %r", result)
-        return None, None
-    log.info("pairing_code_issued len=%d", len(code))
-    return code, expires_at
+        hostname = socket.gethostname()
+    except OSError:
+        hostname = ""
+    return {"hostname": hostname, "os": platform.system(), "version": __version__}
 
 
-def _parse_iso(s: str) -> Optional[datetime]:
+def _parse_iso(value: object) -> Optional[datetime]:
+    if not isinstance(value, str):
+        return None
     try:
-        if s.endswith("Z"):
-            s = s[:-1] + "+00:00"
-        return datetime.fromisoformat(s)
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
     except ValueError:
         return None
