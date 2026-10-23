@@ -18,6 +18,27 @@ beforeEach(() => { api.call.mockReset(); api.refresh.mockReset(); api.success.mo
 afterEach(cleanup);
 
 describe("availability drafts and published bookings", () => {
+  it("blocks reversed or overlapping hours with inline errors, and permits touching windows after correction", () => {
+    render(<CoachSchedule data={payload()} localTimeZone="UTC" refresh={api.refresh} active />);
+    const start = screen.getByLabelText("Monday start time 1");
+    start.focus();
+    fireEvent.change(start, { target: { value: "11:00" } });
+    expect(document.activeElement).toBe(start);
+    expect(start.getAttribute("aria-invalid")).toBe("true");
+    expect(document.getElementById(start.getAttribute("aria-describedby")!)?.textContent).toBe("Ends before it starts.");
+    const publish = screen.getByRole("button", { name: "Publish availability" });
+    expect(publish.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("Fix the highlighted hours to publish")).toBeTruthy();
+    fireEvent.click(publish); expect(api.call).not.toHaveBeenCalled();
+    fireEvent.change(start, { target: { value: "09:00" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add hours" }));
+    expect(screen.getByLabelText("Monday end time 2").getAttribute("aria-invalid")).toBe("true");
+    expect(publish.hasAttribute("disabled")).toBe(true);
+    fireEvent.change(screen.getByLabelText("Monday start time 2"), { target: { value: "10:00" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(publish.hasAttribute("disabled")).toBe(false);
+  });
+
   it("keeps booked times in the saved zone while editing, and Reset clears the draft and unload guard", () => {
     const dirty = vi.fn(); render(<CoachSchedule data={payload()} localTimeZone="UTC" refresh={api.refresh} active onDirtyChange={dirty} />);
     const bookings = screen.getByRole("heading", { name: "Upcoming sessions" }).closest("section")!;
