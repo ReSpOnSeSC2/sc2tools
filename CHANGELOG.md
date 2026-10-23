@@ -16,6 +16,13 @@ corresponding GitHub Release.
 - Practice plans show inline field errors, focus the first field to fix, remember each student's time zone and summarize the actual target before assignment. Failed saves retain the draft for Retry.
 - Weekly availability highlights reversed or overlapping hours and prevents publication until they are corrected. Touching windows remain valid.
 
+### Game workspace and shared clock
+
+- On phones and tablets, replay player names sit above their stats so supply, workers and the clock stay readable without overlapping. Upgrade chips wait for recorded research completion.
+
+- The game page includes the complete macro report, priced leaks and Recompute analysis, with section links that keep the replay mounted. Bank joins the chart metrics, and this browser remembers your selection.
+- Supply blocks, loss causes, macro moments and build steps seek one replay clock. Playback follows through the chart and current build step; timestamp links, completed upgrades and measured banked resources give each moment context.
+
 ### Shared game analysis
 
 - Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.

@@ -1,6 +1,6 @@
 # Wave 3 coaching forms
 
-Implements `reviews-coaching-polish-6` from `plan/final-plan.json`, including its folded `practice-form-validation` audit. Base: main `441582d0`.
+Implements `reviews-coaching-polish-6` from `plan/final-plan.json`, including its folded `practice-form-validation` audit. Started from main `441582d0`; integrated shipped main `3dfdce13` (#693, shared clock and phone HUD). The only integration conflict was CHANGELOG; both entries were retained.
 
 ## Behavior
 
