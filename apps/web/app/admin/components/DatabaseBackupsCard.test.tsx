@@ -197,6 +197,15 @@ describe("DatabaseBackupsCard details", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
     expect(mutate).toHaveBeenCalledTimes(1);
   });
+
+  it("treats an answer that isn't the backups contract as a failure, with Retry", () => {
+    const mutate = vi.fn();
+    renderCard({ mongo: { ok: true } }, { mutate });
+    expect(screen.getByText("Backup status couldn't load")).toBeTruthy();
+    expect(screen.getByRole("alert")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("backup card helpers", () => {

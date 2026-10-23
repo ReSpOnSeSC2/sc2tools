@@ -1,11 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { DatabaseBackup, RefreshCw } from "lucide-react";
 
 import { HelpLink } from "@/components/help/HelpLink";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { QueryState } from "@/components/ui/QueryState";
 import { useApi } from "@/lib/clientApi";
 import { formatBytes, timeSince } from "./format";
 import type {
@@ -20,6 +19,11 @@ import type {
 /** Where the restore steps live (repo doc; admins read it on GitHub). */
 const RUNBOOK_PATH = "docs/runbooks/restore-database.md";
 const DEFAULT_THRESHOLDS = { freshMaxHours: 26, agingMaxHours: 50 } as const;
+/** Shown, with Retry, when the API answered with something else. */
+const UNEXPECTED_ANSWER = {
+  status: -1,
+  message: "The backup status answer wasn't in the expected format.",
+} as const;
 
 export type BackupTone = "ok" | "warning" | "error" | "neutral";
 
@@ -53,22 +57,27 @@ export function DatabaseBackupsCard() {
         {data ? <FreshnessBadge atlas={data.atlas} /> : null}
       </div>
 
-      {request.isLoading && !data ? (
-        <div
-          className="h-56 animate-pulse rounded-xl bg-bg-elevated"
-          role="status"
-          aria-busy="true"
-        >
-          <span className="sr-only">Loading backup status…</span>
-        </div>
-      ) : data ? (
-        <BackupsBody data={data} />
-      ) : (
-        <LoadFailed
-          retrying={Boolean(request.isValidating)}
-          onRetry={() => void request.mutate()}
-        />
-      )}
+      <QueryState
+        q={{
+          data: data ?? undefined,
+          // An answer that isn't the backups contract (an older API, a
+          // proxy error page) is a failure too, never an empty card.
+          error: request.error ?? (request.data !== undefined && !data ? UNEXPECTED_ANSWER : undefined),
+          mutate: () => request.mutate(),
+        }}
+        skeleton={
+          <div
+            className="h-56 rounded-xl bg-bg-elevated motion-safe:animate-pulse"
+            role="status"
+            aria-busy="true"
+          >
+            <span className="sr-only">Loading backup status…</span>
+          </div>
+        }
+        errorTitle="Backup status couldn't load"
+      >
+        {(backups) => <BackupsBody data={backups} />}
+      </QueryState>
     </section>
   );
 }
@@ -251,33 +260,6 @@ function FreshnessBadge({ atlas }: { atlas: AtlasBackupStatus }) {
       <span className={`h-1.5 w-1.5 rounded-full ${TONE_DOT[tone]}`} aria-hidden />
       {freshnessLabel(atlas)}
     </span>
-  );
-}
-
-function LoadFailed({ retrying, onRetry }: { retrying: boolean; onRetry: () => void }) {
-  return (
-    <Card padded>
-      <div role="alert" className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-start gap-3">
-          <DatabaseBackup className="mt-0.5 h-5 w-5 flex-none text-warning" aria-hidden />
-          <div className="space-y-0.5">
-            <p className="font-semibold text-text">Backup status couldn&apos;t load</p>
-            <p className="text-body text-text-muted">
-              Nothing about the backups is known from this page right now.
-            </p>
-          </div>
-        </div>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onRetry}
-          loading={retrying}
-          iconLeft={<RefreshCw className="h-4 w-4" aria-hidden />}
-        >
-          Retry
-        </Button>
-      </div>
-    </Card>
   );
 }
 
