@@ -88,7 +88,7 @@ describe("weekly settlement", () => {
     await waitFor(() => expect(settleStockMarket).toHaveBeenCalledWith("2026-W38", 15));
     expect(apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/arcade/leaderboard", {
       method: "POST",
-      body: JSON.stringify({ weekKey: "2026-W38", pnlPct: 15, displayName: "Tester" }),
+      body: JSON.stringify({ weekKey: "2026-W38", pnlPct: 15, settled: true, displayName: "Tester" }),
     });
   });
 

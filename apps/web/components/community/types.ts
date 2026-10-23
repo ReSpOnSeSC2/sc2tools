@@ -50,7 +50,7 @@ export const COMMUNITY_SORTS: ReadonlyArray<{
   {
     value: "controversial",
     label: "Controversial",
-    hint: "High engagement, divided votes",
+    hint: "Close split of up and down votes (4+ votes)",
   },
 ];
 
