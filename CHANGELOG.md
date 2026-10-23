@@ -15,6 +15,12 @@ corresponding GitHub Release.
 
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
 
+### Setup health and replay imports
+
+- Settings checks profile, desktop connection, updates, games and replay archive independently, with source-specific Retry and safe diagnostics for support.
+- Desktop import controls and the last ten jobs are available to every signed-in user. Browser import keeps its account flag; offline PCs cannot receive start commands.
+- Pair from the dashboard checklist, see setup progress, undo dismissal for five seconds, or restore the checklist from Settings.
+
 - Share one authenticated realtime connection across user and admin surfaces; count newly inserted games accurately, coalesce chart refreshes during imports, and show admin connection recovery status.
 
 ### Build editor safety

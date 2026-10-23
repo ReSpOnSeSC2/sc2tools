@@ -43,13 +43,13 @@ const article: HelpArticle = {
       type: "table",
       head: ["Tab", "What it's for"],
       rows: [
-        ["Foundation", "Your account at a glance (email, games synced, desktop app version) and quick links to Devices, Download and your build library."],
+        ["Foundation", "Setup health checks for your profile, desktop app, updates, games, overlay and replay archive. Copy your cloud user ID or safe diagnostics for support."],
         ["Profile", "Your BattleTag, SC2Pulse IDs and display name, so your games and opponents are matched to you."],
         ["Overlay", "OBS widget URLs, overlay tokens and themes, the Ghost Build coach, multi-platform chat, the chat bot and your connected Twitch, Kick and YouTube accounts."],
         ["Randomizer", "Which builds the build randomizer picks from, and its sound effects."],
         ["Build check-in", "When the desktop app asks which build you were going for."],
         ["Voice", "The scouting report read aloud through your overlay."],
-        ["Import", "Analyze replays in your browser without the desktop app. Only shown when browser import is on for your account."],
+        ["Import", "Start or scan desktop replay imports, pick a folder on your PC, and inspect recent import jobs. Browser import also appears when it is enabled for your account."],
         ["Backups & data", "Snapshots, deleting your game history, and exporting or deleting your account."],
         ["Misc", "The page SC2 Tools opens on, running setup again, and analytics cookies for this browser."],
         ["Help", "These help articles, with search."],
@@ -76,12 +76,13 @@ const article: HelpArticle = {
       items: [
         "**Default tab** picks where the dashboard opens. It only applies when you first open the dashboard in a browser session. **Today (default)** opens on Today; choose a section such as Opponents or Maps to land there instead. Clicking **Today** after that always shows Today.",
         "**Run setup again** reopens the setup guide: download the desktop app, pair it and import your replays. Your games and settings stay as they are.",
+        "**Show the setup checklist again** restores a hidden checklist on your dashboard, keeping your other setup preferences. Dismissing it on the dashboard offers Undo for five seconds.",
         "**Analytics cookies** shows whether Google Analytics is on in this browser. Press **Turn on** or **Turn off** to change it; it takes effect right away. The choice only applies to the browser you're using, the same as the cookie banner.",
       ],
     },
     { type: "settingsLink", label: "Open Settings", href: "/settings" },
   ],
-  related: ["getting-started", "how-to-use-help", "obs-overlay-setup"],
+  related: ["getting-started", "setup-health", "importing-replay-history", "how-to-use-help", "obs-overlay-setup"],
 };
 
 export default article;
