@@ -16,6 +16,7 @@ const harness = vi.hoisted(() => ({
   gameError: null as unknown,
   retryGame: vi.fn(),
   dossierError: null as { status: number; message: string; requestId?: string } | null,
+  dossierLoading: false,
   retryDossier: vi.fn(),
 }));
 
@@ -56,7 +57,7 @@ vi.mock("@/lib/clientApi", () => ({
     return {
       data: path ? harness.data ?? undefined : undefined,
       error: harness.dossierError,
-      isLoading: false,
+      isLoading: harness.dossierLoading,
       mutate: harness.retryDossier,
     };
   },
@@ -131,6 +132,7 @@ beforeEach(() => {
   harness.transitionError = null;
   harness.gameError = null;
   harness.dossierError = null;
+  harness.dossierLoading = false;
   harness.sampleIds = ["shared-replay"];
   harness.compositions = compositionPayload();
   harness.data = {
@@ -291,6 +293,20 @@ describe("BuildDossier check-in counts", () => {
 });
 
 describe("BuildDossier load errors", () => {
+  it("keeps the error panel and focused Retry mounted while revalidating", () => {
+    harness.data = null;
+    harness.dossierError = { status: 500, message: "Still unavailable." };
+    const view = render(<BuildDossier apiPath="/v1/custom-builds/dt-rush/matches" showMacro={false} />);
+    const alert = screen.getByRole("alert");
+    const retry = screen.getByRole("button", { name: "Retry" });
+    retry.focus();
+    harness.dossierLoading = true;
+    view.rerender(<BuildDossier apiPath="/v1/custom-builds/dt-rush/matches" showMacro={false} />);
+    expect(screen.getByRole("alert")).toBe(alert);
+    expect(screen.getByRole("button", { name: "Retry" })).toBe(retry);
+    expect(document.activeElement).toBe(retry);
+  });
+
   it("a failed load shows Retry (calling the dossier's mutate) and a copyable error ID", async () => {
     harness.data = null;
     harness.dossierError = { status: 500, message: "The server had a problem.", requestId: "req-fixture-9" };

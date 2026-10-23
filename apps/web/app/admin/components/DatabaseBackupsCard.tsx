@@ -29,8 +29,8 @@ export type BackupTone = "ok" | "warning" | "error" | "neutral";
 
 /**
  * Admin Health "Database backups" card: how old the newest Atlas Cloud
- * Backup snapshot is (green under 26 h, amber under 50 h, red after that
- * or when there is none), the schedule and retention, point-in-time
+ * Backup snapshot is (using freshness bands from its configured schedule,
+ * or fallback bands if unavailable), retention, point-in-time
  * restore, and the snapshots users take in Settings → Backups.
  *
  * Reads GET /v1/admin/backups every five minutes; the API caches Atlas for
@@ -331,6 +331,13 @@ export function atlasNotice(
         "Atlas backup status isn't connected. Add the ATLAS_* service-account settings in Render; the account only needs the Project Read Only role.",
     };
   }
+  if (atlas.errorCode === "atlas_backup_auth_failed") {
+    return {
+      tone: "warning",
+      text:
+        "Atlas couldn't authenticate the backup check. Check the ATLAS_* service-account credentials in Render and rotate an expired or revoked secret. The displayed snapshot, if any, is the last good result.",
+    };
+  }
   if (atlas.errorCode === "atlas_backup_forbidden" && !atlas.available) {
     return {
       tone: "warning",
@@ -373,7 +380,7 @@ export function atlasNotice(
   if (atlas.freshness === "aging") {
     return {
       tone: "warning",
-      text: "The newest snapshot is late. Atlas usually takes one a day; if the next one doesn't land, check Backup in Atlas.",
+      text: "The newest snapshot is late for the schedule shown below. Check the cluster's Backup page in Atlas for a delayed or paused run.",
     };
   }
   return null;

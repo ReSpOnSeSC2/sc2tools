@@ -61,13 +61,12 @@ export interface BuildDetailViewProps {
  *
  * Auth is settled first: while signed out useApi has no key, so the
  * build request never starts and the skeleton below would never clear.
- * Nothing renders until Clerk loads; a signed-out visitor is asked to
- * sign in and comes back to this build afterwards.
+ * While Clerk loads, the page explains that custom builds need an account.
+ * A signed-out visitor is asked to sign in and comes back here afterwards.
  */
 export function BuildDetailView(props: BuildDetailViewProps) {
   const { isLoaded, isSignedIn } = useAuth();
-  if (!isLoaded) return null;
-  if (!isSignedIn) return <BuildSignInPrompt slug={props.slug} />;
+  if (!isLoaded || !isSignedIn) return <BuildSignInPrompt slug={props.slug} />;
   return <BuildDetailInner {...props} />;
 }
 

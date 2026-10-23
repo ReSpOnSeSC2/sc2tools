@@ -26,8 +26,8 @@ import { ofLastGames, phaseLine } from "../scoutingCopy";
  *   5. Optional "YOUR BEST ANSWER", "CHEESE" and "GAMES USUALLY END"
  *      rows (kept compact for the bottom of the card so the LAST GAMES
  *      list dominates). The last one is the cloud's phase forecast
- *      (``opponentPhases``) in a single line: "Mid/Late game · Carrier,
- *      Tempest".
+ *      (``opponentPhases``) in a single line: "Mid/Late game · Your army:
+ *      Carrier, Tempest".
  *
  * Sized 600px wide on the bottom-center slot — matches the screenshot
  * the streamer uses on stream and leaves the top of the screen free for

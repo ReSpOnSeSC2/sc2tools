@@ -187,9 +187,11 @@ describe("BuildDetailView signed out", () => {
     expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
   });
 
-  it("renders nothing until Clerk has loaded", () => {
+  it("explains the private build and offers a public way out while Clerk loads", () => {
     harness.isLoaded = false;
     const { container } = render(<BuildDetailView slug="proxy-gate" />);
-    expect(container.innerHTML).toBe("");
+    expect(screen.getByRole("heading", { name: "Sign in to open this build" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Browse community builds" })).toBeTruthy();
+    expect(container.querySelector(".animate-pulse")).toBeNull();
   });
 });

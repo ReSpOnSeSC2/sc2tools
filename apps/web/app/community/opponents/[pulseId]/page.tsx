@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/Stat";
+import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import { pct1, wrColor } from "@/lib/format";
 import { raceIconName } from "@/lib/race";
 import { getJsonWithStatus } from "@/lib/serverApi";
@@ -26,7 +27,7 @@ import {
  *
  *   - API 404 (fewer than the minimum number of players): a real 404,
  *     noindex. The page never hints at what is below the floor.
- *   - API unreachable or 5xx: thrown to the error boundary, noindex,
+ *   - API unreachable or 5xx: recoverable outage panel, noindex,
  *     so an outage never reads as "not enough data".
  *   - Otherwise the aggregate, indexable. Every win/loss is from the
  *     opponent's side, and the title names the race and the SC2Pulse
@@ -68,8 +69,13 @@ export default async function CommunityOpponentPage({ params }: PageProps) {
   const { data, status } = await loadOpponent(pulseId);
   if (status === 404 || (data && !meetsPlayerFloor(data))) notFound();
   if (!data) {
-    // The error boundary offers Try again; the metadata above is noindex.
-    throw new Error("community_opponent_unavailable");
+    return (
+      <CommunityUnavailable
+        title="This opponent profile is temporarily unavailable"
+        retryHref={`/community/opponents/${encodeURIComponent(pulseId)}`}
+        standalone
+      />
+    );
   }
 
   const race = opponentRace(data.race);

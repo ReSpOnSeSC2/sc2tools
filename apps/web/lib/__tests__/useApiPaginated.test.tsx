@@ -102,6 +102,24 @@ describe("useApiPaginated account changes", () => {
 });
 
 describe("useApiPaginated failures", () => {
+  it("retains the error during Retry so the focused recovery panel stays mounted", async () => {
+    const retry = deferred<Response>();
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockReturnValueOnce(retry.promise);
+    vi.stubGlobal("fetch", fetchMock);
+    const view = renderHook(() => useApiPaginated<{ id: string }>("/v1/opponents", 1));
+    await waitFor(() => expect(view.result.current.error).not.toBeNull());
+    const originalError = view.result.current.error;
+    act(() => view.result.current.mutate());
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(view.result.current.isLoading).toBe(true);
+    expect(view.result.current.error).toBe(originalError);
+    await act(async () => retry.resolve(pageResponse([{ id: "o-1" }])));
+    await waitFor(() => expect(view.result.current.error).toBeNull());
+    expect(view.result.current.items).toEqual([{ id: "o-1" }]);
+  });
+
   it("reports the API's error envelope, never its raw body, and retries on mutate", async () => {
     const fetchMock = vi
       .fn()

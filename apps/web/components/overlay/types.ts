@@ -342,7 +342,7 @@ export interface PerGameScoutingEnvelope {
 }
 
 /**
- * Single late-game composition summary for the scouting card. The
+ * The streamer's own late-game composition summary for the scouting card. The
  * ``units`` array carries unit tokens (e.g. ``["Carrier", "Tempest",
  * "Mothership"]``) in the order the cloud's per-phase signature
  * aggregator returned them — top-3 non-worker tokens active at the
@@ -355,7 +355,8 @@ export interface TypicalLateComp {
 }
 
 /**
- * Phase forecast attached to the scouting widget's pre-game payload.
+ * Phase forecast from the streamer's perspective in games against this
+ * opponent, attached to the scouting widget's pre-game payload.
  * ``trajectory`` mirrors ``PhaseTrajectoryStripProps`` from
  * ``@/components/analyzer/PhaseTrajectoryStrip`` (re-stated as a
  * structural type here so this file stays import-free of the

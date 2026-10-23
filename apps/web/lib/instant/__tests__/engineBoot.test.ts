@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { Blob as NodeBlob } from "node:buffer";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -281,7 +283,7 @@ function useBootGlobals(): void {
   beforeEach(() => {
     objectUrls.clear();
     revoked.length = 0;
-    // jsdom has neither URL.createObjectURL nor Blob#text; Node's Blob has both.
+    // Keep the real Blob bytes and deterministic object URLs for module checks.
     vi.stubGlobal("Blob", NodeBlob);
     vi.stubGlobal("importScripts", vi.fn());
     Object.defineProperty(URL, "createObjectURL", {

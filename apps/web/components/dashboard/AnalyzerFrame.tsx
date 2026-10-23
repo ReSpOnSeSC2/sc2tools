@@ -132,10 +132,10 @@ export function AnalyzerFrame({
 
             {browserImportEnabled ? <FolderSyncAutoRunner /> : null}
 
-            <div className="rounded-xl border-2 border-line bg-bg-surface px-3 py-3 shadow-hard sm:py-2">
+            {!isArcade ? <div className="rounded-xl border-2 border-line bg-bg-surface px-3 py-3 shadow-hard sm:py-2">
               <FilterBar />
               <ActiveFilterChips className="mt-3 border-t border-border pt-3 sm:mt-2 sm:pt-2" />
-            </div>
+            </div> : null}
 
             {view.checklist ? (
               <OnboardingChecklist

@@ -328,6 +328,17 @@ class AggregationsService {
     const f = { ...(filters || {}) };
     delete f.race;
     delete f.groupByRacePlayed;
+    const work = () => this._randomSummaryOnce(userId, f);
+    // MatchupPicker needs only the all-history race metadata. Share/cache that
+    // result for one minute across tabs; filtered race charts still read fresh.
+    const parts = ["randomSummary", userId, f];
+    return Object.keys(f).length === 0
+      ? this.trendsRequests.cached(parts, work, 60000)
+      : this.trendsRequests.run(parts, work);
+  }
+
+  /** @private @param {string} userId @param {object} f */
+  async _randomSummaryOnce(userId, f) {
     const match = gamesMatchStage(userId, f);
     const rows = await this.db.games
       .aggregate([

@@ -54,7 +54,7 @@ const article: HelpArticle = {
         ],
         [
           "Scouting report",
-          "Head-to-head, last games, your notes, best answer, cheese, and where games against them usually end, like \"Mid/Late game · Carrier, Tempest\".",
+          "Head-to-head, last games, your notes, best answer, cheese, and where games against them usually end, like \"Mid/Late game · Your army: Carrier, Tempest\".",
           "An identified opponent. The \"Games usually end\" line needs 3 games with full replay detail.",
         ],
       ],

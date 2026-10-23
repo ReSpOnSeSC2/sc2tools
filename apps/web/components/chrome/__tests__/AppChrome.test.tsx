@@ -308,6 +308,18 @@ describe("AppChrome mobile navigation", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
   });
+
+  it.each(["Stream Studio", "Settings", "Search help"])("dismisses More on %s even when the pathname does not change", (name) => {
+    harness.pathname = "/settings";
+    render(<AppChrome>content</AppChrome>);
+    fireEvent.click(screen.getByRole("button", { name: /More/ }));
+    expect(document.body.style.overflow).toBe("hidden");
+    const link = within(screen.getByRole("dialog", { name: "More sections" })).getByRole("link", { name });
+    link.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    fireEvent.click(link);
+    expect(screen.queryByRole("dialog", { name: "More sections" })).toBeNull();
+    expect(document.body.style.overflow).not.toBe("hidden");
+  });
 });
 
 describe("AppChrome for signed-out visitors", () => {

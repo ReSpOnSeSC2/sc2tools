@@ -169,7 +169,7 @@ async function listBuildPage(collection, games, userId, raw, projection) {
   pageStages.push({ $sort: { _pageOrder: direction, slug: 1 } }, { $limit: opts.limit + 1 });
   if (opts.view === "summary") pageStages.push({ $project: {
     _id: 0, slug: 1, name: 1, race: 1, vsRace: 1, perspective: 1,
-    updatedAt: 1, description: 1, sourceGameId: 1, _pageOrder: 1,
+    updatedAt: 1, description: 1, sourceGameId: 1, "forkedFrom.communitySlug": 1, _pageOrder: 1,
   } });
   const libraryCount = collection.countDocuments(match);
   const filteredCount = conditions.length === 0 && !opts.hideEmpty

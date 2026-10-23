@@ -31,9 +31,9 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "Press the **?** (Help & support) button in the top bar, then **Report a problem** or **Suggest a feature**.",
-        "On a phone, tap **More** in the bottom bar and scroll down to **Help & support**.",
-        "Your avatar menu has **Report a problem** too, and so do **Settings → Help** and the end of every help article.",
+        "Inside the app on desktop, press **Help & support** (the life-buoy icon) in the top bar, then **Report a problem** or **Suggest a feature**.",
+        "Inside the app on a phone, tap **More** in the bottom bar and scroll down to **Help & support**.",
+        "Inside the app, your avatar menu has **Report a problem** too, and so does **Settings → Help**. On a help page, use **Report a problem** at the end of the article.",
         "If a page breaks, the error screen has a **Report this problem** button. It fills in the page and the error reference for you.",
       ],
     },

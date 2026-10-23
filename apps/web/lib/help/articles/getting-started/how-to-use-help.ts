@@ -45,7 +45,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Still stuck?" },
     {
       type: "paragraph",
-      text: "Help pages end with our support email, and with a **Report a problem** button when you're signed in. Inside the app, the **?** button in the top bar has it too. Tell us what you clicked and add a screenshot if you can; see [Report a problem or suggest a feature](/help/report-a-problem) for what else goes with a report.",
+      text: "Help pages end with our support email, and with a **Report a problem** button when you're signed in. Inside the app, open **Help & support** (the life-buoy icon in the desktop top bar; **More → Help & support** on a phone). Tell us what you clicked and add a screenshot if you can; see [Report a problem or suggest a feature](/help/report-a-problem) for what else goes with a report.",
     },
   ],
   related: ["getting-started", "troubleshooting-and-support", "report-a-problem"],

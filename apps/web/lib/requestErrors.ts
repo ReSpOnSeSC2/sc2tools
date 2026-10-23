@@ -117,7 +117,7 @@ export function isNotFoundError(error: unknown): boolean {
 const COPY: Record<Exclude<RequestErrorKind, "other">, RequestErrorCopy> = {
   network: {
     title: "Can't reach SC2 Tools",
-    body: "Check your connection. If you're online, the server may be waking up, which takes about 30 seconds.",
+    body: "Check your connection. If you're online, the server may be restarting or being updated. Try again in a moment.",
   },
   timeout: {
     title: "This took too long to load",

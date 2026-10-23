@@ -39,7 +39,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Already saved this build? The community page shows **In your library — Open** instead of saving it again, so you never end up with duplicates by accident. Use **Save another copy** when you want a second one to experiment with. Deleting your copy brings the Save button back.",
+      text: "Copies saved since this update are recognised on the community page as **In your library — Open**. Copies saved before this update may not be recognised, so check your library before saving again. Use **Save another copy** when you want a second one to experiment with. Deleting a recognised copy brings the Save button back.",
     },
     { type: "heading", text: "Reading a community build" },
     {

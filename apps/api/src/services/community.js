@@ -1498,7 +1498,7 @@ class CommunityService {
         pulseId,
         pulseCharacterId: { $type: "string", $ne: "" },
       },
-      { projection: { pulseCharacterId: 1 } },
+      { projection: { _id: 0, pulseCharacterId: 1 } },
     );
     const pulseCharacterId = charIdRow && typeof charIdRow.pulseCharacterId === "string"
       ? charIdRow.pulseCharacterId

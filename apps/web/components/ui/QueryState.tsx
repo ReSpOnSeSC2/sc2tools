@@ -81,6 +81,7 @@ export interface QueryStateProps<T> {
  */
 export function hasQueryData<T>(q: QueryLike<T>): q is QueryLike<T> & { data: T } {
   if (q.data === undefined) return false;
+  if (q.isPreviousData && Array.isArray(q.data) && q.data.length === 0) return false;
   return !(q.error && q.isPreviousData);
 }
 
@@ -96,7 +97,11 @@ export function QueryState<T>({
   children,
 }: QueryStateProps<T>) {
   if (hasQueryData(q)) {
-    if (empty !== undefined && isEmpty?.(q.data)) return <>{empty}</>;
+    // An empty answer from the previous filters says nothing about this
+    // request. Keep a loading state until its own answer arrives.
+    if (empty !== undefined && isEmpty?.(q.data)) {
+      return <>{q.isPreviousData ? skeleton : empty}</>;
+    }
     return <>{children ? children(q.data, { isPreviousData: Boolean(q.isPreviousData) }) : null}</>;
   }
   if (q.error) {

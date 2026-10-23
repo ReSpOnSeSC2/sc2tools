@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "analyzer-filters",
   title: "Filters: date, matchup, region and more",
   summary:
-    "The filter bar at the top of the analyzer decides which of your games every section counts. See the defaults, pick a matchup, and find and clear every active filter.",
+    "The filter bar at the top of the analyzer decides which of your games filtered views count. See the defaults, pick a matchup, and find and clear every active filter.",
   category: "analyzer",
   audience: "player",
   signedInOnly: true,
@@ -41,7 +41,7 @@ const article: HelpArticle = {
   body: [
     {
       type: "paragraph",
-      text: "The filter bar sits at the top of the analyzer. Today, Opponents and each opponent's page, Strategies, Trends, Macro, Maps, Builds and Replays all count only the games it lets through, so switching sections never changes which games you are looking at. The page for a single game ignores filters.",
+      text: "The filter bar sits at the top of the analyzer. Opponents and each opponent's page, Strategies, Trends, Macro, Maps, Builds and Replays use these filters. Today includes cards with their own scope, listed below. Arcade and the page for a single game ignore the filter bar.",
     },
     { type: "heading", text: "The defaults" },
     {
@@ -69,7 +69,7 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "In the filter bar, find **Matchup** and choose **vs P**, **vs T** or **vs Z**. Every section now counts only games against that race.",
+        "In the filter bar, find **Matchup** and choose **vs P**, **vs T** or **vs Z**. Filtered views now count only games against that race.",
         "If you play more than one race, use **My race** next to it to pick yours, for example Zerg and vs P for ZvP.",
         "Choose **All** to see every matchup again.",
       ],
@@ -81,7 +81,7 @@ const article: HelpArticle = {
     { type: "heading", text: "See and clear active filters" },
     {
       type: "paragraph",
-      text: "Whenever a filter differs from the defaults, the **Active filters** row under the filter bar shows it as a chip, such as *Opponent race: Zerg* or *Regions: NA, EU*. Nothing else narrows your games, so if a number looks too low, check this row first.",
+      text: "Whenever a filter differs from the defaults, the **Active filters** row under the filter bar shows it as a chip, such as *Opponent race: Zerg* or *Regions: NA, EU*. Views may also have their own search or Min games control. If a number looks too low, check both this row and the controls beside that view.",
     },
     {
       type: "list",
@@ -93,8 +93,8 @@ const article: HelpArticle = {
     {
       type: "callout",
       tone: "warning",
-      title: "Filters picked in Strategies apply everywhere",
-      text: "When you pick **My build** or **Opp strategy** in Strategies, that filter applies to every section (Today, Opponents, Trends, Maps, Builds and the rest) until you clear it. Its chip says *set in Strategies*. These two reset when you reload the page; everything else in the filter bar is remembered.",
+      title: "Filters picked in Strategies follow you across filtered views",
+      text: "When you pick **My build** or **Opp strategy** in Strategies, that filter applies to filtered analyzer views (including Games in range, Opponents, Trends, Maps and Builds) until you clear it. Its chip says *set in Strategies*. These two reset when you reload the page; everything else in the filter bar is remembered.",
     },
     { type: "heading", text: "On a phone" },
     {
@@ -109,6 +109,7 @@ const article: HelpArticle = {
         "**Win rate** on Today has its own timeframe: pick it from the menu next to its title. It ignores the date range, region, matchup and Strategies picks, and keeps the Maps, Players, Length and Hide too-short filters.",
         "**Games today** and **Active streak** look at today and your latest games, with the same Maps, Players, Length and Hide too-short filters.",
         "**MMR** shows your current ladder rating and ignores filters.",
+        "**Daily Pulse** and **Ladder Pulse** use their own recent-game windows and ignore the global filters. **Arcade** also uses its own analysis corpus, without the filter bar.",
       ],
     },
     { type: "settingsLink", label: "Open Strategies", href: "/app/strategies" },

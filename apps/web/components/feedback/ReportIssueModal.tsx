@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { CheckCircle2 } from "lucide-react";
 
@@ -134,6 +134,7 @@ export function ReportIssueModal({ open, onClose, prefill }: ReportIssueModalPro
   const subjectRef = useRef<HTMLInputElement>(null);
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const thanksRef = useRef<HTMLParagraphElement>(null);
+  const focusSubjectAfterReset = useRef(false);
 
   // Read when the form opens, so a parent re-render never resets what
   // the user has typed.
@@ -177,6 +178,10 @@ export function ReportIssueModal({ open, onClose, prefill }: ReportIssueModalPro
 
   useEffect(() => {
     if (status === "sent") thanksRef.current?.focus();
+    if (status === "idle" && focusSubjectAfterReset.current) {
+      focusSubjectAfterReset.current = false;
+      subjectRef.current?.focus();
+    }
   }, [status]);
 
   const context = useMemo(
@@ -232,6 +237,7 @@ export function ReportIssueModal({ open, onClose, prefill }: ReportIssueModalPro
   }
 
   function sendAnother() {
+    focusSubjectAfterReset.current = true;
     setSubject("");
     setMessage("");
     setError(null);
@@ -242,21 +248,21 @@ export function ReportIssueModal({ open, onClose, prefill }: ReportIssueModalPro
 
   const footer =
     status === "sent" ? (
-      <>
+      <Fragment key="sent">
         <Button variant="secondary" onClick={sendAnother}>
           Send another
         </Button>
         <Button onClick={onClose}>Close</Button>
-      </>
+      </Fragment>
     ) : (
-      <>
+      <Fragment key="form">
         <Button variant="secondary" onClick={onClose} disabled={sending}>
           Cancel
         </Button>
         <Button type="submit" form={formId} loading={sending} disabled={!canSubmit}>
           {sending ? "Sending…" : copy.send}
         </Button>
-      </>
+      </Fragment>
     );
 
   return (

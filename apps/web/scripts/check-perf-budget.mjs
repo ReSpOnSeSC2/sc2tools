@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * check-perf-budget — fails when a route's first-load JavaScript grows
  * past its budget in perf-budget.json.

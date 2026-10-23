@@ -3,13 +3,45 @@
 const MAX_PENDING = 256;
 const MAX_JOIN_AGE_MS = 30000;
 
-/** Share only work that is currently running on one service instance. Completed
- * responses are never cached: the next request reads newly uploaded/edited games.
+/** Share work that is currently running on one service instance. Completed
+ * responses are cached only when explicitly requested for lightweight metadata.
  * Keys include the method, authenticated user, filters, and all chart options. */
 class TrendsRequests {
   constructor() {
     /** @type {Map<string, {startedAt: number, promise: Promise<any>}>} */
     this.pending = new Map();
+    /** @type {Map<string, {expiresAt: number, sequence: number, value: any}>} */
+    this.completed = new Map();
+    this.cacheSequence = 0;
+  }
+
+  /** Optional short cache for metadata shared between browser tabs. Normal
+   * chart requests keep using run(), which always reads fresh completed data.
+   * @template T @param {unknown[]} parts @param {() => Promise<T>} work
+   * @param {number} ttlMs @returns {Promise<T>} */
+  cached(parts, work, ttlMs) {
+    const key = requestKey(parts);
+    if (key === null) return this.run(parts, work);
+    const now = Date.now();
+    for (const [oldKey, entry] of this.completed) {
+      if (entry.expiresAt <= now) this.completed.delete(oldKey);
+    }
+    const previous = this.completed.get(key);
+    if (previous) return Promise.resolve(cloneResult(previous.value));
+    return this.run(parts, async () => {
+      const sequence = ++this.cacheSequence;
+      const value = await work();
+      // An aged request may finish after its replacement. Keep the newer answer.
+      if ((this.completed.get(key)?.sequence ?? 0) > sequence) return value;
+      this.completed.delete(key);
+      while (this.completed.size >= MAX_PENDING) {
+        const oldest = this.completed.keys().next().value;
+        if (oldest === undefined) break;
+        this.completed.delete(oldest);
+      }
+      this.completed.set(key, { expiresAt: Date.now() + ttlMs, sequence, value: cloneResult(value) });
+      return value;
+    });
   }
 
   /** @template T

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Plus, Library, BookOpen, RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
@@ -14,16 +15,19 @@ import { apiCall, useApi } from "@/lib/clientApi";
 import { Skeleton } from "@/components/ui/Card";
 import { coerceRace } from "@/lib/race";
 import { BuildCard } from "./BuildCard";
-import { BuildDossierModal } from "./BuildDossierModal";
-import { BuildEditorSheet } from "./BuildEditorSheet";
-import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildFilterBar, type BuildFilterState } from "./BuildFilterBar";
-import { BuildPublishModal } from "./BuildPublishModal";
 import { BuildPagination } from "./BuildPagination";
 import { BuildsPublicIntro } from "./BuildsPublicIntro";
 import { useCustomBuildPage } from "./useCustomBuildPage";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
 import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
+
+// Editors and charts are only needed after a library action. Keep them out
+// of the route's first load, including for signed-out visitors.
+const BuildDossierModal = dynamic(() => import("./BuildDossierModal").then((module) => module.BuildDossierModal));
+const BuildEditorSheet = dynamic(() => import("./BuildEditorSheet").then((module) => module.BuildEditorSheet));
+const EditCustomBuildLauncher = dynamic(() => import("./EditCustomBuildLauncher").then((module) => module.EditCustomBuildLauncher));
+const BuildPublishModal = dynamic(() => import("./BuildPublishModal").then((module) => module.BuildPublishModal));
 
 type ReclassifyResult = {
   ok: true;
@@ -76,13 +80,12 @@ const EMPTY_BUILDS: CustomBuild[] = [];
  * Auth is settled before anything else: useApi has no key while signed
  * out, so the library's SWR-derived loading state would never resolve
  * and a visitor would watch a skeleton forever. Until Clerk loads the
- * page renders nothing; a signed-out visitor gets the public intro
+ * page shows the public intro, as it does for a signed-out visitor
  * (no New build, Reclassify or filters, which all need an account).
  */
 export function BuildsLibrary() {
   const { isLoaded, isSignedIn } = useAuth();
-  if (!isLoaded) return null;
-  if (!isSignedIn) return <BuildsPublicIntro />;
+  if (!isLoaded || !isSignedIn) return <BuildsPublicIntro />;
   return <BuildsLibraryInner />;
 }
 
@@ -492,26 +495,26 @@ function BuildsLibraryInner() {
           onDelete={askDelete}
         />
       ) : null}
-      <BuildEditorSheet
+      {editorOpen ? <BuildEditorSheet
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
         build={editorBuild}
         onSaved={handleSaved}
-      />
-      <EditCustomBuildLauncher
+      /> : null}
+      {richEditBuild ? <EditCustomBuildLauncher
         build={richEditBuild}
         onClose={() => setRichEditBuild(null)}
         onSaved={async (saved, result) => {
           await handleSaved(saved, result);
           setRichEditBuild(null);
         }}
-      />
-      <BuildPublishModal
+      /> : null}
+      {publishOpen ? <BuildPublishModal
         open={publishOpen}
         onClose={() => setPublishOpen(false)}
         build={publishBuild}
         onPublished={handlePublished}
-      />
+      /> : null}
       <ConfirmDialog
         open={!!deletingSlug}
         onClose={() => (deletePending ? undefined : setDeletingSlug(null))}

@@ -14,6 +14,7 @@ const { MongoMemoryServer } = require("mongodb-memory-server");
 
 const { connect } = require("../src/db/connect");
 const { OverlayLiveService } = require("../src/services/overlayLive");
+const { applyOverridePipeline, applyOpponentOverridePipeline } = require("../src/services/buildIntentAttribution");
 
 const TOON = "1-S2-1-424242";
 const PCID = "424242";
@@ -104,6 +105,45 @@ test("best answer follows the game-derived favourite opening", async () => {
   const p = await preGame();
   expect(p.favOpening.name).toBe("Zerg - 12 Pool");
   expect(p.bestAnswer).toEqual({ build: "PvZ - Gate Expand", total: 3, winRate: 2 / 3 });
+});
+
+test("a display-name-only match never supplies another barcode account's tendencies", async () => {
+  await seedOpponentRow({ openings: { "Zerg - 12 Pool": 4 } });
+  await db.games.insertMany([1, 2, 3].map((n) =>
+    vsOpponent(`old-barcode-${n}`, n, { strategy: "Zerg - 12 Pool" })));
+  const p = await svc.buildFromOpponentName("u1", "Shared", "Zerg", null, "Protoss");
+  for (const field of ["favOpening", "cheeseProbability", "cheeseHistory", "predictedStrategies", "scouting", "bestAnswer"]) {
+    expect(p).not.toHaveProperty(field);
+  }
+});
+
+test("an unresolved live account uses its own history despite a different same-name opponent row", async () => {
+  await seedOpponentRow({ openings: { "Zerg - 12 Pool": 4 } });
+  await db.games.insertMany([
+    ...[1, 2, 3].map((n) => vsOpponent(`old-${n}`, n, { strategy: "Zerg - 12 Pool" })),
+    ...[1, 2].map((n) => vsOpponent(`new-${n}`, n, {
+      strategy: "Zerg - Hatch First",
+      opponent: { race: "Zerg", pulseId: "1-S2-1-new-account", displayName: "Shared", strategy: "Zerg - Hatch First" },
+    })),
+  ]);
+  const p = await svc.buildFromOpponentName("u1", "Shared", "Zerg", null, "Protoss", "1-S2-1-new-account");
+  expect(p.favOpening).toMatchObject({ name: "Zerg - Hatch First", samples: 2, of: 2 });
+  expect(p.cheeseProbability).toBeUndefined();
+});
+
+test("best answer follows both labels written by real check-in correction pipelines", async () => {
+  await seedOpponentRow();
+  await db.games.insertMany([1, 2, 3].map((n) =>
+    vsOpponent(`corrected-${n}`, n, { strategy: "Zerg - Hatch First", myBuild: "PvZ - Stargate Opener", result: n === 3 ? "Defeat" : "Victory" })));
+  const ownBuild = { key: "pvz-gate-expand", name: "PvZ - Gate Expand", slug: null, source: "catalog" };
+  const oppBuild = { key: "zerg-12-pool", name: "Zerg - 12 Pool", slug: null, source: "catalog" };
+  await db.games.updateMany({ userId: "u1" }, [
+    ...applyOverridePipeline(ownBuild, {}),
+    ...applyOpponentOverridePipeline(oppBuild, {}),
+  ]);
+  const p = await preGame();
+  expect(p.favOpening.name).toBe(oppBuild.name);
+  expect(p.bestAnswer).toEqual({ build: ownBuild.name, total: 3, winRate: 2 / 3 });
 });
 
 test("a mixed-matchup opponent only counts games in this matchup", async () => {
