@@ -54,9 +54,9 @@ win.show(); app.processEvents()
 ui.on_pending(312)
 ui.on_connection_state("offline",time.time(),time.time()+30,312)
 app.processEvents()
-assert win._connection_banner.isVisible()
-assert "Offline: 312 replays waiting" in win._connection_text.text()
-win._connection_retry.click(); assert retries==[True]
+assert win._status_view.badge_text=="Needs attention"
+assert "312 replays waiting" in win._status_sub.text()
+win._status_action.click(); assert retries==[True]
 win._connection_help.click(); assert opened[-1].endswith("desktop-app-sync-problems?src=agent#offline")
 error=classify(TerminalUploadError("game_payload_too_large: detail"))
 ui.on_upload_failed("game.SC2Replay",error); app.processEvents()
@@ -68,7 +68,7 @@ assert app.clipboard().text()==error.detail
 next(button for button in buttons if button.text()=="Help").click()
 assert opened[-1].endswith("#rejected")
 ui.on_connection_state("online",time.time(),0,0); app.processEvents()
-assert not win._connection_banner.isVisible()
+assert not hasattr(win,"_connection_banner") and win._connection_kind=="online"
 ui.on_upload_success("uploaded.SC2Replay"); app.processEvents()
 assert win._recent_table.item(0,2).text()=="✓ Uploaded"
 ui.on_upload_failed("legacy.SC2Replay","Plain error"); app.processEvents()

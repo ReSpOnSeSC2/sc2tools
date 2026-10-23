@@ -3,8 +3,11 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClerkLoading, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
-import { Bug, ChevronLeft, LifeBuoy, MoreHorizontal, X } from "lucide-react";
+import { ClerkLoading, useAuth, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
+import { Bug, ChevronLeft, Cpu, LifeBuoy, LogIn, MoreHorizontal, PanelLeftOpen, PanelLeftClose, Settings } from "lucide-react";
+import { RailGroup, RailLabel, RailLink } from "./ChromeRail";
+import { MoreSheet } from "./MoreSheet";
+import { RAIL_KEY, readRailPinned } from "./railPreference";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { SyncStatus } from "@/components/SyncStatus";
 import { LazyReportIssueModal } from "@/components/feedback/LazyReportIssueModal";
@@ -22,7 +25,6 @@ import {
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
 import { ConnectionBanner, ConnectionStatusProvider } from "./ConnectionStatus";
 import { HelpMenu } from "./HelpMenu";
-import { helpMenuItems, type HelpMenuItem } from "./helpMenuItems";
 import { BuildCheckInAlert } from "@/components/build-checkin/BuildCheckInAlert";
 import { BuildCheckInProvider } from "@/components/build-checkin/BuildCheckInProvider";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -33,6 +35,8 @@ import { useChromeBottomInset } from "./chromeInsets";
 import { ChromeProvider, useChromeContext } from "./ChromeContext";
 import { NavProgress, startNavProgress } from "./NavProgress";
 import { LogoMark } from "./LogoMark";
+import { WhatsNewButton } from "@/components/announcements/WhatsNewButton";
+import { SiteIncidentBanner } from "@/components/announcements/SiteIncidentBanner";
 
 /* ------------------------------------------------------------------
  * AppChrome — the shell every signed-in surface renders inside:
@@ -107,6 +111,17 @@ function AppChromeShell({ children }: { children: ReactNode }) {
   const backHref = breadcrumb?.backHref ?? match?.backHref ?? "/app";
   const backLabel = breadcrumb?.backLabel ?? `Back to ${match?.backEntry.label ?? "Today"}`;
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const { isSignedIn } = useAuth();
+  useEffect(() => {
+    const initial = readRailPinned(); setPinned(initial);
+    document.documentElement.setAttribute("data-rail", initial ? "pinned" : "collapsed");
+  }, []);
+  const togglePinned = () => {
+    const next = !pinned; setPinned(next);
+    document.documentElement.setAttribute("data-rail", next ? "pinned" : "collapsed");
+    try { localStorage.setItem(RAIL_KEY, next ? "pinned" : "collapsed"); } catch { /* Keep the current view. */ }
+  };
   const [report, setReport] = useState<{ open: boolean; type: ReportType }>({
     open: false,
     type: "problem",
@@ -160,16 +175,22 @@ function AppChromeShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     setSheetOpen(false);
   }, [pathname]);
+  useEffect(() => {
+    const media = window.matchMedia?.("(min-width:768px)");
+    const close = () => { if (media?.matches) setSheetOpen(false); };
+    close(); media?.addEventListener("change", close);
+    return () => media?.removeEventListener("change", close);
+  }, []);
 
   return (
     <div className="flex min-h-dvh">
-      <aside className="relative hidden w-16 shrink-0 md:block">
+      <aside className="app-rail-placeholder relative hidden w-16 shrink-0 md:block">
         {/* The expanded rail overlays content rather than pushing it, so
             hovering never reflows a table mid-read. */}
         <nav
           aria-label="App navigation"
           className={[
-            "group/rail fixed inset-y-0 left-0 z-nav flex w-16 flex-col gap-1 overflow-y-auto overflow-x-hidden",
+            "app-rail group/rail fixed inset-y-0 left-0 z-nav flex w-16 flex-col gap-1 overflow-y-auto overflow-x-hidden",
             "border-r-2 border-border bg-bg-surface px-2 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]",
             "motion-safe:transition-[width] motion-safe:duration-150",
             "hover:w-56 focus-within:w-56 hover:shadow-hard",
@@ -186,22 +207,26 @@ function AppChromeShell({ children }: { children: ReactNode }) {
 
           <ClerkLoading><div aria-hidden className="space-y-1">{Array.from({ length: 8 }, (_, index) => <div key={index} className="flex h-10 items-center px-2.5"><span className="h-[18px] w-[18px] rounded bg-bg-elevated motion-safe:animate-pulse" /></div>)}</div></ClerkLoading>
           <SignedIn>
-            {sections.map((entry) => (
+            <RailGroup label="Analysis">{sections.map((entry) => (
               <RailLink
                 key={entry.key}
                 entry={entry}
                 active={activeKey === entry.key}
+                pinned={pinned}
+                onNavigate={() => beginNavigation(entry.href)}
               />
-            ))}
+            ))}</RailGroup>
             <span className="min-h-3 flex-1" />
             <span aria-hidden className="mx-1.5 border-t-2 border-border" />
-            {utilities.map((entry) => (
+            <RailGroup label="Your setup">{utilities.map((entry) => (
               <RailLink
                 key={entry.key}
                 entry={entry}
                 active={activeKey === entry.key}
+                pinned={pinned}
+                onNavigate={() => beginNavigation(entry.href)}
               />
-            ))}
+            ))}</RailGroup>
           </SignedIn>
 
           <SignedOut>
@@ -210,10 +235,15 @@ function AppChromeShell({ children }: { children: ReactNode }) {
                 key={entry.key}
                 entry={entry}
                 active={activeKey === entry.key}
+                pinned={pinned}
+                onNavigate={() => beginNavigation(entry.href)}
               />
             ))}
             <span className="min-h-3 flex-1" />
           </SignedOut>
+          <button type="button" aria-pressed={pinned} aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"} onClick={togglePinned} className="mt-auto flex min-h-11 items-center gap-3 rounded-lg px-2.5 text-text-muted hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            {pinned ? <PanelLeftClose className="h-5 w-5 shrink-0" aria-hidden /> : <PanelLeftOpen className="h-5 w-5 shrink-0" aria-hidden />}<RailLabel>{pinned ? "Unpin sidebar" : "Pin sidebar"}</RailLabel>
+          </button>
         </nav>
       </aside>
 
@@ -252,6 +282,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
                 <BuildCheckInAlert compact />
                 <CoachingBookingAlert compact />
                 <NotificationBell compact />
+                <WhatsNewButton />
               </SignedIn>
               <ThemeToggle />
               <ClerkLoading><span aria-hidden className="h-8 w-8 rounded-full bg-bg-elevated motion-safe:animate-pulse" /></ClerkLoading>
@@ -264,6 +295,8 @@ function AppChromeShell({ children }: { children: ReactNode }) {
                 >
                   {/* Ours first; listing Clerk's two defaults after keeps them below. */}
                   <UserButton.MenuItems>
+                    <UserButton.Link label="Settings" labelIcon={<Settings className="h-4 w-4" aria-hidden />} href="/settings" />
+                    <UserButton.Link label="Devices" labelIcon={<Cpu className="h-4 w-4" aria-hidden />} href="/devices" />
                     <UserButton.Link
                       label="Help"
                       labelIcon={<LifeBuoy className="h-4 w-4" aria-hidden />}
@@ -297,20 +330,11 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <ConnectionBanner />
+          <Suspense fallback={null}><SiteIncidentBanner /></Suspense>
           <Suspense fallback={null}><NavProgress onPendingChange={setNavPending} /></Suspense>
         </header>
 
-        <SiteStats
-          wide
-          syncStatus={isAnalyzerPath(pathname) && me?.userId && me.games ? (
-            <SyncStatus
-              compact
-              total={me.games.total}
-              latest={me.games.latest}
-              userId={me.userId}
-            />
-          ) : undefined}
-        />
+        <SiteStats variant="app" wide analyzer={isAnalyzerPath(pathname)} signedIn={isSignedIn === true} syncStatus={<SignedIn><SyncStatus compact /></SignedIn>} />
 
         <main
           id="main-content"
@@ -368,7 +392,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
               href="/sign-in"
               className="flex flex-1 flex-col items-center gap-0.5 rounded-lg px-1 py-1.5 text-micro font-bold text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
-              <MoreHorizontal className="h-5 w-5" aria-hidden />
+              <LogIn className="h-5 w-5" aria-hidden />
               Sign in
             </Link>
           </SignedOut>
@@ -423,37 +447,6 @@ function TitleTag({
   );
 }
 
-function RailLabel({ children }: { children: ReactNode }) {
-  return (
-    <span className="whitespace-nowrap font-display text-caption font-bold opacity-0 transition-opacity group-hover/rail:opacity-100 group-focus-within/rail:opacity-100">
-      {children}
-    </span>
-  );
-}
-
-function RailLink({ entry, active }: { entry: NavEntry; active: boolean }) {
-  const Icon: NavIcon = entry.icon;
-  return (
-    <Link
-      href={entry.href}
-      onNavigate={() => beginNavigation(entry.href)}
-      aria-current={active ? "page" : undefined}
-      title={entry.label}
-      className={[
-        "flex h-10 items-center gap-3 rounded-lg border-2 px-2.5",
-        "motion-safe:transition-colors motion-safe:duration-150",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        active
-          ? "border-accent-cyan/40 bg-accent-cyan/10 text-accent"
-          : "border-transparent text-text-muted hover:bg-bg-elevated hover:text-text",
-      ].join(" ")}
-    >
-      <Icon className="h-[18px] w-[18px] shrink-0" aria-hidden />
-      <RailLabel>{entry.label}</RailLabel>
-    </Link>
-  );
-}
-
 function TabBarLink({ entry, active }: { entry: NavEntry; active: boolean }) {
   const Icon: NavIcon = entry.icon;
   return (
@@ -468,157 +461,7 @@ function TabBarLink({ entry, active }: { entry: NavEntry; active: boolean }) {
       ].join(" ")}
     >
       <Icon className="h-5 w-5" aria-hidden />
-      {entry.label}
-    </Link>
-  );
-}
-
-function MoreSheet({
-  entries,
-  activeKey,
-  onClose,
-  onReport,
-}: {
-  entries: readonly NavEntry[];
-  activeKey: string | null;
-  onClose: () => void;
-  onReport: (type: ReportType) => void;
-}) {
-  // Esc closes; body scroll locks while open.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = previous;
-    };
-  }, [onClose]);
-
-  const sections = entries.filter((e) => e.group === "section");
-  const utilities = entries.filter((e) => e.group === "utility");
-
-  return (
-    <div
-      className="fixed inset-0 z-sheet md:hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="More sections"
-    >
-      <button
-        type="button"
-        aria-label="Close menu"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/50"
-      />
-      <div className="absolute inset-x-0 bottom-0 max-h-[80dvh] overflow-y-auto rounded-t-2xl border-t-2 border-border-strong bg-bg-surface px-3 pb-[max(env(safe-area-inset-bottom,0px),12px)] pt-2">
-        <div
-          className="mx-auto mb-2 h-1 w-10 rounded-full bg-border-strong"
-          aria-hidden
-        />
-        <div className="flex items-center justify-between px-2 py-1">
-          <span className="text-micro font-bold uppercase tracking-[0.14em] text-text-dim">
-            Analysis
-          </span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="grid h-9 w-9 place-items-center rounded-full text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            <X className="h-4 w-4" aria-hidden />
-          </button>
-        </div>
-        {sections.map((entry) => (
-          <SheetLink
-            key={entry.key}
-            entry={entry}
-            active={activeKey === entry.key}
-            onClose={onClose}
-          />
-        ))}
-        <div className="px-2 pb-1 pt-3">
-          <span className="text-micro font-bold uppercase tracking-[0.14em] text-text-dim">
-            Your setup
-          </span>
-        </div>
-        {utilities.map((entry) => (
-          <SheetLink
-            key={entry.key}
-            entry={entry}
-            active={activeKey === entry.key}
-            onClose={onClose}
-          />
-        ))}
-        <div className="px-2 pb-1 pt-3">
-          <span className="text-micro font-bold uppercase tracking-[0.14em] text-text-dim">
-            Help &amp; support
-          </span>
-        </div>
-        {helpMenuItems(true).map((item) => (
-          <SheetHelpItem key={item.key} item={item} onReport={onReport} onClose={onClose} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const SHEET_ROW_CLASS = [
-  "flex min-h-[44px] w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left text-body font-semibold",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-].join(" ");
-
-function SheetLink({ entry, active, onClose }: { entry: NavEntry; active: boolean; onClose: () => void }) {
-  const Icon: NavIcon = entry.icon;
-  return (
-    <Link
-      href={entry.href}
-      onNavigate={() => beginNavigation(entry.href)}
-      aria-current={active ? "page" : undefined}
-      onClick={onClose}
-      className={[
-        SHEET_ROW_CLASS,
-        active ? "bg-accent-cyan/10 text-accent" : "text-text hover:bg-bg-elevated",
-      ].join(" ")}
-    >
-      <Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
-      {entry.label}
-    </Link>
-  );
-}
-
-function SheetHelpItem({
-  item,
-  onReport,
-  onClose,
-}: {
-  item: HelpMenuItem;
-  onReport: (type: ReportType) => void;
-  onClose: () => void;
-}) {
-  const Icon: NavIcon = item.icon;
-  const className = `${SHEET_ROW_CLASS} text-text hover:bg-bg-elevated`;
-  if (item.report) {
-    const type = item.report;
-    return (
-      <button
-        type="button"
-        aria-haspopup="dialog"
-        onClick={() => onReport(type)}
-        className={className}
-      >
-        <Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
-        {item.label}
-      </button>
-    );
-  }
-  return (
-    <Link href={item.href} onClick={onClose} className={className}>
-      <Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
-      {item.label}
+      {entry.shortLabel ?? entry.label}
     </Link>
   );
 }

@@ -313,6 +313,29 @@ export function parseClock(raw: string): number | null {
   return Number.isFinite(seconds) ? seconds : null;
 }
 
+/** Offer a clock interpretation without changing parseClock's seconds semantics. */
+export function digitsToClock(raw: string): string | null {
+  const value = raw.trim();
+  if (!/^\d+$/.test(value) || value.length > 8) return null;
+  const seconds = Number(value.slice(-2));
+  if (seconds > 59) return null;
+  return `${Number(value.slice(0, -2) || "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+/** Coarse age; callers supply a stable server time or start ticking after mount. */
+export function age(iso: string | null, now: number): string {
+  if (!iso) return "";
+  const ms = now - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "just now";
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days < 30 ? `${days}d ago` : `${Math.floor(days / 30)}mo ago`;
+}
+
 /** "[PvZ] Why did my blink all-in fail?" */
 export function reviewHeadline(question: string, matchup: string | null): string {
   const q = question.replace(/\s+/g, " ").trim();
@@ -408,6 +431,7 @@ export function commentClusters(
 
 export type BoardFilters = {
   sort: "hot" | "new" | "top";
+  race: "P" | "T" | "Z" | null;
   matchup: string | null;
   band: number | null;
   tag: string | null;
@@ -418,11 +442,14 @@ export function parseBoardFilters(sp: Record<string, string | string[] | undefin
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
   const sort = one(sp.sort);
   const matchup = one(sp.matchup);
+  const race = one(sp.race);
+  const exactMatchup = (MATCHUPS as readonly string[]).includes(matchup) ? matchup : null;
   const band = Number.parseInt(one(sp.band), 10);
   const tag = one(sp.tag);
   return {
     sort: sort === "new" || sort === "top" ? sort : "hot",
-    matchup: (MATCHUPS as readonly string[]).includes(matchup) ? matchup : null,
+    matchup: exactMatchup,
+    race: /^[PTZ]$/.test(race) && (!exactMatchup || exactMatchup[0] === race) ? race as BoardFilters["race"] : null,
     band: LEAGUE_BANDS.some((b) => b.id === band) ? band : null,
     tag: REVIEW_TAGS.some((t) => t.key === tag) ? tag : null,
     unanswered: one(sp.unanswered) === "1",
@@ -433,6 +460,7 @@ export function parseBoardFilters(sp: Record<string, string | string[] | undefin
 export function boardQuery(filters: BoardFilters, extra: Record<string, string> = {}): string {
   const params = new URLSearchParams();
   if (filters.sort !== "hot") params.set("sort", filters.sort);
+  if (filters.race && (!filters.matchup || filters.matchup[0] === filters.race)) params.set("race", filters.race);
   if (filters.matchup) params.set("matchup", filters.matchup);
   if (filters.band !== null) params.set("band", String(filters.band));
   if (filters.tag) params.set("tag", filters.tag);

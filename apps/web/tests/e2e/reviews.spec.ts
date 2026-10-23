@@ -35,6 +35,41 @@ test("review board renders signed out without horizontal scroll", async ({ page 
   await expectNoHorizontalScroll(page, "/reviews");
 });
 
+test("review board race filters, chips and older-page recovery stay usable at every width", async ({ page }, testInfo) => {
+  // A dummy Clerk key can hold the first client navigation until its
+  // external script times out. Keep real URL/content assertions after it.
+  test.setTimeout(60_000);
+  const response = await page.goto("/reviews?sort=new&race=P&cursor=fixture-older");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Replay reviews", exact: true })).toBeVisible();
+  const race = page.getByRole("combobox", { name: "Race (asker race)" });
+  await expect(race).toBeEnabled();
+  const reject = page.locator("[data-cookie-banner]").getByRole("button", { name: "Reject" });
+  if (await reject.isVisible()) await reject.click();
+  await expect(page.getByRole("navigation", { name: "Review board pages" }).getByText("Showing older requests")).toBeVisible();
+  const newest = page.getByRole("link", { name: "← Newest", exact: true });
+  await expect(newest).toHaveAttribute("href", "/reviews?sort=new&race=P");
+  await expect(newest).toHaveAttribute("rel", "nofollow");
+  await newest.click();
+  await expect(page).toHaveURL(/\/reviews\?sort=new&race=P$/, { timeout: 20_000 });
+  await expect(page.getByTestId("review-card").first()).toBeVisible();
+  await race.selectOption("T");
+  await expect(page).toHaveURL(/sort=new&race=T$/, { timeout: 20_000 });
+  await expect(page.getByText("No requests match these filters", { exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Matchup", exact: true }).getByRole("option")).toHaveText(["All", "TvP", "TvT", "TvZ"]);
+  const chip = page.getByRole("link", { name: "Remove filter Race: Terran", exact: true });
+  await expect(chip).toHaveAttribute("href", "/reviews?sort=new");
+  if (testInfo.project.name === "mobile-360") {
+    await page.screenshot({ path: testInfo.outputPath("review-board-filters-360.png"), fullPage: true });
+  }
+  await expectNoHorizontalScroll(page, "/reviews?sort=new&race=T");
+  await chip.focus();
+  await expect(chip).toBeFocused();
+  await chip.press("Enter");
+  await expect(page).toHaveURL(/\/reviews\?sort=new$/, { timeout: 20_000 });
+  await expect(page.getByTestId("review-card").first()).toBeVisible();
+});
+
 test("review page shows the replay and readable comments signed out", async ({ page }, testInfo) => {
   const response = await page.goto(REVIEW);
   expect(response?.status()).toBeLessThan(400);
@@ -74,6 +109,34 @@ test("review page shows the replay and readable comments signed out", async ({ p
   const fontSize = await comments.first().evaluate((el) => Number.parseFloat(getComputedStyle(el.querySelector("p") ?? el).fontSize));
   expect(fontSize).toBeGreaterThanOrEqual(14);
 
+  await expectNoHorizontalScroll(page, REVIEW);
+});
+
+test("review share menu works with a keyboard and keeps a clipboard fallback inside the viewport", async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("Synthetic clipboard denial"); } } });
+  });
+  const response = await page.goto(REVIEW); expect(response?.status()).toBe(200);
+  const reject = page.locator("[data-cookie-banner]").getByRole("button", { name: "Reject" });
+  if (await reject.isVisible()) await reject.click();
+  const share = page.getByRole("button", { name: "Share this review" }); await expect(share).toBeEnabled();
+  const download = page.getByRole("link", { name: "Sign in to download replay", exact: true });
+  const downloadBox = await download.boundingBox(); const shareBox = await share.boundingBox();
+  expect(Math.abs(downloadBox!.y + downloadBox!.height / 2 - shareBox!.y - shareBox!.height / 2)).toBeLessThanOrEqual(1);
+  await share.press("ArrowDown");
+  const menu = page.getByRole("menu", { name: "Share this review" });
+  const reddit = menu.getByRole("menuitem", { name: "Post to Reddit" }); await expect(reddit).toBeFocused();
+  await expect(reddit).toHaveAttribute("href", /^https:\/\/www\.reddit\.com\/submit\?/);
+  await expect(reddit).toHaveAttribute("target", "_blank"); await expect(reddit).toHaveAttribute("rel", "noopener noreferrer");
+  await expect.poll(async () => { const box = await menu.boundingBox(); return !!box && box.x >= 0 && box.x + box.width <= (page.viewportSize()?.width ?? 0); }).toBe(true);
+  for (const item of await menu.getByRole("menuitem").all()) expect((await item.boundingBox())?.height).toBeGreaterThanOrEqual(40);
+  await menu.getByRole("menuitem", { name: "Copy link" }).click();
+  const fallback = menu.getByRole("textbox", { name: "Copy this text" }); await expect(fallback).toBeFocused();
+  await expect(fallback).toHaveAttribute("readonly", ""); await expect(fallback).toHaveValue(new RegExp(`${REVIEW}$`));
+  await expect.poll(() => fallback.evaluate((element) => { const input = element as HTMLInputElement; return input.selectionStart === 0 && input.selectionEnd === input.value.length; })).toBe(true);
+  if (testInfo.project.name === "mobile-360") await page.screenshot({ path: testInfo.outputPath("review-share-menu-360.png") });
+  await fallback.press("Escape"); await expect(menu).toHaveCount(0); await expect(share).toBeFocused();
   await expectNoHorizontalScroll(page, REVIEW);
 });
 

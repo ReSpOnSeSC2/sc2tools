@@ -29,6 +29,7 @@ const { sha256 } = require("../util/hash");
  * @param {{
  *   overlayTokens: import('../services/types').OverlayTokensService,
  *   overlayLive?: import('../services/overlayLive').OverlayLiveService,
+ *   liveGameBroker?: Pick<import('../services/liveGameBroker').LiveGameBroker, 'latest'>,
  *   auth: import('express').RequestHandler,
  *   io?: import('socket.io').Server,
  * }} deps
@@ -214,6 +215,10 @@ function buildOverlayTokensRouter(deps) {
         // the whole layout in one shot. When present, we narrow the
         // payload to just that widget's fields so neighbouring panels
         // stay quiet during a per-widget probe.
+        const phase = deps.liveGameBroker?.latest(auth.userId)?.phase;
+        if (["match_loading", "match_started", "match_in_progress"].includes(String(phase)) && req.body?.force !== true) {
+          res.status(409).json({ error: { code: "live_match", message: "You're in a game — viewers will see sample data for about 20 s" } }); return;
+        }
         const widget = req.body?.widget
           ? String(req.body.widget)
           : undefined;
@@ -248,7 +253,7 @@ function buildOverlayTokensRouter(deps) {
           if ((!widget || widget === "session") && payload.session) {
             deps.io.to(`overlay:${token}`).emit(
               "overlay:session",
-              { ...payload.session, isTest: true },
+              { ...payload.session, isTest: true, testNonce: payload.testNonce },
             );
           }
         }
@@ -293,7 +298,7 @@ function buildOverlayTokensRouter(deps) {
         if (deps.io) {
           deps.io
             .to(`overlay:${token}`)
-            .emit("overlay:clear", { widget: widget || null });
+            .emit("overlay:clear", { scope: "test", widget: widget || null });
         }
         res.status(202).json({ ok: true, widget: widget || "all" });
       } catch (err) {

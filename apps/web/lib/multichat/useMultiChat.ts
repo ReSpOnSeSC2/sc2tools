@@ -7,6 +7,7 @@
 // re-render the OBS source per message. Statuses update immediately —
 // they're low-frequency and the setup screen wants them live.
 
+import { useOverlayPreview } from "@/lib/overlayPreviewContext";
 import { useEffect, useRef, useState } from "react";
 import { appendEvents, EVENT_CAP, type ChatEvent } from "./events";
 import { appendMessages, FEED_CAP } from "./feed";
@@ -40,6 +41,7 @@ export function useMultiChat(args: {
   config: MultichatConfig | null;
 }): MultiChatState {
   const { apiBase, token, config } = args;
+  const preview = useOverlayPreview();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [events, setEvents] = useState<ChatEvent[]>([]);
   const [statuses, setStatuses] = useState<MultiChatState["statuses"]>({});
@@ -48,7 +50,7 @@ export function useMultiChat(args: {
   const eventBufferRef = useRef<ChatEvent[]>([]);
 
   useEffect(() => {
-    if (!config && !token) {
+    if (preview || (!config && !token)) {
       setActive(false);
       return;
     }
@@ -132,7 +134,7 @@ export function useMultiChat(args: {
       eventBufferRef.current = [];
       setStatuses({});
     };
-  }, [apiBase, token, config]);
+  }, [apiBase, token, config, preview]);
 
   return { messages, events, statuses, active };
 }

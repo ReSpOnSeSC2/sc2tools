@@ -2,19 +2,23 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Calendar, Users } from "lucide-react";
+import { ArrowLeft, Calendar } from "lucide-react";
 import { getJsonWithStatus } from "@/lib/serverApi";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { fmtAgo, fmtDate } from "@/lib/format";
+import { fmtAgo } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorChip } from "@/components/community/AuthorChip";
 import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import { CommunityBuildSignatureTimeline } from "@/components/community/CommunityBuildSignatureTimeline";
 import { CommunityGamePlan } from "@/components/community/CommunityGamePlan";
 import { CommunityVotePanel } from "@/components/community/CommunityVotePanel";
+import { CommunityBuildActionsBar } from "@/components/community/CommunityBuildActionsBar";
+import { CommunityBuildReport } from "@/components/community/CommunityBuildReport";
+import { CommunityBuildMeta } from "@/components/community/CommunityBuildMeta";
+import { ExpandableText } from "@/components/community/ExpandableText";
 import { CommunityBuildOwnerControls } from "@/components/community/CommunityBuildOwnerControls";
 import { RelatedBuilds } from "@/components/community/RelatedBuilds";
 import { CommunityGuideLink } from "@/components/guides/CommunityGuideLink";
@@ -24,6 +28,7 @@ import type { CommunityBuildDetail } from "@/components/community/types";
 import { RulesSummary } from "@/components/builds/RulesSummary";
 import { SKILL_LEVELS, coerceSavedRules } from "@/lib/build-rules";
 import { serializeJsonLd } from "@/lib/reviewJsonLd";
+import { communityDescription } from "@/lib/communityDescription";
 
 /**
  * The published build. A 404 from the API is the only "doesn't exist";
@@ -113,6 +118,7 @@ export default async function CommunityBuildPage({
     ? (snapshot.steps as LegacyStep[])
     : [];
   const skillLevel = skillLevelLabel(snapshot.skillLevel);
+  const description = communityDescription(data.description);
 
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
@@ -197,8 +203,10 @@ export default async function CommunityBuildPage({
           </span>
         }
         title={data.title}
-        description={data.description}
+        description={description.summary}
       />
+
+      <CommunityBuildActionsBar build={data} />
 
       {/* Streams in: a slow guide API never holds up the build page. */}
       <Suspense fallback={null}>
@@ -207,6 +215,7 @@ export default async function CommunityBuildPage({
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-6">
+          {description.showAbout ? <Card><h2 className="mb-3 text-h4 font-semibold text-text">About this build</h2><ExpandableText text={data.description.trim()} /></Card> : null}
           {rules.length > 0 ? (
             <RulesSummary rules={rules} />
           ) : signature.length > 0 ? (
@@ -230,13 +239,13 @@ export default async function CommunityBuildPage({
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-          <Card>
+          <Card className="hidden lg:block">
             <CommunityVotePanel
               slug={data.slug}
               initialVotes={data.votes ?? 0}
             />
           </Card>
-          <Card>
+          <Card className="hidden lg:block">
             <div className="space-y-3">
               <SaveToLibraryButton
                 build={data.build}
@@ -252,54 +261,9 @@ export default async function CommunityBuildPage({
               />
             </div>
           </Card>
-          <Card>
-            <dl className="space-y-3 text-caption">
-              <div className="flex items-baseline justify-between gap-2">
-                <dt className="text-text-muted">Race</dt>
-                <dd className="inline-flex items-center gap-1.5 font-medium text-text">
-                  <Icon
-                    name={raceIconName(race)}
-                    kind="race"
-                    size={14}
-                    decorative
-                  />
-                  {race}
-                </dd>
-              </div>
-              {data.matchup ? (
-                <div className="flex items-baseline justify-between gap-2">
-                  <dt className="text-text-muted">Matchup</dt>
-                  <dd className={["font-medium", tint.text].join(" ")}>
-                    {data.matchup}
-                  </dd>
-                </div>
-              ) : null}
-              <div className="flex items-baseline justify-between gap-2">
-                <dt className="text-text-muted">Published</dt>
-                <dd className="font-medium text-text">
-                  {fmtDate(data.publishedAt)}
-                </dd>
-              </div>
-              {data.updatedAt && data.updatedAt !== data.publishedAt ? (
-                <div className="flex items-baseline justify-between gap-2">
-                  <dt className="text-text-muted">Updated</dt>
-                  <dd className="font-medium text-text">
-                    {fmtAgo(data.updatedAt)}
-                  </dd>
-                </div>
-              ) : null}
-              <div className="flex items-baseline justify-between gap-2">
-                <dt className="inline-flex items-center gap-1 text-text-muted">
-                  <Users className="h-3 w-3" aria-hidden />
-                  Author
-                </dt>
-                <dd>
-                  <AuthorChip build={data} size="sm" />
-                </dd>
-              </div>
-            </dl>
-          </Card>
+          <CommunityBuildMeta data={data} ruleCount={Array.isArray(snapshot.rules) ? rules.length : null} stepCount={signature.length || legacySteps.length} />
           <RelatedBuilds matchup={data.matchup} currentSlug={data.slug} />
+          <Card><CommunityBuildReport slug={data.slug} /></Card>
         </aside>
       </div>
     </article>

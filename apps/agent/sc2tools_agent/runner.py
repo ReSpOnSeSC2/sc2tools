@@ -31,6 +31,7 @@ import logging.handlers
 import os
 import sys
 import threading
+import time
 import urllib.parse
 import webbrowser
 from pathlib import Path
@@ -64,6 +65,10 @@ from .pairing import ensure_paired
 from .pairing.flow import PairingControls
 from .pairing.recovery import RuntimeRecovery
 from .errors import classify
+from .status_model import StatusFacts, ConnectionFacts, derive_status
+from .game_activity import GameActivityGate
+from .update_scheduler import UpdateScheduler
+from .obs_activity import outputs_active
 from .import_controller import ImportController
 from .socket_client import SocketClient, make_recompute_handlers
 from .bot_lab import BotLabController
@@ -117,6 +122,10 @@ def run_agent(argv: Optional[List[str]] = None) -> int:
     cfg, _ = _bootstrap(args, configure_logging=False)
     instance_lock = AgentInstanceLock(cfg.state_dir)
     if not instance_lock.acquire():
+        if not args.no_gui and can_use_gui():
+            from .activation import activate_existing
+            if activate_existing(cfg.state_dir):
+                return 0
         print(
             "SC2 Tools Agent is already running. Check the system tray.",
             file=sys.stderr,
@@ -346,6 +355,7 @@ def _run_headless(
     state = load_state(cfg.state_dir)
     api = ApiClient(base_url=cfg.api_base, device_token=state.device_token)
 
+    recovery_cell = _RuntimeCell()
     console = ConsoleUI()
     tray: Optional[TrayUI] = None
 
@@ -375,22 +385,28 @@ def _run_headless(
 
     if can_use_tray():
         tray = TrayUI(
+            initial_paused=state.paused, initial_paused_until=state.paused_until,
             dashboard_url=_dashboard_url_from_api(cfg.api_base),
             log_dir=log_dir,
             replay_folders=initial_replay_folders,
-            on_pause=lambda paused: _handle_pause(cfg, state, upload, paused),
+            on_pause=lambda paused: _handle_pause(cfg, state, upload, paused, ui=ui),
+            on_pause_for=lambda until: _handle_pause(cfg, state, upload, True, ui=ui, until=until),
             on_resync=lambda: _handle_replay_archive_resync(
                 cfg, state, upload,
             ),
             on_choose_folder=lambda picked: _handle_choose_folder(
                 cfg, state, picked, tray, log, upload=upload,
             ),
-            on_check_updates=lambda: updater.check_now() if updater else None,
+            on_check_updates=lambda: _check_updates_with_notice(recovery_cell),
+            on_install_update=lambda: recovery_cell.update_scheduler.tick(explicit=True) if recovery_cell.update_scheduler else None,
             # No GUI in this mode — the tray omits its window item.
             synced_count_provider=lambda: count_synced(state),
         )
 
-    ui = _Multiplexer(console, tray)
+    ui = _Multiplexer(console, tray, facts=StatusFacts(paired=state.is_paired,
+        paused=state.paused,folders=list(initial_replay_folders)))
+    ui.on_paused(state.paused, state.paused_until)
+    _start_pause_expiry(cfg, state, lambda: upload, lambda: ui, stop_event)
     log.info("agent_ui_ready tray=%s log_dir=%s", bool(tray), log_dir)
 
     if tray:
@@ -398,8 +414,11 @@ def _run_headless(
 
     ui.on_status("connecting...")
 
+    ui.on_phase("connecting")
+
     if not state.is_paired:
         ui.on_status("waiting for pairing")
+        ui.on_phase("waiting_pairing")
         paired = ensure_paired(
             cfg=cfg,
             state=state,
@@ -414,6 +433,7 @@ def _run_headless(
         ui.on_paired(state.user_id or "")
 
     probe_ok, probe_diag = probe_analyzer()
+    ui.on_analyzer_probe(probe_ok, probe_diag)
     if not probe_ok:
         log.error(
             "analyzer_probe_failed_at_startup — replays will not be parsed "
@@ -427,7 +447,7 @@ def _run_headless(
     # first) can late-bind it; assigned right after the watcher exists.
     import_ctl: Optional[ImportController] = None
 
-    recovery_cell = _RuntimeCell()
+    activity_gate = GameActivityGate(enabled=not no_live)
     recovery_cell.api = api
     recovery = RuntimeRecovery(cell=recovery_cell, cfg=cfg, state=state, ui=ui,
                                stop_event=stop_event)
@@ -449,8 +469,10 @@ def _run_headless(
         on_pending_changed=ui.on_pending,
     )
     recovery_cell.upload = upload
+    upload.set_activity_gate(activity_gate)
     upload.set_paused(state.paused)
     watcher = ReplayWatcher(
+        activity_gate=activity_gate,
         cfg=cfg,
         state=state,
         upload=upload,
@@ -460,9 +482,7 @@ def _run_headless(
         on_replay_skipped=lambda p, reason: (
             import_ctl.on_replay_skipped(p, reason) if import_ctl else None
         ),
-        on_roots_changed=lambda folders: (
-            tray.set_replay_folders(folders) if tray else None
-        ),
+        on_roots_changed=ui.on_folders,
     )
     import_ctl = ImportController(
         api=api,
@@ -475,17 +495,15 @@ def _run_headless(
         ],
     )
 
-    updater = Updater(
-        cfg=cfg,
-        state=state,
-        on_update_available=lambda release: _handle_update_available(
-            tray, console, None, release, log,
-            state=state, api_base=cfg.api_base, request_stop=request_stop,
-        ),
-    )
-
+    recovery_cell.tray, recovery_cell.console, recovery_cell.ui = tray, console, ui
+    recovery_cell.update_scheduler = _make_update_scheduler(cfg,state,recovery_cell,activity_gate,
+        stop_event,request_stop,log)
+    updater = Updater(cfg=cfg,state=state,on_update_available=recovery_cell.update_scheduler.offer,
+                      on_check=lambda release: _announce_updated_version(cfg,state,recovery_cell,release))
+    recovery_cell.updater = updater
     heartbeat = Heartbeat(api, on_success=recovery.connected,
                           on_failure=recovery.watchdog.failure)
+    recovery_cell.watcher = watcher
     recovery_cell.heartbeat = heartbeat
     recovery_cell.import_ctl = import_ctl
 
@@ -539,10 +557,13 @@ def _run_headless(
     else:
         log.info("live_bridge_disabled_via_flag")
 
+    if live_bus is not None:
+        live_bus.subscribe(activity_gate.on_event)
     obs_client, obs_scene = _build_obs_switcher(
         state=state, bridge=live_bridge, log=log, no_obs=no_obs,
     )
     stream_service = _build_stream_service(cfg, state, no_obs=no_obs)
+    recovery_cell.stream_service = stream_service
     recovery_cell.socket_client = socket_client
     recovery_cell.live_transport = live_transport
 
@@ -585,6 +606,7 @@ def _run_headless(
             name="sc2tools-replay-archive-status",
             daemon=True,
         ).start()
+        ui.on_phase("ready")
         log.info("agent_ready paused=%s", state.paused)
         console.wait_for_exit()
     except KeyboardInterrupt:
@@ -641,6 +663,7 @@ def _run_with_gui(
     # settings changes that arrive after the boot worker has started.
     cell.no_obs = bool(no_obs)
     stream_service = _build_stream_service(cfg, state, no_obs=no_obs)
+    cell.stream_service = stream_service
     stop_event = threading.Event()
     request_stop_lock = threading.Lock()
     stop_called = {"value": False}
@@ -655,12 +678,15 @@ def _run_with_gui(
             cell.gui.request_quit()
 
     initial_settings = SettingsPayload(
+        background_import_speed=state.background_import_speed,
+        pause_history_in_game=state.pause_history_in_game,
+        pause_on_battery=state.pause_on_battery,
         api_base=state.api_base_override,
         log_level=state.log_level_override or "INFO",
         # The watched list, detected folders included: Save stores it as
         # additions and exclusions, so showing only the saved additions
         # would hide the detected folders from the user.
-        replay_folders=list(initial_folders),
+        replay_folders=list(dict.fromkeys([*initial_folders,*map(Path,state.replay_folders_override)])),
         autostart_enabled=autostart.is_enabled(),
         start_minimized=state.start_minimized,
         # Surface the cached handle (cloud profile or prior auto-detect)
@@ -694,10 +720,18 @@ def _run_with_gui(
     )
 
     gui = GuiUI(
+        on_restore_folders=lambda snapshot: _restore_folder_snapshot(cfg,state,cell,snapshot),
+        on_install_update=lambda: cell.update_scheduler.tick(explicit=True) if cell.update_scheduler else None,
+        on_update_later=lambda: cell.update_scheduler.later() if cell.update_scheduler else None,
         on_pairing_retry=cell.pairing_controls.retry_now.set,
         on_pairing_refresh=cell.pairing_controls.request_new_code,
         on_link_again=lambda: cell.recovery.link_again() if cell.recovery else None,
         on_sync_retry=lambda: cell.upload.retry_now() if cell.upload else None,
+        state_dir=cfg.state_dir,
+        initial_tray_hint_shown=state.tray_hint_shown,
+        close_without_tray=state.close_without_tray,
+        on_tray_hint=lambda: _remember_tray_hint(cfg, state, cell),
+        on_close_policy=lambda policy: _remember_close_policy(cfg, state, policy),
         version=__version__,
         dashboard_url=_dashboard_url_from_api(cfg.api_base),
         pairing_url=_pairing_url_from_api(cfg.api_base),
@@ -713,14 +747,14 @@ def _run_with_gui(
         # counts dated entries in state.uploaded so the number survives
         # restarts instead of resetting to 0 every launch.
         synced_count_provider=lambda: count_synced(state),
-        on_pause=lambda paused: _handle_pause(cfg, state, cell.upload, paused),
+        on_pause=lambda paused: _handle_pause(cfg, state, cell.upload, paused, ui=cell.ui),
         on_resync=lambda: _handle_replay_archive_resync(
             cfg, state, cell.upload,
         ),
         on_choose_folder=lambda picked: _handle_choose_folder_gui(
             cfg, state, picked, cell, log,
         ),
-        on_check_updates=lambda: cell.updater.check_now() if cell.updater else None,
+        on_check_updates=lambda: _check_updates_with_notice(cell),
         on_obs_probe=lambda host, port, password: _handle_obs_probe(
             host=host, port=port, password=password, log=log,
         ),
@@ -747,21 +781,21 @@ def _run_with_gui(
         ),
     )
     cell.gui = gui
+    _announce_updated_version(cfg,state,cell,None)
 
     tray: Optional[TrayUI] = None
     if can_use_tray():
         tray = TrayUI(
+            initial_paused=state.paused, initial_paused_until=state.paused_until,
             dashboard_url=_dashboard_url_from_api(cfg.api_base),
             log_dir=log_dir,
             replay_folders=initial_folders,
-            on_pause=lambda paused: _handle_pause(cfg, state, cell.upload, paused),
-            on_resync=lambda: _handle_replay_archive_resync(
-                cfg, state, cell.upload,
-            ),
-            on_choose_folder=lambda picked: _handle_choose_folder_gui(
-                cfg, state, picked, cell, log,
-            ),
-            on_check_updates=lambda: cell.updater.check_now() if cell.updater else None,
+            on_pause=lambda paused: _handle_pause(cfg, state, cell.upload, paused, ui=cell.ui),
+            on_pause_for=lambda until: _handle_pause(cfg, state, cell.upload, True, ui=cell.ui, until=until),
+            on_resync=gui.request_resync,
+            on_choose_folder=lambda _picked: gui.choose_folder(),
+            on_check_updates=gui.check_updates,
+            on_install_update=lambda: cell.update_scheduler.tick(explicit=True) if cell.update_scheduler else None,
             # Route back to the Qt window after a hide-to-tray close —
             # first menu item and the icon's double-click default.
             on_show_window=lambda: cell.gui.show_window() if cell.gui else None,
@@ -773,11 +807,17 @@ def _run_with_gui(
         cell.tray = tray
         tray.start(on_quit=request_stop)
 
+    gui._tray_available = tray is not None
+
     console = ConsoleUI()
     cell.console = console
 
     multiplex = _Multiplexer(console, tray, gui)
     cell.ui = multiplex
+    active_filter=SyncFilter.from_state(preset=state.sync_filter_preset,since_iso=state.sync_filter_since,until_iso=state.sync_filter_until)
+    multiplex.on_filter_label(active_filter.short_label() if active_filter.is_active() else "")
+    multiplex.on_paused(state.paused, state.paused_until)
+    _start_pause_expiry(cfg, state, lambda: cell.upload, lambda: multiplex, stop_event)
     log.info(
         "agent_ui_ready gui=%s tray=%s log_dir=%s",
         bool(gui),
@@ -859,8 +899,11 @@ def _gui_boot_worker(
 
         ui.on_status("connecting...")
 
+        ui.on_phase("connecting")
+
         if not state.is_paired:
             ui.on_status("waiting for pairing")
+            ui.on_phase("waiting_pairing")
             paired = ensure_paired(
                 cfg=cfg,
                 state=state,
@@ -878,6 +921,7 @@ def _gui_boot_worker(
             ui.on_paired(state.user_id or "")
 
         probe_ok, probe_diag = probe_analyzer()
+        ui.on_analyzer_probe(probe_ok, probe_diag)
         if not probe_ok:
             log.error(
                 "analyzer_probe_failed_at_startup — replays will not be "
@@ -893,6 +937,7 @@ def _gui_boot_worker(
         import_ctl: Optional[ImportController] = None
 
         cell.api = api
+        cell.activity_gate = GameActivityGate(enabled=not no_live)
         recovery = RuntimeRecovery(cell=cell, cfg=cfg, state=state, ui=ui,
                                    stop_event=stop_event, controls=cell.pairing_controls)
         cell.recovery = recovery
@@ -918,8 +963,10 @@ def _gui_boot_worker(
                 if getattr(cell, "build_checkin", None) else None
             ),
         )
+        upload.set_activity_gate(cell.activity_gate)
         upload.set_paused(state.paused)
         watcher = ReplayWatcher(
+            activity_gate=cell.activity_gate,
             cfg=cfg,
             state=state,
             upload=upload,
@@ -950,15 +997,10 @@ def _gui_boot_worker(
             if cell.gui:
                 cell.gui.request_quit()
 
-        updater = Updater(
-            cfg=cfg,
-            state=state,
-            on_update_available=lambda release: _handle_update_available(
-                cell.tray, cell.console, cell.gui, release, log,
-                state=state, api_base=cfg.api_base,
-                request_stop=_request_stop_for_update,
-            ),
-        )
+        cell.update_scheduler = _make_update_scheduler(cfg,state,cell,cell.activity_gate,
+            stop_event,_request_stop_for_update,log)
+        updater = Updater(cfg=cfg,state=state,on_update_available=cell.update_scheduler.offer,
+                          on_check=lambda release: _announce_updated_version(cfg,state,cell,release))
         heartbeat = Heartbeat(api, on_success=recovery.connected,
                               on_failure=recovery.watchdog.failure)
 
@@ -1015,6 +1057,7 @@ def _gui_boot_worker(
                 api=api,
                 device_token=state.device_token,
             )
+            live_bus.subscribe(cell.activity_gate.on_event)
             cell.live_bus = live_bus
             cell.live_poller = live_poller
             cell.live_bridge = live_bridge
@@ -1094,9 +1137,11 @@ def _gui_boot_worker(
             name="sc2tools-replay-archive-status",
             daemon=True,
         ).start()
+        ui.on_phase("ready")
         log.info("agent_ready (gui worker) paused=%s", state.paused)
     except Exception as exc:  # noqa: BLE001
         log.exception("agent_boot_worker_failed")
+        ui.on_phase("boot_error", str(exc))
         ui.on_status(f"error: {exc}")
         capture_exception(exc)
 
@@ -1104,16 +1149,46 @@ def _gui_boot_worker(
 # ---------------- callbacks ----------------
 
 
+def _start_pause_expiry(cfg, state, get_upload, get_ui, stop_event):
+    def run():
+        refresh_at=time.monotonic()+30
+        while not stop_event.wait(1):
+            if time.monotonic() >= refresh_at:
+                get_ui().refresh_status()
+                refresh_at=time.monotonic()+30
+            if state.paused and state.paused_until and state.paused_until <= time.time():
+                _handle_pause(cfg, state, get_upload(), False, ui=get_ui())
+    thread = threading.Thread(target=run, name="sc2tools-pause-expiry", daemon=True)
+    thread.start()
+    return thread
+
+
+def _remember_tray_hint(cfg, state, cell):
+    state.tray_hint_shown = True
+    save_state(cfg.state_dir, state)
+    if cell.tray:
+        cell.tray.show_notice("SC2 Tools is still running. Right-click the tray icon to quit.")
+
+
+def _remember_close_policy(cfg, state, policy):
+    state.close_without_tray = policy
+    save_state(cfg.state_dir, state)
+
+
 def _handle_pause(
     cfg: AgentConfig,
     state: AgentState,
     upload: Optional[UploadQueue],
     paused: bool,
+    *, ui=None, until=None,
 ) -> None:
     state.paused = paused
+    state.paused_until = until if paused else None
     save_state(cfg.state_dir, state)
     if upload:
         upload.set_paused(paused)
+    if ui is not None:
+        ui.on_paused(paused, state.paused_until)
     logging.getLogger(__name__).info("agent_pause_toggled paused=%s", paused)
 
 
@@ -1303,10 +1378,29 @@ def _handle_choose_folder(
 
 def _show_replay_folders(cell, folders: List[Path]) -> None:
     """Show the watcher's new folder list in the tray and dashboard."""
+    if getattr(cell, "ui", None):
+        cell.ui.on_folders(folders)
+        return
     if cell.tray:
         cell.tray.set_replay_folders(folders)
     if cell.gui:
         cell.gui.set_replay_folders(folders)
+
+
+def _folder_snapshot(state):
+    return {"added":list(state.replay_folders_override),
+            "excluded":list(state.replay_folders_excluded),
+            "legacy":state.replay_folder_override}
+
+
+def _restore_folder_snapshot(cfg,state,cell,snapshot):
+    state.replay_folders_override = list(snapshot["added"])
+    state.replay_folders_excluded = list(snapshot["excluded"])
+    state.replay_folder_override = snapshot["legacy"]
+    save_state(cfg.state_dir,state)
+    if cell.upload:
+        cell.upload.request_full_resync()
+    _show_replay_folders(cell,_discover_replay_folders(cfg,state))
 
 
 def _handle_choose_folder_gui(
@@ -1317,18 +1411,20 @@ def _handle_choose_folder_gui(
     log: logging.Logger,
 ) -> None:
     """Same as ``_handle_choose_folder`` but updates BOTH tray and GUI."""
+    snapshot = _folder_snapshot(state)
     _handle_choose_folder(
         cfg, state, picked, cell.tray, log, upload=cell.upload,
     )
-    if cell.gui and picked:
-        cell.gui.set_replay_folders(_discover_replay_folders(cfg, state))
+    if picked:
+        _show_replay_folders(cell,_discover_replay_folders(cfg,state))
+    return snapshot
 
 
 def _notify_replay_capture(tray, console, gui, message: str, log) -> None:
     """Announce each new engine recording, including while minimised."""
     if gui is not None:
         try:
-            gui.show_update_notice(message, sticky=False)
+            gui.show_transient_notice(message)
         except Exception:
             log.exception("replay_capture_gui_notice_failed")
     if tray is not None:
@@ -1357,6 +1453,13 @@ def _handle_save_settings(
     log: logging.Logger,
 ) -> None:
     """Persist Settings-tab edits and apply the registry-side changes."""
+    folder_before = _folder_snapshot(state) if payload.replay_folders is not None else None
+    if payload.background_import_speed in ("gentle","balanced","maximum"):
+        state.background_import_speed = payload.background_import_speed
+    if payload.pause_history_in_game is not None:
+        state.pause_history_in_game = payload.pause_history_in_game
+    if payload.pause_on_battery is not None:
+        state.pause_on_battery = payload.pause_on_battery
     if payload.api_base is not None:
         state.api_base_override = payload.api_base or None
     if payload.log_level:
@@ -1605,6 +1708,9 @@ def _handle_save_settings(
         except Exception:  # noqa: BLE001
             log.exception("show_settings_status_failed")
 
+    if getattr(cell,"ui",None):
+        active_filter=SyncFilter.from_state(preset=state.sync_filter_preset,since_iso=state.sync_filter_since,until_iso=state.sync_filter_until)
+        cell.ui.on_filter_label(active_filter.short_label() if active_filter.is_active() else "")
     log.info(
         "settings_saved api_base=%s log_level=%s autostart=%s minimised=%s "
         "folders_added=%d folders_excluded=%d filter=%s",
@@ -1616,98 +1722,63 @@ def _handle_save_settings(
         len(state.replay_folders_excluded),
         state.sync_filter_preset or "all",
     )
+    return folder_before
 
 
-def _handle_update_available(
-    tray: Optional[TrayUI],
-    console: Optional[ConsoleUI],
-    gui: Optional[GuiUI],
-    release: ReleaseInfo,
-    log: logging.Logger,
-    *,
-    state: Optional[AgentState] = None,
-    api_base: Optional[str] = None,
-    request_stop: Optional[Callable[[], None]] = None,
-) -> None:
-    if release.latest:
-        log.info(
-            "update_available channel=%s latest=%s current=%s",
-            release.channel,
-            release.latest,
-            release.current,
-        )
-    if tray and release.latest:
-        tray.on_update_available(release.latest)
-    if gui and release.latest:
-        gui.on_update_available(release.latest)
+def _check_updates_with_notice(cell):
+    release=cell.updater.check_now() if cell.updater else None
+    if cell.tray:
+        message="Update check failed. Open the activity log for details."
+        if release:
+            message=f"Version {release.latest} is ready." if release.update_available else "SC2 Tools is up to date."
+        cell.tray.show_notice(message)
+    return release
 
-    def _notify_gui(message: str) -> None:
-        # Sticky: a pending update stays on the status card until the
-        # install (or the user) resolves it.
-        if gui and hasattr(gui, "show_update_notice"):
-            gui.show_update_notice(message, sticky=True)
 
-    if not (release.artifact and _running_frozen()):
-        if release.latest:
-            if console:
-                console.on_status(
-                    f"update available: {release.latest} (run installer manually)",
-                )
-            _notify_gui(
-                f"Update v{release.latest} is available — download the "
-                "installer from the website to update this build.",
-            )
-        return
+def _make_update_scheduler(cfg,state,cell,gate,stop_event,request_stop,log):
+    def install(release):
+        if not _running_frozen():
+            raise RuntimeError("Use Download installer to update this source install.")
+        host=urllib.parse.urlparse(cfg.api_base).hostname
+        install_release(release,trusted_hosts=[host] if host else [])
+        request_stop()
+    def notify(release,phase,detail):
+        if getattr(cell,"ui",None):
+            cell.ui.on_update_available(release.latest)
+        if cell.gui:
+            cell.gui.show_update_state(release,phase,detail)
+        if phase=="failed":
+            log.warning("update_install_failed: %s",detail)
+    scheduler=UpdateScheduler(gate=gate,state=state,state_dir=cfg.state_dir,
+        install=install,notify=notify,automatic_allowed=_running_frozen,
+        streaming=lambda: outputs_active(getattr(getattr(cell,"stream_service",None),"reader",None)),
+        capturing=lambda: _capture_running(cell))
+    scheduler.start(stop_event)
+    return scheduler
 
-    # Consent gate: honour the auto-update opt-out unless this build is
-    # below the cloud's compatibility floor (minSupportedVersion), in
-    # which case staying put means a broken agent anyway.
-    mandatory = update_is_mandatory(release)
-    if state is not None and not state.auto_update_enabled and not mandatory:
-        log.info("update_skipped_auto_update_disabled latest=%s", release.latest)
-        if console:
-            console.on_status(
-                f"update available: {release.latest} — auto-update is "
-                "disabled; run the installer manually",
-            )
-        _notify_gui(
-            f"Update v{release.latest} is available — automatic install "
-            "is turned off. Enable it in Settings or run the installer "
-            "manually.",
-        )
-        return
 
-    try:
-        log.info(
-            "update_install_starting artifact=%s mandatory=%s",
-            release.artifact.platform,
-            mandatory,
-        )
-        _notify_gui(
-            f"Update v{release.latest} is downloading — the agent will "
-            "restart itself once in-flight uploads finish.",
-        )
-        # Only the API host and GitHub release hosts may serve the
-        # installer — a compromised feed can't point us elsewhere.
-        trusted = []
-        if api_base:
-            host = urllib.parse.urlparse(api_base).hostname
-            if host:
-                trusted.append(host)
-        install_release(release, trusted_hosts=trusted)
-        if console:
-            console.on_status(f"installer launched for {release.latest}")
-        # Exit cleanly during the installer's launch delay so in-flight
-        # parses/uploads finish and NSIS's taskkill backstop is a no-op.
-        if request_stop is not None:
-            log.info("update_install_launched — stopping agent for installer")
-            request_stop()
-    except Exception:  # noqa: BLE001
-        log.exception("update_install_failed")
-        _notify_gui(
-            f"Update v{release.latest} failed to install — see the "
-            "activity log, or download the installer from the website.",
-        )
+def _capture_running(cell):
+    from .socket_client import _ENGINE_REBUILD_LOCK
+    return _ENGINE_REBUILD_LOCK.locked() or bool(cell.watcher and cell.watcher.capture_running)
+
+
+def _announce_updated_version(cfg,state,cell,release):
+    if release is not None:
+        if cell.gui:
+            cell.gui.show_site_notice(release.notice)
+        if cell.tray:
+            cell.tray.on_site_notice(release.notice)
+    if state.last_run_version != __version__:
+        state.last_run_version = __version__
+        save_state(cfg.state_dir,state)
+        if cell.gui:
+            cell.gui.show_transient_notice(f"Updated to v{__version__}")
+    if cell.gui:
+        notes = release.release_notes if release else ""
+        if not notes:
+            from .release_notes import bundled_notes
+            notes = bundled_notes()
+        cell.gui.set_release_notes(notes)
 
 
 # ---------------- helpers ----------------
@@ -1825,7 +1896,7 @@ def _apply_saved_replay_folders(
     Settings opened is simply absent from ``listed`` and stays watched.
     An empty list resets the agent to detection alone.
     """
-    if not listed:
+    if not listed and not removed:
         state.replay_folders_override = []
         state.replay_folders_excluded = []
         state.replay_folder_override = None
@@ -2911,7 +2982,7 @@ class _RuntimeCell:
     deepcopy the live thread/queue handles."""
 
     __slots__ = (
-        "api", "recovery", "pairing_controls",
+        "api", "recovery", "pairing_controls", "activity_gate", "update_scheduler", "stream_service",
         "gui",
         "tray",
         "console",
@@ -2935,6 +3006,9 @@ class _RuntimeCell:
     )
 
     def __init__(self) -> None:
+        self.stream_service = None
+        self.activity_gate = None
+        self.update_scheduler = None
         self.api = None
         self.recovery = None
         self.pairing_controls = PairingControls()
@@ -2971,7 +3045,15 @@ class _Multiplexer:
         console: ConsoleUI,
         tray: Optional[TrayUI] = None,
         gui: Optional[GuiUI] = None,
+        *, facts=None,
     ) -> None:
+        self._status_lock = threading.RLock()
+        initial_folders=getattr(gui,"_replay_folders",None)
+        self._status_facts = facts or StatusFacts(
+            paired=getattr(gui, "_initial_paired", False),
+            paused=getattr(gui, "_initial_paused", False),
+            folders=list(initial_folders) if isinstance(initial_folders,(list,tuple)) else None,
+        )
         self._offline_since = 0.0
         self._offline_toasted = False
         self._recovered_count = 0
@@ -2981,13 +3063,65 @@ class _Multiplexer:
         if gui:
             self._sinks.append(gui)
 
+    def refresh_status(self):
+        self._change_status()
+
+    def on_update_available(self, latest):
+        for sink in self._sinks:
+            callback=getattr(sink,"on_update_available",None)
+            if callback: callback(latest)
+        self._change_status(update_pending=latest)
+
+    def _change_status(self, **changes):
+        with self._status_lock:
+            self._status_facts.terminal_failure_times[:] = [stamp for stamp in self._status_facts.terminal_failure_times if time.time()-stamp <= 600]
+            for key, value in changes.items():
+                setattr(self._status_facts, key, value)
+            view = derive_status(self._status_facts, time.time())
+        for sink in self._sinks:
+            callback = getattr(sink, "on_status_view", None)
+            if callback:
+                callback(view)
+
+    def on_phase(self, phase, detail=""):
+        for sink in self._sinks:
+            callback = getattr(sink, "on_phase", None)
+            if callback: callback(phase, detail)
+        changes = {"phase":phase}
+        if phase=="boot_error": changes["boot_error"]=detail
+        self._change_status(**changes)
+
+    def on_analyzer_probe(self, ok, diag):
+        for sink in self._sinks:
+            callback = getattr(sink, "on_analyzer_probe", None)
+            if callback: callback(ok, diag)
+        self._change_status(analyzer_ok=ok, analyzer_diag=diag)
+
+    def on_paused(self, paused, until=None):
+        for sink in self._sinks:
+            callback = getattr(sink, "on_paused", None)
+            if callback: callback(paused, until)
+        self._change_status(paused=paused, paused_until=until)
+
+    def on_folders(self, folders):
+        for sink in self._sinks:
+            callback=getattr(sink,"set_replay_folders",None)
+            if callback: callback(folders)
+        self._change_status(folders=list(folders))
+
+    def on_filter_label(self, label):
+        self._change_status(filter_label=label)
+
     def on_pairing_state(self, state) -> None:
+        if state.kind in ("requesting", "showing"):
+            self._change_status(unlinked=False, paired=False)
         for sink in self._sinks:
             callback = getattr(sink, "on_pairing_state", None)
             if callback:
                 callback(state)
 
     def on_unlinked(self) -> None:
+        self._change_status(unlinked=True, paired=False)
         for sink in self._sinks:
             callback = getattr(sink, "on_unlinked", None)
             if callback:
@@ -3006,6 +3140,7 @@ class _Multiplexer:
             if waiting_count and not self._offline_toasted and time.time() - self._offline_since >= 600:
                 self._notice(f"Sync is waiting for a connection. {waiting_count:,} replays are safely queued.")
                 self._offline_toasted = True
+        self._change_status(connection=ConnectionFacts(kind,waiting_count,next_retry_at))
         for sink in self._sinks:
             callback = getattr(sink, "on_connection_state", None)
             if callback:
@@ -3022,6 +3157,7 @@ class _Multiplexer:
             s.show_pairing_code(code)
 
     def on_paired(self, user_id: str) -> None:
+        self._change_status(paired=True, unlinked=False)
         for s in self._sinks:
             s.on_paired(user_id)
 
@@ -3030,16 +3166,23 @@ class _Multiplexer:
             s.on_status(status)
 
     def on_upload_success(self, name: str) -> None:
+        self._change_status(last_upload_at=time.time())
         if self._offline_since:
             self._recovered_count += 1
         for s in self._sinks:
             s.on_upload_success(name)
 
     def on_upload_failed(self, name: str, reason) -> None:
+        if getattr(reason, "counts_as_error", True):
+            with self._status_lock:
+                self._status_facts.terminal_failure_times.append(time.time())
+            self._change_status(latest_failure_title=reason if isinstance(reason,str) else reason.title)
         for s in self._sinks:
             s.on_upload_failed(name, reason)
 
     def on_pending(self, count: int) -> None:
+        old=self._status_facts.connection
+        self._change_status(pending_count=count, connection=ConnectionFacts(old.kind,count,old.next_retry_at))
         for s in self._sinks:
             s.on_pending(count)
 

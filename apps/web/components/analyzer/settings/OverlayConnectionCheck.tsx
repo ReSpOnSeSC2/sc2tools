@@ -214,8 +214,8 @@ export function StuckWidgetHelp() {
           <p className="text-text">Widget stuck on the last opponent?</p>
           <p>
             Most widgets auto-hide on a per-panel timer (Match result and
-            Streak in seconds, Scouting after about 22 s, Opponent identity
-            after a longer idle gap). The persistent panels &mdash;{" "}
+              Streak in seconds, Scouting after its short opening window,
+              and Opponent identity after the match). The persistent panels &mdash;{" "}
             <strong className="text-text">Session record</strong> and{" "}
             <strong className="text-text">Top builds</strong> &mdash; stay
             on screen by design. If a widget&apos;s sitting stale, force the
@@ -245,9 +245,12 @@ export function StuckWidgetHelp() {
             Source so the widget always re-mounts when you switch scenes.
           </p>
           <p>
-            <strong className="text-text">Test fires</strong> always carry a
-            short timer (about 20 s), so previewing the Session or Top builds
-            panels with the Test button never leaves sample data on your scene.
+              <strong className="text-text">Test fires</strong> cover real data
+              for about 20 s. Stop or expiry removes only the sample and restores
+              the latest real opponent and session. During a live match,
+              Settings asks before sending samples to viewers; choose{" "}
+              <strong className="text-text">Preview here instead</strong> to open
+              a local sample page that sends nothing to OBS.
           </p>
         </div>
       </div>

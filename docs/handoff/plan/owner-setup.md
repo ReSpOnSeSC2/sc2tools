@@ -1,5 +1,9 @@
 # Owner setup notes (accumulated)
 
+## Wave 2: opponents-polish-2 / opponents-polish-4
+
+No new secrets, infrastructure or migration. Deploy the API before the web for batched private `notesMeta.preview` reads. Existing full-note list responses stay compatible. List URLs use `q`, `sort`, `dir`, `impact` and `notes`; future global URL writers must preserve these and unknown parameters. Sort preferences are local, and list return state plus unsaved note drafts stay in the current browser tab. Draft restoration checks the signed-in owner. No production notes or account data were modified during validation.
+
 ## Wave 2: analyzer-home-polish-2 / analyzer-home-polish-3
 
 No new secrets, environment variables or infrastructure. Filter wire values and request scopes stay compatible. Today stores its editor visibility at `analyzer.today.showFilters`; Trends keeps `analyzer.trends.bucket` and adds `analyzer.trends.collapsed`. These preferences stay on the current browser. Invalid stored values fall back safely. Help describes the summary, the phone editor and the scope of Today/Arcade. No account data migration or production data modification is needed.

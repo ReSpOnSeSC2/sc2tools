@@ -36,6 +36,7 @@ vi.mock("@/lib/clientApi", () => ({
 }));
 
 vi.mock("@/components/ui/Toast", () => ({
+  useToastOptional: () => undefined,
   useToast: () => ({
     toast: { success: harness.toastSuccess, error: vi.fn() },
   }),

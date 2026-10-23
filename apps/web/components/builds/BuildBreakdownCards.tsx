@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { pct1, wrColor } from "@/lib/format";
 import type { BuildDetailRow } from "./types";
+import { StrategyLabel } from "@/components/definitions/StrategyLabel";
 
 /** "Vs opponent strategy" / "Vs map" panels share this layout. */
 export function BreakdownCard({
@@ -25,7 +26,7 @@ export function BreakdownCard({
           {enriched.map((r) => (
             <li key={r.name} className="space-y-1">
               <div className="flex items-baseline justify-between gap-3 text-caption">
-                <span className="truncate text-text">{r.name || "Unknown"}</span>
+                <span className="truncate text-text">{title === "Vs opponent strategy" ? <StrategyLabel label={r.name || "Unknown"} /> : r.name || "Unknown"}</span>
                 <span className="tabular-nums text-text-muted">
                   {r.wins}–{r.losses}
                   <span className="px-1 text-text-dim">·</span>

@@ -20,6 +20,8 @@ export type SessionSummary = {
    * sample data to the scene forever.
    */
   isTest?: boolean;
+  /** Correlates the paired live/session sample without replaying stale tests. */
+  testNonce?: number | string;
 };
 
 /**

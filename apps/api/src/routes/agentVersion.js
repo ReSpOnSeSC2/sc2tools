@@ -17,6 +17,7 @@ const { compareVersions } = require("../services/agentVersion");
  *
  * @param {{
  *   agentVersion: import('../services/types').AgentVersionService,
+ *   announcements?: import('../services/announcements').AnnouncementsService,
  *   adminToken?: string | null,
  *   adminEvents?: {
  *     record: (type: string, payload: Record<string, unknown>, opts?: {ingestionKey?: string}) => Promise<unknown>,
@@ -32,11 +33,12 @@ function buildAgentVersionRouter(deps) {
       const channel = String(req.query.channel || "stable");
       const platform = String(req.query.platform || "windows");
       const current = String(req.query.current || "0.0.0");
+      const notice = deps.announcements ? await deps.announcements.active("agent").catch(() => null) : null;
       const release = /** @type {any} */ (
         await deps.agentVersion.latest({ channel, platform })
       );
       if (!release) {
-        res.json({ ok: true, channel, platform, update_available: false });
+        res.json({ ok: true, channel, platform, update_available: false, notice });
         return;
       }
       const cmp = compareVersions(current, release.version);
@@ -52,6 +54,7 @@ function buildAgentVersionRouter(deps) {
         releaseNotes: release.releaseNotes,
         minSupportedVersion: release.minSupportedVersion,
         artifact: release.artifact,
+        notice,
       });
     } catch (err) {
       next(err);

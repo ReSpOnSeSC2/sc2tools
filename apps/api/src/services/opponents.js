@@ -405,6 +405,7 @@ class OpponentsService {
       this._overlayLatestSeenFromGames(userId, page),
       this._overlayLatestMmrFromGames(userId, page),
       this._overlayGlobalIdentities(page),
+      this._overlayNotes(userId, page, true),
     ]);
     return { items: page, nextBefore };
   }
@@ -540,7 +541,38 @@ class OpponentsService {
     //     used by the unfiltered path: zero outbound Pulse traffic.
     await this._overlayLatestMmrFromGames(userId, page);
     await this._overlayGlobalIdentities(page);
+    await this._overlayNotes(userId, page);
     return { items: page, nextBefore };
+  }
+
+  /**
+   * Private notes live outside replay evidence and opponent identities.
+   * Read one indexed batch per page, scoped to the signed-in owner.
+   * @private
+   * @param {string} userId
+   * @param {Array<any>} rows
+   * @param {boolean} [includeNotes]
+   */
+  async _overlayNotes(userId, rows, includeNotes = false) {
+    if (!rows.length || !this.db.opponentNotes?.find) return;
+    const ids = [...new Set(rows.map((row) => row.pulseId).filter((id) => typeof id === "string"))];
+    if (!ids.length) return;
+    const cursor = this.db.opponentNotes.find(
+      { userId, pulseId: { $in: ids } },
+      { projection: { _id: 0, pulseId: 1, notes: 1 } },
+    );
+    /** @type {Map<string, string>} */
+    const notes = new Map();
+    for await (const doc of cursor) {
+      if (typeof doc.notes === "string" && doc.notes.trim()) notes.set(doc.pulseId, doc.notes);
+    }
+    for (const row of rows) {
+      const value = notes.get(row.pulseId);
+      if (value) row.notesMeta = { preview: Array.from(value.replace(/\s+/g, " ").trim()).slice(0, 140).join("") };
+      else delete row.notesMeta;
+      if (includeNotes && value) row.notes = value;
+      else delete row.notes;
+    }
   }
 
   /**

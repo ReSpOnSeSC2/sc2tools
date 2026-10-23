@@ -1,7 +1,9 @@
 "use strict";
 
 const express = require("express");
+const { NOTIFICATIONS_PREF_TYPE, sanitizeNotificationPrefs } = require("../services/notificationPrefs");
 const { validateProfile } = require("../validation/profile");
+const { publicDataRetention } = require("../services/dataInventory");
 const {
   claimReplayIngestAdmission,
   releaseReplayIngestAdmission,
@@ -42,8 +44,11 @@ const ME_MMR_MAX_TOONS = 8;
  *
  * @param {{
  *   users: import('../services/types').UsersService,
+ *   announcements?: import('../services/announcements').AnnouncementsService,
  *   games: import('../services/types').GamesService,
  *   gdpr: import('../services/gdpr').GdprService,
+ *   backupStatus?: import('../services/backupStatus').BackupStatusService,
+ *   dataRepairs?: import('../services/dataRepairs').DataRepairsService,
  *   pairings: import('../services/devicePairings').DevicePairingsService,
  *   imports?: import('../services/import').ImportService,
  *   multichatSounds?: import('../services/multichatSounds').MultichatSoundsService,
@@ -72,6 +77,20 @@ function buildMeRouter(deps) {
   const isAdminEmail = deps.isAdminEmail || (() => false);
   const clerk = deps.clerk || null;
 
+  router.get("/site/data-retention", async (_req, res, next) => {
+    try {
+      res.set("Cache-Control", "public, max-age=60");
+      res.json(deps.backupStatus ? await publicDataRetention(deps.backupStatus) : { available: false, retention: [], checkedAt: null });
+    } catch (error) { next(error); }
+  });
+  router.get("/me/data-inventory", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      res.set("Cache-Control", "private, no-store");
+      res.json(await deps.gdpr.inventory(req.auth.userId));
+    } catch (error) { next(error); }
+  });
+
   // Auth applied per-route, NOT via router.use(). Router-level middleware
   // here would intercept every /v1/* request that doesn't match an
   // earlier-mounted router, blocking unauthenticated endpoints like
@@ -81,6 +100,7 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       await deps.users.touch(auth.userId);
+      await deps.announcements?.deliverMajors(auth.userId);
       const [stats, summary, agent, activeImportJob, onboarding] =
         await Promise.all([
           deps.games.stats(auth.userId),
@@ -363,6 +383,7 @@ function buildMeRouter(deps) {
   // (downloadStartedAt, dismissedAt). "buildCheckin" is the build check-in
   // switches (always exactly three booleans, default true).
   const PREF_TYPES = new Set([
+    NOTIFICATIONS_PREF_TYPE,
     "misc",
     "voice",
     "arcade",
@@ -382,7 +403,8 @@ function buildMeRouter(deps) {
         return;
       }
       const prefs = await deps.users.getPreferences(auth.userId, type);
-      res.json(type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(prefs) : prefs);
+      res.json(type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(prefs)
+        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(prefs) : prefs);
     } catch (err) {
       next(err);
     }
@@ -407,7 +429,8 @@ function buildMeRouter(deps) {
         res.status(400).json({ error: { code: "invalid_onboarding_goals" } });
         return;
       }
-      const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body) : req.body;
+      const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body)
+        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body) : req.body;
       const saved = await deps.users.updatePreferences(auth.userId, type, body);
       if (deps.buildIntents) {
         try {
@@ -691,6 +714,9 @@ function buildMeRouter(deps) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
+        if (auth.source !== "clerk") {
+          res.status(403).json({ error: { code: "browser_session_required" } }); return;
+        }
       const counts = await deps.gdpr.deleteAll(auth.userId);
       if (deps.logger) {
         deps.logger.info(
@@ -698,7 +724,7 @@ function buildMeRouter(deps) {
           "gdpr_account_deleted",
         );
       }
-      res.json({ deleted: true, counts });
+      res.json({ deleted: true, counts, identityDeletionPending: counts.identityDeletionPending === 1 });
     } catch (err) {
       next(err);
     }
@@ -766,6 +792,41 @@ function buildMeRouter(deps) {
     }
   });
 
+  router.post("/me/repair/:kind", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      if (!deps.dataRepairs) throw Object.assign(new Error("repairs_unavailable"), { status: 503 });
+      res.status(202).json(await deps.dataRepairs.start(req.auth.userId, String(req.params.kind)));
+    } catch (error) { next(error); }
+  });
+
+  for (const action of ["preview", "download"]) {
+    router.get(`/me/backups/:id/${action}`, deps.auth, async (req, res, next) => {
+      try {
+        if (!req.auth) throw new Error("auth_required");
+        if (!deps.gdpr.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+        res.setHeader("Cache-Control", "private, no-store");
+        res.json(action === "preview" ? await deps.gdpr.backups.preview(req.auth.userId, String(req.params.id)) : await deps.gdpr.backups.download(req.auth.userId, String(req.params.id)));
+      } catch (error) { next(error); }
+    });
+  }
+  router.patch("/me/backups/:id", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      if (!deps.gdpr.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+      res.json(await deps.gdpr.backups.label(req.auth.userId, String(req.params.id), req.body?.label));
+    } catch (error) { next(error); }
+  });
+  router.delete("/me/backups/:id", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      if (!deps.gdpr.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+      const fence = await deps.gdpr._acquireMutationFence(req.auth.userId, "delete_backup");
+      try { res.json(await deps.gdpr.backups.remove(req.auth.userId, String(req.params.id))); }
+      finally { await deps.gdpr._releaseMutationFence(req.auth.userId, fence); }
+    } catch (error) { next(error); }
+  });
+
   router.post(
     "/me/backups/:id/restore",
     deps.auth,
@@ -773,9 +834,11 @@ function buildMeRouter(deps) {
       try {
         const auth = req.auth;
         if (!auth) throw new Error("auth_required");
+        if (req.body?.currentRevision !== undefined && (typeof req.body.currentRevision !== "string" || !/^[a-f0-9]{24}$/.test(req.body.currentRevision))) throw Object.assign(new Error("invalid_preview_revision"), { status: 400 });
         const result = await deps.gdpr.restoreSnapshot(
           auth.userId,
           String(req.params.id),
+          req.body?.currentRevision,
         );
         res.json(result);
       } catch (err) {

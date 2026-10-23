@@ -339,3 +339,19 @@ describe("sc2tools.com credit", () => {
     expect(screen.queryByTestId("overlay-credit")).toBeNull();
   });
 });
+
+
+describe("Dock headline precedence", () => {
+  it.each([["starting", "STARTING SOON"], ["brb", "BE RIGHT BACK"], ["intermission", "INTERMISSION"], ["ending", "THANKS FOR WATCHING"]] as const)("keeps the URL backdrop but uses the %s headline", async (mode, headline) => {
+    fetchSpy.mockResolvedValue({ ok: true, json: async () => ({ scene: { mode, message: "A message", countdownEndsAt: null } }) });
+    const { container } = render(<OverlaySceneClient token="token" scene="intermission" />);
+    expect(await screen.findByText(headline)).toBeTruthy();
+    expect(container.querySelector("[data-variant=intermission]")).toBeTruthy();
+    expect(screen.getByText("A message")).toBeTruthy();
+  });
+  it("uses Intermission's own headline when the Dock is idle", async () => {
+    fetchSpy.mockResolvedValue({ ok: true, json: async () => ({ scene: null }) });
+    render(<OverlaySceneClient token="token" scene="intermission" />);
+    await act(async () => {}); expect(screen.getByText("INTERMISSION")).toBeTruthy();
+  });
+});

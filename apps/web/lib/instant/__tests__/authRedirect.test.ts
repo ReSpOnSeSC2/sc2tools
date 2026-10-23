@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { TRY_RESUME_PATH, TRY_SIGN_IN_HREF, TRY_SIGN_UP_HREF, safeAuthRedirect } from "../authRedirect";
+import { TRY_RESUME_PATH, TRY_SIGN_IN_HREF, TRY_SIGN_UP_HREF, safeAuthRedirect, isTryResumeRedirect } from "../authRedirect";
 
 describe("safeAuthRedirect", () => {
   it("allows the /try resume path as-is", () => {
@@ -61,4 +61,10 @@ describe("safeAuthRedirect", () => {
     expect(TRY_SIGN_UP_HREF).toBe("/sign-up?redirect_url=%2Ftry%3Fresume%3D1");
     expect(TRY_SIGN_IN_HREF).toBe("/sign-in?redirect_url=%2Ftry%3Fresume%3D1");
   });
+});
+
+
+describe("isTryResumeRedirect", () => {
+  it.each(["/try?resume=1", "%2Ftry%3Fresume%3D1", "%2ftry%3fresume%3d1"])("recognizes %s", (value) => expect(isTryResumeRedirect(value)).toBe(true));
+  it.each([null, "", "/app", "/try", "/try?resume=1&extra=1", "https://example.com/try?resume=1", "%252Ftry%253Fresume%253D1"])("rejects %s", (value) => expect(isTryResumeRedirect(value)).toBe(false));
 });

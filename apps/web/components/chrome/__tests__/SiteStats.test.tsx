@@ -21,7 +21,7 @@ afterEach(() => {
   response.data = undefined;
   response.error = undefined;
   response.isLoading = false;
-  vi.useRealTimers();
+  vi.useRealTimers(); vi.restoreAllMocks(); localStorage.clear();
 });
 
 function snapshot() {
@@ -93,5 +93,19 @@ describe("public community activity", () => {
     render(<SiteStats />);
     expect(screen.getByText("12,345")).toBeTruthy();
     expect(screen.queryByLabelText("Unavailable")).toBeNull();
+  });
+});
+
+
+describe("compact app activity", () => {
+  it("keeps community counts in a persisted disclosure and includes the supplied agent pill", () => {
+    snapshot(); const first = render(<SiteStats variant="app" signedIn analyzer syncStatus={<span>Agent online</span>} />);
+    const toggle = screen.getByRole("button", { name: /Community · 0 online/ }); const details = document.getElementById(toggle.getAttribute("aria-controls")!)!;
+    expect(details.hidden).toBe(true); expect(screen.getByText("Agent online")).toBeTruthy(); fireEvent.click(toggle); expect(details.hidden).toBe(false); expect(localStorage.getItem("sc2tools:activity-details:v1")).toBe("expanded");
+    first.unmount(); render(<SiteStats variant="app" signedIn analyzer />); expect(screen.getByRole("button", { name: /Community/ }).getAttribute("aria-expanded")).toBe("true");
+  });
+  it("keeps storage failures non-fatal and does not invent an online count on error", () => {
+    snapshot(); response.error = new Error("offline"); vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); }); vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+    render(<SiteStats variant="app" signedIn />); const toggle = screen.getByRole("button", { name: /Community · unavailable/ }); fireEvent.click(toggle); expect(toggle.getAttribute("aria-expanded")).toBe("true");
   });
 });

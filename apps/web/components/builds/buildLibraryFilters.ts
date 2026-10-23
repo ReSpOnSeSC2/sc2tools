@@ -6,7 +6,7 @@ const matchups = new Set(COMMON_MATCHUPS.map(({ my, vs }) => `${raceLetter(my)}v
 export function readBuildFilters(params: Pick<URLSearchParams, "get">): BuildFilterState {
   const sort = params.get("sort"); const matchup = params.get("mu");
   return { search: (params.get("q") || "").slice(0, 200), matchup: matchup && matchups.has(matchup) ? matchup : "All",
-    sort: sort === "games" || sort === "winRate" || sort === "name" ? sort : "updated", hideEmpty: params.get("hide") === "1" };
+    sort: sort === "games" || sort === "winRate" || sort === "name" || sort === "lastPlayed" ? sort : "updated", hideEmpty: params.get("hide") === "1" };
 }
 export function buildFiltersQuery(filters: BuildFilterState): string {
   const params = new URLSearchParams();

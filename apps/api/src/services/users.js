@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
+const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 
 const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
 const REPLAY_SHARE_SLUG_SUFFIX_BYTES = 5;
@@ -29,11 +30,13 @@ class UsersService {
    *       email: string,
    *     ) => Promise<unknown>,
    *   } | null,
+   *   identityDeletions?: import('./identityDeletions').IdentityDeletionsService|null,
    * }} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
     this.adminEvents = opts.adminEvents || null;
+    this.identityDeletions = opts.identityDeletions || null;
   }
 
   /**
@@ -45,7 +48,9 @@ class UsersService {
    */
   async ensureFromClerk(clerkUserId) {
     if (!clerkUserId) throw new Error("clerkUserId required");
+    await this._assertIdentityActive(clerkUserId);
     const existing = await this.db.users.findOne({ clerkUserId });
+    await this._assertIdentityActive(clerkUserId);
     if (existing) {
       return { userId: existing.userId, clerkUserId };
     }
@@ -67,15 +72,23 @@ class UsersService {
       const code = /** @type {any} */ (err)?.code;
       if (code === 11000) {
         const again = await this.db.users.findOne({ clerkUserId });
-        if (again) return { userId: again.userId, clerkUserId };
+        if (again) { await this._assertIdentityActive(clerkUserId); return { userId: again.userId, clerkUserId }; }
       }
       throw err;
     }
     // Await the one-time write so any email discovered later in this same
     // request can deterministically enrich the event instead of racing an
     // unobserved fire-and-forget insert.
-    await this._recordSignup({ clerkUserId, userId, source: "first_touch" });
+    try { await this._assertIdentityActive(clerkUserId); }
+    catch (error) { await this.db.users.deleteOne({ userId, clerkUserId }); throw error; }
+    const lease = this.identityDeletions ? await claimUserDataLease(this.db.users, userId) : null;
+    try { await this._recordSignup({ clerkUserId, userId, source: "first_touch" }); }
+    finally { if (lease) await lease.release(); }
     return { userId, clerkUserId };
+  }
+  /** @param {string} clerkUserId */
+  async _assertIdentityActive(clerkUserId) {
+    if (this.identityDeletions && await this.identityDeletions.isDeleted(clerkUserId)) throw Object.assign(new Error("account_deleted"), { status: 401, code: "account_deleted" });
   }
 
   /**
@@ -497,6 +510,7 @@ class UsersService {
    */
   async upsertFromWebhook(clerkUserId, email, opts = {}) {
     if (!clerkUserId) return false;
+    await this._assertIdentityActive(clerkUserId);
     const now = new Date();
     /** @type {Record<string, unknown>} */
     const set = { lastSeenAt: now };
@@ -516,6 +530,14 @@ class UsersService {
       { $set: set, $setOnInsert: setOnInsert },
       { upsert: true },
     );
+    try { await this._assertIdentityActive(clerkUserId); }
+    catch (error) {
+      if (res.upsertedCount) await this.db.users.deleteOne({ userId: setOnInsert.userId, clerkUserId });
+      throw error;
+    }
+    const current = await this.db.users.findOne({ clerkUserId }, { projection: { userId: 1 } });
+    const lease = this.identityDeletions && current ? await claimUserDataLease(this.db.users, current.userId) : null;
+    try {
     if (opts.eventType !== "user.updated") {
       // user.created is authoritative signup input even if first-touch won
       // the users-row race. record() dedupes by Clerk id and fill-only
@@ -541,6 +563,7 @@ class UsersService {
       await this._enrichSignupEmail({ clerkUserId }, set.email);
     }
     return res.modifiedCount > 0 || res.upsertedCount > 0;
+    } finally { if (lease) await lease.release(); }
   }
 
   /**

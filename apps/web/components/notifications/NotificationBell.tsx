@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useAuth } from "@clerk/nextjs";
 import { Bell } from "lucide-react";
-import { SkeletonBar, SkeletonRegion } from "@/components/ui/Skeleton";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { useUserSocket } from "@/lib/useUserSocket";
-import { reviewsVisible } from "@/lib/reviews";
+const NotificationPanel = dynamic(() => import("./NotificationPanel"), { ssr: false });
 
 type NotificationRow = {
   id: string;
@@ -35,10 +34,7 @@ const notificationVersion = (row: NotificationRow) => `${row.id}:${row.createdAt
  */
 export function NotificationBell({ compact = false }: { compact?: boolean }) {
   const { userId } = useAuth();
-  // Every current notification comes from the Replay Review Exchange,
-  // so the bell follows its rollout (SWR dedupes /v1/me app-wide).
-  const { data: me } = useApi<{ isAdmin?: boolean }>("/v1/me");
-  if (!reviewsVisible(me?.isAdmin)) return null;
+  if (!userId) return null;
   return <Bell_ key={userId || "signed-out"} compact={compact} />;
 }
 
@@ -69,13 +65,18 @@ function Bell_({ compact }: { compact: boolean }) {
   const tokenRef = useRef(getToken);
   tokenRef.current = getToken;
   const [open, setOpen] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
+  const openedNew = useRef(new Set<string>());
+  const bellRef = useRef<HTMLButtonElement>(null);
   const [view, setView] = useState<NotificationView>("all");
   const [cursor, setCursor] = useState<string | null>(null);
   const [items, setItems] = useState<NotificationRow[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [scopeReady, setScopeReady] = useState(false);
+  const [scopeMerged, setScopeMerged] = useState(false);
   const [scopeVersion, setScopeVersion] = useState(0);
   const [readError, setReadError] = useState(false);
+  const failedMarkAll = useRef(false);
   const [readRetry, setReadRetry] = useState(0);
   const acknowledged = useRef(new Map<string, string>());
   const pendingReads = useRef(new Set<string>());
@@ -115,8 +116,7 @@ function Bell_({ compact }: { compact: boolean }) {
     }
   }, [mutateUnread]);
   const handlers = useMemo(() => ({ "notifications:changed": refresh, connect: refresh }), [refresh]);
-  // Only sockets for accounts the API answered for (signed in, feature on).
-  useUserSocket(unread.data ? handlers : null);
+  useUserSocket(handlers);
 
   const count = unread.data?.count ?? 0;
 
@@ -163,6 +163,7 @@ function Bell_({ compact }: { compact: boolean }) {
       return [...rows.values()].sort((a, b) =>
         b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
     });
+    setScopeMerged(true);
     if (view !== "all" || cursor || !loadedHistoryTail.current) {
       setNextCursor(page.nextCursor);
     }
@@ -173,6 +174,7 @@ function Bell_({ compact }: { compact: boolean }) {
     if (!open) return;
     const batch = items.filter((row) => {
       const version = notificationVersion(row);
+      if (!row.readAt) openedNew.current.add(row.id);
       return !row.readAt && !acknowledged.current.has(version)
         && !pendingReads.current.has(version) && !failedReads.current.has(version);
     });
@@ -200,6 +202,7 @@ function Bell_({ compact }: { compact: boolean }) {
   function selectView(next: NotificationView) {
     loadedHistoryTail.current = false;
     setScopeReady(false);
+    setScopeMerged(false);
     setScopeVersion((value) => value + 1);
     setItems([]);
     setCursor(null);
@@ -207,18 +210,32 @@ function Bell_({ compact }: { compact: boolean }) {
     setView(next);
   }
 
+  function closePanel() { setOpen(false); bellRef.current?.focus(); }
   function togglePanel() {
-    if (!open) selectView(count > 0 ? "unread" : "all");
-    setOpen((value) => !value);
+    if (!open) { openedNew.current.clear(); selectView(count > 0 ? "unread" : "all"); setOpen(true); }
+    else closePanel();
+  }
+  async function markAllRead() {
+    if (markingAll || count === 0) return;
+    failedMarkAll.current = false;
+    setMarkingAll(true);
+    try {
+      await apiCall(tokenRef.current, "/v1/me/notifications/read", { method: "POST", body: JSON.stringify({ all: true }) });
+      if (!mounted.current) return;
+      const readAt = new Date().toISOString();
+      setItems((current) => current.map((row) => { acknowledged.current.set(notificationVersion(row), readAt); return { ...row, readAt }; }));
+      setReadError(false); void mutateUnread();
+    } catch { if (mounted.current) { failedMarkAll.current = true; setReadError(true); } }
+    finally { if (mounted.current) setMarkingAll(false); }
   }
 
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) closePanel();
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") closePanel();
     };
     document.addEventListener("mousedown", onDoc);
     document.addEventListener("keydown", onKey);
@@ -244,10 +261,10 @@ function Bell_({ compact }: { compact: boolean }) {
     return () => window.removeEventListener("resize", place);
   }, [open]);
 
-  if (unread.error || !unread.data) return null;
   return (
     <div ref={rootRef} className="relative">
       <button
+        ref={bellRef}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -259,86 +276,18 @@ function Bell_({ compact }: { compact: boolean }) {
           compact ? "h-8 min-w-8 px-2" : "h-9 min-w-9 px-2.5",
         ].join(" ")}
       >
-        <Bell className="h-4 w-4" aria-hidden />
+        <Bell className={`h-4 w-4 ${unread.error ? "text-text-dim" : ""}`} aria-hidden />
         {count > 0 ? (
           <span className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white">
             {count > 99 ? "99+" : String(count)}
           </span>
         ) : null}
       </button>
-      {open ? (
-        <div
-          role="dialog"
-          aria-label="Notifications"
-          style={panelStyle}
-          className="absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border-2 border-line bg-bg-surface p-2 shadow-hard"
-        >
-          <div className="mb-1 flex gap-2 border-b border-border p-1">
-            {(["unread", "all"] as const).map((mode) => (
-              <button key={mode} type="button" aria-pressed={view === mode}
-                onClick={() => { if (view !== mode) selectView(mode); }}
-                className="rounded-lg px-2 py-1 text-caption font-semibold hover:bg-bg-elevated">
-                {mode === "unread" ? "Unread" : "All notifications"}
-              </button>
-            ))}
-          </div>
-          {readError ? (
-            <p role="alert" className="p-2 text-caption text-text-muted">
-              Could not mark notifications as read. <button type="button" className="underline" onClick={() => {
-                failedReads.current.clear();
-                setReadError(false);
-                setReadRetry((value) => value + 1);
-              }}>Retry</button>
-            </p>
-          ) : null}
-          {list.error ? (
-            <p role="alert" className="p-2 text-caption text-text-muted">
-              Could not load notifications. <button type="button" className="underline"
-                onClick={() => {
-                  if (!scopeReady) setScopeVersion((value) => value + 1);
-                  else void list.mutate();
-                }}>Try again</button>
-            </p>
-          ) : null}
-          {(!scopeReady || !list.data || list.isLoading || list.isValidating) && !list.error && items.length === 0 ? (
-            <SkeletonRegion label="Loading notifications" className="space-y-1">
-              {[0, 1, 2].map((i) => (
-                <div key={i} aria-hidden className="space-y-1.5 rounded-lg p-2.5">
-                  <SkeletonBar className="h-3.5 w-3/5" />
-                  <SkeletonBar className="h-3 w-4/5" />
-                  <SkeletonBar className="h-2.5 w-24" />
-                </div>
-              ))}
-            </SkeletonRegion>
-          ) : items.length === 0 ? (
-            !list.error ? <p className="p-3 text-caption text-text-muted">
-              {view === "unread" ? "No unread notifications." : "No notifications yet."}
-            </p> : null
-          ) : (
-            <ul className="max-h-[60vh] space-y-1 overflow-y-auto">
-              {items.map((n) => (
-                <li key={n.id}>
-                  <Link
-                    href={n.href || "/reviews"}
-                    onClick={() => setOpen(false)}
-                    className={`block rounded-lg p-2.5 hover:bg-bg-elevated ${n.readAt ? "" : "bg-accent/10"}`}
-                  >
-                    <span className="block text-caption font-semibold text-text">{n.title}</span>
-                    {n.body ? <span className="block break-words text-micro text-text-muted">{n.body}</span> : null}
-                    <time className="block text-micro text-text-dim" dateTime={n.createdAt}>{new Date(n.createdAt).toLocaleString()}</time>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          {nextCursor ? (
-            <button type="button" disabled={list.isLoading} className="mt-1 w-full rounded-lg p-2 text-caption font-semibold hover:bg-bg-elevated disabled:opacity-50"
-              onClick={() => setCursor(nextCursor)}>
-              {list.isLoading ? "Loading…" : "Load more notifications"}
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+      {open ? <NotificationPanel items={items} style={panelStyle} ready={scopeReady && scopeMerged} loading={!!(list.isLoading || list.isValidating)}
+        listError={!!list.error} unreadError={!!unread.error} readError={readError} view={view} selectView={selectView} onClose={closePanel}
+        retryList={() => { if (!scopeReady) setScopeVersion((value) => value + 1); else void list.mutate(); }}
+        retryUnread={() => void mutateUnread()} retryRead={() => { if (failedMarkAll.current) { void markAllRead(); return; } failedReads.current.clear(); setReadError(false); setReadRetry((value) => value + 1); }}
+        onMore={nextCursor ? () => setCursor(nextCursor) : null} markAll={markAllRead} markingAll={markingAll} unread={count} openedNew={openedNew.current} /> : null}
     </div>
   );
 }

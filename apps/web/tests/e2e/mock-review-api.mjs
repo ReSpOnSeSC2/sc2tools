@@ -15,6 +15,8 @@
 
 import http from "node:http";
 import { GUIDE_ROUTES } from "./mock-guides-api.mjs";
+import { communityFixture } from "./mock-community-api.mjs";
+import { COMMUNITY_DETAIL_ROUTES } from "./mock-community-detail-api.mjs";
 import { publicArchiveFixture } from "./mock-public-archive-api.mjs";
 
 const PORT = Number(process.env.MOCK_API_PORT || 8080);
@@ -122,6 +124,7 @@ const ROUTES = new Map([
   [`/v1/reviews/${ID}/analysis/map-playback`, PLAYBACK],
   [`/v1/reviews/${ID}/og`, { id: ID, question: REQUEST.question, matchup: "PvZ", map: REQUEST.game.map, result: "Loss", askerBand: "Diamond", reviewCount: 3, hasBest: true, status: "answered" }],
   ...GUIDE_ROUTES,
+  ...COMMUNITY_DETAIL_ROUTES,
 ]);
 
 const server = http.createServer((req, res) => {
@@ -156,9 +159,25 @@ const server = http.createServer((req, res) => {
     res.writeHead(204, cors).end();
     return;
   }
+  if (req.method === "GET" && path === "/v1/reviews") {
+    const query = new URL(req.url || "/", "http://fixture.local").searchParams;
+    const matchup = /^[PTZ]v[PTZ]$/.test(query.get("matchup") || "") ? query.get("matchup") : null;
+    const race = /^[PTZ]$/.test(query.get("race") || "") ? query.get("race") : null;
+    const matches = matchup ? CARD.matchup === matchup : !race || CARD.matchup.startsWith(race);
+    const items = matches && !query.has("cursor") ? [CARD] : [];
+    res.writeHead(200, { ...cors, "content-type": "application/json", "cache-control": "no-store" });
+    res.end(JSON.stringify({ items, nextCursor: null }));
+    return;
+  }
   if (req.method === "GET" && ROUTES.has(path)) {
     res.writeHead(200, { ...cors, "content-type": "application/json", "cache-control": "no-store" });
     res.end(JSON.stringify(ROUTES.get(path)));
+    return;
+  }
+  const community = req.method === "GET" ? communityFixture(new URL(req.url || "/", "http://fixture.local")) : null;
+  if (community) {
+    res.writeHead(200, { ...cors, "content-type": "application/json", "cache-control": "no-store" });
+    res.end(JSON.stringify(community));
     return;
   }
   if (req.method === "GET" && path.startsWith("/v1/reviews/")) {

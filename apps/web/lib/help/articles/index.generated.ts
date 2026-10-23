@@ -7,9 +7,12 @@ import type { HelpArticle } from "../types";
 import accountData_backupsAndExport from "./account-data/backups-and-export";
 import accountData_deleteAccount from "./account-data/delete-account";
 import accountData_deletingGameHistory from "./account-data/deleting-game-history";
+import accountData_notifications from "./account-data/notifications";
 import accountData_playerChannels from "./account-data/player-channels";
 import accountData_privacyCookies from "./account-data/privacy-cookies";
 import accountData_publicProfile from "./account-data/public-profile";
+import accountData_repairMyData from "./account-data/repair-my-data";
+import accountData_stayUpToDate from "./account-data/stay-up-to-date";
 import analyzer_analyzerFilters from "./analyzer/analyzer-filters";
 import analyzer_arcade from "./analyzer/arcade";
 import analyzer_builds from "./analyzer/builds";
@@ -34,9 +37,14 @@ import builds_randomizer from "./builds/randomizer";
 import builds_readingGuideStats from "./builds/reading-guide-stats";
 import builds_rulesExplained from "./builds/rules-explained";
 import desktopApp_desktopAppActivityLog from "./desktop-app/desktop-app-activity-log";
+import desktopApp_desktopAppInstall from "./desktop-app/desktop-app-install";
 import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
+import desktopApp_desktopAppPerformance from "./desktop-app/desktop-app-performance";
+import desktopApp_desktopAppStatus from "./desktop-app/desktop-app-status";
 import desktopApp_desktopAppSyncProblems from "./desktop-app/desktop-app-sync-problems";
 import desktopApp_desktopAppSyncRange from "./desktop-app/desktop-app-sync-range";
+import desktopApp_desktopAppTray from "./desktop-app/desktop-app-tray";
+import desktopApp_desktopAppUpdates from "./desktop-app/desktop-app-updates";
 import desktopApp_pairingTroubleshooting from "./desktop-app/pairing-troubleshooting";
 import desktopApp_replayFolders from "./desktop-app/replay-folders";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
@@ -70,9 +78,12 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   accountData_backupsAndExport,
   accountData_deleteAccount,
   accountData_deletingGameHistory,
+  accountData_notifications,
   accountData_playerChannels,
   accountData_privacyCookies,
   accountData_publicProfile,
+  accountData_repairMyData,
+  accountData_stayUpToDate,
   analyzer_analyzerFilters,
   analyzer_arcade,
   analyzer_builds,
@@ -97,9 +108,14 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_readingGuideStats,
   builds_rulesExplained,
   desktopApp_desktopAppActivityLog,
+  desktopApp_desktopAppInstall,
   desktopApp_desktopAppOverview,
+  desktopApp_desktopAppPerformance,
+  desktopApp_desktopAppStatus,
   desktopApp_desktopAppSyncProblems,
   desktopApp_desktopAppSyncRange,
+  desktopApp_desktopAppTray,
+  desktopApp_desktopAppUpdates,
   desktopApp_pairingTroubleshooting,
   desktopApp_replayFolders,
   gamePage_gamePageAccuratePlayback,

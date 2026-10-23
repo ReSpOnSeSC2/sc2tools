@@ -36,6 +36,7 @@ import { NotificationBell } from "../NotificationBell";
 
 let rows: Record<string, Row[]>;
 let failRead: boolean;
+let failUnread: boolean;
 let deferAnnRead: boolean;
 let pendingRead: (() => void) | null;
 let deferList: boolean;
@@ -56,6 +57,7 @@ const versionCursor = (row: Row) => `${row.createdAt}|${row.id}`;
 beforeEach(() => {
   rows = { ann: [], bob: [] };
   failRead = false;
+  failUnread = false;
   deferAnnRead = false;
   pendingRead = null;
   deferList = false;
@@ -73,11 +75,12 @@ beforeEach(() => {
     const headers = init?.headers as Record<string, string>;
     const userId = (headers.authorization || "").replace("Bearer token-", "");
     if (url.pathname === "/v1/me") return response({ isAdmin: true });
-    if (url.pathname.endsWith("/unread-count")) return response({ count: rows[userId].filter((row) => !row.readAt).length });
+    if (url.pathname.endsWith("/unread-count")) return failUnread ? response({ error: { code: "internal_error" } }, 503) : response({ count: rows[userId].filter((row) => !row.readAt).length });
     if (url.pathname.endsWith("/read")) {
       if (failRead) return response({ error: { code: "internal_error" } }, 503);
       if (deferAnnRead && userId === "ann") await new Promise<void>((resolve) => { pendingRead = resolve; });
-      const ids = JSON.parse(init?.body as string).ids as string[];
+      const body = JSON.parse(init?.body as string);
+      const ids = body.all ? rows[userId].map((row) => row.id) : body.ids as string[];
       rows[userId].forEach((row) => { if (ids.includes(row.id)) row.readAt = "2026-10-17T12:00:00.000Z"; });
       return response({ updated: ids.length });
     }
@@ -129,7 +132,7 @@ describe("NotificationBell unread and history", () => {
     fireEvent.click(within(panel).getByRole("button", { name: "Load more notifications" }));
     await within(panel).findByText("Review old-00");
     await screen.findByRole("button", { name: "Notifications" });
-    expect(within(panel).getAllByRole("link")).toHaveLength(25);
+    expect(within(panel).getAllByRole("link").filter((link) => link.hasAttribute("data-notification-row"))).toHaveLength(25);
     expect(readCalls()).toHaveLength(2);
     expect(within(panel).queryByRole("button", { name: "Load more notifications" })).toBeNull();
   });
@@ -166,7 +169,7 @@ describe("NotificationBell unread and history", () => {
 
     expect(await within(panel).findByText("Review new-head")).toBeTruthy();
     await screen.findByRole("button", { name: "Notifications" });
-    expect(within(panel).getAllByRole("link")).toHaveLength(26);
+    expect(within(panel).getAllByRole("link").filter((link) => link.hasAttribute("data-notification-row"))).toHaveLength(26);
   });
 
   it("keeps the history tail cursor when a head refresh adds a new notification", async () => {
@@ -184,7 +187,7 @@ describe("NotificationBell unread and history", () => {
     fireEvent.click(within(panel).getByRole("button", { name: "Load more notifications" }));
 
     await within(panel).findByText("Review history-00");
-    expect(within(panel).getAllByRole("link")).toHaveLength(56);
+    expect(within(panel).getAllByRole("link").filter((link) => link.hasAttribute("data-notification-row"))).toHaveLength(56);
     expect(within(panel).queryByRole("button", { name: "Load more notifications" })).toBeNull();
   });
 
@@ -264,5 +267,79 @@ describe("NotificationBell unread and history", () => {
     await act(async () => { pendingRead?.(); });
     expect(screen.queryByText("Review private-ann")).toBeNull();
     expect(screen.getByText("Review private-bob")).toBeTruthy();
+  });
+});
+
+
+describe("notification center panel behavior", () => {
+  it("is enabled with Reviews off, styles the selected segment, and retains New styling after acknowledgement", async () => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "off"); rows.ann = [notification("one")];
+    render(<Bell />); const panel = await open(1);
+    const segment = within(panel).getByRole("button", { name: "Unread" });
+    expect(segment.className).toContain("bg-accent/15");
+    await waitFor(() => expect(readCalls()).toHaveLength(1));
+    await screen.findByRole("button", { name: "Notifications" });
+    const row = within(panel).getByRole("link", { name: /Review one/ });
+    expect(row.className).toContain("bg-accent/10"); expect(within(row).getByText("New")).toBeTruthy();
+    expect(within(panel).getByRole("link", { name: "See all notifications" }).getAttribute("href")).toBe("/notifications");
+  });
+
+  it("moves focus into the first row and restores it after Escape or outside click", async () => {
+    rows.ann = [notification("focus")]; render(<Bell />);
+    const panel = await open(1);
+    const row = await within(panel).findByRole("link", { name: /Review focus/ });
+    await waitFor(() => expect(document.activeElement).toBe(row));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Notifications" }));
+    fireEvent.click(document.activeElement!);
+    const reopened = await screen.findByRole("dialog");
+    await waitFor(() => expect(document.activeElement).toBe(within(reopened).getByRole("link", { name: /Review focus/ })));
+    fireEvent.mouseDown(document.body);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Notifications" }));
+  });
+
+  it("keeps an unavailable bell rendered and offers a working unread-count retry", async () => {
+    failUnread = true; render(<Bell />);
+    fireEvent.click(await screen.findByRole("button", { name: "Notifications" }));
+    const panel = await screen.findByRole("dialog");
+    expect(await within(panel).findByText(/Couldn't load notifications/)).toBeTruthy();
+    failUnread = false; fireEvent.click(within(panel).getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(within(panel).queryByText(/Couldn't load notifications/)).toBeNull());
+    expect(screen.getByRole("button", { name: "Notifications" })).toBeTruthy();
+  });
+
+  it("filters loaded kinds and hides absent categories without discarding rows", async () => {
+    rows.ann = [notification("review"), { ...notification("booking"), kind: "coaching.booked", title: "Session booked" }];
+    render(<Bell />); const panel = await open(2);
+    await within(panel).findByText("Session booked");
+    expect(within(panel).queryByRole("button", { name: "System" })).toBeNull();
+    fireEvent.click(within(panel).getByRole("button", { name: "Coaching" }));
+    expect(within(panel).queryByText("Review review")).toBeNull();
+    fireEvent.click(within(panel).getByRole("button", { name: "All" }));
+    expect(within(panel).getByText("Review review")).toBeTruthy();
+  });
+
+  it("marks rows beyond the visible first page read with the existing all:true action", async () => {
+    rows.ann = Array.from({ length: 25 }, (_, i) => notification(`mark-${i}`));
+    render(<Bell />); const panel = await open(25);
+    await screen.findByRole("button", { name: "Notifications, 5 unread" });
+    fireEvent.click(within(panel).getByRole("button", { name: "Mark all read" }));
+    await screen.findByRole("button", { name: "Notifications" });
+    expect(readCalls().some((call) => JSON.parse(call[1]?.body as string).all === true)).toBe(true);
+    expect(rows.ann.every((row) => row.readAt)).toBe(true);
+    expect((within(panel).getByRole("button", { name: "Mark all read" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("retries a failed mark-all action for rows beyond the visible page", async () => {
+    rows.ann = Array.from({ length: 25 }, (_, i) => notification(`retry-all-${i}`));
+    render(<Bell />); const panel = await open(25);
+    await screen.findByRole("button", { name: "Notifications, 5 unread" });
+    failRead = true; fireEvent.click(within(panel).getByRole("button", { name: "Mark all read" }));
+    await within(panel).findByRole("alert");
+    failRead = false; fireEvent.click(within(panel).getByRole("button", { name: "Retry" }));
+    await screen.findByRole("button", { name: "Notifications" });
+    expect(rows.ann.every((row) => row.readAt)).toBe(true);
+    expect(readCalls().filter((call) => JSON.parse(call[1]?.body as string).all === true)).toHaveLength(2);
+    expect(within(panel).queryByRole("alert")).toBeNull();
   });
 });

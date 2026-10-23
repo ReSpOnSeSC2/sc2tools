@@ -2,6 +2,7 @@
 
 import { EmptyState } from "@/components/ui/Card";
 import { wrColor, pct1 } from "@/lib/format";
+import { StrategyLabel } from "@/components/definitions/StrategyLabel";
 
 export type StrategyEntry = {
   strategy: string;
@@ -44,7 +45,7 @@ export function StrategyTendencyChart({
               className="w-32 shrink-0 truncate text-text-muted"
               title={s.strategy}
             >
-              {s.strategy}
+              <StrategyLabel label={s.strategy} />
             </span>
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-bg-elevated">
               <div

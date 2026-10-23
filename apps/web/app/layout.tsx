@@ -1,3 +1,4 @@
+import { RAIL_BOOTSTRAP } from "@/components/chrome/railPreference";
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import { AppShell } from "@/app/AppShell";
@@ -140,7 +141,7 @@ export default function RootLayout({
       <head>
         <script
           // Synchronous theme bootstrap — must run before paint.
-          dangerouslySetInnerHTML={{ __html: NO_FLASH_THEME_SCRIPT }}
+          dangerouslySetInnerHTML={{ __html: NO_FLASH_THEME_SCRIPT + RAIL_BOOTSTRAP }}
         />
       </head>
       <body className="flex min-h-dvh flex-col overflow-x-clip">

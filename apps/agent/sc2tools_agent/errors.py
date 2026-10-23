@@ -10,6 +10,7 @@ class UserError:
     detail: str
     action: str
     transient: bool
+    counts_as_error: bool = True
 
     @property
     def help_anchor(self):
@@ -41,7 +42,7 @@ def classify(exc: Exception) -> UserError:
                      "This replay could not be accepted")
         if not exc.counts_as_error:
             title = "Outside your selected sync range"
-        return UserError("rejected", title, detail, "Review the replay details", False)
+        return UserError("rejected", title, detail, "Review the replay details", False, exc.counts_as_error)
     if isinstance(exc, (OSError, ReplayArchiveSourceUnavailable)):
         return UserError("file", "This replay file isn't ready", detail,
                          "Check that the file can be read and SC2 has finished saving", True)

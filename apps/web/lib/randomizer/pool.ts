@@ -47,7 +47,7 @@ export function catalogCandidates(m: MatchupKey): PoolCandidate[] {
   }));
 }
 
-/** Custom builds whose race + vsRace fit a matchup. */
+/** Saved builds in Build library whose race + vsRace fit a matchup. */
 export function customCandidates(
   m: MatchupKey,
   customBuilds: ReadonlyArray<CustomBuild>,

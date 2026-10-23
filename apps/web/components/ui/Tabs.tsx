@@ -224,12 +224,15 @@ Tabs.Trigger = function TabsTrigger({
 export interface TabsContentProps extends HTMLAttributes<HTMLDivElement> {
   value: string;
   children: ReactNode;
+  /** Preserve an activated panel's state while it is hidden. */
+  keepMounted?: boolean;
 }
 
 Tabs.Content = function TabsContent({
   value: contentValue,
   className = "",
   children,
+  keepMounted = false,
   ...rest
 }: TabsContentProps) {
   const { value, baseId } = useTabs();
@@ -252,7 +255,7 @@ Tabs.Content = function TabsContent({
         .join(" ")}
       {...rest}
     >
-      {selected ? children : null}
+      {selected || keepMounted ? children : null}
     </div>
   );
 };

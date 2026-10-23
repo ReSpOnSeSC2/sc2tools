@@ -22,6 +22,7 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
   { path: "/guides/pvz", expectText: /PvZ build orders/i },
   { path: "/guides/pvz/stargate-into-glaives", expectText: /Stargate into Glaives/ },
   { path: "/download", expectText: /download|agent/i },
+  { path: "/changelog", expectText: /what's new/i },
   { path: "/stream-studio", expectText: /StarCraft II overlays for OBS/i },
   { path: "/stream-studio/learn", expectText: /Your first overlay/i },
   { path: "/community", expectText: /community|build/i },
@@ -36,6 +37,40 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
     ? [{ path: "/try", expectText: /analyze/i }]
     : []),
 ];
+
+test("phone sign-in puts the form before collapsed optional marketing", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/sign-in");
+  const form = page.getByRole("region", { name: "Account form" });
+  await expect(form).toBeVisible();
+  await expect(form.getByText("Welcome back to your replay history.")).toBeVisible();
+  const disclosure = page.getByText("Why sign up?", { exact: true }).locator("..");
+  await expect(disclosure).not.toHaveAttribute("open");
+  expect(await form.evaluate((node) => node.getBoundingClientRect().top)).toBeLessThan(844);
+  const email = form.locator('input[name="identifier"], input[type="email"]').first();
+  if (await email.count()) {
+    const box = await email.boundingBox();
+    expect(box).not.toBeNull(); expect(box!.y).toBeGreaterThanOrEqual(0); expect(box!.y + box!.height).toBeLessThanOrEqual(844);
+  } else {
+    // CI uses a deliberately nonexistent Clerk frontend. Assert the actual
+    // form shell here; email geometry is also verified by the component fixture.
+    test.info().annotations.push({ type: "Clerk fixture", description: "Live Clerk widget unavailable with the dummy CI key; form-shell order/viewport verified." });
+  }
+});
+
+test("changelog filters updates and exposes its public RSS feed", async ({ page, request }) => {
+  const response = await page.goto("/changelog");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "What's new", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Guides", exact: true }).click();
+  await expect(page.getByText("No Guides updates yet.")).toBeVisible();
+  await page.getByRole("button", { name: "Website", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Your activity and report replies in one inbox" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Website", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const rss = await request.get("/changelog/rss.xml");
+  expect(rss.status()).toBe(200); expect(rss.headers()["content-type"]).toContain("application/rss+xml");
+  expect(await rss.text()).toContain("/changelog#personal-notifications-and-replies");
+});
 
 test("missing shared replay archives return a real public-friendly 404", async ({ page }) => {
   const response = await page.goto("/players/missing-shared-player/replays");
@@ -368,4 +403,28 @@ test("a build guide is edge-cached (ISR) while an outage is never cached", async
 test("an impossible guide URL is a real 404 (the pages render per request)", async ({ request }) => {
   const response = await request.get("/guides/not-a-matchup");
   expect(response.status()).toBe(404);
+});
+
+
+test("installed-app navigation has a self-contained offline fallback", async ({ page, context }, testInfo) => {
+  await page.goto("/help");
+  await page.evaluate(async () => {
+    await navigator.serviceWorker.ready;
+    if (!navigator.serviceWorker.controller) await new Promise<void>((resolve) => navigator.serviceWorker.addEventListener("controllerchange", () => resolve(), { once: true }));
+  });
+  const cachedPaths = await page.evaluate(async () => (await (await caches.open("sc2tools-offline-v1")).keys()).map((request) => new URL(request.url).pathname));
+  expect(cachedPaths).toEqual(["/offline.html"]);
+  await context.setOffline(true);
+  try {
+    await page.goto("/help?offline-check=1");
+    await expect(page.getByRole("heading", { name: "You're offline" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+    await expect(page.getByText(/desktop app keeps your replays/)).toBeVisible();
+    await Promise.all([
+      page.waitForEvent("framenavigated"),
+      page.getByRole("button", { name: "Try again" }).click(),
+    ]);
+    await expect(page.getByRole("heading", { name: "You're offline" })).toBeVisible();
+    await testInfo.attach("offline-page", { body: await page.screenshot(), contentType: "image/png" });
+  } finally { await context.setOffline(false); }
 });

@@ -28,8 +28,12 @@ const article: HelpArticle = {
     "later",
     "uninstall",
   ],
-  updated: "2026-10-22",
+  updated: "2026-10-23",
   body: [
+    { type: "heading", text: "Install from inside the app", anchor: "install-in-app" },
+    { type: "paragraph", text: "On a phone, open **More → Install app**. On desktop, use **Install app** below the Settings sidebar tabs. A supported browser opens its install prompt, or shows the manual steps below. This row disappears after installation, inside the installed app, or when the browser cannot install it." },
+    { type: "heading", text: "What happens offline", anchor: "offline" },
+    { type: "paragraph", text: "When you navigate without a connection, **You're offline** explains what happened and offers **Try again**. Games need a connection; the desktop app keeps your replays and uploads them when you're back. Only this self-contained offline page is cached, never your account data, API responses or page responses. OBS overlay and Dock sources keep their normal reconnect behavior." },
     {
       type: "paragraph",
       text: "SC2 Tools works in any browser, and you can also install it like an app. The installed app opens in its own window without the address bar, starts on **Today** or the **Default tab** you chose in Settings, and keeps you signed in. The **Today** shortcut always opens Today. It is the same site with the same data, so there is nothing to sync.",
@@ -59,7 +63,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "On iOS 16.4 and later you can also do this from the Share menu in other browsers, such as Chrome.",
+      text: "If you opened the install steps in another iOS browser, open the page in Safari first. Then use **Share → Add to Home Screen**.",
     },
     { type: "heading", text: "On a computer" },
     {

@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 
 export type SortDir = "asc" | "desc";
+/** Full-row comparators return final order; null picked values remain last. */
+export type SortComparators = Readonly<Record<string, (a: unknown, b: unknown, dir: SortDir) => number>>;
 
 export type SortState = {
   sortBy: string;
@@ -19,7 +21,7 @@ export type SortState = {
   sortRows: <T>(rows: T[], pick: (row: T, col: string) => unknown) => T[];
 };
 
-export function useSort(initialCol: string, initialDir: SortDir = "desc"): SortState {
+export function useSort(initialCol: string, initialDir: SortDir = "desc", comparators?: SortComparators): SortState {
   const [sortBy, setSortBy] = useState(initialCol);
   const [sortDir, setSortDir] = useState<SortDir>(initialDir);
   const setSort = useCallback(
@@ -46,13 +48,14 @@ export function useSort(initialCol: string, initialDir: SortDir = "desc"): SortS
         if (av == null && bv == null) return 0;
         if (av == null) return 1;
         if (bv == null) return -1;
+        if (comparators?.[sortBy]) return comparators[sortBy](a, b, sortDir);
         if (av < bv) return sortDir === "asc" ? -1 : 1;
         if (av > bv) return sortDir === "asc" ? 1 : -1;
         return 0;
       });
       return copy;
     },
-    [sortBy, sortDir],
+    [sortBy, sortDir, comparators],
   );
   return { sortBy, sortDir, setSort, setSortExplicit, sortRows };
 }
@@ -81,8 +84,11 @@ export function usePersistentSort(
   key: string,
   initialCol: string,
   initialDir: SortDir = "desc",
+  comparators?: SortComparators,
+  options?: { preferInitial?: boolean },
 ): SortState {
-  const sort = useSort(initialCol, initialDir);
+  const sort = useSort(initialCol, initialDir, comparators);
+  const preferInitial = options?.preferInitial === true;
   const { setSortExplicit } = sort;
   const [stored, setStored] = useLocalStorageState<PersistedSort>(
     key,
@@ -94,8 +100,8 @@ export function usePersistentSort(
   // changes); ``setSortExplicit`` no-ops when the live sort already
   // agrees, so there's no render churn after the values converge.
   useEffect(() => {
-    setSortExplicit(stored.sortBy, stored.sortDir);
-  }, [stored, setSortExplicit]);
+    if (!preferInitial) setSortExplicit(stored.sortBy, stored.sortDir);
+  }, [stored, setSortExplicit, preferInitial]);
 
   // Persist every change the user makes through the table headers or a
   // direction toggle. The first run is skipped so the pre-hydration

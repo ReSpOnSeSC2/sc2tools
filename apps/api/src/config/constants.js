@@ -76,12 +76,15 @@ const COLLECTIONS = Object.freeze({
   COMMUNITY_BUILDS: "community_builds",
   COMMUNITY_REPORTS: "community_reports",
   USER_BACKUPS: "user_backups",
+  BACKUP_RESTORE_STAGING: "backup_restore_staging",
+  PENDING_IDENTITY_DELETIONS: "pending_identity_deletions",
   ARCADE_LEADERBOARD: "arcade_leaderboard",
   // Admin notification feed — one row per signup/download event.
   // Drives the /admin Dashboard counters + /admin/notifications feed.
   ADMIN_EVENTS: "admin_events",
   SUPPORT_EMAIL_SYNC: "support_email_sync",
   SITE_PRESENCE: "site_presence",
+  SITE_CONFIG: "site_config",
   COACHING: "coaching_locker",
   // Global, cross-user SC2Pulse cache. One row per real SC2 account
   // (keyed by toon handle), shared by every platform user so the

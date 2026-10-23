@@ -1,11 +1,15 @@
 "use client";
 
-import { Fragment, memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { Fragment, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import Link from "next/link";
 import {
   ChevronDown,
   ChevronRight,
   CornerDownRight,
   ExternalLink,
+  Search,
+  StickyNote,
+  X,
 } from "lucide-react";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useApi } from "@/lib/clientApi";
@@ -24,10 +28,16 @@ import {
   type PulseLinksResponse,
 } from "@/lib/opponentGroups";
 import { Button } from "@/components/ui/Button";
+import { RevealedChip } from "./RevealedChip";
 import { Skeleton } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { Toggle } from "@/components/ui/Toggle";
-import { useSort, SortableTh } from "@/components/ui/SortableTh";
+import { SortableTh } from "@/components/ui/SortableTh";
+import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { opponentDossierHref } from "./tabs";
+import { visibleOpponentId } from "./opponentListSort";
+import { useOpponentListNavigation, type MmrImpactFilter, type OpponentListLocation, type OpponentListSnapshot } from "./useOpponentListNavigation";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { useAllNetMmrOpponents } from "@/lib/netMmrOpponents";
 import { NoOpponentsMatch } from "./EmptyStates";
@@ -38,8 +48,7 @@ import {
 } from "./OpponentMmrImpact";
 
 const LS_MIN_OPP = "analyzer.opponents.minGames";
-
-type MmrImpactFilter = "all" | "tracked" | "net-gain" | "net-loss";
+type OpenOpponent = (id: string, fromLink?: boolean) => boolean;
 
 type Opp = {
   pulseId: string;
@@ -64,7 +73,10 @@ type Opp = {
   mmrAvgDelta?: number | null;
   lastPlayed: string | null;
   lastSeen?: string | null;
+  notesMeta?: { preview: string };
+  notes?: string;
 };
+const notePreview = (opponent: Opp) => opponent.notesMeta?.preview || Array.from((opponent.notes || "").replace(/\s+/g, " ").trim()).slice(0, 140).join("");
 
 /**
  * Opponents tab — full filters, search, sort, drilldown.
@@ -86,11 +98,16 @@ type Opp = {
  */
 export function OpponentsTab({
   onOpen,
+  location,
+  onResultCount,
 }: {
-  onOpen: (pulseId: string) => void;
+  onOpen?: (pulseId: string) => void;
+  location?: OpponentListLocation;
+  onResultCount?: (count: number) => void;
 }) {
   const { filters, dbRev } = useFilters();
-  const [search, setSearch] = useState("");
+  const { search, setSearch, impact: mmrImpactFilter, setImpact: setMmrImpactFilter, hasNotes, setHasNotes, sort, remember } = useOpponentListNavigation(location);
+  const searchRef = useRef<HTMLInputElement>(null);
   const deferredSearch = useDeferredValue(search);
   const [visibleCount, setVisibleCount] = useState(200);
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_OPP, 1);
@@ -102,9 +119,6 @@ export function OpponentsTab({
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     new Set(),
   );
-  const [mmrImpactFilter, setMmrImpactFilter] =
-    useState<MmrImpactFilter>("all");
-  const sort = useSort("lastPlayed", "desc");
 
   // We don't pass `limit` here — the paginator owns page size and
   // chases `nextBefore` until exhaustion (or a safe page cap).
@@ -123,7 +137,6 @@ export function OpponentsTab({
     isLoadingMore,
     isStale,
     error,
-    pagesFetched,
     hitMaxPages,
     mutate: retryOpponents,
   } = useApiPaginated<Opp>(path, dbRev);
@@ -249,14 +262,15 @@ export function OpponentsTab({
       searchedItems.filter(
         (o) =>
           (o.games || 0) >= minGames
-          && matchesMmrImpactFilter(o, mmrImpactFilter),
+          && matchesMmrImpactFilter(o, mmrImpactFilter)
+          && (!hasNotes || o.identities.some((identity) => Boolean(notePreview(identity)))),
       ),
-    [searchedItems, minGames, mmrImpactFilter],
+    [searchedItems, minGames, mmrImpactFilter, hasNotes],
   );
 
   const { sortRows } = sort;
   const items = useMemo(
-    () => sortRows(filteredItems, (row, col) => (row as any)[col]),
+    () => sortRows(filteredItems, (row, col) => col === "pulseId" ? visibleOpponentId(row) : (row as unknown as Record<string, unknown>)[col]),
     [filteredItems, sortRows],
   );
   // Rows only the Min games picker is hiding, for the empty state.
@@ -267,7 +281,50 @@ export function OpponentsTab({
   const mergedNameCount = normalised.length - groups.length;
   const channelsFor = usePlayerChannels(normalised);
 
-  useEffect(() => setVisibleCount(200), [search, sort.sortBy, sort.sortDir, minGames, mmrImpactFilter, groupByPlayer]);
+  useEffect(() => setVisibleCount(200), [search, sort.sortBy, sort.sortDir, minGames, mmrImpactFilter, groupByPlayer, hasNotes]);
+  useEffect(() => { onResultCount?.(items.length); }, [items.length, onResultCount]);
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || target?.isContentEditable || target?.closest("input,textarea,select,[contenteditable]:not([contenteditable=false])")) return;
+      event.preventDefault(); searchRef.current?.focus();
+    };
+    window.addEventListener("keydown", shortcut); return () => window.removeEventListener("keydown", shortcut);
+  }, []);
+  const restore = useRef<OpponentListSnapshot | null>(null);
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem("opponents:from-list") === "1") {
+        const stored = JSON.parse(sessionStorage.getItem("opponents:list-state") || "null");
+        const here = `${window.location.pathname}${window.location.search}`;
+        if (stored?.listUrl === here && Array.isArray(stored.expandedGroups) && stored.expandedGroups.every((id: unknown) => typeof id === "string") && Number.isFinite(stored.scrollY) && Number.isFinite(stored.renderWindow)) restore.current = stored;
+      }
+      sessionStorage.removeItem("opponents:from-list");
+    } catch { /* List navigation does not depend on session storage. */ }
+  }, []);
+  useEffect(() => {
+    if (isLoading || isLoadingMore || (groupByPlayer && isPulseLinksLoading) || !rawItems.length || !restore.current) return;
+    const stored = restore.current; restore.current = null;
+    setVisibleCount(Math.max(200, Math.min(8000, stored.renderWindow)));
+    setExpandedGroups(new Set(stored.expandedGroups));
+    let second = 0;
+    const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => window.scrollTo(0, Math.max(0, stored.scrollY))); });
+    return () => { cancelAnimationFrame(first); cancelAnimationFrame(second); };
+  }, [isLoading, isLoadingMore, rawItems.length, groupByPlayer, isPulseLinksLoading]);
+  const open: OpenOpponent = useCallback((id: string, fromLink = false) => {
+    remember({ renderWindow: visibleCount, expandedGroups: [...expandedGroups] });
+    if (fromLink && !onOpen) return false;
+    if (onOpen) onOpen(id); else location?.navigate(opponentDossierHref(id));
+    return true;
+  }, [remember, visibleCount, expandedGroups, onOpen, location]);
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prefetch = useCallback((id: string | null) => {
+    if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
+    if (id && location) prefetchTimer.current = setTimeout(() => location.prefetch(opponentDossierHref(id)), 150);
+  }, [location]);
+  useEffect(() => () => { if (prefetchTimer.current) clearTimeout(prefetchTimer.current); }, []);
+  const reset = () => { setSearch(""); setMinGames(1); setMmrImpactFilter("all"); setHasNotes(false); setGroupByPlayer(true); sort.setSortExplicit("lastPlayed", "desc"); };
+  const changed = Boolean(search || minGames !== 1 || mmrImpactFilter !== "all" || hasNotes || !groupByPlayer || sort.sortBy !== "lastPlayed" || sort.sortDir !== "desc");
 
   const toggleGroup = useCallback((pulseId: string) => {
     setExpandedGroups((prev) => {
@@ -289,37 +346,45 @@ export function OpponentsTab({
         loading={isMmrImpactLoading || (groupByPlayer && (isLoading || !!isPulseLinksLoading))}
         unavailable={!!mmrImpactError || (groupByPlayer && !!error)}
         incomplete={groupByPlayer && (hitMaxPages || hitMmrImpactMaxPages)}
-        onOpen={onOpen}
+        onOpen={open}
       />
 
       <div className="flex flex-wrap items-center gap-3">
-        <input
+        <div className="relative w-full sm:max-w-sm">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-dim" aria-hidden />
+        <Input
+          ref={searchRef}
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by name or Pulse ID"
           aria-label="Search opponents"
-          className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none min-h-[44px]"
+          onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setSearch(""); } }}
+          className="min-h-[44px] pl-9 pr-11"
         />
+        {search ? <button type="button" aria-label="Clear search" onClick={() => { setSearch(""); searchRef.current?.focus(); }} className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:ring-accent"><X className="h-4 w-4" aria-hidden /></button> : null}
+        </div>
         <MinGamesPicker value={minGames} onChange={setMinGames} />
-        <label className="flex min-h-[44px] items-center gap-2 rounded-lg border-2 border-line bg-bg-surface px-2.5">
+        <label className="flex min-h-[44px] items-center gap-2">
           <span className="whitespace-nowrap text-micro uppercase tracking-wider text-text-dim">
             MMR impact
           </span>
-          <select
+          <Select
             value={mmrImpactFilter}
             onChange={(event) =>
               setMmrImpactFilter(event.target.value as MmrImpactFilter)
             }
             aria-label="Filter opponents by MMR impact"
-            className="min-h-[32px] bg-transparent text-xs text-text focus:outline-none"
+            className="min-h-[44px] text-caption"
           >
             <option value="all">All opponents</option>
             <option value="tracked">Verified pairs only</option>
             <option value="net-gain">You gained overall</option>
             <option value="net-loss">They gained overall</option>
-          </select>
+          </Select>
         </label>
+        <label className="flex min-h-[44px] items-center gap-2 text-caption text-text-muted"><Toggle checked={hasNotes} onChange={setHasNotes} label="Has notes" /><span>Has notes</span></label>
+        {changed ? <Button variant="ghost" size="sm" onClick={reset}>Reset</Button> : null}
         <label
           className="flex cursor-pointer items-center gap-2 text-xs text-text-muted"
           title="Merge accounts linked to the same player into one row"
@@ -336,13 +401,11 @@ export function OpponentsTab({
         <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
           <span aria-live="polite" className="text-xs text-text-dim">
             {isRefreshing ? "Updating… · " : isLoadingMore ? `Loading more opponents… (${rawItems.length.toLocaleString()} so far) · ` : ""}
-            {items.length.toLocaleString()} of {groups.length.toLocaleString()}
-            {groupByPlayer ? " players" : ""} shown
+            {items.length.toLocaleString()} {groupByPlayer ? "players" : "accounts"}
             {groupByPlayer && mergedNameCount > 0
-              ? ` · ${normalised.length.toLocaleString()} names grouped`
+              ? ` · ${mergedNameCount.toLocaleString()} accounts merged`
               : null}
-            {pagesFetched > 1 ? ` · ${pagesFetched} pages` : null}
-            {hitMaxPages ? " · narrow your filter for more" : null}
+            {hitMaxPages ? " · Showing your most recent 8,000 opponents" : null}
           </span>
           {isMmrImpactLoading || hitMmrImpactMaxPages ? (
             <span className="text-xs text-text-dim">
@@ -351,9 +414,6 @@ export function OpponentsTab({
                 : "Some MMR impact rows were omitted; narrow the global filters."}
             </span>
           ) : null}
-          <span className="hidden text-xs text-text-dim sm:inline">
-            Select a column to sort or a row to view the opponent
-          </span>
         </div>
       </div>
 
@@ -369,7 +429,7 @@ export function OpponentsTab({
         <RequestError error={error} onRetry={retryOpponents} title="Opponents" filtered />
       ) : !showSkeleton && items.length === 0 ? (
         <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard">
-          <NoOpponentsMatch
+          {hasNotes ? <div className="p-6 text-center"><h3 className="font-semibold">No opponents with notes yet. Add one from any dossier.</h3><Button className="mt-3" variant="secondary" onClick={() => setHasNotes(false)}>Show opponents without notes</Button></div> : <NoOpponentsMatch
             minGames={minGames}
             hiddenByMinGames={hiddenByMinGames}
             onLowerMinGames={() => setMinGames(1)}
@@ -385,9 +445,10 @@ export function OpponentsTab({
                     Show all MMR impact
                   </Button>
                 ) : null}
+                {changed ? <Button variant="secondary" size="sm" onClick={reset}>Reset filters</Button> : null}
               </>
             }
-          />
+          />}
         </div>
       ) : (
         <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard overflow-x-auto">
@@ -405,7 +466,7 @@ export function OpponentsTab({
                   width="8.5rem"
                 />
                 <SortableTh
-                  col="pulseCharacterId"
+                  col="pulseId"
                   label="Pulse ID"
                   {...sort}
                   compact
@@ -489,7 +550,7 @@ export function OpponentsTab({
                   align="right"
                   width="6.5rem"
                 />
-                <th className="w-8 px-1 py-1.5 text-right text-text-dim">→</th>
+                <th className="relative w-8 px-1 py-1.5 text-right text-text-dim"><span className="sr-only">Open dossier</span><span aria-hidden>→</span></th>
               </tr>
             </thead>
             <tbody aria-busy={search !== deferredSearch || undefined} className={search !== deferredSearch ? "opacity-70" : undefined}>
@@ -502,7 +563,7 @@ export function OpponentsTab({
               ) : (
                 items.slice(0, visibleCount).map((o) => (
                   <OpponentRow key={o.pulseId} row={o} expanded={expandedGroups.has(o.pulseId)}
-                    onToggle={toggleGroup} onOpen={onOpen} channelsFor={channelsFor} />
+                    onToggle={toggleGroup} onOpen={open} onPrefetch={prefetch} channelsFor={channelsFor} />
                 ))
               )}
             </tbody>
@@ -517,14 +578,21 @@ export function OpponentsTab({
   );
 }
 
-const OpponentRow = memo(function OpponentRow({ row: o, expanded, onToggle, onOpen, channelsFor }: {
+function rowCanOpen(event: MouseEvent<HTMLTableRowElement>) {
+  return event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey
+    && !(event.target as HTMLElement).closest("a,button,input,select,textarea") && !window.getSelection()?.toString();
+}
+
+const OpponentRow = memo(function OpponentRow({ row: o, expanded, onToggle, onOpen, onPrefetch, channelsFor }: {
   row: OpponentGroup<Opp>; expanded: boolean; onToggle: (id: string) => void;
-  onOpen: (id: string) => void; channelsFor: ReturnType<typeof usePlayerChannels>;
+  onOpen: OpenOpponent; channelsFor: ReturnType<typeof usePlayerChannels>;
+  onPrefetch: (id: string | null) => void;
 }) {
   return (
                   <Fragment>
                     <tr
-                      onClick={() => onOpen(o.pulseId)}
+                      onClick={(event) => { if (rowCanOpen(event)) onOpen(o.pulseId); }}
+                      onPointerEnter={() => onPrefetch(o.pulseId)} onPointerLeave={() => onPrefetch(null)}
                       className="group cursor-pointer border-t border-border hover:bg-accent/10"
                     >
                       <td
@@ -532,17 +600,18 @@ const OpponentRow = memo(function OpponentRow({ row: o, expanded, onToggle, onOp
                         title={groupRowTitle(o)}
                       >
                         <span className="flex min-w-0 items-center gap-1">
-                          <span className="truncate">
+                          <OpponentLink opponent={o} onOpen={onOpen} className="min-w-[4rem] max-w-[12rem] truncate hover:underline">
                             {o.name || (
                               <span className="italic text-text-dim">unnamed</span>
                             )}
-                          </span>
+                          </OpponentLink>
                           <RevealedChip
                             name={o.revealedName}
                             displayedName={o.name}
-                            approved={!!o.globalIdentity}
+                            confirmed={!!o.globalIdentity}
                           />
                           <PlayerChannelLinks channels={channelsFor(o) || o.identities.map(channelsFor).find(Boolean)} playerName={o.revealedName || o.name} compact />
+                          <NotePreview previews={o.identities.map(notePreview).filter(Boolean)} />
                           {o.groupSize > 1 ? (
                             <AliasChip
                               group={o}
@@ -580,7 +649,7 @@ const OpponentRow = memo(function OpponentRow({ row: o, expanded, onToggle, onOp
                       </td>
                       <MmrImpactCells opponent={o} />
                       <td className="px-2 py-1 text-right text-xs text-text-dim">
-                        {o.lastPlayed ? fmtAgo(o.lastPlayed) : "—"}
+                        {o.lastPlayed ? <time dateTime={o.lastPlayed} title={new Date(o.lastPlayed).toLocaleString()}>{fmtAgo(o.lastPlayed)}</time> : "—"}
                       </td>
                       <td className="px-1 py-1 text-right text-text-dim group-hover:text-accent">
                         <OpponentOpenButton opponent={o} onOpen={onOpen} />
@@ -593,6 +662,7 @@ const OpponentRow = memo(function OpponentRow({ row: o, expanded, onToggle, onOp
                             identity={identity}
                             channels={channelsFor(identity)}
                             onOpen={onOpen}
+                            onPrefetch={onPrefetch}
                           />
                         ))
                       : null}
@@ -664,15 +734,18 @@ function IdentityRow({
   identity,
   channels,
   onOpen,
+  onPrefetch,
 }: {
   identity: Opp;
   channels?: PlayerChannels;
-  onOpen: (pulseId: string) => void;
+  onOpen: OpenOpponent;
+  onPrefetch: (id: string | null) => void;
 }) {
   const revealedName = identity.globalIdentity?.displayName.trim() || identity.revealedName;
   return (
     <tr
-      onClick={() => onOpen(identity.pulseId)}
+      onClick={(event) => { if (rowCanOpen(event)) onOpen(identity.pulseId); }}
+      onPointerEnter={() => onPrefetch(identity.pulseId)} onPointerLeave={() => onPrefetch(null)}
       className="group cursor-pointer border-t border-border/60 bg-bg-elevated/40 hover:bg-accent/10"
     >
       <td
@@ -684,13 +757,14 @@ function IdentityRow({
             className="h-3 w-3 flex-shrink-0 text-text-dim"
             aria-hidden
           />
-          <span className="truncate">
+          <OpponentLink opponent={identity} onOpen={onOpen} className="min-w-[4rem] max-w-[12rem] truncate hover:underline">
             {identity.name || (
               <span className="italic text-text-dim">unnamed</span>
             )}
-          </span>
-          <RevealedChip name={revealedName} displayedName={identity.name} approved={!!identity.globalIdentity} />
+          </OpponentLink>
+          <RevealedChip name={revealedName} displayedName={identity.name} confirmed={!!identity.globalIdentity} />
           <PlayerChannelLinks channels={channels} playerName={revealedName || identity.name} compact />
+          <NotePreview previews={[notePreview(identity)].filter(Boolean)} />
         </span>
       </td>
       <PulseIdCell opp={identity} />
@@ -714,7 +788,7 @@ function IdentityRow({
       </td>
       <MmrImpactCells opponent={identity} />
       <td className="px-2 py-1 text-right text-xs text-text-dim">
-        {identity.lastPlayed ? fmtAgo(identity.lastPlayed) : "—"}
+        {identity.lastPlayed ? <time dateTime={identity.lastPlayed} title={new Date(identity.lastPlayed).toLocaleString()}>{fmtAgo(identity.lastPlayed)}</time> : "—"}
       </td>
       <td className="px-1 py-1 text-right text-text-dim group-hover:text-accent">
         <OpponentOpenButton opponent={identity} onOpen={onOpen} />
@@ -728,54 +802,33 @@ function OpponentOpenButton({
   onOpen,
 }: {
   opponent: Pick<Opp, "pulseId" | "name">;
-  onOpen: (pulseId: string) => void;
+  onOpen: OpenOpponent;
 }) {
   const name = opponent.name || "unnamed opponent";
   return (
-    <button
-      type="button"
-      onClick={(event) => {
-        event.stopPropagation();
-        onOpen(opponent.pulseId);
-      }}
-      aria-label={`Open ${name} opponent details`}
+    <OpponentLink opponent={opponent} onOpen={onOpen}
+      aria-label={`Open dossier for ${name}`}
       className="inline-flex h-7 w-7 items-center justify-center rounded text-current hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <span aria-hidden>→</span>
-    </button>
+    </OpponentLink>
   );
 }
 
-/**
- * Revealed identity pill. For a barcode opponent the
- * displayed name is unreadable bars, so the revealed pro/main name is
- * the only human-legible identity — surface it inline next to the name.
- * Renders nothing when the opponent isn't revealed, or when the row
- * already displays the revealed name as its main name (a grouped row
- * whose most-known name IS the reveal — repeating it is clutter).
- */
-function RevealedChip({
-  name,
-  displayedName,
-  approved = false,
-}: {
-  name?: string | null;
-  displayedName?: string;
-  approved?: boolean;
-}) {
-  const tag = typeof name === "string" ? name.trim() : "";
-  if (!tag || tag === (displayedName || "").trim()) return null;
-  return (
-    <span
-      className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-accent-cyan/15 px-2 py-0.5 text-micro font-semibold text-accent-cyan"
-      title={approved ? `Confirmed as ${tag}` : `Revealed on SC2Pulse as ${tag}`}
-    >
-      <span className="text-[0.6rem] font-medium uppercase tracking-wider opacity-70">
-        aka
-      </span>
-      <span className="max-w-[10rem] truncate">{tag}</span>
-    </span>
-  );
+function OpponentLink({ opponent, onOpen, children, ...props }: { opponent: Pick<Opp, "pulseId" | "name">; onOpen: OpenOpponent; children: React.ReactNode } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onClick">) {
+  return <Link href={opponentDossierHref(opponent.pulseId)} prefetch={false} {...props} onClick={(event) => {
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+    event.stopPropagation(); if (onOpen(opponent.pulseId, true)) event.preventDefault();
+  }}>{children}</Link>;
+}
+
+function NotePreview({ previews }: { previews: string[] }) {
+  if (!previews.length) return null;
+  return <span className="group/note relative inline-flex shrink-0 items-center gap-1">
+    <button type="button" aria-label={`Scouting note: ${previews[0]}`} title={previews[0]} onClick={(event) => event.stopPropagation()} className="flex h-8 w-8 items-center justify-center rounded text-accent focus-visible:ring-2 focus-visible:ring-accent"><StickyNote className="h-3.5 w-3.5" aria-hidden /></button>
+    {previews.length > 1 ? <span className="text-micro text-text-dim">+{previews.length - 1} more</span> : null}
+    <span role="tooltip" className="pointer-events-none absolute left-0 top-full z-20 hidden w-64 whitespace-normal rounded-lg border border-line bg-bg-elevated p-3 text-caption text-text shadow-hard group-hover/note:block group-focus-within/note:block">{previews[0]}</span>
+  </span>;
 }
 
 /**

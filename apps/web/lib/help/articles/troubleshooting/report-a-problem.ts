@@ -71,7 +71,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Overlay links, pairing codes and other keys are removed from every address before it is attached. Your account email is always included so we can reply.",
+      text: "Overlay links, pairing codes and other keys are removed from every address before it is attached. Your account email is included so admins can identify your report. Replies appear in My reports and your notification inbox.",
     },
     { type: "heading", text: "Remove something" },
     {
@@ -87,11 +87,13 @@ const article: HelpArticle = {
       type: "list",
       items: [
         "Your report goes straight to the SC2 Tools team's inbox, and we read every one.",
-        "If we need more detail, we'll email the address on your account.",
+        "Open [Settings → Help → My reports](/settings?tab=help#my-reports) to see your latest 20 reports and any replies. A notification lets you know when an admin answers or changes the status.",
         "After sending, press **Send another** to start a fresh report, or **Close**.",
         "You can send 5 reports every 10 minutes. If you reach the limit, wait a few minutes and try again.",
       ],
     },
+    { type: "heading", text: "My reports", anchor: "my-reports" },
+    { type: "paragraph", text: "Each report shows **New**, **Looking into it**, **Fixed** or **Won't fix**. Open it to read your original message and replies from SC2 Tools. If you mute report notifications in [Settings → Misc](/settings?tab=misc), replies still appear in My reports. The notification inbox keeps updates for 90 days; My reports lists your latest 20 reports." },
     { type: "heading", text: "Not signed in?" },
     {
       type: "paragraph",

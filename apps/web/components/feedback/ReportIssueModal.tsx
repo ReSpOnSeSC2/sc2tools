@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import { CheckCircle2 } from "lucide-react";
 
@@ -285,7 +286,8 @@ export function ReportIssueModal({ open, onClose, prefill }: ReportIssueModalPro
               Thanks, we got it.
             </p>
             <p className="text-caption text-text-muted">
-              If we need more detail, we&apos;ll email the address on your account.
+              You&apos;ll get a notification if we reply. You can also find replies in{" "}
+              <Link href="/settings?tab=help#my-reports" onClick={onClose} className="text-accent-cyan underline">My reports</Link>.
             </p>
             <p className="text-caption text-text-muted">
               <HelpLink slug="report-a-problem">What happens next</HelpLink>
@@ -363,7 +365,7 @@ export function ReportIssueModal({ open, onClose, prefill }: ReportIssueModalPro
           <ReportContextPanel items={items} excluded={excluded} onToggle={toggleItem} />
 
           <p className="text-caption text-text-dim">
-            Your account email is always included so we can reply.{" "}
+            Your account email is included with your report. Replies appear in My reports.{" "}
             <HelpLink slug="report-a-problem">How reports work</HelpLink>
           </p>
         </form>

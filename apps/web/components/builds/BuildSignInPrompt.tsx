@@ -18,7 +18,7 @@ export function BuildSignInPrompt({ slug }: { slug: string }) {
         size="lg"
         icon={<Lock className="h-6 w-6" aria-hidden />}
         title={<h1 className="text-h3 font-bold text-text">Sign in to open this build</h1>}
-        description="Custom builds are private to the account that saved them. Sign in with that account to see this one."
+        description="Saved builds are private to the account that saved them. Sign in with that account to see this one."
         action={
           <div className="flex flex-col items-center gap-4">
             <div className="flex flex-col gap-2 sm:flex-row">

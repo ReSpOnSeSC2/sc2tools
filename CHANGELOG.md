@@ -16,6 +16,22 @@ corresponding GitHub Release.
 - Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.
 - Shared analysis has section links, one Watch entry point, seekable macro-leak timestamps and an expandable penalty-ordered leak list. Macro scores share clear colour bands and an out-of-100 label.
 
+
+### Download and project costs
+
+- Download failures offer Retry or GitHub, platform instructions follow the selected operating system, and paired users see their installed version. Installer signing copy comes from one truthful source.
+- The donation page shows the sourced monthly total and provider breakdown in plain language, keeps measurement details available, and offers a copy-email button.
+
+### Sign-in and browser analysis
+
+- Sign-in and sign-up put the form first on phones, explain which browser-analyzed games will be saved and share the site colors. Returning visitors have a direct dashboard link.
+- Browser reports expand every opener in place with record bars. Choose the replay date window before selecting files; busy analysis keeps that choice locked.
+
+### Opponent lists and private notes
+
+- Search, sort and note filters stay in the address bar. Dossier links preserve the list's expanded rows and scroll position, with natural name sorting and numeric Pulse IDs.
+- Private note previews appear in the list. Unsaved drafts recover in the same tab, Ctrl/Cmd+Enter saves, and returning to the list asks before discarding edits. Replay history remains directly above notes.
+
 ### Shared replay browsing
 
 - Replay archives combine instant search, matchup, result, map and rolling date filters with removable links, a filtered record and directional page navigation. Apply remains available without JavaScript.
@@ -23,16 +39,88 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Account deletion now removes token-owned stream data and private sound files, ends the sign-in identity with durable retries, and offers an export-first inventory and confirmation flow. Review comments on other requests are anonymized; service backup retention follows the current configured schedule.
+
+### Navigation and installed app
+
+- Pin the labelled sidebar, find Build stats and Build library by clear names, and use the phone More sheet for navigation, support and theme controls.
+- The app status pill describes your desktop connection and latest upload; community counts stay in an optional desktop disclosure. Install the web app from More or Settings and get a clear offline page when the network is unavailable.
+
+### Added
+
+- Read curated updates in What's New, the public changelog and RSS. Service notices explain active incidents and expire automatically; installer release notes are easier to read.
+- Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
+
+### Fixed
+
+- Desktop installation and Settings share one Windows startup switch; upgrades
+  preserve choices and uninstall offers explicit local-data removal. Signing
+  preparation verifies both executables before release checksums are generated.
+- Saving desktop settings keeps the window responsive while the durable write
+  finishes; completion and errors return to the window without losing edits.
+
+- Desktop shortcuts restore the existing window, tray pause actions match the
+  window, and replay folder changes apply immediately with Undo and clear labels.
+- Desktop history imports and updates wait through games; performance profiles
+  reduce worker priority, and update notes and retry actions remain visible.
+- Desktop status cards and tray lights share the same state, cause and action,
+  including startup errors, disconnected queues and recent failed uploads.
+
 - Desktop pairing keeps trying through connection failures, refreshes codes,
   and recovers an unlinked PC without discarding queued replays or settings.
 - Desktop sync retains temporary failures with a retry countdown instead of
   repeating error rows; final replay outcomes have readable details and help.
+
+### Added
+
+- Read curated updates in What's New, the public changelog and RSS. Service notices explain active incidents and expire automatically; installer release notes are easier to read.
+
+- Streamed account snapshots with labels, downloads and retention; verified restore previews preserve existing game details/replays, and self-service repairs save a snapshot before running.
+
+- Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
+
+### Publishing from Community
+
+- Publish a build opens a searchable library picker and keeps the destination through sign-in. Authors can open an existing listing's update window from its private source link.
+- Community's Mine view shows your publications, anonymous status, dates, vote counts and private classified-game record. Owner menus link back to the private build and its publication window; viewers without publications stop polling for records.
+
+### Build library and definitions
+
+- Empty build dossiers explain replay matching and offer re-match, rule editing and pending check-ins. Recent form, section links, sortable game disclosures and retry actions make existing results easier to explore.
+- Build menus add Duplicate, public links and Unpublish; listing labels and delete warnings agree across every surface. Cards show last played and low-sample cues, with a Last played library sort.
+- Definitions group rules by race and matchup, keep filters in the URL, and reveal focused entries from strategy links in dossiers and check-ins.
+
+### Coaching workspace
+
+- Coaching shows your role, coach or students, with keyboard tab navigation and badges for waiting practice requests and unread session alerts.
+- Availability drafts survive tab switches and can be published or reset from the save bar. Booked session times keep their published time zone, and a failed Locker load offers a safe retry.
+
+### Stream Dock and learning pages
+
+- Run build votes, switch all four stream scenes and undo or manage chat blocks; blocked authors do not vote in polls. Refresh existing scene Browser Sources once to recognize Intermission and Stream ending.
+- Stream Studio links features to their guides, offers signed-in setup shortcuts, opens the desktop preview gallery and lets you undo a course-progress reset.
+
+- Review comments save browser drafts, guard discarded text and support Ctrl/Cmd+Enter; edit mode validates text and explains its 15-minute window. Request time ranges have phone-safe inputs, presets and clock suggestions. Share, report, block, delete and close actions use accessible menus and explicit confirmations.
+
+- Community browsing filters by your race, opponent race and skill level, with Recently updated sorting and shareable filter chips. Search follows Back/Forward without losing typing focus, results show loading feedback, and pagination distinguishes disabled ends from stale page links.
+
+### Community build cards and author pages
+
+- Community cards preview timed build steps, keep long author names in bounds, and share one signed score style. Authors manage their listings through a keyboard-accessible menu while keeping both removal confirmations.
+- Build pages put save, vote and share before the rules on phones, preserve long descriptions in an expandable About card, and keep reporting reachable. Author pages add Top/New sorting, search, matchup counts and accurate publishing dates and average scores.
+
+### Fixed
+
+- Overlay Test now uses a temporary sample layer: Stop restores current real opponent/session data. Live matches require confirmation, with a local preview option that sends nothing to OBS.
+
 
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
 - Win rates include verdict symbols, charts use one keyboard Tab stop with pinnable details, and a shared legend plus Help article explains ranges, publishing floors and trends.
 - The guide hub previews busy map cards and links to all openers and counters. Map guides show a race matrix with honest mirror cells, enlarged artwork and neighboring maps.
+
+- Filter replay review requests by asker race, remove active filters and return to the newest page without losing your selection. Signed-in players can pick a synced 1v1 game directly from the board or My reviews, and the personalised help panel has compact cards and a remembered phone disclosure.
 
 ### Analyzer filters and Trends
 
