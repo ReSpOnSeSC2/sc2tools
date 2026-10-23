@@ -19,14 +19,15 @@ import { ReplayDownloadButton } from "@/components/analyzer/ReplayDownloadButton
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { Modal } from "@/components/ui/Modal";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
+import { AssignmentModal } from "./AssignmentModal";
+import { assignmentTimeZone, rememberAssignmentTimeZone } from "./coachingAssignmentPreferences";
 import { useToast } from "@/components/ui/Toast";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { useUserSocket } from "@/lib/useUserSocket";
 import {
   apiMessage,
-  fieldClass,
-  timeZoneOptions,
   useLocalTimeZone,
 } from "./coachingTime";
 import {
@@ -34,8 +35,6 @@ import {
   buildId,
   buildSuggestionKey,
   cadenceNoun,
-  calendarPeriodCount,
-  defaultCalendarRange,
   formatGameDate,
   formatWindow,
   localDateKey,
@@ -44,6 +43,7 @@ import {
   requirementDetail,
   requirementTitle,
   statePill,
+  validateAssignmentDraft,
   type AssignmentDraft,
   type AssignmentGamesPayload,
   type AssignmentsPayload,
@@ -292,7 +292,8 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
       toast.error("The student must approve practice and replay sharing first.");
       return;
     }
-    const today = localDateKey(new Date(), timeZone);
+    const playerTimeZone = assignmentTimeZone(student.id, timeZone);
+    const today = localDateKey(new Date(), playerTimeZone);
     setDraft({
       studentId: student.id,
       type: "build",
@@ -304,7 +305,7 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
       dateRangeEdited: false,
       startsOn: today,
       endsOn: addDays(today, 6),
-      timeZone: "",
+      timeZone: playerTimeZone,
       title: "",
       note: "",
       clientRequestId: requestId(),
@@ -314,41 +315,10 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
   const saveAssignment = async () => {
     if (!draft) return;
     const requiredGames = Number(draft.requiredGames);
-    if (!draft.studentId) {
-      toast.error("Choose a student.");
-      return;
-    }
-    if (!assignableStudents.some((student) => student.id === draft.studentId)) {
-      toast.error("That student must link their account and approve practice sharing first.");
-      return;
-    }
-    if (!Number.isInteger(requiredGames) || requiredGames < 1 || requiredGames > 1000) {
-      toast.error("Required games must be between 1 and 1,000.");
-      return;
-    }
-    if (draft.type === "build" && !draft.buildName.trim()) {
-      toast.error("Choose or enter the build the player should use.");
-      return;
-    }
+    if (Object.keys(validateAssignmentDraft(draft, { assignableStudents, buildOptions: buildSuggestions })).length) return;
     const selectedBuild = draft.type === "build" && draft.buildSelection !== "manual"
       ? buildSuggestions.find((item) => buildSuggestionKey(item) === draft.buildSelection)
       : undefined;
-    if (draft.type === "build" && draft.buildSelection !== "manual" && !selectedBuild) {
-      toast.error("Choose a build available for this student.");
-      return;
-    }
-    if (!draft.startsOn || !draft.endsOn || draft.endsOn < draft.startsOn) {
-      toast.error("Choose a valid start and end date.");
-      return;
-    }
-    if (!draft.timeZone) {
-      toast.error("Choose the player's time zone.");
-      return;
-    }
-    if (Date.parse(`${draft.endsOn}T00:00:00Z`) - Date.parse(`${draft.startsOn}T00:00:00Z`) > 365 * 86_400_000) {
-      toast.error("Practice plans can span up to 366 days.");
-      return;
-    }
 
     setSaving(true);
     try {
@@ -382,6 +352,7 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
           }),
         },
       );
+      rememberAssignmentTimeZone(draft.studentId, draft.timeZone);
       setDraft(null);
       setStudentId(draft.studentId);
       setAssignmentPage(1);
@@ -500,10 +471,8 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
 
       {canManage && students.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <label className="flex items-center gap-2 text-caption font-bold text-text-muted">
-            Player
-            <select
-              className={fieldClass("min-w-52 bg-bg-surface")}
+          <Field label="Player" className="min-w-52">
+            <Select
               value={studentId}
               onChange={(event) => {
                 setStudentId(event.target.value);
@@ -514,8 +483,8 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
               {students.map((student) => (
                 <option key={student.id} value={student.id}>{student.name}</option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
           <p className="text-caption text-text-dim" role="status">
             {canAssignSelected
               ? "Progress refreshes as the desktop agent syncs each replay."
@@ -628,8 +597,9 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
         </Card>
       )}
 
-      <AssignmentModal
-        open={Boolean(draft)}
+      {draft ? <AssignmentModal
+        key={draft.clientRequestId}
+        browserTimeZone={timeZone}
         saving={saving}
         draft={draft}
         students={assignableStudents}
@@ -637,7 +607,7 @@ export default function CoachingPractice({ role }: { role: CoachingRole }) {
         onChange={setDraft}
         onClose={closeAssignmentModal}
         onSave={() => void saveAssignment()}
-      />
+      /> : null}
       <ConfirmDialog
         open={Boolean(cancelTarget)}
         onClose={closeCancelDialog}
@@ -790,304 +760,6 @@ function PracticeSharingPanel({
         </div>
       </div>
     </Card>
-  );
-}
-
-function AssignmentModal({
-  open,
-  saving,
-  draft,
-  students,
-  buildSuggestions,
-  onChange,
-  onClose,
-  onSave,
-}: {
-  open: boolean;
-  saving: boolean;
-  draft: AssignmentDraft | null;
-  students: Student[];
-  buildSuggestions: BuildSuggestion[];
-  onChange: (draft: AssignmentDraft) => void;
-  onClose: () => void;
-  onSave: () => void;
-}) {
-  if (!draft) return null;
-  const patch = (next: Partial<AssignmentDraft>) => onChange({ ...draft, ...next });
-  const defaultRangeIn = (
-    playerTimeZone: string,
-    type: AssignmentDraft["type"] = draft.type,
-    recurrence: AssignmentDraft["recurrence"] = draft.recurrence,
-  ) => {
-    const today = localDateKey(new Date(), playerTimeZone);
-    return type === "total"
-      ? defaultCalendarRange(today, recurrence)
-      : { startsOn: today, endsOn: addDays(today, 6) };
-  };
-  const periodCount = draft.type === "total"
-    ? calendarPeriodCount(draft.startsOn, draft.endsOn, draft.recurrence)
-    : 1;
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Assign a practice plan"
-      description="Progress is calculated from the player's synced replay record, never self-reported."
-      size="lg"
-      disableScrimClose={saving}
-      footer={(
-        <>
-          <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button onClick={onSave} loading={saving}>Assign plan</Button>
-        </>
-      )}
-    >
-      <div className="space-y-5">
-        <label className="block text-caption font-bold text-text-muted">
-          Student
-          <select
-            className={fieldClass("mt-2 w-full")}
-            value={draft.studentId}
-            onChange={(event) => patch({
-              studentId: event.target.value,
-              buildSelection: "manual",
-              buildName: "",
-            })}
-          >
-            {students.map((student) => (
-              <option key={student.id} value={student.id}>{student.name}</option>
-            ))}
-          </select>
-        </label>
-
-        <fieldset>
-          <legend className="text-caption font-bold text-text-muted">What should count?</legend>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            <ChoiceButton
-              active={draft.type === "build"}
-              icon={<Target className="h-4 w-4" />}
-              title="A specific build"
-              detail="One target inside a selected date window"
-              onClick={() => patch({ type: "build" })}
-            />
-            <ChoiceButton
-              active={draft.type === "total"}
-              icon={<Gamepad2 className="h-4 w-4" />}
-              title="Total 1v1 games"
-              detail="A repeating daily, weekly, or monthly target"
-              onClick={() => patch({
-                type: "total",
-                recurrence: "weekly",
-                ...(!draft.totalRangeInitialized && !draft.dateRangeEdited
-                  ? defaultCalendarRange(draft.startsOn, "weekly")
-                  : {}),
-                totalRangeInitialized: true,
-              })}
-            />
-          </div>
-        </fieldset>
-
-        {draft.type === "build" ? (
-          <div className="space-y-3">
-            <label className="block text-caption font-bold text-text-muted">
-              Build
-              <select
-                className={fieldClass("mt-2 w-full")}
-                value={draft.buildSelection}
-                onChange={(event) => {
-                  const buildSelection = event.target.value;
-                  const selected = buildSuggestions.find(
-                    (item) => buildSuggestionKey(item) === buildSelection,
-                  );
-                  patch({ buildSelection, buildName: selected?.name || "" });
-                }}
-              >
-                <option value="manual">Enter an exact detected style name…</option>
-                {buildSuggestions.map((item) => (
-                  <option key={buildSuggestionKey(item)} value={buildSuggestionKey(item)}>
-                    {item.name} — {item.matchBy === "slug" ? "custom build" : "detected style"}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {draft.buildSelection === "manual" ? (
-              <label className="block text-caption font-bold text-text-muted">
-                Exact detected style name
-                <input
-                  className={fieldClass("mt-2 w-full")}
-                  value={draft.buildName}
-                  onChange={(event) => patch({ buildName: event.target.value })}
-                  placeholder="e.g. PvP - Phoenix Style"
-                  autoComplete="off"
-                />
-              </label>
-            ) : (
-              <p className="text-caption text-text-dim">
-                {buildSuggestions.find((item) => buildSuggestionKey(item) === draft.buildSelection)?.matchBy === "slug"
-                  ? "Matches this exact custom-build identity, even when another build has the same display name."
-                  : "Matches this exact replay-engine style name."}
-              </p>
-            )}
-          </div>
-        ) : (
-          <label className="block text-caption font-bold text-text-muted">
-            Repeat target
-            <select
-              className={fieldClass("mt-2 w-full")}
-              value={draft.recurrence}
-              onChange={(event) => {
-                const recurrence = event.target.value as AssignmentDraft["recurrence"];
-                patch({ recurrence });
-              }}
-            >
-              <option value="daily">Per day</option>
-              <option value="weekly">Per week</option>
-              <option value="monthly">Per month</option>
-            </select>
-          </label>
-        )}
-
-        <div className="grid gap-4 sm:grid-cols-3">
-          <label className="block text-caption font-bold text-text-muted">
-            Required games
-            <input
-              className={fieldClass("mt-2 w-full tabular-nums")}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={1000}
-              value={draft.requiredGames}
-              onChange={(event) => patch({ requiredGames: event.target.value })}
-            />
-          </label>
-          <label className="block text-caption font-bold text-text-muted">
-            Starts
-            <input
-              className={fieldClass("mt-2 w-full")}
-              type="date"
-              value={draft.startsOn}
-              onChange={(event) => patch({
-                startsOn: event.target.value,
-                dateRangeEdited: true,
-              })}
-            />
-          </label>
-          <label className="block text-caption font-bold text-text-muted">
-            Ends
-            <input
-              className={fieldClass("mt-2 w-full")}
-              type="date"
-              min={draft.startsOn}
-              value={draft.endsOn}
-              onChange={(event) => patch({
-                endsOn: event.target.value,
-                dateRangeEdited: true,
-              })}
-            />
-          </label>
-        </div>
-
-        <label className="block text-caption font-bold text-text-muted">
-          Player&apos;s time zone
-          <select
-            className={fieldClass("mt-2 w-full")}
-            value={draft.timeZone}
-            onChange={(event) => {
-              const nextTimeZone = event.target.value;
-              patch({
-                timeZone: nextTimeZone,
-                ...(!draft.dateRangeEdited
-                  ? defaultRangeIn(nextTimeZone)
-                  : {}),
-              });
-            }}
-            aria-label="Player's time zone"
-            required
-          >
-            <option value="" disabled>Select the player&apos;s time zone…</option>
-            {timeZoneOptions(draft.timeZone).filter(Boolean).map((zone) => (
-              <option key={zone} value={zone}>{zone.replaceAll("_", " ")}</option>
-            ))}
-          </select>
-          <span className="mt-1 block font-normal text-micro text-text-dim">
-            Daily, weekly, and monthly boundaries follow the player&apos;s local calendar.
-          </span>
-        </label>
-
-        <div className="rounded-xl border border-border bg-bg-elevated/45 px-4 py-3 text-caption text-text-muted">
-          <span className="font-bold text-text">
-            {draft.type === "build"
-              ? "Counts one target across the selected window"
-              : `Creates ${periodCount} calendar ${cadenceNoun(draft.recurrence)} target${periodCount === 1 ? "" : "s"}`}
-          </span>
-          <span>
-            {draft.timeZone
-              ? ` · Boundaries use ${draft.timeZone.replaceAll("_", " ")}.`
-              : " · Choose the player's time zone before assigning."}
-          </span>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className="block text-caption font-bold text-text-muted">
-            Plan title <span className="font-normal text-text-dim">(optional)</span>
-            <input
-              className={fieldClass("mt-2 w-full")}
-              value={draft.title}
-              maxLength={120}
-              onChange={(event) => patch({ title: event.target.value })}
-              placeholder="e.g. PvP Phoenix reps"
-            />
-          </label>
-          <label className="block text-caption font-bold text-text-muted">
-            Note <span className="font-normal text-text-dim">(optional)</span>
-            <input
-              className={fieldClass("mt-2 w-full")}
-              value={draft.note}
-              maxLength={500}
-              onChange={(event) => patch({ note: event.target.value })}
-              placeholder="One cue to focus on"
-            />
-          </label>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-function ChoiceButton({
-  active,
-  icon,
-  title,
-  detail,
-  onClick,
-}: {
-  active: boolean;
-  icon: React.ReactNode;
-  title: string;
-  detail: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={[
-        "flex min-h-20 items-start gap-3 rounded-xl border-2 p-3 text-left transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        active
-          ? "border-accent bg-accent/10"
-          : "border-line bg-bg hover:bg-bg-elevated",
-      ].join(" ")}
-    >
-      <span className={active ? "mt-0.5 text-accent-cyan" : "mt-0.5 text-text-dim"} aria-hidden>
-        {icon}
-      </span>
-      <span>
-        <span className="block font-display text-caption font-extrabold text-text">{title}</span>
-        <span className="mt-0.5 block text-micro text-text-muted">{detail}</span>
-      </span>
-    </button>
   );
 }
 

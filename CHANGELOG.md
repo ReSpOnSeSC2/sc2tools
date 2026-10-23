@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Coaching forms
+
+- Practice plans show inline field errors, focus the first field to fix, remember each student's time zone and summarize the actual target before assignment. Failed saves retain the draft for Retry.
+- Weekly availability highlights reversed or overlapping hours and prevents publication until they are corrected. Touching windows remain valid.
+
 ### Shared game analysis
 
 - Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.
