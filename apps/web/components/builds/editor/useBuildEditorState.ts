@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useToastOptional } from "@/components/ui/Toast";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall } from "@/lib/clientApi";
 import {
@@ -115,6 +117,7 @@ export function useBuildEditorState(
   const { open, context, initialDraft, lockedSlug, onSaved, demoMode, createOnly } = opts;
   const { sourceRows, countRepeats = true } = context;
   const { getToken } = useAuth();
+  const globalToast = useToastOptional()?.toast;
 
   const [draft, setDraft] = useState<BuildEditorDraft>(initialDraft);
   const [errors, setErrors] = useState<BuildEditorErrors>({});
@@ -142,7 +145,7 @@ export function useBuildEditorState(
   const [savedOk, setSavedOk] = useState(false);
   const [toasts, setToasts] = useState<BuildEditorToast[]>([]);
 
-  const pristineRef = useRef<string>(JSON.stringify(initialDraft));
+  const [pristine, setPristine] = useState(() => JSON.stringify(initialDraft));
   const previewGenerationRef = useRef(0);
   const previewAbortRef = useRef<AbortController | null>(null);
 
@@ -164,7 +167,7 @@ export function useBuildEditorState(
     setSaving(false);
     setSaveError(null);
     setSavedOk(false);
-    pristineRef.current = JSON.stringify(initialDraft);
+    setPristine(JSON.stringify(initialDraft));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -286,11 +289,16 @@ export function useBuildEditorState(
       text: string,
       action?: BuildEditorToast["action"],
     ) => {
+      if (globalToast) {
+        const description = action ? createElement(Link, { href: action.href, className: "font-semibold text-accent underline" }, action.label) : undefined;
+        globalToast[kind === "warn" ? "warning" : kind](text, { description });
+        return;
+      }
       const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       setToasts((xs) => [...xs, { id, kind, text, action }]);
       window.setTimeout(() => dismissToast(id), TOAST_TTL_MS);
     },
-    [dismissToast],
+    [dismissToast, globalToast],
   );
 
   /* ---- Rule mutators --------------------------------------------- */
@@ -458,14 +466,22 @@ export function useBuildEditorState(
   }, []);
 
   /* ---- Dirty tracking + save ------------------------------------- */
+  const seedAuthorName = useCallback((name: string) => {
+    const author = name.slice(0, 80);
+    setDraft((current) => current.communityAuthorName ? current : { ...current, communityAuthorName: author });
+    setPristine((snapshot) => {
+      const initial = JSON.parse(snapshot) as BuildEditorDraft;
+      return initial.communityAuthorName ? snapshot : JSON.stringify({ ...initial, communityAuthorName: author });
+    });
+  }, []);
   const isDirty = useMemo(
-    () => JSON.stringify(draft) !== pristineRef.current,
-    [draft],
+    () => JSON.stringify(draft) !== pristine,
+    [draft, pristine],
   );
 
   const save = useCallback(
     async (andReclassify: boolean) => {
-      const sanitised = sanitiseDraft(draft);
+      const sanitised = sanitiseDraft(draft, { allowEmptyRules: !!lockedSlug });
       if (!sanitised.ok) {
         setErrors(sanitised.errors);
         pushToast("error", "Fix the highlighted fields before saving.");
@@ -497,6 +513,7 @@ export function useBuildEditorState(
         race: sanitised.payload.race,
         vsRace: sanitised.payload.vsRace,
         description: sanitised.payload.description,
+        notes: sanitised.payload.notes,
         rules: sanitised.payload.rules,
         skillLevel: sanitised.payload.skillLevel,
         winConditions: sanitised.payload.winConditions,
@@ -543,7 +560,7 @@ export function useBuildEditorState(
             // the user knows only the private-library badge may be stale.
           }
         }
-        pristineRef.current = JSON.stringify(draft);
+        setPristine(JSON.stringify(draft));
         setSaving(false);
         setSavedOk(true);
         pushToast(
@@ -557,6 +574,7 @@ export function useBuildEditorState(
         const reclassifyError = resp?.reclassifyError;
         const summary = describeReclassifySummary(resp?.reclassify);
         if (reclassifyError) {
+          if (!globalToast) pushToast("error", "Build saved, but replay matching couldn't start. Try again in a moment.");
           // The modal promotes this partial failure into the app-wide toast
           // layer so it remains visible after the successfully saved editor
           // closes. Do not emit a second short-lived local error here.
@@ -623,7 +641,7 @@ export function useBuildEditorState(
         pushToast("error", `Save failed: ${message}`);
       }
     },
-    [draft, context.gameId, context.perspective, createOnly, demoMode, getToken, lockedSlug, onSaved, pushToast],
+    [draft, context.gameId, context.perspective, createOnly, demoMode, getToken, globalToast, lockedSlug, onSaved, pushToast],
   );
 
   return {
@@ -655,6 +673,7 @@ export function useBuildEditorState(
     addRuleFromEvent,
     addCustomRule,
     isDirty,
+    seedAuthorName,
     save,
     toasts,
     pushToast,
