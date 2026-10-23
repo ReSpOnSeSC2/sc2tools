@@ -16,6 +16,7 @@ const { createGuidesHarness, seedGuideCorpus, GLAIVES, ROBO, TWELVE_POOL } = req
 
 jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 
+// eslint-disable-next-line max-lines-per-function -- shared real-app/Mongo lifecycle groups the public route integration cases
 describe("public /v1/guides", () => {
   let h; let run;
   const get = (path) => request(h.app).get(path);

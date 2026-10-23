@@ -65,6 +65,19 @@ target; rendered and repeated production hash/focus regressions cover this.
 Shipped main `71d00337` (#693 shared clock/phone HUD and #694 share previews)
 was integrated; only CHANGELOG conflicted and both entries were retained.
 
+The final repair passes all 172 production Playwright scenarios (38 intentional
+skips, no retries or failures), including the existing true-404/308/ISR/outage
+contracts. Eighteen hash-focus checks at phone/tablet/desktop widths preserve
+filters, reveal hidden definitions and cause no document/RSC filter navigation.
+The 11 rendered DefinitionsCatalog tests also cover a superseded router snapshot
+arriving after the newer hash. Both full typechecks and strict scoped lint pass.
+The exact-CI final build passes every unchanged budget (guide 167.7/175 kB,
+game 311.9/440, app 235.1/240, landing 213.4/215). Remaining GuideUnavailable
+log entries are deliberate fixture outages (including the Robo opener cache
+test) or prefetches of routes intentionally absent from the synthetic API.
+
+The original feature checkpoint `ee06f339` additionally passed:
+
 - 481 web assertions / 55 files: guide components, helpers, routes and all
   help tests. Includes real SWR request deduplication and auth gating.
 - 41 API assertions / 3 suites: guidesPayloads, guideStatsIndex,

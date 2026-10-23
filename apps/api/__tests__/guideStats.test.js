@@ -21,6 +21,7 @@ const VOID_RAY = "PvZ - 2 Stargate Void Ray";
 const THREE_GATE_PHOENIX = "PvZ - 3 Stargate Phoenix";
 const KEY_GLAIVES = "build:after:PvZ:stargate-into-glaives";
 
+// eslint-disable-next-line max-lines-per-function -- shared Mongo lifecycle groups the existing aggregate integration cases
 describe("GuideStatsService.recompute — games aggregate", () => {
   let mongo; let db;
 
