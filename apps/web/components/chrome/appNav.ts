@@ -1,5 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 import {
+  Bell,
   BookOpen,
   CalendarClock,
   Cpu,
@@ -111,6 +112,7 @@ const UTILITY_ENTRIES: NavEntry[] = [
     shortcut: true,
   },
   { key: "devices", href: "/devices", label: "Devices", icon: Cpu, group: "utility" },
+  { key: "notifications", href: "/notifications", label: "Notifications", icon: Bell, group: "utility" },
   { key: "settings", href: "/settings", label: "Settings", icon: SlidersHorizontal, group: "utility" },
   { key: "admin", href: "/admin", label: "Admin", icon: ShieldCheck, group: "utility", adminOnly: true },
 ];

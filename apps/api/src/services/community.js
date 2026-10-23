@@ -255,11 +255,12 @@ function pickTop(counts) {
 class CommunityService {
   /**
    * @param {import('../db/connect').DbContext} db
-   * @param {{slugSecret?: Buffer|string, now?: () => number}} [opts]
+   * @param {{slugSecret?: Buffer|string, now?: () => number, notifications?: import('./notifications').NotificationsService}} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
     this.slugSecret = opts.slugSecret || null;
+    this.notifications = opts.notifications || null;
     /**
      * Report targets owned by OTHER services (the Replay Review
      * Exchange registers ``review_request`` / ``review_comment``), so

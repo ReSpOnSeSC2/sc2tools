@@ -29,6 +29,7 @@ const rateLimit =
  * validation/userMessage.js and capped at 2 KB.
  *
  * @param {{
+ *   supportMessages?: import('../services/supportMessages').SupportMessagesService,
  *   adminEvents: import('../services/adminEvents').AdminEventsService,
  *   users: import('../services/users').UsersService,
  *   auth: import('express').RequestHandler,
@@ -80,6 +81,13 @@ function buildMessagesRouter(deps) {
 
   router.use("/messages", deps.auth);
   router.post("/messages", sendLimiter, buildSendHandler(deps));
+  router.get("/messages/mine", async (req, res, next) => {
+    try {
+      res.set("Cache-Control", "private, no-store");
+      if (!deps.supportMessages) throw Object.assign(new Error("unavailable"), { status: 503 });
+      res.json(await deps.supportMessages.mine(requireAuth(req).userId));
+    } catch (err) { next(err); }
+  });
 
   return router;
 }

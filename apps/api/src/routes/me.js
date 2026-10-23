@@ -1,6 +1,7 @@
 "use strict";
 
 const express = require("express");
+const { NOTIFICATIONS_PREF_TYPE, sanitizeNotificationPrefs } = require("../services/notificationPrefs");
 const { validateProfile } = require("../validation/profile");
 const {
   claimReplayIngestAdmission,
@@ -363,6 +364,7 @@ function buildMeRouter(deps) {
   // (downloadStartedAt, dismissedAt). "buildCheckin" is the build check-in
   // switches (always exactly three booleans, default true).
   const PREF_TYPES = new Set([
+    NOTIFICATIONS_PREF_TYPE,
     "misc",
     "voice",
     "arcade",
@@ -382,7 +384,8 @@ function buildMeRouter(deps) {
         return;
       }
       const prefs = await deps.users.getPreferences(auth.userId, type);
-      res.json(type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(prefs) : prefs);
+      res.json(type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(prefs)
+        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(prefs) : prefs);
     } catch (err) {
       next(err);
     }
@@ -401,7 +404,8 @@ function buildMeRouter(deps) {
         res.status(400).json({ error: { code: "invalid_body" } });
         return;
       }
-      const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body) : req.body;
+      const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body)
+        : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body) : req.body;
       const saved = await deps.users.updatePreferences(auth.userId, type, body);
       if (deps.buildIntents) {
         try {

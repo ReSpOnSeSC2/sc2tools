@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { ToastProvider } from "@/components/ui/Toast";
+vi.mock("@/components/notifications/MyReports", () => ({ MyReports: () => <section aria-label="My reports" /> }));
 import { SettingsHelp } from "../SettingsHelp";
 
 // The support line asks Clerk whether "Report a problem" can be offered.

@@ -46,6 +46,7 @@ const {
  *   admin: import('../services/admin').AdminService,
  *   adminGlobal: import('../services/adminGlobal').AdminGlobalService,
  *   adminGlobalTrends: import('../services/adminGlobalTrends').AdminGlobalTrendsService,
+ *   supportMessages?: import('../services/supportMessages').SupportMessagesService,
  *   adminEvents: import('../services/adminEvents').AdminEventsService,
  *   backupStatus?: import('../services/backupStatus').BackupStatusService,
  *   analytics: import('../services/analytics').AnalyticsService,
@@ -492,6 +493,13 @@ function buildAdminRouter(deps) {
     } catch (err) {
       next(err);
     }
+  });
+
+  router.patch("/admin/messages/:eventId", async (req, res, next) => {
+    try {
+      if (!deps.supportMessages) throw Object.assign(new Error("unavailable"), { status: 503 });
+      res.json(await deps.supportMessages.update(req.params.eventId, req.body));
+    } catch (err) { next(err); }
   });
 
   router.get("/admin/events", async (req, res, next) => {

@@ -33,6 +33,7 @@ const isProtected = createRouteMatcher([
   // matcher a signed-out visitor gets a broken shell instead of the
   // sign-in redirect.
   "/settings(.*)",
+  "/notifications(.*)",
   "/admin(.*)",
 ]);
 

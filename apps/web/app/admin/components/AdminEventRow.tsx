@@ -7,6 +7,7 @@ import {
   MonitorCheck,
   UserPlus,
 } from "lucide-react";
+import { ReportReplyControl } from "./ReportReplyControl";
 import { Badge, type BadgeVariant } from "@/components/ui/Badge";
 import {
   describeFailedRequest,
@@ -32,9 +33,11 @@ import type {
 export function AdminEventRow({
   event,
   unread,
+  onReportUpdated,
 }: {
   event: AdminEvent;
   unread: boolean;
+  onReportUpdated?: () => unknown;
 }) {
   const meta = describe(event);
   const report = event.type === "user_message" ? (event.payload as AdminEventUserMessagePayload) : null;
@@ -76,6 +79,7 @@ export function AdminEventRow({
           </p>
         ) : null}
         {report ? <EmailSource payload={report} /> : null}
+        {report && !event.anonymizedAt ? <ReportReplyControl eventId={event.eventId} report={event.report} linkedUser={!!report.userId} onReload={onReportUpdated} /> : null}
       </div>
       <span className="flex-none whitespace-nowrap text-caption text-text-dim">
         {timeSince(event.createdAt)}
