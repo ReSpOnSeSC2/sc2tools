@@ -43,6 +43,8 @@ class DevicePairingsService {
     this.db = db;
     this.adminEvents = opts.adminEvents || null;
     this.logger = opts.logger || null;
+    /** @type {((userId: string, metadata: any) => Promise<void>)|null} */
+    this.onHeartbeat = null;
     this.ipSalt = opts.ipSalt || PROCESS_IP_SALT;
   }
 
@@ -398,6 +400,10 @@ class DevicePairingsService {
           this.logger.warn({ err, deviceId: String(device._id) }, "agent_connection_notification_failed");
         }
       }
+    }
+    if (device && this.onHeartbeat) {
+      try { await this.onHeartbeat(userId, body); }
+      catch (err) { this.logger?.warn({ err }, "agent_update_notification_failed"); }
     }
     return { receivedAt: now };
   }

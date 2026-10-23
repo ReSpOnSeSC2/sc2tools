@@ -81,7 +81,7 @@ const {
 const { ImportService } = require("./services/import");
 const { SpatialService } = require("./services/spatial");
 const { CatalogService } = require("./services/catalog");
-const { AgentVersionService } = require("./services/agentVersion");
+const { AgentVersionService, compareVersions } = require("./services/agentVersion");
 const { GithubReleaseFeed } = require("./services/agentGithubReleases");
 const { GdprService } = require("./services/gdpr");
 const { GuideSamplesService } = require("./services/guideSamples");
@@ -135,6 +135,7 @@ const { buildPlayerChannelsRouter } = require("./routes/playerChannels");
 const { PlayerIdentitiesService } = require("./services/playerIdentities");
 const { buildPlayerIdentitiesRouter } = require("./routes/playerIdentities");
 const { NotificationsService } = require("./services/notifications");
+const { SupportMessagesService } = require("./services/supportMessages");
 const { buildNotificationsRouter } = require("./routes/notifications");
 const { ReviewerReputationService } = require("./services/reviewerReputation");
 const { ReviewsService } = require("./services/reviews");
@@ -317,6 +318,11 @@ function makeServices(deps) {
     logger: deps.logger,
     supportEmail: deps.config.supportEmail,
   });
+  const notifications = new NotificationsService(deps.db, {
+    io: deps.io,
+    logger: deps.logger,
+  });
+  const supportMessages = new SupportMessagesService(deps.db, notifications, adminEvents);
   const users = new UsersService(deps.db, { adminEvents });
   // Pluggable backend for the per-game heavy blob. Defaults to
   // ``MongoDetailsStore`` (in-database); flips to ``R2DetailsStore``
@@ -636,7 +642,7 @@ function makeServices(deps) {
   customBuilds.onDefinitionsChanged = (userId) => buildIntents.invalidateOptions(userId);
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
-  const imports = new ImportService(deps.db, { io: deps.io });
+  const imports = new ImportService(deps.db, { io: deps.io, notifications, logger: deps.logger });
   const spatial = new SpatialService(deps.db);
   // The GitHub feed makes an `agent-v*` tag push a complete release:
   // the updater's /v1/agent/version poll then sees the newest GitHub
@@ -663,6 +669,14 @@ function makeServices(deps) {
           logger: deps.logger,
         });
   const agentVersion = new AgentVersionService(deps.db, { githubFeed });
+  pairings.onHeartbeat = async (userId, metadata) => {
+    if (typeof metadata.version !== "string") return;
+    const release = await agentVersion.latest({ platform: /mac/i.test(metadata.os) ? "macos" : /linux/i.test(metadata.os) ? "linux" : "windows" });
+    if (!release?.minSupportedVersion || compareVersions(metadata.version, release.minSupportedVersion) >= 0) return;
+    await notifications.notify(userId, { kind: "agent.update_required", title: `Update SC2 Tools Agent to ${release.minSupportedVersion}`,
+      body: "Your desktop app needs an update to keep syncing.", href: "/download",
+      groupKey: `agent-update:${release.minSupportedVersion}`, eventKey: `agent-update:${release.minSupportedVersion}` });
+  };
   const siteStats = new SiteStatsService(deps.db, {
     secret: deps.config.serverPepper,
     logger: deps.logger,
@@ -725,6 +739,7 @@ function makeServices(deps) {
   });
   const community = new CommunityService(deps.db, {
     slugSecret: deps.config.serverPepper,
+    notifications,
   });
   // Opt-in public player pages (/p/:handle). Derives entirely from
   // existing services — a public profile exists iff the user published
@@ -741,10 +756,7 @@ function makeServices(deps) {
   // REVIEWS_ENABLED only gates the routes — so GDPR export/deletion and
   // wipes always cover review data. ``reviewSeasonWindowStart`` is a
   // test-injected stand-in so suites never reach live SC2Pulse.
-  const notifications = new NotificationsService(deps.db, {
-    io: deps.io,
-    logger: deps.logger,
-  });
+
   // ``pulse`` reads each reviewer account's current-season league
   // (Grandmaster is a region's top 200, not an MMR line). Tests inject a
   // PulseMmrService with fetch disabled, or a stand-in.
@@ -885,6 +897,7 @@ function makeServices(deps) {
     playerChannels,
     playerIdentities,
     notifications,
+    supportMessages,
     reviewerReputation,
     reviews,
   };
@@ -1210,6 +1223,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       aggregations: services.aggregations,
       coaching: buildCoachingService({
         db: deps.db,
+        notifications: services.notifications,
         io: deps.io,
         logger: deps.logger,
       }),
@@ -1300,7 +1314,6 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildNotificationsRouter({
       notifications: services.notifications,
       auth,
-      rollout: deps.config.reviewsEnabled || "off",
     }),
   );
   // Multichat overlay relays — overlay-token auth (path segment), no
@@ -1333,6 +1346,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAdminRouter({
+      supportMessages: services.supportMessages,
       admin: services.admin,
       adminGlobal: services.adminGlobal,
       adminGlobalTrends: services.adminGlobalTrends,
@@ -1368,6 +1382,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMessagesRouter({
+      supportMessages: services.supportMessages,
       adminEvents: services.adminEvents,
       users: services.users,
       auth,

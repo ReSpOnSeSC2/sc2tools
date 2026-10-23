@@ -745,6 +745,11 @@ async function ensureReviewIndexes(ctx) {
 
   await ctx.notifications.createIndex({ userId: 1, createdAt: -1 });
   await ctx.notifications.createIndex({ userId: 1, readAt: 1 });
+  await ctx.notifications.createIndex(
+    { userId: 1, deliveryKeys: 1 },
+    { unique: true, partialFilterExpression: { deliveryKeys: { $type: "array" } }, name: "notification_delivery_key" },
+  );
+  await ctx.adminEvents.createIndex({ "payload.userId": 1, type: 1, createdAt: -1 });
   // Grouped notifications ("3 new reviews on your request") collapse onto
   // the caller's single UNREAD row per group; once read, the next event
   // starts a fresh row.

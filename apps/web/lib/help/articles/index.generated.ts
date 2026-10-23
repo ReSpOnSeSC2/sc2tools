@@ -7,6 +7,7 @@ import type { HelpArticle } from "../types";
 import accountData_backupsAndExport from "./account-data/backups-and-export";
 import accountData_deleteAccount from "./account-data/delete-account";
 import accountData_deletingGameHistory from "./account-data/deleting-game-history";
+import accountData_notifications from "./account-data/notifications";
 import accountData_playerChannels from "./account-data/player-channels";
 import accountData_privacyCookies from "./account-data/privacy-cookies";
 import accountData_publicProfile from "./account-data/public-profile";
@@ -70,6 +71,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   accountData_backupsAndExport,
   accountData_deleteAccount,
   accountData_deletingGameHistory,
+  accountData_notifications,
   accountData_playerChannels,
   accountData_privacyCookies,
   accountData_publicProfile,

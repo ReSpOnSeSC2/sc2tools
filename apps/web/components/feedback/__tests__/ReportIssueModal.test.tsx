@@ -167,6 +167,8 @@ describe("ReportIssueModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send question" }));
     const thanks = await screen.findByText("Thanks, we got it.");
     await waitFor(() => expect(document.activeElement).toBe(thanks));
+    expect(screen.getByText(/You'll get a notification if we reply/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "My reports" }).getAttribute("href")).toBe("/settings?tab=help#my-reports");
 
     const sendAnother = screen.getByRole("button", { name: "Send another" });
     sendAnother.focus();

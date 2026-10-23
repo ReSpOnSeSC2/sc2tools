@@ -3,6 +3,7 @@
 const { COLLECTIONS, LIMITS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
 const os = require("os");
+const { deliverNotification } = require("./notificationDelivery");
 
 const VALID_DATE_RE = /^\d{4}-\d{2}-\d{2}(T[\d:.\-+Z]+)?$/;
 
@@ -30,11 +31,13 @@ const VALID_DATE_RE = /^\d{4}-\d{2}-\d{2}(T[\d:.\-+Z]+)?$/;
 class ImportService {
   /**
    * @param {{importJobs: import('mongodb').Collection}} db
-   * @param {{ io?: import('socket.io').Server }} [opts]
+   * @param {{ io?: import('socket.io').Server, notifications?: import('./notifications').NotificationsService, logger?: import('pino').Logger }} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
     this.io = opts.io || null;
+    this.notifications = opts.notifications || null;
+    this.logger = opts.logger || null;
   }
 
   /**
@@ -370,6 +373,12 @@ class ImportService {
         ...max,
         ...authoritative,
       });
+    }
+    if (reportsDone && doc?.status === "done" && doc.kind === "import") {
+      await deliverNotification(this.notifications, userId, { kind: "import.done",
+        title: `Import finished: ${Number(doc.completed || 0).toLocaleString("en-US")} games synced`,
+        body: "Re-syncing games already saved does not add duplicate games.", href: "/app",
+        groupKey: `import:${jobId}`, eventKey: `import-done:${jobId}` }, this.logger);
     }
     return doc ? { ok: true } : { ok: true, ignored: true };
   }

@@ -47,7 +47,7 @@ export function BuildCheckInAlert({ compact = false }: { compact?: boolean }) {
             "hard-press relative inline-flex items-center justify-center gap-2 rounded-full",
             "border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-            compact ? "h-8 min-w-8 px-2" : "h-9 min-w-9 px-2.5",
+            "h-8 min-w-8 px-2",
           ].join(" ")}
         >
           <ClipboardCheck className="h-4 w-4 text-accent" aria-hidden />
@@ -56,7 +56,7 @@ export function BuildCheckInAlert({ compact = false }: { compact?: boolean }) {
           </span>
           <span
             aria-hidden
-            className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-accent px-1 font-mono text-micro font-bold leading-none text-white"
+            className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full border-2 border-bg bg-danger px-1 font-mono text-[10px] font-bold leading-none text-white"
           >
             {count}
           </span>

@@ -594,6 +594,7 @@ export type AdminEventBackupStalePayload = {
 };
 
 export type AdminEvent = {
+  report?: { status: "new" | "looking" | "fixed" | "wontfix"; revision: number; updates: Array<{ id: string; reply: string; createdAt: string }> };
   eventId: string;
   type: AdminEventType;
   payload:

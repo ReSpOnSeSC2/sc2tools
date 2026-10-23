@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { deliverNotification } = require("./notificationDelivery");
 const {
   cleanText,
   cleanDisplayName,
@@ -255,11 +256,12 @@ function pickTop(counts) {
 class CommunityService {
   /**
    * @param {import('../db/connect').DbContext} db
-   * @param {{slugSecret?: Buffer|string, now?: () => number}} [opts]
+   * @param {{slugSecret?: Buffer|string, now?: () => number, notifications?: import('./notifications').NotificationsService}} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
     this.slugSecret = opts.slugSecret || null;
+    this.notifications = opts.notifications || null;
     /**
      * Report targets owned by OTHER services (the Replay Review
      * Exchange registers ``review_request`` / ``review_comment``), so
@@ -1383,7 +1385,7 @@ class CommunityService {
         } },
         { $set: { votes: { $subtract: [{ $size: "$upvotes" }, { $size: "$downvotes" }] } } },
       ],
-      { returnDocument: "before", projection: { upvotes: 1, downvotes: 1 } },
+      { returnDocument: "before", projection: { upvotes: 1, downvotes: 1, ownerUserId: 1, title: 1 } },
     );
     if (!before) throw Object.assign(new Error("build_not_found"), { status: 404, code: "build_not_found" });
     const up = new Set(Array.isArray(before.upvotes) ? before.upvotes : []);
@@ -1391,6 +1393,13 @@ class CommunityService {
     const old = up.has(userId) ? 1 : down.has(userId) ? -1 : 0;
     if (delta === 1) up.add(userId); else up.delete(userId);
     if (delta === -1) down.add(userId); else down.delete(userId);
+    if (delta === 1 && old !== 1 && before.ownerUserId !== userId) {
+      const day = new Date(this.now()).toISOString().slice(0, 10);
+      const render = (/** @type {number} */ count) => ({ title: `${count} upvote${count === 1 ? "" : "s"} on ${before.title || "your build"}` });
+      await deliverNotification(this.notifications, before.ownerUserId, { kind: "community.vote",
+        ...render(1), href: `/community/builds/${encodeURIComponent(slug)}`,
+        groupKey: `community-vote:${slug}:${day}`, eventKey: `community-vote:${slug}:${day}:${userId}`, render }, null);
+    }
     return { votes: up.size - down.size, myVote: delta, changed: old !== delta };
   }
 

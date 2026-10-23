@@ -4,7 +4,7 @@
  * slugs, valid dates) and that every link an article makes resolves to a
  * real page, settings tab or article.
  */
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { defaultTabVisibility, isSettingsTabId } from "@/components/analyzer/settings/SettingsShell";
@@ -56,7 +56,8 @@ function brokenInternalLink(href: string): string | null {
   if (url.pathname === "/settings") {
     const tab = url.searchParams.get("tab");
     if (tab !== null && !(isSettingsTabId(tab) && defaultTabVisibility(tab))) return `no visible settings tab "${tab}"`;
-    if (url.hash && tab === "help" && !resolveLegacyAnchor(url.hash)) return `no help section ${url.hash}`;
+    if (url.hash && tab === "help" && !resolveLegacyAnchor(url.hash)
+      && !(url.hash === "#my-reports" && readFileSync(path.join(process.cwd(), "components/notifications/MyReports.tsx"), "utf8").includes('id="my-reports"'))) return `no help section ${url.hash}`;
   }
   return null;
 }
@@ -175,7 +176,7 @@ describe("help articles", () => {
   });
 
   it("has a link checker that catches broken links", () => {
-    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=import", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/help/getting-started", "/help/opponents#net-mmr", "/help/replay-reviews#who-can-review"]) {
+    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=import", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/settings?tab=help#my-reports", "/help/getting-started", "/help/opponents#net-mmr", "/help/replay-reviews#who-can-review"]) {
       expect(brokenInternalLink(ok), ok).toBeNull();
     }
     for (const broken of ["/nope", "/settings?tab=nope", "/settings?tab=help#nope", "/help/nope", "/help/opponents#nope", "/help/replay-reviews#nope"]) {

@@ -12,6 +12,7 @@
  */
 
 import Link from "next/link";
+import { MyReports } from "@/components/notifications/MyReports";
 import { ArrowUpRight, LifeBuoy } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { HelpCenter } from "@/components/help/HelpCenter";
@@ -38,6 +39,8 @@ export function SettingsHelp() {
           <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
         </Link>
       </div>
+      <MyReports />
+      <div className="my-6 border-t border-border" />
       <HelpCenter />
     </Card>
   );
