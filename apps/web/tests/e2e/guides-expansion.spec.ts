@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openGuideTimingsFixture } from "./guide-timings-fixture.mjs";
 
 async function dismissCookies(page: import("@playwright/test").Page) {
   const reject = page.getByRole("button", { name: "Reject", exact: true });
@@ -16,7 +17,7 @@ test("guide openers preserve rank through search, sorting and published-only fil
   await search.fill(""); await page.getByRole("checkbox", { name: "Only openers with a full guide" }).check(); await expect(page.getByText("3 of 4 openers", { exact: true })).toBeVisible();
   if (mobile) { await page.getByRole("combobox", { name: "Sort by" }).selectOption("games:asc"); await expect(cards.getByRole("listitem").first()).toContainText("#3"); await page.setViewportSize({ width: 375, height: 900 }); await search.scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath("guides-openers-375.png") }); }
   else { const table = page.getByRole("table"); await table.getByRole("button", { name: "Games", exact: true }).click(); await table.getByRole("button", { name: "Games", exact: true }).click(); await expect(table.getByRole("rowheader").first()).toHaveText("Robo Opener"); }
-  await noOverflow(page); expect(errors).toEqual([]);
+  expect((await search.boundingBox())?.width).toBeGreaterThan(250); await noOverflow(page); expect(errors).toEqual([]);
 });
 
 test("guide counters and map pool support sorting, missing cells and race-specific columns", async ({ page }, testInfo) => {
@@ -34,4 +35,26 @@ test("build guide groups and all-map disclosure remain accessible and recover th
   await page.getByRole("button", { name: "Show 3 more", exact: true }).click(); await expect(group.getByRole("rowheader")).toHaveCount(8); await expect(page.getByRole("button", { name: "Show fewer", exact: true })).toHaveAttribute("aria-expanded", "true");
   await page.getByText("Show all 7 maps", { exact: true }).click(); const maps = page.getByRole("table", { name: "All maps for this build" }); await expect(maps.getByRole("rowheader")).toHaveCount(7); await expect(maps.getByRole("link")).toHaveCount(1); await expect(page.getByRole("columnheader", { name: "You", exact: true })).toHaveCount(0);
   await noOverflow(page); if (testInfo.project.name === "desktop-1280") { await page.setViewportSize({ width: 1440, height: 1000 }); await group.scrollIntoViewIfNeeded(); await page.screenshot({ path: testInfo.outputPath("guides-matchup-groups-1440.png") }); }
+});
+
+test("personal guide timings use one request, explain deltas and recover through Retry", async ({ page }, testInfo) => {
+  const errors: string[] = []; page.on("pageerror", (error) => errors.push(error.message)); const fixture = await openGuideTimingsFixture(page, "retry");
+  const retry = page.getByRole("button", { name: "Retry", exact: true }); await expect(retry).toBeVisible(); expect(fixture.requests()).toBe(1); await retry.click(); await expect(page.getByRole("button", { name: "Retrying…" })).toHaveAttribute("aria-busy", "true");
+  await expect(page.getByText("You: 48.6% over 37 games · community 55.0% (−6.4 pp)", { exact: true })).toBeVisible(); expect(fixture.requests()).toBe(2); await expect(page.getByRole("columnheader", { name: "You based on 2 of your games" })).toBeVisible(); await expect(page.getByText("+12s · late", { exact: true })).toBeVisible(); await expect(page.getByText("Your median is 12 seconds later than the community median, later than most players", { exact: true })).toHaveClass("sr-only");
+  if (testInfo.project.name === "mobile-360") { await page.setViewportSize({ width: 375, height: 900 }); await expect(page.getByRole("columnheader", { name: "You based on 2 of your games" })).toBeInViewport(); await page.screenshot({ path: testInfo.outputPath("guides-personal-timings-375.png") }); }
+  if (testInfo.project.name === "desktop-1280") { await page.setViewportSize({ width: 1440, height: 900 }); await page.screenshot({ path: testInfo.outputPath("guides-personal-timings-1440.png") }); }
+  await noOverflow(page); expect(errors).toEqual([]);
+});
+
+test("a guide timing session expiry returns to the contextual sign-in prompt", async ({ page }) => {
+  const fixture = await openGuideTimingsFixture(page, "signedout"); await expect(page.getByRole("link", { name: "Sign in to see your own timings next to these" })).toHaveAttribute("href", "/sign-in?redirect_url=%2Fguides%2Fpvz%2Fstargate-into-glaives"); await expect(page.getByRole("columnheader", { name: /^You/ })).toHaveCount(0); expect(fixture.requests()).toBe(1); await noOverflow(page);
+});
+
+test("guide ranks and complete map disclosure remain available without JavaScript", async ({ browser, baseURL }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-1280", "one independent no-JavaScript context covers the server contract");
+  const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 375, height: 900 } });
+  try {
+    const page = await context.newPage(); const openers = await page.goto(`${baseURL}/guides/pvz`); expect(openers?.status()).toBe(200); const cards = page.getByRole("list", { name: "Opener cards" }); await expect(cards.getByRole("listitem")).toHaveCount(4); await expect(cards.getByRole("listitem").first()).toContainText("#1Stargate into Glaives");
+    const build = await page.goto(`${baseURL}/guides/pvz/stargate-into-glaives`); expect(build?.status()).toBe(200); await expect(page.getByRole("table", { name: "Too close to call opponent openers" }).getByRole("rowheader")).toHaveCount(5); await page.getByText("Show all 7 maps", { exact: true }).click(); await expect(page.getByRole("table", { name: "All maps for this build" }).getByRole("rowheader")).toHaveCount(7); await noOverflow(page);
+  } finally { await context.close(); }
 });

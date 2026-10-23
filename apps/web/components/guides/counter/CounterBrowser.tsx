@@ -21,7 +21,7 @@ export function CounterBrowser({ counters, matchupSlug }: { counters: ReadonlyAr
   const controls = useGuideTableControls(counters, { sorts: SORTS, defaultSort: hasRates ? { by: "toughest", direction: "asc" } : null, filterFn: (row, query) => normalizeGuideSearch(row.name).includes(query) });
   return <div className="space-y-3">
     <div className="flex flex-wrap items-end gap-3">
-      <label className="min-w-0 flex-1 text-caption font-semibold text-text">Find an opener<Input type="search" maxLength={100} aria-controls={id} value={controls.query} onChange={(event) => controls.setQuery(event.target.value)} /></label>
+      <label className="w-full min-w-0 text-caption font-semibold text-text sm:w-auto sm:flex-1">Find an opener<Input type="search" maxLength={100} aria-controls={id} value={controls.query} onChange={(event) => controls.setQuery(event.target.value)} /></label>
       <label className="text-caption font-semibold text-text">Sort by<Select value={controls.sortProps.sortBy} onChange={(event) => controls.setSortExplicit(event.target.value, event.target.value === "games" ? "desc" : "asc")}>
         {!hasRates ? <option value="">Published first</option> : null}
         {Object.entries(SORTS).map(([key, sort]) => <option key={key} value={key}>{sort.label}</option>)}

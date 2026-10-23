@@ -71,7 +71,7 @@ export function OpenersTable({ openers, matchupSlug, caption, canLinkGuides }: {
   const mobileSort = controls.sortProps.sortBy ? `${controls.sortProps.sortBy}:${controls.sortProps.sortDir}` : "rank";
   return <div className="min-w-0 space-y-3">
     <div className="flex flex-wrap items-end gap-3">
-      <label className="min-w-0 flex-1 text-caption font-semibold text-text">Find an opener<Input type="search" value={controls.query} maxLength={100} aria-controls={id} onChange={(event) => controls.setQuery(event.target.value)} /></label>
+      <label className="w-full min-w-0 text-caption font-semibold text-text sm:w-auto sm:flex-1">Find an opener<Input type="search" value={controls.query} maxLength={100} aria-controls={id} onChange={(event) => controls.setQuery(event.target.value)} /></label>
       {canLinkGuides ? <label className="flex min-h-11 items-center gap-2 text-caption text-text-muted"><input type="checkbox" checked={onlyGuides} onChange={(event) => setOnlyGuides(event.target.checked)} />Only openers with a full guide</label> : null}
       <p aria-live="polite" className="text-caption text-text-muted">{controls.count} of {ranked.length} openers</p>
     </div>
