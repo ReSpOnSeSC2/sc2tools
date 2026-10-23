@@ -8,6 +8,8 @@ import { ALL_HELP_ARTICLES } from "./articles/index.generated";
 import { HELP_CATEGORIES, type HelpCategory } from "./categories";
 import { POPULAR_HELP_SLUGS } from "./popular";
 import type { HelpArticle } from "./types";
+import { helpArticlePath } from "./paths";
+export { helpArticlePath } from "./paths";
 
 export { ALL_HELP_ARTICLES };
 
@@ -32,9 +34,6 @@ export function getArticle(slug: string): HelpArticle | undefined {
  * Example: `helpArticlePath("stream-dock")` → "/help/stream-dock";
  * `helpArticlePath("replay-reviews", "who-can-review")` → "/help/replay-reviews#who-can-review".
  */
-export function helpArticlePath(slug: string, anchor?: string): string {
-  return anchor ? `/help/${slug}#${anchor}` : `/help/${slug}`;
-}
 
 /**
  * The section anchors an article defines: the `anchor` of each heading

@@ -11,6 +11,13 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Phase 2b: help and Today
+
+- Help now covers 48 topics, with section links, replay reviews and coaching guides, and a dismissible "How to read this" introduction on analyzer sections.
+- Today's session shows wins and losses, KPI failures offer Retry, live replay changes refresh the cards, and the Win rate menu supports keyboard navigation.
+- Your preferred analyzer tab applies when starting a session; explicit Today shortcuts and returning to Today keep you there.
+- Help search loads its article index when you search, keeping browsing fast as the library grows.
+
 ### Repair follow-up
 
 - Build library pages load editors and charts when needed, reducing their initial JavaScript; public build pages remain visible while sign-in loads.
