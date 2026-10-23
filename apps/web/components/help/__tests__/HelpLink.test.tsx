@@ -91,6 +91,50 @@ describe("HelpLink", () => {
     expect(screen.getByRole("dialog", { name: "OBS overlay setup" })).toBeTruthy();
   });
 
+  it("links to a section and opens the sheet at that heading", () => {
+    vi.useFakeTimers();
+    const original = HTMLElement.prototype.scrollIntoView;
+    const scrolled: Element[] = [];
+    HTMLElement.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    try {
+      render(
+        <HelpLink slug="replay-reviews" anchor="who-can-review">
+          Why?
+        </HelpLink>,
+      );
+      const link = screen.getByRole("link", { name: "Why?" });
+      expect(link.getAttribute("href")).toBe("/help/replay-reviews#who-can-review");
+      fireEvent.click(link);
+      flushFocus();
+
+      const dialog = screen.getByRole("dialog", { name: /Replay reviews/ });
+      const heading = within(dialog).getByRole("heading", { level: 3, name: "Who can review" });
+      expect(document.activeElement).toBe(heading);
+      expect(scrolled).toEqual([heading]);
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps Modal's own focus when the anchor is missing", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <HelpLink slug="replay-reviews" anchor="no-such-section">
+          Help
+        </HelpLink>,
+      );
+      fireEvent.click(screen.getByRole("link", { name: "Help" }));
+      flushFocus();
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("renders plain children for an unknown slug instead of a dead link", () => {
     render(<HelpLink slug="does-not-exist">Some text</HelpLink>);
     expect(screen.getByText("Some text")).toBeTruthy();

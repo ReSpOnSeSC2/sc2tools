@@ -91,4 +91,28 @@ describe("HelpArticleBody", () => {
     fireEvent.click(link);
     expect(onOpenArticle).toHaveBeenCalledWith("getting-started");
   });
+
+  it("gives anchored headings an id on the page and a data anchor when compact", () => {
+    const article: HelpArticle = {
+      ...ARTICLE,
+      body: [
+        { type: "heading", anchor: "who-can-review", text: "Who can review" },
+        { type: "heading", text: "No anchor" },
+      ],
+    };
+    const { unmount } = render(<HelpArticleBody article={article} />);
+    const page = screen.getByRole("heading", { level: 2, name: "Who can review" });
+    expect(page.id).toBe("who-can-review");
+    expect(page.className).toContain("scroll-mt-24");
+    expect(screen.getByRole("heading", { level: 2, name: "No anchor" }).id).toBe("");
+    unmount();
+
+    // Settings → Help shows many articles at once: no ids that could clash.
+    render(<HelpArticleBody article={article} variant="compact" />);
+    const compact = screen.getByRole("heading", { level: 3, name: "Who can review" });
+    expect(compact.id).toBe("");
+    expect(compact.getAttribute("data-help-anchor")).toBe("who-can-review");
+    expect(compact.getAttribute("tabindex")).toBe("-1");
+    expect(screen.getByRole("heading", { level: 3, name: "No anchor" }).hasAttribute("data-help-anchor")).toBe(false);
+  });
 });

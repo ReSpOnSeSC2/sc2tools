@@ -24,6 +24,7 @@ export type HelpCategoryId =
   | "game-page"
   | "opponents"
   | "builds"
+  | "reviews-coaching"
   | "stream-studio"
   | "account-data"
   | "troubleshooting";
@@ -81,6 +82,12 @@ export interface HelpArticle {
    * renders for everyone; signed-out readers see a sign-in note.
    */
   signedInOnly?: boolean;
+  /**
+   * Keep the public page out of search engines: a noindex robots tag
+   * and no sitemap row. For features only invited accounts can use. The
+   * article still shows in the help center, search and Settings → Help.
+   */
+  noindex?: boolean;
   /** Extra search terms: the words a reader might type that the text doesn't use. */
   keywords: string[];
   updated: HelpDate;

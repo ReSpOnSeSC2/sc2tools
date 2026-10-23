@@ -39,6 +39,8 @@ import gettingStarted_installAndPair from "./getting-started/install-and-pair";
 import gettingStarted_installApp from "./getting-started/install-app";
 import gettingStarted_settingsOverview from "./getting-started/settings-overview";
 import opponents_opponentDossier from "./opponents/opponent-dossier";
+import reviewsCoaching_coaching from "./reviews-coaching/coaching";
+import reviewsCoaching_replayReviews from "./reviews-coaching/replay-reviews";
 import streamStudio_multiPlatformChat from "./stream-studio/multi-platform-chat";
 import streamStudio_obsAutoSceneSwitching from "./stream-studio/obs-auto-scene-switching";
 import streamStudio_obsOverlaySetup from "./stream-studio/obs-overlay-setup";
@@ -87,6 +89,8 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_installApp,
   gettingStarted_settingsOverview,
   opponents_opponentDossier,
+  reviewsCoaching_coaching,
+  reviewsCoaching_replayReviews,
   streamStudio_multiPlatformChat,
   streamStudio_obsAutoSceneSwitching,
   streamStudio_obsOverlaySetup,

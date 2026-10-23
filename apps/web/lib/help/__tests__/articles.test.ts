@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { defaultTabVisibility, isSettingsTabId } from "@/components/analyzer/settings/SettingsShell";
 import { listHelpArticleFiles } from "@/scripts/gen-help-index.mjs";
 import { ALL_HELP_ARTICLES, getArticle, helpArticleAnchors, resolveLegacyAnchor } from "../index";
+import { helpSitemapRows } from "../sitemap";
 import { helpArticleLinks, helpBlockText } from "../articleText";
 import { isHelpCategoryId } from "../categories";
 import { helpArticleSlugFromHref, helpHrefKind } from "../inline";
@@ -174,10 +175,10 @@ describe("help articles", () => {
   });
 
   it("has a link checker that catches broken links", () => {
-    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/help/getting-started", "/help/opponents#net-mmr"]) {
+    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/help/getting-started", "/help/opponents#net-mmr", "/help/replay-reviews#who-can-review"]) {
       expect(brokenInternalLink(ok), ok).toBeNull();
     }
-    for (const broken of ["/nope", "/settings?tab=nope", "/settings?tab=import", "/settings?tab=help#nope", "/help/nope", "/help/opponents#nope"]) {
+    for (const broken of ["/nope", "/settings?tab=nope", "/settings?tab=import", "/settings?tab=help#nope", "/help/nope", "/help/opponents#nope", "/help/replay-reviews#nope"]) {
       expect(brokenInternalLink(broken), broken).not.toBeNull();
     }
   });
@@ -253,5 +254,57 @@ describe("help articles", () => {
 
   it("lists only existing articles as Popular", () => {
     for (const slug of POPULAR_HELP_SLUGS) expect(getArticle(slug), slug).toBeDefined();
+  });
+
+  it("keeps section anchors well-formed and unique within each article", () => {
+    for (const article of ALL_HELP_ARTICLES) {
+      const anchors = helpArticleAnchors(article);
+      expect(new Set(anchors).size, article.slug).toBe(anchors.length);
+      for (const anchor of anchors) expect(anchor, article.slug).toMatch(SLUG_RE);
+    }
+  });
+});
+
+describe("reviews and coaching articles", () => {
+  it("explains replay reviews publicly, section by section", () => {
+    const article = getArticle("replay-reviews");
+    expect(article?.category).toBe("reviews-coaching");
+    expect(article?.audience).toBe("all");
+    expect(article?.signedInOnly).toBeFalsy();
+    expect(article?.noindex).toBeFalsy();
+    // Other pages and later articles link to these; never rename one.
+    expect(helpArticleAnchors(article!)).toEqual([
+      "how-it-works",
+      "asking-for-a-review",
+      "writing-a-review",
+      "who-can-review",
+      "karma-and-badges",
+      "closing-and-sharing",
+      "blocking-and-reporting",
+    ]);
+    const text = allTextFields(article!).join(" ");
+    expect(text).toContain("20 to 500 characters");
+    expect(text).toContain("all of the game's chat");
+    expect(text).toContain("20 games synced");
+    expect(text).toContain("15 minutes");
+    expect(helpArticleLinks(article!)).toEqual(expect.arrayContaining(["/download", "/reviews", "/reviews/mine"]));
+  });
+
+  it("keeps the invite-only coaching article signed-in, unindexed and out of the sitemap", () => {
+    const article = getArticle("coaching");
+    expect(article?.category).toBe("reviews-coaching");
+    expect(article?.signedInOnly).toBe(true);
+    expect(article?.noindex).toBe(true);
+    expect(helpArticleAnchors(article!)).toEqual([
+      "roles-and-linking",
+      "locker",
+      "practice-sharing",
+      "practice-plans",
+      "sessions",
+    ]);
+    expect(allTextFields(article!).join(" ")).toContain("the workspace never grades or scores your play");
+    const urls = helpSitemapRows("https://sc2tools.com").map((row) => row.url);
+    expect(urls).not.toContain("https://sc2tools.com/help/coaching");
+    expect(urls).toContain("https://sc2tools.com/help/replay-reviews");
   });
 });

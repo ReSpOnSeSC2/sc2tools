@@ -41,11 +41,13 @@ describe("help categories", () => {
       "game-page",
       "opponents",
       "builds",
+      "reviews-coaching",
       "stream-studio",
       "account-data",
       "troubleshooting",
     ]);
     expect(helpCategory("account-data").name).toBe("Account & data");
+    expect(helpCategory("reviews-coaching").name).toBe("Reviews & coaching");
     expect(isHelpCategoryId("builds")).toBe(true);
     expect(isHelpCategoryId("nope")).toBe(false);
   });
@@ -56,6 +58,7 @@ describe("help registry", () => {
     expect(getArticle("getting-started")?.title).toBe("Getting started (5 minutes)");
     expect(getArticle("nope")).toBeUndefined();
     expect(helpArticlePath("stream-dock")).toBe("/help/stream-dock");
+    expect(helpArticlePath("replay-reviews", "who-can-review")).toBe("/help/replay-reviews#who-can-review");
     expect(helpSettingsPath("stream-dock")).toBe("/settings?tab=help#stream-dock");
     expect(helpAnchorPath("opponents", "net-mmr")).toBe("/help/opponents#net-mmr");
   });

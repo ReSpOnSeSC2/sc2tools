@@ -28,6 +28,10 @@ own synced games, and helpful reviewers earn karma.
     `lib/replayMarkers.ts`
 - **Thresholds:** every number below lives in `REVIEWS` in
   `apps/api/src/config/constants.js` (web mirrors in `lib/reviews.ts`).
+- **Player guide:** the help article `/help/replay-reviews`
+  (`apps/web/lib/help/articles/reviews-coaching/replay-reviews.ts`)
+  repeats these rules and numbers in plain words. Update it with them;
+  the board, My reviews and the review page link its section anchors.
 
 ## Rollout
 

@@ -31,6 +31,12 @@ const HEADING_CLASS: Record<HelpArticleBodyVariant, string> = {
   compact: "pt-1 text-body font-semibold text-text",
 };
 
+/** Section headings: clear the sticky site header; no ring on script focus. */
+const ANCHOR_CLASS: Record<HelpArticleBodyVariant, string> = {
+  page: "scroll-mt-24",
+  compact: "focus:outline-none",
+};
+
 function Block({
   block,
   variant,
@@ -49,9 +55,20 @@ function Block({
       );
     case "heading": {
       const Heading = variant === "page" ? "h2" : "h3";
-      const anchor = variant === "page" ? block.anchor : undefined;
+      // A section anchor is the element id on the article page, so the
+      // browser handles /help/<slug>#<id>. Compact surfaces can show many
+      // articles at once (Settings → Help), so they mark it with a data
+      // attribute instead; <HelpLink anchor> focuses it inside its sheet.
+      const anchorProps = !block.anchor
+        ? {}
+        : variant === "page"
+          ? { id: block.anchor }
+          : { "data-help-anchor": block.anchor, tabIndex: -1 };
       return (
-        <Heading id={anchor} className={anchor ? `${HEADING_CLASS[variant]} scroll-mt-24` : HEADING_CLASS[variant]}>
+        <Heading
+          {...anchorProps}
+          className={block.anchor ? `${HEADING_CLASS[variant]} ${ANCHOR_CLASS[variant]}` : HEADING_CLASS[variant]}
+        >
           <HelpInline text={block.text} links={links} />
         </Heading>
       );

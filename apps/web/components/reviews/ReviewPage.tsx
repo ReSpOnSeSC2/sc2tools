@@ -6,6 +6,7 @@ import { useAuth } from "@clerk/nextjs";
 import { ArrowLeft, Lock, MessageSquarePlus, Pin, PinOff } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { MapArtwork } from "@/components/maps/MapArtwork";
 import { apiCall } from "@/lib/clientApi";
 import { usePublicApi } from "@/lib/usePublicApi";
@@ -16,6 +17,7 @@ import {
   formatClock,
   levelLabel,
   pinNumbers,
+  REVIEW_LIMITS,
   reviewHeadline,
   reviewsRollout,
   tagLabel,
@@ -318,7 +320,24 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
   );
 }
 
-function ComposerGate({
+const GATE_CLASS = "rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted";
+const GATE_LINK_CLASS = "inline-flex min-h-9 items-center text-caption font-semibold";
+
+/** "Why?" next to a gate: the article section on who can review. */
+function WhyLink() {
+  return (
+    <LazyHelpLink slug="replay-reviews" anchor="who-can-review" className={GATE_LINK_CLASS}>
+      Why?<span className="sr-only"> Who can review replays</span>
+    </LazyHelpLink>
+  );
+}
+
+/**
+ * What sits above the thread: Sign in, the reason you can't comment yet
+ * (with the way to fix it and a "Why?" into the help article), or the
+ * "Comment at 5:12" button. Exported for tests.
+ */
+export function ComposerGate({
   data,
   signedIn,
   currentTime,
@@ -341,20 +360,40 @@ function ComposerGate({
     );
   }
   if (!v.canComment) {
-    const reason = v.reason === "min_games"
-      ? `Sync at least ${v.requiredGames ?? 20} games with the desktop agent to review replays (you have ${v.syncedGames ?? 0}).`
-      : v.reason === "blocked"
-        ? "The asker isn't accepting comments from you."
-        : v.reason === "browser_session_required"
-          ? "Sign in on the website to comment."
-          : "Comments are closed.";
-    return <p role="status" className="rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted">{reason}</p>;
+    if (v.reason === "min_games") {
+      return (
+        <div role="status" className={GATE_CLASS}>
+          <p>
+            Sync at least {v.requiredGames ?? REVIEW_LIMITS.MIN_SYNCED_GAMES} games with the desktop app to review replays (you have {v.syncedGames ?? 0}).
+          </p>
+          <p className="mt-1 flex flex-wrap items-center gap-x-4">
+            <Link href="/download" className={`${GATE_LINK_CLASS} text-accent-cyan underline underline-offset-2 hover:text-accent-hover`}>
+              Get the desktop app
+            </Link>
+            <WhyLink />
+          </p>
+        </div>
+      );
+    }
+    const reason = v.reason === "blocked"
+      ? "The asker isn't accepting comments from you."
+      : v.reason === "browser_session_required"
+        ? "Sign in on the website to comment."
+        : "Comments are closed.";
+    return <p role="status" className={GATE_CLASS}>{reason}</p>;
   }
   if (!v.isAsker && v.canReview === false) {
+    const level = data.request.desiredLevel;
+    const wanted = level === "my_league_or_higher" ? "players at their league or higher" : `${levelLabel(level)} players`;
     return (
-      <p role="status" className="rounded-xl border-2 border-line bg-bg-surface p-3 text-body text-text-muted">
-        The asker wants reviews from verified {levelLabel(data.request.desiredLevel)} players, so you can reply to existing reviews but not start a new one.
-      </p>
+      <div role="status" className={GATE_CLASS}>
+        <p>
+          The asker wants reviews from verified {wanted}, so you can reply to existing reviews but not start a new one.
+        </p>
+        <p className="mt-1">
+          <WhyLink />
+        </p>
+      </div>
     );
   }
   if (composing !== null) return null;

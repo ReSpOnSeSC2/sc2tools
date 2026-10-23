@@ -26,9 +26,24 @@ export function getArticle(slug: string): HelpArticle | undefined {
   return BY_SLUG.get(slug);
 }
 
-/** Public URL of an article. Example: `helpArticlePath("stream-dock")` → "/help/stream-dock". */
-export function helpArticlePath(slug: string): string {
-  return `/help/${slug}`;
+/**
+ * Public URL of an article, optionally at one of its section anchors.
+ *
+ * Example: `helpArticlePath("stream-dock")` → "/help/stream-dock";
+ * `helpArticlePath("replay-reviews", "who-can-review")` → "/help/replay-reviews#who-can-review".
+ */
+export function helpArticlePath(slug: string, anchor?: string): string {
+  return anchor ? `/help/${slug}#${anchor}` : `/help/${slug}`;
+}
+
+/**
+ * The section anchors an article defines: the `anchor` of each heading
+ * block, in reading order.
+ *
+ * Example: `helpArticleAnchors(getArticle("replay-reviews")!)[0]` → "how-it-works".
+ */
+export function helpArticleAnchors(article: HelpArticle): string[] {
+  return article.body.flatMap((block) => (block.type === "heading" && block.anchor ? [block.anchor] : []));
 }
 
 /** In-app URL that opens an article in Settings → Help. */
@@ -43,11 +58,6 @@ export function helpSettingsPath(slug: string): string {
  */
 export function helpAnchorPath(slug: string, anchor: string): string {
   return `${helpArticlePath(slug)}#${anchor}`;
-}
-
-/** The section anchors an article's headings declare, in reading order. */
-export function helpArticleAnchors(article: HelpArticle): string[] {
-  return article.body.flatMap((block) => (block.type === "heading" && block.anchor ? [block.anchor] : []));
 }
 
 function compareArticles(a: HelpArticle, b: HelpArticle): number {

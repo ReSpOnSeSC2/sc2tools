@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { MouseEvent, ReactNode } from "react";
 import { helpArticleSlugFromHref, parseHelpInline, type HelpInlineNode } from "@/lib/help/inline";
+import { reviewsRollout } from "@/lib/reviews";
 
 /**
  * Renders a help text field (the inline markup of lib/help/inline.ts)
@@ -36,6 +37,11 @@ function renderLink(
 ): ReactNode {
   const children = renderNodes(node.children, `${key}.`, links);
   if (node.hrefKind === "internal") {
+    // The public guide remains readable during a limited rollout. Avoid
+    // sending its readers to a feature page that would return 404.
+    if (/^\/reviews(?:[/?#]|$)/.test(node.href) && reviewsRollout() !== "on") {
+      return <span key={key}>{children}</span>;
+    }
     const slug = helpArticleSlugFromHref(node.href);
     if (slug) {
       const href = links.articleHref?.(slug) ?? node.href;

@@ -82,4 +82,14 @@ describe("helpSitemapRows", () => {
     ]);
     expect(helpSitemapRows(SITE, [])).toEqual([]);
   });
+
+  it("leaves noindex articles out, and dates the hub by the listed ones", () => {
+    const rows = helpSitemapRows(SITE, [
+      { ...article("stream-dock"), updated: "2026-01-02" },
+      { ...article("getting-started"), updated: "2026-03-04", noindex: true },
+    ]);
+    expect(rows.map((row) => row.url)).toEqual([`${SITE}/help`, `${SITE}/help/stream-dock`]);
+    expect(rows[0].lastModified).toEqual(new Date("2026-01-02"));
+    expect(helpSitemapRows(SITE, [{ ...article("stream-dock"), noindex: true }])).toEqual([]);
+  });
 });
