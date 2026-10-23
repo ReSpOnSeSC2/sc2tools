@@ -35,6 +35,7 @@ import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildPublishModal } from "./BuildPublishModal";
 import { BuildSignInPrompt } from "./BuildSignInPrompt";
 import { BuildKebab } from "./BuildCard";
+import { SavedBuildExportMenu } from "./SavedBuildExportMenu";
 import type { CustomBuild } from "./types";
 
 const BACK_LINK_CLASS =
@@ -181,6 +182,7 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         description={build.description}
         actions={
           <div className="flex flex-wrap gap-2">
+            <SavedBuildExportMenu build={build} meta={{ title: build.name || "Untitled build", matchup: mu, author: build.communityAuthorName, sourceUrl: `/builds/${encodeURIComponent(slug)}` }} />
             <Button
               variant="secondary"
               onClick={() => openEditor()}

@@ -21,6 +21,8 @@ import {
 /** Raw event shape returned by the API. */
 export interface BuildOrderEvent {
   time: number;
+  supply?: number;
+  supplyApprox?: boolean;
   time_display?: string;
   name: string;
   display?: string;
@@ -51,6 +53,7 @@ export interface BuildEventRow {
   iconKind: IconKind | null;
   race?: string;
   supply?: number;
+  supplyApprox?: boolean;
   isProxy?: boolean;
   /** Signature rows only: how many before `time` (the "×N" note). */
   count?: number;
@@ -422,6 +425,7 @@ export function normalizeBuildEvent(
     iconKind,
     iconPath,
     race: event?.race,
+    ...(typeof event.supply === "number" && Number.isFinite(event.supply) && event.supply >= 0 ? { supply: event.supply, supplyApprox: event.supplyApprox === true } : {}),
     isProxy: event?.is_proxy === true,
   };
 }
