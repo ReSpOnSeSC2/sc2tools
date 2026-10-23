@@ -24,15 +24,19 @@ import { HelpSupportLine } from "./HelpSupportLine";
  *   variant="inline" (default): text link; children default to the title.
  *   variant="icon": a small "?" button for tight spots next to a setting;
  *     its accessible name is "Help: <article title>".
+ *
+ * `onOpen` runs whenever the reader follows the link, in the sheet or in
+ * a new tab (e.g. an analyzer section shows its hidden intro again).
  */
 export interface HelpLinkProps {
   slug: string;
   children?: ReactNode;
   variant?: "inline" | "icon";
   className?: string;
+  onOpen?: () => void;
 }
 
-export function HelpLink({ slug, children, variant = "inline", className = "" }: HelpLinkProps) {
+export function HelpLink({ slug, children, variant = "inline", className = "", onOpen }: HelpLinkProps) {
   const [open, setOpen] = useState(false);
   const article = getArticle(slug);
   // An unknown slug is a content bug (the help tests catch it); never
@@ -41,6 +45,7 @@ export function HelpLink({ slug, children, variant = "inline", className = "" }:
 
   const href = helpArticlePath(article.slug);
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    onOpen?.();
     if (!isPlainClick(event)) return;
     event.preventDefault();
     setOpen(true);

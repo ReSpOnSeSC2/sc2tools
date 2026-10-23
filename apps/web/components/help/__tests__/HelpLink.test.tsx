@@ -41,6 +41,23 @@ describe("HelpLink", () => {
     }
   });
 
+  it("calls onOpen when the reader follows the link, in the sheet or a new tab", () => {
+    const onOpen = vi.fn();
+    render(<HelpLink slug="stream-dock" onOpen={onOpen}>Dock help</HelpLink>);
+    const link = screen.getByRole("link", { name: "Dock help" });
+    fireEvent.click(link);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    const stopNavigation = (event: MouseEvent) => event.preventDefault();
+    document.addEventListener("click", stopNavigation);
+    try {
+      fireEvent.click(link, { ctrlKey: true });
+    } finally {
+      document.removeEventListener("click", stopNavigation);
+    }
+    expect(onOpen).toHaveBeenCalledTimes(2);
+  });
+
   it("closes from the close button", () => {
     render(<HelpLink slug="stream-dock" />);
     fireEvent.click(screen.getByRole("link", { name: "Stream Dock (your control panel)" }));
