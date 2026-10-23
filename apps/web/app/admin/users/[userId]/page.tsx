@@ -1,29 +1,27 @@
 "use client";
 import { Button } from "@/components/ui/Button";
+import { AdminActionCard } from "../../components/AdminActionCard";
+import { SupportSnapshot } from "../../components/SupportSnapshot";
+import { AdminRoleCard } from "../../components/AdminRoleCard";
 import { RequestError } from "@/components/ui/RequestError";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
-import { use, useState } from "react";
+import { use } from "react";
 import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
 
-import { apiCall, useApi } from "@/lib/clientApi";
+import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
 import {
   compactNumber,
-  formatRebuildSummary,
   timeSince,
 } from "../../components/format";
 import {
-  ConfirmInline,
   ForbiddenCard,
   MetricStat,
 } from "../../components/AdminFragments";
 import type {
   AdminUserDetail,
-  RebuildResp,
-  WipeResp,
 } from "../../components/adminTypes";
 
 /**
@@ -99,22 +97,17 @@ export default function AdminUserDetailPage({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <GrantAdminAction
+        <AdminRoleCard
           userId={data.userId}
           isAdmin={data.isAdmin}
           grantable={Boolean(data.clerkUserId)}
           onDone={() => mutate()}
         />
-        <RebuildOpponentsAction
-          userId={data.userId}
-          onDone={() => mutate()}
-        />
-        <WipeGamesAction
-          userId={data.userId}
-          onDone={() => mutate()}
-        />
+        <AdminActionCard action="rebuild-opponents" user={{userId:data.userId,email:data.email,gameCount:data.games.total}} onDone={() => void mutate()} />
+        <AdminActionCard action="wipe-games" user={{userId:data.userId,email:data.email,gameCount:data.games.total}} onDone={() => void mutate()} />
       </div>
 
+      <SupportSnapshot userId={data.userId} />
       <Card padded={false}>
         <Card.Header>
           <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
@@ -174,288 +167,3 @@ export default function AdminUserDetailPage({
   );
 }
 
-/**
- * Promote another user to admin. Only an existing admin reaches this
- * page (the whole /admin surface is gated on isAdmin), so this is the
- * "only an admin can add other admins" control. Hidden behavior:
- *   - already-admin users show a settled "Already an admin" state;
- *   - users without a Clerk identity can't be promoted (they could
- *     never authenticate), so the action is disabled with a hint.
- */
-function GrantAdminAction({
-  userId,
-  isAdmin,
-  grantable,
-  onDone,
-}: {
-  userId: string;
-  isAdmin: boolean;
-  grantable: boolean;
-  onDone: () => void;
-}) {
-  const { getToken } = useAuth();
-  const [state, setState] = useState<
-    | { kind: "idle" }
-    | { kind: "confirm" }
-    | { kind: "busy" }
-    | { kind: "done" }
-    | { kind: "error"; message: string }
-  >({ kind: "idle" });
-
-  async function run() {
-    setState({ kind: "busy" });
-    try {
-      await apiCall(
-        getToken,
-        `/v1/admin/users/${encodeURIComponent(userId)}/grant-admin`,
-        { method: "POST" },
-      );
-      setState({ kind: "done" });
-      onDone();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setState({ kind: "error", message: msg });
-    }
-  }
-
-  const settled = isAdmin || state.kind === "done";
-
-  return (
-    <Card padded>
-      <div className="flex flex-wrap items-baseline gap-2">
-        <h2 className="text-body font-semibold text-text">Admin access</h2>
-        {settled ? (
-          <span className="rounded-full bg-accent/15 px-2 py-0.5 text-caption font-semibold text-accent">
-            admin
-          </span>
-        ) : null}
-      </div>
-      <p className="mt-1 text-caption text-text-muted">
-        Grants the <code>admin</code> role — full access to this console.
-        Only an admin can add other admins.
-      </p>
-      {settled ? (
-        <p className="mt-3 text-caption text-success">
-          This user is an admin.
-        </p>
-      ) : !grantable ? (
-        <p className="mt-3 text-caption text-text-muted">
-          Can&apos;t promote — this account has no linked sign-in identity.
-        </p>
-      ) : state.kind === "idle" ? (
-        <Button variant="primary" size="sm"
-          type="button"
-          className="mt-3"
-          onClick={() => setState({ kind: "confirm" })}
-        >
-          Grant admin
-        </Button>
-      ) : null}
-      {state.kind === "confirm" ? (
-        <div className="mt-3">
-          <ConfirmInline
-            prompt="Grant this user full admin access?"
-            confirmLabel="Grant admin"
-            variant="primary"
-            onConfirm={run}
-            onCancel={() => setState({ kind: "idle" })}
-          />
-        </div>
-      ) : null}
-      {state.kind === "busy" ? (
-        <p className="mt-3 text-caption text-text-muted">Granting…</p>
-      ) : null}
-      {state.kind === "error" ? (
-        <p className="mt-3 text-caption text-danger">
-          Failed: {state.message}
-        </p>
-      ) : null}
-    </Card>
-  );
-}
-
-function RebuildOpponentsAction({
-  userId,
-  onDone,
-}: {
-  userId: string;
-  onDone: () => void;
-}) {
-  const { getToken } = useAuth();
-  const [state, setState] = useState<
-    | { kind: "idle" }
-    | { kind: "confirm" }
-    | { kind: "busy" }
-    | { kind: "done"; resp: RebuildResp }
-    | { kind: "error"; message: string }
-  >({ kind: "idle" });
-
-  async function run() {
-    setState({ kind: "busy" });
-    try {
-      const resp = await apiCall<RebuildResp>(
-        getToken,
-        `/v1/admin/users/${encodeURIComponent(userId)}/rebuild-opponents`,
-        { method: "POST" },
-      );
-      setState({ kind: "done", resp });
-      onDone();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setState({ kind: "error", message: msg });
-    }
-  }
-
-  return (
-    <Card padded>
-      <h2 className="text-body font-semibold text-text">
-        Rebuild opponents
-      </h2>
-      <p className="mt-1 text-caption text-text-muted">
-        Re-derives every <code>opponents</code> row for this user
-        from their <code>games</code>. Use after a buggy re-sync.
-      </p>
-      {state.kind === "idle" ? (
-        <Button variant="primary" size="sm"
-          type="button"
-          className="mt-3"
-          onClick={() => setState({ kind: "confirm" })}
-        >
-          Rebuild
-        </Button>
-      ) : null}
-      {state.kind === "confirm" ? (
-        <div className="mt-3">
-          <ConfirmInline
-            prompt="Rebuild every opponent row for this user?"
-            confirmLabel="Rebuild"
-            variant="primary"
-            onConfirm={run}
-            onCancel={() => setState({ kind: "idle" })}
-          />
-        </div>
-      ) : null}
-      {state.kind === "busy" ? (
-        <p className="mt-3 text-caption text-text-muted">Rebuilding…</p>
-      ) : null}
-      {state.kind === "done" ? (
-        <RebuildSummary resp={state.resp} />
-      ) : null}
-      {state.kind === "error" ? (
-        <p className="mt-3 text-caption text-danger">
-          Failed: {state.message}
-        </p>
-      ) : null}
-    </Card>
-  );
-}
-
-function WipeGamesAction({
-  userId,
-  onDone,
-}: {
-  userId: string;
-  onDone: () => void;
-}) {
-  const { getToken } = useAuth();
-  const [state, setState] = useState<
-    | { kind: "idle" }
-    | { kind: "confirm" }
-    | { kind: "busy" }
-    | { kind: "done"; resp: WipeResp }
-    | { kind: "error"; message: string }
-  >({ kind: "idle" });
-
-  async function run() {
-    setState({ kind: "busy" });
-    try {
-      const resp = await apiCall<WipeResp>(
-        getToken,
-        `/v1/admin/users/${encodeURIComponent(userId)}/wipe-games`,
-        { method: "POST" },
-      );
-      setState({ kind: "done", resp });
-      onDone();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setState({ kind: "error", message: msg });
-    }
-  }
-
-  return (
-    <Card padded>
-      <div className="flex flex-wrap items-baseline gap-2">
-        <h2 className="text-body font-semibold text-text">
-          Wipe all games
-        </h2>
-        <span className="rounded-full bg-danger/15 px-2 py-0.5 text-caption font-semibold text-danger">
-          destructive
-        </span>
-      </div>
-      <p className="mt-1 text-caption text-text-muted">
-        Deletes every <code>games</code>, <code>game_details</code>,
-        and <code>opponents</code> row for this user. Account and
-        custom builds are preserved.
-      </p>
-      {state.kind === "idle" ? (
-        <button
-          type="button"
-          className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-danger text-white hover:opacity-90"
-          onClick={() => setState({ kind: "confirm" })}
-        >
-          Wipe games
-        </button>
-      ) : null}
-      {state.kind === "confirm" ? (
-        <div className="mt-3">
-          <ConfirmInline
-            prompt={`Permanently delete every replay-derived row for ${userId}? This can NOT be undone.`}
-            confirmLabel="Wipe permanently"
-            variant="danger"
-            onConfirm={run}
-            onCancel={() => setState({ kind: "idle" })}
-          />
-        </div>
-      ) : null}
-      {state.kind === "busy" ? (
-        <p className="mt-3 text-caption text-text-muted">Wiping…</p>
-      ) : null}
-      {state.kind === "done" ? (
-        <p className="mt-3 text-caption text-success">
-          Wiped {state.resp.games} games, {state.resp.opponents} opponents.
-        </p>
-      ) : null}
-      {state.kind === "error" ? (
-        <p className="mt-3 text-caption text-danger">
-          Failed: {state.message}
-        </p>
-      ) : null}
-    </Card>
-  );
-}
-
-/**
- * Two-line summary for the "Rebuild opponents" action: the
- * single-line headline (rebuilt N rows) plus an optional muted
- * second line breaking down the chained Pulse-id heal counters.
- * Mobile- and desktop-friendly: the second line wraps naturally
- * inside the Card's content column without forcing a layout.
- */
-function RebuildSummary({ resp }: { resp: RebuildResp }) {
-  const summary = formatRebuildSummary(resp);
-  const heal = resp.pulseBackfill;
-  const showDetail =
-    !!heal && (heal.scanned > 0 || heal.resolved > 0 || heal.updated > 0);
-  return (
-    <div className="mt-3 space-y-1">
-      <p className="text-caption text-success">{summary}</p>
-      {showDetail ? (
-        <p className="text-caption text-text-muted">
-          Pulse heal — scanned {heal!.scanned}, resolved {heal!.resolved}
-          , updated {heal!.updated}
-          {heal!.skipped > 0 ? `, skipped ${heal!.skipped}` : ""}.
-        </p>
-      ) : null}
-    </div>
-  );
-}

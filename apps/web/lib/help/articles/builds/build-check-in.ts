@@ -24,7 +24,7 @@ const article: HelpArticle = {
     "win rate",
     "planned badge",
   ],
-  updated: "2026-10-22",
+  updated: "2026-10-23",
   body: [
     {
       type: "paragraph",
@@ -63,6 +63,10 @@ const article: HelpArticle = {
       text: "Playing Random, or facing a Random opponent? There's no loading card because the matchup isn't known yet. You're asked after the game, with the real matchup.",
     },
     { type: "heading", text: "The opponent's build" },
+    {
+      type: "paragraph",
+      text: "A game you already checked in shows a compact **Checked in** summary with the effective build, a corrected opponent build when present, and a short preview of a saved note. Press **Edit** to reopen the full card. Save or discard a changed note, then press **Done** to return to the summary. Games still waiting for a choice keep their full prompt; **Add new build…** links open the editor directly.",
+    },
     {
       type: "paragraph",
       text: "The replay also names the build your opponent went for. When it got that wrong, correct it, and your own stats against that build (opponent history, how your builds do against each opener, the custom builds you saved for opponents) count the game under the build they really played.",

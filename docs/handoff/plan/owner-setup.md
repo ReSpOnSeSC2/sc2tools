@@ -49,3 +49,7 @@ Optional:
 ### welcome-wizard-resumable
 
 Deploy the API update before the web. Onboarding preference PUTs now merge fields atomically; other preference types retain their existing replacement behavior. No migration, environment setting or release tag is required. The welcome flow depends on the pairing/device API and shared form from `pairing-web-and-devices`.
+
+### game-page-polish-3
+
+No new environment variable, secret, migration or release is required. Deploy the web normally. Existing replay storage and review rollout settings retain their behavior; completed check-ins open through Edit and close with Done after notes are saved/discarded.

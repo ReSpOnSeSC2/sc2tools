@@ -59,14 +59,14 @@ export function ShareGameButton({
   return (
     <Button
       variant="secondary"
-      size="md"
+      size="sm"
       onClick={onShare}
       loading={busy}
       className={className}
       aria-label="Share this game as an image"
       iconLeft={<Share2 className="h-4 w-4" aria-hidden />}
     >
-      {busy ? "Preparing…" : "Share this game"}
+      {busy ? "Preparing…" : "Share"}
     </Button>
   );
 }

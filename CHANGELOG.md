@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Game header and completed check-ins
+
+- Replay pages use one compact Share, Download, Review and VOD action bar, a descriptive opponent heading and readable recent-game dates. Missing duration and MMR fields stay out of the way.
+- Confirmed build check-ins collapse to a summary with saved note previews. Edit reopens the full controls; Done returns keyboard focus after notes are saved or discarded.
+
 
 
 ### Download and project costs
@@ -35,6 +40,8 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Community search restores correctly with Back and Forward after clearing filters, including when cached server props lag behind the address bar.
+
 - Account deletion now removes token-owned stream data and private sound files, ends the sign-in identity with durable retries, and offers an export-first inventory and confirmation flow. Review comments on other requests are anonymized; service backup retention follows the current configured schedule.
 
 ### Navigation and installed app
@@ -43,6 +50,8 @@ corresponding GitHub Release.
 - The app status pill describes your desktop connection and latest upload; community counts stay in an optional desktop disclosure. Install the web app from More or Settings and get a clear offline page when the network is unavailable.
 
 ### Added
+
+- Operations console adds bounded background-job history and safe Run now controls, a 400-day admin audit log, per-user support snapshots, first-party activation cohorts, and resolved-user repair actions with typed wipe confirmation and game-count conflict protection.
 
 - Read curated updates in What's New, the public changelog and RSS. Service notices explain active incidents and expire automatically; installer release notes are easier to read.
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, type ReactNode, type Ref } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { ClipboardCheck, Info, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import {
   INELIGIBLE_REASON_COPY,
+  effectiveBuild,
   mergeIntentUpdate,
   useGameBuildIntent,
   type BuildOption,
@@ -71,6 +72,10 @@ export function BuildCheckInCard({
   const [creating, setCreating] = useState<NewBuildRequest | null>(null);
   const [signal, setSignal] = useState<SideSignal | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const summaryEditRef = useRef<HTMLButtonElement>(null);
+  const returnToSummary = useRef(false);
+  const focusPanel = useRef(false);
+  const panelId = useId();
   const deepLinkHandled = useRef(false);
   const state = request.data;
   const stateRef = useRef(state);
@@ -83,11 +88,21 @@ export function BuildCheckInCard({
     });
     // A write on an unchecked game (notes, the opponent's build) keeps the
     // full card open instead of folding back to the compact action.
-    if (next.status === "none") setExpanded(true);
+    setExpanded(true);
     onChanged?.(next);
   };
   const actions = useCheckInActions(gameId, applyUpdate);
   const notes = useCheckInNotes(state?.notes ?? "");
+  useLayoutEffect(() => {
+    if (expanded && focusPanel.current) {
+      focusPanel.current = false;
+      document.getElementById(panelId)?.focus();
+    }
+    if (!expanded && returnToSummary.current) {
+      returnToSummary.current = false;
+      summaryEditRef.current?.focus();
+    }
+  }, [expanded, panelId]);
   const checkInNewBuild = useNewBuildCheckIn(actions);
 
   const openNewBuild = (side: CheckInSide, query = "") => {
@@ -129,7 +144,7 @@ export function BuildCheckInCard({
       return;
     }
     deepLinkHandled.current = true;
-    if (state.eligible && state.status === "none") setExpanded(true);
+    if (state.eligible) setExpanded(true);
     openNewBuild(initialNewBuild);
     rootRef.current?.scrollIntoView?.({
       block: "start",
@@ -152,6 +167,7 @@ export function BuildCheckInCard({
   // The compact action stands in for an unchecked game until something on
   // it is set; Cancel folds the expanded card back only when it can.
   const collapsible = state?.status === "none" && !state.opponent?.applied;
+  const confirmed = state?.eligible && (state.status === "confirmed" || state.opponent?.status === "confirmed");
   let content: ReactNode;
   if (!state) {
     content =
@@ -173,6 +189,19 @@ export function BuildCheckInCard({
       );
   } else if (!state.eligible) {
     content = <IneligibleLine state={state} />;
+  } else if (confirmed && !expanded && creating === null && !initialNewBuild) {
+    const build = state.status === "confirmed" ? effectiveBuild(state, null).label : null;
+    const opponent = state.opponent?.status === "confirmed" ? state.opponent.label || state.opponent.build?.name : null;
+    const note = (state.notes || "").replace(/\s+/g, " ").trim();
+    const characters = Array.from(note);
+    const preview = characters.length > 140 ? `${characters.slice(0, 140).join("")}…` : note;
+    content = <div className="flex min-h-11 flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-dashed border-border bg-bg-surface px-4 py-2" data-testid="build-checkin-summary">
+      <div className="min-w-0 flex-1 text-caption text-text-muted">
+        <p className="flex flex-wrap items-center gap-x-1"><ClipboardCheck className="mr-1 h-4 w-4 shrink-0 text-accent" aria-hidden /><span>Checked in{build ? `: ${build}` : ""}</span>{opponent ? <span>· Opponent: {opponent}</span> : null}{note ? <span>· 1 note</span> : null}</p>
+        {preview ? <p className="mt-1 break-words text-text-dim">{preview}</p> : null}
+      </div>
+      <Button ref={summaryEditRef} variant="ghost" size="sm" aria-expanded={false} aria-controls={panelId} onClick={() => { focusPanel.current = true; setExpanded(true); }}>Edit</Button>
+    </div>;
   } else if (collapsible && !expanded) {
     content = (
       <div
@@ -196,6 +225,7 @@ export function BuildCheckInCard({
     content = (
       <CheckInPanel
         key={state.gameId}
+        id={panelId}
         state={state}
         actions={actions}
         notes={notes}
@@ -203,6 +233,7 @@ export function BuildCheckInCard({
         optionsLoading={request.isValidating}
         onRefetch={() => void request.mutate()}
         onCollapse={collapsible && expanded ? () => setExpanded(false) : undefined}
+        onDone={confirmed && expanded ? () => { returnToSummary.current = true; setExpanded(false); } : undefined}
         onAddNew={openNewBuild}
         editorOpen={creating !== null}
       />
@@ -253,6 +284,7 @@ function IneligibleLine({ state }: { state: GameIntentState }) {
 }
 
 function CheckInPanel({
+  id,
   state,
   actions,
   notes,
@@ -260,9 +292,11 @@ function CheckInPanel({
   optionsLoading,
   onRefetch,
   onCollapse,
+  onDone,
   onAddNew,
   editorOpen,
 }: {
+  id: string;
   state: GameIntentState;
   actions: CheckInActions;
   notes: CheckInNotesDraft;
@@ -271,6 +305,7 @@ function CheckInPanel({
   onRefetch: () => void;
   /** Present while a status-none game is expanded from the compact action. */
   onCollapse?: () => void;
+  onDone?: () => void;
   onAddNew: (side: CheckInSide, query: string) => void;
   /** The build editor dialog is open over the page. */
   editorOpen: boolean;
@@ -307,6 +342,8 @@ function CheckInPanel({
 
   return (
     <Card
+      id={id}
+      tabIndex={-1}
       variant={state.status === "pending" ? "feature" : "default"}
       padded={false}
       aria-labelledby={titleId}
@@ -330,6 +367,7 @@ function CheckInPanel({
               : "A confirmed check-in counts this game toward the build you planned, whatever the replay was classified as."}
           </p>
         </div>
+        {onDone ? <Button variant="ghost" size="sm" aria-expanded={true} aria-controls={id} disabled={actions.busy !== null || editorOpen || notes.dirty} title={notes.dirty ? "Save or discard your note before closing" : undefined} onClick={onDone}>Done</Button> : null}
       </div>
 
       <div className="space-y-4 p-4">

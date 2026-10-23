@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 /**
  * Ladder-map (re)classification backfill, run on API startup.
@@ -40,6 +41,7 @@ const DEFAULT_BATCH = 500;
 
 /**
  * @param {{
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   db: import('../db/connect').DbContext,
  *   ladderMapPool: {
  *     get(): Promise<{ maps: string[], teamMaps?: string[], source: string }>,
@@ -69,7 +71,7 @@ function buildLadderMapBackfillJob(deps) {
   // also matches docs with no ``isLadderMapV`` at all (never stamped).
   const STALE = { isLadderMapV: { $ne: LADDER_CLASSIFY_VERSION } };
 
-  async function run() {
+  async function runWork() {
     const remaining = await games.countDocuments(STALE);
     if (remaining === 0) {
       logger.info({ version: LADDER_CLASSIFY_VERSION }, "ladderMapBackfill_skip_complete");
@@ -80,6 +82,7 @@ function buildLadderMapBackfillJob(deps) {
     try {
       pool = await deps.ladderMapPool.get();
     } catch (err) {
+        run.failed(err);
       // The baked-in historical list still gives a comprehensive set,
       // so a pool fetch failure is non-fatal — we just miss any map
       // newer than the baked list until a later boot.
@@ -142,6 +145,7 @@ function buildLadderMapBackfillJob(deps) {
     logger.info({ scanned, written }, "ladderMapBackfill_done");
     return { remaining, scanned, written, skipped: false };
   }
+  const run = observeJob(deps, "ladder-map-backfill", 24 * 60 * 60 * 1000, runWork, { disabled: disabled, scheduleDisabled: true, envFlag: "One-shot at boot / SC2TOOLS_LADDER_BACKFILL_DISABLED" });
 
   return {
     /** Kick off the backfill in the background. Never throws. */
@@ -152,7 +156,7 @@ function buildLadderMapBackfillJob(deps) {
       }
       if (inflight) return;
       inflight = run()
-        .catch((err) => {
+        .catch((/** @type {any} */ err) => {
           logger.warn(
             { err: err && err.message ? err.message : String(err) },
             "ladderMapBackfill_error",

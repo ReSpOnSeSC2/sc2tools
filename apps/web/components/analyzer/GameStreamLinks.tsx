@@ -2,6 +2,7 @@
 
 import { Twitch as TwitchIcon, Youtube as YouTubeIcon } from "lucide-react";
 import { formatOffset, vodLinkAt } from "@/lib/vodLinks";
+import { GameVodToolbar } from "./GameVodToolbar";
 
 export type GameStreamPlatform = "twitch" | "youtube";
 export type GameStreamPerspective = "me" | "opponent";
@@ -37,6 +38,7 @@ export function GameStreamLinks({
   className = "",
   sharedPlayerName,
   ariaLabel = "Game streams",
+  variant = "chips",
 }: {
   links?: readonly GameStreamLink[] | null;
   compact?: boolean;
@@ -44,6 +46,7 @@ export function GameStreamLinks({
   /** Public-share context: replaces recipient-confusing “You” labels. */
   sharedPlayerName?: string | null;
   ariaLabel?: string;
+  variant?: "chips" | "toolbar";
 }) {
   const safeLinks = (links ?? []).flatMap((link, index) => {
     const href = safeTimestampedHref(link);
@@ -53,6 +56,7 @@ export function GameStreamLinks({
   });
 
   if (safeLinks.length === 0) return null;
+  if (variant === "toolbar") return <GameVodToolbar links={safeLinks} className={className} />;
 
   return (
     <div

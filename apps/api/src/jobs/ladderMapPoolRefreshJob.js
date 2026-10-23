@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 /**
  * Ladder map pool refresh worker.
@@ -34,6 +35,7 @@ function logRefreshOutcome({ logger, res }) {
 
 /**
  * @param {{
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   ladderMapPool: import('../services/ladderMapPool').LadderMapPoolService,
  *   logger: import('pino').Logger,
  *   intervalMs?: number,
@@ -64,7 +66,7 @@ function buildLadderMapPoolRefreshJob(deps) {
   /** @type {Promise<void> | null} */
   let inflight = null;
 
-  async function tick() {
+  async function tickWork() {
     if (inflight) return;
     inflight = (async () => {
       try {
@@ -73,6 +75,7 @@ function buildLadderMapPoolRefreshJob(deps) {
         const res = await deps.ladderMapPool.refresh();
         logRefreshOutcome({ ladderMapPool: deps.ladderMapPool, logger, res });
       } catch (err) {
+        tick.failed(err);
         const e = /** @type {{ message?: unknown }} */ (err);
         logger.warn(
           { err: e && e.message ? e.message : String(e) },
@@ -84,6 +87,7 @@ function buildLadderMapPoolRefreshJob(deps) {
     })();
     return inflight;
   }
+  const tick = observeJob(deps, "ladder-map-pool", interval, tickWork, { disabled: disabled, envFlag: "SC2TOOLS_LADDER_POOL_REFRESH_DISABLED" });
 
   return {
     start() {

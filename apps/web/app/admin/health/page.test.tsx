@@ -7,6 +7,7 @@ vi.mock("@/lib/clientApi", () => ({ useApi: (path: string) => path.endsWith("/he
   ? { error: { status: 500, message: "Probe unavailable", requestId: "health-ref" }, mutate: mocks.healthRetry }
   : { error: null, data: { asOf: "2026-10-01" }, mutate: mocks.infrastructureRetry } }));
 vi.mock("../components/InfrastructureOverview", () => ({ InfrastructureOverview: () => <div>Provider capacity still visible</div> }));
+vi.mock("../components/BackgroundJobs", () => ({ BackgroundJobs: () => <div>Background jobs still visible</div> }));
 vi.mock("../components/DatabaseBackupsCard", () => ({ DatabaseBackupsCard: () => <div>Database backups still visible</div> }));
 afterEach(cleanup);
 describe("independent infrastructure states", () => {
