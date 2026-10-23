@@ -63,9 +63,10 @@ function lengthGroup(): HTMLElement {
 describe("FilterBar game-length control", () => {
   it("starts unconstrained, with All selected", () => {
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     expect(
       within(lengthGroup())
-        .getByRole("button", { name: "All" })
+        .getByRole("button", { name: "Any length" })
         .getAttribute("aria-pressed"),
     ).toBe("true");
     expect(state().min_minutes).toBeUndefined();
@@ -74,6 +75,7 @@ describe("FilterBar game-length control", () => {
 
   it("applies a quick band and reflects it back as the active pill", () => {
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     fireEvent.click(within(lengthGroup()).getByRole("button", { name: "10–20" }));
     expect(state()).toMatchObject({ min_minutes: 10, max_minutes: 20 });
     expect(
@@ -85,6 +87,7 @@ describe("FilterBar game-length control", () => {
 
   it("leaves the far side open on the outer bands", () => {
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     fireEvent.click(within(lengthGroup()).getByRole("button", { name: "20+" }));
     expect(state().min_minutes).toBe(20);
     expect(state().max_minutes).toBeUndefined();
@@ -96,14 +99,16 @@ describe("FilterBar game-length control", () => {
 
   it("clears back to no constraint via All", () => {
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     fireEvent.click(within(lengthGroup()).getByRole("button", { name: "20+" }));
-    fireEvent.click(within(lengthGroup()).getByRole("button", { name: "All" }));
+    fireEvent.click(within(lengthGroup()).getByRole("button", { name: "Any length" }));
     expect(state().min_minutes).toBeUndefined();
     expect(state().max_minutes).toBeUndefined();
   });
 
   it("applies a custom range and labels the pill with it", () => {
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     fireEvent.click(within(lengthGroup()).getByRole("button", { name: /Custom/ }));
 
     const dialog = screen.getByRole("dialog", { name: "Custom game length" });
@@ -127,6 +132,7 @@ describe("FilterBar game-length control", () => {
 
   it("swaps a transposed custom range rather than selecting nothing", () => {
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     fireEvent.click(within(lengthGroup()).getByRole("button", { name: /Custom/ }));
 
     const dialog = screen.getByRole("dialog", { name: "Custom game length" });
@@ -143,6 +149,7 @@ describe("FilterBar game-length control", () => {
 
   it("treats an empty box as no bound on that side", () => {
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     fireEvent.click(within(lengthGroup()).getByRole("button", { name: /Custom/ }));
 
     const dialog = screen.getByRole("dialog", { name: "Custom game length" });
@@ -157,6 +164,7 @@ describe("FilterBar game-length control", () => {
 
   it("clears from inside the custom popover", () => {
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     fireEvent.click(within(lengthGroup()).getByRole("button", { name: "10–20" }));
     fireEvent.click(within(lengthGroup()).getByRole("button", { name: /Custom/ }));
 
@@ -167,7 +175,7 @@ describe("FilterBar game-length control", () => {
     expect(state().max_minutes).toBeUndefined();
     expect(
       within(lengthGroup())
-        .getByRole("button", { name: "All" })
+        .getByRole("button", { name: "Any length" })
         .getAttribute("aria-pressed"),
     ).toBe("true");
   });
@@ -177,6 +185,7 @@ describe("FilterBar game-length control", () => {
     // length pick must re-scope the tabs without quietly resetting the
     // ranked-ladder 1v1 cohort or the "Hide too-short" toggle.
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     fireEvent.click(within(lengthGroup()).getByRole("button", { name: "20+" }));
     expect(state()).toMatchObject({
       map_pool: "ladder",

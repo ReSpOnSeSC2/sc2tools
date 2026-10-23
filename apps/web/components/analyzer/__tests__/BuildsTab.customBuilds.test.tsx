@@ -80,10 +80,10 @@ describe("Builds tab filtered custom build integration", () => {
     fireEvent.click(screen.getByRole("radio", { name: "3" }));
     expect(screen.queryByText("Custom rare opener")).toBeNull();
     expect(screen.queryByText("Standard rare opener")).toBeNull();
-    fireEvent.change(screen.getByPlaceholderText("search build…"), { target: { value: "custom" } });
+    fireEvent.change(screen.getByPlaceholderText("Search builds"), { target: { value: "custom" } });
     expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(2);
     expect(screen.queryByText("Standard opener")).toBeNull();
-    fireEvent.change(screen.getByPlaceholderText("search build…"), { target: { value: "" } });
+    fireEvent.change(screen.getByPlaceholderText("Search builds"), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: /Games/ }));
     expect(within(screen.getByRole("table")).getAllByRole("row").slice(1).map((row) => row.querySelector("td")?.textContent))
       .toEqual(["Custom gateway opener", "Standard opener"]);
