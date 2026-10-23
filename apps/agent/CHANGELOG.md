@@ -4,6 +4,10 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+- Loading cards show private opponent history and notes, with a local scouting
+  switch and a slim card when loading build choices are off. After-game cards
+  save a separate private opponent note once the replay identifies the account.
+
 - Desktop installation and Settings share one Windows startup switch; upgrades
   preserve choices and uninstall offers explicit local-data removal. Signing
   preparation verifies both executables before release checksums are generated.

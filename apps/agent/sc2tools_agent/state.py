@@ -288,6 +288,9 @@ class AgentState:
     the default spot beside the game."""
 
     build_checkin_prefs: Optional[Dict[str, bool]] = None
+    # Scouting visibility is local to this PC; cloud check-in switches retain
+    # their three-boolean contract for older web and desktop clients.
+    show_scouting_at_loading: bool = True
     """The last ``buildCheckin`` preference the server confirmed
     (``enabled`` / ``askAtLoading`` / ``askAfterGame``). The cloud stays
     the source of truth; this copy only decides the cards while the
@@ -445,6 +448,7 @@ def load_state(state_dir: Path) -> AgentState:
             raw.get("build_checkin_card_positions"),
         ),
         build_checkin_prefs=_coerce_checkin_prefs(raw.get("build_checkin_prefs")),
+        show_scouting_at_loading=raw.get("show_scouting_at_loading") is not False,
     )
 
 

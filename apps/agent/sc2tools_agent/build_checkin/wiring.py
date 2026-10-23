@@ -59,6 +59,10 @@ def start_build_checkin(
         state.build_checkin_prefs = prefs.to_json()
         save_state(state_dir, state)
 
+    def remember_scouting(enabled: bool) -> None:
+        state.show_scouting_at_loading = enabled
+        save_state(state_dir, state)
+
     try:
         controller = BuildCheckinController(
             api=api,
@@ -69,6 +73,8 @@ def start_build_checkin(
             dashboard_url=dashboard_url,
             prefs=parse_prefs(state.build_checkin_prefs),
             on_prefs_changed=remember_prefs,
+            show_scouting_at_loading=state.show_scouting_at_loading,
+            on_scouting_changed=remember_scouting,
         )
         bind = getattr(view, "bind_controller", None)
         if callable(bind):

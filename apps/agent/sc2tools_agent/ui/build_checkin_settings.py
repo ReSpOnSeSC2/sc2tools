@@ -29,7 +29,7 @@ HINT_NO_LIVE = (
 HINT_CONNECTING = "Available once the agent is connected to sc2tools.com."
 HINT_LOADING = "Loading your check-in settings…"
 HINT_UNSUPPORTED = "Your sc2tools server doesn't support build check-ins yet."
-HINT_READY = "Saved to your sc2tools.com account. Changes apply right away."
+HINT_READY = "Check-in choices are saved to your account. Scouting visibility is saved on this PC."
 HINT_SAVE_FAILED = "Couldn't save that change. Check your connection and try again."
 
 INTRO = (
@@ -89,12 +89,14 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
             "click. It never takes focus from the game.",
         )
         self.after_box = QtWidgets.QCheckBox("Ask after each game")
+        self.scouting_box = QtWidgets.QCheckBox("Show scouting at loading")
+        self.scouting_box.setToolTip("Private scouting on this PC, including a slim card when loading check-ins are off.")
         self.after_box.setToolTip(
             "A card after the match: confirm the build you went for and "
             "note what threw it off.",
         )
         layout.addWidget(self.enabled_box)
-        for box in (self.loading_box, self.after_box):
+        for box in (self.loading_box, self.after_box, self.scouting_box):
             row = QtWidgets.QHBoxLayout()
             row.setContentsMargins(24, 0, 0, 0)
             row.addWidget(box)
@@ -116,6 +118,7 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         self.after_box.toggled.connect(
             lambda checked: self._changed(ask_after_game=checked),
         )
+        self.scouting_box.toggled.connect(self._scouting_changed)
 
         self._paint(None)
 
@@ -165,6 +168,7 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
             (self.enabled_box, getattr(prefs, "enabled", True)),
             (self.loading_box, getattr(prefs, "ask_at_loading", True)),
             (self.after_box, getattr(prefs, "ask_after_game", True)),
+            (self.scouting_box, getattr(self._controller(), "scouting_enabled", True)),
         ):
             box.blockSignals(True)
             box.setChecked(bool(value))
@@ -173,6 +177,7 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         children_enabled = ready and self.enabled_box.isChecked()
         self.loading_box.setEnabled(children_enabled)
         self.after_box.setEnabled(children_enabled)
+        self.scouting_box.setEnabled(children_enabled)
         hint = override_hint or {
             "no_live": HINT_NO_LIVE,
             "connecting": HINT_CONNECTING,
@@ -194,8 +199,16 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         children_enabled = self.enabled_box.isChecked()
         self.loading_box.setEnabled(children_enabled)
         self.after_box.setEnabled(children_enabled)
+        self.scouting_box.setEnabled(children_enabled)
         self.hint.setText(HINT_READY)
         controller.set_prefs(**change)
+
+    def _scouting_changed(self, checked: bool) -> None:
+        controller = self._controller()
+        if controller is not None:
+            change = getattr(controller, "set_scouting_enabled", None)
+            if callable(change):
+                change(bool(checked))
 
     # ------------------------------------------------------ retries
 

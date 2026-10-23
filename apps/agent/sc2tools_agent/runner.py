@@ -1039,6 +1039,10 @@ def _gui_boot_worker(
                     cell.build_checkin.on_intent_changed(ping)
                     if getattr(cell, "build_checkin", None) else None
                 ),
+                on_scouting_brief=lambda brief: (
+                    cell.build_checkin.on_scouting_brief(brief)
+                    if getattr(cell, "build_checkin", None) else None
+                ),
             )
         cell.socket_client = socket_client
 

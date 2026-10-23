@@ -1,5 +1,7 @@
 "use strict";
 
+const { buildScoutingBrief, scoutingDeviceRoom } = require("./agentScouting");
+
 /**
  * In-memory pub/sub for the Live Game Bridge — fans out the agent's
  * outbound ``LiveGameState`` envelopes (see ``POST /v1/agent/live``)
@@ -373,6 +375,7 @@ class LiveGameBroker {
             /** @type {Record<string, unknown>} */ (enriched),
             publishRevision,
           );
+          this._emitScoutingBrief(userId, enriched);
         })
         .catch((err) => {
           this.counters.enrich_failed += 1;
@@ -385,6 +388,15 @@ class LiveGameBroker {
         });
     }
     return true;
+  }
+
+  /** @param {string} userId @param {Record<string, any>} envelope */
+  _emitScoutingBrief(userId, envelope) {
+    // Private notes never use the shared user room or OBS token fan-out.
+    const brief = buildScoutingBrief(envelope);
+    if (!brief || !this._io) return;
+    try { this._io.to(scoutingDeviceRoom(userId)).emit("scouting:brief", brief); }
+    catch { /* advisory; the device-auth cache fallback remains available */ }
   }
 
   /**

@@ -357,4 +357,4 @@ function parseCursor(raw) {
   throw err;
 }
 
-module.exports = { buildOpponentsRouter };
+module.exports = { buildOpponentsRouter, validateNotesBody };

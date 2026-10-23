@@ -65,6 +65,7 @@ class SocketClient:
         on_import_pick_folder: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_bot_lab: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
         on_build_intent_changed: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_scouting_brief: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._device_token = device_token
@@ -86,6 +87,7 @@ class SocketClient:
         # (web pick, randomizer roll, confirmation), or the check-in
         # preference did. Only ids and the prefs flag travel.
         self._on_build_intent_changed = on_build_intent_changed
+        self._on_scouting_brief = on_scouting_brief
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         # Lazily imported in start() so test environments that don't
@@ -96,7 +98,7 @@ class SocketClient:
     def with_device_token(self, token: str) -> "SocketClient":
         """Rebuild a stopped socket with its existing event handlers."""
         names = ("recompute_games", "recompute_opp_build", "full_resync", "import_scan",
-                 "import_start", "import_cancel", "import_pick_folder", "bot_lab", "build_intent_changed")
+                 "import_start", "import_cancel", "import_pick_folder", "bot_lab", "build_intent_changed", "scouting_brief")
         callbacks = {"on_" + name: getattr(self, "_on_" + name) for name in names}
         return SocketClient(base_url=self._base_url, device_token=token, **callbacks)
 
@@ -266,6 +268,19 @@ class SocketClient:
                 cb(ping)
             except Exception:  # noqa: BLE001
                 log.exception("build_intent_changed_callback_failed")
+
+        @sio.on("scouting:brief")
+        async def _on_scouting_brief(payload: Optional[Dict[str, Any]]) -> None:
+            # Never log private note text, player names or game keys. The
+            # controller validates the key/identity and bounds every field.
+            if self._on_scouting_brief is None or not isinstance(payload, dict):
+                return
+            try:
+                self._on_scouting_brief(payload)
+            except Exception as exc:  # noqa: BLE001
+                # An exception may include the note in its message. Log only
+                # the class, with no traceback or user-authored contents.
+                log.warning("scouting_brief_callback_failed type=%s", type(exc).__name__)
 
         @sio.on("resync:request")
         async def _on_resync(payload: Optional[Dict[str, Any]]) -> None:  # noqa: ARG001
