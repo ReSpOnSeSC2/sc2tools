@@ -19,6 +19,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DestructiveConfirmDialog } from "@/components/ui/DestructiveConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
+import { HelpLink } from "@/components/help/HelpLink";
 import { fmtAgo } from "@/lib/format";
 import { ReplayArchiveStatusCard } from "./ReplayArchiveStatusCard";
 
@@ -76,8 +77,9 @@ export function SettingsBackups() {
         { method: "POST", body: "{}" },
       );
       await backups.mutate();
-      toast.success("Restore queued", {
-        description: "Cloud state will swap once the restore job completes.",
+      toast.success("Snapshot restored", {
+        description:
+          "Click Re-sync in the desktop app to bring back build orders, charts and replay files.",
       });
       setPendingRestore(null);
     } catch (err) {
@@ -191,7 +193,7 @@ export function SettingsBackups() {
 
       <Section
         title="Snapshots"
-        description="Atlas takes daily continuous backups in the background. These manual snapshots are for 'before I migrate' checkpoints — labelled and restorable from this UI."
+        description="Your own restore points for your account. Take one before a big import or a history wipe, and restore it here if something goes wrong."
         actions={
           <Button
             variant="primary"
@@ -208,7 +210,7 @@ export function SettingsBackups() {
             <EmptyStatePanel
               icon={<Database className="h-6 w-6" aria-hidden />}
               title="No snapshots yet"
-              description="Take a manual snapshot before any risky migration or import."
+              description="Take one before a big import or a history wipe."
             />
           ) : (
             <ul className="divide-y divide-border">
@@ -222,6 +224,21 @@ export function SettingsBackups() {
             </ul>
           )}
         </Card>
+        <div className="mt-3 space-y-2 text-caption text-text-muted">
+          <p>
+            A snapshot holds your games list, opponents, notes, custom builds
+            and settings. Build orders, charts and original replay files
+            aren&apos;t in it: after a restore, click Re-sync in the
+            desktop app to upload them again.
+          </p>
+          <p>
+            Separately, the whole SC2 Tools database is backed up every day
+            with MongoDB Atlas, so the site can be recovered after a server
+            failure. Those backups cover everyone at once, so they
+            can&apos;t bring back just your account; a snapshot here can.{" "}
+            <HelpLink slug="backups-and-export">How backups work</HelpLink>
+          </p>
+        </div>
       </Section>
 
       <Section
@@ -270,7 +287,7 @@ export function SettingsBackups() {
 
       <Section
         title="Export & delete account (GDPR)"
-        description="Bundle every game, build, opponent record, overlay token, and ML model artifact as JSON. Account deletion is permanent."
+        description="Download everything stored for your account as one JSON file: your games list, opponents, notes, custom builds, settings and overlay tokens. Build orders and charts aren't in the file; original replays download from your replay history. Deleting your account is permanent."
       >
         <Card>
           <div className="flex flex-wrap items-center gap-2">
@@ -300,7 +317,7 @@ export function SettingsBackups() {
         title="Restore from snapshot?"
         description={
           pendingRestore
-            ? `This overwrites your current cloud state with ${pendingRestore.id}. Recent games not in the snapshot will be lost.`
+            ? `This replaces your games list, opponents, notes, custom builds and settings with the snapshot from ${new Date(pendingRestore.createdAt).toLocaleString()}. Games added since then are removed, and build orders, charts and replay files are cleared until you click Re-sync in the desktop app.`
             : undefined
         }
         confirmLabel="Restore"

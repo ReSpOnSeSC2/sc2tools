@@ -70,9 +70,11 @@ describe("help articles", () => {
       "stream-dock",
       "viewer-engagement",
       "troubleshooting-and-support",
+      "backups-and-export",
     ]) {
       expect(getArticle(slug), slug).toBeDefined();
     }
+    expect(getArticle("backups-and-export")?.category).toBe("account-data");
     expect(getArticle("how-to-use-help")?.category).toBe("getting-started");
   });
 

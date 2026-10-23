@@ -4,6 +4,7 @@
 // lib/help/articles/<category>/<slug>.ts file. Do not edit by hand.
 
 import type { HelpArticle } from "../types";
+import accountData_backupsAndExport from "./account-data/backups-and-export";
 import analyzer_analyzerFilters from "./analyzer/analyzer-filters";
 import analyzer_dashboardAndAnalyzer from "./analyzer/dashboard-and-analyzer";
 import builds_buildCheckIn from "./builds/build-check-in";
@@ -25,6 +26,7 @@ import troubleshooting_somethingWentWrong from "./troubleshooting/something-went
 import troubleshooting_troubleshootingAndSupport from "./troubleshooting/troubleshooting-and-support";
 
 export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
+  accountData_backupsAndExport,
   analyzer_analyzerFilters,
   analyzer_dashboardAndAnalyzer,
   builds_buildCheckIn,
