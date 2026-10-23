@@ -20,6 +20,7 @@ import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildFilterBar, type BuildFilterState } from "./BuildFilterBar";
 import { BuildPublishModal } from "./BuildPublishModal";
 import { BuildPagination } from "./BuildPagination";
+import { BuildsPublicIntro } from "./BuildsPublicIntro";
 import { useCustomBuildPage } from "./useCustomBuildPage";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
 import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
@@ -71,8 +72,17 @@ const EMPTY_BUILDS: CustomBuild[] = [];
 /**
  * Phase 7 builds library. Toast context comes from the app-wide
  * ToastProvider in the root layout.
+ *
+ * Auth is settled before anything else: useApi has no key while signed
+ * out, so the library's SWR-derived loading state would never resolve
+ * and a visitor would watch a skeleton forever. Until Clerk loads the
+ * page renders nothing; a signed-out visitor gets the public intro
+ * (no New build, Reclassify or filters, which all need an account).
  */
 export function BuildsLibrary() {
+  const { isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded) return null;
+  if (!isSignedIn) return <BuildsPublicIntro />;
   return <BuildsLibraryInner />;
 }
 

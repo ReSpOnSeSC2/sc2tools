@@ -35,6 +35,7 @@ import { BuildLoadError } from "./BuildLoadError";
 import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildPublishModal } from "./BuildPublishModal";
 import { RulesSummary } from "./RulesSummary";
+import { BuildSignInPrompt } from "./BuildSignInPrompt";
 import type { CustomBuild } from "./types";
 
 const BACK_LINK_CLASS =
@@ -49,8 +50,18 @@ export interface BuildDetailViewProps {
   slug: string;
 }
 
-/** Toast context comes from the app-wide provider in the root layout. */
+/**
+ * Toast context comes from the app-wide provider in the root layout.
+ *
+ * Auth is settled first: while signed out useApi has no key, so the
+ * build request never starts and the skeleton below would never clear.
+ * Nothing renders until Clerk loads; a signed-out visitor is asked to
+ * sign in and comes back to this build afterwards.
+ */
 export function BuildDetailView(props: BuildDetailViewProps) {
+  const { isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded) return null;
+  if (!isSignedIn) return <BuildSignInPrompt slug={props.slug} />;
   return <BuildDetailInner {...props} />;
 }
 

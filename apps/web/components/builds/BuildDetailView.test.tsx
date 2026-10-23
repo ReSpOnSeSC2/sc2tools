@@ -10,10 +10,16 @@ const harness = vi.hoisted(() => ({
   apiCall: vi.fn(async () => null),
   push: vi.fn(),
   toastSuccess: vi.fn(),
+  isLoaded: true,
+  isSignedIn: true,
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: vi.fn(async () => "test-token") }),
+  useAuth: () => ({
+    getToken: vi.fn(async () => "test-token"),
+    isLoaded: harness.isLoaded,
+    isSignedIn: harness.isSignedIn,
+  }),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -71,6 +77,8 @@ afterEach(() => {
   harness.push.mockClear();
   harness.toastSuccess.mockClear();
   vi.restoreAllMocks();
+  harness.isLoaded = true;
+  harness.isSignedIn = true;
 });
 
 describe("BuildDetailView editor routing", () => {
@@ -160,5 +168,28 @@ describe("BuildDetailView states", () => {
     );
     expect(harness.toastSuccess).toHaveBeenCalledWith("Build deleted.");
     expect(assign).not.toHaveBeenCalled();
+  });
+});
+
+describe("BuildDetailView signed out", () => {
+  it("asks a visitor to sign in and come back, never showing a skeleton", () => {
+    harness.isSignedIn = false;
+    const { container } = render(<BuildDetailView slug="proxy gate" />);
+    expect(screen.getByRole("heading", { level: 1, name: "Sign in to open this build" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Sign in" }).getAttribute("href")).toBe(
+      "/sign-in?redirect_url=%2Fbuilds%2Fproxy%2520gate",
+    );
+    expect(screen.getByRole("link", { name: "Create account" }).getAttribute("href")).toBe(
+      "/sign-up?redirect_url=%2Fbuilds%2Fproxy%2520gate",
+    );
+    expect(screen.getByRole("link", { name: "Browse community builds" }).getAttribute("href")).toBe("/community");
+    expect(container.querySelector(".animate-pulse")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Edit" })).toBeNull();
+  });
+
+  it("renders nothing until Clerk has loaded", () => {
+    harness.isLoaded = false;
+    const { container } = render(<BuildDetailView slug="proxy-gate" />);
+    expect(container.innerHTML).toBe("");
   });
 });
