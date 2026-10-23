@@ -243,7 +243,7 @@ describe("PublicReplayLibrary", () => {
       sizeBytes: 123_456,
     }));
 
-    const detailHref = `/players/${PLAYER_SLUG}/replays/game%2F42`;
+    const detailHref = `/players/${PLAYER_SLUG}/replays/game%2F42?from=${encodeURIComponent("search=cannon+rush&result=win&matchup=PvT&sort=date_asc&cursor=current%2Fcursor")}`;
     const analysisLinks = screen.getAllByRole("link", {
       name: "Timeline, macro breakdown and both build orders. Sign in free to open.",
     });
@@ -428,6 +428,12 @@ describe("public replay list metadata", () => {
 });
 
 describe("authenticated shared replay detail route", () => {
+  it("forwards only validated archive filters and keeps the return context", async () => {
+    mocks.apiFetch.mockResolvedValue({ ok: true, data: PUBLIC_DETAIL, status: 200 });
+    render(await SharedReplayAnalysisPage({ params: Promise.resolve({ player: PLAYER_SLUG, gameId: "game/42" }), searchParams: Promise.resolve({ from: "matchup=PvZ&result=loss&map=Alcyone&build=Blink&search=rival&cursor=old&page=3&ignored=secret" }) }));
+    const url = new URL(mocks.apiFetch.mock.calls[0][0], "https://example.test"); expect(Object.fromEntries(url.searchParams)).toEqual({ search: "rival", result: "loss", matchup: "PvZ", map: "Alcyone", build: "Blink" });
+    const back = screen.getByRole("link", { name: /Back to PvZ · Losses/ }); expect(back.getAttribute("href")).toContain("cursor=old&page=3"); expect(back.getAttribute("href")).not.toContain("ignored");
+  });
   it("uses the same busy recovery for a rate-limited shared analysis", async () => {
     mocks.apiFetch.mockResolvedValue({ ok: false, status: 429, error: "busy" });
     render(await SharedReplayAnalysisPage({ params: Promise.resolve({ player: PLAYER_SLUG, gameId: "game/42" }) }));

@@ -4,6 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import type { PublicReplayDetailResponse } from "@/components/analyzer/replays/types";
 import { PublicReplayAnalysis } from "@/components/public-profile/PublicReplayAnalysis";
 import { PublicUnavailable } from "@/components/public-profile/PublicUnavailable";
+import { parseArchiveFrom, parseArchiveQuery, sharedAnalysisHref } from "@/components/public-profile/archiveQuery";
+import { archiveRequestQuery } from "@/components/public-profile/archiveRequest";
 import { apiFetch } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -11,15 +13,23 @@ export const revalidate = 0;
 
 interface PageProps {
   params: Promise<{ player: string; gameId: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
-const fetchAnalysis = cache((player: string, gameId: string) => apiFetch<PublicReplayDetailResponse>(
-  `/v1/public/replays/${encodeURIComponent(player)}/${encodeURIComponent(gameId)}`,
+const fetchAnalysis = cache((player: string, gameId: string, queryKey: string) => apiFetch<PublicReplayDetailResponse>(
+  `/v1/public/replays/${encodeURIComponent(player)}/${encodeURIComponent(gameId)}${queryKey ? `?${queryKey}` : ""}`,
 ));
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+async function readContext(searchParams: PageProps["searchParams"]) {
+  const raw = (await searchParams)?.from;
+  const from = parseArchiveFrom(Array.isArray(raw) ? raw[0] : raw);
+  return { from, queryKey: archiveRequestQuery(parseArchiveQuery(Object.fromEntries(new URLSearchParams(from))), false) };
+}
+
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
   const { player, gameId } = await params;
-  const result = await fetchAnalysis(safeDecode(player), safeDecode(gameId));
+  const { queryKey } = await readContext(searchParams);
+  const result = await fetchAnalysis(safeDecode(player), safeDecode(gameId), queryKey);
   if (!result.ok && result.status === 404) notFound();
   const canonical = `/players/${encodeURIComponent(player)}/replays/${encodeURIComponent(gameId)}`;
   return {
@@ -30,21 +40,22 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function SharedReplayAnalysisPage({ params }: PageProps) {
+export default async function SharedReplayAnalysisPage({ params, searchParams }: PageProps) {
   const { player, gameId } = await params;
   const requestedPlayer = safeDecode(player);
   const requestedGameId = safeDecode(gameId);
-  const result = await fetchAnalysis(requestedPlayer, requestedGameId);
+  const { from, queryKey } = await readContext(searchParams);
+  const result = await fetchAnalysis(requestedPlayer, requestedGameId, queryKey);
   if (!result.ok) {
     if (result.status === 404) notFound();
     return <PublicUnavailable surface="analysis" reason={result.status === 429 ? "busy" : "outage"} />;
   }
   if (result.data.profile.handle !== requestedPlayer) {
     redirect(
-      `/players/${encodeURIComponent(result.data.profile.handle)}/replays/${encodeURIComponent(requestedGameId)}`,
+      sharedAnalysisHref(`/players/${encodeURIComponent(result.data.profile.handle)}/replays`, requestedGameId, from),
     );
   }
-  return <PublicReplayAnalysis data={result.data} />;
+  return <PublicReplayAnalysis key={result.data.game.gameId} data={result.data} from={from} />;
 }
 
 function safeDecode(segment: string): string {

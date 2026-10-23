@@ -13,13 +13,14 @@ import {
 import { GameStreamLinks } from "@/components/analyzer/GameStreamLinks";
 import { ReplayDownloadButton } from "@/components/analyzer/ReplayDownloadButton";
 import { PublicReplayDownloadButton } from "@/components/public-profile/PublicReplayDownloadButton";
+import { sharedAnalysisHref } from "@/components/public-profile/archiveQuery";
 import { MapLabel } from "@/components/maps/MapArtwork";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import { Icon } from "@/components/ui/Icon";
-import { fmtDate, fmtDateCompact, fmtMinutes, fmtMmr } from "@/lib/format";
+import { fmtDate, fmtDateCompact, fmtMinutes, fmtMmr, macroScoreTone } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { isReviewableGame } from "@/lib/reviews";
 import type { ReplayLibraryItem } from "./types";
@@ -29,6 +30,7 @@ export interface ReplayListProps {
   owner: boolean;
   playerName: string;
   publicHandle?: string;
+  listQuery?: string;
   emptyTitle?: string;
   emptyDescription?: string;
 }
@@ -43,6 +45,7 @@ export function ReplayList({
   owner,
   playerName,
   publicHandle,
+  listQuery,
   emptyTitle = "No replays match these filters",
   emptyDescription = "Try a wider date range or clear the replay search filters. Synced games appear here automatically.",
 }: ReplayListProps) {
@@ -93,6 +96,7 @@ export function ReplayList({
                   publicRoot={publicRoot}
                   publicHandle={publicHandle}
                   publicLocked={publicLocked}
+                  listQuery={listQuery}
                 />
               ))}
             </tbody>
@@ -109,6 +113,7 @@ export function ReplayList({
               publicRoot={publicRoot}
               publicHandle={publicHandle}
               publicLocked={publicLocked}
+              listQuery={listQuery}
             />
           ))}
         </ul>
@@ -125,12 +130,13 @@ interface RowProps {
   publicRoot: string | null;
   publicHandle?: string;
   publicLocked: boolean;
+  listQuery?: string;
 }
 
-function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, publicLocked }: RowProps) {
+function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery }: RowProps) {
   const analysisHref = owner
     ? `/app/game/${encodeURIComponent(game.gameId)}`
-    : `${publicRoot}/${encodeURIComponent(game.gameId)}`;
+    : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);
   return (
     <tr className="group bg-bg-surface transition-colors hover:bg-bg-elevated/55">
       <td className={["border-l-4 px-4 py-3", resultRail(game.result)].join(" ")}>
@@ -184,10 +190,10 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
   );
 }
 
-function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, publicLocked }: RowProps) {
+function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery }: RowProps) {
   const analysisHref = owner
     ? `/app/game/${encodeURIComponent(game.gameId)}`
-    : `${publicRoot}/${encodeURIComponent(game.gameId)}`;
+    : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);
   return (
     <li className={["relative border-l-4 px-4 py-4", resultRail(game.result)].join(" ")}>
       <div className="flex items-start justify-between gap-3">
@@ -323,7 +329,7 @@ function Vitals({ game }: { game: ReplayLibraryItem }) {
       <Vital
         label="Macro"
         value={game.macroScore != null ? `${Math.round(game.macroScore)}` : "—"}
-        tone={macroTone(game.macroScore)}
+        tone={macroScoreTone(game.macroScore)}
       />
     </dl>
   );
@@ -369,13 +375,6 @@ function normalizeResult(result?: string | null): DisplayResult {
 function resultRail(result?: string | null): string {
   const normalized = normalizeResult(result);
   return normalized === "Win" ? "border-l-success" : normalized === "Loss" ? "border-l-danger" : "border-l-text-dim";
-}
-
-function macroTone(score?: number | null): string {
-  if (score == null) return "text-text-dim";
-  if (score >= 80) return "text-success";
-  if (score >= 60) return "text-warning";
-  return "text-danger";
 }
 
 function opponentLabel(game: ReplayLibraryItem): string {

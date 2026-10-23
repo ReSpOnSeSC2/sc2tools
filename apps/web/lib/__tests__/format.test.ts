@@ -2,9 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import {
   fmtPlaytime,
   fmtDateCompact,
+  macroScoreTone,
   PLAYTIME_FORMAT_OPTIONS,
   type PlaytimeFormat,
 } from "../format";
+
+it.each([[null, "text-text-dim"], [59, "text-danger"], [60, "text-warning"], [79, "text-warning"], [80, "text-success"], [Number.NaN, "text-text-dim"]])("uses shared macro score bands for %s", (score, tone) => {
+  expect(macroScoreTone(score as number | null)).toBe(tone);
+});
 
 it("formats compact replay dates in en-US with the year for older games", () => {
   vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 9, 23, 12));

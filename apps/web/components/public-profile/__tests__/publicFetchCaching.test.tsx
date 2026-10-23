@@ -39,9 +39,17 @@ it("shares an archive read with matching filters despite separately parsed query
   expect(mocks.getJson).toHaveBeenCalledWith("/v1/public/replays/player?limit=25&sort=date_desc&result=win&cursor=page-two");
 });
 it("shares one authenticated analysis read between metadata and the page", async () => {
-  mocks.apiFetch.mockResolvedValue({ ok: true, status: 200, data: { profile: { handle: "player" } } });
+  mocks.apiFetch.mockResolvedValue({ ok: true, status: 200, data: { profile: { handle: "player" }, game: { gameId: "game/42" } } });
   await analysisMetadata({ params: Promise.resolve({ player: "player", gameId: "game/42" }) });
   await AnalysisPage({ params: Promise.resolve({ player: "player", gameId: "game/42" }) });
   expect(mocks.apiFetch).toHaveBeenCalledTimes(1);
   expect(mocks.apiFetch).toHaveBeenCalledWith("/v1/public/replays/player/game%2F42");
+});
+
+it("shares filtered analysis metadata/page reads and resolves rolling dates once", async () => {
+  mocks.apiFetch.mockResolvedValue({ ok: true, status: 200, data: { profile: { handle: "player" }, game: { gameId: "game/42" } } });
+  await analysisMetadata({ params: Promise.resolve({ player: "player", gameId: "game/42" }), searchParams: Promise.resolve({ from: "result=loss&range=7d&cursor=old&page=3" }) });
+  await AnalysisPage({ params: Promise.resolve({ player: "player", gameId: "game/42" }), searchParams: Promise.resolve({ from: "page=3&cursor=old&range=7d&result=loss&ignored=drop" }) });
+  expect(mocks.apiFetch).toHaveBeenCalledTimes(1);
+  const url = new URL(mocks.apiFetch.mock.calls[0][0], "https://example.test"); expect(url.searchParams.get("result")).toBe("loss"); expect(url.searchParams.has("since")).toBe(true); expect(url.searchParams.has("until")).toBe(true); expect(url.searchParams.has("cursor")).toBe(false); expect(url.searchParams.has("page")).toBe(false);
 });

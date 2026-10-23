@@ -29,6 +29,8 @@ export interface MechanicsPanelProps {
   emptyDescription?: string;
   recomputeAction?: ReactNode;
   seekTarget?: "replay" | "timeline";
+  /** Public analysis can share its archive score bands without changing analyzer defaults. */
+  macroScoreToneClassName?: string;
 }
 
 /**
@@ -52,6 +54,7 @@ export function MechanicsPanel({
   emptyDescription,
   recomputeAction,
   seekTarget = "timeline",
+  macroScoreToneClassName,
 }: MechanicsPanelProps) {
   const raw = breakdown?.raw;
   const race = computeEffectiveRace(breakdown?.race ?? game?.myRace, raw);
@@ -171,7 +174,7 @@ export function MechanicsPanel({
           <MechanicStat
             label="Macro score"
             value={macroScore !== null ? Math.round(macroScore) : "—"}
-            valueClass={scoreToneTextClass(macroScore)}
+            valueClass={macroScoreToneClassName ?? scoreToneTextClass(macroScore)}
           />
           <MechanicStat
             label="SQ (Spending Quotient)"
