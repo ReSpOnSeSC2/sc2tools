@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import base64
 import threading
 from pathlib import Path
 
@@ -15,6 +16,23 @@ from sc2tools_agent.state import (
     load_state,
     save_state,
 )
+
+
+def test_window_preferences_roundtrip_and_reject_junk(tmp_path):
+    geometry = base64.b64encode(b"Qt window geometry").decode("ascii")
+    state = AgentState(window_geometry=geometry, window_page="settings")
+    save_state(tmp_path, state)
+    loaded = load_state(tmp_path)
+    assert (loaded.window_geometry, loaded.window_page) == (geometry, "settings")
+    for invalid_geometry, invalid_page in [(12, []), ("not base64!", "renamed-page"), (True, False)]:
+        (tmp_path / "agent.json").write_text(json.dumps({
+            "window_geometry": invalid_geometry, "window_page": invalid_page,
+        }), encoding="utf-8")
+        loaded = load_state(tmp_path)
+        assert loaded.window_geometry is None and loaded.window_page is None
+    save_state(tmp_path, AgentState(window_geometry="invalid!", window_page="unknown"))
+    assert load_state(tmp_path).window_geometry is None
+    assert load_state(tmp_path).window_page is None
 
 
 def test_load_state_returns_defaults_when_file_missing(tmp_path: Path) -> None:

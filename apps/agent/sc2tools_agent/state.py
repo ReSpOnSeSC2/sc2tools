@@ -13,6 +13,8 @@ preferences until they re-upgrade.
 from __future__ import annotations
 
 import json
+import base64
+import binascii
 import os
 import tempfile
 import threading
@@ -76,6 +78,9 @@ class AgentState:
     or saves an empty list, which resets the agent to detection alone."""
 
     # ---- GUI preferences (introduced with the PySide6 main window) ----
+
+    window_geometry: Optional[str] = None
+    window_page: Optional[str] = None
 
     api_base_override: Optional[str] = None
     """If set, takes precedence over the ``SC2TOOLS_API_BASE`` env var
@@ -374,6 +379,8 @@ def load_state(state_dir: Path) -> AgentState:
         replay_folders_excluded=_coerce_str_list(
             raw.get("replay_folders_excluded"),
         ),
+        window_geometry=_coerce_geometry(raw.get("window_geometry")),
+        window_page=_coerce_window_page(raw.get("window_page")),
         api_base_override=_coerce_str(raw.get("api_base_override")),
         log_level_override=_coerce_str(raw.get("log_level_override")),
         autostart_enabled=bool(raw.get("autostart_enabled") or False),
@@ -461,6 +468,8 @@ def _snapshot(state: AgentState) -> dict:
     """
     stable = replace(
         state,
+        window_geometry=_coerce_geometry(state.window_geometry),
+        window_page=_coerce_window_page(state.window_page),
         uploaded=dict(state.uploaded),
         path_by_game_id=dict(state.path_by_game_id),
         release_seen=dict(state.release_seen),
@@ -477,6 +486,21 @@ def _snapshot(state: AgentState) -> dict:
         ),
     )
     return asdict(stable)
+
+
+def _coerce_geometry(value: object) -> Optional[str]:
+    if not isinstance(value, str) or not value or len(value) > 16384:
+        return None
+    try:
+        return value if base64.b64decode(value, validate=True) else None
+    except (ValueError, binascii.Error):
+        return None
+
+
+def _coerce_window_page(value: object) -> Optional[str]:
+    return value if isinstance(value, str) and value in {
+        "dashboard", "recent", "log", "settings", "streams",
+    } else None
 
 
 def _coerce_mmr(value: object) -> Optional[int]:
