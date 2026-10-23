@@ -7,11 +7,16 @@
 export default function TodayLoading() {
   return (
     <div className="space-y-5" aria-busy="true" aria-label="Loading Today">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      {/* Same grid as DashboardKpiStrip: the lead card spans both
+          columns on phones, so nothing shifts when the cards arrive. */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
-            className="rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard"
+            className={[
+              "rounded-xl border-2 border-line bg-bg-surface p-4 shadow-hard",
+              i === 0 ? "col-span-2 lg:col-span-1" : "",
+            ].join(" ")}
           >
             <div className="h-3 w-16 animate-pulse rounded bg-bg-elevated" />
             <div className="mt-2 h-6 w-20 animate-pulse rounded bg-bg-elevated" />
