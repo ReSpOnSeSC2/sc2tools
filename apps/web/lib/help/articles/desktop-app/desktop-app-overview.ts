@@ -44,7 +44,7 @@ const article: HelpArticle = {
       rows: [
         ["Dashboard", "Status (Active, Paused, Pairing or Error), how many replays are synced and queued, the last upload, and the main buttons. While the app isn't linked yet, it also shows your pairing code."],
         ["Recent uploads", "The replays the app handled most recently and how each one went. Double-click a row to show the file in Explorer."],
-        ["Activity log", "What the app is doing right now, with a filter for warnings and errors and **Open log folder**."],
+        ["Activity log", "What the app is doing right now, with complete tracebacks, level filters, search, follow controls, copy actions and **Open log folder**. See [Find and copy an error](/help/desktop-app-activity-log)."],
         ["Settings", "Replay folders, what to sync, start-up and updates, map replay capture, build check-in and OBS scene switching."],
         ["Streams", "Set one stream title for your connected YouTube, Twitch and Kick accounts."],
       ],
@@ -73,7 +73,7 @@ const article: HelpArticle = {
       head: ["Setting", "What it does"],
       rows: [
         ["Player handle", "Your in-game name, so the app knows which player is you. Leave it blank to detect it from your replays."],
-        ["Sync date range", "Which replays to upload: **All time**, a season, or a custom range. Pick **Current season** if you have years of old replays and want today's stats first. Replays outside the range are skipped, not deleted."],
+        ["Sync date range", "Which replays to upload: **All time**, a season, or a custom range. Pick **Current season** if you have years of old replays and want today's stats first. Replays outside the range are skipped, not deleted. See [Choose what to sync](/help/desktop-app-sync-range)."],
         ["Replay folders", "The folders the app watches. See [Replay folders](/help/replay-folders)."],
         ["Start-up", "**Run SC2 Tools Agent on Windows startup** and **Start minimised to the system tray**."],
         ["Updates", "**Install agent updates automatically** is on by default. Turned off, the app only tells you when an update is out, unless the update is required to keep syncing."],
@@ -89,13 +89,13 @@ const article: HelpArticle = {
     {
       type: "callout",
       tone: "info",
-      title: "Leave the API address blank",
-      text: "**API base URL** is only for people running their own copy of the SC2 Tools server. Leave it empty to sync to sc2tools.com.",
+      title: "API address (advanced)",
+      text: "**API base URL** is only for self-hosted or development setups. Leave it blank or click **Reset to default** to return to sc2tools.com. **Test** checks whether the address is reachable. Changing the address applies after restarting SC2 Tools.",
     },
     { type: "heading", text: "Logs", anchor: "logs" },
     {
       type: "paragraph",
-      text: "The app writes its log to `%LOCALAPPDATA%\\sc2tools\\logs\\agent.log`. The **Activity log** page shows the latest lines; **Open log folder** opens the folder so you can attach the file when you [report a problem](/help/report-a-problem).",
+      text: "The app writes its log to `%LOCALAPPDATA%\\sc2tools\\logs\\agent.log`. The **Activity log** page shows recent entries. Use **Errors only → Copy → Copy last 200 lines** to capture a failure, or **Open log folder** to attach the complete file when you [report a problem](/help/report-a-problem). [Find and copy an error](/help/desktop-app-activity-log) explains search and following.",
     },
     { type: "heading", text: "Updates", anchor: "updates" },
     {
