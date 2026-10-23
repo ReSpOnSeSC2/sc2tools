@@ -50,6 +50,7 @@ const article: HelpArticle = {
       type: "steps",
       items: [
         "Open the [Download](/download) page on your gaming PC and click the download button.",
+        "If the download page can't reach the release server, press **Retry** or use the **GitHub Releases** link.",
         "Double-click the installer in your Downloads folder.",
         "If Windows shows a blue **Windows protected your PC** message, click **More info**, then **Run anyway**. The installer isn't code-signed yet, so Windows warns about it; the warning doesn't mean anything is wrong.",
         "Click **Next**, then **Install**. The defaults are fine, and no administrator password is needed.",

@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
   Apple,
   Copy,
+  ChevronDown,
+  ChevronRight,
   Download,
   ShieldCheck,
   Terminal as LinuxIcon,
@@ -19,6 +21,8 @@ import { gaEvent } from "@/lib/analytics/gtag";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import type { DetectedOS } from "./types";
+import { Button } from "@/components/ui/Button";
+import { CODE_LOCATION, smartScreenNote, sourceInstallSnippet } from "@/lib/agentInstallerCopy";
 import { MiniMarkdown } from "@/components/ui/MiniMarkdown";
 
 const OS_LABEL: Record<Exclude<DetectedOS, "unknown">, string> = {
@@ -45,14 +49,24 @@ export function DownloadCard({
   const mobile = useIsMobileDevice();
   const os = osOverride ?? detectedOs;
   const release = useReleaseInfo(os);
+  const [retrying, setRetrying] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const notesId = useId();
 
   if (mobile) return <SendToPcCard />;
-  if (release.isLoading) return <DownloadCardSkeleton />;
-  if (release.error || !release.data?.artifact) {
-    return <DownloadCardNoArtifact os={os} />;
-  }
+  if (!release.error && (release.isLoading || !release.data)) return <DownloadCardSkeleton />;
+  if (release.error) return <article className="space-y-3 rounded-xl border border-warning/40 bg-bg-surface p-5 sm:p-6">
+    <h3 className="text-h3 font-semibold text-text">Couldn&apos;t reach the release server</h3>
+    <p className="text-body text-text-muted">GitHub may be rate-limiting us. Try again in a minute, or download straight from GitHub.</p>
+    <div className="flex flex-wrap items-center gap-3">
+      <Button variant="secondary" loading={retrying} aria-busy={retrying || release.isValidating || undefined} onClick={() => { setRetrying(true); void release.mutate().catch(() => {}).finally(() => setRetrying(false)); }}>Retry</Button>
+      <a href="https://github.com/ReSpOnSeSC2/sc2tools/releases" className="text-accent-cyan underline">Download from GitHub Releases</a>
+    </div>
+  </article>;
+  if (!release.data?.artifact) return <DownloadCardNoArtifact os={os} />;
 
   const { artifact, latest, publishedAt, releaseNotes } = release.data;
+  const size = formatBytes(artifact.sizeBytes);
   return (
     <article className="space-y-4 rounded-xl border border-accent-cyan/30 bg-bg-surface p-5 shadow-halo-cyan sm:p-6">
       <header className="flex items-center justify-between gap-3">
@@ -63,11 +77,10 @@ export function DownloadCard({
           <h3 className="text-h3 font-semibold text-text">
             SC2 Tools Agent <span className="text-text-muted">v{latest}</span>
           </h3>
-          {publishedAt ? (
+          {publishedAt || size !== "unknown" ? (
             <p className="text-caption text-text-dim">
-              Released{" "}
-              <time dateTime={publishedAt}>{formatDate(publishedAt)}</time>{" "}
-              · {formatBytes(artifact.sizeBytes)}
+              {publishedAt ? <>Released <time dateTime={publishedAt}>{formatDate(publishedAt)}</time></> : null}
+              {size !== "unknown" ? <>{publishedAt ? " · " : ""}{size}</> : null}
             </p>
           ) : null}
         </div>
@@ -101,17 +114,14 @@ export function DownloadCard({
       <NextSteps />
 
       {releaseNotes ? (
-        <details className="group rounded-lg border border-border bg-bg-subtle/40 p-3">
-          <summary className="cursor-pointer list-none text-caption font-medium text-text-muted hover:text-text">
-            Release notes
-            <span className="ml-1 text-text-dim group-open:hidden">▶</span>
-            <span className="ml-1 hidden text-text-dim group-open:inline">
-              ▼
-            </span>
-          </summary>
-          <MiniMarkdown text={releaseNotes} className="mt-3 max-h-[240px] overflow-auto" />
-        </details>
+        <section className="rounded-lg border border-border bg-bg-subtle/40 p-3">
+          <button type="button" aria-expanded={notesOpen} aria-controls={notesId} onClick={() => setNotesOpen((open) => !open)} className="flex min-h-9 items-center gap-1 text-caption font-medium text-text-muted hover:text-text">
+            {notesOpen ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}Release notes
+          </button>
+          {notesOpen ? <div id={notesId}><MiniMarkdown text={releaseNotes} className="mt-3 max-h-[240px] overflow-auto" /></div> : null}
+        </section>
       ) : null}
+      <a href="https://github.com/ReSpOnSeSC2/sc2tools/releases" className="inline-block text-caption text-accent-cyan underline">All releases</a>
     </article>
   );
 }
@@ -193,9 +203,7 @@ function NextSteps() {
       heading: "If Windows shows a blue “protected your PC” prompt",
       body: (
         <>
-          click <em>More info</em>, then <em>Run anyway</em>. The
-          installer is unsigned for now — that warning is normal and
-          doesn&apos;t mean anything is wrong.
+          {smartScreenNote}
         </>
       ),
     },
@@ -207,7 +215,7 @@ function NextSteps() {
       heading: "The Agent window opens automatically",
       body: (
         <>
-          showing a big 6-digit pairing code. Click <em>Open pairing
+          showing a 6-digit code {CODE_LOCATION}. Click <em>Open pairing
           page</em> and sign into SC2 Tools. The page opens with the code
           already filled in, so click <em>Link this PC</em> and confirm the
           PC details. <LazyHelpLink slug="install-and-pair">Install and linking help</LazyHelpLink>
@@ -281,8 +289,6 @@ function DownloadCardSkeleton() {
 function DownloadCardNoArtifact({ os }: { os: DetectedOS }) {
   const isLinux = os === "linux";
   const isMac = os === "macos";
-  // Windows' launcher is `py`; macOS and Linux ship `python3`.
-  const python = isLinux || isMac ? "python3" : "py";
   return (
     <article className="space-y-3 rounded-xl border border-warning/40 bg-warning/5 p-5 sm:p-6">
       {(isMac || isLinux) && getInstantImportMode() === "all" ? <BrowserAnalyzerLead /> : null}
@@ -297,16 +303,13 @@ function DownloadCardNoArtifact({ os }: { os: DetectedOS }) {
             {isLinux ? " for Linux" : isMac ? " for macOS" : ""}
           </h3>
           <p className="text-caption text-text-muted">
-            Run the agent from source while we ship signed binaries.
-            Both flows produce identical results.
+            Run the agent from source when your platform has no installer.
+            The same replay analysis runs locally.
           </p>
         </div>
       </header>
       <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
-        {`git clone https://github.com/ReSpOnSeSC2/sc2tools.git
-cd sc2tools/apps/agent
-${python} -m pip install -r requirements.txt
-${python} -m sc2tools_agent`}
+        {sourceInstallSnippet(os)}
       </pre>
     </article>
   );

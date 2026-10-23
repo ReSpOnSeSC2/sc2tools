@@ -12,6 +12,7 @@ import { DownloadCard } from "./DownloadCard";
 import { usePlatformDetect } from "./usePlatformDetect";
 import { useIsMobileDevice } from "./useIsMobileDevice";
 import { useReleaseInfo, formatBytes } from "./useReleaseInfo";
+import { INSTALLER_SIGNED, smartScreenNote, sourceInstallSnippet } from "@/lib/agentInstallerCopy";
 import type { DetectedOS } from "./types";
 
 const OS_TABS: ReadonlyArray<{ id: DetectedOS; label: string }> = [
@@ -58,7 +59,7 @@ export function DownloadInteractive() {
         {mobile ? null : <OsTabs active={os} onChange={setActive} detected={detected} />}
         <DownloadCard os={os} />
         <InstallOptions />
-        <ManualInstall />
+        <ManualInstall os={os} />
       </section>
 
       <aside className="space-y-4">
@@ -124,14 +125,14 @@ export function InstallOptions() {
         <p>The installer offers <strong>Start SC2 Tools when Windows starts</strong> and <strong>Create desktop shortcut</strong>. Both start on for a first install; silent updates keep your choices.</p>
         <p>Change <strong>Run on Windows startup</strong> later in the desktop Settings. The app and installer share one switch, including migration from older Startup shortcuts.</p>
         <p>Uninstall keeps pairing, settings and logs unless you explicitly select the local-data removal checkbox. Your original StarCraft II replay folders and cloud games are kept.</p>
-        <p>For a signed build, check Windows Properties → Digital Signatures for a valid publisher signature. A matching SHA-256 confirms file integrity.</p>
+        <p>{smartScreenNote} A matching SHA-256 confirms file integrity.</p>
         <Link href="/help/desktop-app-install" className="inline-block text-accent-cyan underline underline-offset-2">Installation and uninstall guide</Link>
       </div>
     </details>
   );
 }
 
-function ManualInstall() {
+function ManualInstall({ os }: { os: DetectedOS }) {
   return (
     <details className="group rounded-xl border border-border bg-bg-surface">
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 sm:p-5">
@@ -140,7 +141,7 @@ function ManualInstall() {
             Manual install + verification
           </h3>
           <p className="text-caption text-text-muted">
-            Run from source or check the installer hash and signature.
+            Run from source or check the installer hash{INSTALLER_SIGNED ? " and signature" : ""}.
           </p>
         </div>
         <ChevronRight
@@ -158,10 +159,7 @@ function ManualInstall() {
             Run from source
           </h4>
           <pre className="overflow-x-auto rounded-lg border border-border bg-bg-subtle/40 p-3 text-caption">
-            {`git clone https://github.com/ReSpOnSeSC2/sc2tools.git
-cd sc2tools/apps/agent
-py -m pip install -r requirements.txt
-py -m sc2tools_agent`}
+            {sourceInstallSnippet(os)}
           </pre>
         </div>
         <div className="space-y-2">
@@ -238,9 +236,9 @@ function SysReqCard({ os }: { os: DetectedOS }) {
   const release = useReleaseInfo(os);
   const sizeBytes = release.data?.artifact?.sizeBytes;
   const diskBody =
-    sizeBytes != null
+    typeof sizeBytes === "number" && Number.isFinite(sizeBytes) && sizeBytes > 0
       ? `~${formatBytes(sizeBytes)} for the installer (Python + Qt runtime bundled). The replay folder itself is untouched.`
-      : "~217 MB for the installer (Python + Qt runtime bundled). The replay folder itself is untouched.";
+      : "Installer size is shown when release information is available. Your replay folder is untouched.";
 
   return (
     <div className="space-y-3 rounded-xl border border-border bg-bg-surface p-4 sm:p-5">
