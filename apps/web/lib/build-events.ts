@@ -52,6 +52,8 @@ export interface BuildEventRow {
   race?: string;
   supply?: number;
   isProxy?: boolean;
+  /** Signature rows only: how many before `time` (the "×N" note). */
+  count?: number;
 }
 
 const NAME_KEYWORDS: ReadonlyArray<{
@@ -526,9 +528,10 @@ export function eventsToSignature(
  * Used by the community build detail page where the timeline reads a
  * compressed signature instead of full per-instance events.
  *
- * Each signature entry yields one row. The count surfaces as a "×N"
- * note so a single line still expresses the "12 zerglings before
- * 4:00" shape.
+ * Each signature entry with a unit yields one row (blank units are
+ * skipped, so render the returned rows, never `signature[index]`). The
+ * row's `count` surfaces as a "×N" note so a single line still
+ * expresses the "12 zerglings before 4:00" shape.
  */
 export function signatureToRows(
   signature: ReadonlyArray<BuildSignatureItem> | null | undefined,
@@ -544,6 +547,9 @@ export function signatureToRows(
     const time = Number.isFinite(item.beforeSec)
       ? Math.max(0, Number(item.beforeSec))
       : 0;
+    const count = Number.isFinite(item.count)
+      ? Math.max(1, Math.floor(item.count))
+      : 1;
     rows.push({
       key: `sig-${index}-${rawName}`,
       time,
@@ -557,6 +563,7 @@ export function signatureToRows(
         ? `${ICON_BASE}/${kindDir(match.iconKind)}/${match.iconName}.png`
         : null,
       isProxy: item.proxy === true,
+      count,
     });
   });
   return rows;

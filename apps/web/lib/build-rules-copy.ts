@@ -19,6 +19,7 @@ import {
 import {
   ruleCountValue,
   ruleQuantifier,
+  ruleTone,
   type RuleQuantifier,
 } from "@/lib/build-rules-quantity";
 
@@ -363,6 +364,109 @@ export function ruleReadoutText(
  */
 export function describeRuleFailure(rule: BuildRule, got: number): string {
   return `Needs ${describeRule(rule)} — this game had ${got > 0 ? got : "none"}.`;
+}
+
+/* ------------------------------------------------------------------ */
+/* Read-only rules summary                                            */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Which list a saved rule sits in on a read-only build page:
+ *   "must"    — At least n, Exactly n (n ≥ 1)
+ *   "mustNot" — None, Exactly 0, At most 0 (all pass only with none)
+ *   "limit"   — At most n (n ≥ 1): a cap that games with none also pass
+ */
+export type RuleSummaryGroup = "must" | "mustNot" | "limit";
+
+/** Display order of the summary's lists. */
+export const RULE_SUMMARY_GROUPS: ReadonlyArray<RuleSummaryGroup> = [
+  "must",
+  "mustNot",
+  "limit",
+];
+
+/** The list a rule joins; null for a rule with no name (never saved). */
+export function ruleSummaryGroup(rule: BuildRule): RuleSummaryGroup | null {
+  switch (ruleTone(rule)) {
+    case "require":
+      return "must";
+    case "forbid":
+      return "mustNot";
+    case "cap":
+      return "limit";
+    default:
+      return null;
+  }
+}
+
+/**
+ * Rules split into the summary's lists, each sorted by deadline (stable,
+ * so rules with the same time keep their saved order). Every saved type
+ * lands somewhere: `not_before` and `count_max 0` under "mustNot".
+ */
+export function groupRulesForSummary(
+  rules: ReadonlyArray<BuildRule>,
+): Record<RuleSummaryGroup, BuildRule[]> {
+  const groups: Record<RuleSummaryGroup, BuildRule[]> = {
+    must: [],
+    mustNot: [],
+    limit: [],
+  };
+  for (const rule of rules) {
+    const group = ruleSummaryGroup(rule);
+    if (group) groups[group].push(rule);
+  }
+  for (const group of RULE_SUMMARY_GROUPS) {
+    groups[group].sort((a, b) => a.time_lt - b.time_lt);
+  }
+  return groups;
+}
+
+/**
+ * One summary row in parts. The renderer shows `quantity` in bold, then
+ * `entity`, then "before" + `time` in mono, and a Proxy badge for proxy
+ * rules (so `entity` never says "proxied").
+ *   count_min 2 BuildVoidRay 6:40 → { "At least 2", "Void Rays", "6:40" }
+ *   not_before BuildRoboticsFacility 4:00 → { "No", "Robotics Facility", "4:00" }
+ *   before ResearchBlink 6:00 → { "", "Blink research", "6:00" }
+ */
+export interface RuleSummaryParts {
+  /** "At least 2", "Exactly 1", "At most 3", "No", or "" for one research. */
+  quantity: string;
+  entity: string;
+  /** The deadline as m:ss. */
+  time: string;
+}
+
+export function ruleSummaryParts(rule: BuildRule): RuleSummaryParts {
+  const time = formatTime(rule.time_lt);
+  const plain = { name: rule.name };
+  if (passesOnlyWithNone(rule)) {
+    return { quantity: "No", entity: ruleEntity(plain, 1), time };
+  }
+  const q = ruleQuantifier(rule) as Exclude<RuleQuantifier, "none">;
+  const n = ruleCountValue(rule) ?? 1;
+  if (q === "at_least" && n === 1 && isResearchToken(rule.name)) {
+    return { quantity: "", entity: ruleEntity(plain, 1), time };
+  }
+  const word = QUANTITY_WORDS[q];
+  return {
+    quantity: `${word.charAt(0).toUpperCase()}${word.slice(1)} ${n}`,
+    entity: ruleEntity(plain, n),
+    time,
+  };
+}
+
+/**
+ * The summary row as one sentence, for screen readers and copy:
+ *   "At least 2 Void Rays before 6:40", "No Robotics Facility before 4:00",
+ *   "At least 1 Gateway before 1:45, proxied".
+ */
+export function ruleSummaryText(rule: BuildRule): string {
+  const { quantity, entity, time } = ruleSummaryParts(rule);
+  const head = quantity ? `${quantity} ${entity}` : entity;
+  const sentence = `${head.charAt(0).toUpperCase()}${head.slice(1)} before ${time}`;
+  return rule.proxy === true ? `${sentence}, proxied` : sentence;
 }
 
 /* ------------------------------------------------------------------ */

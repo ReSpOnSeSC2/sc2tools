@@ -211,7 +211,7 @@ export function CommunityVotePanel({
           >
             Sign in
           </Link>{" "}
-          to vote, save to your library, or report a build.
+          to vote or report a build.
         </p>
       </SignedOut>
       {status ? (

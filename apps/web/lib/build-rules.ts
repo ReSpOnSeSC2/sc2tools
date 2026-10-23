@@ -538,6 +538,23 @@ export function sanitiseRule(r: BuildRule | null | undefined): BuildRule | null 
   return { type: "before", name: r.name, time_lt, ...proxy };
 }
 
+/**
+ * Saved rules read from an untrusted payload (a community snapshot, an
+ * API response), each run through sanitiseRule; anything it rejects is
+ * dropped. At most RULES_MAX_PER_BUILD rules.
+ *   coerceSavedRules([{ type: "not_before", name: "BuildStargate", time_lt: 240 }, "x"])
+ *   → [{ type: "not_before", name: "BuildStargate", time_lt: 240 }]
+ */
+export function coerceSavedRules(value: unknown): BuildRule[] {
+  if (!Array.isArray(value)) return [];
+  const out: BuildRule[] = [];
+  for (const raw of value.slice(0, RULES_MAX_PER_BUILD)) {
+    const rule = sanitiseRule(raw as BuildRule | null);
+    if (rule) out.push(rule);
+  }
+  return out;
+}
+
 function clipStrings(arr: ReadonlyArray<string> | null | undefined): string[] {
   if (!Array.isArray(arr)) return [];
   const out: string[] = [];
