@@ -164,6 +164,7 @@ export type SurfaceMatch = {
   isDetail: boolean;
   /** Where the context bar's back control points on a detail page. */
   backHref: string;
+  backEntry: NavEntry;
 };
 
 /**
@@ -175,7 +176,7 @@ export function matchSurface(pathname: string | null): SurfaceMatch | null {
 
   // /app/game/<id> is a leaf of the analyzer, not a destination of its own.
   if (pathname === "/app/game" || pathname.startsWith("/app/game/")) {
-    return { entry: TODAY_ENTRY, isDetail: true, backHref: "/app" };
+    return { entry: TODAY_ENTRY, isDetail: true, backHref: "/app", backEntry: TODAY_ENTRY };
   }
 
   let best: NavEntry | null = null;
@@ -190,14 +191,12 @@ export function matchSurface(pathname: string | null): SurfaceMatch | null {
     entry: best,
     isDetail: pathname.length > best.href.length,
     backHref: best.href,
+    backEntry: best,
   };
 }
 
 /** Section title shown in the context bar. */
 export function surfaceTitle(pathname: string | null): string {
-  if (pathname === "/app/game" || pathname?.startsWith("/app/game/")) {
-    return "Replay";
-  }
   return matchSurface(pathname)?.entry.label ?? "SC2 Tools";
 }
 

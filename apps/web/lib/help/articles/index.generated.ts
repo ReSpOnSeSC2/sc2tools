@@ -6,7 +6,9 @@
 import type { HelpArticle } from "../types";
 import accountData_backupsAndExport from "./account-data/backups-and-export";
 import accountData_deleteAccount from "./account-data/delete-account";
+import accountData_deletingGameHistory from "./account-data/deleting-game-history";
 import accountData_playerChannels from "./account-data/player-channels";
+import accountData_privacyCookies from "./account-data/privacy-cookies";
 import accountData_publicProfile from "./account-data/public-profile";
 import analyzer_analyzerFilters from "./analyzer/analyzer-filters";
 import analyzer_arcade from "./analyzer/arcade";
@@ -57,7 +59,9 @@ import troubleshooting_troubleshootingAndSupport from "./troubleshooting/trouble
 export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   accountData_backupsAndExport,
   accountData_deleteAccount,
+  accountData_deletingGameHistory,
   accountData_playerChannels,
+  accountData_privacyCookies,
   accountData_publicProfile,
   analyzer_analyzerFilters,
   analyzer_arcade,

@@ -15,6 +15,8 @@ import { expect, test, type Locator, type Page, type TestInfo } from "@playwrigh
  */
 
 const PAGES: Array<{ path: string; expectText: RegExp }> = [
+  { path: "/legal/privacy", expectText: /Privacy Policy/ },
+  { path: "/legal/terms", expectText: /Terms of Service/ },
   { path: "/", expectText: /opponent|build|replay/i },
   { path: "/guides", expectText: /build order guides/i },
   { path: "/guides/pvz", expectText: /PvZ build orders/i },
@@ -34,6 +36,27 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
     ? [{ path: "/try", expectText: /analyze/i }]
     : []),
 ];
+
+test("phone landing headline holds its position while the carousel waits", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const heading = page.getByRole("heading", { level: 1 }).first();
+  const before = await heading.boundingBox();
+  await page.waitForTimeout(6000);
+  const after = await heading.boundingBox();
+  expect(Math.abs((after?.y ?? 0) - (before?.y ?? 0))).toBeLessThanOrEqual(1);
+  const overflow = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth, wide: Array.from(document.querySelectorAll("body *")).filter((node) => node.getBoundingClientRect().right > document.documentElement.clientWidth + 1).slice(0, 8).map((node) => ({ tag: node.tagName, className: node.className, width: node.getBoundingClientRect().width })) }));
+  expect(overflow.width, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport + 1);
+});
+
+test("phone privacy contents links reach the Cookies section", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 844 });
+  await page.goto("/legal/privacy");
+  await page.getByText("On this page", { exact: true }).last().click();
+  await page.getByRole("navigation", { name: "On this page" }).last().getByRole("link", { name: "Cookies", exact: true }).click();
+  await expect(page).toHaveURL(/#cookies$/);
+  await expect(page.locator("h2#cookies")).toBeInViewport();
+});
 
 for (const { path, expectText } of PAGES) {
   test(`${path} renders without horizontal scroll`, async ({ page }) => {

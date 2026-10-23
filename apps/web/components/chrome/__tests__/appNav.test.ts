@@ -67,6 +67,7 @@ describe("app surface matching", () => {
     const dossier = matchSurface("/app/opponents/1-S2-1-99");
     expect(dossier?.isDetail).toBe(true);
     expect(dossier?.backHref).toBe("/app/opponents");
+    expect(dossier?.backEntry.label).toBe("Opponents");
 
     const list = matchSurface("/app/opponents");
     expect(list?.isDetail).toBe(false);
@@ -75,7 +76,8 @@ describe("app surface matching", () => {
     const game = matchSurface("/app/game/g1");
     expect(game?.entry.key).toBe("today");
     expect(game?.backHref).toBe("/app");
-    expect(surfaceTitle("/app/game/g1")).toBe("Replay");
+    expect(game?.backEntry.label).toBe("Today");
+    expect(surfaceTitle("/app/game/g1")).toBe("Today");
   });
 
   it("titles each surface from its nav label", () => {

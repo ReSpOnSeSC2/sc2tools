@@ -18,12 +18,14 @@ import { ToastProvider, useToast } from "@/components/ui/Toast";
 import { Z_LAYERS, aboveChromeBottomPx } from "@/components/ui/__tests__/bottomLayer";
 
 vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
   usePathname: () => "/settings",
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: async () => null, userId: "u1", isLoaded: true, isSignedIn: true }),
   UserButton: () => null,
+  ClerkLoading: () => null,
   SignedIn: ({ children }: { children: ReactNode }) => <>{children}</>,
   SignedOut: () => null,
 }));
@@ -35,6 +37,8 @@ vi.mock("@/components/build-checkin/BuildCheckInAlert", () => ({ BuildCheckInAle
 vi.mock("@/components/notifications/NotificationBell", () => ({ NotificationBell: () => null }));
 vi.mock("../SiteStats", () => ({ SiteStats: () => null }));
 vi.mock("@/lib/analytics/consent", () => ({
+  COOKIE_SETTINGS_EVENT: "sc2tools:open-cookie-settings",
+  withdrawConsent: vi.fn(),
   isAnalyticsConfigured: () => true,
   readConsent: () => "unset",
   setConsent: vi.fn(),

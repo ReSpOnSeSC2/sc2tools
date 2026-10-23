@@ -11,6 +11,14 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Experience polish
+
+- Settings show recoverable load failures, protect saved profile IDs, preview game-history deletion counts, and include both selected days in local time. Mobile tabs scroll into view and support arrow keys.
+- The landing page puts its headline first on phones and offers a stable swipe strip, slideshow pause controls, and current product screenshots and availability.
+- The build editor demo accepts replay drops and iPhone file picks, supports choosing the same replay again, and offers a clear next step after parsing fails.
+- Cookie settings can be reopened from the footer or Privacy Policy, including when storage is blocked. Legal pages have section navigation, and the crash screen follows your theme with retry, reload, home and report controls.
+- Detail pages have one main heading, consistent back links and breadcrumbs. Navigation shows delayed progress, with loading placeholders while pages and sign-in resolve.
+
 ### Phase 2b: build guides
 
 - Guide outages offer a working Retry and report action. Signed-in players can open their own record, builds, or upload games; signing in returns to the guide.
