@@ -73,7 +73,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Too-short games", anchor: "too-short" },
     {
       type: "paragraph",
-      text: "Games under 45 seconds are disconnects and instant leaves where no build order happened. **Hide too-short** leaves them out of every section, which is the default. Turn it off to count them too.",
+      text: "Games under 45 seconds are disconnects and instant leaves where no build order happened. **Hide too-short** leaves them out of filtered analyzer sections by default. Turn it off to count them too. Arcade and individual game pages keep their own scope.",
     },
     { type: "heading", text: "Pick a matchup", anchor: "matchup" },
     {
@@ -117,7 +117,7 @@ const article: HelpArticle = {
       items: [
         "**Games in range** on Today follows every filter. When filters other than the date apply, its note says how many, for example *12-worker patch · 2 more filters*.",
         "**Win rate** on Today has its own timeframe: pick it from the menu next to its title. It ignores the date range, region, matchup and Strategies picks, and keeps the Maps, Players, Length and Hide too-short filters.",
-        "**Games today** and **Active streak** look at today and your latest games, with the same Maps, Players, Length and Hide too-short filters.",
+        "**Today's session** and **Active streak** look at today and your latest games, with the same Maps, Players, Length and Hide too-short filters.",
         "**MMR** shows your current ladder rating and ignores filters.",
         "**Daily Pulse** and **Ladder Pulse** use their own recent-game windows and ignore the global filters. **Arcade** also uses its own analysis corpus, without the filter bar.",
       ],

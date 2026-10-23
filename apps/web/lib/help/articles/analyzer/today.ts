@@ -25,12 +25,14 @@ const article: HelpArticle = {
     "daily replay",
     "recent form",
     "default tab",
+    "session",
+    "retry",
   ],
   updated: "2026-10-23",
   body: [
     {
       type: "paragraph",
-      text: "[Today](/app) is the page SC2 Tools opens on. It answers the questions you have between games: how is today going, am I on a streak, where is my MMR, and what did the last game tell me. Everything updates by itself a few seconds after each replay syncs.",
+      text: "[Today](/app?view=today) answers the questions you have between games: how is today going, am I on a streak, where is my MMR, and what did the last game tell me. The game cards update as each replay syncs, without a refresh.",
     },
     { type: "heading", text: "The live game", anchor: "live-game" },
     {
@@ -42,16 +44,20 @@ const article: HelpArticle = {
       type: "table",
       head: ["Card", "What it counts"],
       rows: [
-        ["Games today", "How many games you've played today, by your own clock."],
+        ["Today's session", "Today's games and win-loss record, by your own clock, for example **6 games · 4W 2L**."],
         ["Win rate", "Your win rate over the timeframe picked in the menu next to its title. It has its own timeframe and ignores the date range in the filter bar."],
         ["Active streak", "Your current run of wins or losses, from your latest games."],
         ["Games in range", "Every game the filter bar lets through. Its note says which filters apply."],
-        ["MMR", "Your current ladder rating from SC2Pulse, for the Pulse IDs in [Settings → Profile](/settings?tab=profile). It ignores filters."],
+        ["MMR", "Your current ladder rating from SC2Pulse, for the Pulse IDs in [Settings → Profile](/settings?tab=profile#pulse-id-help). With none saved, the card links there to add one. It ignores filters."],
       ],
     },
     {
       type: "paragraph",
       text: "Exactly which filters each card follows is in [Filters: date, matchup, region and more](/help/analyzer-filters).",
+    },
+    {
+      type: "paragraph",
+      text: "A card that couldn't load shows **—** and *Couldn't load · Retry*. Press **Retry** to load that card again; the rest of the page keeps working. A real zero still shows 0.",
     },
     { type: "heading", text: "Daily Pulse", anchor: "daily-pulse" },
     {
@@ -85,7 +91,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Prefer to land on another section? Pick it under **Default tab** in [Settings → Misc](/settings?tab=misc).",
+      text: "Prefer to land on another section? Pick it under **Default tab** in [Settings → Misc](/settings?tab=misc). It applies when you first open the dashboard in a browser session. Clicking **Today** or its app shortcut always opens Today.",
     },
   ],
   related: ["analyzer-filters", "dashboard-and-analyzer", "reading-the-charts", "game-page"],

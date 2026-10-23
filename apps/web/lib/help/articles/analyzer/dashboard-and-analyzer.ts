@@ -23,6 +23,12 @@ const article: HelpArticle = {
     "opener",
     "custom builds",
     "how to read this",
+    "today",
+    "session",
+    "games today",
+    "record",
+    "default tab",
+    "retry",
   ],
   updated: "2026-10-23",
   body: [
@@ -48,7 +54,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Each section has a **How to read this** link next to its title that opens its article. The filter bar at the top decides which games every section counts: see [Filters](/help/analyzer-filters). For colors, sample sizes and Min games, see [Reading the charts](/help/reading-the-charts).",
+      text: "Analyzer sections have a **How to read this** link next to their title that opens the relevant article. The filter bar controls filtered sections; Today has cards with their own scope, while Arcade and individual game pages ignore it. See [Filters](/help/analyzer-filters) for the full scope and [Today](/help/today) for the session cards, Retry and Default tab. For colors, sample sizes and Min games, see [Reading the charts](/help/reading-the-charts).",
     },
   ],
   related: ["today", "analyzer-filters", "reading-the-charts", "getting-started"],
