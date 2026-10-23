@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useApi } from "@/lib/clientApi";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
@@ -8,6 +9,11 @@ import { Button } from "@/components/ui/Button";
 export type MyReport = { eventId: string; subject: string; message: string; createdAt: string; status: "new" | "looking" | "fixed" | "wontfix"; revision: number; replies: Array<{ id: string; message: string; createdAt: string }> };
 export const REPORT_STATUS_LABELS = { new: "New", looking: "Looking into it", fixed: "Fixed", wontfix: "Won't fix" };
 export function MyReports() {
+  useEffect(() => {
+    const reveal = () => { if (window.location.hash === "#my-reports") document.getElementById("my-reports")?.scrollIntoView?.({ block: "start" }); };
+    reveal(); window.addEventListener("hashchange", reveal);
+    return () => window.removeEventListener("hashchange", reveal);
+  }, []);
   const query = useApi<{ items: MyReport[] }>("/v1/messages/mine", { refreshInterval: 60000, revalidateOnFocus: true });
   return <section id="my-reports" className="scroll-mt-24 space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-h3 font-semibold text-text">My reports</h2><Button variant="secondary" size="sm" onClick={() => query.mutate()}>Refresh reports</Button></div>

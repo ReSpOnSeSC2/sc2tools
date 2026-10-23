@@ -80,7 +80,7 @@ class NotificationsService {
     if (!KIND_RE.test(String(input.kind || ""))) throw new Error("invalid_notification_kind");
     const user = await this.db.users.findOne({ userId }, { projection: { "preferences.notifications": 1 } });
     if (!user || sanitizeNotificationPrefs(user.preferences?.notifications).muted.includes(input.kind)) return null;
-    const eventKey = input.eventKey ? String(input.eventKey).slice(0, GROUP_KEY_MAX) : null;
+    const eventKey = deliveryKey(input.eventKey);
     if (eventKey && await this.db.notifications.findOne({ userId, deliveryKeys: eventKey }, { projection: { _id: 1 } })) return null;
     const now = new Date();
     const href = safeHref(input.href);
@@ -131,12 +131,21 @@ class NotificationsService {
    */
   async _fold(userId, input, href, now) {
     const groupKey = String(input.groupKey).slice(0, GROUP_KEY_MAX);
-    const eventKey = input.eventKey ? String(input.eventKey).slice(0, GROUP_KEY_MAX) : null;
-    const bumped = await this.db.notifications.findOneAndUpdate(
-      { userId, groupKey, readAt: null, ...(eventKey ? { deliveryKeys: { $ne: eventKey } } : {}) },
-      { $inc: { count: 1 }, $set: { createdAt: now, href }, ...(eventKey ? { $addToSet: { deliveryKeys: eventKey } } : {}) },
-      { returnDocument: "after" },
-    );
+    const eventKey = deliveryKey(input.eventKey);
+    let bumped;
+    try {
+      bumped = await this.db.notifications.findOneAndUpdate(
+        { userId, groupKey, readAt: null, ...(eventKey ? { deliveryKeys: { $ne: eventKey } } : {}) },
+        { $inc: { count: 1 }, $set: { createdAt: now, href }, ...(eventKey ? { $addToSet: { deliveryKeys: eventKey } } : {}) },
+        { returnDocument: "after" },
+      );
+    } catch (error) {
+      // The delivery identity is authoritative even if competing callers
+      // supplied different groups. A unique-index loser is a no-op.
+      if (eventKey && isDuplicateKey(error)
+        && await this.db.notifications.findOne({ userId, deliveryKeys: eventKey }, { projection: { _id: 1 } })) return null;
+      throw error;
+    }
     if (!bumped) return null;
     const rendered = input.render ? input.render(Number(bumped.count) || 1) : null;
     if (rendered) {
@@ -286,5 +295,8 @@ function clampInt(raw, min, max, fallback) {
 function isDuplicateKey(err) {
   return Boolean(err && typeof err === "object" && /** @type {any} */ (err).code === 11000);
 }
+
+/** Fixed-size hashes keep long producer identities distinct and private. @param {unknown} raw */
+function deliveryKey(raw) { return raw ? crypto.createHash("sha256").update(String(raw)).digest("base64url") : null; }
 
 module.exports = { NotificationsService, safeHref };

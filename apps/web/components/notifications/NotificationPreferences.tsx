@@ -13,6 +13,11 @@ import { usePublishDirty } from "@/components/analyzer/settings/SettingsContext"
 
 const DEFAULT_PREFS = { muted: [] as string[] };
 export function NotificationPreferences() {
+  const { userId } = useAuth();
+  return userId ? <NotificationPreferencesForm key={userId} /> : null;
+}
+
+function NotificationPreferencesForm() {
   const { getToken } = useAuth();
   const query = useApi<{ muted: string[] }>("/v1/me/preferences/notifications");
   const form = useDirtyForm(query.data, DEFAULT_PREFS);

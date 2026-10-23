@@ -21,7 +21,7 @@ async function deliverCoachingNotification(service, userId, payload, logger) {
     practice_sharing_revoked: "Practice sharing was revoked",
   };
   await deliverNotification(service, userId, { kind: `coaching.${payload.kind}`,
-    title: titles[payload.kind] || "Your coaching plan changed", href: "/coaching",
+    title: payload.assignmentId && payload.kind === "cancelled" ? "A practice assignment was cancelled" : titles[payload.kind] || "Your coaching plan changed", href: "/coaching",
     groupKey: `coaching:${payload.kind}:${id}`, eventKey: `coaching:${payload.kind}:${id}` }, logger);
 }
 

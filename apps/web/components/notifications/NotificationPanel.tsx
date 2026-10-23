@@ -35,7 +35,7 @@ export default function NotificationPanel(p: Props) {
   return <div ref={panel} role="dialog" aria-label="Notifications" style={p.style}
     className="absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-xl border-2 border-line bg-bg-surface p-2 shadow-hard">
     <div className="flex items-center justify-between gap-2 px-2 py-2">
-      <h2 ref={header} tabIndex={-1} className="rounded text-body font-semibold text-text">Notifications</h2>
+      <h2 ref={header} tabIndex={-1} className={`rounded text-body font-semibold text-text ${notificationFocus}`}>Notifications</h2>
       <button type="button" disabled={p.markingAll || p.unread === 0} onClick={p.markAll} className={`rounded px-1 text-caption text-accent-cyan disabled:text-text-dim ${notificationFocus}`}>{p.markingAll ? "Working…" : "Mark all read"}</button>
     </div>
     <div className="mb-2 flex gap-1 rounded-lg border border-border p-1">

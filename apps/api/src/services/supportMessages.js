@@ -39,10 +39,11 @@ class SupportMessagesService {
     if (previous.revision !== input.expectedRevision) throw problem(409, "report_changed", "This report changed. Reload before saving.");
     if (previous.updates.length >= 50) throw problem(409, "report_update_limit", "This report has reached its reply limit.");
     const status = input.status || previous.status;
+    if (status === previous.status && !reply) return publicReport(row);
     const action = { id: requestId, status, statusChanged: status !== previous.status, reply, createdAt: new Date() };
     const report = { status, revision: previous.revision + 1, updates: [...previous.updates, action] };
     const saved = await this.db.adminEvents.findOneAndUpdate(
-      { eventId, type: "user_message", ...(row.report ? { "report.revision": previous.revision } : { report: { $exists: false } }) },
+      { eventId, type: "user_message", anonymizedAt: { $exists: false }, ...(row.report ? { "report.revision": previous.revision } : { report: { $exists: false } }) },
       { $set: { report } }, { returnDocument: "after" },
     );
     if (!saved) throw problem(409, "report_changed", "This report changed. Reload before saving.");

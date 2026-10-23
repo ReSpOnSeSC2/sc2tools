@@ -65,6 +65,9 @@ vi.mock("../CoachingBookingAlert", () => ({
 vi.mock("@/components/build-checkin/BuildCheckInAlert", () => ({
   BuildCheckInAlert: () => <div data-testid="build-checkin-alert-slot" />,
 }));
+// Shell layout owns the slot; the real bell and shared socket have their
+// own consumer integration tests.
+vi.mock("@/components/notifications/NotificationBell", () => ({ NotificationBell: () => <div data-testid="notifications-bell-slot" /> }));
 vi.mock("../SiteStats", () => ({
   SiteStats: ({ syncStatus }: { syncStatus?: ReactNode }) => <div data-testid="site-stats">{syncStatus}</div>,
 }));

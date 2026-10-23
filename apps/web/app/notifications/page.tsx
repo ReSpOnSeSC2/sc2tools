@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import { useUserSocket } from "@/lib/useUserSocket";
@@ -26,6 +26,7 @@ function NotificationsCenter() {
   const [cursors, setCursors] = useState<Array<string | null>>([null]);
   const [saving, setSaving] = useState(false);
   const [writeError, setWriteError] = useState<ClientApiError | null>(null);
+  const retryWrite = useRef<() => Promise<void>>(async () => {});
   const [, tick] = useState(0);
   const params = new URLSearchParams({ limit: "20", kind: category });
   const cursor = cursors.at(-1); if (cursor) params.set("before", cursor);
@@ -37,11 +38,13 @@ function NotificationsCenter() {
   useEffect(() => { const timer = setInterval(() => tick((n) => n + 1), 30000); return () => clearInterval(timer); }, []);
   async function markAll() {
     if (saving) return; setSaving(true); setWriteError(null);
+    retryWrite.current = markAll;
     try { await apiCall(getToken, "/v1/me/notifications/read", { method: "POST", body: JSON.stringify({ all: true }) }); refresh(); }
     catch (error) { setWriteError(error as ClientApiError); }
     finally { setSaving(false); }
   }
   async function markOne(id: string) {
+    retryWrite.current = () => markOne(id);
     try { await apiCall(getToken, "/v1/me/notifications/read", { method: "POST", body: JSON.stringify({ ids: [id] }) }); refresh(); }
     catch (error) { setWriteError(error as ClientApiError); }
   }
@@ -51,7 +54,7 @@ function NotificationsCenter() {
     <div className="flex flex-wrap gap-2" aria-label="Notification kinds">{NOTIFICATION_CATEGORIES.map((kind) => <button key={kind} type="button" aria-pressed={category === kind} onClick={() => { setCategory(kind); setCursors([null]); }} className={`rounded-full border border-border px-3 py-2 text-caption ${notificationFocus} ${category === kind ? "bg-accent/15 text-accent-cyan" : "text-text-muted hover:bg-bg-elevated"}`}>{CATEGORY_LABELS[kind]}</button>)}
       <label className="inline-flex items-center gap-2 px-2 text-caption"><input type="checkbox" checked={unreadOnly} onChange={(e) => { setUnreadOnly(e.target.checked); setCursors([null]); }} />Unread only</label>
     </div>
-    {writeError ? <RequestError error={writeError} onRetry={markAll} /> : null}
+    {writeError ? <RequestError error={writeError} onRetry={() => retryWrite.current()} /> : null}
     {unread.error ? <RequestError title="Unread count unavailable" error={unread.error} onRetry={() => unread.mutate()} /> : null}
     {list.error ? <RequestError error={list.error} onRetry={() => list.mutate()} /> : list.isLoading && !list.data ? <Skeleton rows={4} /> : !list.data?.items.length ? <EmptyStatePanel title={`No ${category === "all" ? "" : CATEGORY_LABELS[category].toLowerCase() + " "}${unreadOnly ? "unread " : ""}notifications`} description="New activity will appear here. You can change which kinds you receive in Settings → Misc." action={<Link className={`rounded-lg px-3 py-2 text-accent-cyan ${notificationFocus}`} href="/settings?tab=misc">Notification settings</Link>} />
       : <Card><ul className="space-y-2">{list.data.items.map((row) => <li key={row.id}><NotificationItem row={row} isNew={!row.readAt} onOpen={() => void markOne(row.id)} /></li>)}</ul></Card>}

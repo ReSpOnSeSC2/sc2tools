@@ -315,7 +315,7 @@ describe("notification center panel behavior", () => {
     expect(within(panel).queryByRole("button", { name: "System" })).toBeNull();
     fireEvent.click(within(panel).getByRole("button", { name: "Coaching" }));
     expect(within(panel).queryByText("Review review")).toBeNull();
-    fireEvent.click(within(panel).getByRole("button", { name: "All", exact: true }));
+    fireEvent.click(within(panel).getByRole("button", { name: "All" }));
     expect(within(panel).getByText("Review review")).toBeTruthy();
   });
 
