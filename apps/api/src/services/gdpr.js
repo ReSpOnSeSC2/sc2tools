@@ -719,9 +719,6 @@ class GdprService {
     /** @type {Record<string, any>} */
     const filter = this._gamesWipeFilter(userId, opts);
 
-    if (this.customBuilds) {
-      await this.customBuilds.cancelUserReclassifications(userId);
-    }
 
     await this._assertReplayCleanupAvailable(filter);
 

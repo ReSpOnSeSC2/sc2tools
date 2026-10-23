@@ -10,11 +10,11 @@ import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { backupErrorMessage } from "./backupErrors";
 
 const ACTIONS = [{ kind: "opponents", label: "Recount opponent records" }, { kind: "replay-archive", label: "Re-check replay archive" }, { kind: "custom-builds", label: "Re-run custom-build matching" }];
-export function DataRepairCard() {
+export function DataRepairCard({ onStarted }: { onStarted?: () => Promise<void> }) {
   const { getToken } = useAuth(); const { toast } = useToast(); const [pending, setPending] = useState(""); const [error, setError] = useState("");
   async function repair(kind: string) {
     if (pending) return; setPending(kind); setError("");
-    try { await apiCall(getToken, `/v1/me/repair/${kind}`, { method: "POST", body: "{}" }); toast.success("Repair started", { description: "A snapshot was saved first. Your notification bell will show the result." }); }
+    try { await apiCall(getToken, `/v1/me/repair/${kind}`, { method: "POST", body: "{}" }); await onStarted?.().catch(() => {}); toast.success("Repair started", { description: "A snapshot was saved first. Your notification bell will show the result." }); }
     catch (error) { setError(backupErrorMessage(error)); }
     finally { setPending(""); }
   }

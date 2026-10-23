@@ -56,7 +56,7 @@ export function SettingsBackups() {
   async function refreshHistory() {
     try { await refresh((key) => {
       const path = Array.isArray(key) ? key.find((part) => typeof part === "string" && part.startsWith("/v1/")) : key;
-      return typeof path === "string" && /^\/v1\/(?:me(?:\?|$|\/doctor)|games|opponents|timeseries|streak|matchups|builds|macro|maps|trends|strategies|dashboard)/.test(path);
+      return typeof path === "string" && /^\/v1\/(?:me(?:\?|$|\/(?:doctor|backups|replay-archive-status))|games|opponents|timeseries|streak|matchups|builds|macro|maps|trends|strategies|dashboard)/.test(path);
     }); } catch { /* A refresh failure must not turn a completed wipe or restore into a reported failure. */ }
   }
 
@@ -146,7 +146,7 @@ export function SettingsBackups() {
       <ReplayArchiveStatusCard />
 
       <SnapshotManager onRestored={refreshHistory} />
-      <DataRepairCard />
+      <DataRepairCard onStarted={refreshHistory} />
 
       <Section
         title="Delete game history"

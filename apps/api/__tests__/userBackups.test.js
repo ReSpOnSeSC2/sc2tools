@@ -58,7 +58,7 @@ describe("streamed snapshots and safe restore (real Mongo)", () => {
       expect(await db.gameDetails.findOne({ userId: "u1", gameId: "removed" })).toBeNull();
       expect(await db.gameDetails.countDocuments({ userId: "u2" })).toBe(1);
       expect(services.gdpr.replayFiles.deleteMany).toHaveBeenCalledWith("u1", ["removed"]);
-      expect(services.gdpr.replayFiles.verifyAvailableMarker).toHaveBeenCalledWith("u1", "kept", expect.objectContaining({ sha256: "abc" }));
+      expect(services.gdpr.replayFiles.verifyAvailableMarker).toHaveBeenCalledWith("u1", "kept", expect.objectContaining({ sha256: "abc" }), { clearStale: false });
       expect(await db.deviceTokens.countDocuments({ userId: "u1" })).toBe(1);
       expect(await db.userBackups.countDocuments({ userId: "u1", type: "pre_action" })).toBe(1);
     } finally { services.gdpr.replayFiles = replayFiles; }
@@ -118,10 +118,14 @@ describe("streamed snapshots and safe restore (real Mongo)", () => {
     const original = services.gdpr.replayFiles;
     services.gdpr.replayFiles = new ReplayFilesService({ games: db.games, client, bucket: "raw-test" });
     try {
+      const create = jest.spyOn(services.gdpr.backups, "create").mockRejectedValueOnce(new Error("backup upload failed"));
+      await expect(services.gdpr.restoreSnapshot("u1", saved.id)).rejects.toThrow("backup upload failed");
+      expect((await db.games.findOne({ gameId: "missing" })).replayFile.sha256).toBe(marker.sha256);
+      create.mockRestore();
       await services.gdpr.restoreSnapshot("u1", saved.id);
       expect((await db.games.findOne({ gameId: "present" })).replayFile.sha256).toBe(marker.sha256);
       expect((await db.games.findOne({ gameId: "missing" })).replayFile).toBeUndefined();
-      expect(client.send).toHaveBeenCalledTimes(2);
+      expect(client.send).toHaveBeenCalledTimes(4);
     } finally { services.gdpr.replayFiles = original; }
   });
   test("a live write lease and a destructive fence exclude each other on the same Mongo user row", async () => {

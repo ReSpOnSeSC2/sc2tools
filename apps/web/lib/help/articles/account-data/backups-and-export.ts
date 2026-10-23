@@ -29,7 +29,7 @@ const article: HelpArticle = {
     { type: "paragraph", text: "A Before action snapshot is saved automatically before deletion. In Settings → Backups & data, From and Through use your local time and include both chosen days. The confirmation dialog shows how many games will be deleted; an empty range cannot be confirmed. Re-sync from the desktop app afterwards to upload your replays again. [Step-by-step deletion guide](/help/deleting-game-history)." },
     {
       type: "paragraph",
-      text: "Snapshots are compressed files stored separately from the database. They can hold a large history without putting the entire backup into one database document. Your JSON export is a separate copy to keep, and cannot be uploaded as a restore point.",
+      text: "Snapshots work with large game histories and download as compressed files. Your JSON export is a separate copy to keep, and cannot be uploaded as a restore point.",
     },
     { type: "heading", text: "Types and retention", anchor: "retention" },
     { type: "table", head: ["Type", "When created", "Retention"], rows: [["Manual", "When you press Take a snapshot", "Newest 5"], ["Weekly", "Lazily on the first successful ingest of an ISO week, starting Monday in UTC", "Newest 2"], ["Before action", "Before a restore, history wipe or repair", "Newest 3"]] },
@@ -62,7 +62,7 @@ const article: HelpArticle = {
       title: "A restore replaces, it doesn't merge",
       text: "Check the preview before confirming. Covered data is replaced. A snapshot contains no heavy game details or replay binaries, so files already deleted need a desktop Re-sync from replays on your PC. Keep a download of any snapshot you need beyond its retention limit.",
     },
-    { type: "paragraph", text: "If backup storage is unavailable or an archive cannot be verified, restore does not change your current data. Stored replay markers are checked against uploaded files before being restored. For derived-data problems, try [Fixing wrong opponent counts](/help/repair-my-data)." },
+    { type: "paragraph", text: "If backup storage is unavailable or an archive cannot be verified, restore does not change your current data. Existing uploaded replays are checked before restore. For derived-data problems, try [Fixing wrong opponent counts](/help/repair-my-data)." },
     { type: "heading", text: "Export your data" },
     {
       type: "paragraph",

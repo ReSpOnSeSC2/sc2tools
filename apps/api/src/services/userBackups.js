@@ -26,6 +26,18 @@ function cleanGame(row) {
   game._customBuildRevision = randomUUID();
   return stampVersion(game, COLLECTIONS.GAMES);
 }
+/** Restore only approved literal fields, retaining account/security/setup data.
+ * @param {import('mongodb').Collection} users @param {string} userId @param {string} key @param {Record<string,any>|null} saved */
+async function restoreUserSettings(users, userId, key, saved) {
+  if (!saved) return;
+  if (key === "accountProfile") {
+    const fields = Object.fromEntries(PROFILE_KEYS.map((name) => [name, Object.hasOwn(saved.data, name) ? { $literal: saved.data[name] } : "$$REMOVE"]));
+    await users.updateOne({ userId }, [{ $set: { ...fields, profileUpdatedAt: new Date() } }]);
+  } else {
+    const fields = Object.fromEntries(PREFERENCE_KEYS.map((name) => [`preferences.${name}`, Object.hasOwn(saved.data.preferences || {}, name) ? { $literal: saved.data.preferences[name] } : "$$REMOVE"]));
+    await users.updateOne({ userId }, [{ $set: fields }]);
+  }
+}
 
 class UserBackupsService {
   /** @param {import('../db/connect').DbContext} db @param {{store: import('./userBackupsStore').UserBackupsStore|null, gdpr: import('./gdpr').GdprService, logger?: import('pino').Logger}} opts */
@@ -179,7 +191,11 @@ class UserBackupsService {
   }
   /** @param {string} userId @param {string} id */
   async preview(userId, id) {
-    const staged = await this.stage(userId, id);
+    // A preview creates temporary private rows. Register its archive read so
+    // account erasure cannot purge staging and then race a late preview flush.
+    const reader = await claimUserDataLease(this.db.users, userId);
+    let staged;
+    try { staged = await this.stage(userId, id); } finally { await reader.release(); }
     let fence;
     try {
       fence = await this.gdpr._acquireMutationFence(userId, "snapshot_preview");
@@ -204,7 +220,7 @@ class UserBackupsService {
         const byId = new Map(currentRows.map((row) => [row.gameId, row]));
         await Promise.all(page.map(async (saved) => {
           const current = byId.get(saved.gameId); const data = cleanGame(saved.data);
-          if (current?.replayFile && this.gdpr.replayFiles && await this.gdpr.replayFiles.verifyAvailableMarker(userId, saved.gameId, { ...current.replayFile, available: true })) data.replayFile = current.replayFile;
+          if (current?.replayFile && this.gdpr.replayFiles && await this.gdpr.replayFiles.verifyAvailableMarker(userId, saved.gameId, { ...current.replayFile, available: true }, { clearStale: false })) data.replayFile = current.replayFile;
           if (current?.playbackArtifact) data.playbackArtifact = current.playbackArtifact;
           await this.staging.updateOne({ _id: saved._id }, { $set: { data } });
         })); page = [];
@@ -227,22 +243,8 @@ class UserBackupsService {
       await this.db.macroJobs.deleteMany({ userId });
       for (const [dbKey, key] of RESTORABLE) {
         await fence.assert(); const collection = /** @type {any} */ (this.db)[dbKey]; if (!collection) continue;
-        if (key === "accountProfile") {
-          const saved = await this.staging.findOne({ operationId: staged.operationId, key });
-          if (saved) {
-            const fields = Object.fromEntries(PROFILE_KEYS.map((name) => [name, Object.hasOwn(saved.data, name) ? { $literal: saved.data[name] } : "$$REMOVE"]));
-            await this.db.users.updateOne({ userId }, [{ $set: { ...fields, profileUpdatedAt: new Date() } }]);
-          }
-          continue;
-        }
-        if (key === "preferences") {
-          const saved = await this.staging.findOne({ operationId: staged.operationId, key });
-          if (saved) {
-            // Restore ordinary settings field-by-field. Identity, roles,
-            // onboarding progress/goals and notification preferences survive.
-            const fields = Object.fromEntries(PREFERENCE_KEYS.map((name) => [`preferences.${name}`, Object.hasOwn(saved.data.preferences || {}, name) ? { $literal: saved.data.preferences[name] } : "$$REMOVE"]));
-            await this.db.users.updateOne({ userId }, [{ $set: fields }]);
-          }
+        if (dbKey === "users") {
+          await restoreUserSettings(this.db.users, userId, key, await this.staging.findOne({ operationId: staged.operationId, key }));
           continue;
         }
         await collection.deleteMany({ userId });
