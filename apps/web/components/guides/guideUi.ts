@@ -117,3 +117,8 @@ export function eraLabel(era: GuideEra, _patch?: string): string {
 export function unitDisplayName(unit: string): string {
   return unit.replace(/([a-z])([A-Z])/g, "$1 $2");
 }
+
+
+export function verdictLabel(verdict: GuideVerdict): string {
+  return verdict === "win" ? "Your race is favoured" : verdict === "loss" ? "Your race is behind" : "Too close to call";
+}

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import { ArrowRight, Radio, TrendingUp } from "lucide-react";
 import { useToastOptional } from "@/components/ui/Toast";
 import { gaEvent } from "@/lib/analytics/gtag";
@@ -31,7 +32,7 @@ const CTA_EVENT = "guide_cta_click";
 /** The settings page opens a tab from `?tab=` (it never reads the URL hash). */
 const OVERLAY_SETTINGS_HREF = "/settings?tab=overlay";
 
-type CtaName = "track" | "practice" | "matchup";
+type CtaName = "track" | "practice" | "matchup" | "record" | "my-builds" | "upload";
 type ArmStatus = "idle" | "armed" | "failed";
 
 export interface GuideCtasProps {
@@ -59,6 +60,8 @@ async function armTarget(matchup: GuideMatchup, target: GhostTarget): Promise<bo
 }
 
 export function GuideCtas({ matchup, buildSlug, matchupPath, ghostTarget }: GuideCtasProps) {
+  const { isLoaded, isSignedIn } = useAuth();
+  const signedIn = isLoaded && isSignedIn;
   const toastApi = useToastOptional();
   const [status, setStatus] = useState<ArmStatus>("idle");
   const track = (cta: CtaName) => gaEvent(CTA_EVENT, { cta, matchup, build: buildSlug });
@@ -80,10 +83,17 @@ export function GuideCtas({ matchup, buildSlug, matchupPath, ghostTarget }: Guid
   return (
     <div className="space-y-2">
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <Link href="/sign-up" onClick={() => track("track")} className={GUIDE_PRIMARY_ACTION_CLASS}>
+        <Link href={signedIn ? "#your-record" : "/sign-up"} onClick={(event) => {
+          track(signedIn ? "record" : "track");
+          if (signedIn) {
+            const target = document.getElementById("your-record");
+            if (target) { event.preventDefault(); target.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" }); }
+          }
+        }} className={GUIDE_PRIMARY_ACTION_CLASS}>
           <TrendingUp className="h-4 w-4" aria-hidden />
-          Track your win rate with this build — free
+          {signedIn ? "See your record with this build" : "Track your win rate with this build — free"}
         </Link>
+        {signedIn ? <Link href="/app/builds" className={GUIDE_SECONDARY_ACTION_CLASS} onClick={() => track("my-builds")}>Open my builds</Link> : null}
         {ghostTarget ? (
           <button type="button" onClick={onPractice} className={GUIDE_SECONDARY_ACTION_CLASS}>
             <Radio className="h-4 w-4" aria-hidden />

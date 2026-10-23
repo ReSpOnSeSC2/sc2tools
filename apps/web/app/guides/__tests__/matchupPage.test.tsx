@@ -1,10 +1,12 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ fetchGuideMatchup: vi.fn() }));
 
 vi.mock("@/lib/guides/api", () => ({ fetchGuideMatchup: mocks.fetchGuideMatchup }));
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+  usePathname: () => "/guides/pvz/stargate-into-glaives",
   notFound: () => {
     throw Object.assign(new Error("NEXT_NOT_FOUND"), { digest: "NEXT_NOT_FOUND" });
   },
@@ -61,7 +63,7 @@ describe("/guides/[matchup]", () => {
     mocks.fetchGuideMatchup.mockResolvedValue(ok(FIXTURE_MATCHUP));
     render(await MatchupGuidePage(props()));
     expect(screen.getByRole("heading", { level: 1, name: "PvZ build orders" })).toBeTruthy();
-    const table = screen.getByRole("table", { name: /PvZ openers/ });
+    const table = screen.getByRole("table", { name: /^Showing .* openers vs/ });
     const rows = within(table).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(FIXTURE_MATCHUP.openers.length);
     expect(within(table).getAllByTestId("ci-whisker")).toHaveLength(FIXTURE_MATCHUP.openers.length);
@@ -81,24 +83,47 @@ describe("/guides/[matchup]", () => {
 });
 
 describe("/guides/[matchup] filters", () => {
+  it("describes an empty MMR filter and clears only the band when showing all opponents", async () => {
+    mocks.fetchGuideMatchup.mockResolvedValue(ok({ ...FIXTURE_MATCHUP, era: "before", band: { type: "mmr", value: 4500, label: "4500–5000" }, openers: [] }));
+    render(await MatchupGuidePage(props({ band: "mmr:4500", era: "before" })));
+    expect(screen.getByText(/Showing 0 openers vs 4500–5000 MMR opponents/).textContent).toContain("8 starting workers (patch 5.0.16)");
+    expect(screen.getByText("No opener has enough games vs 4500–5000 MMR opponents yet.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Show all opponents" }).getAttribute("href")).toBe("/guides/pvz?era=before");
+    expect(screen.getByRole("link", { name: "Back to 12-worker openers" }).getAttribute("href")).toBe("/guides/pvz");
+    expect(screen.getByText("Guide pages cover the 12-worker game, so openers aren't linked here.")).toBeTruthy();
+    const matchups = screen.getByRole("navigation", { name: "Matchups" });
+    expect(matchups.querySelector('[aria-current="page"]')?.getAttribute("href")).toBe("/guides/pvz?era=before");
+    expect(within(matchups).getAllByRole("link").every((link) => link.getAttribute("href")?.endsWith("?era=before"))).toBe(true);
+  });
+
+  it("shows the league scope in the summary and omits an other-side action for mirrors", async () => {
+    mocks.fetchGuideMatchup.mockResolvedValue(ok({ ...FIXTURE_MATCHUP_BAND, matchup: "PvP", slug: "pvp" }));
+    render(await MatchupGuidePage(props({ band: "league:4" })));
+    expect(screen.getByText(`Showing ${FIXTURE_MATCHUP_BAND.openers.length} openers vs Diamond opponents · 12 starting workers`)).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /See it from/ })).toBeNull();
+  });
+
   it("offers band and era links, the counters list and the latest videos", async () => {
     mocks.fetchGuideMatchup.mockResolvedValue(ok(FIXTURE_MATCHUP_BAND));
     render(await MatchupGuidePage(props({ band: "league:4" })));
     const nav = screen.getByRole("navigation", { name: "Filter openers" });
-    expect(within(nav).getByRole("link", { name: "All" }).getAttribute("href")).toBe("/guides/pvz");
+    expect(within(nav).getByRole("link", { name: "All opponents" }).getAttribute("href")).toBe("/guides/pvz");
     const diamond = within(nav).getByRole("link", { name: "Diamond" });
     expect(diamond.getAttribute("href")).toBe("/guides/pvz?band=league:4");
     expect(diamond.getAttribute("aria-current")).toBe("page");
+    fireEvent.click(within(nav).getByRole("button", { name: "By MMR" }));
     expect(within(nav).getByRole("link", { name: "4500–5000 MMR" }).getAttribute("href")).toBe(
       "/guides/pvz?band=mmr:4500",
     );
     const twelveWorkers = within(nav).getByRole("link", { name: "12 workers" });
     expect(twelveWorkers.getAttribute("href")).toBe("/guides/pvz?band=league:4");
     expect(twelveWorkers.getAttribute("aria-current")).toBe("page");
-    expect(within(nav).getByRole("link", { name: "8 workers · 5.0.16" }).getAttribute("href")).toBe(
+    expect(within(nav).getByRole("link", { name: "8 workers (patch 5.0.16)" }).getAttribute("href")).toBe(
       "/guides/pvz?band=league:4&era=before",
     );
-    expect(within(nav).getByText("Game")).toBeTruthy();
+    expect(within(nav).queryByText("Game")).toBeNull();
+    expect(screen.getByRole("navigation", { name: "Matchups" }).querySelectorAll("a")).toHaveLength(9);
+    expect(screen.getByRole("link", { name: "See it from the Zerg side → ZvP" }).getAttribute("href")).toBe("/guides/zvp");
     expect(screen.queryByRole("columnheader", { name: "Played in" })).toBeNull();
     expect(screen.getByRole("link", { name: "How to beat 12 Pool" }).getAttribute("href")).toBe(
       "/guides/pvz/counter/12-pool",
@@ -132,7 +157,7 @@ describe("/guides/[matchup] filters", () => {
     mocks.fetchGuideMatchup.mockResolvedValue(ok(before));
     render(await MatchupGuidePage(props({ era: "before" })));
     expect(mocks.fetchGuideMatchup).toHaveBeenCalledWith("pvz", { band: null, era: "before" });
-    const table = screen.getByRole("table", { name: /PvZ openers/ });
+    const table = screen.getByRole("table", { name: /^Showing .* openers vs/ });
     const published = FIXTURE_MATCHUP.openers.find((row) => row.published);
     expect(published).toBeTruthy();
     expect(within(table).getByText(published?.name ?? "")).toBeTruthy();
@@ -145,7 +170,7 @@ describe("/guides/[matchup] filters", () => {
   it("keeps guide links and the unpublished hint in the current 12-worker view", async () => {
     mocks.fetchGuideMatchup.mockResolvedValue(ok(FIXTURE_MATCHUP));
     render(await MatchupGuidePage(props()));
-    const table = screen.getByRole("table", { name: /PvZ openers/ });
+    const table = screen.getByRole("table", { name: /^Showing .* openers vs/ });
     expect(within(table).getAllByRole("link")).toHaveLength(
       FIXTURE_MATCHUP.openers.filter((row) => row.published).length,
     );
@@ -224,3 +249,5 @@ describe("/guides/[matchup]/counter", () => {
     await expect(CounterListPage(params)).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });
+
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false }) }));

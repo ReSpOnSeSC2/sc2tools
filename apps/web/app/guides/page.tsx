@@ -38,6 +38,6 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function GuidesHubPage() {
   const result = await loadIndex();
-  if (result.kind === "unavailable") return <GuideUnavailable title="Build guides are temporarily unavailable" />;
+  if (result.kind === "unavailable") return <GuideUnavailable variant="hub" title="Build guides are temporarily unavailable" />;
   return <GuideHub payload={result.data} />;
 }

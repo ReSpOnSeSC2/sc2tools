@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
+import { usePathname } from "next/navigation";
+import { guideSignInHref } from "./guideAuthLinks";
 import { useApi } from "@/lib/clientApi";
 import { fmtClock, fmtCount, fmtPct } from "@/lib/guides/format";
 import type { GuideMePayload, GuideMilestoneEvent } from "@/lib/guides/types";
@@ -78,7 +80,7 @@ function SignedInComparison({
   if (data.games === 0) {
     return (
       <p className={BOX_CLASS}>
-        You haven&apos;t played {buildName} with 12 starting workers yet — upload a few games to compare.
+        You haven&apos;t played {buildName} with 12 starting workers yet — <Link href="/download" className={GUIDE_LINK_CLASS}>upload a few games</Link> to compare.
       </p>
     );
   }
@@ -92,9 +94,10 @@ function SignedInComparison({
 
 /** Sign-in prompt; without community timings there is only the win rate to compare. */
 function SignInPrompt({ hasTimings }: { hasTimings: boolean }) {
+  const pathname = usePathname();
   return (
     <p className={BOX_CLASS}>
-      <Link href="/sign-in" className={GUIDE_LINK_CLASS}>
+      <Link href={guideSignInHref(pathname)} className={GUIDE_LINK_CLASS}>
         {hasTimings ? "Sign in to compare your timings" : "Sign in to compare your win rate"}
       </Link>{" "}
       {hasTimings ? "with the community medians." : "with this build to the community's."}

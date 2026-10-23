@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Badge } from "@/components/ui/Badge";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Section } from "@/components/ui/Section";
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
@@ -10,7 +11,7 @@ import { GuideVideoSection } from "@/components/guides/GuideVideoSection";
 import { WinRateCell } from "@/components/guides/WinRateCell";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { breadcrumbJsonLd, embeddedVideoJsonLd, type GuideCrumb } from "@/components/guides/guideSeo";
-import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS, myRaceWord, oppRaceWord } from "@/components/guides/guideUi";
+import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS, myRaceWord, oppRaceWord, cellVerdict, verdictLabel } from "@/components/guides/guideUi";
 import { BUILD_DEFINITIONS } from "@/lib/build-definitions";
 import { fmtCount, fmtCountNoun, fmtGuideDate, fmtPct } from "@/lib/guides/format";
 import { buildCounterIntro } from "@/lib/guides/guideCopy";
@@ -60,7 +61,7 @@ function OpenerCard({ opener, rank, matchupSlug }: { opener: GuideCounterOpener;
           <WinRateCell winRate={opener.winRate} ci={opener.ci} />
         </div>
         <p className="text-micro tabular-nums text-text-dim">
-          n = {fmtCount(opener.games)} games from {fmtCountNoun(opener.users, "player")}
+          Based on {fmtCount(opener.games)} games from {fmtCountNoun(opener.users, "player")}
         </p>
         {description ? <p className="text-caption text-text-muted">{description}</p> : null}
       </div>
@@ -75,12 +76,11 @@ function PublishedCounter({ payload }: { payload: GuideCounterPublished }) {
       <div className="space-y-3">
         <PageHeader eyebrow={`${payload.matchup} counter guide`} title={`How to beat ${payload.name}`} description={payload.description} />
         <p className="font-display text-h3 font-bold text-text" data-testid="guide-headline">
-          {myRaceWord(payload.matchup)} win rate against it: {fmtPct(overall.winRate)} over{" "}
-          {fmtCount(overall.games)} games
+          {myRaceWord(payload.matchup)} win rate against it: {fmtPct(overall.winRate)} <Badge variant="neutral">{verdictLabel(cellVerdict(overall))}</Badge>
         </p>
         <p className="text-caption tabular-nums text-text-dim">
-          n = {fmtCount(overall.games)} games from {fmtCountNoun(overall.users, "player")}
-          {payload.computedAt ? ` · Stats updated ${fmtGuideDate(payload.computedAt)}` : ""}
+          Based on {fmtCount(overall.games)} games from {fmtCountNoun(overall.users, "player")}
+          {payload.computedAt ? ` · updated ${fmtGuideDate(payload.computedAt)}` : ""}
         </p>
         <GuideCopyText lines={buildCounterIntro(payload)} />
       </div>

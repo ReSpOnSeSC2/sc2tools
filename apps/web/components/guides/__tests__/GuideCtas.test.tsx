@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   gaEvent: vi.fn(),
+  auth: { isLoaded: true, isSignedIn: false },
   arm: vi.fn(() => true),
 }));
 
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => mocks.auth }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: mocks.gaEvent }));
 vi.mock("@/lib/ghostBuild", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/ghostBuild")>();
@@ -27,6 +29,7 @@ beforeEach(() => document.addEventListener("click", preventNavigation, true));
 afterEach(() => {
   document.removeEventListener("click", preventNavigation, true);
   cleanup();
+  mocks.auth = { isLoaded: true, isSignedIn: false };
   mocks.gaEvent.mockReset();
   mocks.arm.mockReset();
   mocks.arm.mockReturnValue(true);
@@ -41,6 +44,19 @@ function renderCtas(ghostTarget = TARGET) {
 }
 
 describe("GuideCtas", () => {
+  it("points signed-in players to their record and builds", () => {
+    mocks.auth = { isLoaded: true, isSignedIn: true };
+    renderCtas();
+    expect(screen.getByRole("link", { name: "See your record with this build" }).getAttribute("href")).toBe("#your-record");
+    expect(screen.getByRole("link", { name: "Open my builds" }).getAttribute("href")).toBe("/app/builds");
+    expect(screen.queryByRole("link", { name: /Track your win rate/ })).toBeNull();
+  });
+
+  it("preserves the visitor CTA while authentication loads", () => {
+    mocks.auth = { isLoaded: false, isSignedIn: false };
+    renderCtas();
+    expect(screen.getByRole("link", { name: /Track your win rate/ }).getAttribute("href")).toBe("/sign-up");
+  });
   it("links sign-up and the matchup page and fires gaEvent for each", () => {
     renderCtas();
     const track = screen.getByRole("link", { name: /Track your win rate with this build — free/ });
