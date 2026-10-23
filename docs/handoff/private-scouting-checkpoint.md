@@ -46,3 +46,21 @@ native install without actual platform verification.
 Frozen chrome #684 exact head `11028908` now has all GitHub web CI green (6,317
 passed, 1 skipped). Latest Vercel failure is external build-rate-limit; prior
 product-identical deployment was green. Root owns that integration/quota handling.
+
+## Transport checkpoint
+
+The API client now exposes the encoded, fail-fast cached brief read and private
+opponent-note write (read-aloud always false). SocketClient accepts scouting briefs,
+retains the callback across repaired device tokens, ignores malformed messages and
+logs only an exception class if the callback fails. The local AgentState scouting
+visibility flag defaults on and round-trips off; the cloud three-boolean check-in
+preference contract is unchanged. Existing global Enable check-ins will continue
+to gate automatic cards.
+
+Affected API-client/socket/state/model regression suites: **150 passed** outside
+the sandbox. The first sandboxed broader run stalled and was stopped using only
+its verified task-owned process IDs; the direct new transport tests also passed
+9/9. No other agent's processes or worktrees were touched.
+
+The controller and Qt widgets have not yet been wired to these APIs. Keep that
+work explicitly incomplete until actor/socket/fallback/real offscreen tests pass.
