@@ -5,6 +5,8 @@ const mounts = vi.hoisted(() => ({ scouting: vi.fn(), randomizer: vi.fn() }));
 
 type SocketHandler = (...args: unknown[]) => void;
 class FakeSocket {
+  connect() {}
+  off() {}
   handlers = new Map<string, SocketHandler>();
   on(event: string, handler: SocketHandler) { this.handlers.set(event, handler); }
   emit() {}

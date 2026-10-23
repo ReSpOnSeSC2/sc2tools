@@ -53,6 +53,7 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
         available: bool,
         clock: Callable[[], float] = time.monotonic,
         parent: Optional[QtWidgets.QWidget] = None,
+        on_help: Optional[Callable[[], None]] = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("card")
@@ -69,7 +70,13 @@ class CheckinSettingsGroup(QtWidgets.QFrame):
 
         title = QtWidgets.QLabel("Build check-in")
         title.setObjectName("h2")
-        layout.addWidget(title)
+        title_row = QtWidgets.QHBoxLayout()
+        title_row.addWidget(title)
+        if on_help is not None:
+            from .help_links import help_button
+            title_row.addWidget(help_button(QtWidgets, "Build check-in", on_help))
+        title_row.addStretch(1)
+        layout.addLayout(title_row)
         intro = QtWidgets.QLabel(INTRO)
         intro.setObjectName("muted")
         intro.setWordWrap(True)
