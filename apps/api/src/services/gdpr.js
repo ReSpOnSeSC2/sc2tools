@@ -3,6 +3,33 @@
 const { randomUUID } = require("crypto");
 const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
+const { purgeTokenData, scrubCommunityVotes } = require("./gdprOwnedData");
+const { dataInventory } = require("./dataInventory");
+
+// Every registered collection needs an explicit disposition. Shared/public
+// records use dedicated scrubbers; this map is audited by a coverage test and
+// deliberately has no catch-all for future collections.
+const GDPR_CLASSIFICATION = Object.freeze({
+  USERS: "user_scoped", PROFILES: "user_scoped", OPPONENTS: "user_scoped", OPPONENT_NOTES: "user_scoped",
+  GAMES: "user_scoped", GAME_DETAILS: "user_scoped", CUSTOM_BUILDS: "user_scoped", CUSTOM_BUILD_JOBS: "purge_only",
+  DEVICE_PAIRINGS: "ttl_ephemeral", DEVICE_TOKENS: "user_scoped", OVERLAY_TOKENS: "user_scoped",
+  MULTICHAT_STUDIO: "overlay_token_scoped", MULTICHAT_SOUNDS: "purge_only", MULTICHAT_ENGAGEMENT_EVENTS: "overlay_token_scoped",
+  MULTICHAT_VIEWERS: "overlay_token_scoped", MULTICHAT_PREDICTIONS: "overlay_token_scoped", MULTICHAT_CLIP_MOMENTS: "overlay_token_scoped",
+  PLATFORM_CONNECTIONS: "purge_only", PUBLIC_YOUTUBE_ARCHIVES: "global", PLATFORM_OAUTH_STATES: "ttl_ephemeral",
+  YOUTUBE_CREATE_OPERATIONS: "purge_only", PLATFORM_WEBHOOK_RECEIPTS: "ttl_ephemeral", PLATFORM_EVENTS: "purge_only",
+  IMPORT_JOBS: "user_scoped", MACRO_JOBS: "user_scoped", AGENT_RELEASES: "global", COMMUNITY_BUILDS: "purge_only",
+  COMMUNITY_REPORTS: "purge_only", USER_BACKUPS: "user_scoped", BACKUP_RESTORE_STAGING: "ttl_ephemeral",
+  PENDING_IDENTITY_DELETIONS: "ttl_ephemeral", ARCADE_LEADERBOARD: "purge_only", ADMIN_EVENTS: "purge_only",
+  SUPPORT_EMAIL_SYNC: "global", SITE_PRESENCE: "ttl_ephemeral", COACHING: "user_scoped",
+  PULSE_ACCOUNTS: "global", PULSE_CHARACTER_LINKS: "global", PLAYER_CHANNELS: "purge_only", PLAYER_IDENTITIES: "global",
+  PLAYER_IDENTITY_SUBMISSIONS: "purge_only", PLAYER_IDENTITY_DIRECTORY: "global", REVIEW_REQUESTS: "user_scoped",
+  REVIEW_COMMENTS: "user_scoped", REVIEW_KARMA_EVENTS: "purge_only", REVIEW_BLOCKS: "purge_only", NOTIFICATIONS: "purge_only",
+  BROWSER_INGEST_DAILY: "ttl_ephemeral", GUIDE_SAMPLES: "purge_only", GUIDE_STATS: "global", GUIDE_NOTES: "global",
+  JOB_RUNS: "global", ADMIN_AUDIT: "purge_only",
+  GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
+  // The independently stacked What's New feature adds this global config.
+  ...(Object.hasOwn(COLLECTIONS, "SITE_CONFIG") ? { SITE_CONFIG: "global" } : {}),
+});
 
 const GDPR_MUTATION_LEASE_MS = 15 * 60 * 1000;
 const GDPR_MUTATION_RENEW_MS = 60 * 1000;
@@ -18,16 +45,12 @@ function wait(ms) {
  *
  *  1. Export every per-user document we hold as a single JSON archive.
  *  2. Delete every per-user document, hard, on user request.
- *  3. Manual snapshots — point-in-time backups the user can take before
- *     a migration. We store these as a JSON blob inside the existing
- *     `import_jobs`-style collection (small footprint, gives us a
- *     human-restorable record without an extra Atlas snapshot).
+ *  3. Private streamed snapshots, delegated to UserBackupsService.
  *
  * The export/delete code lives in one place so a future schema change
  * can't accidentally leak old fields or leave behind orphan rows. Every
  * collection that holds user data must be listed in
- * USER_SCOPED_COLLECTIONS — that single source of truth gates both
- * paths.
+ * GDPR_CLASSIFICATION; dedicated scrubbers handle shared and token-owned data.
  */
 
 const USER_SCOPED_COLLECTIONS = [
@@ -77,6 +100,7 @@ const PURGE_ONLY_COLLECTIONS = [
   // Build check-in live records (TTL): in-flight game state that a restore
   // must never replay. Bound answers already live on games.buildIntent.
   ["buildIntentLive", "userId"],
+  ["multichatSounds", "userId"],
 ];
 
 class GdprService {
@@ -91,6 +115,10 @@ class GdprService {
    *   customBuilds?: import('./types').CustomBuildsService,
    *   reviews?: import('./reviews').ReviewsService | null,
    *   guideSamples?: import('./guideSamples').GuideSamplesService|null,
+   *   identityDeletions?: import('./identityDeletions').IdentityDeletionsService|null,
+   *   overlayTokens?: import('./types').OverlayTokensService|null,
+   *   io?: import('socket.io').Server,
+   *   siteStats?: import('./siteStats').SiteStatsService,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
    *   chain a pulse-character-id backfill so the admin "Rebuild
@@ -100,6 +128,12 @@ class GdprService {
    */
   constructor(db, opts = {}) {
     this.db = db;
+    /** @type {import("./userBackups").UserBackupsService|null} */
+    this.backups = null;
+    this.identityDeletions = opts.identityDeletions || null;
+    this.overlayTokens = opts.overlayTokens || null;
+    this.io = opts.io || null;
+    this.siteStats = opts.siteStats || null;
     this.opponents = (opts && opts.opponents) || null;
     this.logger = (opts && opts.logger) || null;
     // GameDetailsService — the store-aware deleter for the heavy
@@ -144,6 +178,7 @@ class GdprService {
         { userId }, { projection: { _id: 0, reviewedBy: 0, evidenceMaxId: 0 } },
       ).toArray();
     }
+    if (this.db.multichatSounds) data.multichatSounds = await this.db.multichatSounds.find({ userId }, { projection: { _id: 0, data: 0 } }).toArray();
     // Coaching uses a shared Locker document and relationship-specific
     // assignment rows instead of a simple `{ userId }` collection. Export
     // only the caller's portion of that shared state.
@@ -222,6 +257,9 @@ class GdprService {
     if (this.reviews) {
       Object.assign(data, await this.reviews.exportForUser(userId));
     }
+    if (this.db.adminAudit) data.adminAudit = (await this.db.adminAudit.find(
+      { $or: [{ actorUserId: userId }, { target: userId }] }, { projection: { _id: 0 } },
+    ).toArray()).map((row) => ({ ...row, actorUserId: row.actorUserId === userId ? userId : null, target: row.target === userId ? userId : null }));
     return {
       userId,
       exportedAt: new Date().toISOString(),
@@ -229,6 +267,9 @@ class GdprService {
       data,
     };
   }
+
+  /** @param {string} userId */
+  async inventory(userId) { return dataInventory(this.db, userId); }
 
   /**
    * Coach's notes an admin wrote stay on the guides (published content);
@@ -289,9 +330,10 @@ class GdprService {
    * record itself. Returns counts so the caller can audit-log them.
    *
    * @param {string} userId
+   * @param {{clerkUserId?:string, identityAlreadyDeleted?:boolean}} [opts]
    * @returns {Promise<Record<string, number>>}
    */
-  async deleteAll(userId) {
+  async deleteAll(userId, opts = {}) {
     /** @type {Record<string, number>} */
     const counts = {};
 
@@ -306,6 +348,7 @@ class GdprService {
     try {
       await gdprFence.assert();
       await this._drainOpponentBuildOrderWriters(userId);
+      if (this.backups) await this.backups.assertCleanupAvailable(userId);
 
     if (this.customBuilds) {
       await this.customBuilds.cancelUserReclassifications(userId);
@@ -325,6 +368,8 @@ class GdprService {
     }
 
     addDeletionCounts(counts, await this._deleteCoachingData(userId, gdprFence));
+    addDeletionCounts(counts, await purgeTokenData(this.db, userId, gdprFence, { overlayTokens: this.overlayTokens, io: this.io }));
+    counts.communityVotesRemoved = await scrubCommunityVotes(this.db, userId);
 
     await gdprFence.assert();
     for (const [key] of USER_SCOPED_COLLECTIONS) {
@@ -369,24 +414,30 @@ class GdprService {
     // Manual snapshots hold a FULL export of the user's data — the
     // single most sensitive thing to leave behind.
     const backups = this.db.db.collection("user_backups");
+    if (this.backups?.store) await this.backups.store.deleteAllForUser(userId);
+    if (this.backups) await this.backups.staging.deleteMany({ userId });
     const backupsRes = await backups.deleteMany({ userId });
     counts.userBackups = backupsRes.deletedCount || 0;
 
-    // Admin events keep their (now-orphaned, random) userId for
-    // aggregate counts, but the PII riding on signup/message payloads
-    // (email, clerk id) is scrubbed in place.
+    // Keep aggregate activity rows but remove account identifiers and private
+    // report contents, including the admin reply history.
     if (this.db.adminEvents) {
       /** @type {Record<string, string>[]} */
       const identityFilters = [{ "payload.userId": userId }];
       if (user && user.clerkUserId) {
         identityFilters.push({ "payload.clerkUserId": user.clerkUserId });
       }
+      // Do this before clearing the identity fields used to select the rows.
+      await this.db.adminEvents.updateMany({ type: "user_message", $or: identityFilters }, {
+        $set: { "payload.subject": "[deleted user]", "payload.message": "[deleted user]", "payload.context": null, report: { status: "closed", revision: 0, updates: [] } },
+      });
       const scrubRes = await this.db.adminEvents.updateMany(
         { $or: identityFilters },
         {
           $set: {
             "payload.email": null,
             "payload.clerkUserId": null,
+            "payload.userId": null,
             anonymizedAt: new Date(),
           },
         },
@@ -421,11 +472,18 @@ class GdprService {
     // coaching surface immediately before removing the account row.
     addDeletionCounts(counts, await this._deleteCoachingData(userId, gdprFence));
     await gdprFence.assert();
+    const clerkUserId = opts.clerkUserId || user?.clerkUserId;
+    if (this.siteStats && clerkUserId) counts.sitePresence = await this.siteStats.deleteForClerkUser(clerkUserId);
+    if (this.identityDeletions && clerkUserId) {
+      if (opts.identityAlreadyDeleted) await this.identityDeletions.acknowledge(clerkUserId);
+      else await this.identityDeletions.recordIntent(userId, clerkUserId);
+    }
     clearInterval(gdprFence.timer);
     const userRes = await this.db.users.deleteOne({
       userId,
       "_gdprMutation.id": gdprFence.id,
     });
+    if (!userRes.deletedCount && await this.db.users.findOne({ userId }, { projection: { _id: 1 } })) throw new Error("gdpr_operation_lease_lost");
     counts.users = userRes.deletedCount || 0;
     // Retained operational history cannot keep an erased user's identity.
     // Compare literal IDs; the audit payload contains counters only.
@@ -436,11 +494,26 @@ class GdprService {
         target: { $cond: [{ $eq: ["$target", { $literal: userId }] }, null, "$target"] },
       } }],
     );
+    this.io?.in(`user:${userId}`).disconnectSockets(true);
+    if (this.identityDeletions && clerkUserId && !opts.identityAlreadyDeleted) {
+      await this.identityDeletions.activate(clerkUserId);
+      counts.identityDeletionPending = await this.identityDeletions.tryDelete(clerkUserId) ? 0 : 1;
+    }
     return counts;
     } catch (err) {
       await this._releaseMutationFence(userId, gdprFence);
       throw err;
     }
+  }
+  /** The provider webhook and API share the same cleanup. A completed identity
+   * retains only its keyed guard, so a duplicate delivery cannot recreate it.
+   * @param {string} clerkUserId */
+  async deleteForClerkUser(clerkUserId) {
+    const user = await this.db.users.findOne({ clerkUserId }, { projection: { userId: 1 } });
+    const pending = this.identityDeletions ? await this.identityDeletions.lookup(clerkUserId) : null;
+    const userId = user?.userId || pending?.userId;
+    if (!userId) { if (this.identityDeletions) await this.identityDeletions.acknowledge(clerkUserId); return { users: 0 }; }
+    return this.deleteAll(userId, { clerkUserId, identityAlreadyDeleted: true });
   }
 
   /**
@@ -711,6 +784,8 @@ class GdprService {
     try {
       await gdprFence.assert();
       await this._drainOpponentBuildOrderWriters(userId);
+      if (this.customBuilds) await this.customBuilds.cancelUserReclassifications(userId);
+      if (this.backups) await this.backups.create(userId, { type: "pre_action", label: "Before history deletion", assert: gdprFence.assert });
     const since = opts.since instanceof Date && !Number.isNaN(opts.since.getTime())
       ? opts.since
       : null;
@@ -721,9 +796,6 @@ class GdprService {
     /** @type {Record<string, any>} */
     const filter = this._gamesWipeFilter(userId, opts);
 
-    if (this.customBuilds) {
-      await this.customBuilds.cancelUserReclassifications(userId);
-    }
 
     await this._assertReplayCleanupAvailable(filter);
 
@@ -1081,169 +1153,33 @@ class GdprService {
     return { droppedRows, pulseBackfill };
   }
 
-  /**
-   * Take a manual snapshot. We store the user's restorable, directly scoped
-   * collections as a single document. Shared coaching records are deliberately
-   * excluded: restoring one party must never overwrite a student's consent or
-   * resurrect a coach's assignment history, and snapshots must not retain the
-   * other party's profile after account erasure.
-   * in a "user_backups"-style collection scoped to the user — for
-   * SC2-Tools volumes (a few hundred MB at most), Mongo handles this
-   * fine, and it keeps GDPR export & restore symmetric.
-   *
-   * @param {string} userId
-   * @returns {Promise<{id: string, createdAt: Date, sizeBytes: number}>}
-   */
+  /** @param {string} userId */
   async snapshot(userId) {
-    const exportData = await this.export(userId, { includeSharedCoaching: false });
-    const json = JSON.stringify(exportData);
-    const sizeBytes = Buffer.byteLength(json, "utf8");
-    const id = `bk_${Date.now()}_${Math.floor(Math.random() * 1e6)
-      .toString(36)
-      .padStart(4, "0")}`;
-    const doc = {
-      id,
-      userId,
-      createdAt: new Date(),
-      sizeBytes,
-      type: /** @type {const} */ ("manual"),
-      payload: exportData,
-    };
-    const coll = this.db.db.collection("user_backups");
-    await coll.insertOne(doc);
-    return { id, createdAt: doc.createdAt, sizeBytes };
-  }
-
-  /**
-   * @param {string} userId
-   * @returns {Promise<{items: Array<{id: string, createdAt: Date, sizeBytes: number, type: string}>}>}
-   */
-  async listSnapshots(userId) {
-    const coll = this.db.db.collection("user_backups");
-    const items =
-      /** @type {Array<{id: string, createdAt: Date, sizeBytes: number, type: string}>} */ (
-        /** @type {unknown} */ (
-          await coll
-            .find(
-              { userId },
-              { projection: { _id: 0, id: 1, createdAt: 1, sizeBytes: 1, type: 1 } },
-            )
-            .sort({ createdAt: -1 })
-            .toArray()
-        )
-      );
-    return { items };
-  }
-
-  /**
-   * Restore from a snapshot — clear current per-user state, then re-insert
-   * everything from the snapshot. Atomic insofar as Mongo's batched ops
-   * are; we accept the trade-off because the alternative (transactions)
-   * forces a replica set on the dev Atlas tier.
-   *
-   * @param {string} userId
-   * @param {string} snapshotId
-   */
-  async restoreSnapshot(userId, snapshotId) {
-    const coll = this.db.db.collection("user_backups");
-    const snap = await coll.findOne({ userId, id: snapshotId });
-    if (!snap) {
-      const err = new Error("snapshot_not_found");
-      /** @type {any} */ (err).status = 404;
-      throw err;
-    }
-    const gdprFence = await this._acquireMutationFence(userId, "restore");
+    if (!this.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+    const fence = await this._acquireMutationFence(userId, "snapshot");
     try {
-      await gdprFence.assert();
       await this._drainOpponentBuildOrderWriters(userId);
-    if (this.customBuilds) {
-      await this.customBuilds.cancelUserReclassifications(userId);
+      if (this.customBuilds) await this.customBuilds.cancelUserReclassifications(userId);
+      return await this.backups.create(userId, { assert: fence.assert });
     }
-    const snapshotGames = /** @type {Array<Record<string, any>>} */ (
-      Array.isArray(snap.payload?.data?.games) ? snap.payload.data.games : []
-    );
-    const snapshotHasReplayMarkers = snapshotGames.some(
-      (game) => game && (
-        (game.replayFile && game.replayFile.storedAt)
-        || (game.replayUpload && game.replayUpload.uploadId)
-      ),
-    );
-    await this._assertReplayCleanupAvailable(
-      { userId },
-      snapshotHasReplayMarkers,
-    );
-    // Heavy detail blobs are not embedded in manual snapshot JSON. Purge the
-    // active store before restoring slim game rows so current R2/Mongo detail
-    // data cannot survive the restore and attach to a historical gameId.
-    await gdprFence.assert();
-    if (this.gameDetails) {
-      await this.gameDetails.deleteAllForUser(userId);
-      await gdprFence.assert();
-    } else if (this.db.gameDetails) {
-      await this.db.gameDetails.deleteMany({ userId });
-    }
-    // Replay binaries are intentionally not embedded in JSON snapshots.
-    // Remove current objects before clearing their Mongo ownership rows, so
-    // any object-store failure aborts before historical rows are inserted.
-    if (this.replayFiles) {
-      await gdprFence.assert();
-      await this.replayFiles.deleteAllForUser(userId);
-      if (this.playbackArtifacts) await this.playbackArtifacts.deleteAllForUser(userId);
-      await gdprFence.assert();
-    }
-    // Clear current data (NOT the user record — the user keeps their id).
-    await gdprFence.assert();
-    for (const [key] of USER_SCOPED_COLLECTIONS) {
-      await gdprFence.assert();
-      const c = /** @type {any} */ (this.db)[key];
-      if (c) await c.deleteMany({ userId });
-    }
-    // Guide samples are distilled from the detail blobs purged above and
-    // are never in snapshots: purge them (and any published example
-    // replay) with the games they came from.
-    if (this.guideSamples) await this.guideSamples.deleteForUser(userId);
-    await this._scrubUserGuideExamples(userId);
-    const data = snap.payload?.data || {};
-    for (const [key, jsonKey] of USER_SCOPED_COLLECTIONS) {
-      await gdprFence.assert();
-      const c = /** @type {any} */ (this.db)[key];
-      const rows = Array.isArray(data[jsonKey]) ? data[jsonKey] : [];
-      if (c && rows.length > 0) {
-        await c.insertMany(
-          rows.map((r) => {
-            const restored = { ...r, userId };
-            if (key === "games") {
-              delete restored.replayFile;
-              delete restored.playbackArtifact;
-              delete restored.playbackUpload;
-              delete restored.replayUpload;
-              delete restored._customBuildReclassify;
-              delete restored._customBuildClassificationSequence;
-              delete restored._opponentBuildOrderWriteLease;
-              restored._customBuildRevision = randomUUID();
-              // Preserve both perspective-specific provenance fields: unlike
-              // transient stage/order state, they are durable ownership
-              // metadata for `myBuild` and `opponent.strategy`.
-              stampVersion(restored, COLLECTIONS.GAMES);
-            }
-            return restored;
-          }),
-          { ordered: false },
-        );
-      }
-    }
-    // Snapshot JSON never restores raw replay markers. A second pass closes
-    // the same in-flight completion race as account/history deletion.
-    if (this.replayFiles) {
-      await gdprFence.assert();
-      await this.replayFiles.deleteAllForUser(userId);
-      if (this.playbackArtifacts) await this.playbackArtifacts.deleteAllForUser(userId);
-      await gdprFence.assert();
-    }
-    return { restoredAt: new Date(), counts: countsOf(data) };
-    } finally {
-      await this._releaseMutationFence(userId, gdprFence);
-    }
+    finally { await this._releaseMutationFence(userId, fence); }
+  }
+
+  /** @param {string} userId */
+  async listSnapshots(userId) {
+    if (!this.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+    return this.backups.list(userId);
+  }
+
+  /** @param {string} userId @param {string} snapshotId @param {string|undefined} [expectedRevision] */
+  async restoreSnapshot(userId, snapshotId, expectedRevision) {
+    if (!this.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+    const fence = await this._acquireMutationFence(userId, "restore");
+    try {
+      await this._drainOpponentBuildOrderWriters(userId);
+      if (this.customBuilds) await this.customBuilds.cancelUserReclassifications(userId);
+      return await this.backups.restore(userId, snapshotId, fence, expectedRevision);
+    } finally { await this._releaseMutationFence(userId, fence); }
   }
 
   /** @param {string} userId @param {string} kind */
@@ -1263,6 +1199,10 @@ class GdprService {
             { _coachingMutations: { $exists: false } },
             { _coachingMutations: { $not: { $elemMatch: { leaseUntil: { $gt: now } } } } },
           ] },
+          { $or: [
+            { _dataMutations: { $exists: false } },
+            { _dataMutations: { $not: { $elemMatch: { leaseUntil: { $gt: now } } } } },
+          ] },
         ] },
         { $set: { _gdprMutation: {
           id,
@@ -1276,13 +1216,23 @@ class GdprService {
       }
       const blocked = await this.db.users.findOne(
         { userId },
-        { projection: { _id: 0, _gdprMutation: 1, _coachingMutations: 1 } },
+        { projection: { _id: 0, _gdprMutation: 1, _coachingMutations: 1, _dataMutations: 1 } },
       );
+      if (!blocked && kind === "delete_all") {
+        // Idempotent webhook/API repeat: the original user row is already
+        // gone. No new account is created just to clean up orphaned records.
+        const timer = setTimeout(() => {}, 0); timer.unref?.();
+        return { id: "", timer, assert: async () => {
+          if (await this.db.users.findOne({ userId }, { projection: { _id: 1 } })) throw new Error("gdpr_erasure_identity_changed");
+        } };
+      }
       const activeCoaching = Array.isArray(blocked?._coachingMutations)
         && blocked._coachingMutations.some((mutation) =>
           mutation?.leaseUntil instanceof Date && mutation.leaseUntil > now,
         );
-      if (activeCoaching && !blocked?._gdprMutation && Date.now() < deadline) {
+      const activeWrites = Array.isArray(blocked?._dataMutations)
+        && blocked._dataMutations.some((mutation) => mutation?.leaseUntil instanceof Date && mutation.leaseUntil > now);
+      if ((activeCoaching || activeWrites) && !blocked?._gdprMutation && Date.now() < deadline) {
         await wait(50);
         continue;
       }
@@ -1328,6 +1278,7 @@ class GdprService {
   /** @param {string} userId @param {{id: string, timer: NodeJS.Timeout, assert: () => Promise<void>}} fence */
   async _releaseMutationFence(userId, fence) {
     clearInterval(fence.timer);
+    if (!fence.id) return;
     await this.db.users.updateOne(
       { userId, "_gdprMutation.id": fence.id },
       { $unset: { _gdprMutation: "" } },
@@ -1400,16 +1351,6 @@ class GdprService {
     err.code = "replay_storage_unavailable";
     throw err;
   }
-}
-
-/** @param {Record<string, unknown[]>} data */
-function countsOf(data) {
-  /** @type {Record<string, number>} */
-  const out = {};
-  for (const [k, v] of Object.entries(data)) {
-    out[k] = Array.isArray(v) ? v.length : 0;
-  }
-  return out;
 }
 
 /** @param {Record<string, number>} target @param {Record<string, number>} next */
@@ -1507,4 +1448,5 @@ module.exports = {
   GdprService,
   USER_SCOPED_COLLECTIONS,
   PURGE_ONLY_COLLECTIONS,
+  GDPR_CLASSIFICATION,
 };

@@ -7,6 +7,7 @@ const rateLimitModule = require("express-rate-limit");
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
 const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
+const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 
 const {
   YoutubeChatError,
@@ -54,6 +55,7 @@ const {
  *
  * @param {{
  *   overlayTokens: { resolve: (token: string) => Promise<{userId: string} | null> },
+ *   dataUsers?: import('mongodb').Collection<any>,
  *   users: {
  *     getPreferences: (userId: string, type: string) => Promise<Record<string, any>>,
  *     isAdminUserId?: (userId: string) => Promise<boolean>,
@@ -140,6 +142,15 @@ function buildMultichatRouter(deps) {
       }
       // @ts-ignore request-scoped context, same pattern as socket auth
       req.overlayUserId = resolved.userId;
+      // Token-authenticated HTTP controls do not pass the Clerk middleware.
+      // Their reads can also update viewer/Studio state, so admit finite
+      // requests under the same erasure fence. Long-lived SSE is read-only.
+      if (deps.dataUsers && !req.path.endsWith("/tiktok/stream")) {
+        const lease = await claimUserDataLease(deps.dataUsers, resolved.userId);
+        if (res.destroyed) { await lease.release(); return; }
+        res.once("finish", () => { void lease.release().catch((err) => req.log?.warn({ err }, "data_write_lease_release_failed")); });
+        res.once("close", lease.stopRenewing);
+      }
       next();
     } catch (err) {
       next(err);

@@ -37,6 +37,7 @@ const {
 } = require("./jobs/ladderMetaRecomputeJob");
 const { buildReviewDigestJob } = require("./jobs/reviewDigestJob");
 const { buildBackupHealthJob } = require("./jobs/backupHealthJob");
+const { buildIdentityDeletionJob } = require("./jobs/identityDeletionJob");
 const sentry = require("./util/sentry");
 const { TrendsExplorerBackfill } = require("./services/trendsExplorerBackfill");
 const { startBrowserUploadCorsCheck } = require("./services/replayFilesCors");
@@ -368,6 +369,8 @@ async function main() {
     logger,
   });
   backupHealthJob.start();
+  const identityDeletionJob = buildIdentityDeletionJob({ service: /** @type {any} */ (services).identityDeletions, logger });
+  identityDeletionJob.start();
 
   // SC2 Tools Guides build-order videos: seed the committed channel
   // snapshot, then re-read the owner's YouTube RSS feed every 6 h. Only
@@ -431,12 +434,15 @@ async function main() {
     await ladderMetaJob.stop();
     await reviewDigestJob.stop();
     await backupHealthJob.stop();
+    await identityDeletionJob.stop();
     // Also waits for an admin-forced run when the schedule never started.
     await guideStatsJob.stop();
     // Admin-triggered guide backfill (never started at boot) and any
     // in-flight fire-and-forget guide sample writes, before Mongo closes.
     await /** @type {any} */ (services).guideSamplesBackfill.stop();
     await /** @type {any} */ (services).guideSamples.drain();
+    await /** @type {any} */ (services).gdpr.backups?.drain();
+    await /** @type {any} */ (services).dataRepairs.drain();
     await guideVideosJob.stop();
     await /** @type {any} */ (services).customBuilds.stopReclassifications();
     await db.close();

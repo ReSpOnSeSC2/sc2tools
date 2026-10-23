@@ -69,6 +69,7 @@ async function createHarness(opts = {}) {
     reviewsEnabled: opts.rollout || "on",
   };
   const built = buildApp({
+      userBackupsStore: require("./userBackupsStore").createBackupStore(),
     db,
     logger: pino({ level: "silent" }),
     config,

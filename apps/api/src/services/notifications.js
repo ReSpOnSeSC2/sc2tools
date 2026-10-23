@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 
 const LIST_DEFAULT = 20;
 const LIST_MAX = 50;
@@ -77,6 +78,18 @@ class NotificationsService {
    */
   async notify(userId, input) {
     if (typeof userId !== "string" || !userId) return null;
+    let lease;
+    try { lease = await claimUserDataLease(this.db.users, userId); }
+    catch (error) {
+      // A recipient being erased cannot receive a new private row after the
+      // notification purge. The saved originating action still succeeds.
+      if (/** @type {any} */ (error)?.status === 409) return null;
+      throw error;
+    }
+    try { return await this._notify(userId, input); } finally { await lease.release(); }
+  }
+  /** @param {string} userId @param {Parameters<NotificationsService['notify']>[1]} input */
+  async _notify(userId, input) {
     if (!KIND_RE.test(String(input.kind || ""))) throw new Error("invalid_notification_kind");
     const user = await this.db.users.findOne({ userId }, { projection: { "preferences.notifications": 1 } });
     if (!user || sanitizeNotificationPrefs(user.preferences?.notifications).muted.includes(input.kind)) return null;
