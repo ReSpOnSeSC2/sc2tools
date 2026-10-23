@@ -5,9 +5,12 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import {
   GUIDE_PANEL_CLASS,
-  GUIDE_PRIMARY_ACTION_CLASS,
   GUIDE_SECONDARY_ACTION_CLASS,
 } from "@/components/guides/guideUi";
+import { GuideRetryButton } from "./GuideRetryButton";
+import { GuideAuthCta } from "./GuideAuthCta";
+import { ReportErrorAction } from "@/components/feedback/ReportErrorAction";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 
 /**
  * Non-data states shared by the guide pages.
@@ -20,18 +23,22 @@ import {
  *   any channel videos passed as children) and never a number.
  */
 
-export function GuideUnavailable({ title = "This guide is temporarily unavailable" }: { title?: string }) {
+export function GuideUnavailable({ title = "This guide is temporarily unavailable", onRetry, variant = "page" }: { title?: string; onRetry?: () => void; variant?: "page" | "hub" }) {
   return (
     <div className={GUIDE_PANEL_CLASS}>
       <EmptyStatePanel
         size="lg"
         icon={<CloudOff className="h-6 w-6" aria-hidden />}
         title={title}
-        description="The stats service didn't respond. Try again in a moment."
+        description="The stats service didn't respond. This usually clears within a minute."
         action={
-          <Link href="/guides" className={GUIDE_SECONDARY_ACTION_CLASS}>
-            All build guides
-          </Link>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <GuideRetryButton onRetry={onRetry} />
+            {variant === "hub" ? <><Link href="/app" className={GUIDE_SECONDARY_ACTION_CLASS}>Open your dashboard</Link><Link href="/" className={GUIDE_SECONDARY_ACTION_CLASS}>Home</Link></>
+              : <Link href="/guides" className={GUIDE_SECONDARY_ACTION_CLASS}>All build guides</Link>}
+            <LazyHelpLink slug="something-went-wrong">Help with loading problems</LazyHelpLink>
+            <ReportErrorAction />
+          </div>
         }
       />
     </div>
@@ -68,9 +75,7 @@ export function GuideNotEnoughGames({
           description="We publish numbers only once enough players have logged enough ladder games with it. Every game you upload counts toward it."
           action={
             <div className="flex flex-col items-center gap-2 sm:flex-row">
-              <Link href="/sign-up" className={GUIDE_PRIMARY_ACTION_CLASS}>
-                Sign up free and track your games
-              </Link>
+              <GuideAuthCta />
               <Link href={backHref} className={GUIDE_SECONDARY_ACTION_CLASS}>
                 {backLabel}
               </Link>
