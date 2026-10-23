@@ -16,6 +16,15 @@ corresponding GitHub Release.
 - Find and sort openers without losing their original rank, browse phone cards, and group a build's opponent matchups by their likely-range verdict. Complete map lists stay available on demand.
 - Compare your own build timings and record with the guide in one table. Counter lists show your race's aggregate win rates, and the map pool offers a sortable race-specific table when new stats are available.
 
+### Coaching forms
+
+- Practice plans show inline field errors, focus the first field to fix, remember each student's time zone and summarize the actual target before assignment. Failed saves retain the draft for Retry.
+- Weekly availability highlights reversed or overlapping hours and prevents publication until they are corrected. Touching windows remain valid.
+
+### Admin inbox details
+
+- Activity and support message rows now open full details on tap, click, Enter or Space, with diagnostics, replies and account or infrastructure links. Closing returns focus to the row.
+
 ### Build detection
 
 - Both PvZ Archon Drop labels require a real Warp Prism completed by 6:00 and observed Archons. Ordinary or late Templar transitions keep their opener label instead of being counted as drops.
