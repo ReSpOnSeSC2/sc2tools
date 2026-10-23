@@ -1,6 +1,6 @@
 # Wave 2 combined integration
 
-This branch combines the scoped, tested draft PRs below while preserving their complete head ancestry. The final merge must preserve that ancestry (use a merge commit), so the original review trail and dependency commits remain available. This is an integration checkpoint, not a claim that all Wave 2 items or later waves are complete.
+PR #687 merged the scoped branches below into main at da80e2338f60d70a90f254155a4498e8af099dc7 with a merge commit, preserving every source head. All final GitHub CI and the Vercel preview passed on head84a6a95f. This checkpoint does not claim all Wave 2 or later waves are complete.
 
 | Source PR | Scope | Integrated head |
 | --- | --- | --- |
@@ -36,9 +36,9 @@ This branch combines the scoped, tested draft PRs below while preserving their c
 
 ## Validation status
 
-The complete combined desktop suite passed 2,087 tests, one platform skip and 78 subtests. Both complete typechecks and strict root integration-source lint passed. The full API run passed 5,004 tests; one five-test suite could not start temporary MongoDB under concurrent load and passed all five on an isolated rerun without any API source change. The full web run passed 6,642 tests with one focus failure; its actual build-menu race was fixed and all 49 affected card/dialog/opponent regressions pass afterward. Combined production build/budgets and browser checks are being completed before remote CI. Individual draft PRs contain their broader test and screenshot evidence.
+The complete combined desktop suite passed 2,087 tests, one platform skip and 78 subtests. Both complete typechecks and strict root integration-source lint passed. The full API run passed 5,004 tests; one five-test suite could not start temporary MongoDB under concurrent load and passed all five on an isolated rerun without any API source change. The full web run passed 6,642 tests with one focus failure; its actual build-menu race was fixed and all 49 affected card/dialog/opponent regressions pass afterward. Final GitHub CI passed the complete web/API/desktop/replay suites, parity and responsive checks. Production build passed all unchanged budgets; Playwright passed158 with34 intentional skips. All18 combined opponent fixture checks passed at phone/desktop widths. Individual draft PRs contain their broader test and screenshot evidence.
 
-Vercel has reported daily deployment rate limits for several source previews. This is an external deployment quota; do not buy a plan, repeatedly redeploy or claim a deployment succeeded because tests passed. Record the final integration deployment result separately.
+Vercel has reported daily deployment rate limits for several source previews. This is an external deployment quota; do not buy a plan, repeatedly redeploy or claim a deployment succeeded because tests passed. The final #687 Vercel preview deployed successfully. Main-target source PRs were marked merged automatically; eight stacked source PRs were closed with the #687 integration evidence because main already contains all their commits.
 
 ## Operations and remaining work
 

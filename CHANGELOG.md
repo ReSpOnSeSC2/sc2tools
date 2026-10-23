@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Game header and completed check-ins
+
+- Replay pages use one compact Share, Download, Review and VOD action bar, a descriptive opponent heading and readable recent-game dates. Missing duration and MMR fields stay out of the way.
+- Confirmed build check-ins collapse to a summary with saved note previews. Edit reopens the full controls; Done returns keyboard focus after notes are saved or discarded.
+
 
 
 ### Download and project costs
@@ -34,6 +39,8 @@ corresponding GitHub Release.
 - Public replay cards fit laptop widths and put downloads before one clear Analysis action. Dates stay compact, ties use one name, and shared-file privacy copy explains the original replay's names and chat.
 
 ### Fixed
+
+- Community search restores correctly with Back and Forward after clearing filters, including when cached server props lag behind the address bar.
 
 - Account deletion now removes token-owned stream data and private sound files, ends the sign-in identity with durable retries, and offers an export-first inventory and confirmation flow. Review comments on other requests are anonymized; service backup retention follows the current configured schedule.
 

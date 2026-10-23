@@ -29,33 +29,37 @@ export function CommunityFilterBar({ initialRace, initialVs, initialSkill, initi
   const { isLoaded, isSignedIn } = useAuth();
   const router = useRouter(); const sp = useSearchParams(); const queryString = sp.toString();
   const [search, setSearch] = useState(initialSearch);
+  const [acknowledgedQuery, setAcknowledgedQuery] = useState(queryString);
   const [ready, setReady] = useState(false);
-  const lastPushedRef = useRef(initialSearch);
+  const submittedSearch = useRef<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const { setPending } = useCommunityFilterState();
   const id = useId();
   useEffect(() => setReady(true), []);
-  useEffect(() => {
-    if (initialSearch !== lastPushedRef.current) setSearch(initialSearch);
-    // Acknowledge external navigation too, so Back followed by Forward restores both.
-    lastPushedRef.current = initialSearch;
-  }, [initialSearch]);
+  const urlSearch = parseCommunityQuery(Object.fromEntries(new URLSearchParams(queryString))).search;
+  // Back updates client search params before its cached server props settle.
+  // Sync before effects so a stale draft never rewrites that history entry.
+  if (queryString !== acknowledgedQuery) {
+    setAcknowledgedQuery(queryString);
+    if (urlSearch !== submittedSearch.current) setSearch(urlSearch);
+    submittedSearch.current = null;
+  }
   useEffect(() => { setPending(isPending); }, [isPending, setPending]);
   useEffect(() => () => setPending(false), [setPending]);
 
   useEffect(() => {
-    if (search.trim() === initialSearch) return;
+    if (search.trim() === urlSearch) return;
     const timer = setTimeout(() => {
       const next = parseCommunityQuery(Object.fromEntries(new URLSearchParams(queryString)));
-      lastPushedRef.current = search.trim();
+      submittedSearch.current = search.trim();
       startTransition(() => router.replace(communityHref({ ...next, search: search.trim(), offset: 0 }), { scroll: false }));
     }, 300);
     return () => clearTimeout(timer);
-  }, [search, initialSearch, queryString, router]);
+  }, [search, urlSearch, queryString, router]);
 
   function navigate(patch: Partial<{ race: CommunityRace; vs: CommunityRace; skill: SkillLevelId | ""; sort: CommunitySort }>) {
     const next = parseCommunityQuery(Object.fromEntries(new URLSearchParams(queryString)));
-    lastPushedRef.current = search.trim();
+    submittedSearch.current = search.trim();
     startTransition(() => router.replace(communityHref({ ...next, ...patch, search: search.trim(), offset: 0 }), { scroll: false }));
   }
   return <fieldset disabled={!ready} aria-label="Filter community builds" className="m-0 min-w-0 space-y-3 border-0 p-0">

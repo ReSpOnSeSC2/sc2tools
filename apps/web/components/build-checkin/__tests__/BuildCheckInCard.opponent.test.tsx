@@ -191,6 +191,7 @@ describe("BuildCheckInCard — opponent's build", () => {
       opponent: { ...opponentState(), options: undefined },
     });
     renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(within(opponentRow()).getByTestId("corrected-badge")).toBeTruthy();
     fireEvent.change(screen.getByLabelText(/What threw the build off/), {
       target: { value: "Hid the pool" },
@@ -607,6 +608,8 @@ describe("BuildCheckInCard — unchecked games and the opponent", () => {
     harness.intent = intent({ status: "none", suggestion: null, opponent: CORRECTED });
     renderCard();
     expect(screen.queryByTestId("build-checkin-compact")).toBeNull();
+    expect(screen.getByTestId("build-checkin-summary").textContent).toContain("Opponent: Ling Flood");
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(within(opponentRow()).getByTestId("corrected-badge")).toBeTruthy();
     // Shown by the page, not opened by the player: no picker, focus untouched.
     expect(screen.queryByRole("combobox")).toBeNull();
@@ -669,6 +672,7 @@ describe("BuildCheckInCard — staying open", () => {
       opponent: { ...opponentState(), options: undefined },
     });
     renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     fireEvent.click(screen.getByRole("button", { name: "Change the opponent's build" }));
     fireEvent.click(screen.getByRole("button", { name: "Use replay's label" }));
     await waitFor(() =>
