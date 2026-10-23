@@ -7,14 +7,11 @@ import { AlertTriangle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal, ModalActions } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
-import { apiCall, useApi } from "@/lib/clientApi";
+import { apiCall } from "@/lib/clientApi";
 import { CommunityOwnerMenu } from "./CommunityOwnerMenu";
+import { useOwnerBuilds } from "./useOwnerBuilds";
 
 type ConfirmationStep = "closed" | "review" | "final";
-
-type OwnerStatsResponse = {
-  items: Array<{ publicSlug: string }>;
-};
 
 export interface CommunityBuildOwnerControlsProps {
   slug: string;
@@ -42,10 +39,7 @@ export function CommunityBuildOwnerControls({
   const router = useRouter();
   const { getToken } = useAuth();
   const { toast } = useToast();
-  const { data: ownerStats } = useApi<OwnerStatsResponse>(
-    "/v1/community/my-build-stats",
-    { revalidateOnFocus: true },
-  );
+  const { data: ownerStats } = useOwnerBuilds();
   const [step, setStep] = useState<ConfirmationStep>("closed");
   const [acknowledged, setAcknowledged] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -73,8 +67,8 @@ export function CommunityBuildOwnerControls({
   // Anonymous rows intentionally omit ownerUserId. Membership in this
   // authenticated owner-only list keeps the control working without putting
   // a stable identity key back into the public response.
-  const isOwner = ownerStats?.items?.some((row) => row.publicSlug === slug);
-  if (!isOwner) return null;
+  const owned = ownerStats?.items?.find((row) => row.slug === slug);
+  if (!owned) return null;
 
   function continueToFinal() {
     setError(null);
@@ -112,7 +106,7 @@ export function CommunityBuildOwnerControls({
 
   return (
     <>
-      {compact ? <CommunityOwnerMenu onRemove={openReview} /> : <Button
+      {compact ? <CommunityOwnerMenu sourceSlug={owned.sourceSlug} onRemove={openReview} /> : <Button
         type="button"
         variant={compact ? "ghost" : "danger"}
         size={compact ? "sm" : "md"}

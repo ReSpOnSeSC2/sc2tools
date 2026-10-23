@@ -22,6 +22,7 @@ import { BuildFilterBar, type BuildFilterState } from "./BuildFilterBar";
 import { BuildPagination } from "./BuildPagination";
 import { BuildsPublicIntro } from "./BuildsPublicIntro";
 import { useCustomBuildPage } from "./useCustomBuildPage";
+import { BuildPublishIntent } from "./BuildPublishIntent";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
 import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
 
@@ -89,9 +90,9 @@ const EMPTY_BUILDS: CustomBuild[] = [];
  * (no New build, Reclassify or filters, which all need an account).
  */
 export function BuildsLibrary() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   if (!isLoaded || !isSignedIn) return <BuildsPublicIntro />;
-  return <BuildsLibraryInner />;
+  return <BuildsLibraryInner key={userId} />;
 }
 
 function BuildsLibraryInner() {
@@ -263,6 +264,10 @@ function BuildsLibraryInner() {
     },
     [items],
   );
+
+  const choosePublication = useCallback((build: CustomBuild) => {
+    setPublishBuild(build); setPublishOpen(true); setDossierBuild(null);
+  }, []);
 
   const askDelete = useCallback((slug: string) => {
     setDeletingSlug(slug);
@@ -569,6 +574,7 @@ function BuildsLibraryInner() {
           setRichEditBuild(null);
         }}
       /> : null}
+      <BuildPublishIntent onChoose={choosePublication} onCreate={openCreate} />
       {publishOpen ? <BuildPublishModal
         open={publishOpen}
         onClose={() => setPublishOpen(false)}

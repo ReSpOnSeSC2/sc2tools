@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Sparkles, Users } from "lucide-react";
+import { Users } from "lucide-react";
 import { getJsonWithStatus } from "@/lib/serverApi";
 import { Banner } from "@/components/Banner";
 import { Card } from "@/components/ui/Card";
@@ -13,6 +13,8 @@ import { CommunityFilterProvider, CommunityResults } from "@/components/communit
 import { CommunityActiveFilters } from "@/components/community/CommunityActiveFilters";
 import { CommunityShell } from "@/components/community/CommunityShell";
 import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
+import { PublishCta } from "@/components/community/PublishCta";
+import { LazyMyPublishedBuilds } from "@/components/community/LazyMyPublishedBuilds";
 import type { CommunityBuildListResponse } from "@/components/community/types";
 import { clearCommunityFilters, communityEmptyTitle, communityHref, COMMUNITY_PAGE_SIZE, parseCommunityQuery, type CommunityQuery } from "@/lib/communityQuery";
 
@@ -36,24 +38,27 @@ function loadBuilds(query: CommunityQuery) {
 }
 
 export async function generateMetadata({ searchParams }: { searchParams: CommunitySearchParams }): Promise<Metadata> {
-  const { data } = await loadBuilds(parseCommunityQuery(await searchParams));
+  const query = parseCommunityQuery(await searchParams);
+  if (query.mine) return { ...METADATA, robots: { index: false, follow: false } };
+  const { data } = await loadBuilds(query);
   return data ? METADATA : { ...METADATA, robots: { index: false, follow: true } };
 }
 
 export default async function CommunityPage({ searchParams }: { searchParams: CommunitySearchParams }) {
   const query = parseCommunityQuery(await searchParams);
-  const { data } = await loadBuilds(query);
+  const { data } = query.mine ? { data: null } : await loadBuilds(query);
   const items = data?.items ?? []; const total = data?.total ?? 0;
   const filtered = !!(query.race || query.vs || query.skill || query.search);
   const pastEnd = total > 0 && query.offset >= total;
   return <div className="space-y-6">
     <PageHeader eyebrow={<span className="inline-flex items-center gap-1.5"><Users className="h-3 w-3" aria-hidden />Community</span>} title="Community builds"
       description="Player-published builds and the weekly Stock Market leaderboard. Vote, save to your private library, or publish your own."
-      actions={<LinkButton href="/builds" variant="secondary" iconLeft={<Sparkles className="h-4 w-4 text-accent-cyan" aria-hidden />}>Publish a build</LinkButton>} />
+      actions={<PublishCta />} />
     <Banner variant="divider" />
     <CommunityShell active="builds"><CommunityFilterProvider>
-      <CommunityFilterBar initialRace={query.race} initialVs={query.vs} initialSkill={query.skill} initialSort={query.sort} initialSearch={query.search} />
+      <CommunityFilterBar initialRace={query.race} initialVs={query.vs} initialSkill={query.skill} initialSort={query.sort} initialSearch={query.search} initialMine={query.mine} />
       <CommunityResults>
+        {query.mine ? <LazyMyPublishedBuilds /> : <>
         <div className="space-y-2">
           {data && !pastEnd ? <p className="text-caption text-text-muted">Showing <span className="font-mono tabular-nums text-text">{items.length ? (query.offset + 1) + "–" + (query.offset + items.length) : "0"}</span> of <span className="font-mono tabular-nums text-text">{total}</span></p> : null}
           <CommunityActiveFilters query={query} />
@@ -61,6 +66,7 @@ export default async function CommunityPage({ searchParams }: { searchParams: Co
         {!data ? <CommunityUnavailable title="Community builds are temporarily unavailable" retryHref={communityHref(query)} /> : pastEnd ? <Card><EmptyStatePanel size="lg" title="No more results" description="This page is past the end of the list." action={<LinkButton href={communityHref({ ...query, offset: 0 })} variant="secondary">Back to page 1</LinkButton>} /></Card> : !items.length ? <Card><EmptyStatePanel size="lg" title={communityEmptyTitle(query)} description={filtered ? "Try a different keyword or clear a filter to see more published builds." : "Be the first to publish a build to the community."} action={<LinkButton href={filtered ? communityHref(clearCommunityFilters(query)) : "/builds"} variant="secondary">{filtered ? "Reset filters" : "Open my library"}</LinkButton>} /></Card> : <>
           <ul role="list" aria-label="Community builds" className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">{items.map((build) => <li key={build.slug} role="listitem" className="h-full"><CommunityBuildCard build={build} /></li>)}</ul>
           <Pagination query={query} limit={COMMUNITY_PAGE_SIZE} total={total} hasMore={data.hasMore} />
+        </>}
         </>}
       </CommunityResults>
     </CommunityFilterProvider></CommunityShell>

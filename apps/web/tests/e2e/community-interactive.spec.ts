@@ -20,7 +20,7 @@ test("actual Community components save, synchronize votes and retain owner/repor
   expect((await author.boundingBox())!.width).toBeLessThan((await author.locator("../..").boundingBox())!.width * 0.51);
   const owner = page.getByRole("button", { name: "Your build options", exact: true }).last();
   await owner.focus(); await page.keyboard.press("Space");
-  await expect(page.getByRole("menuitem", { name: "Open my library", exact: true })).toBeFocused();
+  await expect(page.getByRole("menuitem", { name: "Edit in library", exact: true })).toBeFocused();
   await page.keyboard.press("End"); await expect(page.getByRole("menuitem", { name: "Remove from Community…" })).toBeFocused();
   const menu = await page.getByRole("menu").boundingBox(); expect(menu!.x).toBeGreaterThanOrEqual(0); expect(menu!.x + menu!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   await page.keyboard.press("Escape"); await expect(owner).toBeFocused();

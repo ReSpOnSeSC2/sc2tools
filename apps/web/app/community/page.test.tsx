@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({ getJsonWithStatus: vi.fn() }));
 
 vi.mock("@/lib/serverApi", () => ({ getJsonWithStatus: mocks.getJsonWithStatus }));
 vi.mock("@/components/Banner", () => ({ Banner: () => null }));
+vi.mock("@/components/community/PublishCta", () => ({ PublishCta: () => <span>Publish fixture</span> }));
+vi.mock("@/components/community/LazyMyPublishedBuilds", () => ({ LazyMyPublishedBuilds: () => <p>Owner-only publications</p> }));
 vi.mock("@/components/community/CommunityFilterBar", () => ({ CommunityFilterBar: ({ initialRace, initialVs }: { initialRace: string; initialVs: string }) => <div data-testid="community-filters" data-race={initialRace} data-vs={initialVs} /> }));
 vi.mock("@/components/community/CommunityShell", () => ({
   CommunityShell: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -28,6 +30,13 @@ afterEach(() => {
 });
 
 describe("/community", () => {
+  it("keeps Mine private and skips every public server fetch", async () => {
+    render(await CommunityPage({ searchParams: search({ mine: "1", race: "P", q: "old" }) }));
+    expect(screen.getByText("Owner-only publications")).toBeTruthy();
+    expect(mocks.getJsonWithStatus).not.toHaveBeenCalled();
+    expect((await generateMetadata({ searchParams: search({ mine: "1" }) })).robots).toEqual({ index: false, follow: false });
+    expect(mocks.getJsonWithStatus).not.toHaveBeenCalled();
+  });
   it.each([null, 502])("says builds are temporarily unavailable (noindex) when the API answers %s", async (status) => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status });
     render(await CommunityPage({ searchParams: search({ matchup: "PvZ", sort: "new" }) }));

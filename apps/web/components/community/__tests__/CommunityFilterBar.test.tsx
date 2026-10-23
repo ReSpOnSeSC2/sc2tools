@@ -3,8 +3,9 @@ import Link from "next/link";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ replace: vi.fn(), query: "", pending: false }));
+const h = vi.hoisted(() => ({ replace: vi.fn(), query: "", pending: false, loaded: true, signedIn: true }));
 vi.mock("next/navigation", () => ({ useRouter: () => h, useSearchParams: () => new URLSearchParams(h.query) }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: h.loaded, isSignedIn: h.signedIn }) }));
 vi.mock("react", async (importOriginal) => ({ ...await importOriginal<typeof import("react")>(), useTransition: () => [h.pending, (action: () => void) => action()] }));
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ children }: { children: ReactNode }) => <Link href="/help/community-builds#sorting">{children}</Link> }));
 
@@ -15,8 +16,24 @@ import { parseCommunityQuery } from "@/lib/communityQuery";
 
 const defaults: CommunityFilterBarProps = { initialRace: "", initialVs: "", initialSkill: "", initialSort: "top", initialSearch: "" };
 const View = ({ props }: { props: CommunityFilterBarProps }) => <CommunityFilterProvider><CommunityFilterBar {...props} /><CommunityResults><p>Build results</p></CommunityResults></CommunityFilterProvider>;
-beforeEach(() => { h.replace.mockReset(); h.query = ""; h.pending = false; vi.useFakeTimers(); });
+beforeEach(() => { h.replace.mockReset(); h.query = ""; h.pending = false; h.loaded = true; h.signedIn = true; vi.useFakeTimers(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
+
+it("switches Mine without retaining public filters, then returns to all builds", () => {
+  h.query = "race=P&q=roach&offset=24";
+  const view = render(<View props={{ ...defaults, initialRace: "P", initialSearch: "roach" }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Mine" }));
+  expect(h.replace).toHaveBeenLastCalledWith("/community?mine=1", { scroll: false });
+  h.query = "mine=1"; view.rerender(<View props={{ ...defaults, initialMine: true }} />);
+  expect(screen.queryByRole("searchbox")).toBeNull(); expect(screen.getByRole("button", { name: "Mine" }).getAttribute("aria-pressed")).toBe("true");
+  fireEvent.click(screen.getByRole("button", { name: "All builds" })); expect(h.replace).toHaveBeenLastCalledWith("/community", { scroll: false });
+});
+
+it.each([{ loaded: false, signedIn: false }, { loaded: true, signedIn: false }])("keeps private view navigation hidden until signed in: %o", (auth) => {
+  Object.assign(h, auth); render(<View props={defaults} />);
+  expect(screen.queryByRole("navigation", { name: "Community build view" })).toBeNull();
+  expect(screen.getByRole("searchbox", { name: "Search community builds" })).toBeTruthy();
+});
 
 it("resets a URL-driven search without remounting or losing the focused input", () => {
   h.query = "q=roach";

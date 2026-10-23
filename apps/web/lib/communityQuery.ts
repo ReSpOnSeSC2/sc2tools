@@ -5,12 +5,14 @@ export type CommunityRace = "" | "P" | "T" | "Z";
 export type CommunityQuery = {
   race: CommunityRace; vs: CommunityRace; skill: SkillLevelId | "";
   sort: CommunitySort; search: string; offset: number;
+  mine?: boolean;
 };
 export const COMMUNITY_PAGE_SIZE = 24;
 export const COMMUNITY_RACE_NAMES = { P: "Protoss", T: "Terran", Z: "Zerg" } as const;
 export const communityRace = (value: unknown): CommunityRace => value === "P" || value === "T" || value === "Z" ? value : "";
 
 export function parseCommunityQuery(sp: Record<string, string | string[] | undefined>): CommunityQuery {
+  if (sp.mine === "1") return { race: "", vs: "", skill: "", sort: "top", search: "", offset: 0, mine: true };
   const legacy = typeof sp.matchup === "string" && /^[PTZ]v[PTZ]$/.test(sp.matchup) ? sp.matchup : "";
   const skill = typeof sp.skill === "string" && SKILL_LEVELS.some((item) => item.id === sp.skill) ? sp.skill as SkillLevelId : "";
   const offset = typeof sp.offset === "string" ? Number.parseInt(sp.offset, 10) : 0;
@@ -23,6 +25,7 @@ export function parseCommunityQuery(sp: Record<string, string | string[] | undef
 }
 
 export function communityHref(query: CommunityQuery): string {
+  if (query.mine) return "/community?mine=1";
   const sp = new URLSearchParams();
   if (query.race) sp.set("race", query.race);
   if (query.vs) sp.set("vs", query.vs);

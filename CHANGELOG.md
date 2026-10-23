@@ -11,12 +11,18 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Publishing from Community
+
+- Publish a build opens a searchable library picker and keeps the destination through sign-in. Authors can open an existing listing's update window from its private source link.
+- Community's Mine view shows your publications, anonymous status, dates, vote counts and private classified-game record. Owner menus link back to the private build and its publication window; viewers without publications stop polling for records.
+
 ### Build library and definitions
 
 - Empty build dossiers explain replay matching and offer re-match, rule editing and pending check-ins. Recent form, section links, sortable game disclosures and retry actions make existing results easier to explore.
 - Build menus add Duplicate, public links and Unpublish; listing labels and delete warnings agree across every surface. Cards show last played and low-sample cues, with a Last played library sort.
 - Definitions group rules by race and matchup, keep filters in the URL, and reveal focused entries from strategy links in dossiers and check-ins.
 - Community browsing filters by your race, opponent race and skill level, with Recently updated sorting and shareable filter chips. Search follows Back/Forward without losing typing focus, results show loading feedback, and pagination distinguishes disabled ends from stale page links.
+
 ### Community build cards and author pages
 
 - Community cards preview timed build steps, keep long author names in bounds, and share one signed score style. Authors manage their listings through a keyboard-accessible menu while keeping both removal confirmations.
