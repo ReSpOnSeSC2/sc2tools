@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Build supply and exports
+
+- Game build orders show prior-sample supply with an approximation marker, worker/supply filters and aligned times. Either side can copy text, supply-first text, Markdown or SALT, print a compact cheat sheet, arm a confirmed Ghost target or open the custom-build editor.
+- Custom and Community definitions share the export menu, including rule-only definitions with their actual condition text. Game headers download available stats/casualties CSV and versioned JSON locally.
+
 ### Guide comparisons and browsing
 
 - Find and sort openers without losing their original rank, browse phone cards, and group a build's opponent matchups by their likely-range verdict. Complete map lists stay available on demand.

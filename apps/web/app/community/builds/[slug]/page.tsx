@@ -27,6 +27,7 @@ import { ShareLinkButton } from "@/components/community/ShareLinkButton";
 import type { CommunityBuildDetail } from "@/components/community/types";
 import { RulesSummary } from "@/components/builds/RulesSummary";
 import { SKILL_LEVELS, coerceSavedRules } from "@/lib/build-rules";
+import { SavedBuildExportMenu } from "@/components/builds/SavedBuildExportMenu";
 import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import { communityDescription } from "@/lib/communityDescription";
 
@@ -254,6 +255,7 @@ export default async function CommunityBuildPage({
                 version={data.updatedAt || data.publishedAt}
               />
               <ShareLinkButton path={`/community/builds/${data.slug}`} />
+              <SavedBuildExportMenu build={build} meta={{ title: data.title, matchup: data.matchup, author: data.authorName, sourceUrl: `/community/builds/${encodeURIComponent(data.slug)}` }} />
               <CommunityBuildOwnerControls
                 slug={data.slug}
                 title={data.title}
