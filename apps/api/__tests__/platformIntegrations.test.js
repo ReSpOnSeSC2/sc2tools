@@ -392,7 +392,7 @@ describe("official OAuth and delivery contracts", () => {
     app.use(buildPlatformIntegrationsRouter({
       auth: (_req, _res, next) => next(),
       integrations: { abandonOauth, complete },
-      returnUrl: "https://sc2tools.com/settings#overlay",
+      returnUrl: "https://sc2tools.com/settings?tab=overlay#platform-connections",
     }));
 
     const response = await request(app)
@@ -1282,8 +1282,8 @@ describe("official OAuth and delivery contracts", () => {
   });
 
   test("OAuth result page only links to an HTTPS configured return URL", () => {
-    expect(callbackPage("twitch", true, "", "https://sc2tools.com/settings#overlay"))
-      .toContain('href="https://sc2tools.com/settings#overlay"');
+    expect(callbackPage("twitch", true, "", "https://sc2tools.com/settings?tab=overlay#platform-connections"))
+      .toContain('href="https://sc2tools.com/settings?tab=overlay#platform-connections"');
     expect(callbackPage("twitch", true, "", "javascript:alert(1)"))
       .not.toContain("javascript:");
   });

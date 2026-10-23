@@ -6,10 +6,11 @@ import { useSearchParams } from "next/navigation";
 import {
   SettingsShell,
   defaultTabVisibility,
-  isSettingsTabId,
+  settingsTabFromParam,
   type SettingsTabId,
 } from "@/components/analyzer/settings/SettingsShell";
 import { SettingsFoundation } from "@/components/analyzer/settings/SettingsFoundation";
+import { HelpLink } from "@/components/help/HelpLink";
 import { Skeleton } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
@@ -61,8 +62,10 @@ const SettingsHelp = dynamic(
 /**
  * /settings — tabbed account settings. `?tab=<id>` opens a tab directly
  * (e.g. `/settings?tab=import` from the dashboard's "Import in your
- * browser" links); unknown or hidden tabs fall back to Foundation. The
- * Import tab only exists while the Instant Analysis flag is on.
+ * browser" links), as does a registered alias (`?tab=streaming`);
+ * unknown or hidden tabs fall back to Foundation. SettingsShell maps old
+ * hash-only links (`#overlay` with no `?tab=`). The Import tab only
+ * exists while the Instant Analysis flag is on.
  */
 export default function SettingsPage() {
   return (
@@ -71,6 +74,14 @@ export default function SettingsPage() {
         eyebrow="Configuration"
         title="Settings"
         description="Account, overlay tokens, voice notifications, and personal preferences. Edits stay in draft until you save."
+        actions={
+          <HelpLink
+            slug="settings-overview"
+            className="inline-flex min-h-11 items-center text-caption font-semibold"
+          >
+            What each tab is for
+          </HelpLink>
+        }
       />
       {/* useSearchParams needs a Suspense boundary for static rendering. */}
       <Suspense fallback={<Skeleton rows={6} />}>
@@ -109,14 +120,13 @@ function renderTab(id: SettingsTabId, origin: string) {
 
 function SettingsTabs() {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
-  const requested = useSearchParams()?.get("tab") ?? null;
+  const requested = settingsTabFromParam(useSearchParams()?.get("tab"));
   const instant = useInstantImport();
   const isTabVisible = (id: SettingsTabId): boolean =>
     id === "import" ? instant.enabled : defaultTabVisibility(id);
   // Wait for the admin check before deciding a deep link to the Import tab.
   if (requested === "import" && instant.loading) return <Skeleton rows={6} />;
-  const initialTab =
-    isSettingsTabId(requested) && isTabVisible(requested) ? requested : undefined;
+  const initialTab = requested && isTabVisible(requested) ? requested : undefined;
   return (
     <SettingsShell
       initialTab={initialTab}

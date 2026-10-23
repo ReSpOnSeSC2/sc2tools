@@ -71,6 +71,21 @@ describe("config loader - replay ingest admission", () => {
   });
 });
 
+describe("config loader - platform OAuth return page", () => {
+  test("links back to the Connected accounts section of the Overlay tab by default", () => {
+    expect(loadConfig({ ...BASE_ENV }).platformIntegrations.returnUrl).toBe(
+      "https://sc2tools.com/settings?tab=overlay#platform-connections",
+    );
+  });
+
+  test("keeps an operator-set return URL", () => {
+    expect(loadConfig({
+      ...BASE_ENV,
+      PLATFORM_INTEGRATIONS_RETURN_URL: " https://staging.sc2tools.com/settings?tab=overlay ",
+    }).platformIntegrations.returnUrl).toBe("https://staging.sc2tools.com/settings?tab=overlay");
+  });
+});
+
 describe("config loader - browser ingest daily cap", () => {
   test("defaults to 5000 games per user per UTC day", () => {
     expect(loadConfig({ ...BASE_ENV }).browserIngestDailyCap).toBe(5000);

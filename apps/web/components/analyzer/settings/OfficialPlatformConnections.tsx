@@ -170,7 +170,12 @@ export function OfficialPlatformConnections() {
   };
 
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-3">
+    // `id`: the OAuth return page links back here
+    // (/settings?tab=overlay#platform-connections).
+    <div
+      id="platform-connections"
+      className="scroll-mt-20 space-y-3 rounded-lg border border-border bg-bg-elevated/40 p-3"
+    >
       <div>
         <div className="text-body font-medium text-text">Connected accounts</div>
         <p className="mt-1 text-caption text-text-dim">

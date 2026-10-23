@@ -732,4 +732,11 @@ describe("DockClient", () => {
     expect(screen.getByRole("spinbutton", { name: "Target value" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Save goals" })).toBeTruthy();
   });
+
+  it("links straight to the Overlay settings tab", async () => {
+    render(<DockClient token="tok_test" />);
+    const link = await screen.findByRole("link", { name: "Open Overlay settings" });
+    expect(link.getAttribute("href")).toBe("/settings?tab=overlay");
+    expect(link.getAttribute("target")).toBe("_blank");
+  });
 });

@@ -375,7 +375,7 @@ function parsePlatformIntegrationsConfig(env) {
     encryptionKey: enabled ? encryptionKey : null,
     returnUrl: String(
       env.PLATFORM_INTEGRATIONS_RETURN_URL
-        || "https://sc2tools.com/settings#overlay",
+        || "https://sc2tools.com/settings?tab=overlay#platform-connections",
     ).trim(),
     youtubePollIntervalMs: parsePositiveInteger(
       env.YOUTUBE_SUBSCRIBER_POLL_INTERVAL_MS,

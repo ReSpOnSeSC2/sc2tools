@@ -599,12 +599,12 @@ export function DockClient({ token }: { token: string }) {
                 </p>
                 <div className="border-t border-border pt-3">
                   <a
-                    href="/settings"
+                    href="/settings?tab=overlay"
                     target="_blank"
                     rel="noreferrer"
                     className="text-caption text-accent-cyan underline-offset-2 hover:underline"
                   >
-                    Open Settings
+                    Open Overlay settings
                   </a>
                   <p className="mt-2 text-micro text-text-dim">
                     Add this page as an OBS custom browser dock: Docks →

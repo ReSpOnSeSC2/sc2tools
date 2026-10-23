@@ -71,6 +71,19 @@ describe("SettingsPage ?tab=", () => {
     expect(screen.queryByText("checkin body")).toBeNull();
   });
 
+  it("opens a tab through a registered alias", async () => {
+    mocks.tab = "streaming";
+    render(<SettingsPage />);
+    expect(await screen.findByText("overlay body")).toBeTruthy();
+  });
+
+  it("links the help article about the tabs", () => {
+    render(<SettingsPage />);
+    expect(
+      screen.getByRole("link", { name: "What each tab is for" }).getAttribute("href"),
+    ).toBe("/help/settings-overview");
+  });
+
   it("opens any other known tab and ignores unknown ones", async () => {
     mocks.tab = "voice";
     render(<SettingsPage />);

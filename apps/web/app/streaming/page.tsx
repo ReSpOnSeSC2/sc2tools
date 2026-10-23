@@ -11,5 +11,5 @@ export const metadata = {
  * /streaming gets bounced to the new home.
  */
 export default function StreamingPage(): never {
-  redirect("/settings#overlay");
+  redirect("/settings?tab=overlay");
 }

@@ -44,7 +44,7 @@ const QUICK_LINKS: ReadonlyArray<{
     description: "Pair the desktop agent or extra browsers",
   },
   {
-    href: "/settings#overlay",
+    href: "/settings?tab=overlay",
     label: "Streaming overlay",
     description: "Copy OBS browser-source URLs",
   },

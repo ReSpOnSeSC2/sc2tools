@@ -171,6 +171,11 @@ describe("/v1/me/profile/battletag/detect", () => {
     const res = await withAuth(request(app).get("/v1/me/doctor"));
     const ids = res.body.warnings.map((w) => w.id);
     expect(ids).toContain("no_profile");
+    // The web renders the CTA as-is: it must open the Profile tab.
+    expect(res.body.warnings.find((w) => w.id === "no_profile").cta).toEqual({
+      label: "Set up profile",
+      href: "/settings?tab=profile",
+    });
     expect(res.body.warnings.find((w) => w.id === "no_agent")).toMatchObject({
       severity: "warn",
       message:
