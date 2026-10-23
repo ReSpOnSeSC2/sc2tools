@@ -179,11 +179,22 @@ const SITEMAP = {
   })),
 };
 
+const MAP_GUIDE = {
+  published: true, map: MAP, mapSlug: MAP_SLUG, era: "after", patch: PATCH, computedAt: NOW, games: 640,
+  matchups: [
+    { matchup: "PvP", slug: "pvp", ...cell(100, 20, 50), openers: [] },
+    { matchup: "PvZ", slug: "pvz", ...cell(240, 40, 136), openers: PVZ_OPENERS.filter((row) => row.published).map((row) => ({ ...row })) },
+    { matchup: "TvZ", slug: "tvz", ...cell(180, 30, 99), openers: [] },
+    { matchup: "ZvP", slug: "zvp", ...cell(120, 20, 55), openers: [] },
+  ],
+};
+
 /** Exact API paths → JSON bodies (200). */
 export const GUIDE_ROUTES = new Map([
   ["/v1/guides", INDEX],
   ["/v1/guides/pvz", MATCHUP],
   ["/v1/guides/pvz/stargate-into-glaives", BUILD],
+  [`/v1/guides/maps/${MAP_SLUG}`, MAP_GUIDE],
   ["/v1/guides/sitemap", SITEMAP],
 ]);
 

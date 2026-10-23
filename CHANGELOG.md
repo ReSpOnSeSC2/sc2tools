@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Guide reading and map navigation
+
+- Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
+- Win rates include verdict symbols, charts use one keyboard Tab stop with pinnable details, and a shared legend plus Help article explains ranges, publishing floors and trends.
+- The guide hub previews busy map cards and links to all openers and counters. Map guides show a race matrix with honest mirror cells, enlarged artwork and neighboring maps.
+
 ### Experience polish
 
 - Settings show recoverable load failures, protect saved profile IDs, preview game-history deletion counts, and include both selected days in local time. Mobile tabs scroll into view and support arrow keys.

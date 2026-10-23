@@ -193,6 +193,47 @@ const GUIDE_STATS: Array<{ path: string; locate: (page: Page) => Locator; stat: 
 ];
 
 test.describe("guide pages at 375 and 1440 px", () => {
+  test("guide section deep links clear the header at 375 and 1280px", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop-1280", "widths are set explicitly");
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    for (const width of [375, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("about:blank");
+      const response = await page.goto("/guides/pvz/stargate-into-glaives#key-timings");
+      expect(response?.status()).toBe(200);
+      const heading = page.getByRole("heading", { name: "Key timings", exact: true });
+      await expect(heading).toBeInViewport();
+      const header = page.locator("header").first();
+      const sectionTop = await heading.evaluate((node) => node.getBoundingClientRect().top);
+      const headerBottom = await header.evaluate((node) => node.getBoundingClientRect().bottom);
+      expect(sectionTop).toBeGreaterThanOrEqual(headerBottom - 1);
+      const contents = page.getByRole("navigation", { name: "On this page", exact: true });
+      await contents.getByRole("link", { name: "Army", exact: true }).click();
+      await expect(page).toHaveURL(/#army$/);
+      await expect(page.getByRole("heading", { name: "Army at 6, 8 and 10 minutes", exact: true })).toBeInViewport();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("map galleries and the race matrix fit a 375px phone and enlarge the map", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop-1280", "width is set explicitly");
+    await page.setViewportSize({ width: 375, height: 900 });
+    for (const path of ["/guides/maps", "/guides/maps/fixture-station-le"]) {
+      expect((await page.goto(path))?.status()).toBe(200);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    }
+    const matrix = page.getByRole("table", { name: "Win rate by matchup on this map" });
+    await expect(matrix.getByRole("rowheader")).toHaveCount(3);
+    await expect(matrix.getByRole("columnheader")).toHaveCount(3);
+    const mirror = matrix.getByRole("row").nth(1).getByRole("cell").nth(0);
+    await expect(mirror).toContainText("mirror");
+    await expect(mirror).not.toContainText("%");
+    await page.getByRole("button", { name: "Enlarge map: Fixture Station LE" }).click();
+    await expect(page.getByRole("dialog", { name: "Fixture Station LE map preview" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  });
+
   test("filtered opener controls stay inside a 375px page", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop-1280", "the viewport is set per test; run it once");
     await page.setViewportSize({ width: 375, height: 900 });
