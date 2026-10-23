@@ -19,6 +19,9 @@ import { Section } from "@/components/ui/Section";
 import { BrowserImportPanel } from "@/components/instant/BrowserImportPanel";
 import { BrowserVsAgentTable } from "@/components/instant/BrowserVsAgentTable";
 import { FolderSyncCard, useFolderSync } from "@/components/instant/FolderSyncCard";
+import { useInstantImport } from "@/lib/instant/useInstantImport";
+import { SettingsImportPanel } from "./SettingsImportPanel";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 
 /**
  * The Import settings tab.
@@ -27,6 +30,11 @@ import { FolderSyncCard, useFolderSync } from "@/components/instant/FolderSyncCa
  *   <SettingsImport />
  */
 export function SettingsImport() {
+  const instant = useInstantImport();
+  return <div className="space-y-6"><LazyHelpLink slug="importing-replay-history">Importing your replay history</LazyHelpLink><SettingsImportPanel />{instant.enabled ? <BrowserSettingsImport /> : null}</div>;
+}
+
+function BrowserSettingsImport() {
   const folderSync = useFolderSync();
   return (
     <div className="space-y-6">

@@ -34,3 +34,7 @@ Automatic review initially rejected the irreversible ml_models/ml_jobs cleanup m
 - Root continues welcome and settings-onboarding-polish-2. Then proceed through every remaining item in plan/final-plan.json and write the complete owner setup guide at docs/SETUP_GUIDE.md.
 
 The primary C:\\SC2TOOLS checkout has unrelated owner edits. Work stays in isolated worktrees under .worktrees. Stage explicit paths; never stage node_modules junctions or test-rewritten ladder-map-pool data.
+
+## Setup health follow-on prepared
+
+codex/wave2-setup-health completes settings-onboarding-polish-2: independent health rows/retry, safe diagnostic copy, desktop imports for every account, ten-job history, compact inline pairing, setup progress and deferred five-second dismissal Undo/restore. Local affected run: 272 tests; full application web run: 6,191 passed and one intentionally skipped, plus the display-only render harness. Web types/strict changed-file lint and all unchanged production budgets pass (/app 238.3/240). Real component fixture screenshots at 390/1440px were inspected with no overflow or browser errors. Games.latest is the played-game date, so its label truthfully says latest game rather than last sync. Depends on the atomic onboarding merge in #663. No live account or production import was changed.

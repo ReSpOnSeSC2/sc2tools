@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Setup health and replay imports
+
+- Settings checks profile, desktop connection, updates, games and replay archive independently, with source-specific Retry and safe diagnostics for support.
+- Desktop import controls and the last ten jobs are available to every signed-in user. Browser import keeps its account flag; offline PCs cannot receive start commands.
+- Pair from the dashboard checklist, see setup progress, undo dismissal for five seconds, or restore the checklist from Settings.
+
 ### Resumable setup
 
 - Setup remembers its step in the URL, recognizes paired PCs and existing games, and keeps browser import on its own Back path. Completed steps can be revisited.

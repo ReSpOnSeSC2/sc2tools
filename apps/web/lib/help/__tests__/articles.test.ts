@@ -175,10 +175,10 @@ describe("help articles", () => {
   });
 
   it("has a link checker that catches broken links", () => {
-    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/help/getting-started", "/help/opponents#net-mmr", "/help/replay-reviews#who-can-review"]) {
+    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=import", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/help/getting-started", "/help/opponents#net-mmr", "/help/replay-reviews#who-can-review"]) {
       expect(brokenInternalLink(ok), ok).toBeNull();
     }
-    for (const broken of ["/nope", "/settings?tab=nope", "/settings?tab=import", "/settings?tab=help#nope", "/help/nope", "/help/opponents#nope", "/help/replay-reviews#nope"]) {
+    for (const broken of ["/nope", "/settings?tab=nope", "/settings?tab=help#nope", "/help/nope", "/help/opponents#nope", "/help/replay-reviews#nope"]) {
       expect(brokenInternalLink(broken), broken).not.toBeNull();
     }
   });

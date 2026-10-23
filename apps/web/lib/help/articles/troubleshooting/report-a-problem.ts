@@ -47,6 +47,7 @@ const article: HelpArticle = {
       title: "These might help",
       text: "As you type the subject, matching help articles appear under it. Open one to read it beside the form; your draft stays where it is.",
     },
+    { type: "paragraph", text: "For a setup or sync problem, [Settings → Foundation](/settings?tab=foundation) has **Copy diagnostics** beside [Setup health](/help/setup-health). It copies your cloud user ID and a sanitized setup summary without emails, overlay URLs or tokens. You can paste that text into the report." },
     { type: "heading", text: "What goes with your report" },
     {
       type: "paragraph",
