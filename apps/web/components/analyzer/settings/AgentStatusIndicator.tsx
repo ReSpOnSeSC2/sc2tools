@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Activity, AlertCircle } from "lucide-react";
 import { useLiveGame } from "@/lib/useLiveGame";
+import { agentPresence } from "@/lib/agentPresence";
 import { useApi } from "@/lib/clientApi";
 
 /**
@@ -47,7 +48,6 @@ const FRESH_ANY_MS = 60_000;
  * DEFAULT_INTERVAL_SEC). Allow two misses before calling it offline so a
  * single dropped request or a slow round trip doesn't flicker the badge.
  */
-const FRESH_HEARTBEAT_MS = 150_000;
 /** Re-read /v1/me often enough that a stopped agent goes grey promptly. */
 const HEARTBEAT_POLL_MS = 60_000;
 
@@ -123,16 +123,9 @@ export function useAgentStatus(): AgentStatus {
 
   // No usable envelope. Fall back to the heartbeat: an agent with SC2
   // closed is connected, just not in a game.
-  const heartbeatMs = parseTimestamp(me?.agentLastSeenAt);
-  if (heartbeatMs !== null && now - heartbeatMs < FRESH_HEARTBEAT_MS) {
+  if (agentPresence(me?.agentLastSeenAt, now) === "online") {
     return "connected-idle";
   }
   return "offline";
 }
 
-/** Parse an ISO timestamp to epoch ms, or null when absent/unparseable. */
-function parseTimestamp(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const ms = Date.parse(value);
-  return Number.isFinite(ms) ? ms : null;
-}

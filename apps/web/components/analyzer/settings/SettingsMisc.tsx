@@ -65,7 +65,7 @@ const DEFAULT_TABS: ReadonlyArray<{ value: string; label: string }> = [
   { value: "trends", label: "Trends" },
   { value: "macro", label: "Macro" },
   { value: "battlefield", label: "Maps" },
-  { value: "builds", label: "Builds" },
+  { value: "builds", label: "Build stats" },
   { value: "arcade", label: "Arcade" },
 ];
 

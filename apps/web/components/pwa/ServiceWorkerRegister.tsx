@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
+import { startInstallCapture } from "@/lib/pwa/install";
 import { RefreshCw } from "lucide-react";
 
 const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -103,7 +104,8 @@ export function ServiceWorkerRegister() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (isOverlay) return;
-    if (window.location.protocol !== "https:" && window.location.hostname !== "localhost") {
+    startInstallCapture();
+    if (window.location.protocol !== "https:" && !["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname)) {
       return;
     }
     const swc = serviceWorkerContainer();

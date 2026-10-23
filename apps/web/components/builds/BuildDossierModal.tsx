@@ -18,7 +18,7 @@ import { BuildDefinitionCard } from "./BuildDefinitionCard";
 import type { CustomBuild } from "./types";
 
 /**
- * Modal opened from the `/builds` (Custom builds) card grid. Renders
+ * Modal opened from the `/builds` (Build library) card grid. Renders
  * the same `<BuildDossier />` surface as the analyzer modal and the
  * standalone `/builds/[slug]` route, so a card click stays on the
  * library page instead of full-page navigating away.

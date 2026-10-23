@@ -702,3 +702,12 @@ h4 {
   background: rgb(var(--text-dim));
   background-clip: content-box;
 }
+
+/* A pre-paint html attribute keeps pinned navigation from covering content. */
+html[data-rail="pinned"] .app-rail-placeholder,
+html[data-rail="pinned"] .app-rail { width: 14rem; }
+html[data-rail="pinned"] .app-rail-label { opacity: 1; }
+.app-rail-caption { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+html[data-rail="pinned"] .app-rail-caption,
+.app-rail:hover .app-rail-caption,
+.app-rail:focus-within .app-rail-caption { position: static; width: auto; height: auto; padding: 8px 10px 4px; margin: 0; overflow: visible; clip: auto; white-space: normal; }
