@@ -16,6 +16,18 @@ Affected verification passed 130 checks across24 suites, including the final
 release loading/size guards, inherited safe markdown and help contracts. Web
 typecheck and strict changed-file lint pass. Exact-CI production build and all
 unchanged budgets pass (/app233.8/240 kB, opponents175.8/180, guides169.8/175).
-Full web suite and actual browser verification are running/pending. No signing assertion, version bump, release/tag/install,
+Full web suite passed: 6,285 tests, 1 skipped across 658 suites. Actual Chromium
+checks passed at 390 and 1440 px with production CSS/fonts and fixture data:
+error/Retry vs empty release, OS command switching, safe release notes, conditional
+account notices, donation cost totals, copy and denied-clipboard selection,
+light/dark layouts, no horizontal overflow and no browser errors. Browser checks
+caught a grid min-content overflow with manual commands expanded on phones; the
+grid now uses shrinkable tracks and the command block scrolls within its card.
+Five reviewed screenshots are in docs/handoff/screenshots/download-polish-* and
+donate-polish-*. Grid correction focused tests passed 2/2. No signing assertion, version bump, release/tag/install,
 AI feature/API call, new infrastructure, donation or production account mutation.
 The INSTALLER_SIGNED flag stays false pending actual signed-artifact verification.
+
+The draft targets codex/wave2-download-donate-deps (the dependency-only merge at
+8a046ec6) so its diff stays focused. Root must integrate #671 and #672 and their
+parents, then retarget this draft to main and rerun final remote integration CI.

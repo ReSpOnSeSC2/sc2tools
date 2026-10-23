@@ -54,15 +54,15 @@ export function DownloadInteractive() {
   const os = active ?? (detected === "unknown" || mobile ? "windows" : detected);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_minmax(260px,360px)]">
-      <section className="space-y-4">
+    <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(260px,360px)]">
+      <section className="min-w-0 space-y-4">
         {mobile ? null : <OsTabs active={os} onChange={setActive} detected={detected} />}
         <DownloadCard os={os} />
         <InstallOptions />
         <ManualInstall os={os} />
       </section>
 
-      <aside className="space-y-4">
+      <aside className="min-w-0 space-y-4">
         <RecapCard />
         <SysReqCard os={os} />
       </aside>

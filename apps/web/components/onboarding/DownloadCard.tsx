@@ -215,7 +215,7 @@ function NextSteps() {
       heading: "The Agent window opens automatically",
       body: (
         <>
-          showing a 6-digit code {CODE_LOCATION}. Click <em>Open pairing
+          Use the 6-digit code {CODE_LOCATION}. Click <em>Open pairing
           page</em> and sign into SC2 Tools. The page opens with the code
           already filled in, so click <em>Link this PC</em> and confirm the
           PC details. <LazyHelpLink slug="install-and-pair">Install and linking help</LazyHelpLink>
