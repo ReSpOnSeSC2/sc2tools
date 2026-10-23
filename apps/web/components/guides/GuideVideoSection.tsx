@@ -1,4 +1,4 @@
-import { Section } from "@/components/ui/Section";
+import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { YouTubeFacade } from "@/components/guides/YouTubeFacade";
 import { GUIDE_LINK_CLASS, GUIDE_VIDEO_AUTHOR } from "@/components/guides/guideUi";
 import { safeVideoUrls } from "@/components/guides/youtubeUrls";
