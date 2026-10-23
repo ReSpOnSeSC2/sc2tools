@@ -276,6 +276,7 @@ describe("reviews and coaching articles", () => {
     expect(helpArticleAnchors(article!)).toEqual([
       "how-it-works",
       "asking-for-a-review",
+      "finding-requests",
       "writing-a-review",
       "who-can-review",
       "karma-and-badges",
@@ -287,6 +288,8 @@ describe("reviews and coaching articles", () => {
     expect(text).toContain("all of the game's chat");
     expect(text).toContain("20 games synced");
     expect(text).toContain("15 minutes");
+    expect(text).toContain("Race (asker race)");
+    expect(text).toContain("Search the game picker");
     expect(helpArticleLinks(article!)).toEqual(expect.arrayContaining(["/download", "/reviews", "/reviews/mine"]));
   });
 
