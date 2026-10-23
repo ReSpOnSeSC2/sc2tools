@@ -1393,6 +1393,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       opponents: services.opponents,
       identityMatcher: services.opponentIdentityMatcher,
       overlayLive: services.overlayLive,
+      community: services.community,
       auth,
       pulseIntel: services.pulseIntel,
       pulseLinks: services.pulseLinks,

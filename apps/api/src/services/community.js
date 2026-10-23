@@ -31,6 +31,13 @@ const K_ANONYMITY_THRESHOLD = 5;
 const AGGREGATE_OPPONENT_MAX_GAMES = 20000;
 const PUBLIC_AUTHOR_BUILD_LIMIT = 100;
 
+// The dossier asks "is this opponent's public profile live?" on every
+// load. The answer only moves when another player's games land, so it
+// is cached per process: an hour is fresh enough for a link, and the
+// entry cap keeps memory flat on the single instance.
+const OPPONENT_AVAILABILITY_TTL_MS = 60 * 60 * 1000;
+const OPPONENT_AVAILABILITY_MAX_ENTRIES = 5000;
+
 /**
  * Match current rows plus legacy publications that stored the private slug
  * only inside build.
@@ -248,7 +255,7 @@ function pickTop(counts) {
 class CommunityService {
   /**
    * @param {import('../db/connect').DbContext} db
-   * @param {{slugSecret?: Buffer|string}} [opts]
+   * @param {{slugSecret?: Buffer|string, now?: () => number}} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
@@ -261,6 +268,15 @@ class CommunityService {
      * @type {Map<string, ReportTargetHandlers>}
      */
     this.reportTargets = new Map();
+    /**
+     * pulseId → whether its public opponent profile meets the
+     * k-anonymity floor, with the time the answer expires.
+     *
+     * @type {Map<string, {available: boolean, expiresAt: number}>}
+     */
+    this.opponentAvailability = new Map();
+    /** @type {() => number} */
+    this.now = typeof opts.now === "function" ? opts.now : Date.now;
   }
 
   /**
@@ -1398,9 +1414,77 @@ class CommunityService {
    * private correction of the opponent's build never reaches the public
    * profile.
    *
+   * The result carries the resolved SC2Pulse ``pulseCharacterId`` (or
+   * null) so the public page can name the opponent by it rather than by
+   * the toon handle in its URL.
+   *
    * @param {string} pulseId
    */
   async aggregateOpponent(pulseId) {
+    const { filter, pulseCharacterId } = await this._opponentScope(pulseId);
+    if (!(await this._opponentFloorMet(filter))) {
+      return null;
+    }
+    const games = await this.db.games
+      .find(filter, {
+        projection: {
+          userId: 1,
+          result: 1,
+          map: 1,
+          "opponent.race": 1,
+          "opponent.strategy": 1,
+          "opponent.opening": 1,
+          ...OPP_INTENT_LABEL_PROJECTION,
+          _id: 0,
+        },
+      })
+      // Hard cap: aggregate quality saturates long before this, and it
+      // bounds memory for celebrity opponents. Most recent-inserted
+      // rows win (natural order); counts below reflect the capped set.
+      .limit(AGGREGATE_OPPONENT_MAX_GAMES)
+      .toArray();
+    return summarizeOpponentGames(pulseId, pulseCharacterId, games);
+  }
+
+  /**
+   * Whether ``/community/opponents/:pulseId`` has a public profile, for
+   * the private dossier's "Public profile" link. Uses the same indexed
+   * k-anonymity pre-check as aggregateOpponent (without loading games)
+   * and caches the answer per process for an hour, so a dossier load
+   * costs at most one ``distinct`` per opponent per hour.
+   *
+   * @param {string} pulseId
+   * @returns {Promise<boolean>}
+   */
+  async opponentProfileAvailable(pulseId) {
+    const now = this.now();
+    const cached = this.opponentAvailability.get(pulseId);
+    if (cached && cached.expiresAt > now) return cached.available;
+    const { filter } = await this._opponentScope(pulseId);
+    const available = await this._opponentFloorMet(filter);
+    // Re-insert so insertion order is answer age: the cap below drops
+    // the oldest answers first.
+    this.opponentAvailability.delete(pulseId);
+    this.opponentAvailability.set(pulseId, {
+      available,
+      expiresAt: now + OPPONENT_AVAILABILITY_TTL_MS,
+    });
+    while (this.opponentAvailability.size > OPPONENT_AVAILABILITY_MAX_ENTRIES) {
+      const oldest = this.opponentAvailability.keys().next().value;
+      if (oldest === undefined) break;
+      this.opponentAvailability.delete(oldest);
+    }
+    return available;
+  }
+
+  /**
+   * The games filter for one opponent across every user, and the
+   * SC2Pulse character id it resolved to.
+   *
+   * @param {string} pulseId
+   * @returns {Promise<{filter: Record<string, any>, pulseCharacterId: string|null}>}
+   */
+  async _opponentScope(pulseId) {
     // Discover the canonical SC2Pulse character id for this toon
     // handle from any opponents row that's seen it. If a player
     // ever rebound their Battle.net account, two distinct toon
@@ -1433,85 +1517,23 @@ class CommunityService {
           isResumedFromReplay: { $ne: true },
           "opponent.pulseId": pulseId,
         };
-    // Check the k-anonymity floor BEFORE materializing rows. This is a
-    // public, unauthenticated endpoint: for a heavily-faced opponent
-    // (a pro / streamer) the old load-then-count shape let any
-    // anonymous caller trigger an unbounded scan+load of every user's
-    // games. ``distinct`` resolves from the index without shipping
-    // documents.
+    return { filter, pulseCharacterId };
+  }
+
+  /**
+   * The k-anonymity floor, checked BEFORE materializing rows. This is a
+   * public, unauthenticated endpoint: for a heavily-faced opponent (a
+   * pro / streamer) the old load-then-count shape let any anonymous
+   * caller trigger an unbounded scan+load of every user's games.
+   * ``distinct`` resolves from the index without shipping documents.
+   *
+   * @param {Record<string, any>} filter
+   * @returns {Promise<boolean>}
+   */
+  async _opponentFloorMet(filter) {
     const distinctUserIds = (await this.db.games.distinct("userId", filter))
       .filter((userId) => typeof userId === "string" && userId.length > 0);
-    if (distinctUserIds.length < K_ANONYMITY_THRESHOLD) {
-      return null;
-    }
-    const games = await this.db.games
-      .find(filter, {
-        projection: {
-          userId: 1,
-          result: 1,
-          map: 1,
-          "opponent.race": 1,
-          "opponent.strategy": 1,
-          "opponent.opening": 1,
-          ...OPP_INTENT_LABEL_PROJECTION,
-          _id: 0,
-        },
-      })
-      // Hard cap: aggregate quality saturates long before this, and it
-      // bounds memory for celebrity opponents. Most recent-inserted
-      // rows win (natural order); counts below reflect the capped set.
-      .limit(AGGREGATE_OPPONENT_MAX_GAMES)
-      .toArray();
-    const distinctUsers = new Set(
-      games
-        .map((g) => g.userId)
-        .filter((userId) => typeof userId === "string" && userId.length > 0),
-    );
-    // The indexed pre-check above applies to the complete match set. A single
-    // prolific contributor can still occupy the entire bounded sample while
-    // four sparse contributors sit beyond the 20k cap. Never publish that
-    // sample: the aggregate itself must independently satisfy k-anonymity.
-    if (distinctUsers.size < K_ANONYMITY_THRESHOLD) {
-      return null;
-    }
-    let wins = 0;
-    let losses = 0;
-    /** @type {Record<string, number>} */
-    const openings = {};
-    /** @type {Record<string, number>} */
-    const strategies = {};
-    /** @type {Record<string, {wins: number, losses: number}>} */
-    const byMap = {};
-    /** @type {string|undefined} */
-    let race = undefined;
-    for (const g of games) {
-      // From the opponent's perspective: their wins are our losses.
-      if (g.result === "Defeat") wins += 1;
-      if (g.result === "Victory") losses += 1;
-      if (!race && g.opponent?.race) race = g.opponent.race;
-      const op = g.opponent?.opening;
-      if (op) openings[op] = (openings[op] || 0) + 1;
-      const st = opponentDetectorView(g).strategy;
-      if (st) strategies[st] = (strategies[st] || 0) + 1;
-      if (g.map) {
-        if (!byMap[g.map]) byMap[g.map] = { wins: 0, losses: 0 };
-        if (g.result === "Defeat") byMap[g.map].wins += 1;
-        if (g.result === "Victory") byMap[g.map].losses += 1;
-      }
-    }
-    const total = wins + losses;
-    return {
-      pulseId,
-      race,
-      contributors: distinctUsers.size,
-      games: games.length,
-      wins,
-      losses,
-      winRate: total > 0 ? wins / total : 0,
-      openings,
-      strategies,
-      byMap,
-    };
+    return distinctUserIds.length >= K_ANONYMITY_THRESHOLD;
   }
 
   // ── Moderation queue ─────────────────────────────────────────────
@@ -1706,6 +1728,69 @@ class CommunityService {
     // Fallback — astronomically unlikely.
     return `build-${crypto.randomBytes(8).toString("hex")}`;
   }
+}
+
+/**
+ * Fold one opponent's (capped) games into the public aggregate, from the
+ * opponent's perspective, or null when the sample itself falls below the
+ * k-anonymity floor.
+ *
+ * @param {string} pulseId
+ * @param {string|null} pulseCharacterId
+ * @param {Array<Record<string, any>>} games
+ */
+function summarizeOpponentGames(pulseId, pulseCharacterId, games) {
+  const distinctUsers = new Set(
+    games
+      .map((g) => g.userId)
+      .filter((userId) => typeof userId === "string" && userId.length > 0),
+  );
+  // The indexed pre-check applies to the complete match set. A single
+  // prolific contributor can still occupy the entire bounded sample while
+  // four sparse contributors sit beyond the 20k cap. Never publish that
+  // sample: the aggregate itself must independently satisfy k-anonymity.
+  if (distinctUsers.size < K_ANONYMITY_THRESHOLD) {
+    return null;
+  }
+  let wins = 0;
+  let losses = 0;
+  /** @type {Record<string, number>} */
+  const openings = {};
+  /** @type {Record<string, number>} */
+  const strategies = {};
+  /** @type {Record<string, {wins: number, losses: number}>} */
+  const byMap = {};
+  /** @type {string|undefined} */
+  let race = undefined;
+  for (const g of games) {
+    // From the opponent's perspective: their wins are our losses.
+    if (g.result === "Defeat") wins += 1;
+    if (g.result === "Victory") losses += 1;
+    if (!race && g.opponent?.race) race = g.opponent.race;
+    const op = g.opponent?.opening;
+    if (op) openings[op] = (openings[op] || 0) + 1;
+    const st = opponentDetectorView(g).strategy;
+    if (st) strategies[st] = (strategies[st] || 0) + 1;
+    if (g.map) {
+      if (!byMap[g.map]) byMap[g.map] = { wins: 0, losses: 0 };
+      if (g.result === "Defeat") byMap[g.map].wins += 1;
+      if (g.result === "Victory") byMap[g.map].losses += 1;
+    }
+  }
+  const total = wins + losses;
+  return {
+    pulseId,
+    pulseCharacterId,
+    race,
+    contributors: distinctUsers.size,
+    games: games.length,
+    wins,
+    losses,
+    winRate: total > 0 ? wins / total : 0,
+    openings,
+    strategies,
+    byMap,
+  };
 }
 
 module.exports = { CommunityService, K_ANONYMITY_THRESHOLD };

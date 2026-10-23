@@ -98,7 +98,8 @@ describe("opponent profile channel placement", () => {
     expect(within(header).getByRole("link", { name: "8703807" }).getAttribute("href")).toContain("id=8703807");
     expect(within(header).getByText("· toon 2-S2-2-240434")).toBeTruthy();
     expect(within(header).getByRole("link", { name: "Visit Strange's Twitch channel" })).toBeTruthy();
-    expect(within(header).getByRole("link", { name: "community profile →" }).getAttribute("href")).toBe("/community/opponents/8703807");
+    // No communityAvailable in this payload: the public profile link stays hidden.
+    expect(within(header).queryByRole("link", { name: /Public profile/ })).toBeNull();
     expect(usePlayerChannelsMock).toHaveBeenCalledWith([{ pulseId: "8703807", pulseCharacterId: "8703807", toonHandle: "2-S2-2-240434" }]);
     expect(within(header).getByRole("note", { name: "Protoss MMR 6100 for Strange's main profile" }).getAttribute("title")).toBe("Highest-rated race on Strange's confirmed main profile (SC2Pulse)");
     expect(screen.getByRole("link", { name: "View SC2Pulse profile" }).getAttribute("href")).toContain("id=236671");
@@ -147,5 +148,32 @@ describe("opponent profile channel placement", () => {
     expect(within(header).getByRole("note", { name: "Latest recorded SC2Pulse MMR 6305 for Strange's main profile" })).toBeTruthy();
     expect(screen.queryByText("5,275")).toBeNull();
     expect(useApiMock).toHaveBeenCalledWith("/v1/opponents/8703807/pulse-intel", { revalidateOnFocus: false });
+  });
+});
+
+describe("opponent profile public-profile link", () => {
+  it("links the public profile only once it exists, and explains the player floor", () => {
+    useApiMock.mockImplementation((path: string) => ({
+      data: path.includes("pulse-races") ? undefined : { ...confirmedProfile, communityAvailable: true },
+      isLoading: false,
+    }));
+    channelsForMock.mockReturnValue(undefined);
+    render(<ProfileView pulseId="8703807" onBack={vi.fn()} />);
+    const header = screen.getByLabelText("Opponent profile");
+    const link = within(header).getByRole("link", { name: "Public profile" });
+    expect(link.getAttribute("href")).toBe("/community/opponents/8703807");
+    expect(link.getAttribute("title")).toContain("at least 5 different players");
+    expect(link.getAttribute("aria-describedby")).toBe("public-profile-tip");
+    expect(screen.queryByRole("link", { name: /community profile/ })).toBeNull();
+  });
+
+  it("hides the link when the public profile doesn't exist yet", () => {
+    useApiMock.mockImplementation((path: string) => ({
+      data: path.includes("pulse-races") ? undefined : { ...confirmedProfile, communityAvailable: false },
+      isLoading: false,
+    }));
+    channelsForMock.mockReturnValue(undefined);
+    render(<ProfileView pulseId="8703807" onBack={vi.fn()} />);
+    expect(screen.queryByRole("link", { name: /Public profile/ })).toBeNull();
   });
 });
