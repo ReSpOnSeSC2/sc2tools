@@ -33,3 +33,7 @@ Optional:
 1. After deploy, open Admin > Infrastructure and check the "Database backups" card. If it says "Atlas refused the backup check", give the service account Project Read Only on the project in Atlas (Access Manager). If it says "Not connected", the ATLAS_* variables aren't set in Render.
 2. To turn off the hourly stale-backup check, set SC2TOOLS_BACKUP_ALERT_DISABLED=1 on the Render API service.
 3. Read docs/runbooks/restore-database.md once. Atlas restores have to be done by a person with the Project Owner role, because the app's account is read-only.
+
+### welcome-wizard-resumable
+
+Deploy the API update before the web. Onboarding preference PUTs now merge fields atomically; other preference types retain their existing replacement behavior. No migration, environment setting or release tag is required. The welcome flow depends on the pairing/device API and shared form from `pairing-web-and-devices`.
