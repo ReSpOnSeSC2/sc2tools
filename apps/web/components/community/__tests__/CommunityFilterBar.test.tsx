@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -63,6 +63,31 @@ it("restores search on Back and Forward after clearing it", async () => {
   h.query = "q=roach"; rerender(<View props={{ ...defaults, initialSearch: "roach" }} />);
   expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("roach");
   h.query = ""; rerender(<View props={defaults} />); expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("");
+});
+
+it("never debounces an old draft during an external navigation commit", () => {
+  // A busy browser can run a due timer before a passive-effect state update
+  // commits. External URL synchronization must not queue an obsolete replace.
+  function NavigationCommit({ props }: { props: CommunityFilterBarProps }) {
+    useEffect(() => { if (!props.initialSearch) vi.advanceTimersByTime(300); }, [props.initialSearch]);
+    return <View props={props} />;
+  }
+  h.query = "q=roach";
+  const view = render(<NavigationCommit props={{ ...defaults, initialSearch: "roach" }} />);
+  h.query = "";
+  view.rerender(<NavigationCommit props={defaults} />);
+  expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("");
+  expect(h.replace).not.toHaveBeenCalled();
+});
+
+it("restores Back from client URL params before cached server props settle", () => {
+  h.query = "q=roach";
+  const view = render(<View props={{ ...defaults, initialSearch: "roach" }} />);
+  h.query = ""; view.rerender(<View props={defaults} />);
+  h.query = "q=roach"; view.rerender(<View props={defaults} />);
+  expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("roach");
+  act(() => vi.advanceTimersByTime(300));
+  expect(h.replace).not.toHaveBeenCalled();
 });
 
 it("writes race, vs and skill while retaining the current search/sort and dropping pagination", () => {
