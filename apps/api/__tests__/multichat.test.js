@@ -1517,6 +1517,16 @@ describe("routes/multichat studio", () => {
     expect(r2.body.poll).toBeNull();
   });
 
+  test.each(["intermission", "ending"])("Dock scene %s persists and clears through HTTP", async (mode) => {
+    const saved = await request(app2).post(`/v1/multichat/${token2}/studio`).send({ scene: { mode, message: "Scene message" } });
+    expect(saved.status).toBe(200);
+    expect(saved.body.scene).toMatchObject({ mode, message: "Scene message", countdownEndsAt: null });
+    const read = await request(app2).get(`/v1/multichat/${token2}/studio`);
+    expect(read.body.scene.mode).toBe(mode);
+    const cleared = await request(app2).post(`/v1/multichat/${token2}/studio`).send({ scene: null });
+    expect(cleared.body.scene).toBeNull();
+  });
+
   test("scene round-trips sanitized; Go live clears it", async () => {
     const future = Date.now() + 5 * 60_000;
     const set = await request(app2)

@@ -25,6 +25,7 @@ import {
   type StudioScene,
 } from "@/lib/multichat/useStudioState";
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
+import { STUDIO_SCENE_HEADLINES } from "@/lib/multichat/sceneModes";
 import { testScene } from "@/lib/multichat/testStudio";
 import type { LiveGamePayload } from "../types";
 import { useOverlayBuildRefresh } from "../useOverlayBuildRefresh";
@@ -130,8 +131,8 @@ export function StreamSceneCanvas({
   videoFormat: StudioBrollVideoFormat;
 }) {
   const hasBroll = broll.clips.length > 0;
-  const isBrb = scene.mode === "brb";
-  const headline = isBrb ? "BE RIGHT BACK" : "STARTING SOON";
+  const headline = STUDIO_SCENE_HEADLINES[scene.mode];
+  const doneLabel = scene.mode === "starting" ? "STARTING NOW" : scene.mode === "ending" ? "STREAM ENDING" : "BACK ANY MOMENT";
   const done = remainMs !== null && remainMs <= 0;
 
   return (
@@ -164,9 +165,7 @@ export function StreamSceneCanvas({
                   style={brollCountdownStyle}
                 >
                   {done
-                    ? isBrb
-                      ? "BACK ANY MOMENT"
-                      : "STARTING NOW"
+                    ? doneLabel
                     : formatCountdown(remainMs)}
                 </div>
               ) : null}
@@ -210,7 +209,7 @@ export function StreamSceneCanvas({
             {remainMs !== null ? (
               done ? (
                 <div className="scn-now" style={defaultCountdownStyle}>
-                  {isBrb ? "BACK ANY MOMENT" : "STARTING NOW"}
+                  {doneLabel}
                 </div>
               ) : (
                 <div style={defaultCountdownStyle}>

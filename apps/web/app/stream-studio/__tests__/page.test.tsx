@@ -5,6 +5,8 @@ import StreamStudioRoute, { metadata } from "../page";
 import { StreamStudioPage } from "@/components/landing/StreamStudioPage";
 import { PRODUCT_FACTS } from "@/lib/productFacts";
 
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: false }) }));
+
 afterEach(() => {
   cleanup();
   vi.unstubAllEnvs();

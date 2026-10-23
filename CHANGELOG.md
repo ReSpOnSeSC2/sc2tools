@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Stream Dock and learning pages
+
+- Run build votes, switch all four stream scenes and undo or manage chat blocks; blocked authors do not vote in polls. Refresh existing scene Browser Sources once to recognize Intermission and Stream ending.
+- Stream Studio links features to their guides, offers signed-in setup shortcuts, opens the desktop preview gallery and lets you undo a course-progress reset.
+
 ### Analyzer filters and Trends
 
 - Filters have a readable summary, a full phone editor and focused desktop controls. Today explains its scope and remembers whether its editor is open; Arcade keeps its own scope.

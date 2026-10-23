@@ -28,6 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import {
   blockedUserSet,
+  normalizeBlockedUser,
   excludeBlockedUsers,
   DEFAULT_APPEARANCE,
   sanitizeAppearance,
@@ -47,7 +48,9 @@ import { sanitizeTtsConfig, type ChatTtsConfig } from "@/lib/multichat/tts";
 import { useVoiceApplier } from "@/lib/useVoiceApplier";
 import { inferVoiceGender } from "@/lib/voiceCatalog";
 import { DockChat } from "./DockChat";
-import { DockPoll } from "./DockPoll";
+import { DockBlockedUsers } from "./DockBlockedUsers";
+import { DOCK_BLOCKLIST_MAX } from "./dockConstants";
+import { DockPollCard } from "./DockPollCard";
 import { DockGoals } from "./DockGoals";
 import { DockScenes, DockTimer } from "./DockScenes";
 import { DockClips } from "./DockClips";
@@ -410,7 +413,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
 
   const [autoRead, setAutoRead] = useState(false);
   useEffect(() => {
-    setAutoRead(window.localStorage.getItem("dock:autoReadHighlights") === "1");
+    try { setAutoRead(window.localStorage.getItem("dock:autoReadHighlights") === "1"); } catch { /* Session-only preference. */ }
   }, []);
   const toggleAutoRead = (on: boolean) => {
     setAutoRead(on);
@@ -434,17 +437,32 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
     if (autoReadRef.current) speakHighlight(h);
   }, [studio.highlight, speakHighlight]);
 
-  const blockUser = useCallback(
-    async (user: string): Promise<StudioState | null> => {
-      if (!studioSnapshotReady) return null;
-      const retry = () => {
-        const latest = latestStudioRef.current;
-        return latest?.token === token ? postStudio({ blockedUsers: [...latest.state.blockedUsers, user] }, retry) : Promise.resolve(null);
-      };
-      return retry();
-    },
-    [postStudio, studioSnapshotReady, token],
-  );
+  const [blockUndo, setBlockUndo] = useState<{ user: string; at: number } | null>(null);
+  useEffect(() => {
+    if (!blockUndo) return;
+    const timer = setTimeout(() => setBlockUndo(null), 6000);
+    return () => clearTimeout(timer);
+  }, [blockUndo]);
+  const editBlocklist = useCallback(async (user: string, block: boolean): Promise<StudioState | null> => {
+    if (!studioSnapshotReady) return null;
+    const retry = () => {
+      const latest = latestStudioRef.current;
+      if (latest?.token !== token) return Promise.resolve(null);
+      const current = latest.state.blockedUsers;
+      const remaining = current.filter((entry) => normalizeBlockedUser(entry) !== normalizeBlockedUser(user));
+      if (block && remaining.length >= DOCK_BLOCKLIST_MAX) return Promise.resolve(null);
+      return postStudio({ blockedUsers: block ? [...remaining, user] : remaining }, retry);
+    };
+    return retry();
+  }, [postStudio, studioSnapshotReady, token]);
+  const blockUser = async (user: string) => {
+    const saved = await editBlocklist(user, true);
+    if (saved?.blockedUsers.some((entry) => normalizeBlockedUser(entry) === normalizeBlockedUser(user))) setBlockUndo({ user, at: Date.now() });
+  };
+  const unblockUser = async (user: string) => {
+    const saved = await editBlocklist(user, false);
+    if (saved && blockUndo && normalizeBlockedUser(blockUndo.user) === normalizeBlockedUser(user)) setBlockUndo(null);
+  };
 
   const [dockUrl, setDockUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -498,10 +516,13 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
             statuses={statuses}
             blockedUsers={[...blockedUsers]}
             busy={busy}
+            blocklistFull={studio.blockedUsers.length >= DOCK_BLOCKLIST_MAX}
             viewers={viewers}
             onHighlight={(m) => void highlightMessage(m)}
             onBlock={(user) => void blockUser(user)}
           />
+          {blockUndo ? <p role="status" className="mt-2 text-caption text-success">Blocked {blockUndo.user} · <button type="button" disabled={busy || !studioSnapshotReady} onClick={() => void unblockUser(blockUndo.user)} className="underline">Undo</button></p> : null}
+          <DockBlockedUsers users={studio.blockedUsers} managedUsers={moderationAppearance.blockedUsers.split(",").map((u) => u.trim()).filter(Boolean)} ready={studioSnapshotReady} busy={busy} onUnblock={(user) => void unblockUser(user)} />
         </section>
 
         <div className="min-w-0 space-y-3">
@@ -554,6 +575,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
           <section id="dock-scenes" className="scroll-mt-12">
             <SectionCard title="Scenes">
               <DockScenes
+                token={token}
                 studioReady={studioSnapshotReady}
                 scene={studio.scene}
                 broll={studio.broll}
@@ -589,10 +611,11 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
 
           <section id="dock-poll" className="scroll-mt-12">
             <SectionCard title="Poll">
-              <DockPoll
+              <DockPollCard
+                token={token}
                 studioReady={studioSnapshotReady}
                 poll={studio.poll}
-                messages={messages}
+                messages={moderatedMessages}
                 busy={busy}
                 onPost={postStudioAction}
               />
@@ -686,11 +709,13 @@ export function DockButton({
   disabled,
   onClick,
   danger,
+  success,
   children,
 }: {
   disabled?: boolean;
   onClick: () => void;
   danger?: boolean;
+  success?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -702,6 +727,7 @@ export function DockButton({
         "rounded-md border px-2.5 py-1.5 text-caption font-medium transition-colors disabled:opacity-50",
         danger
           ? "border-danger/50 text-danger hover:bg-danger/10"
+          : success ? "border-success/50 bg-success/15 text-success hover:bg-success/25"
           : "border-border bg-bg-elevated text-text hover:border-accent",
       ].join(" ")}
     >

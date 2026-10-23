@@ -20,7 +20,9 @@ import { DockButton } from "./DockClient";
 import type { DockPost } from "./dockActions";
 import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
-const QUICK_MINUTES = [5, 10, 15] as const;
+import { DOCK_QUICK_MINUTES } from "./dockConstants";
+import { useSceneMessages } from "./useSceneMessages";
+import { STUDIO_SCENE_LABELS, type StudioSceneMode } from "@/lib/multichat/sceneModes";
 
 export function DockTimer({
   timer,
@@ -98,7 +100,7 @@ export function DockTimer({
           className="w-16 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption tabular-nums text-text focus:border-accent focus:outline-none"
         />
         <span className="text-caption text-text-dim">min</span>
-        {[1, 5, 10, 15].map((m) => (
+        {DOCK_QUICK_MINUTES.map((m) => (
           <button
             key={m}
             type="button"
@@ -126,6 +128,7 @@ export function DockTimer({
 }
 
 export function DockScenes({
+  token,
   scene,
   broll,
   busy,
@@ -133,6 +136,7 @@ export function DockScenes({
   streamStartMs = null,
   onPost,
 }: {
+  token?: string;
   scene: StudioScene | null;
   broll: StudioBrollConfig;
   busy: boolean;
@@ -142,6 +146,7 @@ export function DockScenes({
   onPost: DockPost;
 }) {
   const [message, setMessage] = useState("");
+  const presets = useSceneMessages(token);
   const [minutes, setMinutes] = useState<number>(5);
   const [volumeDraft, setVolumeDraft] = useState(broll.volume);
   const volumeInFlightRef = useRef<number | null>(null);
@@ -163,7 +168,7 @@ export function DockScenes({
   }, [scene?.countdownEndsAt]);
 
   const { run, notice, pending } = useDockPanelActions(studioReady, busy, onPost, {
-    start: (mode: "brb" | "starting") => ({ patch: { scene: { mode, message: message.trim(), countdownEndsAt: minutes > 0 ? Date.now() + Math.round(minutes) * 60_000 : null } }, message: mode === "brb" ? "Scene set to BRB" : "Scene set to Starting Soon", after: () => { setMessage(""); setMinutes(5); } }),
+    start: (mode: StudioSceneMode) => ({ patch: { scene: { mode, message: message.trim(), countdownEndsAt: minutes > 0 ? Date.now() + Math.round(minutes) * 60_000 : null } }, message: `Scene set to ${STUDIO_SCENE_LABELS[mode]}`, after: () => { presets.remember(message.trim()); setMessage(""); setMinutes(5); } }),
     live: () => ({ patch: { scene: null, ...(scene?.mode === "starting" && !streamStartMs ? { streamStartMs: Date.now() } : {}) }, message: "Stream is live" }),
     shuffle: () => ({ patch: { broll: { shuffle: !broll.shuffle } }, message: "B-roll order saved" }),
     mute: () => ({ patch: { broll: { muted: !broll.muted } }, message: "B-roll audio saved" }),
@@ -202,7 +207,7 @@ export function DockScenes({
       {scene ? (
         <div className="flex flex-wrap items-center gap-2 rounded-md border border-accent-cyan/40 bg-accent-cyan/10 px-2.5 py-2">
           <span className="text-micro font-bold uppercase tracking-widest text-accent-cyan">
-            {scene.mode === "brb" ? "BRB on stream" : "Starting Soon on stream"}
+            {STUDIO_SCENE_LABELS[scene.mode]} on stream
           </span>
           {remainMs !== null ? (
             <span className="text-caption tabular-nums text-text">
@@ -211,7 +216,7 @@ export function DockScenes({
           ) : null}
           <DockButton
             disabled={busy}
-            danger
+            success
             onClick={() =>
               // Going live off "Starting Soon" is the natural stream
               // start — auto-mark it for the clip log's VOD offsets,
@@ -225,7 +230,7 @@ export function DockScenes({
       ) : (
         <p className="text-caption text-text-dim">
           Stream is live — no scene overlay. Add the{" "}
-          <b>BRB / Starting Soon</b> Browser Source to your OBS scenes
+          <b>Stream scene</b> Browser Source to your OBS scenes
           first (Settings → Overlay).
         </p>
       )}
@@ -250,8 +255,8 @@ export function DockScenes({
         </div>
         <p className="mt-1 text-micro text-text-dim">
           {clipCount > 0
-            ? "These highlights belong to this Stream Dock and play automatically behind the compact banner whenever Starting Soon or BRB is active."
-            : "This Stream Dock has no b-roll. The default BRB / Starting Soon screen is active; add your own YouTube highlights below to enable it."}
+            ? "These highlights belong to this Stream Dock and play automatically behind the compact banner whenever a scene is active."
+            : "This Stream Dock has no b-roll. The default stream scene is active; add your own YouTube highlights below to enable it."}
         </p>
 
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -319,6 +324,13 @@ export function DockScenes({
         className="w-full min-w-0 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption text-text placeholder:text-text-muted focus:border-accent focus:outline-none"
       />
 
+      {presets.messages.length > 0 ? <div aria-label="Saved scene messages" className="flex flex-wrap gap-1.5">
+        {presets.messages.map((preset) => <span key={preset} className="inline-flex max-w-full items-center rounded-md border border-border text-caption">
+          <button type="button" onClick={() => setMessage(preset)} className="min-w-0 truncate px-2 py-1 text-text">{preset}</button>
+          <button type="button" onClick={() => presets.remove(preset)} aria-label={`Remove saved message: ${preset}`} className="px-2 py-1 text-text-muted">×</button>
+        </span>)}
+      </div> : null}
+
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-caption text-text-dim">Countdown</span>
         <input
@@ -333,7 +345,7 @@ export function DockScenes({
           className="w-16 rounded-md border border-border bg-bg-elevated px-2 py-1 text-caption tabular-nums text-text focus:border-accent focus:outline-none"
         />
         <span className="text-caption text-text-dim">min</span>
-        {QUICK_MINUTES.map((m) => (
+        {DOCK_QUICK_MINUTES.map((m) => (
           <button
             key={m}
             type="button"
@@ -351,12 +363,9 @@ export function DockScenes({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <DockButton disabled={busy} onClick={() => void run("start", "starting")}>
-          ▶ Starting soon
-        </DockButton>
-        <DockButton disabled={busy} onClick={() => void run("start", "brb")}>
-          ⏸ BRB
-        </DockButton>
+        {(Object.keys(STUDIO_SCENE_LABELS) as StudioSceneMode[]).map((mode) => <DockButton key={mode} disabled={busy} onClick={() => void run("start", mode)}>
+          {STUDIO_SCENE_LABELS[mode]}
+        </DockButton>)}
       </div>
     </div></fieldset>
   );
