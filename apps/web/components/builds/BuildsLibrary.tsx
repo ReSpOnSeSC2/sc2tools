@@ -146,6 +146,7 @@ function BuildsLibraryInner() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorBuild, setEditorBuild] = useState<CustomBuild | null>(null);
   const [richEditBuild, setRichEditBuild] = useState<CustomBuild | null>(null);
+  const [richEditFocus, setRichEditFocus] = useState<"notes" | "preview" | undefined>();
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishBuild, setPublishBuild] = useState<CustomBuild | null>(null);
   const [dossierBuild, setDossierBuild] = useState<CustomBuild | null>(null);
@@ -235,11 +236,12 @@ function BuildsLibraryInner() {
   );
 
   const openEdit = useCallback(
-    (slug: string) => {
+    (slug: string, initialFocus?: "notes" | "preview") => {
       const target = items.find((b) => b.slug === slug) || null;
       // Opens the rich rule-based editor (the same modal used by
       // "Save as new build") pre-populated with the existing build.
       setRichEditBuild(target);
+      setRichEditFocus(initialFocus);
       setDossierBuild(null);
     },
     [items],
@@ -286,7 +288,7 @@ function BuildsLibraryInner() {
 
   const handleSaved = useCallback(
     async (saved: CustomBuild, result?: BuildEditorSaveResult) => {
-      toast.success(
+      if (!result) toast.success(
         editorBuild ? `Saved “${saved.name}”.` : `Created “${saved.name}”.`,
       );
       if (!result?.reclassifyError && result?.reclassifyRequested) {
@@ -547,6 +549,7 @@ function BuildsLibraryInner() {
       /> : null}
       {richEditBuild ? <EditCustomBuildLauncher
         build={richEditBuild}
+        initialFocus={richEditFocus}
         onClose={() => setRichEditBuild(null)}
         onSaved={async (saved, result) => {
           await handleSaved(saved, result);

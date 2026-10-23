@@ -22,8 +22,10 @@ it("keeps one Dashboard heading while loading and after data settles", () => {
   mocks.loading = false;
   rerender(<Dashboard />);
   expect(screen.getAllByRole("heading", { level: 1, name: "Dashboard" })).toHaveLength(1);
-  fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
-  expect(mocks.recent).toHaveBeenCalledTimes(1);
+  const refresh = screen.getAllByRole("button", { name: "Refresh" });
+  expect(refresh).toHaveLength(2);
+  refresh.forEach((button) => fireEvent.click(button));
+  expect(mocks.recent).toHaveBeenCalledTimes(2);
 });
 
 it("keeps failures recoverable while revalidating each independent source", () => {

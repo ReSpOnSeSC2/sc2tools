@@ -39,6 +39,7 @@ import type { BuildRule } from "@/lib/build-rules";
  * user can spot which event triggered the hit.
  */
 export function BuildEditorPreview({
+  focusRef,
   preview,
   loading,
   error,
@@ -81,7 +82,7 @@ export function BuildEditorPreview({
   });
 
   return (
-    <section aria-label="Match preview" className="space-y-2">
+    <section ref={focusRef} tabIndex={-1} aria-label="Match preview" className="space-y-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
       <h3 className="text-caption font-semibold uppercase tracking-wider text-text-muted">
         3 · Match preview
       </h3>

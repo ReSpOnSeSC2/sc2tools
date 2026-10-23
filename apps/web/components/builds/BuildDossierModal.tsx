@@ -14,6 +14,7 @@ import {
   type VsRace,
 } from "@/lib/race";
 import { BuildDossier } from "./BuildDossier";
+import { BuildDefinitionCard } from "./BuildDefinitionCard";
 import type { CustomBuild } from "./types";
 
 /**
@@ -22,8 +23,8 @@ import type { CustomBuild } from "./types";
  * standalone `/builds/[slug]` route, so a card click stays on the
  * library page instead of full-page navigating away.
  *
- * Notes are read-only here (the BuildEditorSheet remains the canonical
- * editor for them — wired through the Edit button); Publish reuses the
+ * Notes are read-only here; their edit action opens the shared rich
+ * editor focused on private notes. Publish reuses the
  * existing publish modal opened by the parent `BuildsLibrary`.
  */
 export function BuildDossierModal({
@@ -35,7 +36,7 @@ export function BuildDossierModal({
 }: {
   build: CustomBuild;
   onClose: () => void;
-  onEdit: (slug: string) => void;
+  onEdit: (slug: string, initialFocus?: "notes" | "preview") => void;
   onPublish: (slug: string) => void;
   onDelete: (slug: string) => void;
 }) {
@@ -151,7 +152,7 @@ export function BuildDossierModal({
             build.perspective === "opponent" ? "opponent" : undefined
           }
           headerSlot={() => (
-            <NotesPanel notes={build.notes} onEdit={() => onEdit(build.slug)} />
+            <div className="grid min-w-0 gap-4 lg:grid-cols-2"><BuildDefinitionCard build={build} onEdit={() => onEdit(build.slug)} /><NotesPanel notes={build.notes} onEdit={() => onEdit(build.slug, "notes")} /></div>
           )}
         />
       </div>

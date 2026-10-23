@@ -15,6 +15,13 @@ corresponding GitHub Release.
 
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
 
+- Share one authenticated realtime connection across user and admin surfaces; count newly inserted games accurately, coalesce chart refreshes during imports, and show admin connection recovery status.
+
+### Build editor safety
+
+- Both build editors ask before discarding unsaved work. Save failures keep their complete message visible, and editor notifications use the shared toast layer.
+- The rich editor includes private notes, preserves notes and legacy signatures during metadata edits, and opens from every Edit action. Dossiers show authored rules, strategy notes and skill level beside personal notes.
+
 ### Resumable setup
 
 - Setup remembers its step in the URL, recognizes paired PCs and existing games, and keeps browser import on its own Back path. Completed steps can be revisited.

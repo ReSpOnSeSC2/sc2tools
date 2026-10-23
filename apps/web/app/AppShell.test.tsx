@@ -18,6 +18,10 @@ vi.mock("@clerk/nextjs", () => ({
   },
 }));
 
+vi.mock("@/components/realtime/RealtimeProvider", () => ({
+  RealtimeProvider: ({ children }: { children: ReactNode }) => <div data-testid="realtime-provider">{children}</div>,
+}));
+
 vi.mock("@/components/ui/Toast", () => ({
   ToastProvider: ({ children }: { children: ReactNode }) => (
     <div data-testid="toast-provider">{children}</div>
@@ -88,6 +92,7 @@ describe("token-auth broadcast routes", () => {
     expect(screen.getByTestId("route-content")).toBeTruthy();
     expect(screen.getByTestId("toast-provider")).toBeTruthy();
     expect(screen.queryByTestId("clerk-provider")).toBeNull();
+    expect(screen.queryByTestId("realtime-provider")).toBeNull();
     expect(route.clerkRenders).not.toHaveBeenCalled();
     expect(screen.queryByTestId("site-header")).toBeNull();
     expect(screen.queryByTestId("site-footer")).toBeNull();
@@ -120,6 +125,7 @@ describe("app chrome routes", () => {
       renderAt(pathname);
 
       expect(screen.getByTestId("clerk-provider")).toBeTruthy();
+      expect(screen.getByTestId("realtime-provider")).toBeTruthy();
       expect(route.clerkRenders).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId("route-content")).toBeTruthy();
       expect(screen.getByTestId("cookie-banner")).toBeTruthy();
@@ -142,6 +148,7 @@ describe("admin routes", () => {
       renderAt(pathname);
 
       expect(screen.getByTestId("clerk-provider")).toBeTruthy();
+      expect(screen.getByTestId("realtime-provider")).toBeTruthy();
       expect(screen.getByTestId("app-chrome")).toBeTruthy();
       expect(screen.getByTestId("route-content")).toBeTruthy();
       expect(screen.getByTestId("cookie-banner")).toBeTruthy();
@@ -174,6 +181,7 @@ describe("normal and protected routes", () => {
       renderAt(pathname);
 
       expect(screen.getByTestId("clerk-provider")).toBeTruthy();
+      expect(screen.getByTestId("realtime-provider")).toBeTruthy();
       expect(route.clerkRenders).toHaveBeenCalledTimes(1);
       expect(screen.getByTestId("site-header")).toBeTruthy();
       expect(screen.getByTestId("site-footer")).toBeTruthy();
@@ -190,6 +198,7 @@ describe("normal and protected routes", () => {
     renderAt(null);
 
     expect(screen.getByTestId("clerk-provider")).toBeTruthy();
+      expect(screen.getByTestId("realtime-provider")).toBeTruthy();
     expect(route.clerkRenders).toHaveBeenCalledTimes(1);
   });
 });
@@ -204,6 +213,7 @@ describe("shared player replay routes", () => {
 
     expect(screen.getByTestId("route-content")).toBeTruthy();
     expect(screen.getByTestId("clerk-provider")).toBeTruthy();
+      expect(screen.getByTestId("realtime-provider")).toBeTruthy();
     expect(screen.getByTestId("site-header")).toBeTruthy();
     expect(screen.getByTestId("site-footer")).toBeTruthy();
     expect(screen.getByTestId("cookie-banner")).toBeTruthy();

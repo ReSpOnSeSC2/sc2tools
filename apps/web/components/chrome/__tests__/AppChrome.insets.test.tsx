@@ -24,12 +24,12 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: async () => null, userId: "u1", isLoaded: true, isSignedIn: true }),
-  UserButton: () => null,
+  UserButton: Object.assign(() => null, { MenuItems: () => null, Link: () => null, Action: () => null }),
   ClerkLoading: () => null,
   SignedIn: ({ children }: { children: ReactNode }) => <>{children}</>,
   SignedOut: () => null,
 }));
-vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: undefined }) }));
+vi.mock("@/lib/clientApi", () => ({ API_BASE: "http://localhost:8080", useApi: () => ({ data: undefined }) }));
 vi.mock("@/components/SyncStatus", () => ({ SyncStatus: () => null }));
 vi.mock("@/components/ui/ThemeToggle", () => ({ ThemeToggle: () => null }));
 vi.mock("../CoachingBookingAlert", () => ({ CoachingBookingAlert: () => null }));

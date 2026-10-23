@@ -50,7 +50,7 @@ vi.mock("@clerk/nextjs", () => ({
   SignedOut: ({ children }: { children: ReactNode }) =>
     harness.loaded && !harness.signedIn ? <>{children}</> : null,
 }));
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", () => ({ API_BASE: "http://localhost:8080",
   useApi: (path: string) => ({
     data: path === "/v1/coaching/me" ? harness.coachingMe : harness.me,
   }),
