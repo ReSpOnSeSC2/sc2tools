@@ -1,31 +1,60 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
-import { ChevronDown, ChevronRight, Settings2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
+import {
+  isAnalyticsConfigured,
+  readConsent,
+  setConsent,
+  subscribeConsent,
+  type ConsentState,
+} from "@/lib/analytics/consent";
+import { Badge, type BadgeVariant } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Field } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
-import { Toggle } from "@/components/ui/Toggle";
 import { SaveBar } from "@/components/ui/SaveBar";
 import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
+import { TODAY_DEFAULT_TAB } from "@/components/analyzer/tabs";
 import { usePublishDirty } from "./SettingsContext";
 
 type Misc = {
   defaultTab?: string;
-  showWizardOnNextLogin?: boolean;
-  analytics?: boolean;
 };
 
 const DEFAULT_MISC: Misc = {};
 
-// Mirrors components/analyzer/tabs.ts TABS — the values must be real
-// TabIds or the Today route ignores the preference (the old "ml"
-// entry pointed at a tab that no longer exists).
+/**
+ * Keys older versions of this page saved that nothing reads any more
+ * (a first-run wizard switch and a telemetry switch). The PUT replaces
+ * the whole preference doc, so leaving them out of the next save
+ * removes them.
+ */
+const RETIRED_MISC_KEYS: readonly string[] = ["showWizardOnNextLogin", "analytics"];
+
+/**
+ * The doc to save: the draft without retired keys.
+ *
+ * Example:
+ *   miscForSave({ defaultTab: "trends", analytics: true }); // -> { defaultTab: "trends" }
+ */
+export function miscForSave(draft: Misc): Misc {
+  return Object.fromEntries(
+    Object.entries(draft).filter(([key]) => !RETIRED_MISC_KEYS.includes(key)),
+  ) as Misc;
+}
+
+// Today first (the default), then components/analyzer/tabs.ts TABS —
+// the values must be real TabIds or the Today route ignores the
+// preference (the old "ml" entry pointed at a tab that no longer exists).
 const DEFAULT_TABS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: TODAY_DEFAULT_TAB, label: "Today (default)" },
   { value: "replays", label: "Replays" },
   { value: "opponents", label: "Opponents" },
   { value: "strategies", label: "Strategies" },
@@ -43,7 +72,6 @@ export function SettingsMisc() {
   );
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const { draft, setDraft, dirty, reset, markSaved } = useDirtyForm<Misc>(
     data,
@@ -56,11 +84,12 @@ export function SettingsMisc() {
     if (saving) return;
     setSaving(true);
     const previous = data;
+    const body = miscForSave(draft);
     try {
-      await mutate(draft, { revalidate: false });
+      await mutate(body, { revalidate: false });
       await apiCall(getToken, "/v1/me/preferences/misc", {
         method: "PUT",
-        body: JSON.stringify(draft),
+        body: JSON.stringify(body),
       });
       await mutate();
       markSaved();
@@ -81,13 +110,16 @@ export function SettingsMisc() {
     <>
       <Section
         title="App preferences"
-        description="Default tab and the small dials that don't fit elsewhere."
+        description="Where SC2 Tools opens, and the small dials that don't fit elsewhere."
       >
         <Card>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Default tab" hint="Where the analyzer opens by default">
+            <Field
+              label="Default tab"
+              hint="The page SC2 Tools opens on. You can still go back to Today any time."
+            >
               <Select
-                value={draft.defaultTab ?? "opponents"}
+                value={draft.defaultTab ?? TODAY_DEFAULT_TAB}
                 onChange={(e) =>
                   setDraft((d) => ({ ...d, defaultTab: e.target.value }))
                 }
@@ -103,42 +135,29 @@ export function SettingsMisc() {
         </Card>
       </Section>
 
-      <section className="space-y-3">
-        <button
-          type="button"
-          onClick={() => setAdvancedOpen((v) => !v)}
-          aria-expanded={advancedOpen}
-          className="inline-flex items-center gap-2 text-caption font-medium uppercase tracking-wider text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
-        >
-          {advancedOpen ? (
-            <ChevronDown className="h-4 w-4" aria-hidden />
-          ) : (
-            <ChevronRight className="h-4 w-4" aria-hidden />
-          )}
-          <Settings2 className="h-4 w-4" aria-hidden />
-          Advanced
-        </button>
-        {advancedOpen ? (
-          <Card>
-            <div className="space-y-3">
-              <ToggleRow
-                title="Show first-run wizard at next login"
-                description="Replays the onboarding flow the next time you sign in. Handy for testing or when bringing a new machine online."
-                checked={!!draft.showWizardOnNextLogin}
-                onChange={(on) =>
-                  setDraft((d) => ({ ...d, showWizardOnNextLogin: on }))
-                }
-              />
-              <ToggleRow
-                title="Allow anonymous usage telemetry"
-                description="Helps us catch regressions. No game data is sent — only client-side errors and feature usage counts."
-                checked={!!draft.analytics}
-                onChange={(on) => setDraft((d) => ({ ...d, analytics: on }))}
-              />
-            </div>
-          </Card>
-        ) : null}
-      </section>
+      <Section title="Setup & privacy">
+        <Card>
+          <div className="divide-y divide-border">
+            <SettingRow
+              title="Setup guide"
+              description="Go through the first-run steps again: download the desktop app, pair it and import your replays. Your games and settings stay as they are."
+              action={
+                <Link
+                  href="/welcome"
+                  className={[
+                    "hard-press inline-flex min-h-11 flex-shrink-0 items-center justify-center gap-2 rounded-full border-2 border-line bg-bg-surface px-4 font-display text-caption font-bold text-text hover:bg-bg-elevated",
+                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
+                  ].join(" ")}
+                >
+                  Run setup again
+                  <ArrowRight className="h-4 w-4" aria-hidden />
+                </Link>
+              }
+            />
+            <AnalyticsCookiesRow />
+          </div>
+        </Card>
+      </Section>
 
       <SaveBar
         visible={dirty}
@@ -150,26 +169,124 @@ export function SettingsMisc() {
   );
 }
 
-function ToggleRow({
+const CONSENT_STATUS: Record<ConsentState, { label: string; variant: BadgeVariant }> = {
+  granted: { label: "On", variant: "success" },
+  denied: { label: "Off", variant: "neutral" },
+  unset: { label: "Not chosen yet", variant: "warning" },
+};
+
+/**
+ * The real analytics consent for this browser (the cookie banner's
+ * store), changed right away rather than through Save. Follows changes
+ * made in the banner or another tab.
+ */
+function AnalyticsCookiesRow() {
+  const consent = useSyncExternalStore(
+    subscribeConsent,
+    readConsent,
+    () => "unset" as const,
+  );
+  const turnOnRef = useRef<HTMLButtonElement>(null);
+  const configured = isAnalyticsConfigured();
+  const status = configured
+    ? CONSENT_STATUS[consent]
+    : { label: "Not used", variant: "neutral" as const };
+
+  const keepOff = () => {
+    setConsent("denied");
+    // "Keep off" goes away with the choice; keep focus in the row.
+    turnOnRef.current?.focus();
+  };
+
+  return (
+    <SettingRow
+      title="Analytics cookies"
+      status={status}
+      description={
+        <>
+          {configured
+            ? "Google Analytics shows us which pages get used, so we know what to improve. No ads, no data selling."
+            : "This site doesn't use analytics cookies."}{" "}
+          <Link
+            href="/legal/privacy"
+            className="rounded-sm font-medium text-accent-cyan underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            Privacy Policy
+          </Link>
+          <span className="mt-1 block text-micro text-text-dim">
+            Applies to this browser
+          </span>
+        </>
+      }
+      action={
+        configured ? (
+          <div className="flex flex-wrap gap-2">
+            {consent === "granted" ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                aria-label="Turn off analytics cookies"
+                onClick={() => setConsent("denied")}
+              >
+                Turn off
+              </Button>
+            ) : (
+              <Button
+                ref={turnOnRef}
+                variant="secondary"
+                size="sm"
+                aria-label="Turn on analytics cookies"
+                onClick={() => setConsent("granted")}
+              >
+                Turn on
+              </Button>
+            )}
+            {consent === "unset" ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="Keep analytics cookies off"
+                onClick={keepOff}
+              >
+                Keep off
+              </Button>
+            ) : null}
+          </div>
+        ) : null
+      }
+    />
+  );
+}
+
+function SettingRow({
   title,
+  status,
   description,
-  checked,
-  onChange,
+  action,
 }: {
   title: string;
-  description: string;
-  checked: boolean;
-  onChange: (next: boolean) => void;
+  /** Current state, announced when it changes. */
+  status?: { label: string; variant: BadgeVariant };
+  description: ReactNode;
+  action?: ReactNode;
 }) {
   return (
-    <label className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-border bg-bg-elevated px-3 py-2.5">
-      <span className="min-w-0 flex-1">
-        <span className="block text-body font-medium text-text">{title}</span>
-        <span className="mt-0.5 block text-caption text-text-muted">
-          {description}
-        </span>
-      </span>
-      <Toggle checked={checked} onChange={onChange} label={title} />
-    </label>
+    <div className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <h3 className="text-body font-medium text-text">{title}</h3>
+          {status ? (
+            <span role="status">
+              <span className="sr-only">{title}: </span>
+              <Badge variant={status.variant} size="sm">
+                {status.label}
+              </Badge>
+            </span>
+          ) : null}
+        </div>
+        <div className="mt-0.5 text-caption text-text-muted">{description}</div>
+      </div>
+      {action}
+    </div>
   );
 }
