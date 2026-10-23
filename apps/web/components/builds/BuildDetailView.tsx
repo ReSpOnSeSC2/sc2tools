@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
 import {
   ArrowLeft,
@@ -18,7 +19,9 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { useToast } from "@/components/ui/Toast";
+import { CommunityBuildSignatureTimeline } from "@/components/community/CommunityBuildSignatureTimeline";
 import { apiCall, useApi } from "@/lib/clientApi";
+import { coerceSavedRules } from "@/lib/build-rules";
 import {
   coerceRace,
   matchupLabel,
@@ -28,9 +31,19 @@ import {
 } from "@/lib/race";
 import { BuildDossier } from "./BuildDossier";
 import { BuildEditorSheet } from "./BuildEditorSheet";
+import { BuildLoadError } from "./BuildLoadError";
 import { EditCustomBuildLauncher } from "./EditCustomBuildLauncher";
 import { BuildPublishModal } from "./BuildPublishModal";
+import { RulesSummary } from "./RulesSummary";
 import type { CustomBuild } from "./types";
+
+const BACK_LINK_CLASS =
+  "inline-flex min-h-[44px] items-center gap-1.5 text-caption font-medium text-text-muted hover:text-text";
+
+/** The tab title once the build has loaded (the server title is generic). */
+export function buildDocumentTitle(name: string): string {
+  return `${name} · Custom build · SC2 Tools`;
+}
 
 export interface BuildDetailViewProps {
   slug: string;
@@ -43,6 +56,7 @@ export function BuildDetailView(props: BuildDetailViewProps) {
 
 function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const { getToken } = useAuth();
+  const router = useRouter();
   const { toast } = useToast();
   const buildSwr = useApi<CustomBuild>(
     `/v1/custom-builds/${encodeURIComponent(slug)}`,
@@ -57,6 +71,12 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const [publishOpen, setPublishOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+
+  // The server title is generic (and noindex): build names are private.
+  const loadedName = buildSwr.data?.name?.trim();
+  useEffect(() => {
+    if (loadedName) document.title = buildDocumentTitle(loadedName);
+  }, [loadedName]);
 
   const handleSaved = useCallback(
     async (saved: CustomBuild) => {
@@ -75,7 +95,8 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
         { method: "DELETE" },
       );
       toast.success("Build deleted.");
-      window.location.assign("/builds");
+      // Client navigation keeps the app shell (and its toast) mounted.
+      router.push("/builds");
     } catch (err: unknown) {
       const message =
         err && typeof err === "object" && "message" in err
@@ -85,10 +106,35 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
       setDeletePending(false);
       setDeleteOpen(false);
     }
-  }, [slug, toast, getToken]);
+  }, [slug, toast, getToken, router]);
 
   if (buildSwr.error?.status === 404) {
     return <NotFoundView slug={slug} />;
+  }
+
+  if (!buildSwr.data && buildSwr.error) {
+    return (
+      <div className="space-y-6">
+        <Link href="/builds" className={BACK_LINK_CLASS}>
+          <ArrowLeft className="h-4 w-4" aria-hidden />
+          Back to library
+        </Link>
+        <BuildLoadError
+          title="Couldn’t load this build"
+          error={buildSwr.error}
+          onRetry={() => buildSwr.mutate()}
+          actions={
+            <Link
+              href="/builds"
+              className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 text-body font-semibold text-text-muted hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <Library className="h-4 w-4" aria-hidden />
+              Back to library
+            </Link>
+          }
+        />
+      </div>
+    );
   }
 
   if (!buildSwr.data) {
@@ -100,13 +146,12 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
   const tint = raceTint(race);
   const mu = matchupLabel(race, (build.vsRace as VsRace) ?? "Any");
   const fromOpponent = build.perspective === "opponent";
+  const rules = coerceSavedRules(build.rules);
+  const signature = Array.isArray(build.signature) ? build.signature : [];
 
   return (
     <div className="space-y-6">
-      <Link
-        href="/builds"
-        className="inline-flex min-h-[44px] items-center gap-1.5 text-caption font-medium text-text-muted hover:text-text"
-      >
+      <Link href="/builds" className={BACK_LINK_CLASS}>
         <ArrowLeft className="h-4 w-4" aria-hidden />
         Back to library
       </Link>
@@ -156,6 +201,12 @@ function BuildDetailInner({ slug }: BuildDetailViewProps) {
           </div>
         }
       />
+
+      {rules.length > 0 ? (
+        <RulesSummary rules={rules} />
+      ) : signature.length > 0 ? (
+        <CommunityBuildSignatureTimeline signature={signature} />
+      ) : null}
 
       {dossierPath ? (
         <BuildDossier
@@ -237,10 +288,7 @@ function NotesPanel({
 function NotFoundView({ slug }: { slug: string }) {
   return (
     <div className="space-y-6">
-      <Link
-        href="/builds"
-        className="inline-flex min-h-[44px] items-center gap-1.5 text-caption font-medium text-text-muted hover:text-text"
-      >
+      <Link href="/builds" className={BACK_LINK_CLASS}>
         <ArrowLeft className="h-4 w-4" aria-hidden />
         Back to library
       </Link>

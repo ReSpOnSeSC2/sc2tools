@@ -632,7 +632,7 @@ function FirstRunEmptyState({ onCreate }: { onCreate: () => void }) {
           size="lg"
           icon={<Sparkles className="h-6 w-6" aria-hidden />}
           title="No custom builds yet"
-          description="Save your favourite openers so the classifier learns them. From inside any opponent profile, click ‘Save as new build’ to capture an opener from a real game."
+          description="Save your favourite openers so the classifier learns them. From any game’s build order, click ‘Save as new build’ to capture an opener from a real game."
           action={
             <Button
               size="lg"

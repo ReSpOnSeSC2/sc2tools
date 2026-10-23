@@ -346,6 +346,9 @@ describe("BuildsLibrary loading failures", () => {
 
     expect(screen.getByText("No custom builds yet")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create your first build" })).toBeTruthy();
+    // Points at the real entry point (a game's build order), not opponent profiles.
+    expect(screen.getByText(/From any game’s build order, click ‘Save as new build’/)).toBeTruthy();
+    expect(screen.queryByText(/opponent profile/)).toBeNull();
   });
 });
 

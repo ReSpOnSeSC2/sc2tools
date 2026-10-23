@@ -15,6 +15,8 @@ const harness = vi.hoisted(() => ({
   sampleIds: ["shared-replay"],
   gameError: null as unknown,
   retryGame: vi.fn(),
+  dossierError: null as { status: number; message: string; requestId?: string } | null,
+  retryDossier: vi.fn(),
 }));
 
 vi.mock("@/lib/clientApi", () => ({
@@ -51,7 +53,12 @@ vi.mock("@/lib/clientApi", () => ({
         mutate: harness.retryGame,
       };
     }
-    return { data: path ? harness.data : undefined, error: null, isLoading: false, mutate: vi.fn() };
+    return {
+      data: path ? harness.data ?? undefined : undefined,
+      error: harness.dossierError,
+      isLoading: false,
+      mutate: harness.retryDossier,
+    };
   },
 }));
 
@@ -123,6 +130,7 @@ beforeEach(() => {
   harness.compositionError = null;
   harness.transitionError = null;
   harness.gameError = null;
+  harness.dossierError = null;
   harness.sampleIds = ["shared-replay"];
   harness.compositions = compositionPayload();
   harness.data = {
@@ -279,5 +287,80 @@ describe("BuildDossier check-in counts", () => {
     };
     render(<BuildDossier apiPath="/v1/custom-builds/dt-rush/matches" showMacro={false} />);
     expect(screen.queryByTestId("dossier-checkins")).toBeNull();
+  });
+});
+
+describe("BuildDossier load errors", () => {
+  it("a failed load shows Retry (calling the dossier's mutate) and a copyable error ID", async () => {
+    harness.data = null;
+    harness.dossierError = { status: 500, message: "The server had a problem.", requestId: "req-fixture-9" };
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+
+    render(<BuildDossier apiPath="/v1/custom-builds/dt-rush/matches" showMacro={false} />);
+
+    const alert = screen.getByRole("alert");
+    expect(alert.textContent).toContain("Couldn't load this build's games and stats");
+    expect(alert.textContent).toContain("The server had a problem.");
+    expect(alert.textContent).toContain("req-fixture-9");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(harness.retryDossier).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy error ID" }));
+    expect(writeText).toHaveBeenCalledWith("req-fixture-9");
+    expect(await screen.findByRole("button", { name: "Error ID copied" })).toBeTruthy();
+  });
+
+  it("a failed refresh keeps the last results and offers Try again", () => {
+    harness.dossierError = { status: 503, message: "Busy." };
+    render(<BuildDossier apiPath="/v1/custom-builds/dt-rush/matches" showMacro={false} />);
+    expect(screen.getByText("Performance")).toBeTruthy();
+    expect(screen.getByText("Couldn't refresh this analysis. Showing the previous results.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Retry build stats" }));
+    expect(harness.retryDossier).toHaveBeenCalledOnce();
+  });
+});
+
+describe("BuildDossier win-rate trend", () => {
+  // jsdom has no ResizeObserver; the chart's ResponsiveContainer needs one.
+  beforeEach(() => {
+    vi.stubGlobal("ResizeObserver", class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const game = (index: number, result: string) => ({
+    gameId: `g${index}`,
+    date: new Date(Date.UTC(2026, 8, 1 + index)).toISOString(),
+    result,
+  });
+
+  it("draws a rolling 10-game trend from recent games, not per-matchup records", () => {
+    harness.data = {
+      ...harness.data!,
+      // Newest first, as the API sends them: 12 games, the last 10 are 6–4.
+      recent: Array.from({ length: 12 }, (_, i) => game(12 - i, i < 6 ? "Win" : "Loss")),
+      byMatchup: [{ name: "PvZ", wins: 9, losses: 1, total: 10 }],
+    };
+    render(<BuildDossier apiPath="/v1/custom-builds/dt-rush/matches" showMacro={false} />);
+    expect(screen.getByText("Rolling 10 games")).toBeTruthy();
+    expect(screen.getByText("Last 10 games")).toBeTruthy();
+    expect(screen.getByText("60%")).toBeTruthy();
+    expect(screen.getByText("6W · 4L")).toBeTruthy();
+  });
+
+  it("says there aren't enough games below 10 results", () => {
+    harness.data = {
+      ...harness.data!,
+      recent: [game(1, "Win"), game(2, "Loss"), game(3, "Tie")],
+    };
+    render(<BuildDossier apiPath="/v1/custom-builds/dt-rush/matches" showMacro={false} />);
+    expect(screen.getByText("Not enough games for a trend")).toBeTruthy();
+    expect(screen.getByText(/2 so far/)).toBeTruthy();
   });
 });
