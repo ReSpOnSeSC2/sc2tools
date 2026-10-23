@@ -64,3 +64,25 @@ its verified task-owned process IDs; the direct new transport tests also passed
 
 The controller and Qt widgets have not yet been wired to these APIs. Keep that
 work explicitly incomplete until actor/socket/fallback/real offscreen tests pass.
+
+## Actor checkpoint
+
+- Controller has separate scouting operations (new mixin module) over its existing
+  actor/executor. It rejects wrong keys/opponents, bounds fallback to one flight
+  and at least five seconds between attempts, and preserves real check-in logic.
+- A slim card is eligible with Ask at loading off only after an actual brief
+  exists. Global Enable check-ins and the local scouting flag gate it. Missing
+  data cannot invent a first meeting or show an empty new card; user dismissal
+  never reopens on a later brief. Automatic cards keep the existing 30-second
+  game-time cutoff and never acquire focus.
+- Models/records carry the scouting strip and a separate private opponent-note
+  draft/status. Notes are written only after the replay upload binds the opponent
+  record, with retryable failure and no overwrite of game check-in notes.
+- Settings toggle and runner socket callback are wired; persistence is dispatched
+  off the UI/actor thread through the existing executor. The original cloud
+  three-boolean check-in preference and controller APIs remain compatible.
+- **237 affected actor/postgame/opponent/runner-binding/real offscreen Settings
+  tests pass**, including nine new actor cases. Legacy fixtures/assertions were
+  retained. No card widget/strip/note editor has been rendered yet; Qt rendering,
+  real widget focus/no-activation/500-character behavior, help and full suites
+  remain required. Preview/reset/keyboard expansion still follows separately.

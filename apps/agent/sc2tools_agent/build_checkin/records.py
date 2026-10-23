@@ -20,6 +20,7 @@ from .models import (
     PostgameCardModel,
     matchup_for,
 )
+from .scouting import ScoutingBrief
 
 ACTIVE_PHASES = frozenset({"match_loading", "match_started", "match_in_progress"})
 
@@ -66,6 +67,7 @@ class CardOp:
 class LoadingCard:
     shown_at: float
     visible: bool = True
+    hidden_reason: Optional[str] = None
     rows: FrozenOptionRows = field(default_factory=FrozenOptionRows)
     status: str = ""
     changing: bool = False
@@ -121,6 +123,9 @@ class LiveGame:
     op_inflight: Optional[LiveOp] = None
 
     loading: Optional[LoadingCard] = None
+    scouting: Optional[ScoutingBrief] = None
+    scouting_fetching: bool = False
+    scouting_read_at: Optional[float] = None
     card_id: Optional[str] = None
 
     @property
@@ -179,6 +184,11 @@ class PostgameCard:
     passed_rules: Optional[int] = None
     rule_count: Optional[int] = None
     notes: str = ""
+    opponent_note: str = ""
+    opponent_note_touched: bool = False
+    opponent_note_status: str = ""
+    opponent_note_busy: bool = False
+    opponent_pulse_id: Optional[str] = None
     notes_synced: Optional[str] = None
     """Notes the server holds, when known."""
     flush_pending: bool = False

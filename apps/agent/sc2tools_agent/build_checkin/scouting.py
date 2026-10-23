@@ -12,11 +12,11 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 
 
-def plain_text(value: Any, limit: int) -> str:
+def plain_text(value: Any, limit: int, *, trim: bool = True) -> str:
     """Bound text in UTF-16 units, matching the note API's character limit."""
     if not isinstance(value, str):
         return ""
-    encoded = value.strip().encode("utf-16-le", errors="replace")[:limit * 2]
+    encoded = (value.strip() if trim else value).encode("utf-16-le", errors="replace")[:limit * 2]
     return encoded.decode("utf-16-le", errors="ignore")
 
 
