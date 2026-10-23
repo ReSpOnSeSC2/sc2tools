@@ -431,7 +431,6 @@ async function main() {
 
 main().catch((err) => {
   sentry.captureException(err);
-  // eslint-disable-next-line no-console
   console.error("fatal_boot_error", err);
   process.exit(1);
 });
