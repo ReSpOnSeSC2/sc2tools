@@ -100,6 +100,8 @@ class GdprService {
    */
   constructor(db, opts = {}) {
     this.db = db;
+    /** @type {import("./userBackups").UserBackupsService|null} */
+    this.backups = null;
     this.opponents = (opts && opts.opponents) || null;
     this.logger = (opts && opts.logger) || null;
     // GameDetailsService — the store-aware deleter for the heavy
@@ -306,6 +308,7 @@ class GdprService {
     try {
       await gdprFence.assert();
       await this._drainOpponentBuildOrderWriters(userId);
+      if (this.backups) await this.backups.assertCleanupAvailable(userId);
 
     if (this.customBuilds) {
       await this.customBuilds.cancelUserReclassifications(userId);
@@ -369,6 +372,8 @@ class GdprService {
     // Manual snapshots hold a FULL export of the user's data — the
     // single most sensitive thing to leave behind.
     const backups = this.db.db.collection("user_backups");
+    if (this.backups?.store) await this.backups.store.deleteAllForUser(userId);
+    if (this.backups) await this.backups.staging.deleteMany({ userId });
     const backupsRes = await backups.deleteMany({ userId });
     counts.userBackups = backupsRes.deletedCount || 0;
 
@@ -702,6 +707,8 @@ class GdprService {
     try {
       await gdprFence.assert();
       await this._drainOpponentBuildOrderWriters(userId);
+      if (this.customBuilds) await this.customBuilds.cancelUserReclassifications(userId);
+      if (this.backups) await this.backups.create(userId, { type: "pre_action", label: "Before history deletion", assert: gdprFence.assert });
     const since = opts.since instanceof Date && !Number.isNaN(opts.since.getTime())
       ? opts.since
       : null;
@@ -712,9 +719,6 @@ class GdprService {
     /** @type {Record<string, any>} */
     const filter = this._gamesWipeFilter(userId, opts);
 
-    if (this.customBuilds) {
-      await this.customBuilds.cancelUserReclassifications(userId);
-    }
 
     await this._assertReplayCleanupAvailable(filter);
 
@@ -1072,169 +1076,33 @@ class GdprService {
     return { droppedRows, pulseBackfill };
   }
 
-  /**
-   * Take a manual snapshot. We store the user's restorable, directly scoped
-   * collections as a single document. Shared coaching records are deliberately
-   * excluded: restoring one party must never overwrite a student's consent or
-   * resurrect a coach's assignment history, and snapshots must not retain the
-   * other party's profile after account erasure.
-   * in a "user_backups"-style collection scoped to the user — for
-   * SC2-Tools volumes (a few hundred MB at most), Mongo handles this
-   * fine, and it keeps GDPR export & restore symmetric.
-   *
-   * @param {string} userId
-   * @returns {Promise<{id: string, createdAt: Date, sizeBytes: number}>}
-   */
+  /** @param {string} userId */
   async snapshot(userId) {
-    const exportData = await this.export(userId, { includeSharedCoaching: false });
-    const json = JSON.stringify(exportData);
-    const sizeBytes = Buffer.byteLength(json, "utf8");
-    const id = `bk_${Date.now()}_${Math.floor(Math.random() * 1e6)
-      .toString(36)
-      .padStart(4, "0")}`;
-    const doc = {
-      id,
-      userId,
-      createdAt: new Date(),
-      sizeBytes,
-      type: /** @type {const} */ ("manual"),
-      payload: exportData,
-    };
-    const coll = this.db.db.collection("user_backups");
-    await coll.insertOne(doc);
-    return { id, createdAt: doc.createdAt, sizeBytes };
-  }
-
-  /**
-   * @param {string} userId
-   * @returns {Promise<{items: Array<{id: string, createdAt: Date, sizeBytes: number, type: string}>}>}
-   */
-  async listSnapshots(userId) {
-    const coll = this.db.db.collection("user_backups");
-    const items =
-      /** @type {Array<{id: string, createdAt: Date, sizeBytes: number, type: string}>} */ (
-        /** @type {unknown} */ (
-          await coll
-            .find(
-              { userId },
-              { projection: { _id: 0, id: 1, createdAt: 1, sizeBytes: 1, type: 1 } },
-            )
-            .sort({ createdAt: -1 })
-            .toArray()
-        )
-      );
-    return { items };
-  }
-
-  /**
-   * Restore from a snapshot — clear current per-user state, then re-insert
-   * everything from the snapshot. Atomic insofar as Mongo's batched ops
-   * are; we accept the trade-off because the alternative (transactions)
-   * forces a replica set on the dev Atlas tier.
-   *
-   * @param {string} userId
-   * @param {string} snapshotId
-   */
-  async restoreSnapshot(userId, snapshotId) {
-    const coll = this.db.db.collection("user_backups");
-    const snap = await coll.findOne({ userId, id: snapshotId });
-    if (!snap) {
-      const err = new Error("snapshot_not_found");
-      /** @type {any} */ (err).status = 404;
-      throw err;
-    }
-    const gdprFence = await this._acquireMutationFence(userId, "restore");
+    if (!this.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+    const fence = await this._acquireMutationFence(userId, "snapshot");
     try {
-      await gdprFence.assert();
       await this._drainOpponentBuildOrderWriters(userId);
-    if (this.customBuilds) {
-      await this.customBuilds.cancelUserReclassifications(userId);
+      if (this.customBuilds) await this.customBuilds.cancelUserReclassifications(userId);
+      return await this.backups.create(userId, { assert: fence.assert });
     }
-    const snapshotGames = /** @type {Array<Record<string, any>>} */ (
-      Array.isArray(snap.payload?.data?.games) ? snap.payload.data.games : []
-    );
-    const snapshotHasReplayMarkers = snapshotGames.some(
-      (game) => game && (
-        (game.replayFile && game.replayFile.storedAt)
-        || (game.replayUpload && game.replayUpload.uploadId)
-      ),
-    );
-    await this._assertReplayCleanupAvailable(
-      { userId },
-      snapshotHasReplayMarkers,
-    );
-    // Heavy detail blobs are not embedded in manual snapshot JSON. Purge the
-    // active store before restoring slim game rows so current R2/Mongo detail
-    // data cannot survive the restore and attach to a historical gameId.
-    await gdprFence.assert();
-    if (this.gameDetails) {
-      await this.gameDetails.deleteAllForUser(userId);
-      await gdprFence.assert();
-    } else if (this.db.gameDetails) {
-      await this.db.gameDetails.deleteMany({ userId });
-    }
-    // Replay binaries are intentionally not embedded in JSON snapshots.
-    // Remove current objects before clearing their Mongo ownership rows, so
-    // any object-store failure aborts before historical rows are inserted.
-    if (this.replayFiles) {
-      await gdprFence.assert();
-      await this.replayFiles.deleteAllForUser(userId);
-      if (this.playbackArtifacts) await this.playbackArtifacts.deleteAllForUser(userId);
-      await gdprFence.assert();
-    }
-    // Clear current data (NOT the user record — the user keeps their id).
-    await gdprFence.assert();
-    for (const [key] of USER_SCOPED_COLLECTIONS) {
-      await gdprFence.assert();
-      const c = /** @type {any} */ (this.db)[key];
-      if (c) await c.deleteMany({ userId });
-    }
-    // Guide samples are distilled from the detail blobs purged above and
-    // are never in snapshots: purge them (and any published example
-    // replay) with the games they came from.
-    if (this.guideSamples) await this.guideSamples.deleteForUser(userId);
-    await this._scrubUserGuideExamples(userId);
-    const data = snap.payload?.data || {};
-    for (const [key, jsonKey] of USER_SCOPED_COLLECTIONS) {
-      await gdprFence.assert();
-      const c = /** @type {any} */ (this.db)[key];
-      const rows = Array.isArray(data[jsonKey]) ? data[jsonKey] : [];
-      if (c && rows.length > 0) {
-        await c.insertMany(
-          rows.map((r) => {
-            const restored = { ...r, userId };
-            if (key === "games") {
-              delete restored.replayFile;
-              delete restored.playbackArtifact;
-              delete restored.playbackUpload;
-              delete restored.replayUpload;
-              delete restored._customBuildReclassify;
-              delete restored._customBuildClassificationSequence;
-              delete restored._opponentBuildOrderWriteLease;
-              restored._customBuildRevision = randomUUID();
-              // Preserve both perspective-specific provenance fields: unlike
-              // transient stage/order state, they are durable ownership
-              // metadata for `myBuild` and `opponent.strategy`.
-              stampVersion(restored, COLLECTIONS.GAMES);
-            }
-            return restored;
-          }),
-          { ordered: false },
-        );
-      }
-    }
-    // Snapshot JSON never restores raw replay markers. A second pass closes
-    // the same in-flight completion race as account/history deletion.
-    if (this.replayFiles) {
-      await gdprFence.assert();
-      await this.replayFiles.deleteAllForUser(userId);
-      if (this.playbackArtifacts) await this.playbackArtifacts.deleteAllForUser(userId);
-      await gdprFence.assert();
-    }
-    return { restoredAt: new Date(), counts: countsOf(data) };
-    } finally {
-      await this._releaseMutationFence(userId, gdprFence);
-    }
+    finally { await this._releaseMutationFence(userId, fence); }
+  }
+
+  /** @param {string} userId */
+  async listSnapshots(userId) {
+    if (!this.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+    return this.backups.list(userId);
+  }
+
+  /** @param {string} userId @param {string} snapshotId @param {string|undefined} [expectedRevision] */
+  async restoreSnapshot(userId, snapshotId, expectedRevision) {
+    if (!this.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+    const fence = await this._acquireMutationFence(userId, "restore");
+    try {
+      await this._drainOpponentBuildOrderWriters(userId);
+      if (this.customBuilds) await this.customBuilds.cancelUserReclassifications(userId);
+      return await this.backups.restore(userId, snapshotId, fence, expectedRevision);
+    } finally { await this._releaseMutationFence(userId, fence); }
   }
 
   /** @param {string} userId @param {string} kind */
@@ -1254,6 +1122,10 @@ class GdprService {
             { _coachingMutations: { $exists: false } },
             { _coachingMutations: { $not: { $elemMatch: { leaseUntil: { $gt: now } } } } },
           ] },
+          { $or: [
+            { _dataMutations: { $exists: false } },
+            { _dataMutations: { $not: { $elemMatch: { leaseUntil: { $gt: now } } } } },
+          ] },
         ] },
         { $set: { _gdprMutation: {
           id,
@@ -1267,13 +1139,15 @@ class GdprService {
       }
       const blocked = await this.db.users.findOne(
         { userId },
-        { projection: { _id: 0, _gdprMutation: 1, _coachingMutations: 1 } },
+        { projection: { _id: 0, _gdprMutation: 1, _coachingMutations: 1, _dataMutations: 1 } },
       );
       const activeCoaching = Array.isArray(blocked?._coachingMutations)
         && blocked._coachingMutations.some((mutation) =>
           mutation?.leaseUntil instanceof Date && mutation.leaseUntil > now,
         );
-      if (activeCoaching && !blocked?._gdprMutation && Date.now() < deadline) {
+      const activeWrites = Array.isArray(blocked?._dataMutations)
+        && blocked._dataMutations.some((mutation) => mutation?.leaseUntil instanceof Date && mutation.leaseUntil > now);
+      if ((activeCoaching || activeWrites) && !blocked?._gdprMutation && Date.now() < deadline) {
         await wait(50);
         continue;
       }
@@ -1391,16 +1265,6 @@ class GdprService {
     err.code = "replay_storage_unavailable";
     throw err;
   }
-}
-
-/** @param {Record<string, unknown[]>} data */
-function countsOf(data) {
-  /** @type {Record<string, number>} */
-  const out = {};
-  for (const [k, v] of Object.entries(data)) {
-    out[k] = Array.isArray(v) ? v.length : 0;
-  }
-  return out;
 }
 
 /** @param {Record<string, number>} target @param {Record<string, number>} next */

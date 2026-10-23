@@ -57,6 +57,7 @@ async function createGuidesHarness(opts = {}) {
     channelId: CHANNEL_ID, channelUrl: CHANNEL_URL, logger, fetchImpl: opts.fetchImpl || networkDisabled,
   });
   const built = buildApp({
+      userBackupsStore: require("./userBackupsStore").createBackupStore(),
     db, logger, config, guideVideos,
     pulseMmr: new PulseMmrService({ fetchImpl: networkDisabled }),
   });

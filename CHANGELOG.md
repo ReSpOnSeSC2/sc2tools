@@ -34,6 +34,9 @@ corresponding GitHub Release.
 ### Added
 
 - Read curated updates in What's New, the public changelog and RSS. Service notices explain active incidents and expire automatically; installer release notes are easier to read.
+
+- Streamed account snapshots with labels, downloads and retention; verified restore previews preserve existing game details/replays, and self-service repairs save a snapshot before running.
+
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
 
 ### Build library and definitions

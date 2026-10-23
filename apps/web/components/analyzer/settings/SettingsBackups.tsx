@@ -3,48 +3,28 @@
 import { useEffect, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import { localDayStartIso, localNextDayStartIso } from "@/lib/localDateRange";
-import { SettingsLoadError } from "./SettingsLoadError";
 import { useAuth } from "@clerk/nextjs";
 import {
-  Database,
   Download,
-  Camera,
-  History,
   Trash2,
 } from "lucide-react";
-import { apiCall, useApi, API_BASE, type ClientApiError } from "@/lib/clientApi";
-import { Card, Skeleton } from "@/components/ui/Card";
-import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { apiCall, API_BASE, type ClientApiError } from "@/lib/clientApi";
+import { Card } from "@/components/ui/Card";
 import { Section } from "@/components/ui/Section";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DestructiveConfirmDialog } from "@/components/ui/DestructiveConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
-import { LazyHelpLink } from "@/components/help/LazyHelpLink";
-import { fmtAgo } from "@/lib/format";
 import { ReplayArchiveStatusCard } from "./ReplayArchiveStatusCard";
-
-type Backup = {
-  id: string;
-  createdAt: string;
-  sizeBytes: number;
-  type: "manual" | "auto";
-};
-
-type BackupsResp = { items: Backup[] };
+import { SnapshotManager } from "./SnapshotManager";
+import { DataRepairCard } from "./DataRepairCard";
 
 export function SettingsBackups() {
   const { getToken } = useAuth();
   const tokenRef = useRef(getToken);
   tokenRef.current = getToken;
-  const backups = useApi<BackupsResp>("/v1/me/backups");
   const { toast } = useToast();
   const { mutate: refresh } = useSWRConfig();
-  const [snapping, setSnapping] = useState(false);
-  const [pendingRestore, setPendingRestore] = useState<Backup | null>(null);
-  const [restoring, setRestoring] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -76,52 +56,8 @@ export function SettingsBackups() {
   async function refreshHistory() {
     try { await refresh((key) => {
       const path = Array.isArray(key) ? key.find((part) => typeof part === "string" && part.startsWith("/v1/")) : key;
-      return typeof path === "string" && /^\/v1\/(?:me(?:\?|$|\/doctor)|games|opponents|timeseries|streak|matchups|builds|macro|maps|trends|strategies|dashboard)/.test(path);
+      return typeof path === "string" && /^\/v1\/(?:me(?:\?|$|\/(?:doctor|backups|replay-archive-status))|games|opponents|timeseries|streak|matchups|builds|macro|maps|trends|strategies|dashboard)/.test(path);
     }); } catch { /* A refresh failure must not turn a completed wipe or restore into a reported failure. */ }
-  }
-
-  async function snap() {
-    if (snapping) return;
-    setSnapping(true);
-    try {
-      await apiCall(getToken, "/v1/me/backups", {
-        method: "POST",
-        body: "{}",
-      });
-      await backups.mutate();
-      toast.success("Snapshot created");
-    } catch (err) {
-      const message =
-        (err as ClientApiError | undefined)?.message ?? "Please try again.";
-      toast.error("Couldn't create snapshot", { description: message });
-    } finally {
-      setSnapping(false);
-    }
-  }
-
-  async function confirmRestore() {
-    const target = pendingRestore;
-    if (!target || restoring) return;
-    setRestoring(true);
-    try {
-      const result = await apiCall<{ counts?: { games?: number } }>(
-        getToken,
-        `/v1/me/backups/${encodeURIComponent(target.id)}/restore`,
-        { method: "POST", body: "{}" },
-      );
-      await Promise.allSettled([backups.mutate(), refreshHistory()]);
-      toast.success(`Restored ${(result.counts?.games ?? 0).toLocaleString()} games`, {
-        description:
-          "Click Re-sync in the desktop app to bring back build orders, charts and replay files.",
-      });
-      setPendingRestore(null);
-    } catch (err) {
-      const message =
-        (err as ClientApiError | undefined)?.message ?? "Please try again.";
-      toast.error("Couldn't restore snapshot", { description: message });
-    } finally {
-      setRestoring(false);
-    }
   }
 
   async function exportData() {
@@ -203,69 +139,14 @@ export function SettingsBackups() {
     }
   }
 
-  if (backups.isLoading) {
-    return (
-      <div className="space-y-6">
-        <ReplayArchiveStatusCard />
-        <Skeleton rows={3} />
-      </div>
-    );
-  }
-  const items = backups.data?.items ?? [];
+
 
   return (
     <div className="space-y-6">
       <ReplayArchiveStatusCard />
 
-      <Section
-        title="Snapshots"
-        description="Your own restore points for your account. Take one before a big import or a history wipe, and restore it here if something goes wrong."
-        actions={
-          <Button
-            variant="primary"
-            onClick={snap}
-            loading={snapping}
-            iconLeft={<Camera className="h-4 w-4" aria-hidden />}
-          >
-            Take a snapshot
-          </Button>
-        }
-      >
-        <Card padded={items.length === 0}>
-          {backups.error && backups.data === undefined ? <SettingsLoadError tab="snapshots" error={backups.error} retry={backups.mutate} /> : items.length === 0 ? (
-            <EmptyStatePanel
-              icon={<Database className="h-6 w-6" aria-hidden />}
-              title="No snapshots yet"
-              description="Take one before a big import or a history wipe."
-            />
-          ) : (
-            <ul className="divide-y divide-border">
-              {items.map((b) => (
-                <BackupRow
-                  key={b.id}
-                  backup={b}
-                  onRestore={() => setPendingRestore(b)}
-                />
-              ))}
-            </ul>
-          )}
-        </Card>
-        <div className="mt-3 space-y-2 text-caption text-text-muted">
-          <p>
-            A snapshot holds your games list, opponents, notes, custom builds
-            and settings. Build orders, charts and original replay files
-            aren&apos;t in it: after a restore, click Re-sync in the
-            desktop app to upload them again.
-          </p>
-          <p>
-            Separately, the whole SC2 Tools database is backed up every day
-            with MongoDB Atlas, so the site can be recovered after a server
-            failure. Those backups cover everyone at once, so they
-            can&apos;t bring back just your account; a snapshot here can.{" "}
-            <LazyHelpLink slug="backups-and-export">How backups work</LazyHelpLink>
-          </p>
-        </div>
-      </Section>
+      <SnapshotManager onRestored={refreshHistory} />
+      <DataRepairCard onStarted={refreshHistory} />
 
       <Section
         title="Delete game history"
@@ -338,21 +219,6 @@ export function SettingsBackups() {
         </Card>
       </Section>
 
-      <ConfirmDialog
-        open={pendingRestore !== null}
-        onClose={() => (restoring ? undefined : setPendingRestore(null))}
-        onConfirm={confirmRestore}
-        title="Restore from snapshot?"
-        description={
-          pendingRestore
-            ? `This replaces your games list, opponents, notes, custom builds and settings with the snapshot from ${new Date(pendingRestore.createdAt).toLocaleString()}. Games added since then are removed, and build orders, charts and replay files are cleared until you click Re-sync in the desktop app.`
-            : undefined
-        }
-        confirmLabel="Restore"
-        cancelLabel="Cancel"
-        intent="danger"
-        loading={restoring}
-      />
       <DestructiveConfirmDialog
         open={pendingDelete}
         onClose={() => (deleting ? undefined : setPendingDelete(false))}
@@ -378,40 +244,5 @@ export function SettingsBackups() {
         loading={wiping}
       />
     </div>
-  );
-}
-
-function BackupRow({
-  backup,
-  onRestore,
-}: {
-  backup: Backup;
-  onRestore: () => void;
-}) {
-  return (
-    <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-caption text-text">{backup.id}</span>
-          <Badge variant={backup.type === "auto" ? "neutral" : "cyan"} size="sm">
-            {backup.type}
-          </Badge>
-        </div>
-        <div className="mt-0.5 text-caption text-text-muted">
-          {fmtAgo(backup.createdAt)} ·{" "}
-          <span className="tabular-nums">
-            {(backup.sizeBytes / 1024 / 1024).toFixed(1)} MB
-          </span>
-        </div>
-      </div>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={onRestore}
-        iconLeft={<History className="h-4 w-4" aria-hidden />}
-      >
-        Restore
-      </Button>
-    </li>
   );
 }

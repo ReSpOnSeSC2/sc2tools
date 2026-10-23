@@ -109,6 +109,7 @@ function captureGuideSample(guideSamples, userId, game, customTag, created) {
  *   browserIngestQuota?: import('./gamesIngestPolicy').BrowserIngestQuota,
  *   testOnlyAllowMissingReplayIngestAdmission?: boolean,
  *   runtimeCapacityRegistry?: import('../services/runtimeCapacity').RuntimeCapacityRegistry,
+ *   weeklyBackup?: (userId: string) => Promise<void>,
  * }} deps
  */
 function buildGamesRouter(deps) {
@@ -1060,6 +1061,7 @@ function buildGamesRouter(deps) {
         accepted.length,
       );
       res.status(202).json({ accepted, rejected });
+      if (accepted.length && deps.weeklyBackup) void deps.weeklyBackup(userId).catch((err) => req.log?.warn({ err, userId }, "weekly_backup_failed"));
     } catch (err) {
       next(err);
     } finally {
