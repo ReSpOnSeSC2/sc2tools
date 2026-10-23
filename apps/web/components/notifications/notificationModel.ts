@@ -11,6 +11,7 @@ export const NOTIFICATION_KINDS = [
   ["coaching.practice_sharing_rejected", "Practice sharing declined"], ["coaching.practice_sharing_revoked", "Practice sharing revoked"],
   ["import.done", "Import finished"], ["agent.update_required", "Required desktop app updates"],
   ["community.vote", "Community build upvotes"], ["support.status", "Report status changes"], ["support.reply", "Replies to reports"],
+  ["whats_new", "Major product updates"],
 ] as const;
 export function notificationCategory(kind: string): NotificationCategory {
   return kind.startsWith("review.") ? "reviews" : kind.startsWith("coaching.") ? "coaching" : "system";

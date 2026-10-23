@@ -82,6 +82,7 @@ const COLLECTIONS = Object.freeze({
   ADMIN_EVENTS: "admin_events",
   SUPPORT_EMAIL_SYNC: "support_email_sync",
   SITE_PRESENCE: "site_presence",
+  SITE_CONFIG: "site_config",
   COACHING: "coaching_locker",
   // Global, cross-user SC2Pulse cache. One row per real SC2 account
   // (keyed by toon handle), shared by every platform user so the

@@ -22,6 +22,7 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
   { path: "/guides/pvz", expectText: /PvZ build orders/i },
   { path: "/guides/pvz/stargate-into-glaives", expectText: /Stargate into Glaives/ },
   { path: "/download", expectText: /download|agent/i },
+  { path: "/changelog", expectText: /what's new/i },
   { path: "/stream-studio", expectText: /StarCraft II overlays for OBS/i },
   { path: "/stream-studio/learn", expectText: /Your first overlay/i },
   { path: "/community", expectText: /community|build/i },
@@ -36,6 +37,20 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
     ? [{ path: "/try", expectText: /analyze/i }]
     : []),
 ];
+
+test("changelog filters updates and exposes its public RSS feed", async ({ page, request }) => {
+  const response = await page.goto("/changelog");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "What's new", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Guides", exact: true }).click();
+  await expect(page.getByText("No Guides updates yet.")).toBeVisible();
+  await page.getByRole("button", { name: "Website", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Your activity and report replies in one inbox" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Website", exact: true })).toHaveAttribute("aria-pressed", "true");
+  const rss = await request.get("/changelog/rss.xml");
+  expect(rss.status()).toBe(200); expect(rss.headers()["content-type"]).toContain("application/rss+xml");
+  expect(await rss.text()).toContain("/changelog#personal-notifications-and-replies");
+});
 
 test("missing shared replay archives return a real public-friendly 404", async ({ page }) => {
   const response = await page.goto("/players/missing-shared-player/replays");

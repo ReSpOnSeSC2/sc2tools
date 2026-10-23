@@ -33,6 +33,8 @@ import { useChromeBottomInset } from "./chromeInsets";
 import { ChromeProvider, useChromeContext } from "./ChromeContext";
 import { NavProgress, startNavProgress } from "./NavProgress";
 import { LogoMark } from "./LogoMark";
+import { WhatsNewButton } from "@/components/announcements/WhatsNewButton";
+import { SiteIncidentBanner } from "@/components/announcements/SiteIncidentBanner";
 
 /* ------------------------------------------------------------------
  * AppChrome — the shell every signed-in surface renders inside:
@@ -252,6 +254,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
                 <BuildCheckInAlert compact />
                 <CoachingBookingAlert compact />
                 <NotificationBell compact />
+                <WhatsNewButton />
               </SignedIn>
               <ThemeToggle />
               <ClerkLoading><span aria-hidden className="h-8 w-8 rounded-full bg-bg-elevated motion-safe:animate-pulse" /></ClerkLoading>
@@ -297,6 +300,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
             </div>
           </div>
           <ConnectionBanner />
+          <Suspense fallback={null}><SiteIncidentBanner /></Suspense>
           <Suspense fallback={null}><NavProgress onPendingChange={setNavPending} /></Suspense>
         </header>
 
