@@ -133,6 +133,18 @@ function buildCommunityRouter(deps) {
   });
 
   router.get(
+    "/community/my-builds",
+    deps.auth,
+    async (req, res, next) => {
+      res.set("Cache-Control", "private, no-store");
+      try {
+        if (!req.auth) throw new Error("auth_required");
+        res.json({ items: await deps.community.listOwnerBuilds(req.auth.userId) });
+      } catch (err) { next(err); }
+    },
+  );
+
+  router.get(
     "/community/my-build-stats",
     deps.auth,
     async (req, res, next) => {

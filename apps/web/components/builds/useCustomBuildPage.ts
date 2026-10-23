@@ -15,6 +15,7 @@ export interface CustomBuildPage {
 
 export interface CustomBuildQuery {
   search?: string;
+  nameSearch?: string;
   matchup?: string;
   sort?: "updated" | "name" | "winRate" | "games" | "lastPlayed";
   hideEmpty?: boolean;
@@ -34,6 +35,7 @@ export function useCustomBuildPage(query: CustomBuildQuery = {}) {
   const { userId } = useAuth();
   const params = new URLSearchParams();
   if (query.search?.trim()) params.set("search", query.search.trim());
+  if (query.nameSearch?.trim()) params.set("nameSearch", query.nameSearch.trim());
   if (query.matchup && query.matchup !== "All") params.set("matchup", query.matchup);
   if (query.sort && query.sort !== "updated") params.set("sort", query.sort);
   if (query.hideEmpty) params.set("hideEmpty", "true");

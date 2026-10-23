@@ -60,6 +60,11 @@ corresponding GitHub Release.
 
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
 
+### Publishing from Community
+
+- Publish a build opens a searchable library picker and keeps the destination through sign-in. Authors can open an existing listing's update window from its private source link.
+- Community's Mine view shows your publications, anonymous status, dates, vote counts and private classified-game record. Owner menus link back to the private build and its publication window; viewers without publications stop polling for records.
+
 ### Build library and definitions
 
 - Empty build dossiers explain replay matching and offer re-match, rule editing and pending check-ins. Recent form, section links, sortable game disclosures and retry actions make existing results easier to explore.
@@ -88,6 +93,7 @@ corresponding GitHub Release.
 ### Fixed
 
 - Overlay Test now uses a temporary sample layer: Stop restores current real opponent/session data. Live matches require confirmation, with a local preview option that sends nothing to OBS.
+
 
 ### Guide reading and map navigation
 

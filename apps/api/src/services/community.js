@@ -17,6 +17,7 @@ const {
 } = require("./communityBuildSnapshot");
 const { communitySitemap } = require("./communitySitemap");
 const { communityListFilter } = require("./communityListFilters");
+const { listOwnerBuilds } = require("./communityOwnerBuilds");
 const {
   DETECTOR_OPP_SLUG_EXPR,
   DETECTOR_SLUG_EXPR,
@@ -1045,11 +1046,12 @@ class CommunityService {
    *
    * @param {string} userId
    * @returns {Promise<Array<{publicSlug: string, total: number, wins: number, losses: number}>>}
+   * @param {{includeRemoved?: boolean, publicSlugs?: string[]}} [opts]
    */
-  async listOwnerReplayStats(userId) {
+  async listOwnerReplayStats(userId, opts = {}) {
     const published = await this.db.communityBuilds
       .find(
-        { ownerUserId: userId, removed: false },
+        { ownerUserId: userId, ...(opts.includeRemoved ? {} : { removed: false }), ...(opts.publicSlugs ? { slug: { $in: opts.publicSlugs } } : {}) },
         {
           projection: {
             _id: 0,
@@ -1146,6 +1148,11 @@ class CommunityService {
         losses: Math.max(0, Number(count?.losses) || 0),
       };
     });
+  }
+
+  /** @param {string} userId */
+  async listOwnerBuilds(userId) {
+    return listOwnerBuilds(this.db, userId, (publicSlugs) => this.listOwnerReplayStats(userId, { includeRemoved: true, publicSlugs }));
   }
 
   /**

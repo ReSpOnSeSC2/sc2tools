@@ -3,6 +3,8 @@
 import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Search, X } from "lucide-react";
+import { useAuth } from "@clerk/nextjs";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Icon } from "@/components/ui/Icon";
@@ -17,12 +19,14 @@ import { useCommunityFilterState } from "./CommunityFilterContext";
 export interface CommunityFilterBarProps {
   initialRace: CommunityRace; initialVs: CommunityRace; initialSkill: SkillLevelId | "";
   initialSort: CommunitySort; initialSearch: string;
+  initialMine?: boolean;
 }
 const RACES = [{ value: "" as const, name: "Any", code: "Any" }, { value: "P" as const, name: "Protoss", code: "P" }, { value: "T" as const, name: "Terran", code: "T" }, { value: "Z" as const, name: "Zerg", code: "Z" }];
 const raceOptions = RACES.map(({ value, name, code }) => ({ value, ariaLabel: name === "Any" ? "Any race" : name, label: <span className="inline-flex items-center gap-1">{value ? <Icon name={raceIconName(coerceRace(name))} kind="race" size={12} decorative /> : null}{code}</span> }));
 
 /** Filters navigate without remounting the input, preserving focus while typing. */
-export function CommunityFilterBar({ initialRace, initialVs, initialSkill, initialSort, initialSearch }: CommunityFilterBarProps) {
+export function CommunityFilterBar({ initialRace, initialVs, initialSkill, initialSort, initialSearch, initialMine = false }: CommunityFilterBarProps) {
+  const { isLoaded, isSignedIn } = useAuth();
   const router = useRouter(); const sp = useSearchParams(); const queryString = sp.toString();
   const [search, setSearch] = useState(initialSearch);
   const [ready, setReady] = useState(false);
@@ -55,6 +59,11 @@ export function CommunityFilterBar({ initialRace, initialVs, initialSkill, initi
     startTransition(() => router.replace(communityHref({ ...next, ...patch, search: search.trim(), offset: 0 }), { scroll: false }));
   }
   return <fieldset disabled={!ready} aria-label="Filter community builds" className="m-0 min-w-0 space-y-3 border-0 p-0">
+    {isLoaded && isSignedIn ? <nav aria-label="Community build view" className="flex flex-wrap gap-2">
+      <Button size="sm" variant={initialMine ? "secondary" : "primary"} aria-pressed={!initialMine} onClick={() => startTransition(() => router.replace("/community", { scroll: false }))}>All builds</Button>
+      <Button size="sm" variant={initialMine ? "primary" : "secondary"} aria-pressed={initialMine} onClick={() => startTransition(() => router.replace("/community?mine=1", { scroll: false }))}>Mine</Button>
+    </nav> : null}
+    {!initialMine ? <>
     <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
       <div className="relative flex-1">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" aria-hidden />
@@ -69,5 +78,6 @@ export function CommunityFilterBar({ initialRace, initialVs, initialSkill, initi
       <div className="flex flex-wrap items-center gap-2"><span id={`${id}-vs`} className="w-14 text-caption font-semibold text-text">vs</span><SegmentedControl labelledBy={`${id}-vs`} value={initialVs} options={raceOptions} onChange={(vs) => navigate({ vs })} /></div>
       <label className="flex items-center gap-2 text-caption font-semibold text-text"><span className="shrink-0">Skill level</span><Select value={initialSkill} onChange={(event) => navigate({ skill: event.target.value as SkillLevelId | "" })}><option value="">Any level</option>{SKILL_LEVELS.map((level) => <option key={level.id} value={level.id}>{level.label}</option>)}</Select></label>
     </div>
+    </> : null}
   </fieldset>;
 }

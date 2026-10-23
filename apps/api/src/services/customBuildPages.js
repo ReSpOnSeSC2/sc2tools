@@ -41,6 +41,7 @@ function parseBuildPageOptions(raw = {}) {
   return {
     limit, sort, matchup: matchup === "All" ? "" : matchup, hideEmpty, view, includeGeneric, forkedFrom,
     search: textOption(raw.search, "search", 200),
+    nameSearch: textOption(raw.nameSearch, "name search", 120),
     name: textOption(raw.name, "name", 200),
     normalizedName: textOption(raw.normalizedName, "normalizedName", 200),
     cursor: textOption(raw.cursor, "cursor", 2048),
@@ -112,6 +113,7 @@ function buildPageConditions(opts) {
   /** @type {Record<string, any>[]} */
   const conditions = [];
   if (opts.name) conditions.push({ $or: [{ name: opts.name }, { slug: opts.name }] });
+  if (opts.nameSearch) conditions.push({ name: { $regex: escapeRegex(opts.nameSearch), $options: "i" } });
   if (opts.forkedFrom) conditions.push({ "forkedFrom.communitySlug": opts.forkedFrom });
   if (opts.normalizedName) conditions.push({ $or: ["name", "slug"].map((field) => ({ [field]: { $regex: normalizedNameRegex(opts.normalizedName), $options: "i" } })) });
   if (opts.matchup) {

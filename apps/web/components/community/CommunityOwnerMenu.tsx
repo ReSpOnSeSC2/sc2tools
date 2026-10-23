@@ -7,7 +7,7 @@ import { MoreHorizontal } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 
 /** Owner actions follow the library card's keyboard and viewport-safe menu pattern. */
-export function CommunityOwnerMenu({ onRemove }: { onRemove: () => void }) {
+export function CommunityOwnerMenu({ onRemove, sourceSlug }: { onRemove: () => void; sourceSlug?: string }) {
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const menu = useRef<HTMLUListElement>(null);
@@ -46,12 +46,13 @@ export function CommunityOwnerMenu({ onRemove }: { onRemove: () => void }) {
     <Badge size="sm" variant="neutral">Your build</Badge>
     <button ref={trigger} type="button" aria-label="Your build options" aria-haspopup="menu" aria-expanded={open} aria-controls={open ? id : undefined}
       onClick={() => { initialItem.current = 0; setOpen((value) => !value); }}
-      onKeyDown={(event) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); initialItem.current = event.key === "ArrowUp" ? 1 : 0; setOpen(true); } }}
+      onKeyDown={(event) => { if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); initialItem.current = event.key === "ArrowUp" ? (sourceSlug ? 2 : 1) : 0; setOpen(true); } }}
       className="inline-flex min-h-[44px] w-11 items-center justify-center rounded-md text-text-muted hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><MoreHorizontal className="h-5 w-5" aria-hidden /></button>
     {open ? createPortal(<ul ref={menu} id={id} role="menu" aria-label="Your build actions" onKeyDown={move}
       onBlur={(event) => { if (event.relatedTarget instanceof Node && !menu.current?.contains(event.relatedTarget) && event.relatedTarget !== trigger.current) close(); }}
       style={position} className="fixed z-[70] w-56 overflow-y-auto rounded-lg border border-border bg-bg-surface p-1 shadow-lg">
-      <li role="none"><Link role="menuitem" tabIndex={-1} href="/builds" onClick={() => close()} className="flex min-h-11 items-center rounded-md px-3 text-caption text-text hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none">Open my library</Link></li>
+      <li role="none"><Link role="menuitem" tabIndex={-1} href={sourceSlug ? `/builds/${encodeURIComponent(sourceSlug)}` : "/builds"} onClick={() => close()} className="flex min-h-11 items-center rounded-md px-3 text-caption text-text hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none">{sourceSlug ? "Edit in library" : "Open my library"}</Link></li>
+      {sourceSlug ? <li role="none"><Link role="menuitem" tabIndex={-1} href={`/builds?publish=${encodeURIComponent(sourceSlug)}`} onClick={() => close()} className="flex min-h-11 items-center rounded-md px-3 text-caption text-text hover:bg-bg-elevated focus:bg-bg-elevated focus:outline-none">Publish update</Link></li> : null}
       <li role="none"><button role="menuitem" tabIndex={-1} type="button" onClick={() => { close(true); onRemove(); }} className="flex min-h-11 w-full items-center rounded-md px-3 text-left text-caption text-danger hover:bg-danger/10 focus:bg-danger/10 focus:outline-none">Remove from Community…</button></li>
     </ul>, document.body) : null}
   </span>;
