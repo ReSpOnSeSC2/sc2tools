@@ -2,13 +2,18 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useAuth } from "@clerk/nextjs";
-import { Check, Download, Loader2, Play } from "lucide-react";
+import { Check, Download, Play } from "lucide-react";
 import { apiCall } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ImportProgressCard } from "@/components/imports/ImportProgressCard";
 import { useImportStatus } from "@/components/imports/useImportStatus";
+import { useChecklistDismiss } from "./useChecklistDismiss";
+import type { PairedDevice } from "./pairingTypes";
+
+const PairDeviceForm = dynamic(() => import("./PairDeviceForm").then((module) => module.PairDeviceForm), { loading: () => <p role="status">Loading pairing form…</p> });
 
 const AGENT_ONLINE_WINDOW_MS = 3 * 60 * 1000;
 
@@ -16,7 +21,7 @@ export type ChecklistMe = {
   games: { total: number };
   agentPaired: boolean;
   agentLastSeenAt?: string | null;
-  onboarding?: { downloadStartedAt?: string; dismissedAt?: string } | null;
+  onboarding?: { downloadStartedAt?: string; dismissedAt?: string | null; [field: string]: unknown } | null;
 };
 
 export type ChecklistOptions = {
@@ -57,17 +62,22 @@ export function OnboardingChecklist({
   browserImportEnabled?: boolean;
 }) {
   const { getToken } = useAuth();
-  const [dismissed, setDismissed] = useState(false);
+  const { dismissed, dismiss, hiddenNotice } = useChecklistDismiss();
+  const [pairingPending, setPairingPending] = useState(false);
+  const [connection, setConnection] = useState("");
   const importStatus = useImportStatus();
   const [startingImport, setStartingImport] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
 
-  if (dismissed || !checklistVisible(me, { browserImportEnabled })) return null;
+  if (dismissed) return hiddenNotice;
+  if (!checklistVisible(me, { browserImportEnabled })) return null;
 
   const downloadDone =
     me.agentPaired || !!me.onboarding?.downloadStartedAt;
   const pairDone = me.agentPaired;
   const playDone = me.games.total > 0;
+  const doneCount = Number(downloadDone) + Number(pairDone) + Number(playDone);
+  const pairExpanded = downloadDone && (!pairDone || pairingPending);
   const agentOnline =
     !!me.agentLastSeenAt &&
     Date.now() - new Date(me.agentLastSeenAt).getTime() <
@@ -78,28 +88,12 @@ export function OnboardingChecklist({
       await apiCall(getToken, "/v1/me/preferences/onboarding", {
         method: "PUT",
         body: JSON.stringify({
-          ...(me.onboarding || {}),
           downloadStartedAt: new Date().toISOString(),
         }),
       });
       onRefresh?.();
     } catch {
       // Cosmetic only — the step also completes on pairing.
-    }
-  }
-
-  async function dismiss() {
-    setDismissed(true);
-    try {
-      await apiCall(getToken, "/v1/me/preferences/onboarding", {
-        method: "PUT",
-        body: JSON.stringify({
-          ...(me.onboarding || {}),
-          dismissedAt: new Date().toISOString(),
-        }),
-      });
-    } catch {
-      // Local state already hid it for this session.
     }
   }
 
@@ -136,13 +130,14 @@ export function OnboardingChecklist({
             Get your dashboard live
           </h2>
           <p className="mt-0.5 text-caption text-text-muted">
-            Three steps — most players are done in under five minutes.
+            {doneCount} of 3 done · About five minutes of setup.
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={() => void dismiss()}>
           Dismiss
         </Button>
       </div>
+      <div role="progressbar" aria-label="Setup progress" aria-valuemin={0} aria-valuemax={3} aria-valuenow={doneCount} className="mt-3 h-1 overflow-hidden rounded bg-bg-elevated"><div className="h-full bg-accent" style={{ width: `${doneCount / 3 * 100}%` }} /></div>
 
       <ol className="mt-4 space-y-3">
         <ChecklistRow
@@ -163,7 +158,7 @@ export function OnboardingChecklist({
           done={pairDone}
           title="Pair this account"
           subtitle={
-            pairDone ? (
+            connection ? connection : pairDone ? (
               <span className="inline-flex items-center gap-1.5">
                 <span
                   aria-hidden
@@ -185,10 +180,10 @@ export function OnboardingChecklist({
               <CtaLink href="/devices">Open Devices</CtaLink>
             )
           }
-          expanded={downloadDone && !pairDone}
+          expanded={pairExpanded}
           expandedContent={
-            downloadDone && !pairDone ? (
-              <PairHint onPaired={onRefresh} />
+            pairExpanded ? (
+              <PairHint onRefresh={onRefresh} onClaimed={() => setPairingPending(true)} onConnected={(device) => { setConnection(`Connected: ${device.label || device.hostname || "Your PC"}`); setPairingPending(false); onRefresh?.(); }} />
             ) : null
           }
         />
@@ -288,35 +283,14 @@ function ChecklistRow({
 
 const PAIR_POLL_MS = 5000;
 
-/**
- * The agent generates the pairing code (shown in its window on first
- * run); the user enters it at /devices. While this hint is visible we
- * re-fetch /v1/me every few seconds so the row ticks green on its own
- * the moment the claim lands.
- */
-function PairHint({ onPaired }: { onPaired?: () => void }) {
+/** Inline pairing shares the form and keeps the existing five-second refresh. */
+function PairHint({ onRefresh, onClaimed, onConnected }: { onRefresh?: () => void; onClaimed: () => void; onConnected: (device: PairedDevice) => void }) {
   useEffect(() => {
-    if (!onPaired) return;
-    const id = window.setInterval(onPaired, PAIR_POLL_MS);
+    if (!onRefresh) return;
+    const id = window.setInterval(onRefresh, PAIR_POLL_MS);
     return () => window.clearInterval(id);
-  }, [onPaired]);
-
-  return (
-    <ol className="ml-5 list-decimal space-y-1 text-caption text-text-muted">
-      <li>Run the app — use the 6-digit code shown in the SC2 Tools window on your PC.</li>
-      <li>
-        Enter the code on the{" "}
-        <Link href="/devices" className="font-medium text-accent hover:text-accent-hover">
-          Devices page
-        </Link>
-        .
-      </li>
-      <li className="inline-flex items-center gap-1.5">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-        This row ticks green automatically once paired.
-      </li>
-    </ol>
-  );
+  }, [onRefresh]);
+  return <PairDeviceForm compact onPaired={() => { onClaimed(); onRefresh?.(); }} onConnected={onConnected} />;
 }
 
 /**

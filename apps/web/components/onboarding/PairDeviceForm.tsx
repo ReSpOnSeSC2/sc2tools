@@ -10,7 +10,7 @@ import { apiCall } from "@/lib/clientApi";
 import { gaEvent } from "@/lib/analytics/gtag";
 import { normalizePairingCode, PAIRING_CODE_LOCATION, type PairedDevice, type PairingInfo } from "./pairingTypes";
 
-interface Props { compact?: boolean; onPaired?: () => void; onConnected?: () => void }
+interface Props { compact?: boolean; onPaired?: (info: PairingInfo) => void; onConnected?: (device: PairedDevice) => void }
 
 /** Reading the browser query stays behind Suspense on statically rendered pages. */
 export function PairDeviceForm(props: Props) {
@@ -53,7 +53,7 @@ function PairForm({ compact = false, onPaired, onConnected }: Props) {
         const device = result.items.find((item) => item.deviceId === claimed!.device.deviceId && item.lastSeenAt);
         if (device && active.current && !controller.signal.aborted) {
           setConfirmation(`Connected: ${device.label || device.hostname || "Your PC"}${device.agentVersion ? `, v${device.agentVersion}` : ""}`);
-          onConnectedRef.current?.();
+          onConnectedRef.current?.(device);
           clearTimeout(stop); return;
         }
       } catch { /* A short outage keeps the bounded confirmation poll running. */ }
@@ -91,7 +91,7 @@ function PairForm({ compact = false, onPaired, onConnected }: Props) {
         setClaimed(result); setLate(false); setCode("");
         const remaining = new URLSearchParams(params.toString()); remaining.delete("code");
         router.replace(`${pathname || "/devices"}${remaining.size ? `?${remaining}` : ""}`, { scroll: false });
-        gaEvent("device_paired"); onPairedRef.current?.();
+        gaEvent("device_paired"); onPairedRef.current?.(result);
       }
     } catch (failure) {
       if (active.current) { setPreview(null); setError(failure instanceof Error || (failure && typeof failure === "object" && "message" in failure) ? String(failure.message) : "Couldn't link this PC. Please try again."); }
