@@ -29,7 +29,7 @@ vi.mock("@clerk/nextjs", () => ({
   SignedIn: ({ children }: { children: ReactNode }) => <>{children}</>,
   SignedOut: () => null,
 }));
-vi.mock("@/lib/clientApi", () => ({ useApi: () => ({ data: undefined }) }));
+vi.mock("@/lib/clientApi", () => ({ API_BASE: "http://localhost:8080", useApi: () => ({ data: undefined }) }));
 vi.mock("@/components/SyncStatus", () => ({ SyncStatus: () => null }));
 vi.mock("@/components/ui/ThemeToggle", () => ({ ThemeToggle: () => null }));
 vi.mock("../CoachingBookingAlert", () => ({ CoachingBookingAlert: () => null }));

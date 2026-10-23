@@ -1791,7 +1791,7 @@ describe("POST /v1/games re-emits overlay:session", () => {
     await waitFor(() => captured.sessionEmits.length >= 2);
 
     expect(captured.gamesChangedEmits).toHaveLength(1);
-    expect(captured.gamesChangedEmits[0]).toEqual({ count: 1 });
+    expect(captured.gamesChangedEmits[0]).toEqual({ count: 1, inserted: 1, bulk: false, reason: "ingest" });
 
     // Two overlay sockets in the room → two emits, one per timezone.
     // The web-kind socket must be filtered out.
@@ -1840,7 +1840,7 @@ describe("POST /v1/games re-emits overlay:session", () => {
     // Historical rows cannot affect the active four-hour session. They still
     // emit one cheap games:changed nudge, but must not start Mongo/Pulse
     // session resolution for this batch.
-    expect(captured.gamesChangedEmits).toEqual([{ count: 25 }]);
+    expect(captured.gamesChangedEmits).toEqual([{ count: 25, inserted: 25, bulk: true, reason: "ingest" }]);
     expect(sessionSpy).not.toHaveBeenCalled();
     expect(captured.sessionEmits).toHaveLength(0);
   });

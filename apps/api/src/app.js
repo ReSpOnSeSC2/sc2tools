@@ -613,7 +613,7 @@ function makeServices(deps) {
       if (!deps.io) return;
       const changed = Number(result?.tagged || 0) + Number(result?.cleared || 0);
       if (changed > 0) {
-        deps.io.to(`user:${userId}`).emit("games:changed", { count: changed });
+        deps.io.to(`user:${userId}`).emit("games:changed", { count: changed, inserted: 0, bulk: true, reason: "reclassify" });
       }
     },
   });
