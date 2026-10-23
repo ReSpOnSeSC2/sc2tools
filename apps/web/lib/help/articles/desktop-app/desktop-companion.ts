@@ -1,0 +1,68 @@
+import type { HelpArticle } from "@/lib/help/types";
+
+const article: HelpArticle = {
+  slug: "desktop-companion",
+  title: "Desktop Companion: scouting, build choices and practice",
+  summary: "Use one interactive Windows app to browse opponents and replay timings, choose your build, roll your randomizer, and follow a Ghost build. Pin only the game panels you want.",
+  category: "desktop-app",
+  audience: "player",
+  signedInOnly: true,
+  order: 4,
+  keywords: ["companion", "standalone", "desktop", "scouting", "always on top", "pin", "build selectors", "randomizer", "ghost", "local replay", "reference replay", "star", "admin examples", "on off", "saved modes", "hotkey", "ladder", "customs", "teams", "practice", "review"],
+  updated: "2026-10-23",
+  body: [
+    { type: "paragraph", text: "Open **Companion** in the Windows desktop app. Its tabs keep scouting, build selectors, the randomizer and Build Order Ghost together. You can click through your history and configure assistance without adding an OBS Browser Source." },
+    { type: "heading", text: "Connect your account", anchor: "connect" },
+    { type: "steps", items: [
+      "[Download the Windows app](/download), install it, and link it to your SC2 Tools account. See [Install and pair](/help/install-and-pair) if this is your first setup.",
+      "Leave the agent running so new replays sync and the app receives the current game clock and matchup.",
+      "Open **Companion** from the desktop sidebar. Your opponent library comes from your account's imported games.",
+    ] },
+    { type: "heading", text: "Control what appears during a game", anchor: "switches" },
+    { type: "list", items: [
+      "**Game assistance enabled** is the master switch. Turning it off hides the game panels and stops automatic assistance while keeping your saved choices.",
+      "**Pin opponent** and **Pin scouting** are independent. Enable either panel to keep it above the game while the full Companion stays available for browsing.",
+      "Build selectors, randomizer and Ghost have their own controls. Change them whenever you want; the master switch also gates their game assistance.",
+      "**Refresh library** refreshes all Companion workspaces, including build choices, your randomizer pool and Ghost references saved on the website.",
+      "Use StarCraft II in Windowed or Windowed (Fullscreen) mode for native panels above the game.",
+    ] },
+    { type: "heading", text: "Save a mode and optional global shortcut", anchor: "modes" },
+    { type: "paragraph", text: "Choose **Ladder**, **Customs**, **Teams**, **Practice** or **Review** yourself. These are saved local presets, not automatic queue detection. Open **Customize mode** to adjust the six independent feature gates. Each mode remembers its choices across app restarts." },
+    { type: "list", items: [
+      "Ladder and Customs initially allow every feature; existing account switches and pin choices still decide what runs. Practice initially allows the selectors and Ghost. Review initially hides game assistance while leaving the library available.",
+      "Mode gates work alongside the master switch and each feature's account switch. Switching modes does not change your account's randomizer pool or check-in preferences. A pinned panel hidden by a preset is identified in the mode summary.",
+      "Teams initially hides assistance. Actual team-game guidance is unsupported: even customized Teams gates remain inactive unless the current source identifies a human 1v1 game. Selecting Teams does not enable team-game scouting or Ghost support.",
+      "Opt in to **Global hide/show shortcut** to toggle the master switch with **Ctrl+Shift+F10**, including while another app has focus. The Windows shortcut must be available; its registration status appears under Customize mode. A shortcut conflict does not change your saved feature choices.",
+    ] },
+    { type: "image", src: "/landing/companion-workspace.png", alt: "Desktop Companion scouting workspace with a selected opponent and both replay timelines", caption: "Actual desktop interface with sample data. Your library and timings come from your own replay history." },
+    { type: "heading", text: "Browse scouting and replay tech steps", anchor: "scouting" },
+    { type: "steps", items: [
+      "Choose an opponent, then select one of your previous encounters. The two build labels show what you and the opponent played.",
+      "Use **Tech milestones**, **Full opening** and **Upgrades** to inspect both players. Each replay step has an icon and a timestamp.",
+      "**Started** marks observed construction starts. **Completed** marks observed unit, research or morph completions. **Recorded** is used for older rows whose event type is unavailable; missing timings remain unavailable.",
+      "Keep private scouting notes for the next meeting. Browsing another opponent does not replace the current-game identity shown in a pinned game panel.",
+    ] },
+    { type: "heading", text: "Build selectors and one saved randomizer pick", anchor: "builds" },
+    { type: "paragraph", text: "In **Build selectors**, choose your plan for the current matchup and handle the after-game check-in. You can also correct the opponent's build. [Build check-in](/help/build-check-in) explains which confirmations change your personal statistics." },
+    { type: "paragraph", text: "In **Randomizer**, enable the matchups you want, check the eligible builds and save the selected pool. The switch uses the same account setting as the website. **Roll now** requests a real saved draw, including when no OBS source is open. A declared build takes priority; retries and connected OBS sources share the game's first saved pick." },
+    { type: "image", src: "/landing/companion-selectors.png", alt: "Native build selectors and independent assistance controls", caption: "Build selectors shown with sample data." },
+    { type: "heading", text: "Choose a replay for Build Order Ghost", anchor: "ghost" },
+    { type: "steps", items: [
+      "Open **Build Order Ghost**. Choose a local **.SC2Replay**, or drop one onto Ghost. You can also choose from your synced replay library or an available published example.",
+      "Preview the available build order for each player. Select the player whose opening you want to practice, then assign that target to its matchup.",
+      "Turn on **Show Build Order Ghost during matching games** and the master assistance switch. Ghost follows the current game clock in its own panel. It does not infer unit completion from the live client.",
+      "Save a good example as a build's reference with its star action in **Builds** or **Opponents**, then reuse it when selecting a practice target. References belong to individual builds.",
+    ] },
+    { type: "image", src: "/landing/companion-ghost.png", alt: "Native Ghost replay selection, both-player preview and matchup target", caption: "Ghost source selection shown with sample data." },
+    { type: "heading", text: "Find, compare and restore references", anchor: "references" },
+    { type: "paragraph", text: "The Ghost replay library filters by search, matchup, build, map, result and references. Filters apply to loaded pages; load older replays when the example you want is not listed. Local replay selection also accepts files outside your watched folders. Choosing a file does not upload the original replay." },
+    { type: "paragraph", text: "Star a replay to replace that build's reference. The last three previous versions are retained in **Reference history / Undo**. Choose an earlier version and confirm restoration. If another device changed the reference, refresh before trying again; Undo never silently overwrites a newer reference." },
+    { type: "paragraph", text: "Use **Compare with reference** for a completed replay. The table matches repeated steps in order and shows the timing difference only for compatible start or completion observations. The source replay is not graded against itself. Missing or incompatible events remain marked rather than treated as completed steps. The same comparison is available in expanded website replay rows." },
+    { type: "heading", text: "Your library and shared examples", anchor: "privacy" },
+    { type: "paragraph", text: "Your synced replays and saved references remain part of your account. An admin may explicitly publish an example for others to practice; importing, starring or selecting a private replay does not publish it automatically. Review the selected player and source before assigning a Ghost target." },
+    { type: "paragraph", text: "OBS remains optional. Stream Browser Sources and the native desktop panels have different display settings. If you broadcast a display or window capture, check which Companion windows and notes your capture actually includes." },
+  ],
+  related: ["install-and-pair", "desktop-scouting", "build-check-in", "randomizer", "practice-ghost-build"],
+};
+
+export default article;

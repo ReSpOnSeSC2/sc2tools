@@ -13,6 +13,7 @@ pytest.importorskip("PySide6")
 from PySide6 import QtCore, QtGui, QtWidgets
 
 from sc2tools_agent.ui.companion_page import _events, _icon_root, _icon_token, _live_context, _note_length, _time, build_companion_page
+from sc2tools_agent.companion_modes import default_modes
 
 
 def wait_until(app, predicate, timeout=3):
@@ -40,7 +41,7 @@ def companion():
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     preferences = {"overlaysEnabled": True, "opponentOverlay": True, "scoutingOverlay": True}
     state = {
-        "snapshot": {"paired": True, "preferences": preferences, "liveGame": {
+        "snapshot": {"paired": True, "preferences": preferences, "modes": default_modes(), "liveGame": {
             "phase": "match_in_progress", "gameKey": "current", "displayTime": 50,
             "opponent": {"name": "Live opponent", "race": "Terran", "profile": {"mmr": 4000}},
             "streamerHistory": {"last5GamesScouting": [game()], "headToHead": {"wins": 2, "losses": 1}},
@@ -50,6 +51,7 @@ def companion():
         "details": {"one": {"name": "Library one", "last5GamesScouting": [game()], "notes": "Old note", "totals": {"wins": 2, "losses": 1}},
                     "two": {"name": "Library two", "last5GamesScouting": []}},
         "calls": [], "threads": [],
+        "ghost_references": {},
     }
 
     def handler(payload):
@@ -67,8 +69,37 @@ def companion():
         if action == "preferences":
             state["snapshot"]["preferences"] = deepcopy(payload["preferences"])
             return {"preferences": deepcopy(payload["preferences"])}
+        if action == "companion_modes":
+            if "modes" not in payload:
+                saved = {"modes": deepcopy(state["snapshot"]["modes"]),
+                         "preferences": deepcopy(state["snapshot"]["preferences"])}
+                gate = state.get("local_settings_gate")
+                if gate is not None:
+                    gate.wait(2)
+                return saved
+            gate = state.get("mode_gate")
+            if gate is not None:
+                gate.wait(2)
+            if state.get("mode_error"):
+                raise RuntimeError("Disk unavailable")
+            state["snapshot"]["modes"] = deepcopy(payload["modes"])
+            return {"modes": deepcopy(payload["modes"])}
         if action == "save_notes":
             return {"notes": payload["text"], "notesReadAloud": payload["readAloud"]}
+        if action == "ghost_state":
+            return {"ghost": {"v": 1, "enabled": False, "slots": {}}, "references": deepcopy(state["ghost_references"])}
+        if action == "ghost_games":
+            return {"items": []}
+        if action == "ghost_reference":
+            gate = state.get("ghost_reference_gate")
+            if gate is not None:
+                gate.wait(2)
+            key = payload["side"]
+            if payload.get("clear"):
+                state["ghost_references"].pop(key, None)
+            else:
+                state["ghost_references"][key] = {"gameId": payload["gameId"], "side": payload["side"], "matchup": "PvT"}
+            return {"ghost": {"v": 1, "enabled": False, "slots": {}}, "references": deepcopy(state["ghost_references"])}
         raise AssertionError(action)
 
     page = build_companion_page(None, handler=handler, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
@@ -94,6 +125,22 @@ def test_handler_calls_run_off_the_gui_thread_and_real_timelines_render(companio
     assert page.trees["build"]["my"].topLevelItem(0).text(2) == "Recorded"
 
 
+def test_explicit_library_refresh_synchronizes_all_workspaces_without_polling_them_each_tick(companion, monkeypatch):
+    page, state, app = companion
+    calls = []
+    for name in ("build_selectors", "randomizer_page", "ghost_page"):
+        monkeypatch.setattr(getattr(page, name), "refresh", lambda key=name: calls.append(key))
+    for name in ("randomizer_page", "ghost_page"):
+        monkeypatch.setattr(getattr(page, name), "update_snapshot", lambda _snapshot: None)
+    page.refresh_library()
+    assert calls == ["build_selectors", "randomizer_page", "ghost_page"]
+    calls.clear()
+    wait_until(app, lambda: "snapshot" not in page._requests)
+    page.refresh()
+    wait_until(app, lambda: "snapshot" not in page._requests)
+    assert calls == []
+
+
 def test_panels_use_current_opponent_while_browsing_another_and_main_hidden(companion):
     page, state, app = companion
     assert page.overlays["opponent"].isVisible()
@@ -117,6 +164,144 @@ def test_master_off_persists_and_retains_independent_pin_choices(companion):
     page.preference_checks["overlaysEnabled"].setChecked(True)
     wait_until(app, lambda: not page._preference_busy)
     assert all(panel.isVisible() for panel in page.overlays.values())
+
+
+def test_saved_modes_gate_panels_without_changing_shared_settings_and_keep_controls_adjustable(companion):
+    page, state, app = companion
+    original_preferences = deepcopy(state["snapshot"]["preferences"])
+    changes = []
+    page.modesChanged.connect(changes.append)
+    controls = page.mode_controls
+    assert controls.details.isHidden()
+    controls.mode_select.setCurrentIndex(controls.mode_select.findData("review"))
+    assert not any(panel.isVisible() for panel in page.overlays.values())
+    assert "Pinned but hidden by preset" in controls.explanation.text()
+    wait_until(app, lambda: not page._mode_busy)
+    assert state["snapshot"]["preferences"] == original_preferences
+    assert not [call for call in state["calls"] if call["action"] in {"randomizer_settings", "preferences"}]
+    assert changes[-1]["mode"] == "review" and changes[-1]["ghost"] is False
+    assert controls.feature_checks["ghost"].isEnabled()
+    page.set_preference("overlaysEnabled", False)
+    controls.mode_select.setCurrentIndex(controls.mode_select.findData("practice"))
+    controls.customize_button.click()
+    assert not controls.details.isHidden()
+    controls.feature_checks["opponentOverlay"].setChecked(True)
+    wait_until(app, lambda: not page._mode_busy and not page._preference_busy)
+    controls.mode_select.setCurrentIndex(controls.mode_select.findData("review"))
+    controls.mode_select.setCurrentIndex(controls.mode_select.findData("practice"))
+    assert controls.feature_checks["opponentOverlay"].isChecked()
+    assert not page.assistance_enabled()
+    assert not page.randomizer_page._assistance
+    assert page.mode_gates()["ghost"] is True
+
+
+def test_mode_saves_coalesce_and_hotkey_notifies_once_per_change(companion):
+    page, state, app = companion
+    gate = state["mode_gate"] = threading.Event()
+    hotkey = []
+    page.hotkeyEnabledChanged.connect(hotkey.append)
+    controls = page.mode_controls
+    controls.mode_select.setCurrentIndex(controls.mode_select.findData("customs"))
+    controls.feature_checks["randomizer"].setChecked(False)
+    controls.hotkey_check.setChecked(True)
+    controls.mode_select.setCurrentIndex(controls.mode_select.findData("practice"))
+    controls.feature_checks["ghost"].setChecked(False)
+    assert page._mode_busy and page._modes_queued
+    assert hotkey == [True]
+    gate.set()
+    wait_until(app, lambda: not page._mode_busy)
+    saved = state["snapshot"]["modes"]
+    assert saved["active"] == "practice" and saved["hotkeyEnabled"] is True
+    assert saved["profiles"]["customs"]["randomizer"] is False
+    assert saved["profiles"]["practice"]["ghost"] is False
+    assert len([call for call in state["calls"] if call["action"] == "companion_modes" and "modes" in call]) == 2
+    page.set_hotkey_status("Ctrl+Shift+F10 is already in use")
+    assert "already in use" in controls.hotkey_check.toolTip()
+
+
+def test_mode_save_failure_rolls_back_and_teams_never_unhides_unknown_team_guidance(companion):
+    page, state, app = companion
+    state["mode_error"] = True
+    controls = page.mode_controls
+    controls.mode_select.setCurrentIndex(controls.mode_select.findData("practice"))
+    wait_until(app, lambda: not page._mode_busy)
+    assert page._modes["active"] == "ladder"
+    assert "not saved" in controls.save_status.text()
+    state["mode_error"] = False
+    controls.mode_select.setCurrentIndex(controls.mode_select.findData("teams"))
+    for checkbox in controls.feature_checks.values():
+        checkbox.setChecked(True)
+    wait_until(app, lambda: not page._mode_busy)
+    assert not page.mode_gates()["ghost"]
+    assert not page.mode_gates()["scoutingOverlay"]
+    assert "team-game guidance is unsupported" in controls.explanation.text()
+    assert not any(panel.isVisible() for panel in page.overlays.values())
+    state["snapshot"]["liveGame"]["players"] = [{"type": "user"}] * 2
+    page.refresh()
+    wait_until(app, lambda: "snapshot" not in page._requests)
+    assert page.mode_gates()["ghost"]
+    assert page._modes["active"] == "teams"
+
+
+def test_late_local_settings_cannot_overwrite_new_mode_or_master_choice(companion):
+    page, state, app = companion
+    gate = state["local_settings_gate"] = threading.Event()
+    page._job("modes_load", {"action": "companion_modes"})
+    page.mode_controls.mode_select.setCurrentIndex(page.mode_controls.mode_select.findData("practice"))
+    page.set_preference("overlaysEnabled", False)
+    wait_until(app, lambda: not page._mode_busy and not page._preference_busy)
+    gate.set()
+    wait_until(app, lambda: "modes_load" not in page._requests)
+    assert page._modes["active"] == "practice"
+    assert page._preferences == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": True}
+
+
+def test_offline_start_restores_local_modes_hotkey_and_pins_without_telemetry():
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    modes = default_modes()
+    modes["active"] = "review"
+    modes["hotkeyEnabled"] = True
+    modes["profiles"]["customs"]["ghost"] = False
+    state = {"modes": modes, "preferences": {"overlaysEnabled": True, "opponentOverlay": True, "scoutingOverlay": False}}
+    calls = []
+
+    def handler(payload):
+        calls.append(deepcopy(payload))
+        if payload["action"] == "snapshot":
+            raise RuntimeError("Network unavailable")
+        if payload["action"] == "companion_modes":
+            if "modes" in payload:
+                state["modes"] = deepcopy(payload["modes"])
+            return deepcopy(state)
+        if payload["action"] == "preferences":
+            state["preferences"] = deepcopy(payload["preferences"])
+            return {"preferences": deepcopy(state["preferences"])}
+        raise AssertionError(payload["action"])
+
+    page = build_companion_page(None, handler=handler, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+    page.timer.stop()
+    hotkey = []
+    page.hotkeyEnabledChanged.connect(hotkey.append)
+    try:
+        wait_until(app, lambda: page._modes_loaded and "snapshot" not in page._requests)
+        assert page._modes == modes
+        assert page._preferences == state["preferences"]
+        assert hotkey == [True]
+        assert not page._snapshot_healthy
+        assert not any(panel.isVisible() for panel in page.overlays.values())
+        assert page.mode_controls.isEnabled()
+        page.set_preference("overlaysEnabled", False)
+        wait_until(app, lambda: not page._preference_busy)
+        assert state["preferences"] == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": False}
+        page.mode_controls.mode_select.setCurrentIndex(page.mode_controls.mode_select.findData("practice"))
+        wait_until(app, lambda: not page._mode_busy)
+        assert state["modes"]["profiles"]["customs"]["ghost"] is False
+        assert state["modes"]["hotkeyEnabled"] is True
+        assert not [call for call in calls if call["action"] in {"randomizer_roll", "randomizer_settings", "opponents"}]
+    finally:
+        page.shutdown()
+        page.deleteLater()
+        app.processEvents()
 
 
 def test_rapid_panel_closes_are_serialized_and_persist_final_choices(companion):
@@ -271,3 +456,34 @@ def test_shutdown_is_idempotent_and_stops_hidden_panel_refresh(companion):
     page.refresh()
     assert not page.timer.isActive()
     assert not page._requests
+
+
+def test_previous_encounter_can_star_each_players_build_reference(companion):
+    page, state, app = companion
+    page.ghost_reference_buttons["you"].click()
+    wait_until(app, lambda: "you" in state["ghost_references"])
+    wait_until(app, lambda: page.ghost_reference_buttons["you"].text().startswith("★"))
+    assert {"action": "ghost_reference", "gameId": "game-1", "side": "you", "clear": False} in state["calls"]
+    page.ghost_reference_buttons["opponent"].click()
+    wait_until(app, lambda: "opponent" in state["ghost_references"])
+    wait_until(app, lambda: page.ghost_reference_buttons["opponent"].text().startswith("★"))
+    assert {"action": "ghost_reference", "gameId": "game-1", "side": "opponent", "clear": False} in state["calls"]
+    page.ghost_reference_buttons["you"].click()
+    wait_until(app, lambda: "you" not in state["ghost_references"])
+    assert "opponent" in state["ghost_references"]
+
+
+def test_reference_response_does_not_change_selected_encounter_or_claim_wrong_replay(companion):
+    page, state, app = companion
+    gate = threading.Event()
+    state["ghost_reference_gate"] = gate
+    page.ghost_reference_buttons["you"].click()
+    page._games.append(game("other-game"))
+    page.game_select.addItem("Another replay", "other-game")
+    page.game_select.setCurrentIndex(1)
+    page.notice.setText("Viewing the other replay")
+    gate.set()
+    wait_until(app, lambda: "ghost_reference" not in page._requests)
+    assert page.game_select.currentData() == "other-game"
+    assert page.notice.text() == "Viewing the other replay"
+    assert page.ghost_reference_buttons["you"].text().startswith("☆")

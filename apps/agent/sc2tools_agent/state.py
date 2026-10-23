@@ -22,6 +22,7 @@ import threading
 from dataclasses import dataclass, field, asdict, replace
 from pathlib import Path
 from typing import Dict, List, Optional
+from .companion_modes import normalize_modes
 
 STATE_FILENAME = "agent.json"
 
@@ -119,6 +120,12 @@ class AgentState:
 
     companion_preferences: Dict[str, bool] = field(default_factory=dict)
     """Native Companion overlay switches. Missing switches default to off."""
+
+    companion_modes: Dict[str, object] = field(default_factory=dict)
+    """Local presentation profiles and optional global hide/show shortcut."""
+
+    companion_ghost: Dict[str, object] = field(default_factory=dict)
+    """Local Ghost targets by matchup and the independent enabled switch."""
 
     parse_concurrency_override: Optional[int] = None
     """How many parse threads the watcher's ThreadPoolExecutor runs.
@@ -429,6 +436,10 @@ def load_state(state_dir: Path) -> AgentState:
             if key in {"overlaysEnabled", "opponentOverlay", "scoutingOverlay"}
             and type(value) is bool
         },
+        companion_ghost=(
+            dict(raw["companion_ghost"]) if isinstance(raw.get("companion_ghost"), dict) else {}
+        ),
+        companion_modes=normalize_modes(raw.get("companion_modes")),
         parse_concurrency_override=_coerce_int(
             raw.get("parse_concurrency_override"),
         ),
@@ -537,6 +548,8 @@ def _snapshot(state: AgentState) -> dict:
         uploaded=dict(state.uploaded),
         path_by_game_id=dict(state.path_by_game_id),
         companion_preferences=dict(state.companion_preferences),
+        companion_modes=normalize_modes(state.companion_modes),
+        companion_ghost=dict(state.companion_ghost),
         release_seen=dict(state.release_seen),
         replay_folders_override=list(state.replay_folders_override),
         replay_folders_excluded=list(state.replay_folders_excluded),

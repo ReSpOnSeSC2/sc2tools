@@ -731,11 +731,50 @@ def _run_with_gui(
             state.companion_preferences = previous
             raise
 
+    def save_companion_modes(modes):
+        previous = state.companion_modes
+        state.companion_modes = dict(modes)
+        try:
+            save_state(cfg.state_dir, state)
+        except OSError:
+            state.companion_modes = previous
+            raise
+
     companion = CompanionClient(
         lambda: (cfg.api_base, state.device_token),
         preferences_provider=lambda: state.companion_preferences,
         save_preferences=save_companion_preferences,
+        modes_provider=lambda: state.companion_modes,
+        save_modes=save_companion_modes,
     )
+    from .companion_ghost import GhostClient
+
+    def save_companion_ghost(preferences):
+        previous = state.companion_ghost
+        state.companion_ghost = dict(preferences)
+        try:
+            save_state(cfg.state_dir, state)
+        except OSError:
+            state.companion_ghost = previous
+            raise
+
+    ghost = GhostClient(
+        companion._request,
+        preferences_provider=lambda: state.companion_ghost,
+        save_preferences=save_companion_ghost,
+    )
+
+    def companion_action(request):
+        if isinstance(request, dict) and str(request.get("action", "")).startswith("ghost_"):
+            if request.get("action") == "ghost_local_target":
+                from .ghost_replay import load_local_ghost_replay
+
+                return load_local_ghost_replay(request.get("path"))
+            result = ghost.action(request)
+            if request.get("action") == "ghost_state":
+                result["replayFolders"] = [str(folder) for folder in _discover_replay_folders(cfg, state)]
+            return result
+        return companion.action(request)
 
     gui = GuiUI(
         on_restore_folders=lambda snapshot: _restore_folder_snapshot(cfg,state,cell,snapshot),
@@ -783,7 +822,7 @@ def _run_with_gui(
         on_recent_retry=lambda paths, reason: _retry_desktop_replays(cfg, state, cell, paths, reason, log),
         on_import_current_season=lambda: _handle_save_settings(cfg, state,
             SettingsPayload(sync_filter_preset="current_season", sync_filter_since="", sync_filter_until=""), cell, log),
-        on_companion_action=companion.action,
+        on_companion_action=companion_action,
         on_save_settings=lambda payload: _handle_save_settings(
             cfg, state, payload, cell, log,
         ),

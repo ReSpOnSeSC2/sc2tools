@@ -108,6 +108,12 @@ def _exercise_gui(report):
             app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
             if window.grab().isNull():
                 raise RuntimeError("The bundled Companion page did not paint.")
+            companion = window._companion_page
+            for index in range(companion.workspace_tabs.count()):
+                companion.workspace_tabs.setCurrentIndex(index)
+                app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+                if window.grab().isNull():
+                    raise RuntimeError("A bundled Companion tool did not paint.")
             report.update(qt_version=QtCore.qVersion(), qt_platform=app.platformName(),
                           page_count=stack.count(), streams_painted=True, companion_painted=True,
                           checkin_previews_painted=True, dashboard_recent_painted=True)

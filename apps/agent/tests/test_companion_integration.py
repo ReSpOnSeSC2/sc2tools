@@ -15,9 +15,12 @@ def test_companion_extends_the_existing_agent_and_preserves_navigation(tmp_path:
         pytest.skip("Qt is not installed")
     script = textwrap.dedent("""
         import sys
+        from dataclasses import replace
         from pathlib import Path
         from PySide6 import QtCore, QtGui, QtWidgets
         from sc2tools_agent.ui.gui import GuiUI, SettingsPayload, _GuiSignals, _MainWindow
+        from sc2tools_agent.build_checkin.models import LoadingCardModel
+        from tests.test_build_checkin_ui_core import FakeWindow
 
         app = QtWidgets.QApplication([])
         base = Path(sys.argv[1])
@@ -77,6 +80,31 @@ def test_companion_extends_the_existing_agent_and_preserves_navigation(tmp_path:
         assert pending._stack.currentIndex() == 3
         assert paired._nav_group.button(1).text() == 'Recent games'
         assert paired._checkin_host is not None
+        paired._checkin_host._window_factory = lambda kind, owner: FakeWindow(kind)
+        companion = paired._companion_page
+        companion._paired = True
+        companion._snapshot_healthy = True
+        companion._preferences['overlaysEnabled'] = True
+        companion._update_overlays()
+        loading = LoadingCardModel(game_key='shared-current')
+        paired._on_build_checkin('show_loading', (loading,))
+        loading_window = paired._checkin_host.existing_window('loading')
+        assert loading_window.visible
+        assert companion.build_selectors.loading_model.game_key == 'shared-current'
+        companion.set_preference('overlaysEnabled', False)
+        assert not loading_window.visible
+        assert not companion.ghost_page._assistance_enabled
+        newer_loading = replace(loading, locked_label='Latest selection')
+        paired._on_build_checkin('update_loading', (newer_loading,))
+        assert not loading_window.visible
+        companion.set_preference('overlaysEnabled', True)
+        assert loading_window.visible
+        assert loading_window.calls[-1] == ('show', newer_loading)
+        assert companion.build_selectors.loading_model.locked_label == 'Latest selection'
+        companion.set_preference('overlaysEnabled', False)
+        paired._on_build_checkin('hide_loading', ('shared-current', 'ended'))
+        companion.set_preference('overlaysEnabled', True)
+        assert not loading_window.visible
         for win in (paired, unpaired, saved, restored, pending):
             win._companion_page.shutdown()
             win._log_timer.stop()

@@ -1,11 +1,14 @@
 """Interactive native scouting desk and optional in-game companion panels."""
 from __future__ import annotations
 
+from copy import deepcopy
 import math
 from pathlib import Path
 import re
 import threading
 import time
+
+from ..companion_modes import build_companion_modes, effective_mode_features, normalize_modes
 
 
 _STYLE = """
@@ -161,7 +164,8 @@ def _icon_root():
     return packaged if packaged.is_dir() else Path(__file__).resolve().parents[3] / "web" / "public" / "icons" / "sc2"
 
 
-def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
+def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
+                         checkin_controller_provider=None):
     """Build a lazy-Qt page; all handler calls run in daemon workers."""
     icon_root = _icon_root()
 
@@ -292,6 +296,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
 
     class CompanionPage(QtWidgets.QWidget):
         completed = QtCore.Signal(dict)
+        assistanceChanged = QtCore.Signal(bool)
+        modesChanged = QtCore.Signal(dict)
+        hotkeyEnabledChanged = QtCore.Signal(bool)
 
         def __init__(self):
             super().__init__(parent)
@@ -303,6 +310,12 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._preferences_revision = 0
             self._preference_busy = False
             self._preferences_queued = False
+            self._modes = normalize_modes({})
+            self._saved_modes = deepcopy(self._modes)
+            self._modes_loaded = False
+            self._mode_revision = 0
+            self._mode_busy = False
+            self._modes_queued = False
             self._paired = False
             self._directory_loaded = False
             self._opponents = []
@@ -315,6 +328,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._preferences = {"overlaysEnabled": False, "opponentOverlay": False, "scoutingOverlay": False}
             self._rendering_notes = False
             self._games = []
+            self._ghost_references = {}
             self._build_ui()
             self.overlays = {kind: CompanionPanel(self, kind) for kind in ("opponent", "scouting")}
             self._position_overlays()
@@ -323,6 +337,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.timer.setInterval(3000)
             self.timer.timeout.connect(self.refresh)
             if callable(handler):
+                self._job("modes_load", {"action": "companion_modes"})
                 self.timer.start()
                 self.refresh()
             else:
@@ -349,11 +364,12 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
             layout.addWidget(self.live_label)
             controls = QtWidgets.QHBoxLayout()
             self.preference_checks = {}
-            for key, title in [("overlaysEnabled", "In-game panels enabled"), ("opponentOverlay", "Pin opponent"), ("scoutingOverlay", "Pin scouting")]:
+            for key, title in [("overlaysEnabled", "Game assistance enabled"), ("opponentOverlay", "Pin opponent"), ("scoutingOverlay", "Pin scouting")]:
                 checkbox = QtWidgets.QCheckBox(title)
                 checkbox.setChecked(self._preferences[key])
                 checkbox.toggled.connect(lambda value, preference=key: self.set_preference(preference, value))
                 self.preference_checks[key] = checkbox
+                checkbox.setEnabled(False)
                 controls.addWidget(checkbox)
             controls.addStretch()
             self.preview_button = QtWidgets.QPushButton("Preview panels")
@@ -361,6 +377,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.preview_button.toggled.connect(self._update_overlays)
             controls.addWidget(self.preview_button)
             layout.addLayout(controls)
+            self.mode_controls = build_companion_modes(self, QtCore=QtCore, QtWidgets=QtWidgets)
+            self.mode_controls.setEnabled(False)
+            self.mode_controls.changed.connect(self._modes_changed)
+            layout.addWidget(self.mode_controls)
             self.notice = label("Loading your opponent library…", "Muted")
             layout.addWidget(self.notice)
 
@@ -408,6 +428,15 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.game_select.currentIndexChanged.connect(self._game_selected)
             self.game_select.setEnabled(False)
             body_layout.addWidget(self.game_select)
+            ghost_actions = QtWidgets.QHBoxLayout()
+            self.ghost_reference_buttons = {}
+            for side, title in [("you", "Use my build as Ghost"), ("opponent", "Use opponent's build as Ghost")]:
+                button = QtWidgets.QPushButton("☆ " + title)
+                button.setEnabled(False)
+                button.clicked.connect(lambda _checked=False, chosen_side=side: self._save_ghost_reference(chosen_side))
+                self.ghost_reference_buttons[side] = button
+                ghost_actions.addWidget(button)
+            body_layout.addLayout(ghost_actions)
             self.build_labels = label("Choose a replay to compare both build orders.", "Heading")
             body_layout.addWidget(self.build_labels)
             self.game_summary = label("", "Muted")
@@ -458,7 +487,29 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
             splitter.addWidget(scroll)
             splitter.setStretchFactor(1, 1)
             splitter.setSizes([230, 800])
-            layout.addWidget(splitter, 1)
+            self.workspace_tabs = QtWidgets.QTabWidget()
+            self.workspace_tabs.addTab(splitter, "Scouting")
+            from .companion_builds import build_companion_builds
+            from .companion_randomizer import build_companion_randomizer
+            from .companion_ghost import build_companion_ghost
+            self.build_selectors = build_companion_builds(
+                self.workspace_tabs, controller_provider=checkin_controller_provider or (lambda: None),
+                QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets,
+            )
+            self.randomizer_page = build_companion_randomizer(
+                self.workspace_tabs, handler=handler, QtCore=QtCore,
+                QtGui=QtGui, QtWidgets=QtWidgets,
+            )
+            self.build_selectors.roll_now.clicked.connect(self.randomizer_page.request_roll_now)
+            self.ghost_page = build_companion_ghost(
+                self.workspace_tabs, handler=handler, QtCore=QtCore,
+                QtGui=QtGui, QtWidgets=QtWidgets,
+            )
+            self.ghost_page.referencesChanged.connect(self._ghost_references_changed)
+            self.workspace_tabs.addTab(self.build_selectors, "Build selectors")
+            self.workspace_tabs.addTab(self.randomizer_page, "Randomizer")
+            self.workspace_tabs.addTab(self.ghost_page, "Build Order Ghost")
+            layout.addWidget(self.workspace_tabs, 1)
 
         def _position_overlays(self):
             screen = self.screen()
@@ -477,6 +528,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
             request = self._sequence
             self._requests[channel] = request
             revision = self._preferences_revision
+            mode_revision = self._mode_revision
 
             def work():
                 try:
@@ -489,7 +541,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
                 if self._closed:
                     return
                 try:
-                    self.completed.emit({"channel": channel, "request": request, "payload": payload, "revision": revision, **response})
+                    self.completed.emit({"channel": channel, "request": request, "payload": payload,
+                                         "revision": revision, "modeRevision": mode_revision, **response})
                 except RuntimeError:
                     pass
 
@@ -501,6 +554,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
 
         def refresh_library(self):
             self.refresh()
+            self.build_selectors.refresh()
+            self.randomizer_page.refresh()
+            self.ghost_page.refresh()
             if self._paired and "directory" not in self._requests:
                 self._job("directory", {"action": "opponents"})
             if self._paired and self._selected_id and "opponent" not in self._requests:
@@ -519,6 +575,35 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
                 return
             self._requests.pop(channel, None)
             payload = response["payload"]
+            if channel == "modes_load":
+                self.mode_controls.setEnabled(callable(handler))
+                if not self._preference_busy:
+                    for checkbox in self.preference_checks.values():
+                        checkbox.setEnabled(callable(handler))
+                if not response.get("error"):
+                    result = response["result"]
+                    if response.get("revision") == self._preferences_revision and not self._preference_busy:
+                        self._apply_preferences(result.get("preferences") or {})
+                    if response.get("modeRevision") == self._mode_revision and not self._mode_busy:
+                        self._apply_modes(result.get("modes", self._modes), saved=True)
+                    self._update_overlays()
+                return
+            if channel == "modes":
+                self._mode_busy = False
+                self._mode_revision += 1
+                if not response.get("error"):
+                    self._saved_modes = normalize_modes(response["result"].get("modes"))
+                if self._modes_queued:
+                    self._modes_queued = False
+                    self._dispatch_modes()
+                elif response.get("error"):
+                    self._apply_modes(self._saved_modes)
+                    self.mode_controls.save_status.setText("Mode settings were not saved. " + response["error"])
+                    self.mode_controls.save_status.show()
+                else:
+                    self._apply_modes(self._saved_modes)
+                    self.mode_controls.save_status.hide()
+                return
             if channel == "preferences":
                 self._preference_busy = False
                 self._preferences_revision += 1
@@ -533,14 +618,17 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
                 if channel == "snapshot":
                     self._snapshot_healthy = False
                     self.live_label.setText("Connection unavailable · retrying")
-                    for panel in self.overlays.values():
-                        panel.hide()
+                    self._update_overlays()
+                    self.randomizer_page.update_snapshot({"paired": False})
+                    self.ghost_page.update_snapshot({"paired": False})
                 if channel == "preferences":
                     self.notice.setText("Panel settings were not saved. Refresh to restore saved settings or try again. " + response["error"])
                 if channel == "directory":
                     self.load_more_button.setEnabled(bool(self._cursor))
                 if channel == "notes":
                     self._notes_changed()
+                if channel == "ghost_reference":
+                    self._update_ghost_reference_buttons()
                 return
             result = response["result"]
             if channel == "snapshot":
@@ -553,6 +641,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self.refresh_button.setEnabled(paired)
                 if response.get("revision") == self._preferences_revision and not self._preference_busy:
                     self._apply_preferences(result.get("preferences") or {})
+                if response.get("modeRevision") == self._mode_revision and not self._mode_busy:
+                    self._apply_modes(result.get("modes", self._modes), saved=True)
                 active, context = _live_context(result)
                 if not paired:
                     self.live_label.setText("Pair your agent on Dashboard to open your scouting library.")
@@ -564,6 +654,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
                 if paired and not self._directory_loaded and "directory" not in self._requests:
                     self._job("directory", {"action": "opponents"})
                 self._update_overlays()
+                self.randomizer_page.update_snapshot(result)
+                self.ghost_page.update_snapshot(result)
             elif channel == "directory":
                 self._directory_loaded = True
                 rows = result.get("items") or []
@@ -595,6 +687,13 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self._apply_preferences(result.get("preferences", result))
                 self.notice.setText("In-game panel preferences saved. Panels appear during matches; Preview lets you position them now.")
                 self._update_overlays()
+            elif channel == "ghost_reference":
+                self.ghost_page.apply_account_result(result)
+                self.ghost_page.refresh()
+                self._update_ghost_reference_buttons()
+                if payload.get("gameId") == self.game_select.currentData():
+                    side = "Your build" if payload.get("side") == "you" else "Opponent's build"
+                    self.notice.setText(side + (" reference cleared." if payload.get("clear") else " selected as the Ghost reference for this matchup."))
 
         def _clear_library(self):
             self._requests.pop("directory", None)
@@ -693,6 +792,31 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
                 if text:
                     transitions.append(title + ": " + text)
             self.phase_summary.setText("\n".join(transitions))
+            self._update_ghost_reference_buttons()
+
+        def _ghost_references_changed(self, references):
+            self._ghost_references = references if isinstance(references, dict) else {}
+            self._update_ghost_reference_buttons()
+
+        def _is_ghost_reference(self, side):
+            game_id = self.game_select.currentData()
+            return bool(game_id) and any(isinstance(reference, dict) and reference.get("side", "you") == side
+                                        and (reference.get("gameId") or (reference.get("target") or {}).get("sourceGameId")) == game_id
+                                        for reference in self._ghost_references.values())
+
+        def _update_ghost_reference_buttons(self):
+            game_id = self.game_select.currentData()
+            for side, button in self.ghost_reference_buttons.items():
+                title = "Use my build as Ghost" if side == "you" else "Use opponent's build as Ghost"
+                button.setText(("★ " if self._is_ghost_reference(side) else "☆ ") + title)
+                button.setEnabled(bool(game_id) and "ghost_reference" not in self._requests)
+
+        def _save_ghost_reference(self, side):
+            game_id = self.game_select.currentData()
+            if game_id and "ghost_reference" not in self._requests:
+                self._job("ghost_reference", {"action": "ghost_reference", "gameId": game_id,
+                                               "side": side, "clear": self._is_ghost_reference(side)})
+                self._update_ghost_reference_buttons()
 
         def _notes_changed(self, *_args, track=True):
             if self._rendering_notes:
@@ -734,15 +858,65 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
                 checkbox.setEnabled(False)
             self._job("preferences", {"action": "preferences", "preferences": dict(self._preferences)})
 
+        def _apply_modes(self, modes, *, saved=False):
+            previous_hotkey = self._modes["hotkeyEnabled"]
+            self._modes = normalize_modes(modes)
+            self.mode_controls.set_state(self._modes)
+            if saved:
+                self._saved_modes = deepcopy(self._modes)
+            if not self._modes_loaded or previous_hotkey != self._modes["hotkeyEnabled"]:
+                self.hotkeyEnabledChanged.emit(self._modes["hotkeyEnabled"])
+            self._modes_loaded = True
+            self._update_overlays()
+
+        def _modes_changed(self, modes):
+            if self._closed or not callable(handler):
+                return
+            self._mode_revision += 1
+            self._apply_modes(modes)
+            if self._mode_busy:
+                self._modes_queued = True
+            else:
+                self._dispatch_modes()
+
+        def _dispatch_modes(self):
+            self._mode_busy = True
+            self.mode_controls.save_status.hide()
+            self._job("modes", {"action": "companion_modes", "modes": deepcopy(self._modes)})
+
+        def mode_gates(self):
+            return effective_mode_features(self._modes, self._snapshot)
+
+        def set_hotkey_status(self, status):
+            self.mode_controls.hotkey_status.setText(str(status))
+            self.mode_controls.hotkey_check.setToolTip(str(status))
+
         def _update_overlays(self, *_args):
             if not hasattr(self, "overlays"):
                 return
+            enabled = self.assistance_enabled()
+            gates = self.mode_gates()
+            caption = str(gates["mode"]).capitalize()
+            self.build_selectors.set_assistance_enabled(enabled)
+            self.build_selectors.set_feature_gates(gates)
+            self.randomizer_page.set_assistance_enabled(enabled and gates["randomizer"],
+                reason=f"{caption} preset keeps Randomizer guidance hidden; account settings stay saved." if enabled and not gates["randomizer"] else None)
+            self.ghost_page.set_assistance_enabled(enabled and gates["ghost"],
+                reason=f"{caption} preset hides 1v1 Ghost guidance; reference settings stay saved." if enabled and not gates["ghost"] else None)
+            self.assistanceChanged.emit(enabled)
+            self.modesChanged.emit(gates)
+            blocked_pins = [kind for kind in ("opponent", "scouting")
+                            if self._preferences[kind + "Overlay"] and not gates[kind + "Overlay"]]
+            summary = self.mode_controls.summary()
+            if blocked_pins:
+                summary += " Pinned but hidden by preset: " + ", ".join(blocked_pins) + "."
+            self.mode_controls.explanation.setText(summary)
             active, context = _live_context(self._snapshot)
             preview = self.preview_button.isChecked()
             if preview and not active:
                 context = self._detail
             for kind, panel in self.overlays.items():
-                visible = not self._closed and self._paired and self._snapshot_healthy and self._preferences["overlaysEnabled"] and self._preferences[kind + "Overlay"] and (active or preview)
+                visible = enabled and self._preferences[kind + "Overlay"] and gates[kind + "Overlay"] and (active or preview)
                 if visible:
                     panel.update_context(context)
                     if not panel.isVisible():
@@ -753,6 +927,15 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
         def set_active(self, active):
             if active:
                 self.refresh()
+                self.build_selectors.refresh()
+
+        def assistance_enabled(self):
+            return bool(not self._closed and self._paired and self._snapshot_healthy
+                        and self._preferences["overlaysEnabled"])
+
+        def dispatch_build_checkin(self, method, args=()):
+            if not self._closed:
+                self.build_selectors.dispatch(method, args)
 
         def shutdown(self):
             if self._closed:
@@ -760,6 +943,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._closed = True
             self.timer.stop()
             self._requests.clear()
+            self.build_selectors.set_assistance_enabled(False)
+            self.randomizer_page.shutdown()
+            self.ghost_page.shutdown()
             for panel in self.overlays.values():
                 panel.close()
                 panel.deleteLater()

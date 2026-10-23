@@ -27,6 +27,7 @@ const GDPR_CLASSIFICATION = Object.freeze({
   BROWSER_INGEST_DAILY: "ttl_ephemeral", GUIDE_SAMPLES: "purge_only", GUIDE_STATS: "global", GUIDE_NOTES: "global",
   JOB_RUNS: "global", ADMIN_AUDIT: "purge_only",
   GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
+  GHOST_EXAMPLES: "purge_only",
   // The independently stacked What's New feature adds this global config.
   ...(Object.hasOwn(COLLECTIONS, "SITE_CONFIG") ? { SITE_CONFIG: "global" } : {}),
 });
@@ -76,6 +77,7 @@ const USER_SCOPED_COLLECTIONS = [
  * (db key, filter field holding the user's id)
  */
 const PURGE_ONLY_COLLECTIONS = [
+  ["ghostExamples", "ownerUserId"],
   ["devicePairings", "userId"],
   // Ephemeral background work must never be exported/restored: doing so could
   // resurrect a completed classifier after an account recovery.

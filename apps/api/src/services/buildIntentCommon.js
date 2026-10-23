@@ -152,7 +152,7 @@ function overlayPayload(doc, nowMs) {
   const roll = doc.randomizer && typeof doc.randomizer === "object" ? doc.randomizer : null;
   return {
     gameKey: String(doc.gameKey),
-    suppressRandomizer: Boolean(declared) && (!roll || declared.key !== roll.key),
+    suppressRandomizer: roll?.native === true || (Boolean(declared) && (!roll || declared.key !== roll.key)),
     holdRemainingMs: holdRemainingMs(doc.hold, nowMs),
   };
 }

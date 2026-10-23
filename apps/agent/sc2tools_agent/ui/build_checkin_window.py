@@ -125,6 +125,9 @@ class BuildCheckinHost:
         self._settings = settings
         self._window_factory = window_factory or _qt_card_window
         self._windows: Dict[str, Any] = {}
+        self._models: Dict[str, Any] = {}
+        self._panels_enabled = True
+        self._feature_gates = {LOADING: True, POSTGAME: True}
         self._closed = False
         self._preview_race = preview_race or (lambda: None)
         self._on_reset_positions = on_reset_positions
@@ -142,28 +145,44 @@ class BuildCheckinHost:
 
     def _show_loading(self, model: Any) -> None:
         self._dismiss_previews()
-        self.window(LOADING).show_model(model)
+        self._models[LOADING] = model
+        if self._panel_enabled(LOADING):
+            self.window(LOADING).show_model(model)
 
     def _update_loading(self, model: Any) -> None:
+        current = self._models.get(LOADING)
+        if current is not None and current.game_key == model.game_key:
+            self._models[LOADING] = model
         window = self._windows.get(LOADING)
-        if window is not None and window.owns(model.game_key):
+        if self._panel_enabled(LOADING) and window is not None and window.owns(model.game_key):
             window.update_model(model)
 
     def _hide_loading(self, game_key: str, reason: str) -> None:
+        current = self._models.get(LOADING)
+        if current is not None and current.game_key == game_key:
+            self._models.pop(LOADING, None)
         window = self._windows.get(LOADING)
         if window is not None and window.owns(game_key):
             window.dismiss(reason)
 
     def _show_postgame(self, model: Any) -> None:
         self._dismiss_previews()
-        self.window(POSTGAME).show_model(model)
+        self._models[POSTGAME] = model
+        if self._panel_enabled(POSTGAME):
+            self.window(POSTGAME).show_model(model)
 
     def _update_postgame(self, model: Any) -> None:
+        current = self._models.get(POSTGAME)
+        if current is not None and current.card_id == model.card_id:
+            self._models[POSTGAME] = model
         window = self._windows.get(POSTGAME)
-        if window is not None and window.owns(model.card_id):
+        if self._panel_enabled(POSTGAME) and window is not None and window.owns(model.card_id):
             window.update_model(model)
 
     def _hide_postgame(self, card_id: str, reason: str) -> None:
+        current = self._models.get(POSTGAME)
+        if current is not None and current.card_id == card_id:
+            self._models.pop(POSTGAME, None)
         window = self._windows.get(POSTGAME)
         if window is not None and window.owns(card_id):
             window.dismiss(reason)
@@ -175,6 +194,36 @@ class BuildCheckinHost:
     def _bind_controller(self) -> None:
         if self._settings is not None:
             self._settings.controller_bound()
+
+    def set_panels_enabled(self, enabled: bool) -> None:
+        if self._closed or self._panels_enabled == bool(enabled):
+            return
+        self._panels_enabled = bool(enabled)
+        if not self._panels_enabled:
+            for window in self._windows.values():
+                window.dismiss("disabled")
+            return
+        for kind, model in self._models.items():
+            if self._panel_enabled(kind):
+                self.window(kind).show_model(model)
+
+    def _panel_enabled(self, kind: str) -> bool:
+        return self._panels_enabled and self._feature_gates.get(kind, False)
+
+    def set_feature_gates(self, gates: Mapping[str, Any]) -> None:
+        if self._closed:
+            return
+        for kind, key in ((LOADING, "preGameSelector"), (POSTGAME, "postGameSelector")):
+            enabled = gates.get(key) is True
+            if enabled == self._feature_gates[kind]:
+                continue
+            self._feature_gates[kind] = enabled
+            if not self._panel_enabled(kind):
+                window = self._windows.get(kind)
+                if window is not None:
+                    window.dismiss("mode_disabled")
+            elif kind in self._models:
+                self.window(kind).show_model(self._models[kind])
 
     # ---------------------------------------------------------- windows
 
@@ -202,7 +251,7 @@ class BuildCheckinHost:
 
     def show_preview(self, kind: str) -> bool:
         """Show an inert local sample; an actual visible card has priority."""
-        if self._closed or kind not in (LOADING, POSTGAME):
+        if self._closed or not self._panels_enabled or kind not in (LOADING, POSTGAME):
             return False
         if any(window.isVisible() and not getattr(window, "is_preview", False)
                for window in self._windows.values()):
@@ -245,6 +294,7 @@ class BuildCheckinHost:
     def close(self) -> None:
         """App shutdown: hide both cards and stop their timers."""
         self._closed = True
+        self._models.clear()
         for window in self._windows.values():
             try:
                 window.shutdown()

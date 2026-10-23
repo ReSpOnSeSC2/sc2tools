@@ -1301,6 +1301,18 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 preview_race=ui._build_checkin_preview_race,
                 on_reset_positions=ui._on_build_checkin_reset,
             )
+            if callable(ui._on_companion_action):
+                self._companion_page.assistanceChanged.connect(self._checkin_host.set_panels_enabled)
+                self._checkin_host.set_panels_enabled(self._companion_page.assistance_enabled())
+                self._companion_page.modesChanged.connect(self._checkin_host.set_feature_gates)
+                from .assistance_hotkey import build_assistance_hotkey
+
+                self._assistance_hotkey = build_assistance_hotkey(
+                    QtWidgets.QApplication.instance(), self._toggle_assistance,
+                    QtCore=QtCore,
+                )
+                self._companion_page.hotkeyEnabledChanged.connect(self._set_assistance_hotkey)
+                QtWidgets.QApplication.instance().aboutToQuit.connect(self._assistance_hotkey.shutdown)
             self._wire_signals()
             self._refresh_status_card()
             self._refresh_stats()
@@ -1375,6 +1387,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._companion_page = build_companion_page(
                 self, handler=ui._on_companion_action, QtCore=QtCore,
                 QtGui=QtGui, QtWidgets=QtWidgets,
+                checkin_controller_provider=ui._build_checkin_controller,
             )
             self._stack.addWidget(self._companion_page)
 
@@ -2856,8 +2869,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         # ---- signal handlers (always on the GUI thread) ----
 
+        def _toggle_assistance(self) -> None:
+            page = self._companion_page
+            page.set_preference("overlaysEnabled", not page._preferences["overlaysEnabled"])
+
+        def _set_assistance_hotkey(self, enabled: bool) -> None:
+            self._companion_page.set_hotkey_status(self._assistance_hotkey.set_enabled(enabled))
+
         def _on_build_checkin(self, method: str, args: object) -> None:
             self._checkin_host.dispatch(method, args)
+            self._companion_page.dispatch_build_checkin(method, args)
 
         def _on_pairing_state(self, state):
             if state.kind != "paired":

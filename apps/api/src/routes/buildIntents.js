@@ -183,6 +183,22 @@ function registerQueueRoutes(router, deps, limiters) {
  */
 function registerLiveRoutes(router, deps, limiters) {
   const service = deps.buildIntents;
+  router.post("/build-intents/live/:gameKey/randomizer", noStore, deps.auth, limiters.liveWrites, handle(async (req, res) => {
+    const auth = requireAuth(req);
+    const { gameKey } = req.params;
+    const body = req.body;
+    if (!isValidGameKey(gameKey)) {
+      sendError(res, 400, "invalid_game_key", "Invalid live game key.");
+      return;
+    }
+    if (!body || typeof body !== "object" || Array.isArray(body)
+        || Object.keys(body).some((key) => !["matchup", "releaseHold"].includes(key))
+        || !parseMatchupParam(body.matchup) || typeof body.releaseHold !== "boolean") {
+      sendError(res, 400, "invalid_request", "Provide a matchup and an explicit hold choice.");
+      return;
+    }
+    res.json(await service.rollNativeRandomizer(auth.userId, gameKey, body));
+  }));
   router.get("/build-intents/live/:gameKey", noStore, deps.auth, limiters.reads, handle(async (req, res) => {
     const auth = requireAuth(req);
     const { gameKey } = req.params;

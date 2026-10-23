@@ -2,9 +2,9 @@ import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
   slug: "install-app",
-  title: "Install SC2 Tools as an app",
+  title: "Install SC2 Tools: desktop Companion or web app",
   summary:
-    "Add SC2 Tools to your phone's home screen or your computer's apps. It opens in its own window on Today or your chosen Default tab, with shortcuts to key pages.",
+    "Install the Windows desktop app for replay sync and the interactive Companion, or add the website to your phone or computer as a web app.",
   category: "getting-started",
   audience: "all",
   order: 3,
@@ -30,6 +30,9 @@ const article: HelpArticle = {
   ],
   updated: "2026-10-23",
   body: [
+    { type: "heading", text: "Windows desktop Companion", anchor: "desktop-companion" },
+    { type: "paragraph", text: "For replay syncing, an interactive scouting desk, build selectors, randomizer and Build Order Ghost, [download the Windows desktop app](/download) and [link your account](/help/install-and-pair). Open **Companion** in its sidebar. Native game panels work without OBS and have a master assistance switch plus individual controls. See [Desktop Companion](/help/desktop-companion)." },
+    { type: "paragraph", text: "The browser installation below adds the website as a separate app window. It gives you the dashboard on phones and computers; it does not install the Windows replay-sync service or native in-game panels." },
     { type: "heading", text: "Install from inside the app", anchor: "install-in-app" },
     { type: "paragraph", text: "On a phone, open **More → Install app**. On desktop, use **Install app** below the Settings sidebar tabs. A supported browser opens its install prompt, or shows the manual steps below. This row disappears after installation, inside the installed app, or when the browser cannot install it." },
     { type: "heading", text: "What happens offline", anchor: "offline" },
@@ -103,7 +106,7 @@ const article: HelpArticle = {
       text: "Remove it like any other app on your device. Your account, replays and settings stay on SC2 Tools; only the shortcut to it goes away.",
     },
   ],
-  related: ["getting-started", "how-to-use-help", "troubleshooting-and-support"],
+  related: ["desktop-companion", "install-and-pair", "getting-started", "how-to-use-help", "troubleshooting-and-support"],
 };
 
 export default article;

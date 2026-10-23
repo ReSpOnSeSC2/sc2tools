@@ -127,6 +127,23 @@ The Companion requires the matching API update for account data. Update the
 installed agent through the existing update flow; a second installation or
 pairing is not needed. OBS browser sources and Build check-in remain available.
 
+The **Build selectors** tab contains the pre-game plan and post-game check-in.
+Choices, opponent corrections, and notes use the same records as the website
+and floating game cards. Their independent switches can be changed at any time.
+The **Randomizer** tab manages the matchup's eligible pool and rolls without an
+OBS browser source. **Build Order Ghost** arms a recorded replay target for
+each matchup and follows the live game clock in an optional floating panel.
+Each feature has its own on/off control. Turn **Game assistance enabled** off
+to hide every game panel and pause native assistance without clearing settings.
+
+Save local **Ladder**, **Customs**, **Teams**, **Practice**, and **Review** presets
+under **Customize mode**. Preset gates never rewrite shared account settings;
+actual team-game scouting and Ghost guidance remain unsupported. The optional
+**Ctrl+Shift+F10** shortcut toggles assistance without leaving the game.
+Ghost accepts local replay files, account replays, and explicitly published
+admin examples. Star per-build references, filter the replay library, restore
+earlier reference versions, and compare completed replay timings against them.
+
 ## Main window - what is where
 
 | Tab | Contents |

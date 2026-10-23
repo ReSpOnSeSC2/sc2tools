@@ -4,9 +4,9 @@ const article: HelpArticle = {
   slug: "randomizer",
   title: "Build randomizer: let a draw pick your build",
   summary:
-    "Choose which builds can come up in each matchup and how likely each one is, and an animated draw picks your build on stream when a new game loads.",
+    "Choose a pool for each matchup and let the desktop Companion draw one saved build for your next game. OBS reveals are optional.",
   category: "builds",
-  audience: "streamer",
+  audience: "player",
   signedInOnly: true,
   order: 50,
   keywords: [
@@ -29,18 +29,18 @@ const article: HelpArticle = {
   body: [
     {
       type: "paragraph",
-      text: "The build randomizer is an overlay widget that draws a build for you, and your viewers, at the start of each new game. You decide which builds can come up in each matchup and how often.",
+      text: "The build randomizer picks from your selected pool for the current matchup. Open **Companion → Randomizer** in the Windows app to use it without OBS. Its enable switch and pool use the same account settings as the website, and each real game keeps one saved pick.",
     },
     { type: "heading", text: "Set it up", anchor: "setup" },
     {
       type: "steps",
       items: [
-        "Open [Settings → Randomizer](/settings?tab=randomizer) and pick a matchup.",
+        "Open **Companion → Randomizer** and choose a matchup. Your current concrete matchup is selected when a game arrives.",
         "Turn on **Enable randomizer for this matchup**.",
-        "Tick the builds it may draw: **Catalog builds** that come with SC2 Tools, and **Your custom builds** that fit the matchup. Search to find one.",
-        "Leave **Use custom weights** off for an equal chance per build, or turn it on and use the sliders to make some builds come up more often.",
-        "Press **Save changes**. Repeat for every matchup you want drawn.",
-        "In [Settings → Overlay](/settings?tab=overlay), copy the **Build randomizer** URL into an OBS Browser Source, or use the all-in-one overlay that already includes it.",
+        "Check the eligible builds and press **Save selected pool**. Turn the matchup switch on or off whenever you want; these changes are saved to your account.",
+        "Keep **Game assistance enabled** on in Companion when you want automatic game assistance. Its master switch stops native draws while preserving the matchup choices.",
+        "For custom weights, search and the animated preview, open [Settings → Randomizer](/settings?tab=randomizer). Leave **Use custom weights** off for equal odds or adjust each weight, then press **Save changes**.",
+        "An OBS reveal is optional. To show draws on stream, use the **Build randomizer** Browser Source from [Settings → Overlay](/settings?tab=overlay).",
       ],
     },
     {
@@ -50,7 +50,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Opening Gateway draw (Protoss)", anchor: "gateway-draw" },
     {
       type: "paragraph",
-      text: "After a 1 Gate or 2 Gate build wins the draw and its reveal clears, the widget can draw one opening unit (1 Gate) or two (2 Gate). Each build keeps its own unit odds.",
+      text: "The optional OBS widget can follow a 1 Gate or 2 Gate build reveal with one opening unit (1 Gate) or two (2 Gate). Each build keeps its own unit odds. The native Companion currently shows the saved build pick; the animated opening-unit sequence belongs to the OBS widget and website preview.",
     },
     { type: "heading", text: "Try it before you go live", anchor: "preview" },
     {
@@ -65,8 +65,8 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "When the desktop app reports a new game in a matchup you've set up, the widget draws a build and reveals it, then clears for the game.",
-        "With [Build check-in](/help/build-check-in) asking at the loading screen, the card reads *Randomizer will roll*. Pick a build yourself and the draw is skipped for that game; press **Roll now** to draw right away, or wait a few seconds.",
+        "The native randomizer waits for the loading check-in, then draws when the game starts. **Roll now** in Companion draws immediately and releases that wait.",
+        "A build you declared yourself takes priority. A retry, refresh or second connected display reuses the first saved pick for the game. A native roll suppresses a duplicate OBS reveal, and Companion shows an OBS pick if OBS saved it first.",
         "The drawn build is marked **Rolled** and is suggested as your plan after the game. It only counts toward a build's record once you confirm the check-in.",
       ],
     },
@@ -74,14 +74,14 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "Check that you pressed **Save changes** and that this exact matchup is enabled with at least one build ticked.",
-        "Games against Random have no known matchup at the start, so there's no draw.",
+        "Check that game assistance is on, this exact matchup is enabled, and its saved pool contains at least one eligible build.",
+        "The matchup must be concrete. Random or unresolved races wait; finished games, replays, team games and games against the computer do not start native draws.",
         "The desktop app must be running: the draw starts when it reports the new game.",
       ],
     },
     { type: "settingsLink", label: "Open Settings → Randomizer", href: "/settings?tab=randomizer" },
   ],
-  related: ["build-check-in", "practice-ghost-build", "obs-overlay-setup", "custom-builds"],
+  related: ["desktop-companion", "build-check-in", "practice-ghost-build", "obs-overlay-setup", "custom-builds"],
 };
 
 export default article;

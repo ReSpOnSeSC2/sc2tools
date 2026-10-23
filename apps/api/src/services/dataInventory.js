@@ -16,6 +16,7 @@ async function dataInventory(db, userId) {
     publishedBuilds: ["communityBuilds", "ownerUserId"], reports: ["communityReports", "reporterUserId"],
     connectedAccounts: ["platformConnections", "userId"], notifications: ["notifications", "userId"],
     reviewRequests: ["reviewRequests", "userId"], playerChannels: ["playerChannels", "ownerUserId"],
+    ghostExamples: ["ghostExamples", "ownerUserId"],
   };
   await Promise.all(Object.entries(fields).map(async ([label, [key, field]]) => {
     removed[label] = await /** @type {any} */ (db)[key].countDocuments({ [field]: userId }, QUERY_OPTIONS);

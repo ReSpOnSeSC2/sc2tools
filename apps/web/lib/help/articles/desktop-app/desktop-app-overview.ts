@@ -68,6 +68,7 @@ const article: HelpArticle = {
       ],
     },
     { type: "heading", text: "Settings", anchor: "settings" },
+    { type: "paragraph", text: "For an interactive scouting desk, independent game panels, build selectors, a standalone randomizer and replay-based practice, open **Companion** in the sidebar. [Desktop Companion](/help/desktop-companion) walks through its tabs and master assistance switch. OBS is optional." },
     {
       type: "table",
       head: ["Setting", "What it does"],
@@ -103,7 +104,7 @@ const article: HelpArticle = {
       text: "The app checks for new versions on its own and, with automatic updates on, installs them and restarts minimised. **Check for updates** checks right away; the result shows on the Dashboard page. [Settings → Foundation](/settings?tab=foundation) shows which version your PC is running.",
     },
   ],
-  related: ["desktop-scouting", "install-and-pair", "replay-folders", "my-game-didnt-show-up", "build-check-in"],
+  related: ["desktop-companion", "desktop-scouting", "install-and-pair", "replay-folders", "my-game-didnt-show-up", "build-check-in"],
 };
 
 export default article;

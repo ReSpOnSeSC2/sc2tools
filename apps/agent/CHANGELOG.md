@@ -4,6 +4,36 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+## 0.21.0
+
+### Added - Complete Companion controls
+
+- Choose a build before the game and confirm or correct both players' builds
+  after the game directly in the Companion, using the existing build check-in
+  records and preferences shared with the website and game cards.
+- Control the randomizer from the Companion, including its eligible build pool
+  and persisted match result, without requiring an OBS browser source.
+- Arm a Build Order Ghost from a saved replay and follow recorded target steps
+  against the current game clock in an optional always-on-top panel.
+- Open or drop a local .SC2Replay, preview either player's timed build, and
+  assign it to an exact matchup. Star a reference replay per build in Builds
+  and Opponents; account references are available in the desktop Companion.
+- Administrators can preview and explicitly publish curated replay examples.
+  Private imports and starred references are never published automatically.
+- Native-first how-to guides and the landing page include real desktop
+  screenshots with clearly labeled sample data.
+- Each feature has an independent on/off control. The master assistance switch
+  hides all game panels and pauses native assistance while preserving choices.
+- Saved Ladder, Customs, Teams, Practice, and Review presets remember local
+  panel choices without rewriting shared account settings. Unsupported team
+  guidance remains clearly unavailable rather than guessing a 1v1 matchup.
+- An optional Ctrl+Shift+F10 global shortcut hides or restores assistance
+  without stealing keyboard focus. Shortcut conflicts are reported visibly.
+- Replay source filters, clear panel status, bounded reference history with
+  safe restore, and post-game reference timing comparisons improve practice.
+
+### Fixed
+
 - Retry-After scheduling tests use a controlled clock and tolerate floating-point
   rounding, preventing intermittent Windows CI failures without changing uploads.
 

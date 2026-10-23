@@ -11,6 +11,22 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.21.0 - Companion build tools
+
+- Pre-game and post-game build selectors, the build randomizer, and Build Order
+  Ghost join scouting in the native Companion. Each feature can be switched on
+  or off independently; the master switch hides game panels and pauses native
+  assistance while preserving individual choices and targets.
+- Local replay picking, per-build starred references, and explicitly curated
+  admin examples make practice targets easy to choose without sharing private
+  replay files. Native-first how-to articles and actual desktop screenshots
+  introduce the workspace on the landing page.
+- Saved play-mode presets, an optional global hide/show shortcut, replay-picker
+  filters, safe reference history/Undo, and post-game timing comparisons make
+  the Companion easier to use during both ladder and practice sessions.
+- Windows CI checks Retry-After scheduling with a deterministic clock to avoid
+  intermittent floating-point assertion failures.
+
 ### Agent 0.20.0 - Native Companion
 
 - The existing desktop agent gains an interactive **Companion** with opponent

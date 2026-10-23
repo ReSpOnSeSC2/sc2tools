@@ -100,6 +100,11 @@ class BuildIntentsService {
     return this.live.get(userId, gameKey);
   }
 
+  /** @param {string} userId @param {string} gameKey @param {{matchup:string,releaseHold:boolean}} body */
+  rollNativeRandomizer(userId, gameKey, body) {
+    return this.live.nativeRoll(userId, gameKey, body);
+  }
+
   /** @param {string} userId @param {unknown} envelope */
   registerFromEnvelope(userId, envelope) {
     return this.live.registerFromEnvelope(userId, envelope);

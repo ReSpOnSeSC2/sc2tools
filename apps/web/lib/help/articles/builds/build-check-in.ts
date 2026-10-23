@@ -47,6 +47,8 @@ const article: HelpArticle = {
         "The desktop app's Settings tab has the same three switches, kept in sync with the website. Every card also has a quick link to stop asking (**Don't ask at loading**, **Turn off check-ins after games**).",
       ],
     },
+    { type: "heading", text: "Use selectors inside Companion", anchor: "companion" },
+    { type: "paragraph", text: "Open **Companion → Build selectors** in the Windows app to handle your build choices in the same workspace as scouting and Ghost. Keep **Game assistance enabled** on for game assistance, then use the individual selector controls to decide when to ask. You can turn these on or off whenever you want. The native selector works without an OBS source; [Desktop Companion](/help/desktop-companion) explains the shared workspace." },
     { type: "heading", text: "Preview and move the cards", anchor: "preview-and-move" },
     {
       type: "steps",
@@ -66,7 +68,7 @@ const article: HelpArticle = {
       type: "steps",
       items: [
         "**Loading screen.** A small **What's the plan?** card appears on the right side of the screen with the matchup and your opponent. Click one of **Your builds**, sorted by how often you play them in this matchup and shown with your record, or open **More builds…** for every build in the matchup (your saved custom builds plus the standard build list). The card never takes keyboard focus from the game: click and keep playing. It then shows **Locked in** with a **Change** button and goes away about 30 seconds into the game. **Not now** means you'll decide after the game.",
-        "**Build randomizer.** If the randomizer is on for the matchup, the card reads *Randomizer will roll — pick a build to skip it*. Pick a build and the randomizer doesn't roll on stream for that game; **Roll now** rolls it right away; do nothing and it rolls after a few seconds. The rolled build is marked **Rolled** and is treated as your plan: after the game it's pre-selected unless your replay clearly went a different way. You still confirm it.",
+        "**Build randomizer.** If enabled for the matchup, it waits for your loading-screen choice. Pick a build yourself to skip the draw. **Roll now** in Companion's build selector or Randomizer tab requests and saves the build immediately without needing OBS; otherwise the native randomizer waits for the game to start. Connected displays share the game's first saved roll. The rolled build is pre-selected after the game unless the replay clearly went another way; you still confirm it.",
         "**After the game.** When the game ends, **Which build were you going for?** appears with a best guess already selected and a label saying why: you picked it at loading, it was the randomizer roll, it best matches your replay, it's your closest custom build, or it's your usual build for the matchup. *Replay classified as …* shows what the replay looked like. Press **Confirm**, pick a different build, choose **No set build** (you weren't going for anything in particular; the game keeps the replay's label) or **Later**. Use the notes box for what threw the build off. Ctrl+Enter confirms, Esc means Later. Once your replay has uploaded, the card also shows **Opponent's build** and **Add new build…** (see below).",
         "**Picked at loading?** If the replay matched your pick there's nothing to do. If it didn't, a short **What happened?** card asks for a note: **Done** keeps your pick, **Change build** switches it.",
         "**Missed one?** The **Build check-ins (N)** chip in the header lists games from the last 72 hours that are waiting: Confirm, Change… or No set build, or Dismiss all. Each game also shows the opponent's build. Every game page also has a **Build check-in** card where you can set or change the planned build, correct the opponent's build and edit your notes at any time. The desktop app's tray menu has **Build check-in…** to reopen a card you closed.",
@@ -121,7 +123,7 @@ const article: HelpArticle = {
     { type: "heading", text: "On stream" },
     {
       type: "paragraph",
-      text: "The desktop cards are hidden from screen capture, so OBS display or window capture won't show them, and your pick is never sent to overlay widgets or chat commands. Viewers only see the randomizer reveal, or no reveal when you picked a build first.",
+      text: "The check-in cards request Windows capture exclusion, but capture tools and modes can behave differently. Verify your own setup before displaying private notes. Declared build names are not sent in overlay build-intent events or chat commands. A native Companion roll suppresses a duplicate OBS reveal; a roll already saved by OBS is reused in Companion.",
     },
     { type: "heading", text: "If something's missing" },
     {
@@ -134,7 +136,7 @@ const article: HelpArticle = {
       ],
     },
   ],
-  related: ["desktop-scouting", "dashboard-and-analyzer", "getting-started"],
+  related: ["desktop-companion", "desktop-scouting", "dashboard-and-analyzer", "getting-started"],
 };
 
 export default article;

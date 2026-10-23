@@ -20,6 +20,7 @@ const { BUILD_INTENT, COLLECTIONS } = require("../config/constants");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { sanitizeNotes } = require("./buildIntentShape");
 const { randomizerPool, readBuildIntentPrefs } = require("./buildIntentPrefs");
+const { nativeRandomizerRoll } = require("./buildIntentNativeRandomizer");
 const {
   BuildIntentError,
   normalizeRace,
@@ -254,6 +255,11 @@ class BuildIntentLive {
   async get(userId, gameKey) {
     const doc = await this.collection.findOne({ userId, gameKey });
     return doc ? this._state(userId, doc) : null;
+  }
+
+  /** @param {string} userId @param {string} gameKey @param {{matchup:string,releaseHold:boolean}} body */
+  nativeRoll(userId, gameKey, body) {
+    return nativeRandomizerRoll(this, userId, gameKey, body);
   }
 
   /**
