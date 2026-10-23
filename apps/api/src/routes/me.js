@@ -406,6 +406,12 @@ function buildMeRouter(deps) {
         res.status(400).json({ error: { code: "invalid_body" } });
         return;
       }
+      if (type === "onboarding" && req.body.goals !== undefined &&
+          (!Array.isArray(req.body.goals) || req.body.goals.length > 2 ||
+           req.body.goals.some((/** @type {unknown} */ goal) => goal !== "improve" && goal !== "stream"))) {
+        res.status(400).json({ error: { code: "invalid_onboarding_goals" } });
+        return;
+      }
       const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body)
         : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body) : req.body;
       const saved = await deps.users.updatePreferences(auth.userId, type, body);
