@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * gen-help-index — writes lib/help/articles/index.generated.ts, the
  * registry of every help article.

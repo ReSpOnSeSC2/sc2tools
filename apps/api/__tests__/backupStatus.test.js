@@ -91,8 +91,10 @@ describe("backup freshness bands", () => {
 
   test.each([
     ["atlas_admin_http_403", "atlas_backup_forbidden"],
-    ["atlas_admin_http_401", "atlas_backup_forbidden"],
-    ["atlas_oauth_http_401", "atlas_backup_forbidden"],
+    ["atlas_admin_http_401", "atlas_backup_auth_failed"],
+    ["atlas_oauth_http_401", "atlas_backup_auth_failed"],
+    ["atlas_oauth_http_403", "atlas_backup_auth_failed"],
+    ["atlas_oauth_invalid_response", "atlas_backup_auth_failed"],
     ["atlas_admin_http_500", "atlas_backup_unavailable"],
     ["", "atlas_backup_unavailable"],
   ])("maps %s to %s", (code, expected) => {
@@ -147,7 +149,31 @@ describe("BackupStatusService.atlasStatus", () => {
     await Promise.all([svc.atlasStatus(), svc.atlasStatus(), svc.atlasStatus()]);
     expect(atlas.backupStatus).toHaveBeenCalledTimes(1);
   });
+});
 
+describe("backup schedule health bands", () => {
+  test("uses the shortest backup schedule for health bands and admin copy", async () => {
+    const atlas = { backupStatus: async () => backup({
+      lastSnapshotAt: new Date(T0.getTime() - 15 * HOUR).toISOString(),
+      retention: [
+        { frequency: "daily", everyHours: null },
+        { frequency: "hourly", everyHours: 6 },
+      ],
+    }) };
+    const result = await service({ atlas }).adminSnapshot();
+    expect(result.thresholds).toEqual({ freshMaxHours: 8, agingMaxHours: 14 });
+    expect(result.atlas.freshness).toBe("stale");
+    expect(_internals.backupFreshness(7.9, result.thresholds)).toBe("fresh");
+    expect(_internals.backupFreshness(8, result.thresholds)).toBe("aging");
+    expect(_internals.backupFreshness(14, result.thresholds)).toBe("stale");
+  });
+
+  test("falls back to daily bands when the schedule is missing or unreadable", () => {
+    for (const retention of [undefined, [], [{ frequency: "hourly", everyHours: null }]]) {
+      expect(_internals.backupThresholds(retention))
+        .toEqual({ freshMaxHours: 26, agingMaxHours: 50 });
+    }
+  });
 });
 
 describe("BackupStatusService.atlasStatus failures", () => {

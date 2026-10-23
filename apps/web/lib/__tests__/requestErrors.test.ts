@@ -35,7 +35,7 @@ describe("requestErrorCopy", () => {
   it("explains a dropped connection without blaming the player", () => {
     expect(requestErrorCopy(networkUnavailableError())).toEqual({
       title: "Can't reach SC2 Tools",
-      body: expect.stringContaining("waking up"),
+      body: expect.stringContaining("restarting or being updated"),
     });
   });
 

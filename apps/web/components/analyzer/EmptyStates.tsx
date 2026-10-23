@@ -184,7 +184,9 @@ export function NoFilterMatches({
   const { filters, setFilters, seasons } = useFilters();
   // The date range is always listed, with its own "Widen" action, so it
   // is left out of the facets "Reset filters" clears.
-  const active = describeActiveFilters(filters, { seasons }).filter((filter) => filter.key !== "preset");
+  const active = describeActiveFilters(filters, { seasons }).filter(
+    (filter) => filter.key !== "preset" && filter.key !== "exclude_too_short",
+  );
   const preset = filters.preset ?? "all";
   const canLowerMinGames =
     Boolean(onLowerMinGames) && (minGames ?? 1) > 1 && hiddenByMinGames > 0;

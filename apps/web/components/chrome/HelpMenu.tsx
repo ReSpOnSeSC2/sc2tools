@@ -12,7 +12,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LifeBuoy } from "lucide-react";
 import type { ReportType } from "@/lib/feedback/reportContext";
-import { helpMenuItems, type HelpMenuGroup, type HelpMenuItem } from "./helpMenu";
+import { helpMenuItems, type HelpMenuGroup, type HelpMenuItem } from "./helpMenuItems";
 
 const ITEM_CLASS = [
   "flex min-h-11 w-full items-center gap-3 rounded-lg px-2.5 py-2 text-left text-caption font-semibold text-text",
@@ -157,7 +157,7 @@ export function HelpMenu({
           aria-labelledby={buttonId}
           onKeyDown={onMenuKeyDown}
           className={[
-            "fixed inset-x-4 top-14 z-50 rounded-xl border-2 border-line bg-bg-surface p-1.5 shadow-hard",
+            "fixed inset-x-4 top-[calc(env(safe-area-inset-top,0px)+3.5rem)] z-50 rounded-xl border-2 border-line bg-bg-surface p-1.5 shadow-hard",
             "sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-72",
           ].join(" ")}
         >

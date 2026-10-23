@@ -62,6 +62,7 @@ describe("opponent profile channel placement", () => {
     expect(header.compareDocumentPosition(screen.getByLabelText("Opponent notes")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(header.compareDocumentPosition(screen.getByLabelText("Replay history")) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(screen.getByLabelText("Replay history")).queryByRole("link")).toBeNull();
+    expect(screen.getByLabelText("Replay history").nextElementSibling).toBe(screen.getByLabelText("Opponent notes"));
   });
 
   it("resolves channels from the selected stable identity even when the profile omits identity fields", () => {

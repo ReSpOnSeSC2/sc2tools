@@ -46,8 +46,9 @@ export function TodayView() {
   const redirected = useRef(false);
   useEffect(() => {
     if (redirected.current) return;
-    const target = defaultTabRedirect(misc?.defaultTab);
-    if (!target) return;
+    const explicitToday = new URLSearchParams(window.location.search).get("view") === "today";
+    const target = explicitToday ? null : defaultTabRedirect(misc?.defaultTab);
+    if (!explicitToday && !target) return;
     try {
       if (window.sessionStorage.getItem(DEFAULT_TAB_APPLIED_KEY)) return;
       window.sessionStorage.setItem(DEFAULT_TAB_APPLIED_KEY, "1");
@@ -55,7 +56,7 @@ export function TodayView() {
       /* storage unavailable — apply once per mount instead */
     }
     redirected.current = true;
-    router.replace(hrefForTab(target));
+    if (target) router.replace(hrefForTab(target));
   }, [misc, router]);
 
   return (

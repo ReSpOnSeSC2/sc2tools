@@ -29,9 +29,9 @@ const QUERY_TIMEOUT_MS = 5 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 
 /**
- * Snapshot-age bands. Atlas takes one snapshot a day under the default
- * policy, so a day plus two hours of slack is on time, a missed day is
- * late, and two missed days is overdue (and raises the admin alert).
+ * Fallback snapshot-age bands when Atlas does not report a readable policy.
+ * A reported policy uses its shortest interval plus two hours of slack;
+ * missing two intervals is overdue and raises the admin alert.
  */
 const FRESH_MAX_HOURS = 26;
 const AGING_MAX_HOURS = 50;
@@ -92,10 +92,7 @@ class BackupStatusService {
     ]);
     return {
       asOf: this._now().toISOString(),
-      thresholds: {
-        freshMaxHours: FRESH_MAX_HOURS,
-        agingMaxHours: AGING_MAX_HOURS,
-      },
+      thresholds: backupThresholds(atlas.retention),
       atlas,
       inApp,
     };
@@ -239,7 +236,7 @@ class BackupStatusService {
       stale: errorCode !== null,
       checkedAt,
       errorCode,
-      freshness: backupFreshness(ageHours),
+      freshness: backupFreshness(ageHours, backupThresholds(value.retention)),
       ageHours,
       lastSnapshotAt,
       latestStatus: typeof value.latestStatus === "string"
@@ -306,25 +303,48 @@ function snapshotAgeHours(lastSnapshotAt, nowMs) {
 
 /**
  * @param {number|null} ageHours null when Atlas has no completed snapshot
+ * @param {{freshMaxHours: number, agingMaxHours: number}} [thresholds]
  * @returns {BackupFreshness}
  */
-function backupFreshness(ageHours) {
+function backupFreshness(ageHours, thresholds = backupThresholds()) {
   if (ageHours === null) return "missing";
-  if (ageHours < FRESH_MAX_HOURS) return "fresh";
-  if (ageHours < AGING_MAX_HOURS) return "aging";
+  if (ageHours < thresholds.freshMaxHours) return "fresh";
+  if (ageHours < thresholds.agingMaxHours) return "aging";
   return "stale";
 }
 
 /**
- * Reduce an Atlas client failure to a stable, credential-free code. A 401
- * or 403 on the token or the API means the service account is missing the
- * Project Read Only role (or its secret is wrong).
+ * Use the most frequent scheduled snapshot, not a fixed daily assumption.
+ * @param {unknown} [retention]
+ */
+function backupThresholds(retention) {
+  const intervals = (Array.isArray(retention) ? retention : []).map((item) => {
+    if (item?.frequency === "hourly") return Number(item.everyHours);
+    switch (item?.frequency) {
+      case "daily": return 24;
+      case "weekly": return 168;
+      case "monthly": return 720;
+      case "yearly": return 8760;
+      default: return 0;
+    }
+  }).filter((hours) => Number.isFinite(hours) && hours > 0);
+  if (!intervals.length) {
+    return { freshMaxHours: FRESH_MAX_HOURS, agingMaxHours: AGING_MAX_HOURS };
+  }
+  const interval = Math.min(...intervals);
+  return { freshMaxHours: interval + 2, agingMaxHours: interval * 2 + 2 };
+}
+
+/**
+ * Reduce an Atlas client failure to a stable, credential-free code.
+ * Token/401 failures need credential checks; only API 403 needs role checks.
  *
  * @param {unknown} err
  */
 function backupErrorCode(err) {
   const code = String(/** @type {any} */ (err)?.code || "");
-  if (/_http_(401|403)$/.test(code)) return "atlas_backup_forbidden";
+  if (/^atlas_oauth_/.test(code) || /_http_401$/.test(code)) return "atlas_backup_auth_failed";
+  if (/_http_403$/.test(code)) return "atlas_backup_forbidden";
   return "atlas_backup_unavailable";
 }
 
@@ -362,6 +382,7 @@ module.exports = {
   _internals: {
     backupErrorCode,
     backupFreshness,
+    backupThresholds,
     snapshotAgeHours,
   },
 };

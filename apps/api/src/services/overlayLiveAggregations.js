@@ -472,8 +472,8 @@ async function readOneOverlayDetail(gameDetails, userId, gameId, fields) {
 }
 
 /**
- * Phase forecast for the scouting card's "Usually reaches Mid/Late"
- * strip. Pulls up to ``OPPONENT_PHASE_SCAN_CAP`` of the streamer's
+ * The streamer's phase forecast and own army for the scouting card's
+ * "Games usually end" line. Pulls up to ``OPPONENT_PHASE_SCAN_CAP`` of the streamer's
  * recent games against this opponent in this matchup, hydrates
  * ``macroBreakdown`` from the detail store, then hands the matched
  * set to ``computeCompositions`` to derive the same trajectory shape

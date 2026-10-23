@@ -10,6 +10,10 @@ import { fetchPublishedGuidePaths } from "@/lib/guides/api";
 import { definitionGuideLinks } from "@/lib/guides/definitionLinks";
 import { guidesEnabled } from "@/lib/guides/flags";
 
+// Keep the successful sitemap in the data cache, but never cache a whole
+// page with missing links after one failed API request.
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   alternates: { canonical: "/definitions" },
   title: "Build & Strategy Definitions",
@@ -19,7 +23,7 @@ export const metadata = {
 
 export default async function DefinitionsPage() {
   // The guide sitemap is a cached read (6 h, purged when guides publish);
-  // with guides off or the API down, cards simply show no Guide link.
+  // with guides off or the API down, this request shows no Guide link.
   const published = guidesEnabled() ? await fetchPublishedGuidePaths() : null;
   const guideLinks = definitionGuideLinks(BUILD_DEFINITIONS, published);
   return (

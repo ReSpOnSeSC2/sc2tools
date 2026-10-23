@@ -61,6 +61,10 @@ export function readConsent(): ConsentState {
  * effect without a reload.
  */
 export function setConsent(state: Exclude<ConsentState, "unset">): void {
+  if (typeof window === "undefined") return;
+  // gtag.js stays loaded after its Script component unmounts. Google's
+  // opt-out flag blocks automatic hits as well as our own events.
+  window[`ga-disable-${GA_MEASUREMENT_ID}`] = state !== "granted";
   try {
     window.localStorage.setItem(STORAGE_KEY, state);
   } catch {
@@ -117,7 +121,10 @@ export function clearAnalyticsCookies(): void {
 export function subscribeConsent(callback: () => void): () => void {
   const onCustom = () => callback();
   const onStorage = (e: StorageEvent) => {
-    if (e.key === STORAGE_KEY) callback();
+    if (e.key === STORAGE_KEY || e.key === null) {
+      window[`ga-disable-${GA_MEASUREMENT_ID}`] = readConsent() !== "granted";
+      callback();
+    }
   };
   window.addEventListener(EVENT_NAME, onCustom);
   window.addEventListener("storage", onStorage);

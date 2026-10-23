@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "install-app",
   title: "Install SC2 Tools as an app",
   summary:
-    "Add SC2 Tools to your phone's home screen or your computer's apps. It opens on Today in its own window, with shortcuts to Opponents, Replays and Stream settings.",
+    "Add SC2 Tools to your phone's home screen or your computer's apps. It opens in its own window on Today or your chosen Default tab, with shortcuts to key pages.",
   category: "getting-started",
   audience: "all",
   order: 3,
@@ -32,7 +32,7 @@ const article: HelpArticle = {
   body: [
     {
       type: "paragraph",
-      text: "SC2 Tools works in any browser, and you can also install it like an app. The installed app opens in its own window without the address bar, starts on **Today** and keeps you signed in. It is the same site with the same data, so there is nothing to sync.",
+      text: "SC2 Tools works in any browser, and you can also install it like an app. The installed app opens in its own window without the address bar, starts on **Today** or the **Default tab** you chose in Settings, and keeps you signed in. The **Today** shortcut always opens Today. It is the same site with the same data, so there is nothing to sync.",
     },
     {
       type: "callout",
@@ -88,7 +88,7 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "The app updates itself. When a new version is ready, **Update available** appears at the bottom of the screen. **Reload** switches to it now, so save any edits first. **Later** hides the message until you next open SC2 Tools.",
     },
-    { type: "heading", text: "Installed it before October 2026?" },
+    { type: "heading", text: "Installed it before this update?" },
     {
       type: "paragraph",
       text: "Older installs open on the home page and have no shortcuts. Remove SC2 Tools from your device and install it again to get them. Your account and data are not affected.",

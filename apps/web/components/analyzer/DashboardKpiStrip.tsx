@@ -266,7 +266,7 @@ export function DashboardKpiStrip() {
             {/* This card keeps its own timeframe (the menu by its label),
                 so a date range picked in the filter bar leaves it as is. */}
             <span className="mt-0.5 block text-micro text-text-dim">
-              Own timeframe · ignores the date filter
+              Own timeframe · ignores date, matchup, region and Strategies filters
             </span>
           </>
         }

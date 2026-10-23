@@ -341,8 +341,8 @@ ring, and what that means when you style one yourself.
 
 Every section that loads data has four states, always checked in this
 order: **loading, failed, empty, ready**. The order is the rule. The
-API runs on one free-tier instance that sleeps when idle, so failed
-requests are normal; a failed request must show Retry, never an empty
+API runs on one paid instance; connection failures, restarts and deployments
+can interrupt requests. A failed request must show Retry, never an empty
 state. "No matchups match" while the server is down tells the player
 something false about their games.
 

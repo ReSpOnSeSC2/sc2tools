@@ -173,6 +173,29 @@ describe("update prompt", () => {
     expect(await screen.findByRole("status", { name: "Update available" })).toBeTruthy();
   });
 
+  it("returns keyboard focus to the control used before entering the prompt", async () => {
+    installWaitingWorker();
+    render(<><button type="button">Continue editing</button><ServiceWorkerRegister /></>);
+    const editing = screen.getByRole("button", { name: "Continue editing" });
+    editing.focus();
+    const later = await screen.findByRole("button", { name: "Later" });
+    later.focus();
+    fireEvent.click(later);
+    expect(prompt()).toBeNull();
+    expect(document.activeElement).toBe(editing);
+  });
+
+  it("returns to main content when the previous control has been removed", async () => {
+    installWaitingWorker();
+    const view = render(<><button key="temporary" type="button">Temporary control</button><main key="main" id="main-content" tabIndex={-1}>Page content</main><ServiceWorkerRegister key="worker" /></>);
+    screen.getByRole("button", { name: "Temporary control" }).focus();
+    const later = await screen.findByRole("button", { name: "Later" });
+    later.focus();
+    view.rerender(<><main key="main" id="main-content" tabIndex={-1}>Page content</main><ServiceWorkerRegister key="worker" /></>);
+    fireEvent.click(screen.getByRole("button", { name: "Later" }));
+    expect(document.activeElement).toBe(screen.getByRole("main"));
+  });
+
   it("still works when session storage is blocked", async () => {
     installWaitingWorker();
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {

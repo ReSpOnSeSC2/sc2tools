@@ -674,6 +674,7 @@ export type AtlasBackupStatus = {
   errorCode:
     | "not_configured"
     | "atlas_backup_forbidden"
+    | "atlas_backup_auth_failed"
     | "atlas_backup_unavailable"
     | null;
   freshness: BackupFreshness;

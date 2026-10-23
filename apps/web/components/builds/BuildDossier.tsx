@@ -139,7 +139,7 @@ export function BuildDossier({
   const scope = `${apiPath}|${phasePerspective ?? "default"}`;
   const activeGameFilter = gameFilter?.scope === scope ? gameFilter : null;
 
-  if (isLoading && !data) {
+  if (isLoading && !data && !error) {
     return (
       <div className="space-y-4">
         {headerSlot ? headerSlot(null) : null}

@@ -22,7 +22,7 @@ import {
 import { CoachingBookingAlert } from "./CoachingBookingAlert";
 import { ConnectionBanner, ConnectionStatusProvider } from "./ConnectionStatus";
 import { HelpMenu } from "./HelpMenu";
-import { helpMenuItems, type HelpMenuItem } from "./helpMenu";
+import { helpMenuItems, type HelpMenuItem } from "./helpMenuItems";
 import { BuildCheckInAlert } from "@/components/build-checkin/BuildCheckInAlert";
 import { BuildCheckInProvider } from "@/components/build-checkin/BuildCheckInProvider";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -519,6 +519,7 @@ function MoreSheet({
             key={entry.key}
             entry={entry}
             active={activeKey === entry.key}
+            onClose={onClose}
           />
         ))}
         <div className="px-2 pb-1 pt-3">
@@ -531,6 +532,7 @@ function MoreSheet({
             key={entry.key}
             entry={entry}
             active={activeKey === entry.key}
+            onClose={onClose}
           />
         ))}
         <div className="px-2 pb-1 pt-3">
@@ -539,7 +541,7 @@ function MoreSheet({
           </span>
         </div>
         {helpMenuItems(true).map((item) => (
-          <SheetHelpItem key={item.key} item={item} onReport={onReport} />
+          <SheetHelpItem key={item.key} item={item} onReport={onReport} onClose={onClose} />
         ))}
       </div>
     </div>
@@ -551,12 +553,13 @@ const SHEET_ROW_CLASS = [
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
 ].join(" ");
 
-function SheetLink({ entry, active }: { entry: NavEntry; active: boolean }) {
+function SheetLink({ entry, active, onClose }: { entry: NavEntry; active: boolean; onClose: () => void }) {
   const Icon: NavIcon = entry.icon;
   return (
     <Link
       href={entry.href}
       aria-current={active ? "page" : undefined}
+      onClick={onClose}
       className={[
         SHEET_ROW_CLASS,
         active ? "bg-accent-cyan/10 text-accent" : "text-text hover:bg-bg-elevated",
@@ -571,9 +574,11 @@ function SheetLink({ entry, active }: { entry: NavEntry; active: boolean }) {
 function SheetHelpItem({
   item,
   onReport,
+  onClose,
 }: {
   item: HelpMenuItem;
   onReport: (type: ReportType) => void;
+  onClose: () => void;
 }) {
   const Icon: NavIcon = item.icon;
   const className = `${SHEET_ROW_CLASS} text-text hover:bg-bg-elevated`;
@@ -592,7 +597,7 @@ function SheetHelpItem({
     );
   }
   return (
-    <Link href={item.href} className={className}>
+    <Link href={item.href} onClick={onClose} className={className}>
       <Icon className="h-5 w-5 shrink-0 text-text-muted" aria-hidden />
       {item.label}
     </Link>

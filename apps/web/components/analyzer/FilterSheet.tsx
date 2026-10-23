@@ -61,7 +61,7 @@ export function FilterSheet({
         open={open}
         onClose={() => setOpen(false)}
         title="Filters"
-        description="Changes apply right away, to every section."
+        description="Changes apply right away to filtered analyzer views. Cards with their own scope explain it beside their numbers."
         footer={
           <>
             <Button

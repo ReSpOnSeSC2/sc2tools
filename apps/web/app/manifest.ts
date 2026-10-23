@@ -11,7 +11,8 @@ const SHORTCUT_ICONS = [
 /**
  * Web app manifest (served at /manifest.webmanifest).
  *
- * The installed app opens on Today (`/app`). `id` is fixed to "/app" so
+ * The installed app opens on Today (`/app`) or the chosen Default tab.
+ * The Today shortcut is explicit and stays on Today. `id` is fixed to "/app" so
  * the install keeps its identity if `start_url`'s query ever changes;
  * `?source=pwa` lets analytics tell app launches from browser visits.
  * Orientation is left to the device so tables and charts can use
@@ -65,7 +66,7 @@ export default function manifest(): MetadataRoute.Manifest {
         name: "Today",
         short_name: "Today",
         description: "Your session, streak and MMR at a glance.",
-        url: "/app",
+        url: "/app?view=today",
         icons: SHORTCUT_ICONS,
       },
       {

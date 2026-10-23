@@ -52,9 +52,13 @@ beforeEach(() => {
   mocks.replace.mockReset();
   mocks.misc = undefined;
   window.sessionStorage.clear();
+  window.history.replaceState(null, "", "/app");
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.history.replaceState(null, "", "/");
+});
 
 describe("TodayView", () => {
   it("places Daily Pulse above Ladder Pulse", () => {
@@ -87,5 +91,18 @@ describe("TodayView default tab", () => {
     render(<TodayView />);
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(screen.getByTestId("daily-pulse")).toBeTruthy();
+  });
+
+  it("keeps the Today launcher shortcut on Today despite a saved default section", () => {
+    mocks.misc = { defaultTab: "macro" };
+    window.history.replaceState(null, "", "/app?view=today");
+    render(<TodayView />);
+    expect(mocks.replace).not.toHaveBeenCalled();
+    expect(screen.getByTestId("daily-pulse")).toBeTruthy();
+    // Once Today was chosen explicitly, returning to it stays there this session.
+    cleanup();
+    window.history.replaceState(null, "", "/app");
+    render(<TodayView />);
+    expect(mocks.replace).not.toHaveBeenCalled();
   });
 });

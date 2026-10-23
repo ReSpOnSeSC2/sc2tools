@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { HelpMenu } from "../HelpMenu";
-import { helpMenuItems } from "../helpMenu";
+import { helpMenuItems } from "../helpMenuItems";
 
 const nav = vi.hoisted(() => ({ pathname: "/app" }));
 vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));

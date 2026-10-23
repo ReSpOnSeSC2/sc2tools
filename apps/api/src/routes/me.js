@@ -723,12 +723,6 @@ function buildMeRouter(deps) {
         return;
       }
       const counts = await deps.gdpr.wipeGames(auth.userId, { since, until });
-      if (deps.logger) {
-        deps.logger.info(
-          { userId: auth.userId, counts },
-          "gdpr_games_wiped",
-        );
-      }
       res.json({ deleted: true, counts });
     } catch (err) {
       next(err);

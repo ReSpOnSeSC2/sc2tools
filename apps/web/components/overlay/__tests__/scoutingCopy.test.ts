@@ -37,9 +37,9 @@ describe("phaseLine", () => {
     expect(phaseLine(phases("earlyMid"))).toBe("Early/Mid game");
   });
 
-  it("adds up to three units of the army they usually reach, in plain words", () => {
+  it("labels up to three units as the streamer's own army, in plain words", () => {
     expect(phaseLine(phases("late", ["Carrier", "VoidRay", "HighTemplar", "Archon"]))).toBe(
-      "Late game · Carrier, Void Ray, High Templar",
+      "Late game · Your army: Carrier, Void Ray, High Templar",
     );
   });
 });

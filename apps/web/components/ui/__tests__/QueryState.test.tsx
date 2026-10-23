@@ -54,6 +54,12 @@ describe("QueryState", () => {
     expect(screen.queryByTestId("request-error")).toBeNull();
   });
 
+  it("does not describe the new filters as empty while their request is pending", () => {
+    renderRows(q({ data: [], isPreviousData: true }));
+    expect(screen.getByText("skeleton")).toBeTruthy();
+    expect(screen.queryByText("No matchups match")).toBeNull();
+  });
+
   it("renders the data when there is some", () => {
     renderRows(q({ data: ["PvT", "PvZ"] }));
     expect(screen.getByText("rows:PvT,PvZ")).toBeTruthy();

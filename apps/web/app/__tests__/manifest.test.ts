@@ -9,7 +9,7 @@ const PUBLIC_DIR = path.resolve(process.cwd(), "public");
 describe("web app manifest", () => {
   const m = manifest();
 
-  it("installs as the app: fixed id, opens on Today, any orientation", () => {
+  it("installs as the app: fixed id, opens the preferred landing page, any orientation", () => {
     expect(m.id).toBe("/app");
     expect(m.start_url).toBe("/app?source=pwa");
     expect(m.scope).toBe("/");
@@ -24,7 +24,7 @@ describe("web app manifest", () => {
 
   it("offers shortcuts to Today, Opponents, Replays and Stream settings", () => {
     expect(m.shortcuts?.map((s) => [s.name, s.url])).toEqual([
-      ["Today", "/app"],
+      ["Today", "/app?view=today"],
       ["Opponents", "/app/opponents"],
       ["Replays", "/app/replays"],
       ["Stream settings", "/settings?tab=overlay"],

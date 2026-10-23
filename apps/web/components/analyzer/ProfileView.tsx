@@ -341,6 +341,23 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         </div>
       </header>
 
+      <OpponentReplayHistory
+        // A query-scope or database revision change must reset cursor history
+        // to page one. Remounting avoids briefly applying an old opaque cursor
+        // to a new filter set.
+        key={`${replayHistoryPath}:${dbRev}`}
+        path={replayHistoryPath}
+        initialGames={filteredGames}
+        profileTruncated={data.gamesTruncated}
+        targetGameId={pendingGameId}
+        targetGameSeq={pendingGameSeq}
+        myName={myName}
+        opponentContext={{
+          pulseId,
+          displayName: data.name || data.displayNameSample || null,
+        }}
+      />
+
       <OpponentNotesCard
         pulseId={pulseId}
         initialNotes={data.notes}
@@ -462,22 +479,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         finalPhaseDistribution={data.phases?.finalPhaseDistribution}
       />
 
-      <OpponentReplayHistory
-        // A query-scope or database revision change must reset cursor history
-        // to page one. Remounting avoids briefly applying an old opaque cursor
-        // to a new filter set.
-        key={`${replayHistoryPath}:${dbRev}`}
-        path={replayHistoryPath}
-        initialGames={filteredGames}
-        profileTruncated={data.gamesTruncated}
-        targetGameId={pendingGameId}
-        targetGameSeq={pendingGameSeq}
-        myName={myName}
-        opponentContext={{
-          pulseId,
-          displayName: data.name || data.displayNameSample || null,
-        }}
-      />
+
     </div>
   );
 }

@@ -89,6 +89,16 @@ export function ServiceWorkerRegister() {
   // Set when the user clicks Reload; controllerchange events we didn't
   // initiate (e.g. very first install) must not reload under the user.
   const applyRequested = useRef(false);
+  const promptRef = useRef<HTMLDivElement>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!waiting || later || isOverlay) return;
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && focused !== document.body && !promptRef.current?.contains(focused)) {
+      returnFocusRef.current = focused;
+    }
+  }, [waiting, later, isOverlay]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -156,8 +166,15 @@ export function ServiceWorkerRegister() {
 
   return (
     <div
+      ref={promptRef}
       role="status"
       aria-label="Update available"
+      onFocusCapture={(event) => {
+        const previous = event.relatedTarget;
+        if (previous instanceof HTMLElement && previous !== document.body && !event.currentTarget.contains(previous)) {
+          returnFocusRef.current = previous;
+        }
+      }}
       className="fixed bottom-above-chrome left-1/2 z-banner flex w-[calc(100%-2rem)] max-w-md -translate-x-1/2 flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-xl border-2 border-line bg-bg-surface px-4 py-3 shadow-hard"
     >
       <p className="min-w-0 flex-1 basis-48 text-caption text-text">
@@ -172,6 +189,9 @@ export function ServiceWorkerRegister() {
           disabled={applying}
           onClick={() => {
             writeUpdateLater();
+            const previous = returnFocusRef.current;
+            const target = previous?.isConnected ? previous : document.getElementById("main-content");
+            target?.focus();
             setLater(true);
           }}
           className="inline-flex min-h-[36px] items-center rounded-lg px-3 text-caption font-semibold text-text-muted transition-colors hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:opacity-60"

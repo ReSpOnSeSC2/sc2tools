@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import {
   ServerCog,
   UserRound,
@@ -249,6 +249,7 @@ function SettingsShellInner({
   // and highlight it, and again whenever the anchor changes. Help opens
   // its own article anchors.
   const [anchorChanges, setAnchorChanges] = useState(0);
+  const panelScopeId = useId();
   useEffect(() => {
     const onHashChange = () => setAnchorChanges((n) => n + 1);
     window.addEventListener("hashchange", onHashChange);
@@ -256,8 +257,10 @@ function SettingsShellInner({
   }, []);
   useEffect(() => {
     if (active === "help") return undefined;
-    return revealSectionAnchor(window.location.hash);
-  }, [active, anchorChanges]);
+    const panel = document.querySelector<HTMLElement>(`[data-settings-panel="${panelScopeId}-${active}"]`);
+    if (!panel) return undefined;
+    return revealSectionAnchor(window.location.hash, panel);
+  }, [active, anchorChanges, panelScopeId]);
 
   const confirmDiscard = () => {
     if (pending) {
@@ -327,6 +330,7 @@ function SettingsShellInner({
           <Tabs.Content
             key={t.id}
             value={t.id}
+            data-settings-panel={`${panelScopeId}-${t.id}`}
             className="space-y-5 pb-24"
           >
             {renderTab(t.id)}

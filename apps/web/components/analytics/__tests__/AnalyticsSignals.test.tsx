@@ -20,11 +20,13 @@ vi.mock("@clerk/nextjs", () => ({
 
 import { InternalTrafficMarker, SignUpTracker } from "@/components/analytics/AnalyticsSignals";
 import { INTERNAL_TRAFFIC_STORAGE_KEY } from "@/lib/analytics/internalTraffic";
+import { GA_MEASUREMENT_ID, setConsent } from "@/lib/analytics/consent";
 
 describe("InternalTrafficMarker", () => {
   const gtag = vi.fn();
 
   beforeEach(() => {
+    setConsent("granted");
     window.gtag = gtag;
   });
 
@@ -32,6 +34,7 @@ describe("InternalTrafficMarker", () => {
     cleanup();
     gtag.mockReset();
     delete window.gtag;
+    delete window[`ga-disable-${GA_MEASUREMENT_ID}`];
     window.localStorage.clear();
     mocks.me = null;
   });
@@ -55,6 +58,7 @@ describe("SignUpTracker", () => {
   const gtag = vi.fn();
 
   beforeEach(() => {
+    setConsent("granted");
     window.gtag = gtag;
   });
 
@@ -62,6 +66,7 @@ describe("SignUpTracker", () => {
     cleanup();
     gtag.mockReset();
     delete window.gtag;
+    delete window[`ga-disable-${GA_MEASUREMENT_ID}`];
     window.localStorage.clear();
     mocks.user = null;
   });

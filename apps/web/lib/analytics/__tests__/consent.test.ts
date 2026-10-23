@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  GA_MEASUREMENT_ID,
   readConsent,
   setConsent,
   subscribeConsent,
@@ -16,6 +17,7 @@ describe("analytics consent store", () => {
   afterEach(() => {
     window.localStorage.clear();
     vi.restoreAllMocks();
+    delete window[`ga-disable-${GA_MEASUREMENT_ID}`];
   });
 
   it("defaults to 'unset' so nothing tracks before a choice", () => {
@@ -59,6 +61,7 @@ describe("changing consent mid-visit", () => {
   afterEach(() => {
     window.localStorage.clear();
     delete window.gtag;
+    delete window[`ga-disable-${GA_MEASUREMENT_ID}`];
     for (const name of ["_ga", "_ga_TEST123", "_gid", "theme"]) {
       document.cookie = `${name}=; Max-Age=0; path=/`;
     }
@@ -69,8 +72,10 @@ describe("changing consent mid-visit", () => {
     window.gtag = gtag;
     setConsent("denied");
     expect(gtag).toHaveBeenLastCalledWith("consent", "update", { analytics_storage: "denied" });
+    expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(true);
     setConsent("granted");
     expect(gtag).toHaveBeenLastCalledWith("consent", "update", { analytics_storage: "granted" });
+    expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(false);
   });
 
   it("deletes only the Google Analytics cookies when turned off", () => {
@@ -87,5 +92,16 @@ describe("changing consent mid-visit", () => {
     document.cookie = "_ga=GA1.1.123; path=/";
     expect(() => setConsent("granted")).not.toThrow();
     expect(document.cookie).toContain("_ga=GA1.1.123");
+  });
+
+  it("stops an already-loaded tracker when another tab revokes consent", () => {
+    setConsent("granted");
+    const callback = vi.fn();
+    const unsubscribe = subscribeConsent(callback);
+    window.localStorage.setItem("sc2tools.analyticsConsent.v1", "denied");
+    window.dispatchEvent(new StorageEvent("storage", { key: "sc2tools.analyticsConsent.v1", newValue: "denied" }));
+    expect(window[`ga-disable-${GA_MEASUREMENT_ID}`]).toBe(true);
+    expect(callback).toHaveBeenCalledTimes(1);
+    unsubscribe();
   });
 });

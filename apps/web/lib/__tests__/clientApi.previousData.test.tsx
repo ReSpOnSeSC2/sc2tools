@@ -93,6 +93,16 @@ describe("useApi keeps the previous answer only within the same account and reso
     expect(view.result.current.isPreviousData).toBe(false);
   });
 
+  it("drops the previous filters' answer when the current request fails, even for legacy consumers", async () => {
+    const view = renderPath("/v1/matchups?since=2026-01-01");
+    await load(view, "/v1/matchups?since=2026-01-01", "january");
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: false, status: 500, text: async () => JSON.stringify({ error: { code: "internal_error", message: "Failed" } }),
+    } as Response);
+    view.rerender({ path: "/v1/matchups?since=2026-06-01" });
+    await waitFor(() => expect(view.result.current.data).toBeUndefined());
+  });
+
   it("drops it when the account changes", async () => {
     const view = renderPath("/v1/me");
     await load(view, "/v1/me", "account a");

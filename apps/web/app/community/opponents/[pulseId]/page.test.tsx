@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The public opponent profile: 404 + noindex below the player floor,
- * the error boundary (noindex) on an outage, and a profile that never
+ * a reloadable outage panel (noindex), and a profile that never
  * shows the toon handle. All data is synthetic.
  */
 const mocks = vi.hoisted(() => ({
@@ -66,9 +66,14 @@ describe("/community/opponents/[pulseId]", () => {
     await expect(CommunityOpponentPage({ params: params() })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
-  it.each([null, 503])("sends an outage (%s) to the error boundary with noindex, never 'not enough data'", async (status) => {
+  it.each([null, 503])("offers a full reload on an outage (%s) with noindex, never 'not enough data'", async (status) => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status });
-    await expect(CommunityOpponentPage({ params: params() })).rejects.toThrow("community_opponent_unavailable");
+    render(await CommunityOpponentPage({ params: params() }));
+    expect(screen.getByRole("heading", { level: 1, name: "This opponent profile is temporarily unavailable" })).toBeTruthy();
+    const retry = screen.getByRole("link", { name: "Try again" });
+    expect(retry.getAttribute("href")).toBe(`/community/opponents/${TOON}`);
+    // A native anchor forces a fresh server fetch rather than reusing a failed RSC payload.
+    expect(retry.tagName).toBe("A");
     expect(mocks.notFound).not.toHaveBeenCalled();
     const metadata = await generateMetadata({ params: params() });
     expect(metadata.robots).toEqual({ index: false, follow: false });

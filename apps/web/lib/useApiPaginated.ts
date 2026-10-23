@@ -65,14 +65,14 @@ export function useApiPaginated<T>(
   const { getToken, isLoaded, isSignedIn, userId } = useAuth();
   const pageLimit = opts.pageLimit || DEFAULT_PAGE_LIMIT;
   const maxPages = opts.maxPages || DEFAULT_MAX_PAGES;
-  // Bumped by Retry; part of the request identity so the effect re-runs.
+  // Retry re-runs the same request without discarding its error panel.
   const [attempt, setAttempt] = useState(0);
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const requestKey = useMemo(
     () => isLoaded && isSignedIn && userId && path
-      ? JSON.stringify([userId, path, dbRev, pageLimit, maxPages, attempt])
+      ? JSON.stringify([userId, path, dbRev, pageLimit, maxPages])
       : null,
-    [attempt, dbRev, isLoaded, isSignedIn, maxPages, pageLimit, path, userId],
+    [dbRev, isLoaded, isSignedIn, maxPages, pageLimit, path, userId],
   );
   const [state, setState] = useState<AccountBoundState<T>>(() =>
     emptyState(requestKey, !isLoaded || requestKey !== null),
@@ -87,7 +87,10 @@ export function useApiPaginated<T>(
     const ctrl = new AbortController();
     let cancelled = false;
 
-    setState(emptyState(requestKey, true));
+    setState((current) => ({
+      ...emptyState<T>(requestKey, true),
+      error: current.requestKey === requestKey ? current.error : null,
+    }));
 
     (async () => {
       try {
@@ -146,7 +149,7 @@ export function useApiPaginated<T>(
       cancelled = true;
       ctrl.abort();
     };
-  }, [getToken, isLoaded, maxPages, pageLimit, path, requestKey]);
+  }, [attempt, getToken, isLoaded, maxPages, pageLimit, path, requestKey]);
 
   // Effects clean up after a render commits. Fail closed during that one
   // render: if Clerk's account changed, never expose pages tagged for the old

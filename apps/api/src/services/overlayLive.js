@@ -746,10 +746,17 @@ class OverlayLiveService {
     // Favourite opening, predictions and cheese from the streamer's
     // games vs this opponent in this matchup. Pre-game the cheese
     // alert reads "they tend to bring this", never this match.
+    // A display-name fallback can belong to a different barcode account.
+    // Only the live envelope's own identifiers may anchor its tendencies;
+    // a resolved Tier A/B match can also supply the older row identifiers.
+    const tendencyIdentity = oppRow?.matchedBy === "display_name"
+      ? { pulseId: opponentToonHandle, pulseCharacterId: pcidString }
+      : opp;
     const tendencies = await this._opponentTendencies(
-      userId, opp, myRace, opponentRace,
+      userId, tendencyIdentity, myRace, opponentRace,
     );
-    applyOpponentTendencies(payload, tendencies, oppRow?.openings);
+    applyOpponentTendencies(payload, tendencies,
+      oppRow?.matchedBy === "display_name" ? null : oppRow?.openings);
 
     // Phase forecast — drives the scouting card's "Games usually end"
     // line. Best-effort: a Mongo or detail-store blip must NOT block

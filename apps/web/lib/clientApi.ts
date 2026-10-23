@@ -159,7 +159,12 @@ function scopePreviousData<T>(
   Object.defineProperty(result, "data", {
     configurable: true,
     enumerable: true,
-    get: () => resolve(readSwrData()).data,
+    get: () => {
+      const scoped = resolve(readSwrData());
+      // Legacy consumers may not inspect isPreviousData. Never hand them
+      // another filter's answer after the current request has failed.
+      return result.error && scoped.isPreviousData ? undefined : scoped.data;
+    },
   });
   Object.defineProperty(result, "isPreviousData", {
     configurable: true,

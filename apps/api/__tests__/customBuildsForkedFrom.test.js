@@ -155,6 +155,7 @@ describe("custom builds forkedFrom (route + Mongo)", () => {
     const res = await list({ forkedFrom: FORKED_FROM.communitySlug, limit: "1", view: "summary" }).expect(200);
     expect(res.body.total).toBe(1);
     expect(res.body.items.map((item) => item.slug)).toEqual(["glaives-copy"]);
+    expect(res.body.items[0].forkedFrom).toEqual({ communitySlug: FORKED_FROM.communitySlug });
 
     const none = await list({ forkedFrom: "never-saved" }).expect(200);
     expect(none.body).toEqual(expect.objectContaining({ items: [], total: 0 }));
