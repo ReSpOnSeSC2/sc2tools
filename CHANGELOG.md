@@ -17,6 +17,10 @@ corresponding GitHub Release.
 - Win rates include verdict symbols, charts use one keyboard Tab stop with pinnable details, and a shared legend plus Help article explains ranges, publishing floors and trends.
 - The guide hub previews busy map cards and links to all openers and counters. Map guides show a race matrix with honest mirror cells, enlarged artwork and neighboring maps.
 
+### Removed
+
+- Retired the unused server model-training and prediction endpoints. Replay analysis continues to use fixed rules and statistics; the API image now installs only its server analysis dependencies.
+
 ### Community and public sharing
 
 - Community votes show your saved vote, support undo and keep their score correct during simultaneous voting. Reports use readable categories and optional details; Controversial favors divided votes. Public author and player names are escaped safely in structured data.

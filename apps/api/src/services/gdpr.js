@@ -38,8 +38,6 @@ const USER_SCOPED_COLLECTIONS = [
   ["customBuilds", "customBuilds"],
   ["overlayTokens", "overlayTokens"],
   ["deviceTokens", "deviceTokens"],
-  ["mlModels", "mlModels"],
-  ["mlJobs", "mlJobs"],
   ["importJobs", "importJobs"],
   ["macroJobs", "macroJobs"],
   ["profiles", "profiles"],
