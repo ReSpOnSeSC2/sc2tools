@@ -9,8 +9,7 @@ import type { CustomBuild } from "@/components/builds/types";
 
 /**
  * Build summary returned by GET /v1/community/builds. The `build`
- * snapshot field is omitted in list responses but included on detail
- * responses.
+ * snapshot accompanies list responses so cards can preview key steps.
  */
 export interface CommunityBuildListItem {
   slug: string;
@@ -38,7 +37,7 @@ export interface CommunityBuildDetail extends CommunityBuildListItem {
   build: Partial<CustomBuild>;
 }
 
-export type CommunitySort = "top" | "new" | "controversial";
+export type CommunitySort = "top" | "new" | "controversial" | "updated";
 
 export const COMMUNITY_SORTS: ReadonlyArray<{
   value: CommunitySort;
@@ -47,6 +46,7 @@ export const COMMUNITY_SORTS: ReadonlyArray<{
 }> = [
   { value: "top", label: "Top", hint: "Highest-voted first" },
   { value: "new", label: "New", hint: "Most recently published" },
+  { value: "updated", label: "Recently updated", hint: "Most recently updated first" },
   {
     value: "controversial",
     label: "Controversial",

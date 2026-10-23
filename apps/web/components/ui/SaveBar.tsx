@@ -8,6 +8,9 @@ import { Save, RotateCcw } from "lucide-react";
 export interface SaveBarProps {
   visible: boolean;
   saving?: boolean;
+  saveDisabled?: boolean;
+  /** Keep long messages and save labels readable on narrow screens. */
+  stackOnMobile?: boolean;
   onSave: () => void;
   onReset?: () => void;
   saveLabel?: string;
@@ -29,6 +32,8 @@ export interface SaveBarProps {
 export function SaveBar({
   visible,
   saving = false,
+  saveDisabled = false,
+  stackOnMobile = false,
   onSave,
   onReset,
   saveLabel = "Save changes",
@@ -54,7 +59,7 @@ export function SaveBar({
       aria-label="Unsaved changes"
       className="pointer-events-none fixed inset-x-0 bottom-above-chrome z-banner flex justify-center px-4"
     >
-      <div className="pointer-events-auto flex w-full max-w-3xl items-center justify-between gap-3 rounded-xl border border-accent-cyan/40 bg-bg-surface px-4 py-3 shadow-[var(--shadow-card)] sm:gap-4">
+      <div className={`pointer-events-auto flex w-full max-w-3xl justify-between gap-3 rounded-xl border border-accent-cyan/40 bg-bg-surface px-4 py-3 shadow-[var(--shadow-card)] sm:gap-4 ${stackOnMobile ? "flex-col items-stretch sm:flex-row sm:items-center" : "items-center"}`}>
         <div className="flex min-w-0 items-center gap-2 text-caption text-text">
           <span
             aria-hidden
@@ -62,7 +67,7 @@ export function SaveBar({
           />
           <span className="truncate">{message}</span>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
+        <div className="flex flex-shrink-0 items-center justify-end gap-2">
           {onReset ? (
             <Button
               variant="ghost"
@@ -71,8 +76,7 @@ export function SaveBar({
               disabled={saving}
               iconLeft={<RotateCcw className="h-4 w-4" aria-hidden />}
             >
-              <span className="hidden sm:inline">{resetLabel}</span>
-              <span className="sm:hidden">{resetLabel}</span>
+              {resetLabel}
             </Button>
           ) : null}
           <Button
@@ -80,6 +84,7 @@ export function SaveBar({
             size="sm"
             onClick={onSave}
             loading={saving}
+            disabled={saveDisabled}
             iconLeft={<Save className="h-4 w-4" aria-hidden />}
           >
             {saveLabel}

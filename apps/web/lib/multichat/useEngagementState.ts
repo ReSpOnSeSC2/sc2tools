@@ -7,6 +7,7 @@
 // missed-event fallback, socket payloads applied on identity change,
 // everything re-sanitized before render.
 
+import { useOverlayPreview } from "@/lib/overlayPreviewContext";
 import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { CHAT_PLATFORMS, type ChatPlatform } from "./types";
@@ -208,11 +209,13 @@ export function useEngagementState(
   token: string,
   engagementEvent: unknown,
 ): { summary: EngagementSummary; lastEvent: Record<string, unknown> | null } {
+  const preview = useOverlayPreview();
   const [summary, setSummary] = useState<EngagementSummary>(EMPTY_ENGAGEMENT);
   const [lastEvent, setLastEvent] = useState<Record<string, unknown> | null>(null);
   const lastEventAtRef = useRef(0);
 
   useEffect(() => {
+    if (preview) return;
     let cancelled = false;
     const load = async () => {
       const startedAt = Date.now();
@@ -235,7 +238,7 @@ export function useEngagementState(
       cancelled = true;
       clearInterval(timer);
     };
-  }, [token]);
+  }, [token, preview]);
 
   useEffect(() => {
     if (!engagementEvent || typeof engagementEvent !== "object") return;

@@ -8,7 +8,11 @@ import {
   useState,
   type CSSProperties,
   type RefObject,
+  type ReactNode,
 } from "react";
+import { OverlayLocalPreviewFrame, localPreviewRandomizer } from "@/components/overlay/OverlayLocalPreviewFrame";
+import { CompositeTestWidgets } from "@/components/overlay/CompositeTestWidgets";
+import { useOverlayTestLayer, type TestClear } from "@/components/overlay/useOverlayTestLayer";
 import type { Socket } from "socket.io-client";
 import type {
   LiveGameEnvelope,
@@ -96,8 +100,15 @@ import { hasLiveIntel, LIVE_INTEL_WIDGETS, liveIntelPayload } from "@/components
  *    so they can position them independently — same trick the legacy
  *    HTML overlay used.
  */
-export function OverlayClient(props: Parameters<typeof ConnectedOverlayClient>[0]) {
+export function OverlayClient(props: Parameters<typeof ConnectedOverlayClient>[0] & { demo?: LiveGamePayload }) {
+  if (props.demo) return <LocalCompositePreview sample={props.demo} themeParam={props.themeParam} />;
   return <ConnectedOverlayClient key={props.token} {...props} />;
+}
+
+function LocalCompositePreview({ sample, themeParam }: { sample: LiveGamePayload; themeParam?: string | null }) {
+  const randomizer = useMemo(localPreviewRandomizer, []);
+  const theme = useMemo(() => themeToCssVars(decodeOverlayTheme(themeParam || null)), [themeParam]);
+  return <div className="relative h-screen w-screen" style={theme as CSSProperties}><OverlayLocalPreviewFrame sample={sample}>{(live) => <CompositeTestWidgets live={live} session={live.session as SessionSummary || null} randomizer={randomizer} targets={() => true} />}</OverlayLocalPreviewFrame></div>;
 }
 
 function ConnectedOverlayClient({
@@ -120,6 +131,7 @@ function ConnectedOverlayClient({
   showCredit?: boolean;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
+  const testLayer = useOverlayTestLayer(token);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [enabled, setEnabled] = useState<Set<WidgetId>>(
@@ -135,17 +147,6 @@ function ConnectedOverlayClient({
     useState<OverlayConnectionStatus>("connecting");
   const [buildIntents, onBuildIntent] = useOverlayBuildIntents();
 
-  // Stable callback so the socket effect doesn't reconnect on every
-  // render. State setters from useState are reference-stable, so this
-  // closure has no dependencies that need tracking.
-  const onClear = useCallback(() => {
-    setLive(null);
-    setLiveGame(null);
-    setSession(null);
-    setVisibleLive(new Set());
-    setSessionVisible(false);
-  }, []);
-
   const socketRef = useOverlaySocket(
     token,
     setLive,
@@ -154,7 +155,9 @@ function ConnectedOverlayClient({
     setEnabled,
     setVoicePrefs,
     setRandomizer,
-    onClear,
+    testLayer.receiveLive,
+    testLayer.receiveSession,
+    testLayer.clear,
     setConnectionStatus,
     onBuildIntent,
   );
@@ -207,7 +210,7 @@ function ConnectedOverlayClient({
   // — those are sibling Browser Sources that share the room.
   const enableVoiceHere = singleWidget === null || singleWidget === "scouting";
   const voice = useVoiceReadout(
-    enableVoiceHere ? live : null,
+    enableVoiceHere ? testLayer.targets("scouting") ? testLayer.live : live : null,
     enableVoiceHere ? voicePrefs : null,
     // Plumb the agent's envelope so the voice line fires when the match
     // starts, without waiting for the replay-derived ``live`` payload.
@@ -235,6 +238,8 @@ function ConnectedOverlayClient({
   }
 
   const intel = liveIntelPayload(live, liveGame);
+  const testTargets = (id: WidgetId) => enabled.has(id) && (!singleWidget || singleWidget === id) && testLayer.targets(id);
+  const realSlot = (id: WidgetId, card: ReactNode) => <div data-overlay-real={id} style={{ display: testTargets(id) ? "none" : undefined }}>{card}</div>;
 
   if (connectionStatus === "invalid") return <><OverlaySetupCard reason="invalid-token" /><OverlayCheckBadge status="invalid" /></>;
 
@@ -244,31 +249,25 @@ function ConnectedOverlayClient({
       style={{ background: "transparent", ...themeVars } as CSSProperties}
     >
       <OverlayCheckBadge status={connectionStatus} live={hasActiveOverlayGame(liveGame)} />
-      {shouldShow("opponent") && (
-        <OpponentWidget live={live} liveGame={liveGame} />
-      )}
-      {shouldShow("match-result") && <MatchResultWidget live={live} />}
-      {shouldShow("post-game") && <PostGameWidget live={live} />}
-      {shouldShow("mmr-delta") && <MmrDeltaWidget live={live} />}
-      {shouldShow("streak") && <StreakWidget live={intel} />}
-      {shouldShow("cheese") && <CheeseWidget live={intel} />}
-      {shouldShow("rematch") && <RematchWidget live={intel} />}
-      {shouldShow("rival") && <RivalWidget live={intel} />}
-      {shouldShow("rank") && <RankWidget live={live} />}
-      {shouldShow("meta") && <MetaWidget live={intel} />}
-      {shouldShow("topbuilds") && <TopBuildsWidget live={intel} />}
-      {shouldShow("fav-opening") && <FavOpeningWidget live={intel} />}
-      {shouldShow("best-answer") && <BestAnswerWidget live={intel} />}
-      {shouldShow("scouting") && (
-        <ScoutingWidget live={live} liveGame={liveGame} />
-      )}
-      {shouldShow("session") && (
-        <SessionWidget live={live} session={session} />
-      )}
+      {shouldShow("opponent") && realSlot("opponent", <OpponentWidget live={live} liveGame={liveGame} />)}
+      {shouldShow("match-result") && realSlot("match-result", <MatchResultWidget live={live} />)}
+      {shouldShow("post-game") && realSlot("post-game", <PostGameWidget live={live} />)}
+      {shouldShow("mmr-delta") && realSlot("mmr-delta", <MmrDeltaWidget live={live} />)}
+      {shouldShow("streak") && realSlot("streak", <StreakWidget live={intel} />)}
+      {shouldShow("cheese") && realSlot("cheese", <CheeseWidget live={intel} />)}
+      {shouldShow("rematch") && realSlot("rematch", <RematchWidget live={intel} />)}
+      {shouldShow("rival") && realSlot("rival", <RivalWidget live={intel} />)}
+      {shouldShow("rank") && realSlot("rank", <RankWidget live={live} />)}
+      {shouldShow("meta") && realSlot("meta", <MetaWidget live={intel} />)}
+      {shouldShow("topbuilds") && realSlot("topbuilds", <TopBuildsWidget live={intel} />)}
+      {shouldShow("fav-opening") && realSlot("fav-opening", <FavOpeningWidget live={intel} />)}
+      {shouldShow("best-answer") && realSlot("best-answer", <BestAnswerWidget live={intel} />)}
+      {shouldShow("scouting") && realSlot("scouting", <ScoutingWidget live={live} liveGame={liveGame} />)}
+      {shouldShow("session") && realSlot("session", <SessionWidget live={live} session={session} />)}
       {/* Preserve the spin ledger through timed hides and brief bridge
           interruptions, so recovering the same match cannot replay it. */}
       {enabled.has("randomizer") && (!singleWidget || singleWidget === "randomizer") && (
-        <div style={{ display: shouldShow("randomizer") ? "block" : "none" }}>
+        <div data-overlay-real="randomizer" style={{ display: shouldShow("randomizer") && !testTargets("randomizer") ? "block" : "none" }}>
           <RandomizerWidget
             live={randomizerLive}
             liveGame={randomizerLiveGame}
@@ -279,6 +278,7 @@ function ConnectedOverlayClient({
           />
         </div>
       )}
+      <CompositeTestWidgets live={testLayer.live} session={testLayer.session} randomizer={randomizer} targets={testTargets} />
       {/* A refused first handshake has no widget payload to make visible. */}
       {connectionStatus === "reconnecting" ? (
         <ReconnectDot />
@@ -286,7 +286,7 @@ function ConnectedOverlayClient({
       {voice.needsGesture ? (
         <VoiceGestureBanner onClick={voice.onUserGesture} />
       ) : null}
-      <OverlayCredit placement="top-left" visible={compositeCreditVisible(showCredit, singleWidget, shouldShow)} />
+      <OverlayCredit placement="top-left" visible={compositeCreditVisible(showCredit, singleWidget, (id) => shouldShow(id) || testTargets(id))} />
     </div>
   );
 }
@@ -353,7 +353,9 @@ function useOverlaySocket(
   setEnabled: (next: Set<WidgetId>) => void,
   setVoicePrefs: (prefs: VoicePrefs | null) => void,
   setRandomizer: (cfg: RandomizerConfig | null) => void,
-  onClear: () => void,
+  onTestLive: (msg: LiveGamePayload) => void,
+  onTestSession: (msg: SessionSummary) => void,
+  onClear: (msg: TestClear) => void,
   setConnectionStatus: (status: OverlayConnectionStatus) => void,
   onBuildIntent: (msg: unknown) => void,
 ): RefObject<Socket | null> {
@@ -376,6 +378,7 @@ function useOverlaySocket(
     const socket = connection.socket;
     socketRef.current = socket;
     socket.on("overlay:live", (msg: LiveGamePayload) => {
+      if (msg?.isTest) { onTestLive(msg); return; }
       setLive(msg);
       if (msg && typeof msg.gameKey === "string") {
         gameKeyRef.current = msg.gameKey;
@@ -403,6 +406,7 @@ function useOverlaySocket(
       setLiveGame(merged.envelope);
     });
     socket.on("overlay:session", (msg: SessionSummary) => {
+      if (msg?.isTest) { onTestSession(msg); return; }
       if (msg && typeof msg === "object") setSession(msg);
     });
     socket.on(
@@ -425,13 +429,7 @@ function useOverlaySocket(
     );
     // Replayed by the cloud on connect and resync, like the envelope.
     socket.on("overlay:buildIntent", onBuildIntent);
-    // Streamer cancelled the test fire — drop every payload + visible
-    // flag so the scene snaps clean instead of waiting for the natural
-    // visibility timers to expire on each panel.
-    socket.on("overlay:clear", () => {
-      stickyHistoryRef.current = null;
-      onClear();
-    });
+    socket.on("overlay:clear", onClear);
     // Reconnect resync + heartbeat/drift detection + connection
     // status — shared with the per-widget OverlayWidgetClient via
     // ``attachOverlayResilience``. This client previously had NONE of
@@ -454,6 +452,8 @@ function useOverlaySocket(
     setEnabled,
     setVoicePrefs,
     setRandomizer,
+    onTestLive,
+    onTestSession,
     onClear,
     setConnectionStatus,
     onBuildIntent,

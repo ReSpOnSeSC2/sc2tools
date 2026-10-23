@@ -3,6 +3,7 @@ import { getJsonWithStatus } from "@/lib/serverApi";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
+import { VoteScore } from "./VoteScore";
 import type {
   CommunityBuildListItem,
   CommunityBuildListResponse,
@@ -81,9 +82,7 @@ function RelatedRow({ build }: { build: CommunityBuildListItem }) {
             <span aria-hidden className="text-text-dim">
               ·
             </span>
-            <span className="font-mono tabular-nums">
-              {build.votes >= 0 ? "▲" : "▼"} {Math.abs(build.votes)}
-            </span>
+            <VoteScore votes={build.votes} />
           </span>
         </span>
       </Link>

@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useToast } from "@/components/ui/Toast";
 import { fmtAgo } from "@/lib/format";
-import { TEST_DURATION_MS } from "@/components/overlay/widgetLifecycle";
+import { useOverlayTests, OverlayLiveTestDialog } from "./OverlayTestControls";
 import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import {
   appendOverlayThemeToUrl,
@@ -198,22 +198,8 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   const [pendingRevoke, setPendingRevoke] = useState<OverlayToken | null>(null);
   const [revoking, setRevoking] = useState(false);
   const [autoMintError, setAutoMintError] = useState<string | null>(null);
-  const [testingWidget, setTestingWidget] = useState<string | null>(null);
+  const { testingWidget, pendingLiveTest, setPendingLiveTest, testWidget } = useOverlayTests(getToken, toast);
   const autoMintingRef = useRef(false);
-  // Tracks the in-flight Test fire so we can cancel/clean it up if the
-  // user navigates away or fires another test before the visibility
-  // window expires. The window mirrors `TEST_DURATION_MS` so the
-  // button's loading state matches when the OBS widget actually
-  // disappears.
-  const testTimerRef = useRef<number | null>(null);
-  useEffect(() => {
-    return () => {
-      if (testTimerRef.current !== null) {
-        window.clearTimeout(testTimerRef.current);
-        testTimerRef.current = null;
-      }
-    };
-  }, []);
 
   const items = useMemo(
     () => (data?.items ?? []).filter((i) => !i.revokedAt),
@@ -423,78 +409,6 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
   // button would snap back as soon as the API responded (~100 ms),
   // leaving the user mashing "Test" while the previous widget was
   // still on screen.
-  function clearTestTimer() {
-    if (testTimerRef.current !== null) {
-      window.clearTimeout(testTimerRef.current);
-      testTimerRef.current = null;
-    }
-  }
-
-  async function testWidget(token: string, widget?: string) {
-    // Treat a click while a test is in flight as "cancel + clear" —
-    // the streamer can dismiss the test before the natural visibility
-    // window expires. Per-widget cancel only fires when the click is
-    // on the SAME widget that's currently testing; clicks on other
-    // widgets are still gated by the disabled state in the UI.
-    if (testingWidget) {
-      const key = widget || "all";
-      if (testingWidget === key) {
-        await cancelTest(token, widget);
-      }
-      return;
-    }
-    const key = widget || "all";
-    clearTestTimer();
-    setTestingWidget(key);
-    try {
-      await apiCall(getToken, "/v1/overlay-events/test", {
-        method: "POST",
-        body: JSON.stringify({ token, widget }),
-      });
-      toast.success(
-        widget
-          ? `Sent test data to "${widget}"`
-          : "Sent test data to every enabled widget",
-        {
-          description:
-            "Renders for ~20 s in OBS, then auto-hides. Click Stop to dismiss early.",
-        },
-      );
-      // Hold the loading state for the same window the overlay
-      // widget itself stays visible. When it expires the button
-      // resets so the streamer can fire another test.
-      testTimerRef.current = window.setTimeout(() => {
-        setTestingWidget(null);
-        testTimerRef.current = null;
-      }, TEST_DURATION_MS);
-    } catch (err) {
-      const message =
-        (err as ClientApiError | undefined)?.message ?? "Please try again.";
-      toast.error("Couldn't fire test event", { description: message });
-      // Reset immediately on failure — the OBS widget never received
-      // anything so there's nothing to wait for.
-      setTestingWidget(null);
-    }
-  }
-
-  async function cancelTest(token: string, widget?: string) {
-    clearTestTimer();
-    setTestingWidget(null);
-    try {
-      await apiCall(getToken, "/v1/overlay-events/test/cancel", {
-        method: "POST",
-        body: JSON.stringify({ token, widget }),
-      });
-    } catch (err) {
-      // Cancel is best-effort — the OBS widget will still auto-hide
-      // when its natural timer expires. Log the failure so the user
-      // knows but don't block them mashing Test again.
-      const message =
-        (err as ClientApiError | undefined)?.message ?? "Please try again.";
-      toast.error("Couldn't dismiss the test", { description: message });
-    }
-  }
-
   if (isLoading) return <Skeleton rows={3} />;
   if (error) {
     return (
@@ -695,6 +609,8 @@ export function SettingsOverlay({ origin }: { origin?: string }) {
         </Card>
       </Section>
 
+      <OverlayLiveTestDialog pending={pendingLiveTest} busy={testingWidget !== null} origin={origin}
+        onClose={() => setPendingLiveTest(null)} onSend={() => { if (pendingLiveTest) void testWidget(pendingLiveTest.token, pendingLiveTest.widget, true); }} />
       <ConfirmDialog
         open={pendingRevoke !== null}
         onClose={() => (revoking ? undefined : setPendingRevoke(null))}

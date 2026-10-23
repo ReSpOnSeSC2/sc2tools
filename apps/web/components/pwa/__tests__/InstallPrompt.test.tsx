@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { startInstallCapture } from "@/lib/pwa/install";
 import { InstallPrompt } from "../InstallPrompt";
 
 afterEach(() => {
@@ -18,4 +19,15 @@ describe("InstallPrompt", () => {
     const link = screen.getByRole("link", { name: "How the app works" });
     expect(link.getAttribute("href")).toBe("/help/install-app");
   });
+});
+
+
+it("clears dismissal on every new native prompt event, even if availability was already true", async () => {
+  vi.spyOn(navigator, "userAgent", "get").mockReturnValue("Android Chrome/120"); startInstallCapture();
+  const prompt = () => { const event = new Event("beforeinstallprompt", { cancelable: true }); Object.assign(event, { prompt: vi.fn(async () => {}), userChoice: Promise.resolve({ outcome: "dismissed" }) }); window.dispatchEvent(event); };
+  prompt(); render(<InstallPrompt />); await screen.findByRole("region", { name: "Install SC2 Tools as a mobile app" });
+  fireEvent.click(screen.getByRole("button", { name: "Dismiss install prompt" })); expect(screen.queryByRole("region")).toBeNull();
+  expect(localStorage.getItem("sc2tools.pwa.installPromptDismissedAt")).not.toBeNull();
+  act(prompt); await screen.findByRole("region", { name: "Install SC2 Tools as a mobile app" });
+  expect(localStorage.getItem("sc2tools.pwa.installPromptDismissedAt")).toBeNull();
 });

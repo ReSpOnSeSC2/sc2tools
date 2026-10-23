@@ -20,6 +20,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { useMultiChat } from "@/lib/multichat/useMultiChat";
+import { blockedUserSet, excludeBlockedUsers } from "@/lib/multichat/appearance";
 import { tallyPollVotes } from "@/lib/multichat/poll";
 import { useStudioState } from "@/lib/multichat/useStudioState";
 import { useTestFireFlag } from "@/lib/multichat/useTestFireFlag";
@@ -42,7 +43,7 @@ export function ChatPollWidget({
   /** Shared overlay payload — read ONLY for the Test-fire flag. */
   live?: LiveGamePayload | null;
 }) {
-  const { platforms } = useMultichatConfig(token);
+  const { platforms, appearance } = useMultichatConfig(token);
   const state = useStudioState(token, studioEvent ?? null);
   const studioPoll = state.poll;
   const { messages } = useMultiChat({
@@ -80,8 +81,8 @@ export function ChatPollWidget({
   const poll = testActive ? demoPoll : studioPoll;
 
   const liveTally = useMemo(
-    () => (studioPoll ? tallyPollVotes(messages, studioPoll) : null),
-    [messages, studioPoll],
+    () => (studioPoll ? tallyPollVotes(excludeBlockedUsers(messages, blockedUserSet(appearance, state.blockedUsers)), studioPoll) : null),
+    [messages, studioPoll, appearance, state.blockedUsers],
   );
 
   // Freeze the tally when the poll closes: keep updating a ref while

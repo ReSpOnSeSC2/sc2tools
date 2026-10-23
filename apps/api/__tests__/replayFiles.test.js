@@ -634,7 +634,7 @@ describe("replay file routes - browser (Clerk) backup", () => {
 function fakeCollection(overrides = {}) {
   return {
     findOne: jest.fn(async () => null),
-    find: jest.fn(() => ({ toArray: jest.fn(async () => []) })),
+    find: jest.fn(() => ({ toArray: jest.fn(async () => []), batchSize() { return this; }, async *[Symbol.asyncIterator]() {} })),
     deleteMany: jest.fn(async () => ({ deletedCount: 0 })),
     deleteOne: jest.fn(async () => ({ deletedCount: 0 })),
     updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
@@ -744,27 +744,14 @@ describe("GDPR replay object integration", () => {
     expect(replayFiles.deleteAllForUser).not.toHaveBeenCalled();
   });
 
-  test("snapshot restore purges objects and strips stale replay markers", async () => {
+  test("snapshot restore delegates to validated streamed restore while holding the GDPR fence", async () => {
     const db = fakeGdprDb();
-    db.backups.findOne.mockResolvedValue({
-      payload: {
-        data: {
-          games: [{ gameId: "g1", replayFile: { storedAt: new Date() } }],
-        },
-      },
-    });
-    const replayFiles = { deleteAllForUser: jest.fn(async () => {}) };
-    const gameDetails = { deleteAllForUser: jest.fn(async () => {}) };
-    const gdpr = new GdprService(db, { replayFiles, gameDetails });
-    await gdpr.restoreSnapshot("u1", "snapshot-1");
-    expect(replayFiles.deleteAllForUser).toHaveBeenCalledTimes(2);
-    expect(replayFiles.deleteAllForUser).toHaveBeenCalledWith("u1");
-    expect(gameDetails.deleteAllForUser).toHaveBeenCalledTimes(1);
-    expect(gameDetails.deleteAllForUser).toHaveBeenCalledWith("u1");
-    expect(gameDetails.deleteAllForUser.mock.invocationCallOrder[0])
-      .toBeLessThan(db.games.insertMany.mock.invocationCallOrder[0]);
-    const inserted = db.games.insertMany.mock.calls[0][0][0];
-    expect(inserted).toMatchObject({ userId: "u1", gameId: "g1" });
-    expect(inserted.replayFile).toBeUndefined();
+    const gdpr = new GdprService(db);
+    gdpr.backups = { restore: jest.fn(async () => ({ counts: { games: 1 } })) };
+    const result = await gdpr.restoreSnapshot("u1", "bk_streamed");
+    expect(result).toEqual({ counts: { games: 1 } });
+    expect(gdpr.backups.restore).toHaveBeenCalledWith("u1", "bk_streamed", expect.objectContaining({ assert: expect.any(Function) }), undefined);
+    expect(db.users.updateOne.mock.calls[0][1].$set._gdprMutation.kind).toBe("restore");
+    expect(db.users.updateOne.mock.calls.at(-1)[1]).toEqual({ $unset: { _gdprMutation: "" } });
   });
 });

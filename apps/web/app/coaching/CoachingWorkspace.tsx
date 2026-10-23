@@ -5,10 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarClock, LockKeyhole, PanelsTopLeft, Target } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { PageHeader } from "@/components/ui/PageHeader";
+import { Tabs } from "@/components/ui/Tabs";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import LockerHost from "./LockerHost";
 import CoachingPractice from "./CoachingPractice";
 import CoachingSchedule from "./CoachingSchedule";
+import { useCoachingBadges } from "./useCoachingBadges";
 
 type CoachingMe = {
   role: "admin" | "coach" | "student" | "none";
@@ -32,19 +36,18 @@ export default function CoachingWorkspace() {
       : "locker";
   const [view, setView] = useState<WorkspaceView>(routeView);
   const [lockerActivated, setLockerActivated] = useState(routeView === "locker");
+  const [sessionsActivated, setSessionsActivated] = useState(routeView === "sessions");
+  const [scheduleDirty, setScheduleDirty] = useState(false);
+  const badges = useCoachingBadges(data?.role);
 
   useEffect(() => {
     setView(routeView);
     if (routeView === "locker") setLockerActivated(true);
+    if (routeView === "sessions") setSessionsActivated(true);
   }, [routeView]);
 
   if (isLoading || (!data && !error)) {
-    return (
-      <div className="space-y-4" aria-label="Loading coaching workspace">
-        <div className="h-14 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
-        <div className="h-72 animate-pulse rounded-xl border-2 border-line bg-bg-surface" />
-      </div>
-    );
+    return <CoachingShellSkeleton />;
   }
 
   if (error) {
@@ -96,6 +99,7 @@ export default function CoachingWorkspace() {
   const selectView = (next: WorkspaceView) => {
     setView(next);
     if (next === "locker") setLockerActivated(true);
+    if (next === "sessions") setSessionsActivated(true);
     const href =
       next === "sessions"
         ? "/coaching?view=schedule"
@@ -104,86 +108,34 @@ export default function CoachingWorkspace() {
           : "/coaching";
     router.replace(href, { scroll: false });
   };
+  const relationships = badges.relationships;
+  const description = !relationships ? undefined : data.role === "student" ? relationships[0]?.coach.name ? `with ${relationships[0].coach.name}` : undefined : `${new Set(relationships.map((relationship) => relationship.student.id)).size} students · ${relationships.filter((relationship) => relationship.status === "accepted").length} sharing practice`;
 
   return (
     <div className="space-y-5">
-      <h1 className="sr-only">Coaching</h1>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <nav
-          aria-label="Coaching workspace"
-          className="flex w-full gap-1 rounded-xl border-2 border-line bg-bg-surface p-1 shadow-hard sm:w-fit"
-        >
-          <WorkspaceTab
-            active={view === "locker"}
-            onClick={() => selectView("locker")}
-            icon={<PanelsTopLeft className="h-4 w-4" aria-hidden />}
-          >
-            Locker
-          </WorkspaceTab>
-          <WorkspaceTab
-            active={view === "practice"}
-            onClick={() => selectView("practice")}
-            icon={<Target className="h-4 w-4" aria-hidden />}
-          >
-            Practice
-          </WorkspaceTab>
-          <WorkspaceTab
-            active={view === "sessions"}
-            onClick={() => selectView("sessions")}
-            icon={<CalendarClock className="h-4 w-4" aria-hidden />}
-          >
-            Sessions
-          </WorkspaceTab>
-        </nav>
-        <LazyHelpLink
-          slug="coaching"
-          className="inline-flex min-h-11 items-center self-end text-caption font-semibold sm:self-auto"
-        >
-          How coaching works
-        </LazyHelpLink>
-      </div>
+      <PageHeader eyebrow="Private coaching" title={<span className="inline-flex flex-wrap items-center gap-3">Coaching <Badge variant="accent">{data.role === "admin" ? "Admin" : data.role === "coach" ? "Coach" : "Student"}</Badge></span>} description={description} actions={<LazyHelpLink slug="coaching" className="inline-flex min-h-11 items-center text-caption font-semibold">How coaching works</LazyHelpLink>} />
+      <Tabs value={view} onValueChange={(next) => selectView(next as WorkspaceView)}>
+        <Tabs.List ariaLabel="Coaching workspace" className="flex-nowrap">
+          <Tabs.Trigger value="locker"><span className="inline-flex items-center gap-2"><PanelsTopLeft className="h-4 w-4" aria-hidden />Locker</span></Tabs.Trigger>
+          <Tabs.Trigger value="practice"><span className="inline-flex items-center gap-2"><Target className="h-4 w-4" aria-hidden />Practice {badges.practice ? <span className="rounded-full bg-warning/15 px-1.5 text-micro text-warning"><span aria-hidden>{badges.practice}</span><span className="sr-only">{badges.practice} practice-sharing request{badges.practice === 1 ? "" : "s"} waiting</span></span> : null}</span></Tabs.Trigger>
+          <Tabs.Trigger value="sessions"><span className="inline-flex items-center gap-2"><CalendarClock className="h-4 w-4" aria-hidden />Sessions {badges.sessions ? <span className="rounded-full bg-accent/15 px-1.5 text-micro"><span aria-hidden>{badges.sessions}</span><span className="sr-only">{badges.sessions} unread session alerts</span></span> : null}{scheduleDirty ? <span className="h-2 w-2 rounded-full bg-warning"><span className="sr-only">Unpublished availability changes</span></span> : null}</span></Tabs.Trigger>
+        </Tabs.List>
 
       {/* The legacy Locker script declares global lexical bindings. Keep its
           host mounted while switching sections so returning to Locker never
           re-executes/redeclares that bundle. */}
       {lockerActivated ? (
-        <div className={view === "locker" ? "" : "hidden"} aria-hidden={view !== "locker"}>
+        <Tabs.Content value="locker" keepMounted>
           <LockerHost />
-        </div>
+        </Tabs.Content>
       ) : null}
-      {view === "practice" ? <CoachingPractice role={data.role} /> : null}
-      {view === "sessions" ? <CoachingSchedule /> : null}
+      <Tabs.Content value="practice"><CoachingPractice role={data.role} /></Tabs.Content>
+      {sessionsActivated ? <Tabs.Content value="sessions" keepMounted><CoachingSchedule onDirtyChange={setScheduleDirty} active={view === "sessions"} /></Tabs.Content> : null}
+      </Tabs>
     </div>
   );
 }
 
-function WorkspaceTab({
-  active,
-  onClick,
-  icon,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-current={active ? "page" : undefined}
-      onClick={onClick}
-      className={[
-        "flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg px-4",
-        "font-display text-caption font-bold transition-colors sm:flex-none",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-        active
-          ? "bg-accent text-white"
-          : "text-text-muted hover:bg-bg-elevated hover:text-text",
-      ].join(" ")}
-    >
-      {icon}
-      {children}
-    </button>
-  );
+export function CoachingShellSkeleton() {
+  return <div role="region" aria-busy="true" aria-label="Loading coaching workspace" className="space-y-4"><div className="h-20 animate-pulse rounded-xl border-2 border-line bg-bg-surface" /><div className="flex gap-2">{[0, 1, 2].map((item) => <div key={item} className="h-11 w-28 animate-pulse rounded-full bg-bg-elevated" />)}</div><div className="h-72 animate-pulse rounded-xl border-2 border-line bg-bg-surface" /></div>;
 }

@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
+import { smartScreenNote } from "@/lib/agentInstallerCopy";
 import { InstallOptions } from "./DownloadInteractive";
 
 afterEach(cleanup);
@@ -14,5 +15,5 @@ it("explains startup, preservation and verification in an accessible expander", 
   expect(screen.getByText(/silent updates keep your choices/)).toBeTruthy();
   expect(screen.getByText(/original StarCraft II replay folders and cloud games are kept/)).toBeTruthy();
   expect(screen.getByRole("link", { name: "Installation and uninstall guide" }).getAttribute("href")).toBe("/help/desktop-app-install");
-  expect(screen.getByText(/For a signed build/)).toBeTruthy();
+  expect(screen.getByText((text) => text.includes(smartScreenNote))).toBeTruthy();
 });

@@ -53,3 +53,8 @@ export function safeAuthRedirect(value: string | null): string | null {
   if (value === TRY_RESUME_PATH) return TRY_RESUME_PATH;
   return decodeOnce(value) === TRY_RESUME_PATH ? TRY_RESUME_PATH : null;
 }
+
+/** Recognize only the canonical /try hand-off, including its encoded form. */
+export function isTryResumeRedirect(value: string | null): boolean {
+  return safeAuthRedirect(value) === TRY_RESUME_PATH;
+}

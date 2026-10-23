@@ -2,11 +2,12 @@
 
 import { useEffect, useId, useState, type ReactNode } from "react";
 import Link from "next/link";
+import { buttonClassName } from "@/components/ui/Button";
 import { ArrowLeft, ArrowRight, Check, RotateCcw } from "lucide-react";
 
 const STORAGE_KEY = "sc2tools:stream-studio:crash-course:v1";
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
-const LINK = `inline-flex min-h-11 items-center gap-2 rounded-md border-2 border-line bg-bg-surface px-4 py-2 font-semibold text-text transition-colors hover:bg-bg-elevated ${FOCUS}`;
+const LINK = buttonClassName({ variant: "secondary" });
 
 type Lesson = {
   id: string;
@@ -178,6 +179,12 @@ export function CrashCourse() {
   const [hydrated, setHydrated] = useState(false);
   const [storageAvailable, setStorageAvailable] = useState<boolean | null>(null);
   const [answerVisible, setAnswerVisible] = useState(false);
+  const [resetUndo, setResetUndo] = useState<{ progress: Progress } | null>(null);
+  useEffect(() => {
+    if (!resetUndo) return;
+    const timer = setTimeout(() => setResetUndo(null), 8000);
+    return () => clearTimeout(timer);
+  }, [resetUndo]);
 
   useEffect(() => {
     try {
@@ -213,7 +220,7 @@ export function CrashCourse() {
   }
 
   return (
-    <section id="crash-course" aria-labelledby={headingId} className="scroll-mt-24 space-y-6 pt-12 md:pt-16">
+    <section id="crash-course" aria-labelledby={headingId} className="scroll-mt-28 space-y-6 pt-12 md:pt-16">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="max-w-2xl">
           <p className="kicker">The first-scene crash course</p>
@@ -227,16 +234,17 @@ export function CrashCourse() {
         <button
           type="button"
           className={`inline-flex min-h-11 items-center gap-2 rounded-md px-3 py-2 text-caption font-semibold text-text-muted hover:bg-bg-elevated hover:text-text ${FOCUS}`}
-          onClick={() => { setProgress(emptyProgress()); setAnswerVisible(false); }}
+          onClick={() => { setResetUndo({ progress }); setProgress(emptyProgress()); setAnswerVisible(false); }}
         >
           <RotateCcw className="h-4 w-4" aria-hidden />
           Reset course progress
         </button>
       </div>
 
+      {resetUndo ? <div role="status" className="fixed bottom-5 right-5 z-50 max-w-[calc(100vw-2.5rem)] rounded-md border-2 border-line bg-bg-surface p-4 text-body text-text shadow-hard">Progress reset · <button type="button" className="font-semibold text-accent underline" onClick={() => { setProgress(resetUndo.progress); setResetUndo(null); setAnswerVisible(false); }}>Undo</button></div> : null}
       <div className="space-y-2">
         <p role="status" aria-live="polite" className="text-body font-semibold text-text">
-          {progress.completed.length} of {LESSONS.length} lessons complete{finished ? " — your first-scene checklist is ready." : "."}
+          {progress.completed.length} of {LESSONS.length} lessons complete{finished ? <> — nice work. Next: add your first widgets in <Link href="/settings?tab=overlay" className="underline text-accent">Overlay settings</Link>.</> : "."}
         </p>
         <div className="h-2 overflow-hidden rounded-full bg-accent/15" aria-hidden>
           <div className="h-full rounded-full bg-accent transition-[width] motion-reduce:transition-none" style={{ width: `${progress.completed.length / LESSONS.length * 100}%` }} />

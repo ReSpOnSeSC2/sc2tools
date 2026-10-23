@@ -41,6 +41,9 @@ describe("real buildApp paired-agent stream control boundary", () => {
     });
     db = await connect({ uri: mongo.getUri(), dbName: "streaming_boundary" });
     ({ app, services } = buildApp({ db, logger: pino({ level: "silent" }), config }));
+    // A paired device belongs to a persisted account. Erasure admission now
+    // correctly rejects writes from orphaned tokens instead of recreating it.
+    await db.users.insertOne({ userId: owner, clerkUserId: "fixture-agent-owner", createdAt: new Date(), lastSeenAt: new Date() });
     await db.deviceTokens.insertOne({ tokenHash: sha256(deviceToken), userId: owner, revokedAt: null });
     providerFetch.mockImplementation(async (url, init = {}) => {
       if (String(url).includes("oauth2/validate")) return Response.json({ user_id: "42", login: "fixture_streamer",

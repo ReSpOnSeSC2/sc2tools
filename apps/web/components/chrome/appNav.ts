@@ -1,5 +1,6 @@
 import type { ComponentType, SVGProps } from "react";
 import {
+  Bell,
   BookOpen,
   CalendarClock,
   Cpu,
@@ -38,6 +39,8 @@ export type NavEntry = {
   key: string;
   href: string;
   label: string;
+  shortLabel?: string;
+  description?: string;
   icon: NavIcon;
   /** Analyzer sections sit in the rail's top group. */
   group: "section" | "utility";
@@ -66,6 +69,7 @@ export const TODAY_ENTRY: NavEntry = {
   key: "today",
   href: "/app",
   label: "Today",
+  description: "Your latest games and setup progress",
   icon: Zap,
   group: "section",
 };
@@ -74,28 +78,30 @@ const SECTION_ENTRIES: NavEntry[] = TABS.map((tab) => ({
   key: tab.id,
   href: hrefForTab(tab.id),
   label: tab.label,
+  shortLabel: tab.id === "builds" ? "Builds" : undefined,
+  description: tab.description,
   icon: tab.icon,
   group: "section" as const,
 }));
 
 const UTILITY_ENTRIES: NavEntry[] = [
-  { key: "builds-library", href: "/builds", label: "Custom builds", icon: Library, group: "utility" },
+  { key: "builds-library", href: "/builds", label: "Build library", description: "Your saved build orders and rules", icon: Library, group: "utility" },
   {
     key: "guides",
     href: "/guides",
-    label: "Guides",
+    label: "Guides", description: "Build orders and matchup guides",
     icon: BookOpen,
     group: "utility",
     publicRoute: true,
     guidesFlag: true,
     ownChrome: true,
   },
-  { key: "community", href: "/community", label: "Community", icon: Users2, group: "utility", publicRoute: true },
-  { key: "reviews", href: "/reviews", label: "Reviews", icon: MessageSquareText, group: "utility", publicRoute: true, reviewsRollout: true },
+  { key: "community", href: "/community", label: "Community", description: "Builds and scouting shared by players", icon: Users2, group: "utility", publicRoute: true },
+  { key: "reviews", href: "/reviews", label: "Reviews", description: "Replay reviews from other players", icon: MessageSquareText, group: "utility", publicRoute: true, reviewsRollout: true },
   {
     key: "coaching",
     href: "/coaching",
-    label: "Coaching",
+    label: "Coaching", description: "Your sessions",
     icon: CalendarClock,
     group: "utility",
     coachingOnly: true,
@@ -105,14 +111,15 @@ const UTILITY_ENTRIES: NavEntry[] = [
   {
     key: "stream-studio",
     href: "/settings?tab=overlay",
-    label: "Stream Studio",
+    label: "Stream Studio", description: "Overlay widgets and stream setup",
     icon: MonitorPlay,
     group: "utility",
     shortcut: true,
   },
-  { key: "devices", href: "/devices", label: "Devices", icon: Cpu, group: "utility" },
-  { key: "settings", href: "/settings", label: "Settings", icon: SlidersHorizontal, group: "utility" },
-  { key: "admin", href: "/admin", label: "Admin", icon: ShieldCheck, group: "utility", adminOnly: true },
+  { key: "devices", href: "/devices", label: "Devices", description: "Your linked PCs", icon: Cpu, group: "utility" },
+  { key: "notifications", href: "/notifications", label: "Notifications", description: "Your activity and report replies", icon: Bell, group: "utility" },
+  { key: "settings", href: "/settings", label: "Settings", description: "Profile, imports, overlay and preferences", icon: SlidersHorizontal, group: "utility" },
+  { key: "admin", href: "/admin", label: "Admin", description: "Site administration", icon: ShieldCheck, group: "utility", adminOnly: true },
 ];
 
 export const NAV_ENTRIES: readonly NavEntry[] = [

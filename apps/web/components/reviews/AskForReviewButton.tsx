@@ -7,13 +7,16 @@ import { useAuth } from "@clerk/nextjs";
 import { MessageSquarePlus } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
+import { FocusRangeFields } from "./FocusRangeFields";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { gaEvent } from "@/lib/analytics/gtag";
 import {
   DESIRED_LEVELS,
   REVIEW_LIMITS,
   REVIEW_TAGS,
-  formatClock,
   parseClock,
   reviewsRollout,
   reviewsVisible,
@@ -124,6 +127,7 @@ function AskForReviewForm({ gameId, durationSec, matchup, onClose }: Props & { o
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [existing, setExisting] = useState(false);
+  const [discard, setDiscard] = useState(false);
   const submitting = useRef(false);
   const mounted = useRef(true);
 
@@ -134,6 +138,11 @@ function AskForReviewForm({ gameId, durationSec, matchup, onClose }: Props & { o
 
   const questionProblem = validateQuestion(question);
   const range = parseRange(rangeStart, rangeEnd, durationSec ?? null);
+  const dirty = !!(question || tags.length || rangeStart || rangeEnd);
+  const requestClose = () => {
+    if (submitting.current) return;
+    if (dirty) setDiscard(true); else onClose();
+  };
 
   async function submit() {
     // The submit event can fire again before React disables the button (or
@@ -177,15 +186,16 @@ function AskForReviewForm({ gameId, durationSec, matchup, onClose }: Props & { o
   }
 
   return (
-    <Modal
+    <><Modal
       open
-      onClose={onClose}
+      onClose={requestClose}
+      disableScrimClose={dirty || busy}
       size="lg"
       title="Ask for a replay review"
       description="Reviewers answer with comments pinned to moments on your replay and the map. Your opponent is never named: they appear as their race and approximate MMR."
       footer={
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="ghost" onClick={requestClose} disabled={busy}>Cancel</Button>
           <Button type="submit" form={formId} loading={busy} disabled={busy}>Post request</Button>
         </div>
       }
@@ -230,31 +240,20 @@ function AskForReviewForm({ gameId, durationSec, matchup, onClose }: Props & { o
           </div>
         </fieldset>
 
-        <fieldset>
-          <legend className="text-caption font-semibold text-text">Time range of interest (optional)</legend>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <input aria-label="From (m:ss)" aria-invalid={touched && Boolean(range.error)} aria-describedby={touched && range.error ? `${formId}-range-error` : undefined} inputMode="numeric" placeholder="5:00" value={rangeStart} onChange={(e) => setRangeStart(e.target.value)} className="h-10 w-24 rounded-lg border-2 border-line bg-bg px-2 font-mono text-body" />
-            <span className="text-text-dim">to</span>
-            <input aria-label="To (m:ss)" aria-invalid={touched && Boolean(range.error)} aria-describedby={touched && range.error ? `${formId}-range-error` : undefined} inputMode="numeric" placeholder="6:30" value={rangeEnd} onChange={(e) => setRangeEnd(e.target.value)} className="h-10 w-24 rounded-lg border-2 border-line bg-bg px-2 font-mono text-body" />
-            {durationSec ? <span className="text-micro text-text-dim">Game length {formatClock(durationSec)}</span> : null}
-          </div>
-          {touched && range.error ? <p id={`${formId}-range-error`} role="alert" className="mt-1 text-micro text-danger">{range.error}</p> : null}
-        </fieldset>
+        <FocusRangeFields start={rangeStart} end={rangeEnd} onStartChange={setRangeStart} onEndChange={setRangeEnd} durationSec={durationSec ?? null} range={range} touched={touched} />
 
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1 text-caption font-semibold text-text">
-            Who should review
-            <select value={level} onChange={(e) => setLevel(e.target.value as DesiredLevel)} className="h-10 rounded-lg border-2 border-line bg-bg px-2 text-body">
+          <Field label="Who should review" hint="'My league or higher' is checked against each reviewer's league, verified from their own ranked games.">
+            <Select value={level} onChange={(e) => setLevel(e.target.value as DesiredLevel)}>
               {DESIRED_LEVELS.map((l) => <option key={l.key} value={l.key}>{l.label}</option>)}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-caption font-semibold text-text">
-            Visibility
-            <select value={visibility} onChange={(e) => setVisibility(e.target.value as "public" | "link")} className="h-10 rounded-lg border-2 border-line bg-bg px-2 text-body">
+            </Select>
+          </Field>
+          <Field label="Visibility" hint="Link only: not listed on the board and not indexed by search engines. Anyone with the link can open it.">
+            <Select value={visibility} onChange={(e) => setVisibility(e.target.value as "public" | "link")}>
               <option value="public">Public board</option>
               <option value="link">Link only (not listed)</option>
-            </select>
-          </label>
+            </Select>
+          </Field>
         </div>
 
         <label className="flex items-start gap-2 text-caption text-text">
@@ -286,7 +285,7 @@ function AskForReviewForm({ gameId, durationSec, matchup, onClose }: Props & { o
           </p>
         ) : null}
       </form>
-    </Modal>
+    </Modal><ConfirmDialog open={discard} onClose={() => setDiscard(false)} onConfirm={() => { if (!submitting.current) onClose(); }} intent="danger" focusCancel title="Discard this request?" description="Your question and selected focus will be removed." confirmLabel="Discard" cancelLabel="Keep editing" /></>
   );
 }
 

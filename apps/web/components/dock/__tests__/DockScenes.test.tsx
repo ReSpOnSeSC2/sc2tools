@@ -182,7 +182,7 @@ describe("DockScenes b-roll controls", () => {
     expect(screen.getByText("0 highlight clips")).toBeTruthy();
     expect(
       screen.getByText(
-        "This Stream Dock has no b-roll. The default BRB / Starting Soon screen is active; add your own YouTube highlights below to enable it.",
+        "This Stream Dock has no b-roll. The default stream scene is active; add your own YouTube highlights below to enable it.",
       ),
     ).toBeTruthy();
     expect(
@@ -214,7 +214,7 @@ describe("DockScenes b-roll controls", () => {
     fireEvent.change(screen.getByPlaceholderText(/Optional message/), {
       target: { value: "warming up" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "▶ Starting soon" }));
+    fireEvent.click(screen.getByRole("button", { name: "Starting Soon" }));
     await waitFor(() => expect(onPost).toHaveBeenCalledTimes(1));
     const patch = onPost.mock.calls[0][0] as Record<string, unknown>;
     expect(patch).not.toHaveProperty("broll");

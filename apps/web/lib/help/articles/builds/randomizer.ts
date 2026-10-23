@@ -45,7 +45,7 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
-      text: "Terran and Zerg matchups need your own builds: the catalog covers Protoss for now. Make them in your [build library](/builds) (**Custom builds** in the menu) with the right race and opponent race.",
+      text: "Terran and Zerg matchups need your own builds: the catalog covers Protoss for now. Make them in your [build library](/builds) (**Build library** in the menu) with the right race and opponent race.",
     },
     { type: "heading", text: "Opening Gateway draw (Protoss)", anchor: "gateway-draw" },
     {

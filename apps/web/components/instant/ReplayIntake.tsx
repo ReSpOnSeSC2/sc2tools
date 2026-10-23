@@ -225,6 +225,10 @@ export function ReplayIntake({
         onDropFiles={(files) => onFiles(files, "drop")}
         onIntent={intent}
       >
+        <div className="flex w-full min-w-0 flex-wrap items-end justify-center gap-3 text-caption text-text-muted">
+          <DateWindowSelect value={dateWindow} onChange={onDateWindowChange} disabled={disabled} />
+          <div className="pb-1"><p>Applies to the replays you add next</p>{maxFiles !== undefined ? <p>newest {maxFiles} replays</p> : null}</div>
+        </div>
         <IntakeButtons
           disabled={disabled}
           hintsId={hintsId}
@@ -238,10 +242,7 @@ export function ReplayIntake({
       {allowFolderInput ? (
         <input ref={inputs.attachFolderInput} type="file" multiple onChange={inputs.onPicked("folder")} disabled={disabled} tabIndex={-1} aria-label="Replay folder" className="sr-only" />
       ) : null}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <DateWindowSelect value={dateWindow} onChange={onDateWindowChange} disabled={disabled} />
-        <IntakeStatus fileCount={fileCount} estimate={estimate} maxFiles={maxFiles} />
-      </div>
+      <IntakeStatus fileCount={fileCount} estimate={estimate} maxFiles={maxFiles} />
       <details className="rounded-lg border-2 border-line bg-bg-surface px-3">
         <summary className="flex min-h-[44px] cursor-pointer items-center text-caption font-semibold text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           Where are my replays?

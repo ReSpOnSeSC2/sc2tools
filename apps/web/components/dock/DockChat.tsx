@@ -26,7 +26,6 @@ import { useEffect, useRef, useState } from "react";
 import { fallbackColor, mergeDisplayFeed } from "@/lib/multichat/feed";
 import {
   excludeBlockedUsers,
-  isBlockedUser,
   normalizedBlockedUserSet,
 } from "@/lib/multichat/appearance";
 import {
@@ -87,6 +86,7 @@ export function DockChat({
   statuses,
   blockedUsers,
   busy,
+  blocklistFull = false,
   viewers = EMPTY_VIEWER_COUNTS,
   onHighlight,
   onBlock,
@@ -103,6 +103,7 @@ export function DockChat({
   >;
   blockedUsers: ReadonlyArray<string>;
   busy: boolean;
+  blocklistFull?: boolean;
   /** Live audience per platform + combined; blank until it loads. */
   viewers?: ViewerCounts;
   onHighlight: (message: ChatMessage) => void;
@@ -121,7 +122,7 @@ export function DockChat({
   const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blocked = normalizedBlockedUserSet(blockedUsers);
   const visibleEvents = excludeBlockedUsers(events, blocked);
-  const displayRows = mergeDisplayFeed(messages, visibleEvents);
+  const displayRows = mergeDisplayFeed(excludeBlockedUsers(messages, blocked), visibleEvents);
 
   useEffect(() => {
     const el = listRef.current;
@@ -306,12 +307,11 @@ export function DockChat({
             const m = row.item;
             const key = `${m.platform}:${m.id}`;
             const meta = PLATFORM_META[m.platform];
-            const isBlocked = isBlockedUser(m.user, blocked);
             const showActions = selected === key;
             return (
               <div
                 key={`message:${key}`}
-                className={`group rounded-md px-1 py-0.5 text-caption leading-snug hover:bg-bg-elevated ${isBlocked ? "opacity-40" : ""}`}
+                className="group rounded-md px-1 py-0.5 text-caption leading-snug hover:bg-bg-elevated"
               >
                 <button
                   type="button"
@@ -335,11 +335,6 @@ export function DockChat({
                   >
                     {m.user}
                   </span>
-                  {isBlocked ? (
-                    <span className="ml-1 text-micro text-text-dim">
-                      (blocked)
-                    </span>
-                  ) : null}
                   <span className="text-text-dim">: </span>
                   <span className="text-text">{m.text}</span>
                 </button>
@@ -354,10 +349,10 @@ export function DockChat({
                   >
                     Highlight
                   </button>
-                  {!isBlocked ? (
-                    <button
+                  <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || blocklistFull}
+                      title={blocklistFull ? "Blocklist full — unblock someone first" : undefined}
                       onClick={() => tapBlock(m.user)}
                       className={`rounded border px-1.5 py-0.5 text-micro disabled:opacity-50 ${
                         armed === m.user
@@ -367,13 +362,13 @@ export function DockChat({
                     >
                       {armed === m.user ? "Confirm?" : "Block"}
                     </button>
-                  ) : null}
                 </div>
               </div>
             );
           })
         )}
       </div>
+      {blocklistFull ? <p className="mt-2 text-caption text-warning">Blocklist full — unblock someone first</p> : null}
     </div>
   );
 }

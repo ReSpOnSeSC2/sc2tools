@@ -62,6 +62,20 @@ const article: HelpArticle = {
       title: "Opponents have a public page too",
       text: "An opponent faced by at least 5 SC2 Tools players gets a combined public profile with no names. Your games add to it without naming you. See [Opponent dossier](/help/opponent-dossier).",
     },
+    { type: "heading", text: "Finding a game", anchor: "finding-a-game" },
+    {
+      type: "paragraph",
+      text: "Replay filters combine and apply as soon as you change them. Search applies after you pause with at least two characters, or immediately when you press Enter. Without JavaScript, choose **Apply**. Matchup and map choices come from the player's archive. Each chip removes one filter; **Clear all** removes them together. **This season**, **Last 7 days** and **Last 30 days** roll forward when you open the link.",
+    },
+    {
+      type: "paragraph",
+      text: "The record line counts all games matching the active filters, across every page. A result filter hides the win–loss record and win rate so a list of losses does not look like an overall record. Copy the page URL or choose **Share** to share the same filtered view. **Older replays** moves back in time; when sorted oldest first, **Newer replays** moves forward.",
+    },
+    { type: "heading", text: "What visitors can see", anchor: "what-visitors-can-see" },
+    {
+      type: "paragraph",
+      text: "The replay list and downloads need no account. Full analysis — the timeline, macro breakdown and both build orders — needs a free account. Downloads are the original .SC2Replay file, which includes the in-game names and chat StarCraft II records.",
+    },
   ],
   related: ["publish-community-builds", "replays", "player-channels", "delete-account"],
 };

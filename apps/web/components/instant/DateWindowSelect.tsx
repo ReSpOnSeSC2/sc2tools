@@ -38,7 +38,7 @@ export function DateWindowSelect({
 }: DateWindowSelectProps) {
   const name = useId();
   return (
-    <fieldset disabled={disabled} className={["min-w-0", className].filter(Boolean).join(" ")}>
+    <fieldset disabled={disabled} aria-disabled={disabled} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} onKeyUp={(event) => event.stopPropagation()} className={["min-w-0", className].filter(Boolean).join(" ")}>
       <legend className="mb-1 text-caption font-semibold text-text">{legend}</legend>
       <div className="inline-flex flex-wrap gap-1 rounded-full border-2 border-line bg-bg-surface p-1">
         {OPTIONS.map((option) => (

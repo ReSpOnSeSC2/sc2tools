@@ -93,7 +93,7 @@ const article: HelpArticle = {
       type: "list",
       items: [
         "Only confirmed check-ins change your stats. Suggestions and randomizer rolls never do on their own.",
-        "A confirmed check-in counts in your Builds tab, build details, custom build library, MMR charts, trends and overlay widgets. **incl. N check-ins** shows how many games count only because of a check-in; those games carry a **Planned** badge with the replay's own label and your notes.",
+        "A confirmed check-in counts in your Build stats tab, build details, custom build library, MMR charts, trends and overlay widgets. **incl. N check-ins** shows how many games count only because of a check-in; those games carry a **Planned** badge with the replay's own label and your notes.",
         "Build timings, compositions and transitions only use games that actually followed the build, so a build's shape isn't diluted by games that went sideways.",
         "A corrected opponent build counts the same way: your own stats against that build include the game.",
         "Community guides, ladder meta and coaching keep the replay's own label, for your build and the opponent's. Your check-ins only change your own stats.",

@@ -14,7 +14,7 @@
  */
 
 import { useState } from "react";
-import { tallyPollVotes } from "@/lib/multichat/poll";
+import { usePollTally } from "./usePollTally";
 import type { StudioPoll } from "@/lib/multichat/useStudioState";
 import type { ChatMessage } from "@/lib/multichat/types";
 import { DockButton } from "./DockClient";
@@ -37,6 +37,7 @@ export function DockPoll({
   studioReady?: boolean;
   onPost: DockPost;
 }) {
+  const tally = usePollTally(messages, poll);
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState<string[]>(["", ""]);
   const filled = options.map((o) => o.trim()).filter(Boolean);
@@ -49,7 +50,7 @@ export function DockPoll({
   if (!studioReady) return <DockSnapshotState />;
 
   if (poll) {
-    const { counts, total } = tallyPollVotes(messages, poll);
+    const { counts, total } = tally!;
     return (
       <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2">
         <DockActionNotice message={notice} />

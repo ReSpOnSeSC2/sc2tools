@@ -395,8 +395,9 @@ class ReplayFilesService {
    * @param {string} userId
    * @param {string} gameId
    * @param {{available?: boolean, sizeBytes?: number, sha256?: string, storedAt?: Date|string}} marker
+   * @param {{clearStale?: boolean}} [opts] restore validates before its pre-action snapshot without mutating current rows
    */
-  async verifyAvailableMarker(userId, gameId, marker) {
+  async verifyAvailableMarker(userId, gameId, marker, opts = {}) {
     if (
       !marker
       || marker.available !== true
@@ -411,7 +412,7 @@ class ReplayFilesService {
       marker,
     );
     if (matches) return true;
-    await this._clearMarker(userId, gameId, marker.storedAt);
+    if (opts.clearStale !== false) await this._clearMarker(userId, gameId, marker.storedAt);
     return false;
   }
 

@@ -46,6 +46,7 @@ import {
 } from "./SC2BackdropScene";
 import { OverlayCredit } from "../OverlayCredit";
 import { CinematicBackgroundScene } from "./CinematicBackgroundScene";
+import { STUDIO_SCENE_HEADLINES } from "@/lib/multichat/sceneModes";
 import { StreamSceneCanvas } from "../widgets/StreamSceneWidget";
 import { useBrollAudioOwner } from "../widgets/brollAudio";
 import {
@@ -186,11 +187,7 @@ function DockDrivenOverlaySceneClient({
   });
   const fallbackVariant: BackdropVariant =
     scene === "manual" ? "starting-soon" : scene;
-  const variant: BackdropVariant = dockScene
-    ? dockScene.mode === "brb"
-      ? "brb"
-      : "starting-soon"
-    : fallbackVariant;
+  const variant: BackdropVariant = fallbackVariant;
 
   const accent = useMemo(() => {
     if (demo) return accentForRace("zerg");
@@ -268,6 +265,8 @@ function DockDrivenOverlaySceneClient({
       {connectionStatus === "reconnecting" ? <ReconnectDot /> : null}
       <SC2BackdropScene
         variant={variant}
+        headline={dockScene ? STUDIO_SCENE_HEADLINES[dockScene.mode] : undefined}
+        layout={dockScene ? "full" : undefined}
         accent={accent}
         message={dockScene?.message || null}
         countdownMs={countdownMs}

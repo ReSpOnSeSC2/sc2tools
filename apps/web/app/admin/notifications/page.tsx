@@ -212,6 +212,7 @@ export default function AdminNotificationsPage() {
               <AdminEventRow
                 key={event.eventId}
                 event={event}
+                onReportUpdated={() => mutate()}
                 unread={!event.readAt}
               />
             ))}

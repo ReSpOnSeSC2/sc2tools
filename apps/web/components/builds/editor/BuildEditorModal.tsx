@@ -9,7 +9,7 @@ import {
   type VsRaceLite,
 } from "@/lib/build-rules";
 import type { BuildEditorSaveResult } from "./BuildEditor.types";
-import type { BuildOrderEvent } from "@/lib/build-events";
+import type { BuildOrderEvent, BuildSignatureItem } from "@/lib/build-events";
 import { Modal } from "@/components/ui/Modal";
 import { useToastOptional } from "@/components/ui/Toast";
 import { useBuildEditorCloseGuard } from "./useBuildEditorCloseGuard";
@@ -75,6 +75,9 @@ export interface BuildEditorModalProps {
   createOnly?: boolean;
   initialFocus?: "notes" | "preview";
   legacySignature?: boolean;
+  sourceSignature?: BuildSignatureItem[];
+  saveIntent?: "duplicate";
+  timelineFromSavedBuild?: boolean;
 }
 
 /**
@@ -108,6 +111,9 @@ export function BuildEditorModal({
   createOnly = false,
   initialFocus,
   legacySignature = false,
+  sourceSignature,
+  saveIntent,
+  timelineFromSavedBuild = false,
 }: BuildEditorModalProps) {
   const toast = useToastOptional()?.toast;
   const notesRef = useRef<HTMLTextAreaElement>(null);
@@ -116,7 +122,7 @@ export function BuildEditorModal({
   // Edit mode rebuilds the timeline from the saved rules' deadlines
   // (EditCustomBuildLauncher.docToEvents), so two rows of a token are two
   // rules, not two Stargates, and must not be counted.
-  const countRepeats = mode !== "edit";
+  const countRepeats = mode !== "edit" && !timelineFromSavedBuild;
 
   const computedDefaultName = useMemo(
     () =>
@@ -171,6 +177,8 @@ export function BuildEditorModal({
     lockedSlug,
     demoMode,
     createOnly,
+    sourceSignature,
+    saveIntent,
     context: {
       gameId,
       sourceEvents: events,
@@ -269,6 +277,7 @@ export function BuildEditorModal({
             onCancel={guard.requestClose}
             onSave={editor.save}
             mode={mode}
+            hasSignature={!!sourceSignature?.length}
             demoMode={demoMode}
           />
         }

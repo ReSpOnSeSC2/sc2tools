@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 
 const LIST_DEFAULT = 20;
 const LIST_MAX = 50;
@@ -11,6 +12,7 @@ const BODY_MAX = 280;
 const HREF_MAX = 300;
 const KIND_RE = /^[a-z][a-z0-9_.]{1,63}$/;
 const GROUP_KEY_MAX = 200;
+const { sanitizeNotificationPrefs } = require("./notificationPrefs");
 
 /** Compound cursors preserve rows sharing a millisecond; ISO-date cursors remain supported.
  * @param {unknown} raw
@@ -69,13 +71,30 @@ class NotificationsService {
    *   body?: string,
    *   href?: string,
    *   groupKey?: string,
+   *   eventKey?: string,
    *   render?: (count: number) => {title: string, body?: string},
    * }} input
    * @returns {Promise<Record<string, any> | null>} the stored row, or null when skipped
    */
   async notify(userId, input) {
     if (typeof userId !== "string" || !userId) return null;
+    let lease;
+    try { lease = await claimUserDataLease(this.db.users, userId); }
+    catch (error) {
+      // A recipient being erased cannot receive a new private row after the
+      // notification purge. The saved originating action still succeeds.
+      if (/** @type {any} */ (error)?.status === 409) return null;
+      throw error;
+    }
+    try { return await this._notify(userId, input); } finally { await lease.release(); }
+  }
+  /** @param {string} userId @param {Parameters<NotificationsService['notify']>[1]} input */
+  async _notify(userId, input) {
     if (!KIND_RE.test(String(input.kind || ""))) throw new Error("invalid_notification_kind");
+    const user = await this.db.users.findOne({ userId }, { projection: { "preferences.notifications": 1 } });
+    if (!user || sanitizeNotificationPrefs(user.preferences?.notifications).muted.includes(input.kind)) return null;
+    const eventKey = deliveryKey(input.eventKey);
+    if (eventKey && await this.db.notifications.findOne({ userId, deliveryKeys: eventKey }, { projection: { _id: 1 } })) return null;
     const now = new Date();
     const href = safeHref(input.href);
     /** @type {Record<string, any> | null} */
@@ -96,12 +115,15 @@ class NotificationsService {
           readAt: null,
           createdAt: now,
           ...(input.groupKey ? { groupKey: String(input.groupKey).slice(0, GROUP_KEY_MAX) } : {}),
+          ...(eventKey ? { deliveryKeys: [eventKey] } : {}),
         },
         COLLECTIONS.NOTIFICATIONS,
       );
       try {
         await this.db.notifications.insertOne(row);
       } catch (err) {
+        if (eventKey && isDuplicateKey(err)
+          && await this.db.notifications.findOne({ userId, deliveryKeys: eventKey }, { projection: { _id: 1 } })) return null;
         // Lost a race with a concurrent first event for the same group:
         // the other writer created the unread row, so fold into it.
         if (!(input.groupKey && isDuplicateKey(err))) throw err;
@@ -116,23 +138,33 @@ class NotificationsService {
 
   /**
    * @param {string} userId
-   * @param {{kind: string, title: string, body?: string, groupKey?: string, render?: (count: number) => {title: string, body?: string}}} input
+   * @param {{kind: string, title: string, body?: string, groupKey?: string, eventKey?: string, render?: (count: number) => {title: string, body?: string}}} input
    * @param {string|null} href
    * @param {Date} now
    */
   async _fold(userId, input, href, now) {
     const groupKey = String(input.groupKey).slice(0, GROUP_KEY_MAX);
-    const bumped = await this.db.notifications.findOneAndUpdate(
-      { userId, groupKey, readAt: null },
-      { $inc: { count: 1 }, $set: { createdAt: now, href } },
-      { returnDocument: "after" },
-    );
+    const eventKey = deliveryKey(input.eventKey);
+    let bumped;
+    try {
+      bumped = await this.db.notifications.findOneAndUpdate(
+        { userId, groupKey, readAt: null, ...(eventKey ? { deliveryKeys: { $ne: eventKey } } : {}) },
+        { $inc: { count: 1 }, $set: { createdAt: now, href }, ...(eventKey ? { $addToSet: { deliveryKeys: eventKey } } : {}) },
+        { returnDocument: "after" },
+      );
+    } catch (error) {
+      // The delivery identity is authoritative even if competing callers
+      // supplied different groups. A unique-index loser is a no-op.
+      if (eventKey && isDuplicateKey(error)
+        && await this.db.notifications.findOne({ userId, deliveryKeys: eventKey }, { projection: { _id: 1 } })) return null;
+      throw error;
+    }
     if (!bumped) return null;
     const rendered = input.render ? input.render(Number(bumped.count) || 1) : null;
     if (rendered) {
       const title = clip(rendered.title, TITLE_MAX);
       const body = clip(rendered.body || "", BODY_MAX);
-      await this.db.notifications.updateOne({ _id: bumped._id }, { $set: { title, body } });
+      await this.db.notifications.updateOne({ _id: bumped._id, count: bumped.count }, { $set: { title, body } });
       bumped.title = title;
       bumped.body = body;
     }
@@ -141,13 +173,20 @@ class NotificationsService {
 
   /**
    * @param {string} userId
-   * @param {{limit?: unknown, before?: unknown, unread?: boolean}} [opts]
+   * @param {{limit?: unknown, before?: unknown, unread?: boolean, kind?: unknown}} [opts]
    */
   async list(userId, opts = {}) {
     const limit = clampInt(opts.limit, 1, LIST_MAX, LIST_DEFAULT);
     /** @type {Record<string, any>} */
     const filter = { userId };
     if (opts.unread === true) filter.readAt = null;
+    if (typeof opts.kind === "string" && opts.kind !== "all") {
+      if (opts.kind === "reviews") filter.kind = /^review\./;
+      else if (opts.kind === "coaching") filter.kind = /^coaching\./;
+      else if (opts.kind === "system") filter.kind = { $not: /^(review|coaching)\./ };
+      else if (KIND_RE.test(opts.kind)) filter.kind = opts.kind;
+      else throw Object.assign(new Error("Invalid notification kind."), { status: 400, code: "bad_request" });
+    }
     const cursor = parseNotificationCursor(opts.before);
     if (cursor) {
       filter.$or = [
@@ -269,5 +308,8 @@ function clampInt(raw, min, max, fallback) {
 function isDuplicateKey(err) {
   return Boolean(err && typeof err === "object" && /** @type {any} */ (err).code === 11000);
 }
+
+/** Fixed-size hashes keep long producer identities distinct and private. @param {unknown} raw */
+function deliveryKey(raw) { return raw ? crypto.createHash("sha256").update(String(raw)).digest("base64url") : null; }
 
 module.exports = { NotificationsService, safeHref };

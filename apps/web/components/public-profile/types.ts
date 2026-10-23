@@ -17,7 +17,7 @@ export interface PublicProfileTotals {
 }
 
 export interface PublicProfileMatchupSplit {
-  /** "vs P" / "vs T" / "vs Z" / "vs Unknown" — race letters, not people. */
+  /** API race labels ("vs P", etc.), displayed as "vs Protoss" / "vs Unknown race". */
   matchup: string;
   games: number;
   wins: number;

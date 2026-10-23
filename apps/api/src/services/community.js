@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
+const { deliverNotification } = require("./notificationDelivery");
 const {
   cleanText,
   cleanDisplayName,
@@ -15,6 +16,8 @@ const {
   matchupFromRaces,
 } = require("./communityBuildSnapshot");
 const { communitySitemap } = require("./communitySitemap");
+const { communityListFilter } = require("./communityListFilters");
+const { listOwnerBuilds } = require("./communityOwnerBuilds");
 const {
   DETECTOR_OPP_SLUG_EXPR,
   DETECTOR_SLUG_EXPR,
@@ -255,11 +258,12 @@ function pickTop(counts) {
 class CommunityService {
   /**
    * @param {import('../db/connect').DbContext} db
-   * @param {{slugSecret?: Buffer|string, now?: () => number}} [opts]
+   * @param {{slugSecret?: Buffer|string, now?: () => number, notifications?: import('./notifications').NotificationsService}} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
     this.slugSecret = opts.slugSecret || null;
+    this.notifications = opts.notifications || null;
     /**
      * Report targets owned by OTHER services (the Replay Review
      * Exchange registers ``review_request`` / ``review_comment``), so
@@ -984,30 +988,26 @@ class CommunityService {
    *
    * @param {{
    *   matchup?: string,
+   *   race?: string,
+   *   vsRace?: string,
+   *   skill?: string,
    *   limit?: number,
    *   offset?: number,
-   *   sort?: 'top' | 'new' | 'controversial',
+   *   sort?: 'top' | 'new' | 'controversial' | 'updated',
    *   search?: string,
    * }} opts
    */
   async listPublic(opts = {}) {
-    const filter = /** @type {Record<string, any>} */ ({ removed: false });
-    if (opts.matchup) filter.matchup = opts.matchup;
-    if (opts.search) {
-      const escaped = String(opts.search).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const re = new RegExp(escaped, "i");
-      filter.$or = [
-        { title: re },
-        { description: re },
-        { authorName: re },
-      ];
-    }
+    const filter = communityListFilter(opts);
     const limit = Math.min(opts.limit || 30, 100);
     const offset = Math.max(0, Number(opts.offset) || 0);
     const sortKey = opts.sort || "top";
     /** @type {Record<string, 1 | -1>} */
     let sort;
     switch (sortKey) {
+      case "updated":
+        sort = { updatedAt: -1, publishedAt: -1 };
+        break;
       case "new":
         sort = { publishedAt: -1, votes: -1 };
         break;
@@ -1046,11 +1046,12 @@ class CommunityService {
    *
    * @param {string} userId
    * @returns {Promise<Array<{publicSlug: string, total: number, wins: number, losses: number}>>}
+   * @param {{includeRemoved?: boolean, publicSlugs?: string[]}} [opts]
    */
-  async listOwnerReplayStats(userId) {
+  async listOwnerReplayStats(userId, opts = {}) {
     const published = await this.db.communityBuilds
       .find(
-        { ownerUserId: userId, removed: false },
+        { ownerUserId: userId, ...(opts.includeRemoved ? {} : { removed: false }), ...(opts.publicSlugs ? { slug: { $in: opts.publicSlugs } } : {}) },
         {
           projection: {
             _id: 0,
@@ -1147,6 +1148,11 @@ class CommunityService {
         losses: Math.max(0, Number(count?.losses) || 0),
       };
     });
+  }
+
+  /** @param {string} userId */
+  async listOwnerBuilds(userId) {
+    return listOwnerBuilds(this.db, userId, (publicSlugs) => this.listOwnerReplayStats(userId, { includeRemoved: true, publicSlugs }));
   }
 
   /**
@@ -1383,7 +1389,7 @@ class CommunityService {
         } },
         { $set: { votes: { $subtract: [{ $size: "$upvotes" }, { $size: "$downvotes" }] } } },
       ],
-      { returnDocument: "before", projection: { upvotes: 1, downvotes: 1 } },
+      { returnDocument: "before", projection: { upvotes: 1, downvotes: 1, ownerUserId: 1, title: 1 } },
     );
     if (!before) throw Object.assign(new Error("build_not_found"), { status: 404, code: "build_not_found" });
     const up = new Set(Array.isArray(before.upvotes) ? before.upvotes : []);
@@ -1391,6 +1397,13 @@ class CommunityService {
     const old = up.has(userId) ? 1 : down.has(userId) ? -1 : 0;
     if (delta === 1) up.add(userId); else up.delete(userId);
     if (delta === -1) down.add(userId); else down.delete(userId);
+    if (delta === 1 && old !== 1 && before.ownerUserId !== userId) {
+      const day = new Date(this.now()).toISOString().slice(0, 10);
+      const render = (/** @type {number} */ count) => ({ title: `${count} upvote${count === 1 ? "" : "s"} on ${before.title || "your build"}` });
+      await deliverNotification(this.notifications, before.ownerUserId, { kind: "community.vote",
+        ...render(1), href: `/community/builds/${encodeURIComponent(slug)}`,
+        groupKey: `community-vote:${slug}:${day}`, eventKey: `community-vote:${slug}:${day}:${userId}`, render }, null);
+    }
     return { votes: up.size - down.size, myVote: delta, changed: old !== delta };
   }
 

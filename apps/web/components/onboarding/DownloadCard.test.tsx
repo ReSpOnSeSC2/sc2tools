@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DownloadCard } from "./DownloadCard";
 
@@ -92,4 +92,43 @@ describe("DownloadCard", () => {
       version: "0.15.20",
     });
   });
+});
+
+
+describe("release recovery", () => {
+  afterEach(cleanup);
+it("distinguishes release-server errors from an empty release and retries with busy feedback", async () => {
+  let finish!: () => void;
+  const mutate = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+  useReleaseInfoMock.mockReturnValue({ isLoading: false, error: new Error("rate limited"), mutate });
+  render(<DownloadCard os="windows" />);
+  expect(screen.getByRole("heading", { name: "Couldn't reach the release server" })).toBeTruthy();
+  expect(screen.queryByText(/No installer published yet/)).toBeNull();
+  expect(screen.getByRole("link", { name: "Download from GitHub Releases" }).getAttribute("href")).toBe("https://github.com/ReSpOnSeSC2/sc2tools/releases");
+  const retry = screen.getByRole("button", { name: "Retry" }); fireEvent.click(retry);
+  expect(mutate).toHaveBeenCalledOnce(); expect(retry.getAttribute("aria-busy")).toBe("true");
+  await act(async () => finish());
+  await waitFor(() => expect(retry.getAttribute("aria-busy")).not.toBe("true"));
+});
+it("waits for a successful response before claiming no installer is published", () => {
+  useReleaseInfoMock.mockReturnValue({ isLoading: false, error: null, data: undefined });
+  render(<DownloadCard os="windows" />);
+  expect(screen.getByLabelText("Loading the latest release")).toBeTruthy(); expect(screen.queryByText(/No installer published/)).toBeNull();
+});
+it("shows no-installer instructions only after a successful empty release", () => {
+  useReleaseInfoMock.mockReturnValue({ isLoading: false, error: null, data: { artifact: null } });
+  render(<DownloadCard os="linux" />);
+  expect(screen.getByRole("heading", { name: "No installer published yet for Linux" })).toBeTruthy();
+  expect(screen.queryByText(/Couldn't reach/)).toBeNull();
+});
+it("keeps release notes plain-safe behind an accessible toggle and links all releases", () => {
+  useReleaseInfoMock.mockReturnValue({ isLoading: false, data: { latest: "0.19.0", artifact: { downloadUrl: "https://example.com/a.exe", sha256: "a", sizeBytes: 100 }, releaseNotes: "## Changes\n- **A fix**\n<script>unsafe</script>" } });
+  const { container } = render(<DownloadCard os="windows" />);
+  const notes = screen.getByRole("button", { name: "Release notes" }); expect(notes.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(notes); expect(notes.getAttribute("aria-expanded")).toBe("true");
+  expect(screen.getByText("A fix").tagName).toBe("STRONG"); expect(container.querySelector("script")).toBeNull();
+  expect(document.getElementById(notes.getAttribute("aria-controls")!)).toBeTruthy();
+  expect(screen.getByRole("link", { name: "All releases" }).getAttribute("href")).toContain("/releases");
+});
+
 });

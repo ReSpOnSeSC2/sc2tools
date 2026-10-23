@@ -36,7 +36,7 @@ export function BuildsPublicIntro({ returnTo = "/builds" }: { returnTo?: string 
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Custom builds"
+        eyebrow="Build library"
         title="Your own build library"
         description="Describe the openers you play once. Every replay you upload is matched to them automatically, with win rates for each build and matchup."
       />

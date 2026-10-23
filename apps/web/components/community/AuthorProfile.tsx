@@ -11,6 +11,7 @@ import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorBuildsList } from "./AuthorBuildsList";
 import { AuthorStatsStrip } from "./AuthorStatsStrip";
 import type { CommunityAuthorProfile } from "./types";
+import { VoteScore } from "./VoteScore";
 
 export interface AuthorProfileProps {
   profile: CommunityAuthorProfile;
@@ -28,6 +29,8 @@ export function AuthorProfile({ profile }: AuthorProfileProps) {
     ? coerceRace(profile.primaryRace)
     : null;
   const tint = race ? raceTint(race) : null;
+  const firstPublishedAt = profile.builds.map((build) => build.publishedAt).filter((date) => Number.isFinite(Date.parse(date))).sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+  const matchupCount = new Set(profile.builds.map((build) => build.matchup).filter(Boolean)).size;
   const personJsonLd = {
     "@context": "https://schema.org",
     "@type": "Person",
@@ -83,9 +86,6 @@ export function AuthorProfile({ profile }: AuthorProfileProps) {
                     {race}
                   </Badge>
                 ) : null}
-                <span className="text-micro uppercase tracking-wider text-text-dim">
-                  Member {fmtAgo(profile.joinedAt)}
-                </span>
               </span>
             }
             title={profile.displayName}
@@ -115,6 +115,8 @@ export function AuthorProfile({ profile }: AuthorProfileProps) {
         primaryRace={profile.primaryRace}
         joinedAt={profile.joinedAt}
         topMatchup={profile.topMatchup}
+        firstPublishedAt={firstPublishedAt}
+        matchupCount={matchupCount}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -141,10 +143,7 @@ export function AuthorProfile({ profile }: AuthorProfileProps) {
                     <span aria-hidden className="text-text-dim">
                       ·
                     </span>
-                    <span className="font-mono tabular-nums">
-                      {profile.topBuild.votes >= 0 ? "▲" : "▼"}{" "}
-                      {Math.abs(profile.topBuild.votes)}
-                    </span>
+                    <VoteScore votes={profile.topBuild.votes} />
                   </span>
                 </Link>
               </div>
