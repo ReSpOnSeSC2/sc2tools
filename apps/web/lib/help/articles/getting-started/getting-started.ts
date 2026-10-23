@@ -37,7 +37,7 @@ const article: HelpArticle = {
       type: "steps",
       items: [
         "**Create your account.** [Sign up](/sign-up) on the website. A short setup guide opens right after and walks you through the next steps.",
-        "**Install the desktop app.** Download it from the [Download](/download) page and install it on the PC you play on (Windows 10 or 11). It watches your replay folder; you never upload anything by hand.",
+        "**Install the desktop app.** Download it from the [Download](/download) page and install it on the PC you play on (Windows 10 or 11). It watches your replay folder; you never upload anything by hand. Step by step: [Install and link the desktop app](/help/install-and-pair).",
         "**Pair it with your account.** The app opens showing a 6-digit pairing code. Click **Open pairing page**, or go to [Devices](/devices) yourself, and enter the code. The code expires after 10 minutes; if it does, close the app and open it again to get a new one.",
         "**Play or import a game.** Every ladder game is read automatically a few seconds after it ends and synced to your account. To fill your stats right away, press **Import my history** in the setup checklist on your dashboard to add the replays already on your PC.",
         "**Read Today.** [Today](/app) is your between-games view: the live game while you play, your session record, streak and MMR, and the Daily Pulse strip with fresh insights from your own games every day. Builds, maps, trends and opponent history fill in as replays land.",
@@ -59,7 +59,7 @@ const article: HelpArticle = {
       text: "Stuck on a step? Search Help for the words on your screen, or see [Troubleshooting & support](/help/troubleshooting-and-support).",
     },
   ],
-  related: ["how-to-use-help", "settings-overview", "dashboard-and-analyzer", "obs-overlay-setup", "a-page-asked-me-to-sign-in"],
+  related: ["how-to-use-help", "install-and-pair", "settings-overview", "dashboard-and-analyzer", "obs-overlay-setup", "a-page-asked-me-to-sign-in"],
 };
 
 export default article;

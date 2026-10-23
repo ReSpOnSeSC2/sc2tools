@@ -373,6 +373,12 @@ function PulseIdEditor({
   const [helpOpen, setHelpOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // A link to #pulse-id-help (the Today MMR card's "Add a Pulse ID")
+  // opens the help, so the Settings anchor scroll has a target.
+  useEffect(() => {
+    if (window.location.hash === "#pulse-id-help") setHelpOpen(true);
+  }, []);
+
   const trimmed = value.trim();
   const liveClass =
     trimmed.length === 0 ? "idle" : classifyPulseId(trimmed);

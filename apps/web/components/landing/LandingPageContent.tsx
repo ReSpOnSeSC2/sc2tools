@@ -447,7 +447,7 @@ const INCLUDED_GROUPS = [
       "Custom rules with durable background reclassification",
       "Build Roulette plus one- or two-unit Gateway rolls",
       "Named or anonymous Community publishing",
-      "Map-veto help, daily challenges and season recaps",
+      "Daily challenges, replay quizzes and season recaps",
       "Touch-friendly army, cost and upgrade inspection",
     ],
   },

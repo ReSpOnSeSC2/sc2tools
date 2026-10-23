@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowUpRight, CircleHelp } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
@@ -21,26 +21,53 @@ import { HelpSupportLine } from "./HelpSupportLine";
  * It is a real link to the article, so a middle-click or Ctrl/Cmd-click
  * still opens the page in a new tab, and it works before hydration.
  *
+ * `anchor` points at one section (a heading `anchor` in the article): the
+ * link goes to /help/<slug>#<anchor> and the sheet opens scrolled to
+ * that heading, with focus on it.
+ *
  *   variant="inline" (default): text link; children default to the title.
  *   variant="icon": a small "?" button for tight spots next to a setting;
  *     its accessible name is "Help: <article title>".
+ *
+ * `onOpen` runs whenever the reader follows the link, in the sheet or in
+ * a new tab (e.g. an analyzer section shows its hidden intro again).
  */
 export interface HelpLinkProps {
   slug: string;
+  /** A section of the article: the `anchor` of one of its headings. */
+  anchor?: string;
   children?: ReactNode;
   variant?: "inline" | "icon";
   className?: string;
+  onOpen?: () => void;
 }
 
-export function HelpLink({ slug, children, variant = "inline", className = "" }: HelpLinkProps) {
+export function HelpLink({ slug, anchor, children, variant = "inline", className = "", onOpen }: HelpLinkProps) {
   const [open, setOpen] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const article = getArticle(slug);
+
+  // Open the sheet at the section. Runs after Modal's own initial focus
+  // (child effects run first, so its 0 ms timer is queued before this one).
+  useEffect(() => {
+    if (!open || !anchor) return;
+    const timer = window.setTimeout(() => {
+      const headings = bodyRef.current?.querySelectorAll<HTMLElement>("[data-help-anchor]") ?? [];
+      const heading = Array.from(headings).find((element) => element.dataset.helpAnchor === anchor);
+      if (!heading) return;
+      heading.scrollIntoView?.({ block: "start" });
+      heading.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [open, anchor]);
+
   // An unknown slug is a content bug (the help tests catch it); never
   // render a link that leads nowhere.
   if (!article) return children ? <>{children}</> : null;
 
-  const href = helpArticlePath(article.slug);
+  const href = helpArticlePath(article.slug, anchor);
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    onOpen?.();
     if (!isPlainClick(event)) return;
     event.preventDefault();
     setOpen(true);
@@ -86,7 +113,7 @@ export function HelpLink({ slug, children, variant = "inline", className = "" }:
           </Link>
         }
       >
-        <div className="space-y-5">
+        <div ref={bodyRef} className="space-y-5">
           <HelpArticleBody article={article} variant="compact" />
           <HelpSupportLine className="border-t border-border pt-4 text-caption" />
         </div>

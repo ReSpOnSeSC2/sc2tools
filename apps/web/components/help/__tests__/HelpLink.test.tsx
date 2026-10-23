@@ -41,6 +41,23 @@ describe("HelpLink", () => {
     }
   });
 
+  it("calls onOpen when the reader follows the link, in the sheet or a new tab", () => {
+    const onOpen = vi.fn();
+    render(<HelpLink slug="stream-dock" onOpen={onOpen}>Dock help</HelpLink>);
+    const link = screen.getByRole("link", { name: "Dock help" });
+    fireEvent.click(link);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    const stopNavigation = (event: MouseEvent) => event.preventDefault();
+    document.addEventListener("click", stopNavigation);
+    try {
+      fireEvent.click(link, { ctrlKey: true });
+    } finally {
+      document.removeEventListener("click", stopNavigation);
+    }
+    expect(onOpen).toHaveBeenCalledTimes(2);
+  });
+
   it("closes from the close button", () => {
     render(<HelpLink slug="stream-dock" />);
     fireEvent.click(screen.getByRole("link", { name: "Stream Dock (your control panel)" }));
@@ -72,6 +89,50 @@ describe("HelpLink", () => {
     const icon = screen.getByRole("link", { name: "Help: OBS overlay setup" });
     fireEvent.click(icon);
     expect(screen.getByRole("dialog", { name: "OBS overlay setup" })).toBeTruthy();
+  });
+
+  it("links to a section and opens the sheet at that heading", () => {
+    vi.useFakeTimers();
+    const original = HTMLElement.prototype.scrollIntoView;
+    const scrolled: Element[] = [];
+    HTMLElement.prototype.scrollIntoView = vi.fn(function (this: Element) {
+      scrolled.push(this);
+    });
+    try {
+      render(
+        <HelpLink slug="replay-reviews" anchor="who-can-review">
+          Why?
+        </HelpLink>,
+      );
+      const link = screen.getByRole("link", { name: "Why?" });
+      expect(link.getAttribute("href")).toBe("/help/replay-reviews#who-can-review");
+      fireEvent.click(link);
+      flushFocus();
+
+      const dialog = screen.getByRole("dialog", { name: /Replay reviews/ });
+      const heading = within(dialog).getByRole("heading", { level: 3, name: "Who can review" });
+      expect(document.activeElement).toBe(heading);
+      expect(scrolled).toEqual([heading]);
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps Modal's own focus when the anchor is missing", () => {
+    vi.useFakeTimers();
+    try {
+      render(
+        <HelpLink slug="replay-reviews" anchor="no-such-section">
+          Help
+        </HelpLink>,
+      );
+      fireEvent.click(screen.getByRole("link", { name: "Help" }));
+      flushFocus();
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close" }));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("renders plain children for an unknown slug instead of a dead link", () => {

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CloudOff, MessageSquareText } from "lucide-react";
 import { SignedIn, SignedOut } from "@clerk/nextjs";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { ReviewCard } from "@/components/reviews/ReviewCard";
@@ -60,8 +61,12 @@ export default async function ReviewsBoardPage({ searchParams }: { searchParams:
       title="Replay reviews"
       description="Players post a game with a question; reviewers answer with comments pinned to exact moments on the replay and the map. Reviewer leagues are verified from their own synced games."
       actions={
-        <SignedIn>
-          <div className="flex flex-wrap gap-2">
+        <>
+          {/* Outside SignedIn: visitors deciding whether to sign up need it most. */}
+          <LazyHelpLink slug="replay-reviews" className="inline-flex min-h-11 items-center text-caption font-semibold">
+            How it works
+          </LazyHelpLink>
+          <SignedIn>
             <Link href="/reviews/mine" className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated">
               My reviews
             </Link>
@@ -69,13 +74,19 @@ export default async function ReviewsBoardPage({ searchParams }: { searchParams:
                 games (the "Ask for a review" button sits in its actions). */}
             <Link
               href="/app/replays"
-              title="Opens your replays: pick a 1v1 game, then click “Ask for a review”"
               className="hard-press inline-flex min-h-[44px] items-center rounded-full border-2 border-line bg-accent px-5 font-display text-body font-bold text-white hover:bg-accent-hover"
             >
               Ask about one of your games
             </Link>
-          </div>
-        </SignedIn>
+            <LazyHelpLink
+              slug="replay-reviews"
+              anchor="asking-for-a-review"
+              className="inline-flex min-h-11 items-center text-caption font-semibold"
+            >
+              How to ask
+            </LazyHelpLink>
+          </SignedIn>
+        </>
       }
     />
   );

@@ -19,6 +19,19 @@ corresponding GitHub Release.
 - Cookie settings can be reopened from the footer or Privacy Policy, including when storage is blocked. Legal pages have section navigation, and the crash screen follows your theme with retry, reload, home and report controls.
 - Detail pages have one main heading, consistent back links and breadcrumbs. Navigation shows delayed progress, with loading placeholders while pages and sign-in resolve.
 
+### Review recovery
+
+- Failed request closure and reviewer preference saves show recovery actions; preferences roll back when saving fails.
+- Review-board and written-review loading failures show clear Retry states.
+- Map pins belong to each composer, so posting or cancelling a reply preserves the pin on your separate top-level comment.
+
+### Phase 2b: help and Today
+
+- Help now covers 48 topics, with section links, replay reviews and coaching guides, and a dismissible "How to read this" introduction on analyzer sections.
+- Today's session shows wins and losses, KPI failures offer Retry, live replay changes refresh the cards, and the Win rate menu supports keyboard navigation.
+- Your preferred analyzer tab applies when starting a session; explicit Today shortcuts and returning to Today keep you there.
+- Help search loads its article index when you search, keeping browsing fast as the library grows.
+
 ### Repair follow-up
 
 - Build library pages load editors and charts when needed, reducing their initial JavaScript; public build pages remain visible while sign-in loads.

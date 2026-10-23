@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarClock, LockKeyhole, PanelsTopLeft, Target } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import LockerHost from "./LockerHost";
 import CoachingPractice from "./CoachingPractice";
 import CoachingSchedule from "./CoachingSchedule";
@@ -80,6 +81,13 @@ export default function CoachingWorkspace() {
             This workspace is invite-only. Ask your coach to attach the
             sc2tools.com account you are currently signed in with.
           </p>
+          <LazyHelpLink
+            slug="coaching"
+            anchor="roles-and-linking"
+            className="mt-3 inline-flex min-h-11 items-center text-caption font-semibold"
+          >
+            How coaching access works
+          </LazyHelpLink>
         </div>
       </Card>
     );
@@ -100,32 +108,40 @@ export default function CoachingWorkspace() {
   return (
     <div className="space-y-5">
       <h1 className="sr-only">Coaching</h1>
-      <nav
-        aria-label="Coaching workspace"
-        className="flex w-full gap-1 rounded-xl border-2 border-line bg-bg-surface p-1 shadow-hard sm:w-fit"
-      >
-        <WorkspaceTab
-          active={view === "locker"}
-          onClick={() => selectView("locker")}
-          icon={<PanelsTopLeft className="h-4 w-4" aria-hidden />}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <nav
+          aria-label="Coaching workspace"
+          className="flex w-full gap-1 rounded-xl border-2 border-line bg-bg-surface p-1 shadow-hard sm:w-fit"
         >
-          Locker
-        </WorkspaceTab>
-        <WorkspaceTab
-          active={view === "practice"}
-          onClick={() => selectView("practice")}
-          icon={<Target className="h-4 w-4" aria-hidden />}
+          <WorkspaceTab
+            active={view === "locker"}
+            onClick={() => selectView("locker")}
+            icon={<PanelsTopLeft className="h-4 w-4" aria-hidden />}
+          >
+            Locker
+          </WorkspaceTab>
+          <WorkspaceTab
+            active={view === "practice"}
+            onClick={() => selectView("practice")}
+            icon={<Target className="h-4 w-4" aria-hidden />}
+          >
+            Practice
+          </WorkspaceTab>
+          <WorkspaceTab
+            active={view === "sessions"}
+            onClick={() => selectView("sessions")}
+            icon={<CalendarClock className="h-4 w-4" aria-hidden />}
+          >
+            Sessions
+          </WorkspaceTab>
+        </nav>
+        <LazyHelpLink
+          slug="coaching"
+          className="inline-flex min-h-11 items-center self-end text-caption font-semibold sm:self-auto"
         >
-          Practice
-        </WorkspaceTab>
-        <WorkspaceTab
-          active={view === "sessions"}
-          onClick={() => selectView("sessions")}
-          icon={<CalendarClock className="h-4 w-4" aria-hidden />}
-        >
-          Sessions
-        </WorkspaceTab>
-      </nav>
+          How coaching works
+        </LazyHelpLink>
+      </div>
 
       {/* The legacy Locker script declares global lexical bindings. Keep its
           host mounted while switching sections so returning to Locker never

@@ -22,21 +22,21 @@ const HelpLink = lazy(() =>
  * The fallback cannot read the article's title: give inline links their
  * text as children.
  */
-export function LazyHelpLink({ slug, children, variant = "inline", className = "" }: HelpLinkProps) {
-  const href = `/help/${slug}`;
+export function LazyHelpLink({ slug, anchor, children, variant = "inline", className = "", onOpen }: HelpLinkProps) {
+  const href = anchor ? `/help/${slug}#${anchor}` : `/help/${slug}`;
   const fallback =
     variant === "icon" ? (
-      <a href={href} aria-label="Help" className={[HELP_ICON_LINK_CLASS, className].filter(Boolean).join(" ")}>
+      <a href={href} onClick={onOpen} aria-label="Help" className={[HELP_ICON_LINK_CLASS, className].filter(Boolean).join(" ")}>
         <CircleHelp className="h-4 w-4" aria-hidden />
       </a>
     ) : (
-      <a href={href} className={[HELP_TEXT_LINK_CLASS, className].filter(Boolean).join(" ")}>
+      <a href={href} onClick={onOpen} className={[HELP_TEXT_LINK_CLASS, className].filter(Boolean).join(" ")}>
         {children}
       </a>
     );
   return (
     <Suspense fallback={fallback}>
-      <HelpLink slug={slug} variant={variant} className={className}>
+      <HelpLink slug={slug} anchor={anchor} variant={variant} className={className} onOpen={onOpen}>
         {children}
       </HelpLink>
     </Suspense>

@@ -134,7 +134,7 @@ describe("SettingsHelp", () => {
     }
   });
 
-  it("opens a search result in place and moves focus to it", () => {
+  it("opens a search result in place and moves focus to it", async () => {
     window.history.replaceState(null, "", "/settings?tab=help");
     const scroll = stubScroll();
     try {
@@ -142,7 +142,7 @@ describe("SettingsHelp", () => {
       fireEvent.change(screen.getByRole("searchbox", { name: "Search help" }), {
         target: { value: "stream dock" },
       });
-      const results = screen.getByRole("list", { name: "Search results" });
+      const results = await screen.findByRole("list", { name: "Search results" });
       const first = within(results).getAllByRole("link")[0];
       expect(first.getAttribute("href")).toBe("/settings?tab=help#stream-dock");
       fireEvent.click(first);

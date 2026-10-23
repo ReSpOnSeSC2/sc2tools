@@ -8,6 +8,8 @@ import { ALL_HELP_ARTICLES } from "./articles/index.generated";
 import { HELP_CATEGORIES, type HelpCategory } from "./categories";
 import { POPULAR_HELP_SLUGS } from "./popular";
 import type { HelpArticle } from "./types";
+import { helpArticlePath } from "./paths";
+export { helpArticlePath } from "./paths";
 
 export { ALL_HELP_ARTICLES };
 
@@ -26,14 +28,35 @@ export function getArticle(slug: string): HelpArticle | undefined {
   return BY_SLUG.get(slug);
 }
 
-/** Public URL of an article. Example: `helpArticlePath("stream-dock")` → "/help/stream-dock". */
-export function helpArticlePath(slug: string): string {
-  return `/help/${slug}`;
+/**
+ * Public URL of an article, optionally at one of its section anchors.
+ *
+ * Example: `helpArticlePath("stream-dock")` → "/help/stream-dock";
+ * `helpArticlePath("replay-reviews", "who-can-review")` → "/help/replay-reviews#who-can-review".
+ */
+
+/**
+ * The section anchors an article defines: the `anchor` of each heading
+ * block, in reading order.
+ *
+ * Example: `helpArticleAnchors(getArticle("replay-reviews")!)[0]` → "how-it-works".
+ */
+export function helpArticleAnchors(article: HelpArticle): string[] {
+  return article.body.flatMap((block) => (block.type === "heading" && block.anchor ? [block.anchor] : []));
 }
 
 /** In-app URL that opens an article in Settings → Help. */
 export function helpSettingsPath(slug: string): string {
   return `/settings?tab=help#${slug}`;
+}
+
+/**
+ * Public URL of one section of an article (a heading's `anchor`).
+ *
+ * Example: `helpAnchorPath("opponents", "net-mmr")` → "/help/opponents#net-mmr".
+ */
+export function helpAnchorPath(slug: string, anchor: string): string {
+  return `${helpArticlePath(slug)}#${anchor}`;
 }
 
 function compareArticles(a: HelpArticle, b: HelpArticle): number {
