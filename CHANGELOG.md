@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Admin inbox details
+
+- Activity and support message rows now open full details on tap, click, Enter or Space, with diagnostics, replies and account or infrastructure links. Closing returns focus to the row.
+
 ### Game workspace and shared clock
 
 - On phones and tablets, replay player names sit above their stats so supply, workers and the clock stay readable without overlapping. Upgrade chips wait for recorded research completion.
