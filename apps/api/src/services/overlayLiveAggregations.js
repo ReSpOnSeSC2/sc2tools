@@ -5,11 +5,11 @@ const {
   computeCompositions,
   prepareCompositionGame,
 } = require("./buildCompositions");
-const { computePerGameScouting } = require("./scouting/perGameScouting");
+const { compactAnalysisMacroBreakdown } = require("./boundedReplayDetail");
+const { OPP_INTENT_LABEL_PROJECTION } = require("./buildIntentShape");
 const {
-  compactAnalysisBuildLog,
-  compactAnalysisMacroBreakdown,
-} = require("./boundedReplayDetail");
+  summarizeOpponentTendencies,
+} = require("./scouting/opponentTendencies");
 
 /**
  * Cap on the number of recent games we run the phase classifier over
@@ -20,11 +20,13 @@ const {
  * medians a stable signal while keeping the detail-store work bounded.
  */
 const OPPONENT_PHASE_SCAN_CAP = 50;
-const OVERLAY_DETAIL_FIELDS = Object.freeze([
-  "buildLog",
-  "oppBuildLog",
-  "macroBreakdown",
-]);
+
+/**
+ * Newest games against one opponent that ``opponentTendencies`` reads
+ * (every matchup; the matchup subset is taken in memory). Metadata
+ * only, so 50 rows stay a few kilobytes.
+ */
+const TENDENCY_SCAN_CAP = 50;
 
 /** @type {ReadonlyArray<'early'|'earlyMid'|'mid'|'midLate'|'late'>} */
 const PHASE_ORDER = ["early", "earlyMid", "mid", "midLate", "late"];
@@ -650,133 +652,74 @@ async function opponentPhaseProfile(games, gameDetails, userId, opp, myRace, opp
 }
 
 /**
- * Per-game scouting envelopes for the last 5 games against this
- * opponent. Drives the overlay's scouting widget's "Last 5 games"
- * block — real build-order events + phase transitions +
- * composition-by-phase snapshots from real games (no medians, no
- * fabricated data).
+ * Fields ``opponentTendencies`` reads: the date for ordering, both
+ * races for the matchup subset, the opponent's label plus the
+ * check-in correction fields, and the length so leavers drop out.
+ */
+const TENDENCY_PROJECTION = Object.freeze({
+  _id: 0,
+  date: 1,
+  durationSec: 1,
+  myRace: 1,
+  "opponent.race": 1,
+  "opponent.strategy": 1,
+  ...OPP_INTENT_LABEL_PROJECTION,
+});
+
+/**
+ * Same race when both sides name one, compared by initial; an unknown
+ * side never narrows the set (mirrors ``recentGamesForOpponent``).
  *
- * Returns the array sorted newest-first to match the widget's
- * top-to-bottom render order. Empty when no games match.
+ * @param {unknown} stored
+ * @param {string|undefined} wanted
+ * @returns {boolean}
+ */
+function sameRaceInitial(stored, wanted) {
+  if (!wanted) return true;
+  const want = String(wanted).charAt(0).toUpperCase();
+  return String(stored || "").charAt(0).toUpperCase() === want;
+}
+
+/**
+ * Favourite opening, predicted strategies and the cheese alert for one
+ * opponent, from the streamer's own games against them. One indexed
+ * query (``{opponent.pulseId|pulseCharacterId, userId, date}``) reads
+ * the newest ``TENDENCY_SCAN_CAP`` games across every matchup; the
+ * matchup subset is then summarised in memory by
+ * ``scouting/opponentTendencies.summarizeOpponentTendencies``.
+ *
+ * Identity is the Pulse toon handle and/or character id only. A bare
+ * display name is not enough: barcode names are shared by many players
+ * and would blend their openings into one "favourite".
+ *
+ * Fail-soft: a Mongo error reads as no history (``{window: 0}``).
  *
  * @param {import('mongodb').Collection} games
- * @param {import('./gameDetails').GameDetailsService | null} gameDetails
  * @param {string} userId
- * @param {Record<string, any>} opp
- * @param {string|undefined} myRace
- * @param {string|undefined} oppRace
- * @returns {Promise<Array<object>>}
+ * @param {{pulseId?: string|null, pulseCharacterId?: string|null} | null | undefined} identity
+ * @param {{myRace?: string, oppRace?: string}} [matchup]
+ * @returns {Promise<import('./scouting/opponentTendencies').OpponentTendencies>}
  */
-async function last5GamesScouting(games, gameDetails, userId, opp, myRace, oppRace) {
-  if (!opp) return [];
+async function opponentTendencies(games, userId, identity, matchup = {}) {
   /** @type {Record<string, any>} */
   const filter = { userId, isResumedFromReplay: { $ne: true } };
-  const attached = attachOpponentIdsToFilter(filter, {
-    pulseId: opp.pulseId,
-    pulseCharacterId: opp.pulseCharacterId,
-  });
-  if (!attached) {
-    if (opp.displayName) {
-      filter["opponent.displayName"] = opp.displayName;
-    } else {
-      return [];
-    }
-  }
-  if (myRace) {
-    filter.myRace = { $regex: `^${escapeRegex(String(myRace).charAt(0))}`, $options: "i" };
-  }
-  if (oppRace) {
-    filter["opponent.race"] = {
-      $regex: `^${escapeRegex(String(oppRace).charAt(0))}`,
-      $options: "i",
-    };
-  }
+  const attached = userId && identity
+    ? attachOpponentIdsToFilter(filter, {
+        pulseId: identity.pulseId,
+        pulseCharacterId: identity.pulseCharacterId,
+      })
+    : null;
+  if (!attached) return summarizeOpponentTendencies([]);
   const rows = await games
-    .find(filter, {
-      projection: {
-        _id: 1,
-        gameId: 1,
-        date: 1,
-        result: 1,
-        map: 1,
-        myRace: 1,
-        myBuild: 1,
-        durationSec: 1,
-        "opponent.displayName": 1,
-        "opponent.race": 1,
-        "opponent.strategy": 1,
-      },
-    })
+    .find(filter, { projection: TENDENCY_PROJECTION })
     .sort({ date: -1 })
-    .limit(5)
+    .limit(TENDENCY_SCAN_CAP)
     .toArray()
     .catch(() => []);
-  if (rows.length === 0) return [];
-  // Hydrate one row at a time and immediately reduce it to the bounded
-  // scouting response. This preserves both sides' build-order/composition
-  // fields without retaining five raw replay blobs at once.
-  /** @type {Array<object>} */
-  const envelopes = [];
-  for (const r of rows) {
-    const gameId = String(r.gameId || "");
-    const detail = await readOneOverlayDetail(
-      gameDetails,
-      userId,
-      gameId,
-      OVERLAY_DETAIL_FIELDS,
-    );
-    const needsInline = (
-      !Array.isArray(detail?.buildLog) && !Array.isArray(r.buildLog)
-    ) || (
-      !Array.isArray(detail?.oppBuildLog) && !Array.isArray(r.oppBuildLog)
-    ) || (!detail?.macroBreakdown && !r.macroBreakdown);
-    const inline = needsInline && r._id
-      ? await games.findOne(
-          { userId, _id: r._id },
-          {
-            projection: {
-              _id: 0,
-              buildLog: 1,
-              oppBuildLog: 1,
-              macroBreakdown: 1,
-            },
-          },
-        ).catch(() => null)
-      : null;
-    const hydrated = {
-      gameId,
-      date: r.date,
-      result: r.result,
-      map: r.map,
-      myRace: r.myRace,
-      myBuild: r.myBuild,
-      durationSec: r.durationSec,
-      opponent: r.opponent,
-      buildLog: compactAnalysisBuildLog(
-        detail?.buildLog ?? r.buildLog ?? inline?.buildLog,
-      ),
-      oppBuildLog: compactAnalysisBuildLog(
-        detail?.oppBuildLog ?? r.oppBuildLog ?? inline?.oppBuildLog,
-      ),
-      macroBreakdown: compactAnalysisMacroBreakdown(
-        detail?.macroBreakdown ?? r.macroBreakdown ?? inline?.macroBreakdown,
-      ),
-    };
-    try {
-      const env = computePerGameScouting(hydrated);
-      // Strip the heavy ``macroBreakdown`` blob if the compute kept any
-      // reference (it doesn't — it copies the fields it needs — but
-      // defensive against future regressions).
-      envelopes.push(env);
-    } catch (err) {
-      console.warn(
-        "last5GamesScouting: skipping gameId=%s userId=%s: %s",
-        r && r.gameId, userId,
-        (err && /** @type {{ message?: unknown }} */ (err).message) || err,
-      );
-    }
-  }
-  return envelopes;
+  const inMatchup = rows.filter((r) =>
+    sameRaceInitial(r.myRace, matchup.myRace)
+    && sameRaceInitial(r.opponent && r.opponent.race, matchup.oppRace));
+  return summarizeOpponentTendencies(inMatchup);
 }
 
 module.exports = {
@@ -791,6 +734,7 @@ module.exports = {
   bestAnswerVsStrategy,
   metaForMatchup,
   opponentPhaseProfile,
-  last5GamesScouting,
+  opponentTendencies,
   OPPONENT_PHASE_SCAN_CAP,
+  TENDENCY_SCAN_CAP,
 };

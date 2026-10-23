@@ -32,7 +32,7 @@ function aggregate(overrides: Record<string, unknown> = {}) {
     wins: 22,
     losses: 18,
     winRate: 0.55,
-    openings: {},
+    // The API no longer sends an openings map (nothing ever produced one).
     strategies: { "Ling Flood": 6, "Roach Ravager": 12, "12 Pool": 2 },
     byMap: {
       "Alcyone": { wins: 2, losses: 1 },

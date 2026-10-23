@@ -1086,7 +1086,7 @@ describe("community + gdpr integration", () => {
             pulseId: opp,
             displayName: "x",
             race: "Protoss",
-            opening: "Phoenix",
+            strategy: "Protoss - Phoenix Opener",
           },
         });
       }
@@ -1095,7 +1095,10 @@ describe("community + gdpr integration", () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.contributors).toBeGreaterThanOrEqual(5);
-      expect(res.body.openings.Phoenix).toBeGreaterThan(0);
+      expect(res.body.strategies["Protoss - Phoenix Opener"]).toBe(6);
+      // Nothing produces ``opponent.opening``; the aggregate no longer
+      // ships an always-empty openings map.
+      expect(res.body).not.toHaveProperty("openings");
       // No opponents row resolved a character id for this toon.
       expect(res.body.pulseCharacterId).toBeNull();
     });

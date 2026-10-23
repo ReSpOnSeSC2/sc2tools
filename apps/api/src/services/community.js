@@ -1433,7 +1433,6 @@ class CommunityService {
           map: 1,
           "opponent.race": 1,
           "opponent.strategy": 1,
-          "opponent.opening": 1,
           ...OPP_INTENT_LABEL_PROJECTION,
           _id: 0,
         },
@@ -1755,8 +1754,6 @@ function summarizeOpponentGames(pulseId, pulseCharacterId, games) {
   let wins = 0;
   let losses = 0;
   /** @type {Record<string, number>} */
-  const openings = {};
-  /** @type {Record<string, number>} */
   const strategies = {};
   /** @type {Record<string, {wins: number, losses: number}>} */
   const byMap = {};
@@ -1767,8 +1764,6 @@ function summarizeOpponentGames(pulseId, pulseCharacterId, games) {
     if (g.result === "Defeat") wins += 1;
     if (g.result === "Victory") losses += 1;
     if (!race && g.opponent?.race) race = g.opponent.race;
-    const op = g.opponent?.opening;
-    if (op) openings[op] = (openings[op] || 0) + 1;
     const st = opponentDetectorView(g).strategy;
     if (st) strategies[st] = (strategies[st] || 0) + 1;
     if (g.map) {
@@ -1787,7 +1782,6 @@ function summarizeOpponentGames(pulseId, pulseCharacterId, games) {
     wins,
     losses,
     winRate: total > 0 ? wins / total : 0,
-    openings,
     strategies,
     byMap,
   };

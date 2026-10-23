@@ -7,6 +7,13 @@ const {
   invalidateEnrichmentForOpponent: invalidateEnrichmentForOpponentImpl,
 } = require("./overlayLiveEnrichment");
 const aggregations = require("./overlayLiveAggregations");
+const {
+  CHEESE_ALERT_THRESHOLD,
+  MIN_TENDENCY_GAMES,
+  cheeseProbability,
+  hasTendencies,
+  tendenciesFromLegacyOpenings,
+} = require("./scouting/opponentTendencies");
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 
 const { bucketResult } = aggregations;
@@ -62,29 +69,6 @@ const { bucketResult } = aggregations;
  */
 
 /**
- * Strategy keywords that the cheese widget should highlight. Lowercase
- * match against ``opponent.strategy`` (substring) so variants like
- * "6 Pool" / "Pool first" / "Proxy 2 Gate" all light up. The threshold
- * the widget renders against (``cheeseProbability >= 0.4``) means we
- * pick a probability that comfortably crosses it — 0.7 — for any hit.
- * Non-matches get a baseline 0.1 so the widget hides itself.
- */
-const CHEESE_KEYWORDS = [
-  "cheese",
-  "proxy",
-  "cannon rush",
-  "pool first",
-  "6 pool",
-  "8 pool",
-  "12 pool",
-  "all-in",
-  "allin",
-  "all in",
-  "bunker rush",
-  "worker rush",
-];
-
-/**
  * Map a numeric MMR to a Blizzard ladder league name + tier guess.
  * Boundaries follow Blizzard's published season cutoffs (approximate —
  * tiers within a league shift by a few hundred MMR each season, and
@@ -135,20 +119,38 @@ function matchupLabel(myRace, oppRace) {
 }
 
 /**
- * Probability the cheese widget renders for a stored opponent
- * strategy. Keyword hits land at 0.7 (above the widget's 0.4
- * threshold); everything else at the hide-me baseline 0.1.
+ * Copy the opponent's tendencies onto a live payload: favourite
+ * opening, predicted strategies (also as the legacy ``scouting``
+ * tells) and, at or above the alert threshold, the cheese probability
+ * with the games behind it.
  *
- * @param {unknown} strategy
- * @returns {number}
+ * The game-derived summary wins whenever it has anything to show. The
+ * legacy ``opponents.openings`` map is read only for opponents whose
+ * games carry no usable labels (nothing writes that map any more).
+ *
+ * @param {Record<string, any>} payload mutated in place
+ * @param {import('./scouting/opponentTendencies').OpponentTendencies} tendencies
+ * @param {unknown} legacyOpenings ``opponents.openings`` from the matched row
  */
-function cheeseProbability(strategy) {
-  if (!strategy) return 0.1;
-  const s = String(strategy).toLowerCase();
-  for (const k of CHEESE_KEYWORDS) {
-    if (s.includes(k)) return 0.7;
+function applyOpponentTendencies(payload, tendencies, legacyOpenings) {
+  const t = hasTendencies(tendencies)
+    ? tendencies
+    : tendenciesFromLegacyOpenings(legacyOpenings) || tendencies;
+  if (t.favOpening) payload.favOpening = t.favOpening;
+  if (t.predictedStrategies && t.predictedStrategies.length > 0) {
+    payload.predictedStrategies = t.predictedStrategies;
+    payload.scouting = t.predictedStrategies.map((p) => ({
+      label: p.name,
+      confidence: p.weight,
+    }));
   }
-  return 0.1;
+  if (
+    typeof t.cheeseProbability === "number"
+    && t.cheeseProbability >= CHEESE_ALERT_THRESHOLD
+  ) {
+    payload.cheeseProbability = t.cheeseProbability;
+    if (t.cheeseHistory) payload.cheeseHistory = t.cheeseHistory;
+  }
 }
 
 /**
@@ -348,58 +350,20 @@ class OverlayLiveService {
       ) {
         payload.rematch = { isRematch: true, lastResult: bucket || undefined };
       }
-      // Fav opening — most-frequent opening row stored in ``openings``.
-      const openings = oppRow.openings && typeof oppRow.openings === "object"
-        ? oppRow.openings
-        : null;
-      if (openings) {
-        const entries = Object.entries(openings).filter(
-          ([, v]) => Number.isFinite(Number(v)) && Number(v) > 0,
-        );
-        if (entries.length > 0) {
-          entries.sort((a, b) => Number(b[1]) - Number(a[1]));
-          const [name, count] = entries[0];
-          const total = entries.reduce((acc, [, v]) => acc + Number(v), 0);
-          payload.favOpening = {
-            name,
-            share: total > 0 ? Number(count) / total : 0,
-            samples: Number(count),
-          };
-        }
-      }
     }
 
-    // Cheese alert — lit by the opponent's stored strategy.
-    const cp = cheeseProbability(opp?.strategy);
-    if (cp >= 0.4) payload.cheeseProbability = cp;
-
-    // Predicted strategies — naive in-row weighting from the openings
-    // map. The dashboard's recency-weighted predictor is richer but it
-    // requires hydrating the full per-opponent game list; the overlay
-    // panel only renders the top 3, so the openings counts are a
-    // proportional-enough signal.
-    if (oppRow?.openings) {
-      const total = Object.values(oppRow.openings).reduce(
-        (acc, v) => acc + Number(v || 0),
-        0,
-      );
-      if (total > 0) {
-        const preds = Object.entries(oppRow.openings)
-          .map(([name, v]) => ({
-            name,
-            weight: Number(v) / total,
-          }))
-          .sort((a, b) => b.weight - a.weight)
-          .slice(0, 3);
-        if (preds.length > 0) payload.predictedStrategies = preds;
-        // Scouting tells: project the same predictions but with a
-        // confidence column so the scouting widget can render "look
-        // for X by Y minutes".
-        payload.scouting = preds.map((p) => ({
-          label: p.name,
-          confidence: p.weight,
-        }));
-      }
+    // Favourite opening, predictions and cheese from the streamer's
+    // games vs this opponent in this matchup, this game included.
+    const tendencies = await this._opponentTendencies(userId, opp, myRace, oppRace);
+    applyOpponentTendencies(payload, tendencies, oppRow?.openings);
+    // Too little history to weigh yet: the opening this game just
+    // showed still lights the cheese alert on its own.
+    if (
+      payload.cheeseProbability === undefined
+      && tendencies.window < MIN_TENDENCY_GAMES
+    ) {
+      const cp = cheeseProbability(opp?.strategy);
+      if (cp >= CHEESE_ALERT_THRESHOLD) payload.cheeseProbability = cp;
     }
 
     // Streak — walk the most-recent N games and count the current run.
@@ -557,10 +521,10 @@ class OverlayLiveService {
   /**
    * Build a pre-game ``LiveGamePayload``-shaped object from an
    * opponent identity. Mirrors the post-game card's contextual fields
-   * (H2H, RIVAL/FAMILIAR, last-games list, best answer, predicted
-   * strategies, top builds, meta, opponent phases, last5GamesScouting)
-   * — result-specific fields (result/durationSec/mmrDelta/map) are
-   * NOT populated; those only land post-game.
+   * (H2H, RIVAL/FAMILIAR, last-games list, favourite opening, best
+   * answer, predicted strategies, cheese, top builds, meta, opponent
+   * phases) — result-specific fields (result/durationSec/mmrDelta/map)
+   * are NOT populated; those only land post-game.
    *
    * Three-tier opponent-row lookup:
    *   * Tier A — ``pulseCharacterId`` (most stable; survives toon_handle rotation).
@@ -596,7 +560,8 @@ class OverlayLiveService {
     // the three tiers (and the downstream payload derivation) actually
     // read: identity (pulseId / pulseCharacterId), display
     // (displayNameSample), counters (gameCount, wins, losses), recency
-    // (lastSeen), strategy mix (openings), race (used to break
+    // (lastSeen), the legacy strategy mix (openings, read only when the
+    // opponent's games carry no labels), race (used to break
     // display-name collisions in Tier C), and the last-observed
     // ``mmr`` so the scouting widget can show a record even when
     // SC2Pulse's live profile lookup hasn't returned a current MMR
@@ -738,47 +703,6 @@ class OverlayLiveService {
       ) {
         payload.rematch = { isRematch: true };
       }
-      const openings = oppRow.openings && typeof oppRow.openings === "object"
-        ? oppRow.openings
-        : null;
-      if (openings) {
-        const entries = Object.entries(openings).filter(
-          ([, v]) => Number.isFinite(Number(v)) && Number(v) > 0,
-        );
-        if (entries.length > 0) {
-          entries.sort((a, b) => Number(b[1]) - Number(a[1]));
-          const [name, count] = entries[0];
-          const total = entries.reduce((acc, [, v]) => acc + Number(v), 0);
-          payload.favOpening = {
-            name,
-            share: total > 0 ? Number(count) / total : 0,
-            samples: Number(count),
-          };
-        }
-        const total = Object.values(openings).reduce(
-          (acc, v) => acc + Number(v || 0),
-          0,
-        );
-        if (total > 0) {
-          const preds = Object.entries(openings)
-            .map(([name, v]) => ({ name, weight: Number(v) / total }))
-            .sort((a, b) => b.weight - a.weight)
-            .slice(0, 3);
-          if (preds.length > 0) payload.predictedStrategies = preds;
-          payload.scouting = preds.map((p) => ({
-            label: p.name,
-            confidence: p.weight,
-          }));
-        }
-      }
-      // Cheese probability — derived from the opponent's most-played
-      // opening if it matches the cheese keyword list. Pre-game we
-      // don't know what THIS match's strategy will be, so the
-      // probability reflects "they tend to bring this on the ladder".
-      if (payload.favOpening?.name) {
-        const cp = cheeseProbability(payload.favOpening.name);
-        if (cp >= 0.4) payload.cheeseProbability = cp;
-      }
     } else {
       // No opponents row matched any of the three identity tiers —
       // the cloud has never seen this player before. Stamp an explicit
@@ -819,31 +743,24 @@ class OverlayLiveService {
     );
     if (recent.length > 0) payload.recentGames = recent;
 
-    // Phase forecast — drives the scouting card's "Usually reaches
-    // Mid/Late" strip. Best-effort: a Mongo or detail-store blip must
-    // NOT block the rest of the pre-game card; absent ``opponentPhases``
-    // renders nothing in that slot, which is the desired fallback.
+    // Favourite opening, predictions and cheese from the streamer's
+    // games vs this opponent in this matchup. Pre-game the cheese
+    // alert reads "they tend to bring this", never this match.
+    const tendencies = await this._opponentTendencies(
+      userId, opp, myRace, opponentRace,
+    );
+    applyOpponentTendencies(payload, tendencies, oppRow?.openings);
+
+    // Phase forecast — drives the scouting card's "Games usually end"
+    // line. Best-effort: a Mongo or detail-store blip must NOT block
+    // the rest of the pre-game card; absent ``opponentPhases`` renders
+    // nothing in that slot, which is the desired fallback.
     try {
       const phases = await this._opponentPhaseProfile(
         userId, opp, myRace, opponentRace,
       );
       if (phases) payload.opponentPhases = phases;
     } catch { /* swallow */ }
-
-    // Per-game scouting envelopes for the overlay's "Last 5 games"
-    // block. Best-effort guard as above.
-    try {
-      const scouting = await aggregations.last5GamesScouting(
-        this.db.games, this.gameDetails, userId, opp, myRace, opponentRace,
-      );
-      if (scouting.length > 0) payload.last5GamesScouting = scouting;
-    } catch (err) {
-      const e = /** @type {{ message?: unknown }} */ (err);
-      console.warn(
-        "overlayLive: last5GamesScouting failed for userId=%s: %s",
-        userId, (e && e.message) || e,
-      );
-    }
 
     // Best answer vs the opponent's most-likely opening.
     const favOpeningStrategy = payload.favOpening?.name;
@@ -1073,6 +990,18 @@ class OverlayLiveService {
   _opponentPhaseProfile(userId, opp, myRace, oppRace) {
     return aggregations.opponentPhaseProfile(
       this.db.games, this.gameDetails, userId, opp, myRace, oppRace,
+    );
+  }
+
+  /**
+   * @param {string} userId
+   * @param {{pulseId?: string|null, pulseCharacterId?: string|null} | null} identity
+   * @param {string} [myRace]
+   * @param {string} [oppRace]
+   */
+  _opponentTendencies(userId, identity, myRace, oppRace) {
+    return aggregations.opponentTendencies(
+      this.db.games, userId, identity, { myRace, oppRace },
     );
   }
 }

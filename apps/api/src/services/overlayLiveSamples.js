@@ -38,6 +38,7 @@ function buildSamplePayload(widget) {
     headToHead: { wins: 4, losses: 2 },
     streak: { kind: "win", count: 3 },
     cheeseProbability: 0.65,
+    cheeseHistory: { samples: 12, of: 20 },
     predictedStrategies: [
       { name: "Pool first", weight: 0.45 },
       { name: "Hatch first", weight: 0.35 },
@@ -48,7 +49,7 @@ function buildSamplePayload(widget) {
       { name: "P - 4 Gate", total: 9, winRate: 0.55 },
     ],
     bestAnswer: { build: "P - Stargate", winRate: 0.78, total: 7 },
-    favOpening: { name: "Pool first", share: 0.55, samples: 11 },
+    favOpening: { name: "Pool first", share: 0.55, samples: 11, of: 20 },
     scouting: [
       { label: "Pool first", tellAt: 90, confidence: 0.55 },
       { label: "Hatch first", tellAt: 75, confidence: 0.35 },
@@ -122,9 +123,8 @@ function buildSamplePayload(widget) {
     // Realistic phase forecast — modal final phase Mid/Late with a
     // Skytoss composition, matching the calibration anchor from the
     // PvZ 15m Skytoss snapshot in
-    // ``apps/api/__tests__/phaseClassifier.test.js``. Numbers are
-    // shaped so the trajectory strip's crossings + final-phase
-    // histogram both render through the compact path.
+    // ``apps/api/__tests__/phaseClassifier.test.js``. The scouting
+    // card renders it as one "Games usually end" footer line.
     opponentPhases: {
       typicalFinalPhase: "midLate",
       trajectory: {
@@ -182,7 +182,7 @@ const PER_WIDGET_KEYS = {
   "post-game": ["map", "durationSec", "result"],
   "mmr-delta": ["mmrDelta", "myMmr"],
   "streak": ["streak"],
-  "cheese": ["cheeseProbability", "predictedStrategies"],
+  "cheese": ["cheeseProbability", "cheeseHistory", "predictedStrategies"],
   "rematch": ["rematch"],
   "rival": ["rival"],
   "rank": ["rank"],
@@ -201,6 +201,7 @@ const PER_WIDGET_KEYS = {
     "bestAnswer",
     "favOpening",
     "cheeseProbability",
+    "cheeseHistory",
     "recentGames",
     "opponentPhases",
   ],

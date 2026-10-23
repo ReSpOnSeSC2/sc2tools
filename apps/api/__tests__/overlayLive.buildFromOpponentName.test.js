@@ -8,7 +8,7 @@
  *
  * What this covers:
  *   - Hydrating cross-cutting fields (H2H, RIVAL/FAMILIAR, fav opening,
- *     scouting, recent games) from the opponents collection.
+ *     scouting, recent games) from the opponents and games collections.
  *   - The three-tier opponent-row lookup
  *     (pulse_character_id → toon_handle → displayName + race).
  *   - First-meeting signal (``headToHead: { wins: 0, losses: 0 }``)
@@ -48,11 +48,12 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
   });
 
   test("returns the same opponent-context fields as buildFromGame, sans result/duration", async () => {
-    // Streamer's history with this opponent: 4-2 record, multiple
-    // openings, one prior game in the same matchup. The opponents row
-    // matches production shape — pulseId is the toon_handle, the
-    // SC2Pulse character id lives on pulseCharacterId, and the plain-
-    // text name is on displayNameSample.
+    // Streamer's history with this opponent: 4-2 record, three prior
+    // games in the same matchup. The opponents row matches production
+    // shape — pulseId is the toon_handle, the SC2Pulse character id
+    // lives on pulseCharacterId, the plain-text name is on
+    // displayNameSample, and (like every row the agent produces) there
+    // is no ``openings`` map: the opening intel comes from the games.
     await db.opponents.insertOne({
       userId: "u1",
       pulseId: "1-S2-1-future-toon",
@@ -64,10 +65,26 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
       wins: 4,
       losses: 2,
       lastSeen: new Date(Date.now() - 2 * 60 * 60 * 1000),
-      openings: { "1-1-1 Standard": 4, "Banshee Rush": 1, Macro: 1 },
     });
     const now = Date.now();
     await db.games.insertMany([
+      {
+        userId: "u1",
+        gameId: "h-0",
+        result: "Victory",
+        myRace: "Protoss",
+        myBuild: "PvT - Strange's 1 Gate Expand",
+        map: "Lightshade LE",
+        durationSec: 702,
+        date: new Date(now - 6000),
+        opponent: {
+          race: "Terran",
+          pulseId: "1-S2-1-future-toon",
+          pulseCharacterId: "111000",
+          displayName: "Future",
+          strategy: "1-1-1 Standard",
+        },
+      },
       {
         userId: "u1",
         gameId: "h-1",
@@ -124,10 +141,15 @@ describe("services/overlayLive.buildFromOpponentName (pre-game enrichment)", () 
     // Pre-game has no lastResult on the rematch flag — we haven't
     // played the current match yet.
     expect(p.rematch.lastResult).toBeUndefined();
-    expect(p.favOpening.name).toBe("1-1-1 Standard");
+    expect(p.favOpening).toEqual({
+      name: "1-1-1 Standard",
+      share: 2 / 3,
+      samples: 2,
+      of: 3,
+    });
     expect(p.predictedStrategies[0].name).toBe("1-1-1 Standard");
     expect(p.scouting[0].label).toBe("1-1-1 Standard");
-    expect(p.recentGames).toHaveLength(2);
+    expect(p.recentGames).toHaveLength(3);
     expect(p.recentGames[0].result).toBe("Win");
     expect(p.recentGames[0].myBuild).toBe("PvT - Phoenix into Robo");
     expect(p.recentGames[0].oppBuild).toBe("Banshee Rush");
