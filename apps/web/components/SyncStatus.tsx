@@ -42,7 +42,7 @@ export function SyncStatus({ total: initialTotal, latest, userId, compact = fals
   const visual = visualForState(conn);
 
   return (
-    <p className={`flex items-center gap-x-2 text-caption text-text-muted ${compact ? "whitespace-nowrap" : "flex-wrap gap-y-1"}`}>
+    <p className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-muted ${compact ? "whitespace-nowrap" : ""}`}>
       <span
         role="status"
         aria-live="polite"
@@ -72,7 +72,7 @@ export function SyncStatus({ total: initialTotal, latest, userId, compact = fals
         synced
         {latestAt ? <span title={new Date(latestAt).toLocaleString()} className={compact ? "sr-only sm:not-sr-only" : undefined}>{` · last ${formatRelative(latestAt, now)}`}</span> : null}
       </span>
-      {realtime.bulk ? <span role="status" className="max-w-[14rem] whitespace-normal text-micro text-text-muted">Syncing — charts refresh every 30 s</span> : null}
+      {realtime.bulk ? <span role="status" className="max-w-[14rem] basis-full whitespace-normal text-micro text-text-muted xl:basis-auto">Syncing — charts refresh every 30 s</span> : null}
       {conn.kind === "reconnecting" && conn.attempts >= 3 ? (
         <span className={`text-caption text-warning ${compact ? "sr-only sm:not-sr-only" : ""}`}>
           retry {conn.attempts}…
