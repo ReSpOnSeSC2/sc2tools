@@ -540,7 +540,8 @@ export type AdminEventType =
   | "agent_download"
   | "agent_connected"
   | "user_message"
-  | "backup_stale";
+  | "backup_stale"
+  | "job_overdue";
 
 export type AdminEventSignupPayload = {
   clerkUserId: string | null;
@@ -593,6 +594,8 @@ export type AdminEventBackupStalePayload = {
   latestStatus: AtlasSnapshotStatus | null;
 };
 
+export type AdminEventJobOverduePayload = { job:string; intervalMs:number };
+
 export type AdminEvent = {
   report?: { status: "new" | "looking" | "fixed" | "wontfix"; revision: number; updates: Array<{ id: string; reply: string; createdAt: string }> };
   eventId: string;
@@ -602,7 +605,8 @@ export type AdminEvent = {
     | AdminEventDownloadPayload
     | AdminEventAgentConnectedPayload
     | AdminEventUserMessagePayload
-    | AdminEventBackupStalePayload;
+    | AdminEventBackupStalePayload
+    | AdminEventJobOverduePayload;
   createdAt: string;
   readAt: string | null;
   anonymizedAt?: string;

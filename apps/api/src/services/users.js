@@ -204,10 +204,18 @@ class UsersService {
    *
    * @param {string} userId
    */
+  async recordDownload(userId) {
+    await this.db.users.updateOne({ userId }, { $min: { "activation.downloadedAt": new Date() } });
+  }
+
+  /** @param {string} userId */
   async touch(userId) {
     await this.db.users.updateOne(
       { userId },
-      { $set: { lastSeenAt: new Date() } },
+      [{ $set: { lastSeenAt: new Date(), "activation.week2ReturnAt": { $cond: [
+        { $and: [{ $lte: ["$createdAt", new Date(Date.now() - 7 * 86400000)] }, { $gt: ["$createdAt", new Date(Date.now() - 14 * 86400000)] }] },
+        { $ifNull: ["$activation.week2ReturnAt", new Date()] }, { $ifNull: ["$activation.week2ReturnAt", "$$REMOVE"] },
+      ] } } }],
     );
   }
 

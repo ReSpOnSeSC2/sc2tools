@@ -3,6 +3,7 @@
 require("dotenv").config();
 
 const http = require("http");
+const { startJobMonitor } = require("./util/jobLedger");
 const pinoModule = require("pino");
 const { Server: IoServer } = require("socket.io");
 
@@ -218,6 +219,7 @@ async function main() {
   // typically the public web origin's /api/ping URL — so dev environments
   // and the test harness stay quiet by default.
   const keepalive = buildKeepaliveWorker({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     targets: config.keepaliveTargets,
     intervalMs: config.keepaliveIntervalMs,
     logger,
@@ -227,6 +229,7 @@ async function main() {
   // Direct support email shares the same durable Messages feed as in-app
   // reports. Gmail access is read-only and disabled until configured.
   const supportEmailJob = buildSupportEmailJob({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     service: config.supportEmail ? new SupportEmailService({
       db,
       adminEvents: /** @type {import('./services/adminEvents').AdminEventsService} */ (services.adminEvents),
@@ -242,6 +245,7 @@ async function main() {
   // see jobs/pulseBackfillJob.js for the lock + cycle policy.
   // Soft-disabled via SC2TOOLS_PULSE_BACKFILL_DISABLED=1.
   const pulseBackfill = buildPulseBackfillJob({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     db,
     opponents: services.opponents,
     logger,
@@ -254,6 +258,7 @@ async function main() {
   // rows, refresh the public aggregate immediately instead of leaving the
   // recovered sample invisible until the next nightly rebuild.
   const opponentMmrEnrichment = buildOpponentMmrEnrichmentJob({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     db,
     pulseMmr: /** @type {any} */ (services).pulseMmr,
     logger,
@@ -278,6 +283,7 @@ async function main() {
   // ≤5 min latency between the inactivity threshold tripping and the
   // card resetting on screen.
   const sessionRefresher = buildSessionRefresher({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     io,
     games: services.games,
     logger,
@@ -289,6 +295,7 @@ async function main() {
   // 24h (configurable, soft-disable via env). Runs once on start so a
   // fresh container doesn't rely on the bundled seed for very long.
   const ladderMapPoolRefresh = buildLadderMapPoolRefreshJob({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     ladderMapPool: /** @type {any} */ (services).seasons.ladderMapPool,
     logger,
   });
@@ -302,6 +309,7 @@ async function main() {
   // so it never blocks boot. Disable with
   // ``SC2TOOLS_LADDER_BACKFILL_DISABLED=1``.
   const ladderMapBackfill = buildLadderMapBackfillJob({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     db,
     ladderMapPool: /** @type {any} */ (services).seasons.ladderMapPool,
     logger,
@@ -310,6 +318,7 @@ async function main() {
 
   // Nightly league-percentile benchmark rebuild (Macro tab framing).
   const leaguePercentilesJob = buildLeaguePercentilesRecomputeJob({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     leaguePercentiles: /** @type {any} */ (services).leaguePercentiles,
     logger,
   });
@@ -320,6 +329,7 @@ async function main() {
   // contributes exactly one observation.
   const fingerprintPopulationCalibrationJob =
     buildFingerprintPopulationCalibrationRecomputeJob({
+    jobLedger: /** @type {any} */ (services).jobLedger,
       calibration: /** @type {any} */ (services)
         .fingerprintPopulationCalibration,
       logger,
@@ -329,6 +339,7 @@ async function main() {
   // Nightly effectiveness-weighted ladder meta rebuild (the signed-in
   // Ladder Pulse; the old public /meta page now redirects to /guides).
   const ladderMetaJob = buildLadderMetaRecomputeJob({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     ladderMeta: /** @type {any} */ (services).ladderMeta,
     logger,
   });
@@ -343,6 +354,7 @@ async function main() {
 
   // Weekly Replay Review Exchange digest (hourly check, weekly send).
   const reviewDigestJob = buildReviewDigestJob({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     reviews: /** @type {any} */ (services).reviews,
     logger,
     enabled: config.reviewsEnabled === "on",
@@ -352,11 +364,12 @@ async function main() {
   // Hourly Atlas Cloud Backup check: one admin notification per day while
   // the newest snapshot is overdue. Only with the Atlas service account.
   const backupHealthJob = buildBackupHealthJob({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     backupStatus: /** @type {any} */ (services).backupStatus,
     logger,
   });
   backupHealthJob.start();
-  const identityDeletionJob = buildIdentityDeletionJob({ service: /** @type {any} */ (services).identityDeletions, logger });
+  const identityDeletionJob = buildIdentityDeletionJob({ jobLedger: /** @type {any} */ (services).jobLedger, service: /** @type {any} */ (services).identityDeletions, logger });
   identityDeletionJob.start();
 
   // SC2 Tools Guides build-order videos: seed the committed channel
@@ -370,9 +383,11 @@ async function main() {
   // Derive compact chart facts from existing replay details in small batches.
   // Normal uploads maintain these facts atomically; no reupload is needed.
   const trendsExplorerBackfill = new TrendsExplorerBackfill({
+    jobLedger: /** @type {any} */ (services).jobLedger,
     db, gameDetails: /** @type {any} */ (services).gameDetails, logger,
   });
   trendsExplorerBackfill.start();
+  const stopJobMonitor = startJobMonitor(/** @type {any} */ (services).jobLedger);
 
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
@@ -381,6 +396,7 @@ async function main() {
   async function shutdown(signal) {
     logger.info({ signal }, "shutdown_start");
     runtimeCapacity.stop();
+    stopJobMonitor();
     await trendsExplorerBackfill.stop();
     await /** @type {any} */ (services).platformIntegrations.stop();
     // True drain, in order: stop accepting connections, let in-flight

@@ -12,6 +12,8 @@
  */
 
 import { after, NextRequest, NextResponse } from "next/server";
+import { auth } from "@clerk/nextjs/server";
+import { recordAuthenticatedDownload } from "@/lib/activationDownload.server";
 import { forwardAgentDownloadEvent } from "@/lib/agentDownloadEvents.server";
 
 export const runtime = "nodejs";
@@ -42,16 +44,21 @@ export async function POST(req: NextRequest) {
 
   const rawPlatform = form.get("platform");
   const platform = typeof rawPlatform === "string" ? rawPlatform : "windows";
+  let accessToken: string | null = null;
+  if (req.cookies.has("__session")) {
+    try { accessToken = await (await auth()).getToken(); } catch { /* Attribution never prevents a download. */ }
+  }
   // Snapshot request headers before the response closes. after() extends the
   // serverless request lifetime for the event write without delaying the 303.
   const eventRequest = { headers: new Headers(req.headers) };
-  after(() =>
+  after(() => Promise.allSettled([
+    recordAuthenticatedDownload(accessToken),
     forwardAgentDownloadEvent(eventRequest, {
       platform,
       version: asset.version,
       channel: "stable",
     }),
-  );
+  ]));
 
   return NextResponse.redirect(asset.downloadUrl, {
     status: 303,

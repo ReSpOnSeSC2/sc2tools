@@ -49,6 +49,7 @@ async function dataInventory(db, userId) {
   for await (const row of ownThreads) { ids.push(row._id); if (ids.length === 100) await countThreads(); }
   if (ids.length) await countThreads();
   anonymized.reviewComments = Math.max(0, await db.reviewComments.countDocuments({ authorId: userId }, QUERY_OPTIONS) - ownAuthored);
+  if (db.adminAudit) anonymized.auditRows = await db.adminAudit.countDocuments({ $or: [{ actorUserId: userId }, { target: userId }] }, QUERY_OPTIONS);
   anonymized.activityEvents = await db.adminEvents.countDocuments({ "payload.userId": userId }, QUERY_OPTIONS);
   return { removed, anonymized, countedAt: new Date().toISOString() };
 }
