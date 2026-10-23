@@ -389,7 +389,7 @@
       "name": "PvZ - Archon Drop",
       "race": "Protoss",
       "matchup": "PvZ",
-      "description": "Detected if Stargate goes down before Twilight Council, a Templar Archives is up by 9:00, and 2+ Archons have been produced by 9:00 -- Stargate opener transitioning into Archon drops. Requires Templar Archives (or Dark Shrine for DT-Archon morph). Checked before Stargate into Robo, so the drop's Warp Prism (Robotics Facility) never hides it."
+      "description": "Detected if Stargate is the first tech building, a real Warp Prism completes by 6:00, Templar Archives starts by 9:00, and 2+ real Archons are produced by 9:00. The Prism requires a Robotics Facility; absent, hallucinated or later Prisms do not count. Unit deadlines use recorded completion times, not estimated training-start times. Checked before Stargate into Robo."
     },
     {
       "name": "PvZ - Blink Stalker All-in (2 Base)",
@@ -419,7 +419,7 @@
       "name": "PvZ - DT drop into Archon Drop",
       "race": "Protoss",
       "matchup": "PvZ",
-      "description": "Detected if Twilight Council goes down before Dark Shrine, a Dark Shrine AND a Robotics Facility are up by 9:00, 3+ Dark Templar are produced by 9:00, and a Warp Prism is on the field by 9:00."
+      "description": "Detected if Twilight Council starts before Dark Shrine, Dark Shrine and Robotics Facility start by 9:00, a real Warp Prism completes by 6:00, 3+ real Dark Templar are produced by 9:00, and at least one real Archon is produced by 9:00. DTs without an observed Archon do not prove this follow-up. Unit deadlines use recorded completion times, not estimated training-start times; hallucinations do not count."
     },
     {
       "name": "PvZ - Macro Transition (Unclassified)",

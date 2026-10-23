@@ -16,6 +16,10 @@ corresponding GitHub Release.
 - Find and sort openers without losing their original rank, browse phone cards, and group a build's opponent matchups by their likely-range verdict. Complete map lists stay available on demand.
 - Compare your own build timings and record with the guide in one table. Counter lists show your race's aggregate win rates, and the map pool offers a sortable race-specific table when new stats are available.
 
+### Build detection
+
+- Both PvZ Archon Drop labels require a real Warp Prism completed by 6:00 and observed Archons. Ordinary or late Templar transitions keep their opener label instead of being counted as drops.
+
 ### Game workspace and shared clock
 
 - On phones and tablets, replay player names sit above their stats so supply, workers and the clock stay readable without overlapping. Upgrade chips wait for recorded research completion.
