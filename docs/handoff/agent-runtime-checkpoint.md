@@ -40,7 +40,16 @@ global writer lock is held; geometry persistence defers until that Save finishes
 The handler still returns only after the real durable commit. The old handler
 wall-clock test is replaced by actual durability plus this native responsiveness
 contract, rather than excluding a UI stall from its measurement. Settings/state
-focused checks passed 103; final full-suite verification is pending this fix.
+focused checks passed 103. The resulting full Windows agent suite passed 2,076
+tests, 1 skipped and 78 subtests (151.33 seconds); the final competing-write
+guards passed 11 native checks. These changes retain real atomic persistence.
+
+Main 17ab0ff2 is now integrated at e271cb1f. Its merged changes are confined to
+web/help/docs; all 100 help/search/render checks and web typecheck/lint pass.
+Exact-CI production build and all unchanged budgets pass: /app 234.4/240 kB,
+opponents 175.7/180, builds 187.9/270 and help 150.4/185. The final main
+integration changed web/help/docs only; the native suite evidence above remains
+applicable. Draft PR #668 is ready for final remote CI and dependency-order review.
 
 No canonical version bump, release tag, signed installer claim, or publication.
 The owner coordinates the final accepted Wave 2 version and pushes the tag after
