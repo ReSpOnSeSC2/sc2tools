@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Account deletion now removes token-owned stream data and private sound files, ends the sign-in identity with durable retries, and offers an export-first inventory and confirmation flow. Review comments on other requests are anonymized; service backup retention follows the current configured schedule.
+
 ### Added
 
 - Streamed account snapshots with labels, downloads and retention; verified restore previews preserve existing game details/replays, and self-service repairs save a snapshot before running.

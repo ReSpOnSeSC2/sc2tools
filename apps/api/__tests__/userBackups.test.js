@@ -18,7 +18,7 @@ describe("streamed snapshots and safe restore (real Mongo)", () => {
   });
   afterAll(async () => { await db.close(); await mongo.stop(); });
   beforeEach(async () => {
-    for (const name of ["games", "gameDetails", "users", "userBackups", "notifications", "customBuilds", "opponentNotes", "overlayTokens", "deviceTokens"]) await db[name].deleteMany({});
+    for (const name of ["games", "gameDetails", "users", "pendingIdentityDeletions", "userBackups", "notifications", "customBuilds", "opponentNotes", "overlayTokens", "deviceTokens"]) await db[name].deleteMany({});
     await db.db.collection("backup_restore_staging").deleteMany({}); store.objects.clear();
     await db.users.insertMany([{ userId: "u1", clerkUserId: "clerk-one" }, { userId: "u2", clerkUserId: "clerk-two" }]);
   });

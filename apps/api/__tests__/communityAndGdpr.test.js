@@ -1780,7 +1780,7 @@ describe("community + gdpr integration", () => {
         updatedAt: new Date(),
       });
       // Admin events carrying PII (email + clerk id).
-      await db.adminEvents.insertOne({
+      const event = await db.adminEvents.insertOne({
         type: "user_signup",
         createdAt: new Date(),
         payload: {
@@ -1814,11 +1814,12 @@ describe("community + gdpr integration", () => {
 
       // Event row survives for aggregate stats, but the PII is gone.
       const ev = await db.adminEvents.findOne({
-        "payload.userId": userId,
+        _id: event.insertedId,
       });
       expect(ev).toBeTruthy();
       expect(ev.payload.email).toBeNull();
       expect(ev.payload.clerkUserId).toBeNull();
+      expect(ev.payload.userId).toBeNull();
       expect(ev.anonymizedAt).toBeInstanceOf(Date);
     });
 

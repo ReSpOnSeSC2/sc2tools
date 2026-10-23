@@ -48,6 +48,7 @@ const VERSION_KEY = "_schemaVersion";
  * @type {Readonly<Record<string, SchemaSpec>>}
  */
 const REGISTRY = Object.freeze({
+  [COLLECTIONS.PENDING_IDENTITY_DELETIONS]: { collection: COLLECTIONS.PENDING_IDENTITY_DELETIONS, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.BACKUP_RESTORE_STAGING]: { collection: COLLECTIONS.BACKUP_RESTORE_STAGING, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.PUBLIC_YOUTUBE_ARCHIVES]: { collection: COLLECTIONS.PUBLIC_YOUTUBE_ARCHIVES, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.PLAYER_IDENTITIES]: { collection: COLLECTIONS.PLAYER_IDENTITIES, currentVersion: 1, versionKey: VERSION_KEY },

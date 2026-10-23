@@ -87,6 +87,7 @@ const { GdprService } = require("./services/gdpr");
 const { UserBackupsService } = require("./services/userBackups");
 const { buildUserBackupsStore } = require("./services/userBackupsStore");
 const { DataRepairsService } = require("./services/dataRepairs");
+const { IdentityDeletionsService } = require("./services/identityDeletions");
 const { withUserDataWriteFence } = require("./middleware/userDataWriteFence");
 const { GuideSamplesService } = require("./services/guideSamples");
 const { buildGuideSamplesBackfillJob } = require("./jobs/guideSamplesBackfillJob");
@@ -260,6 +261,7 @@ function isCoachingStateJson(req) {
  *   reviewSeasonWindowStart?: () => Promise<Date>,
  *   guideVideos?: import('./services/guideVideos').GuideVideosService,
  *   userBackupsStore?: import('./services/userBackupsStore').UserBackupsStore,
+ *   clerkClient?: import('./services/clerkClient').ClerkClient,
  * }} AppDeps
  */
 
@@ -281,14 +283,14 @@ function buildApp(deps) {
   // (or test harnesses calling buildApp many times in one process)
   // skip duplicate registrations.
   loadAllMigrations();
-  const services = makeServices(deps);
-  registerRuntimeCapacityProviders(deps.runtimeCapacityRegistry, services);
-  const clerk = deps.config.clerkSecretKey
+  const clerk = deps.clerkClient || (deps.config.clerkSecretKey
     ? buildClerkClient({
         secretKey: deps.config.clerkSecretKey,
         logger: deps.logger,
       })
-    : noopClerkClient();
+    : noopClerkClient());
+  const services = makeServices(deps, clerk);
+  registerRuntimeCapacityProviders(deps.runtimeCapacityRegistry, services);
   const app = express();
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
@@ -312,8 +314,9 @@ function buildApp(deps) {
 
 /**
  * @param {AppDeps} deps
+ * @param {import('./services/clerkClient').ClerkClient} clerk
  */
-function makeServices(deps) {
+function makeServices(deps, clerk) {
   // Admin notification stream — wired BEFORE UsersService so the
   // user-creation paths (ensureFromClerk first-touch, webhook upsert)
   // can fire signup events without a forward reference.
@@ -328,7 +331,8 @@ function makeServices(deps) {
     logger: deps.logger,
   });
   const supportMessages = new SupportMessagesService(deps.db, notifications, adminEvents);
-  const users = new UsersService(deps.db, { adminEvents });
+  const identityDeletions = new IdentityDeletionsService(deps.db, { clerk, secret: deps.config.serverPepper, logger: deps.logger });
+  const users = new UsersService(deps.db, { adminEvents, identityDeletions });
   // Pluggable backend for the per-game heavy blob. Defaults to
   // ``MongoDetailsStore`` (in-database); flips to ``R2DetailsStore``
   // when ``GAME_DETAILS_STORE=r2`` is set with the R2 connection
@@ -732,6 +736,7 @@ function makeServices(deps) {
   const guideNotes = new GuideNotesService(deps.db);
   const guides = new GuidesService(deps.db, { guideNotes, guideVideos, logger: deps.logger });
   const gdpr = new GdprService(deps.db, {
+    siteStats,
     opponents,
     logger: deps.logger,
     // Store-aware heavy-blob deleter: without it, delete-account and
@@ -741,7 +746,11 @@ function makeServices(deps) {
     playbackArtifacts,
     customBuilds,
     guideSamples,
+    identityDeletions,
+    overlayTokens,
+    io: deps.io,
   });
+  identityDeletions.retryDataPurge = (userId, clerkUserId) => gdpr.deleteAll(userId, { clerkUserId });
   const community = new CommunityService(deps.db, {
     slugSecret: deps.config.serverPepper,
     notifications,
@@ -872,6 +881,7 @@ function makeServices(deps) {
     agentVersion,
     siteStats,
     gdpr,
+    identityDeletions,
     dataRepairs,
     community,
     seasons,
@@ -1245,6 +1255,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       users: services.users,
       games: services.games,
       gdpr: services.gdpr,
+      backupStatus: services.backupStatus,
       dataRepairs: services.dataRepairs,
       pairings: services.pairings,
       imports: services.imports,
@@ -1268,6 +1279,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildClerkWebhookRouter({
       users: services.users,
+      gdpr: services.gdpr,
       secret: deps.config.clerkWebhookSecret,
       logger: deps.logger,
     }),
@@ -1330,6 +1342,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMultichatRouter({
+      dataUsers: deps.db.users,
       overlayTokens: services.overlayTokens,
       users: services.users,
       auth,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useSWRConfig } from "swr";
 import { localDayStartIso, localNextDayStartIso } from "@/lib/localDateRange";
 import { useAuth } from "@clerk/nextjs";
@@ -19,6 +20,8 @@ import { ReplayArchiveStatusCard } from "./ReplayArchiveStatusCard";
 import { SnapshotManager } from "./SnapshotManager";
 import { DataRepairCard } from "./DataRepairCard";
 
+const AccountDeleteDialog = dynamic(() => import("./AccountDeleteDialog"), { ssr: false });
+
 export function SettingsBackups() {
   const { getToken } = useAuth();
   const tokenRef = useRef(getToken);
@@ -26,7 +29,6 @@ export function SettingsBackups() {
   const { toast } = useToast();
   const { mutate: refresh } = useSWRConfig();
   const [pendingDelete, setPendingDelete] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [wipeSince, setWipeSince] = useState("");
   const [wipeUntil, setWipeUntil] = useState("");
@@ -61,7 +63,7 @@ export function SettingsBackups() {
   }
 
   async function exportData() {
-    if (exporting) return;
+    if (exporting) return false;
     setExporting(true);
     try {
       const token = await getToken();
@@ -79,25 +81,13 @@ export function SettingsBackups() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast.success("Export started — check your downloads.");
+      return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Please try again.";
       toast.error("Couldn't export data", { description: message });
+      return false;
     } finally {
       setExporting(false);
-    }
-  }
-
-  async function confirmDelete() {
-    if (deleting) return;
-    setDeleting(true);
-    try {
-      await apiCall(getToken, "/v1/me", { method: "DELETE" });
-      window.location.href = "/";
-    } catch (err) {
-      const message =
-        (err as ClientApiError | undefined)?.message ?? "Please try again.";
-      toast.error("Couldn't delete account", { description: message });
-      setDeleting(false);
     }
   }
 
@@ -219,16 +209,7 @@ export function SettingsBackups() {
         </Card>
       </Section>
 
-      <DestructiveConfirmDialog
-        open={pendingDelete}
-        onClose={() => (deleting ? undefined : setPendingDelete(false))}
-        onConfirm={confirmDelete}
-        title="Permanently delete your account?"
-        description="This wipes every game, build, and overlay token tied to your cloud user. Cannot be undone."
-        confirmWord="DELETE"
-        confirmLabel="Delete account"
-        loading={deleting}
-      />
+      {pendingDelete ? <AccountDeleteDialog onClose={() => setPendingDelete(false)} onExport={exportData} /> : null}
       <DestructiveConfirmDialog
         open={pendingWipe}
         onClose={() => (wiping ? undefined : setPendingWipe(false))}

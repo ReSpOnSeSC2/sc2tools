@@ -3,6 +3,7 @@
 const express = require("express");
 const { NOTIFICATIONS_PREF_TYPE, sanitizeNotificationPrefs } = require("../services/notificationPrefs");
 const { validateProfile } = require("../validation/profile");
+const { publicDataRetention } = require("../services/dataInventory");
 const {
   claimReplayIngestAdmission,
   releaseReplayIngestAdmission,
@@ -45,6 +46,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   users: import('../services/types').UsersService,
  *   games: import('../services/types').GamesService,
  *   gdpr: import('../services/gdpr').GdprService,
+ *   backupStatus?: import('../services/backupStatus').BackupStatusService,
  *   dataRepairs?: import('../services/dataRepairs').DataRepairsService,
  *   pairings: import('../services/devicePairings').DevicePairingsService,
  *   imports?: import('../services/import').ImportService,
@@ -73,6 +75,20 @@ function buildMeRouter(deps) {
   const isAdmin = deps.isAdmin || (() => false);
   const isAdminEmail = deps.isAdminEmail || (() => false);
   const clerk = deps.clerk || null;
+
+  router.get("/site/data-retention", async (_req, res, next) => {
+    try {
+      res.set("Cache-Control", "public, max-age=60");
+      res.json(deps.backupStatus ? await publicDataRetention(deps.backupStatus) : { available: false, retention: [], checkedAt: null });
+    } catch (error) { next(error); }
+  });
+  router.get("/me/data-inventory", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      res.set("Cache-Control", "private, no-store");
+      res.json(await deps.gdpr.inventory(req.auth.userId));
+    } catch (error) { next(error); }
+  });
 
   // Auth applied per-route, NOT via router.use(). Router-level middleware
   // here would intercept every /v1/* request that doesn't match an
@@ -696,6 +712,9 @@ function buildMeRouter(deps) {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
+        if (auth.source !== "clerk") {
+          res.status(403).json({ error: { code: "browser_session_required" } }); return;
+        }
       const counts = await deps.gdpr.deleteAll(auth.userId);
       if (deps.logger) {
         deps.logger.info(
@@ -703,7 +722,7 @@ function buildMeRouter(deps) {
           "gdpr_account_deleted",
         );
       }
-      res.json({ deleted: true, counts });
+      res.json({ deleted: true, counts, identityDeletionPending: counts.identityDeletionPending === 1 });
     } catch (err) {
       next(err);
     }

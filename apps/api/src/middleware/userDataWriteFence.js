@@ -1,7 +1,9 @@
 "use strict";
 const { randomUUID } = require("crypto");
 const LEASE_MS = 15 * 60 * 1000;
-const DATA_PATH = /^\/(?:v1\/)?(?:games(?:\/|$)|build-intents(?:\/|$)|custom-builds(?:\/|$)|opponents(?:\/|$)|overlay-tokens(?:\/|$)|me\/(?:profile|preferences)(?:\/|$))/;
+// All authenticated user writes participate in erasure exclusion. These
+// operations own their own exclusive fence or act on a different target user.
+const UNFENCED_PATH = /^\/(?:v1\/)?(?:admin(?:\/|$)|webhooks(?:\/|$)|me(?:$|\/(?:backups|repair|games\/wipe)(?:\/|$)))/;
 
 /** @param {import('mongodb').Collection<any>} users @param {string} userId */
 async function claimUserDataLease(users, userId) {
@@ -36,7 +38,7 @@ function withUserDataWriteFence(auth, users) {
   const registered = new WeakSet();
   return (req, res, next) => auth(req, res, (error) => {
     if (error) { next(error); return; }
-    if (!req.auth || !["POST", "PUT", "PATCH", "DELETE"].includes(req.method) || !DATA_PATH.test(req.originalUrl.split("?", 1)[0]) || registered.has(req)) { next(); return; }
+    if (!req.auth || !["POST", "PUT", "PATCH", "DELETE"].includes(req.method) || UNFENCED_PATH.test(req.originalUrl.split("?", 1)[0]) || registered.has(req)) { next(); return; }
     void claimUserDataLease(users, req.auth.userId).then(async (lease) => {
       if (res.destroyed) { await lease.release(); return; }
       registered.add(req);
@@ -48,4 +50,4 @@ function withUserDataWriteFence(auth, users) {
     }).catch(next);
   });
 }
-module.exports = { withUserDataWriteFence, claimUserDataLease, DATA_PATH };
+module.exports = { withUserDataWriteFence, claimUserDataLease, UNFENCED_PATH };

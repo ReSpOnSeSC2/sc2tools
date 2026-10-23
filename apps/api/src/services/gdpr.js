@@ -3,6 +3,32 @@
 const { randomUUID } = require("crypto");
 const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
+const { purgeTokenData, scrubCommunityVotes } = require("./gdprOwnedData");
+const { dataInventory } = require("./dataInventory");
+
+// Every registered collection needs an explicit disposition. Shared/public
+// records use dedicated scrubbers; this map is audited by a coverage test and
+// deliberately has no catch-all for future collections.
+const GDPR_CLASSIFICATION = Object.freeze({
+  USERS: "user_scoped", PROFILES: "user_scoped", OPPONENTS: "user_scoped", OPPONENT_NOTES: "user_scoped",
+  GAMES: "user_scoped", GAME_DETAILS: "user_scoped", CUSTOM_BUILDS: "user_scoped", CUSTOM_BUILD_JOBS: "purge_only",
+  DEVICE_PAIRINGS: "ttl_ephemeral", DEVICE_TOKENS: "user_scoped", OVERLAY_TOKENS: "user_scoped",
+  MULTICHAT_STUDIO: "overlay_token_scoped", MULTICHAT_SOUNDS: "purge_only", MULTICHAT_ENGAGEMENT_EVENTS: "overlay_token_scoped",
+  MULTICHAT_VIEWERS: "overlay_token_scoped", MULTICHAT_PREDICTIONS: "overlay_token_scoped", MULTICHAT_CLIP_MOMENTS: "overlay_token_scoped",
+  PLATFORM_CONNECTIONS: "purge_only", PUBLIC_YOUTUBE_ARCHIVES: "global", PLATFORM_OAUTH_STATES: "ttl_ephemeral",
+  YOUTUBE_CREATE_OPERATIONS: "purge_only", PLATFORM_WEBHOOK_RECEIPTS: "ttl_ephemeral", PLATFORM_EVENTS: "purge_only",
+  IMPORT_JOBS: "user_scoped", MACRO_JOBS: "user_scoped", AGENT_RELEASES: "global", COMMUNITY_BUILDS: "purge_only",
+  COMMUNITY_REPORTS: "purge_only", USER_BACKUPS: "user_scoped", BACKUP_RESTORE_STAGING: "ttl_ephemeral",
+  PENDING_IDENTITY_DELETIONS: "ttl_ephemeral", ARCADE_LEADERBOARD: "purge_only", ADMIN_EVENTS: "purge_only",
+  SUPPORT_EMAIL_SYNC: "global", SITE_PRESENCE: "ttl_ephemeral", COACHING: "user_scoped",
+  PULSE_ACCOUNTS: "global", PULSE_CHARACTER_LINKS: "global", PLAYER_CHANNELS: "purge_only", PLAYER_IDENTITIES: "global",
+  PLAYER_IDENTITY_SUBMISSIONS: "purge_only", PLAYER_IDENTITY_DIRECTORY: "global", REVIEW_REQUESTS: "user_scoped",
+  REVIEW_COMMENTS: "user_scoped", REVIEW_KARMA_EVENTS: "purge_only", REVIEW_BLOCKS: "purge_only", NOTIFICATIONS: "purge_only",
+  BROWSER_INGEST_DAILY: "ttl_ephemeral", GUIDE_SAMPLES: "purge_only", GUIDE_STATS: "global", GUIDE_NOTES: "global",
+  GUIDE_VIDEOS: "global", BUILD_INTENT_LIVE: "ttl_ephemeral",
+  // The independently stacked What's New feature adds this global config.
+  ...(Object.hasOwn(COLLECTIONS, "SITE_CONFIG") ? { SITE_CONFIG: "global" } : {}),
+});
 
 const GDPR_MUTATION_LEASE_MS = 15 * 60 * 1000;
 const GDPR_MUTATION_RENEW_MS = 60 * 1000;
@@ -18,16 +44,12 @@ function wait(ms) {
  *
  *  1. Export every per-user document we hold as a single JSON archive.
  *  2. Delete every per-user document, hard, on user request.
- *  3. Manual snapshots — point-in-time backups the user can take before
- *     a migration. We store these as a JSON blob inside the existing
- *     `import_jobs`-style collection (small footprint, gives us a
- *     human-restorable record without an extra Atlas snapshot).
+ *  3. Private streamed snapshots, delegated to UserBackupsService.
  *
  * The export/delete code lives in one place so a future schema change
  * can't accidentally leak old fields or leave behind orphan rows. Every
  * collection that holds user data must be listed in
- * USER_SCOPED_COLLECTIONS — that single source of truth gates both
- * paths.
+ * GDPR_CLASSIFICATION; dedicated scrubbers handle shared and token-owned data.
  */
 
 const USER_SCOPED_COLLECTIONS = [
@@ -77,6 +99,7 @@ const PURGE_ONLY_COLLECTIONS = [
   // Build check-in live records (TTL): in-flight game state that a restore
   // must never replay. Bound answers already live on games.buildIntent.
   ["buildIntentLive", "userId"],
+  ["multichatSounds", "userId"],
 ];
 
 class GdprService {
@@ -91,6 +114,10 @@ class GdprService {
    *   customBuilds?: import('./types').CustomBuildsService,
    *   reviews?: import('./reviews').ReviewsService | null,
    *   guideSamples?: import('./guideSamples').GuideSamplesService|null,
+   *   identityDeletions?: import('./identityDeletions').IdentityDeletionsService|null,
+   *   overlayTokens?: import('./types').OverlayTokensService|null,
+   *   io?: import('socket.io').Server,
+   *   siteStats?: import('./siteStats').SiteStatsService,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
    *   chain a pulse-character-id backfill so the admin "Rebuild
@@ -102,6 +129,10 @@ class GdprService {
     this.db = db;
     /** @type {import("./userBackups").UserBackupsService|null} */
     this.backups = null;
+    this.identityDeletions = opts.identityDeletions || null;
+    this.overlayTokens = opts.overlayTokens || null;
+    this.io = opts.io || null;
+    this.siteStats = opts.siteStats || null;
     this.opponents = (opts && opts.opponents) || null;
     this.logger = (opts && opts.logger) || null;
     // GameDetailsService — the store-aware deleter for the heavy
@@ -146,6 +177,7 @@ class GdprService {
         { userId }, { projection: { _id: 0, reviewedBy: 0, evidenceMaxId: 0 } },
       ).toArray();
     }
+    if (this.db.multichatSounds) data.multichatSounds = await this.db.multichatSounds.find({ userId }, { projection: { _id: 0, data: 0 } }).toArray();
     // Coaching uses a shared Locker document and relationship-specific
     // assignment rows instead of a simple `{ userId }` collection. Export
     // only the caller's portion of that shared state.
@@ -232,6 +264,9 @@ class GdprService {
     };
   }
 
+  /** @param {string} userId */
+  async inventory(userId) { return dataInventory(this.db, userId); }
+
   /**
    * Coach's notes an admin wrote stay on the guides (published content);
    * only the editor's internal id is scrubbed from the audit field.
@@ -291,9 +326,10 @@ class GdprService {
    * record itself. Returns counts so the caller can audit-log them.
    *
    * @param {string} userId
+   * @param {{clerkUserId?:string, identityAlreadyDeleted?:boolean}} [opts]
    * @returns {Promise<Record<string, number>>}
    */
-  async deleteAll(userId) {
+  async deleteAll(userId, opts = {}) {
     /** @type {Record<string, number>} */
     const counts = {};
 
@@ -328,6 +364,8 @@ class GdprService {
     }
 
     addDeletionCounts(counts, await this._deleteCoachingData(userId, gdprFence));
+    addDeletionCounts(counts, await purgeTokenData(this.db, userId, gdprFence, { overlayTokens: this.overlayTokens, io: this.io }));
+    counts.communityVotesRemoved = await scrubCommunityVotes(this.db, userId);
 
     await gdprFence.assert();
     for (const [key] of USER_SCOPED_COLLECTIONS) {
@@ -377,21 +415,25 @@ class GdprService {
     const backupsRes = await backups.deleteMany({ userId });
     counts.userBackups = backupsRes.deletedCount || 0;
 
-    // Admin events keep their (now-orphaned, random) userId for
-    // aggregate counts, but the PII riding on signup/message payloads
-    // (email, clerk id) is scrubbed in place.
+    // Keep aggregate activity rows but remove account identifiers and private
+    // report contents, including the admin reply history.
     if (this.db.adminEvents) {
       /** @type {Record<string, string>[]} */
       const identityFilters = [{ "payload.userId": userId }];
       if (user && user.clerkUserId) {
         identityFilters.push({ "payload.clerkUserId": user.clerkUserId });
       }
+      // Do this before clearing the identity fields used to select the rows.
+      await this.db.adminEvents.updateMany({ type: "user_message", $or: identityFilters }, {
+        $set: { "payload.subject": "[deleted user]", "payload.message": "[deleted user]", "payload.context": null, report: { status: "closed", revision: 0, updates: [] } },
+      });
       const scrubRes = await this.db.adminEvents.updateMany(
         { $or: identityFilters },
         {
           $set: {
             "payload.email": null,
             "payload.clerkUserId": null,
+            "payload.userId": null,
             anonymizedAt: new Date(),
           },
         },
@@ -426,17 +468,39 @@ class GdprService {
     // coaching surface immediately before removing the account row.
     addDeletionCounts(counts, await this._deleteCoachingData(userId, gdprFence));
     await gdprFence.assert();
+    const clerkUserId = opts.clerkUserId || user?.clerkUserId;
+    if (this.siteStats && clerkUserId) counts.sitePresence = await this.siteStats.deleteForClerkUser(clerkUserId);
+    if (this.identityDeletions && clerkUserId) {
+      if (opts.identityAlreadyDeleted) await this.identityDeletions.acknowledge(clerkUserId);
+      else await this.identityDeletions.recordIntent(userId, clerkUserId);
+    }
     clearInterval(gdprFence.timer);
     const userRes = await this.db.users.deleteOne({
       userId,
       "_gdprMutation.id": gdprFence.id,
     });
+    if (!userRes.deletedCount && await this.db.users.findOne({ userId }, { projection: { _id: 1 } })) throw new Error("gdpr_operation_lease_lost");
     counts.users = userRes.deletedCount || 0;
+    this.io?.in(`user:${userId}`).disconnectSockets(true);
+    if (this.identityDeletions && clerkUserId && !opts.identityAlreadyDeleted) {
+      await this.identityDeletions.activate(clerkUserId);
+      counts.identityDeletionPending = await this.identityDeletions.tryDelete(clerkUserId) ? 0 : 1;
+    }
     return counts;
     } catch (err) {
       await this._releaseMutationFence(userId, gdprFence);
       throw err;
     }
+  }
+  /** The provider webhook and API share the same cleanup. A completed identity
+   * retains only its keyed guard, so a duplicate delivery cannot recreate it.
+   * @param {string} clerkUserId */
+  async deleteForClerkUser(clerkUserId) {
+    const user = await this.db.users.findOne({ clerkUserId }, { projection: { userId: 1 } });
+    const pending = this.identityDeletions ? await this.identityDeletions.lookup(clerkUserId) : null;
+    const userId = user?.userId || pending?.userId;
+    if (!userId) { if (this.identityDeletions) await this.identityDeletions.acknowledge(clerkUserId); return { users: 0 }; }
+    return this.deleteAll(userId, { clerkUserId, identityAlreadyDeleted: true });
   }
 
   /**
@@ -1141,6 +1205,14 @@ class GdprService {
         { userId },
         { projection: { _id: 0, _gdprMutation: 1, _coachingMutations: 1, _dataMutations: 1 } },
       );
+      if (!blocked && kind === "delete_all") {
+        // Idempotent webhook/API repeat: the original user row is already
+        // gone. No new account is created just to clean up orphaned records.
+        const timer = setTimeout(() => {}, 0); timer.unref?.();
+        return { id: "", timer, assert: async () => {
+          if (await this.db.users.findOne({ userId }, { projection: { _id: 1 } })) throw new Error("gdpr_erasure_identity_changed");
+        } };
+      }
       const activeCoaching = Array.isArray(blocked?._coachingMutations)
         && blocked._coachingMutations.some((mutation) =>
           mutation?.leaseUntil instanceof Date && mutation.leaseUntil > now,
@@ -1193,6 +1265,7 @@ class GdprService {
   /** @param {string} userId @param {{id: string, timer: NodeJS.Timeout, assert: () => Promise<void>}} fence */
   async _releaseMutationFence(userId, fence) {
     clearInterval(fence.timer);
+    if (!fence.id) return;
     await this.db.users.updateOne(
       { userId, "_gdprMutation.id": fence.id },
       { $unset: { _gdprMutation: "" } },
@@ -1362,4 +1435,5 @@ module.exports = {
   GdprService,
   USER_SCOPED_COLLECTIONS,
   PURGE_ONLY_COLLECTIONS,
+  GDPR_CLASSIFICATION,
 };
