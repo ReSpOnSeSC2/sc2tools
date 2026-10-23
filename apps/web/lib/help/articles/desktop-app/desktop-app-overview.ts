@@ -68,7 +68,7 @@ const article: HelpArticle = {
       ],
     },
     { type: "heading", text: "Settings", anchor: "settings" },
-    { type: "paragraph", text: "For an interactive scouting desk, independent game panels, build selectors, a standalone randomizer and replay-based practice, open **Companion** in the sidebar. [Desktop Companion](/help/desktop-companion) walks through its tabs and master assistance switch. OBS is optional." },
+    { type: "paragraph", text: "The **Companion 0.21.0 preview** adds an interactive scouting desk, independent game panels, embedded build selectors, a standalone randomizer and replay-based practice. It is not included in the current stable download. [Desktop Companion preview](/help/desktop-companion) explains availability, its tabs and master assistance switch. OBS is optional." },
     {
       type: "table",
       head: ["Setting", "What it does"],

@@ -487,3 +487,64 @@ def test_reference_response_does_not_change_selected_encounter_or_claim_wrong_re
     assert page.game_select.currentData() == "other-game"
     assert page.notice.text() == "Viewing the other replay"
     assert page.ghost_reference_buttons["you"].text().startswith("☆")
+
+
+def test_four_information_layouts_change_visible_data_and_keep_full_details_available(companion):
+    page, state, app = companion
+    page._snapshot["liveGame"]["capturedAt"] = time.time()
+    page._snapshot_healthy = True
+    saved_preferences = deepcopy(page._preferences)
+    page.set_density("compact")
+    assert not page.compact_card.isHidden()
+    assert page.workspace_tabs.isHidden() and page.overview.isHidden()
+    assert all(widget.isHidden() for widget in page._normal_chrome)
+    assert [widget.text() for widget in page.compact_card.findChildren(QtWidgets.QLabel)] == ["Live opponent", "Terran", "4000 MMR"]
+    requests = []
+    page.windowSizeRequested.connect(requests.append)
+    page.compact_enlarge.click()
+    assert requests == ["standard"]
+    page.set_density("standard")
+    assert page.compact_card.isHidden() and page.workspace_tabs.isHidden()
+    assert not page.overview.isHidden()
+    assert [page.overview_tabs.tabText(index) for index in range(page.overview_tabs.count())] == ["Build orders", "Recent games", "Game plan"]
+    assert "Blink expand" in page.overview_builds.text()
+    assert "Bio timing" in page.overview_builds.text()
+    assert page.overview_timings.topLevelItemCount() == 3
+    assert page.overview_recent.topLevelItemCount() == 1
+    page.set_density("detailed")
+    assert not page.workspace_tabs.isHidden() and page.overview.isHidden()
+    assert page.notes_section.isHidden()
+    assert not page.tabs.isTabVisible(1)
+    assert page.ghost_page.filters_widget.isHidden()
+    page.notes_toggle.click()
+    assert not page.notes_section.isHidden()
+    assert page.notes.toPlainText() == "Old note"
+    page.set_density("full")
+    assert page.tabs.isTabVisible(1)
+    assert not page.notes_section.isHidden()
+    assert not page.ghost_page.filters_widget.isHidden()
+    assert not page.ghost_page.history_toggle.isHidden()
+    page.set_density("standard")
+    page.open_full_details()
+    assert page.current_density() == "full"
+    assert not page.return_overview_button.isHidden()
+    page.return_overview_button.click()
+    assert page.current_density() == "standard"
+    assert page._preferences == saved_preferences
+
+
+def test_compact_identity_uses_fresh_direct_opponent_fields_without_inference(companion):
+    page, state, app = companion
+    page._detail = {"name": "Browsed player", "race": "Zerg", "mmr": 4700}
+    page._snapshot_healthy = True
+    page._snapshot = {"liveGame": {"phase": "match_in_progress", "gameKey": "fresh", "capturedAt": time.time(),
+                                   "opponent": {"name": "Current player"},
+                                   "streamerHistory": {"oppRace": "Terran", "oppMmr": 5000}}}
+    page.set_density("compact")
+    assert [page.compact_name.text(), page.compact_race.text(), page.compact_mmr.text()] == ["Current player", "—", "—"]
+    page._snapshot["liveGame"]["capturedAt"] = time.time() - 100
+    page._render_information_layout()
+    assert [page.compact_name.text(), page.compact_race.text(), page.compact_mmr.text()] == ["—", "—", "—"]
+    page._snapshot = {"liveGame": {"phase": "menu"}}
+    page._render_information_layout()
+    assert [page.compact_name.text(), page.compact_race.text(), page.compact_mmr.text()] == ["Browsed player", "Zerg", "4700 MMR"]

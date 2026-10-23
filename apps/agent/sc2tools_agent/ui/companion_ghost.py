@@ -125,6 +125,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             super().__init__(parent)
             self._closed = False
             self._assistance_enabled = False
+            self._density = "full"
             self._assistance_reason = "Hidden by the master assistance switch"
             self._state = normalize_ghost_state(None)
             self._session = GhostSession()
@@ -225,7 +226,9 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.clear_filters_button = QtWidgets.QPushButton("Clear filters")
             self.clear_filters_button.clicked.connect(self._clear_filters)
             filters.addWidget(self.clear_filters_button, 2, 1)
-            library_layout.addLayout(filters)
+            self.filters_widget = QtWidgets.QWidget()
+            self.filters_widget.setLayout(filters)
+            library_layout.addWidget(self.filters_widget)
             self.library_count = label("Filters apply to loaded pages only. Load older replays to search further.")
             library_layout.addWidget(self.library_count)
             self.games = QtWidgets.QComboBox()
@@ -939,9 +942,28 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
 
         def set_assistance_enabled(self, enabled, reason=None):
             self._assistance_enabled = bool(enabled)
-            if isinstance(reason, str) and reason:
-                self._assistance_reason = reason[:180]
+            self._assistance_reason = reason[:180] if isinstance(reason, str) and reason else "Hidden by the master assistance switch"
             self._render()
+
+        def set_density(self, level):
+            self._density = level if level in ("compact", "standard", "detailed", "full") else "standard"
+            full = self._density == "full"
+            self.filters_widget.setVisible(full)
+            self.history_toggle.setVisible(full)
+            self.history_group.setVisible(full and self.history_toggle.isChecked())
+            self.examples_search.setVisible(full)
+            self.examples_matchup_filter.setVisible(full)
+
+        def overview_summary(self, limit=3):
+            view, status = self._session.view(self._state)
+            if not self._state["enabled"]:
+                return "Ghost is off"
+            if not self._assistance_enabled:
+                return self._assistance_reason
+            if not view:
+                return status
+            steps = view["target"]["steps"][view["index"]:view["index"] + max(1, min(3, limit))]
+            return view["target"]["name"] + "\n" + "\n".join(_clock(step["t"]) + " · " + _display(step["name"]) + " · " + step["timing"] for step in steps)
 
         def _render(self):
             if self._closed:

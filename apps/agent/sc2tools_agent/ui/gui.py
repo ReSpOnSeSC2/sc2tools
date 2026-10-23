@@ -667,6 +667,8 @@ class GuiUI:
         window_geometry: Optional[str] = None,
         window_page: Optional[str] = None,
         on_window_state: Optional[Callable[[str, str], None]] = None,
+        window_information_layout: str = "standard",
+        on_window_information_layout: Optional[Callable[[str], None]] = None,
         on_pairing_retry: Optional[Callable[[], None]] = None,
         on_pairing_refresh: Optional[Callable[[], None]] = None,
         on_link_again: Optional[Callable[[], None]] = None,
@@ -706,6 +708,9 @@ class GuiUI:
         self._window_geometry = window_geometry
         self._window_page = window_page
         self._on_window_state = on_window_state
+        from .window_sizes import normalize_information_layout
+        self._window_information_layout = normalize_information_layout(window_information_layout)
+        self._on_window_information_layout = on_window_information_layout
         self._version = version
         self._dashboard_url = dashboard_url
         self._pairing_url = pairing_url
@@ -1245,6 +1250,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._status_facts = StatusFacts(paired=ui._initial_paired, paused=ui._initial_paused,
                                              folders=list(ui._replay_folders), phase="connecting")
             self._paired = ui._initial_paired
+            self._window_information_layout = ui._window_information_layout
             self._user_id = ui._initial_user_id
             self._uploaded_count = 0 if ui._recent_games_enabled else self._query_synced_count(default=0)
             self._history_facts = None
@@ -1368,7 +1374,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             outer.setContentsMargins(0, 0, 0, 0)
             outer.setSpacing(0)
 
-            outer.addWidget(self._build_sidebar())
+            self._sidebar = self._build_sidebar()
+            outer.addWidget(self._sidebar)
 
             self._stack = QtWidgets.QStackedWidget()
             outer.addWidget(self._stack, stretch=1)
@@ -1390,6 +1397,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 checkin_controller_provider=ui._build_checkin_controller,
             )
             self._stack.addWidget(self._companion_page)
+            self._normal_stack_policy = self._stack.sizePolicy()
+            self._companion_page.windowSizeRequested.connect(self._set_window_size)
+            if hasattr(self._companion_page, "set_density"):
+                self._companion_page.set_density(ui._window_information_layout)
+                self._companion_page.densityChanged.connect(self._information_layout_changed)
 
         def _build_sidebar(self) -> QtWidgets.QWidget:
             frame = QtWidgets.QFrame()
@@ -3393,12 +3405,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._api_test_status.setText(message)
 
         def _go_to_page(self, key):
+            if key != "companion" and self._window_information_layout == "compact":
+                if not self._set_window_size("Standard"):
+                    return
             index = self._PAGE_KEYS.index(key) if key in self._PAGE_KEYS else 0
             self._stack.setCurrentIndex(index)
             button = self._nav_group.button(index)
             if button is not None:
                 button.setChecked(True)
             self._companion_page.set_active(key == "companion")
+            self._apply_window_chrome()
             self._schedule_window_state()
 
         def _preferred_paired_page(self):
@@ -3428,10 +3444,121 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def resizeEvent(self, event):
             super().resizeEvent(event)
+            self._update_window_size_label()
             self._schedule_window_state()
+
+        def changeEvent(self, event):
+            super().changeEvent(event)
+            if event.type() == QtCore.QEvent.WindowStateChange:
+                self._update_window_size_label()
+                self._schedule_window_state()
+
+        def _window_size_screen(self):
+            return self.screen() or QtWidgets.QApplication.primaryScreen()
+
+        def _window_frame_size(self):
+            frame = self.frameGeometry()
+            return max(0, frame.width() - self.width()), max(0, frame.height() - self.height())
+
+        def _information_layout_changed(self, level):
+            from .window_sizes import normalize_information_layout
+            self._window_information_layout = normalize_information_layout(level)
+            self._apply_window_chrome()
+            self._fit_current_window_to_screen()
+            self._update_window_size_label()
+
+        def _compact_window_active(self):
+            return self._window_information_layout == "compact" and self._stack.currentWidget() is self._companion_page
+
+        def _apply_window_chrome(self):
+            compact = self._compact_window_active()
+            self._sidebar.setVisible(not compact)
+            if compact:
+                self._stack.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Ignored)
+            else:
+                self._stack.setSizePolicy(self._normal_stack_policy)
+            minimum = (300, 160) if compact else (820, 540)
+            screen = self._window_size_screen()
+            if screen is not None:
+                available = screen.availableGeometry()
+                frame = self._window_frame_size()
+                self.setMinimumSize(min(minimum[0], max(1, available.width() - frame[0])), min(minimum[1], max(1, available.height() - frame[1])))
+            else:
+                self.setMinimumSize(*minimum)
+
+        def _fit_current_window_to_screen(self):
+            screen = self._window_size_screen()
+            if screen is None or self.isMaximized() or self.isMinimized():
+                return
+            available = screen.availableGeometry()
+            frame = self._window_frame_size()
+            width = min(self.width(), max(1, available.width() - frame[0]))
+            height = min(self.height(), max(1, available.height() - frame[1]))
+            self.resize(width, height)
+            position = self.frameGeometry().topLeft()
+            left = min(max(position.x(), available.x()), available.x() + max(0, available.width() - width - frame[0]))
+            top = min(max(position.y(), available.y()), available.y() + max(0, available.height() - height - frame[1]))
+            self.move(left, top)
+
+        def _update_window_size_label(self):
+            from .window_sizes import window_size_label
+            page = getattr(self, "_companion_page", None)
+            screen = self._window_size_screen()
+            if page is None or screen is None:
+                return
+            page.set_window_size_label(window_size_label(
+                (self.width(), self.height()), available=screen.availableGeometry().getRect(),
+                frame=self._window_frame_size(), layout=self._window_information_layout,
+                maximized=self.isMaximized(),
+            ))
+
+        def _set_window_size(self, name):
+            from .window_sizes import WINDOW_SIZE_PRESETS, fit_window_preset
+            preset = next((item for item in WINDOW_SIZE_PRESETS if item[0] == name or item[1] == name), None)
+            if preset is None:
+                return False
+            screen = self._window_size_screen()
+            if screen is None:
+                return False
+            level = preset[1]
+            try:
+                if ui._on_window_information_layout:
+                    ui._on_window_information_layout(level)
+            except Exception:
+                log.exception("gui_window_information_layout_save_failed")
+                self._companion_page.set_window_size_notice("Couldn't save this layout. Your current size and information layout are unchanged. Try again.")
+                self._update_window_size_label()
+                return False
+            ui._window_information_layout = level
+            self._window_information_layout = level
+            self._companion_page.set_window_size_notice("")
+            if hasattr(self._companion_page, "set_density"):
+                self._companion_page.set_density(level)
+            if level == "compact":
+                self._go_to_page("companion")
+            self._apply_window_chrome()
+            if preset[2] is None:
+                self.showMaximized()
+            else:
+                if self.isMaximized() or self.isMinimized() or self.isFullScreen():
+                    self.showNormal()
+                available = screen.availableGeometry()
+                frame = self._window_frame_size()
+                position = self.frameGeometry().topLeft()
+                left, top, width, height = fit_window_preset(
+                    preset[0], available.getRect(), position=(position.x(), position.y()), frame=frame,
+                )
+                self.resize(width, height)
+                self.move(left, top)
+            self._update_window_size_label()
+            QtCore.QTimer.singleShot(0, self._update_window_size_label)
+            self._schedule_window_state()
+            return True
 
         def _restore_window_state(self):
             from .build_checkin_window import clamp_card_position, screen_rects
+            key = "companion" if self._window_information_layout == "compact" else self._preferred_paired_page() if self._paired else "dashboard"
+            self._go_to_page(key)
             if ui._window_geometry:
                 self.restoreGeometry(QtCore.QByteArray.fromBase64(ui._window_geometry.encode("ascii")))
             screens = QtWidgets.QApplication.screens()
@@ -3442,14 +3569,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 target = QtWidgets.QApplication.primaryScreen().availableGeometry()
                 if point is not None:
                     target = next((screen.availableGeometry() for screen in screens if screen.availableGeometry().contains(QtCore.QPoint(*point))), target)
-                self.setMinimumSize(min(820, target.width()), min(540, target.height()))
+                minimum = (300, 160) if self._compact_window_active() else (820, 540)
+                frame_size = self._window_frame_size()
+                self.setMinimumSize(min(minimum[0], max(1, target.width() - frame_size[0])), min(minimum[1], max(1, target.height() - frame_size[1])))
                 if point is None:
                     self.resize(min(960, target.width()), min(640, target.height()))
                     point = (target.x() + (target.width() - self.width()) // 2, target.y() + (target.height() - self.height()) // 2)
                 else:
-                    self.resize(min(self.width(), target.width()), min(self.height(), target.height()))
+                    self.resize(min(self.width(), max(1, target.width() - frame_size[0])), min(self.height(), max(1, target.height() - frame_size[1])))
                 self.move(*point)
-            self._go_to_page(self._preferred_paired_page() if self._paired else "dashboard")
+            self._update_window_size_label()
 
         def _click_save_settings(self) -> None:
             if self._settings_save_pending:

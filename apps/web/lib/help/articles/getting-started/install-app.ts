@@ -2,9 +2,9 @@ import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
   slug: "install-app",
-  title: "Install SC2 Tools: desktop Companion or web app",
+  title: "Install SC2 Tools: desktop app or web app",
   summary:
-    "Install the Windows desktop app for replay sync and the interactive Companion, or add the website to your phone or computer as a web app.",
+    "Install the Windows desktop agent for replay sync, learn about the Companion preview, or add the website to your phone or computer as a web app.",
   category: "getting-started",
   audience: "all",
   order: 3,
@@ -30,8 +30,9 @@ const article: HelpArticle = {
   ],
   updated: "2026-10-23",
   body: [
+    { type: "callout", tone: "info", title: "Companion 0.21.0 is a preview", text: "The [current stable download](/download) does not include the Companion 0.21.0 preview. A signed public release is pending; unsigned verification builds are separate test artifacts. See [Companion preview availability](/help/desktop-companion) before following its native workspace instructions." },
     { type: "heading", text: "Windows desktop Companion", anchor: "desktop-companion" },
-    { type: "paragraph", text: "For replay syncing, an interactive scouting desk, build selectors, randomizer and Build Order Ghost, [download the Windows desktop app](/download) and [link your account](/help/install-and-pair). Open **Companion** in its sidebar. Native game panels work without OBS and have a master assistance switch plus individual controls. See [Desktop Companion](/help/desktop-companion)." },
+    { type: "paragraph", text: "For replay syncing, [download the current stable Windows agent](/download) and [link your account](/help/install-and-pair). The separate **Companion 0.21.0 preview** adds the interactive scouting desk, embedded build selectors, standalone randomizer and Build Order Ghost. Its native panels work without OBS and have a master assistance switch plus individual controls. See [Desktop Companion preview](/help/desktop-companion)." },
     { type: "paragraph", text: "The browser installation below adds the website as a separate app window. It gives you the dashboard on phones and computers; it does not install the Windows replay-sync service or native in-game panels." },
     { type: "heading", text: "Install from inside the app", anchor: "install-in-app" },
     { type: "paragraph", text: "On a phone, open **More → Install app**. On desktop, use **Install app** below the Settings sidebar tabs. A supported browser opens its install prompt, or shows the manual steps below. This row disappears after installation, inside the installed app, or when the browser cannot install it." },

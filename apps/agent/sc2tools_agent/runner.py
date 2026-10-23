@@ -829,6 +829,8 @@ def _run_with_gui(
         on_quit=request_stop,
         start_minimized=start_minimized,
         window_geometry=state.window_geometry,
+        window_information_layout=state.window_information_layout,
+        on_window_information_layout=lambda layout: _remember_information_layout(cfg.state_dir, state, layout),
         window_page=state.window_page,
         on_window_state=lambda geometry, page: _remember_window_state(
             cfg.state_dir, state, geometry, page,
@@ -1576,6 +1578,18 @@ def _remember_window_state(state_dir, state, geometry, page):
     state.window_geometry = geometry
     state.window_page = page
     save_state(state_dir, state)
+
+
+def _remember_information_layout(state_dir, state, layout):
+    if layout not in {"compact", "standard", "detailed", "full"}:
+        return
+    previous = state.window_information_layout
+    state.window_information_layout = layout
+    try:
+        save_state(state_dir, state)
+    except OSError:
+        state.window_information_layout = previous
+        raise
 
 
 def _handle_save_settings(

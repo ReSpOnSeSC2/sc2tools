@@ -22,7 +22,7 @@ export function CompanionShowcase() {
     <section id="desktop-companion" aria-labelledby="companion-showcase-title" className="scroll-mt-24 border-t border-line py-16 md:py-24">
       <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:items-end">
         <div className="min-w-0">
-          <p className="kicker">Windows desktop Companion</p>
+          <p className="kicker">Windows desktop Companion preview</p>
           <h2 id="companion-showcase-title" className="mt-4 max-w-2xl font-serif text-4xl font-semibold leading-tight text-text md:text-5xl">
             Your ladder desk, beside the game.
           </h2>
@@ -37,14 +37,30 @@ export function CompanionShowcase() {
           </div>
           <p className="mt-4 text-caption text-text-muted">Runs without OBS. Stream overlays remain an optional way to show selected features to viewers.</p>
           <p className="mt-3 text-caption text-text-muted">Save your own Ladder, Customs, Teams, Practice and Review presets. Customize each feature locally, with an optional Ctrl+Shift+F10 master shortcut. Team-game guidance is not supported.</p>
+          <p className="mt-4 rounded-sm border border-warning/40 bg-bg-surface p-3 text-caption text-text-muted">Companion 0.21.0 is a preview, not included in the current stable download. A signed public release is pending; unsigned verification builds are separate test artifacts.</p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Link href="/download" className="inline-flex min-h-11 items-center gap-2 rounded-sm bg-accent-cyan px-4 py-2 text-caption font-bold text-[#071b22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
-              <Download className="h-4 w-4" aria-hidden />Download the Windows app
+              <Download className="h-4 w-4" aria-hidden />Download current stable agent
             </Link>
             <Link href="/help/desktop-companion" className="inline-flex min-h-11 items-center gap-2 text-caption font-semibold text-text underline-offset-4 hover:underline">
               Explore Companion<ArrowRight className="h-4 w-4" aria-hidden />
             </Link>
           </div>
+        </div>
+      </div>
+      <div className="mt-9 grid min-w-0 gap-6 rounded-md border border-border bg-bg-surface p-4 sm:p-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-center">
+        <figure className="mx-auto w-full min-w-0 max-w-[360px] lg:mx-0">
+          <Image src="/landing/companion-compact.png" alt="Compact Companion showing only a sample opponent's name, race and MMR, plus a small expand button" width={360} height={190} sizes="(max-width: 400px) 100vw, 360px" className="h-auto w-full rounded-md" />
+          <figcaption className="mt-2 text-micro text-text-dim">Compact layout · actual interface with sample data.</figcaption>
+        </figure>
+        <div className="min-w-0">
+          <h3 className="font-serif text-2xl font-semibold text-text">Choose how much you see.</h3>
+          <ul className="mt-4 grid gap-3 text-caption text-text-muted sm:grid-cols-2">
+            <li><strong className="text-text">Compact</strong> — name, race and MMR only. A small expand button opens Standard.</li>
+            <li><strong className="text-text">Standard</strong> — build orders, recent games and a game plan in simple tabs.</li>
+            <li><strong className="text-text">Detailed</strong> — both players&apos; tech steps, upgrades and replay timings.</li>
+            <li><strong className="text-text">Full workspace</strong> — the complete library, notes, filters and replay tools.</li>
+          </ul>
         </div>
       </div>
       <figure className="mt-9 min-w-0">

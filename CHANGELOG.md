@@ -24,6 +24,9 @@ corresponding GitHub Release.
 - Saved play-mode presets, an optional global hide/show shortcut, replay-picker
   filters, safe reference history/Undo, and post-game timing comparisons make
   the Companion easier to use during both ladder and practice sessions.
+- Compact, Standard, Detailed, and Full workspace change information density,
+  not just dimensions. Compact shows opponent name, race and MMR with a small
+  expand button; larger layouts progressively reveal build and replay detail.
 - Windows CI checks Retry-After scheduling with a deterministic clock to avoid
   intermittent floating-point assertion failures.
 

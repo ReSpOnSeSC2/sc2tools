@@ -143,6 +143,10 @@ actual team-game scouting and Ghost guidance remain unsupported. The optional
 Ghost accepts local replay files, account replays, and explicitly published
 admin examples. Star per-build references, filter the replay library, restore
 earlier reference versions, and compare completed replay timings against them.
+Choose **Compact**, **Standard**, **Detailed**, or **Full workspace** from
+**Window size**. Compact shows only opponent name, race, and MMR with a small
+expand button. Standard adds tabbed build information; larger layouts reveal
+more timing and replay detail. Manual size and information layout are retained.
 
 ## Main window - what is where
 

@@ -2,7 +2,7 @@ import type { HelpArticle } from "@/lib/help/types";
 
 const article: HelpArticle = {
   slug: "desktop-companion",
-  title: "Desktop Companion: scouting, build choices and practice",
+  title: "Desktop Companion preview: scouting, build choices and practice",
   summary: "Use one interactive Windows app to browse opponents and replay timings, choose your build, roll your randomizer, and follow a Ghost build. Pin only the game panels you want.",
   category: "desktop-app",
   audience: "player",
@@ -11,14 +11,17 @@ const article: HelpArticle = {
   keywords: ["companion", "standalone", "desktop", "scouting", "always on top", "pin", "build selectors", "randomizer", "ghost", "local replay", "reference replay", "star", "admin examples", "on off", "saved modes", "hotkey", "ladder", "customs", "teams", "practice", "review"],
   updated: "2026-10-23",
   body: [
+    { type: "callout", tone: "info", title: "Companion 0.21.0 preview", text: "These instructions and screenshots cover the Companion 0.21.0 preview. It is not included in the [current stable download](/download). A signed public release is pending; unsigned verification builds are separate test artifacts, not a signed public release." },
     { type: "paragraph", text: "Open **Companion** in the Windows desktop app. Its tabs keep scouting, build selectors, the randomizer and Build Order Ghost together. You can click through your history and configure assistance without adding an OBS Browser Source." },
     { type: "heading", text: "Connect your account", anchor: "connect" },
     { type: "steps", items: [
-      "[Download the Windows app](/download), install it, and link it to your SC2 Tools account. See [Install and pair](/help/install-and-pair) if this is your first setup.",
+      "Use the Companion 0.21.0 preview build for the features in this article; the [current stable agent](/download) does not include this preview. Link your installed app to your SC2 Tools account; see [Install and pair](/help/install-and-pair) if this is your first setup.",
       "Leave the agent running so new replays sync and the app receives the current game clock and matchup.",
       "Open **Companion** from the desktop sidebar. Your opponent library comes from your account's imported games.",
     ] },
     { type: "heading", text: "Control what appears during a game", anchor: "switches" },
+    { type: "paragraph", text: "Use **Window size** to choose an information layout, not just a different window size. **Compact** shows only the opponent's name, race and MMR; its small expand button opens Standard with one click. **Standard** adds build-order information and simple tabs. **Detailed** shows both players' tech and upgrade timings with more replay detail. **Full workspace** includes the complete library, notes, filters and replay tools. Smaller layouts can still open deeper details without changing your saved targets or assistance switches." },
+    { type: "paragraph", text: "Named layouts fit the current monitor's available space. Manual resizing remains available, and the app remembers both its window geometry and selected information layout." },
     { type: "list", items: [
       "**Game assistance enabled** is the master switch. Turning it off hides the game panels and stops automatic assistance while keeping your saved choices.",
       "**Pin opponent** and **Pin scouting** are independent. Enable either panel to keep it above the game while the full Companion stays available for browsing.",
@@ -34,6 +37,7 @@ const article: HelpArticle = {
       "Teams initially hides assistance. Actual team-game guidance is unsupported: even customized Teams gates remain inactive unless the current source identifies a human 1v1 game. Selecting Teams does not enable team-game scouting or Ghost support.",
       "Opt in to **Global hide/show shortcut** to toggle the master switch with **Ctrl+Shift+F10**, including while another app has focus. The Windows shortcut must be available; its registration status appears under Customize mode. A shortcut conflict does not change your saved feature choices.",
     ] },
+    { type: "image", src: "/landing/companion-compact.png", alt: "Compact Companion with a sample opponent's name, race, MMR and expand button", caption: "Compact layout with sample data. The small expand button opens Standard." },
     { type: "image", src: "/landing/companion-workspace.png", alt: "Desktop Companion scouting workspace with a selected opponent and both replay timelines", caption: "Actual desktop interface with sample data. Your library and timings come from your own replay history." },
     { type: "heading", text: "Browse scouting and replay tech steps", anchor: "scouting" },
     { type: "steps", items: [

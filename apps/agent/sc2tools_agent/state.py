@@ -93,6 +93,7 @@ class AgentState:
     # ---- GUI preferences (introduced with the PySide6 main window) ----
 
     window_geometry: Optional[str] = None
+    window_information_layout: str = "standard"
     window_page: Optional[str] = None
 
     api_base_override: Optional[str] = None
@@ -422,6 +423,7 @@ def load_state(state_dir: Path) -> AgentState:
             raw.get("replay_folders_excluded"),
         ),
         window_geometry=_coerce_geometry(raw.get("window_geometry")),
+        window_information_layout=_coerce_information_layout(raw.get("window_information_layout")),
         window_page=_coerce_window_page(raw.get("window_page")),
         api_base_override=_coerce_str(raw.get("api_base_override")),
         log_level_override=_coerce_str(raw.get("log_level_override")),
@@ -544,6 +546,7 @@ def _snapshot(state: AgentState) -> dict:
     stable = replace(
         state,
         window_geometry=_coerce_geometry(state.window_geometry),
+        window_information_layout=_coerce_information_layout(state.window_information_layout),
         window_page=_coerce_window_page(state.window_page),
         uploaded=dict(state.uploaded),
         path_by_game_id=dict(state.path_by_game_id),
@@ -603,6 +606,10 @@ def _coerce_mmr(value: object) -> Optional[int]:
     if 500 <= n <= 9999:
         return n
     return None
+
+
+def _coerce_information_layout(value: object) -> str:
+    return value if isinstance(value, str) and value in {"compact", "standard", "detailed", "full"} else "standard"
 
 
 def _coerce_int(value: object) -> Optional[int]:

@@ -27,6 +27,10 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 - Saved Ladder, Customs, Teams, Practice, and Review presets remember local
   panel choices without rewriting shared account settings. Unsupported team
   guidance remains clearly unavailable rather than guessing a 1v1 matchup.
+- Four information layouts fit the current monitor: Compact shows only
+  opponent name, race and MMR with a small expand button; Standard adds tabbed
+  build information; Detailed adds tech timing detail; Full workspace exposes
+  all replay tools. Manual resizing and the chosen layout remain saved.
 - An optional Ctrl+Shift+F10 global shortcut hides or restores assistance
   without stealing keyboard focus. Shortcut conflicts are reported visibly.
 - Replay source filters, clear panel status, bounded reference history with

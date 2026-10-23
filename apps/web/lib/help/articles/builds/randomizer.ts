@@ -27,6 +27,7 @@ const article: HelpArticle = {
   ],
   updated: "2026-10-23",
   body: [
+    { type: "callout", tone: "info", title: "Native Companion preview", text: "The native workspace steps below require the Companion 0.21.0 preview, which is not included in the current stable download. Website settings and optional OBS setup remain separate. See [Companion preview availability](/help/desktop-companion)." },
     {
       type: "paragraph",
       text: "The build randomizer picks from your selected pool for the current matchup. Open **Companion → Randomizer** in the Windows app to use it without OBS. Its enable switch and pool use the same account settings as the website, and each real game keeps one saved pick.",

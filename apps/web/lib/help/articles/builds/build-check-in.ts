@@ -48,6 +48,7 @@ const article: HelpArticle = {
       ],
     },
     { type: "heading", text: "Use selectors inside Companion", anchor: "companion" },
+    { type: "paragraph", text: "Embedded selectors require the **Companion 0.21.0 preview**, not the current stable download. Existing 0.19.0 loading and after-game cards still work as described in this guide. See [Companion preview availability](/help/desktop-companion)." },
     { type: "paragraph", text: "Open **Companion → Build selectors** in the Windows app to handle your build choices in the same workspace as scouting and Ghost. Keep **Game assistance enabled** on for game assistance, then use the individual selector controls to decide when to ask. You can turn these on or off whenever you want. The native selector works without an OBS source; [Desktop Companion](/help/desktop-companion) explains the shared workspace." },
     { type: "heading", text: "Preview and move the cards", anchor: "preview-and-move" },
     {
