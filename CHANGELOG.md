@@ -11,6 +11,8 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+- Review comments save browser drafts, guard discarded text and support Ctrl/Cmd+Enter; edit mode validates text and explains its 15-minute window. Request time ranges have phone-safe inputs, presets and clock suggestions. Share, report, block, delete and close actions use accessible menus and explicit confirmations.
+
 ### Analyzer filters and Trends
 
 - Filters have a readable summary, a full phone editor and focused desktop controls. Today explains its scope and remembers whether its editor is open; Arcade keeps its own scope.

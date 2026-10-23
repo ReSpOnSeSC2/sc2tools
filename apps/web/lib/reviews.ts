@@ -313,6 +313,29 @@ export function parseClock(raw: string): number | null {
   return Number.isFinite(seconds) ? seconds : null;
 }
 
+/** Offer a clock interpretation without changing parseClock's seconds semantics. */
+export function digitsToClock(raw: string): string | null {
+  const value = raw.trim();
+  if (!/^\d+$/.test(value) || value.length > 8) return null;
+  const seconds = Number(value.slice(-2));
+  if (seconds > 59) return null;
+  return `${Number(value.slice(0, -2) || "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+/** Coarse age; callers supply a stable server time or start ticking after mount. */
+export function age(iso: string | null, now: number): string {
+  if (!iso) return "";
+  const ms = now - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return "just now";
+  const min = Math.floor(ms / 60_000);
+  if (min < 1) return "just now";
+  if (min < 60) return `${min}m ago`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days < 30 ? `${days}d ago` : `${Math.floor(days / 30)}mo ago`;
+}
+
 /** "[PvZ] Why did my blink all-in fail?" */
 export function reviewHeadline(question: string, matchup: string | null): string {
   const q = question.replace(/\s+/g, " ").trim();

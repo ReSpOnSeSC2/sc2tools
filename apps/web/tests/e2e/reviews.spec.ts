@@ -77,6 +77,29 @@ test("review page shows the replay and readable comments signed out", async ({ p
   await expectNoHorizontalScroll(page, REVIEW);
 });
 
+test("review share menu works with a keyboard and keeps a clipboard fallback inside the viewport", async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("Synthetic clipboard denial"); } } });
+  });
+  const response = await page.goto(REVIEW); expect(response?.status()).toBe(200);
+  const share = page.getByRole("button", { name: "Share this review" }); await expect(share).toBeEnabled();
+  await share.press("ArrowDown");
+  const menu = page.getByRole("menu", { name: "Share this review" });
+  const reddit = menu.getByRole("menuitem", { name: "Post to Reddit" }); await expect(reddit).toBeFocused();
+  await expect(reddit).toHaveAttribute("href", /^https:\/\/www\.reddit\.com\/submit\?/);
+  await expect(reddit).toHaveAttribute("target", "_blank"); await expect(reddit).toHaveAttribute("rel", "noopener noreferrer");
+  await expect.poll(async () => { const box = await menu.boundingBox(); return !!box && box.x >= 0 && box.x + box.width <= (page.viewportSize()?.width ?? 0); }).toBe(true);
+  for (const item of await menu.getByRole("menuitem").all()) expect((await item.boundingBox())?.height).toBeGreaterThanOrEqual(40);
+  await menu.getByRole("menuitem", { name: "Copy link" }).click();
+  const fallback = menu.getByRole("textbox", { name: "Copy this text" }); await expect(fallback).toBeFocused();
+  await expect(fallback).toHaveAttribute("readonly", ""); await expect(fallback).toHaveValue(new RegExp(`${REVIEW}$`));
+  await expect.poll(() => fallback.evaluate((element) => { const input = element as HTMLInputElement; return input.selectionStart === 0 && input.selectionEnd === input.value.length; })).toBe(true);
+  if (testInfo.project.name === "mobile-360") await page.screenshot({ path: testInfo.outputPath("review-share-menu-360.png") });
+  await fallback.press("Escape"); await expect(menu).toHaveCount(0); await expect(share).toBeFocused();
+  await expectNoHorizontalScroll(page, REVIEW);
+});
+
 test("my reviews asks signed-out visitors to sign in", async ({ page }) => {
   const response = await page.goto("/reviews/mine");
   expect(response?.status()).toBeLessThan(400);
