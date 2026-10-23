@@ -14,9 +14,9 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { GlowHalo } from "@/components/ui/GlowHalo";
 import { longLabelFor } from "@/lib/datePresets";
 import {
+  applyFilterPatch,
   describeActiveFilters,
   useFilters,
-  type AnalyzerFilters,
 } from "@/lib/filterContext";
 
 /**
@@ -165,8 +165,9 @@ export interface NoFilterMatchesProps {
 
 /**
  * "Nothing matches" for a filtered analyzer view. Says what is applied
- * (the date range plus every filter describeActiveFilters reports) and
- * offers only the ways out that would change the answer:
+ * (the date range plus every other facet describeActiveFilters reports,
+ * the same list as the chip row under the filter bar) and offers only
+ * the ways out that would change the answer:
  *   - "Lower Min games to 1" when the Min games picker hid rows,
  *   - "Reset filters" when any filter beyond the defaults is on (keeps
  *     the date range),
@@ -181,15 +182,15 @@ export function NoFilterMatches({
   size = "md",
 }: NoFilterMatchesProps) {
   const { filters, setFilters, seasons } = useFilters();
-  const active = describeActiveFilters(filters);
+  // The date range is always listed, with its own "Widen" action, so it
+  // is left out of the facets "Reset filters" clears.
+  const active = describeActiveFilters(filters, { seasons }).filter((filter) => filter.key !== "preset");
   const preset = filters.preset ?? "all";
   const canLowerMinGames =
     Boolean(onLowerMinGames) && (minGames ?? 1) > 1 && hiddenByMinGames > 0;
 
   const resetFilters = () => {
-    const cleared: AnalyzerFilters = { ...filters };
-    for (const filter of active) Object.assign(cleared, filter.clearPatch);
-    setFilters(cleared);
+    setFilters(active.reduce((next, filter) => applyFilterPatch(next, filter.clearPatch), filters));
   };
 
   const actions = (

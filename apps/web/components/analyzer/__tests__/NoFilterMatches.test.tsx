@@ -27,8 +27,15 @@ describe("NoFilterMatches", () => {
     renderWith({ ...DEFAULTS, race: "Z", map: "Alcyone LE" });
     const applied = screen.getByTestId("no-filter-matches-applied");
     expect(within(applied).getByText("Dates:")).toBeTruthy();
-    expect(applied.textContent).toContain("My race:Zerg");
+    expect(applied.textContent).toContain("Your race:Zerg");
     expect(applied.textContent).toContain("Map:Alcyone LE");
+  });
+
+  it("uses the chip row's list, listing the date range once", () => {
+    renderWith({ ...DEFAULTS, preset: "all", exclude_too_short: false });
+    const applied = screen.getByTestId("no-filter-matches-applied");
+    expect(within(applied).getAllByText(/Dates:|Date range:/)).toHaveLength(1);
+    expect(applied.textContent).toContain("Too-short games:Shown");
   });
 
   it("offers Reset filters only when a filter beyond the defaults is on, and keeps the dates", () => {
@@ -36,11 +43,10 @@ describe("NoFilterMatches", () => {
     expect(screen.queryByRole("button", { name: "Reset filters" })).toBeNull();
     cleanup();
 
-    const setFilters = renderWith({ ...DEFAULTS, race: "P", regions: "EU", map_pool: "all" });
+    const setFilters = renderWith({ ...DEFAULTS, preset: "all", race: "P", regions: "EU", map_pool: "all" });
     fireEvent.click(screen.getByRole("button", { name: "Reset filters" }));
-    expect(setFilters).toHaveBeenCalledWith(
-      expect.objectContaining({ race: undefined, regions: undefined, map_pool: "ladder", preset: "after_5_0_17" }),
-    );
+    // Every facet is back on its default; the date range is untouched.
+    expect(setFilters).toHaveBeenCalledWith({ ...DEFAULTS, preset: "all" });
   });
 
   it("offers Widen to All time only when the date range is narrower", () => {
