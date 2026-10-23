@@ -50,12 +50,12 @@ function adminAuditMiddleware(service, isAdmin) {
       if (recorded || !isAdmin(req)) return;
       recorded = true;
       const target = res.locals.auditTarget || null;
-      const action = res.locals.auditAction || `${req.method} ${String(req.route?.path || path)}`;
+      const action = res.locals.auditAction || `${req.method} ${String(req.route?.path || "unmatched-admin-mutation")}`;
       void service.audit(req, action, target, { status: res.statusCode, ok: res.statusCode < 400, ...res.locals.auditResult });
     };
     const json = res.json;
     res.json = function(body) {
-      res.locals.auditAction ||= `${req.method} ${String(req.route?.path || path)}`;
+      res.locals.auditAction ||= `${req.method} ${String(req.route?.path || "unmatched-admin-mutation")}`;
       res.locals.auditTarget ||= ["userId","buildId","reportId","requestId","channelId","pulseId","job"].map((key)=>req.params[key]).find((value)=>typeof value==="string") || null;
       res.locals.auditResult = { ...safeResult(body && typeof body === "object" ? body : {}), ...res.locals.auditResult,
         ...(body?.error?.code ? {code:body.error.code} : {}) };

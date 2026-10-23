@@ -167,6 +167,15 @@ test("service-credential release publishing is audited without retaining its tok
   expect(response.status).toBe(201);const row=await db.adminAudit.findOne({action:"agent.release.publish"});expect(row).toMatchObject({actorUserId:null,actorKind:"service",target:"stable:9.9.9",result:{status:201,ok:true}});expect(JSON.stringify(row)).not.toMatch(/release-admin|example.test/);
 });
 
+test("unmatched authenticated admin mutations never retain private path fragments",async()=>{
+  const secretUser="private-unmatched-user",secretToken="private-unmatched-token";
+  const response=await admin(request(app).post(`/v1/admin/users/${secretUser}/unknown/${secretToken}`));
+  expect(response.status).toBe(404);
+  const row=await waitAudit("POST unmatched-admin-mutation",null);
+  expect(row).toMatchObject({actorUserId:adminId,result:{status:404,ok:false}});
+  expect(JSON.stringify(await db.adminAudit.find({}).toArray())).not.toMatch(/private-unmatched-user|private-unmatched-token/);
+});
+
 test("a completed wipe is audited even if its HTTP client disconnects before receiving success",async()=>{
   const userId="disconnected-wipe";await db.users.insertOne({userId,clerkUserId:"disconnected-clerk",createdAt:new Date()});await db.games.insertOne({userId,gameId:"disconnected-game",date:new Date()});
   let entered,release;const began=new Promise(resolve=>{entered=resolve;}),hold=new Promise(resolve=>{release=resolve;});
