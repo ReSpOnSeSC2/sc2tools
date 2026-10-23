@@ -53,6 +53,8 @@ corresponding GitHub Release.
 - Win rates include verdict symbols, charts use one keyboard Tab stop with pinnable details, and a shared legend plus Help article explains ranges, publishing floors and trends.
 - The guide hub previews busy map cards and links to all openers and counters. Map guides show a race matrix with honest mirror cells, enlarged artwork and neighboring maps.
 
+- Filter replay review requests by asker race, remove active filters and return to the newest page without losing your selection. Signed-in players can pick a synced 1v1 game directly from the board or My reviews, and the personalised help panel has compact cards and a remembered phone disclosure.
+
 ### Analyzer filters and Trends
 
 - Filters have a readable summary, a full phone editor and focused desktop controls. Today explains its scope and remembers whether its editor is open; Arcade keeps its own scope.

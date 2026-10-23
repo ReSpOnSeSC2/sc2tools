@@ -10,6 +10,7 @@ import { apiCall, useApi } from "@/lib/clientApi";
 import type { MyReviewsResponse, ReviewBlocksResponse } from "@/lib/reviews";
 import { ReviewCard } from "./ReviewCard";
 import { RequestError } from "@/components/ui/RequestError";
+import { AskAboutGameButton } from "./AskGamePicker";
 
 /**
  * /reviews/mine — the signed-in player's own corner of the exchange: the
@@ -73,8 +74,8 @@ function MyReviewsSignedIn() {
           ) : asked.length === 0 ? (
             <EmptyStatePanel
               title="You haven't asked for a review yet"
-              description="Open one of your 1v1 games from Replays and use “Ask for a review”."
-              action={<Link href="/app/replays" className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">Go to your replays</Link>}
+              description="Pick one of your synced 1v1 games and ask about the moment you want help with."
+              action={<div className="flex flex-wrap justify-center gap-3"><AskAboutGameButton /><Link href="/app/replays" className="inline-flex min-h-11 items-center font-semibold text-link underline">Browse your replays</Link></div>}
             />
           ) : (
             <ul className="space-y-3" aria-label="Your review requests">

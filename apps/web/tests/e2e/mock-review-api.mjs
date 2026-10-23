@@ -153,6 +153,16 @@ const server = http.createServer((req, res) => {
     res.writeHead(204, cors).end();
     return;
   }
+  if (req.method === "GET" && path === "/v1/reviews") {
+    const query = new URL(req.url || "/", "http://fixture.local").searchParams;
+    const matchup = /^[PTZ]v[PTZ]$/.test(query.get("matchup") || "") ? query.get("matchup") : null;
+    const race = /^[PTZ]$/.test(query.get("race") || "") ? query.get("race") : null;
+    const matches = matchup ? CARD.matchup === matchup : !race || CARD.matchup.startsWith(race);
+    const items = matches && !query.has("cursor") ? [CARD] : [];
+    res.writeHead(200, { ...cors, "content-type": "application/json", "cache-control": "no-store" });
+    res.end(JSON.stringify({ items, nextCursor: null }));
+    return;
+  }
   if (req.method === "GET" && ROUTES.has(path)) {
     res.writeHead(200, { ...cors, "content-type": "application/json", "cache-control": "no-store" });
     res.end(JSON.stringify(ROUTES.get(path)));

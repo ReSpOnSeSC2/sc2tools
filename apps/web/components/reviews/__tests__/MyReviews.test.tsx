@@ -29,7 +29,7 @@ const card = (id: string, extra: Record<string, unknown> = {}) => ({
   createdAt: "2026-09-27T10:00:00.000Z", lastActivityAt: null, ...extra,
 });
 
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 beforeEach(() => {
   harness.auth = { isLoaded: true, isSignedIn: true, getToken: async () => "token" };
   harness.apiCall.mockReset();
@@ -77,6 +77,16 @@ describe("My reviews", () => {
     delete harness.data["/v1/me/reviews"];
     render(<MyReviews />);
     expect(screen.getByLabelText("Loading reviews you've written").getAttribute("aria-busy")).toBe("true");
+  });
+
+  it("offers the in-place game picker and a secondary replay library link before the first request", () => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    harness.data["/v1/me/reviews"] = { asked: [], answered: [] };
+    render(<MyReviews />);
+    expect(screen.getByRole("button", { name: "Ask about one of your games" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Browse your replays" }).getAttribute("href")).toBe("/app/replays");
+    fireEvent.click(screen.getByRole("button", { name: "Ask about one of your games" }));
+    expect(screen.getByRole("dialog", { name: "Pick a game to ask about" })).toBeTruthy();
   });
 
   it("lists your requests (with link-only and hidden flags) and the reviews you wrote", () => {

@@ -18,11 +18,12 @@ vi.mock("next/navigation", () => ({
   },
 }));
 vi.mock("@/lib/serverApi", () => ({ getJsonWithStatus: harness.getJsonWithStatus }));
-vi.mock("@/components/reviews/ReviewBoardFilters", () => ({ ReviewBoardFilters: () => null }));
-vi.mock("@/components/reviews/ReviewBoardSidebar", () => ({ HelpWithList: () => null, ReviewLeaderboard: () => null }));
-vi.mock("@/components/reviews/ReviewBoardLoader", () => ({ ReviewBoardLoader: () => null }));
+vi.mock("@/components/reviews/ReviewBoardFilters", () => ({ ReviewBoardFilters: () => <div data-testid="filters" /> }));
+vi.mock("@/components/reviews/ReviewBoardSidebar", () => ({ HelpWithPanel: ({ placement }: { placement: string }) => <div data-testid={`help-${placement}`} />, ReviewLeaderboard: () => null }));
+vi.mock("@/components/reviews/AskGamePicker", () => ({ AskAboutGameButton: () => <button>Ask about one of your games</button> }));
+vi.mock("@/components/reviews/ReviewBoardLoader", () => ({ ReviewBoardLoader: ({ query, cursor }: { query: string; cursor: string }) => <div data-testid="admin-board" data-query={query} data-cursor={cursor} /> }));
 
-import ReviewsBoardPage from "@/app/reviews/(board)/page";
+import ReviewsBoardPage, { generateMetadata } from "@/app/reviews/(board)/page";
 
 async function renderBoard() {
   vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
@@ -76,11 +77,41 @@ describe("/reviews for a signed-in player", () => {
   it("explains where asking starts, without a hover-only hint", async () => {
     harness.signedIn = true;
     await renderBoard();
-    const ask = screen.getByRole("link", { name: "Ask about one of your games" });
-    expect(ask.getAttribute("href")).toBe("/app/replays");
+    const ask = within(screen.getByRole("heading", { name: "Replay reviews" }).closest("header")!).getByRole("button", { name: "Ask about one of your games" });
     expect(ask.hasAttribute("title")).toBe(false);
     const howTo = await screen.findByRole("link", { name: "How to ask" });
     expect(howTo.getAttribute("href")).toBe("/help/replay-reviews#asking-for-a-review");
     expect((await screen.findByRole("link", { name: "How it works" })).getAttribute("href")).toBe("/help/replay-reviews");
+  });
+
+  it("uses race in shareable metadata while an exact matchup wins over a conflicting race", async () => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    const race = await generateMetadata({ searchParams: Promise.resolve({ race: "P", cursor: "old", sort: "new" }) });
+    expect(race.title).toBe("Protoss Replay reviews — ask about any moment of your game");
+    expect(race.alternates?.canonical).toBe("/reviews?race=P");
+    const matchup = await generateMetadata({ searchParams: Promise.resolve({ race: "T", matchup: "PvZ" }) });
+    expect(matchup.title).toBe("PvZ Replay reviews — ask about any moment of your game");
+    expect(matchup.alternates?.canonical).toBe("/reviews?matchup=PvZ");
+  });
+
+  it("renders filters, chips and both help placements in admin preview without public API reads", async () => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "admins"); harness.signedIn = true;
+    render(await ReviewsBoardPage({ searchParams: Promise.resolve({ race: "Z", unanswered: "1", cursor: "old" }) }));
+    expect(harness.getJsonWithStatus).not.toHaveBeenCalled();
+    expect(screen.getByTestId("filters")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Remove filter Race: Zerg" })).toBeTruthy();
+    const board = screen.getByTestId("admin-board");
+    expect(board.dataset).toMatchObject({ query: "?race=Z&unanswered=1", cursor: "old" });
+    expect(screen.getByTestId("help-inline").compareDocumentPosition(board) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId("help-aside").closest("aside")).toBeTruthy();
+  });
+
+  it("sends race and cursor to the public API and renders Newest when there are no further results", async () => {
+    vi.stubEnv("NEXT_PUBLIC_REVIEWS_ENABLED", "on");
+    harness.getJsonWithStatus.mockResolvedValue({ data: { items: [], nextCursor: null }, status: 200 });
+    render(await ReviewsBoardPage({ searchParams: Promise.resolve({ race: "T", cursor: "old" }) }));
+    expect(harness.getJsonWithStatus).toHaveBeenCalledWith("/v1/reviews?race=T&cursor=old", { revalidateSec: 60 });
+    expect(screen.getByRole("link", { name: /Newest/ }).getAttribute("href")).toBe("/reviews?race=T");
+    expect(screen.queryByRole("link", { name: /Older requests/ })).toBeNull();
   });
 });
