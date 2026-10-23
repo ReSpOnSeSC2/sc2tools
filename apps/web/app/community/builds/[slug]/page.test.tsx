@@ -11,13 +11,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  * are stubbed. All data is synthetic test fixture data.
  */
 const mocks = vi.hoisted(() => ({
-  getJson: vi.fn(),
+  getJsonWithStatus: vi.fn(),
+  notFound: vi.fn(() => {
+    throw new Error("NEXT_NOT_FOUND");
+  }),
   guideLinkProps: [] as Array<{ matchup: string | undefined; names: ReadonlyArray<unknown> }>,
   timelineCalls: 0,
   saveProps: [] as Array<Record<string, unknown>>,
 }));
 
-vi.mock("@/lib/serverApi", () => ({ getJson: mocks.getJson }));
+vi.mock("@/lib/serverApi", () => ({ getJsonWithStatus: mocks.getJsonWithStatus }));
+vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
 vi.mock("@/components/guides/CommunityGuideLink", () => ({
   CommunityGuideLink: (props: { matchup: string | undefined; names: ReadonlyArray<unknown> }) => {
     mocks.guideLinkProps.push(props);
@@ -44,7 +48,7 @@ vi.mock("@/components/community/SaveToLibraryButton", () => ({
 }));
 vi.mock("@/components/community/ShareLinkButton", () => ({ ShareLinkButton: () => null }));
 
-import CommunityBuildPage from "@/app/community/builds/[slug]/page";
+import CommunityBuildPage, { generateMetadata } from "@/app/community/builds/[slug]/page";
 
 const HOSTILE_TITLE = 'Fixture opener</script><script>window.__pwned = 1</script><!--';
 
@@ -68,7 +72,7 @@ function detail(title: string, build: Record<string, unknown> = {}) {
 }
 
 async function renderPage(title: string, build?: Record<string, unknown>) {
-  mocks.getJson.mockResolvedValue(detail(title, build));
+  mocks.getJsonWithStatus.mockResolvedValue({ data: detail(title, build), status: 200 });
   const page = await CommunityBuildPage({ params: Promise.resolve({ slug: "build-fixture0001" }) });
   return render(page);
 }
@@ -84,7 +88,8 @@ function groupRows(title: string): string[] {
 
 afterEach(() => {
   cleanup();
-  mocks.getJson.mockReset();
+  mocks.getJsonWithStatus.mockReset();
+  mocks.notFound.mockClear();
   mocks.guideLinkProps.length = 0;
   mocks.timelineCalls = 0;
   mocks.saveProps.length = 0;
@@ -172,5 +177,39 @@ describe("/community/builds/[slug]", () => {
       version: "2026-09-10T00:00:00.000Z",
       title: "Saveable",
     });
+  });
+});
+
+describe("/community/builds/[slug] when the build can't be fetched", () => {
+  const params = () => Promise.resolve({ slug: "build-fixture0001" });
+
+  it.each([
+    ["the API is unreachable", null],
+    ["the API fails", 503],
+  ])("says it is temporarily unavailable when %s, never a 404", async (_label, status) => {
+    mocks.getJsonWithStatus.mockResolvedValue({ data: null, status });
+    const { container } = render(await CommunityBuildPage({ params: params() }));
+    expect(mocks.notFound).not.toHaveBeenCalled();
+    const heading = container.querySelector("h1");
+    expect(heading?.textContent).toBe("This build is temporarily unavailable");
+    expect(container.textContent).toContain("The server may be waking up (about 30 s). Nothing is lost.");
+    const retry = Array.from(container.querySelectorAll("a")).find((a) => a.textContent?.includes("Try again"));
+    expect(retry?.getAttribute("href")).toBe("/community/builds/build-fixture0001");
+    const metadata = await generateMetadata({ params: params() });
+    expect(metadata.robots).toEqual({ index: false, follow: false });
+  });
+
+  it("returns a real 404 only when the API says the build doesn't exist", async () => {
+    mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: 404 });
+    await expect(CommunityBuildPage({ params: params() })).rejects.toThrow("NEXT_NOT_FOUND");
+    await expect(generateMetadata({ params: params() })).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(mocks.notFound).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a live build indexable", async () => {
+    mocks.getJsonWithStatus.mockResolvedValue({ data: detail("Glaive adepts"), status: 200 });
+    const metadata = await generateMetadata({ params: params() });
+    expect(metadata.robots).toBeUndefined();
+    expect(metadata.title).toBe("Glaive adepts · Community build");
   });
 });

@@ -1,9 +1,11 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getJson } from "@/lib/serverApi";
+import { getJsonWithStatus } from "@/lib/serverApi";
 import { Card } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { AuthorProfile } from "@/components/community/AuthorProfile";
+import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import type { CommunityAuthorProfile } from "@/components/community/types";
 
 /**
@@ -15,6 +17,8 @@ import type { CommunityAuthorProfile } from "@/components/community/types";
  * or unknown user id) returns 404, which we surface as a NotFound
  * panel rather than the global 404 — the wording stays neutral so a
  * user who deliberately stays anonymous isn't outed by the message.
+ * An unreachable API or a 5xx is an outage, not a missing profile: it
+ * gets the "temporarily unavailable" panel. Both are noindex.
  */
 export const revalidate = 300;
 
@@ -22,17 +26,29 @@ interface PageParams {
   params: Promise<{ userId: string }>;
 }
 
-export async function generateMetadata({ params }: PageParams) {
-  const { userId } = await params;
-  const profile = await getJson<CommunityAuthorProfile>(
+/** generateMetadata and the page make the same request; Next dedupes it. */
+function loadProfile(userId: string) {
+  return getJsonWithStatus<CommunityAuthorProfile>(
     `/v1/community/authors/${encodeURIComponent(userId)}`,
   );
+}
+
+const UNAVAILABLE_TITLE = "This profile is temporarily unavailable";
+
+export async function generateMetadata({ params }: PageParams): Promise<Metadata> {
+  const { userId } = await params;
+  const { data: profile, status } = await loadProfile(userId);
   if (!profile) {
-    return {
-      title: "Author profile",
-      description: "This SC2 Tools community profile is private or doesn't exist.",
-      robots: { index: false, follow: false },
-    };
+    return status === 404
+      ? {
+          title: "Author profile",
+          description: "This SC2 Tools community profile is private or doesn't exist.",
+          robots: { index: false, follow: false },
+        }
+      : {
+          title: UNAVAILABLE_TITLE,
+          robots: { index: false, follow: false },
+        };
   }
   const description =
     profile.totalBuilds === 1
@@ -51,11 +67,17 @@ export async function generateMetadata({ params }: PageParams) {
 
 export default async function CommunityAuthorPage({ params }: PageParams) {
   const { userId } = await params;
-  const profile = await getJson<CommunityAuthorProfile>(
-    `/v1/community/authors/${encodeURIComponent(userId)}`,
-  );
+  const { data: profile, status } = await loadProfile(userId);
   if (!profile) {
-    return <NotFoundPanel />;
+    return status === 404 ? (
+      <NotFoundPanel />
+    ) : (
+      <CommunityUnavailable
+        title={UNAVAILABLE_TITLE}
+        retryHref={`/community/authors/${encodeURIComponent(userId)}`}
+        standalone
+      />
+    );
   }
   return <AuthorProfile profile={profile} />;
 }

@@ -1,8 +1,9 @@
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Calendar, Users } from "lucide-react";
-import { getJson } from "@/lib/serverApi";
+import { getJsonWithStatus } from "@/lib/serverApi";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -10,6 +11,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { fmtAgo, fmtDate } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorChip } from "@/components/community/AuthorChip";
+import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import { CommunityBuildSignatureTimeline } from "@/components/community/CommunityBuildSignatureTimeline";
 import { CommunityGamePlan } from "@/components/community/CommunityGamePlan";
 import { CommunityVotePanel } from "@/components/community/CommunityVotePanel";
@@ -23,16 +25,35 @@ import { RulesSummary } from "@/components/builds/RulesSummary";
 import { SKILL_LEVELS, coerceSavedRules } from "@/lib/build-rules";
 import { serializeJsonLd } from "@/lib/reviewJsonLd";
 
+/**
+ * The published build. A 404 from the API is the only "doesn't exist";
+ * an unreachable API or a 5xx leaves `data` null with any other status,
+ * and the page then says it is temporarily unavailable instead of
+ * 404ing a build that exists. generateMetadata and the page make the
+ * same request, which Next dedupes within one render.
+ */
+function loadBuild(slug: string) {
+  return getJsonWithStatus<CommunityBuildDetail>(
+    `/v1/community/builds/${encodeURIComponent(slug)}`,
+  );
+}
+
+const UNAVAILABLE_TITLE = "This build is temporarily unavailable";
+
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
-}) {
+}): Promise<Metadata> {
   const { slug } = await params;
-  const data = await getJson<CommunityBuildDetail>(
-    `/v1/community/builds/${encodeURIComponent(slug)}`,
-  );
-  if (!data) return { title: "Build not found" };
+  const { data, status } = await loadBuild(slug);
+  if (status === 404) notFound();
+  if (!data) {
+    return {
+      title: UNAVAILABLE_TITLE,
+      robots: { index: false, follow: false },
+    };
+  }
   const description =
     data.description?.slice(0, 200) ||
     `Player-published StarCraft II build for ${data.matchup || "any matchup"}.`;
@@ -65,10 +86,17 @@ export default async function CommunityBuildPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const data = await getJson<CommunityBuildDetail>(
-    `/v1/community/builds/${encodeURIComponent(slug)}`,
-  );
-  if (!data) notFound();
+  const { data, status } = await loadBuild(slug);
+  if (status === 404) notFound();
+  if (!data) {
+    return (
+      <CommunityUnavailable
+        title={UNAVAILABLE_TITLE}
+        retryHref={`/community/builds/${encodeURIComponent(slug)}`}
+        standalone
+      />
+    );
+  }
 
   const build = data.build || {};
   // The snapshot's v3 fields aren't on the legacy CustomBuild type.

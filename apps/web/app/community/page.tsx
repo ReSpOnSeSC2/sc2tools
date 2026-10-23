@@ -1,6 +1,7 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Sparkles, Users } from "lucide-react";
-import { getJson } from "@/lib/serverApi";
+import { getJsonWithStatus } from "@/lib/serverApi";
 import { Banner } from "@/components/Banner";
 import { Card } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
@@ -8,13 +9,14 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { CommunityBuildCard } from "@/components/community/CommunityBuildCard";
 import { CommunityFilterBar } from "@/components/community/CommunityFilterBar";
 import { CommunityShell } from "@/components/community/CommunityShell";
+import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import {
   COMMUNITY_SORTS,
   type CommunityBuildListResponse,
   type CommunitySort,
 } from "@/components/community/types";
 
-export const metadata = {
+const METADATA: Metadata = {
   alternates: { canonical: "/community" },
   title: "Community",
   description:
@@ -33,32 +35,72 @@ function isSort(value: string | undefined): value is CommunitySort {
   return COMMUNITY_SORTS.some((s) => s.value === value);
 }
 
+type CommunitySearchParams = Promise<{
+  matchup?: string;
+  sort?: string;
+  q?: string;
+  offset?: string;
+}>;
+
+interface CommunityQuery {
+  matchup: string;
+  sort: CommunitySort;
+  search: string;
+  offset: number;
+}
+
+function parseQuery(sp: Awaited<CommunitySearchParams>): CommunityQuery {
+  return {
+    matchup: (sp.matchup || "").trim(),
+    sort: isSort(sp.sort) ? sp.sort : "top",
+    search: (sp.q || "").trim(),
+    offset: Math.max(0, Number.parseInt(sp.offset || "0", 10) || 0),
+  };
+}
+
+/**
+ * One page of published builds. `data` is null when the API was
+ * unreachable or failed: that is an outage, never an empty list.
+ * generateMetadata and the page make the same request, which Next
+ * dedupes within one render.
+ */
+function loadBuilds(query: CommunityQuery) {
+  const params = new URLSearchParams();
+  if (query.matchup) params.set("matchup", query.matchup);
+  params.set("sort", query.sort);
+  if (query.search) params.set("q", query.search);
+  params.set("limit", String(PAGE_SIZE));
+  params.set("offset", String(query.offset));
+  return getJsonWithStatus<CommunityBuildListResponse>(
+    `/v1/community/builds?${params.toString()}`,
+  );
+}
+
+/** The /community URL for a query (pagination, "Try again"). */
+function communityHref(query: CommunityQuery): string {
+  const sp = new URLSearchParams();
+  if (query.matchup) sp.set("matchup", query.matchup);
+  if (query.sort && query.sort !== "top") sp.set("sort", query.sort);
+  if (query.search) sp.set("q", query.search);
+  if (query.offset > 0) sp.set("offset", String(query.offset));
+  const qs = sp.toString();
+  return qs ? `/community?${qs}` : "/community";
+}
+
+export async function generateMetadata({ searchParams }: { searchParams: CommunitySearchParams }): Promise<Metadata> {
+  const { data } = await loadBuilds(parseQuery(await searchParams));
+  // An outage page is not the community page: keep it out of the index.
+  return data ? METADATA : { ...METADATA, robots: { index: false, follow: true } };
+}
+
 export default async function CommunityPage({
   searchParams,
 }: {
-  searchParams: Promise<{
-    matchup?: string;
-    sort?: string;
-    q?: string;
-    offset?: string;
-  }>;
+  searchParams: CommunitySearchParams;
 }) {
-  const sp = await searchParams;
-  const matchup = (sp.matchup || "").trim();
-  const sort: CommunitySort = isSort(sp.sort) ? sp.sort : "top";
-  const search = (sp.q || "").trim();
-  const offset = Math.max(0, Number.parseInt(sp.offset || "0", 10) || 0);
-
-  const params = new URLSearchParams();
-  if (matchup) params.set("matchup", matchup);
-  if (sort) params.set("sort", sort);
-  if (search) params.set("q", search);
-  params.set("limit", String(PAGE_SIZE));
-  params.set("offset", String(offset));
-
-  const data = await getJson<CommunityBuildListResponse>(
-    `/v1/community/builds?${params.toString()}`,
-  );
+  const query = parseQuery(await searchParams);
+  const { matchup, sort, search, offset } = query;
+  const { data } = await loadBuilds(query);
   const items = data?.items || [];
   const total = data?.total ?? 0;
   const hasMore = data?.hasMore ?? false;
@@ -96,7 +138,12 @@ export default async function CommunityPage({
         initialSearch={search}
       />
 
-      {items.length === 0 ? (
+      {!data ? (
+        <CommunityUnavailable
+          title="Community builds are temporarily unavailable"
+          retryHref={communityHref(query)}
+        />
+      ) : items.length === 0 ? (
         <Card>
           <EmptyStatePanel
             size="lg"
@@ -141,13 +188,10 @@ export default async function CommunityPage({
             ))}
           </ul>
           <Pagination
-            offset={offset}
+            query={query}
             limit={PAGE_SIZE}
             total={total}
             hasMore={hasMore}
-            search={search}
-            sort={sort}
-            matchup={matchup}
           />
         </>
       )}
@@ -157,33 +201,20 @@ export default async function CommunityPage({
 }
 
 function Pagination({
-  offset,
+  query,
   limit,
   total,
   hasMore,
-  search,
-  sort,
-  matchup,
 }: {
-  offset: number;
+  query: CommunityQuery;
   limit: number;
   total: number;
   hasMore: boolean;
-  search: string;
-  sort: CommunitySort;
-  matchup: string;
 }) {
+  const { offset } = query;
   const prev = Math.max(0, offset - limit);
   const next = offset + limit;
-  function urlFor(o: number): string {
-    const sp = new URLSearchParams();
-    if (matchup) sp.set("matchup", matchup);
-    if (sort && sort !== "top") sp.set("sort", sort);
-    if (search) sp.set("q", search);
-    if (o > 0) sp.set("offset", String(o));
-    const qs = sp.toString();
-    return qs ? `/community?${qs}` : "/community";
-  }
+  const urlFor = (o: number) => communityHref({ ...query, offset: o });
   if (total <= limit) return null;
   return (
     <nav
