@@ -8,6 +8,7 @@ from copy import deepcopy
 MODES = (("ladder", "Ladder"), ("customs", "Customs"), ("teams", "Teams"),
          ("practice", "Practice"), ("review", "Review"))
 FEATURES = (("opponentOverlay", "Opponent panel"), ("scoutingOverlay", "Scouting panel"),
+            ("scoutingReadAloud", "Spoken scouting report"),
             ("preGameSelector", "Pre-game selector"), ("postGameSelector", "Post-game selector"),
             ("randomizer", "Randomizer"), ("ghost", "Build Order Ghost"))
 

@@ -4,6 +4,24 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+## 0.21.1 - 2026-10-23
+
+### Changed - Reference-led Companion console
+- Replace the tab-heavy Companion shell with a persistent portrait dossier,
+  Home/Back navigation, separate opponent/game arrows, and replay history.
+- Compact adds your W–L record and win percentage; Standard uses opening icon
+  chains, Detailed adds tech and upgrades, and Full retains complete timelines.
+- Preserve selected encounters, history scrolling, and unsaved notes while
+  refreshing or changing information layouts.
+
+### Added - Native scouting readout
+- Optional desktop scouting speech with a header switch, manual repeat, and Stop;
+  uses the Windows system voice without requiring OBS or browser audio.
+- Saved local and per-mode speech switches respect master-off, live freshness,
+  human 1v1 scope, note consent, and one automatic announcement per game/session.
+- Unsigned verification builds remain separate test artifacts; they do not
+  replace the signed public stable download or bypass the signing requirement.
+
 ## 0.21.0
 
 ### Added - Complete Companion controls

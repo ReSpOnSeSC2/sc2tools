@@ -1399,6 +1399,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._stack.addWidget(self._companion_page)
             self._normal_stack_policy = self._stack.sizePolicy()
             self._companion_page.windowSizeRequested.connect(self._set_window_size)
+            self._companion_page.agentPageRequested.connect(self._go_to_page)
             if hasattr(self._companion_page, "set_density"):
                 self._companion_page.set_density(ui._window_information_layout)
                 self._companion_page.densityChanged.connect(self._information_layout_changed)
@@ -3472,12 +3473,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _apply_window_chrome(self):
             compact = self._compact_window_active()
-            self._sidebar.setVisible(not compact)
+            self._sidebar.setVisible(self._stack.currentWidget() is not self._companion_page)
             if compact:
                 self._stack.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Ignored)
             else:
                 self._stack.setSizePolicy(self._normal_stack_policy)
-            minimum = (300, 160) if compact else (820, 540)
+            minimum = (300, 210) if compact else (820, 540)
             screen = self._window_size_screen()
             if screen is not None:
                 available = screen.availableGeometry()
@@ -3569,7 +3570,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 target = QtWidgets.QApplication.primaryScreen().availableGeometry()
                 if point is not None:
                     target = next((screen.availableGeometry() for screen in screens if screen.availableGeometry().contains(QtCore.QPoint(*point))), target)
-                minimum = (300, 160) if self._compact_window_active() else (820, 540)
+                minimum = (300, 210) if self._compact_window_active() else (820, 540)
                 frame_size = self._window_frame_size()
                 self.setMinimumSize(min(minimum[0], max(1, target.width() - frame_size[0])), min(minimum[1], max(1, target.height() - frame_size[1])))
                 if point is None:

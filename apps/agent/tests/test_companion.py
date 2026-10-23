@@ -98,12 +98,13 @@ def test_overlay_preferences_persist_without_repairing_or_network(tmp_path):
         preferences_provider=lambda: state.companion_preferences,
         save_preferences=save, transport=unexpected_network)
     client.action({"action": "preferences", "preferences": {
-        "overlaysEnabled": True, "scoutingOverlay": True,
+        "overlaysEnabled": True, "scoutingOverlay": True, "scoutingReadAloud": True,
     }})
     client.action({"action": "preferences", "preferences": {"overlaysEnabled": False}})
     loaded = load_state(tmp_path)
     assert loaded.companion_preferences == {
         "overlaysEnabled": False, "opponentOverlay": False, "scoutingOverlay": True,
+        "scoutingReadAloud": True,
     }
     assert loaded.device_token == "same-pairing"
     assert loaded.uploaded == state.uploaded
@@ -119,7 +120,7 @@ def test_preferences_reject_invalid_switches_and_handle_old_states(tmp_path):
     assert loaded.companion_preferences == {"opponentOverlay": False}
     assert loaded.device_token == "old-token"
     client = CompanionClient(lambda: ("https://api.example.test", "token"))
-    for updates in ({"overlaysEnabled": "false"}, {"unknown": True}):
+    for updates in ({"overlaysEnabled": "false"}, {"scoutingReadAloud": "true"}, {"unknown": True}):
         with pytest.raises(CompanionError):
             client.action({"action": "preferences", "preferences": updates})
 

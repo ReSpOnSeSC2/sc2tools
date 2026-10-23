@@ -20,7 +20,7 @@ def test_four_named_layouts_have_distinct_information_levels():
 
 
 @pytest.mark.parametrize("name,expected", [
-    ("Compact", (360, 190)), ("Standard", (1200, 900)), ("Detailed", (1440, 1080)),
+    ("Compact", (360, 240)), ("Standard", (1200, 900)), ("Detailed", (1440, 1080)),
 ])
 def test_normal_sizes_use_logical_pixels_and_keep_the_existing_screen(name, expected):
     placement = fit_window_preset(name, (-2560, -200, 2560, 1440), position=(-100, 1000), frame=(16, 40))
@@ -39,7 +39,7 @@ def test_presets_clamp_to_small_work_areas_including_window_decorations():
 
 def test_labels_require_matching_geometry_and_density_and_allow_custom_manual_sizes():
     available = (0, 0, 1920, 1080)
-    assert window_size_label((360, 190), available=available, layout="compact") == "Compact"
+    assert window_size_label((360, 240), available=available, layout="compact") == "Compact"
     assert window_size_label((400, 210), available=available, layout="compact") == "Custom"
     assert window_size_label((1200, 900), available=available, layout="full") == "Custom"
     assert window_size_label((1440, 1040), available=available, layout="detailed", frame=(16, 40)) == "Detailed"
@@ -65,7 +65,7 @@ def test_real_window_presets_resize_change_density_and_restore_normal_chrome(tmp
             QtTest.QTest.qWait(20)
             assert page.current_density() == level
             assert page.window_size.currentText() == title, (title, page.window_size.currentText(), win.size().toTuple())
-            assert win._sidebar.isVisible() == (level != "compact")
+            assert not win._sidebar.isVisible()
             assert win.isMaximized() == (level == "full")
             if level != "full":
                 screen = win.screen().availableGeometry()
@@ -75,11 +75,11 @@ def test_real_window_presets_resize_change_density_and_restore_normal_chrome(tmp
         assert layouts == ["compact", "standard", "detailed", "full"]
         page.windowSizeRequested.emit("compact")
         app.processEvents()
-        assert (win.width(), win.height()) == (360, 190)
+        assert (win.width(), win.height()) == (360, 240)
         assert not win._sidebar.isVisible()
         page.compact_enlarge.click()
         app.processEvents()
-        assert win._sidebar.isVisible()
+        assert not win._sidebar.isVisible()
         assert page.current_density() == "standard"
         assert not win.isMaximized()
         page.shutdown()
@@ -102,7 +102,7 @@ def test_manual_geometry_and_temporary_full_details_do_not_save_new_density(tmp_
         assert layouts == ["compact"]
         page.set_density("full")
         app.processEvents()
-        assert win._sidebar.isVisible()
+        assert not win._sidebar.isVisible()
         assert page.window_size.currentText() == "Custom"
         assert layouts == ["compact"]
         assert ui._window_information_layout == "compact"
@@ -123,7 +123,7 @@ def test_saved_compact_geometry_and_density_restore_without_new_preset_or_write(
             window_information_layout="compact", on_window_information_layout=layouts.append)
         restored.show()
         app.processEvents()
-        assert (restored.width(), restored.height()) == (360, 190)
+        assert (restored.width(), restored.height()) == (360, 240)
         assert restored._companion_page.current_density() == "compact"
         assert not restored._sidebar.isVisible()
         assert layouts == ["compact"]
@@ -161,7 +161,7 @@ def test_failed_layout_save_leaves_geometry_and_information_unchanged(tmp_path):
         app.processEvents()
         assert win.geometry() == before
         assert page.current_density() == "standard"
-        assert win._sidebar.isVisible()
+        assert not win._sidebar.isVisible()
         assert page.window_size_notice.isVisible()
         assert "Couldn't save" in page.window_size_notice.text()
         assert page.window_size.currentText() != "Compact"

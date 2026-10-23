@@ -120,7 +120,7 @@ class AgentState:
     """Opt-in local notification for newly synced live games; never history imports."""
 
     companion_preferences: Dict[str, bool] = field(default_factory=dict)
-    """Native Companion overlay switches. Missing switches default to off."""
+    """Native Companion panel and speech switches. Missing switches default to off."""
 
     companion_modes: Dict[str, object] = field(default_factory=dict)
     """Local presentation profiles and optional global hide/show shortcut."""
@@ -435,7 +435,7 @@ def load_state(state_dir: Path) -> AgentState:
                 raw.get("companion_preferences")
                 if isinstance(raw.get("companion_preferences"), dict) else {}
             ).items()
-            if key in {"overlaysEnabled", "opponentOverlay", "scoutingOverlay"}
+            if key in {"overlaysEnabled", "opponentOverlay", "scoutingOverlay", "scoutingReadAloud"}
             and type(value) is bool
         },
         companion_ghost=(

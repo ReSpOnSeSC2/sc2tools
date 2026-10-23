@@ -15,6 +15,7 @@ DEFAULT_PREFERENCES = {
     "overlaysEnabled": False,
     "opponentOverlay": False,
     "scoutingOverlay": False,
+    "scoutingReadAloud": False,
 }
 
 

@@ -42,7 +42,7 @@ def companion():
     preferences = {"overlaysEnabled": True, "opponentOverlay": True, "scoutingOverlay": True}
     state = {
         "snapshot": {"paired": True, "preferences": preferences, "modes": default_modes(), "liveGame": {
-            "phase": "match_in_progress", "gameKey": "current", "displayTime": 50,
+            "phase": "match_in_progress", "gameKey": "current", "displayTime": 50, "capturedAt": time.time(),
             "opponent": {"name": "Live opponent", "race": "Terran", "profile": {"mmr": 4000}},
             "streamerHistory": {"last5GamesScouting": [game()], "headToHead": {"wins": 2, "losses": 1}},
         }},
@@ -160,7 +160,7 @@ def test_master_off_persists_and_retains_independent_pin_choices(companion):
     assert all(not panel.isVisible() for panel in page.overlays.values())
     wait_until(app, lambda: not page._preference_busy)
     preferences = state["snapshot"]["preferences"]
-    assert preferences == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": True}
+    assert preferences == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": True, "scoutingReadAloud": False}
     page.preference_checks["overlaysEnabled"].setChecked(True)
     wait_until(app, lambda: not page._preference_busy)
     assert all(panel.isVisible() for panel in page.overlays.values())
@@ -253,7 +253,7 @@ def test_late_local_settings_cannot_overwrite_new_mode_or_master_choice(companio
     gate.set()
     wait_until(app, lambda: "modes_load" not in page._requests)
     assert page._modes["active"] == "practice"
-    assert page._preferences == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": True}
+    assert page._preferences == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": True, "scoutingReadAloud": False}
 
 
 def test_offline_start_restores_local_modes_hotkey_and_pins_without_telemetry():
@@ -262,7 +262,7 @@ def test_offline_start_restores_local_modes_hotkey_and_pins_without_telemetry():
     modes["active"] = "review"
     modes["hotkeyEnabled"] = True
     modes["profiles"]["customs"]["ghost"] = False
-    state = {"modes": modes, "preferences": {"overlaysEnabled": True, "opponentOverlay": True, "scoutingOverlay": False}}
+    state = {"modes": modes, "preferences": {"overlaysEnabled": True, "opponentOverlay": True, "scoutingOverlay": False, "scoutingReadAloud": False}}
     calls = []
 
     def handler(payload):
@@ -292,7 +292,7 @@ def test_offline_start_restores_local_modes_hotkey_and_pins_without_telemetry():
         assert page.mode_controls.isEnabled()
         page.set_preference("overlaysEnabled", False)
         wait_until(app, lambda: not page._preference_busy)
-        assert state["preferences"] == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": False}
+        assert state["preferences"] == {"overlaysEnabled": False, "opponentOverlay": True, "scoutingOverlay": False, "scoutingReadAloud": False}
         page.mode_controls.mode_select.setCurrentIndex(page.mode_controls.mode_select.findData("practice"))
         wait_until(app, lambda: not page._mode_busy)
         assert state["modes"]["profiles"]["customs"]["ghost"] is False
@@ -387,7 +387,7 @@ def test_time_and_older_event_data_do_not_invent_completed_timings():
 
 
 def test_live_context_rejects_previous_match_data():
-    active, context = _live_context({"liveGame": {"phase": "match_in_progress", "gameKey": "new", "opponent": {"name": "Current"}},
+    active, context = _live_context({"liveGame": {"phase": "match_in_progress", "gameKey": "new", "capturedAt": time.time(), "opponent": {"name": "Current"}},
                                      "live": {"gameKey": "old", "oppName": "Previous", "last5GamesScouting": [game()]}})
     assert active
     assert context["name"] == "Current"
@@ -399,6 +399,54 @@ def test_live_context_expires_abandoned_active_match():
     assert not active
     active, context = _live_context({"liveGame": {"phase": "match_in_progress", "receivedAt": (time.time() - 2) * 1000, "opponent": {"name": "Current"}}})
     assert active
+
+
+@pytest.mark.parametrize("timestamp", [None, True, float("nan"), time.time() + 60, time.time() - 31])
+def test_live_context_rejects_unknown_stale_or_future_clock(timestamp):
+    active, _context = _live_context({"liveGame": {"phase": "match_in_progress", "capturedAt": timestamp,
+                                                   "opponent": {"name": "Current"}}})
+    assert not active
+
+
+def test_live_identity_never_infers_missing_race_or_mmr_from_history():
+    active, context = _live_context({"liveGame": {"phase": "match_in_progress", "capturedAt": time.time(),
+        "opponent": {"name": "Current"}, "streamerHistory": {"oppRace": "Zerg", "oppMmr": 5000}}})
+    assert active
+    assert context["race"] is None and context["mmr"] is None
+
+
+@pytest.mark.parametrize("opponent", [{"name": "Current player"}, {"revealedName": "Current player"},
+                                      {"name": " ", "revealedName": "Current player"}])
+def test_live_history_name_mismatch_cannot_attach_previous_player_records(opponent):
+    active, context = _live_context({"liveGame": {"phase": "match_in_progress", "capturedAt": time.time(),
+        "opponent": opponent, "streamerHistory": {"oppName": "Previous player", "headToHead": {"wins": 7, "losses": 2},
+            "opponentNotes": {"text": "Not this player", "readAloud": True}}}})
+    assert active
+    assert not context.get("headToHead") and not context.get("opponentNotes")
+
+
+def test_unmatched_live_identity_does_not_present_candidate_records_or_notes(companion):
+    page, state, app = companion
+    history = page._snapshot["liveGame"]["streamerHistory"]
+    history["opponentIdentityMatched"] = False
+    history["opponentNotes"] = {"text": "Not this player", "readAloud": True}
+    page.set_density("compact")
+    assert page.compact_card.record["wins"] is None
+    assert page.compact_card.win_rate_label.text() == "—"
+    active, context = _live_context(page._snapshot)
+    assert active and context["name"] == "Live opponent"
+    assert not context.get("headToHead") and not context.get("opponentNotes")
+    assert not context.get("last5GamesScouting")
+
+
+def test_compact_record_and_percentage_follow_the_live_opponent_not_browsed_dossier(companion):
+    page, state, app = companion
+    page._detail["totals"] = {"wins": 20, "losses": 0}
+    page.set_density("compact")
+    assert page.compact_card.record["wins"] == 2
+    assert page.compact_card.record["losses"] == 1
+    assert page.compact_card.win_rate_label.text() == "66.7%"
+    assert page.overlays["opponent"].identity_card.record["wins"] == 2
 
 
 def test_note_limit_matches_server_utf16_length():
@@ -496,30 +544,31 @@ def test_four_information_layouts_change_visible_data_and_keep_full_details_avai
     saved_preferences = deepcopy(page._preferences)
     page.set_density("compact")
     assert not page.compact_card.isHidden()
-    assert page.workspace_tabs.isHidden() and page.overview.isHidden()
+    assert page.console.isHidden()
     assert all(widget.isHidden() for widget in page._normal_chrome)
-    assert [widget.text() for widget in page.compact_card.findChildren(QtWidgets.QLabel)] == ["Live opponent", "Terran", "4000 MMR"]
+    assert page.compact_card.identity == {"name": "Live opponent", "race": "Terran", "mmr": "4000"}
     requests = []
     page.windowSizeRequested.connect(requests.append)
     page.compact_enlarge.click()
     assert requests == ["standard"]
     page.set_density("standard")
-    assert page.compact_card.isHidden() and page.workspace_tabs.isHidden()
-    assert not page.overview.isHidden()
-    assert [page.overview_tabs.tabText(index) for index in range(page.overview_tabs.count())] == ["Build orders", "Recent games", "Game plan"]
-    assert "Blink expand" in page.overview_builds.text()
-    assert "Bio timing" in page.overview_builds.text()
-    assert page.overview_timings.topLevelItemCount() == 3
+    assert page.compact_card.isHidden() and not page.console.isHidden()
+    assert page.scouting_stack.currentWidget() is page.overview
+    assert page.workspace_tabs.tabBar().isHidden()
+    assert page.chain_labels["my"].text() == "Blink expand"
+    assert page.chain_labels["opp"].text() == "Bio timing"
     assert page.overview_recent.topLevelItemCount() == 1
+    assert len(page.build_chains["my"].steps) == 2
+    assert page.upgrade_chains["my"].isHidden()
     page.set_density("detailed")
-    assert not page.workspace_tabs.isHidden() and page.overview.isHidden()
+    assert page.scouting_stack.currentWidget() is page.overview
+    assert not page.upgrade_chains["my"].isHidden()
     assert page.notes_section.isHidden()
     assert not page.tabs.isTabVisible(1)
     assert page.ghost_page.filters_widget.isHidden()
-    page.notes_toggle.click()
-    assert not page.notes_section.isHidden()
     assert page.notes.toPlainText() == "Old note"
     page.set_density("full")
+    assert page.scouting_stack.currentWidget() is page.dossier
     assert page.tabs.isTabVisible(1)
     assert not page.notes_section.isHidden()
     assert not page.ghost_page.filters_widget.isHidden()
@@ -541,10 +590,10 @@ def test_compact_identity_uses_fresh_direct_opponent_fields_without_inference(co
                                    "opponent": {"name": "Current player"},
                                    "streamerHistory": {"oppRace": "Terran", "oppMmr": 5000}}}
     page.set_density("compact")
-    assert [page.compact_name.text(), page.compact_race.text(), page.compact_mmr.text()] == ["Current player", "—", "—"]
+    assert page.compact_card.identity == {"name": "Current player", "race": "—", "mmr": "—"}
     page._snapshot["liveGame"]["capturedAt"] = time.time() - 100
     page._render_information_layout()
-    assert [page.compact_name.text(), page.compact_race.text(), page.compact_mmr.text()] == ["—", "—", "—"]
+    assert page.compact_card.identity == {"name": "—", "race": "—", "mmr": "—"}
     page._snapshot = {"liveGame": {"phase": "menu"}}
     page._render_information_layout()
-    assert [page.compact_name.text(), page.compact_race.text(), page.compact_mmr.text()] == ["Browsed player", "Zerg", "4700 MMR"]
+    assert page.compact_card.identity == {"name": "Browsed player", "race": "Zerg", "mmr": "4700"}

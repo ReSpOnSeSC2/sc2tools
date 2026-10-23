@@ -127,10 +127,10 @@ The Companion requires the matching API update for account data. Update the
 installed agent through the existing update flow; a second installation or
 pairing is not needed. OBS browser sources and Build check-in remain available.
 
-The **Build selectors** tab contains the pre-game plan and post-game check-in.
+The **Build selectors** screen contains the pre-game plan and post-game check-in.
 Choices, opponent corrections, and notes use the same records as the website
 and floating game cards. Their independent switches can be changed at any time.
-The **Randomizer** tab manages the matchup's eligible pool and rolls without an
+The **Randomizer** screen manages the matchup's eligible pool and rolls without an
 OBS browser source. **Build Order Ghost** arms a recorded replay target for
 each matchup and follows the live game clock in an optional floating panel.
 Each feature has its own on/off control. Turn **Game assistance enabled** off
@@ -144,9 +144,27 @@ Ghost accepts local replay files, account replays, and explicitly published
 admin examples. Star per-build references, filter the replay library, restore
 earlier reference versions, and compare completed replay timings against them.
 Choose **Compact**, **Standard**, **Detailed**, or **Full workspace** from
-**Window size**. Compact shows only opponent name, race, and MMR with a small
-expand button. Standard adds tabbed build information; larger layouts reveal
-more timing and replay detail. Manual size and information layout are retained.
+the size picker. Compact shows opponent name, race, MMR, your W–L record against
+them, and your win percentage, with a small expand button. No league field is
+added. Standard shows a persistent portrait beside both opening icon chains;
+Detailed adds more tech steps and upgrades; Full workspace exposes full replay
+timelines and notes. Home, Back, opponent arrows, game arrows, and Previous
+encounters let you browse without losing selected replays or unsaved notes.
+Manual size and information layout are retained. The **Agent** menu opens the
+existing Dashboard, Settings, Streams, Recent games, and Logs.
+
+**Voice on/off** in the Companion header controls spoken scouting independently
+of pinned panels. **Assistance → Read scouting report aloud in Companion** is
+the same saved switch; **Read report now** repeats the current live report and
+**Stop reading** cancels it. This uses the Windows system voice without OBS.
+Automatic reports require a fresh human 1v1 game and read at most once per game
+in this agent session. They wait briefly for opponent history before falling back
+to the known profile if enrichment is unavailable. Browsing history never triggers speech. Only notes marked
+for readout are included. Master-off, a disallowing preset, stale telemetry, or
+quitting stops speech; enable the per-mode speech gate under Customize mode if
+needed. OBS voice preferences remain separate—keep only one scouting voice
+enabled to avoid hearing both. Missing native speech engines show an error
+instead of silently claiming playback.
 
 ## Main window - what is where
 

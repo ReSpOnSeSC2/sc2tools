@@ -8,7 +8,8 @@ import re
 import threading
 import time
 
-from ..companion_modes import build_companion_modes, effective_mode_features, normalize_modes
+from ..companion_modes import build_companion_modes, effective_mode_features, normalize_modes, verified_one_on_one
+from .opponent_card import opponent_record
 
 
 _STYLE = """
@@ -139,7 +140,7 @@ def _live_context(snapshot):
         timestamp /= 1000
     else:
         timestamp = envelope.get("capturedAt")
-    if isinstance(timestamp, (int, float)) and (not math.isfinite(timestamp) or time.time() - timestamp > 30):
+    if type(timestamp) not in {int, float} or not math.isfinite(timestamp) or not -5 <= time.time() - timestamp <= 30:
         active = False
     history = envelope.get("streamerHistory") or {}
     post = snapshot.get("live") or {}
@@ -147,12 +148,19 @@ def _live_context(snapshot):
         if envelope.get("gameKey") and post.get("gameKey") == envelope.get("gameKey"):
             history = {**history, **post}
         opponent = envelope.get("opponent") or {}
+        history_name = history.get("oppName")
+        current_name = opponent.get("name")
+        if not isinstance(current_name, str) or not current_name.strip():
+            current_name = opponent.get("revealedName")
+        mismatched_name = isinstance(history_name, str) and history_name.strip() and (not isinstance(current_name, str) or history_name.strip().casefold() != current_name.strip().casefold())
+        if history.get("opponentIdentityMatched") is False or mismatched_name:
+            history = {"opponentIdentityMatched": False}
         profile = opponent.get("profile") or {}
         return active, {
             **history,
-            "name": opponent.get("revealedName") or opponent.get("name") or history.get("oppName") or "Opponent resolving…",
-            "race": opponent.get("race") or history.get("oppRace"),
-            "mmr": profile.get("mmr") or history.get("oppMmr"),
+            "name": opponent.get("revealedName") or opponent.get("name") or "Opponent resolving…",
+            "race": opponent.get("race"),
+            "mmr": profile.get("mmr"),
             "league": profile.get("league"), "region": profile.get("region"),
             "elapsed": envelope.get("displayTime"),
         }
@@ -165,7 +173,7 @@ def _icon_root():
 
 
 def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
-                         checkin_controller_provider=None):
+                         checkin_controller_provider=None, speech_factory=None):
     """Build a lazy-Qt page; all handler calls run in daemon workers."""
     icon_root = _icon_root()
 
@@ -227,6 +235,15 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             layout.addWidget(self.subtitle)
             self.detail = label("", "Muted")
             layout.addWidget(self.detail)
+            if kind == "opponent":
+                from .opponent_card import build_opponent_card
+                layout.setContentsMargins(0, 0, 0, 0)
+                self.identity_card = build_opponent_card(self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, icon_root=icon_root)
+                self.identity_card.enlargeRequested.connect(owner._enlarge_from_panel)
+                layout.addWidget(self.identity_card)
+                self.title.hide()
+                self.subtitle.hide()
+                self.detail.hide()
             if kind == "scouting":
                 self.games = QtWidgets.QComboBox()
                 self.games.currentIndexChanged.connect(self._game_changed)
@@ -236,7 +253,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.tree = timeline()
                 self.tree.setHeaderLabels(["HISTORICAL TECH STEP", "TIME", "EVENT"])
                 layout.addWidget(self.tree)
-            self.resize(650 if kind == "scouting" else 330, 450 if kind == "scouting" else 220)
+            self.resize(650 if kind == "scouting" else 360, 450 if kind == "scouting" else 190)
             self._signature = None
             self._games = []
 
@@ -255,9 +272,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             notes = context.get("opponentNotes") or {}
             text = notes.get("text") if isinstance(notes, dict) else ""
             if self.kind == "opponent":
-                wins, losses = record.get("wins"), record.get("losses")
-                summary = f"Your head-to-head: {wins}W · {losses}L" if wins is not None and losses is not None else "First meeting or no shared replay history"
-                self.detail.setText(summary + ("\n\n" + str(text or context.get("notes")) if text or context.get("notes") else ""))
+                self.identity_card.set_identity(name=_name(context) if context else None,
+                                                race=context.get("race") or context.get("oppRace"),
+                                                mmr=context.get("mmr", context.get("oppMmr")),
+                                                wins=record.get("wins"), losses=record.get("losses"))
                 return
             self.detail.setText("Previous games against this opponent · replay timings")
             games = context.get("last5GamesScouting") or []
@@ -301,6 +319,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
         hotkeyEnabledChanged = QtCore.Signal(bool)
         densityChanged = QtCore.Signal(str)
         windowSizeRequested = QtCore.Signal(str)
+        agentPageRequested = QtCore.Signal(str)
 
         def __init__(self):
             super().__init__(parent)
@@ -327,13 +346,21 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._drafts = {}
             self._snapshot = {}
             self._snapshot_healthy = False
-            self._preferences = {"overlaysEnabled": False, "opponentOverlay": False, "scoutingOverlay": False}
+            self._preferences = {"overlaysEnabled": False, "opponentOverlay": False, "scoutingOverlay": False, "scoutingReadAloud": False}
             self._rendering_notes = False
             self._games = []
+            self._game_selections = {}
             self._ghost_references = {}
             self._density = "full"
             self._return_density = None
+            self._spoken_game_keys = []
+            self._speech_game_key = None
+            self._speech_pending_key = None
+            self._speech_pending_at = None
             self._build_ui()
+            from .companion_speech import build_scouting_speech
+            self.scouting_speech = (speech_factory or build_scouting_speech)(self, QtCore=QtCore)
+            self.scouting_speech.statusChanged.connect(self.voice_status.setText)
             self.overlays = {kind: CompanionPanel(self, kind) for kind in ("opponent", "scouting")}
             self._position_overlays()
             self.completed.connect(self._completed)
@@ -354,14 +381,17 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
 
         def _build_ui(self):
             layout = QtWidgets.QVBoxLayout(self)
-            layout.setContentsMargins(22, 18, 22, 18)
-            layout.setSpacing(12)
-            heading = QtWidgets.QHBoxLayout()
-            self.window_heading = heading
-            heading.addWidget(label("Companion", "Title"))
-            heading.addStretch()
-            self.window_size_caption = label("Window size", "Muted")
-            heading.addWidget(self.window_size_caption)
+            layout.setContentsMargins(10, 10, 10, 10)
+            layout.setSpacing(6)
+            self.controls_page = QtWidgets.QScrollArea()
+            self.controls_page.setWidgetResizable(True)
+            self.controls_page.setFrameShape(QtWidgets.QFrame.NoFrame)
+            controls_body = QtWidgets.QWidget()
+            controls_layout = QtWidgets.QVBoxLayout(controls_body)
+            controls_layout.setContentsMargins(12, 12, 12, 12)
+            controls_layout.setSpacing(14)
+            controls_layout.addWidget(label("ASSISTANCE SETTINGS", "Heading"))
+            controls_layout.addWidget(label("Turn features on or off whenever you need. Your saved choices stay separate from the active mode.", "Muted"))
             self.window_size = QtWidgets.QComboBox()
             self.window_size.setObjectName("companionWindowSize")
             self.window_size.setAccessibleName("Window size")
@@ -373,17 +403,12 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.window_size.model().item(self.window_size.count() - 1).setEnabled(False)
             self.window_size.setCurrentIndex(self.window_size.findData("Custom"))
             self.window_size.activated.connect(lambda index: self.windowSizeRequested.emit(self.window_size.itemData(index)))
-            heading.addWidget(self.window_size)
             self.refresh_button = QtWidgets.QPushButton("Refresh library")
             self.refresh_button.clicked.connect(self.refresh_library)
-            heading.addWidget(self.refresh_button)
-            layout.addLayout(heading)
             self.window_size_notice = label("", "Muted")
             self.window_size_notice.hide()
             layout.addWidget(self.window_size_notice)
-            layout.addWidget(label("Your scouting desk. Browse opponents, compare openings, and pin only what you need in game.", "Muted"))
             self.live_label = label("Connecting to your agent…", "Accent")
-            layout.addWidget(self.live_label)
             controls = QtWidgets.QHBoxLayout()
             self.preference_checks = {}
             for key, title in [("overlaysEnabled", "Game assistance enabled"), ("opponentOverlay", "Pin opponent"), ("scoutingOverlay", "Pin scouting")]:
@@ -398,15 +423,34 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.preview_button.setCheckable(True)
             self.preview_button.toggled.connect(self._update_overlays)
             controls.addWidget(self.preview_button)
-            layout.addLayout(controls)
+            controls_layout.addLayout(controls)
+            voice = QtWidgets.QCheckBox("Read scouting report aloud in Companion")
+            voice.setEnabled(False)
+            voice.toggled.connect(lambda value: self.set_preference("scoutingReadAloud", value))
+            self.preference_checks["scoutingReadAloud"] = voice
+            controls_layout.addWidget(voice)
+            controls_layout.addWidget(label("Uses your Windows system voice without OBS. Reads current opponent information and notes marked for readout. Keep only one scouting voice enabled if you also use OBS.", "Muted"))
+            voice_actions = QtWidgets.QHBoxLayout()
+            self.read_report_button = QtWidgets.QPushButton("Read report now")
+            self.read_report_button.setEnabled(False)
+            self.read_report_button.clicked.connect(self._read_report_now)
+            voice_actions.addWidget(self.read_report_button)
+            self.stop_report_button = QtWidgets.QPushButton("Stop reading")
+            self.stop_report_button.clicked.connect(self._stop_report)
+            voice_actions.addWidget(self.stop_report_button)
+            controls_layout.addLayout(voice_actions)
+            self.voice_status = label("Spoken scouting is off.", "Muted")
+            controls_layout.addWidget(self.voice_status)
             self.mode_controls = build_companion_modes(self, QtCore=QtCore, QtWidgets=QtWidgets)
             self.mode_controls.setEnabled(False)
             self.mode_controls.changed.connect(self._modes_changed)
-            layout.addWidget(self.mode_controls)
+            controls_layout.addWidget(self.mode_controls)
             self.notice = label("Loading your opponent library…", "Muted")
-            layout.addWidget(self.notice)
+            controls_layout.addWidget(self.notice)
+            controls_layout.addWidget(self.refresh_button)
+            controls_layout.addStretch()
+            self.controls_page.setWidget(controls_body)
 
-            splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
             library = QtWidgets.QWidget()
             library_layout = QtWidgets.QVBoxLayout(library)
             library_layout.setContentsMargins(0, 0, 6, 0)
@@ -425,7 +469,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.load_more_button.clicked.connect(self.load_more)
             self.load_more_button.setEnabled(False)
             library_layout.addWidget(self.load_more_button)
-            splitter.addWidget(library)
+            self.library_page = library
             scroll = QtWidgets.QScrollArea()
             scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
             scroll.setWidgetResizable(True)
@@ -445,6 +489,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.tendencies = label("", "Accent")
             profile_layout.addWidget(self.tendencies)
             body_layout.addWidget(profile)
+            profile.hide()
             body_layout.addWidget(label("PREVIOUS ENCOUNTERS", "Accent"))
             self.game_select = QtWidgets.QComboBox()
             self.game_select.currentIndexChanged.connect(self._game_selected)
@@ -517,11 +562,11 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             body_layout.addWidget(self.notes_section)
             body_layout.addStretch()
             scroll.setWidget(body)
-            splitter.addWidget(scroll)
-            splitter.setStretchFactor(1, 1)
-            splitter.setSizes([230, 800])
+            self.dossier = scroll
             self.workspace_tabs = QtWidgets.QTabWidget()
-            self.workspace_tabs.addTab(splitter, "Scouting")
+            self.scouting_stack = QtWidgets.QStackedWidget()
+            self.scouting_stack.addWidget(self.dossier)
+            self.workspace_tabs.addTab(self.scouting_stack, "Scouting")
             from .companion_builds import build_companion_builds
             from .companion_randomizer import build_companion_randomizer
             from .companion_ghost import build_companion_ghost
@@ -542,7 +587,6 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.workspace_tabs.addTab(self.build_selectors, "Build selectors")
             self.workspace_tabs.addTab(self.randomizer_page, "Randomizer")
             self.workspace_tabs.addTab(self.ghost_page, "Build Order Ghost")
-            layout.addWidget(self.workspace_tabs, 1)
             self._build_density_ui(layout)
 
         def _build_density_ui(self, layout):
@@ -556,31 +600,15 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                         result.extend(children(item.layout()))
                 return result
 
+            from .opponent_card import build_opponent_card
             self._normal_chrome = children(layout)
-            self.compact_card = QtWidgets.QFrame()
-            self.compact_card.setObjectName("companionCard")
-            compact_layout = QtWidgets.QVBoxLayout(self.compact_card)
-            compact_layout.setContentsMargins(12, 10, 12, 10)
-            compact_heading = QtWidgets.QHBoxLayout()
-            self.compact_name = label("—", "Heading")
-            compact_heading.addWidget(self.compact_name, 1)
-            self.compact_enlarge = QtWidgets.QToolButton()
-            self.compact_enlarge.setIcon(self.style().standardIcon(QtWidgets.QStyle.SP_TitleBarMaxButton))
-            self.compact_enlarge.setFixedSize(26, 26)
-            self.compact_enlarge.setStyleSheet("QToolButton { background: #b99aff; border: 1px solid #d4bfff; border-radius: 4px; padding: 3px; }")
-            self.compact_enlarge.setAccessibleName("Enlarge Companion")
-            self.compact_enlarge.setToolTip("Enlarge Companion · Standard view")
-            self.compact_enlarge.clicked.connect(lambda: self.windowSizeRequested.emit("standard"))
-            compact_heading.addWidget(self.compact_enlarge)
-            compact_layout.addLayout(compact_heading)
-            compact_stats = QtWidgets.QHBoxLayout()
-            self.compact_race = label("—", "Accent")
-            self.compact_mmr = label("—", "Accent")
-            compact_stats.addWidget(self.compact_race)
-            compact_stats.addStretch()
-            compact_stats.addWidget(self.compact_mmr)
-            compact_layout.addLayout(compact_stats)
-            layout.insertWidget(layout.count() - 1, self.compact_card, 1)
+            self.compact_card = build_opponent_card(self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, icon_root=icon_root)
+            self.compact_name = self.compact_card.name_label
+            self.compact_race = self.compact_card.race_label
+            self.compact_mmr = self.compact_card.mmr_label
+            self.compact_enlarge = self.compact_card.enlarge_button
+            self.compact_card.enlargeRequested.connect(lambda: self.windowSizeRequested.emit("standard"))
+            layout.addWidget(self.compact_card, 1)
 
             self.overview = QtWidgets.QScrollArea()
             self.overview.setWidgetResizable(True)
@@ -590,44 +618,68 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             overview_body.setObjectName("companionContent")
             overview_layout = QtWidgets.QVBoxLayout(overview_body)
             overview_layout.setContentsMargins(0, 0, 0, 0)
-            self.overview_identity = label("Choose an opponent", "Heading")
-            self.overview_stats = label("Race / MMR unavailable", "Muted")
-            overview_layout.addWidget(self.overview_identity)
-            overview_layout.addWidget(self.overview_stats)
-            self.overview_tabs = QtWidgets.QTabWidget()
-            build_summary = QtWidgets.QWidget()
-            build_layout = QtWidgets.QVBoxLayout(build_summary)
-            self.overview_builds = label("No replay build orders available", "Accent")
-            build_layout.addWidget(self.overview_builds)
-            self.overview_timings = QtWidgets.QTreeWidget()
-            self.overview_timings.setColumnCount(3)
-            self.overview_timings.setHeaderLabels(["SIDE", "KEY STEP", "TIME"])
-            self.overview_timings.setRootIsDecorated(False)
-            self.overview_timings.header().setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
-            self.overview_timings.setMinimumHeight(160)
-            build_layout.addWidget(self.overview_timings)
-            self.overview_tabs.addTab(build_summary, "Build orders")
             self.overview_recent = QtWidgets.QTreeWidget()
             self.overview_recent.setColumnCount(3)
             self.overview_recent.setHeaderLabels(["RECENT GAME", "YOUR BUILD", "OPPONENT BUILD"])
             self.overview_recent.setRootIsDecorated(False)
             self.overview_recent.header().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
             self.overview_recent.setMinimumHeight(160)
-            self.overview_tabs.addTab(self.overview_recent, "Recent games")
-            plan = QtWidgets.QWidget()
-            plan_layout = QtWidgets.QVBoxLayout(plan)
+            self.plan_summary = QtWidgets.QWidget()
+            plan_layout = QtWidgets.QVBoxLayout(self.plan_summary)
+            plan_layout.setContentsMargins(0, 4, 0, 4)
             self.overview_plan = label("Current plan unavailable", "Accent")
             self.overview_ghost = label("Ghost is waiting for live telemetry", "Muted")
+            self.overview_ghost.setMaximumHeight(36)
             plan_layout.addWidget(self.overview_plan)
             plan_layout.addWidget(self.overview_ghost)
-            plan_layout.addStretch()
-            self.overview_tabs.addTab(plan, "Game plan")
-            overview_layout.addWidget(self.overview_tabs)
+            overview_layout.addWidget(self.plan_summary)
             open_details = QtWidgets.QPushButton("Open full details")
             open_details.clicked.connect(self.open_full_details)
             overview_layout.addWidget(open_details)
             self.overview.setWidget(overview_body)
-            layout.insertWidget(layout.count() - 1, self.overview, 1)
+            from .companion_build_chain import build_build_chain
+            self.overview_dossier_title = label("SELECTED GAME · BUILD VS BUILD", "Heading")
+            overview_layout.insertWidget(0, self.overview_dossier_title)
+            self.build_chains = {}
+            self.upgrade_chains = {}
+            self.upgrade_headings = {}
+            self.chain_labels = {}
+            self.chain_reference_buttons = {}
+            self.chain_cards = []
+            chain_cards_body = QtWidgets.QWidget()
+            self.chain_cards_layout = QtWidgets.QGridLayout(chain_cards_body)
+            self.chain_cards_layout.setContentsMargins(0, 0, 0, 0)
+            self.chain_cards_layout.setSpacing(10)
+            overview_layout.insertWidget(1, chain_cards_body, 1)
+            for position, (side, title) in enumerate((("my", "YOUR OPENING"), ("opp", "OPPONENT OPENING"))):
+                card = QtWidgets.QFrame()
+                card.setObjectName("companionCard")
+                card_layout = QtWidgets.QVBoxLayout(card)
+                card_layout.setContentsMargins(12, 12, 12, 12)
+                card_layout.setSpacing(8)
+                card_layout.addWidget(label(title, "Accent"))
+                build_name = label("Unclassified build", "Heading")
+                card_layout.addWidget(build_name)
+                chain = build_build_chain(card, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, icon_provider=icon)
+                card_layout.addWidget(chain, 1)
+                upgrade_heading = label("UPGRADES · OBSERVED TIMINGS", "Accent")
+                upgrade_chain = build_build_chain(card, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, icon_provider=icon)
+                card_layout.addWidget(upgrade_heading)
+                upgrade_chain.setMaximumHeight(180)
+                card_layout.addWidget(upgrade_chain)
+                self.upgrade_headings[side] = upgrade_heading
+                self.upgrade_chains[side] = upgrade_chain
+                star = QtWidgets.QPushButton("☆ Use this build as Ghost")
+                chosen_side = "you" if side == "my" else "opponent"
+                star.clicked.connect(lambda _checked=False, selected_side=chosen_side: self._save_ghost_reference(selected_side))
+                card_layout.addWidget(star)
+                self.build_chains[side] = chain
+                self.chain_labels[side] = build_name
+                self.chain_reference_buttons[chosen_side] = star
+                self.chain_cards.append(card)
+                self.chain_cards_layout.addWidget(card, position, 0)
+            overview_layout.insertWidget(2, label("Replay observations · Started and Completed keep their original meaning.", "Muted"))
+            self.scouting_stack.addWidget(self.overview)
 
             self.details_bar = QtWidgets.QWidget()
             details_layout = QtWidgets.QHBoxLayout(self.details_bar)
@@ -640,7 +692,56 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.return_overview_button = QtWidgets.QPushButton("Return to overview")
             self.return_overview_button.clicked.connect(self._return_to_overview)
             details_layout.addWidget(self.return_overview_button)
-            layout.insertWidget(layout.count() - 1, self.details_bar)
+            self.details_bar.hide()
+            profile_body = QtWidgets.QWidget()
+            profile_layout = QtWidgets.QVBoxLayout(profile_body)
+            profile_layout.setContentsMargins(0, 0, 0, 0)
+            self.profile_card = build_opponent_card(profile_body, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, icon_root=icon_root, layout="profile")
+            self.profile_card.enlarge_button.hide()
+            profile_layout.addWidget(self.profile_card)
+            library_button = QtWidgets.QPushButton("Opponent library  ›")
+            profile_layout.addWidget(library_button)
+            encounters_button = QtWidgets.QPushButton("Previous encounters  ›")
+            profile_layout.addWidget(encounters_button)
+            profile_layout.addStretch()
+            from .companion_console import build_companion_console
+            self.console = build_companion_console(
+                self, profile_widget=profile_body, workspace_tabs=self.workspace_tabs,
+                opponents_widget=self.library_page, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets,
+            )
+            self.console.register_page("settings", self.controls_page, "Assistance settings")
+            self.console.register_page("history", self.overview_recent, "Previous encounters")
+            library_button.clicked.connect(lambda: self.console.navigate("opponents"))
+            encounters_button.clicked.connect(lambda: self.console.navigate("history"))
+            self.overview_recent.itemActivated.connect(lambda item, _column: self.console.navigate("scouting", opponent_id=self._selected_id, game_id=item.data(0, QtCore.Qt.UserRole)))
+            self.overview_recent.itemClicked.connect(lambda item, _column: self.console.navigate("scouting", opponent_id=self._selected_id, game_id=item.data(0, QtCore.Qt.UserRole)))
+            self.console.gameStepRequested.connect(self._step_game)
+            self.console.playerStepRequested.connect(self._step_opponent)
+            self.console.navigationChanged.connect(self._console_navigation_changed)
+            self.opponent_list.itemClicked.connect(lambda item: self.console.navigate("scouting", opponent_id=item.data(QtCore.Qt.UserRole)))
+            self.console.brand_actions.addWidget(self.window_size)
+            self.voice_shortcut = QtWidgets.QPushButton("Voice off")
+            self.voice_shortcut.setAccessibleName("Spoken scouting report")
+            self.voice_shortcut.setCheckable(True)
+            self.voice_shortcut.toggled.connect(lambda checked: self.set_preference("scoutingReadAloud", checked))
+            self.voice_shortcut.setEnabled(callable(handler))
+            self.console.brand_actions.addWidget(self.voice_shortcut)
+            assistance_button = QtWidgets.QPushButton("Assistance")
+            assistance_button.clicked.connect(lambda: self.console.navigate("settings"))
+            self.console.brand_actions.addWidget(assistance_button)
+            self.agent_menu_button = QtWidgets.QToolButton()
+            self.agent_menu_button.setText("Agent")
+            self.agent_menu_button.setAccessibleName("Agent pages and settings")
+            self.agent_menu_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+            menu = QtWidgets.QMenu(self.agent_menu_button)
+            for title, route in (("Dashboard", "dashboard"), ("Recent games", "recent"), ("Settings", "settings"), ("Streams", "streams"), ("Logs", "log")):
+                menu.addAction(title, lambda _checked=False, destination=route: self.agentPageRequested.emit(destination))
+            self.agent_menu_button.setMenu(menu)
+            self.console.brand_actions.addWidget(self.agent_menu_button)
+            layout.addWidget(self.console, 1)
+            layout.addWidget(self.details_bar)
+            layout.addWidget(self.live_label)
+            self.console.navigate("scouting")
             self.set_density("full")
 
         def current_density(self):
@@ -656,13 +757,22 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             compact = level == "compact"
             for widget in self._normal_chrome:
                 widget.setVisible(not compact and (widget is not self.window_size_notice or bool(self.window_size_notice.text())))
-            self.layout().setContentsMargins(10, 10, 10, 10) if compact else self.layout().setContentsMargins(22, 18, 22, 18)
-            self.layout().setSpacing(6 if compact else 12)
+            self.layout().setContentsMargins(0, 0, 0, 0) if compact else self.layout().setContentsMargins(8, 8, 8, 8)
+            self.layout().setSpacing(6)
             self.compact_card.setVisible(compact)
-            self.overview.setVisible(level == "standard")
-            self.workspace_tabs.setVisible(level in ("detailed", "full"))
-            self.details_bar.setVisible(level == "detailed" or bool(self._return_density))
-            self.full_details_button.setVisible(level == "detailed")
+            self.console.setVisible(not compact)
+            self.live_label.setVisible(not compact)
+            self.plan_summary.setVisible(level == "standard")
+            self.scouting_stack.setCurrentWidget(self.dossier if level == "full" else self.overview)
+            for index, card in enumerate(self.chain_cards):
+                self.chain_cards_layout.addWidget(card, index if level == "standard" else 0, 0 if level == "standard" else index)
+            for side in self.upgrade_chains:
+                self.upgrade_chains[side].setVisible(level == "detailed")
+                self.upgrade_headings[side].setVisible(level == "detailed")
+                self.build_chains[side].setMinimumHeight(166)
+            self.console.set_density(level)
+            self.details_bar.setVisible(not compact and bool(self._return_density))
+            self.full_details_button.hide()
             self.return_overview_button.setVisible(bool(self._return_density))
             self.details_caption.setText("Full details · your overview stays available" if self._return_density else
                                          "Detailed · both tech trees, upgrades and replay comparison")
@@ -709,35 +819,95 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 profile = direct.get("profile") if isinstance(direct.get("profile"), dict) else {}
                 mmr = profile.get("mmr")
             race = {"p": "Protoss", "protoss": "Protoss", "t": "Terran", "terran": "Terran", "z": "Zerg", "zerg": "Zerg", "r": "Random", "random": "Random"}.get(str(race).strip().lower(), "—")
-            mmr_text = str(round(mmr)) + " MMR" if type(mmr) in {int, float} and math.isfinite(mmr) and mmr > 0 else "—"
-            self.compact_name.setText(name)
-            self.compact_race.setText(str(race))
-            self.compact_mmr.setText(mmr_text)
-            self.compact_card.setToolTip("Current live opponent" if active else "Opponent telemetry unavailable" if in_game else "Selected opponent profile")
-            self.overview_identity.setText(name)
             record = context.get("headToHead") or context.get("totals") or {}
-            h2h = f"{record['wins']}W / {record['losses']}L" if isinstance(record, dict) and record.get("wins") is not None and record.get("losses") is not None else "No head-to-head record"
-            self.overview_stats.setText(str(race) + " · " + mmr_text + " · " + h2h)
-            games = context.get("last5GamesScouting") if active else self._games if context else []
-            games = games if isinstance(games, list) else []
+            record = record if isinstance(record, dict) else {}
+            self.compact_card.set_identity(name=name, race=race, mmr=mmr, wins=record.get("wins"), losses=record.get("losses"))
+            self.compact_card.setToolTip("Current live opponent" if active else "Opponent telemetry unavailable" if in_game else "Selected opponent profile")
+            games = self._games
             selected = self.game_select.currentData()
             game = next((row for row in games if isinstance(row, dict) and row.get("gameId") == selected), games[0] if games else {})
-            self.overview_builds.setText(_builds(game) if game else "No replay build orders available")
-            self.overview_recent.clear()
-            for index, recent in enumerate(games[:5]):
+            for side, key in (("my", "myBuild"), ("opp", "oppStrategy")):
+                build_name = game.get(key) or (game.get("oppBuild") if side == "opp" else None)
+                self.chain_labels[side].setText(str(build_name or "Unclassified build"))
+                self.build_chains[side].set_events(_events(game, side), limit=4 if self._density == "standard" else 8)
+                self.build_chains[side].set_density(self._density)
+                self.upgrade_chains[side].set_events(_events(game, side, upgrades=True), limit=8)
+            self.overview_dossier_title.setText("BUILD VS BUILD · " + (str(game.get("map") or "Unknown map") if game else "SELECT A REPLAY"))
+            recent_rows = []
+            for index, recent in enumerate(games):
                 if isinstance(recent, dict):
-                    self.overview_recent.addTopLevelItem(QtWidgets.QTreeWidgetItem([_game_title(recent, index), str(recent.get("myBuild") or "Unclassified"), str(recent.get("oppStrategy") or "Unclassified")]))
-            self.overview_timings.clear()
-            for side, caption in (("my", "YOU"), ("opp", "OPP")):
-                for event in _events(game, side)[:4]:
-                    self.overview_timings.addTopLevelItem(QtWidgets.QTreeWidgetItem([caption, _display_name(event["name"]), _time(event["timeSec"])]))
-            if not self.overview_timings.topLevelItemCount():
-                self.overview_timings.addTopLevelItem(QtWidgets.QTreeWidgetItem(["", "Replay timings unavailable", ""]))
+                    recent_rows.append((recent.get("gameId"), _game_title(recent, index), str(recent.get("myBuild") or "Unclassified"), str(recent.get("oppStrategy") or "Unclassified")))
+            recent_signature = tuple(recent_rows)
+            if recent_signature != getattr(self, "_recent_signature", None):
+                current_item = self.overview_recent.currentItem()
+                current_id = current_item.data(0, QtCore.Qt.UserRole) if current_item is not None else selected
+                vertical_position = self.overview_recent.verticalScrollBar().value()
+                horizontal_position = self.overview_recent.horizontalScrollBar().value()
+                blocked = QtCore.QSignalBlocker(self.overview_recent)
+                self.overview_recent.clear()
+                previous_item = None
+                selected_item = None
+                for game_id, *columns in recent_rows:
+                    item = QtWidgets.QTreeWidgetItem(columns)
+                    item.setData(0, QtCore.Qt.UserRole, game_id)
+                    self.overview_recent.addTopLevelItem(item)
+                    if game_id == current_id:
+                        previous_item = item
+                    if game_id == selected:
+                        selected_item = item
+                if previous_item is not None or selected_item is not None:
+                    self.overview_recent.setCurrentItem(previous_item if previous_item is not None else selected_item)
+                self.overview_recent.doItemsLayout()
+                self.overview_recent.verticalScrollBar().setValue(vertical_position)
+                self.overview_recent.horizontalScrollBar().setValue(horizontal_position)
+                self._recent_signature = recent_signature
+                del blocked
             loading = self.build_selectors.loading_model
             key = envelope.get("gameKey") if isinstance(envelope, dict) else None
             plan = (getattr(loading, "locked_label", None) or getattr(loading, "current_pick_label", None)) if active and loading is not None and loading.game_key == key else None
             self.overview_plan.setText("Current plan · " + str(plan) if plan else "No current plan selected")
-            self.overview_ghost.setText(self.ghost_page.overview_summary(3))
+            ghost_summary = self.ghost_page.overview_summary(1)
+            self.overview_ghost.setText(ghost_summary)
+            self.overview_ghost.setToolTip(ghost_summary)
+            if hasattr(self, "console"):
+                self.console.set_game_navigation(self.game_select.currentIndex(), len(self._games), self.game_select.currentText())
+                self.console.set_player_navigation(self.opponent_list.currentRow(), self.opponent_list.count())
+                self.console.set_breadcrumb(opponent_name=_name(self._detail) if self._detail else "", game_title=str(game.get("map") or ""))
+
+        def _step_game(self, step):
+            index = self.game_select.currentIndex() + step
+            if 0 <= index < self.game_select.count():
+                self.console.navigate("scouting", opponent_id=self._selected_id, game_id=self.game_select.itemData(index))
+
+        def _enlarge_from_panel(self):
+            self.windowSizeRequested.emit("standard")
+            self.console.navigate("scouting")
+            self.window().showNormal()
+            self.window().raise_()
+            self.window().activateWindow()
+
+        def _step_opponent(self, step):
+            index = self.opponent_list.currentRow() + step
+            if 0 <= index < self.opponent_list.count():
+                item = self.opponent_list.item(index)
+                self.console.navigate("scouting", opponent_id=item.data(QtCore.Qt.UserRole))
+
+        def _console_navigation_changed(self, entry):
+            opponent_id = entry.get("opponentId")
+            game_id = entry.get("gameId")
+            if opponent_id and game_id:
+                self._game_selections[opponent_id] = game_id
+            if opponent_id and opponent_id != self._selected_id:
+                for index in range(self.opponent_list.count()):
+                    item = self.opponent_list.item(index)
+                    if item.data(QtCore.Qt.UserRole) == opponent_id:
+                        self.opponent_list.setCurrentItem(item)
+                        return
+                self.console.set_context(opponent_id=self._selected_id, game_id=self.game_select.currentData())
+            elif game_id:
+                index = self.game_select.findData(game_id)
+                if index >= 0:
+                    self.game_select.setCurrentIndex(index)
 
         def _position_overlays(self):
             screen = self.screen()
@@ -949,6 +1119,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._selected_id = None
             self._detail = {}
             self._drafts.clear()
+            self._game_selections.clear()
             self.opponent_list.clear()
             self._render_detail()
 
@@ -960,8 +1131,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             for row in self._opponents:
                 if query and query not in (_name(row) + " " + str(row.get("race") or "")).casefold():
                     continue
-                wins, losses = row.get("wins", 0), row.get("losses", 0)
-                item = QtWidgets.QListWidgetItem(f"{_name(row)}\n{row.get('race') or 'Unknown race'}   ·   {wins}W / {losses}L")
+                record = opponent_record(row.get("wins"), row.get("losses"))
+                item = QtWidgets.QListWidgetItem(f"{_name(row)}\n{row.get('race') or 'Unknown race'}   ·   {record['text']}")
                 item.setData(QtCore.Qt.UserRole, str(row.get("pulseId") or ""))
                 item.setIcon(icon(str(row.get("race") or ""), "race"))
                 self.opponent_list.addItem(item)
@@ -1000,6 +1171,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             if wins is not None and losses is not None:
                 pieces.append(f"Your record: {wins}W · {losses}L")
             self.profile_summary.setText("  ·  ".join(pieces) or "Select an opponent to browse shared replay history.")
+            selected_row = next((row for row in self._opponents if str(row.get("pulseId")) == self._selected_id), {})
+            self.profile_card.set_identity(name=_name(detail) if detail else _name(selected_row) if selected_row else None,
+                                           race=detail.get("race") or detail.get("oppRaceModal") or selected_row.get("race"),
+                                           mmr=detail.get("mmr"), wins=wins, losses=losses)
             predictions = detail.get("predictedStrategies") or detail.get("topStrategies") or []
             self.tendencies.setText("Observed openings: " + " · ".join(str(row.get("name") or row.get("strategy") or "") for row in predictions[:3]) if predictions else "")
             self._games = detail.get("gamesScouting") or detail.get("last5GamesScouting") or []
@@ -1007,6 +1182,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.game_select.clear()
             for index, game in enumerate(self._games):
                 self.game_select.addItem(_game_title(game, index), game.get("gameId"))
+            selected_game = self.game_select.findData(self._game_selections.get(self._selected_id))
+            if selected_game >= 0:
+                self.game_select.setCurrentIndex(selected_game)
             self.game_select.setEnabled(bool(self._games))
             del blocked
             self._game_selected()
@@ -1025,6 +1203,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
         def _game_selected(self):
             index = self.game_select.currentIndex()
             game = self._games[index] if 0 <= index < len(self._games) else {}
+            if self._selected_id and game.get("gameId"):
+                self._game_selections[self._selected_id] = game["gameId"]
+            if hasattr(self, "console"):
+                self.console.set_context(opponent_id=self._selected_id, game_id=game.get("gameId"))
             self.build_labels.setText(_builds(game) if game else "No prior replay scouting available")
             self.game_summary.setText(f"{game.get('myRace') or 'You'} vs {game.get('oppRace') or 'Opponent'} · {_time(game.get('durationSec'))} · {game.get('map') or 'Unknown map'}" if game else "Import and analyze replays to see build orders, important tech steps, and their timings.")
             for key, sides in self.trees.items():
@@ -1039,6 +1221,74 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.phase_summary.setText("\n".join(transitions))
             self._update_ghost_reference_buttons()
             self._render_information_layout()
+            self._update_speech()
+
+        def _update_speech(self):
+            if not hasattr(self, "scouting_speech"):
+                return
+            active, context = _live_context(self._snapshot)
+            envelope = self._snapshot.get("liveGame") or {}
+            game_key = envelope.get("gameKey")
+            permitted = self.assistance_enabled() and self._preferences["scoutingReadAloud"] and self.mode_gates()["scoutingReadAloud"]
+            opponent = envelope.get("opponent") or {}
+            known_identity = any(isinstance(value, str) and value.strip() for value in (opponent.get("revealedName"), opponent.get("name")))
+            current = bool(active and known_identity and isinstance(game_key, str) and game_key.strip() and verified_one_on_one(self._snapshot))
+            self.read_report_button.setEnabled(permitted and current)
+            self.voice_shortcut.setToolTip("Desktop scouting voice. Turn off to stop reading immediately. OBS speech is a separate setting." if permitted else
+                                           "Desktop scouting voice is off or hidden by the master switch or active mode. Open Assistance to change it.")
+            if not permitted or not current:
+                if self._speech_game_key is not None or self._speech_pending_key is not None:
+                    self._stop_report()
+                self.voice_status.setText("Spoken scouting is off." if not self._preferences["scoutingReadAloud"] else
+                                          "Spoken scouting is hidden by the master switch or active mode." if not permitted else
+                                          "Waiting for a fresh human 1v1 opponent. Browsing history does not trigger speech.")
+                return
+            if self._speech_game_key is not None and self._speech_game_key != game_key:
+                self._stop_report()
+            if envelope.get("phase") not in {"match_started", "match_in_progress"}:
+                self.voice_status.setText("Spoken scouting is ready for the game to start.")
+                return
+            if game_key not in self._spoken_game_keys:
+                if self._speech_pending_key != game_key:
+                    self._speech_pending_key = game_key
+                    self._speech_pending_at = time.monotonic()
+                history = envelope.get("streamerHistory")
+                enriched = isinstance(history, dict) and (isinstance(history.get("headToHead"), dict) or type(history.get("opponentIdentityMatched")) is bool)
+                if not enriched and time.monotonic() - self._speech_pending_at < 6:
+                    self.voice_status.setText("Preparing the scouting report · waiting briefly for your opponent history.")
+                    return
+                self._spoken_game_keys = (self._spoken_game_keys + [game_key])[-128:]
+                self._speech_pending_key = None
+                self._speech_pending_at = None
+                self._speak_report(context, game_key)
+
+        def _speak_report(self, context, game_key):
+            from .companion_speech import build_scouting_report
+            if self.scouting_speech.speak(build_scouting_report(context)):
+                self._speech_game_key = game_key
+
+        def _read_report_now(self):
+            active, context = _live_context(self._snapshot)
+            envelope = self._snapshot.get("liveGame") or {}
+            opponent = envelope.get("opponent") or {}
+            game_key = envelope.get("gameKey")
+            identity_ready = any(isinstance(value, str) and value.strip() for value in (opponent.get("revealedName"), opponent.get("name")))
+            allowed = self.assistance_enabled() and self._preferences["scoutingReadAloud"] and self.mode_gates()["scoutingReadAloud"]
+            if allowed and active and identity_ready and isinstance(game_key, str) and game_key.strip() and verified_one_on_one(self._snapshot):
+                if game_key not in self._spoken_game_keys:
+                    self._spoken_game_keys = (self._spoken_game_keys + [game_key])[-128:]
+                self._speech_pending_key = None
+                self._speech_pending_at = None
+                self._speak_report(context, game_key)
+
+        def _stop_report(self):
+            if hasattr(self, "scouting_speech"):
+                self.scouting_speech.stop()
+            if self._speech_pending_key is not None and self._speech_pending_key not in self._spoken_game_keys:
+                self._spoken_game_keys = (self._spoken_game_keys + [self._speech_pending_key])[-128:]
+            self._speech_pending_key = None
+            self._speech_pending_at = None
+            self._speech_game_key = None
 
         def _ghost_references_changed(self, references):
             self._ghost_references = references if isinstance(references, dict) else {}
@@ -1056,6 +1306,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 title = "Use my build as Ghost" if side == "you" else "Use opponent's build as Ghost"
                 button.setText(("★ " if self._is_ghost_reference(side) else "☆ ") + title)
                 button.setEnabled(bool(game_id) and "ghost_reference" not in self._requests)
+                chain_button = self.chain_reference_buttons[side]
+                chain_button.setText(("★ " if self._is_ghost_reference(side) else "☆ ") + "Use this build as Ghost")
+                chain_button.setEnabled(button.isEnabled())
 
         def _save_ghost_reference(self, side):
             game_id = self.game_select.currentData()
@@ -1085,6 +1338,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 blocked = QtCore.QSignalBlocker(self.preference_checks[key])
                 self.preference_checks[key].setChecked(self._preferences[key])
                 del blocked
+            blocked = QtCore.QSignalBlocker(self.voice_shortcut)
+            self.voice_shortcut.setChecked(self._preferences["scoutingReadAloud"])
+            self.voice_shortcut.setText("Voice on" if self._preferences["scoutingReadAloud"] else "Voice off")
+            del blocked
 
         def set_preference(self, key, value):
             if self._closed or not callable(handler) or key not in self._preferences:
@@ -1170,6 +1427,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 else:
                     panel.hide()
             self._render_information_layout()
+            self._update_speech()
 
         def set_active(self, active):
             if active:
@@ -1190,6 +1448,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 return
             self._closed = True
             self.timer.stop()
+            self.scouting_speech.shutdown()
             self._requests.clear()
             self.build_selectors.set_assistance_enabled(False)
             self.randomizer_page.shutdown()

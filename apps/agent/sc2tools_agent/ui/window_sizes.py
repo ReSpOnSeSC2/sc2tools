@@ -3,7 +3,7 @@ from __future__ import annotations
 
 
 WINDOW_SIZE_PRESETS = (
-    ("Compact", "compact", (360, 190)),
+    ("Compact", "compact", (360, 240)),
     ("Standard", "standard", (1200, 900)),
     ("Detailed", "detailed", (1440, 1080)),
     ("Full workspace", "full", None),
@@ -26,7 +26,7 @@ def fit_window_preset(
     requested = next((size for title, _layout, size in WINDOW_SIZE_PRESETS if title == name), None)
     if requested is None:
         raise ValueError("Unknown normal-window preset")
-    minimum = minimum or ((300, 160) if name == "Compact" else (820, 540))
+    minimum = minimum or ((300, 210) if name == "Compact" else (820, 540))
     origin_x, origin_y, available_width, available_height = available
     frame_width, frame_height = (max(0, dimension) for dimension in frame)
     maximum_width = max(1, available_width - frame_width)

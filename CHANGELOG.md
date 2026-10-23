@@ -11,6 +11,15 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.21.1 - Companion console and scouting voice
+- Reference-led purple dossier UI with portrait-based Compact, W–L and win
+  percentage, icon build chains, and context-preserving screen navigation.
+- Optional native scouting speech independent of OBS and pinned panels, with
+  saved on/off controls, manual repeat, immediate Stop, and stale-game guards.
+- Agent package, website version fallback, preview guidance, and desktop
+  screenshots are updated together. Unsigned verification builds remain test
+  artifacts, separate from the signed public stable download.
+
 ### Agent 0.21.0 - Companion build tools
 
 - Pre-game and post-game build selectors, the build randomizer, and Build Order

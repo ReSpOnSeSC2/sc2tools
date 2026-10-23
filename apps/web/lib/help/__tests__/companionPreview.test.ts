@@ -8,7 +8,7 @@ describe("Companion preview availability", () => {
       const article = getArticle(slug);
       expect(article, slug).toBeDefined();
       const text = article!.body.map(helpBlockText).join(" ");
-      expect(text, slug).toContain("Companion 0.21.0 preview");
+      expect(text, slug).toContain(`Companion ${slug === "desktop-companion" ? "0.21.1" : "0.21.0"} preview`);
       expect(text, slug).toContain("current stable download");
     }
     for (const slug of ["desktop-companion", "install-app"]) {
