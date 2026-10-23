@@ -33,6 +33,7 @@ import builds_customBuilds from "./builds/custom-builds";
 import builds_practiceGhostBuild from "./builds/practice-ghost-build";
 import builds_publishCommunityBuilds from "./builds/publish-community-builds";
 import builds_randomizer from "./builds/randomizer";
+import builds_readingGuideStats from "./builds/reading-guide-stats";
 import builds_rulesExplained from "./builds/rules-explained";
 import desktopApp_desktopAppActivityLog from "./desktop-app/desktop-app-activity-log";
 import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
@@ -46,6 +47,7 @@ import gettingStarted_aPageAskedMeToSignIn from "./getting-started/a-page-asked-
 import gettingStarted_browserImport from "./getting-started/browser-import";
 import gettingStarted_gettingStarted from "./getting-started/getting-started";
 import gettingStarted_howToUseHelp from "./getting-started/how-to-use-help";
+import gettingStarted_importingReplayHistory from "./getting-started/importing-replay-history";
 import gettingStarted_installAndPair from "./getting-started/install-and-pair";
 import gettingStarted_installApp from "./getting-started/install-app";
 import gettingStarted_settingsOverview from "./getting-started/settings-overview";
@@ -61,6 +63,7 @@ import streamStudio_viewerEngagement from "./stream-studio/viewer-engagement";
 import streamStudio_voice from "./stream-studio/voice";
 import troubleshooting_myGameDidntShowUp from "./troubleshooting/my-game-didnt-show-up";
 import troubleshooting_reportAProblem from "./troubleshooting/report-a-problem";
+import troubleshooting_setupHealth from "./troubleshooting/setup-health";
 import troubleshooting_somethingWentWrong from "./troubleshooting/something-went-wrong";
 import troubleshooting_troubleshootingAndSupport from "./troubleshooting/troubleshooting-and-support";
 
@@ -94,6 +97,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_practiceGhostBuild,
   builds_publishCommunityBuilds,
   builds_randomizer,
+  builds_readingGuideStats,
   builds_rulesExplained,
   desktopApp_desktopAppActivityLog,
   desktopApp_desktopAppOverview,
@@ -107,6 +111,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   gettingStarted_browserImport,
   gettingStarted_gettingStarted,
   gettingStarted_howToUseHelp,
+  gettingStarted_importingReplayHistory,
   gettingStarted_installAndPair,
   gettingStarted_installApp,
   gettingStarted_settingsOverview,
@@ -122,6 +127,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   streamStudio_voice,
   troubleshooting_myGameDidntShowUp,
   troubleshooting_reportAProblem,
+  troubleshooting_setupHealth,
   troubleshooting_somethingWentWrong,
   troubleshooting_troubleshootingAndSupport,
 ];

@@ -341,7 +341,7 @@ export function DashboardKpiStrip() {
               q={selectedRangeSeries}
             />
           ) : (
-            selectedRangeLabel
+            <span>Uses filters · {selectedRangeLabel}</span>
           )
         }
         size="md"

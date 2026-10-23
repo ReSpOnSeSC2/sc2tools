@@ -39,6 +39,8 @@ const article: HelpArticle = {
   ],
   updated: "2026-10-23",
   body: [
+    { type: "heading", text: "Using filters", anchor: "using-filters" },
+    { type: "paragraph", text: "The summary lists your date range, game type, game size, regions, length and any matchup. **Filters** counts all facets that differ from the defaults. On a computer, date, matchup and region stay inline; open Filters for the other choices. On a phone, Filters opens the complete editor, with Reset to defaults and Done at the bottom. Changes apply immediately." },
     {
       type: "paragraph",
       text: "The filter bar sits at the top of the analyzer. Opponents and each opponent's page, Strategies, Trends, Macro, Maps, Builds and Replays use these filters. Today includes cards with their own scope, listed below. Arcade and the page for a single game ignore the filter bar.",
@@ -55,10 +57,10 @@ const article: HelpArticle = {
         ["Date range", "After 5.0.17 · 12 workers", "A patch, a ladder season, a quick range such as Last 30 days, or your own dates."],
         ["Matchup", "All", "Only games against one race. **My race** appears when you have games as more than one race."],
         ["Region", "All six on", "Tap a region to hide its games. PTR is the Public Test Realm."],
-        ["Maps", "Ladder", "Ranked ladder games, custom and unranked games, or All."],
-        ["Players", "1v1", "1v1 games, team games, or All."],
-        ["Length", "All", "Games under 10 minutes, 10 to 20, 20 and over, or a custom range."],
-        ["Hide too-short", "On", "Leaves out games under 45 seconds."],
+        ["Game type", "Ranked ladder", "Ranked ladder, Custom games (including unranked), or Both."],
+        ["Game size", "1v1", "1v1 games, team games, or All."],
+        ["Length", "Any length", "Games under 10 minutes, 10 to 20, 20 and over, or a custom range."],
+        ["Hide games under 45 s", "On", "Leaves out games under 45 seconds."],
       ],
     },
     {
@@ -73,7 +75,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Too-short games", anchor: "too-short" },
     {
       type: "paragraph",
-      text: "Games under 45 seconds are disconnects and instant leaves where no build order happened. **Hide too-short** leaves them out of filtered analyzer sections by default. Turn it off to count them too. Arcade and individual game pages keep their own scope.",
+      text: "Games under 45 seconds are disconnects and instant leaves where no build order happened. **Hide games under 45 s** leaves them out of filtered analyzer sections by default. Turn it off to count them too. Arcade and individual game pages keep their own scope.",
     },
     { type: "heading", text: "Pick a matchup", anchor: "matchup" },
     {
@@ -109,13 +111,13 @@ const article: HelpArticle = {
     { type: "heading", text: "On a phone", anchor: "phone" },
     {
       type: "paragraph",
-      text: "The date range stays at the top. The other filters sit behind the **Filters** button, which counts the filters other than the date range that differ from the defaults, for example *Filters · 2 active*. Tap it to open them, make your changes (they apply right away) and tap **Done**. The Active filters row works the same as on a computer.",
+      text: "The summary and **Filters** button stay at the top. Tap Filters for every control, including the date range. Large touch targets, Reset to defaults and Done keep the editor usable on a small screen. The Active filters row works the same as on a computer.",
     },
     { type: "heading", text: "Cards with their own scope", anchor: "card-scope" },
     {
       type: "list",
       items: [
-        "**Games in range** on Today follows every filter. When filters other than the date apply, its note says how many, for example *12-worker patch · 2 more filters*.",
+        "**Games in range** on Today follows every filter and says **Uses filters**. Today starts with a slim scope note: use Show filters to expand the editor; that choice is remembered on this device. Active filter chips stay visible even when the editor is closed.",
         "**Win rate** on Today has its own timeframe: pick it from the menu next to its title. It ignores the date range, region, matchup and Strategies picks, and keeps the Maps, Players, Length and Hide too-short filters.",
         "**Today's session** and **Active streak** look at today and your latest games, with the same Maps, Players, Length and Hide too-short filters.",
         "**MMR** shows your current ladder rating and ignores filters.",

@@ -1,15 +1,16 @@
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { fmtDeltaPp, fmtGuideDate, trendDirection, type GuideTrendDirection } from "@/lib/guides/format";
 import type { GuideTrend } from "@/lib/guides/types";
+import { Badge } from "@/components/ui/Badge";
 
 const TREND_ICONS = { up: ArrowUp, down: ArrowDown, flat: Minus } as const;
 const TREND_TONES = { up: "text-success", down: "text-danger", flat: "text-text-dim" } as const;
 
 function NewTag() {
   return (
-    <span className="inline-flex items-center rounded-full border border-accent-cyan/40 px-1.5 text-micro font-bold uppercase text-accent-cyan">
+    <Badge variant="cyan" size="sm">
       New
-    </span>
+    </Badge>
   );
 }
 

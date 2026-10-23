@@ -14,12 +14,12 @@ import {
 afterEach(cleanup);
 
 describe("SettingsShell import tab", () => {
-  it("is hidden by default", () => {
+  it("is available by default for desktop import", () => {
     render(<SettingsShell renderTab={(id) => <div>{id}</div>} />);
-    expect(screen.queryAllByRole("tab", { name: "Import" })).toHaveLength(0);
+    expect(screen.queryAllByRole("tab", { name: "Import" })).toHaveLength(2);
     expect(screen.getAllByRole("tab", { name: "Backups & data" })).toHaveLength(2);
-    expect(defaultTabVisibility("import")).toBe(false);
-    expect(visibleSettingsTabs()).not.toContain("import");
+    expect(defaultTabVisibility("import")).toBe(true);
+    expect(visibleSettingsTabs()).toContain("import");
   });
 
   it("is shown and selectable when the page allows it", () => {
@@ -35,7 +35,7 @@ describe("SettingsShell import tab", () => {
   });
 
   it("falls back to the first visible tab for a hidden initial tab", () => {
-    render(<SettingsShell initialTab="import" renderTab={(id) => <div>panel:{id}</div>} />);
+    render(<SettingsShell initialTab="import" isTabVisible={(id) => id !== "import"} renderTab={(id) => <div>panel:{id}</div>} />);
     expect(screen.getByRole("tabpanel", { name: "Foundation" }).textContent).toBe("panel:foundation");
   });
 

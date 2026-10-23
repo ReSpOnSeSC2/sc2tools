@@ -9,6 +9,7 @@ import {
   useFilters,
 } from "@/lib/filterContext";
 import { PillButton } from "./FilterPill";
+import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 
 /**
  * Quick game-length bands offered beside the custom range.
@@ -55,6 +56,8 @@ export function GameLengthFilter() {
   const { filters, setFilters } = useFilters();
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap({ open, containerRef: dialogRef, onClose: () => setOpen(false) });
 
   const min = filters.min_minutes;
   const max = filters.max_minutes;
@@ -76,18 +79,6 @@ export function GameLengthFilter() {
     setDraftMax(max === undefined ? "" : String(max));
   }, [min, max, open]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
   const applyBounds = (next: { min_minutes?: number; max_minutes?: number }) => {
     setFilters({ ...filters, ...next });
   };
@@ -105,20 +96,19 @@ export function GameLengthFilter() {
   };
 
   return (
-    <div
-      role="group"
+    <fieldset
       aria-label="Filter by game length"
       className="inline-flex flex-wrap items-center gap-1.5"
     >
-      <span className="text-xs uppercase tracking-wider text-text-dim">
+      <legend className="mb-1 text-xs uppercase tracking-wider text-text-dim">
         Length
-      </span>
+      </legend>
       <PillButton
         active={isAll}
         title="Games of any length"
         onClick={() => applyBounds({ min_minutes: undefined, max_minutes: undefined })}
       >
-        All
+        Any length
       </PillButton>
       {LENGTH_BANDS.map((band) => (
         <PillButton
@@ -147,7 +137,7 @@ export function GameLengthFilter() {
               : "Filter to a custom game-length range"
           }
           className={[
-            "inline-flex min-h-[28px] items-center gap-1 rounded-full border px-2 py-0.5",
+            "analyzer-filter-pill inline-flex min-h-8 items-center gap-1 rounded-full border px-2 py-0.5",
             "text-micro font-medium uppercase tracking-wider tabular-nums",
             "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
             isCustom
@@ -168,11 +158,13 @@ export function GameLengthFilter() {
               onClick={() => setOpen(false)}
             />
             <div
+              ref={dialogRef}
               role="dialog"
+              tabIndex={-1}
               aria-modal="true"
               aria-label="Custom game length"
               className={[
-                "fixed inset-x-2 bottom-2 z-40 rounded-xl border border-border bg-bg-surface p-4 shadow-card",
+                "fixed inset-x-2 bottom-above-chrome z-sheet rounded-xl border border-border bg-bg-surface p-4 shadow-card",
                 "sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-full sm:mt-1 sm:w-[min(92vw,320px)] sm:rounded-lg sm:p-3",
               ].join(" ")}
             >
@@ -250,6 +242,6 @@ export function GameLengthFilter() {
           </>
         ) : null}
       </div>
-    </div>
+    </fieldset>
   );
 }
