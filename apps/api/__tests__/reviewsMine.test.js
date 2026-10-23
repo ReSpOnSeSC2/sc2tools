@@ -90,6 +90,11 @@ test("invalid cursors and cursors from another tab or sort cannot change the req
   }
   const other = await get(`?section=asked&tab=needs&cursor=${needs.body.nextCursor}`, "other");
   expect(other.body.items).toEqual([]);
+  await h.db.reviewRequests.insertOne(row(1000, { userId: "u_other" }));
+  await h.db.reviewComments.insertMany([comment(1, { upvotes: 20 }), comment(2, { upvotes: 1 })]);
+  const top = await get("?section=answered&sort=top&limit=1");
+  const newest = await get(`?section=answered&sort=new&cursor=${top.body.nextCursor}`);
+  expect(newest.body.items.map((item) => item.commentId)).toEqual([id(2, "C"), id(1, "C")]);
 });
 
 test("written pagination preserves hidden-parent privacy, excludes replies/removed comments and can advance an empty page", async () => {
