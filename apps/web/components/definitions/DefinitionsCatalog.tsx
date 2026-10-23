@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { BookOpen, Check, Link2, Search, X } from "lucide-react";
-import { HelpLink } from "@/components/help/HelpLink";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { Field } from "@/components/ui/Field";
@@ -342,7 +342,7 @@ export function DefinitionsHeaderHint() {
         The detection rules used by the analyzer to label opponent strategies and
         your own builds. Use these to interpret labels in the rest of the app.
         Tracking your own version of an opener?{" "}
-        <HelpLink slug="custom-builds">Detected builds vs custom builds</HelpLink>
+        <LazyHelpLink slug="custom-builds">Detected builds vs custom builds</LazyHelpLink>
       </span>
     </p>
   );

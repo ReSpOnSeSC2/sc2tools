@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { HelpLink } from "@/components/help/HelpLink";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { Button } from "@/components/ui/Button";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { SaveBar } from "@/components/ui/SaveBar";
@@ -134,12 +134,12 @@ export function BuildCheckInSettings() {
             </li>
             <li>Games under 45 seconds never count toward a build.</li>
           </ul>
-          <HelpLink
+          <LazyHelpLink
             slug="build-check-in"
             className="mt-3 inline-flex min-h-11 items-center text-caption font-semibold text-accent-cyan underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
             How build check-in works, step by step
-          </HelpLink>
+          </LazyHelpLink>
         </Card>
       </Section>
 

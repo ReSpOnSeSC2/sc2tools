@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { HelpLink } from "@/components/help/HelpLink";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { Card } from "@/components/ui/Card";
 import { QueryState } from "@/components/ui/QueryState";
 import { useApi } from "@/lib/clientApi";
@@ -93,7 +93,7 @@ function BackupsBody({ data }: { data: AdminBackupsResp }) {
         <span>
           Restore steps: <code className="break-all font-mono">{RUNBOOK_PATH}</code>
         </span>
-        <HelpLink slug="backups-and-export">What users are told about backups</HelpLink>
+        <LazyHelpLink slug="backups-and-export">What users are told about backups</LazyHelpLink>
       </div>
     </Card>
   );

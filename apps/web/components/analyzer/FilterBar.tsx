@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarRange, ChevronDown, X } from "lucide-react";
-import { HelpLink } from "@/components/help/HelpLink";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import {
   ANALYZER_REGIONS,
   PTR_REGION,
@@ -281,7 +281,7 @@ export function FilterBar() {
 
       <div className="hidden sm:contents">{controls}</div>
 
-      <HelpLink slug="analyzer-filters" variant="icon" />
+      <LazyHelpLink slug="analyzer-filters" variant="icon" />
     </div>
   );
 }

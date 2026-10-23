@@ -86,7 +86,7 @@ export function RulesSummary({ rules, title = "Build order" }: RulesSummaryProps
               <RuleGroup key={group} group={group} rules={groups[group]} />
             ) : null,
           )}
-          <RulesLegend helpSlug="rules-explained" />
+          <RulesLegend withHelpLink />
         </div>
       </section>
     </Card>

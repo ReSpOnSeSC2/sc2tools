@@ -7,7 +7,7 @@ import { Modal } from "@/components/ui/Modal";
 import { getArticle, helpArticlePath } from "@/lib/help";
 import { helpInlinePlainText } from "@/lib/help/inline";
 import { HelpArticleBody } from "./HelpArticleBody";
-import { HELP_TEXT_LINK_CLASS, isPlainClick } from "./HelpInline";
+import { HELP_ICON_LINK_CLASS, HELP_TEXT_LINK_CLASS, isPlainClick } from "./HelpInline";
 import { HelpSupportLine } from "./HelpSupportLine";
 
 /**
@@ -55,12 +55,7 @@ export function HelpLink({ slug, children, variant = "inline", className = "" }:
           aria-haspopup="dialog"
           aria-label={`Help: ${article.title}`}
           title={article.title}
-          className={[
-            "inline-flex h-8 w-8 items-center justify-center rounded-full text-text-dim hover:bg-bg-elevated hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-            className,
-          ]
-            .filter(Boolean)
-            .join(" ")}
+          className={[HELP_ICON_LINK_CLASS, className].filter(Boolean).join(" ")}
         >
           <CircleHelp className="h-4 w-4" aria-hidden />
         </a>

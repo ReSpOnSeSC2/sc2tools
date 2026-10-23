@@ -141,9 +141,9 @@ describe("FilterBar phone sheet", () => {
     expect(picker.className).not.toMatch(/(^|\s)bottom-2(\s|$)/);
   });
 
-  it("links the filters help article from the bar", () => {
+  it("links the filters help article from the bar", async () => {
     render(<Harness />);
-    const help = screen.getByRole("link", { name: "Help: Filters: date, matchup, region and more" });
+    const help = await screen.findByRole("link", { name: "Help: Filters: date, matchup, region and more" });
     expect(help.getAttribute("href")).toBe("/help/analyzer-filters");
   });
 });

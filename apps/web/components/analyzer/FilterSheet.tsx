@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState, type ReactNode } from "react";
 import { SlidersHorizontal } from "lucide-react";
-import { HelpLink } from "@/components/help/HelpLink";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import {
@@ -83,9 +83,9 @@ export function FilterSheet({
       >
         <div className="flex flex-col items-start gap-5">
           {children}
-          <HelpLink slug="analyzer-filters" className="text-caption">
+          <LazyHelpLink slug="analyzer-filters" className="text-caption">
             How filters work
-          </HelpLink>
+          </LazyHelpLink>
         </div>
       </Modal>
     </>

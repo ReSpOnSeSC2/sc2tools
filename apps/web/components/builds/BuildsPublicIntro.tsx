@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { BookOpen, Library, Lock, Users } from "lucide-react";
-import { HelpLink } from "@/components/help/HelpLink";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { GlowHalo } from "@/components/ui/GlowHalo";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { buttonClassName } from "@/components/ui/buttonStyles";
@@ -78,7 +78,7 @@ export function BuildsPublicIntro({ returnTo = "/builds" }: { returnTo?: string 
                   Your build library needs a free account, and your builds stay
                   private unless you publish one. Community builds and
                   Definitions are public.{" "}
-                  <HelpLink slug="a-page-asked-me-to-sign-in">Which pages are public?</HelpLink>
+                  <LazyHelpLink slug="a-page-asked-me-to-sign-in">Which pages are public?</LazyHelpLink>
                 </span>
               </p>
               <div className="flex flex-col gap-2 sm:flex-row">

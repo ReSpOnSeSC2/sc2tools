@@ -19,7 +19,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DestructiveConfirmDialog } from "@/components/ui/DestructiveConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { useToast } from "@/components/ui/Toast";
-import { HelpLink } from "@/components/help/HelpLink";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { fmtAgo } from "@/lib/format";
 import { ReplayArchiveStatusCard } from "./ReplayArchiveStatusCard";
 
@@ -236,7 +236,7 @@ export function SettingsBackups() {
             with MongoDB Atlas, so the site can be recovered after a server
             failure. Those backups cover everyone at once, so they
             can&apos;t bring back just your account; a snapshot here can.{" "}
-            <HelpLink slug="backups-and-export">How backups work</HelpLink>
+            <LazyHelpLink slug="backups-and-export">How backups work</LazyHelpLink>
           </p>
         </div>
       </Section>

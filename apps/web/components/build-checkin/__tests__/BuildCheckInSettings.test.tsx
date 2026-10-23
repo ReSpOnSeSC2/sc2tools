@@ -62,12 +62,12 @@ describe("BuildCheckInSettings", () => {
     expect(screen.queryByRole("region", { name: "Unsaved changes" })).toBeNull();
   });
 
-  it("opens the step-by-step guide in the help panel", () => {
+  it("opens the step-by-step guide in the help panel", async () => {
     harness.data = {};
     render(<BuildCheckInSettings />);
-    const link = screen.getByRole("link", { name: "How build check-in works, step by step" });
-    expect(link.getAttribute("href")).toBe("/help/build-check-in");
-    expect(link.getAttribute("aria-haspopup")).toBe("dialog");
+    const link = () => screen.getByRole("link", { name: "How build check-in works, step by step" });
+    expect(link().getAttribute("href")).toBe("/help/build-check-in");
+    await vi.waitFor(() => expect(link().getAttribute("aria-haspopup")).toBe("dialog"), { timeout: 10_000 });
   });
 
   it("disables the agent prompts while check-ins are off", () => {

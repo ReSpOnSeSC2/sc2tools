@@ -116,16 +116,17 @@ describe("widget learning explorer", () => {
     expect((screen.getByRole("combobox", { name: "Category" }) as HTMLSelectElement).value).toBe("all");
   });
 
-  it("links the scouting widgets to the article that explains their numbers", () => {
+  it("links the scouting widgets to the article that explains their numbers", async () => {
     render(<WidgetExplorer />);
     const opponent = screen.getByRole("article", { name: "Opponent identity guide" });
     expect(within(opponent).queryByRole("link", { name: "Where these numbers come from" })).toBeNull();
 
     fireEvent.change(screen.getByRole("combobox", { name: "Choose a widget" }), { target: { value: "fav-opening" } });
     const guide = screen.getByRole("article", { name: "Favourite opening guide" });
-    const help = within(guide).getByRole("link", { name: "Where these numbers come from" });
-    expect(help.getAttribute("href")).toBe("/help/opponent-scouting");
-    fireEvent.click(help);
+    const help = () => within(guide).getByRole("link", { name: "Where these numbers come from" });
+    expect(help().getAttribute("href")).toBe("/help/opponent-scouting");
+    await vi.waitFor(() => expect(help().getAttribute("aria-haspopup")).toBe("dialog"), { timeout: 10_000 });
+    fireEvent.click(help());
     expect(screen.getByRole("dialog", { name: /Opponent scouting/ })).toBeTruthy();
   });
 
