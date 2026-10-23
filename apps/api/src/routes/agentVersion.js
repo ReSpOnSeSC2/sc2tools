@@ -18,6 +18,7 @@ const { compareVersions } = require("../services/agentVersion");
  * @param {{
  *   agentVersion: import('../services/types').AgentVersionService,
  *   adminToken?: string | null,
+ *   adminAudit?: import("../services/adminAudit").AdminAuditService,
  *   adminEvents?: {
  *     record: (type: string, payload: Record<string, unknown>, opts?: {ingestionKey?: string}) => Promise<unknown>,
  *   } | null,
@@ -125,6 +126,7 @@ function buildAgentVersionRouter(deps) {
     try {
       requireAdmin(req, deps.adminToken);
       const result = await deps.agentVersion.publish(req.body || {});
+      await deps.adminAudit?.audit(req, "agent.release.publish", `${result.channel}:${result.version}`, { status: 201, ok: true });
       res.status(201).json({ ok: true, ...result });
     } catch (err) {
       next(err);

@@ -15,7 +15,7 @@ let mongo, db, app, services, adminId;
 const admin = (call) => call.set("authorization", "Bearer admin-token");
 beforeAll(async () => {
   mongo = await MongoMemoryReplSet.create({ replSet: { count: 1 } }); db = await connect({ uri: mongo.getUri(), dbName: "ops_console" });
-  const built = buildApp({ db, userBackupsStore:createBackupStore(), clerkClient:{getEmail:async()=>null,deleteUser:async()=>{}}, logger: pino({ level: "silent" }), config: { nodeEnv: "test", serverPepper: Buffer.alloc(32, 5), clerkSecretKey: "sk_test", adminUserIds: ["admin-clerk"], rateLimitPerMinute: 5000, corsAllowedOrigins: [], gameDetailsStore: "mongo", r2: null, pythonExe: null, pythonAnalyzerDir: "/none" } });
+  const built = buildApp({ db, userBackupsStore:createBackupStore(), clerkClient:{getEmail:async()=>null,deleteUser:async()=>{}}, logger: pino({ level: "silent" }), config: { nodeEnv: "test", serverPepper: Buffer.alloc(32, 5), clerkSecretKey: "sk_test", agentReleaseAdminToken: "release-admin", adminUserIds: ["admin-clerk"], rateLimitPerMinute: 5000, corsAllowedOrigins: [], gameDetailsStore: "mongo", r2: null, pythonExe: null, pythonAnalyzerDir: "/none" } });
   app = built.app; services = built.services; adminId = (await admin(request(app).get("/v1/me"))).body.userId;
 });
 afterAll(async () => { await db?.close(); await mongo?.stop(); });
@@ -160,4 +160,19 @@ test("admin rebuild excludes concurrent owner writes until its pre-snapshot and 
     expect((await request(app).put("/v1/me/preferences/misc").set("authorization","Bearer normal-token").send({timezone:"UTC"})).status).toBe(409);
   }finally{release();spy.mockRestore();}
   const result=await rebuilding;expect(result.status).toBe(202);expect(result.body).toMatchObject({userId:user,games:0,opponents:0,macroJobs:0});expect((await db.users.findOne({userId:user}))._gdprMutation).toBeUndefined();
+});
+
+test("service-credential release publishing is audited without retaining its token or artifact URL",async()=>{
+  const response=await request(app).post("/v1/agent/releases").set("x-admin-token","release-admin").send({channel:"stable",version:"9.9.9",releaseNotes:"fixture",artifacts:[{platform:"windows",downloadUrl:"https://example.test/private-fixture.exe",sha256:"a".repeat(64),sizeBytes:12}]});
+  expect(response.status).toBe(201);const row=await db.adminAudit.findOne({action:"agent.release.publish"});expect(row).toMatchObject({actorUserId:null,actorKind:"service",target:"stable:9.9.9",result:{status:201,ok:true}});expect(JSON.stringify(row)).not.toMatch(/release-admin|example.test/);
+});
+
+test("a completed wipe is audited even if its HTTP client disconnects before receiving success",async()=>{
+  const userId="disconnected-wipe";await db.users.insertOne({userId,clerkUserId:"disconnected-clerk",createdAt:new Date()});await db.games.insertOne({userId,gameId:"disconnected-game",date:new Date()});
+  let entered,release;const began=new Promise(resolve=>{entered=resolve;}),hold=new Promise(resolve=>{release=resolve;});
+  const original=services.gdpr.wipeGames.bind(services.gdpr);
+  const spy=jest.spyOn(services.gdpr,"wipeGames").mockImplementationOnce(async(...args)=>{entered();await hold;return original(...args);});
+  const server=require("http").createServer(app);await new Promise(resolve=>server.listen(0,resolve));
+  const pending=admin(request(server).post(`/v1/admin/users/${userId}/wipe-games`));void pending.then(()=>null,()=>null);await began;pending.abort();release();
+  try{expect(await waitAudit("user.wipe-games",userId)).toMatchObject({result:{games:1,status:202,ok:true}});expect(await db.games.countDocuments({userId})).toBe(0);}finally{spy.mockRestore();await new Promise(resolve=>server.close(resolve));}
 });

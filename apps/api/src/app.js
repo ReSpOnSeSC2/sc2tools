@@ -1166,6 +1166,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAgentVersionRouter({
+      adminAudit: services.adminAudit,
       agentVersion: services.agentVersion,
       adminToken: deps.config.agentReleaseAdminToken,
       adminEvents: services.adminEvents,

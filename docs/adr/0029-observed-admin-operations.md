@@ -29,3 +29,8 @@ The repair UI resolves a real user before enabling actions, uses shared state
 and result components, and requires typed email/ID for an all-history wipe. The
 confirmed game count is checked under the exclusive fence before a snapshot or
 deletion begins. A changed count returns 409 with history untouched.
+
+Coverage: this change completes `ops-console`, its folded
+`admin/tools-user-lookup` augment and its how-to. `admin-polish-4`, `-5`, `-6`
+and `-7` remain separate packs; their URL/table, game browser, inbox read controls
+and triage dashboard are not claimed here.

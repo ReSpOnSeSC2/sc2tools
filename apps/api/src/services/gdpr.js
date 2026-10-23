@@ -477,6 +477,7 @@ class GdprService {
     if (this.db.adminAudit) await this.db.adminAudit.updateMany(
       { $or: [{ actorUserId: userId }, { target: userId }] },
       [{ $set: {
+        actorKind: { $cond: [{ $eq: ["$actorUserId", { $literal: userId }] }, "anonymized", "$actorKind"] },
         actorUserId: { $cond: [{ $eq: ["$actorUserId", { $literal: userId }] }, null, "$actorUserId"] },
         target: { $cond: [{ $eq: ["$target", { $literal: userId }] }, null, "$target"] },
       } }],

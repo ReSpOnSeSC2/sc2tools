@@ -20,7 +20,7 @@ class AdminAuditService {
       }
       for (const lease of leases.values()) await lease.assert();
       await this.collection.insertOne(stampVersion({ auditId: crypto.randomUUID(), createdAt: new Date(),
-        actorUserId: actor && leases.has(actor) ? actor : null, action: action.slice(0, 160),
+        actorUserId: actor && leases.has(actor) ? actor : null, actorKind: actor ? leases.has(actor) ? "user" : "anonymized" : "service", action: action.slice(0, 160),
         target: userTarget && (!target || !leases.has(target)) ? null : target,
         result: safeResult(result) }, COLLECTIONS.ADMIN_AUDIT));
     } catch { /* Audit failure must not retry or roll back a successful operation. */ }
@@ -45,20 +45,25 @@ function adminAuditMiddleware(service, isAdmin) {
   return (req, res, next) => {
     const path = req.path;
     if (!["POST","PUT","PATCH","DELETE"].includes(req.method) || !/(?:^|\/)admin(?:\/|$)/.test(path)) { next(); return; }
+    let recorded = false;
+    const record = () => {
+      if (recorded || !isAdmin(req)) return;
+      recorded = true;
+      const target = res.locals.auditTarget || null;
+      const action = res.locals.auditAction || `${req.method} ${String(req.route?.path || path)}`;
+      void service.audit(req, action, target, { status: res.statusCode, ok: res.statusCode < 400, ...res.locals.auditResult });
+    };
     const json = res.json;
     res.json = function(body) {
       res.locals.auditAction ||= `${req.method} ${String(req.route?.path || path)}`;
       res.locals.auditTarget ||= ["userId","buildId","reportId","requestId","channelId","pulseId","job"].map((key)=>req.params[key]).find((value)=>typeof value==="string") || null;
       res.locals.auditResult = { ...safeResult(body && typeof body === "object" ? body : {}), ...res.locals.auditResult,
         ...(body?.error?.code ? {code:body.error.code} : {}) };
-      return json.call(this, body);
+      // A completed mutation is still auditable if its client disconnected
+      // before this JSON result could emit finish. Never infer success on close.
+      record(); return json.call(this, body);
     };
-    res.once("finish", () => {
-      if (!isAdmin(req)) return;
-      const target = res.locals.auditTarget || null;
-      const action = res.locals.auditAction || `${req.method} ${String(req.route?.path || path).replace(/\/[^/:]+(?=\/(?:wipe-games|rebuild-opponents|grant-admin|revoke-admin)$)/, "/:userId")}`;
-      void service.audit(req, action, target, { status: res.statusCode, ok: res.statusCode < 400, ...res.locals.auditResult });
-    }); next();
+    res.once("finish", record); next();
   };
 }
 module.exports = { AdminAuditService, adminAuditMiddleware };

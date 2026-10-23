@@ -49,7 +49,9 @@ retry. This development work did not run production jobs.
 Admin → Audit log filters retained administrator mutations by action and target.
 The shared middleware covers admin mutation routes, including domain routers,
 and records actor ID, route/action, target, HTTP result and allowlisted counters.
-A wipe records the actual games deleted. Request bodies, emails, tokens and query
+A wipe records the actual games deleted. Agent release publication through its
+separate service-credential gate records a service actor and channel/version,
+without retaining the credential or artifact URL. Request bodies, emails, tokens and query
 strings are excluded. Compound cursors keep concurrent actions at the same
 millisecond traversable. Rows expire after 400 days; observation remains best
 effort, so a missing row cannot prove that an action never ran.
