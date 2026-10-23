@@ -11,6 +11,18 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+
+
+### Download and project costs
+
+- Download failures offer Retry or GitHub, platform instructions follow the selected operating system, and paired users see their installed version. Installer signing copy comes from one truthful source.
+- The donation page shows the sourced monthly total and provider breakdown in plain language, keeps measurement details available, and offers a copy-email button.
+
+### Added
+
+- Read curated updates in What's New, the public changelog and RSS. Service notices explain active incidents and expire automatically; installer release notes are easier to read.
+- Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
+
 ### Fixed
 
 - Desktop installation and Settings share one Windows startup switch; upgrades
