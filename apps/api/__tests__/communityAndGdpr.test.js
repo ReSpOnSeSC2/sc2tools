@@ -69,6 +69,7 @@ describe("community + gdpr integration", () => {
     // for the "admin-x" bearer.
     config.adminUserIds = ["clerk_admin"];
     const built = buildApp({
+      userBackupsStore: require("./helpers/userBackupsStore").createBackupStore(),
       db,
       logger: pino({ level: "silent" }),
       config,
@@ -1358,9 +1359,13 @@ describe("community + gdpr integration", () => {
       const snapshot = await services.gdpr.snapshot(userId);
       const stored = await db.db.collection("user_backups").findOne({ id: snapshot.id });
 
-      expect(stored.payload.data).not.toHaveProperty("coachingAssignments");
-      expect(stored.payload.data).not.toHaveProperty("coachingRelationships");
-      expect(stored.payload.data).not.toHaveProperty("coachingCalendars");
+      expect(stored.payload).toBeUndefined();
+      expect(stored.counts).not.toHaveProperty("coachingAssignments");
+      expect(stored.counts).not.toHaveProperty("coachingRelationships");
+      expect(stored.counts).not.toHaveProperty("coachingCalendars");
+      const archive = [];
+      for await (const line of services.gdpr.backups.store.read(userId, snapshot.id)) archive.push(line);
+      expect(archive.join("\n")).not.toContain("snapshot-shared");
     });
 
     test("delete wipes per-user records", async () => {

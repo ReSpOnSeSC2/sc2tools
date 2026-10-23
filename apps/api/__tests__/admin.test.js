@@ -97,6 +97,7 @@ describe("/v1/admin", () => {
     mongo = await MongoMemoryServer.create();
     db = await connect({ uri: mongo.getUri(), dbName: config.mongoDb });
     const built = buildApp({
+      userBackupsStore: require("./helpers/userBackupsStore").createBackupStore(),
       db,
       logger: pino({ level: "silent" }),
       config,

@@ -77,6 +77,7 @@ describe("POST /v1/games captures guide_samples", () => {
     mongo = await MongoMemoryServer.create();
     db = await connect({ uri: mongo.getUri(), dbName: config.mongoDb });
     const built = buildApp({
+      userBackupsStore: require("./helpers/userBackupsStore").createBackupStore(),
       db, logger: pino({ level: "silent" }), config,
       pulseMmr: new PulseMmrService({ fetchImpl: async () => { throw new Error("network_disabled_in_tests"); } }),
     });

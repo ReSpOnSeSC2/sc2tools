@@ -84,6 +84,10 @@ const { CatalogService } = require("./services/catalog");
 const { AgentVersionService, compareVersions } = require("./services/agentVersion");
 const { GithubReleaseFeed } = require("./services/agentGithubReleases");
 const { GdprService } = require("./services/gdpr");
+const { UserBackupsService } = require("./services/userBackups");
+const { buildUserBackupsStore } = require("./services/userBackupsStore");
+const { DataRepairsService } = require("./services/dataRepairs");
+const { withUserDataWriteFence } = require("./middleware/userDataWriteFence");
 const { GuideSamplesService } = require("./services/guideSamples");
 const { buildGuideSamplesBackfillJob } = require("./jobs/guideSamplesBackfillJob");
 const { GuideStatsService } = require("./services/guideStats");
@@ -255,6 +259,7 @@ function isCoachingStateJson(req) {
  *   runtimeCapacityRegistry?: import('./services/runtimeCapacity').RuntimeCapacityRegistry,
  *   reviewSeasonWindowStart?: () => Promise<Date>,
  *   guideVideos?: import('./services/guideVideos').GuideVideosService,
+ *   userBackupsStore?: import('./services/userBackupsStore').UserBackupsStore,
  * }} AppDeps
  */
 
@@ -287,13 +292,13 @@ function buildApp(deps) {
   const app = express();
   app.set("trust proxy", 1);
   app.disable("x-powered-by");
-  const auth = buildAuth({
+  const auth = withUserDataWriteFence(buildAuth({
     secretKey: deps.config.clerkSecretKey,
     issuer: deps.config.clerkJwtIssuer,
     audience: deps.config.clerkJwtAudience,
     getDeviceToken: (hash) => services.pairings.findTokenByHash(hash),
     ensureUser: (clerkUserId) => services.users.ensureFromClerk(clerkUserId),
-  });
+  }), deps.db.users);
   applyBaseMiddleware(app, deps, auth, services.siteStats);
   // Live admin allowlist — seeded from SC2TOOLS_ADMIN_USER_IDS and
   // mutated in place by the email-allowlist + admin-grant paths. The
@@ -741,6 +746,8 @@ function makeServices(deps) {
     slugSecret: deps.config.serverPepper,
     notifications,
   });
+  gdpr.backups = new UserBackupsService(deps.db, { gdpr, store: deps.userBackupsStore || buildUserBackupsStore(deps.config), logger: deps.logger });
+  const dataRepairs = new DataRepairsService(deps.db, { gdpr, notifications, logger: deps.logger });
   // Opt-in public player pages (/p/:handle). Derives entirely from
   // existing services — a public profile exists iff the user published
   // a community build under a public authorName (the community opt-in),
@@ -865,6 +872,7 @@ function makeServices(deps) {
     agentVersion,
     siteStats,
     gdpr,
+    dataRepairs,
     community,
     seasons,
     arcade,
@@ -1237,6 +1245,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       users: services.users,
       games: services.games,
       gdpr: services.gdpr,
+      dataRepairs: services.dataRepairs,
       pairings: services.pairings,
       imports: services.imports,
       multichatSounds: services.multichatSounds,
@@ -1469,6 +1478,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       auth,
       browserIngestQuota: services.browserIngestQuota,
       runtimeCapacityRegistry: deps.runtimeCapacityRegistry,
+      weeklyBackup: async (userId) => { await services.gdpr.backups?.weekly(userId); },
     }),
   );
   // Build check-in routes (per-route auth; /games/:gameId/build-intent does

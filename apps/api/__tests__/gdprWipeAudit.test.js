@@ -15,6 +15,7 @@ describe("history wipe restore audit", () => {
 
   beforeAll(async () => {
     h = await startHarness("gdpr_wipe_audit", { adminUserIds: ["clerk_wipe_admin"] });
+    h.services.gdpr.backups.store = require("./helpers/userBackupsStore").createBackupStore();
     await request(h.app).get("/v1/me").set("authorization", "Bearer admin");
     userId = await userIdForClerk(h.db, "clerk_wipe_admin");
     info = jest.spyOn(h.services.gdpr.logger, "info");

@@ -421,6 +421,8 @@ async function main() {
     // in-flight fire-and-forget guide sample writes, before Mongo closes.
     await /** @type {any} */ (services).guideSamplesBackfill.stop();
     await /** @type {any} */ (services).guideSamples.drain();
+    await /** @type {any} */ (services).gdpr.backups?.drain();
+    await /** @type {any} */ (services).dataRepairs.drain();
     await guideVideosJob.stop();
     await /** @type {any} */ (services).customBuilds.stopReclassifications();
     await db.close();

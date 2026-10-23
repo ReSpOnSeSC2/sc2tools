@@ -13,6 +13,8 @@ corresponding GitHub Release.
 
 ### Added
 
+- Streamed account snapshots with labels, downloads and retention; verified restore previews preserve existing game details/replays, and self-service repairs save a snapshot before running.
+
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
 
 - Share one authenticated realtime connection across user and admin surfaces; count newly inserted games accurately, coalesce chart refreshes during imports, and show admin connection recovery status.

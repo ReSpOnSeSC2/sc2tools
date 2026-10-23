@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "backups-and-export",
   title: "Backups, snapshots and export",
   summary:
-    "What's backed up and by whom: daily database backups, the snapshots you take and restore yourself, and the JSON export you keep.",
+    "Create, label and download restore points, then preview a restore that keeps existing build orders and replay files for shared games.",
   category: "account-data",
   audience: "all",
   signedInOnly: true,
@@ -21,78 +21,48 @@ const article: HelpArticle = {
     "json",
     "gdpr",
     "delete account",
-    "atlas",
     "recovery",
   ],
   updated: "2026-10-23",
   body: [
     { type: "heading", text: "Deleting game history" },
-    { type: "paragraph", text: "Take a snapshot first. In Settings → Backups & data, From and Through use your local time and include both chosen days. The confirmation dialog shows how many games will be deleted; an empty range cannot be confirmed. Re-sync from the desktop app afterwards to upload your replays again. [Step-by-step deletion guide](/help/deleting-game-history)." },
+    { type: "paragraph", text: "A Before action snapshot is saved automatically before deletion. In Settings → Backups & data, From and Through use your local time and include both chosen days. The confirmation dialog shows how many games will be deleted; an empty range cannot be confirmed. Re-sync from the desktop app afterwards to upload your replays again. [Step-by-step deletion guide](/help/deleting-game-history)." },
     {
       type: "paragraph",
-      text: "Your data is protected in three ways. Each one does a different job, so it helps to know which one to reach for.",
+      text: "Snapshots are compressed files stored separately from the database. They can hold a large history without putting the entire backup into one database document. Your JSON export is a separate copy to keep, and cannot be uploaded as a restore point.",
     },
-    {
-      type: "table",
-      head: ["Kind", "Who makes it", "What it covers", "Who can restore it"],
-      rows: [
-        [
-          "**Daily database backup**",
-          "Automatic, every day",
-          "The whole SC2 Tools database, for everyone",
-          "Only us, to recover the site after a failure",
-        ],
-        [
-          "**Your snapshots**",
-          "You, in Settings → Backups & data",
-          "Your account: games list, opponents, notes, custom builds and settings",
-          "You, any time, from the same page",
-        ],
-        [
-          "**Your export**",
-          "You, as a download",
-          "The same account data as one JSON file you keep",
-          "It's your copy to keep; it isn't loaded back in",
-        ],
-      ],
-    },
-    { type: "heading", text: "Daily database backups" },
-    {
-      type: "paragraph",
-      text: "The SC2 Tools database runs on MongoDB Atlas, which takes an automatic, encrypted snapshot of the whole database every day and deletes old ones when their retention period ends. These backups are there so the site can be recovered after a server failure or data loss. They hold everyone's data at once, so they can't be used to bring back one account or undo one person's change. For that, take your own snapshot.",
-    },
-    {
-      type: "paragraph",
-      text: "Original replay files and replay-detail data (build orders, charts and the replay map view) are stored separately in Cloudflare R2 and aren't part of these backups. The desktop app can upload them again from the replays still on your PC.",
-    },
+    { type: "heading", text: "Types and retention", anchor: "retention" },
+    { type: "table", head: ["Type", "When created", "Retention"], rows: [["Manual", "When you press Take a snapshot", "Newest 5"], ["Weekly", "Lazily on the first successful ingest of an ISO week, starting Monday in UTC", "Newest 2"], ["Before action", "Before a restore, history wipe or repair", "Newest 3"]] },
+    { type: "paragraph", text: "Older snapshots of each type are pruned. Download a copy you need to keep longer. This page restores snapshots still in your account, not files uploaded from your computer." },
     { type: "heading", text: "Take a snapshot" },
     {
       type: "steps",
       items: [
         "Open [Settings → Backups & data](/settings?tab=backups).",
-        "Under **Snapshots**, press **Take a snapshot**. It appears in the list with when it was taken and its size.",
-        "Take one before anything you might want to undo: a big import, a history wipe, or a round of edits to your custom builds.",
+        "Under **Snapshots**, press **Take a snapshot**. The row shows its type, age, compressed size and saved counts.",
+        "Add a useful label and press **Save label**. **Download** keeps a gzip NDJSON copy; **Delete snapshot** removes only that backup, leaving your current games unchanged.",
       ],
     },
     {
       type: "paragraph",
-      text: "A snapshot holds your games list, opponents, opponent notes, custom builds, settings, overlay tokens and paired devices. It doesn't hold build orders, charts, the replay map view or original replay files. Coaching and community posts aren't in it either, so a restore never changes what other people see. Snapshots stay until you delete your account.",
+      text: "A snapshot holds your games list, opponents, notes, custom builds, profile, ordinary settings and overlay tokens. Heavy game details and replay binaries are separate. Paired PCs, onboarding goals/checklist progress, notification choices, import history, coaching and community records stay outside restore. Old work queues are never revived.",
     },
     { type: "heading", text: "Restore a snapshot" },
     {
       type: "steps",
       items: [
         "In [Settings → Backups & data](/settings?tab=backups), find the snapshot and press **Restore**.",
-        "Read the confirmation and press **Restore**. Your games list, opponents, notes, custom builds and settings go back to how they were when the snapshot was taken. Games added since then are removed.",
-        "Open the desktop app and click **Re-sync**. It uploads your replays again, which brings back build orders, charts, replay files and any newer games that are still on your PC.",
+        "Wait for the verified preview. Check games kept, removed and added, plus custom builds, notes and tokens. If preview fails, **Try again**; Restore stays disabled. Confirm **Restore** only after checking these numbers. A fresh Before action snapshot is saved first.",
+        "Build orders, charts, replay-map data and original replay files for game IDs in both your current list and the snapshot are kept. Games absent from the snapshot and their files are removed. Restored games absent from your current data may need a desktop **Re-sync** to recover their files.",
       ],
     },
     {
       type: "callout",
       tone: "warning",
       title: "A restore replaces, it doesn't merge",
-      text: "Everything in your account that the snapshot covers is replaced. If you're unsure, take a fresh snapshot first: then you can always go back to right now.",
+      text: "Check the preview before confirming. Covered data is replaced. A snapshot contains no heavy game details or replay binaries, so files already deleted need a desktop Re-sync from replays on your PC. Keep a download of any snapshot you need beyond its retention limit.",
     },
+    { type: "paragraph", text: "If backup storage is unavailable or an archive cannot be verified, restore does not change your current data. Stored replay markers are checked against uploaded files before being restored. For derived-data problems, try [Fixing wrong opponent counts](/help/repair-my-data)." },
     { type: "heading", text: "Export your data" },
     {
       type: "paragraph",
@@ -108,7 +78,7 @@ const article: HelpArticle = {
       ],
     },
   ],
-  related: ["getting-started", "troubleshooting-and-support"],
+  related: ["deleting-game-history", "repair-my-data", "delete-account"],
   order: 20,
 };
 

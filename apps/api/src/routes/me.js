@@ -45,6 +45,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   users: import('../services/types').UsersService,
  *   games: import('../services/types').GamesService,
  *   gdpr: import('../services/gdpr').GdprService,
+ *   dataRepairs?: import('../services/dataRepairs').DataRepairsService,
  *   pairings: import('../services/devicePairings').DevicePairingsService,
  *   imports?: import('../services/import').ImportService,
  *   multichatSounds?: import('../services/multichatSounds').MultichatSoundsService,
@@ -770,6 +771,41 @@ function buildMeRouter(deps) {
     }
   });
 
+  router.post("/me/repair/:kind", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      if (!deps.dataRepairs) throw Object.assign(new Error("repairs_unavailable"), { status: 503 });
+      res.status(202).json(await deps.dataRepairs.start(req.auth.userId, String(req.params.kind)));
+    } catch (error) { next(error); }
+  });
+
+  for (const action of ["preview", "download"]) {
+    router.get(`/me/backups/:id/${action}`, deps.auth, async (req, res, next) => {
+      try {
+        if (!req.auth) throw new Error("auth_required");
+        if (!deps.gdpr.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+        res.setHeader("Cache-Control", "private, no-store");
+        res.json(action === "preview" ? await deps.gdpr.backups.preview(req.auth.userId, String(req.params.id)) : await deps.gdpr.backups.download(req.auth.userId, String(req.params.id)));
+      } catch (error) { next(error); }
+    });
+  }
+  router.patch("/me/backups/:id", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      if (!deps.gdpr.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+      res.json(await deps.gdpr.backups.label(req.auth.userId, String(req.params.id), req.body?.label));
+    } catch (error) { next(error); }
+  });
+  router.delete("/me/backups/:id", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      if (!deps.gdpr.backups) throw Object.assign(new Error("backups_unavailable"), { status: 503 });
+      const fence = await deps.gdpr._acquireMutationFence(req.auth.userId, "delete_backup");
+      try { res.json(await deps.gdpr.backups.remove(req.auth.userId, String(req.params.id))); }
+      finally { await deps.gdpr._releaseMutationFence(req.auth.userId, fence); }
+    } catch (error) { next(error); }
+  });
+
   router.post(
     "/me/backups/:id/restore",
     deps.auth,
@@ -777,9 +813,11 @@ function buildMeRouter(deps) {
       try {
         const auth = req.auth;
         if (!auth) throw new Error("auth_required");
+        if (req.body?.currentRevision !== undefined && (typeof req.body.currentRevision !== "string" || !/^[a-f0-9]{24}$/.test(req.body.currentRevision))) throw Object.assign(new Error("invalid_preview_revision"), { status: 400 });
         const result = await deps.gdpr.restoreSnapshot(
           auth.userId,
           String(req.params.id),
+          req.body?.currentRevision,
         );
         res.json(result);
       } catch (err) {
