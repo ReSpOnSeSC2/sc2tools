@@ -32,7 +32,9 @@ export function MyReviewerProfile() {
       {!profile ? !me.error ? <div aria-label="Loading reviewer profile" aria-busy="true" className="h-48 animate-pulse rounded-lg bg-bg-elevated" /> : null : <div className="space-y-4">
         <p className="break-words font-display text-h4 font-semibold text-text">{profile.name}</p>
         <ReviewerBadges author={{ label: profile.name, isAsker: false, profileHref: null, verified: profile.verified, badges: profile.badges, flair: profile.flair }} />
-        {!profile.verified ? <p className="text-caption text-text-muted"><strong>Not verified yet.</strong> Not enough ranked 1v1 games with recorded MMR in the current or previous season. Sync your own ladder games to verify your league.</p> : null}
+        {!profile.verified ? <p className="text-caption text-text-muted"><strong>Not verified yet.</strong>{" "}
+          {profile.verificationReason === "not_enough_ladder_games" ? "Not enough ranked 1v1 games with recorded MMR in the current or previous season. " : ""}
+          Sync your own ladder games to verify your league.</p> : null}
         <dl className="grid grid-cols-2 gap-2">
           {([['karma', 'Karma'], ['reviews', 'Reviews'], ['helpful', 'Helpful'], ['best', 'Best'], ['upvotes', 'Upvotes']] as const).map(([key, label]) => <div key={key} className="min-w-0 rounded-lg border border-border p-2">
             <dt className="text-caption text-text-muted">{label}</dt><dd className="break-words font-mono text-h4 font-bold tabular-nums text-text">{profile.stats[key].toLocaleString()}</dd>

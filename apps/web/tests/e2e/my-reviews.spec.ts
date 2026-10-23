@@ -53,3 +53,21 @@ test("Reviewer profile has accessible stats, preference rollback and digest savi
   await expect(profile).toBeFocused(); await noOverflow(page); expect(errors).toEqual([]);
   await page.screenshot({ path: info.outputPath("my-reviewer-profile.png"), fullPage: true });
 });
+
+test("a summary refresh failure retains both lists and supports real Help and Retry", async ({ page }) => {
+  const errors: string[] = []; page.on("pageerror", (error) => errors.push(error.message));
+  await openMyReviewsFixture(page, { failSummaryRefresh: true });
+  const request = page.getByText("How should I defend the third base in needs-1?", { exact: true });
+  const written = page.getByText("Scout the third base before moving out: newest.", { exact: true });
+  await expect(request).toBeVisible(); await expect(written).toBeVisible();
+  await page.evaluate(() => { window.dispatchEvent(new Event("focus")); });
+  await expect(page.getByRole("alert")).toHaveCount(2);
+  await expect(request).toBeVisible(); await expect(written).toBeVisible();
+  await page.getByRole("link", { name: "What does this mean?" }).first().click();
+  const help = page.getByRole("dialog"); await expect(help).toBeVisible();
+  await help.press("Escape"); await expect(help).toBeHidden();
+  await page.getByRole("button", { name: "Retry", exact: true }).first().click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(request).toBeVisible(); await expect(written).toBeVisible();
+  await noOverflow(page); expect(errors).toEqual([]);
+});

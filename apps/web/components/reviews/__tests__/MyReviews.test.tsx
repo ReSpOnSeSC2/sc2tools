@@ -28,6 +28,9 @@ vi.mock("@/lib/clientApi", () => ({
   }),
 }));
 vi.mock("@/components/maps/MapArtwork", () => ({ MapArtwork: () => null }));
+// Keep paging assertions independent of lazy drawer loading. The browser suite
+// exercises the real RequestError Help drawer alongside retained dashboard data.
+vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: ({ slug, children }: { slug: string; children: React.ReactNode }) => <a href={`/help/${slug}`}>{children}</a> }));
 
 import { MyReviews } from "../MyReviews";
 import { MyReviewerProfile } from "../MyReviewerProfile";
