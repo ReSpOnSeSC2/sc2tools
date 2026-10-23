@@ -81,7 +81,6 @@ const {
 const { ImportService } = require("./services/import");
 const { SpatialService } = require("./services/spatial");
 const { CatalogService } = require("./services/catalog");
-const { MLService } = require("./services/ml");
 const { AgentVersionService, compareVersions } = require("./services/agentVersion");
 const { GithubReleaseFeed } = require("./services/agentGithubReleases");
 const { GdprService } = require("./services/gdpr");
@@ -645,7 +644,6 @@ function makeServices(deps) {
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io, notifications, logger: deps.logger });
   const spatial = new SpatialService(deps.db);
-  const ml = new MLService(deps.db, { io: deps.io, gameDetails });
   // The GitHub feed makes an `agent-v*` tag push a complete release:
   // the updater's /v1/agent/version poll then sees the newest GitHub
   // release even when nobody ran the manual POST /v1/agent/releases
@@ -864,7 +862,6 @@ function makeServices(deps) {
     macroBackfill,
     imports,
     spatial,
-    ml,
     agentVersion,
     siteStats,
     gdpr,
@@ -1051,9 +1048,6 @@ function registerRuntimeCapacityProviders(registry, services) {
       : null,
     gameDetailsHeavyIo: services.gameDetails?.bulkReadCapacitySnapshot
       ? () => services.gameDetails.bulkReadCapacitySnapshot()
-      : null,
-    mlTraining: services.ml?.trainingCapacitySnapshot
-      ? () => services.ml.trainingCapacitySnapshot()
       : null,
   };
   for (const [name, provider] of Object.entries(providers)) {
@@ -1555,7 +1549,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildMlRouter({ ml: services.ml, auth }),
+    buildMlRouter({ auth }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,

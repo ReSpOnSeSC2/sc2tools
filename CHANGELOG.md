@@ -11,7 +11,13 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
+
+### Removed
+
+- Retired the unused server model-training and prediction endpoints. Replay analysis continues to use fixed rules and statistics; the API image now installs only its server analysis dependencies.
 
 ### Community and public sharing
 

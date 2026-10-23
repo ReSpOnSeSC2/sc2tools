@@ -1776,7 +1776,7 @@ module.exports = {
   parseBuildLogWithProxies,
   annotateProxyBuildings,
   eventsToStartTime,
-  // Exported so other services (dnaTimings, ml) consume the same
+  // Exported so other services (dnaTimings) consume the same
   // derivation logic instead of each rolling their own filter.
   deriveEarlyBuildLog,
   readEarlyBuildLog,

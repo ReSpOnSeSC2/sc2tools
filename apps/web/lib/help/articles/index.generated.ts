@@ -15,6 +15,7 @@ import analyzer_analyzerFilters from "./analyzer/analyzer-filters";
 import analyzer_arcade from "./analyzer/arcade";
 import analyzer_builds from "./analyzer/builds";
 import analyzer_dashboardAndAnalyzer from "./analyzer/dashboard-and-analyzer";
+import analyzer_howAnalysisWorks from "./analyzer/how-analysis-works";
 import analyzer_macro from "./analyzer/macro";
 import analyzer_maps from "./analyzer/maps";
 import analyzer_opponents from "./analyzer/opponents";
@@ -73,6 +74,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_arcade,
   analyzer_builds,
   analyzer_dashboardAndAnalyzer,
+  analyzer_howAnalysisWorks,
   analyzer_macro,
   analyzer_maps,
   analyzer_opponents,

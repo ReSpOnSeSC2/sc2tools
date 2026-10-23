@@ -1,0 +1,7 @@
+-r requirements-server.txt
+# Legacy local analyzer UI; never installed in the API image.
+customtkinter==5.2.2
+matplotlib==3.9.2
+pandas==2.2.3
+Pillow==11.0.0
+flask==3.0.3
