@@ -18,6 +18,8 @@ import {
 type SocketHandler = (...args: unknown[]) => void;
 
 class FakeSocket {
+  connect() {}
+  off() {}
   handlers = new Map<string, SocketHandler>();
 
   on(event: string, handler: SocketHandler) {

@@ -18,6 +18,8 @@ import { tallyPollVotes } from "@/lib/multichat/poll";
 import type { StudioPoll } from "@/lib/multichat/useStudioState";
 import type { ChatMessage } from "@/lib/multichat/types";
 import { DockButton } from "./DockClient";
+import type { DockPost } from "./dockActions";
+import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
 const MIN_OPTIONS = 2;
 const MAX_OPTIONS = 6;
@@ -26,20 +28,31 @@ export function DockPoll({
   poll,
   messages,
   busy,
+  studioReady = true,
   onPost,
 }: {
   poll: StudioPoll | null;
   messages: ReadonlyArray<ChatMessage>;
   busy: boolean;
-  onPost: (patch: Record<string, unknown>) => Promise<void>;
+  studioReady?: boolean;
+  onPost: DockPost;
 }) {
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState<string[]>(["", ""]);
+  const filled = options.map((o) => o.trim()).filter(Boolean);
+  const canStart = question.trim().length > 0 && filled.length >= MIN_OPTIONS;
+  const { run, notice, pending } = useDockPanelActions(studioReady, busy, onPost, {
+    start: () => canStart ? { patch: { poll: { question: question.trim(), options: filled, status: "open" } }, message: "Poll started", after: () => { setQuestion(""); setOptions(["", ""]); } } : null,
+    close: () => poll ? { patch: { poll: { ...poll, status: "closed" } }, message: "Poll closed" } : null,
+    clear: () => ({ patch: { poll: null }, message: "Poll cleared" }),
+  });
+  if (!studioReady) return <DockSnapshotState />;
 
   if (poll) {
     const { counts, total } = tallyPollVotes(messages, poll);
     return (
-      <div className="space-y-2">
+      <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2">
+        <DockActionNotice message={notice} />
         <div className="flex items-center gap-2">
           <span
             className={`rounded px-1.5 py-0.5 text-micro font-bold uppercase tracking-wider ${
@@ -90,7 +103,7 @@ export function DockPoll({
             <DockButton
               disabled={busy}
               onClick={() =>
-                void onPost({ poll: { ...poll, status: "closed" } })
+                void run("close")
               }
             >
               Close poll
@@ -99,31 +112,21 @@ export function DockPoll({
           <DockButton
             danger
             disabled={busy}
-            onClick={() => void onPost({ poll: null })}
+            onClick={() => void run("clear")}
           >
             Clear
           </DockButton>
         </div>
-      </div>
+      </div></fieldset>
     );
   }
-
-  const filled = options.map((o) => o.trim()).filter(Boolean);
-  const canStart = question.trim().length > 0 && filled.length >= MIN_OPTIONS;
 
   const setOption = (i: number, v: string) =>
     setOptions((prev) => prev.map((o, j) => (j === i ? v : o)));
 
-  const start = async () => {
-    await onPost({
-      poll: { question: question.trim(), options: filled, status: "open" },
-    });
-    setQuestion("");
-    setOptions(["", ""]);
-  };
-
   return (
-    <div className="space-y-2">
+    <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2">
+      <DockActionNotice message={notice} />
       <input
         type="text"
         value={question}
@@ -162,13 +165,13 @@ export function DockPoll({
             + Add option
           </DockButton>
         ) : null}
-        <DockButton disabled={busy || !canStart} onClick={() => void start()}>
+        <DockButton disabled={busy || !canStart} onClick={() => void run("start")}>
           Start poll
         </DockButton>
       </div>
       <p className="text-micro text-text-dim">
         Viewers vote by typing the option number in any connected chat.
       </p>
-    </div>
+    </div></fieldset>
   );
 }

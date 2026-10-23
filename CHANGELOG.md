@@ -93,6 +93,8 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Stream overlays recover refused handshakes and temporary outages automatically. Revoked or mistyped links show a clear setup notice; `?check=1` shows a short connection check in OBS.
+- Stream Dock editors wait for saved controls before enabling writes. Failed saves keep drafts, and Retry uses current edits instead of replaying an older goal or b-roll list.
 - Moderation groups reports by target, confirms removals, records notes and shows failures with Retry. One decision clears every open report on the target; opponent removals now hide the public profile.
 - Infrastructure keeps provider checks and backups visible when an operational probe fails, with independent Retry and Refresh controls. Charts follow the selected theme and status indicators include text and icons.
 

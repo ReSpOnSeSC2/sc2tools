@@ -42,6 +42,9 @@ const article: HelpArticle = {
       ],
     },
     { type: "settingsLink", label: "Open Settings → Overlay", href: "/settings?tab=overlay" },
+    { type: "heading", text: "Check a source and recover its connection", anchor: "connection-check" },
+    { type: "paragraph", text: "Overlays reconnect automatically after an outage. Refresh a Browser Source after a site update if it is still running old code; a brief connection failure should recover on its own. Add **?check=1** to an overlay URL (or **&check=1** when it already has a query) to show its connection status inside OBS for 10 seconds." },
+    { type: "paragraph", text: "**This overlay link no longer works** means the token was revoked or mistyped. Copy a fresh URL from **Settings → Overlay**. The notice shrinks after a minute. The Stream Dock shows the same terminal state and stops retrying a revoked token. While your saved Dock controls are loading, editors stay locked; failed saves keep what you typed so you can edit and Retry." },
   ],
   related: ["multi-platform-chat", "stream-dock", "obs-auto-scene-switching", "voice", "troubleshooting-and-support"],
 };
