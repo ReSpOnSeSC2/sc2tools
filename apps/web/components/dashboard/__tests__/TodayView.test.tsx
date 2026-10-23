@@ -4,7 +4,7 @@ import { TodayView } from "../TodayView";
 
 const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
-  misc: undefined as { defaultTab?: string } | undefined,
+  useApi: vi.fn(() => ({ data: { defaultTab: "battlefield" }, isLoading: false, error: null })),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -12,7 +12,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/lib/clientApi", () => ({
-  useApi: () => ({ data: mocks.misc, isLoading: false, error: null }),
+  useApi: mocks.useApi,
 }));
 
 vi.mock("@/lib/instant/useInstantImport", () => ({
@@ -50,9 +50,9 @@ vi.mock("@/components/analyzer/LadderPulse", () => ({
 
 beforeEach(() => {
   mocks.replace.mockReset();
-  mocks.misc = undefined;
   window.sessionStorage.clear();
   window.history.replaceState(null, "", "/app");
+  mocks.useApi.mockClear();
 });
 
 afterEach(() => {
@@ -73,28 +73,15 @@ describe("TodayView", () => {
 });
 
 describe("TodayView default tab", () => {
-  it("opens the chosen section once per visit", () => {
-    mocks.misc = { defaultTab: "battlefield" };
-    render(<TodayView />);
-    expect(mocks.replace).toHaveBeenCalledWith("/app/maps");
-    cleanup();
-    render(<TodayView />);
-    expect(mocks.replace).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([
-    ["Today (default)", { defaultTab: "today" }],
-    ["no choice", {}],
-    ["a section that no longer exists", { defaultTab: "ml" }],
-  ])("stays on Today for %s", (_label, misc) => {
-    mocks.misc = misc;
+  // Settings → "Default tab" moved to the /app page on the server
+  // (app/app/page.tsx), so Today itself never bounces you away.
+  it("never redirects, whatever the saved default tab", () => {
     render(<TodayView />);
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(screen.getByTestId("daily-pulse")).toBeTruthy();
   });
 
   it("keeps the Today launcher shortcut on Today despite a saved default section", () => {
-    mocks.misc = { defaultTab: "macro" };
     window.history.replaceState(null, "", "/app?view=today");
     render(<TodayView />);
     expect(mocks.replace).not.toHaveBeenCalled();
@@ -104,5 +91,11 @@ describe("TodayView default tab", () => {
     window.history.replaceState(null, "", "/app");
     render(<TodayView />);
     expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it("no longer asks for the misc preferences", () => {
+    render(<TodayView />);
+    const paths = mocks.useApi.mock.calls.map((call) => (call as unknown[])[0]);
+    expect(paths).not.toContain("/v1/me/preferences/misc");
   });
 });

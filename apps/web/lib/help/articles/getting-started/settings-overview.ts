@@ -74,7 +74,7 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "**Default tab** picks the page SC2 Tools opens on. **Today (default)** keeps you on the dashboard. Choose a section such as Opponents or Maps to land there once per visit; you can still go back to Today.",
+        "**Default tab** picks where the dashboard opens. It only applies when you first open the dashboard in a browser session. **Today (default)** opens on Today; choose a section such as Opponents or Maps to land there instead. Clicking **Today** after that always shows Today.",
         "**Run setup again** reopens the setup guide: download the desktop app, pair it and import your replays. Your games and settings stay as they are.",
         "**Analytics cookies** shows whether Google Analytics is on in this browser. Press **Turn on** or **Turn off** to change it; it takes effect right away. The choice only applies to the browser you're using, the same as the cookie banner.",
       ],

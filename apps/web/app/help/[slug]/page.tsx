@@ -49,6 +49,8 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
     title,
     description,
     alternates: { canonical },
+    // Invite-only features stay out of search engines (and the sitemap).
+    ...(article.noindex ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
       type: "article",
       siteName: "SC2 Tools",

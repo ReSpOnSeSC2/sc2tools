@@ -84,7 +84,7 @@ const article: HelpArticle = {
       items: [
         "**On the desktop card**, click **Add new build…** under your builds or under the opponent's. It opens this game on sc2tools.com with the editor ready, and the card steps aside. It's available once your replay has uploaded.",
         "**On the website**, press **Change…** on either side of the game page's check-in card (or in the **Build check-ins (N)** list) and click **Add new build…** under the list. If your search found nothing, **Add “…” as a new build…** uses what you typed as the name. In the check-in list, the opponent's line has its own **Add new build…**.",
-        "**Build it from the replay.** The editor shows this game's build order for that player: click **+** on the starred steps that define the build, check the live match preview, name it and press **Save build** (or **Save & Reclassify** to also match your older games). The race is set by the game; the vs race can be this game's or Any.",
+        "**Build it from the replay.** The editor shows this game's build order for that player: click **+** on the starred steps that define the build, check the live match preview, name it and press **Save build** (or **Save & re-match** to also match your older games). The race is set by the game; the vs race can be this game's or Any.",
         "**Done.** *Saved to your library and checked in* means the new build is in your library and counts for this game. If a build with that name already exists, you're asked to pick another name, so nothing is overwritten. If the game can't take a check-in, the build is still saved to your library.",
       ],
     },

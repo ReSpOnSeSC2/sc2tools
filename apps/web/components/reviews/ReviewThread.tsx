@@ -21,11 +21,11 @@ export type ThreadContext = {
   currentTime: number;
   durationSec: number | null;
   canPin: boolean;
-  draftPin: DraftPin | null;
-  pinMode: boolean;
+  pinFor: (owner: string) => DraftPin | null;
+  pickingFor: string | null;
   onSeek: (seconds: number, commentId?: string) => void;
-  onTogglePinMode: () => void;
-  onClearPin: () => void;
+  onTogglePinMode: (owner: string) => void;
+  onClearPin: (owner: string) => void;
   onChanged: () => void | Promise<unknown>;
 };
 
@@ -224,7 +224,7 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
           </button>
         ) : null}
         {!isReply && data.viewer.canComment ? (
-          <button type="button" onClick={() => setReplying((v) => !v)} className="min-h-[32px] rounded-full px-2 font-semibold text-text-muted hover:text-text">Reply</button>
+          <button type="button" onClick={() => { if (replying) ctx.onClearPin(c.id); setReplying((v) => !v); }} className="min-h-[32px] rounded-full px-2 font-semibold text-text-muted hover:text-text">Reply</button>
         ) : null}
         {c.canEdit && !editing ? (
           <button type="button" onClick={() => setEditing(true)} className="min-h-[32px] rounded-full px-2 font-semibold text-text-muted hover:text-text">Edit</button>
@@ -251,15 +251,16 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
           currentTime={ctx.currentTime}
           initialTime={c.gameTimeSec ?? ctx.currentTime}
           parentId={c.id}
-          draftPin={ctx.draftPin}
-          pinMode={ctx.pinMode}
-          onTogglePinMode={ctx.onTogglePinMode}
-          onClearPin={ctx.onClearPin}
+          draftPin={ctx.pinFor(c.id)}
+          nextPinNumber={ctx.pinNumbers.size + 1}
+          pinMode={ctx.pickingFor === c.id}
+          onTogglePinMode={() => ctx.onTogglePinMode(c.id)}
+          onClearPin={() => ctx.onClearPin(c.id)}
           canPin={ctx.canPin}
-          onCancel={() => setReplying(false)}
+          onCancel={() => { setReplying(false); ctx.onClearPin(c.id); }}
           onPosted={() => {
             setReplying(false);
-            ctx.onClearPin();
+            ctx.onClearPin(c.id);
             void ctx.onChanged();
           }}
         />

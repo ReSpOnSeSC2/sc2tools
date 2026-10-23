@@ -9,6 +9,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { apiCall, useApi } from "@/lib/clientApi";
 import type { MyReviewsResponse, ReviewBlocksResponse } from "@/lib/reviews";
 import { ReviewCard } from "./ReviewCard";
+import { RequestError } from "@/components/ui/RequestError";
 
 /**
  * /reviews/mine — the signed-in player's own corner of the exchange: the
@@ -66,7 +67,7 @@ function MyReviewsSignedIn() {
         <section aria-labelledby="my-requests" className="space-y-3">
           <h2 id="my-requests" className="font-display text-h3 font-bold text-text">Your review requests</h2>
           {mine.error ? (
-            <p role="status" className="text-body text-text-muted">Your requests couldn&apos;t be loaded. Try again in a moment.</p>
+            <RequestError error={mine.error} onRetry={() => mine.mutate()} />
           ) : !mine.data ? (
             <div aria-busy="true" className="h-28 animate-pulse rounded-xl border-2 border-line bg-bg-elevated" />
           ) : asked.length === 0 ? (
@@ -84,7 +85,9 @@ function MyReviewsSignedIn() {
 
         <section aria-labelledby="my-answers" className="space-y-3">
           <h2 id="my-answers" className="font-display text-h3 font-bold text-text">Reviews you've written</h2>
-          {!mine.data ? null : answered.length === 0 ? (
+          {mine.error ? <RequestError error={mine.error} onRetry={() => mine.mutate()} /> : !mine.data ? (
+            <div aria-busy="true" aria-label="Loading reviews you've written" className="space-y-2">{[0, 1].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl border-2 border-line bg-bg-elevated" />)}</div>
+          ) : answered.length === 0 ? (
             <p className="text-body text-text-muted">
               None yet. <Link href="/reviews" className="font-semibold text-accent-cyan underline underline-offset-2 hover:text-accent-hover">Browse requests</Link> you can help with.
             </p>

@@ -95,6 +95,14 @@ describe("AnalyzerFrame", () => {
     }
   });
 
+  it("marks the browser session on mount, so Today stops applying the default tab", () => {
+    document.cookie = "sc2_app_session=; Max-Age=0; Path=/";
+    expect(document.cookie).not.toContain("sc2_app_session=1");
+    mocks.pathname = "/app/maps";
+    render(<AnalyzerFrame me={{ ...NEW_USER, agentPaired: true, games: { total: 5, latest: null } }}>PAGE</AnalyzerFrame>);
+    expect(document.cookie).toContain("sc2_app_session=1");
+  });
+
   it("leaves the Active filters row off the single-game page", () => {
     mocks.pathname = "/app/game/abc";
     render(<AnalyzerFrame me={{ ...NEW_USER, agentPaired: true, games: { total: 5, latest: null } }}>PAGE</AnalyzerFrame>);

@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
+  role: "coach",
   search: "",
   replace: vi.fn(),
   mutate: vi.fn(async () => undefined),
@@ -13,7 +14,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@/lib/clientApi", () => ({
   useApi: () => ({
-    data: { role: "coach", coachId: "coach-1", studentId: null },
+    data: { role: harness.role, coachId: harness.role === "coach" ? "coach-1" : null, studentId: null },
     error: undefined,
     isLoading: false,
     mutate: harness.mutate,
@@ -37,6 +38,7 @@ import CoachingWorkspace from "./CoachingWorkspace";
 
 afterEach(() => {
   cleanup();
+  harness.role = "coach";
   harness.search = "";
   harness.replace.mockClear();
   harness.mutate.mockClear();
@@ -75,5 +77,22 @@ describe("CoachingWorkspace", () => {
 
     await waitFor(() => expect(screen.getByTestId("sessions-view")).toBeTruthy());
     expect(screen.getByTestId("locker-host").parentElement?.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("links the guide from the tab row", async () => {
+    render(<CoachingWorkspace />);
+    const help = await screen.findByRole("link", { name: "How coaching works" });
+    expect(help.getAttribute("href")).toBe("/help/coaching");
+    const nav = screen.getByRole("navigation", { name: "Coaching workspace" });
+    expect(nav.parentElement?.contains(help)).toBe(true);
+  });
+
+  it("explains the invite-only screen to an account no coach has attached", async () => {
+    harness.role = "none";
+    render(<CoachingWorkspace />);
+    expect(screen.getByRole("heading", { name: "Private coaching" })).toBeTruthy();
+    const help = await screen.findByRole("link", { name: "How coaching access works" });
+    expect(help.getAttribute("href")).toBe("/help/coaching#roles-and-linking");
+    expect(screen.queryByRole("navigation", { name: "Coaching workspace" })).toBeNull();
   });
 });

@@ -116,7 +116,7 @@ export function SettingsMisc() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field
               label="Default tab"
-              hint="The page SC2 Tools opens on. You can still go back to Today any time."
+              hint="Where the dashboard opens the first time you visit it in a browser session. Clicking Today always shows Today."
             >
               <Select
                 value={draft.defaultTab ?? TODAY_DEFAULT_TAB}

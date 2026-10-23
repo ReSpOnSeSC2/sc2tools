@@ -98,7 +98,7 @@ describe("SettingsHelp", () => {
     expect(text).toContain("Add “…” as a new build…");
     expect(text).toContain("Save as new build");
     expect(text).toContain("Save build");
-    expect(text).toContain("Save & Reclassify");
+    expect(text).toContain("Save & re-match");
     expect(text).toContain("Saved to your library and checked in");
     expect(text).toContain("Available once your replay uploads");
   });
@@ -134,7 +134,7 @@ describe("SettingsHelp", () => {
     }
   });
 
-  it("opens a search result in place and moves focus to it", () => {
+  it("opens a search result in place and moves focus to it", async () => {
     window.history.replaceState(null, "", "/settings?tab=help");
     const scroll = stubScroll();
     try {
@@ -142,7 +142,7 @@ describe("SettingsHelp", () => {
       fireEvent.change(screen.getByRole("searchbox", { name: "Search help" }), {
         target: { value: "stream dock" },
       });
-      const results = screen.getByRole("list", { name: "Search results" });
+      const results = await screen.findByRole("list", { name: "Search results" });
       const first = within(results).getAllByRole("link")[0];
       expect(first.getAttribute("href")).toBe("/settings?tab=help#stream-dock");
       fireEvent.click(first);
