@@ -83,7 +83,7 @@ export function BuildsTab() {
       <div className="flex flex-wrap items-center gap-3">
         <input
           className="w-full rounded-lg border-2 border-line bg-bg-surface px-3 py-[0.55rem] text-text transition-colors placeholder:text-text-dim focus:border-accent focus:outline-none"
-          placeholder="search build…"
+          placeholder="Search builds"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -94,7 +94,7 @@ export function BuildsTab() {
           onChange={(dir) => sort.setSortExplicit("winRate", dir)}
         />
         <span className="text-xs text-text-dim">
-          click a row to inspect or edit a build
+          Select a build to view or edit it
         </span>
       </div>
 

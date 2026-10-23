@@ -222,7 +222,7 @@ export function ImportProgressCard({
           await cancel();
         }}
         title="Cancel this import?"
-        description="Already-imported games stay in the cloud, and background sync keeps watching for new replays. You can restart the import any time from Settings."
+        description={<>Already-imported games stay in the cloud, and background sync keeps watching for new replays. You can restart the import any time from <a href="/settings?tab=import" className="text-accent underline">Settings → Import</a>.</>}
         confirmLabel="Cancel import"
         cancelLabel="Keep importing"
         intent="danger"

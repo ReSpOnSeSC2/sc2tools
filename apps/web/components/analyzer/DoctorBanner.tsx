@@ -8,7 +8,7 @@ import {
 } from "@/lib/agentNotice";
 import { useApi } from "@/lib/clientApi";
 
-type DoctorResp = {
+export type DoctorResp = {
   ok: boolean;
   warnings?: {
     id: string;
@@ -20,14 +20,23 @@ type DoctorResp = {
 
 /**
  * "Doctor" banner — a top-of-page warning strip when something is off
- * (no agent connected, schema migration pending, ML model stale, etc).
+ * (no agent connected, replay archive incomplete, and similar checks).
  * The API computes warnings; the UI just renders them.
  */
 export function DoctorBanner() {
+  const { data } = useDoctor();
+  const warnings = (data?.warnings || []).filter((w) => w.severity !== "info");
+  if (!warnings.length) return null;
+
+  return <ul className="space-y-2" aria-live="polite">{warnings.map((w) => <DoctorWarning key={w.id} warning={w} />)}</ul>;
+}
+
+/** Shared SWR key for the dashboard warning and Settings setup overview. */
+export function useDoctor() {
   // A full re-sync can begin while this page is open. Poll lightly so the
   // one-time notice disappears after the latest agent acknowledges that the
   // all-time scan started, without requiring a dashboard refresh.
-  const { data } = useApi<DoctorResp>("/v1/me/doctor", {
+  return useApi<DoctorResp>("/v1/me/doctor", {
     refreshInterval: (latest) =>
       latest?.warnings?.some(
         (warning) => warning.id === "replay_archive_incomplete",
@@ -35,36 +44,27 @@ export function DoctorBanner() {
         ? 30_000
         : 0,
   });
-  const warnings = (data?.warnings || []).filter(
-    (w) => w.severity !== "info",
-  );
-  if (!warnings.length) return null;
+}
 
+function DoctorWarning({ warning: w }: { warning: NonNullable<DoctorResp["warnings"]>[number] }) {
+  const cls =
+    w.severity === "error"
+      ? "border-danger/40 bg-danger/10 text-danger"
+      : "border-warning/40 bg-warning/10 text-warning";
   return (
-    <ul className="space-y-2" aria-live="polite">
-      {warnings.map((w) => {
-        const cls =
-          w.severity === "error"
-            ? "border-danger/40 bg-danger/10 text-danger"
-            : "border-warning/40 bg-warning/10 text-warning";
-        return (
-          <li
-            key={w.id}
-            className={`flex items-center justify-between gap-3 rounded border px-4 py-2 text-sm ${cls}`}
-          >
-            <DoctorMessage warning={w} />
-            {w.cta && (
-              <Link
-                href={w.cta.href}
-                className="hard-press inline-flex shrink-0 items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py-[0.55rem] font-display text-xs font-bold text-text hover:bg-bg-elevated"
-              >
-                {w.cta.label}
-              </Link>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+    <li
+      className={`flex items-center justify-between gap-3 rounded border px-4 py-2 text-sm ${cls}`}
+    >
+      <DoctorMessage warning={w} />
+      {w.cta && (
+        <Link
+          href={w.cta.href}
+          className="hard-press inline-flex shrink-0 items-center gap-2 rounded-full border-2 border-line bg-bg-surface px-5 py-[0.55rem] font-display text-xs font-bold text-text hover:bg-bg-elevated"
+        >
+          {w.cta.label}
+        </Link>
+      )}
+    </li>
   );
 }
 
