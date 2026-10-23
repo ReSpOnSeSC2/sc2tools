@@ -277,6 +277,7 @@ export interface OpponentsService {
 }
 
 export interface GamesService {
+  neighbors: import("./games").GamesService["neighbors"];
   list(
     userId: string,
     opts?: { limit?: number; before?: Date; oppPulseId?: string },
