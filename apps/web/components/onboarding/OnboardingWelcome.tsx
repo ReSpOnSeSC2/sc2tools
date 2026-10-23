@@ -4,6 +4,7 @@ import { useUser } from "@clerk/nextjs";
 import { Activity, BarChart3, Radio } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import type { OnboardingHelpers } from "./OnboardingShell";
+import type { OnboardingGoal } from "./welcomeState";
 
 const PILLARS: ReadonlyArray<{
   icon: typeof Activity;
@@ -32,7 +33,7 @@ const PILLARS: ReadonlyArray<{
  * we read the signed-in user's first name straight from Clerk so the
  * greeting works without any API round-trip.
  */
-export function OnboardingWelcome({ helpers }: { helpers: OnboardingHelpers }) {
+export function OnboardingWelcome({ helpers, goals = ["improve"], onGoalsChange, onContinue, saving = false, error }: { helpers: OnboardingHelpers; goals?: OnboardingGoal[]; onGoalsChange?: (goals: OnboardingGoal[]) => void; onContinue?: () => void; saving?: boolean; error?: string }) {
   const { user, isLoaded } = useUser();
   const firstName = isLoaded
     ? user?.firstName?.trim() ||
@@ -54,10 +55,18 @@ export function OnboardingWelcome({ helpers }: { helpers: OnboardingHelpers }) {
           {firstName ? `Welcome, ${firstName}.` : "Welcome to SC2 Tools."}
         </h1>
         <p className="text-body-lg text-text-muted">
-          Two minutes of setup. Then your dashboard fills with every
+          About five minutes of setup. Then your dashboard fills with every
           ranked match the moment it ends.
         </p>
       </header>
+
+      <fieldset className="space-y-3" disabled={saving}>
+        <legend className="mb-3 text-h3 font-semibold">What do you want from SC2 Tools?</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {([ ["improve", "Improve my play"], ["stream", "Upgrade my stream"] ] as const).map(([goal, label]) => <button key={goal} type="button" aria-pressed={goals.includes(goal)} onClick={() => onGoalsChange?.(goals.includes(goal) ? goals.filter((value) => value !== goal) : [...goals, goal])} className={`rounded-xl border p-4 text-left font-semibold focus-visible:ring-2 focus-visible:ring-accent ${goals.includes(goal) ? "border-accent bg-accent/10 text-accent" : "border-border bg-bg-surface text-text"}`}>{label}</button>)}
+        </div>
+        <p className="text-caption text-text-muted">Choose either or both. You can use every feature.</p>
+      </fieldset>
 
       <ul role="list" className="grid gap-3 sm:grid-cols-1">
         {PILLARS.map(({ icon: Icon, title, body }) => (
@@ -79,12 +88,14 @@ export function OnboardingWelcome({ helpers }: { helpers: OnboardingHelpers }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <Button
           size="lg"
-          onClick={helpers.next}
+          onClick={onContinue || helpers.next}
+          loading={saving}
           aria-label="Continue to the download step"
         >
           Get started →
         </Button>
       </div>
+      {error ? <p role="alert" className="text-caption text-danger">{error}</p> : null}
     </section>
   );
 }
