@@ -7,6 +7,7 @@ import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { X } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { LogoMark } from "./LogoMark";
+import { NavAuthGate } from "./NavAuthGate";
 
 /**
  * MobileNav — slide-in right-side drawer for the <lg viewport.
@@ -25,12 +26,15 @@ export type MobileNavLink = {
   label: string;
   /**
    * "in"    — visible when signed in.
+   * "out"   — visible only to signed-out visitors.
    * "any"   — visible to everyone.
    * "admin" — visible when signed in AND the caller is on the admin list
    *           (the parent decides this from the /v1/me payload and only
    *           passes admin links through when the user qualifies).
    */
-  auth: "in" | "any" | "admin";
+  auth: "in" | "out" | "any" | "admin";
+  /** The desktop header shows it from xl up; the drawer always lists it. */
+  wideOnly?: boolean;
 };
 
 export interface MobileNavProps {
@@ -148,30 +152,28 @@ export function MobileNav({ open, onClose, pathname, links }: MobileNavProps) {
           aria-label="Primary"
         >
           <ul className="space-y-1">
-            {links.map((link) => {
-              if (link.auth === "in" || link.auth === "admin") {
-                return (
-                  <SignedIn key={link.href}>
-                    <DrawerLink
-                      href={link.href}
-                      label={link.label}
-                      active={isActive(link.href, pathname)}
-                      onSelect={onClose}
-                    />
-                  </SignedIn>
-                );
-              }
-              return (
+            {links.map((link) => (
+              <NavAuthGate key={`${link.auth}:${link.href}`} auth={link.auth}>
                 <DrawerLink
-                  key={link.href}
                   href={link.href}
                   label={link.label}
                   active={isActive(link.href, pathname)}
                   onSelect={onClose}
                 />
-              );
-            })}
+              </NavAuthGate>
+            ))}
           </ul>
+          <SignedIn>
+            <div className="mt-4 px-1">
+              <Link
+                href="/app"
+                onClick={onClose}
+                className="hard-press flex h-12 w-full items-center justify-center rounded-full border-2 border-line bg-accent px-3 font-display text-body font-bold text-white hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                Open app
+              </Link>
+            </div>
+          </SignedIn>
           <SignedOut>
             <div className="mt-4 space-y-2 px-1">
               <Link
