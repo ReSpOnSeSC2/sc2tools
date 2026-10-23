@@ -227,7 +227,7 @@ export function BuildPublishModal({
               aria-live="polite"
               className="rounded-lg border border-border bg-bg-elevated/50 px-3 py-2 text-caption text-text-muted"
             >
-              Loading your current Community author settingâ€¦
+              Loading your current Community author setting…
             </div>
           ) : null}
           {identityError ? (

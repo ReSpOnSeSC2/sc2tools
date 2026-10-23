@@ -555,7 +555,7 @@ export function BuildEditorSheet({
                 aria-live="polite"
                 className="text-caption text-text-muted sm:col-span-2"
               >
-                Loading your current Community author settingâ€¦
+                Loading your current Community author setting…
               </div>
             ) : null}
             <Field
