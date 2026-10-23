@@ -24,6 +24,7 @@ corresponding GitHub Release.
   and recovers an unlinked PC without discarding queued replays or settings.
 - Desktop sync retains temporary failures with a retry countdown instead of
   repeating error rows; final replay outcomes have readable details and help.
+
 - Share one authenticated realtime connection across user and admin surfaces; count newly inserted games accurately, coalesce chart refreshes during imports, and show admin connection recovery status.
 
 ### Build editor safety
