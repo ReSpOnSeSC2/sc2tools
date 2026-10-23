@@ -708,6 +708,7 @@ class AdminService {
    * @param {string} userId
    * @returns {Promise<{
    *   userId: string,
+   *   games: number, opponents: number, macroJobs: number,
    *   droppedRows: number,
    *   pulseBackfill: {
    *     scanned: number,
@@ -719,12 +720,7 @@ class AdminService {
    */
   async rebuildOpponentsForUser(userId) {
     if (!userId) throw new Error("userId required");
-    const result = await this.gdpr.rebuildOpponentsAndHealForUser(userId);
-    return {
-      userId,
-      droppedRows: result.droppedRows,
-      pulseBackfill: result.pulseBackfill,
-    };
+    return this.gdpr.rebuildOpponentsForAdmin(userId);
   }
 
   /**

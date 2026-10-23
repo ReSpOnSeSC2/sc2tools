@@ -44,6 +44,8 @@ corresponding GitHub Release.
 
 ### Added
 
+- Operations console adds bounded background-job history and safe Run now controls, a 400-day admin audit log, per-user support snapshots, first-party activation cohorts, and resolved-user repair actions with typed wipe confirmation and game-count conflict protection.
+
 - Read curated updates in What's New, the public changelog and RSS. Service notices explain active incidents and expire automatically; installer release notes are easier to read.
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
 

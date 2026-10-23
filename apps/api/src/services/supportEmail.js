@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -296,6 +297,7 @@ function syncError(code) {
 
 /**
  * @param {{
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   service: SupportEmailService | null,
  *   logger: import('pino').Logger,
  *   intervalMs?: number,
@@ -306,10 +308,11 @@ function buildSupportEmailJob(deps) {
   let timer = null;
   /** @type {Promise<{ processed: number } | null> | null} */
   let running = null;
-  function runOnce() {
+  function runOnceWork() {
     if (!running) {
       running = (deps.service ? deps.service.sync() : Promise.resolve(null))
         .catch(async (err) => {
+          runOnce.failed(err);
           // Do not log OAuth responses, tokens, message bodies or headers.
           const code = typeof err?.code === "string" && /^[a-z0-9_]{1,64}$/.test(err.code)
             ? err.code : "sync_failed";
@@ -320,6 +323,7 @@ function buildSupportEmailJob(deps) {
     }
     return running;
   }
+  const runOnce = observeJob(deps, "support-email", deps.intervalMs || 60000, runOnceWork, { disabled: !deps.service, envFlag: "SUPPORT_GMAIL_*" });
   return {
     start() {
       if (timer) return;

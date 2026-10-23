@@ -1,0 +1,19 @@
+"use client";
+import { useState } from "react";
+import { useAuth } from "@clerk/nextjs";
+import { apiCall, useApi } from "@/lib/clientApi";
+import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { RequestError } from "@/components/ui/RequestError";
+import { timeSince } from "./format";
+type Job = {job:string;lastOk:string|null;lastError:{startedAt:string;errorCode:string}|null;durations:number[];nextDue:string|null;envFlag:string|null;disabled:boolean;running:boolean;canRun:boolean;overdue:boolean};
+export function BackgroundJobs() {
+  const swr=useApi<{jobs:Job[]}>("/v1/admin/jobs",{refreshInterval:60000}), {getToken}=useAuth();
+  const [selected,setSelected]=useState<Job|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState<string|null>(null);
+  async function run(){if(!selected||busy)return;setBusy(true);setError(null);try{await apiCall(getToken,`/v1/admin/jobs/${encodeURIComponent(selected.job)}/run`,{method:"POST"});setSelected(null);await swr.mutate();}catch(e){setError(e instanceof Error?e.message:"Job failed. Try again.");}finally{setBusy(false);}}
+  return <section aria-labelledby="background-jobs"><h2 id="background-jobs" className="text-h3">Background jobs</h2><details className="my-2 text-caption text-text-muted"><summary>How to read this</summary><p>Last OK and last error are retained runs, not guarantees about the next run. A job overdue by three intervals raises an alert. Disabled jobs do not alert. Run now joins the scheduler&apos;s single flight and respects its lock and environment flag. Durations show the last 12 runs. <a className="underline" href="https://github.com/ReSpOnSeSC2/sc2tools/blob/main/docs/runbooks/admin-operations.md">Operations guide</a></p></details>
+    {swr.error?<RequestError error={swr.error} onRetry={()=>swr.mutate()}/>:!swr.data?<p role="status">Loading background jobs…</p>:<div className="overflow-x-auto"><table className="w-full text-left text-caption"><caption className="sr-only">Background job health and bounded run durations</caption><thead><tr>{["Job","Last OK","Last error","Durations","Next due","Configuration","Action"].map((h)=><th key={h} className="p-2">{h}</th>)}</tr></thead><tbody>{swr.data.jobs.map((job)=><tr key={job.job} className="border-t border-border"><th scope="row" className="p-2">{job.job}{job.overdue?" · Overdue":""}</th><td className="p-2">{timeSince(job.lastOk)}</td><td className="p-2">{job.lastError?`${timeSince(job.lastError.startedAt)} · ${job.lastError.errorCode}`:"—"}</td><td className="p-2"><DurationSparkline values={job.durations}/></td><td className="p-2">{job.disabled?(job.canRun?"Not scheduled":"Disabled"):job.nextDue?new Date(job.nextDue).toLocaleString():"—"}</td><td className="p-2">{job.envFlag||"—"}</td><td className="p-2"><Button size="sm" variant="secondary" disabled={!job.canRun||job.running} onClick={()=>{setSelected(job);setError(null);}}>Run now</Button></td></tr>)}</tbody></table>{!swr.data.jobs.length?<p className="text-caption">No scheduled jobs registered in this process.</p>:null}</div>}
+    <ConfirmDialog open={!!selected} loading={busy} onClose={()=>{if(!busy)setSelected(null);}} onConfirm={()=>void run()} title={`Run ${selected?.job||"job"} now?`} description="This executes real configured work. Existing locks, freshness checks and single-flight limits still apply." confirmLabel="Run now">{error?<p role="alert" className="text-danger">{error}</p>:null}</ConfirmDialog>
+  </section>;
+}
+function DurationSparkline({values}:{values:number[]}){const max=Math.max(1,...values);return <div role="img" aria-label={values.length?`Run durations: ${values.join(", ")} milliseconds`:"No completed runs"} className="flex h-8 items-end gap-0.5">{values.map((v,i)=><span key={i} className="w-1.5 bg-accent" style={{height:`${Math.max(4,v/max*100)}%`}}/>)}<span className="ml-1 text-micro">{values.at(-1)??"—"} ms</span></div>;}

@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 /**
  * Guide videos sync worker.
@@ -123,6 +124,8 @@ function buildSyncRunner(videos, logger) {
  * @param {{
  *   guideVideos: GuideVideosSyncTarget,
  *   logger: import('pino').Logger,
+ *   enabled?: boolean,
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   intervalMs?: number,
  *   env?: NodeJS.ProcessEnv,
  * }} deps
@@ -145,6 +148,7 @@ function buildGuideVideosSyncJob(deps) {
   const logger = deps.logger.child({ component: "guideVideosJob" });
   const videos = deps.guideVideos;
   const runner = buildSyncRunner(videos, logger);
+  const runOnce = observeJob(deps, "guide-videos", interval, runner.runOnce, { disabled: deps.enabled === false || disabled || !videos.isConfigured(), envFlag: "GUIDES_ENABLED / SC2TOOLS_GUIDE_VIDEOS_DISABLED" });
   /** @type {NodeJS.Timeout | null} */
   let timer = null;
   let started = false;
@@ -157,8 +161,8 @@ function buildGuideVideosSyncJob(deps) {
         return;
       }
       started = true;
-      void runner.runOnce();
-      timer = setInterval(() => void runner.runOnce(), interval);
+      void runOnce();
+      timer = setInterval(() => void runOnce(), interval);
       if (typeof timer.unref === "function") timer.unref();
       logger.info({ intervalMs: interval }, "guide_videos_job_started");
     },
@@ -169,7 +173,7 @@ function buildGuideVideosSyncJob(deps) {
       const pending = runner.inflight();
       if (pending) await pending;
     },
-    runOnce: runner.runOnce,
+    runOnce,
     isRunning() {
       return started;
     },
