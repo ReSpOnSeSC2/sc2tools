@@ -116,14 +116,15 @@ export function AdminGameDetail({
       <Card padded>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-text-muted">
           <span
+            title={!game.result ? "Result not recorded" : undefined}
             className={[
               "rounded-full px-2 py-0.5 font-semibold",
-              isWin(game.result)
+              !game.result ? "bg-bg-elevated text-text-muted" : isWin(game.result)
                 ? "bg-success/15 text-success"
                 : "bg-danger/15 text-danger",
             ].join(" ")}
           >
-            {isWin(game.result) ? "Win" : "Loss"}
+            {!game.result ? "—" : isWin(game.result) ? "Win" : "Loss"}
           </span>
           <span className="font-mono text-text-dim">{fmtDate(game.date)}</span>
           <span>{game.map || "—"}</span>

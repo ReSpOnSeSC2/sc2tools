@@ -658,6 +658,8 @@ class GuiUI:
         build_checkin_available: bool = False,
         build_checkin_positions: Optional[dict] = None,
         on_build_checkin_moved: Optional[Callable[[str, int, int], None]] = None,
+        on_build_checkin_reset: Optional[Callable[[], None]] = None,
+        build_checkin_preview_race: Optional[Callable[[], Optional[str]]] = None,
         window_geometry: Optional[str] = None,
         window_page: Optional[str] = None,
         on_window_state: Optional[Callable[[str, str], None]] = None,
@@ -735,6 +737,8 @@ class GuiUI:
         self._build_checkin_available = build_checkin_available
         self._build_checkin_positions = dict(build_checkin_positions or {})
         self._on_build_checkin_moved = on_build_checkin_moved
+        self._on_build_checkin_reset = on_build_checkin_reset
+        self._build_checkin_preview_race = build_checkin_preview_race
         self._checkin_proxy = None
         self._checkin_lock = threading.Lock()
         self._checkin_ready = False
@@ -1268,6 +1272,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 positions=ui._build_checkin_positions,
                 on_moved=ui._on_build_checkin_moved,
                 settings=self._checkin_settings,
+                preview_race=ui._build_checkin_preview_race,
+                on_reset_positions=ui._on_build_checkin_reset,
             )
             self._wire_signals()
             self._refresh_status_card()
@@ -2375,6 +2381,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 controller=ui._build_checkin_controller,
                 available=ui._build_checkin_available,
                 on_help=lambda: self._open_help("build-check-in"),
+                on_preview=lambda kind: self._checkin_host.show_preview(kind),
+                on_reset_positions=lambda: self._checkin_host.reset_positions(),
+                on_open_queue=lambda: self._open_checkin_queue(),
             )
             v.addWidget(self._checkin_settings)
             v.addWidget(self._build_obs_card())
@@ -3213,6 +3222,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _help_url(self, slug):
             return help_url(ui._dashboard_url, slug)
+
+        def _open_checkin_queue(self) -> None:
+            from ..build_checkin.links import web_queue_url
+            webbrowser.open(web_queue_url(ui._dashboard_url), new=2)
 
         def _open_help(self, slug, anchor=""):
             webbrowser.open(self._help_url(slug) + ("#" + anchor if anchor else ""), new=2)

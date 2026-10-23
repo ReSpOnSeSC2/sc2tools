@@ -776,6 +776,8 @@ def _run_with_gui(
         # The check-in controller rides on the live bridge.
         build_checkin_available=not no_live,
         build_checkin_positions=dict(state.build_checkin_card_positions),
+        build_checkin_preview_race=lambda: state.last_known_race,
+        on_build_checkin_reset=lambda: _reset_build_checkin_positions(cfg.state_dir, state),
         on_build_checkin_moved=lambda kind, x, y: _remember_build_checkin_position(
             cfg.state_dir, state, kind, x, y,
         ),
@@ -958,9 +960,8 @@ def _gui_boot_worker(
             ),
             on_pending_changed=ui.on_pending,
             # Late-bound: the build check-in starts with the live bridge.
-            on_game_accepted=lambda *accepted: (
-                cell.build_checkin.on_game_accepted(*accepted)
-                if getattr(cell, "build_checkin", None) else None
+            on_game_accepted=lambda *accepted: _handle_checkin_game_accepted(
+                cfg.state_dir, state, cell, *accepted,
             ),
         )
         upload.set_activity_gate(cell.activity_gate)
@@ -1968,6 +1969,44 @@ def _open_build_checkin(cell: "_RuntimeCell", dashboard_url: str) -> None:
         controller.reopen()
         return
     webbrowser.open(web_queue_url(dashboard_url), new=2)
+
+
+def _reset_build_checkin_positions(state_dir: Path, state: AgentState) -> None:
+    state.build_checkin_card_positions = {}
+    def save() -> None:
+        try:
+            save_state(state_dir, state)
+        except OSError:
+            logging.getLogger("sc2tools_agent").warning("build_checkin_position_reset_failed", exc_info=True)
+    threading.Thread(target=save, name="sc2tools-checkin-reset", daemon=True).start()
+
+
+_CHECKIN_PREVIEW_RACE_LOCK = threading.Lock()
+
+
+def _handle_checkin_game_accepted(state_dir: Path, state: AgentState, cell: Any, path: Any, game: Any, *accepted: Any) -> None:
+    """Remember the latest replay race on the upload worker, not Qt/controller."""
+    from datetime import datetime, timezone
+    from .build_checkin.models import canonical_race
+    def timestamp(raw):
+        try:
+            parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
+        except (ValueError, TypeError, AttributeError):
+            return None
+    race = canonical_race(getattr(game, "my_race", None))
+    played = getattr(game, "date_iso", None)
+    with _CHECKIN_PREVIEW_RACE_LOCK:
+        instant, previous = timestamp(played), timestamp(state.last_known_race_at)
+        if race in ("Protoss", "Terran", "Zerg") and instant is not None and (previous is None or instant > previous):
+            state.last_known_race, state.last_known_race_at = race, played
+            try:
+                save_state(state_dir, state)
+            except OSError:
+                logging.getLogger("sc2tools_agent").warning("checkin_preview_race_save_failed")
+    controller = getattr(cell, "build_checkin", None)
+    if controller is not None:
+        controller.on_game_accepted(path, game, *accepted)
 
 
 def _remember_build_checkin_position(

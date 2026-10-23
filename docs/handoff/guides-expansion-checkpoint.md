@@ -55,6 +55,16 @@ the final evidence commit. No shared focus, filter, chrome or SortableTh edits.
 
 ## Verification
 
+CI follow-up: the existing nightly and route assertions now verify the exact
+new counter/map payloads, including privacy-safe keys and null rates below
+the publication floor (45 real-Mongo assertions in the two previously failing
+suites). The old phone headline smoke now checks the ranked cards shown on
+phones. Definitions filtering remains local and now replaces browser history
+without an RSC request, so a delayed server response cannot hide a newer hash
+target; rendered and repeated production hash/focus regressions cover this.
+Shipped main `71d00337` (#693 shared clock/phone HUD and #694 share previews)
+was integrated; only CHANGELOG conflicted and both entries were retained.
+
 - 481 web assertions / 55 files: guide components, helpers, routes and all
   help tests. Includes real SWR request deduplication and auth gating.
 - 41 API assertions / 3 suites: guidesPayloads, guideStatsIndex,
