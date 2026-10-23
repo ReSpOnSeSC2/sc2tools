@@ -55,7 +55,7 @@
  */
 
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MapPlayback } from "@/lib/mapReplay";
 import type { PatchEra } from "@/lib/meta";
 import {
@@ -209,13 +209,14 @@ export function ReplayStage({
   const onSpeedChange = useCallback((next: ReplaySpeed) => setSpeed(next), []);
   const onUserSeek = useCallback((next: number) => { seek(next); onPlayingChange(false); onStageSeek?.(next); }, [seek, onPlayingChange, onStageSeek]);
 
+  // Pause and seek before the browser can tick the old playing position.
   // External seek-and-pause. Keyed on ``seq`` so asking for the same
   // moment twice (clicking one time chip again after scrubbing away)
   // still jumps; routed through ``seek`` so a segmented host loads the
   // right segment and MapReplayer sees a non-echo time. Starts at null so
   // a request made while the stage was still loading applies on mount.
   const lastSeekSeq = useRef<number | null>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!seekRequest || seekRequest.seq === lastSeekSeq.current) return;
     lastSeekSeq.current = seekRequest.seq;
     const target = Math.min(model.gameLength, Math.max(0, seekRequest.t));

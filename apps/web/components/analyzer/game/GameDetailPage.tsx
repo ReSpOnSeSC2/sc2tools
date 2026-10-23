@@ -208,7 +208,7 @@ function GameDetailContent({
     intentReq.data && intentReq.data.opponent !== undefined
       ? effectiveOpponentBuild(intentReq.data.opponent, game.opponent?.strategy)
       : null;
-  const recomputeAction = macroStatus === "ready" || macroStatus === "notComputed" ? <RecomputeAnalysisAction onRecompute={() => void macroReq.recompute()} busy={macroReq.recomputing} disabledReason={recomputeDisabledReason} /> : undefined;
+  const recomputeAction = macroStatus === "ready" || macroStatus === "notComputed" ? <RecomputeAnalysisAction onRecompute={() => void macroReq.recompute()} busy={macroReq.recomputing} message={macroReq.recomputeMsg} disabledReason={recomputeDisabledReason} /> : undefined;
   // Once the editor opened, a refresh or a copied link mustn't reopen it.
   const dropNewBuildParam = () => {
     const { pathname, search, hash } = window.location;
@@ -275,7 +275,7 @@ function GameDetailContent({
 
       </section>
       <section id="macro" className="scroll-mt-[var(--game-section-offset,8rem)]" aria-label="Macro breakdown">
-        <SectionBoundary key={`macro:${game.gameId}`} label="the macro breakdown" title="The macro breakdown hit a problem"><GameMacroSection inspectionTime={clock.t} onSeek={setScrubTime} gameId={game.gameId} data={breakdown} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} action={recomputeAction} message={macroReq.recomputeMsg} onRecompute={() => void macroReq.recompute()} recomputing={macroReq.recomputing} headerMeta={{ playerName: myName, opponentName: oppName, myRace: ghostMyRace, opponentRace: ghostOpponentRace, dateIso: game.date, gameVersion: game.gameVersion, gameBuild: game.gameBuild }} /></SectionBoundary>
+        <SectionBoundary key={`macro:${game.gameId}`} label="the macro breakdown" title="The macro breakdown hit a problem"><GameMacroSection inspectionTime={clock.t} onSeek={setScrubTime} gameId={game.gameId} data={breakdown} loading={macroStatus === "loading"} error={macroStatus === "error" ? macroReq.error : undefined} onRetry={() => macroReq.mutate()} action={recomputeAction} onRecompute={() => void macroReq.recompute()} recomputing={macroReq.recomputing} headerMeta={{ playerName: myName, opponentName: oppName, myRace: ghostMyRace, opponentRace: ghostOpponentRace, dateIso: game.date, gameVersion: game.gameVersion, gameBuild: game.gameBuild }} /></SectionBoundary>
       </section>
       <section id="builds" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]" aria-labelledby="game-builds-heading">
         <h2 id="game-builds-heading" className="font-display text-h3 font-bold">Builds <LazyHelpLink slug="game-page" anchor="build-orders">Help</LazyHelpLink></h2>

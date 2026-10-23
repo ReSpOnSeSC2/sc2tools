@@ -97,8 +97,8 @@ export function MacroBreakdownBody({
             oppProductionBuildings={data.opp_production_buildings}
             gameLengthSec={data.game_length_sec}
             leaks={leaks}
-            supplyBlockWindows={raw.supply_block_windows || []}
-            oppSupplyBlockWindows={raw.opp_supply_block_windows || []}
+            supplyBlockWindows={raw.supply_block_windows}
+            oppSupplyBlockWindows={raw.opp_supply_block_windows}
             highlightedKey={highlightedKey}
             myName={headerMeta?.playerName ?? null}
             oppName={headerMeta?.opponentName ?? null}

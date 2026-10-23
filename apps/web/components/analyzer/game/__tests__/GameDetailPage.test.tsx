@@ -318,7 +318,7 @@ describe("GameDetailPage", () => {
     expect(screen.getByText("Terran - 2 Rax")).toBeTruthy();
 
     // Centerpiece timeline with scrubber + readout.
-    expect(await screen.findByRole("button", { name: "Army", exact: true })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "Army" })).toBeTruthy();
     expect(screen.getByLabelText("Scrub game time")).toBeTruthy();
     expect(screen.getByTestId("game-clock-readout")).toBeTruthy();
 

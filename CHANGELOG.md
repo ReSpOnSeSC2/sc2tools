@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Game workspace and shared clock
+
+- The game page includes the complete macro report, priced leaks and Recompute analysis, with section links that keep the replay mounted. Bank joins the chart metrics, and this browser remembers your selection.
+- Supply blocks, loss causes, macro moments and build steps seek one replay clock. Playback follows through the chart and current build step; timestamp links, completed upgrades and measured banked resources give each moment context.
+
 ### Shared game analysis
 
 - Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.

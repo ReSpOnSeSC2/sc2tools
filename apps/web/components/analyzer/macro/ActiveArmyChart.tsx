@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   useCallback,
   useEffect,
   useId,
@@ -341,24 +342,8 @@ export function ActiveArmyChart({
           preserveAspectRatio="none"
           className="absolute inset-0 block h-full w-full"
         >
-          <Grid layout={layout} />
-          {showSupplyBlocks ? (
-            <SupplyBlockBands
-              layout={layout}
-              my={supplyBlockWindows}
-              opp={oppSupplyBlockWindows}
-            />
-          ) : null}
-          <XAxis layout={layout} />
-          <LeakMarkers
-            layout={layout}
-            leaks={leaks}
-            highlightedKey={highlightedKey}
-          />
-          <LeadShading layout={layout} clipId={clipId} />
-          <SeriesLines layout={layout} />
+          <StaticTimelineLayers layout={layout} clipId={clipId} leaks={leaks} highlightedKey={highlightedKey} showSupplyBlocks={showSupplyBlocks} supplyBlockWindows={supplyBlockWindows} oppSupplyBlockWindows={oppSupplyBlockWindows} />
           {hover ? <HoverCrosshair layout={layout} hover={hover} /> : null}
-          <YAxisLabels layout={layout} />
           <rect
             ref={overlayRef}
             x={layout.plotLeft}
@@ -439,6 +424,18 @@ function chartLabel(plotted: readonly TimelineMetricDef[]): string {
  * any scroll during the press voids it, and a press that travels is a
  * drag, not a tap.
  */
+/** Playback moves the cursor/readout without repainting the static SVG paths. */
+const StaticTimelineLayers = memo(function StaticTimelineLayers({ layout, clipId, leaks, highlightedKey, showSupplyBlocks, supplyBlockWindows, oppSupplyBlockWindows }: {
+  layout: ChartLayout; clipId: string;
+} & Pick<ActiveArmyChartProps, "leaks" | "highlightedKey" | "showSupplyBlocks" | "supplyBlockWindows" | "oppSupplyBlockWindows">) {
+  return <g>
+    <Grid layout={layout} />
+    {showSupplyBlocks ? <SupplyBlockBands layout={layout} my={supplyBlockWindows} opp={oppSupplyBlockWindows} /> : null}
+    <XAxis layout={layout} /><LeakMarkers layout={layout} leaks={leaks} highlightedKey={highlightedKey} />
+    <LeadShading layout={layout} clipId={clipId} /><SeriesLines layout={layout} /><YAxisLabels layout={layout} />
+  </g>;
+});
+
 function useDismissOnTapOutside(
   figureRef: RefObject<HTMLElement | null>,
   active: boolean,

@@ -21,9 +21,10 @@ export function useRecomputeAvailability(gameId: string | null) {
   return agentPresence(me.data.agentLastSeenAt, now) === "online" ? null : "Open your paired SC2 Tools desktop app to recompute this replay.";
 }
 
-export function RecomputeAnalysisAction({ onRecompute, busy, disabledReason }: { onRecompute: () => void; busy: boolean; disabledReason?: string | null }) {
+export function RecomputeAnalysisAction({ onRecompute, busy, disabledReason, message }: { onRecompute: () => void; busy: boolean; disabledReason?: string | null; message?: string | null }) {
   return <span className="inline-flex max-w-full flex-wrap items-center gap-2">
     <Button variant="secondary" size="sm" onClick={onRecompute} loading={busy} disabled={busy || Boolean(disabledReason)} title={disabledReason || RECOMPUTE_ANALYSIS_HINT} iconLeft={<RefreshCcw className="h-4 w-4" aria-hidden />}>Recompute analysis</Button>
     {disabledReason ? <span className="max-w-xs text-micro font-normal normal-case tracking-normal text-text-muted">{disabledReason}</span> : null}
+    {message ? <span role="status" className="max-w-sm text-micro font-normal normal-case tracking-normal text-text-muted">{message}</span> : null}
   </span>;
 }
