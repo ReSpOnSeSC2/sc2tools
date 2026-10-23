@@ -44,6 +44,27 @@ def _cfg(tmp_path: Path) -> AgentConfig:
     )
 
 
+def test_blank_api_address_clears_override(tmp_path):
+    state = AgentState(api_base_override="https://private.example")
+    _handle_save_settings(_cfg(tmp_path), state, SettingsPayload(api_base=""), _cell(), logging.getLogger("test"))
+    assert state.api_base_override is None
+    assert load_state(tmp_path).api_base_override is None
+
+
+@pytest.mark.parametrize("count,parts", [
+    (0, []),
+    (1, ["1 queued upload skipped", "1 older replay will sync again"]),
+    (2, ["2 queued uploads skipped", "2 older replays will sync again"]),
+])
+def test_save_summary_omits_zero_counts_and_pluralises(tmp_path, count, parts):
+    state = AgentState(uploaded={f"replay-{index}": "filtered" for index in range(count)})
+    messages = []
+    cell = SimpleNamespace(upload=_StubUpload(drop_count=count), watcher=_StubWatcher(), tray=None,
+                           gui=SimpleNamespace(show_settings_status=messages.append))
+    _handle_save_settings(_cfg(tmp_path), state, SettingsPayload(sync_filter_preset="season:67"), cell, logging.getLogger("test"))
+    assert messages == ["Saved. " + "; ".join(["Syncing Season 67 only", *parts]) + "."]
+
+
 class _StubUpload:
     def __init__(
         self,
@@ -833,7 +854,7 @@ def test_save_calls_show_settings_status_with_apply_summary(
     # Carries the filter label, drop count, and re-eligible count.
     assert "Season 67" in msg
     assert "3 queued upload" in msg
-    assert "1 previously filtered replay" in msg
+    assert "1 older replay will sync again" in msg
 
 
 def test_save_unrelated_change_emits_default_status_message(
@@ -859,7 +880,7 @@ def test_save_unrelated_change_emits_default_status_message(
     _handle_save_settings(
         _cfg(tmp_path), state, payload, cell, logging.getLogger("test"),
     )
-    assert gui.statuses == ["Settings saved"]
+    assert gui.statuses == ["Saved."]
 
 
 def test_folder_change_only_calls_resync_once(tmp_path: Path) -> None:
