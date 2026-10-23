@@ -159,8 +159,8 @@ describe("GamesSection builds and chart", () => {
     render(<GamesSection games={buildReportGames([realWin()])} />);
     const mine = within(screen.getByTestId("build-column-me"));
     const theirs = within(screen.getByTestId("build-column-opp"));
-    expect(mine.getByText("You — PvZ - Adept Glaives (Robo)")).toBeTruthy();
-    expect(theirs.getByText("Squirtuoz — ZvP - Speedling Flood")).toBeTruthy();
+    expect(mine.getAllByText("You — PvZ - Adept Glaives (Robo)")).toHaveLength(2);
+    expect(theirs.getAllByText("Squirtuoz — ZvP - Speedling Flood")).toHaveLength(2);
     expect(theirs.getAllByText("Spawning Pool").length).toBeGreaterThan(0);
     const columns = screen.getByTestId("report-build-orders");
     expect(columns.textContent).not.toMatch(/Reward|Beacon|Spray/);
