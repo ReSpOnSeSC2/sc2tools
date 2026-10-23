@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { BandAxisToggle } from "./BandAxisToggle";
+import { FilterPillLabel } from "./FilterPillLabel";
+import { PillScroller } from "./PillScroller";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { guideBandQueryString, type GuideBandQuery } from "@/lib/guides/format";
 import { eraShortLabel } from "@/lib/guides/guideCopy";
@@ -26,22 +29,22 @@ interface Pill {
 function PillGroup({ label, pills }: { label: string; pills: ReadonlyArray<Pill> }) {
   if (pills.length === 0) return null;
   return (
-    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+    <div className="flex min-w-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3">
       <span className="text-micro font-semibold uppercase tracking-wider text-text-dim">{label}</span>
-      <ul className="flex flex-wrap gap-1.5">
+      <PillScroller>
         {pills.map((pill) => (
-          <li key={pill.key}>
+          <li key={pill.key} className="shrink-0 snap-start">
             <Link
               href={pill.href}
               aria-current={pill.isActive ? "page" : undefined}
               className={`${PILL_CLASS} ${pill.isActive ? PILL_ACTIVE_CLASS : PILL_IDLE_CLASS}`}
               prefetch={false}
             >
-              {pill.label}
+              <FilterPillLabel label={pill.label} />
             </Link>
           </li>
         ))}
-      </ul>
+      </PillScroller>
     </div>
   );
 }
@@ -85,14 +88,16 @@ export function BandSwitcher({
   const current: GuideBandQuery | null = band ? { type: band.type, value: band.value } : null;
   const eraPills: Pill[] = [
     { key: "after", label: eraShortLabel("after"), href: `${path}${guideBandQueryString(current, "after")}`, isActive: era === "after" },
-    { key: "before", label: eraShortLabel("before"), href: `${path}${guideBandQueryString(current, "before")}`, isActive: era === "before" },
+    { key: "before", label: `${eraShortLabel("before").split(" · ")[0]} (patch 5.0.16)`, href: `${path}${guideBandQueryString(current, "before")}`, isActive: era === "before" },
   ];
-  const allPill: Pill = { key: "all", label: "All", href: `${path}${guideBandQueryString(null, era)}`, isActive: !band };
+  const allPill: Pill = { key: "all", label: "All opponents", href: `${path}${guideBandQueryString(null, era)}`, isActive: !band };
   return (
     <nav aria-label="Filter openers" className="space-y-2">
-      <PillGroup label="Game" pills={eraPills} />
-      <PillGroup label="Opponent league" pills={[allPill, ...bandPills(path, "league", options.league, band, era)]} />
-      <PillGroup label="Opponent MMR" pills={bandPills(path, "mmr", options.mmr, band, era)} />
+      <PillGroup label="Starting workers" pills={eraPills} />
+      <PillGroup label="Opponents" pills={[allPill]} />
+      <BandAxisToggle initialAxis={band?.type ?? "league"}
+        league={<PillGroup label="League" pills={bandPills(path, "league", options.league, band, era)} />}
+        mmr={<PillGroup label="MMR" pills={bandPills(path, "mmr", options.mmr, band, era)} />} />
     </nav>
   );
 }

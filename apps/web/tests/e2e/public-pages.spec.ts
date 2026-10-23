@@ -193,6 +193,19 @@ const GUIDE_STATS: Array<{ path: string; locate: (page: Page) => Locator; stat: 
 ];
 
 test.describe("guide pages at 375 and 1440 px", () => {
+  test("filtered opener controls stay inside a 375px page", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop-1280", "the viewport is set per test; run it once");
+    await page.setViewportSize({ width: 375, height: 900 });
+    const response = await page.goto("/guides/pvz?band=league:4");
+    expect(response?.status()).toBe(200);
+    const filters = page.getByRole("navigation", { name: "Filter openers" });
+    await expect(filters).toBeVisible();
+    await expect(filters.getByRole("link", { name: "All opponents", exact: true })).toHaveAttribute("href", "/guides/pvz");
+    await expect(page.getByRole("navigation", { name: "Matchups" }).getByRole("link")).toHaveCount(9);
+    await filters.getByRole("button", { name: "By MMR" }).click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  });
+
   for (const width of [375, 1440]) {
     test(`headline stats visible with no horizontal scroll at ${width}px`, async ({ page }, testInfo) => {
       test.skip(testInfo.project.name !== "desktop-1280", "the viewport is set per test; run it once");

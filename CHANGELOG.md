@@ -19,6 +19,12 @@ corresponding GitHub Release.
 - Cookie settings can be reopened from the footer or Privacy Policy, including when storage is blocked. Legal pages have section navigation, and the crash screen follows your theme with retry, reload, home and report controls.
 - Detail pages have one main heading, consistent back links and breadcrumbs. Navigation shows delayed progress, with loading placeholders while pages and sign-in resolve.
 
+### Phase 2b: build guides
+
+- Guide outages offer a working Retry and report action. Signed-in players can open their own record, builds, or upload games; signing in returns to the guide.
+- Matchup guides separate opponent league and MMR filters, show the current scope and loading feedback, and offer a way out of empty results.
+- Switch between all nine matchups, view the other side, and read plain-language sample sizes and counter verdicts. A new Build guides help article explains the filters and archived eight-worker games.
+
 ### Review recovery
 
 - Failed request closure and reviewer preference saves show recovery actions; preferences roll back when saving fails.

@@ -8,6 +8,7 @@ const harness = vi.hoisted(() => ({
   useApi: vi.fn(),
 }));
 
+vi.mock("next/navigation", () => ({ usePathname: () => "/guides/pvz/stargate-into-glaives" }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => harness.auth }));
 vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string) => {
@@ -48,7 +49,7 @@ describe("GuidePersonalComparison", () => {
   it("asks signed-out visitors to sign in and makes no request", () => {
     renderComparison();
     const link = screen.getByRole("link", { name: "Sign in to compare your timings" });
-    expect(link.getAttribute("href")).toBe("/sign-in");
+    expect(link.getAttribute("href")).toBe("/sign-in?redirect_url=%2Fguides%2Fpvz%2Fstargate-into-glaives");
     expect(harness.useApi).not.toHaveBeenCalled();
   });
 
