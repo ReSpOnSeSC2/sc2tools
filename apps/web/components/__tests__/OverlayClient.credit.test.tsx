@@ -10,6 +10,8 @@ import { act, cleanup, render, screen } from "@testing-library/react";
 type SocketHandler = (...args: unknown[]) => void;
 
 class FakeSocket {
+  connect() {}
+  off() {}
   handlers = new Map<string, SocketHandler>();
   on(event: string, handler: SocketHandler) {
     this.handlers.set(event, handler);
@@ -70,6 +72,17 @@ describe("OverlayClient credit", () => {
     const credit = screen.getByTestId("overlay-credit");
     expect(credit.textContent).toBe("Overlay by sc2tools.com");
     expect(credit.getAttribute("data-placement")).toBe("top-left");
+  });
+
+  it("resets both the old snapshot and terminal status when switching tokens", () => {
+    const view = render(<OverlayClient token="old-token" />);
+    act(() => startMatch(activeSocket as FakeSocket));
+    expect(screen.getByTestId("overlay-credit")).toBeTruthy();
+    act(() => activeSocket!.fire("connect_error", new Error("invalid_overlay_token")));
+    expect(screen.getByText("This overlay link no longer works")).toBeTruthy();
+    view.rerender(<OverlayClient token="new-token" />);
+    expect(screen.queryByText("This overlay link no longer works")).toBeNull();
+    expect(screen.queryByTestId("overlay-credit")).toBeNull();
   });
 
   it("is hidden by ?credit=0", () => {

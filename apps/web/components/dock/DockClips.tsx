@@ -22,6 +22,8 @@ import { useMemo, useState } from "react";
 import type { ClipMoment } from "@/lib/multichat/useEngagementState";
 import { formatOffset, vodLinkAt } from "@/lib/vodLinks";
 import { DockButton } from "./DockClient";
+import type { DockPost } from "./dockActions";
+import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
 export { formatOffset, vodLinkAt } from "@/lib/vodLinks";
 
@@ -30,16 +32,25 @@ export function DockClips({
   streamStartMs,
   vodUrl,
   busy,
+  studioReady = true,
   onPost,
 }: {
   moments: ReadonlyArray<ClipMoment>;
   streamStartMs: number | null;
   vodUrl: string | null;
   busy: boolean;
-  onPost: (patch: Record<string, unknown>) => Promise<void>;
+  studioReady?: boolean;
+  onPost: DockPost;
 }) {
   const [vodDraft, setVodDraft] = useState("");
   const [copied, setCopied] = useState(false);
+  const { run, notice, pending } = useDockPanelActions(studioReady, busy, onPost, {
+    saveVod: () => vodDraft.trim() ? { patch: { vodUrl: vodDraft.trim() }, message: "VOD link saved", after: () => setVodDraft("") } : null,
+    clearVod: () => ({ patch: { vodUrl: null }, message: "VOD link cleared" }),
+    mark: () => ({ patch: { streamStartMs: Date.now() }, message: "Stream start marked" }),
+    clearMark: () => ({ patch: { streamStartMs: null }, message: "Stream start cleared" }),
+  });
+  if (!studioReady) return <DockSnapshotState />;
 
   const copyList = () => {
     const lines = [...moments]
@@ -63,7 +74,8 @@ export function DockClips({
   };
 
   return (
-    <div className="space-y-2.5">
+    <fieldset disabled={busy || pending} className="min-w-0"><div className="space-y-2.5">
+      <DockActionNotice message={notice} />
       <div className="flex flex-wrap items-center gap-2">
         {streamStartMs ? (
           <>
@@ -78,7 +90,7 @@ export function DockClips({
             </span>
             <DockButton
               disabled={busy}
-              onClick={() => void onPost({ streamStartMs: null })}
+              onClick={() => void run("clearMark")}
             >
               Clear mark
             </DockButton>
@@ -87,7 +99,7 @@ export function DockClips({
           <>
             <DockButton
               disabled={busy}
-              onClick={() => void onPost({ streamStartMs: Date.now() })}
+              onClick={() => void run("mark")}
             >
               ⏺ Mark stream start
             </DockButton>
@@ -111,7 +123,7 @@ export function DockClips({
             </span>
             <DockButton
               disabled={busy}
-              onClick={() => void onPost({ vodUrl: null })}
+              onClick={() => void run("clearVod")}
             >
               Clear
             </DockButton>
@@ -127,10 +139,7 @@ export function DockClips({
             />
             <DockButton
               disabled={busy || vodDraft.trim().length === 0}
-              onClick={() => {
-                void onPost({ vodUrl: vodDraft.trim() });
-                setVodDraft("");
-              }}
+              onClick={() => void run("saveVod")}
             >
               Save
             </DockButton>
@@ -155,7 +164,7 @@ export function DockClips({
           ))}
         </ul>
       )}
-    </div>
+    </div></fieldset>
   );
 }
 
