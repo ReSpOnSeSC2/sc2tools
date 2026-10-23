@@ -16,7 +16,7 @@ export function ReplayNeighborNav({ root, from, neighbors }: { root: string; fro
     if (!older && !newer) return;
     function onKey(event: KeyboardEvent) {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-      if (event.target instanceof Element && event.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="slider"],[data-testid="interactive-timeline"]')) return;
+      if (event.target instanceof Element && event.target.closest('input,textarea,select,dialog,[contenteditable]:not([contenteditable="false"]),[role="slider"],[role="dialog"],[role="alertdialog"],[role="menu"],[role="menubar"],[role="listbox"],[role="tablist"],[role="combobox"],[data-testid="interactive-timeline"]')) return;
       const href = event.key === "ArrowLeft" ? older : event.key === "ArrowRight" ? newer : undefined;
       if (href) { event.preventDefault(); router.push(href); }
     }

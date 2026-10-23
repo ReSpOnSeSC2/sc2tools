@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { createPortal } from "react-dom";
 import { PublicReplayAnalysis } from "../PublicReplayAnalysis";
 import { parseArchiveFrom, sharedAnalysisHref } from "../archiveQuery";
 import type { PublicReplayDetailResponse } from "@/components/analyzer/replays/types";
@@ -57,6 +58,21 @@ it("uses plain arrows outside editing and timeline controls, preserving modified
   const controls = render(<div><input aria-label="Search" /><textarea aria-label="Notes" /><select aria-label="Choice"><option>Choice</option></select><div contentEditable aria-label="Editor" /><div role="slider" aria-label="Position" aria-valuenow={0} /></div>);
   for (const label of ["Search", "Notes", "Choice", "Editor", "Position", "Scrub timeline"]) fireEvent.keyDown(screen.getByLabelText(label), { key: "ArrowRight" });
   fireEvent.keyDown(screen.getByRole("button", { name: "Timeline chart" }), { key: "ArrowRight" }); expect(h.push).not.toHaveBeenCalled(); controls.unmount();
+});
+
+it("leaves portalled Help dialogs and composite controls in charge of their arrows", () => {
+  render(<PublicReplayAnalysis data={data} />);
+  const roles = ["dialog", "alertdialog", "menu", "menubar", "listbox", "tablist", "combobox"];
+  render(createPortal(<div>{roles.map((role) => <div key={role} role={role} aria-label={`Help ${role}`}><button>{role} control</button></div>)}<dialog open><button>Native dialog control</button></dialog></div>, document.body));
+  for (const role of roles) {
+    const control = screen.getByRole("button", { name: `${role} control` });
+    fireEvent.keyDown(control, { key: "ArrowLeft" });
+    fireEvent.keyDown(control, { key: "ArrowRight" });
+  }
+  fireEvent.keyDown(screen.getByRole("button", { name: "Native dialog control" }), { key: "ArrowRight" });
+  expect(h.push).not.toHaveBeenCalled();
+  fireEvent.keyDown(document.body, { key: "ArrowLeft" });
+  expect(h.push).toHaveBeenCalledTimes(1);
 });
 
 it("deduplicates stream chips and uses the shared bar's scroll-spy without changing guide defaults", () => {
