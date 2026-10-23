@@ -6,7 +6,7 @@
 #      small (no build-essential, no scipy/wheel/manylinux noise) and
 #      lets us cache requirements independently of source changes.
 #   2. runtime: Node 22 LTS slim, plus python3 + the venv from stage 1.
-#      The Express server spawns scripts/{macro,apm,spatial,ml}_cli.py
+#      The Express server spawns scripts/{macro,apm,spatial}_cli.py
 #      out of /opt/sc2-analyzer using /opt/sc2-py/bin/python.
 #
 # Required build-time context: the repository root, so the COPY of
@@ -29,7 +29,7 @@ RUN apt-get update \
         libgomp1 \
         python3-venv \
     && rm -rf /var/lib/apt/lists/*
-COPY apps/replay-engine/requirements.txt /tmp/sc2-requirements.txt
+COPY apps/replay-engine/requirements-server.txt /tmp/sc2-requirements.txt
 # Single self-verifying RUN: create the venv, install deps, prove
 # python+sc2reader work, all in one layer so a partial state can
 # never be cached as "successful". Render's layer cache had a stale
@@ -117,6 +117,10 @@ RUN /opt/sc2-py/bin/python --version \
 # checks both ``data/map_assets`` and ``data/map-images`` so the
 # directory is picked up automatically once it lands on disk.
 COPY apps/replay-engine /opt/sc2-analyzer
+
+# Verify installed dependencies and exercise the CLI with server-only packages.
+RUN /opt/sc2-py/bin/python /opt/sc2-analyzer/scripts/check_server_dependencies.py \
+    && /opt/sc2-py/bin/python /opt/sc2-analyzer/scripts/spatial_cli.py maps --db /tmp/sc2-empty-smoke.json
 
 WORKDIR /app
 
