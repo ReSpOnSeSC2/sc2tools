@@ -792,6 +792,9 @@ class GuiUI:
     def show_update_state(self, release, state, detail=""):
         self._dispatch("updateState", release, state, detail)
 
+    def show_site_notice(self, notice):
+        self._dispatch("siteNotice", notice)
+
     def show_transient_notice(self, message):
         self._dispatch("transientNotice", message)
 
@@ -995,6 +998,7 @@ def _make_signals():
         transientNotice = QtCore.Signal(str)
         updateState = QtCore.Signal(object, str, str)
         releaseNotes = QtCore.Signal(str)
+        siteNotice = QtCore.Signal(object)
         chooseFolderRequested = QtCore.Signal()
         resyncRequested = QtCore.Signal()
         checkUpdatesRequested = QtCore.Signal()
@@ -1412,6 +1416,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             title.setObjectName("h1")
             v.addWidget(title)
 
+            from .service_notice import build_service_notice
+            self._site_notice_card = build_service_notice(self, QtCore=QtCore, QtWidgets=QtWidgets,
+                dashboard_url=ui._dashboard_url, open_browser=lambda url: webbrowser.open(url,new=2))
+            v.addWidget(self._site_notice_card)
             v.addWidget(self._build_status_card())
             from .update_card import build_update_card
             self._update_card = build_update_card(self, QtCore=QtCore, QtWidgets=QtWidgets,
@@ -2793,6 +2801,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             signals.transientNotice.connect(self._show_transient_notice)
             signals.updateState.connect(self._on_update_state)
             signals.releaseNotes.connect(self._on_release_notes)
+            signals.siteNotice.connect(self._site_notice_card.apply)
             signals.chooseFolderRequested.connect(self._click_choose_folder)
             signals.resyncRequested.connect(self._click_archive_resync)
             signals.checkUpdatesRequested.connect(self._click_check_updates)

@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Callable, List, Optional
 
 from .tray_images import _square_pad, render_tray_image, dot_color
+from .tray_notices import TrayNotices
 
 log = logging.getLogger(__name__)
 
@@ -75,6 +76,7 @@ class TrayUI:
         on_pause_for=None,
         on_install_update=None,
     ) -> None:
+        self._site_notices = TrayNotices(notify=self.show_notice, refresh=self._refresh)
         self._on_pause_for = on_pause_for
         self._on_install_update = on_install_update
         self._status_view = None
@@ -137,6 +139,7 @@ class TrayUI:
         ).start()
 
     def stop(self) -> None:
+        self._site_notices.stop()
         if self._icon and hasattr(self._icon, "stop"):
             try:
                 self._icon.stop()
@@ -246,6 +249,9 @@ class TrayUI:
             self._pending = count
         self._refresh()
 
+    def on_site_notice(self, notice):
+        self._site_notices.apply(notice)
+
     def on_update_available(self, latest_version: str) -> None:
         with self._lock:
             self._update_pending = latest_version
@@ -262,6 +268,8 @@ class TrayUI:
         items = [pystray.MenuItem(self._title, None, enabled=False),
                  pystray.MenuItem(self._second_line, None, enabled=False),
                  pystray.MenuItem(self._third_line, None, enabled=False), pystray.Menu.SEPARATOR]
+        if self._site_notices.current:
+            items.append(pystray.MenuItem(self._site_notices.current.message, None, enabled=False))
         if self._update_pending and self._on_install_update:
             items.append(pystray.MenuItem(f"Install update v{self._update_pending}", lambda *_: self._on_install_update()))
         if self._on_show_window_cb:

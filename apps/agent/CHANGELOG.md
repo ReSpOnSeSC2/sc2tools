@@ -11,6 +11,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 - Background history parsing, replay archiving, capture, and installer launches
   respect game activity. Performance profiles request lower worker priority;
   updates have persistent notes, safe-time installation, snooze and retry.
+- Time-limited service notices use their own plain-text card and tray message,
+  with safe links, toast deduplication and automatic expiry.
 - Dashboard, sidebar and tray share one structured status with a cause and next
   action. Connection holds use that card, recent terminal failures expire, and
   the padded logo shows a matching coloured status dot.

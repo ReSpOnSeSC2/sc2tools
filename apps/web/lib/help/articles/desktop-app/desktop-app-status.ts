@@ -95,7 +95,7 @@ const article: HelpArticle = {
     },
     {
       "type": "paragraph",
-      "text": "The update card remains separate from this status. An amber or red tray dot keeps priority over the blue update dot. Read [How updates work](/help/desktop-app-updates) and [Sync problems](/help/desktop-app-sync-problems) for the next steps."
+      "text": "Time-limited service notices appear in a separate area and expire automatically. Their information link stays on the SC2 Tools website. The update card remains separate from this status. An amber or red tray dot keeps priority over the blue update dot. Read [How updates work](/help/desktop-app-updates) and [Sync problems](/help/desktop-app-sync-problems) for the next steps."
     }
   ],
   "related": [

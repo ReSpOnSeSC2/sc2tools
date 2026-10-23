@@ -1763,6 +1763,11 @@ def _capture_running(cell):
 
 
 def _announce_updated_version(cfg,state,cell,release):
+    if release is not None:
+        if cell.gui:
+            cell.gui.show_site_notice(release.notice)
+        if cell.tray:
+            cell.tray.on_site_notice(release.notice)
     if state.last_run_version != __version__:
         state.last_run_version = __version__
         save_state(cfg.state_dir,state)
