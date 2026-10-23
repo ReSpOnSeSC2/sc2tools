@@ -48,7 +48,9 @@ describe("public /v1/guides", () => {
     expect(body.matchups.find((m) => m.matchup === "TvZ")).toEqual({
       matchup: "TvZ", slug: "tvz", published: false, games: null, users: null, top: [], publishedBuilds: 0,
     });
-    expect(body.maps).toEqual([{ map: "Site Delta LE", slug: "site-delta-le", games: 161 }]);
+    expect(body.maps).toEqual([{ map: "Site Delta LE", slug: "site-delta-le", games: 161,
+      cells: [{ matchup: "PvZ", games: 161, winRate: 0.5404, ci: { low: 0.4633, high: 0.6155 } }],
+    }]);
     // Every channel video so far is from the 8-worker patch: the 12-worker
     // list is empty and they are listed apart.
     expect(body.videos).toEqual([]);
@@ -70,9 +72,11 @@ describe("public /v1/guides", () => {
     expect(res.body.openers[0]).toMatchObject({ name: "Stargate into Glaives", games: 121, prevalence: expect.any(Number) });
     expect(res.body.counters[0]).toEqual({
       strategyKey: TWELVE_POOL, strategySlug: "12-pool", name: "12 Pool", published: true, games: 121,
+      winRate: 0.5537, ci: { low: 0.4648, high: 0.6393 },
     });
     expect(res.body.counters.find((c) => c.strategySlug === "ling-bane-bust")).toEqual({
       strategyKey: "ZvP - Ling Bane Bust", strategySlug: "ling-bane-bust", name: "Ling Bane Bust", published: false, games: null,
+      winRate: null, ci: null,
     });
     expect(res.body.bandOptions).toEqual({
       league: [{ value: 4, label: "Diamond" }],

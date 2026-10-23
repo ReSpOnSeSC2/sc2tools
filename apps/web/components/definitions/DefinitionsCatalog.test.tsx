@@ -85,7 +85,7 @@ describe("DefinitionsCatalog", () => {
     fireEvent.click(matchups.getByRole("button", { name: "TvZ" }));
     expect(matchups.getByRole("button", { name: "TvZ" }).getAttribute("aria-pressed")).toBe("true");
     expect(within(screen.getByRole("group", { name: "Filter by race" })).getByRole("button", { name: "Terran" }).getAttribute("aria-pressed")).toBe("true");
-    await waitFor(() => expect(router.replace).toHaveBeenLastCalledWith("/definitions?race=T&matchup=TvZ#unmatched", { scroll: false }));
+    await waitFor(() => expect(`${window.location.pathname}${window.location.search}${window.location.hash}`).toBe("/definitions?race=T&matchup=TvZ#unmatched"));
   });
 
   it("reads URL filters, ignores invalid values, and groups live counts by race and matchup", () => {
@@ -124,6 +124,23 @@ describe("DefinitionsCatalog", () => {
     fireEvent(window, new HashChangeEvent("hashchange"));
     await waitFor(() => expect(document.activeElement?.textContent).toBe("PvZ - Stargate into Glaives"));
     expect((screen.getByLabelText("Search builds and strategies") as HTMLInputElement).value).toBe("");
+  });
+
+  it("keeps rapid local filter changes and a newer hash reveal out of server navigation", async () => {
+    router.replace.mockClear();
+    router.params = "q=8+pool&race=Z&matchup=ZvT";
+    window.history.replaceState({}, "", "/definitions?q=8+pool&race=Z&matchup=ZvT#zerg-12-pool");
+    render(<DefinitionsCatalog />);
+    fireEvent.click(within(screen.getByRole("group", { name: "Filter by race" })).getByRole("button", { name: "Terran" }));
+    expect(window.location.search).toBe("?q=8+pool&race=T");
+    expect(document.getElementById("zerg-12-pool")).toBeNull();
+    window.history.replaceState({}, "", "/definitions?q=8+pool&race=T#pvz-stargate-into-glaives");
+    fireEvent(window, new HashChangeEvent("hashchange"));
+    await waitFor(() => expect(document.activeElement?.textContent).toBe("PvZ - Stargate into Glaives"));
+    expect(window.location.search).toBe("");
+    expect(window.location.hash).toBe("#pvz-stargate-into-glaives");
+    expect(card("pvz-stargate-into-glaives").className).toContain("ring-2");
+    expect(router.replace).not.toHaveBeenCalled();
   });
 
   it("links known strategy labels on all dossier and check-in surfaces and leaves unknown labels plain", () => {
