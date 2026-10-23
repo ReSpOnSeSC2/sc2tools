@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Coaching workspace
+
+- Coaching shows your role, coach or students, with keyboard tab navigation and badges for waiting practice requests and unread session alerts.
+- Availability drafts survive tab switches and can be published or reset from the save bar. Booked session times keep their published time zone, and a failed Locker load offers a safe retry.
+
 ### Build editor safety
 
 - Both build editors ask before discarding unsaved work. Save failures keep their complete message visible, and editor notifications use the shared toast layer.
