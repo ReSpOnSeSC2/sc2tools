@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
 import {
   LEAGUE_BANDS,
   MATCHUPS,
@@ -8,8 +10,6 @@ import {
   boardQuery,
   type BoardFilters,
 } from "@/lib/reviews";
-
-const SELECT = "min-h-[40px] rounded-lg border-2 border-line bg-bg-surface px-2.5 text-caption font-semibold text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";
 
 /**
  * Board filters: every change is a navigation to a canonical URL, so each
@@ -40,27 +40,29 @@ export function ReviewBoardFilters({ filters }: { filters: BoardFilters }) {
           </button>
         ))}
       </div>
-      <label className="flex flex-col gap-1 text-micro font-semibold uppercase tracking-wide text-text-dim">
-        Matchup
-        <select aria-label="Matchup" className={SELECT} value={filters.matchup ?? ""} onChange={(e) => go({ matchup: e.target.value || null })}>
+      <Field label="Race (asker race)">
+        <Select selectSize="sm" value={filters.race ?? ""} onChange={(e) => go({ race: e.target.value as BoardFilters["race"] || null, matchup: !e.target.value || filters.matchup?.startsWith(e.target.value) ? filters.matchup : null })}>
+          <option value="">All</option><option value="P">Protoss</option><option value="T">Terran</option><option value="Z">Zerg</option>
+        </Select>
+      </Field>
+      <Field label="Matchup">
+        <Select selectSize="sm" value={filters.matchup ?? ""} onChange={(e) => go({ matchup: e.target.value || null })}>
           <option value="">All</option>
-          {MATCHUPS.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1 text-micro font-semibold uppercase tracking-wide text-text-dim">
-        League
-        <select aria-label="League band" className={SELECT} value={filters.band ?? ""} onChange={(e) => go({ band: e.target.value === "" ? null : Number(e.target.value) })}>
+          {MATCHUPS.filter((m) => !filters.race || m.startsWith(filters.race)).map((m) => <option key={m} value={m}>{m}</option>)}
+        </Select>
+      </Field>
+      <Field label="League">
+        <Select aria-label="League band" selectSize="sm" value={filters.band ?? ""} onChange={(e) => go({ band: e.target.value === "" ? null : Number(e.target.value) })}>
           <option value="">All</option>
           {LEAGUE_BANDS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1 text-micro font-semibold uppercase tracking-wide text-text-dim">
-        Focus
-        <select aria-label="Focus tag" className={SELECT} value={filters.tag ?? ""} onChange={(e) => go({ tag: e.target.value || null })}>
+        </Select>
+      </Field>
+      <Field label="Focus">
+        <Select aria-label="Focus tag" selectSize="sm" value={filters.tag ?? ""} onChange={(e) => go({ tag: e.target.value || null })}>
           <option value="">Any</option>
           {REVIEW_TAGS.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
-        </select>
-      </label>
+        </Select>
+      </Field>
       <label className="flex min-h-[40px] items-center gap-2 rounded-lg px-1 text-caption font-semibold text-text">
         <input type="checkbox" checked={filters.unanswered} onChange={(e) => go({ unanswered: e.target.checked })} className="h-4 w-4 accent-[rgb(var(--accent))]" />
         Unanswered

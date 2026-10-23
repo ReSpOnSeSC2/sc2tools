@@ -35,6 +35,36 @@ test("review board renders signed out without horizontal scroll", async ({ page 
   await expectNoHorizontalScroll(page, "/reviews");
 });
 
+test("review board race filters, chips and older-page recovery stay usable at every width", async ({ page }, testInfo) => {
+  const response = await page.goto("/reviews?sort=new&race=P&cursor=fixture-older");
+  expect(response?.status()).toBe(200);
+  await expect(page.getByRole("heading", { name: "Replay reviews", exact: true })).toBeVisible();
+  const reject = page.locator("[data-cookie-banner]").getByRole("button", { name: "Reject" });
+  if (await reject.isVisible()) await reject.click();
+  await expect(page.getByRole("navigation", { name: "Review board pages" }).getByText("Showing older requests")).toBeVisible();
+  const newest = page.getByRole("link", { name: "← Newest", exact: true });
+  await expect(newest).toHaveAttribute("href", "/reviews?sort=new&race=P");
+  await expect(newest).toHaveAttribute("rel", "nofollow");
+  await newest.click();
+  await expect(page.getByTestId("review-card").first()).toBeVisible();
+  const race = page.getByRole("combobox", { name: "Race (asker race)" });
+  await race.selectOption("T");
+  await expect(page).toHaveURL(/sort=new&race=T$/);
+  await expect(page.getByText("No requests match these filters", { exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Matchup", exact: true }).getByRole("option")).toHaveText(["All", "TvP", "TvT", "TvZ"]);
+  const chip = page.getByRole("link", { name: "Remove filter Race: Terran", exact: true });
+  await expect(chip).toHaveAttribute("href", "/reviews?sort=new");
+  if (testInfo.project.name === "mobile-360") {
+    await page.screenshot({ path: testInfo.outputPath("review-board-filters-360.png"), fullPage: true });
+  }
+  await expectNoHorizontalScroll(page, "/reviews?sort=new&race=T");
+  await chip.focus();
+  await expect(chip).toBeFocused();
+  await chip.press("Enter");
+  await expect(page).toHaveURL(/\/reviews\?sort=new$/);
+  await expect(page.getByTestId("review-card").first()).toBeVisible();
+});
+
 test("review page shows the replay and readable comments signed out", async ({ page }, testInfo) => {
   const response = await page.goto(REVIEW);
   expect(response?.status()).toBeLessThan(400);

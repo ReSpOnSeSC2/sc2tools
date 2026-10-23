@@ -54,7 +54,7 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "Open one of your 1v1 games: from [Replays](/app/replays), from the game's own page, or from an opponent's list of games. Press **Ask for a review**. On the review board, **Ask about one of your games** takes you to Replays.",
+        "On the [review board](/reviews) or in [My reviews](/reviews/mine), press **Ask about one of your games**. Search the game picker, load more if needed, then choose a synced 1v1 game to open the question form here. You can also open a game from [Replays](/app/replays), its own page or an opponent's games and press **Ask for a review**.",
         "Write **your question**, 20 to 500 characters. Name the moment and what you tried: *Why did my blink all-in fail? I hit at 6:00 but the roaches were already out* gets better answers than *What did I do wrong?*",
         "Optionally pick **Focus** tags (build order, macro, scouting, army control, decision making, micro, specific timing) and a **Time range of interest**, like 5:00 to 6:30.",
         "Choose **Who should review**: **Anyone**, **My league or higher** or **Masters+**. *My league or higher* is checked against each reviewer's league, verified from their own ranked games, and compared with the league you played at in this game. Anyone who can review may still reply under a review.",
@@ -74,6 +74,17 @@ const article: HelpArticle = {
       items: [
         "You can post your own 1v1 games only. The game needs its macro breakdown; if the form says it has none yet, resync the game with the desktop app and try again.",
         "You can have up to **3 open requests** at a time and post up to 3 new ones a day, one per game.",
+      ],
+    },
+    { type: "heading", anchor: "finding-requests", text: "Find requests you can answer" },
+    {
+      type: "list",
+      items: [
+        "The [review board](/reviews) filters are shareable links. **Race (asker race)** selects the player's side of the matchup; **Matchup** narrows it to one opponent race. **League** filters the asker's league and **Focus** picks a topic. **Unanswered** keeps requests with no reviews.",
+        "**Hot** balances recent activity and interest, **New** shows the newest requests first, and **Top** favors requests with helpful answers. Remove an active filter using its chip, or **Clear all** to keep your sort and reset the filters.",
+        "**Older requests** moves through the filtered results. **Newest** returns to the start with those same filters. An empty filtered view offers **Clear filters**; it does not mean the whole board is empty.",
+        "When signed in, **Requests you can help with** lists games in your verified race's matchups at or below your league. On phones, open the panel above the board; this browser remembers whether you left it open. **See all … requests** opens that race's unanswered board. Until your league is verified, sync ranked games with the [desktop app](/download).",
+        "If the game picker has no synced games, install the desktop app and [pair a device](/devices). It offers 1v1 games only. A failed load has a retry action, and asking about a game you already posted explains where its existing request is.",
       ],
     },
     { type: "heading", anchor: "writing-a-review", text: "Write a review" },

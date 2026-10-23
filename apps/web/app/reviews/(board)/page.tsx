@@ -8,7 +8,11 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { ReviewCard } from "@/components/reviews/ReviewCard";
 import { ReviewBoardFilters } from "@/components/reviews/ReviewBoardFilters";
-import { HelpWithList, ReviewLeaderboard } from "@/components/reviews/ReviewBoardSidebar";
+import { HelpWithPanel, ReviewLeaderboard } from "@/components/reviews/ReviewBoardSidebar";
+import { ActiveFilterChips } from "@/components/reviews/ActiveFilterChips";
+import { AskAboutGameButton } from "@/components/reviews/AskGamePicker";
+import { ReviewBoardEmpty } from "@/components/reviews/ReviewBoardEmpty";
+import { ReviewBoardPagination } from "@/components/reviews/ReviewBoardPagination";
 import { ReviewBoardLoader } from "@/components/reviews/ReviewBoardLoader";
 import { ReviewExchangeIntro } from "@/components/reviews/ReviewExchangeIntro";
 import { getJsonWithStatus } from "@/lib/serverApi";
@@ -36,7 +40,7 @@ export async function generateMetadata({ searchParams }: { searchParams: SearchP
   const rollout = reviewsRollout();
   if (rollout === "off") notFound();
   const filters = parseBoardFilters(await searchParams);
-  const scope = filters.matchup ? `${filters.matchup} ` : "";
+  const scope = filters.matchup ? `${filters.matchup} ` : filters.race ? `${{ P: "Protoss", T: "Terran", Z: "Zerg" }[filters.race]} ` : "";
   const title = `${scope}Replay reviews — ask about any moment of your game`;
   const description = `Post a StarCraft II ${scope}replay with a question and get answers pinned to exact moments on the replay timeline and map, from players whose league is verified from their own games.`;
   return {
@@ -70,14 +74,7 @@ export default async function ReviewsBoardPage({ searchParams }: { searchParams:
             <Link href="/reviews/mine" className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated">
               My reviews
             </Link>
-            {/* Requests start from a game page; Replays is the list of your
-                games (the "Ask for a review" button sits in its actions). */}
-            <Link
-              href="/app/replays"
-              className="hard-press inline-flex min-h-[44px] items-center rounded-full border-2 border-line bg-accent px-5 font-display text-body font-bold text-white hover:bg-accent-hover"
-            >
-              Ask about one of your games
-            </Link>
+            <AskAboutGameButton />
             <LazyHelpLink
               slug="replay-reviews"
               anchor="asking-for-a-review"
@@ -90,17 +87,10 @@ export default async function ReviewsBoardPage({ searchParams }: { searchParams:
       }
     />
   );
-  if (rollout === "admins") {
-    return (
-      <div className="space-y-6">
-        {header}
-        <ReviewBoardLoader query={boardQuery(filters)} />
-      </div>
-    );
-  }
+  const adminStage = rollout === "admins";
   const [board, leaderboard] = await Promise.all([
-    getJsonWithStatus<ReviewBoardResponse>(`/v1/reviews${boardQuery(filters, cursor ? { cursor } : {})}`, { revalidateSec: 60 }),
-    getJsonWithStatus<LeaderboardResponse>("/v1/reviews/leaderboard", { revalidateSec: 60 }),
+    adminStage ? Promise.resolve({ data: null }) : getJsonWithStatus<ReviewBoardResponse>(`/v1/reviews${boardQuery(filters, cursor ? { cursor } : {})}`, { revalidateSec: 60 }),
+    adminStage ? Promise.resolve({ data: null }) : getJsonWithStatus<LeaderboardResponse>("/v1/reviews/leaderboard", { revalidateSec: 60 }),
   ]);
   const now = Date.now();
   const items = board.data?.items ?? [];
@@ -111,38 +101,28 @@ export default async function ReviewsBoardPage({ searchParams }: { searchParams:
         <ReviewExchangeIntro />
       </SignedOut>
       <ReviewBoardFilters filters={filters} />
+      <ActiveFilterChips filters={filters} />
+      <SignedIn><HelpWithPanel now={now} placement="inline" /></SignedIn>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-4">
-          {!board.data ? (
+          {adminStage ? <ReviewBoardLoader query={boardQuery(filters)} cursor={cursor} /> : !board.data ? (
             <EmptyStatePanel
               icon={<CloudOff className="h-6 w-6" aria-hidden />}
               title="The review board is temporarily unavailable"
               description="The review service didn't respond. Try again in a moment."
             />
           ) : items.length === 0 ? (
-            <EmptyStatePanel
-              icon={<MessageSquareText className="h-6 w-6" aria-hidden />}
-              title="No review requests match"
-              description="Try another filter, or open one of your games and ask for a review."
-            />
+            <ReviewBoardEmpty filters={filters} />
           ) : (
             <ul className="space-y-3" aria-label="Review requests">
               {items.map((card) => <ReviewCard key={card.id} card={card} now={now} />)}
             </ul>
           )}
-          {board.data?.nextCursor ? (
-            <Link
-              href={`/reviews${boardQuery(filters, { cursor: board.data.nextCursor })}`}
-              rel="nofollow"
-              className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated"
-            >
-              Older requests →
-            </Link>
-          ) : null}
+          {!adminStage ? <ReviewBoardPagination filters={filters} cursor={cursor} nextCursor={board.data?.nextCursor} /> : null}
         </div>
         <aside className="min-w-0 space-y-6">
           <SignedIn>
-            <HelpWithList now={now} />
+            <HelpWithPanel now={now} placement="aside" />
           </SignedIn>
           <ReviewLeaderboard initial={leaderboard.data} />
         </aside>

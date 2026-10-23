@@ -11,6 +11,8 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+- Filter replay review requests by asker race, remove active filters and return to the newest page without losing your selection. Signed-in players can pick a synced 1v1 game directly from the board or My reviews, and the personalised help panel has compact cards and a remembered phone disclosure.
+
 - Share one authenticated realtime connection across user and admin surfaces; count newly inserted games accurately, coalesce chart refreshes during imports, and show admin connection recovery status.
 
 ### Build editor safety
