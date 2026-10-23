@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Shared game analysis
+
+- Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.
+- Shared analysis has section links, one Watch entry point, seekable macro-leak timestamps and an expandable penalty-ordered leak list. Macro scores share clear colour bands and an out-of-100 label.
+
 ### Game header and completed check-ins
 
 - Replay pages use one compact Share, Download, Review and VOD action bar, a descriptive opponent heading and readable recent-game dates. Missing duration and MMR fields stay out of the way.
@@ -59,6 +64,10 @@ corresponding GitHub Release.
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
 
 ### Fixed
+
+- Desktop loading cards show bounded, private opponent scouting through a
+  device-only channel. Scouting can stay on without loading build choices;
+  after-game cards save a separate private note for the identified opponent.
 
 - Desktop installation and Settings share one Windows startup switch; upgrades
   preserve choices and uninstall offers explicit local-data removal. Signing

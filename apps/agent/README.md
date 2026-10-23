@@ -190,6 +190,24 @@ It never starts a stream when the agent launches or when a game changes scenes.
 
 The sidebar **Help & support** link opens the desktop guide. The round **?** buttons beside sync range, replay folders, OBS, build check-in and Activity log open their matching how-to. Closing the window keeps syncing in the tray; use the tray **Quit** action to stop it.
 
+### Private scouting
+
+Settings → Build check-in → **Show scouting at loading** is a local PC choice.
+With check-ins enabled, loading cards show the current opponent's record, recent
+opening samples, best recorded answer and a two-line private note. Turning off
+Ask during the loading screen leaves a slim scouting-only card. Missing or
+ambiguous identity never borrows another account's private note. **Open dossier**
+opens the validated account path in your configured dashboard.
+
+After the replay syncs and identifies the opponent, **Note for next time → Save
+note** saves up to 500 characters to that opponent's private dossier, separately
+from the game's check-in notes. Notes are never enabled for read-aloud. Scouting
+uses a bounded authenticated device-room brief with a current-game cache fallback;
+private notes do not go to OBS overlay rooms. Native cards retain their Windows
+capture-exclusion request and non-activating loading flags. Offscreen tests verify
+those requests, not every capture tool's behavior or real OS foreground state.
+Read [Private desktop scouting](https://sc2tools.com/help/desktop-scouting).
+
 ## Tray menu (right-click the indicator)
 
 | Item | What it does |

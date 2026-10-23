@@ -62,6 +62,7 @@ from .build_checkin_window import (
     rect_of,
     screen_rects,
 )
+from .private_scouting import OpponentNoteEditor, ScoutingStrip
 
 log = logging.getLogger(__name__)
 
@@ -423,6 +424,10 @@ class LoadingCardWindow(CardWindow):
         layout.addWidget(self.bar)
 
         self.bar.hide()
+        self.scouting = ScoutingStrip()
+        self.scouting.open_requested.connect(lambda: self._act("open_scouting_dossier", self.model.game_key) if self.model else None)
+        layout.addWidget(self.scouting)
+        self.scouting.hide()
 
     # ---------------------------------------------------- controller in
 
@@ -439,6 +444,8 @@ class LoadingCardWindow(CardWindow):
 
     def _render(self, model: LoadingCardModel) -> None:
         self.model = model
+        self.scouting.set_model(model.scouting)
+        self.scouting.setVisible(model.scouting is not None)
         collapsed = model.collapsed and bool(model.locked_label)
         self.full.setVisible(not collapsed)
         self.bar.setVisible(collapsed)
@@ -456,6 +463,12 @@ class LoadingCardWindow(CardWindow):
         self.eyebrow.setText(model.heading.upper())
         self.title.setText(model.title)
         self.title.setVisible(bool(model.title))
+        self.not_now.setText("Close" if model.scouting_only else "Not now")
+        self.dont_ask.setVisible(not model.scouting_only)
+        if model.scouting_only:
+            for widget in (self.intro, self.waiting, self.strip, self.builds, self.loading, self.empty, self.status):
+                widget.hide()
+            return
         self.intro_text.setText(model.intro_text)
         self.intro.setVisible(model.show_intro)
         self.waiting.setText(model.waiting_label)
@@ -504,7 +517,7 @@ class LoadingCardWindow(CardWindow):
 
     def _not_now(self) -> None:
         if self.model is not None:
-            self._act("not_now", self.model.game_key)
+            self._act("dismiss_scouting" if self.model.scouting_only else "not_now", self.model.game_key)
 
 
 class PostgameCardWindow(CardWindow):
@@ -643,6 +656,11 @@ class PostgameCardWindow(CardWindow):
         self.counter = plain_label("", "checkinCounter")
         self.counter.setAlignment(QtCore.Qt.AlignRight)
         layout.addWidget(self.counter)
+        self.opponent_note = OpponentNoteEditor()
+        self.opponent_note.edited.connect(lambda note: self._act("update_opponent_note", self.card_id, note))
+        self.opponent_note.save_requested.connect(lambda note: self._act("save_opponent_note", self.card_id, note))
+        self.opponent_note.expanded.connect(self._private_note_expanded)
+        layout.addWidget(self.opponent_note)
 
         actions = QtWidgets.QHBoxLayout()
         actions.setContentsMargins(0, 2, 0, 0)
@@ -729,6 +747,10 @@ class PostgameCardWindow(CardWindow):
                 ),
             )
             self._render_header(model)
+            self.opponent_note.set_model(model)
+            if self.opponent_note.toggle.isChecked():
+                self.picker.hide()
+                self.opp_picker.hide()
             if apply_draft and self.notes.toPlainText() != model.notes:
                 self.notes.setPlainText(model.notes)
             self.notes.setPlaceholderText(model.notes_placeholder)
@@ -736,6 +758,16 @@ class PostgameCardWindow(CardWindow):
             self._render_actions(model)
         finally:
             self._applying = False
+
+    def _private_note_expanded(self, opened: bool) -> None:
+        self._interacted()
+        if opened:
+            self.picker.hide()
+            self.opp_picker.hide()
+        elif self.model is not None:
+            self._render_picker(self.model, apply_draft=False)
+            self._render_opponent(self.model, apply_draft=False)
+        self.settle()
 
     def _render_header(self, model: PostgameCardModel) -> None:
         self.eyebrow.setText(model.heading.upper())
@@ -879,6 +911,7 @@ class PostgameCardWindow(CardWindow):
         self.primary.setToolTip(("Done" if notes_first else "Confirm") + " (Ctrl+Enter)")
         self.primary.setEnabled(not busy and self.selection() is not None)
         if model.variant == NOTES_FIRST_VARIANT:
+            self.opponent_note.toggle.setChecked(False)
             self.secondary.setText("Change build")
             self.secondary.setVisible(not self._changing)
             self.later.setVisible(False)
@@ -1033,6 +1066,7 @@ class PostgameCardWindow(CardWindow):
             self.opp_change.setFocus(QtCore.Qt.OtherFocusReason)
 
     def _toggle_opponent(self) -> None:
+        self.opponent_note.toggle.setChecked(False)
         if self.model is None or self.model.busy or self.model.opponent is None:
             return
         self._interacted()
