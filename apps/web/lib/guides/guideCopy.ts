@@ -18,7 +18,7 @@
  * yet"). Samples under twice the page floor get a plain small-sample
  * caveat.
  */
-import { fmtClock, fmtCi, fmtCount, fmtCountNoun, fmtPct, trendDirection } from "@/lib/guides/format";
+import { fmtClock, fmtCi, fmtCount, fmtCountNoun, fmtPct, trendDirection, GUIDE_TREND_FLAT_THRESHOLD } from "@/lib/guides/format";
 import type {
   GuideBuildPayload,
   GuideBuildPublished,
@@ -40,6 +40,29 @@ export interface GuideCopyLine {
 
 /** Mirror of the API's GUIDE_PAGE_MIN_GAMES (apps/api/src/config/guides.js). */
 export const GUIDE_PAGE_MIN_GAMES = 100;
+/** Mirrors publishing floors in apps/api/src/config/guides.js. */
+export const GUIDE_CELL_MIN_USERS = 5;
+export const GUIDE_CELL_MIN_GAMES = 30;
+export const GUIDE_CONFIDENCE_PERCENT = 95;
+/** Mirrors GUIDE_BASELINE_MIN_AGE_MS in apps/api/src/config/guides.js. */
+export const GUIDE_TREND_BASELINE_DAYS = 7;
+const GUIDE_LEGEND_REFERENCE_PERCENT = 50;
+export const GUIDE_STATS_LEGEND = {
+  title: "How to read these numbers",
+  rangeLabel: "Likely range",
+  verdict: {
+    win: `Green: the whole likely range is above ${GUIDE_LEGEND_REFERENCE_PERCENT}%`,
+    even: "Too close to call",
+    loss: `Red: the whole likely range is below ${GUIDE_LEGEND_REFERENCE_PERCENT}%`,
+  },
+  range: `We're ${GUIDE_CONFIDENCE_PERCENT}% sure the true win rate is inside this range. Fewer games means a wider range.`,
+  ranking: "Openers are ranked by the low end of the range, so a few lucky games can't top the table.",
+  floors: `A number appears once at least ${GUIDE_CELL_MIN_USERS} players have played ${GUIDE_CELL_MIN_GAMES} games in it; a guide page needs ${GUIDE_PAGE_MIN_GAMES} games.`,
+  trend: `Compared with a snapshot at least ${GUIDE_TREND_BASELINE_DAYS} days old; moves under ${GUIDE_TREND_FLAT_THRESHOLD * 100} pp count as flat.`,
+  updated: "Updated nightly",
+  lastUpdate: "last update",
+  help: "More in Help: Reading guide stats",
+};
 /** Below THIN_SAMPLE_FACTOR × the page floor a page reads as directional. */
 const THIN_SAMPLE_FACTOR = 2;
 export const GUIDE_THIN_SAMPLE_GAMES = GUIDE_PAGE_MIN_GAMES * THIN_SAMPLE_FACTOR;

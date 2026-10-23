@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { MatchupSwitcher } from "../MatchupSwitcher";
 import { GuideFilterPendingProvider, GuideFilterRegion } from "./GuideFilterPending";
-import { Section } from "@/components/ui/Section";
+import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
@@ -10,6 +10,7 @@ import { GuideEightWorkerVideos } from "@/components/guides/GuideEightWorkerVide
 import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
 import { GuideNotEnoughGames } from "@/components/guides/GuideStates";
 import { GuideVideoRow } from "@/components/guides/GuideVideoRow";
+import { GuideStatsLegend } from "@/components/guides/GuideStatsLegend";
 import { BandSwitcher } from "@/components/guides/matchup/BandSwitcher";
 import { CounterLinks } from "@/components/guides/matchup/CounterLinks";
 import { OpenersTable } from "@/components/guides/matchup/OpenersTable";
@@ -76,6 +77,7 @@ function OpenersSection({ payload }: { payload: GuideMatchupPayload }) {
           options={payload.bandOptions}
         />
         <p className="text-caption text-text-muted">{summary}{payload.band || payload.era === "before" ? <> · <Link href={guidePaths.matchup(payload.slug)} className={GUIDE_LINK_CLASS}>Clear filter</Link></> : null}</p>
+        <GuideStatsLegend computedAt={payload.computedAt} />
         {payload.era === "before" ? <p className="text-caption text-text-muted">{EIGHT_WORKER_GUIDE_NOTE}</p> : null}
         <GuideFilterRegion>{payload.openers.length > 0 ? (
           <OpenersTable

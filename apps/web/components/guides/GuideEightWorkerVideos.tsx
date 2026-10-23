@@ -2,6 +2,8 @@ import { GUIDE_LINK_CLASS } from "@/components/guides/guideUi";
 import { safePlaylistUrl, safeVideoUrls } from "@/components/guides/youtubeUrls";
 import { fmtGuideDate } from "@/lib/guides/format";
 import type { GuideVideo } from "@/lib/guides/types";
+import { GUIDE_SECTION_ANCHOR_CLASS } from "./guideUi";
+import { GuideSectionCopy } from "./GuideSectionCopy";
 
 /**
  * The channel's videos from the 8-worker patch 5.0.16, kept apart from
@@ -44,9 +46,10 @@ export function GuideEightWorkerVideos({
   if (links.length === 0) return null;
   const playlist = safePlaylistUrl(playlistUrl);
   return (
-    <section id={id} className="border-t border-border pt-4">
+    <section id={id} className={`group/guide relative border-t border-border pt-4 ${GUIDE_SECTION_ANCHOR_CLASS}`}>
+      <div className="absolute right-0 top-4"><GuideSectionCopy id={id} label={title} /></div>
       <details>
-        <summary className={SUMMARY_CLASS}>
+        <summary className={`${SUMMARY_CLASS} pr-12`}>
           <h2 className="inline text-caption font-semibold">{title}</h2>{" "}
           <span className="text-caption text-text-dim">({links.length})</span>
         </summary>
