@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { MatchupSwitcher } from "../MatchupSwitcher";
+import { GuideFilterPendingProvider, GuideFilterRegion } from "./GuideFilterPending";
 import { Section } from "@/components/ui/Section";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
@@ -14,8 +16,8 @@ import { OpenersTable } from "@/components/guides/matchup/OpenersTable";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { breadcrumbJsonLd, type GuideCrumb } from "@/components/guides/guideSeo";
 import { GUIDE_LINK_CLASS, GUIDE_PANEL_CLASS, eraLabel, oppRaceWord } from "@/components/guides/guideUi";
-import { GUIDE_DEFAULT_ERA, fmtGuideDate } from "@/lib/guides/format";
-import { buildMatchupIntro } from "@/lib/guides/guideCopy";
+import { guideBandQueryString, GUIDE_DEFAULT_ERA, fmtGuideDate } from "@/lib/guides/format";
+import { buildMatchupIntro, filterSummaryText, EIGHT_WORKER_GUIDE_NOTE } from "@/lib/guides/guideCopy";
 import type { GuideMatchupPayload } from "@/lib/guides/types";
 
 /**
@@ -57,14 +59,15 @@ export function matchupCrumbs(payload: Pick<GuideMatchupPayload, "matchup" | "sl
 }
 
 function OpenersSection({ payload }: { payload: GuideMatchupPayload }) {
-  const bandText = payload.band ? ` vs ${payload.band.label}${payload.band.type === "mmr" ? " MMR" : ""} opponents` : "";
+  const summary = filterSummaryText({ count: payload.openers.length, band: payload.band, era: payload.era });
+  const allHref = `${guidePaths.matchup(payload.slug)}${guideBandQueryString(null, payload.era)}`;
   return (
     <Section
       id="openers"
       title={`${payload.matchup} openers ranked`}
       description="Ranked by the low end of each opener's likely win-rate range, so small samples can't top the table on luck."
     >
-      <div className="space-y-4">
+      <GuideFilterPendingProvider><div className="min-w-0 space-y-4">
         <BandSwitcher
           matchupSlug={payload.slug}
           band={payload.band}
@@ -72,23 +75,26 @@ function OpenersSection({ payload }: { payload: GuideMatchupPayload }) {
           patch={payload.patch}
           options={payload.bandOptions}
         />
-        {payload.openers.length > 0 ? (
+        <p className="text-caption text-text-muted">{summary}{payload.band || payload.era === "before" ? <> · <Link href={guidePaths.matchup(payload.slug)} className={GUIDE_LINK_CLASS}>Clear filter</Link></> : null}</p>
+        {payload.era === "before" ? <p className="text-caption text-text-muted">{EIGHT_WORKER_GUIDE_NOTE}</p> : null}
+        <GuideFilterRegion>{payload.openers.length > 0 ? (
           <OpenersTable
             openers={payload.openers}
             matchupSlug={payload.slug}
-            caption={`${payload.matchup} openers${bandText}, ${eraLabel(payload.era, payload.patch)}`}
+            caption={summary}
             canLinkGuides={linksGuides(payload)}
           />
         ) : (
           <div className={GUIDE_PANEL_CLASS}>
             <EmptyStatePanel
               size="sm"
-              title="No opener has enough games in this filter yet"
+              title={`No opener has enough games vs ${payload.band ? `${payload.band.label}${payload.band.type === "mmr" ? " MMR" : ""}` : "all"} opponents yet.`}
               description="Try another band or the full ladder view."
+              action={<div className="flex flex-wrap justify-center gap-2"><Link href={allHref} className={GUIDE_LINK_CLASS}>Show all opponents</Link>{payload.era === "before" ? <Link href={guidePaths.matchup(payload.slug)} className={GUIDE_LINK_CLASS}>Back to 12-worker openers</Link> : null}</div>}
             />
           </div>
-        )}
-      </div>
+        )}</GuideFilterRegion>
+      </div></GuideFilterPendingProvider>
     </Section>
   );
 }
@@ -118,6 +124,7 @@ function PublishedMatchup({ payload }: { payload: GuideMatchupPayload }) {
         <PageHeader
           eyebrow="Build order guides"
           title={`${payload.matchup} build orders`}
+          actions={payload.matchup[0] !== payload.matchup[2] ? <Link href={`${guidePaths.matchup(`${payload.matchup[2]}v${payload.matchup[0]}`.toLowerCase())}${guideBandQueryString(null, payload.era)}`} className={GUIDE_LINK_CLASS}>See it from the {oppRaceWord(payload.matchup)} side → {payload.matchup[2]}v{payload.matchup[0]}</Link> : undefined}
           description={`What's winning in ${payload.matchup} on the ladder, from real games ${eraLabel(payload.era, payload.patch)}.`}
         />
         <GuideCopyText lines={buildMatchupIntro(payload)} />
@@ -137,6 +144,7 @@ export function MatchupGuide({ payload }: { payload: GuideMatchupPayload }) {
     <div className="space-y-10">
       <GuideJsonLd items={[breadcrumbJsonLd(crumbs)]} />
       <GuideBreadcrumbs crumbs={crumbs} />
+      <MatchupSwitcher current={payload.matchup} era={payload.era} />
       {payload.published ? (
         <PublishedMatchup payload={payload} />
       ) : (

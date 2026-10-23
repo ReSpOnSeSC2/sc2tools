@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, startTransition } from "react";
+import { useRouter } from "next/navigation";
 import { GuideUnavailable } from "@/components/guides/GuideStates";
 
 /**
@@ -12,7 +13,8 @@ import { GuideUnavailable } from "@/components/guides/GuideStates";
  * own uncached 500 response instead; see lib/guides/guideErrors.ts.) The
  * server logs the error itself; the client only notes the digest.
  */
-export default function GuidesError({ error }: { error: Error & { digest?: string } }) {
+export default function GuidesError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  const router = useRouter();
   useEffect(() => {
     console.warn("guide_unavailable", { digest: error.digest ?? null });
   }, [error]);
@@ -20,7 +22,7 @@ export default function GuidesError({ error }: { error: Error & { digest?: strin
   return (
     <>
       <meta name="robots" content="noindex, nofollow" />
-      <GuideUnavailable />
+      <GuideUnavailable onRetry={() => startTransition(() => { router.refresh(); reset(); })} />
     </>
   );
 }
