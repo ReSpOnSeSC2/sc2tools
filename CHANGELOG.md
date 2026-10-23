@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### My reviews dashboard
+
+- My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
+- Your reviewer profile shows verified leagues, badges, karma and synced-game eligibility. Leaderboard and weekly digest preferences live together there and restore their previous value if saving fails.
+
 ### Build supply and exports
 
 - Game build orders show prior-sample supply with an approximation marker, worker/supply filters and aligned times. Either side can copy text, supply-first text, Markdown or SALT, print a compact cheat sheet, arm a confirmed Ghost target or open the custom-build editor.

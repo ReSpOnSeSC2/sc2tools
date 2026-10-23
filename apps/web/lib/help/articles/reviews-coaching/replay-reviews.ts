@@ -136,8 +136,27 @@ const article: HelpArticle = {
       type: "list",
       items: [
         "**Badges:** *First Review* after your first review, *Helpful ×10* and *Mentor* at 10 and 50 helpful marks, *Best Answer ×10* at 10 best reviews. Your flair combines your verified league with your top title, like *Masters Mentor*.",
-        "**This week's top reviewers** on the board ranks the karma earned this week (Monday to Sunday, UTC). You're listed only if you tick **Show my name on the leaderboard** under it. Your karma counts toward your badges either way.",
-        "**Weekly digest of open requests in my matchups** sends one notification each Monday listing open requests you could answer. It's on by default once your league is verified; untick it under the leaderboard to stop it. Notifications arrive in the bell in the header; there's no email.",
+        "**This week's top reviewers** on the board ranks the karma earned this week (Monday to Sunday, UTC). You're listed only if you turn on **Show my name on the weekly leaderboard** in [your reviewer profile](/reviews/mine#reviewer-profile). Your karma counts toward your badges either way.",
+        "**Weekly digest of open requests in my matchups** sends one notification each Monday listing open requests you could answer. It's on by default once your league is verified; turn it off in your reviewer profile to stop it. Notifications arrive in the bell in the header; there's no email.",
+      ],
+    },
+    { type: "heading", anchor: "your-reviewer-profile", text: "Your reviewer profile" },
+    {
+      type: "paragraph",
+      text: "Open [My reviews → Your reviewer profile](/reviews/mine#reviewer-profile), or follow **Reviewer profile & settings →** beside your karma on the review board. The card shows your name, verified league by region, badges, and totals for karma, reviews, helpful marks, best reviews and upvotes. Verification comes from your own synced ranked 1v1 games with recorded MMR in this season or last, never a league you type in yourself. **Not verified yet** explains which games to sync.",
+    },
+    {
+      type: "paragraph",
+      text: "The synced-game progress bar shows how close you are to the **20 synced games** needed to comment on other players' requests. Below 20, **Get the desktop app** helps you start syncing. That requirement is separate from league verification and from requests that ask for a particular league. The card also holds the weekly leaderboard and digest switches. A failed save restores the previous setting and gives you a message so you can try again.",
+    },
+    { type: "heading", anchor: "my-reviews", text: "Track your requests and written reviews" },
+    {
+      type: "list",
+      items: [
+        "[My reviews](/reviews/mine) opens **Needs your response** when you have open requests with reviews; otherwise it opens **All**. Each tab shows its count, and the selected tab is saved in the URL so you can bookmark or share that view of your own dashboard.",
+        "**Needs your response** contains open requests with at least one review. **Waiting for reviews** contains open requests with none. **Answered** means you chose a best review; marking one helpful alone does not answer the request. **Closed** contains requests you closed. **All** contains every request still available, including your own requests hidden pending moderation.",
+        "Use **Load more requests** to append older requests. **Reviews you've written** has its own **Newest** and **Most upvoted** sort and **Load more written reviews** button. Its links open the exact comment. If a parent request is no longer visible, the dashboard keeps it private; an empty page can still offer Load more to continue through your history.",
+        "The header links back to the **Review board** and lets you **Ask about one of your games**. Your reviewer profile sits above **Blocked reviewers**, where **Unblock** undoes a block.",
       ],
     },
     { type: "heading", anchor: "closing-and-sharing", text: "Close a request, stop sharing" },
