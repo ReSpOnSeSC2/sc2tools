@@ -21,6 +21,7 @@ const VOID_RAY = "PvZ - 2 Stargate Void Ray";
 const THREE_GATE_PHOENIX = "PvZ - 3 Stargate Phoenix";
 const KEY_GLAIVES = "build:after:PvZ:stargate-into-glaives";
 
+// eslint-disable-next-line max-lines-per-function -- shared Mongo lifecycle groups the existing aggregate integration cases
 describe("GuideStatsService.recompute — games aggregate", () => {
   let mongo; let db;
 
@@ -130,6 +131,7 @@ describe("GuideStatsService.recompute — games aggregate", () => {
     const matchup = docs.get("matchup:after:PvZ");
     expect(matchup.counters[0]).toEqual({
       strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool", published: true, games: 120,
+      users: 12, winRate: 0.65, ci: wilsonInterval(78, 120),
     });
     expect(matchup.counters.slice(1).every((c) => c.published === false && c.games === null)).toBe(true);
     // A map with one floor-clearing matchup cell but under 100 games: a doc, not a page.

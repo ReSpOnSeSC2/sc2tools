@@ -104,17 +104,20 @@ function OpenersSection({ payload }: { payload: GuideMatchupPayload }) {
 function CountersSection({ payload }: { payload: GuideMatchupPayload }) {
   if (!linksGuides(payload)) return null;
   if (!payload.counters.some((counter) => counter.published)) return null;
+  const published = payload.counters.filter((counter) => counter.published);
+  const ranked = published.some((counter) => counter.ci) ? [...published].sort((a, b) => (a.ci?.high ?? Infinity) - (b.ci?.high ?? Infinity)) : published;
   return (
     <Section
       id="counters"
       title={`How to beat ${oppRaceWord(payload.matchup)} openers`}
+      description={`Your win rate against each ${oppRaceWord(payload.matchup)} opener, toughest first.`}
       actions={
         <Link href={guidePaths.counters(payload.slug)} className={GUIDE_LINK_CLASS}>
-          All {oppRaceWord(payload.matchup)} openers
+          All {published.length} {oppRaceWord(payload.matchup)} openers →
         </Link>
       }
     >
-      <CounterLinks counters={payload.counters} matchupSlug={payload.slug} />
+      <CounterLinks counters={ranked.slice(0, 6)} matchupSlug={payload.slug} />
     </Section>
   );
 }
