@@ -17,6 +17,11 @@ corresponding GitHub Release.
 - Win rates include verdict symbols, charts use one keyboard Tab stop with pinnable details, and a shared legend plus Help article explains ranges, publishing floors and trends.
 - The guide hub previews busy map cards and links to all openers and counters. Map guides show a race matrix with honest mirror cells, enlarged artwork and neighboring maps.
 
+### Resumable setup
+
+- Setup remembers its step in the URL, recognizes paired PCs and existing games, and keeps browser import on its own Back path. Completed steps can be revisited.
+- Choose play or streaming goals, then see live import progress and relevant next actions on the new Done step. Goal saves merge with checklist preferences.
+
 ### Pairing and devices
 
 - Link a PC through one shared form, normalize pasted codes, check the PC details before confirming, and watch for its first connection. Prefilled codes never submit automatically.
