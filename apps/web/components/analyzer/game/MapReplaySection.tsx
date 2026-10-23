@@ -29,6 +29,7 @@ import { useMapReplay, type MapReplayController } from "@/lib/useMapReplay";
 import type { PatchEra } from "@/lib/meta";
 import { CompactReplayHost } from "./replay/CompactReplayHost";
 import { ReplayStage } from "./replay/ReplayStage";
+import type { ComponentProps } from "react";
 import dynamic from "next/dynamic";
 
 const SegmentedReplayHost = dynamic(() => import("./replay/SegmentedReplayHost").then(value => value.SegmentedReplayHost), { ssr: false });
@@ -51,6 +52,13 @@ export function MapReplaySection({
   buildMatchPct,
   initialTimeSec,
   patchEra,
+  seekRequest,
+  onPlaybackTimeChange,
+  onPlaybackStateChange,
+  onStageSeek,
+  banked,
+  upgrades,
+  clockLink,
 }: {
   gameId: string;
   /** Share the host’s recording action and progress without a second request. */
@@ -77,7 +85,7 @@ export function MapReplaySection({
   /** The game's patch era (``patchEraForGame`` on the game row), which
    *  prices kills and losses. Omitted, the live 12-worker game. */
   patchEra?: PatchEra | null;
-}) {
+} & Pick<ComponentProps<typeof ReplayStage>, "seekRequest" | "onPlaybackTimeChange" | "onPlaybackStateChange" | "onStageSeek" | "banked" | "upgrades" | "clockLink">) {
   const fallback = useMapReplay(controller ? null : gameId);
   const { playback, manifest, isLoading, error, canRefresh, refreshing, refreshMessage, refresh } = controller ?? fallback;
   const fidelity = manifest?.fidelity ?? playback?.fidelity;
@@ -99,7 +107,8 @@ export function MapReplaySection({
 
   if (manifest) return <section aria-label="Map replay" className="space-y-2">
     {refreshControl}
-    <SegmentedReplayHost key={JSON.stringify([gameId, manifest.artifactId, initialTimeSec ?? null])}
+    <SegmentedReplayHost key={JSON.stringify([gameId, manifest.artifactId, onPlaybackTimeChange ? null : initialTimeSec ?? null])}
+      seekRequest={seekRequest} onPlaybackTimeChange={onPlaybackTimeChange} onPlaybackStateChange={onPlaybackStateChange} onStageSeek={onStageSeek} banked={banked} upgrades={upgrades} clockLink={clockLink}
       manifest={manifest} gameId={gameId} compact={compact} initialTimeSec={initialTimeSec}
       maxHeightPx={stageMaxH} myName={myName} oppName={oppName} myRace={myRace} oppRace={oppRace}
       buildName={buildName} buildMatchPct={buildMatchPct} patchEra={patchEra} />
@@ -166,7 +175,8 @@ export function MapReplaySection({
     <div className="space-y-2">
     {refreshControl}
     <ReplayStage
-      key={JSON.stringify([gameId, initialTimeSec ?? null])}
+      key={JSON.stringify([gameId, onPlaybackTimeChange ? null : initialTimeSec ?? null])}
+      seekRequest={seekRequest} onPlaybackTimeChange={onPlaybackTimeChange} onPlaybackStateChange={onPlaybackStateChange} onStageSeek={onStageSeek} banked={banked} upgrades={upgrades} clockLink={clockLink}
       playback={playback}
       gameId={gameId}
       initialTimeSec={initialTimeSec}

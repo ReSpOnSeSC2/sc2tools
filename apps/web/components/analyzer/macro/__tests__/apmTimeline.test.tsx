@@ -63,6 +63,7 @@ function averageCells() {
 }
 
 beforeEach(() => {
+  localStorage.removeItem("sc2tools:timeline-metrics:v1");
   useApiMock.mockReturnValue({ data: null, error: null, isLoading: false });
   vi.stubGlobal("ResizeObserver", class {
     constructor(private callback: ResizeObserverCallback) {}

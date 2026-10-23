@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 import {
@@ -12,8 +11,6 @@ import {
   Swords,
 } from "lucide-react";
 import { GameStreamLinks } from "@/components/analyzer/GameStreamLinks";
-import { MacroBreakdownPanel } from "@/components/analyzer/macro/MacroBreakdownPanel";
-import type { PanelHeaderMeta } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import { ReplayDownloadButton } from "@/components/analyzer/ReplayDownloadButton";
 import { PublicReplayDownloadButton } from "@/components/public-profile/PublicReplayDownloadButton";
 import { sharedAnalysisHref } from "@/components/public-profile/archiveQuery";
@@ -52,7 +49,6 @@ export function ReplayList({
   emptyTitle = "No replays match these filters",
   emptyDescription = "Try a wider date range or clear the replay search filters. Synced games appear here automatically.",
 }: ReplayListProps) {
-  const [macroGame, setMacroGame] = useState<ReplayLibraryItem | null>(null);
   const { isLoaded, isSignedIn } = useAuth();
   const publicLocked = isLoaded && !isSignedIn;
 
@@ -101,7 +97,6 @@ export function ReplayList({
                   publicHandle={publicHandle}
                   publicLocked={publicLocked}
                   listQuery={listQuery}
-                  onMacro={() => setMacroGame(game)}
                 />
               ))}
             </tbody>
@@ -119,22 +114,11 @@ export function ReplayList({
               publicHandle={publicHandle}
               publicLocked={publicLocked}
               listQuery={listQuery}
-              onMacro={() => setMacroGame(game)}
             />
           ))}
         </ul>
       </div>
 
-      {owner && macroGame ? (
-        <MacroBreakdownPanel
-          open
-          onClose={() => setMacroGame(null)}
-          gameId={macroGame.gameId}
-          initialScore={macroGame.macroScore}
-          headerMeta={headerMeta(macroGame, playerName)}
-          reviewable={isReviewableGame(macroGame)}
-        />
-      ) : null}
     </>
   );
 }
@@ -147,10 +131,9 @@ interface RowProps {
   publicHandle?: string;
   publicLocked: boolean;
   listQuery?: string;
-  onMacro: () => void;
 }
 
-function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery, onMacro }: RowProps) {
+function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery }: RowProps) {
   const analysisHref = owner
     ? `/app/game/${encodeURIComponent(game.gameId)}`
     : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);
@@ -173,14 +156,13 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
       <td className="px-4 py-3 align-middle">
         <div className="flex items-center justify-end gap-1.5">
           {owner ? <>
-            <button
-              type="button"
-              onClick={onMacro}
+            <Link
+              href={`${analysisHref}#macro`}
               className={actionClass}
               aria-label={`Open macro breakdown for ${opponentLabel(game)}`}
             >
               <Gauge className="h-4 w-4" aria-hidden /> Macro
-            </button>
+            </Link>
           <Link href={analysisHref} className={actionClass} aria-label={`Open replay analysis for ${replayContext(game)}`}>
             <BarChart3 className="h-4 w-4" aria-hidden /> Analysis
           </Link>
@@ -208,7 +190,7 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, p
   );
 }
 
-function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery, onMacro }: RowProps) {
+function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, publicLocked, listQuery }: RowProps) {
   const analysisHref = owner
     ? `/app/game/${encodeURIComponent(game.gameId)}`
     : sharedAnalysisHref(publicRoot || "", game.gameId, listQuery);
@@ -246,9 +228,9 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, p
         {game.streams?.length ? <GameStreamLinks links={game.streams} sharedPlayerName={owner ? undefined : playerName} /> : null}
         <span className="min-w-2 flex-1" />
         {owner ? <>
-          <button type="button" onClick={onMacro} className={mobileActionClass} aria-label={`Open macro breakdown for ${replayContext(game)}`}>
+          <Link href={`${analysisHref}#macro`} className={mobileActionClass} aria-label={`Open macro breakdown for ${replayContext(game)}`}>
             <Gauge className="h-4 w-4" aria-hidden /> Macro breakdown
-          </button>
+          </Link>
         <Link href={analysisHref} className={mobileActionClass} aria-label={`Open replay analysis for ${replayContext(game)}`}>
           <Eye className="h-4 w-4" aria-hidden /> Analysis
         </Link>
@@ -420,20 +402,6 @@ function PublicReplayActions({ game, href, handle, locked, mobile = false }: { g
       {locked ? <LockKeyhole className="h-3.5 w-3.5 flex-none text-text-dim" aria-hidden /> : <BarChart3 className="h-4 w-4 flex-none" aria-hidden />}<span>Analysis{locked ? <span className="block text-[10px] font-normal text-text-dim">Free account</span> : null}</span>
     </Link>
   </div>;
-}
-
-function headerMeta(game: ReplayLibraryItem, playerName: string): PanelHeaderMeta {
-  return {
-    playerName,
-    myRace: game.myRace,
-    opponentName: game.opponent?.displayName,
-    opponentRace: game.opponent?.race,
-    map: game.map,
-    result: game.result,
-    dateIso: game.date,
-    gameVersion: game.gameVersion,
-    gameBuild: game.gameBuild,
-  };
 }
 
 const actionClass = "inline-flex min-h-8 items-center gap-1.5 rounded-md border border-border bg-bg-elevated/60 px-2.5 text-micro font-semibold text-text-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";

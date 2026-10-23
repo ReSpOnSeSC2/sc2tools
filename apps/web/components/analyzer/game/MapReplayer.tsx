@@ -30,7 +30,7 @@
  * rendering this at all).
  */
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { statsAt, worldProjection, type MapPlayback } from "@/lib/mapReplay";
 
 import { spriteAssetsVersion } from "@/lib/spriteSheets";
@@ -335,10 +335,11 @@ export function MapReplayer({
     [gameLength, emitTime],
   );
 
-  // External seek (a marker click in the host's transport dock). Skips
+  // Apply controlled seeks before the next animation frame can emit an old
+  // position. External seek (a marker click in the host's transport dock). Skips
   // the host echoing our own tick back, so a controlled clock advances
   // in the loop and is never dragged backwards by a 4 Hz round trip.
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (time === undefined || time === lastEmitRef.current) return;
     timeRef.current = Math.min(gameLength, Math.max(0, time));
   }, [time, gameLength]);

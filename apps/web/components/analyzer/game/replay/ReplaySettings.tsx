@@ -17,7 +17,7 @@
  * none; see the handover notes for the exact change each needs.
  */
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Settings2 } from "lucide-react";
 import type { ReplaySide } from "@/lib/replayHud";
 import { sideLabel } from "./replayTheme";
@@ -53,6 +53,7 @@ export function ReplaySettings({
   onProductionSide,
   myName,
   oppName,
+  footer,
 }: {
   showProductionRail: boolean;
   onShowProductionRail: (v: boolean) => void;
@@ -62,6 +63,7 @@ export function ReplaySettings({
   onProductionSide: (side: ReplaySide) => void;
   myName?: string | null;
   oppName?: string | null;
+  footer?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -137,6 +139,7 @@ export function ReplaySettings({
               </button>
             ))}
           </div>
+          {footer ? <div className="border-t border-border p-2">{footer}</div> : null}
         </div>
       ) : null}
     </div>

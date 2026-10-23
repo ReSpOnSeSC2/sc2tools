@@ -14,10 +14,10 @@
  * metric of its own.
  */
 
-import { Keyboard, type LucideIcon } from "lucide-react";
+import { Keyboard, Wallet, type LucideIcon } from "lucide-react";
 import type { SeriesPoint } from "./activeArmyLayout";
 
-export type TimelineMetric = "army" | "workers" | "supply" | "income" | "apm";
+export type TimelineMetric = "army" | "workers" | "supply" | "income" | "bank" | "apm";
 
 type RaceLetter = "P" | "T" | "Z";
 
@@ -91,6 +91,16 @@ export const TIMELINE_METRICS: readonly TimelineMetricDef[] = [
     floor: 200,
     icon: { P: "Nexus", T: "CommandCenter", Z: "Hatchery" },
     dash: "9 5.5 0.1 5.5",
+  },
+  {
+    key: "bank",
+    label: "Bank",
+    title: "Unspent minerals and gas",
+    caption: "banked resources",
+    read: (p) => p.bank ?? null,
+    floor: 200,
+    glyph: Wallet,
+    dash: "12 4 3 4",
   },
   {
     key: "apm",

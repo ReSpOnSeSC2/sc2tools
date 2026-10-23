@@ -190,6 +190,22 @@ It never starts a stream when the agent launches or when a game changes scenes.
 
 The sidebar **Help & support** link opens the desktop guide. The round **?** buttons beside sync range, replay folders, OBS, build check-in and Activity log open their matching how-to. Closing the window keeps syncing in the tray; use the tray **Quit** action to stop it.
 
+### Preview and place check-in cards
+
+Settings → Build check-in → Cards previews either card with fixed sample data,
+even with check-ins off. **Preview - nothing is saved** means answers stay local;
+dragging the header still remembers the position for real cards. Any answer,
+Escape or 90 seconds closes the sample, and real cards take priority. **Reset card
+positions** clears every card kind and moves visible cards to their default spot;
+**Open check-in queue on sc2tools.com** uses the same URL as the tray. Previews use
+the last accepted replay's known race, falling back to ZvP; older history cannot
+replace a newer race. Preview code does not change controller business logic.
+
+On a real after-game card, click search, type, Enter to pick/focus the top visible
+match, then Ctrl+Enter to confirm. Down focuses the first result without choosing;
+Up returns to search. No match leaves the choice unchanged. Esc closes an opponent
+list first, then means Later. These keys never activate a card over the game.
+
 ### Private scouting
 
 Settings → Build check-in → **Show scouting at loading** is a local PC choice.

@@ -81,6 +81,13 @@ QLabel {{
     background-color: transparent;
     border: none;
 }}
+QLabel#checkinPreview {{
+    color: {_ACCENT_CYAN};
+    background-color: {_SUBTLE};
+    border: 1px solid {_BORDER_STRONG};
+    border-radius: 6px;
+    padding: 3px 6px;
+}}
 QLabel#checkinEyebrow {{
     color: {_TEXT_MUTED};
     font-size: 10px;
@@ -540,6 +547,8 @@ class BuildList(QtWidgets.QWidget):
             self.search.setAccessibleName(search_placeholder)
             self.search.setClearButtonEnabled(True)
             self.search.textEdited.connect(self._on_search_edited)
+            self.search.returnPressed.connect(self._pick_first_visible)
+            self.search.installEventFilter(self)
             layout.addWidget(self.search)
 
         self.featured_label = plain_label(featured_title, "checkinSection")
@@ -623,6 +632,7 @@ class BuildList(QtWidgets.QWidget):
                     row.clicked.connect(lambda _checked=False, k=option.key: self._on_row_clicked(k))
                     if self._group is not None:
                         self._group.addButton(row)
+                    row.installEventFilter(self)
                     self._rows[option.key] = row
                     keys.append(option.key)
                     if box is self._more_layout:
@@ -700,6 +710,34 @@ class BuildList(QtWidgets.QWidget):
     def _on_search_edited(self, text: str) -> None:
         self.set_filter(text)
         self.searched.emit(text)
+
+    def _first_visible_row(self):
+        keys = self.visible_keys()
+        return self._rows[keys[0]] if keys else None
+
+    def _focus_first_visible(self) -> None:
+        row = self._first_visible_row()
+        if row is not None and row.isEnabled():
+            row.setFocus(QtCore.Qt.TabFocusReason)
+            self.ensure_visible(row.key)
+
+    def _pick_first_visible(self) -> None:
+        row = self._first_visible_row()
+        if row is not None and row.isEnabled():
+            row.click()
+            # A preview action can close the card; do not steal focus back.
+            if self.isVisible():
+                self._focus_first_visible()
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802
+        if event.type() == QtCore.QEvent.KeyPress and not event.modifiers():
+            if watched is self.search and event.key() == QtCore.Qt.Key_Down:
+                self._focus_first_visible()
+                return True
+            if watched is self._first_visible_row() and event.key() == QtCore.Qt.Key_Up and self.search is not None:
+                self.search.setFocus(QtCore.Qt.TabFocusReason)
+                return True
+        return super().eventFilter(watched, event)
 
     def _matches(self, key: str) -> bool:
         return not self._filter or self._filter in self._rows[key].name.casefold()

@@ -441,6 +441,15 @@ describe("services/perGameCompute", () => {
     });
   });
 
+  test("a Prism completed after the drop deadline stays late despite its earlier display start", () => {
+    const recorded = parseBuildLogLines(["[6:01] WarpPrism"]);
+    const [display] = eventsToStartTime(recorded);
+    expect(display.time).toBeLessThan(360);
+    expect(display.complete_time).toBe(361);
+    // Display projection must leave the raw classifier clock untouched.
+    expect(recorded[0].time).toBe(361);
+  });
+
   describe("eventsToStartTime", () => {
     test("rewinds finish-time events using the build-duration table", () => {
       const recorded = parseBuildLogLines([

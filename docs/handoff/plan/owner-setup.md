@@ -53,3 +53,7 @@ Deploy the API update before the web. Onboarding preference PUTs now merge field
 ### game-page-polish-3
 
 No new environment variable, secret, migration or release is required. Deploy the web normally. Existing replay storage and review rollout settings retain their behavior; completed check-ins open through Edit and close with Done after notes are saved/discarded.
+
+### game-page-macro-workspace / one-game-clock
+
+No new environment variable, secret, database migration or desktop release is required. Deploy the web normally. Recompute reuses the existing authenticated macro request and the paired desktop app; keep that app open with access to the original replay. It reparses the replay and does not record StarCraft II. Timestamp links and metric preferences are browser features. Missing measured banked resources stay hidden.

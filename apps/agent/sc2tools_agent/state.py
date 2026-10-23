@@ -296,6 +296,10 @@ class AgentState:
     the source of truth; this copy only decides the cards while the
     first read of a session has not answered (offline at login)."""
 
+    # Appended to preserve existing positional AgentState constructor fields.
+    last_known_race: Optional[str] = None
+    last_known_race_at: Optional[str] = None
+
     @property
     def is_paired(self) -> bool:
         return bool(self.device_token)
@@ -449,6 +453,8 @@ def load_state(state_dir: Path) -> AgentState:
         ),
         build_checkin_prefs=_coerce_checkin_prefs(raw.get("build_checkin_prefs")),
         show_scouting_at_loading=raw.get("show_scouting_at_loading") is not False,
+        last_known_race=raw.get("last_known_race") if raw.get("last_known_race") in ("Protoss", "Terran", "Zerg") else None,
+        last_known_race_at=_coerce_str(raw.get("last_known_race_at")),
     )
 
 
