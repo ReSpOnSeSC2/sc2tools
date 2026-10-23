@@ -19,6 +19,14 @@ Check Notifications for support messages, Moderation for reported content, and
 Infrastructure for failed dependencies or overdue backups. Refresh before acting.
 Read the content in context and leave a short resolution note for other admins.
 
+Tap or click an activity row's title, identity or message body to open its full
+details. Keyboard users can focus the row and press Enter or Space. The details
+panel shows the complete support message, included diagnostics and exact time;
+linked accounts and infrastructure alerts have their corresponding destination
+links. Status / Reply works inside the panel. Escape, Close or the backdrop
+closes it and returns focus to the row. Opening details does not mark activity
+read; Mark all unread as read remains a separate action.
+
 ## Moderation
 
 Reports are grouped by target. Dismiss keeps the content and restores auto-hidden

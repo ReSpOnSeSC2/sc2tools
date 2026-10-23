@@ -10,6 +10,9 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   Optional every-game notifications stay quiet during history imports. Re-sync
   is in Settings Maintenance; Check for updates is beside the sidebar version.
 
+- PvZ Archon Drop detection requires a real Warp Prism completed by 6:00 and
+  observed Archons, preventing late Templar transitions from being called drops.
+
 - Desktop check-in previews use local sample data, remember dragged positions and
   reset every card kind. Search Enter picks the top result, Down/Up moves between
   search and results, and Ctrl+Enter confirms without automatic focus changes.

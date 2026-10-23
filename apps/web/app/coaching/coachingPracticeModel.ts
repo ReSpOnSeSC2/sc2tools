@@ -145,6 +145,72 @@ export function buildSuggestionKey(build: BuildSuggestion) {
   return `${build.matchBy}:${identity}`;
 }
 
+export type AssignmentErrors = Partial<Record<keyof AssignmentDraft, string>>;
+
+function validCalendarDate(value: string) {
+  const date = new Date(`${value}T00:00:00Z`);
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(date.getTime()) &&
+    date.toISOString().slice(0, 10) === value;
+}
+
+export function validTimeZone(value: string) {
+  if (!value.trim()) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value }).format(0);
+    return true;
+  } catch { return false; }
+}
+
+export function validateAssignmentDraft(
+  draft: AssignmentDraft,
+  { assignableStudents, buildOptions }: { assignableStudents: Student[]; buildOptions: BuildSuggestion[] },
+): AssignmentErrors {
+  const errors: AssignmentErrors = {};
+  if (!draft.studentId) errors.studentId = "Choose a student.";
+  else if (!assignableStudents.some((student) => student.id === draft.studentId)) {
+    errors.studentId = "This student must link their account and approve practice sharing first.";
+  }
+  const requiredGames = Number(draft.requiredGames);
+  if (!Number.isInteger(requiredGames) || requiredGames < 1 || requiredGames > 1000) {
+    errors.requiredGames = "Use a whole number between 1 and 1,000.";
+  }
+  if (draft.type === "build") {
+    if (draft.buildSelection === "manual" && !draft.buildName.trim()) {
+      errors.buildName = "Enter the exact detected style name.";
+    } else if (draft.buildSelection !== "manual" && !buildOptions.some((build) => buildSuggestionKey(build) === draft.buildSelection)) {
+      errors.buildSelection = "Choose a build available for this student.";
+    }
+  }
+  if (!validCalendarDate(draft.startsOn)) errors.startsOn = "Choose a valid start date.";
+  if (!validCalendarDate(draft.endsOn)) errors.endsOn = "Choose a valid end date.";
+  if (!errors.startsOn && !errors.endsOn) {
+    if (draft.endsOn < draft.startsOn) errors.endsOn = "Ends before it starts.";
+    else if (Date.parse(draft.endsOn) - Date.parse(draft.startsOn) > 365 * 86_400_000) {
+      errors.endsOn = "Practice plans can span up to 366 days.";
+    }
+  }
+  if (!validTimeZone(draft.timeZone)) errors.timeZone = "Choose the player's time zone.";
+  return errors;
+}
+
+/** Describes only the configured target; it does not predict progress or results. */
+export function assignmentSummary(draft: AssignmentDraft, studentName: string) {
+  if (!studentName.trim() || !draft.studentId || !validCalendarDate(draft.startsOn) ||
+      !validCalendarDate(draft.endsOn) || draft.endsOn < draft.startsOn || !validTimeZone(draft.timeZone)) return null;
+  const games = Number(draft.requiredGames);
+  if (!Number.isInteger(games) || games < 1 || games > 1000 ||
+      Date.parse(draft.endsOn) - Date.parse(draft.startsOn) > 365 * 86_400_000 ||
+      (draft.type === "build" && !draft.buildName.trim())) return null;
+  const date = (value: string) => new Intl.DateTimeFormat("en", {
+    timeZone: "UTC", month: "short", day: "numeric", year: "numeric",
+  }).format(new Date(`${value}T12:00:00Z`));
+  const range = draft.startsOn === draft.endsOn ? date(draft.startsOn) : `${date(draft.startsOn)}–${date(draft.endsOn)}`;
+  const target = draft.type === "build"
+    ? ` using ${draft.buildName.trim()}`
+    : ` each ${cadenceNoun(draft.recurrence)}`;
+  return `${studentName.trim()} plays ${games} eligible 1v1 game${games === 1 ? "" : "s"}${target}, ${range} (${draft.timeZone}).`;
+}
+
 export function requirementTitle(assignment: PracticeAssignment) {
   const count = assignment.requirement.requiredGames;
   if (assignment.requirement.type === "build") {

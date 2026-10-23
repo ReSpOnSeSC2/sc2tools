@@ -53,7 +53,7 @@ export function useZoneClock(timeZone: string) {
   }).format(now);
 }
 
-export function timeZoneOptions(current: string) {
+export function timeZoneOptions(current: string, preferred: string[] = []) {
   let zones: string[] = [];
   try {
     const intl = Intl as typeof Intl & {
@@ -63,7 +63,8 @@ export function timeZoneOptions(current: string) {
   } catch {
     zones = [];
   }
-  return Array.from(new Set([current, "UTC", ...zones])).sort();
+  const first = Array.from(new Set(preferred.filter(Boolean)));
+  return [...first, ...Array.from(new Set([current, "UTC", ...zones])).filter((zone) => zone && !first.includes(zone)).sort()];
 }
 
 export function compareWindows(
@@ -78,16 +79,25 @@ export function clockValue(minutes: number) {
 }
 
 export function minuteValue(value: string) {
+  if (!/^\d{2}:\d{2}$/.test(value)) return Number.NaN;
   const [hour, minute] = value.split(":").map(Number);
-  return hour * 60 + minute;
+  return hour < 24 && minute < 60 ? hour * 60 + minute : Number.NaN;
 }
 
-export function fieldClass(extra = "") {
-  return [
-    "h-10 rounded-lg border border-border bg-bg px-3 text-caption text-text",
-    "focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25",
-    extra,
-  ].join(" ");
+export function windowProblems(windows: Array<{ day: number; startMinute: number; endMinute: number }>) {
+  const problems: Partial<Record<number, string>> = {};
+  windows.forEach((window, index) => {
+    if (!Number.isFinite(window.startMinute) || !Number.isFinite(window.endMinute)) {
+      problems[index] = "Choose a start and end time.";
+    } else if (window.endMinute <= window.startMinute) {
+      problems[index] = "Ends before it starts.";
+    } else {
+      const overlap = windows.find((other, otherIndex) => otherIndex !== index && other.day === window.day &&
+        other.endMinute > other.startMinute && window.startMinute < other.endMinute && window.endMinute > other.startMinute);
+      if (overlap) problems[index] = `Overlaps ${clockValue(overlap.startMinute).replace(/^0/, "")}–${clockValue(overlap.endMinute).replace(/^0/, "")}.`;
+    }
+  });
+  return problems;
 }
 
 export function formatDuration(minutes: number) {
