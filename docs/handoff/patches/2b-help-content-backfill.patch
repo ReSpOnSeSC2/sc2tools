@@ -1,0 +1,3944 @@
+From 12003ab51a318d40435f3a257902aa19b2b85a76 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 23 Oct 2026 02:32:25 +0000
+Subject: [PATCH 1/3] docs(help): write the missing how-tos and give article
+ sections stable anchors
+
+New articles for features that shipped without a how-to:
+- getting-started: install-and-pair, browser-import
+- desktop-app: desktop-app-overview, replay-folders
+- analyzer: today, opponents, strategies, trends, macro, maps, builds,
+  replays, arcade, reading-the-charts (each covers what the section
+  answers, how to drill in and how much data it needs)
+- game-page: game-page, game-page-replay, game-page-accurate-playback
+- opponents: opponent-dossier
+- builds: practice-ghost-build, randomizer
+- account-data: delete-account, public-profile, player-channels
+- stream-studio: voice, obs-auto-scene-switching (links to the
+  Stream Studio crash course rather than copying it)
+- troubleshooting: my-game-didnt-show-up
+
+Existing articles: "Dashboard & analyzer" becomes the section index and
+drops the map-veto claim; Filters gains patch-preset and too-short
+sections; the OBS step says the overlay token is created for you;
+Getting started links the install guide. Articles that explain stats
+say every number is computed with fixed rules, never AI.
+
+Headings take an optional `anchor`, rendered as an id on /help/<slug>
+so later info tips can link to one section (helpAnchorPath,
+helpArticleAnchors). lib/glossary.ts seeds Pulse ID, toon, Net MMR,
+verified pairs, MMR impact, Group same player and barcode, each linked
+to its article section.
+
+Tests: every analyzer section has its article, every HelpLink /
+LazyHelpLink / helpSlug in the source resolves, anchors are unique and
+links to /help/<slug>#<anchor> resolve, glossary links resolve. Search
+expectations follow the new dedicated articles.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01KG8e5a59qtUDJJY3Fm1hxC
+---
+ apps/web/app/help/__tests__/pages.test.tsx    |   2 +-
+ apps/web/components/help/HelpArticleBody.tsx  |   9 +-
+ .../help/__tests__/HelpArticleBody.test.tsx   |   9 ++
+ .../help/__tests__/HelpSearch.test.tsx        |   4 +-
+ apps/web/lib/__tests__/glossary.test.ts       |  39 ++++++
+ apps/web/lib/glossary.ts                      | 117 +++++++++++++++++
+ apps/web/lib/help/__tests__/articles.test.ts  |  77 +++++++++++-
+ apps/web/lib/help/__tests__/helpLinks.test.ts |  74 +++++++++++
+ apps/web/lib/help/__tests__/registry.test.ts  |  16 +++
+ apps/web/lib/help/__tests__/search.test.ts    |  11 +-
+ .../articles/account-data/delete-account.ts   |  72 +++++++++++
+ .../articles/account-data/player-channels.ts  |  64 ++++++++++
+ .../articles/account-data/public-profile.ts   |  69 ++++++++++
+ .../articles/analyzer/analyzer-filters.ts     |  24 ++--
+ apps/web/lib/help/articles/analyzer/arcade.ts |  86 +++++++++++++
+ apps/web/lib/help/articles/analyzer/builds.ts |  73 +++++++++++
+ .../analyzer/dashboard-and-analyzer.ts        |  33 ++++-
+ apps/web/lib/help/articles/analyzer/macro.ts  |  79 ++++++++++++
+ apps/web/lib/help/articles/analyzer/maps.ts   |  68 ++++++++++
+ .../lib/help/articles/analyzer/opponents.ts   | 106 ++++++++++++++++
+ .../articles/analyzer/reading-the-charts.ts   |  99 +++++++++++++++
+ .../web/lib/help/articles/analyzer/replays.ts |  80 ++++++++++++
+ .../lib/help/articles/analyzer/strategies.ts  |  77 ++++++++++++
+ apps/web/lib/help/articles/analyzer/today.ts  |  94 ++++++++++++++
+ apps/web/lib/help/articles/analyzer/trends.ts |  80 ++++++++++++
+ .../articles/builds/practice-ghost-build.ts   | 103 +++++++++++++++
+ .../lib/help/articles/builds/randomizer.ts    |  87 +++++++++++++
+ .../desktop-app/desktop-app-overview.ts       | 109 ++++++++++++++++
+ .../articles/desktop-app/replay-folders.ts    |  72 +++++++++++
+ .../game-page/game-page-accurate-playback.ts  |  79 ++++++++++++
+ .../articles/game-page/game-page-replay.ts    |  91 ++++++++++++++
+ .../lib/help/articles/game-page/game-page.ts  |  87 +++++++++++++
+ .../getting-started/browser-import.ts         | 101 +++++++++++++++
+ .../getting-started/getting-started.ts        |   4 +-
+ .../getting-started/install-and-pair.ts       | 100 +++++++++++++++
+ apps/web/lib/help/articles/index.generated.ts |  52 ++++++++
+ .../articles/opponents/opponent-dossier.ts    | 119 ++++++++++++++++++
+ .../stream-studio/obs-auto-scene-switching.ts |  94 ++++++++++++++
+ .../stream-studio/obs-overlay-setup.ts        |   6 +-
+ .../lib/help/articles/stream-studio/voice.ts  |  65 ++++++++++
+ .../troubleshooting/my-game-didnt-show-up.ts  |  96 ++++++++++++++
+ apps/web/lib/help/index.ts                    |  14 +++
+ apps/web/lib/help/types.ts                    |   9 +-
+ 43 files changed, 2717 insertions(+), 33 deletions(-)
+ create mode 100644 apps/web/lib/__tests__/glossary.test.ts
+ create mode 100644 apps/web/lib/glossary.ts
+ create mode 100644 apps/web/lib/help/__tests__/helpLinks.test.ts
+ create mode 100644 apps/web/lib/help/articles/account-data/delete-account.ts
+ create mode 100644 apps/web/lib/help/articles/account-data/player-channels.ts
+ create mode 100644 apps/web/lib/help/articles/account-data/public-profile.ts
+ create mode 100644 apps/web/lib/help/articles/analyzer/arcade.ts
+ create mode 100644 apps/web/lib/help/articles/analyzer/builds.ts
+ create mode 100644 apps/web/lib/help/articles/analyzer/macro.ts
+ create mode 100644 apps/web/lib/help/articles/analyzer/maps.ts
+ create mode 100644 apps/web/lib/help/articles/analyzer/opponents.ts
+ create mode 100644 apps/web/lib/help/articles/analyzer/reading-the-charts.ts
+ create mode 100644 apps/web/lib/help/articles/analyzer/replays.ts
+ create mode 100644 apps/web/lib/help/articles/analyzer/strategies.ts
+ create mode 100644 apps/web/lib/help/articles/analyzer/today.ts
+ create mode 100644 apps/web/lib/help/articles/analyzer/trends.ts
+ create mode 100644 apps/web/lib/help/articles/builds/practice-ghost-build.ts
+ create mode 100644 apps/web/lib/help/articles/builds/randomizer.ts
+ create mode 100644 apps/web/lib/help/articles/desktop-app/desktop-app-overview.ts
+ create mode 100644 apps/web/lib/help/articles/desktop-app/replay-folders.ts
+ create mode 100644 apps/web/lib/help/articles/game-page/game-page-accurate-playback.ts
+ create mode 100644 apps/web/lib/help/articles/game-page/game-page-replay.ts
+ create mode 100644 apps/web/lib/help/articles/game-page/game-page.ts
+ create mode 100644 apps/web/lib/help/articles/getting-started/browser-import.ts
+ create mode 100644 apps/web/lib/help/articles/getting-started/install-and-pair.ts
+ create mode 100644 apps/web/lib/help/articles/opponents/opponent-dossier.ts
+ create mode 100644 apps/web/lib/help/articles/stream-studio/obs-auto-scene-switching.ts
+ create mode 100644 apps/web/lib/help/articles/stream-studio/voice.ts
+ create mode 100644 apps/web/lib/help/articles/troubleshooting/my-game-didnt-show-up.ts
+
+diff --git a/apps/web/app/help/__tests__/pages.test.tsx b/apps/web/app/help/__tests__/pages.test.tsx
+index 8e2d4127..cf922596 100644
+--- a/apps/web/app/help/__tests__/pages.test.tsx
++++ b/apps/web/app/help/__tests__/pages.test.tsx
+@@ -55,7 +55,7 @@ describe("/help", () => {
+     expect(within(builds).getByRole("link", { name: /Build check-in/ }).getAttribute("href")).toBe("/help/build-check-in");
+     // Topics with articles get a card; topics without articles yet stay hidden.
+     expect(document.getElementById("account-data")).not.toBeNull();
+-    expect(document.getElementById("desktop-app")).toBeNull();
++    expect(document.getElementById("desktop-app")).not.toBeNull();
+     for (const category of HELP_CATEGORIES) {
+       const hasArticles = ALL_HELP_ARTICLES.some((article) => article.category === category.id);
+       expect(document.getElementById(category.id) !== null, category.id).toBe(hasArticles);
+diff --git a/apps/web/components/help/HelpArticleBody.tsx b/apps/web/components/help/HelpArticleBody.tsx
+index fc30c6ec..3a4e2e9f 100644
+--- a/apps/web/components/help/HelpArticleBody.tsx
++++ b/apps/web/components/help/HelpArticleBody.tsx
+@@ -8,9 +8,11 @@ import { HelpWidget } from "./HelpWidget";
+ /**
+  * Renders an article's blocks. One renderer for every surface:
+  *
+- *   - "page": the public /help/<slug> article (h2 sub-headings).
++ *   - "page": the public /help/<slug> article (h2 sub-headings, which
++ *     carry their `anchor` as id so /help/<slug>#<anchor> lands on them).
+  *   - "compact": Settings → Help sections and the <HelpLink> sheet
+- *     (h3 sub-headings, tighter rhythm).
++ *     (h3 sub-headings, tighter rhythm, no ids: Settings → Help shows
++ *     every article on one page, where anchors could repeat).
+  *
+  * Server-safe (no hooks); `links.onOpenArticle` is only passed by
+  * client surfaces.
+@@ -47,8 +49,9 @@ function Block({
+       );
+     case "heading": {
+       const Heading = variant === "page" ? "h2" : "h3";
++      const anchor = variant === "page" ? block.anchor : undefined;
+       return (
+-        <Heading className={HEADING_CLASS[variant]}>
++        <Heading id={anchor} className={anchor ? `${HEADING_CLASS[variant]} scroll-mt-24` : HEADING_CLASS[variant]}>
+           <HelpInline text={block.text} links={links} />
+         </Heading>
+       );
+diff --git a/apps/web/components/help/__tests__/HelpArticleBody.test.tsx b/apps/web/components/help/__tests__/HelpArticleBody.test.tsx
+index 79c5e682..e9ccd520 100644
+--- a/apps/web/components/help/__tests__/HelpArticleBody.test.tsx
++++ b/apps/web/components/help/__tests__/HelpArticleBody.test.tsx
+@@ -18,6 +18,7 @@ const ARTICLE: HelpArticle = {
+   body: [
+     { type: "paragraph", text: "Open [Devices](/devices), read [Getting started](/help/getting-started) or [the channel](https://www.youtube.com/@ReSpOnSeSC2). [bad](javascript:alert(1))" },
+     { type: "heading", text: "A sub-heading" },
++    { type: "heading", text: "Anchored", anchor: "anchored" },
+     { type: "steps", items: ["**First.** Do this.", "Then `that`."] },
+     { type: "list", items: ["One *item*"] },
+     { type: "callout", tone: "warning", title: "Careful", text: "Mind the gap." },
+@@ -58,6 +59,12 @@ describe("HelpArticleBody", () => {
+     expect(screen.getByRole("button", { name: /Copy for your bio/ })).toBeTruthy();
+   });
+ 
++  it("gives anchored headings their id on the article page", () => {
++    renderBody();
++    expect(screen.getByRole("heading", { level: 2, name: "Anchored" }).id).toBe("anchored");
++    expect(screen.getByRole("heading", { level: 2, name: "A sub-heading" }).id).toBe("");
++  });
++
+   it("renders safe links and leaves unsafe ones as text", () => {
+     renderBody();
+     expect(screen.getByRole("link", { name: "Devices" }).getAttribute("href")).toBe("/devices");
+@@ -77,6 +84,8 @@ describe("HelpArticleBody", () => {
+       links: { articleHref: (slug) => `/settings?tab=help#${slug}`, onOpenArticle },
+     });
+     expect(screen.getByRole("heading", { level: 3, name: "A sub-heading" })).toBeTruthy();
++    // Settings → Help lists every article on one page: no heading ids there.
++    expect(screen.getByRole("heading", { level: 3, name: "Anchored" }).id).toBe("");
+     const link = screen.getByRole("link", { name: "Getting started" });
+     expect(link.getAttribute("href")).toBe("/settings?tab=help#getting-started");
+     fireEvent.click(link);
+diff --git a/apps/web/components/help/__tests__/HelpSearch.test.tsx b/apps/web/components/help/__tests__/HelpSearch.test.tsx
+index 9c55a405..379b32f4 100644
+--- a/apps/web/components/help/__tests__/HelpSearch.test.tsx
++++ b/apps/web/components/help/__tests__/HelpSearch.test.tsx
+@@ -15,8 +15,8 @@ describe("HelpSearch", () => {
+     type("code expired");
+     const list = screen.getByRole("list", { name: "Search results" });
+     const first = within(list).getAllByRole("link")[0];
+-    expect(first.getAttribute("href")).toBe("/help/getting-started");
+-    expect(first.textContent).toContain("Getting started (5 minutes)");
++    expect(first.getAttribute("href")).toBe("/help/install-and-pair");
++    expect(first.textContent).toContain("Install and link the desktop app");
+     expect(first.textContent).toContain("Getting started · ");
+     expect(screen.getByRole("status").textContent).toMatch(/^\d+ articles?$/);
+   });
+diff --git a/apps/web/lib/__tests__/glossary.test.ts b/apps/web/lib/__tests__/glossary.test.ts
+new file mode 100644
+index 00000000..ff32e69e
+--- /dev/null
++++ b/apps/web/lib/__tests__/glossary.test.ts
+@@ -0,0 +1,39 @@
++import { describe, expect, it } from "vitest";
++import { GLOSSARY, glossaryHelpPath, glossaryTerm } from "../glossary";
++import { getArticle, helpArticleAnchors } from "../help";
++
++describe("glossary", () => {
++  it("seeds the opponent and MMR terms the info tips will use", () => {
++    expect(GLOSSARY.map((term) => term.id)).toEqual(
++      expect.arrayContaining(["pulse-id", "toon", "net-mmr", "verified-pairs", "mmr-impact", "group-same-player", "barcode"]),
++    );
++    expect(glossaryTerm("net-mmr")?.term).toBe("Net MMR");
++    expect(glossaryTerm("nope")).toBeUndefined();
++  });
++
++  it("has unique, well-formed ids and related terms that exist", () => {
++    const ids = GLOSSARY.map((term) => term.id);
++    expect(new Set(ids).size).toBe(ids.length);
++    for (const term of GLOSSARY) {
++      expect(term.id).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
++      expect(term.short.trim(), term.id).not.toBe("");
++      for (const related of term.related) {
++        expect(related, term.id).not.toBe(term.id);
++        expect(glossaryTerm(related), `${term.id} → ${related}`).toBeDefined();
++      }
++    }
++  });
++
++  it("links every term to a real help article section", () => {
++    for (const term of GLOSSARY) {
++      const article = getArticle(term.help.slug);
++      expect(article, term.id).toBeDefined();
++      if (term.help.anchor) expect(helpArticleAnchors(article!), term.id).toContain(term.help.anchor);
++    }
++  });
++
++  it("builds the help URL with the section anchor", () => {
++    expect(glossaryHelpPath(glossaryTerm("net-mmr")!)).toBe("/help/opponents#net-mmr");
++    expect(glossaryHelpPath({ ...glossaryTerm("barcode")!, help: { slug: "opponent-dossier" } })).toBe("/help/opponent-dossier");
++  });
++});
+diff --git a/apps/web/lib/glossary.ts b/apps/web/lib/glossary.ts
+new file mode 100644
+index 00000000..f3021915
+--- /dev/null
++++ b/apps/web/lib/glossary.ts
+@@ -0,0 +1,117 @@
++/**
++ * Glossary: the short, plain definitions of terms the analyzer uses
++ * without explaining them on screen (Pulse ID, Net MMR, …). Each term
++ * points at the help article section that explains it in full, so an
++ * info tip beside a column header or a toggle can say one sentence and
++ * link to the rest.
++ *
++ * Plain data, like the help articles; the help tests check that every
++ * `help` link resolves to a real article and heading anchor. Add a term
++ * here before adding a tip for it in the UI.
++ *
++ * Deliberately free of imports: an info tip that reads one definition
++ * must not pull every help article into its page's bundle.
++ */
++
++/** Topic a term belongs to, for grouping on a glossary page. */
++export type GlossaryCategory = "opponents" | "mmr";
++
++export interface GlossaryTerm {
++  /** Stable id: lowercase letters, digits and hyphens. */
++  id: string;
++  /** The term as it appears on screen. */
++  term: string;
++  /** One plain sentence, short enough for a tooltip. */
++  short: string;
++  /** Optional second sentence or two for a glossary page. */
++  long?: string;
++  /** Ids of related terms. */
++  related: string[];
++  category: GlossaryCategory;
++  /** Where the term is explained in full: a help article and, optionally, one of its heading anchors. */
++  help: { slug: string; anchor?: string };
++}
++
++export const GLOSSARY: readonly GlossaryTerm[] = [
++  {
++    id: "pulse-id",
++    term: "Pulse ID",
++    short: "A player's ID on SC2Pulse, the public ladder site. It stays the same when they change their name.",
++    long: "It brings their current MMR, league and linked accounts. Until it's found, SC2 Tools shows the player's toon instead.",
++    related: ["toon", "group-same-player"],
++    category: "opponents",
++    help: { slug: "opponents", anchor: "pulse-id" },
++  },
++  {
++    id: "toon",
++    term: "Toon",
++    short: "The account ID inside a replay, such as 1-S2-1-267727: region, realm and account number.",
++    long: "Every replay has one, so it identifies an opponent even before their Pulse ID is known.",
++    related: ["pulse-id"],
++    category: "opponents",
++    help: { slug: "opponents", anchor: "pulse-id" },
++  },
++  {
++    id: "net-mmr",
++    term: "Net MMR",
++    short: "The MMR you gained or lost against an opponent in total, from verified pairs of ranked games.",
++    related: ["verified-pairs", "mmr-impact"],
++    category: "mmr",
++    help: { slug: "opponents", anchor: "net-mmr" },
++  },
++  {
++    id: "verified-pairs",
++    term: "Verified pairs",
++    short: "Two ranked 1v1 games in a row on the same account and race. The MMR change of the first game is the start MMR of the second minus its own.",
++    long: "Pairs with a change bigger than 150 MMR are left out, because something happened in between that the replays don't show.",
++    related: ["net-mmr", "mmr-impact"],
++    category: "mmr",
++    help: { slug: "opponents", anchor: "net-mmr" },
++  },
++  {
++    id: "mmr-impact",
++    term: "MMR impact",
++    short: "Which opponents you've won the most MMR from, and lost the most MMR to, counted from verified pairs.",
++    related: ["net-mmr", "verified-pairs"],
++    category: "mmr",
++    help: { slug: "opponents", anchor: "mmr-impact" },
++  },
++  {
++    id: "group-same-player",
++    term: "Group same player",
++    short: "Merges accounts that SC2Pulse links to the same player, or that are confirmed as the same person, into one row.",
++    related: ["pulse-id", "barcode"],
++    category: "opponents",
++    help: { slug: "opponents", anchor: "group-same-player" },
++  },
++  {
++    id: "barcode",
++    term: "Barcode",
++    short: "A name made only of look-alike characters, such as IIlIlI, used to hide who's playing.",
++    long: "When the player behind it is known, from SC2Pulse or an identity confirmed by our team, their real name shows next to it.",
++    related: ["group-same-player", "pulse-id"],
++    category: "opponents",
++    help: { slug: "opponent-dossier", anchor: "barcode" },
++  },
++];
++
++const BY_ID: ReadonlyMap<string, GlossaryTerm> = new Map(GLOSSARY.map((term) => [term.id, term]));
++
++/**
++ * The term with this id, if any.
++ *
++ * Example: `glossaryTerm("net-mmr")?.term` → "Net MMR".
++ */
++export function glossaryTerm(id: string): GlossaryTerm | undefined {
++  return BY_ID.get(id);
++}
++
++/**
++ * Public URL of the help section that explains a term.
++ *
++ * Example: `glossaryHelpPath(glossaryTerm("net-mmr")!)` → "/help/opponents#net-mmr".
++ */
++export function glossaryHelpPath(term: GlossaryTerm): string {
++  const article = `/help/${term.help.slug}`;
++  return term.help.anchor ? `${article}#${term.help.anchor}` : article;
++}
+diff --git a/apps/web/lib/help/__tests__/articles.test.ts b/apps/web/lib/help/__tests__/articles.test.ts
+index 2ff09748..9e7ff07b 100644
+--- a/apps/web/lib/help/__tests__/articles.test.ts
++++ b/apps/web/lib/help/__tests__/articles.test.ts
+@@ -9,7 +9,7 @@ import path from "node:path";
+ import { describe, expect, it } from "vitest";
+ import { defaultTabVisibility, isSettingsTabId } from "@/components/analyzer/settings/SettingsShell";
+ import { listHelpArticleFiles } from "@/scripts/gen-help-index.mjs";
+-import { ALL_HELP_ARTICLES, getArticle, resolveLegacyAnchor } from "../index";
++import { ALL_HELP_ARTICLES, getArticle, helpArticleAnchors, resolveLegacyAnchor } from "../index";
+ import { helpArticleLinks, helpBlockText } from "../articleText";
+ import { isHelpCategoryId } from "../categories";
+ import { helpArticleSlugFromHref, helpHrefKind } from "../inline";
+@@ -44,7 +44,13 @@ function routeExists(segments: string[], dir = APP_DIR): boolean {
+ function brokenInternalLink(href: string): string | null {
+   const url = new URL(href, "https://sc2tools.com");
+   const slug = helpArticleSlugFromHref(url.pathname);
+-  if (slug) return getArticle(slug) ? null : `no help article "${slug}"`;
++  if (slug) {
++    const article = getArticle(slug);
++    if (!article) return `no help article "${slug}"`;
++    const anchor = url.hash.slice(1);
++    if (anchor && !helpArticleAnchors(article).includes(anchor)) return `no section #${anchor} in "${slug}"`;
++    return null;
++  }
+   if (!routeExists(url.pathname.split("/").filter(Boolean))) return `no page at ${url.pathname}`;
+   if (url.pathname === "/settings") {
+     const tab = url.searchParams.get("tab");
+@@ -71,6 +77,38 @@ describe("help articles", () => {
+       "viewer-engagement",
+       "troubleshooting-and-support",
+       "backups-and-export",
++      // The how-tos for features that shipped without one.
++      "install-and-pair",
++      "browser-import",
++      "desktop-app-overview",
++      "replay-folders",
++      "today",
++      "analyzer-filters",
++      "opponents",
++      "strategies",
++      "trends",
++      "macro",
++      "maps",
++      "builds",
++      "replays",
++      "arcade",
++      "reading-the-charts",
++      "game-page",
++      "game-page-replay",
++      "game-page-accurate-playback",
++      "opponent-dossier",
++      "custom-builds",
++      "rules-explained",
++      "practice-ghost-build",
++      "randomizer",
++      "publish-community-builds",
++      "delete-account",
++      "public-profile",
++      "player-channels",
++      "voice",
++      "obs-auto-scene-switching",
++      "my-game-didnt-show-up",
++      "a-page-asked-me-to-sign-in",
+     ]) {
+       expect(getArticle(slug), slug).toBeDefined();
+     }
+@@ -136,10 +174,10 @@ describe("help articles", () => {
+   });
+ 
+   it("has a link checker that catches broken links", () => {
+-    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/help/getting-started"]) {
++    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/help/getting-started", "/help/opponents#net-mmr"]) {
+       expect(brokenInternalLink(ok), ok).toBeNull();
+     }
+-    for (const broken of ["/nope", "/settings?tab=nope", "/settings?tab=import", "/settings?tab=help#nope", "/help/nope"]) {
++    for (const broken of ["/nope", "/settings?tab=nope", "/settings?tab=import", "/settings?tab=help#nope", "/help/nope", "/help/opponents#nope"]) {
+       expect(brokenInternalLink(broken), broken).not.toBeNull();
+     }
+   });
+@@ -182,6 +220,37 @@ describe("help articles", () => {
+     }
+   });
+ 
++  it("gives section anchors a stable, unique id within each article", () => {
++    for (const article of ALL_HELP_ARTICLES) {
++      const anchors = helpArticleAnchors(article);
++      expect(new Set(anchors).size, `${article.slug}: repeated anchor`).toBe(anchors.length);
++      for (const anchor of anchors) expect(anchor, article.slug).toMatch(SLUG_RE);
++    }
++  });
++
++  it("covers each analyzer section: what it answers, how to drill in and how much data it needs", () => {
++    for (const slug of ["today", "opponents", "strategies", "trends", "macro", "maps", "builds", "arcade"]) {
++      const article = getArticle(slug);
++      expect(article?.category, slug).toBe("analyzer");
++      expect(helpArticleAnchors(article!), slug).toContain("sample-size");
++    }
++    // The anchors the filter bar's and the tables' info tips link to.
++    expect(helpArticleAnchors(getArticle("analyzer-filters")!)).toEqual(
++      expect.arrayContaining(["defaults", "patch-presets", "too-short", "matchup", "active-filters"]),
++    );
++    expect(helpArticleAnchors(getArticle("opponents")!)).toEqual(
++      expect.arrayContaining(["group-same-player", "mmr-impact", "net-mmr", "pulse-id"]),
++    );
++    expect(helpArticleAnchors(getArticle("reading-the-charts")!)).toContain("min-games");
++  });
++
++  it("says the numbers come from fixed rules, never AI, wherever stats are explained", () => {
++    for (const slug of ["dashboard-and-analyzer", "today", "opponents", "macro", "reading-the-charts", "game-page"]) {
++      const text = allTextFields(getArticle(slug)!).join(" ");
++      expect(text, slug).toMatch(/fixed rules, never AI/);
++    }
++  });
++
+   it("lists only existing articles as Popular", () => {
+     for (const slug of POPULAR_HELP_SLUGS) expect(getArticle(slug), slug).toBeDefined();
+   });
+diff --git a/apps/web/lib/help/__tests__/helpLinks.test.ts b/apps/web/lib/help/__tests__/helpLinks.test.ts
+new file mode 100644
+index 00000000..641f1ca4
+--- /dev/null
++++ b/apps/web/lib/help/__tests__/helpLinks.test.ts
+@@ -0,0 +1,74 @@
++/**
++ * Every place the app links to help must reach a real article: each
++ * analyzer section's "How to read this", and every <HelpLink>,
++ * <LazyHelpLink> and `helpSlug` written in the source. An unknown slug
++ * renders as plain text (HelpLink never shows a dead link), so without
++ * this check a typo would quietly drop the help link.
++ */
++import { readdirSync, readFileSync } from "node:fs";
++import path from "node:path";
++import { describe, expect, it } from "vitest";
++import { slugForTab, TABS } from "@/components/analyzer/tabs";
++import { getArticle } from "../index";
++
++const WEB_ROOT = path.resolve(__dirname, "../../..");
++const SOURCE_DIRS = ["app", "components", "lib"];
++
++/** Source files (.ts/.tsx), skipping tests and generated output. */
++function sourceFiles(dir: string): string[] {
++  const out: string[] = [];
++  for (const entry of readdirSync(dir, { withFileTypes: true })) {
++    const full = path.join(dir, entry.name);
++    if (entry.isDirectory()) {
++      if (entry.name === "__tests__" || entry.name === "node_modules") continue;
++      out.push(...sourceFiles(full));
++    } else if (/\.tsx?$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name)) {
++      out.push(full);
++    }
++  }
++  return out;
++}
++
++const HELP_LINK_SLUG_RE = /<(?:Lazy)?HelpLink\b[^>]*?\bslug=(?:"([^"]+)"|\{"([^"]+)"\})/g;
++const HELP_SLUG_PROP_RE = /\bhelpSlug(?:=|:\s*)(?:"([^"]+)"|\{"([^"]+)"\})/g;
++
++/** Every literal help slug a source file links to, with where it was found. */
++function literalHelpSlugs(): Array<{ slug: string; where: string }> {
++  const found: Array<{ slug: string; where: string }> = [];
++  for (const dir of SOURCE_DIRS) {
++    for (const file of sourceFiles(path.join(WEB_ROOT, dir))) {
++      const source = readFileSync(file, "utf8");
++      for (const re of [HELP_LINK_SLUG_RE, HELP_SLUG_PROP_RE]) {
++        for (const match of source.matchAll(re)) {
++          found.push({ slug: match[1] ?? match[2], where: path.relative(WEB_ROOT, file) });
++        }
++      }
++    }
++  }
++  return found;
++}
++
++describe("help links in the app", () => {
++  it("has a help article for every analyzer section, at the section's own slug", () => {
++    for (const tab of TABS) {
++      const slug = slugForTab(tab.id);
++      const article = getArticle(slug);
++      expect(article, `${tab.id} → /help/${slug}`).toBeDefined();
++      expect(article?.category, slug).toBe("analyzer");
++    }
++    // Today (/app) is the landing page rather than a routed section.
++    expect(getArticle("today")?.category).toBe("analyzer");
++  });
++
++  it("finds the help slugs written in the source", () => {
++    const slugs = literalHelpSlugs().map((item) => item.slug);
++    // A few known links, so a broken scan can't pass silently.
++    expect(slugs).toEqual(expect.arrayContaining(["something-went-wrong", "analyzer-filters", "opponent-scouting"]));
++  });
++
++  it("points every HelpLink, LazyHelpLink and helpSlug at an existing article", () => {
++    for (const { slug, where } of literalHelpSlugs()) {
++      expect(getArticle(slug), `${where} links to /help/${slug}`).toBeDefined();
++    }
++  });
++});
+diff --git a/apps/web/lib/help/__tests__/registry.test.ts b/apps/web/lib/help/__tests__/registry.test.ts
+index 0843874a..59f85f5f 100644
+--- a/apps/web/lib/help/__tests__/registry.test.ts
++++ b/apps/web/lib/help/__tests__/registry.test.ts
+@@ -4,6 +4,8 @@ import {
+   articlesByCategory,
+   formatHelpDate,
+   getArticle,
++  helpAnchorPath,
++  helpArticleAnchors,
+   helpArticlePath,
+   helpAudienceLabel,
+   helpSettingsPath,
+@@ -55,6 +57,20 @@ describe("help registry", () => {
+     expect(getArticle("nope")).toBeUndefined();
+     expect(helpArticlePath("stream-dock")).toBe("/help/stream-dock");
+     expect(helpSettingsPath("stream-dock")).toBe("/settings?tab=help#stream-dock");
++    expect(helpAnchorPath("opponents", "net-mmr")).toBe("/help/opponents#net-mmr");
++  });
++
++  it("lists an article's section anchors in reading order", () => {
++    const article = fixture("anchored", {
++      body: [
++        { type: "heading", text: "First", anchor: "first" },
++        { type: "paragraph", text: "p" },
++        { type: "heading", text: "No anchor" },
++        { type: "heading", text: "Second", anchor: "second" },
++      ],
++    });
++    expect(helpArticleAnchors(article)).toEqual(["first", "second"]);
++    expect(helpArticleAnchors(fixture("plain"))).toEqual([]);
+   });
+ 
+   it("groups articles by topic in display order, skipping empty topics", () => {
+diff --git a/apps/web/lib/help/__tests__/search.test.ts b/apps/web/lib/help/__tests__/search.test.ts
+index 93a7f6f1..b41b63a2 100644
+--- a/apps/web/lib/help/__tests__/search.test.ts
++++ b/apps/web/lib/help/__tests__/search.test.ts
+@@ -54,8 +54,9 @@ describe("withinOneEdit", () => {
+ 
+ describe("searchHelp on the shipped articles", () => {
+   it("ranks the pairing walkthrough first for 'code expired'", () => {
+-    expect(top("code expired")).toBe("getting-started");
+-    expect(top("pairing code")).toBe("getting-started");
++    expect(top("code expired")).toBe("install-and-pair");
++    expect(top("pairing code")).toBe("install-and-pair");
++    expect(slugs("pairing code")).toContain("getting-started");
+   });
+ 
+   it("finds articles by title words, keywords and prefixes", () => {
+@@ -76,7 +77,7 @@ describe("searchHelp on the shipped articles", () => {
+ 
+   it("tolerates one typo in longer words, not in short ones", () => {
+     expect(top("ovrlay setup")).toBe("obs-overlay-setup");
+-    expect(top("randomiser")).toBe("build-check-in");
++    expect(top("randomiser")).toBe("randomizer");
+     expect(slugs("kikc")).toEqual([]);
+   });
+ 
+@@ -89,7 +90,9 @@ describe("searchHelp on the shipped articles", () => {
+     });
+     expect(top("obs")).toBe("obs-overlay-setup");
+     expect(slugs("tray")).toContain("getting-started");
+-    expect(slugs("sync")).toContain("getting-started");
++    expect(slugs("tray")).toContain("desktop-app-overview");
++    expect(slugs("sync")).toContain("desktop-app-overview");
++    expect(slugs("sync")).toContain("my-game-didnt-show-up");
+   });
+ 
+   it("ignores filler words unless they are all there is", () => {
+diff --git a/apps/web/lib/help/articles/account-data/delete-account.ts b/apps/web/lib/help/articles/account-data/delete-account.ts
+new file mode 100644
+index 00000000..babcb683
+--- /dev/null
++++ b/apps/web/lib/help/articles/account-data/delete-account.ts
+@@ -0,0 +1,72 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "delete-account",
++  title: "Deleting your account",
++  summary:
++    "What deleting your SC2 Tools account removes, what to save first, how to do it, and the gentler option of deleting only your game history.",
++  category: "account-data",
++  audience: "all",
++  signedInOnly: true,
++  order: 30,
++  keywords: [
++    "delete account",
++    "close account",
++    "remove account",
++    "delete my data",
++    "erase",
++    "gdpr",
++    "right to be forgotten",
++    "privacy",
++    "export",
++    "delete game history",
++    "start over",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "You can delete your SC2 Tools account and everything stored for it at any time, from [Settings → Backups & data](/settings?tab=backups). It can't be undone.",
++    },
++    { type: "heading", text: "Before you delete", anchor: "before" },
++    {
++      type: "list",
++      items: [
++        "Press **Export my data** on the same page to download a copy of your games list, opponents, notes, custom builds and settings as one file.",
++        "Download any original replays you want to keep from [Replays](/app/replays). Your replays also stay in your StarCraft II folder on your PC.",
++        "On your gaming PC, quit the desktop app or uninstall it, so it stops trying to sync.",
++      ],
++    },
++    { type: "heading", text: "Delete your account", anchor: "how" },
++    {
++      type: "steps",
++      items: [
++        "Open [Settings → Backups & data](/settings?tab=backups).",
++        "Under **Export & delete account (GDPR)**, press **Delete my account**.",
++        "Type `DELETE` to confirm and press **Delete account**. You're taken back to the home page.",
++      ],
++    },
++    { type: "heading", text: "What's removed", anchor: "what-is-removed" },
++    {
++      type: "list",
++      items: [
++        "Your games, opponents, notes, custom builds, settings, overlay links, paired devices and snapshots, and your connected Twitch, Kick and YouTube accounts.",
++        "Your original replay files and map playback recordings.",
++        "Builds you published to Community, the channels you linked to your player identity, and your public profile and replay page, whose links stop working.",
++        "Copies inside our daily database backups aren't edited; they're deleted on their own when those backups expire. See [Backups, snapshots and export](/help/backups-and-export) and the [privacy policy](/legal/privacy).",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Signing in again later with the same login starts a new, empty account.",
++    },
++    { type: "heading", text: "Only want a fresh start?", anchor: "delete-history-instead" },
++    {
++      type: "paragraph",
++      text: "**Delete game history**, on the same page, removes your games and opponent records but keeps your account, custom builds, overlay links and paired devices. You can limit it to a date range. Afterwards, press **Re-sync** in the desktop app to upload your replays again. Take a snapshot first if you might want to go back.",
++    },
++  ],
++  related: ["backups-and-export", "public-profile", "troubleshooting-and-support"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/account-data/player-channels.ts b/apps/web/lib/help/articles/account-data/player-channels.ts
+new file mode 100644
+index 00000000..9c04c9c9
+--- /dev/null
++++ b/apps/web/lib/help/articles/account-data/player-channels.ts
+@@ -0,0 +1,64 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "player-channels",
++  title: "Link your Twitch and YouTube channels",
++  summary:
++    "Connect your Twitch and YouTube channels to your StarCraft II accounts so other players can find your stream, and so your games link to the moment in your recordings.",
++  category: "account-data",
++  audience: "streamer",
++  signedInOnly: true,
++  order: 50,
++  keywords: [
++    "twitch",
++    "youtube",
++    "channel",
++    "channels",
++    "stream link",
++    "vod",
++    "recording",
++    "pov",
++    "watch",
++    "player channels",
++    "pending review",
++    "disconnect",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "Linking your channels does two things. Players who face you see your Twitch and YouTube links in their opponent list and at the top of their dossier on you. And when a game you played was streamed, the game shows a link that opens the recording at the moment the game started, for you and for your opponent.",
++    },
++    { type: "heading", text: "Connect your channels", anchor: "connect" },
++    {
++      type: "steps",
++      items: [
++        "Open [Settings → Profile](/settings?tab=profile). Your SC2Pulse IDs or toons must be saved there first: they tell us which StarCraft II accounts are yours.",
++        "Under **Twitch & YouTube**, choose which of your accounts the channels are for in **Connect channels for**. Pick all of them to use the same channels everywhere.",
++        "Paste your **Twitch channel URL** and your **YouTube channel URL** (a channel or @handle address). Leave one blank if you don't use it.",
++        "Press **Save channels**. They show as **Pending review** until an administrator approves them; then everyone can see them.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Only connect channels that belong to you. The review step exists because anyone could type any channel; links you had approved before stay public while a change is reviewed.",
++    },
++    { type: "heading", text: "Links to the moment in a recording", anchor: "recordings" },
++    {
++      type: "list",
++      items: [
++        "A game only gets a watch link when a recording that covers its time is found on a linked channel. Having a channel linked isn't enough on its own.",
++        "The link opens the recording at the game's start. You'll find these links in the game header and in the **Streams** column of [Replays](/app/replays).",
++        "Your opponent's recordings show too, when their channel is linked.",
++      ],
++    },
++    { type: "heading", text: "Change or remove them", anchor: "disconnect" },
++    {
++      type: "paragraph",
++      text: "Edit the addresses and press **Save channels** again; changes are reviewed like new links. **Disconnect** removes your links for everyone straight away. Clearing both fields and saving does the same.",
++    },
++  ],
++  related: ["public-profile", "replays", "opponent-dossier"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/account-data/public-profile.ts b/apps/web/lib/help/articles/account-data/public-profile.ts
+new file mode 100644
+index 00000000..67b28dac
+--- /dev/null
++++ b/apps/web/lib/help/articles/account-data/public-profile.ts
+@@ -0,0 +1,69 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "public-profile",
++  title: "Your public profile and replay page",
++  summary:
++    "The two pages anyone can see about you, both off until you turn them on: your public profile with your record and signature builds, and your shared replay archive.",
++  category: "account-data",
++  audience: "all",
++  signedInOnly: true,
++  order: 40,
++  keywords: [
++    "public profile",
++    "player page",
++    "profile link",
++    "share profile",
++    "signature builds",
++    "featured build",
++    "author name",
++    "anonymous",
++    "replay page",
++    "share replays",
++    "private",
++    "privacy",
++    "turn off",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "Your games, stats and opponents are private by default. There are two pages you can choose to make public, and each one is off until you turn it on.",
++    },
++    { type: "heading", text: "Public profile", anchor: "profile" },
++    {
++      type: "paragraph",
++      text: "A shareable page with your record, matchup splits and signature builds, at an address like `sc2tools.com/p/` followed by your ID.",
++    },
++    {
++      type: "list",
++      items: [
++        "**Shown:** the author name you chose, your main race, your games, wins, losses and win rate, your results against each race, your most-played builds with their win rates, a featured community build, and your reviewer stats if you write replay reviews.",
++        "**Never shown:** your opponents' names, battle tags or IDs, your individual games, your notes, or your email.",
++      ],
++    },
++    { type: "heading", text: "Turn it on or off", anchor: "turn-on" },
++    {
++      type: "steps",
++      items: [
++        "Your profile turns on when you publish a build to [Community](/community) under a public author name. Open one of your [custom builds](/builds), choose **Publish**, and leave **Post anonymously** unticked. See [Publish and reuse community builds](/help/publish-community-builds).",
++        "[Settings → Profile](/settings?tab=profile) then shows *Your profile is live*, with **View profile** and **Copy link**.",
++        "To turn it off, take down your named community builds, or publish them anonymously instead. With no build under your name, the page goes away.",
++      ],
++    },
++    { type: "heading", text: "Shared replay page", anchor: "replay-page" },
++    {
++      type: "paragraph",
++      text: "Separately, you can share your whole replay archive from [Replays](/app/replays) with **Share replay page**. Visitors see every synced game with its map, result, players, MMR, builds and stream links, and can download your original replay files. Turn it off there at any time. See [Replays](/help/replays).",
++    },
++    {
++      type: "callout",
++      tone: "info",
++      title: "Opponents have a public page too",
++      text: "An opponent faced by at least 5 SC2 Tools players gets a combined public profile with no names. Your games add to it without naming you. See [Opponent dossier](/help/opponent-dossier).",
++    },
++  ],
++  related: ["publish-community-builds", "replays", "player-channels", "delete-account"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/analyzer-filters.ts b/apps/web/lib/help/articles/analyzer/analyzer-filters.ts
+index 5ac588a9..3805d61e 100644
+--- a/apps/web/lib/help/articles/analyzer/analyzer-filters.ts
++++ b/apps/web/lib/help/articles/analyzer/analyzer-filters.ts
+@@ -37,13 +37,13 @@ const article: HelpArticle = {
+     "no data",
+     "wrong numbers",
+   ],
+-  updated: "2026-10-22",
++  updated: "2026-10-23",
+   body: [
+     {
+       type: "paragraph",
+       text: "The filter bar sits at the top of the analyzer. Today, Opponents and each opponent's page, Strategies, Trends, Macro, Maps, Builds and Replays all count only the games it lets through, so switching sections never changes which games you are looking at. The page for a single game ignores filters.",
+     },
+-    { type: "heading", text: "The defaults" },
++    { type: "heading", text: "The defaults", anchor: "defaults" },
+     {
+       type: "paragraph",
+       text: "A new visit counts your **ranked 1v1 ladder games on the current 12-worker patch**, from every region, of any length, with **too-short games hidden**. Too-short games are replays under 45 seconds: disconnects and instant leaves where no build order happened.",
+@@ -65,7 +65,17 @@ const article: HelpArticle = {
+       type: "paragraph",
+       text: "Your choices are remembered on this device, so the next visit opens the way you left it.",
+     },
+-    { type: "heading", text: "Pick a matchup" },
++    { type: "heading", text: "Patch presets", anchor: "patch-presets" },
++    {
++      type: "paragraph",
++      text: "The first three date choices split your games by patch, using each game's own game version rather than its date: **After 5.0.17 · 12 workers** (the current game), **5.0.16 · 8 workers** (the patch that started players on 8 workers) and **Before 5.0.16 · 12 workers**. Openings and timings change with the starting workers, so keeping the patches apart keeps your numbers comparable. The other choices, such as **Last 30 days** or a season, go by date.",
++    },
++    { type: "heading", text: "Too-short games", anchor: "too-short" },
++    {
++      type: "paragraph",
++      text: "Games under 45 seconds are disconnects and instant leaves where no build order happened. **Hide too-short** leaves them out of every section, which is the default. Turn it off to count them too.",
++    },
++    { type: "heading", text: "Pick a matchup", anchor: "matchup" },
+     {
+       type: "steps",
+       items: [
+@@ -78,7 +88,7 @@ const article: HelpArticle = {
+       type: "paragraph",
+       text: "With a keyboard, Tab to the matchup and use the arrow keys to move between the choices.",
+     },
+-    { type: "heading", text: "See and clear active filters" },
++    { type: "heading", text: "See and clear active filters", anchor: "active-filters" },
+     {
+       type: "paragraph",
+       text: "Whenever a filter differs from the defaults, the **Active filters** row under the filter bar shows it as a chip, such as *Opponent race: Zerg* or *Regions: NA, EU*. Nothing else narrows your games, so if a number looks too low, check this row first.",
+@@ -96,12 +106,12 @@ const article: HelpArticle = {
+       title: "Filters picked in Strategies apply everywhere",
+       text: "When you pick **My build** or **Opp strategy** in Strategies, that filter applies to every section (Today, Opponents, Trends, Maps, Builds and the rest) until you clear it. Its chip says *set in Strategies*. These two reset when you reload the page; everything else in the filter bar is remembered.",
+     },
+-    { type: "heading", text: "On a phone" },
++    { type: "heading", text: "On a phone", anchor: "phone" },
+     {
+       type: "paragraph",
+       text: "The date range stays at the top. The other filters sit behind the **Filters** button, which counts the filters other than the date range that differ from the defaults, for example *Filters · 2 active*. Tap it to open them, make your changes (they apply right away) and tap **Done**. The Active filters row works the same as on a computer.",
+     },
+-    { type: "heading", text: "Cards with their own scope" },
++    { type: "heading", text: "Cards with their own scope", anchor: "card-scope" },
+     {
+       type: "list",
+       items: [
+@@ -113,7 +123,7 @@ const article: HelpArticle = {
+     },
+     { type: "settingsLink", label: "Open Strategies", href: "/app/strategies" },
+   ],
+-  related: ["dashboard-and-analyzer"],
++  related: ["dashboard-and-analyzer", "today", "strategies", "reading-the-charts"],
+ };
+ 
+ export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/arcade.ts b/apps/web/lib/help/articles/analyzer/arcade.ts
+new file mode 100644
+index 00000000..4edbe976
+--- /dev/null
++++ b/apps/web/lib/help/articles/analyzer/arcade.ts
+@@ -0,0 +1,86 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "arcade",
++  title: "Arcade: quizzes and games about your own play",
++  summary:
++    "Daily quizzes and games built from your real replays, your Season Recap, a card collection of your builds and the Stock Market, with XP, streaks and badges.",
++  category: "analyzer",
++  audience: "player",
++  signedInOnly: true,
++  order: 10,
++  keywords: [
++    "arcade",
++    "quiz",
++    "quizzes",
++    "games",
++    "daily drop",
++    "daily run",
++    "daily quests",
++    "quick play",
++    "collection",
++    "card binder",
++    "my stats",
++    "xp",
++    "level",
++    "minerals",
++    "badges",
++    "streak",
++    "season recap",
++    "stock market",
++    "bingo",
++    "buildle",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "[Arcade](/app/arcade) turns your own games into short quizzes and games. Every question is built from your real replays, so answering it teaches you something true about how you play, often something no single chart shows: which rival is on a streak against you, how you do after three losses in a row, which build wins fastest.",
++    },
++    { type: "heading", text: "The four tabs", anchor: "tabs" },
++    {
++      type: "table",
++      head: ["Tab", "What's there"],
++      rows: [
++        ["Today", "**Daily Quests**, the **Daily Drop** (one quiz) and the **Daily Run** (one game). They change every day at midnight."],
++        ["Quick Play", "Every quiz and game, to play any time. Filter by **Quizzes** or **Games** and by how long they take."],
++        ["Collection", "Your **Card binder**, with a card for every build you've played, and the **Cosmetics shop**."],
++        ["My Stats", "Your streak, level, accuracy and minerals, and your record in each mode."],
++      ],
++    },
++    { type: "heading", text: "Season Recap", anchor: "season-recap" },
++    {
++      type: "paragraph",
++      text: "At the top of Arcade, **Season Recap** sums up your season as a set of slides you can share as an image. It unlocks once you have 10 games.",
++    },
++    { type: "heading", text: "XP, minerals and badges", anchor: "progress" },
++    {
++      type: "list",
++      items: [
++        "Answering and playing earns XP, which raises your level, and minerals to spend in the Cosmetics shop.",
++        "Playing every day keeps your streak going. Badges reward runs of correct answers and perfect days.",
++        "Your Arcade progress is saved to your account, so it follows you to every device.",
++      ],
++    },
++    { type: "heading", text: "Stock Market", anchor: "stock-market" },
++    {
++      type: "paragraph",
++      text: "Spread 100 points across up to five of your builds for the week. Your return depends on how those builds actually do in your games that week. You can show your result on the weekly leaderboard in [Community](/community/leaderboard), or keep it to yourself.",
++    },
++    { type: "heading", text: "How much data it needs", anchor: "sample-size" },
++    {
++      type: "list",
++      items: [
++        "Each mode needs enough of the right games to ask a fair question, such as at least 3 opponents to compare. When it can't, it says what's missing instead of making up an answer.",
++        "With only a few games, some days have no Daily Drop or Daily Run. They appear as you play more.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Every question and answer is computed from your replays with fixed rules, never AI.",
++    },
++  ],
++  related: ["today", "builds", "opponents", "trends"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/builds.ts b/apps/web/lib/help/articles/analyzer/builds.ts
+new file mode 100644
+index 00000000..2c0be037
+--- /dev/null
++++ b/apps/web/lib/help/articles/analyzer/builds.ts
+@@ -0,0 +1,73 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "builds",
++  title: "Builds: how each of your builds performs",
++  summary:
++    "Your record with every build you play, how each build does at different MMRs, how you get better at a build with practice, and where to edit or publish one.",
++  category: "analyzer",
++  audience: "player",
++  signedInOnly: true,
++  order: 8,
++  keywords: [
++    "builds",
++    "build win rate",
++    "my builds",
++    "build stats",
++    "win rate by mmr",
++    "build mastery curve",
++    "mmr progression by build",
++    "planned",
++    "unclassified",
++    "reclassify my games",
++    "personal notes",
++    "publish to community",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "The [Builds](/app/builds) section of the analyzer lists every build you've played in the games the filter bar lets through: the openings SC2 Tools detects and the custom builds you've defined. It answers: which builds win, which don't, and which ones I'm getting better at.",
++    },
++    { type: "heading", text: "The build table", anchor: "table" },
++    {
++      type: "list",
++      items: [
++        "One row per build with wins, losses, games and win rate. Search by name, and sort by win rate with the arrow button or by any column header.",
++        "**incl. N check-ins** means N of the games count only because you checked in to this build. See [Build check-in](/help/build-check-in).",
++        "Click a row to open the build: its record by matchup and map, recent games, your **Personal notes**, and **Publish to community** for a build saved in your library.",
++      ],
++    },
++    { type: "heading", text: "The charts", anchor: "charts" },
++    {
++      type: "table",
++      head: ["Chart", "What it answers"],
++      rows: [
++        ["Win rate by MMR — your builds", "One line per build, with your MMR when you played it along the bottom. Shows which builds hold up as you climb."],
++        ["Build mastery curve", "Your running win rate with each build by how many times you've played it, not by date: an early dip that climbs means the build is settling in."],
++        ["MMR progression by build", "Your MMR over time, split by the build you played."],
++      ],
++    },
++    { type: "heading", text: "Games without a build name", anchor: "unclassified" },
++    {
++      type: "paragraph",
++      text: "Very old uploads can be listed as *Unclassified - Zerg* or *Unclassified - Terran*: they were synced before those builds were detected. Press **Reclassify my games** in the banner and the desktop app reads those replays again with today's rules. It must be running, with the replays still on your PC.",
++    },
++    { type: "heading", text: "How much data it needs", anchor: "sample-size" },
++    {
++      type: "list",
++      items: [
++        "**Min games** hides builds you've played fewer times than the number you pick.",
++        "The MMR charts skip MMR ranges with fewer games than Min games, so a build only shows where it has enough games.",
++        "The mastery curve has its own **Min plays per build**: builds played fewer times aren't drawn, so one lucky first game doesn't dominate it.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Want to define your own version of an opener, with its own record? See [Detected builds vs custom builds](/help/custom-builds). Every number here is counted from your replays with fixed rules, never AI.",
++    },
++  ],
++  related: ["custom-builds", "strategies", "build-check-in", "reading-the-charts"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/dashboard-and-analyzer.ts b/apps/web/lib/help/articles/analyzer/dashboard-and-analyzer.ts
+index 689755c5..55ae56fb 100644
+--- a/apps/web/lib/help/articles/analyzer/dashboard-and-analyzer.ts
++++ b/apps/web/lib/help/articles/analyzer/dashboard-and-analyzer.ts
+@@ -4,31 +4,54 @@ const article: HelpArticle = {
+   slug: "dashboard-and-analyzer",
+   title: "Dashboard & analyzer",
+   summary:
+-    "What the analyzer shows from your replays: build win rates, map stats, opponent scouting, MMR progression and your custom build library.",
++    "What the analyzer shows from your replays, section by section: Today, Opponents, Strategies, Trends, Macro, Maps, Builds, Replays and Arcade.",
+   category: "analyzer",
+   audience: "player",
++  order: 0,
+   keywords: [
+     "stats",
+     "dashboard",
++    "analyzer",
++    "sections",
+     "win rate",
+     "mmr",
+     "maps",
+-    "veto",
+     "opponents",
+     "scouting",
+     "head-to-head",
+     "strategy detection",
+     "opener",
+     "custom builds",
++    "how to read this",
+   ],
+-  updated: "2026-10-22",
++  updated: "2026-10-23",
+   body: [
+     {
+       type: "paragraph",
+-      text: "Everything is fed by your own replays — no manual tagging. The analyzer covers build win-rates (with MMR-band splits), map stats and veto help, opponent scouting (their openers, your head-to-head), MMR progression with peak/trough markers, and a custom build library you can save openings into. Strategy detection names the opener your opponent went for across 100+ known builds.",
++      text: "Everything in the analyzer comes from your own replays, with no manual tagging. Each replay is read with fixed rules, never AI: the opening you and your opponent played is named from more than 100 known builds, and your record, MMR, macro and timings are counted from the replay itself. The same games always give the same numbers.",
++    },
++    { type: "heading", text: "The sections", anchor: "sections" },
++    {
++      type: "table",
++      head: ["Section", "What it answers"],
++      rows: [
++        ["[Today](/help/today)", "How is today going, and what did my last game tell me?"],
++        ["[Opponents](/help/opponents)", "Who do I play, who beats me, and who costs me MMR?"],
++        ["[Strategies](/help/strategies)", "Which openings beat me, and which of my builds answers each one?"],
++        ["[Trends](/help/trends)", "Am I improving, in which matchup, and when do I play best?"],
++        ["[Macro](/help/macro)", "Which macro mistake costs me the most, and does fixing it win games?"],
++        ["[Maps](/help/maps)", "Which maps and matchups go my way?"],
++        ["[Builds](/help/builds)", "How does each of my builds perform, and am I getting better with it?"],
++        ["[Replays](/help/replays)", "Where is that game I want to review?"],
++        ["[Arcade](/help/arcade)", "What don't I know about my own play?"],
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Each section has a **How to read this** link next to its title that opens its article. The filter bar at the top decides which games every section counts: see [Filters](/help/analyzer-filters). For colors, sample sizes and Min games, see [Reading the charts](/help/reading-the-charts).",
+     },
+   ],
+-  related: ["analyzer-filters", "getting-started", "build-check-in"],
++  related: ["today", "analyzer-filters", "reading-the-charts", "getting-started"],
+ };
+ 
+ export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/macro.ts b/apps/web/lib/help/articles/analyzer/macro.ts
+new file mode 100644
+index 00000000..20a8a96a
+--- /dev/null
++++ b/apps/web/lib/help/articles/analyzer/macro.ts
+@@ -0,0 +1,79 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "macro",
++  title: "Macro: read your report and track progress",
++  summary:
++    "What the macro score measures, which leak costs you the most, whether better macro wins you games, and how to score your older replays.",
++  category: "analyzer",
++  audience: "player",
++  signedInOnly: true,
++  order: 6,
++  keywords: [
++    "macro",
++    "macro score",
++    "spending quotient",
++    "sq",
++    "leaks",
++    "leak ledger",
++    "supply blocked",
++    "floating minerals",
++    "injects",
++    "chrono",
++    "mules",
++    "fix this first",
++    "does macro win you games",
++    "where macro collapses",
++    "score older games",
++    "backfill",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "[Macro](/app/macro) looks at your economy across all the games the filter bar lets through. It answers: how clean is my macro, which mistake costs me the most, and does fixing it actually win games.",
++    },
++    { type: "heading", text: "The macro score", anchor: "macro-score" },
++    {
++      type: "paragraph",
++      text: "Every synced game gets a macro score from 0 to 100. It starts from your **spending quotient** (SQ), a standard measure of how well you keep your money spent as your income grows, then takes points off for time spent supply blocked, for missed race mechanics (injects, Chrono Boost or MULEs) and for floating resources. Roughly: 75 and up is strong, 50 to 74 is decent, under 50 leaves a lot on the table.",
++    },
++    { type: "heading", text: "What's on the page", anchor: "cards" },
++    {
++      type: "table",
++      head: ["Card", "What it tells you"],
++      rows: [
++        ["Average macro score", "Your average score, how many of your games are scored, and your most expensive recurring leaks."],
++        ["Fix this first", "The single leak that costs you the most, how often it happens, about how many minerals it costs per game, and whether it's getting better."],
++        ["Does macro win you games?", "Your win rate for each band of macro score. A rising line means better macro is paying off."],
++        ["Where macro collapses", "Your average score and win rate by matchup, game length and build, so you can see where your macro slips."],
++        ["Leak ledger", "Every leak priced in minerals, with your win rate in games with and without it."],
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Click any row or band to see the games behind it, then open one to see that game's own macro breakdown.",
++    },
++    { type: "heading", text: "Score your older games", anchor: "backfill" },
++    {
++      type: "paragraph",
++      text: "Games synced before macro scoring existed have no score. When some are missing, a **Score N older games** button appears at the top. It asks the desktop app on your PC to read those replays again, so the app has to be running and the replays still on your PC. The scores fill in as each game is done.",
++    },
++    { type: "heading", text: "How much data it needs", anchor: "sample-size" },
++    {
++      type: "list",
++      items: [
++        "One game's score tells you about that game. Your average and the leak ledger start to mean something after 10 or more scored games.",
++        "*Fix this first* compares your recent scored games with the ones before, so its trend needs a steady stream of new games.",
++        "A band or segment with only a few games can show an extreme win rate. Check its game count before acting on it.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "The score and every leak are computed from your replays with fixed rules, never AI.",
++    },
++  ],
++  related: ["game-page", "trends", "reading-the-charts", "analyzer-filters"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/maps.ts b/apps/web/lib/help/articles/analyzer/maps.ts
+new file mode 100644
+index 00000000..57b67903
+--- /dev/null
++++ b/apps/web/lib/help/articles/analyzer/maps.ts
+@@ -0,0 +1,68 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "maps",
++  title: "Maps: your record on each map and matchup",
++  summary:
++    "Your win rate in each matchup and on each map, split by matchup, with your recent form, so you can see your strong and weak maps.",
++  category: "analyzer",
++  audience: "player",
++  signedInOnly: true,
++  order: 7,
++  keywords: [
++    "maps",
++    "map stats",
++    "map win rate",
++    "matchups",
++    "pvz",
++    "tvz",
++    "zvp",
++    "map pool",
++    "veto",
++    "best map",
++    "worst map",
++    "recent form",
++    "map preview",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "[Maps](/app/maps) answers: which matchups and maps go my way, and which ones don't. It counts the games the filter bar lets through, so set the date range to the current season to see this map pool.",
++    },
++    { type: "heading", text: "Matchups", anchor: "matchups" },
++    {
++      type: "paragraph",
++      text: "One row per matchup, such as *vs Z*, with your wins, losses, games and win rate. The squares on the right are your last few results in that matchup, oldest to newest: green for a win, red for a loss.",
++    },
++    { type: "heading", text: "Win rate by map by matchup", anchor: "by-map" },
++    {
++      type: "list",
++      items: [
++        "One block per map with your overall record on it, then a row for each matchup you've played there.",
++        "Sort the maps by **Win rate**, **Games**, **Wins** or **Losses**, and flip the direction with the button next to it.",
++        "Click a map's picture for a larger view of the map.",
++      ],
++    },
++    { type: "heading", text: "Using it to pick vetoes", anchor: "vetoes" },
++    {
++      type: "paragraph",
++      text: "Sort by win rate and look at the bottom of the list for maps you could veto, but only trust a map with enough games behind it. A map you've played twice can sit at 0% or 100% by chance. Narrow the matchup in the filter bar to see your maps for one matchup only.",
++    },
++    { type: "heading", text: "How much data it needs", anchor: "sample-size" },
++    {
++      type: "list",
++      items: [
++        "**Min games** (3 by default) hides matchups and map rows with fewer games. A map shows when at least one of its matchups reaches it, and its overall record still counts every game on it.",
++        "Win rates are colored from 3 games up; below that they stay grey.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Everything here is counted from your replays with fixed rules, never AI. For one opponent's maps, open their [dossier](/help/opponent-dossier).",
++    },
++  ],
++  related: ["trends", "reading-the-charts", "analyzer-filters", "opponent-dossier"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/opponents.ts b/apps/web/lib/help/articles/analyzer/opponents.ts
+new file mode 100644
+index 00000000..de98777b
+--- /dev/null
++++ b/apps/web/lib/help/articles/analyzer/opponents.ts
+@@ -0,0 +1,106 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "opponents",
++  title: "Opponents: everyone you've played",
++  summary:
++    "Read the Opponents list: your record against each player, how accounts of the same player are grouped, what MMR impact and Net MMR mean, and Pulse IDs vs toons.",
++  category: "analyzer",
++  audience: "player",
++  signedInOnly: true,
++  order: 3,
++  keywords: [
++    "opponents",
++    "opponent list",
++    "head to head",
++    "h2h",
++    "record",
++    "group same player",
++    "merge accounts",
++    "mmr impact",
++    "net mmr",
++    "mmr won",
++    "mmr lost",
++    "verified pairs",
++    "last mmr",
++    "pulse id",
++    "sc2pulse",
++    "toon",
++    "toon handle",
++    "barcode",
++    "min games",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "[Opponents](/app/opponents) lists every player you've faced in the games the filter bar lets through, with your record against each one. It answers: who do I play most, who do I beat, who beats me, and who costs me the most MMR.",
++    },
++    { type: "heading", text: "What each column means", anchor: "columns" },
++    {
++      type: "table",
++      head: ["Column", "What it shows"],
++      rows: [
++        ["Opponent", "Their name in your games. When the player behind a barcode name is known, their real name shows next to it."],
++        ["Pulse ID", "Their SC2Pulse ID, or their toon when SC2Pulse doesn't know them yet. See below."],
++        ["W, L, Win rate, Games", "Your record against them."],
++        ["Last MMR", "Their MMR in the most recent game you played against them."],
++        ["Net MMR", "The MMR you gained or lost against them in total, from verified pairs."],
++        ["MMR won, MMR lost", "The two halves of Net MMR: all the MMR you gained against them, and all you lost."],
++        ["Last", "When you last played them."],
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Click a column header to sort by it; click again to reverse. Click a row to open that opponent's dossier.",
++    },
++    { type: "heading", text: "Group same player", anchor: "group-same-player" },
++    {
++      type: "paragraph",
++      text: "Many players have more than one account: other regions, smurfs, renamed accounts. With **Group same player** on, accounts that SC2Pulse links to the same player, or that are confirmed as the same person, are merged into one row with their combined record. Expand the row to see each account. Turn it off to see every account on its own row. The choice is remembered on this device, and the dossier follows it.",
++    },
++    { type: "heading", text: "MMR impact", anchor: "mmr-impact" },
++    {
++      type: "paragraph",
++      text: "**Opponent MMR impact** at the top of the page names the players you've won the most MMR from and lost the most MMR to. The **MMR impact** menu next to the search box narrows the list: **Verified pairs only** shows opponents with at least one measured MMR change, **You gained overall** and **They gained overall** split them by Net MMR.",
++    },
++    { type: "heading", text: "Net MMR and verified pairs", anchor: "net-mmr" },
++    {
++      type: "paragraph",
++      text: "Your replays record your MMR at the start of each ranked game. The change from one game is your MMR at the start of the next ranked game minus your MMR at the start of this one. That pair of games is a **verified pair** when both are ranked 1v1, on the same account, with the same race, one right after the other in your synced replays.",
++    },
++    {
++      type: "list",
++      items: [
++        "A game without a following ranked game (your latest game, or the last game before a gap) has no measured change yet.",
++        "A pair whose change is bigger than 150 MMR is left out: something happened in between that the replays don't show.",
++        "Net MMR adds up every verified change against one opponent. The number under it is how many pairs it comes from; a dash means none yet.",
++      ],
++    },
++    { type: "heading", text: "Pulse ID or toon", anchor: "pulse-id" },
++    {
++      type: "list",
++      items: [
++        "A **toon** is the account ID inside the replay, such as `1-S2-1-267727`: region, realm and account number. Every replay has one.",
++        "A **Pulse ID** is the player's ID on [SC2Pulse](https://sc2pulse.nephest.com/sc2/), the public ladder site. It follows the player across name changes, and it brings their current MMR, league and linked accounts.",
++        "SC2 Tools looks up each opponent's Pulse ID from their toon. Until it's found the column shows the toon. If it stays missing, open the dossier and see [Opponent dossier](/help/opponent-dossier).",
++      ],
++    },
++    { type: "heading", text: "How much data it needs", anchor: "sample-size" },
++    {
++      type: "list",
++      items: [
++        "**Min games** hides opponents you've played fewer times than the number you pick. Set it to 1 to see everyone.",
++        "A win rate over 1 or 2 games says little. Win rates are colored only from 3 games up; below that they stay grey.",
++        "Net MMR needs verified pairs, so opponents from your oldest replays, or from unranked games, can show none.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Everything here is computed from your replays with fixed rules, never AI. For one player in depth, see [Opponent dossier](/help/opponent-dossier).",
++    },
++  ],
++  related: ["opponent-dossier", "analyzer-filters", "reading-the-charts", "opponent-scouting"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/reading-the-charts.ts b/apps/web/lib/help/articles/analyzer/reading-the-charts.ts
+new file mode 100644
+index 00000000..90e7270f
+--- /dev/null
++++ b/apps/web/lib/help/articles/analyzer/reading-the-charts.ts
+@@ -0,0 +1,99 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "reading-the-charts",
++  title: "Reading the charts: colors, sample sizes and Min games",
++  summary:
++    "How to read any table or chart in the analyzer: what the win-rate colors mean, how many games a number needs before you trust it, and what Min games does.",
++  category: "analyzer",
++  audience: "player",
++  signedInOnly: true,
++  order: 11,
++  keywords: [
++    "charts",
++    "graphs",
++    "colors",
++    "colours",
++    "green",
++    "red",
++    "grey",
++    "win rate color",
++    "sample size",
++    "small sample",
++    "not enough data",
++    "min games",
++    "minimum games",
++    "50% line",
++    "coin flip",
++    "tooltip",
++    "time zone",
++    "no games match",
++    "how are stats calculated",
++    "ai",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "Every table and chart in the analyzer is counted from your own replays with fixed rules, never AI. The same games always give the same numbers, and a number you can click always lists the games behind it.",
++    },
++    { type: "heading", text: "Win-rate colors", anchor: "colors" },
++    {
++      type: "list",
++      items: [
++        "Win rates run from red (around 30% and below) through amber (around 50%) to green (around 65% and above).",
++        "A win rate over fewer than 3 games stays **grey**, whatever it is: 1 win from 1 game isn't really 100%.",
++        "In grids such as heatmaps, a fainter cell has fewer games behind it.",
++      ],
++    },
++    { type: "heading", text: "How many games is enough?", anchor: "sample-size" },
++    {
++      type: "paragraph",
++      text: "A win rate settles slowly. Over 5 games, one extra win moves it by 20 points; over 50 games, by 2. As a rule of thumb:",
++    },
++    {
++      type: "table",
++      head: ["Games", "How to read the win rate"],
++      rows: [
++        ["1 to 4", "A hint at most. Look at the games themselves."],
++        ["5 to 19", "A direction. Compare it with something that has more games."],
++        ["20 or more", "A result you can act on, especially when it stays the same over time."],
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "So always read the game count next to a percentage. Most rows show it, and most charts show it when you hover or tap a point.",
++    },
++    { type: "heading", text: "Min games", anchor: "min-games" },
++    {
++      type: "paragraph",
++      text: "**Min games** hides rows with fewer games than the number you pick: 1, 3, 5, 10, 20 or your own number. It's on Opponents, Strategies, Maps and Builds, and each section remembers its own setting on this device. Raise it to see only results you can trust; set it to 1 to see everything. If that hides every row, the page says so and offers to lower it to 1.",
++    },
++    { type: "heading", text: "The 50% line and MMR charts", anchor: "mmr-charts" },
++    {
++      type: "list",
++      items: [
++        "A 50% line marks a coin flip. Above it you win more than you lose.",
++        "Charts by MMR put games into MMR ranges and skip ranges with fewer games than Min games, so a line can have gaps.",
++        "MMR comes from the replay itself, so unranked games and games without an MMR aren't on MMR charts.",
++      ],
++    },
++    { type: "heading", text: "Dates and times", anchor: "dates" },
++    {
++      type: "paragraph",
++      text: "Days, weeks and calendars use your computer's time zone, so a late-night session counts on the day you played it.",
++    },
++    { type: "heading", text: "Empty or missing", anchor: "empty" },
++    {
++      type: "list",
++      items: [
++        "*No games match these filters* means the filters really left nothing. Check the Active filters row under the filter bar; see [Filters](/help/analyzer-filters).",
++        "*Not enough games yet* or *Not enough data* means there are games, just too few for that chart to say something fair.",
++        "*Couldn't load* with a **Retry** button means the request failed, not that you have no data. See [Something went wrong](/help/something-went-wrong).",
++      ],
++    },
++  ],
++  related: ["analyzer-filters", "today", "opponents", "something-went-wrong"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/replays.ts b/apps/web/lib/help/articles/analyzer/replays.ts
+new file mode 100644
+index 00000000..3af01852
+--- /dev/null
++++ b/apps/web/lib/help/articles/analyzer/replays.ts
+@@ -0,0 +1,80 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "replays",
++  title: "Replays: your game history",
++  summary:
++    "Search every synced game, open its analysis, download the original replay or jump to your stream at that moment, and share your replay archive if you want to.",
++  category: "analyzer",
++  audience: "player",
++  signedInOnly: true,
++  order: 9,
++  keywords: [
++    "replays",
++    "replay archive",
++    "game history",
++    "match history",
++    "search games",
++    "download replay",
++    "sc2replay",
++    "vod",
++    "stream link",
++    "macro breakdown",
++    "share replay page",
++    "public replays",
++    "newer",
++    "older",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "[Replays](/app/replays) lists every synced game, newest first, 25 to a page. It's where you find a specific game to review.",
++    },
++    { type: "heading", text: "Find a game", anchor: "find" },
++    {
++      type: "list",
++      items: [
++        "Search by player, map, build or strategy. Narrow it with the **result** and **matchup** menus, or show the oldest games first.",
++        "The filter bar above applies too: date range, region, ladder or custom games, 1v1 or team games, and game length. **Reset** clears only the search and menus on this page.",
++        "Use **Newer** and **Older** at the bottom to page through.",
++      ],
++    },
++    { type: "heading", text: "What each row shows", anchor: "rows" },
++    {
++      type: "list",
++      items: [
++        "The result, when it was played, the matchup and map, your build and their strategy, and the game's length, MMR and macro score.",
++        "**Streams:** when you or your opponent streamed the game and the recording is known, a link jumps to that moment in the recording.",
++        "Open the replay analysis for the full game page, or the macro breakdown for that game's economy in a window.",
++      ],
++    },
++    { type: "heading", text: "Download the original replay", anchor: "download" },
++    {
++      type: "paragraph",
++      text: "Each row, and each game page, has a download button for the original .SC2Replay file, when the file was kept as the game synced. A game synced before original files were kept has no file to download yet: run **Re-sync** in the desktop app to upload it again, as long as the replay is still on your PC.",
++    },
++    { type: "heading", text: "Share your replay archive", anchor: "share" },
++    {
++      type: "steps",
++      items: [
++        "Press **Share replay page** at the top of the page.",
++        "Read **Exactly what visitors can see**: every synced game, not only the ones in your current filters, with maps, results, names, races, MMR, builds, macro scores, stream links and the original files to download.",
++        "Press **Turn on and copy link**. Send the link to a teammate, coach or your viewers.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Visitors need to sign in to open the full analysis of a game. Press **Turn off sharing** at any time to close the page and stop new downloads. Your replay page keeps the same address if you turn it on again later.",
++    },
++    {
++      type: "callout",
++      tone: "warning",
++      title: "Original replays contain more than the stats",
++      text: "An .SC2Replay file includes both players' names and account details and the in-game chat. Only share your archive if you're comfortable with that.",
++    },
++  ],
++  related: ["game-page", "public-profile", "my-game-didnt-show-up", "analyzer-filters"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/strategies.ts b/apps/web/lib/help/articles/analyzer/strategies.ts
+new file mode 100644
+index 00000000..9cbd5a1d
+--- /dev/null
++++ b/apps/web/lib/help/articles/analyzer/strategies.ts
+@@ -0,0 +1,77 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "strategies",
++  title: "Strategies: your builds against their openings",
++  summary:
++    "Which openings you beat and which beat you, how each of your builds does against each of theirs, and how those results change with MMR.",
++  category: "analyzer",
++  audience: "player",
++  signedInOnly: true,
++  order: 4,
++  keywords: [
++    "strategies",
++    "opponent strategy",
++    "opener",
++    "opening",
++    "build vs strategy",
++    "matchup matrix",
++    "heatmap",
++    "best vs",
++    "worst vs",
++    "my build",
++    "opp strategy",
++    "win rate by mmr",
++    "cheese",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "[Strategies](/app/strategies) answers two questions: which of my opponents' openings do I struggle against, and which of my builds is the right answer to each one. Openings are named from the replay with fixed rules, the same names as [Build definitions](/definitions).",
++    },
++    { type: "heading", text: "Two views", anchor: "views" },
++    {
++      type: "list",
++      items: [
++        "**Build vs strategy** (the default): your build on one side, their opening on the other, with your record for each pairing. Show it as a **table** or a **heatmap**; greener cells are better for you.",
++        "**By opponent strategy**: one card per opening you've faced, with your win rate and record against it. The cards at the top name the opening you've seen most, and your best and worst results.",
++      ],
++    },
++    { type: "heading", text: "Drill in", anchor: "drill-in" },
++    {
++      type: "list",
++      items: [
++        "Click a card, cell or row to see the games behind it. For a build and opening pair you also get a side-by-side of what you typically do and what they typically do. Press **back to strategies** to return.",
++        "Use **My race**, **My build**, **Opp race** and **Opp strategy** at the top to narrow the whole analyzer to those games.",
++      ],
++    },
++    {
++      type: "callout",
++      tone: "warning",
++      title: "These picks apply everywhere",
++      text: "**My build** and **Opp strategy** filter every section, not just this one, until you clear them. Their chips in the Active filters row say *set in Strategies*. See [Filters](/help/analyzer-filters).",
++    },
++    { type: "heading", text: "Results by MMR", anchor: "by-mmr" },
++    {
++      type: "paragraph",
++      text: "**Win rate by MMR — opponent strategies** draws one line per opening, with the opponent's MMR along the bottom and the 50% line marking a coin flip. **Build × Strategy heatmap by MMR** shows your build and opening pairings within one MMR range at a time.",
++    },
++    { type: "heading", text: "How much data it needs", anchor: "sample-size" },
++    {
++      type: "list",
++      items: [
++        "**Min games** (3 by default) hides openings and pairings you've seen fewer times. Lower it to 1 to see everything, but treat 1 or 2 games as a hint, not a result.",
++        "**Best vs** and **Worst vs** only consider openings that reach the Min games number. *Not enough data* means none do yet.",
++        "In the MMR charts, MMR ranges with fewer games than Min games are skipped instead of drawn from a tiny sample.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Want to track your own version of a build? Make it a [custom build](/help/custom-builds). Planned a build but the replay named it differently? Use [Build check-in](/help/build-check-in).",
++    },
++  ],
++  related: ["builds", "custom-builds", "analyzer-filters", "reading-the-charts"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/today.ts b/apps/web/lib/help/articles/analyzer/today.ts
+new file mode 100644
+index 00000000..9942e2a3
+--- /dev/null
++++ b/apps/web/lib/help/articles/analyzer/today.ts
+@@ -0,0 +1,94 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "today",
++  title: "Today: your between-games view",
++  summary:
++    "What Today shows: the game you're playing, today's games, your streak and MMR, the Daily Pulse insights and the Ladder Pulse briefing on your latest replay.",
++  category: "analyzer",
++  audience: "player",
++  signedInOnly: true,
++  order: 1,
++  keywords: [
++    "today",
++    "dashboard",
++    "home",
++    "kpi",
++    "games today",
++    "win rate",
++    "active streak",
++    "games in range",
++    "mmr",
++    "live game",
++    "daily pulse",
++    "ladder pulse",
++    "daily replay",
++    "recent form",
++    "default tab",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "[Today](/app) is the page SC2 Tools opens on. It answers the questions you have between games: how is today going, am I on a streak, where is my MMR, and what did the last game tell me. Everything updates by itself a few seconds after each replay syncs.",
++    },
++    { type: "heading", text: "The live game", anchor: "live-game" },
++    {
++      type: "paragraph",
++      text: "While you're in a game, a card at the top shows the matchup, your opponent and the game clock. It comes from the desktop app on your gaming PC, so it only appears while the app is running, and it goes away when you're back in the menus.",
++    },
++    { type: "heading", text: "The cards", anchor: "cards" },
++    {
++      type: "table",
++      head: ["Card", "What it counts"],
++      rows: [
++        ["Games today", "How many games you've played today, by your own clock."],
++        ["Win rate", "Your win rate over the timeframe picked in the menu next to its title. It has its own timeframe and ignores the date range in the filter bar."],
++        ["Active streak", "Your current run of wins or losses, from your latest games."],
++        ["Games in range", "Every game the filter bar lets through. Its note says which filters apply."],
++        ["MMR", "Your current ladder rating from SC2Pulse, for the Pulse IDs in [Settings → Profile](/settings?tab=profile). It ignores filters."],
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Exactly which filters each card follows is in [Filters: date, matchup, region and more](/help/analyzer-filters).",
++    },
++    { type: "heading", text: "Daily Pulse", anchor: "daily-pulse" },
++    {
++      type: "paragraph",
++      text: "A strip of short insights picked from your own games, with a fresh mix every day: yesterday's session, a streak, how close you are to your MMR peak, a build on the rise, a nemesis, a map edge, a milestone. Open a card to jump to the section with the full story. Press the strip's header to open or close it; the choice is remembered on this device.",
++    },
++    { type: "heading", text: "Ladder Pulse", anchor: "ladder-pulse" },
++    {
++      type: "list",
++      items: [
++        "**Your latest replay:** your opener, what the opponent showed, the MMR change, the macro score and your last few results. Click through to the game page.",
++        "**Daily replay:** one of your games picked for review each day, the same game all day.",
++        "**Recent form:** how your latest games went in the matchup or with the build you just played.",
++        "**Across SC2 Tools:** how often the opener you just faced is being played on the ladder right now.",
++      ],
++    },
++    { type: "heading", text: "How much data it needs", anchor: "sample-size" },
++    {
++      type: "list",
++      items: [
++        "The cards work from your first game. A win rate over a handful of games swings a lot, so read it together with the number of games.",
++        "Daily Pulse only shows a card when your games support it. With few games, some days have fewer cards.",
++        "Ladder Pulse needs at least one synced replay. Its MMR change needs two ranked games in a row on the same account and race.",
++      ],
++    },
++    {
++      type: "callout",
++      tone: "info",
++      title: "Where the numbers come from",
++      text: "Every number here is computed from your replays with fixed rules, never AI. The same games always give the same numbers.",
++    },
++    {
++      type: "paragraph",
++      text: "Prefer to land on another section? Pick it under **Default tab** in [Settings → Misc](/settings?tab=misc).",
++    },
++  ],
++  related: ["analyzer-filters", "dashboard-and-analyzer", "reading-the-charts", "game-page"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/analyzer/trends.ts b/apps/web/lib/help/articles/analyzer/trends.ts
+new file mode 100644
+index 00000000..1872bacd
+--- /dev/null
++++ b/apps/web/lib/help/articles/analyzer/trends.ts
+@@ -0,0 +1,80 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "trends",
++  title: "Trends: how you're doing over time",
++  summary:
++    "Your win rate and MMR over time, matchup by matchup, when you play best, how game length changes results, and an explorer for your own questions.",
++  category: "analyzer",
++  audience: "player",
++  signedInOnly: true,
++  order: 5,
++  keywords: [
++    "trends",
++    "win rate over time",
++    "mmr progression",
++    "mmr chart",
++    "peak",
++    "net mmr by matchup",
++    "opponent mmr",
++    "momentum",
++    "session patterns",
++    "time of day",
++    "game length",
++    "activity calendar",
++    "map performance",
++    "explore performance",
++    "fingerprint",
++    "day week month",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "[Trends](/app/trends) shows how your results move over time, for the games the filter bar lets through. It answers: am I improving, in which matchup, at what time of day do I play best, and do long games go my way.",
++    },
++    { type: "heading", text: "What's on the page", anchor: "charts" },
++    {
++      type: "table",
++      head: ["Chart", "What it answers"],
++      rows: [
++        ["Games played, Win rate", "How much you play and how often you win, per day, week or month."],
++        ["Win rate by matchup over time", "Which matchup is getting better or worse."],
++        ["MMR progression", "Your rating game by game, with your peak and low marked, and your best and worst days."],
++        ["Net MMR by matchup", "How much MMR each matchup has won or cost you. Click a bar to see the opponents behind it."],
++        ["Win rate by opponent MMR", "How you do against weaker, equal and stronger players."],
++        ["Session patterns", "Whether your results hold up through a long session."],
++        ["Time played by matchup, Win rate by game length", "How long your games run, and whether short or long games go your way."],
++        ["Activity by time of day, Activity calendar", "When you play, and when you play best."],
++        ["Map performance over time", "Which maps are trending up or down for you."],
++        ["Explore performance", "Ready-made analyses you pick from a list, such as comparing two periods, first meetings against rematches, or whether a worker or army lead at 5 minutes turns into wins. Press **Load analyses** to open it."],
++        ["Fingerprint", "Your playstyle in each matchup, compared to common player archetypes."],
++      ],
++    },
++    { type: "heading", text: "Drill in", anchor: "drill-in" },
++    {
++      type: "list",
++      items: [
++        "Use **Activity grouping** at the top to switch between **Day**, **Week** and **Month**. Days show detail; months smooth out the noise.",
++        "Hover or tap a point to see its numbers. Where a chart offers it, click a bar or a cell to list the games behind it.",
++        "Narrow the date range, matchup or region in the filter bar and every chart follows.",
++      ],
++    },
++    { type: "heading", text: "How much data it needs", anchor: "sample-size" },
++    {
++      type: "list",
++      items: [
++        "A period with only a few games can swing from 0% to 100%. Look at the game count before reading much into one point.",
++        "MMR charts use ranked 1v1 games with an MMR in the replay. Net MMR uses verified pairs: see [Net MMR and verified pairs](/help/opponents).",
++        "Charts that need detailed replay measurements leave out games without them instead of guessing.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Every chart is computed from your replays with fixed rules, never AI. New to reading these charts? See [Reading the charts](/help/reading-the-charts).",
++    },
++  ],
++  related: ["reading-the-charts", "today", "opponents", "analyzer-filters"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/builds/practice-ghost-build.ts b/apps/web/lib/help/articles/builds/practice-ghost-build.ts
+new file mode 100644
+index 00000000..a399cc5e
+--- /dev/null
++++ b/apps/web/lib/help/articles/builds/practice-ghost-build.ts
+@@ -0,0 +1,103 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "practice-ghost-build",
++  title: "Practice a build with Ghost Build",
++  summary:
++    "Save a timed build from one of your games, follow it step by step on an overlay while you play, and get a grade on how closely you hit each timing.",
++  category: "builds",
++  audience: "player",
++  signedInOnly: true,
++  order: 40,
++  keywords: [
++    "ghost build",
++    "ghost",
++    "practice",
++    "build order practice",
++    "timings",
++    "coach",
++    "voice coach",
++    "save for",
++    "matchup build coach",
++    "grade",
++    "drift",
++    "first divergence",
++    "homework",
++    "random opponents",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "Ghost Build is a practice loop for a build order. You pick a timed build for a matchup, follow its next steps on an overlay while you play, then see a grade on the game page for how closely you hit each timing. It runs on your own games and your own timings; nothing is guessed.",
++    },
++    { type: "heading", text: "1. Save a timed build", anchor: "save" },
++    {
++      type: "steps",
++      items: [
++        "Open a game where you played the build well, ideally a clean win.",
++        "On **Build orders**, press **Save for** and the matchup, such as **Save for PvT**. The build's steps and their timings are saved for that matchup only.",
++        "Do the same for any other matchup you want to practice. Each of the nine matchups has its own slot.",
++      ],
++    },
++    { type: "heading", text: "2. Choose what Ghost coaches", anchor: "assign" },
++    {
++      type: "steps",
++      items: [
++        "Open [Settings → Overlay](/settings?tab=overlay) and go to **Ghost Build coach**.",
++        "Under **Matchup build coach**, pick one saved build for each matchup you want coached. The badge shows how many of the nine are ready.",
++        "Your choices are stored in this browser and built into the Ghost Build widget's URL, so copy the URL again after any change.",
++      ],
++    },
++    { type: "heading", text: "3. Put it on screen", anchor: "overlay" },
++    {
++      type: "steps",
++      items: [
++        "In **OBS Browser Source URLs** on the same page, find **Ghost Build coach** and copy its URL. Turn on **Voice coach** next to it first if you want each step read out a few seconds before it's due.",
++        "Add the URL to OBS as its own Browser Source. It's separate from the all-in-one overlay.",
++        "Between games it shows that a build is armed. When a game starts, it waits for both races, then shows the previous, current and next step against the game clock, with a drift chip saying how early or late you are.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Don't stream? You can still keep the source open in a browser window on a second screen. See [OBS overlay setup](/help/obs-overlay-setup) for adding a Browser Source.",
++    },
++    { type: "heading", text: "4. Read your grade", anchor: "grade" },
++    {
++      type: "paragraph",
++      text: "After the game, the game page shows a **Ghost Build grade** card when a build is set for that matchup in this browser.",
++    },
++    {
++      type: "table",
++      head: ["Grade", "What it takes"],
++      rows: [
++        ["S", "Every step done, on average within 5 seconds of its time, never more than 15 seconds off."],
++        ["A", "At least 90% of the steps, on average within 10 seconds, never more than 30 seconds off."],
++        ["B", "At least 75% of the steps, on average within 20 seconds."],
++        ["C", "At least half the steps, on average within 40 seconds."],
++        ["D", "Anything less."],
++      ],
++    },
++    {
++      type: "list",
++      items: [
++        "**Steps hit**, **Avg drift** and **Max drift** show how close you were.",
++        "**First divergence** names the first step you skipped or did more than 30 seconds off its time. That's usually where to look in the replay.",
++        "**Per-step breakdown** lists every step: green within 5 seconds, amber within 15, red beyond that or missed.",
++        "**Clear** and the matchup, under the card, stops grading that matchup in this browser.",
++      ],
++    },
++    { type: "heading", text: "Good to know", anchor: "limits" },
++    {
++      type: "list",
++      items: [
++        "Ghost pauses for the whole game against a Random opponent, so it never coaches the wrong matchup once their race shows.",
++        "The overlay needs the desktop app running to follow the game clock.",
++        "Your Ghost builds live in this browser. On another computer, save them again from a game, or reuse the copied URL there.",
++      ],
++    },
++  ],
++  related: ["custom-builds", "game-page", "randomizer", "obs-overlay-setup"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/builds/randomizer.ts b/apps/web/lib/help/articles/builds/randomizer.ts
+new file mode 100644
+index 00000000..4fd4059f
+--- /dev/null
++++ b/apps/web/lib/help/articles/builds/randomizer.ts
+@@ -0,0 +1,87 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "randomizer",
++  title: "Build randomizer: let a draw pick your build",
++  summary:
++    "Choose which builds can come up in each matchup and how likely each one is, and an animated draw picks your build on stream when a new game loads.",
++  category: "builds",
++  audience: "streamer",
++  signedInOnly: true,
++  order: 50,
++  keywords: [
++    "randomizer",
++    "build randomizer",
++    "build roulette",
++    "random build",
++    "spin",
++    "roll",
++    "weights",
++    "custom weights",
++    "opening gateway draw",
++    "1 gate",
++    "2 gate",
++    "sound effects",
++    "live preview",
++    "roll now",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "The build randomizer is an overlay widget that draws a build for you, and your viewers, at the start of each new game. You decide which builds can come up in each matchup and how often.",
++    },
++    { type: "heading", text: "Set it up", anchor: "setup" },
++    {
++      type: "steps",
++      items: [
++        "Open [Settings → Randomizer](/settings?tab=randomizer) and pick a matchup.",
++        "Turn on **Enable randomizer for this matchup**.",
++        "Tick the builds it may draw: **Catalog builds** that come with SC2 Tools, and **Your custom builds** that fit the matchup. Search to find one.",
++        "Leave **Use custom weights** off for an equal chance per build, or turn it on and use the sliders to make some builds come up more often.",
++        "Press **Save changes**. Repeat for every matchup you want drawn.",
++        "In [Settings → Overlay](/settings?tab=overlay), copy the **Build randomizer** URL into an OBS Browser Source, or use the all-in-one overlay that already includes it.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Terran and Zerg matchups need your own builds: the catalog covers Protoss for now. Make them in your [build library](/builds) (**Custom builds** in the menu) with the right race and opponent race.",
++    },
++    { type: "heading", text: "Opening Gateway draw (Protoss)", anchor: "gateway-draw" },
++    {
++      type: "paragraph",
++      text: "After a 1 Gate or 2 Gate build wins the draw and its reveal clears, the widget can draw one opening unit (1 Gate) or two (2 Gate). Each build keeps its own unit odds.",
++    },
++    { type: "heading", text: "Try it before you go live", anchor: "preview" },
++    {
++      type: "list",
++      items: [
++        "**Live preview** at the bottom of the page plays the full sequence for the selected matchup, exactly as it will look in OBS.",
++        "**Sound effects** adds wheel ticks and a winner fanfare to the reveal, with its own volume. They play in OBS and in the preview.",
++        "The **Test** button next to the widget in Settings → Overlay plays a sample draw in OBS.",
++      ],
++    },
++    { type: "heading", text: "During a game", anchor: "during-a-game" },
++    {
++      type: "list",
++      items: [
++        "When the desktop app reports a new game in a matchup you've set up, the widget draws a build and reveals it, then clears for the game.",
++        "With [Build check-in](/help/build-check-in) asking at the loading screen, the card reads *Randomizer will roll*. Pick a build yourself and the draw is skipped for that game; press **Roll now** to draw right away, or wait a few seconds.",
++        "The drawn build is marked **Rolled** and is suggested as your plan after the game. It only counts toward a build's record once you confirm the check-in.",
++      ],
++    },
++    { type: "heading", text: "If it doesn't spin", anchor: "troubleshooting" },
++    {
++      type: "list",
++      items: [
++        "Check that you pressed **Save changes** and that this exact matchup is enabled with at least one build ticked.",
++        "Games against Random have no known matchup at the start, so there's no draw.",
++        "The desktop app must be running: the draw starts when it reports the new game.",
++      ],
++    },
++    { type: "settingsLink", label: "Open Settings → Randomizer", href: "/settings?tab=randomizer" },
++  ],
++  related: ["build-check-in", "practice-ghost-build", "obs-overlay-setup", "custom-builds"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/desktop-app/desktop-app-overview.ts b/apps/web/lib/help/articles/desktop-app/desktop-app-overview.ts
+new file mode 100644
+index 00000000..d435d1f2
+--- /dev/null
++++ b/apps/web/lib/help/articles/desktop-app/desktop-app-overview.ts
+@@ -0,0 +1,109 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "desktop-app-overview",
++  title: "The desktop app: window, tray and settings",
++  summary:
++    "What the SC2 Tools desktop app does on your PC, what each page of its window shows, how to pause or re-sync, and where its settings and logs are.",
++  category: "desktop-app",
++  audience: "all",
++  order: 1,
++  keywords: [
++    "desktop app",
++    "agent",
++    "tray",
++    "system tray",
++    "window",
++    "dashboard",
++    "recent uploads",
++    "activity log",
++    "logs",
++    "pause",
++    "resume",
++    "re-sync",
++    "resync",
++    "quit",
++    "close",
++    "updates",
++    "auto update",
++    "start with windows",
++    "player handle",
++    "sync date range",
++    "settings",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "The desktop app watches your StarCraft II replay folders. A few seconds after each game it reads the new replay on your PC and syncs the result to your account: build orders, timings, macro, MMR and the original file. While you play it also tells SC2 Tools about the game in progress, which drives the live card on [Today](/app), your OBS overlays and build check-in. Not installed yet? See [Install and link the desktop app](/help/install-and-pair).",
++    },
++    { type: "heading", text: "The window", anchor: "window" },
++    {
++      type: "table",
++      head: ["Page", "What it's for"],
++      rows: [
++        ["Dashboard", "Status (Active, Paused, Pairing or Error), how many replays are synced and queued, the last upload, and the main buttons. While the app isn't linked yet, it also shows your pairing code."],
++        ["Recent uploads", "The replays the app handled most recently and how each one went. Double-click a row to show the file in Explorer."],
++        ["Activity log", "What the app is doing right now, with a filter for warnings and errors and **Open log folder**."],
++        ["Settings", "Replay folders, what to sync, start-up and updates, map replay capture, build check-in and OBS scene switching."],
++        ["Streams", "Set one stream title for your connected YouTube, Twitch and Kick accounts."],
++      ],
++    },
++    { type: "heading", text: "Window and tray", anchor: "tray" },
++    {
++      type: "list",
++      items: [
++        "Closing the window keeps the app running in the system tray, next to the clock, and it keeps syncing.",
++        "Double-click the tray icon, or right-click it and choose **Open agent window**, to bring the window back.",
++        "The tray menu also has **Open dashboard** (opens SC2 Tools in your browser), **Build check-in…**, **Pause syncing**, **Re-sync from scratch**, **Choose replay folder…**, **Check for updates** and **Open log folder**.",
++        "To stop the app completely, choose **Quit** in the tray menu.",
++      ],
++    },
++    { type: "heading", text: "Pause or re-sync", anchor: "pause-and-resync" },
++    {
++      type: "list",
++      items: [
++        "**Pause syncing** stops uploads but keeps watching your folders. **Resume syncing** uploads everything that waited.",
++        "**Re-sync** uploads every replay the app can see again. Use it after a snapshot restore, after deleting your game history, or when support asks you to. A game is never counted twice, so it's safe; with many replays it can take a while.",
++      ],
++    },
++    { type: "heading", text: "Settings", anchor: "settings" },
++    {
++      type: "table",
++      head: ["Setting", "What it does"],
++      rows: [
++        ["Player handle", "Your in-game name, so the app knows which player is you. Leave it blank to detect it from your replays."],
++        ["Sync date range", "Which replays to upload: **All time**, a season, or a custom range. Pick **Current season** if you have years of old replays and want today's stats first. Replays outside the range are skipped, not deleted."],
++        ["Replay folders", "The folders the app watches. See [Replay folders](/help/replay-folders)."],
++        ["Start-up", "**Run SC2 Tools Agent on Windows startup** and **Start minimised to the system tray**."],
++        ["Updates", "**Install agent updates automatically** is on by default. Turned off, the app only tells you when an update is out, unless the update is required to keep syncing."],
++        ["Map replay", "**Automatically capture map replays** records detailed playback for each new game. It uses a lot of CPU for a few minutes per replay. See [Accurate map playback](/help/game-page-accurate-playback)."],
++        ["Build check-in", "When to ask which build you went for. See [Build check-in](/help/build-check-in)."],
++        ["OBS scene switching", "Switch OBS scenes when a game starts and ends. See [OBS auto scene switching](/help/obs-auto-scene-switching)."],
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Press **Save settings** at the bottom of the page. The map replay and build check-in switches apply straight away.",
++    },
++    {
++      type: "callout",
++      tone: "info",
++      title: "Leave the API address blank",
++      text: "**API base URL** is only for people running their own copy of the SC2 Tools server. Leave it empty to sync to sc2tools.com.",
++    },
++    { type: "heading", text: "Logs", anchor: "logs" },
++    {
++      type: "paragraph",
++      text: "The app writes its log to `%LOCALAPPDATA%\\sc2tools\\logs\\agent.log`. The **Activity log** page shows the latest lines; **Open log folder** opens the folder so you can attach the file when you [report a problem](/help/report-a-problem).",
++    },
++    { type: "heading", text: "Updates", anchor: "updates" },
++    {
++      type: "paragraph",
++      text: "The app checks for new versions on its own and, with automatic updates on, installs them and restarts minimised. **Check for updates** checks right away; the result shows on the Dashboard page. [Settings → Foundation](/settings?tab=foundation) shows which version your PC is running.",
++    },
++  ],
++  related: ["install-and-pair", "replay-folders", "my-game-didnt-show-up", "build-check-in"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/desktop-app/replay-folders.ts b/apps/web/lib/help/articles/desktop-app/replay-folders.ts
+new file mode 100644
+index 00000000..d98e020d
+--- /dev/null
++++ b/apps/web/lib/help/articles/desktop-app/replay-folders.ts
+@@ -0,0 +1,72 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "replay-folders",
++  title: "Replay folders",
++  summary:
++    "Which folders the desktop app watches, why you may have more than one, and how to add, remove or find them again with Auto-detect.",
++  category: "desktop-app",
++  audience: "all",
++  order: 2,
++  keywords: [
++    "replay folder",
++    "replays folder",
++    "multiplayer folder",
++    "accounts folder",
++    "add folder",
++    "auto-detect",
++    "onedrive",
++    "documents",
++    "region",
++    "second account",
++    "smurf",
++    "ptr",
++    "missing games",
++    "folder not found",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "StarCraft II saves each replay under your Documents folder, in a separate folder for every region and account you play on:",
++    },
++    {
++      type: "paragraph",
++      text: "`Documents\\StarCraft II\\Accounts\\<account>\\<region and handle>\\Replays\\Multiplayer`",
++    },
++    {
++      type: "paragraph",
++      text: "The desktop app finds these folders on its own, including Documents folders moved into OneDrive, and keeps looking while it runs. A folder that appears later, for example the first time you play on another region or on the Public Test Realm, is picked up without a restart.",
++    },
++    { type: "heading", text: "Playing on several regions or accounts?", anchor: "several-regions" },
++    {
++      type: "paragraph",
++      text: "Each one has its own folder, and the app watches all of them. If games from one region or account are missing, open the app's **Settings** page and press **Auto-detect** under **Replay folders**: it adds every Replays\\Multiplayer folder it can find and keeps the ones already listed.",
++    },
++    { type: "heading", text: "Add or remove a folder", anchor: "add-or-remove" },
++    {
++      type: "steps",
++      items: [
++        "Open the app window and go to **Settings**.",
++        "Under **Replay folders**, press **Add folder…** and choose a Replays\\Multiplayer folder, for example one on another drive. **Add replay folder…** on the Dashboard page does the same.",
++        "To stop watching a folder, select it and press **Remove selected**. A folder the app found by itself stays unwatched until you add it again or press **Auto-detect**.",
++        "Press **Save settings**.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Removing a folder only stops new uploads from it. Games already synced stay in your account, and nothing is deleted from your PC.",
++    },
++    { type: "heading", text: "If no folder is found", anchor: "not-found" },
++    {
++      type: "list",
++      items: [
++        "Play one game first: StarCraft II only creates the Replays folder after it saves a replay.",
++        "If your Documents folder lives somewhere unusual, add the folder yourself with **Add folder…**.",
++      ],
++    },
++  ],
++  related: ["desktop-app-overview", "my-game-didnt-show-up", "install-and-pair"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/game-page/game-page-accurate-playback.ts b/apps/web/lib/help/articles/game-page/game-page-accurate-playback.ts
+new file mode 100644
+index 00000000..867244c0
+--- /dev/null
++++ b/apps/web/lib/help/articles/game-page/game-page-accurate-playback.ts
+@@ -0,0 +1,79 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "game-page-accurate-playback",
++  title: "Accurate map playback",
++  summary:
++    "Record a game with StarCraft II itself for exact positions, attacks, spells and creep in the map replay: for one game with a button, or for every new game automatically.",
++  category: "game-page",
++  audience: "player",
++  signedInOnly: true,
++  order: 3,
++  keywords: [
++    "accurate playback",
++    "generate accurate playback",
++    "recorded game playback",
++    "recording replay",
++    "map replay capture",
++    "automatically capture map replays",
++    "cpu",
++    "positions",
++    "attacks",
++    "creep",
++    "re-sync",
++    "recording failed",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "A replay file doesn't store where every unit was at every moment, so the standard map replay fills in some positions. **Accurate playback** has the desktop app play the replay with StarCraft II on your PC and record what really happened: every position, attack, spell and creep tumor. The note on the map then reads *Recorded game playback*.",
++    },
++    { type: "heading", text: "What you need", anchor: "requirements" },
++    {
++      type: "list",
++      items: [
++        "The desktop app, version 0.16.11 or newer, running and linked on your PC.",
++        "StarCraft II installed on that PC, and the replay still in its replay folder.",
++        "Some spare CPU: recording runs StarCraft II in the background and can keep your PC busy for several minutes per game.",
++      ],
++    },
++    { type: "heading", text: "Record one game", anchor: "one-game" },
++    {
++      type: "steps",
++      items: [
++        "Open the game page and find **Generate accurate playback** above the map replay. It shows whenever the game's playback isn't fully recorded yet.",
++        "Press it and keep the desktop app open. The button reads *Recording replay…* while it works.",
++        "When the recording is done it uploads, and the map replay switches to the recorded playback. A recording that's already been made is reused, so pressing it again later is quick.",
++      ],
++    },
++    { type: "heading", text: "Record every new game", anchor: "automatic" },
++    {
++      type: "steps",
++      items: [
++        "In the desktop app, open **Settings** and tick **Automatically capture map replays (uses more CPU)** under **Map replay**. It applies straight away.",
++        "Each new game is recorded after it ends, before it syncs.",
++        "For games you already synced, run **Re-sync** once. Games with a saved recording aren't recorded again.",
++      ],
++    },
++    {
++      type: "callout",
++      tone: "warning",
++      title: "Streaming or playing on a slower PC?",
++      text: "Recording uses a lot of CPU for a few minutes after each game. Leave automatic capture off while you stream or play, and use **Generate accurate playback** for the games you want to study.",
++    },
++    { type: "heading", text: "If it doesn't work", anchor: "troubleshooting" },
++    {
++      type: "list",
++      items: [
++        "*Recording failed. Keep the desktop agent open and try again.* The app was closed, or StarCraft II couldn't play the replay. Open the app and press the button again.",
++        "*Recording is still processing.* Large games take longer. Check back in a few minutes; you can leave the page.",
++        "No button at all: the game is already fully recorded. The button only shows on your own game pages.",
++        "Still on *Older replay data*? The game was synced by an old desktop app version. Update the app and run **Re-sync**.",
++      ],
++    },
++  ],
++  related: ["game-page-replay", "game-page", "desktop-app-overview"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/game-page/game-page-replay.ts b/apps/web/lib/help/articles/game-page/game-page-replay.ts
+new file mode 100644
+index 00000000..def063a4
+--- /dev/null
++++ b/apps/web/lib/help/articles/game-page/game-page-replay.ts
+@@ -0,0 +1,91 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "game-page-replay",
++  title: "Map replay: watch a game on the map",
++  summary:
++    "Play a game back on its map on the game page: the controls, the production and build-order panels beside it, notable moments, and what the accuracy note means.",
++  category: "game-page",
++  audience: "player",
++  signedInOnly: true,
++  order: 2,
++  keywords: [
++    "map replay",
++    "replay player",
++    "playback",
++    "play",
++    "pause",
++    "speed",
++    "zoom",
++    "full screen",
++    "fullscreen",
++    "production rail",
++    "build order rail",
++    "notable moments",
++    "music",
++    "limited position data",
++    "older replay data",
++    "estimated creep",
++    "no playback data",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "Under the timeline on the game page, **Map replay** plays the game back on its map: both players' units and buildings, their movement, fights and spells, with both players' army, workers and supply along the top.",
++    },
++    { type: "heading", text: "Play it back", anchor: "controls" },
++    {
++      type: "list",
++      items: [
++        "**Play** and **Pause** start and stop it. **Skip to start** goes back to 0:00.",
++        "The speed button cycles through 1×, 4×, 8× and 16×.",
++        "Drag the position bar to jump anywhere in the game. The marks along it are notable moments, such as fights; click one to jump there.",
++        "The music button plays a soundtrack under the replay, with its own volume.",
++      ],
++    },
++    { type: "heading", text: "Map controls", anchor: "map-controls" },
++    {
++      type: "list",
++      items: [
++        "Use the **Zoom in** and **Zoom out** buttons on the map, or scroll or pinch, to zoom. Drag to move around once zoomed in.",
++        "Double-click the map, or press **Reset zoom**, to see the whole map again.",
++        "**Full screen** fills the screen with the replay; press it again or Esc to leave.",
++      ],
++    },
++    { type: "heading", text: "The panels beside it", anchor: "panels" },
++    {
++      type: "list",
++      items: [
++        "**Production** shows what each player is building and researching at this moment.",
++        "**Build order** lists each player's build so far, following the replay.",
++        "Show or hide either panel from the display settings button on the replay.",
++      ],
++    },
++    { type: "heading", text: "The accuracy note", anchor: "accuracy" },
++    {
++      type: "table",
++      head: ["Note on the map", "What it means"],
++      rows: [
++        ["Recorded game playback", "The game was recorded with StarCraft II itself: positions, attacks and spells are exact."],
++        ["Limited position data", "The replay file only records some positions. Units hold their last known position in between."],
++        ["Older replay data", "This game was synced by an older desktop app. Run **Re-sync** in the app for better positions."],
++        ["partial recording", "The recording stopped before the end of the game."],
++        ["regenerate for attacks", "This recording is older than attack tracking. Record it again to see attacks."],
++        ["estimated creep", "Creep is drawn from where tumors and hatcheries were, not recorded."],
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "For exact playback of a game, see [Accurate map playback](/help/game-page-accurate-playback).",
++    },
++    { type: "heading", text: "No replay on the map?", anchor: "no-playback" },
++    {
++      type: "paragraph",
++      text: "*No playback data for this game* means the game was synced before map playback existed, or its playback hasn't been made yet. Turn on automatic map replays in the desktop app, or press **Generate accurate playback** to record this one game: see [Accurate map playback](/help/game-page-accurate-playback).",
++    },
++  ],
++  related: ["game-page", "game-page-accurate-playback", "desktop-app-overview"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/game-page/game-page.ts b/apps/web/lib/help/articles/game-page/game-page.ts
+new file mode 100644
+index 00000000..b4bc22f3
+--- /dev/null
++++ b/apps/web/lib/help/articles/game-page/game-page.ts
+@@ -0,0 +1,87 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "game-page",
++  title: "The game page: one game in detail",
++  summary:
++    "Everything about one game: the build orders, the timeline, the map replay, your mechanics, why you lost, and the buttons to download, share, check in or save the build.",
++  category: "game-page",
++  audience: "player",
++  signedInOnly: true,
++  order: 1,
++  keywords: [
++    "game page",
++    "game detail",
++    "replay analysis",
++    "build order",
++    "build orders",
++    "timeline",
++    "army value",
++    "mechanics",
++    "macro score",
++    "sq",
++    "apm",
++    "why you lost",
++    "loss autopsy",
++    "save as new build",
++    "share this game",
++    "battle card",
++    "download replay",
++    "ask for a review",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "Click any game, in [Replays](/app/replays), in an opponent's dossier or on [Today](/app), to open its game page. It shows that one game and ignores the filter bar.",
++    },
++    { type: "heading", text: "The header", anchor: "header" },
++    {
++      type: "list",
++      items: [
++        "The result, matchup and map, when it was played, how long it lasted, the MMR, and your opponent, with a link to their dossier.",
++        "**My build** and **Opponent strategy** name the openings the replay shows. **Planned** or **Corrected** means you changed them with [Build check-in](/help/build-check-in).",
++        "**Share this game** saves or shares the game as an image. The download button gets the original .SC2Replay file, and **Ask for a review** asks other players about a moment in the game.",
++        "When you or your opponent streamed the game, a link jumps to that moment in the recording.",
++      ],
++    },
++    { type: "heading", text: "Down the page", anchor: "cards" },
++    {
++      type: "table",
++      head: ["Card", "What it shows"],
++      rows: [
++        ["Build check-in", "Which build you were going for, and the opponent's build if the replay named it wrong."],
++        ["Game timeline", "Both armies, your unspent minerals and your supply over the game, with fights marked along the bottom. Click the chart or a fight, or drag the slider, to read the numbers at that moment."],
++        ["Map replay", "The game played back on the map. See [Map replay](/help/game-page-replay)."],
++        ["Mechanics", "This game's macro score, spending quotient (SQ), APM, supply blocks and your race mechanics. Click a supply block to move the timeline to it."],
++        ["Why you lost", "On a loss: the biggest macro causes, worst first, each with what it cost and when it happened. On a win, this card is a short note instead."],
++        ["Ghost Build grade", "How closely you followed your practice build, when one is set for this matchup. See [Practice a build with Ghost Build](/help/practice-ghost-build)."],
++        ["Build orders", "Both players' build orders side by side, with the time and supply of each step."],
++      ],
++    },
++    { type: "heading", text: "Save the build", anchor: "save-build" },
++    {
++      type: "list",
++      items: [
++        "**Save as new build** on your build order turns this game's opening into a custom build: pick the steps that define it, name it and save. See [Detected builds vs custom builds](/help/custom-builds).",
++        "**Save for** and the matchup, such as **Save for PvZ**, keeps this game's timed build as a practice target for Ghost Build in that matchup.",
++      ],
++    },
++    { type: "heading", text: "When a card is empty", anchor: "empty-cards" },
++    {
++      type: "list",
++      items: [
++        "The timeline, mechanics and build orders come from the replay's detailed data. A game synced by an old version of the desktop app may not have it: run **Re-sync** in the app to read it again.",
++        "*Not enough data to explain this one* on a loss means the rules found no clear macro cause. The loss came from somewhere else, such as a fight or a timing.",
++        "APM needs a game synced with desktop app 0.17.2 or newer.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Every number on this page comes from the replay with fixed rules, never AI.",
++    },
++  ],
++  related: ["game-page-replay", "game-page-accurate-playback", "macro", "build-check-in"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/getting-started/browser-import.ts b/apps/web/lib/help/articles/getting-started/browser-import.ts
+new file mode 100644
+index 00000000..dd65dcbf
+--- /dev/null
++++ b/apps/web/lib/help/articles/getting-started/browser-import.ts
+@@ -0,0 +1,101 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "browser-import",
++  title: "Import replays in your browser",
++  summary:
++    "Add replays to your account without the desktop app, from Windows, Mac, Chromebook or iPad: pick files or a folder, and in Chrome or Edge keep a folder in sync.",
++  category: "getting-started",
++  audience: "player",
++  signedInOnly: true,
++  order: 4,
++  keywords: [
++    "import",
++    "browser import",
++    "upload replays",
++    "no agent",
++    "without the app",
++    "mac",
++    "macos",
++    "chromebook",
++    "ipad",
++    "zip",
++    "folder sync",
++    "sync a replay folder",
++    "sc2replay",
++    "which player are you",
++    "back up original replay files",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "Browser import reads your replays right in the browser tab, with the same analysis as the desktop app, then uploads the results to your account. It is being rolled out: when it's on for your account, Settings has an **Import** tab, and a new account with no games sees it next to the desktop app on [Today](/app).",
++    },
++    { type: "heading", text: "Import replays", anchor: "import" },
++    {
++      type: "steps",
++      items: [
++        "Open **Settings → Import**.",
++        "Press **Choose replays** and pick .SC2Replay files or a .zip of them, or **Choose a folder** for a whole folder. You can also drag files or a folder onto the box.",
++        "Pick **Replays from**: **Last 90 days** (the default) or **All time**. Up to 500 replays go in one run, newest first; run it again for older ones.",
++        "Press **Analyze and upload**. The first run downloads the analyzer (about 8 MB) once. Keep the tab open until it says your games are uploaded.",
++      ],
++    },
++    {
++      type: "list",
++      items: [
++        "If the replays don't make clear which player is you, you're asked **Which player are you?** Pick your name once; it's remembered.",
++        "Games already in your account are skipped, so importing the same folder twice is safe.",
++        "If the upload stops, press **Try again**. Games that made it are not uploaded twice.",
++      ],
++    },
++    { type: "heading", text: "Keep a folder in sync (Chrome and Edge)", anchor: "folder-sync" },
++    {
++      type: "paragraph",
++      text: "In Chrome or Edge, **Folder Sync** remembers your StarCraft II folder. Press **Choose your StarCraft II folder** under Folder Sync (or **Sync a replay folder** in the import box) and pick it once. From then on, each time you open SC2 Tools (at most every 10 minutes), new ladder replays in that folder are analyzed and uploaded. Nothing is ever written to the folder.",
++    },
++    {
++      type: "list",
++      items: [
++        "Press **Sync now** to check right away. After the browser restarts it asks for your OK again: press **Resume sync**.",
++        "**Stop syncing** makes this browser forget the folder. Games already in your account stay.",
++        "Other browsers can't remember a folder. Use **Import a replay folder** to import a whole folder at once; replays imported from it before are skipped next time.",
++      ],
++    },
++    { type: "heading", text: "Where is my replay folder?", anchor: "where-are-my-replays" },
++    {
++      type: "table",
++      head: ["Computer", "Folder"],
++      rows: [
++        ["Windows", "`Documents\\StarCraft II\\Accounts`"],
++        ["Mac", "`~/Library/Application Support/Blizzard/StarCraft II/Accounts`"],
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Pick the **Accounts** folder to include every region and account you play on. On an iPad or phone, copy the replays onto the device first, for example as a .zip in Files.",
++    },
++    { type: "heading", text: "Original replay files", anchor: "backups" },
++    {
++      type: "paragraph",
++      text: "When the import box offers **Also back up original replay files**, it starts ticked: a private copy of each .SC2Replay is kept in your account so you can download it later from the game page. Untick it and the files stay only on your device. Your stats are the same either way.",
++    },
++    { type: "heading", text: "Browser import or the desktop app?", anchor: "browser-or-desktop-app" },
++    {
++      type: "list",
++      items: [
++        "Both give the same stats in every analyzer section.",
++        "Only the desktop app syncs games while you play with no tab open, and only it feeds live overlays, pre-game scouting, OBS scene switching and accurate map playback, because those need StarCraft II running on the same PC.",
++        "Browser import works on a Mac, Chromebook or iPad and needs nothing installed.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "On Windows, the desktop app is the easier choice: see [Install and link the desktop app](/help/install-and-pair).",
++    },
++  ],
++  related: ["install-and-pair", "getting-started", "my-game-didnt-show-up"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/getting-started/getting-started.ts b/apps/web/lib/help/articles/getting-started/getting-started.ts
+index 21d3182e..6d8af0e7 100644
+--- a/apps/web/lib/help/articles/getting-started/getting-started.ts
++++ b/apps/web/lib/help/articles/getting-started/getting-started.ts
+@@ -37,7 +37,7 @@ const article: HelpArticle = {
+       type: "steps",
+       items: [
+         "**Create your account.** [Sign up](/sign-up) on the website. A short setup guide opens right after and walks you through the next steps.",
+-        "**Install the desktop app.** Download it from the [Download](/download) page and install it on the PC you play on (Windows 10 or 11). It watches your replay folder; you never upload anything by hand.",
++        "**Install the desktop app.** Download it from the [Download](/download) page and install it on the PC you play on (Windows 10 or 11). It watches your replay folder; you never upload anything by hand. Step by step: [Install and link the desktop app](/help/install-and-pair).",
+         "**Pair it with your account.** The app opens showing a 6-digit pairing code. Click **Open pairing page**, or go to [Devices](/devices) yourself, and enter the code. The code expires after 10 minutes; if it does, close the app and open it again to get a new one.",
+         "**Play or import a game.** Every ladder game is read automatically a few seconds after it ends and synced to your account. To fill your stats right away, press **Import my history** in the setup checklist on your dashboard to add the replays already on your PC.",
+         "**Read Today.** [Today](/app) is your between-games view: the live game while you play, your session record, streak and MMR, and the Daily Pulse strip with fresh insights from your own games every day. Builds, maps, trends and opponent history fill in as replays land.",
+@@ -59,7 +59,7 @@ const article: HelpArticle = {
+       text: "Stuck on a step? Search Help for the words on your screen, or see [Troubleshooting & support](/help/troubleshooting-and-support).",
+     },
+   ],
+-  related: ["how-to-use-help", "settings-overview", "dashboard-and-analyzer", "obs-overlay-setup", "a-page-asked-me-to-sign-in"],
++  related: ["how-to-use-help", "install-and-pair", "settings-overview", "dashboard-and-analyzer", "obs-overlay-setup", "a-page-asked-me-to-sign-in"],
+ };
+ 
+ export default article;
+diff --git a/apps/web/lib/help/articles/getting-started/install-and-pair.ts b/apps/web/lib/help/articles/getting-started/install-and-pair.ts
+new file mode 100644
+index 00000000..7af47200
+--- /dev/null
++++ b/apps/web/lib/help/articles/getting-started/install-and-pair.ts
+@@ -0,0 +1,100 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "install-and-pair",
++  title: "Install and link the desktop app",
++  summary:
++    "Download the desktop app, get past the Windows warning, and link it to your account with the 6-digit code. After that, every game you play syncs on its own.",
++  category: "getting-started",
++  audience: "all",
++  order: 3,
++  keywords: [
++    "install",
++    "installer",
++    "download",
++    "desktop app",
++    "agent",
++    "windows",
++    "smartscreen",
++    "protected your pc",
++    "run anyway",
++    "pair",
++    "pairing",
++    "pairing code",
++    "6-digit code",
++    "link",
++    "devices",
++    "unpair",
++    "second pc",
++    "code expired",
++    "mac",
++    "linux",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "The desktop app is how your games reach SC2 Tools. It runs on the PC you play on, reads each replay a few seconds after the game ends and syncs the result to your account. You install it once and link it once.",
++    },
++    { type: "heading", text: "What you need", anchor: "requirements" },
++    {
++      type: "list",
++      items: [
++        "Windows 10 or 11, on the PC where you play StarCraft II.",
++        "A free SC2 Tools account. [Sign up](/sign-up) first if you don't have one.",
++        "About 220 MB of disk space for the app. Your replays stay where they are.",
++      ],
++    },
++    { type: "heading", text: "Install it", anchor: "install" },
++    {
++      type: "steps",
++      items: [
++        "Open the [Download](/download) page on your gaming PC and click the download button.",
++        "Double-click the installer in your Downloads folder.",
++        "If Windows shows a blue **Windows protected your PC** message, click **More info**, then **Run anyway**. The installer isn't code-signed yet, so Windows warns about it; the warning doesn't mean anything is wrong.",
++        "Click **Next**, then **Install**. The defaults are fine, and no administrator password is needed.",
++      ],
++    },
++    { type: "heading", text: "Link it to your account", anchor: "pair" },
++    {
++      type: "steps",
++      items: [
++        "The app opens on its own and shows a 6-digit code under **Pair this device**.",
++        "Click **Open pairing page**. Your browser opens [Devices](/devices); sign in if it asks.",
++        "Type the code under **Pairing code** and press **Pair device**. The app says it's paired within a few seconds and starts reading your replays.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "The code works for 10 minutes. If it runs out, close the app and open it again for a new one.",
++    },
++    { type: "heading", text: "After that", anchor: "after-pairing" },
++    {
++      type: "list",
++      items: [
++        "The app keeps running in the system tray, next to the clock. Closing its window doesn't stop it.",
++        "New games sync a few seconds after they end. Your older replays already on the PC are uploaded too, newest first.",
++        "It starts with Windows and updates itself, so there's nothing else to do. See [The desktop app](/help/desktop-app-overview) for its window, tray menu and settings.",
++      ],
++    },
++    { type: "heading", text: "More than one PC", anchor: "more-than-one-pc" },
++    {
++      type: "paragraph",
++      text: "Install the app on each PC you play on and pair each one with its own code. They all sync to the same account, and the same game is never counted twice. [Devices](/devices) lists every paired PC with when it was last seen.",
++    },
++    { type: "heading", text: "Unpair a PC", anchor: "unpair" },
++    {
++      type: "paragraph",
++      text: "On [Devices](/devices), press **Unpair** next to the PC. It stops syncing straight away; your games already synced stay in your account. To use it again, open the app on that PC and pair it with a new code.",
++    },
++    {
++      type: "callout",
++      tone: "info",
++      title: "On a Mac, Chromebook or iPad?",
++      text: "The desktop app is built for Windows. When browser import is available for your account, you can add replays from any computer instead: see [Import replays in your browser](/help/browser-import).",
++    },
++  ],
++  related: ["getting-started", "desktop-app-overview", "replay-folders", "my-game-didnt-show-up"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/index.generated.ts b/apps/web/lib/help/articles/index.generated.ts
+index b1775b89..c39c5b39 100644
+--- a/apps/web/lib/help/articles/index.generated.ts
++++ b/apps/web/lib/help/articles/index.generated.ts
+@@ -5,44 +5,96 @@
+ 
+ import type { HelpArticle } from "../types";
+ import accountData_backupsAndExport from "./account-data/backups-and-export";
++import accountData_deleteAccount from "./account-data/delete-account";
++import accountData_playerChannels from "./account-data/player-channels";
++import accountData_publicProfile from "./account-data/public-profile";
+ import analyzer_analyzerFilters from "./analyzer/analyzer-filters";
++import analyzer_arcade from "./analyzer/arcade";
++import analyzer_builds from "./analyzer/builds";
+ import analyzer_dashboardAndAnalyzer from "./analyzer/dashboard-and-analyzer";
++import analyzer_macro from "./analyzer/macro";
++import analyzer_maps from "./analyzer/maps";
++import analyzer_opponents from "./analyzer/opponents";
++import analyzer_readingTheCharts from "./analyzer/reading-the-charts";
++import analyzer_replays from "./analyzer/replays";
++import analyzer_strategies from "./analyzer/strategies";
++import analyzer_today from "./analyzer/today";
++import analyzer_trends from "./analyzer/trends";
+ import builds_buildCheckIn from "./builds/build-check-in";
+ import builds_customBuilds from "./builds/custom-builds";
++import builds_practiceGhostBuild from "./builds/practice-ghost-build";
+ import builds_publishCommunityBuilds from "./builds/publish-community-builds";
++import builds_randomizer from "./builds/randomizer";
+ import builds_rulesExplained from "./builds/rules-explained";
++import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
++import desktopApp_replayFolders from "./desktop-app/replay-folders";
++import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
++import gamePage_gamePageReplay from "./game-page/game-page-replay";
++import gamePage_gamePage from "./game-page/game-page";
+ import gettingStarted_aPageAskedMeToSignIn from "./getting-started/a-page-asked-me-to-sign-in";
++import gettingStarted_browserImport from "./getting-started/browser-import";
+ import gettingStarted_gettingStarted from "./getting-started/getting-started";
+ import gettingStarted_howToUseHelp from "./getting-started/how-to-use-help";
++import gettingStarted_installAndPair from "./getting-started/install-and-pair";
+ import gettingStarted_installApp from "./getting-started/install-app";
+ import gettingStarted_settingsOverview from "./getting-started/settings-overview";
++import opponents_opponentDossier from "./opponents/opponent-dossier";
+ import streamStudio_multiPlatformChat from "./stream-studio/multi-platform-chat";
++import streamStudio_obsAutoSceneSwitching from "./stream-studio/obs-auto-scene-switching";
+ import streamStudio_obsOverlaySetup from "./stream-studio/obs-overlay-setup";
+ import streamStudio_opponentScouting from "./stream-studio/opponent-scouting";
+ import streamStudio_streamDock from "./stream-studio/stream-dock";
+ import streamStudio_viewerEngagement from "./stream-studio/viewer-engagement";
++import streamStudio_voice from "./stream-studio/voice";
++import troubleshooting_myGameDidntShowUp from "./troubleshooting/my-game-didnt-show-up";
+ import troubleshooting_reportAProblem from "./troubleshooting/report-a-problem";
+ import troubleshooting_somethingWentWrong from "./troubleshooting/something-went-wrong";
+ import troubleshooting_troubleshootingAndSupport from "./troubleshooting/troubleshooting-and-support";
+ 
+ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
+   accountData_backupsAndExport,
++  accountData_deleteAccount,
++  accountData_playerChannels,
++  accountData_publicProfile,
+   analyzer_analyzerFilters,
++  analyzer_arcade,
++  analyzer_builds,
+   analyzer_dashboardAndAnalyzer,
++  analyzer_macro,
++  analyzer_maps,
++  analyzer_opponents,
++  analyzer_readingTheCharts,
++  analyzer_replays,
++  analyzer_strategies,
++  analyzer_today,
++  analyzer_trends,
+   builds_buildCheckIn,
+   builds_customBuilds,
++  builds_practiceGhostBuild,
+   builds_publishCommunityBuilds,
++  builds_randomizer,
+   builds_rulesExplained,
++  desktopApp_desktopAppOverview,
++  desktopApp_replayFolders,
++  gamePage_gamePageAccuratePlayback,
++  gamePage_gamePageReplay,
++  gamePage_gamePage,
+   gettingStarted_aPageAskedMeToSignIn,
++  gettingStarted_browserImport,
+   gettingStarted_gettingStarted,
+   gettingStarted_howToUseHelp,
++  gettingStarted_installAndPair,
+   gettingStarted_installApp,
+   gettingStarted_settingsOverview,
++  opponents_opponentDossier,
+   streamStudio_multiPlatformChat,
++  streamStudio_obsAutoSceneSwitching,
+   streamStudio_obsOverlaySetup,
+   streamStudio_opponentScouting,
+   streamStudio_streamDock,
+   streamStudio_viewerEngagement,
++  streamStudio_voice,
++  troubleshooting_myGameDidntShowUp,
+   troubleshooting_reportAProblem,
+   troubleshooting_somethingWentWrong,
+   troubleshooting_troubleshootingAndSupport,
+diff --git a/apps/web/lib/help/articles/opponents/opponent-dossier.ts b/apps/web/lib/help/articles/opponents/opponent-dossier.ts
+new file mode 100644
+index 00000000..94bb2faf
+--- /dev/null
++++ b/apps/web/lib/help/articles/opponents/opponent-dossier.ts
+@@ -0,0 +1,119 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "opponent-dossier",
++  title: "Opponent dossier: one player in depth",
++  summary:
++    "Everything you know about one opponent: your record, their builds and what they'll likely do next, your scouting notes, their real identity behind a barcode, and how to fix a missing Pulse ID.",
++  category: "opponents",
++  audience: "player",
++  signedInOnly: true,
++  order: 1,
++  keywords: [
++    "dossier",
++    "opponent profile",
++    "deep dive",
++    "scouting notes",
++    "notes",
++    "read aloud",
++    "voice",
++    "likely strategies",
++    "build tendencies",
++    "h2h",
++    "head to head",
++    "where games end",
++    "pulse id missing",
++    "sc2pulse id not resolved",
++    "retry",
++    "diagnostics",
++    "barcode",
++    "identity",
++    "smurf",
++    "public profile",
++    "community profile",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "Click any row in [Opponents](/app/opponents) to open that player's dossier. It is private to you and built only from your own games against them, filtered by the filter bar like the rest of the analyzer.",
++    },
++    { type: "heading", text: "What's on the page", anchor: "sections" },
++    {
++      type: "table",
++      head: ["Part", "What it tells you"],
++      rows: [
++        ["Header", "Their name, MMR and Pulse ID, your games, wins, losses and win rate against them, and their Twitch or YouTube channel when they've connected one."],
++        ["Scouting notes", "Your own notes about this player. See below."],
++        ["Ladder MMR by race and ladder context", "Their current rating, league and recent form from SC2Pulse."],
++        ["By map, By strategy", "Your record against them on each map, and against each opening they used."],
++        ["Build tendencies", "The openings they use most against you, over time."],
++        ["Likely strategies next", "What they're most likely to open with next time, weighted toward your last 10 games against them."],
++        ["H2H trends", "Your games against them as a timeline, your streaks, and maps and build pairings side by side."],
++        ["Where games end", "Whether your games against them tend to end early, in the mid game or late."],
++        ["Replay history", "Every game against them, newest first, with a link to each game page."],
++      ],
++    },
++    { type: "heading", text: "Narrow it down", anchor: "drill-down" },
++    {
++      type: "paragraph",
++      text: "In **H2H trends**, open the **Maps** or **Builds** tab and pick a map or a pairing of your build and theirs. The replay history then lists only those games. Pick it again to go back to every game.",
++    },
++    { type: "heading", text: "Scouting notes and read-aloud", anchor: "notes" },
++    {
++      type: "list",
++      items: [
++        "Write what you want to remember, for example *Hides tech after early pressure*, and press **Save notes**. Notes are private.",
++        "When the desktop app detects this player at the start of a game, your notes show on your private scouting overlay.",
++        "Turn on **Read notes aloud** to hear them at the start of the game too. It needs the voice readout on, with **Scouting report (pre-game)** ticked: see [Voice readout](/help/voice).",
++      ],
++    },
++    { type: "heading", text: "Pulse ID or MMR missing", anchor: "pulse-id-missing" },
++    {
++      type: "paragraph",
++      text: "SC2 Tools looks up each opponent on SC2Pulse to find their Pulse ID and current MMR. Until that works, the header shows their toon instead of a Pulse ID, and MMR and ladder context stay empty.",
++    },
++    {
++      type: "steps",
++      items: [
++        "Open **Identity & MMR diagnostics** on the dossier. It shows whether their Pulse ID was found, their toon, region and when MMR was last fetched.",
++        "Press the **Retry** button there. It asks SC2Pulse again right away.",
++        "If it's found, the Pulse ID, MMR and ladder context fill in, and your older games against them are updated too. If it still isn't, SC2Pulse doesn't list the player yet, often because they haven't played enough ranked games this season. Try again later.",
++      ],
++    },
++    { type: "heading", text: "Barcodes and real identities", anchor: "barcode" },
++    {
++      type: "paragraph",
++      text: "A *barcode* is a name made only of look-alike characters such as IIlIlI, used to hide who's playing. When SC2 Tools knows who it is, from SC2Pulse or from an identity confirmed by our team, their real name shows next to the barcode.",
++    },
++    {
++      type: "list",
++      items: [
++        "**Possible identity matches** compares this barcode with the players in your own replays: build patterns, control groups and replay actions. These are private leads, never proof, and the panel says how strong the evidence is.",
++        "Know who it is? Under **Player identity**, pick their known account and explain the match in at least 10 characters, for example a stream or replay detail that can be checked. Press **Submit for review**.",
++        "An administrator checks the evidence. Once approved, the identity shows for everyone. Your submission shows **Awaiting review**, **Approved** or **Not approved**, with a note from the reviewer.",
++      ],
++    },
++    { type: "heading", text: "The public profile", anchor: "public-profile" },
++    {
++      type: "paragraph",
++      text: "Once at least 5 different SC2 Tools players have faced this opponent, a **Public profile** link appears in the header. That page is open to everyone and combines all of those players' games: race, record, strategies seen and maps, counted from the opponent's side. It never shows names, battle tags, or who contributed.",
++    },
++    { type: "heading", text: "How much data it needs", anchor: "sample-size" },
++    {
++      type: "list",
++      items: [
++        "Everything works from one game, but tendencies and predictions mean little until you've played someone a few times.",
++        "Map rows with fewer than 2 games are marked as a low sample in H2H trends.",
++        "Likely strategies next counts your last 10 games against them double, so a recent change of style shows up quickly.",
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "Every number comes from replays with fixed rules, never AI. To read the list of all your opponents, see [Opponents](/help/opponents).",
++    },
++  ],
++  related: ["opponents", "opponent-scouting", "voice", "analyzer-filters"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/stream-studio/obs-auto-scene-switching.ts b/apps/web/lib/help/articles/stream-studio/obs-auto-scene-switching.ts
+new file mode 100644
+index 00000000..ed5445b3
+--- /dev/null
++++ b/apps/web/lib/help/articles/stream-studio/obs-auto-scene-switching.ts
+@@ -0,0 +1,94 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "obs-auto-scene-switching",
++  title: "OBS auto scene switching",
++  summary:
++    "Let the desktop app switch OBS to your gameplay scene when a game loads and back to your between-games scene when you leave it, and build both scenes in one click.",
++  category: "stream-studio",
++  audience: "streamer",
++  signedInOnly: true,
++  order: 6,
++  keywords: [
++    "scene switching",
++    "auto scene switch",
++    "switch scenes automatically",
++    "websocket",
++    "websocket server",
++    "port 4455",
++    "password",
++    "test connection",
++    "build my scenes",
++    "update my scenes",
++    "between games",
++    "in game",
++    "two pc",
++    "dual pc",
++    "replays",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "The desktop app knows when a game is loading, running or over, so it can switch OBS scenes for you: the gameplay scene as soon as a game loads, and your between-games scene when you're back in the menus. It only changes which scene is live; it never edits your scenes unless you ask it to build them.",
++    },
++    { type: "heading", text: "Set it up", anchor: "setup" },
++    {
++      type: "steps",
++      items: [
++        "In OBS, open **Tools → WebSocket Server Settings**, tick **Enable WebSocket server** and note the port (4455) and password (**Show Connect Info**). It comes with OBS 28 and later.",
++        "In the desktop app, open **Settings**, go to **OBS scene switching** and tick **Switch scenes automatically while I play**.",
++        "Leave **OBS host** as 127.0.0.1, check the **Port**, paste the **Password** and press **Test connection**.",
++        "Choose a scene for each stage of a game, or press **Build my scenes…** to create them (below).",
++        "Press **Save settings**.",
++      ],
++    },
++    { type: "heading", text: "Which scene when", anchor: "phases" },
++    {
++      type: "table",
++      head: ["Stage", "Typical scene"],
++      rows: [
++        ["In the menu / queueing", "Between games"],
++        ["Match loading, started, in progress", "In game. The switch happens as the game loads, before the map appears."],
++        ["Match ended (score screen)", "Stays on In game, so viewers see the score screen."],
++        ["StarCraft II closed", "Between games"],
++      ],
++    },
++    {
++      type: "list",
++      items: [
++        "Every row is optional: leave it on *don't switch* and the scene stays as it is for that stage.",
++        "**Wait before leaving a match** (3 seconds by default) stops an alt-tab or a dropped connection from switching away mid-game. Going into a game is never delayed.",
++        "Switching a scene by hand pauses automatic switching until the next stage of the game.",
++        "Watching replays doesn't switch scenes unless you tick **Also switch when I watch a replay**.",
++      ],
++    },
++    { type: "heading", text: "Build the scenes for you", anchor: "build-scenes" },
++    {
++      type: "paragraph",
++      text: "**Build my scenes…** creates two scenes from the sources you already have: *SC2 Tools — Between Games*, with a big camera, your chat, session stats and a small game view, and *SC2 Tools — In Game*, with the game full screen and a small camera. Pick your webcam and game capture and confirm. They're ordinary OBS scenes, so edit them as you like afterwards; **Update my scenes** later keeps your changes. Starting Soon and BRB from the [Stream Dock](/help/stream-dock) still show on top of both.",
++    },
++    { type: "heading", text: "Two PCs", anchor: "two-pcs" },
++    {
++      type: "paragraph",
++      text: "Run the desktop app on the gaming PC, where StarCraft II runs. Set **OBS host** to the stream PC's network address, and allow port 4455 through the stream PC's firewall.",
++    },
++    { type: "heading", text: "If it doesn't switch", anchor: "troubleshooting" },
++    {
++      type: "list",
++      items: [
++        "Press **Test connection**. A wrong password or a closed OBS shows there; OBS must be open before the app can connect.",
++        "A scene marked *(missing)* in a dropdown was renamed or deleted in OBS. Pick it again.",
++        "Make sure the desktop app is running and StarCraft II is open on the same PC.",
++      ],
++    },
++    {
++      type: "settingsLink",
++      label: "Stream Studio crash course: build your first scene",
++      href: "/stream-studio/learn#crash-course",
++    },
++  ],
++  related: ["obs-overlay-setup", "stream-dock", "desktop-app-overview"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/stream-studio/obs-overlay-setup.ts b/apps/web/lib/help/articles/stream-studio/obs-overlay-setup.ts
+index 1ed7ba53..861db3a6 100644
+--- a/apps/web/lib/help/articles/stream-studio/obs-overlay-setup.ts
++++ b/apps/web/lib/help/articles/stream-studio/obs-overlay-setup.ts
+@@ -21,7 +21,7 @@ const article: HelpArticle = {
+     "transparent",
+     "stream",
+   ],
+-  updated: "2026-10-22",
++  updated: "2026-10-23",
+   body: [
+     {
+       type: "settingsLink",
+@@ -35,7 +35,7 @@ const article: HelpArticle = {
+     {
+       type: "steps",
+       items: [
+-        "In **Settings → Overlay**, create (or copy) an overlay token — the token IS the key, so treat the URLs like passwords.",
++        "Open **Settings → Overlay**. Your overlay token is created for you the first time you open it, and every widget URL is listed with a **Copy** button. The token in the URL is the key to your overlay, so treat these URLs like passwords.",
+         "Each widget has its own URL — add one OBS **Browser Source** per widget you want and position it freely. Backgrounds are transparent.",
+         "Press **Test** on any widget to render clearly-labelled sample content for ~20 seconds — place and style everything without waiting for a real game.",
+         "Widgets show up when something happens (a game starts or ends) and auto-hide between games; persistent HUDs like the session record stay up. Config changes reach OBS within about a minute of pressing Save — no Browser Source edits needed.",
+@@ -43,7 +43,7 @@ const article: HelpArticle = {
+     },
+     { type: "settingsLink", label: "Open Settings → Overlay", href: "/settings?tab=overlay" },
+   ],
+-  related: ["multi-platform-chat", "stream-dock", "troubleshooting-and-support"],
++  related: ["multi-platform-chat", "stream-dock", "obs-auto-scene-switching", "voice", "troubleshooting-and-support"],
+ };
+ 
+ export default article;
+diff --git a/apps/web/lib/help/articles/stream-studio/voice.ts b/apps/web/lib/help/articles/stream-studio/voice.ts
+new file mode 100644
+index 00000000..91ea2013
+--- /dev/null
++++ b/apps/web/lib/help/articles/stream-studio/voice.ts
+@@ -0,0 +1,65 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "voice",
++  title: "Voice readout: hear the scouting report",
++  summary:
++    "Have your overlay read the pre-game scouting report aloud, plus match start, match end and cheese alerts, in a voice that works inside OBS.",
++  category: "stream-studio",
++  audience: "streamer",
++  signedInOnly: true,
++  order: 5,
++  keywords: [
++    "voice",
++    "voice readout",
++    "text to speech",
++    "tts",
++    "read aloud",
++    "speak",
++    "scouting report",
++    "cheese detected",
++    "match start",
++    "match end",
++    "obs voice",
++    "streamlabs",
++    "no sound",
++    "voice blocked",
++    "opponent notes aloud",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "Voice readout speaks through your overlay in OBS, so you hear the scouting report at the start of a game without looking away, for example *Facing Maru, Terran. 6720 MMR. You're 3 and 1 against them.* It uses the speech voices built into your computer: nothing is generated by AI.",
++    },
++    { type: "heading", text: "Set it up", anchor: "setup" },
++    {
++      type: "steps",
++      items: [
++        "Open [Settings → Voice](/settings?tab=voice) and turn on **Enable voice readout**.",
++        "Pick a **Voice**. The list only shows voices that also work inside OBS and Streamlabs, labelled by gender.",
++        "Set **Rate**, **Pitch**, **Volume** and **Delay before speaking**, then press **Hear the OBS version** to hear exactly what your stream will hear.",
++        "Under **Events to announce**, choose what it reads: **Scouting report (pre-game)** is on by default; **Match start**, **Match end** and **Cheese detected** are off.",
++        "Press **Save changes**, then make sure the **Scouting tells** widget, or the all-in-one overlay, is in OBS. That's the source that speaks; see [OBS overlay setup](/help/obs-overlay-setup).",
++      ],
++    },
++    { type: "heading", text: "Read your opponent notes aloud", anchor: "notes" },
++    {
++      type: "paragraph",
++      text: "On an opponent's dossier, turn on **Read notes aloud** next to your scouting notes. The next time you face them, the scouting report includes *Opponent note:* followed by your notes. It needs **Scouting report (pre-game)** on. See [Opponent dossier](/help/opponent-dossier).",
++    },
++    { type: "heading", text: "If you hear nothing", anchor: "troubleshooting" },
++    {
++      type: "list",
++      items: [
++        "Browsers only allow speech after a click. The first time, the overlay shows a banner: right-click the Browser Source in OBS, choose **Interact**, and click once.",
++        "*Voice blocked by your browser* in Settings means the same thing for the preview: press **Retry now**.",
++        "A voice named *Google …* or *… Online (Natural)* only exists in your browser, not in OBS. Settings warns you and offers **Use that voice everywhere** to switch to one OBS can use.",
++        "With **Control audio via OBS** ticked on the Browser Source, the voice plays through OBS's audio mixer: check it isn't muted there, and turn on monitoring if you want to hear it yourself.",
++      ],
++    },
++  ],
++  related: ["opponent-scouting", "obs-overlay-setup", "opponent-dossier", "troubleshooting-and-support"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/articles/troubleshooting/my-game-didnt-show-up.ts b/apps/web/lib/help/articles/troubleshooting/my-game-didnt-show-up.ts
+new file mode 100644
+index 00000000..7b60a73b
+--- /dev/null
++++ b/apps/web/lib/help/articles/troubleshooting/my-game-didnt-show-up.ts
+@@ -0,0 +1,96 @@
++import type { HelpArticle } from "@/lib/help/types";
++
++const article: HelpArticle = {
++  slug: "my-game-didnt-show-up",
++  title: "Why didn't my game show up?",
++  summary:
++    "A game you just played isn't in your stats? Work through these checks: the desktop app, your filters, the replay folder and games the app skips on purpose.",
++  category: "troubleshooting",
++  audience: "all",
++  signedInOnly: true,
++  order: 20,
++  keywords: [
++    "game missing",
++    "missing game",
++    "game not showing",
++    "not syncing",
++    "sync",
++    "upload",
++    "no games",
++    "stats not updating",
++    "replay not uploaded",
++    "games synced",
++    "paused",
++    "skipped",
++    "vs ai",
++    "team games",
++    "custom games",
++    "too short",
++    "which player is you",
++    "battletag",
++    "re-sync",
++  ],
++  updated: "2026-10-23",
++  body: [
++    {
++      type: "paragraph",
++      text: "A game normally appears a few seconds after it ends: the desktop app reads the replay, syncs it, and every open page updates on its own. If it doesn't, go through these checks in order.",
++    },
++    { type: "heading", text: "1. Is it in Replays?", anchor: "check-replays" },
++    {
++      type: "paragraph",
++      text: "Open [Replays](/app/replays) and look at the top of the list. If the game is there, it synced fine and a filter is hiding it from the other sections: go to step 2. If it isn't there, go to step 3.",
++    },
++    { type: "heading", text: "2. Check your filters", anchor: "filters" },
++    {
++      type: "list",
++      items: [
++        "By default the analyzer counts **ranked 1v1 ladder games on the current patch** and hides games under 45 seconds. Custom games, games against friends and team games are hidden until you change **Maps** or **Players** in the filter bar.",
++        "Look at the **Active filters** row under the filter bar. A matchup, region or date range left on from earlier, or a pick made in Strategies, hides everything else. **Reset to defaults** clears them all.",
++        "See [Filters](/help/analyzer-filters) for every filter and its default.",
++      ],
++    },
++    { type: "heading", text: "3. Is the desktop app running?", anchor: "desktop-app" },
++    {
++      type: "list",
++      items: [
++        "Look for the SC2 Tools icon in the system tray on your gaming PC. If it isn't there, start **SC2 Tools Agent** from the Start menu.",
++        "Open its window. **Paused** means syncing is paused: press **Resume syncing**. **Pairing** means it isn't linked to your account: see [Install and link the desktop app](/help/install-and-pair).",
++        "[Devices](/devices) shows when each paired PC was last seen. A PC that hasn't been seen for a long time isn't syncing.",
++      ],
++    },
++    { type: "heading", text: "4. Did the app upload it?", anchor: "recent-uploads" },
++    {
++      type: "paragraph",
++      text: "In the app, open **Recent uploads**. It lists the replays uploaded since the app started, newest first, with **Uploaded** or the reason an upload failed. If the game isn't there, one of these is the usual reason:",
++    },
++    {
++      type: "table",
++      head: ["Reason", "What to do"],
++      rows: [
++        ["The app doesn't watch that replay folder, for example a new region or account", "Press **Auto-detect** in the app's Settings: see [Replay folders](/help/replay-folders)."],
++        ["It was a game against the AI", "Games against the computer aren't synced, on purpose."],
++        ["The app couldn't tell which player is you", "Set your BattleTag and SC2Pulse IDs in [Settings → Profile](/settings?tab=profile), or your **Player handle** in the app's Settings, then press **Re-sync**."],
++        ["Someone left during loading", "The game has no result, so there's nothing to count."],
++        ["The replay was cut off or can't be read", "It was interrupted while saving, or comes from an unsupported game version. Press **Re-sync** to try again."],
++        ["It's outside the app's **Sync date range**", "Set the range to **All time** in the app's Settings to include older games."],
++      ],
++    },
++    {
++      type: "paragraph",
++      text: "While a large import runs, the progress card on [Today](/app) also counts skipped replays and says why.",
++    },
++    { type: "heading", text: "5. Still missing?", anchor: "still-missing" },
++    {
++      type: "steps",
++      items: [
++        "Press **Re-sync** in the app. It uploads every replay it can see again; games already synced aren't counted twice.",
++        "If the bar at the top of SC2 Tools says *Reconnecting*, the server is waking up. Your game is safe on your PC and the app keeps retrying: see [Something went wrong](/help/something-went-wrong).",
++        "Still not there? [Report a problem](/help/report-a-problem) with the time you played. In the app, **Open log folder** gets the log file to attach.",
++      ],
++    },
++  ],
++  related: ["install-and-pair", "replay-folders", "analyzer-filters", "desktop-app-overview"],
++};
++
++export default article;
+diff --git a/apps/web/lib/help/index.ts b/apps/web/lib/help/index.ts
+index 2fcc7c06..5f322d2a 100644
+--- a/apps/web/lib/help/index.ts
++++ b/apps/web/lib/help/index.ts
+@@ -36,6 +36,20 @@ export function helpSettingsPath(slug: string): string {
+   return `/settings?tab=help#${slug}`;
+ }
+ 
++/**
++ * Public URL of one section of an article (a heading's `anchor`).
++ *
++ * Example: `helpAnchorPath("opponents", "net-mmr")` → "/help/opponents#net-mmr".
++ */
++export function helpAnchorPath(slug: string, anchor: string): string {
++  return `${helpArticlePath(slug)}#${anchor}`;
++}
++
++/** The section anchors an article's headings declare, in reading order. */
++export function helpArticleAnchors(article: HelpArticle): string[] {
++  return article.body.flatMap((block) => (block.type === "heading" && block.anchor ? [block.anchor] : []));
++}
++
+ function compareArticles(a: HelpArticle, b: HelpArticle): number {
+   const order = (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER);
+   if (order !== 0) return order;
+diff --git a/apps/web/lib/help/types.ts b/apps/web/lib/help/types.ts
+index c5a3d72d..ab37eaf5 100644
+--- a/apps/web/lib/help/types.ts
++++ b/apps/web/lib/help/types.ts
+@@ -46,8 +46,13 @@ export type HelpWidgetId = "chat-commands";
+ export type HelpBlock =
+   /** A paragraph of text. */
+   | { type: "paragraph"; text: string }
+-  /** A sub-heading inside the article. */
+-  | { type: "heading"; text: string }
++  /**
++   * A sub-heading inside the article. `anchor` gives it a stable id on
++   * the article page (/help/<slug>#<anchor>) so other parts of the app
++   * can link to one section: lowercase letters, digits and hyphens,
++   * unique within the article. Keep an anchor once it is published.
++   */
++  | { type: "heading"; text: string; anchor?: string }
+   /** A numbered sequence the reader follows in order. */
+   | { type: "steps"; items: string[] }
+   /** A bulleted list. */
+-- 
+2.43.0
+
+
+From cb81496cd0487f91e84452592c301d959190b75e Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 23 Oct 2026 02:32:36 +0000
+Subject: [PATCH 2/3] feat(web): analyzer sections open with a header and a
+ "How to read this" link
+
+components/analyzer/SectionHeader.tsx, rendered by SectionPanel and
+OpponentsRoute, shows the section's name, its tabs.ts intro, a "How to
+read this" link that opens the section's help article in the side
+sheet (/app/maps -> /help/maps), and an actions slot.
+
+- The title is an h2: the context bar stays the page's h1.
+- "Hide intro" hides the intro for that section on this device
+  (localStorage analyzer.intro.hidden.<tabId>) and moves focus to the
+  help link; following "How to read this" brings the intro back.
+- PageHeader gains `as` ("h1" | "h2"), a smaller "section" size and a
+  description id; existing pages render exactly as before.
+- HelpLink and LazyHelpLink take an optional onOpen, called whenever
+  the reader follows the link (sheet or new tab).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01KG8e5a59qtUDJJY3Fm1hxC
+---
+ .../components/analyzer/OpponentsRoute.tsx    |  15 ++-
+ .../web/components/analyzer/SectionHeader.tsx | 102 ++++++++++++++++++
+ apps/web/components/analyzer/SectionPanel.tsx |  15 ++-
+ .../analyzer/__tests__/SectionHeader.test.tsx |  74 +++++++++++++
+ .../analyzer/__tests__/SectionPanel.test.tsx  |   8 ++
+ apps/web/components/help/HelpLink.tsx         |   7 +-
+ apps/web/components/help/LazyHelpLink.tsx     |  11 +-
+ .../help/__tests__/HelpLink.test.tsx          |  17 +++
+ apps/web/components/ui/PageHeader.tsx         |  31 +++++-
+ 9 files changed, 266 insertions(+), 14 deletions(-)
+ create mode 100644 apps/web/components/analyzer/SectionHeader.tsx
+ create mode 100644 apps/web/components/analyzer/__tests__/SectionHeader.test.tsx
+
+diff --git a/apps/web/components/analyzer/OpponentsRoute.tsx b/apps/web/components/analyzer/OpponentsRoute.tsx
+index 7441ef15..6c4e7e92 100644
+--- a/apps/web/components/analyzer/OpponentsRoute.tsx
++++ b/apps/web/components/analyzer/OpponentsRoute.tsx
+@@ -2,14 +2,21 @@
+ 
+ import { useRouter } from "next/navigation";
+ import { OpponentsTab } from "./OpponentsTab";
++import { SectionHeader } from "./SectionHeader";
+ import { opponentDossierHref } from "./tabs";
+ 
+-/** Route wrapper: the opponent list, with rows navigating to real dossier URLs. */
++/**
++ * Route wrapper: the section header, then the opponent list, with rows
++ * navigating to real dossier URLs.
++ */
+ export function OpponentsRoute() {
+   const router = useRouter();
+   return (
+-    <OpponentsTab
+-      onOpen={(pulseId) => router.push(opponentDossierHref(pulseId))}
+-    />
++    <div className="space-y-5">
++      <SectionHeader tab="opponents" />
++      <OpponentsTab
++        onOpen={(pulseId) => router.push(opponentDossierHref(pulseId))}
++      />
++    </div>
+   );
+ }
+diff --git a/apps/web/components/analyzer/SectionHeader.tsx b/apps/web/components/analyzer/SectionHeader.tsx
+new file mode 100644
+index 00000000..af291f7e
+--- /dev/null
++++ b/apps/web/components/analyzer/SectionHeader.tsx
+@@ -0,0 +1,102 @@
++"use client";
++
++import { useId, useRef, type ReactNode } from "react";
++import { CircleHelp } from "lucide-react";
++import { LazyHelpLink } from "@/components/help/LazyHelpLink";
++import { PageHeader } from "@/components/ui/PageHeader";
++import { useLocalStorageState } from "@/lib/useLocalStorageState";
++import { slugForTab, TABS, type TabId } from "./tabs";
++
++/**
++ * SectionHeader — the top of an analyzer section (/app/<section> and
++ * /app/opponents): the section's name, its one-line intro from tabs.ts,
++ * a "How to read this" link and an optional actions slot.
++ *
++ * The title is an h2: the app's context bar is the page's h1 on every
++ * analyzer section.
++ *
++ * "How to read this" opens the section's help article in a side sheet.
++ * Its slug is the section's URL segment (/app/maps → /help/maps), so
++ * every section has exactly one article (the help tests check it).
++ *
++ * "Hide intro" hides the one-line intro for that section on this
++ * device (localStorage `analyzer.intro.hidden.<tabId>`); following
++ * "How to read this" brings it back.
++ *
++ * Example:
++ *   <SectionHeader tab="battlefield" actions={<Badge>12 maps</Badge>} />
++ */
++
++/** localStorage key for a section's "Hide intro" choice. */
++export function introHiddenKey(tab: TabId): string {
++  return `analyzer.intro.hidden.${tab}`;
++}
++
++function isBoolean(raw: unknown): raw is boolean {
++  return typeof raw === "boolean";
++}
++
++export interface SectionHeaderProps {
++  tab: TabId;
++  /** Replaces the tabs.ts label. */
++  title?: ReactNode;
++  /** Replaces the tabs.ts description. */
++  description?: ReactNode;
++  /** Section-level controls, shown before "How to read this". */
++  actions?: ReactNode;
++  className?: string;
++}
++
++const CONTROL_CLASS =
++  "inline-flex min-h-11 items-center gap-1.5 text-caption";
++
++export function SectionHeader({ tab, title, description, actions, className = "" }: SectionHeaderProps) {
++  const def = TABS.find((item) => item.id === tab);
++  const intro = description ?? def?.description;
++  const [hidden, setHidden] = useLocalStorageState<boolean>(introHiddenKey(tab), false, isBoolean);
++  const helpRef = useRef<HTMLSpanElement>(null);
++  const introId = useId();
++  const showIntro = Boolean(intro) && !hidden;
++
++  const hideIntro = () => {
++    setHidden(true);
++    // The button goes away with the intro: hand focus to the link that
++    // brings it back instead of dropping it on the page.
++    helpRef.current?.querySelector<HTMLElement>("a")?.focus();
++  };
++
++  return (
++    <PageHeader
++      as="h2"
++      size="section"
++      title={title ?? def?.label ?? tab}
++      description={showIntro ? intro : undefined}
++      descriptionId={introId}
++      className={className}
++      actions={
++        <>
++          {actions}
++          <span ref={helpRef} className="inline-flex">
++            <LazyHelpLink slug={slugForTab(tab)} className={CONTROL_CLASS} onOpen={() => setHidden(false)}>
++              <CircleHelp className="h-4 w-4 shrink-0" aria-hidden />
++              How to read this
++            </LazyHelpLink>
++          </span>
++          {showIntro ? (
++            <button
++              type="button"
++              onClick={hideIntro}
++              aria-controls={introId}
++              className={[
++                CONTROL_CLASS,
++                "rounded-sm px-1 text-text-dim hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
++              ].join(" ")}
++            >
++              Hide intro
++            </button>
++          ) : null}
++        </>
++      }
++    />
++  );
++}
+diff --git a/apps/web/components/analyzer/SectionPanel.tsx b/apps/web/components/analyzer/SectionPanel.tsx
+index 903d6bd3..e6d916c4 100644
+--- a/apps/web/components/analyzer/SectionPanel.tsx
++++ b/apps/web/components/analyzer/SectionPanel.tsx
+@@ -3,6 +3,7 @@
+ import dynamic from "next/dynamic";
+ import type { TabId } from "@/components/analyzer/tabs";
+ import { Skeleton } from "@/components/ui/Card";
++import { SectionHeader } from "./SectionHeader";
+ 
+ /*
+  * Each section is its own chunk: /app/macro no longer downloads the
+@@ -42,10 +43,20 @@ const ArcadeTab = dynamic(
+ 
+ /**
+  * SectionPanel — renders one analyzer section for its /app/<section>
+- * route. Opponents is not handled here: /app/opponents has its own
+- * routes (list + per-opponent dossier) so a dossier is a real URL.
++ * route, under its SectionHeader (title, intro, "How to read this").
++ * Opponents is not handled here: /app/opponents has its own routes
++ * (list + per-opponent dossier) so a dossier is a real URL.
+  */
+ export function SectionPanel({ tab }: { tab: Exclude<TabId, "opponents"> }) {
++  return (
++    <div className="space-y-5">
++      <SectionHeader tab={tab} />
++      <SectionBody tab={tab} />
++    </div>
++  );
++}
++
++function SectionBody({ tab }: { tab: Exclude<TabId, "opponents"> }) {
+   switch (tab) {
+     case "replays":
+       return <ReplayLibrary />;
+diff --git a/apps/web/components/analyzer/__tests__/SectionHeader.test.tsx b/apps/web/components/analyzer/__tests__/SectionHeader.test.tsx
+new file mode 100644
+index 00000000..6c7bbdd9
+--- /dev/null
++++ b/apps/web/components/analyzer/__tests__/SectionHeader.test.tsx
+@@ -0,0 +1,74 @@
++/**
++ * SectionHeader: each analyzer section's name, intro and "How to read
++ * this" link, with an intro the reader can hide (remembered per section
++ * on this device) and bring back from the help link.
++ */
++import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
++import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
++import { introHiddenKey, SectionHeader } from "../SectionHeader";
++
++vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false }) }));
++
++const MAPS_INTRO = "Maps and matchup performance.";
++
++beforeEach(() => window.localStorage.clear());
++afterEach(cleanup);
++
++/**
++ * The help link, once its lazy chunk has turned it into the
++ * sheet-opening HelpLink (the first load imports every article).
++ */
++async function helpLink(): Promise<HTMLElement> {
++  await waitFor(
++    () => expect(screen.getByRole("link", { name: "How to read this" }).getAttribute("aria-haspopup")).toBe("dialog"),
++    { timeout: 5000 },
++  );
++  return screen.getByRole("link", { name: "How to read this" });
++}
++
++describe("SectionHeader", () => {
++  it("names the section in an h2 under the context bar's h1, with its intro and help link", async () => {
++    render(<SectionHeader tab="battlefield" />);
++    expect(screen.getByRole("heading", { level: 2, name: "Maps" })).toBeTruthy();
++    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
++    expect(screen.getByText(MAPS_INTRO)).toBeTruthy();
++    // The help slug is the section's URL segment: battlefield lives at /app/maps.
++    expect((await helpLink()).getAttribute("href")).toBe("/help/maps");
++  });
++
++  it("hides the intro, remembers it for that section and moves focus to the help link", async () => {
++    render(<SectionHeader tab="battlefield" />);
++    const link = await helpLink();
++    fireEvent.click(screen.getByRole("button", { name: "Hide intro" }));
++    expect(screen.queryByText(MAPS_INTRO)).toBeNull();
++    expect(screen.queryByRole("button", { name: "Hide intro" })).toBeNull();
++    expect(document.activeElement).toBe(link);
++    await waitFor(() => expect(window.localStorage.getItem(introHiddenKey("battlefield"))).toBe("true"));
++    expect(window.localStorage.getItem(introHiddenKey("strategies"))).toBeNull();
++  });
++
++  it("keeps a hidden intro hidden on the next visit, and How to read this brings it back", async () => {
++    window.localStorage.setItem(introHiddenKey("strategies"), "true");
++    render(<SectionHeader tab="strategies" />);
++    await waitFor(() => expect(screen.queryByText("Build vs strategy and per-strategy results.")).toBeNull());
++    fireEvent.click(await helpLink());
++    expect(screen.getByText("Build vs strategy and per-strategy results.")).toBeTruthy();
++    expect(screen.getByRole("dialog", { name: "Strategies: your builds against their openings" })).toBeTruthy();
++    await waitFor(() => expect(window.localStorage.getItem(introHiddenKey("strategies"))).toBe("false"));
++  });
++
++  it("takes a custom title, intro and actions", async () => {
++    render(
++      <SectionHeader
++        tab="opponents"
++        title="Everyone you've faced"
++        description="Keyed to their SC2Pulse ID."
++        actions={<span>12 players</span>}
++      />,
++    );
++    expect(screen.getByRole("heading", { level: 2, name: "Everyone you've faced" })).toBeTruthy();
++    expect(screen.getByText("Keyed to their SC2Pulse ID.")).toBeTruthy();
++    expect(screen.getByText("12 players")).toBeTruthy();
++    expect((await helpLink()).getAttribute("href")).toBe("/help/opponents");
++  });
++});
+diff --git a/apps/web/components/analyzer/__tests__/SectionPanel.test.tsx b/apps/web/components/analyzer/__tests__/SectionPanel.test.tsx
+index 48d6807a..305c47f3 100644
+--- a/apps/web/components/analyzer/__tests__/SectionPanel.test.tsx
++++ b/apps/web/components/analyzer/__tests__/SectionPanel.test.tsx
+@@ -52,6 +52,14 @@ describe("SectionPanel", () => {
+     expect([...loaded]).toEqual(["macro"]);
+   });
+ 
++  it("puts the section header (h2, intro, How to read this) above the section", async () => {
++    render(<SectionPanel tab="trends" />);
++    expect(screen.getByRole("heading", { level: 2, name: "Trends" })).toBeTruthy();
++    expect(screen.getByText("Win-rate trajectory across periods.")).toBeTruthy();
++    expect(screen.getByRole("link", { name: "How to read this" }).getAttribute("href")).toBe("/help/trends");
++    expect(await screen.findByText("trends section")).toBeTruthy();
++  });
++
+   it("renders each section for its tab", async () => {
+     const cases = [
+       ["replays", "replays section"],
+diff --git a/apps/web/components/help/HelpLink.tsx b/apps/web/components/help/HelpLink.tsx
+index 9ed63a16..67550f8e 100644
+--- a/apps/web/components/help/HelpLink.tsx
++++ b/apps/web/components/help/HelpLink.tsx
+@@ -24,15 +24,19 @@ import { HelpSupportLine } from "./HelpSupportLine";
+  *   variant="inline" (default): text link; children default to the title.
+  *   variant="icon": a small "?" button for tight spots next to a setting;
+  *     its accessible name is "Help: <article title>".
++ *
++ * `onOpen` runs whenever the reader follows the link, in the sheet or in
++ * a new tab (e.g. an analyzer section shows its hidden intro again).
+  */
+ export interface HelpLinkProps {
+   slug: string;
+   children?: ReactNode;
+   variant?: "inline" | "icon";
+   className?: string;
++  onOpen?: () => void;
+ }
+ 
+-export function HelpLink({ slug, children, variant = "inline", className = "" }: HelpLinkProps) {
++export function HelpLink({ slug, children, variant = "inline", className = "", onOpen }: HelpLinkProps) {
+   const [open, setOpen] = useState(false);
+   const article = getArticle(slug);
+   // An unknown slug is a content bug (the help tests catch it); never
+@@ -41,6 +45,7 @@ export function HelpLink({ slug, children, variant = "inline", className = "" }:
+ 
+   const href = helpArticlePath(article.slug);
+   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
++    onOpen?.();
+     if (!isPlainClick(event)) return;
+     event.preventDefault();
+     setOpen(true);
+diff --git a/apps/web/components/help/LazyHelpLink.tsx b/apps/web/components/help/LazyHelpLink.tsx
+index a628e426..2182f02e 100644
+--- a/apps/web/components/help/LazyHelpLink.tsx
++++ b/apps/web/components/help/LazyHelpLink.tsx
+@@ -20,16 +20,21 @@ const HelpLink = lazy(() =>
+  *
+  * Feature code that already links to help can keep importing HelpLink.
+  */
+-export function LazyHelpLink({ slug, children, className = "" }: Pick<HelpLinkProps, "slug" | "children" | "className">) {
++export function LazyHelpLink({
++  slug,
++  children,
++  className = "",
++  onOpen,
++}: Pick<HelpLinkProps, "slug" | "children" | "className" | "onOpen">) {
+   return (
+     <Suspense
+       fallback={
+-        <a href={`/help/${slug}`} className={[HELP_TEXT_LINK_CLASS, className].filter(Boolean).join(" ")}>
++        <a href={`/help/${slug}`} onClick={onOpen} className={[HELP_TEXT_LINK_CLASS, className].filter(Boolean).join(" ")}>
+           {children}
+         </a>
+       }
+     >
+-      <HelpLink slug={slug} className={className}>
++      <HelpLink slug={slug} className={className} onOpen={onOpen}>
+         {children}
+       </HelpLink>
+     </Suspense>
+diff --git a/apps/web/components/help/__tests__/HelpLink.test.tsx b/apps/web/components/help/__tests__/HelpLink.test.tsx
+index 5fe75ee2..6963f66c 100644
+--- a/apps/web/components/help/__tests__/HelpLink.test.tsx
++++ b/apps/web/components/help/__tests__/HelpLink.test.tsx
+@@ -41,6 +41,23 @@ describe("HelpLink", () => {
+     }
+   });
+ 
++  it("calls onOpen when the reader follows the link, in the sheet or a new tab", () => {
++    const onOpen = vi.fn();
++    render(<HelpLink slug="stream-dock" onOpen={onOpen}>Dock help</HelpLink>);
++    const link = screen.getByRole("link", { name: "Dock help" });
++    fireEvent.click(link);
++    expect(onOpen).toHaveBeenCalledTimes(1);
++    fireEvent.click(screen.getByRole("button", { name: "Close" }));
++    const stopNavigation = (event: MouseEvent) => event.preventDefault();
++    document.addEventListener("click", stopNavigation);
++    try {
++      fireEvent.click(link, { ctrlKey: true });
++    } finally {
++      document.removeEventListener("click", stopNavigation);
++    }
++    expect(onOpen).toHaveBeenCalledTimes(2);
++  });
++
+   it("closes from the close button", () => {
+     render(<HelpLink slug="stream-dock" />);
+     fireEvent.click(screen.getByRole("link", { name: "Stream Dock (your control panel)" }));
+diff --git a/apps/web/components/ui/PageHeader.tsx b/apps/web/components/ui/PageHeader.tsx
+index a345e6dc..273a15cb 100644
+--- a/apps/web/components/ui/PageHeader.tsx
++++ b/apps/web/components/ui/PageHeader.tsx
+@@ -3,6 +3,10 @@ import type { ReactNode } from "react";
+ /**
+  * PageHeader — title + optional eyebrow + description + actions row.
+  * Server-component-safe (no client hooks).
++ *
++ *   as="h2" + size="section": a header for one part of a page whose h1
++ *   lives elsewhere, e.g. an analyzer section, where the app's context
++ *   bar is the h1 (see components/analyzer/SectionHeader.tsx).
+  */
+ export interface PageHeaderProps {
+   title: ReactNode;
+@@ -10,15 +14,34 @@ export interface PageHeaderProps {
+   eyebrow?: ReactNode;
+   actions?: ReactNode;
+   align?: "left" | "center";
++  /** Heading level of the title. Default "h1". */
++  as?: "h1" | "h2";
++  /** "page" (default) or the smaller "section" type scale. */
++  size?: "page" | "section";
++  /** id for the description, e.g. for aria-describedby. */
++  descriptionId?: string;
+   className?: string;
+ }
+ 
++const TITLE_CLASS: Record<NonNullable<PageHeaderProps["size"]>, string> = {
++  page: "text-h1 font-bold text-text",
++  section: "text-h3 font-bold text-text",
++};
++
++const DESCRIPTION_CLASS: Record<NonNullable<PageHeaderProps["size"]>, string> = {
++  page: "max-w-2xl text-body-lg text-text-muted",
++  section: "max-w-3xl text-body text-text-muted",
++};
++
+ export function PageHeader({
+   title,
+   description,
+   eyebrow,
+   actions,
+   align = "left",
++  as: Heading = "h1",
++  size = "page",
++  descriptionId,
+   className = "",
+ }: PageHeaderProps) {
+   return (
+@@ -35,9 +58,9 @@ export function PageHeader({
+         {eyebrow ? (
+           <div className="overline text-accent-cyan">{eyebrow}</div>
+         ) : null}
+-        <h1
++        <Heading
+           className={[
+-            "text-h1 font-bold text-text",
++            TITLE_CLASS[size],
+             // The accent "spine" only reads when the title is left-aligned.
+             align === "center" ? "" : "title-spine",
+           ]
+@@ -45,9 +68,9 @@ export function PageHeader({
+             .join(" ")}
+         >
+           {title}
+-        </h1>
++        </Heading>
+         {description ? (
+-          <p className="max-w-2xl text-body-lg text-text-muted">
++          <p id={descriptionId} className={DESCRIPTION_CLASS[size]}>
+             {description}
+           </p>
+         ) : null}
+-- 
+2.43.0
+
+
+From f353835c03c7f143050eb01bcb7fe9a0ec892dd7 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 23 Oct 2026 02:32:43 +0000
+Subject: [PATCH 3/3] =?UTF-8?q?fix(web):=20drop=20map-veto=20claims=20and?=
+ =?UTF-8?q?=20stale=20"Settings=20=E2=86=92=20Builds"=20copy?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+There is no map-veto feature yet, so the landing page's Practice list
+and the sign-up page no longer promise one. The randomizer's build
+picker pointed at a "Settings → Builds" tab that no longer exists and
+named an internal catalog; it now says "Custom builds in the menu" and
+describes the built-in builds in plain words.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01KG8e5a59qtUDJJY3Fm1hxC
+---
+ apps/web/app/sign-up/[[...rest]]/page.tsx                   | 2 +-
+ .../analyzer/settings/randomizer/MatchupBuildPicker.tsx     | 6 +++---
+ apps/web/components/landing/LandingPageContent.tsx          | 2 +-
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/apps/web/app/sign-up/[[...rest]]/page.tsx b/apps/web/app/sign-up/[[...rest]]/page.tsx
+index f81047a7..95cd382c 100644
+--- a/apps/web/app/sign-up/[[...rest]]/page.tsx
++++ b/apps/web/app/sign-up/[[...rest]]/page.tsx
+@@ -80,7 +80,7 @@ const BULLETS: ReadonlyArray<MarketingBullet> = [
+   },
+   {
+     icon: ShieldCheck,
+-    text: "Per-opener W-L, per-map veto data, and dossiers that survive opponent name changes.",
++    text: "Per-opener W-L, per-map win rates, and dossiers that survive opponent name changes.",
+   },
+ ];
+ 
+diff --git a/apps/web/components/analyzer/settings/randomizer/MatchupBuildPicker.tsx b/apps/web/components/analyzer/settings/randomizer/MatchupBuildPicker.tsx
+index add2b709..67fb51d6 100644
+--- a/apps/web/components/analyzer/settings/randomizer/MatchupBuildPicker.tsx
++++ b/apps/web/components/analyzer/settings/randomizer/MatchupBuildPicker.tsx
+@@ -115,14 +115,14 @@ export function MatchupBuildPicker({
+         <Card>
+           <EmptyStatePanel
+             title="No builds eligible for this matchup"
+-            description="The bundled catalog covers Protoss matchups for now — add a Custom build under Settings → Builds (with the right Race / vsRace) to populate Terran and Zerg matchups."
++            description="The builds that come with SC2 Tools cover Protoss matchups for now. For Terran and Zerg, add builds with the right race and opponent race under Custom builds in the menu."
+           />
+         </Card>
+       ) : (
+         <>
+           <Section
+             title="Catalog builds"
+-            description="From the bundled BUILD_DEFINITIONS catalog (race-generic + matchup-specific entries)."
++            description="Builds that come with SC2 Tools, for this matchup or for your race in any matchup."
+           >
+             <BuildChecklist
+               candidates={catalog}
+@@ -136,7 +136,7 @@ export function MatchupBuildPicker({
+           </Section>
+           <Section
+             title="Your custom builds"
+-            description="Custom builds whose race / vsRace fit this matchup. Add more under Settings → Builds."
++            description="Your custom builds whose race and opponent race fit this matchup. Add more under Custom builds in the menu."
+           >
+             {onSearchChange ? (
+               <input
+diff --git a/apps/web/components/landing/LandingPageContent.tsx b/apps/web/components/landing/LandingPageContent.tsx
+index d7a064f0..2c5c2839 100644
+--- a/apps/web/components/landing/LandingPageContent.tsx
++++ b/apps/web/components/landing/LandingPageContent.tsx
+@@ -460,7 +460,7 @@ const INCLUDED_GROUPS = [
+       "Custom rules with durable background reclassification",
+       "Build Roulette plus one- or two-unit Gateway rolls",
+       "Named or anonymous Community publishing",
+-      "Map-veto help, daily challenges and season recaps",
++      "Daily challenges, replay quizzes and season recaps",
+       "Touch-friendly army, cost and upgrade inspection",
+     ],
+   },
+-- 
+2.43.0
+
