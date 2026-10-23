@@ -2,6 +2,7 @@
 
 import {
   DatabaseBackup,
+  ClockAlert,
   Download,
   MessageSquareWarning,
   MonitorCheck,
@@ -19,6 +20,7 @@ import type {
   AdminEvent,
   AdminEventAgentConnectedPayload,
   AdminEventBackupStalePayload,
+  AdminEventJobOverduePayload,
   AdminEventDownloadPayload,
   AdminEventSignupPayload,
   AdminEventUserMessagePayload,
@@ -72,6 +74,7 @@ export function AdminEventRow({
             {meta.subtitle}
           </p>
         ) : null}
+        {meta.href ? <a className="inline-flex min-h-11 items-center text-caption text-accent underline" href={meta.href}>Open Infrastructure →</a> : null}
         {report?.context ? <ReportContextLines payload={report} /> : null}
         {meta.body ? (
           <p className="mt-1.5 whitespace-pre-wrap break-words rounded-lg border border-border bg-bg-elevated/40 px-3 py-2 text-caption text-text-muted">
@@ -94,6 +97,7 @@ const ICON_CLASSES: Record<AdminEvent["type"], string> = {
   agent_connected: "border-success/40 bg-success/10 text-success",
   user_message: "border-warning/40 bg-warning/10 text-warning",
   backup_stale: "border-danger/40 bg-danger/10 text-danger",
+  job_overdue: "border-danger/40 bg-danger/10 text-danger",
 };
 
 function EventIcon({ type }: { type: AdminEvent["type"] }) {
@@ -101,6 +105,7 @@ function EventIcon({ type }: { type: AdminEvent["type"] }) {
   if (type === "agent_connected") return <MonitorCheck className="h-4 w-4" />;
   if (type === "user_message")
     return <MessageSquareWarning className="h-4 w-4" />;
+  if (type === "job_overdue") return <ClockAlert className="h-4 w-4" />;
   if (type === "backup_stale") return <DatabaseBackup className="h-4 w-4" />;
   return <Download className="h-4 w-4" />;
 }
@@ -109,6 +114,7 @@ function describe(event: AdminEvent): {
   title: string;
   subtitle: string;
   body?: string;
+  href?: string;
 } {
   if (event.type === "user_signup") {
     const p = event.payload as AdminEventSignupPayload;
@@ -126,6 +132,10 @@ function describe(event: AdminEvent): {
       subtitle: `from ${from}${p.source === "email" ? " · via email" : ""}`,
       body: p.message,
     };
+  }
+  if (event.type === "job_overdue") {
+    const payload=event.payload as AdminEventJobOverduePayload;
+    return { title:"Background job overdue", subtitle:`${payload.job} · no OK run for at least 3 intervals`, href:"/admin/health#background-jobs" };
   }
   if (event.type === "backup_stale") {
     return describeBackupStale(event.payload as AdminEventBackupStalePayload);

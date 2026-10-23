@@ -33,6 +33,7 @@
  */
 
 const express = require("express");
+const { buildAdminOpsRouter, requireKnownUser } = require("./adminOps");
 const { analyticsRange } = require("../services/analytics");
 const { buildAdminGlobalTrendsRouter } = require("./adminGlobalTrends");
 const { buildAdminGuidesRouter } = require("./adminGuides");
@@ -43,6 +44,13 @@ const {
 
 /**
  * @param {{
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
+ *   adminAudit?: import("../services/adminAudit").AdminAuditService,
+ *   pairings?: import("../services/devicePairings").DevicePairingsService,
+ *   replayArchiveEnabled?: boolean,
+ *   protectedAdminIds?: string[],
+ *   protectedAdminEmails?: string[],
+ *   onAdminRevoked?: (id:string)=>void,
  *   admin: import('../services/admin').AdminService,
  *   adminGlobal: import('../services/adminGlobal').AdminGlobalService,
  *   adminGlobalTrends: import('../services/adminGlobalTrends').AdminGlobalTrendsService,
@@ -85,6 +93,8 @@ function buildAdminRouter(deps) {
     }
     next();
   });
+
+  if (deps.jobLedger && deps.adminAudit) router.use("/admin", buildAdminOpsRouter(deps));
 
   router.use("/admin/global-trends", buildAdminGlobalTrendsRouter(deps.adminGlobalTrends));
   // SC2 Tools Guides admin (notes, runs, backfill, videos). Mounted
@@ -341,6 +351,7 @@ function buildAdminRouter(deps) {
           res.status(404).json({ error: { code: "opponent_not_found" } });
           return;
         }
+        res.locals.auditResult = result;
         res.status(202).json(result);
       } catch (err) {
         next(err);
@@ -431,9 +442,12 @@ function buildAdminRouter(deps) {
     "/admin/users/:userId/rebuild-opponents",
     async (req, res, next) => {
       try {
+        await requireKnownUser(deps, String(req.params.userId));
+        res.locals.auditAction = "user.rebuild-opponents"; res.locals.auditTarget = String(req.params.userId);
         const result = await deps.admin.rebuildOpponentsForUser(
           String(req.params.userId),
         );
+        res.locals.auditResult = result;
         res.status(202).json(result);
       } catch (err) {
         next(err);
@@ -445,13 +459,17 @@ function buildAdminRouter(deps) {
     "/admin/users/:userId/wipe-games",
     async (req, res, next) => {
       try {
+        await requireKnownUser(deps, String(req.params.userId));
+        res.locals.auditAction = "user.wipe-games"; res.locals.auditTarget = String(req.params.userId);
         // GDPR.wipeGames is the single source of truth for cascading
         // a user's data delete (games + game_details + opponents
         // re-derive + macroJobs). The admin route just delegates.
-        const result = await deps.gdpr.wipeGames(
-          String(req.params.userId),
-          {},
-        );
+        const expectedGames = req.body?.expectedGames;
+        if (expectedGames !== undefined && (!Number.isSafeInteger(expectedGames) || expectedGames < 0)) {
+          res.status(400).json({ error: { code: "bad_request" } }); return;
+        }
+        const result = await deps.gdpr.wipeGames(String(req.params.userId), expectedGames === undefined ? {} : { expectedGames });
+        res.locals.auditResult = result;
         res.status(202).json(result);
       } catch (err) {
         next(err);

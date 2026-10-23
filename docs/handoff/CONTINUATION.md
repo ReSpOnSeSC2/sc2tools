@@ -6,7 +6,7 @@ The owner requested the entire HANDOFF program through waves 2–6, and no AI fe
 
 PR #647 was already merged at task start; its description was completed accurately. PR #648 fixed all twelve confirmed phase2a findings, the bundle/CI failure and the requested placement of opponent replay history directly above notes. All 44 review dispositions are recorded in review-resolution-phase2a.md.
 
-All 25 Wave 1 phase2b packs are merged with applicable CI and deployment checks: #649, #650, #651, #652, #653, #654, #656, #658 and #657. Wave 2 merged milestones: #655 server ML retirement; #659 pairing/devices; #663 resumable setup; #664 build editor safety; #660 shared realtime; #666 setup health/imports; #669 filters/Trends; #662 guides; #661 desktop pairing recovery/calm sync. PR #687 merged the twenty-source integration with all final CI and Vercel green; current main is da80e233.
+All 25 Wave 1 phase2b packs are merged with applicable CI and deployment checks: #649, #650, #651, #652, #653, #654, #656, #658 and #657. Wave 2 merged milestones: #655 server ML retirement; #659 pairing/devices; #663 resumable setup; #664 build editor safety; #660 shared realtime; #666 setup health/imports; #669 filters/Trends; #662 guides; #661 desktop pairing recovery/calm sync. PR #687 merged the twenty-source integration with all final CI and Vercel green; main reached da80e233. Ops-console #689 is also merged with all CI/deployment green; current main is37736a0b.
 
 ## Combined Wave 2 validation
 
@@ -16,8 +16,8 @@ The source drafts are frozen. Shared integration fixes include synchronous dialo
 
 ## Active follow-ons
 
-- Root: game-page-polish-3 in wave2-game-header; header/actions/formatting and finished check-in summary are implemented with188 component assertions,24 browser checks, types/lint/build/budgets passing. PR/remote CI pending. Then own Wave3 macro workspace and shared clock.
-- API agent: ops-console #689 frozen at986aa647, main integrated; remote CI pending. Admin4/5/6/7 continue separately. Audit actor/target scrubbing must use the shared write lease; job_runs is global. Frozen snapshot675 and erasure680 runbooks describe manual migration/rollback and durable Clerk retries.
+- Root: game-page-polish-3 in wave2-game-header; header/actions/formatting and finished check-in summary are implemented with188 component assertions,24 browser checks, types/lint/build/budgets passing. PR #690 is open; inherited Community Back/Forward race reproduced and fixed (12 unit/18 repeated browser checks). Final CI pending. Root also owns Wave3 macro workspace/shared clock in wave3-game-workspace; foundations pass32 assertions, full types and strict lint except a corrected raw memo warning; page integration is unfinished.
+- API agent: ops-console #689 merged at37736a0b after root privacy review and final CI/deployment pass. Admin4/5/6/7 continue separately. Audit actor/target scrubbing must use the shared write lease; job_runs is global. Frozen snapshot675 and erasure680 runbooks describe manual migration/rollback and durable Clerk retries.
 - Chrome agent: profiles-replays-expansion-1 #688 frozen at424f9340, main integrated; remote CI pending. Wave3 guide expansions1/2/3 next. Preserve existing SectionNav defaults and all privacy projections.
 - Desktop agent: Wave3 private scouting card and separate check-in GUI expansion, isolated on frozen installer/runtime foundations. Never send private briefs to shared user or OBS rooms.
 - Continue every remaining item in plan/final-plan.json through waves 3–6 and write the complete owner setup guide at docs/SETUP_GUIDE.md. These later waves are not complete.

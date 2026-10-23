@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 const { DETAIL_VERSION, DETAIL_READ_FIELDS, extractDetailSummary } = require("./trendsExplorerDetail");
 const BACKFILL_SORT = Object.freeze({ date: -1, _id: -1 });
@@ -21,8 +22,9 @@ function pendingSummaryMatch() {
  * compare-and-set prevents a background result from replacing fresh ingest.
  */
 class TrendsExplorerBackfill {
-  /** @param {{db:{gameDetails:import('mongodb').Collection},gameDetails:import('./gameDetails').GameDetailsService,logger?:any}} deps */
+  /** @param {{db:{gameDetails:import('mongodb').Collection},gameDetails:import('./gameDetails').GameDetailsService,logger?:any,jobLedger?:import("../util/jobLedger").JobLedger}} deps */
   constructor(deps) {
+    this.observedBatch = observeJob(deps, "trends-history", 5 * 60 * 1000, (options) => this.runBatch(options), { manual: false, firstDelayMs: 10000, minRecordIntervalMs: 5 * 60 * 1000, envFlag: "always enabled; successful batches sampled every 5 min" });
     this.collection = deps.db.gameDetails;
     this.details = deps.gameDetails;
     this.externalStore = /** @type {any} */ (deps.gameDetails.store)?.kind === "r2";
@@ -155,7 +157,7 @@ class TrendsExplorerBackfill {
       this.running = true;
       let nextDelay = delayMs;
       try {
-        const result = await this.runBatch({ batchSize, signal: this.controller?.signal });
+        const result = await this.observedBatch({ batchSize, signal: this.controller?.signal });
         if ((result.done && !this.completionLogged) || (result.updated > 0 && Math.floor(this.progress.updated / 1000) !== Math.floor((this.progress.updated - result.updated) / 1000))) {
           this.logger?.info?.({ ...this.progress, complete: result.done }, "Trends history materialization progress");
         }

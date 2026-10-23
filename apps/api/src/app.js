@@ -1,6 +1,8 @@
 "use strict";
 
 const express = require("express");
+const { JobLedger } = require("./util/jobLedger");
+const { AdminAuditService, adminAuditMiddleware } = require("./services/adminAudit");
 const helmetModule = require("helmet");
 const cors = require("cors");
 const rateLimitModule = require("express-rate-limit");
@@ -689,6 +691,8 @@ function makeServices(deps, clerk) {
       body: "Your desktop app needs an update to keep syncing.", href: "/download",
       groupKey: `agent-update:${release.minSupportedVersion}`, eventKey: `agent-update:${release.minSupportedVersion}` });
   };
+  const jobLedger = new JobLedger({ db: deps.db, adminEvents });
+  const adminAudit = new AdminAuditService({ db: deps.db });
   const siteStats = new SiteStatsService(deps.db, {
     secret: deps.config.serverPepper,
     logger: deps.logger,
@@ -712,6 +716,7 @@ function makeServices(deps, clerk) {
   // admin "Recompute now" route calls guideStatsJob.runOnce({ force: true }).
   const guideStats = new GuideStatsService(deps.db, { logger: deps.logger });
   const guideStatsJob = buildGuideStatsRecomputeJob({
+    jobLedger, enabled: deps.config.guidesEnabled,
     db: deps.db,
     guideStats,
     logger: deps.logger,
@@ -733,7 +738,7 @@ function makeServices(deps, clerk) {
     },
     logger: deps.logger,
   });
-  const guideVideosJob = buildGuideVideosSyncJob({ guideVideos, logger: deps.logger });
+  const guideVideosJob = buildGuideVideosSyncJob({ guideVideos, logger: deps.logger, jobLedger, enabled: deps.config.guidesEnabled });
   // SC2 Tools Guides read layer (public /v1/guides, routes/guides.js) and
   // the admin-edited coach's notes it shows (routes/adminGuides.js).
   const guideNotes = new GuideNotesService(deps.db);
@@ -846,6 +851,7 @@ function makeServices(deps, clerk) {
     },
   });
   return {
+    jobLedger, adminAudit,
     users,
     opponents,
     opponentIdentityMatcher,
@@ -1095,6 +1101,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   // ones the auth-using router won't even handle. Mounting public routes
   // first short-circuits before those auth-eager middlewares get a turn.
   app.use(SERVICE.ROUTE_PREFIX, buildHealthRouter({ db: deps.db }));
+  app.use(SERVICE.ROUTE_PREFIX, adminAuditMiddleware(services.adminAudit, (req) => isAdmin(req)));
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildInfrastructureCostsRouter({
@@ -1164,6 +1171,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAgentVersionRouter({
+      adminAudit: services.adminAudit,
       announcements: services.announcements,
       agentVersion: services.agentVersion,
       adminToken: deps.config.agentReleaseAdminToken,
@@ -1377,6 +1385,12 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildAdminRouter({
       announcements: services.announcements,
       supportMessages: services.supportMessages,
+      jobLedger: services.jobLedger, adminAudit: services.adminAudit,
+      protectedAdminIds: deps.config.adminUserIds || [],
+      protectedAdminEmails: deps.config.adminEmails || [],
+      onAdminRevoked: (clerkId) => { adminClerkIds.delete(clerkId); },
+      pairings: services.pairings,
+      replayArchiveEnabled: deps.config.replayFilesStore === "r2",
       admin: services.admin,
       adminGlobal: services.adminGlobal,
       adminGlobalTrends: services.adminGlobalTrends,
