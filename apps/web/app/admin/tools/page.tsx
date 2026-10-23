@@ -1,4 +1,8 @@
 "use client";
+import { Field } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Input";
+import { Button } from "@/components/ui/Button";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { useState } from "react";
 import { useAuth } from "@clerk/nextjs";
@@ -34,14 +38,8 @@ import type { RebuildResp, WipeResp } from "../components/adminTypes";
 export default function AdminToolsPage() {
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold">Tools</h1>
-        <p className="text-text-muted">
-          Operational utilities for repairing data integrity issues
-          and supporting individual users. All actions are logged
-          server-side.
-        </p>
-      </header>
+      <AdminPageHeader anchor="users-and-repairing-data" title="Tools" description="Repair account data after confirming the intended target." />
+      <details className="text-caption text-text-muted"><summary>Learn more</summary><p>Rebuild recomputes derived opponent counters from stored games. Wipe permanently deletes replay history for the chosen user. Check the account ID and confirmation before running a tool.</p></details>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <RebuildMyOpponentsTool />
@@ -96,13 +94,13 @@ function RebuildMyOpponentsTool() {
         looks inflated after a re-sync.
       </p>
       {state.kind === "idle" ? (
-        <button
+        <Button variant="primary" size="sm"
           type="button"
-          className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
+          className="mt-3"
           onClick={() => setState({ kind: "confirm" })}
         >
           Rebuild my opponents
-        </button>
+        </Button>
       ) : null}
       {state.kind === "confirm" ? (
         <div className="mt-3">
@@ -180,26 +178,26 @@ function RebuildUserOpponentsTool() {
         Useful when a user reports inflated numbers and you have
         their userId from the Users tab.
       </p>
-      <input
+      <Field label="User ID" className="mt-3"><Input
         type="text"
         value={userId}
         onChange={(e) => setUserId(e.target.value)}
         placeholder="e.g. u_abc123"
-        className="mt-3 w-full rounded-lg border border-border bg-bg-surface px-3 py-2 font-mono text-sm text-text placeholder:text-text-dim focus:border-accent focus:outline-none"
+        className="font-mono"
         spellCheck={false}
         autoCapitalize="none"
         autoCorrect="off"
         disabled={state.kind === "busy"}
-      />
+      /></Field>
       {state.kind === "idle" ? (
-        <button
+        <Button variant="primary" size="sm"
           type="button"
-          className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+          className="mt-3"
           onClick={() => setState({ kind: "confirm" })}
           disabled={!canRun}
         >
           Rebuild opponents
-        </button>
+        </Button>
       ) : null}
       {state.kind === "confirm" ? (
         <div className="mt-3">
@@ -284,17 +282,17 @@ function WipeUserGamesTool() {
         and custom builds are preserved — only replay-derived data
         is removed.
       </p>
-      <input
+      <Field label="User ID" className="mt-3"><Input
         type="text"
         value={userId}
         onChange={(e) => setUserId(e.target.value)}
         placeholder="e.g. u_abc123"
-        className="mt-3 w-full rounded-lg border border-border bg-bg-surface px-3 py-2 font-mono text-sm text-text placeholder:text-text-dim focus:border-danger focus:outline-none"
+        className="font-mono"
         spellCheck={false}
         autoCapitalize="none"
         autoCorrect="off"
         disabled={state.kind === "busy"}
-      />
+      /></Field>
       {state.kind === "idle" ? (
         <button
           type="button"

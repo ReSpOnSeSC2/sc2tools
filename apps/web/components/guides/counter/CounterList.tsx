@@ -1,3 +1,4 @@
+import { MatchupSwitcher } from "../MatchupSwitcher";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
@@ -30,6 +31,7 @@ export function CounterList({ payload }: { payload: GuideMatchupPayload }) {
     <div className="space-y-8">
       <GuideJsonLd items={[breadcrumbJsonLd(crumbs)]} />
       <GuideBreadcrumbs crumbs={crumbs} />
+      <MatchupSwitcher current={payload.matchup} era={payload.era} counters />
       <div className="space-y-2">
         <PageHeader
           eyebrow={`${payload.matchup} counter guides`}

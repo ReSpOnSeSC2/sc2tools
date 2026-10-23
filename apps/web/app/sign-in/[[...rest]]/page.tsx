@@ -6,7 +6,6 @@ import { SignIn } from "@clerk/nextjs";
 import {
   Cloud,
   Replace,
-  Sparkles,
   Tv,
   type LucideIcon,
 } from "lucide-react";
@@ -31,7 +30,7 @@ export default function SignInPage() {
 function SignInWidget({ theme }: { theme: Theme }) {
   const searchParams = useSearchParams();
   // Only the allowlisted /try hand-off forces a destination; otherwise
-  // Clerk keeps its default behaviour (no open redirects added here).
+  // Clerk keeps its default behavior (no open redirects added here).
   const redirect = safeAuthRedirect(searchParams.get("redirect_url"));
   return (
     <SignIn
@@ -99,25 +98,6 @@ function SignInMarketing() {
           </li>
         ))}
       </ul>
-      <FeatureHighlight />
-    </div>
-  );
-}
-
-function FeatureHighlight() {
-  return (
-    <div className="rounded-lg border border-border bg-bg-elevated/60 p-4">
-      <div className="flex items-start gap-3">
-        <Sparkles
-          className="mt-0.5 h-4 w-4 flex-shrink-0 text-accent-cyan"
-          aria-hidden
-        />
-        <p className="text-caption text-text-muted">
-          <span className="font-semibold text-text">Latest:</span>{" "}
-          Strategy detection now spots ZvT openers from the first scouting
-          tells — live in your dashboard the moment you sign in.
-        </p>
-      </div>
     </div>
   );
 }

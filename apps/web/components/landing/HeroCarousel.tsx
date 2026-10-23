@@ -1,209 +1,57 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 
-/**
- * HeroCarousel — landing hero carousel.
- *
- * Behaviour:
- *   - Auto-advances every `intervalMs` milliseconds (paused while
- *     hovered/focused or when prefers-reduced-motion is set).
- *   - Manual nav arrows + dot indicators below.
- *   - Keyboard: ←/→ navigate, Home/End jump to first/last.
- *   - Each slide is rendered with `aria-hidden` when off-screen so
- *     screen readers only announce the active panel.
- *
- * The slides themselves are passed in as children so the carousel
- * stays presentation-only — the landing page composes brand-specific
- * slides without HeroCarousel having to know about them.
- */
+export interface HeroCarouselSlide { id: string; label: string; content: ReactNode }
+export interface HeroCarouselProps { slides: ReadonlyArray<HeroCarouselSlide>; intervalMs?: number; ariaLabel?: string }
 
-export interface HeroCarouselSlide {
-  id: string;
-  /** Used for the dot label and the live region announcement. */
-  label: string;
-  content: ReactNode;
-}
-
-export interface HeroCarouselProps {
-  slides: ReadonlyArray<HeroCarouselSlide>;
-  /** Auto-advance interval; default 5500ms. Set 0 to disable. */
-  intervalMs?: number;
-  /** ARIA label for the whole carousel region. */
-  ariaLabel?: string;
-}
-
-export function HeroCarousel({
-  slides,
-  intervalMs = 5500,
-  ariaLabel = "Product highlights",
-}: HeroCarouselProps) {
+/** Swipe strip on phones, stable-height pausable slideshow on larger screens. */
+export function HeroCarousel({ slides, intervalMs = 5500, ariaLabel = "Product highlights" }: HeroCarouselProps) {
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
+  const [desktop, setDesktop] = useState(false);
+  const [visible, setVisible] = useState(true);
+  const pointer = useRef<{ x: number; y: number } | null>(null);
   const total = slides.length;
-  const safeActive = total > 0 ? ((active % total) + total) % total : 0;
-
-  const goTo = useCallback(
-    (next: number) => {
-      if (total === 0) return;
-      setActive(((next % total) + total) % total);
-    },
-    [total],
-  );
-  const goNext = useCallback(() => goTo(safeActive + 1), [goTo, safeActive]);
-  const goPrev = useCallback(() => goTo(safeActive - 1), [goTo, safeActive]);
-
-  // Auto-advance
+  const current = total ? active % total : 0;
   useEffect(() => {
-    if (intervalMs <= 0 || paused || total <= 1) return;
-    if (typeof window === "undefined") return;
-    const reduced = window.matchMedia?.(
-      "(prefers-reduced-motion: reduce)",
-    )?.matches;
-    if (reduced) return;
-    const handle = window.setInterval(() => {
-      setActive((cur) => (cur + 1) % total);
-    }, intervalMs);
-    return () => window.clearInterval(handle);
-  }, [intervalMs, paused, total]);
-
-  if (total === 0) return null;
-
-  return (
-    <section
-      ref={containerRef}
-      aria-roledescription="carousel"
-      aria-label={ariaLabel}
-      // Hover does NOT pause — the user wants the carousel to keep
-      // sliding even when they're reading it. Focus still pauses
-      // because a keyboard user reading the slide should be able to
-      // finish before the next one appears (a11y best practice).
-      onFocus={() => setPaused(true)}
-      onBlur={(e) => {
-        if (
-          !containerRef.current ||
-          !containerRef.current.contains(e.relatedTarget as Node | null)
-        ) {
-          setPaused(false);
-        }
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "ArrowRight") {
-          e.preventDefault();
-          goNext();
-        } else if (e.key === "ArrowLeft") {
-          e.preventDefault();
-          goPrev();
-        } else if (e.key === "Home") {
-          e.preventDefault();
-          goTo(0);
-        } else if (e.key === "End") {
-          e.preventDefault();
-          goTo(total - 1);
-        }
-      }}
-      className="relative"
-    >
-      <div
-        aria-live="polite"
-        className="group relative overflow-hidden rounded-md border-2 border-line bg-bg-elevated/40 shadow-hard"
-      >
-        <ul className="relative" role="list">
-          {slides.map((slide, i) => {
-            const isActive = i === safeActive;
-            return (
-              <li
-                key={slide.id}
-                role="group"
-                aria-roledescription="slide"
-                aria-label={`${slide.label} — ${i + 1} of ${total}`}
-                aria-hidden={!isActive}
-                className={[
-                  "transition-opacity duration-500 motion-reduce:transition-none",
-                  isActive
-                    ? "relative opacity-100"
-                    : "pointer-events-none absolute inset-0 opacity-0",
-                ].join(" ")}
-              >
-                {slide.content}
-              </li>
-            );
-          })}
-        </ul>
-
-        {total > 1 ? (
-          <>
-            <button
-              type="button"
-              onClick={goPrev}
-              aria-label="Previous slide"
-              className={NAV_BTN_CLS + " left-2 sm:left-3"}
-            >
-              <ChevronLeft className="h-5 w-5" aria-hidden />
-            </button>
-            <button
-              type="button"
-              onClick={goNext}
-              aria-label="Next slide"
-              className={NAV_BTN_CLS + " right-2 sm:right-3"}
-            >
-              <ChevronRight className="h-5 w-5" aria-hidden />
-            </button>
-          </>
-        ) : null}
-      </div>
-
-      {total > 1 ? (
-        <div
-          role="tablist"
-          aria-label="Slide selector"
-          className="mt-3 flex items-center justify-center gap-2"
-        >
-          {slides.map((slide, i) => {
-            const isActive = i === safeActive;
-            return (
-              <button
-                key={slide.id}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                aria-controls={`carousel-slide-${slide.id}`}
-                onClick={() => goTo(i)}
-                className={[
-                  "h-1.5 rounded-none transition-all motion-reduce:transition-none",
-                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-                  isActive
-                    ? "w-8 bg-editorial"
-                    : "w-3 bg-border hover:bg-border-strong",
-                ].join(" ")}
-              >
-                <span className="sr-only">Go to {slide.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-    </section>
-  );
+    const media = window.matchMedia?.("(min-width: 768px)");
+    const update = () => setDesktop(media?.matches ?? true);
+    update(); media?.addEventListener?.("change", update);
+    const visibility = () => setVisible(!document.hidden);
+    visibility(); document.addEventListener("visibilitychange", visibility);
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) setPaused(true);
+    return () => { media?.removeEventListener?.("change", update); document.removeEventListener("visibilitychange", visibility); };
+  }, []);
+  const playing = desktop && !paused && visible && intervalMs > 0 && total > 1;
+  useEffect(() => {
+    if (!playing) return;
+    const timer = window.setInterval(() => setActive((value) => (value + 1) % total), intervalMs);
+    return () => window.clearInterval(timer);
+  }, [playing, intervalMs, total]);
+  function go(next: number) { setPaused(true); setActive((next + total) % total); }
+  if (!total) return null;
+  return <section aria-roledescription="carousel" aria-label={ariaLabel} aria-live={playing ? "off" : "polite"} className="relative min-w-0"
+    onKeyDown={(event) => { const next = event.key === "ArrowRight" ? current + 1 : event.key === "ArrowLeft" ? current - 1 : event.key === "Home" ? 0 : event.key === "End" ? total - 1 : null; if (next !== null) { event.preventDefault(); go(next); } }}>
+    <div className="group relative overflow-hidden rounded-md border-2 border-line bg-bg-elevated/40 shadow-hard">
+      <ul role="list" className="grid max-md:flex max-md:snap-x max-md:snap-mandatory max-md:gap-3 max-md:overflow-x-auto"
+        style={{ touchAction: desktop ? "pan-y" : "auto" }}
+        onScroll={() => { if (!desktop) setPaused(true); }}
+        onPointerDown={(event) => { pointer.current = { x: event.clientX, y: event.clientY }; }}
+        onPointerUp={(event) => { const from = pointer.current; pointer.current = null; if (!from || !desktop) return; const dx = event.clientX - from.x; const dy = event.clientY - from.y; if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) go(current + (dx < 0 ? 1 : -1)); }}>
+        {slides.map((slide, index) => <li key={slide.id} role="group" aria-roledescription="slide" aria-label={slide.label + " — " + (index + 1) + " of " + total}
+          aria-hidden={desktop ? index !== current : undefined} inert={desktop && index !== current ? true : undefined}
+          className={["col-start-1 row-start-1 min-w-0 transition-opacity duration-500 motion-reduce:transition-none max-md:w-[85%] max-md:shrink-0 max-md:snap-center max-md:opacity-100", index === current ? "opacity-100" : "md:pointer-events-none opacity-0"].join(" ")}>{slide.content}</li>)}
+      </ul>
+      {total > 1 ? <><button type="button" aria-label="Previous slide" onClick={() => go(current - 1)} className={NAV + " left-2"}><ChevronLeft aria-hidden className="h-5 w-5" /></button>
+        <button type="button" aria-label="Next slide" onClick={() => go(current + 1)} className={NAV + " right-2"}><ChevronRight aria-hidden className="h-5 w-5" /></button></> : null}
+    </div>
+    {total > 1 ? <div aria-label="Slide selector" className="mt-3 hidden items-center justify-center gap-2 md:flex">
+      {slides.map((slide, index) => <button key={slide.id} type="button" aria-label={"Show slide " + (index + 1) + " of " + total + ": " + slide.label} aria-current={index === current ? "true" : undefined}
+        onClick={() => go(index)} className="inline-flex h-6 min-w-6 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><span aria-hidden className={index === current ? "h-1.5 w-8 bg-editorial" : "h-1.5 w-3 bg-border"} /></button>)}
+      <button type="button" aria-label={paused ? "Play slideshow" : "Pause slideshow"} onClick={() => setPaused((value) => !value)} className="inline-flex h-11 w-11 items-center justify-center rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{paused ? <Play aria-hidden className="h-5 w-5" /> : <Pause aria-hidden className="h-5 w-5" />}</button>
+    </div> : null}
+  </section>;
 }
-
-const NAV_BTN_CLS = [
-  "absolute top-1/2 z-10 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center",
-  "rounded-md border border-border bg-bg-surface/80 text-text shadow-md backdrop-blur",
-  "hover:bg-bg-surface hover:border-editorial",
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-  // Hidden by default; fade in when the visitor hovers the carousel
-  // or focuses any element inside it (so keyboard users can find them).
-  "opacity-0 motion-safe:transition-opacity motion-safe:duration-200",
-  "group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100",
-  "motion-reduce:opacity-100",
-].join(" ");
+const NAV = "absolute top-1/2 z-10 hidden h-11 w-11 -translate-y-1/2 items-center justify-center rounded-md border border-border bg-bg-surface/80 text-text opacity-0 md:inline-flex group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100 motion-reduce:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";

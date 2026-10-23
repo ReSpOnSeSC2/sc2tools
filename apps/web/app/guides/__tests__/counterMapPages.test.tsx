@@ -16,6 +16,8 @@ vi.mock("@/lib/guides/api", () => ({
   fetchPublishedGuidePaths: mocks.fetchPublishedGuidePaths,
 }));
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+  usePathname: () => "/guides/pvz/stargate-into-glaives",
   notFound: () => {
     throw Object.assign(new Error("NEXT_NOT_FOUND"), { digest: "NEXT_NOT_FOUND" });
   },
@@ -53,6 +55,18 @@ afterEach(() => {
 });
 
 describe("/guides/[matchup]/counter/[strategy]", () => {
+  it.each([
+    [{ low: 0.55, high: 0.65 }, "Your race is favoured"],
+    [{ low: 0.45, high: 0.55 }, "Too close to call"],
+    [{ low: 0.35, high: 0.45 }, "Your race is behind"],
+  ])("labels the counter headline from its likely range %j", async (ci, verdict) => {
+    mocks.fetchGuideCounter.mockResolvedValue(ok({ ...FIXTURE_COUNTER_PUBLISHED, overall: { ...FIXTURE_COUNTER_PUBLISHED.overall, ci } }));
+    render(await CounterGuidePage(COUNTER_PARAMS));
+    expect(within(screen.getByTestId("guide-headline")).getByText(verdict)).toBeTruthy();
+    expect(screen.getByText(/Based on 236 games from/)).toBeTruthy();
+    expect(screen.getByTestId("guide-headline").textContent).not.toContain("games");
+  });
+
   it("titles the page from the payload and describes it with n and the stats date", async () => {
     mocks.fetchGuideCounter.mockResolvedValue(ok(FIXTURE_COUNTER_PUBLISHED));
     const md = await counterMetadata(COUNTER_PARAMS);
@@ -79,7 +93,7 @@ describe("/guides/[matchup]/counter/[strategy]", () => {
     expect(within(list).getByRole("link", { name: first.name }).getAttribute("href")).toBe(
       `/guides/pvz/${first.buildSlug}`,
     );
-    expect(list.textContent).toContain(`n = ${first.games} games from ${first.users} players`);
+    expect(list.textContent).toContain(`Based on ${first.games} games from ${first.users} players`);
     for (const entry of buildCounterIntro(FIXTURE_COUNTER_PUBLISHED)) {
       expect(document.querySelector(`[data-copy-id="${entry.id}"]`)?.textContent).toBe(entry.text);
     }
@@ -120,7 +134,7 @@ describe("/guides/[matchup]/counter/[strategy]", () => {
     render(await CounterGuidePage(COUNTER_PARAMS));
     const pct = `${(FIXTURE_COUNTER_PUBLISHED.overall.winRate * 100).toFixed(1)}%`;
     expect(screen.getByTestId("guide-headline").textContent).toBe(
-      `Protoss win rate against it: ${pct} over ${FIXTURE_COUNTER_PUBLISHED.overall.games} games`,
+      `Protoss win rate against it: ${pct} Your race is favoured`,
     );
   });
 
@@ -204,3 +218,5 @@ describe("/guides/maps/[map]", () => {
     expect(mocks.fetchGuideMap).not.toHaveBeenCalled();
   });
 });
+
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false }) }));

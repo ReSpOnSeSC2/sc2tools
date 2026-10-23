@@ -1,4 +1,5 @@
 "use client";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
@@ -72,16 +73,7 @@ export default function AdminPlayerChannelsPage() {
   const total = data?.total ?? 0;
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div className="max-w-2xl space-y-2">
-          <h1 className="text-3xl font-bold">Player channels</h1>
-          <p className="text-body text-text-muted">The shared Twitch and YouTube directory. Link a channel once and every user sees it at the top of that player&apos;s opponent profile. Replays show a recording link only when a matching recording and timestamp are available.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" iconLeft={<Download className="h-4 w-4" aria-hidden />} loading={busy === "import"} disabled={Boolean(busy) || Boolean(error) || isLoading} onClick={() => void importPulse()}>Import SC2Pulse</Button>
-          <Button iconLeft={<Plus className="h-4 w-4" aria-hidden />} disabled={Boolean(busy) || Boolean(error) || isLoading} onClick={() => setEditor("new")}>Add player</Button>
-        </div>
-      </header>
+      <AdminPageHeader anchor="identity-and-channel-review" title="Player channels" description="Review and maintain shared player channels." actions={<><Button variant="secondary" iconLeft={<Download className="h-4 w-4" aria-hidden />} loading={busy === "import"} disabled={Boolean(busy) || Boolean(error) || isLoading} onClick={() => void importPulse()}>Import SC2Pulse</Button><Button iconLeft={<Plus className="h-4 w-4" aria-hidden />} disabled={Boolean(busy) || Boolean(error) || isLoading} onClick={() => setEditor("new")}>Add player</Button></>} />
       <Card>
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
           <Field className="min-w-0 flex-1" label="Search players" hint="Search by player name, channel, Pulse ID, or toon handle.">

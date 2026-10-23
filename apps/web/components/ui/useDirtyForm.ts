@@ -15,6 +15,7 @@ export interface UseDirtyFormResult<T> {
   draft: T;
   setDraft: (next: T | ((prev: T) => T)) => void;
   dirty: boolean;
+  hydrated: boolean;
   reset: () => void;
   markSaved: () => void;
 }
@@ -61,6 +62,7 @@ export function useDirtyForm<T>(
     draft,
     setDraft: setDraftState,
     dirty,
+    hydrated,
     reset: () => {
       if (serverValue !== undefined) {
         const json = stableStringify(serverValue);

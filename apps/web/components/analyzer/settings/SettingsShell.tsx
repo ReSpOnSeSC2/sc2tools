@@ -13,7 +13,7 @@ import {
   Upload,
   ClipboardCheck,
 } from "lucide-react";
-import { Tabs } from "@/components/ui/Tabs";
+import { Tabs, useTabIds } from "@/components/ui/Tabs";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useDocumentTitle } from "@/lib/useDocumentTitle";
 import {
@@ -284,25 +284,7 @@ function SettingsShellInner({
         orientation="vertical"
         className="lg:grid-cols-[240px_minmax(0,1fr)]"
       >
-        {/* Mobile bar — horizontal scroll above content */}
-        <div className="lg:hidden">
-          <div
-            role="tablist"
-            aria-label="Settings sections"
-            aria-orientation="horizontal"
-            className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
-          >
-            {tabs.map((t) => (
-              <MobileTabTrigger
-                key={t.id}
-                tab={t}
-                active={active === t.id}
-                dirty={ctx.isDirty(t.id)}
-                onActivate={() => requestSwitch(t.id)}
-              />
-            ))}
-          </div>
-        </div>
+        <MobileSettingsTabs tabs={tabs} active={active} isDirty={ctx.isDirty} requestSwitch={requestSwitch} />
 
         {/* Desktop sidebar */}
         <Tabs.List ariaLabel="Settings sections" className="hidden lg:flex">
@@ -366,39 +348,45 @@ function writeTabToUrl(tab: SettingsTabId): void {
   window.history.replaceState(null, "", url);
 }
 
-function MobileTabTrigger({
-  tab,
-  active,
-  dirty,
-  onActivate,
-}: {
-  tab: TabDef;
-  active: boolean;
-  dirty: boolean;
-  onActivate: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={active}
-      onClick={onActivate}
-      className={[
-        "relative inline-flex min-h-[44px] flex-shrink-0 items-center gap-1.5 rounded-md border px-3 py-2 text-caption transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
-        active
-          ? "border-accent/40 bg-accent/15 text-accent"
-          : "border-border bg-bg-surface text-text-muted hover:bg-bg-elevated hover:text-text",
-      ].join(" ")}
-    >
-      <tab.Icon className="h-4 w-4 flex-shrink-0" aria-hidden />
-      <span className="whitespace-nowrap">{tab.label}</span>
-      {dirty ? (
-        <span
-          aria-label="Unsaved changes"
-          className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-accent-cyan"
-        />
-      ) : null}
-    </button>
-  );
+function MobileSettingsTabs({ tabs, active, isDirty, requestSwitch }: { tabs: readonly TabDef[]; active: SettingsTabId; isDirty: (id: SettingsTabId) => boolean; requestSwitch: (id: string) => void }) {
+  const scroller = useRef<HTMLDivElement>(null);
+  const first = useRef(true);
+  const [edges, setEdges] = useState({ left: false, right: false });
+  const measure = () => { const el = scroller.current; if (el) setEdges({ left: el.scrollLeft > 1, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1 }); };
+  useEffect(() => {
+    const el = scroller.current;
+    const button = el?.querySelector<HTMLElement>('[aria-selected="true"]');
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    button?.scrollIntoView?.({ inline: 'nearest', block: 'nearest', behavior: first.current || reduced ? 'auto' : 'smooth' });
+    first.current = false; measure();
+  }, [active]);
+  useEffect(() => {
+    const el = scroller.current; if (!el) return;
+    measure(); const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure); observer?.observe(el);
+    for (const child of Array.from(el.children)) observer?.observe(child);
+    return () => observer?.disconnect();
+  }, []);
+  return <div className="relative min-w-0 lg:hidden">
+    <div ref={scroller} role="tablist" aria-label="Settings sections" aria-orientation="horizontal" onScroll={measure}
+      className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 pb-1 sm:mx-0 sm:px-0"
+      onKeyDown={(event) => {
+        const items = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+        const index = items.indexOf(event.target as HTMLButtonElement);
+        const next = event.key === 'ArrowRight' ? (index + 1) % items.length : event.key === 'ArrowLeft' ? (index + items.length - 1) % items.length : event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : null;
+        if (next !== null) { event.preventDefault(); items[next]?.focus(); requestSwitch(items[next].dataset.value!); }
+      }}>
+      {tabs.map((tab) => <MobileTabTrigger key={tab.id} tab={tab} active={active === tab.id} dirty={isDirty(tab.id)} onActivate={() => requestSwitch(tab.id)} />)}
+    </div>
+    {edges.left ? <span aria-hidden className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-bg to-transparent" /> : null}
+    {edges.right ? <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-bg to-transparent" /> : null}
+  </div>;
+}
+
+function MobileTabTrigger({ tab, active, dirty, onActivate }: { tab: TabDef; active: boolean; dirty: boolean; onActivate: () => void }) {
+  const { triggerId, panelId } = useTabIds(tab.id);
+  return <button type="button" role="tab" id={triggerId + '-mobile'} data-value={tab.id} aria-controls={panelId} aria-selected={active} tabIndex={active ? 0 : -1} onClick={onActivate}
+    className={['relative inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-md border px-3 py-2 text-caption focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent', active ? 'border-accent/40 bg-accent/15 text-accent' : 'border-border bg-bg-surface text-text-muted'].join(' ')}>
+    <tab.Icon className="h-4 w-4 shrink-0" aria-hidden /><span className="whitespace-nowrap">{tab.label}</span>
+    {dirty ? <span aria-label="Unsaved changes" className="ml-0.5 h-1.5 w-1.5 rounded-full bg-accent-cyan" /> : null}
+  </button>;
 }

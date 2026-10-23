@@ -10,6 +10,7 @@ import {
   IdCard,
 } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
+import { SettingsLoadError } from "./SettingsLoadError";
 import { Card, Skeleton } from "@/components/ui/Card";
 import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { Section } from "@/components/ui/Section";
@@ -67,6 +68,7 @@ const QUICK_LINKS: ReadonlyArray<{
 
 export function SettingsFoundation() {
   const me = useApi<Me>("/v1/me");
+  if (me.error && me.data === undefined) return <SettingsLoadError tab="Foundation settings" error={me.error} retry={me.mutate} />;
 
   if (!hasQueryData(me)) {
     return <QueryState q={me} skeleton={<Skeleton rows={3} />} errorTitle="Account" />;

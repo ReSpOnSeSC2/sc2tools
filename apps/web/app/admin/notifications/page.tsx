@@ -1,4 +1,9 @@
 "use client";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { RequestError } from "@/components/ui/RequestError";
+import { AdminPagination } from "@/app/admin/components/AdminPagination";
+import { Button } from "@/components/ui/Button";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { useCallback, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
@@ -109,20 +114,9 @@ export default function AdminNotificationsPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold">Notifications</h1>
-          <p className="text-text-muted">
-            Live feed of new signups, agent downloads, confirmed installs, and user messages.
-            Updates in real time while this page is open.
-          </p>
-          <p className="text-caption text-text-muted">
-            {unread} unread across all activity.
-          </p>
-        </div>
-        <button
+      <AdminPageHeader anchor="notifications-and-support-inbox" title="Notifications" description="Triage activity and support messages." actions={<><Button variant="secondary" size="sm"
           type="button"
-          className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
+
           onClick={markAllRead}
           disabled={markingRead || unread === 0}
         >
@@ -131,8 +125,12 @@ export default function AdminNotificationsPage() {
             : unread === 0
               ? "All caught up"
               : `Mark all ${unread} unread as read`}
-        </button>
-      </header>
+        </Button></>} />
+      <details className="text-caption text-text-muted"><summary>Learn more</summary><p className="text-text-muted">
+            Live feed of new signups, agent downloads, confirmed installs, and user messages.
+            Updates in real time while this page is open.
+          </p></details>
+      <p className="text-caption text-text-muted">{unread} unread across all activity.</p>
 
       {counts.data?.supportEmail ? (
         <p className="rounded-lg border border-border bg-bg-surface px-4 py-3 text-caption text-text-muted"
@@ -154,7 +152,7 @@ export default function AdminNotificationsPage() {
         <div className="mb-4 flex flex-wrap items-center gap-2" aria-label="Notification view">
           <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">View</span>
           {[true, false].map((onlyUnread) => (
-            <button key={String(onlyUnread)} type="button" aria-pressed={unreadOnly === onlyUnread}
+            <Button variant="secondary" size="sm" key={String(onlyUnread)} type="button" aria-pressed={unreadOnly === onlyUnread}
               onClick={() => { setUnreadOnly(onlyUnread); resetPage(); }}
               className={[
                 "rounded-full border px-3 py-1 text-caption transition-colors",
@@ -162,7 +160,7 @@ export default function AdminNotificationsPage() {
                   : "border-border bg-bg-surface text-text-muted hover:bg-bg-elevated hover:text-text",
               ].join(" ")}>
               {onlyUnread ? "Unread" : "All activity"}
-            </button>
+            </Button>
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -174,7 +172,7 @@ export default function AdminNotificationsPage() {
           ).map((f) => {
             const isActive = filter === f;
             return (
-              <button
+              <Button variant="secondary" size="sm"
                 key={f}
                 type="button"
                 onClick={() => {
@@ -189,7 +187,7 @@ export default function AdminNotificationsPage() {
                 ].join(" ")}
               >
                 {FILTER_LABEL[f]}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -198,28 +196,11 @@ export default function AdminNotificationsPage() {
       {isLoading && !data ? (
         <LoadingRows rows={8} />
       ) : error ? (
-        <Card padded>
-          <p className="text-danger">
-            Failed to load events: {error.message}
-          </p>
-        </Card>
+        <RequestError error={error} onRetry={() => mutate()} />
       ) : items.length === 0 ? (
         <Card padded>
-          <p className="text-text-muted">
-            {unreadOnly ? `No unread ${emptyType}${filter !== "all" ? " in this filter" : before ? " on this page" : ""}.`
-              : `No ${emptyType} in this view.`}
-          </p>
-          {unreadOnly && unread > 0 ? (
-            <button type="button" className="mt-3 text-caption text-accent-cyan underline-offset-2 hover:underline"
-              onClick={() => { setFilter("all"); resetPage(); void mutate(); }}>
-              View all {unread} unread notifications
-            </button>
-          ) : unreadOnly ? (
-            <button type="button" className="mt-3 text-caption text-accent-cyan underline-offset-2 hover:underline"
-              onClick={() => { setUnreadOnly(false); resetPage(); }}>
-              View all activity
-            </button>
-          ) : null}
+          <EmptyStatePanel title="No activity in this view" description={unreadOnly ? `No unread ${emptyType}${filter !== "all" ? " in this filter" : before ? " on this page" : ""}.` : `No ${emptyType} in this view.`} action={<div className="flex flex-wrap gap-2">{unreadOnly && unread > 0 ? <Button variant="secondary" onClick={() => { setFilter("all"); resetPage(); void mutate(); }}>View all {unread} unread notifications</Button> : null}<Button variant="secondary" onClick={() => { setUnreadOnly(false); setFilter("all"); resetPage(); void mutate(); }}>View all activity</Button></div>} />
+
         </Card>
       ) : (
         <Card padded={false}>
@@ -235,27 +216,7 @@ export default function AdminNotificationsPage() {
         </Card>
       )}
 
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={pageHistory.length <= 1}
-          onClick={prevPage}
-        >
-          ← Newer
-        </button>
-        <span className="text-caption text-text-dim">
-          {items.length} on this page
-        </span>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-          disabled={!data?.nextBefore || isValidating}
-          onClick={nextPage}
-        >
-          Older →
-        </button>
-      </div>
+      <AdminPagination hasPrev={!(pageHistory.length <= 1)} hasNext={!(!data?.nextBefore || isValidating)} onPrev={prevPage} onNext={nextPage} label={"Page " + pageHistory.length} loading={isValidating} itemCount={data?.items.length ?? 0} />
 
       {/* Hint about the live API_BASE so admins can verify the
           environment when triaging in a staging deployment. */}

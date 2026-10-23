@@ -26,6 +26,8 @@ const article: HelpArticle = {
   ],
   updated: "2026-10-23",
   body: [
+    { type: "heading", text: "Deleting game history" },
+    { type: "paragraph", text: "Take a snapshot first. In Settings → Backups & data, From and Through use your local time and include both chosen days. The confirmation dialog shows how many games will be deleted; an empty range cannot be confirmed. Re-sync from the desktop app afterwards to upload your replays again. [Step-by-step deletion guide](/help/deleting-game-history)." },
     {
       type: "paragraph",
       text: "Your data is protected in three ways. Each one does a different job, so it helps to know which one to reach for.",

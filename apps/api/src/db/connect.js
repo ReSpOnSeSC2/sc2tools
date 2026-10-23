@@ -604,6 +604,7 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.communityBuilds.createIndex({ matchup: 1, removed: 1, votes: -1 });
 
   await ctx.communityReports.createIndex({ targetType: 1, targetId: 1 });
+  await ctx.communityReports.createIndex({ targetType: 1, targetId: 1, resolvedAt: -1 });
   await ctx.communityReports.createIndex({ resolvedAt: 1, createdAt: -1 });
 
   await ctx.userBackups.createIndex({ userId: 1, createdAt: -1 });

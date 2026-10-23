@@ -1,6 +1,9 @@
 "use client";
 
 import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { buttonClassName } from "@/components/ui/buttonStyles";
+import { CircleHelp } from "lucide-react";
 
 /**
  * Small presentational primitives reused across admin tabs. Kept in
@@ -16,10 +19,9 @@ export function ForbiddenCard() {
           403 — admin only
         </span>
         <p className="text-text-muted">
-          Your account isn&apos;t on the admin list. Ask an existing
-          admin to add your Clerk user id to{" "}
-          <code className="font-mono text-text">SC2TOOLS_ADMIN_USER_IDS</code>.
+          Your account isn&apos;t an admin. Ask an existing admin to grant you access from Admin → Users → your account → Grant admin.
         </p>
+        <p className="text-caption text-text-dim">Server operators can also add your Clerk user id to <code>SC2TOOLS_ADMIN_USER_IDS</code>.</p>
       </div>
     </Card>
   );
@@ -93,31 +95,30 @@ export function ConfirmInline({
   confirmLabel?: string;
   variant?: "danger" | "primary";
 }) {
-  const tone =
-    variant === "danger"
-      ? "bg-danger text-white hover:opacity-90"
-      : "bg-accent text-bg hover:bg-accent-hover";
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg-elevated/40 p-3 sm:flex-row sm:items-center sm:gap-3">
       <p className="flex-1 text-caption text-text">{prompt}</p>
       <div className="flex gap-2">
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm"
+        <Button variant="secondary" size="sm"
           onClick={onCancel}
           disabled={busy}
         >
           Cancel
-        </button>
-        <button
-          type="button"
-          className={`inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors text-sm ${tone}`}
+        </Button>
+        <Button variant={variant} size="sm" loading={busy}
           onClick={onConfirm}
           disabled={busy}
         >
           {busy ? "Working…" : confirmLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );
+}
+
+export function AdminHelpLink({ anchor }: { anchor: string }) {
+  return <a href={`https://github.com/ReSpOnSeSC2/sc2tools/blob/main/docs/admin-console.md#${anchor}`} target="_blank" rel="noreferrer"
+    className={buttonClassName({ variant: "ghost", size: "sm" })}>
+    <CircleHelp className="h-4 w-4" aria-hidden />Help<span className="sr-only"> (opens in new tab)</span>
+  </a>;
 }

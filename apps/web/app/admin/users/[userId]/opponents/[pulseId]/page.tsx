@@ -1,4 +1,9 @@
 "use client";
+import { Button } from "@/components/ui/Button";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { RequestError } from "@/components/ui/RequestError";
+import { AdminPagination } from "@/app/admin/components/AdminPagination";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { use, useState } from "react";
 import Link from "next/link";
@@ -48,7 +53,7 @@ export default function AdminOpponentGamesPage({
     userId,
   )}/opponents/${encodeURIComponent(pulseId)}/games?${query.toString()}`;
 
-  const { data, error, isLoading } = useApi<OpponentGamesResp>(path);
+  const { data, error, isLoading, isValidating, mutate } = useApi<OpponentGamesResp>(path);
 
   function nextPage() {
     if (data?.nextBefore) {
@@ -71,22 +76,13 @@ export default function AdminOpponentGamesPage({
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <Link
+      <AdminPageHeader anchor="users-and-repairing-data" title="Opponent" description="Inspect this account’s games against one opponent." actions={<><Link
           href={`/admin/users/${encodeURIComponent(userId)}/opponents`}
           className="text-caption text-text-dim hover:text-text"
         >
           ← All opponents
-        </Link>
-        <h1 className="text-3xl font-bold">{oppName || "Opponent"}</h1>
-        <p className="break-all font-mono text-caption text-text-dim">
-          {pulseId}
-        </p>
-        <p className="text-text-muted">
-          Every game this user played against this opponent. Click a game
-          to see both build orders, just like the user&apos;s own replay.
-        </p>
-      </header>
+        </Link></>} />
+      <p className="break-all text-body text-text">{oppName || "Opponent"} · <span className="font-mono text-caption">{pulseId}</span></p>
 
       <OpponentDiagnosticsPanel
         diagnosticsPath={`/v1/admin/users/${encodeURIComponent(
@@ -97,17 +93,13 @@ export default function AdminOpponentGamesPage({
         )}/opponents/${encodeURIComponent(pulseId)}/retry-pulse`}
       />
 
-      {isLoading ? (
+      {error ? (
+        <RequestError error={error} onRetry={() => mutate()} />
+      ) : isLoading ? (
         <LoadingRows rows={8} />
-      ) : error ? (
-        <Card padded>
-          <p className="text-danger">Failed to load games: {error.message}</p>
-        </Card>
       ) : !data || data.items.length === 0 ? (
         <Card padded>
-          <p className="text-text-muted">
-            No games recorded against this opponent.
-          </p>
+          <EmptyStatePanel title="No games recorded against this opponent" action={<Button variant="secondary" onClick={() => void mutate()}>Refresh</Button>} />
         </Card>
       ) : (
         <div className="lg:grid lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:gap-4">
@@ -158,27 +150,7 @@ export default function AdminOpponentGamesPage({
               </ul>
             </Card>
 
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={pageHistory.length <= 1}
-                onClick={prevPage}
-              >
-                ← Previous
-              </button>
-              <span className="text-caption text-text-dim">
-                {data.items.length} on this page
-              </span>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!data.nextBefore}
-                onClick={nextPage}
-              >
-                Next →
-              </button>
-            </div>
+            <AdminPagination hasPrev={!(pageHistory.length <= 1)} hasNext={!(!data.nextBefore)} onPrev={prevPage} onNext={nextPage} label={"Page " + pageHistory.length} loading={isValidating} itemCount={data?.items.length ?? 0} />
           </div>
 
           {/* Detail — hidden on mobile until a game is selected. */}

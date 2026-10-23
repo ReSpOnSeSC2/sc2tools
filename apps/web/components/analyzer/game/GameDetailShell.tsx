@@ -1,5 +1,6 @@
 "use client";
 
+import { useChromeBreadcrumb } from "@/components/chrome/ChromeContext";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -67,7 +68,8 @@ export function GameDetailShell({
   const backHref = opponentProfileHref(opponentContext);
   const backLabel = opponentContext
     ? `Back to ${backName}`
-    : "Back to dashboard";
+    : "Back to Today";
+  const inChrome = useChromeBreadcrumb({ backHref, backLabel, trail: opponentContext ? [{ label: "Opponents", href: "/app/opponents" }, { label: backName, href: backHref }, { label: `${matchup || "Replay"} on ${game.map || "Unknown map"}` }] : [{ label: "Today", href: "/app" }, { label: `${matchup || "Replay"} on ${game.map || "Unknown map"}` }] });
   const replayAvailable =
     game.replayAvailable === true || Boolean(game.replayFile?.storedAt);
   const replaySizeBytes =
@@ -92,7 +94,7 @@ export function GameDetailShell({
       <header className="space-y-3">
         <Link
           href={backHref}
-          className="inline-flex min-h-[44px] items-center gap-1.5 rounded text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          className={`${inChrome ? "md:hidden " : ""}inline-flex min-h-[44px] items-center gap-1.5 rounded text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
           {backLabel}

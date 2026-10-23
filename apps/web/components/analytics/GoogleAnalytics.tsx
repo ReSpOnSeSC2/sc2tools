@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 import Script from "next/script";
 import { usePathname, useSearchParams } from "next/navigation";
 
@@ -9,6 +9,7 @@ import {
   isAnalyticsConfigured,
   readConsent,
   subscribeConsent,
+  withdrawConsent,
 } from "@/lib/analytics/consent";
 import { pageview } from "@/lib/analytics/gtag";
 import {
@@ -42,6 +43,11 @@ export function GoogleAnalytics() {
     readConsent,
     () => "unset" as const,
   );
+  const previous = useRef(consent);
+  useEffect(() => {
+    if (previous.current === "granted" && consent === "denied") withdrawConsent();
+    previous.current = consent;
+  }, [consent]);
 
   if (!isAnalyticsConfigured()) return null;
 

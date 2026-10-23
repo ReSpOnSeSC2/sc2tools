@@ -3,6 +3,11 @@
 import { useState } from "react";
 
 import { useApi } from "@/lib/clientApi";
+import { Button } from "@/components/ui/Button";
+import { AdminPageHeader as PageHeader } from "@/app/admin/components/AdminPageHeader";
+import { RequestError } from "@/components/ui/RequestError";
+import { AnalyticsRangePicker } from "./components/AnalyticsRangePicker";
+import { downloadCsv } from "./components/analyticsExport";
 import { Card } from "@/components/ui/Card";
 import { compactNumber } from "../components/format";
 import { ForbiddenCard, LoadingRows } from "../components/AdminFragments";
@@ -36,63 +41,49 @@ import type {
  *     tab is safe to ship before GA credentials are wired up.
  */
 
-const RANGE_OPTIONS = [
-  { days: 7, label: "7d" },
-  { days: 28, label: "28d" },
-  { days: 90, label: "90d" },
-] as const;
-
 const REALTIME_REFRESH_MS = 60_000;
 
 export default function AdminAnalyticsPage() {
-  const [days, setDays] = useState<number>(28);
+  const [days, setDays] = useState<number | "custom">(28);
+  const [rangeQuery, setRangeQuery] = useState("days=28");
   const summary = useApi<AnalyticsSummaryResp>(
-    `/v1/admin/analytics/summary?days=${days}`,
+    `/v1/admin/analytics/summary?${rangeQuery}`,
   );
   const realtime = useApi<RealtimeResp>("/v1/admin/analytics/realtime", {
     refreshInterval: REALTIME_REFRESH_MS,
   });
 
-  if (summary.error?.status === 403) return <ForbiddenCard />;
+  if (summary.error?.status === 403 || realtime.error?.status === 403) return <ForbiddenCard />;
 
   const data = summary.data;
   const notConfigured = data !== undefined && !data.configured;
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold">Analytics</h1>
-          <p className="text-text-muted">
-            Live Google Analytics 4 traffic for sc2tools.com — visitors,
-            sessions, top pages, and acquisition.
-          </p>
-        </div>
-        <RangePicker
-          value={days}
-          onChange={setDays}
-          disabled={notConfigured}
-        />
-      </header>
+      <PageHeader anchor="web-analytics-ga4-setup" eyebrow="Admin" title="Web analytics" description="Visitors, sessions, top pages and acquisition from Google Analytics 4." />
+      <AnalyticsRangePicker value={days} disabled={notConfigured}
+        onPreset={(next) => { setDays(next); setRangeQuery("days=" + next); }}
+        onCustom={(from, to) => { setDays("custom"); setRangeQuery("from=" + from + "&to=" + to); }} />
+      {realtime.error ? <p className="text-caption text-text-muted">Realtime unavailable · <Button variant="ghost" size="sm" loading={realtime.isValidating} onClick={() => void realtime.mutate()}>Retry</Button></p> : null}
 
       <RealtimeBanner data={realtime.data} />
 
       {summary.error && summary.error.status !== 403 ? (
-        <Card padded>
-          <p className="text-danger">
-            Failed to load analytics: {summary.error.message}
-          </p>
-        </Card>
+        <RequestError title="Analytics could not load" error={summary.error} onRetry={() => summary.mutate()} />
       ) : notConfigured ? (
         <NotConfiguredCard />
       ) : !isConfigured(data) ? (
         <AnalyticsSkeleton />
       ) : (
         <>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" size="sm" onClick={() => exportAnalytics(data, "top-pages")}>Export CSV: top pages</Button>
+            <Button variant="secondary" size="sm" onClick={() => exportAnalytics(data, "channels")}>Export CSV: channels</Button>
+          </div>
           <KpiGrid totals={data.totals} deltas={data.deltas} />
           <TrafficChart points={data.timeseries} />
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <TopPagesTable rows={data.topPages} />
+            <TopPagesTable rows={data.topPages} total={data.totals.screenPageViews} />
             <BarBreakdown
               title="Acquisition channels"
               empty="No sessions yet."
@@ -120,40 +111,13 @@ export default function AdminAnalyticsPage() {
   );
 }
 
-function RangePicker({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: number;
-  onChange: (days: number) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div
-      className="flex items-center gap-1 rounded-lg border border-border bg-bg-surface p-1"
-      role="group"
-      aria-label="Date range"
-    >
-      {RANGE_OPTIONS.map((opt) => (
-        <button
-          key={opt.days}
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange(opt.days)}
-          className={[
-            "rounded-md px-3 py-1 text-caption font-semibold transition-colors disabled:opacity-40",
-            value === opt.days
-              ? "bg-accent/20 text-accent ring-1 ring-accent/40"
-              : "text-text-muted hover:text-text",
-          ].join(" ")}
-          aria-pressed={value === opt.days}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
+function exportAnalytics(data: import("./components/analyticsTypes").AnalyticsSummary, kind: "top-pages" | "channels") {
+  const to = /^\d{4}-/.test(data.range.endDate) ? data.range.endDate : new Date().toISOString().slice(0, 10);
+  const from = /^\d{4}-/.test(data.range.startDate) ? data.range.startDate : new Date(Date.parse(to) - (data.range.days - 1) * 86400000).toISOString().slice(0, 10);
+  const rows = kind === "top-pages"
+    ? [["Page", "Title", "Views", "Users"], ...data.topPages.map((row) => [row.path, row.title, row.views, row.activeUsers])]
+    : [["Channel", "Sessions", "Users"], ...data.channels.map((row) => [row.channel, row.sessions, row.activeUsers])];
+  downloadCsv("analytics-" + kind + "-" + from + "_to_" + to + ".csv", rows);
 }
 
 function RealtimeBanner({ data }: { data: RealtimeResp | undefined }) {
@@ -195,6 +159,7 @@ function NotConfiguredCard() {
           property, then reload. The tracking tag on the public site works
           independently of this dashboard.
         </p>
+        <a className="text-accent-cyan underline" href="https://github.com/ReSpOnSeSC2/sc2tools/blob/main/docs/admin-console.md#web-analytics-ga4-setup" target="_blank" rel="noreferrer">GA4 setup guide<span className="sr-only"> (opens in new tab)</span></a>
       </div>
     </Card>
   );
