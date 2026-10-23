@@ -75,7 +75,8 @@ function DeviceCard({ device, now, latest, onUnpair, onSaved }: { device: Paired
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const seen = device.lastSeenAt ? Date.parse(device.lastSeenAt) : NaN;
-  const online = Number.isFinite(seen) && now - seen >= 0 && now - seen < AGENT_ONLINE_WINDOW_MS;
+  const age = Math.max(now, Date.now()) - seen;
+  const online = Number.isFinite(seen) && age >= 0 && age < AGENT_ONLINE_WINDOW_MS;
   const update = Boolean(latest && device.agentVersion && !isAgentVersionAtLeast(device.agentVersion, latest));
   async function save(event: React.FormEvent) {
     event.preventDefault(); if (busy) return;

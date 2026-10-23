@@ -18,6 +18,8 @@ import {
   parseYouTubeVideoId,
 } from "../BrollLibraryEditor";
 import { DockScenes } from "../DockScenes";
+import { DEFAULT_STUDIO_STATE } from "@/lib/multichat/useStudioState";
+import type { DockPost } from "../dockActions";
 
 vi.mock("@/components/overlay/widgets/StreamSceneWidget", () => ({
   formatCountdown: () => "4:59",
@@ -124,8 +126,8 @@ describe("b-roll input helpers", () => {
 
 describe("DockScenes b-roll controls", () => {
   it("shows active status and posts race-safe partial config updates", async () => {
-    const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<void>>(
-      async () => undefined,
+    const onPost = vi.fn<DockPost>(
+      async () => DEFAULT_STUDIO_STATE,
     );
     render(
       <DockScenes
@@ -140,8 +142,11 @@ describe("DockScenes b-roll controls", () => {
     expect(screen.getByText("2 highlight clips")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: /Shuffle/ }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("button", { name: "Mute b-roll" }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledTimes(2));
     fireEvent.click(screen.getByRole("button", { name: /Skip/ }));
+    await waitFor(() => expect(onPost).toHaveBeenCalledTimes(3));
     const volume = screen.getByRole("slider", { name: "B-roll volume" });
     fireEvent.change(volume, { target: { value: "37" } });
     fireEvent.pointerUp(volume);
@@ -149,21 +154,21 @@ describe("DockScenes b-roll controls", () => {
     await waitFor(() => expect(onPost).toHaveBeenCalledTimes(4));
     expect(onPost).toHaveBeenNthCalledWith(1, {
       broll: { shuffle: false },
-    });
+    }, expect.any(Function));
     expect(onPost).toHaveBeenNthCalledWith(2, {
       broll: { muted: true },
-    });
+    }, expect.any(Function));
     expect(onPost).toHaveBeenNthCalledWith(3, {
       broll: { skipNonce: 4 },
-    });
+    }, expect.any(Function));
     expect(onPost).toHaveBeenNthCalledWith(4, {
       broll: { volume: 37 },
-    });
+    }, expect.any(Function));
   });
 
   it("reports an empty library and disables playback-only controls", () => {
-    const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<void>>(
-      async () => undefined,
+    const onPost = vi.fn<DockPost>(
+      async () => DEFAULT_STUDIO_STATE,
     );
     render(
       <DockScenes
@@ -195,8 +200,8 @@ describe("DockScenes b-roll controls", () => {
   });
 
   it("keeps the existing Starting Soon activation payload unchanged", async () => {
-    const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<void>>(
-      async () => undefined,
+    const onPost = vi.fn<DockPost>(
+      async () => DEFAULT_STUDIO_STATE,
     );
     render(
       <DockScenes
@@ -225,8 +230,8 @@ describe("DockScenes b-roll controls", () => {
 
 describe("BrollLibraryEditor", () => {
   it("adds a URL segment, then rolls its end forward for fast batch cutting", async () => {
-    const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<void>>(
-      async () => undefined,
+    const onPost = vi.fn<DockPost>(
+      async () => DEFAULT_STUDIO_STATE,
     );
     render(
       <BrollLibraryEditor broll={BROLL} busy={false} onPost={onPost} />,
@@ -270,8 +275,8 @@ describe("BrollLibraryEditor", () => {
   });
 
   it("removes one clip with a library-only patch", async () => {
-    const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<void>>(
-      async () => undefined,
+    const onPost = vi.fn<DockPost>(
+      async () => DEFAULT_STUDIO_STATE,
     );
     render(
       <BrollLibraryEditor broll={BROLL} busy={false} onPost={onPost} />,
@@ -280,12 +285,12 @@ describe("BrollLibraryEditor", () => {
     await waitFor(() => expect(onPost).toHaveBeenCalledTimes(1));
     expect(onPost).toHaveBeenCalledWith({
       broll: { clips: [CLIPS[1]] },
-    });
+    }, expect.any(Function));
   });
 
   it("replaces clips from JSON while preserving live audio and order settings", async () => {
-    const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<void>>(
-      async () => undefined,
+    const onPost = vi.fn<DockPost>(
+      async () => DEFAULT_STUDIO_STATE,
     );
     render(
       <BrollLibraryEditor broll={BROLL} busy={false} onPost={onPost} />,
@@ -299,13 +304,13 @@ describe("BrollLibraryEditor", () => {
     await waitFor(() => expect(onPost).toHaveBeenCalledTimes(1));
     expect(onPost).toHaveBeenCalledWith({
       broll: { clips: [CLIPS[1]] },
-    });
+    }, expect.any(Function));
     expect(await screen.findByText("Imported 1 clip.")).toBeTruthy();
   });
 
   it("imports a selected JSON file through the same validation and save path", async () => {
-    const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<void>>(
-      async () => undefined,
+    const onPost = vi.fn<DockPost>(
+      async () => DEFAULT_STUDIO_STATE,
     );
     render(
       <BrollLibraryEditor broll={BROLL} busy={false} onPost={onPost} />,
@@ -323,7 +328,7 @@ describe("BrollLibraryEditor", () => {
     await waitFor(() => expect(onPost).toHaveBeenCalledTimes(1));
     expect(onPost).toHaveBeenCalledWith({
       broll: { clips: [CLIPS[1]] },
-    });
+    }, expect.any(Function));
     expect(
       (screen.getByRole("textbox", {
         name: "B-roll library JSON",
@@ -335,8 +340,8 @@ describe("BrollLibraryEditor", () => {
   });
 
   it("reports invalid file JSON without saving and disables file import while busy", async () => {
-    const onPost = vi.fn<(patch: Record<string, unknown>) => Promise<void>>(
-      async () => undefined,
+    const onPost = vi.fn<DockPost>(
+      async () => DEFAULT_STUDIO_STATE,
     );
     const { rerender } = render(
       <BrollLibraryEditor broll={BROLL} busy={false} onPost={onPost} />,

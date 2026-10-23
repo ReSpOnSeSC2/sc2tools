@@ -6,6 +6,8 @@ import type {
   StudioBrollConfig,
 } from "@/lib/multichat/useStudioState";
 import { parseYouTubeVideoId } from "@/lib/youtube";
+import type { DockPost } from "./dockActions";
+import { DockActionNotice, DockSnapshotState, useDockPanelActions } from "./useDockPanelActions";
 
 // Moved to lib/youtube.ts (shared with the admin Guides videos panel);
 // re-exported so existing imports of this module keep working.
@@ -207,11 +209,13 @@ function libraryJson(clips: StudioBrollClip[]): string {
 export function BrollLibraryEditor({
   broll,
   busy,
+  studioReady = true,
   onPost,
 }: {
   broll: StudioBrollConfig;
   busy: boolean;
-  onPost: (patch: Record<string, unknown>) => Promise<void>;
+  studioReady?: boolean;
+  onPost: DockPost;
 }) {
   const [source, setSource] = useState("");
   const [title, setTitle] = useState("");
@@ -222,28 +226,25 @@ export function BrollLibraryEditor({
   const [transferStatus, setTransferStatus] = useState<string | null>(null);
   const [transferError, setTransferError] = useState(false);
 
-  const saveClips = (clips: StudioBrollClip[]) =>
-    onPost({ broll: { clips } });
-
-  const addClip = async () => {
+  const addClip = () => {
     const videoId = parseYouTubeVideoId(source);
     const startSeconds = parseBrollTimecode(start);
     const endSeconds = parseBrollTimecode(end);
     if (!videoId) {
       setFormError("Paste a valid YouTube URL or 11-character video ID.");
-      return;
+      return null;
     }
     if (startSeconds === null || endSeconds === null) {
       setFormError("Enter start and end as seconds, mm:ss, or hh:mm:ss.");
-      return;
+      return null;
     }
     if (endSeconds <= startSeconds) {
       setFormError("End time must be later than start time.");
-      return;
+      return null;
     }
     if (broll.clips.length >= MAX_IMPORT_CLIPS) {
       setFormError(`A library can contain at most ${MAX_IMPORT_CLIPS} clips.`);
-      return;
+      return null;
     }
 
     const usedIds = new Set(broll.clips.map((clip) => clip.id));
@@ -257,12 +258,9 @@ export function BrollLibraryEditor({
       endSeconds,
     };
     setFormError(null);
-    await saveClips([...broll.clips, clip]);
-    // Keep the VOD in place and roll the previous end forward. Cutting several
-    // moments from one stream then only needs a title and new end time.
-    setTitle("");
-    setStart(formatTimecode(endSeconds));
-    setEnd("");
+    return { patch: { broll: { clips: [...broll.clips, clip] } }, message: "Highlight saved", after: () => {
+      setTitle(""); setStart(formatTimecode(endSeconds)); setEnd("");
+    } };
   };
 
   const exportJson = async () => {
@@ -279,20 +277,12 @@ export function BrollLibraryEditor({
   };
 
   const importLibraryJson = async (input: string) => {
-    const parsed = parseBrollLibraryJson(input);
-    if (parsed.clips === null) {
-      setTransferError(true);
-      setTransferStatus(parsed.error);
-      return;
-    }
-    await saveClips(parsed.clips);
-    setTransferError(false);
-    setTransferStatus(
-      `Imported ${parsed.clips.length} ${parsed.clips.length === 1 ? "clip" : "clips"}.`,
-    );
+    if (!studioReady || busy) return;
+    await run("import", input);
   };
 
   const importJsonFile = async (file: File) => {
+    if (!studioReady || busy) return;
     if (!file.name.toLowerCase().endsWith(".json")) {
       setTransferError(true);
       setTransferStatus("Choose a .json library file.");
@@ -315,13 +305,28 @@ export function BrollLibraryEditor({
     }
   };
 
+  const { run, notice, pending } = useDockPanelActions(studioReady, busy, onPost, {
+    add: addClip,
+    remove: (id: string) => ({ patch: { broll: { clips: broll.clips.filter((clip) => clip.id !== id) } }, message: "Highlight removed" }),
+    import: (input?: string) => {
+      const parsed = parseBrollLibraryJson(input ?? jsonDraft);
+      if (!parsed.clips) { setTransferError(true); setTransferStatus(parsed.error); return null; }
+      const count = parsed.clips.length;
+      return { patch: { broll: { clips: parsed.clips } }, message: `Imported ${count} ${count === 1 ? "clip" : "clips"}.`, retry: (): ReturnType<DockPost> => run("import"), after: () => {
+        setTransferError(false); setTransferStatus(null);
+      } };
+    },
+  });
+  if (!studioReady) return <DockSnapshotState />;
+
   return (
-    <details className="mt-2 border-t border-border pt-2">
+    <fieldset disabled={busy || pending} className="min-w-0"><details className="mt-2 border-t border-border pt-2">
       <summary className="cursor-pointer select-none text-caption font-medium text-text hover:text-accent-cyan">
         Manage highlight library
       </summary>
 
       <div className="mt-2 space-y-2">
+        <DockActionNotice message={notice} />
         <div className="grid grid-cols-2 gap-1.5">
           <input
             type="text"
@@ -367,7 +372,7 @@ export function BrollLibraryEditor({
           <button
             type="button"
             disabled={busy}
-            onClick={() => void addClip()}
+            onClick={() => void run("add")}
             className="rounded-md border border-border bg-bg-elevated px-2.5 py-1.5 text-caption font-medium text-text transition-colors hover:border-accent disabled:opacity-50"
           >
             + Add highlight
@@ -405,9 +410,7 @@ export function BrollLibraryEditor({
                   disabled={busy}
                   aria-label={`Remove ${clip.title}`}
                   onClick={() =>
-                    void saveClips(
-                      broll.clips.filter((candidate) => candidate.id !== clip.id),
-                    )
+                    void run("remove", clip.id)
                   }
                   className="rounded border border-danger/40 px-2 py-1 text-micro text-danger hover:bg-danger/10 disabled:opacity-50"
                 >
@@ -475,6 +478,6 @@ export function BrollLibraryEditor({
           </div>
         </details>
       </div>
-    </details>
+    </details></fieldset>
   );
 }

@@ -15,15 +15,7 @@ CATALOG_PLACEHOLDERS = {
 DEFAULT_STREAM_DESCRIPTION = "Live StarCraft II games, ranked matches, and practice.\n\nThanks for watching! Join the chat and enjoy the stream."
 
 
-def _WheelGuard(QtCore, parent):
-    class WheelGuard(QtCore.QObject):
-        """Ignore wheel events on unfocused dropdowns so page scrolling never edits a choice."""
-        def eventFilter(self, watched, event):
-            if event.type() == QtCore.QEvent.Wheel and not watched.hasFocus():
-                event.ignore()
-                return True
-            return False
-    return WheelGuard(parent)
+from .qt_helpers import install_wheel_guard
 
 
 def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
@@ -374,10 +366,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             layout.addStretch()
             # Scrolling the page over an unfocused dropdown must never change a
             # saved choice (channel, key, visibility, audience, destination).
-            self._wheel_guard = _WheelGuard(QtCore, self)
             for combo in (self.channel_combo, self.horizontal_combo, self.portrait_combo, self.privacy, self.audience, self.obs_destination):
-                combo.setFocusPolicy(QtCore.Qt.StrongFocus)
-                combo.installEventFilter(self._wheel_guard)
+                install_wheel_guard(combo, QtCore)
             for combo, key in ((self.channel_combo, "channel_id"), (self.horizontal_combo, "horizontal_id"), (self.portrait_combo, "portrait_id"), (self.privacy, "privacy"), (self.audience, "made_for_kids")):
                 combo.currentIndexChanged.connect(lambda _index, name=key: self._setup_edited(name))
             self.auto_check.toggled.connect(lambda _checked: self._setup_edited("auto_rearm"))

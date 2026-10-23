@@ -52,7 +52,7 @@ describe("DockClips", () => {
         streamStartMs={START}
         vodUrl="https://www.twitch.tv/videos/42"
         busy={false}
-        onPost={async () => {}}
+        onPost={async () => null}
       />,
     );
     const link = screen.getByRole("link", { name: /2:12:10 in/ });
@@ -69,7 +69,7 @@ describe("DockClips", () => {
         streamStartMs={START}
         vodUrl={null}
         busy={false}
-        onPost={async () => {}}
+        onPost={async () => null}
       />,
     );
     expect(screen.getByText("2:05 in")).toBeTruthy();
@@ -80,7 +80,7 @@ describe("DockClips", () => {
         streamStartMs={null}
         vodUrl={null}
         busy={false}
-        onPost={async () => {}}
+        onPost={async () => null}
       />,
     );
     expect(screen.queryByText(/in$/)).toBeNull();
@@ -95,7 +95,7 @@ describe("DockClips", () => {
         streamStartMs={START}
         vodUrl={null}
         busy={false}
-        onPost={async () => {}}
+        onPost={async () => null}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Copy timestamps" }));

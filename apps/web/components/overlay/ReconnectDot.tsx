@@ -8,8 +8,8 @@
  *  - amber rather than red — "data may be stale", not "panic";
  *  - static (no animation) so reduced-motion needs no special case
  *    and it never draws the audience's eye;
- *  - the CALLER must only mount it while widget content is visible —
- *    an otherwise-transparent scene must stay perfectly transparent.
+ *  - shown only after the connection has failed for five seconds,
+ *    including refused handshakes before the first widget arrives.
  */
 export function ReconnectDot() {
   return (

@@ -21,6 +21,12 @@ corresponding GitHub Release.
 - Link a PC through one shared form, normalize pasted codes, check the PC details before confirming, and watch for its first connection. Prefilled codes never submit automatically.
 - Devices show online/offline and update status, support optional labels, and confirm before unpairing. Pairing failures explain expired or already-used codes and preserve the entered code.
 
+### Community and public sharing
+
+- Community votes show your saved vote, support undo and keep their score correct during simultaneous voting. Reports use readable categories and optional details; Controversial favors divided votes. Public author and player names are escaped safely in structured data.
+- The Stock Market leaderboard opens on the last settled week, distinguishes locked portfolios from results, highlights your own rank and provides shareable week navigation. Player names remain visible only to signed-in players.
+- Public profiles keep temporary outages out of their page cache. Shared replay pages recover expired page links, retry busy services within a limit, share metadata reads and provide a public-friendly private-or-missing page.
+
 ### Experience polish
 
 - Settings show recoverable load failures, protect saved profile IDs, preview game-history deletion counts, and include both selected days in local time. Mobile tabs scroll into view and support arrow keys.
@@ -103,6 +109,8 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Stream overlays recover refused handshakes and temporary outages automatically. Revoked or mistyped links show a clear setup notice; `?check=1` shows a short connection check in OBS.
+- Stream Dock editors wait for saved controls before enabling writes. Failed saves keep drafts, and Retry uses current edits instead of replaying an older goal or b-roll list.
 - Moderation groups reports by target, confirms removals, records notes and shows failures with Retry. One decision clears every open report on the target; opponent removals now hide the public profile.
 - Infrastructure keeps provider checks and backups visible when an operational probe fails, with independent Retry and Refresh controls. Charts follow the selected theme and status indicators include text and icons.
 

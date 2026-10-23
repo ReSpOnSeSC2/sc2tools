@@ -715,6 +715,11 @@ def _run_with_gui(
         ),
         on_quit=request_stop,
         start_minimized=start_minimized,
+        window_geometry=state.window_geometry,
+        window_page=state.window_page,
+        on_window_state=lambda geometry, page: _remember_window_state(
+            cfg.state_dir, state, geometry, page,
+        ),
         # The check-in controller rides on the live bridge.
         build_checkin_available=not no_live,
         build_checkin_positions=dict(state.build_checkin_card_positions),
@@ -1313,6 +1318,12 @@ def _notify_replay_capture(tray, console, gui, message: str, log) -> None:
             log.exception("replay_capture_console_notice_failed")
 
 
+def _remember_window_state(state_dir, state, geometry, page):
+    state.window_geometry = geometry
+    state.window_page = page
+    save_state(state_dir, state)
+
+
 def _handle_save_settings(
     cfg: AgentConfig,
     state: AgentState,
@@ -1542,7 +1553,7 @@ def _handle_save_settings(
     # Surface the apply summary in the GUI's settings status bar so
     # the user gets confirmation that the filter actually took effect
     # — and how many in-flight uploads were dropped because of it.
-    status_msg = "Settings saved"
+    status_msg = "Saved."
     if filter_changed and filter_apply_summary is not None:
         n_drop = filter_apply_summary["dropped_queued"]
         n_clear = filter_apply_summary["cleared_filtered"]
@@ -1551,18 +1562,18 @@ def _handle_save_settings(
             since_iso=state.sync_filter_since,
             until_iso=state.sync_filter_until,
         ).short_label()
-        bits = [f"filter active: {preset_label}"]
+        bits = [f"Syncing {preset_label}" + (" only" if preset_label != "All time" else "")]
         if n_drop > 0:
             bits.append(
                 f"{n_drop} queued upload"
-                f"{'s' if n_drop != 1 else ''} dropped",
+                f"{'s' if n_drop != 1 else ''} skipped",
             )
         if n_clear > 0:
             bits.append(
-                f"{n_clear} previously filtered replay"
-                f"{'s' if n_clear != 1 else ''} re-eligible",
+                f"{n_clear} older replay"
+                f"{'s' if n_clear != 1 else ''} will sync again",
             )
-        status_msg = "Settings saved — " + " · ".join(bits)
+        status_msg = "Saved. " + "; ".join(bits) + "."
     if cell.gui is not None and hasattr(cell.gui, "show_settings_status"):
         try:
             cell.gui.show_settings_status(status_msg)

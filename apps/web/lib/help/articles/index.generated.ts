@@ -19,17 +19,21 @@ import analyzer_maps from "./analyzer/maps";
 import analyzer_opponents from "./analyzer/opponents";
 import analyzer_readingTheCharts from "./analyzer/reading-the-charts";
 import analyzer_replays from "./analyzer/replays";
+import analyzer_stockMarketLeaderboard from "./analyzer/stock-market-leaderboard";
 import analyzer_strategies from "./analyzer/strategies";
 import analyzer_today from "./analyzer/today";
 import analyzer_trends from "./analyzer/trends";
 import builds_buildCheckIn from "./builds/build-check-in";
 import builds_buildGuides from "./builds/build-guides";
+import builds_communityBuilds from "./builds/community-builds";
 import builds_customBuilds from "./builds/custom-builds";
 import builds_practiceGhostBuild from "./builds/practice-ghost-build";
 import builds_publishCommunityBuilds from "./builds/publish-community-builds";
 import builds_randomizer from "./builds/randomizer";
 import builds_rulesExplained from "./builds/rules-explained";
+import desktopApp_desktopAppActivityLog from "./desktop-app/desktop-app-activity-log";
 import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
+import desktopApp_desktopAppSyncRange from "./desktop-app/desktop-app-sync-range";
 import desktopApp_pairingTroubleshooting from "./desktop-app/pairing-troubleshooting";
 import desktopApp_replayFolders from "./desktop-app/replay-folders";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
@@ -73,17 +77,21 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_opponents,
   analyzer_readingTheCharts,
   analyzer_replays,
+  analyzer_stockMarketLeaderboard,
   analyzer_strategies,
   analyzer_today,
   analyzer_trends,
   builds_buildCheckIn,
   builds_buildGuides,
+  builds_communityBuilds,
   builds_customBuilds,
   builds_practiceGhostBuild,
   builds_publishCommunityBuilds,
   builds_randomizer,
   builds_rulesExplained,
+  desktopApp_desktopAppActivityLog,
   desktopApp_desktopAppOverview,
+  desktopApp_desktopAppSyncRange,
   desktopApp_pairingTroubleshooting,
   desktopApp_replayFolders,
   gamePage_gamePageAccuratePlayback,

@@ -3,9 +3,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { DockClient } from "../DockClient";
 import type { MultichatConfig } from "@/lib/multichat/types";
 import type { MultiChatState } from "@/lib/multichat/useMultiChat";
+import type { OverlayConnectionStatus } from "@/components/overlay/overlayResilience";
+const connection = vi.hoisted(() => ({ status: "connected" as OverlayConnectionStatus }));
 vi.mock("@/lib/multichat/useStudioUpdates", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/multichat/useStudioUpdates")>(),
-  useStudioUpdates: () => undefined,
+  useStudioUpdates: () => ({ status: connection.status }),
 }));
 
 let mockChat: MultiChatState = {
@@ -50,6 +52,7 @@ const fetchMock = vi.fn();
 let studioState: Record<string, unknown> = { ...EMPTY_STUDIO };
 
 beforeEach(() => {
+  connection.status = "connected";
   engagementSpy.mockClear();
   multiChatSpy.mockClear();
   configState = CONFIG;
@@ -104,6 +107,101 @@ async function drain() {
 }
 
 describe("DockClient", () => {
+  it.each(["/config", "/studio"])("stops every retry/fetch after an invalid token from %s", async (failedPath) => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(async (url: string) => String(url).includes(failedPath)
+      ? { ok: false, status: 401, json: async () => ({ error: { code: "invalid_overlay_token" } }) }
+      : { ok: true, json: async () => String(url).includes("/config") ? { config: CONFIG } : studioState });
+    render(<DockClient token="private-revoked-token" />);
+    await drain();
+    expect(screen.getByRole("heading", { name: "This Dock link no longer works" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Open Overlay settings/ }).getAttribute("href")).toBe("/settings?tab=overlay");
+    expect(document.body.textContent).not.toContain("private-revoked-token");
+    const calls = fetchMock.mock.calls.length;
+    await act(async () => { vi.advanceTimersByTime(120000); });
+    await drain();
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
+  });
+
+  it("shows terminal socket failures and resets them when the token changes", async () => {
+    connection.status = "invalid";
+    const view = render(<DockClient token="old-token" />);
+    await drain();
+    expect(screen.getByRole("heading", { name: "This Dock link no longer works" })).toBeTruthy();
+    connection.status = "connected";
+    view.rerender(<DockClient token="new-token" />);
+    await drain();
+    expect(screen.queryByRole("heading", { name: "This Dock link no longer works" })).toBeNull();
+    expect(screen.getByText("Live chat")).toBeTruthy();
+  });
+
+  it("shows a local reconnect status during a non-terminal outage", async () => {
+    connection.status = "reconnecting";
+    render(<DockClient token="token" />);
+    await drain();
+    expect(screen.getByText("Reconnecting to SC2 Tools…").getAttribute("role")).toBe("status");
+    expect(screen.queryByRole("heading", { name: "This Dock link no longer works" })).toBeNull();
+  });
+
+  it("ignores a late invalid response from the previous token", async () => {
+    let finishOld: ((response: { ok: boolean; status: number }) => void) | undefined;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/old-token/") && init?.method === "POST") return new Promise((resolve) => { finishOld = resolve; });
+      if (String(url).includes("/new-token/")) return { ok: false, status: 401 };
+      return { ok: true, json: async () => String(url).includes("/config") ? { config: CONFIG } : studioState };
+    });
+    const view = render(<DockClient token="old-token" />);
+    await drain();
+    fireEvent.click(screen.getByRole("button", { name: "Fire session recap" }));
+    view.rerender(<DockClient token="new-token" />);
+    await drain();
+    expect(screen.getByRole("heading", { name: "This Dock link no longer works" })).toBeTruthy();
+    const calls = fetchMock.mock.calls.length;
+    await act(async () => { finishOld?.({ ok: false, status: 401 }); });
+    await drain();
+    expect(screen.getByRole("heading", { name: "This Dock link no longer works" })).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(calls);
+  });
+
+  it("locks saved controls and refuses writes until the studio snapshot arrives", async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/studio") && init?.method !== "POST") return new Promise(() => undefined);
+      return { ok: true, json: async () => String(url).includes("/config") ? { config: CONFIG } : studioState };
+    });
+    render(<DockClient token="waiting-token" />);
+    await drain();
+    const recap = screen.getByRole("button", { name: "Fire session recap" }) as HTMLButtonElement;
+    expect(recap.disabled).toBe(true);
+    fireEvent.click(recap);
+    expect(studioPosts()).toHaveLength(0);
+    expect(screen.getAllByRole("status").some((node) => node.textContent?.includes("Loading your saved controls"))).toBe(true);
+    expect(screen.queryByText(/No goals yet/)).toBeNull();
+  });
+
+  it("retries the current goals draft instead of the failed full list", async () => {
+    studioState = { ...EMPTY_STUDIO, goals: [{ label: "First draft", current: 1, target: 10 }] };
+    let failSave = true;
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes("/config")) return { ok: true, json: async () => ({ config: CONFIG }) };
+      if (String(url).includes("/studio") && init?.method === "POST") {
+        if (failSave) return { ok: false, status: 503 };
+        studioState = { ...studioState, ...JSON.parse(String(init.body)) };
+      }
+      return { ok: true, json: async () => studioState };
+    });
+    render(<DockClient token="retry-token" />);
+    await drain();
+    fireEvent.change(screen.getByPlaceholderText("Goal label"), { target: { value: "Failed draft" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save goals" }));
+    await drain();
+    expect(screen.getByRole("alert")).toBeTruthy();
+    expect((screen.getByPlaceholderText("Goal label") as HTMLInputElement).value).toBe("Failed draft");
+    fireEvent.change(screen.getByPlaceholderText("Goal label"), { target: { value: "Latest draft" } });
+    failSave = false;
+    fireEvent.click(within(screen.getByRole("alert")).getByRole("button", { name: "Retry" }));
+    await drain();
+    expect(studioPosts().at(-1)?.goals).toEqual([{ label: "Latest draft", current: 1, target: 10 }]);
+  });
   it("does not render a standalone build-vote section", async () => {
     render(<DockClient token="tok_test" />);
     await screen.findByText("Live chat");
