@@ -1,0 +1,57 @@
+{
+  "openings": {
+    "stargate": {
+      "personal": "PvZ - Archon Drop",
+      "opponent": "Protoss - Stargate Opener",
+      "archons": 2,
+      "events": [
+        {"type":"building","name":"Nexus","time":0,"subtype":"born","x":10,"y":10},
+        {"type":"building","name":"Pylon","time":18,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"Gateway","time":40,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"Assimilator","time":50,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"Nexus","time":85,"subtype":"init","x":40,"y":10},
+        {"type":"building","name":"CyberneticsCore","time":90,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"Assimilator","time":100,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"Stargate","time":150,"subtype":"init","x":10,"y":10},
+        {"type":"unit","name":"Oracle","time":215,"x":10,"y":10},
+        {"type":"building","name":"TwilightCouncil","time":240,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"RoboticsFacility","time":280,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"TemplarArchive","time":330,"subtype":"init","x":10,"y":10},
+        {"type":"unit","name":"HighTemplar","time":380,"x":10,"y":10},
+        {"type":"unit","name":"HighTemplar","time":390,"x":10,"y":10},
+        {"type":"unit","name":"HighTemplar","time":400,"x":10,"y":10},
+        {"type":"unit","name":"HighTemplar","time":410,"x":10,"y":10}
+      ]
+    },
+    "dt": {
+      "personal": "PvZ - DT drop into Archon Drop",
+      "opponent": "Protoss - DT Rush",
+      "archons": 1,
+      "events": [
+        {"type":"building","name":"Nexus","time":0,"subtype":"born","x":10,"y":10},
+        {"type":"building","name":"Pylon","time":18,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"Gateway","time":40,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"Assimilator","time":50,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"Nexus","time":85,"subtype":"init","x":40,"y":10},
+        {"type":"building","name":"CyberneticsCore","time":90,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"Assimilator","time":100,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"TwilightCouncil","time":140,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"DarkShrine","time":210,"subtype":"init","x":10,"y":10},
+        {"type":"building","name":"RoboticsFacility","time":240,"subtype":"init","x":10,"y":10},
+        {"type":"unit","name":"DarkTemplar","time":300,"x":10,"y":10},
+        {"type":"unit","name":"DarkTemplar","time":320,"x":10,"y":10},
+        {"type":"unit","name":"DarkTemplar","time":340,"x":10,"y":10}
+      ]
+    }
+  },
+  "cases": [
+    {"id":"early-completion","prism":330,"matches":true},
+    {"id":"exact-six-minutes","prism":360,"matches":true},
+    {"id":"fractionally-late-completion","prism":360.01,"matches":false},
+    {"id":"late-completion-with-early-training-start","prism":390,"matches":false},
+    {"id":"missing-prism","prism":null,"matches":false},
+    {"id":"no-observed-archon","prism":360,"archons":0,"matches":false},
+    {"id":"hallucinated-prism","prism":360,"hallucinated":"WarpPrism","matches":false},
+    {"id":"hallucinated-archons","prism":360,"hallucinated":"Archon","matches":false}
+  ]
+}

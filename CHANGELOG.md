@@ -16,6 +16,14 @@ corresponding GitHub Release.
 - Practice plans show inline field errors, focus the first field to fix, remember each student's time zone and summarize the actual target before assignment. Failed saves retain the draft for Retry.
 - Weekly availability highlights reversed or overlapping hours and prevents publication until they are corrected. Touching windows remain valid.
 
+### Admin inbox details
+
+- Activity and support message rows now open full details on tap, click, Enter or Space, with diagnostics, replies and account or infrastructure links. Closing returns focus to the row.
+
+### Build detection
+
+- Both PvZ Archon Drop labels require a real Warp Prism completed by 6:00 and observed Archons. Ordinary or late Templar transitions keep their opener label instead of being counted as drops.
+
 ### Game workspace and shared clock
 
 - On phones and tablets, replay player names sit above their stats so supply, workers and the clock stay readable without overlapping. Upgrade chips wait for recorded research completion.
