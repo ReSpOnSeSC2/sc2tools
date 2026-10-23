@@ -122,6 +122,16 @@ class CardWindow(QtWidgets.QWidget):
         self._drag_offset: Optional[QtCore.QPoint] = None
         self._dragged = False
         self._previous_foreground: Optional[int] = None
+        self.is_preview = False
+        self.preview_chip = plain_label("Preview - nothing is saved", "checkinPreview")
+        self.preview_chip.setAccessibleName("Preview - nothing is saved")
+        self.preview_chip.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
+        self.preview_chip.hide()
+        self._preview_timer = QtCore.QTimer(self)
+        self._preview_timer.setSingleShot(True)
+        self._preview_timer.setInterval(90_000)
+        self._preview_timer.timeout.connect(self._dismiss_preview)
+        self._preview_escape = None
 
         self.setObjectName("checkinWindow")
         self.setWindowTitle("Build check-in")
@@ -182,13 +192,39 @@ class CardWindow(QtWidgets.QWidget):
         """Hide the card (the controller decided it is done)."""
         del reason
         self._topmost_timer.stop()
+        self._preview_timer.stop()
+        if self._preview_escape is not None:
+            self._preview_escape.setEnabled(False)
         self._identity = None
         self.hide()
 
     def shutdown(self) -> None:
-        self._topmost_timer.stop()
-        self._identity = None
-        self.hide()
+        # Avoid the postgame foreground restore while the application exits.
+        CardWindow.dismiss(self, "shutdown")
+
+    def _set_preview(self, preview: bool) -> None:
+        self.is_preview = preview
+        self.preview_chip.setVisible(preview)
+        if preview and self._preview_escape is None:
+            self._preview_escape = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Escape), self)
+            self._preview_escape.setContext(QtCore.Qt.ApplicationShortcut)
+            self._preview_escape.activated.connect(self._dismiss_preview)
+        if self._preview_escape is not None:
+            self._preview_escape.setEnabled(preview)
+        real_escape = getattr(self, "_real_escape", None)
+        if real_escape is not None:
+            real_escape.setEnabled(not preview)
+        self._preview_timer.stop()
+        if preview:
+            self._preview_timer.start()
+
+    def _dismiss_preview(self) -> None:
+        if self.is_preview:
+            self.dismiss("preview_closed")
+
+    def reset_position(self) -> None:
+        if self.isVisible():
+            self._place()
 
     def _ensure_native(self) -> None:
         if self._native_ready:
@@ -280,6 +316,10 @@ class CardWindow(QtWidgets.QWidget):
     # ------------------------------------------------------ helpers
 
     def _act(self, action: str, *args: Any) -> None:
+        if self.is_preview:
+            if action not in {"interacted", "update_draft", "update_opponent_note"}:
+                self._dismiss_preview()
+            return
         self._host.act(action, *args)
 
 
@@ -338,6 +378,7 @@ class LoadingCardWindow(CardWindow):
         layout = QtWidgets.QVBoxLayout(self.card)
         layout.setContentsMargins(14, 12, 14, 12)
         layout.setSpacing(0)
+        layout.addWidget(self.preview_chip)
 
         # ---- full card ----
         self.full = QtWidgets.QWidget()
@@ -431,7 +472,8 @@ class LoadingCardWindow(CardWindow):
 
     # ---------------------------------------------------- controller in
 
-    def show_model(self, model: LoadingCardModel) -> None:
+    def show_model(self, model: LoadingCardModel, *, preview: bool = False) -> None:
+        self._set_preview(preview)
         if model.game_key != self._identity:
             self.builds.reset()
         self._identity = model.game_key
@@ -547,6 +589,7 @@ class PostgameCardWindow(CardWindow):
         layout = QtWidgets.QVBoxLayout(self.card)
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(8)
+        layout.addWidget(self.preview_chip)
 
         self.eyebrow = plain_label("", "checkinEyebrow")
         title_row = QtWidgets.QWidget()
@@ -687,12 +730,13 @@ class PostgameCardWindow(CardWindow):
         for keys in ("Ctrl+Return", "Ctrl+Enter"):
             shortcut = QtGui.QShortcut(QtGui.QKeySequence(keys), self)
             shortcut.activated.connect(self._primary_clicked)
-        escape = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Escape), self)
-        escape.activated.connect(self._escape)
+        self._real_escape = QtGui.QShortcut(QtGui.QKeySequence(QtCore.Qt.Key_Escape), self)
+        self._real_escape.activated.connect(self._escape)
 
     # ---------------------------------------------------- controller in
 
-    def show_model(self, model: PostgameCardModel) -> None:
+    def show_model(self, model: PostgameCardModel, *, preview: bool = False) -> None:
+        self._set_preview(preview)
         fresh = model.card_id != self._identity or not self.isVisible()
         if model.card_id != self._identity:
             self.builds.reset()
@@ -992,6 +1036,9 @@ class PostgameCardWindow(CardWindow):
         self.settle()
 
     def _picked(self, _key: str) -> None:
+        if self.is_preview:
+            self._dismiss_preview()
+            return
         if self.card_id is None:
             return
         self._draft_changed()
@@ -1073,6 +1120,9 @@ class PostgameCardWindow(CardWindow):
         self._set_opponent_open(not self._opp_open)
 
     def _opp_picked(self, _key: str) -> None:
+        if self.is_preview:
+            self._dismiss_preview()
+            return
         if self.card_id is None:
             return
         self._opp_touched = True
