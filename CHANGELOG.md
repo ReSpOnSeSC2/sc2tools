@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Game header and completed check-ins
+
+- Replay pages use one compact Share, Download, Review and VOD action bar, a descriptive opponent heading and readable recent-game dates. Missing duration and MMR fields stay out of the way.
+- Confirmed build check-ins collapse to a summary with saved note previews. Edit reopens the full controls; Done returns keyboard focus after notes are saved or discarded.
+
 
 
 ### Download and project costs

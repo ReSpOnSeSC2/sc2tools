@@ -37,8 +37,6 @@ export function GameVodToolbar({ links, className }: { links: SafeLink[]; classN
     document.addEventListener("pointerdown", outside);
     window.addEventListener("resize", moved);
     return () => { document.removeEventListener("pointerdown", outside); window.removeEventListener("resize", moved); };
-    // Event handlers use current refs; rows do not reset the active item.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
   if (links.length === 1) {
     const link = links[0];

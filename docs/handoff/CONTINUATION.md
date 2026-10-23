@@ -6,19 +6,19 @@ The owner requested the entire HANDOFF program through waves 2–6, and no AI fe
 
 PR #647 was already merged at task start; its description was completed accurately. PR #648 fixed all twelve confirmed phase2a findings, the bundle/CI failure and the requested placement of opponent replay history directly above notes. All 44 review dispositions are recorded in review-resolution-phase2a.md.
 
-All 25 Wave 1 phase2b packs are merged with applicable CI and deployment checks: #649, #650, #651, #652, #653, #654, #656, #658 and #657. Wave 2 merged milestones: #655 server ML retirement; #659 pairing/devices; #663 resumable setup; #664 build editor safety; #660 shared realtime; #666 setup health/imports; #669 filters/Trends; #662 guides; #661 desktop pairing recovery/calm sync. Current main is 4178ed2a.
+All 25 Wave 1 phase2b packs are merged with applicable CI and deployment checks: #649, #650, #651, #652, #653, #654, #656, #658 and #657. Wave 2 merged milestones: #655 server ML retirement; #659 pairing/devices; #663 resumable setup; #664 build editor safety; #660 shared realtime; #666 setup health/imports; #669 filters/Trends; #662 guides; #661 desktop pairing recovery/calm sync. PR #687 merged the twenty-source integration with all final CI and Vercel green; current main is da80e233.
 
 ## Combined Wave 2 validation
 
-Root owns C:/SC2TOOLS/.worktrees/wave2-integration, branch codex/wave2-integration. It preserves the source heads of twenty scoped drafts (#665/#667/#668/#670–#686, excluding already merged #669) and the original review evidence. The exact manifest, conflict decisions, tests and remaining gates are in WAVE2-INTEGRATION.md. Use a final merge commit to retain those source heads. Do not mark it complete before production budgets, browser checks and final remote CI pass.
+Root owns C:/SC2TOOLS/.worktrees/wave2-integration, branch codex/wave2-integration. It preserves the source heads of twenty scoped drafts (#665/#667/#668/#670–#686, excluding already merged #669) and the original review evidence. The exact manifest, conflict decisions, tests and remaining gates are in WAVE2-INTEGRATION.md. Use a final merge commit to retain those source heads. All final production budgets,158 public-browser tests,18 opponent fixture checks, GitHub CI and the Vercel preview passed.
 
 The source drafts are frozen. Shared integration fixes include synchronous dialog focus/top scope ownership, respecting a new dialog during deferred menu focus restoration, and an opponent-table load boundary under its header. Replay history remains directly above opponent notes. List/draft privacy, URL/Back state and final 18 phone/desktop browser checks are documented in opponents-polish-checkpoint.md.
 
 ## Active follow-ons
 
-- Root: game-page-polish-3 in wave2-game-header, based on the combined branch; complete header/actions/formatting and finished check-in summary.
-- API agent: ops-console then admin4/5/6/7, stacked on account erasure. Audit actor/target scrubbing must use the shared write lease; job_runs is global. Frozen snapshot675 and erasure680 runbooks describe manual migration/rollback and durable Clerk retries.
-- Chrome agent: profiles-replays-expansion-1, stacked on archive686; then later review/community/guide work as assigned. Preserve existing SectionNav defaults and all privacy projections.
+- Root: game-page-polish-3 in wave2-game-header; header/actions/formatting and finished check-in summary are implemented with188 component assertions,24 browser checks, types/lint/build/budgets passing. PR/remote CI pending. Then own Wave3 macro workspace and shared clock.
+- API agent: ops-console #689 frozen at986aa647, main integrated; remote CI pending. Admin4/5/6/7 continue separately. Audit actor/target scrubbing must use the shared write lease; job_runs is global. Frozen snapshot675 and erasure680 runbooks describe manual migration/rollback and durable Clerk retries.
+- Chrome agent: profiles-replays-expansion-1 #688 frozen at424f9340, main integrated; remote CI pending. Wave3 guide expansions1/2/3 next. Preserve existing SectionNav defaults and all privacy projections.
 - Desktop agent: Wave3 private scouting card and separate check-in GUI expansion, isolated on frozen installer/runtime foundations. Never send private briefs to shared user or OBS rooms.
 - Continue every remaining item in plan/final-plan.json through waves 3–6 and write the complete owner setup guide at docs/SETUP_GUIDE.md. These later waves are not complete.
 
