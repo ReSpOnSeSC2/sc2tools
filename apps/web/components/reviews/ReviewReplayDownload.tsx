@@ -38,7 +38,7 @@ export function ReviewReplayDownload({
 
   const cls = variant === "card"
     ? "grid h-9 w-9 place-items-center rounded-full border-2 border-line bg-bg-surface text-text-muted transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60"
-    : "inline-flex min-h-9 items-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-3.5 text-caption font-semibold text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60";
+    : "inline-flex min-h-9 min-w-0 max-w-full items-center gap-1.5 rounded-full border-2 border-line bg-bg-surface px-3.5 text-caption font-semibold text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-60";
   const suffix = variant === "card" && contextLabel ? `: ${contextLabel}` : "";
   const label = `Download replay${suffix}`;
 
@@ -53,8 +53,8 @@ export function ReviewReplayDownload({
         aria-label={variant === "card" ? signIn : undefined}
         title={signIn}
       >
-        <Download className="h-4 w-4" aria-hidden />
-        {variant === "page" ? <span>Sign in to download replay</span> : null}
+        <Download className="h-4 w-4 shrink-0" aria-hidden />
+        {variant === "page" ? <span className="min-w-0">Sign in to download replay</span> : null}
       </Link>
     );
   }
@@ -98,7 +98,7 @@ export function ReviewReplayDownload({
   }
 
   return (
-    <span className="inline-flex flex-col items-start gap-1">
+    <span className="inline-flex min-w-0 flex-col items-start gap-1">
       <button
         type="button"
         onClick={(e) => void download(e)}
@@ -107,8 +107,8 @@ export function ReviewReplayDownload({
         aria-label={variant === "card" ? (state === "error" ? `${label} — ${message}` : label) : undefined}
         title={state === "error" ? message : label}
       >
-        {state === "loading" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Download className="h-4 w-4" aria-hidden />}
-        {variant === "page" ? <span>{label}</span> : null}
+        {state === "loading" ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden /> : <Download className="h-4 w-4 shrink-0" aria-hidden />}
+        {variant === "page" ? <span className="min-w-0">{label}</span> : null}
       </button>
       {state === "error" ? (
         <span role="status" className={variant === "page" ? "text-micro text-danger" : "sr-only"}>{message}</span>

@@ -50,15 +50,18 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("review recovery", () => {
   it("retries a failed close without asking for confirmation again", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirm = vi.spyOn(window, "confirm");
     h.apiCall.mockRejectedValueOnce({ message: "Connection interrupted" });
     render(<ReviewPage initial={h.page!} />);
+    fireEvent.click(screen.getByText("Asker tools"));
     fireEvent.click(screen.getByRole("button", { name: "Close request" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Close this request?" })).getByRole("button", { name: "Close request" }));
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("Connection interrupted"));
     expect(h.mutate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(h.apiCall).toHaveBeenCalledTimes(2));
-    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: "Close this request?" })).toBeNull();
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it.each([403, 404, 503, 0])("distinguishes preview access from failed board requests (%s)", async (status) => {

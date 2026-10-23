@@ -1,9 +1,12 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { Clock, MapPin, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { clearDraft, loadDraft, saveDraft } from "@/lib/reviewDrafts";
+import { useReviewShortcutLabel } from "./useReviewShortcutLabel";
 import { apiCall } from "@/lib/clientApi";
 import { gaEvent } from "@/lib/analytics/gtag";
 import {
@@ -63,18 +66,47 @@ export function ReviewComposer({
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
+  const submitting = useRef(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const shortcut = useReviewShortcutLabel();
+  const initial = useRef({ initialTime, durationSec });
+
+  useEffect(() => {
+    const saved = loadDraft(requestId, parentId);
+    if (!saved) return;
+    setBody(saved.body);
+    const fits = !validateComment({ body: "Restored review text.", gameTimeSec: saved.start, endTimeSec: saved.end }, initial.current.durationSec);
+    if (fits) { setStart(saved.start); setEnd(saved.end); }
+    setRestored(true);
+  }, [requestId, parentId]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (body.trim()) saveDraft(requestId, parentId, { body, start, end });
+      else clearDraft(requestId, parentId);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [body, start, end, requestId, parentId]);
+
+  function discard(cancel = false) {
+    clearDraft(requestId, parentId); setBody(""); setStart(roundTenth(initial.current.initialTime)); setEnd(null);
+    setRestored(false); setError(null); setTouched(false); setConfirmDiscard(false); onClearPin();
+    if (cancel) onCancel?.();
+  }
 
   const draft = { body, gameTimeSec: start, endTimeSec: end };
   const problem = validateComment(draft, durationSec);
   const remaining = REVIEW_LIMITS.COMMENT_MAX - body.trim().length;
 
   async function submit() {
+    if (submitting.current) return;
     setTouched(true);
     if (problem) {
       setError(problem);
       return;
     }
-    setBusy(true);
+    submitting.current = true; setBusy(true);
     setError(null);
     try {
       const res = await apiCall<{ id: string }>(getToken, `/v1/reviews/${encodeURIComponent(requestId)}/comments`, {
@@ -88,6 +120,7 @@ export function ReviewComposer({
         }),
       });
       gaEvent("review_comment_posted", { reply: Boolean(parentId), pinned: Boolean(draftPin), ranged: end !== null });
+      clearDraft(requestId, parentId); setRestored(false);
       setBody("");
       setEnd(null);
       setTouched(false);
@@ -95,12 +128,13 @@ export function ReviewComposer({
     } catch (err) {
       setError((err as { message?: string })?.message || "Couldn't post your comment.");
     } finally {
+      submitting.current = false;
       setBusy(false);
     }
   }
 
   return (
-    <form
+    <><form
       className="space-y-3 rounded-xl border-2 border-line bg-bg-surface p-3 shadow-hard"
       aria-label={parentId ? "Reply" : "Write a review comment"}
       onSubmit={(e) => {
@@ -108,6 +142,7 @@ export function ReviewComposer({
         void submit();
       }}
     >
+      {restored ? <p role="status" className="flex flex-wrap items-center gap-2 text-caption text-text-muted">Draft restored (at {formatClock(start)}) · <button type="button" className="min-h-10 font-semibold text-link hover:underline" onClick={() => { setStart(roundTenth(currentTime)); setEnd(null); }}>Use current time</button> · <button type="button" className="min-h-10 font-semibold text-link hover:underline" onClick={() => discard()}>Discard</button></p> : null}
       <div className="flex flex-wrap items-center gap-2 text-caption">
         <span className="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-accent-cyan/60 bg-accent-cyan/15 px-2.5 font-mono font-semibold tabular-nums text-text" data-testid="composer-time">
           <Clock className="h-3.5 w-3.5 text-accent-cyan" aria-hidden />
@@ -163,6 +198,11 @@ export function ReviewComposer({
           value={body}
           onChange={(e) => setBody(e.target.value)}
           onBlur={() => setTouched(true)}
+          onKeyDown={(event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && !event.nativeEvent.isComposing) {
+              event.preventDefault(); if (!submitting.current) void submit();
+            }
+          }}
           rows={parentId ? 3 : 4}
           maxLength={REVIEW_LIMITS.COMMENT_MAX + 200}
           placeholder={parentId ? "Reply…" : "What happened here, and what should they do instead? **bold**, *italic*, lists and links work; times like 5:40 become jump links."}
@@ -172,7 +212,7 @@ export function ReviewComposer({
         />
         <div id={`${bodyId}-help`} className="mt-1 flex items-center justify-between gap-2 text-micro">
           <span role={error ? "alert" : undefined} className={error || (touched && problem) ? "text-danger" : "text-text-dim"}>
-            {error || (touched && problem) || `At least ${REVIEW_LIMITS.COMMENT_MIN} characters. No raw HTML.`}
+            {error || (touched && problem) || `At least ${REVIEW_LIMITS.COMMENT_MIN} characters · ${shortcut} to post`}
           </span>
           <span className={remaining < 0 ? "text-danger" : "text-text-dim"}>{remaining}</span>
         </div>
@@ -180,13 +220,13 @@ export function ReviewComposer({
 
       <div className="flex flex-wrap justify-end gap-2">
         {onCancel ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>
+          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => { if (body.trim()) setConfirmDiscard(true); else discard(true); }}>Cancel</Button>
         ) : null}
-        <Button type="submit" size="sm" loading={busy} disabled={busy}>
+        <Button type="submit" size="sm" loading={busy} disabled={busy} aria-keyshortcuts="Control+Enter Meta+Enter">
           {parentId ? "Reply" : `Comment at ${formatClock(start)}`}
         </Button>
       </div>
-    </form>
+    </form><ConfirmDialog open={confirmDiscard} onClose={() => setConfirmDiscard(false)} onConfirm={() => discard(true)} intent="danger" focusCancel title="Discard this comment?" description="Your text will be removed from this browser." confirmLabel="Discard" cancelLabel="Keep editing" /></>
   );
 }
 

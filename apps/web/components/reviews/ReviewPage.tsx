@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
-import { ArrowLeft, Lock, MessageSquarePlus, Pin, PinOff } from "lucide-react";
+import { ArrowLeft, Lock, MessageSquarePlus, MoreHorizontal, Pin, PinOff } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Toggle } from "@/components/ui/Toggle";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { MapArtwork } from "@/components/maps/MapArtwork";
 import { apiCall } from "@/lib/clientApi";
@@ -28,6 +30,7 @@ import { ReviewComposer, type DraftPin } from "./ReviewComposer";
 import { ReviewReplayDownload } from "./ReviewReplayDownload";
 import { ReviewReplayPanel } from "./ReviewReplayPanel";
 import { ReviewShareMenu } from "./ReviewShareMenu";
+import { REPORT_REASONS, ReviewMenu } from "./ReviewMenu";
 import { ReviewThread } from "./ReviewThread";
 
 /**
@@ -230,12 +233,18 @@ export function ReviewPage({ initial }: { initial: ReviewPageData }) {
   );
 }
 
-function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: () => Promise<unknown> }) {
-  const { getToken } = useAuth();
+export function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: () => Promise<unknown> }) {
+  const { getToken, isSignedIn } = useAuth();
+  const shareToggleId = useId();
   const [closing, setClosing] = useState(false);
+  const closePending = useRef(false);
+  const [confirmClose, setConfirmClose] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+  const [reporting, setReporting] = useState(false);
+  const [reportNotice, setReportNotice] = useState<string | null>(null);
+  const [reportError, setReportError] = useState<string | null>(null);
   const r = data.request;
   const active = r.status === "open" || r.status === "answered";
   async function setReplaySharing(value: boolean) {
@@ -251,8 +260,9 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
     }
   }
   const headline = reviewHeadline(r.question, r.game.matchup);
-  async function close(confirmed = false) {
-    if (!confirmed && !window.confirm("Close this request? New comments stop and the replay analysis is no longer shared. The thread stays readable.")) return;
+  async function close() {
+    if (closePending.current) return;
+    closePending.current = true;
     setClosing(true);
     setCloseError(null);
     try {
@@ -261,13 +271,22 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
     } catch (err) {
       setCloseError((err as { message?: string })?.message || "Couldn't close this request. Check your connection and try again.");
     } finally {
+      closePending.current = false; setConfirmClose(false);
       setClosing(false);
     }
   }
+  async function report(reason: string) {
+    setReporting(true); setReportNotice(null); setReportError(null);
+    try {
+      const result = await apiCall<{ alreadyReported?: boolean }>(getToken, `/v1/reviews/${encodeURIComponent(r.id)}/report`, { method: "POST", body: JSON.stringify({ reason }) });
+      setReportNotice(result?.alreadyReported ? "You already reported this request." : "Thanks — a moderator will take a look.");
+    } catch (error) { setReportError((error as { message?: string })?.message || "Couldn't report this request. Try again."); }
+    finally { setReporting(false); }
+  }
   return (
-    <header className="relative overflow-hidden rounded-xl border-2 border-line bg-bg-surface shadow-hard">
-      <MapArtwork mapName={r.game.map} size="hero" eager className="pointer-events-none absolute inset-0 border-0 opacity-25" />
-      <span aria-hidden className="absolute inset-0 bg-gradient-to-r from-bg-surface via-bg-surface/95 to-bg-surface/70" />
+    <><header className="relative rounded-xl border-2 border-line bg-bg-surface shadow-hard">
+      <MapArtwork mapName={r.game.map} size="hero" eager className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl border-0 opacity-25" />
+      <span aria-hidden className="absolute inset-0 rounded-xl bg-gradient-to-r from-bg-surface via-bg-surface/95 to-bg-surface/70" />
       <div className="relative space-y-3 p-4 sm:p-5">
         <div className="flex flex-wrap items-center gap-2">
           {r.game.matchup ? <Badge variant="accent" size="md">{r.game.matchup}</Badge> : null}
@@ -294,26 +313,26 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
           <Badge variant="neutral" size="sm">Wants: {levelLabel(r.desiredLevel)}</Badge>
           {r.game.myBuild ? <Badge variant="neutral" size="sm">{r.game.myBuild}</Badge> : null}
         </div>
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+        <div className="flex min-w-0 items-center gap-2 pt-1">
           {r.replay?.shared ? (
             <ReviewReplayDownload requestId={r.id} requestUrl={r.url} variant="page" available={r.replay.available} />
           ) : null}
           <ReviewShareMenu path={r.url} question={r.question} matchup={r.game.matchup} />
-          {r.asker.isYou && active ? (
-            <Button variant="ghost" size="sm" loading={closing} onClick={() => void close()}>Close request</Button>
-          ) : null}
+          {isSignedIn && !r.asker.isYou ? <ReviewMenu label="Request actions" disabled={reporting} items={[{ id: "report", label: "Report request…", items: REPORT_REASONS.map((reason) => ({ id: reason, label: reason, onSelect: () => report(reason) })) }]}><MoreHorizontal className="h-5 w-5" aria-hidden /></ReviewMenu> : null}
         </div>
-        {closeError ? <p role="alert" className="text-danger">{closeError} <Button variant="ghost" size="sm" loading={closing} onClick={() => void close(true)}>Try again</Button></p> : null}
+        {reportNotice ? <p role="status" className="text-caption text-text-muted">{reportNotice}</p> : null}
+        {reportError ? <p role="alert" className="text-caption text-danger">{reportError}</p> : null}
         {r.asker.isYou && active ? (
-          <label className="flex items-start gap-2 text-caption text-text-muted">
-            <input
-              type="checkbox"
+          <details className="rounded-lg border border-border bg-bg-surface/80 p-3"><summary className="min-h-10 cursor-pointer content-center text-caption font-semibold text-text">Asker tools</summary><div className="mt-2 space-y-3"><label htmlFor={shareToggleId} className="flex min-h-11 items-start gap-2 text-caption text-text-muted">
+            <Toggle
+              id={shareToggleId}
+              label="Let reviewers download my replay file"
               // The saved choice, not the effective state: while the request
               // is hidden downloads pause, but the asker can still turn it off.
               checked={r.replay?.optedIn ?? r.replay?.shared === true}
               disabled={sharing}
-              onChange={(e) => void setReplaySharing(e.target.checked)}
-              className="mt-0.5 h-4 w-4"
+              onChange={(value) => void setReplaySharing(value)}
+              className="mt-0.5"
             />
             <span>
               Let reviewers download my replay file.{" "}
@@ -323,13 +342,15 @@ function RequestHeader({ data, onChanged }: { data: ReviewPageData; onChanged: (
               ) : null}
               {shareError ? <span role="alert" className="block text-danger">{shareError}</span> : null}
             </span>
-          </label>
+          </label><Button variant="ghost" size="sm" loading={closing} onClick={() => setConfirmClose(true)}>Close request</Button>
+            {closeError ? <p role="alert" className="text-danger">{closeError} <Button variant="ghost" size="sm" loading={closing} onClick={() => void close()}>Try again</Button></p> : null}
+          </div></details>
         ) : null}
         {r.status === "closed" && r.closedReason === "game_unavailable" ? (
           <p className="text-caption text-text-muted">The asker removed this game, so its replay is no longer shared.</p>
         ) : null}
       </div>
-    </header>
+    </header><ConfirmDialog open={confirmClose} onClose={() => { if (!closePending.current) setConfirmClose(false); }} onConfirm={() => void close()} loading={closing} intent="danger" title="Close this request?" description="New comments stop and the replay analysis is no longer shared. The thread stays readable. You can't reopen it." confirmLabel="Close request" /></>
   );
 }
 

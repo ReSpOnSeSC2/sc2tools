@@ -2,7 +2,7 @@ import Link from "next/link";
 import { CheckCircle2, Film, MessageSquare, Star } from "lucide-react";
 import { MapArtwork } from "@/components/maps/MapArtwork";
 import { Badge } from "@/components/ui/Badge";
-import { formatClock, tagLabel, type ReviewCard as ReviewCardData } from "@/lib/reviews";
+import { age, formatClock, tagLabel, type ReviewCard as ReviewCardData } from "@/lib/reviews";
 import { ReviewReplayDownload } from "./ReviewReplayDownload";
 
 /**
@@ -71,20 +71,4 @@ export function ReviewCard({ card, now, variant = "full" }: { card: ReviewCardDa
   );
 }
 
-/**
- * Coarse, deterministic age ("3h ago"). ``now`` is passed in from the
- * server render so client hydration never disagrees with it.
- */
-export function age(iso: string | null, now: number): string {
-  if (!iso) return "";
-  const ms = now - new Date(iso).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return "just now";
-  const min = Math.floor(ms / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min}m ago`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
-  return `${Math.floor(d / 30)}mo ago`;
-}
+export { age } from "@/lib/reviews";

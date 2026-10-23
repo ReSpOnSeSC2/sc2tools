@@ -55,6 +55,8 @@ corresponding GitHub Release.
 - Run build votes, switch all four stream scenes and undo or manage chat blocks; blocked authors do not vote in polls. Refresh existing scene Browser Sources once to recognize Intermission and Stream ending.
 - Stream Studio links features to their guides, offers signed-in setup shortcuts, opens the desktop preview gallery and lets you undo a course-progress reset.
 
+- Review comments save browser drafts, guard discarded text and support Ctrl/Cmd+Enter; edit mode validates text and explains its 15-minute window. Request time ranges have phone-safe inputs, presets and clock suggestions. Share, report, block, delete and close actions use accessible menus and explicit confirmations.
+
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
