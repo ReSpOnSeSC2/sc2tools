@@ -88,6 +88,32 @@ describe("per-opponent scouting notes", () => {
     }));
   });
 
+  test("lists private note previews in one batch on filtered and unfiltered pages", async () => {
+    await db.opponents.insertOne({ userId: "owner", pulseId: "pulse-2", displayNameSample: "Other", lastSeen: new Date(), wins: 1, losses: 0, gameCount: 1 });
+    await db.games.insertOne({ userId: "owner", gameId: "other", date: new Date(), result: "Victory", opponent: { pulseId: "pulse-2", displayName: "Other" } });
+    const text = "  Watch\n  proxy " + "🌟".repeat(150);
+    await db.opponentNotes.insertMany([
+      { userId: "owner", pulseId: "pulse-1", notes: text },
+      { userId: "another-user", pulseId: "pulse-2", notes: "Private to someone else" },
+    ]);
+    const find = jest.spyOn(db.opponentNotes, "find");
+    try {
+      for (const filters of [{}, { since: new Date("2026-01-01") }]) {
+        find.mockClear();
+        const page = await opponents.list("owner", { filters });
+        expect(find).toHaveBeenCalledTimes(1);
+        expect(find.mock.calls[0][0]).toEqual({ userId: "owner", pulseId: { $in: expect.arrayContaining(["pulse-1", "pulse-2"]) } });
+        const withNotes = page.items.find((item) => item.pulseId === "pulse-1");
+        const withoutNotes = page.items.find((item) => item.pulseId === "pulse-2");
+        expect(withNotes.notesMeta.preview).toBe(Array.from(text.replace(/\s+/g, " ").trim()).slice(0, 140).join(""));
+        expect(Array.from(withNotes.notesMeta.preview)).toHaveLength(140);
+        expect(withoutNotes.notesMeta).toBeUndefined();
+        if (filters.since) expect(withNotes.notes).toBeUndefined();
+        else expect(withNotes.notes).toBe(text);
+      }
+    } finally { find.mockRestore(); }
+  });
+
   test("blank notes delete the row and force read-aloud off", async () => {
     await opponents.updateNotes("owner", "pulse-1", {
       notes: "Existing note",

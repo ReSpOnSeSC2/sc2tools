@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { OpponentsTab } from "../OpponentsTab";
 
@@ -137,6 +137,69 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  sessionStorage.clear();
+  vi.useRealTimers();
+});
+
+describe("opponent list controls and navigation", () => {
+  it("uses dossier links and leaves modified row clicks, alias buttons and selected text alone", () => {
+    const onOpen = vi.fn(); render(<OpponentsTab onOpen={onOpen} />);
+    const table = screen.getByRole("table");
+    const name = within(table).getByRole("link", { name: "Alpha" });
+    expect(name.getAttribute("href")).toBe("/app/opponents/alpha");
+    const row = name.closest("tr")!;
+    for (const modifier of ["ctrlKey", "metaKey", "shiftKey", "altKey"]) fireEvent.click(row, { [modifier]: true });
+    fireEvent.click(row, { button: 1 });
+    expect(onOpen).not.toHaveBeenCalled();
+    const selection = vi.spyOn(window, "getSelection").mockReturnValue({ toString: () => "Copied name" } as Selection);
+    fireEvent.click(row); expect(onOpen).not.toHaveBeenCalled(); selection.mockRestore();
+    fireEvent.click(row); expect(onOpen).toHaveBeenCalledWith("alpha");
+    expect(within(table).getByRole("columnheader", { name: /Open dossier/ })).toBeTruthy();
+    expect(row.querySelector("time")?.getAttribute("dateTime")).toBe(opponents[0].lastPlayed);
+  });
+  it("focuses search with slash, clears with Escape or its button, and resets only local controls", () => {
+    render(<><input aria-label="Other editor" /><OpponentsTab onOpen={() => undefined} /></>);
+    const search = screen.getByRole("textbox", { name: "Search opponents" });
+    expect(screen.queryByRole("button", { name: "Reset" })).toBeNull();
+    fireEvent.keyDown(window, { key: "/" }); expect(document.activeElement).toBe(search);
+    const other = screen.getByRole("textbox", { name: "Other editor" }); other.focus(); fireEvent.keyDown(other, { key: "/" }); expect(document.activeElement).toBe(other);
+    fireEvent.change(search, { target: { value: "Alpha" } }); fireEvent.keyDown(search, { key: "Escape" }); expect((search as HTMLInputElement).value).toBe("");
+    fireEvent.change(search, { target: { value: "Beta" } }); fireEvent.click(screen.getByRole("button", { name: "Clear search" })); expect((search as HTMLInputElement).value).toBe("");
+    fireEvent.click(screen.getByRole("switch", { name: "Group same player" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Filter opponents by MMR impact" }), { target: { value: "tracked" } });
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(screen.queryByRole("button", { name: "Reset" })).toBeNull(); expect(screen.getByRole("switch", { name: "Group same player" }).getAttribute("aria-checked")).toBe("true");
+    expect(useFiltersMock.mock.results.at(-1)?.value.filters).toEqual({});
+  });
+  it("filters notes across grouped members, shows more previews, and keeps legacy notes readable", () => {
+    useApiMock.mockReturnValue({ data: { links: { 101: { accountId: "same" }, 202: { accountId: "same" } } } });
+    useApiPaginatedMock.mockReturnValue({ items: [{ ...opponents[0], notesMeta: { preview: "Check the third" } }, { ...opponents[1], notes: "Legacy note" }], isLoading: false });
+    render(<OpponentsTab onOpen={() => undefined} />);
+    fireEvent.click(screen.getByRole("switch", { name: "Has notes" }));
+    expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(1);
+    expect(screen.getByText("+1 more")).toBeTruthy(); expect(screen.getByRole("button", { name: /^Scouting note:/ }).getAttribute("title")).toBeTruthy();
+    fireEvent.click(screen.getByRole("switch", { name: "Group same player" }));
+    expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(2); expect(screen.getByRole("button", { name: "Scouting note: Legacy note" })).toBeTruthy();
+  });
+  it("debounces row prefetch through one timer and reports the page cap without page jargon", () => {
+    vi.useFakeTimers(); const prefetch = vi.fn();
+    useApiPaginatedMock.mockReturnValue({ items: opponents, isLoading: false, hitMaxPages: true });
+    render(<OpponentsTab onOpen={() => undefined} location={{ pathname: "/app/opponents", query: "", replace: vi.fn(), prefetch, navigate: vi.fn() }} />);
+    const table = screen.getByRole("table"); const alpha = within(table).getByRole("link", { name: "Alpha" }).closest("tr")!; const beta = within(table).getByRole("link", { name: "Beta" }).closest("tr")!;
+    fireEvent.pointerEnter(alpha); act(() => vi.advanceTimersByTime(100)); fireEvent.pointerEnter(beta); act(() => vi.advanceTimersByTime(149)); expect(prefetch).not.toHaveBeenCalled(); act(() => vi.advanceTimersByTime(1)); expect(prefetch).toHaveBeenCalledOnce(); expect(prefetch).toHaveBeenCalledWith("/app/opponents/beta");
+    expect(screen.getByText(/Showing your most recent 8,000 opponents/)).toBeTruthy(); expect(screen.queryByText(/\d+ pages/)).toBeNull();
+  });
+  it("restores the saved render window before scrolling and clears the return flag", () => {
+    vi.useFakeTimers(); window.history.replaceState({}, "", "/app/opponents");
+    const scroll = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    sessionStorage.setItem("opponents:from-list", "1");
+    sessionStorage.setItem("opponents:list-state", JSON.stringify({ listUrl: "/app/opponents", renderWindow: 400, expandedGroups: [], scrollY: 950 }));
+    useApiPaginatedMock.mockReturnValue({ items: Array.from({ length: 450 }, (_, index) => ({ ...opponents[0], pulseId: String(index), pulseCharacterId: String(index), name: `Player ${index}` })), isLoading: false });
+    render(<OpponentsTab onOpen={() => undefined} />);
+    expect(screen.getByRole("table").querySelectorAll("tbody tr")).toHaveLength(400);
+    expect(scroll).not.toHaveBeenCalled(); act(() => vi.advanceTimersByTime(40));
+    expect(scroll).toHaveBeenCalledWith(0, 950); expect(sessionStorage.getItem("opponents:from-list")).toBeNull(); scroll.mockRestore();
+  });
 });
 
 function mockGroupedImpacts(identitySource: "pulse" | "approved" = "pulse") {
@@ -225,7 +288,7 @@ describe("OpponentsTab MMR impact", () => {
       "MMR won",
       "MMR lost",
       "Last",
-      "→",
+      "Open dossier→",
     ]);
 
     const alphaRow = within(table).getByText("Alpha").closest("tr");
@@ -253,7 +316,7 @@ describe("OpponentsTab MMR impact", () => {
     expect(onOpen).toHaveBeenCalledWith("alpha");
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Open Alpha opponent details" }),
+      screen.getByRole("link", { name: "Open dossier for Alpha" }),
     );
     expect(onOpen).toHaveBeenCalledWith("alpha");
   });
@@ -270,7 +333,7 @@ describe("OpponentsTab MMR impact", () => {
       const row = within(table).getByText(value, { selector: "span" }).closest("tr")!;
       fireEvent.click(card);
       const cardTarget = onOpen.mock.lastCall?.[0];
-      fireEvent.click(within(row).getByRole("button", { name: /opponent details$/ }));
+      fireEvent.click(within(row).getByRole("link", { name: /^Open dossier for/ }));
       expect(onOpen).toHaveBeenLastCalledWith(cardTarget);
     }
 
@@ -297,7 +360,7 @@ describe("OpponentsTab MMR impact", () => {
     // offers a way back from each local control.
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.getByText("No opponents match these filters")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Clear search" })).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: "Clear search" })).toHaveLength(2);
     expect(screen.getByRole("button", { name: "Show all MMR impact" })).toBeTruthy();
     expect(within(screen.getByRole("button", { name: /most net MMR won$/ })).getByText("+140")).toBeTruthy();
     expect(within(screen.getByRole("button", { name: /most net MMR lost$/ })).getByText("-130")).toBeTruthy();
@@ -458,27 +521,27 @@ describe("OpponentsTab MMR impact", () => {
     render(<OpponentsTab onOpen={onOpen} />);
     const table = screen.getByRole("table", { name: "Opponent history" });
     const grouped = within(table).getByText(barcode).closest("tr")!;
-    expect(within(grouped).getByText("aka")).toBeTruthy();
-    expect(within(grouped).getByTitle("Confirmed as Strange").textContent).toBe("akaStrange");
+    expect(within(grouped).getByText("Confirmed as Strange")).toBeTruthy();
+    expect(within(grouped).getByTitle("Confirmed by an admin").textContent).toBe("Confirmed as Strange");
     expect(within(grouped).queryByText("StaleName")).toBeNull();
     expect(within(grouped).getAllByRole("cell")[5].textContent).toBe("6");
     expect(within(grouped).getByRole("link", { name: "Visit Strange's Twitch channel" }).getAttribute("href")).toBe("https://www.twitch.tv/strange");
     expect(within(grouped).getByRole("link", { name: "Visit Strange's YouTube channel" })).toBeTruthy();
-    fireEvent.click(within(grouped).getByRole("button", { name: `Open ${barcode} opponent details` }));
+    fireEvent.click(within(grouped).getByRole("link", { name: `Open dossier for ${barcode}` }));
     expect(onOpen).toHaveBeenLastCalledWith("8703807");
 
     fireEvent.click(screen.getByRole("button", { name: "Show the 2 names this player uses" }));
     const expanded = within(table).getAllByRole("row").filter((row) => row.className.includes("bg-bg-elevated/40"));
     expect(expanded).toHaveLength(2);
     const source = expanded.find((row) => within(row).queryByText(barcode))!;
-    expect(within(source).getByTitle("Confirmed as Strange")).toBeTruthy();
+    expect(within(source).getByTitle("Confirmed by an admin")).toBeTruthy();
     expect(within(source).getByRole("link", { name: "Visit Strange's YouTube channel" })).toBeTruthy();
     expect(within(source).getAllByRole("cell")[5].textContent).toBe("3");
 
     fireEvent.click(screen.getByRole("switch", { name: "Group same player" }));
     expect(within(table).getAllByRole("row")).toHaveLength(3);
     const separate = within(table).getByText(barcode).closest("tr")!;
-    expect(within(separate).getByTitle("Confirmed as Strange")).toBeTruthy();
+    expect(within(separate).getByTitle("Confirmed by an admin")).toBeTruthy();
     expect(within(separate).getByRole("link", { name: "Visit Strange's Twitch channel" })).toBeTruthy();
     expect(within(separate).getAllByRole("cell")[5].textContent).toBe("3");
     const search = screen.getByRole("textbox", { name: "Search opponents" });

@@ -63,6 +63,9 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
+        "The replay history sits directly above your notes near the top of the dossier. The list also shows a private note preview, and its **Has notes** toggle finds opponents you have written about.",
+        "Press **Ctrl+Enter** (or **Cmd+Enter** on a Mac) in the editor to save. A failed save keeps your text and offers **Retry**. The 500-character limit stays the same; the counter appears below 100 characters remaining.",
+        "Unsaved drafts stay in this browser tab and restore when you return to the same opponent. **Discard** returns to the saved note. Following **All opponents** or the breadcrumb asks before discarding unsaved work; **Keep editing** is the default action.",
         "Write what you want to remember, for example *Hides tech after early pressure*, and press **Save notes**. Notes are private.",
         "When the desktop app detects this player at the start of a game, your notes show on your private scouting overlay.",
         "Turn on **Read notes aloud** to hear them at the start of the game too. It needs the voice readout on, with **Scouting report (pre-game)** ticked: see [Voice readout](/help/voice).",
