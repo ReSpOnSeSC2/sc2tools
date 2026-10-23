@@ -1,0 +1,29 @@
+import { expect, test } from "@playwright/test";
+
+test("definition links reveal hidden rules, preserve URL filters and fit the viewport", async ({ page }, testInfo) => {
+  await page.goto("/");
+  const reject = page.getByRole("button", { name: "Reject", exact: true });
+  await reject.click();
+  const response = await page.goto("/definitions?q=impossible&race=T#zerg-12-pool");
+  expect(response?.status()).toBe(200);
+  const pool = page.getByRole("heading", { name: "Zerg - 12 Pool", exact: true });
+  await expect(pool).toBeFocused();
+  await expect(page.getByRole("textbox", { name: "Search builds and strategies" })).toHaveValue("");
+  const matchup = page.getByRole("group", { name: "Filter by matchup", exact: true });
+  await expect(matchup.getByRole("button")).toHaveCount(10);
+  await matchup.getByRole("button", { name: "ZvT", exact: true }).click();
+  await expect(page).toHaveURL(/race=Z&matchup=ZvT#zerg-12-pool$/);
+  await expect(matchup.getByRole("button", { name: "ZvT", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("textbox", { name: "Search builds and strategies" }).fill("8 pool");
+  await expect(page).toHaveURL(/q=8\+pool&race=Z&matchup=ZvT#zerg-12-pool$/);
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Search builds and strategies" })).toHaveValue("8 pool");
+  await page.getByRole("group", { name: "Filter by race", exact: true }).getByRole("button", { name: "Terran", exact: true }).click();
+  await expect(pool).toHaveCount(0);
+  await page.evaluate(() => { window.location.hash = "pvz-stargate-into-glaives"; });
+  const revealed = page.getByRole("heading", { name: "PvZ - Stargate into Glaives", exact: true });
+  await expect(revealed).toBeFocused();
+  await expect(page.locator("#pvz-stargate-into-glaives")).toHaveClass(/ring-2/);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  await page.screenshot({ path: testInfo.outputPath(`definitions-${testInfo.project.name}.png`) });
+});

@@ -8,7 +8,7 @@ import type { MobileNavLink } from "./MobileNav";
  * Signed out, the list leads with what a visitor can use without an
  * account: Analyze replays (/try, only while Instant Analysis is open to
  * everyone), Stream Studio, Guides, Community, Reviews, Help and
- * Download. Signed in, it is Custom builds, Guides, Community, Reviews,
+ * Download. Signed in, it is Build library, Guides, Community, Reviews,
  * Help, Settings, then Admin for admins. The app itself is reached from
  * the header's "Open app" pill, so "Today" stays the only in-app name
  * for /app. Guides took the slot of the retired Meta radar.
@@ -16,7 +16,7 @@ import type { MobileNavLink } from "./MobileNav";
 
 export const TRY_NAV_LINK: MobileNavLink = { href: "/try", label: "Analyze replays", auth: "out" };
 const STREAM_STUDIO_NAV_LINK: MobileNavLink = { href: "/stream-studio", label: "Stream Studio", auth: "out" };
-const BUILDS_NAV_LINK: MobileNavLink = { href: "/builds", label: "Custom builds", auth: "in" };
+const BUILDS_NAV_LINK: MobileNavLink = { href: "/builds", label: "Build library", auth: "in" };
 export const GUIDES_NAV_LINK: MobileNavLink = { href: "/guides", label: "Guides", auth: "any" };
 const COMMUNITY_LINK: MobileNavLink = { href: "/community", label: "Community", auth: "any" };
 const REVIEWS_NAV_LINK: MobileNavLink = { href: "/reviews", label: "Reviews", auth: "any" };
@@ -44,7 +44,7 @@ export interface HeaderNavOptions {
  * the matching Clerk gate.
  *
  * Example: `headerNavLinks({ guides: true, reviews: false, isAdmin: false })`
- * → Stream Studio, Custom builds, Guides, Community, Help, Download, Settings.
+ * → Stream Studio, Build library, Guides, Community, Help, Download, Settings.
  */
 export function headerNavLinks(options: HeaderNavOptions): readonly MobileNavLink[] {
   return [

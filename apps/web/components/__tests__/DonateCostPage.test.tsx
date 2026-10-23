@@ -14,6 +14,7 @@ vi.mock("@/lib/infrastructureCosts", async (importOriginal) => {
   };
 });
 
+import { monthlyCostSummary } from "@/lib/infrastructureCosts";
 import DonatePage from "@/app/donate/page";
 
 const COSTS = {
@@ -150,4 +151,18 @@ test("shows an honest unavailable state instead of treating missing usage as zer
   expect(screen.getByText("No zero-cost assumption shown")).toBeTruthy();
   expect(screen.getByText(/no replay storage amount, R2 cost or live combined total has been invented/i))
     .toBeTruthy();
+});
+
+
+test("uses the same sourced total in the plain hero and accessible provider bar", async () => {
+  getInfrastructureCostsMock.mockResolvedValue(COSTS);
+  const { container } = render(await DonatePage());
+  expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("Running SC2 Tools costs about $68.30 a month. Every feature stays free.");
+  expect(screen.getByText("Donations pay for the servers, database and storage.")).toBeTruthy();
+  const bar = screen.getByRole("img", { name: /Estimated monthly costs/ });
+  const sum = [...bar.querySelectorAll<HTMLElement>("[data-cost-usd]")].reduce((total, segment) => total + Number(segment.dataset.costUsd), 0);
+  expect(sum).toBeCloseTo(monthlyCostSummary(COSTS).totalUsd, 12);
+  expect(bar.getAttribute("aria-label")).toContain("Render $7.00, Atlas $60.00, Domain $1.25, R2 $0.05");
+  expect(container.querySelector("details")?.open).toBe(false);
+  expect(screen.getByText("How these numbers are measured")).toBeTruthy();
 });

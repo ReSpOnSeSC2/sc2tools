@@ -33,6 +33,7 @@ export const ENGINE_DEFINITIONS_FILE = path.join(ENGINE_ROOT, "core", "build_def
 
 /** The file this script writes. */
 export const GENERATED_FILE = path.join(webRoot, "lib", "build-definitions.generated.json");
+export const GENERATED_LINKS_FILE = path.join(webRoot, "lib", "definition-names.generated.json");
 
 const EXPORT_SCRIPT = path.join(ENGINE_ROOT, "scripts", "export_build_definitions.py");
 const NAME_SEPARATOR = " - ";
@@ -134,6 +135,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
   const [exportFile] = process.argv.slice(2);
   const payload = JSON.parse(exportFile ? readFileSync(exportFile, "utf8") : runExport());
   writeFileSync(GENERATED_FILE, renderGeneratedCatalog(payload));
+  // A name-only index keeps strategy links out of the much larger prose catalog.
+  writeFileSync(GENERATED_LINKS_FILE, `${JSON.stringify(buildGeneratedCatalog(payload).definitions.map(({ name, eightWorkerName }) => eightWorkerName ? [name, eightWorkerName] : [name]))}\n`);
   console.log(
     `${path.relative(webRoot, GENERATED_FILE)}: ${payload.definitions.length} engine labels`,
   );

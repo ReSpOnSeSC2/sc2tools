@@ -12,9 +12,10 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { TrySavePanel } from "@/components/auth/TrySavePanel";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { appearanceFor } from "@/lib/clerk-appearance";
-import { safeAuthRedirect } from "@/lib/instant/authRedirect";
+import { isTryResumeRedirect, safeAuthRedirect } from "@/lib/instant/authRedirect";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import type { Theme } from "@/lib/theme";
 
@@ -22,8 +23,14 @@ import type { Theme } from "@/lib/theme";
 const WELCOME_PATH = "/welcome";
 
 export default function SignUpPage() {
+  return <Suspense fallback={<WidgetPlaceholder />}><SignUpContent /></Suspense>;
+}
+
+function SignUpContent() {
+  const searchParams = useSearchParams();
+  const tryResume = isTryResumeRedirect(searchParams.get("redirect_url"));
   return (
-    <AuthShell marketing={<SignUpMarketing />}>
+    <AuthShell lead={tryResume ? "Save your /try report" : "Your replay history, saved privately."} marketing={tryResume ? <TrySavePanel /> : <SignUpMarketing />}>
       {(theme) => (
         // useSearchParams needs a Suspense boundary for the static build.
         <Suspense fallback={<WidgetPlaceholder />}>

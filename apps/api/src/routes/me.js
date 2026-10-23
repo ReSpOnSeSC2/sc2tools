@@ -45,6 +45,7 @@ const ME_MMR_MAX_TOONS = 8;
  *
  * @param {{
  *   users: import('../services/types').UsersService,
+ *   announcements?: import('../services/announcements').AnnouncementsService,
  *   games: import('../services/types').GamesService,
  *   gdpr: import('../services/gdpr').GdprService,
  *   backupStatus?: import('../services/backupStatus').BackupStatusService,
@@ -100,6 +101,7 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       await deps.users.touch(auth.userId);
+      await deps.announcements?.deliverMajors(auth.userId);
       const [stats, summary, agent, activeImportJob, onboarding] =
         await Promise.all([
           deps.games.stats(auth.userId),

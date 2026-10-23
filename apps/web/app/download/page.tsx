@@ -1,5 +1,6 @@
 import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import { Banner } from "@/components/Banner";
+import { ResyncNotice, InstalledAgentVersion } from "@/components/onboarding/DownloadAccountStatus";
 import { DownloadInteractive } from "@/components/onboarding/DownloadInteractive";
 
 export const metadata = {
@@ -56,16 +57,8 @@ export default function DownloadPage() {
           sync securely to your private cloud library, where only your
           account can review or download them.
         </p>
-        <div
-          role="note"
-          className="max-w-2xl rounded-md border border-accent/35 bg-accent/10 px-4 py-3 text-body text-text"
-        >
-          <strong>Already using the agent?</strong> Install the latest version,
-          choose <strong>All time</strong> for the replay filter, then click{" "}
-          <strong>Re-sync replay library</strong> once. That one scan rebuilds
-          cloud analysis and archives every original still available on this
-          PC; it does not duplicate games.
-        </div>
+        <InstalledAgentVersion />
+        <ResyncNotice />
       </header>
 
       <Banner variant="divider" />

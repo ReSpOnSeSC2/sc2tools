@@ -8,6 +8,7 @@ export interface ShareLinkButtonProps {
   /** Path relative to the site root. Origin is read at click time. */
   path: string;
   label?: string;
+  className?: string;
 }
 
 /**
@@ -20,6 +21,7 @@ export interface ShareLinkButtonProps {
 export function ShareLinkButton({
   path,
   label = "Share link",
+  className,
 }: ShareLinkButtonProps) {
   const [copied, setCopied] = useState(false);
 
@@ -54,6 +56,7 @@ export function ShareLinkButton({
     <Button
       variant="ghost"
       size="sm"
+      className={className}
       onClick={handleClick}
       iconLeft={
         copied ? (

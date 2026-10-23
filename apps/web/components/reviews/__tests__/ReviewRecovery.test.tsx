@@ -6,8 +6,8 @@ const h = vi.hoisted(() => ({ apiCall: vi.fn(), mutate: vi.fn(), page: null as R
   reviewer: null as ReviewerMe | null, reviewerMutate: vi.fn(), status: 0, reviewerError: false }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, getToken: async () => "token" }), SignedIn: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock("@/lib/clientApi", () => ({ apiCall: h.apiCall, useApi: () => ({ data: h.reviewer, mutate: h.reviewerMutate, error: h.reviewerError ? { status: 500 } : undefined }) }));
-vi.mock("@/lib/usePublicApi", () => ({ usePublicApi: (path: string) => ({ data: path.includes("?test") ? undefined : path.endsWith("leaderboard") ? { items: [] } : path.endsWith("analysis") ? undefined : h.page,
-  mutate: h.mutate, isValidating: false, error: path.includes("?test") ? { status: h.status, message: "failed" } : undefined }) }));
+vi.mock("@/lib/usePublicApi", () => ({ usePublicApi: (path: string) => ({ data: path.includes("?race=P") ? undefined : path.endsWith("leaderboard") ? { items: [] } : path.endsWith("analysis") ? undefined : h.page,
+  mutate: h.mutate, isValidating: false, error: path.includes("?race=P") ? { status: h.status, message: "failed" } : undefined }) }));
 vi.mock("@/components/maps/MapArtwork", () => ({ MapArtwork: () => null }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
 vi.mock("../ReviewShareMenu", () => ({ ReviewShareMenu: () => null }));
@@ -50,19 +50,22 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("review recovery", () => {
   it("retries a failed close without asking for confirmation again", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const confirm = vi.spyOn(window, "confirm");
     h.apiCall.mockRejectedValueOnce({ message: "Connection interrupted" });
     render(<ReviewPage initial={h.page!} />);
+    fireEvent.click(screen.getByText("Asker tools"));
     fireEvent.click(screen.getByRole("button", { name: "Close request" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Close this request?" })).getByRole("button", { name: "Close request" }));
     expect(await screen.findByRole("alert")).toHaveProperty("textContent", expect.stringContaining("Connection interrupted"));
     expect(h.mutate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(h.apiCall).toHaveBeenCalledTimes(2));
-    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("dialog", { name: "Close this request?" })).toBeNull();
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it.each([403, 404, 503, 0])("distinguishes preview access from failed board requests (%s)", async (status) => {
-    h.status = status; render(<ReviewBoardLoader query="?test" />);
+    h.status = status; render(<ReviewBoardLoader query="?race=P" />);
     if (status === 403 || status === 404) expect(screen.getByText("Reviews are in an admin-only preview.")).toBeTruthy();
     else {
       expect(screen.getByText("Couldn't load the review board")).toBeTruthy();

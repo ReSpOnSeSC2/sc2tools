@@ -1,3 +1,4 @@
+import { localOverlaySample } from "@/lib/overlayDemo.server";
 import { OverlayWidgetClient } from "@/components/OverlayWidgetClient";
 import { OVERLAY_THEME_PARAM } from "@/lib/overlayTheme";
 import { GHOST_BUILD_PARAM } from "@/lib/ghostBuild";
@@ -88,6 +89,7 @@ export default async function OverlayWidgetPage({
   }
   return (
     <OverlayWidgetClient
+      demo={sp.demo === "1" ? localOverlaySample(widget) : undefined}
       token={token}
       widget={widget}
       themeParam={themeParam}

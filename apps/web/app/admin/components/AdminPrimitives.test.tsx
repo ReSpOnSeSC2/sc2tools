@@ -24,8 +24,8 @@ describe("admin navigation and page primitives", () => {
   it("has five labelled groups, thirteen unique icons, longest-prefix selection and mobile scrolling", () => {
     expect(NAV_GROUPS).toHaveLength(5);
     const items = NAV_GROUPS.flatMap((group) => [...group.items]);
-    expect(items).toHaveLength(13);
-    expect(new Set(items.map((item) => item.icon)).size).toBe(13);
+    expect(items).toHaveLength(14);
+    expect(new Set(items.map((item) => item.icon)).size).toBe(14);
     const { rerender } = render(<AdminShell>Page</AdminShell>);
     expect(screen.getByRole("list", { name: "Community" })).toBeTruthy();
     const mobile = screen.getByRole("navigation", { name: "Admin sections" });
@@ -35,6 +35,9 @@ describe("admin navigation and page primitives", () => {
     rerender(<AdminShell>Page</AdminShell>);
     expect(within(mobile).getByRole("link", { name: "Global trends" }).getAttribute("aria-current")).toBe("page");
     expect(mocks.scroll).toHaveBeenCalledTimes(2);
+    expect(within(screen.getByRole("list", { name: "Content" })).getByRole("link", { name: "Announcements" }).getAttribute("href")).toBe("/admin/announcements");
+    mocks.pathname = "/admin/announcements"; rerender(<AdminShell>Page</AdminShell>);
+    expect(within(mobile).getByRole("link", { name: "Announcements" }).getAttribute("aria-current")).toBe("page");
   });
 
   it("hides empty pagination, displays its label, and respects busy/disabled actions", () => {

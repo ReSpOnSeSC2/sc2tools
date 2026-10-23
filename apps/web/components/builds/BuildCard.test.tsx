@@ -1,8 +1,12 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BuildCard } from "./BuildCard";
 import type { DecoratedBuild } from "./types";
+const publication = vi.hoisted(() => ({ data: undefined as undefined | { published: boolean; publicSlug: string | null; mirrorPending: boolean }, paths: [] as Array<string | null>, mutate: vi.fn(), call: vi.fn(), token: vi.fn(async () => "token") }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: publication.token }) }));
+vi.mock("@/lib/clientApi", () => ({ apiCall: publication.call, useApi: (path: string | null) => { publication.paths.push(path); return { data: path ? publication.data : undefined, mutate: publication.mutate }; } }));
+beforeEach(() => { publication.data = undefined; publication.paths = []; publication.call.mockReset(); });
 
 const callbacks = {
   onOpen: vi.fn(),
@@ -30,7 +34,7 @@ describe("BuildCard replay-stat states", () => {
   it("does not describe an unfinished request as zero matches", () => {
     render(<BuildCard build={build({ statsState: "loading" })} {...callbacks} />);
 
-    expect(screen.getByRole("status").textContent).toBe("Loading record");
+    expect(screen.getByRole("status").textContent).toBe("Loading stats");
     expect(screen.queryByText("No classified replays")).toBeNull();
   });
 
@@ -49,24 +53,28 @@ describe("BuildCard replay-stat states", () => {
     expect(screen.getByText("No classified replays")).toBeTruthy();
   });
 
-  it("labels the replay sample as a total game count in plain language", () => {
+  it("shows a single played timestamp instead of repeating the total or edited timestamp", () => {
     render(
       <BuildCard
         build={build({
           statsState: "ready",
+          updatedAt: "2026-09-01T00:00:00Z",
           stats: {
             name: "PvT 3 Gate",
             wins: 300,
             losses: 276,
             total: 576,
             winRate: 300 / 576,
+            lastPlayed: "2026-10-21T12:00:00Z",
           },
         })}
         {...callbacks}
       />,
     );
 
-    expect(screen.getByText("Total games: 576")).toBeTruthy();
+    expect(screen.getByText(/^Played /).getAttribute("title")).toBe(new Date("2026-10-21T12:00:00Z").toLocaleString());
+    expect(screen.queryByText(/^Edited /)).toBeNull();
+    expect(screen.queryByText("Total games: 576")).toBeNull();
     expect(screen.queryByText("n = 576")).toBeNull();
     expect(screen.queryByText(/check-in/)).toBeNull();
   });
@@ -116,7 +124,7 @@ describe("BuildCard actions menu", () => {
     expect(menu.className).toContain("overflow-y-auto");
     expect(
       screen.getAllByRole("menuitem").map((item) => item.textContent),
-    ).toEqual(["Edit", "Re-match replays", "Publish", "Delete"]);
+    ).toEqual(["Open full page", "Edit", "Re-match replays", "Publish…", "Delete"]);
     for (const item of screen.getAllByRole("menuitem")) {
       expect(item.className).toContain("min-h-11");
     }
@@ -188,7 +196,7 @@ describe("BuildCard actions menu", () => {
 
     await waitFor(() => {
       expect(document.activeElement).toBe(
-        screen.getByRole("menuitem", { name: "Edit" }),
+        screen.getByRole("menuitem", { name: "Open full page" }),
       );
     });
     fireEvent.keyDown(menu, { key: "End" });
@@ -201,5 +209,86 @@ describe("BuildCard actions menu", () => {
       name: "Build actions for PvT 3 Gate",
     })).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+});
+
+describe("BuildCard variants and Community actions", () => {
+  it.each([1, 4, 5, 0])("uses the low-sample cue only for one through four games (%s)", (total) => {
+    const { container } = render(<BuildCard build={build({ updatedAt: "2026-10-21", stats: { name: "test", total, wins: total, losses: 0, winRate: 1 } })} {...callbacks} />);
+    expect(!!screen.queryByText("Low sample")).toBe(total > 0 && total < 5);
+    if (total > 0 && total < 5) expect(container.querySelector("dd")?.getAttribute("style")).toContain("--text-dim");
+    expect(screen.getByText(/^Edited /)).toBeTruthy();
+  });
+
+  it("keeps duplicate private and reads public identity only when opening a public menu", () => {
+    const duplicate = vi.fn();
+    render(<BuildCard build={build()} {...callbacks} onDuplicate={duplicate} />);
+    expect(publication.paths.filter(Boolean)).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Build options for PvT 3 Gate" }));
+    expect(screen.getByRole("menuitem", { name: "Open full page" }).getAttribute("href")).toBe("/builds/pvt-three-gate");
+    expect(screen.queryByRole("menuitem", { name: "Unpublish" })).toBeNull();
+    fireEvent.click(screen.getByRole("menuitem", { name: "Duplicate" }));
+    expect(duplicate).toHaveBeenCalledWith("pvt-three-gate");
+  });
+
+  it("loads public links lazily, copies the public slug and unpublishes through mirror repair before refreshing", async () => {
+    const changed = vi.fn();
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const view = render(<BuildCard build={build({ isPublic: true })} {...callbacks} onDuplicate={vi.fn()} onChanged={changed} />);
+    expect(publication.paths.filter(Boolean)).toHaveLength(0);
+    const trigger = screen.getByRole("button", { name: "Build options for PvT 3 Gate" });
+    fireEvent.click(trigger);
+    expect((screen.getByRole("menuitem", { name: "Copy public link · Loading…" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(publication.paths).toContain("/v1/community/my-build-publication/pvt-three-gate");
+    publication.data = { published: true, publicSlug: "public-three-gate", mirrorPending: false };
+    view.rerender(<BuildCard build={build({ isPublic: true })} {...callbacks} onDuplicate={vi.fn()} onChanged={changed} />);
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Open full page", "Edit", "Duplicate", "Update listing", "View on Community", "Copy public link", "Unpublish", "Delete"]);
+    expect(screen.getByRole("menuitem", { name: "View on Community" }).getAttribute("href")).toBe("/community/builds/public-three-gate");
+    fireEvent.click(screen.getByRole("menuitem", { name: "Copy public link" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/community/builds/public-three-gate`));
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Unpublish" }));
+    const dialog = screen.getByRole("dialog", { name: "Unpublish “PvT 3 Gate”?" });
+    expect(dialog.textContent).toContain("Your private copy, stats and notes stay.");
+    expect(publication.call).not.toHaveBeenCalled();
+    publication.call.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ published: false, publicSlug: null, mirrorPending: false });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Unpublish" }));
+    await waitFor(() => expect(changed).toHaveBeenCalledOnce());
+    expect(publication.call.mock.calls.map((call) => [call[1], call[2]?.method ?? "GET"])).toEqual([["/v1/community/builds/public-three-gate", "DELETE"], ["/v1/community/my-build-publication/pvt-three-gate", "GET"]]);
+    expect(screen.getByRole("status").textContent).toBe("Unpublished.");
+  });
+
+  it("selects a read-only public link when clipboard access is blocked and keeps an Unpublish failure actionable", async () => {
+    publication.data = { published: true, publicSlug: "public-three-gate", mirrorPending: false };
+    Object.defineProperty(navigator, "clipboard", { value: { writeText: vi.fn(async () => { throw new Error("blocked"); }) }, configurable: true });
+    render(<BuildCard build={build({ isPublic: true })} {...callbacks} />);
+    const trigger = screen.getByRole("button", { name: "Build options for PvT 3 Gate" });
+    fireEvent.click(trigger); fireEvent.click(screen.getByRole("menuitem", { name: "Copy public link" }));
+    const field = await screen.findByRole("textbox", { name: "Public build link" }) as HTMLInputElement;
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    expect(field.readOnly).toBe(true); expect(field.selectionStart).toBe(0); expect(field.selectionEnd).toBe(field.value.length);
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Copy public link" })).getByRole("button", { name: "Close" }));
+    fireEvent.click(trigger); fireEvent.click(screen.getByRole("menuitem", { name: "Unpublish" }));
+    publication.call.mockRejectedValue({ message: "Service unavailable", requestId: "req-unpublish" });
+    const dialog = screen.getByRole("dialog", { name: "Unpublish “PvT 3 Gate”?" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Unpublish" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Service unavailable Error ID: req-unpublish"));
+    expect(screen.getByRole("dialog", { name: "Unpublish “PvT 3 Gate”?" })).toBe(dialog);
+    expect((within(dialog).getByRole("button", { name: "Unpublish" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("reports a committed removal honestly when only the private badge refresh fails", async () => {
+    publication.data = { published: true, publicSlug: "public-three-gate", mirrorPending: false };
+    publication.call.mockResolvedValueOnce({ ok: true }).mockRejectedValueOnce({ message: "Badge offline", requestId: "req-badge" });
+    const changed = vi.fn();
+    render(<BuildCard build={build({ isPublic: true })} {...callbacks} onChanged={changed} />);
+    fireEvent.click(screen.getByRole("button", { name: "Build options for PvT 3 Gate" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Unpublish" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Unpublish “PvT 3 Gate”?" })).getByRole("button", { name: "Unpublish" }));
+    await waitFor(() => expect(changed).toHaveBeenCalledOnce());
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain("The listing is unpublished, but its private badge couldn't refresh.");
+    expect(screen.getByRole("status").textContent).toContain("req-badge");
   });
 });

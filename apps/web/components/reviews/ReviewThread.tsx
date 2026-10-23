@@ -9,8 +9,12 @@ import { gaEvent } from "@/lib/analytics/gtag";
 import { ReviewMarkdown } from "@/lib/reviewMarkdown";
 import type { ReviewComment, ReviewPageData } from "@/lib/reviews";
 import { ReviewComposer, type DraftPin } from "./ReviewComposer";
+import { CommentEditor } from "./CommentEditor";
 import { ReviewerBadges } from "./ReviewerBadges";
 import { TimeChip } from "./TimeChip";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { REPORT_REASONS, ReviewMenu, type ReviewMenuItem } from "./ReviewMenu";
+import { CommentTime } from "./CommentTime";
 
 type ThreadOrder = "top" | "timeline";
 
@@ -105,27 +109,30 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
   const requestId = data.request.id;
   const [replying, setReplying] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [editBody, setEditBody] = useState(c.body);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [noticeError, setNoticeError] = useState(false);
+  const [confirm, setConfirm] = useState<"delete" | "block" | null>(null);
   const pin = ctx.pinNumbers.get(c.id);
   const active = ctx.activeId === c.id;
   const base = `/v1/reviews/${encodeURIComponent(requestId)}/comments/${encodeURIComponent(c.id)}`;
   const isAsker = data.viewer.isAsker;
   const open = data.request.status === "open" || data.request.status === "answered";
 
-  /** Resolves true on success; on failure shows the error and resolves false. */
-  async function act(path: string, body: Record<string, unknown> = {}, method = "POST", event?: string): Promise<boolean> {
+  /** Keep the parsed response, including the report route's alreadyReported flag. */
+  async function act(path: string, body: Record<string, unknown> = {}, method = "POST", event?: string): Promise<Record<string, unknown> | null> {
     setBusy(true);
     setNotice(null);
+    setNoticeError(false);
     try {
-      await apiCall(getToken, `${base}${path}`, { method, body: method === "DELETE" ? undefined : JSON.stringify(body) });
+      const result = await apiCall<Record<string, unknown>>(getToken, `${base}${path}`, { method, body: method === "DELETE" ? undefined : JSON.stringify(body) });
       if (event) gaEvent(event);
       await ctx.onChanged();
-      return true;
+      return result ?? {};
     } catch (err) {
       setNotice((err as { message?: string })?.message || "That didn't work.");
-      return false;
+      setNoticeError(true);
+      return null;
     } finally {
       setBusy(false);
     }
@@ -141,6 +148,14 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
   }
 
   const author = c.author;
+  const menuItems: ReviewMenuItem[] = [];
+  if (isSignedIn && !c.mine && author) {
+    menuItems.push({ id: "report", label: "Report…", items: REPORT_REASONS.map((reason) => ({ id: reason, label: reason, onSelect: async () => {
+      const result = await act("/report", { reason }, "POST", "review_report");
+      if (result) setNotice(result.alreadyReported ? "You already reported this comment." : "Thanks — a moderator will take a look.");
+    } })) });
+    if (!author.isAsker) menuItems.push({ id: "block", label: "Block reviewer", onSelect: () => setConfirm("block") });
+  }
   return (
     <article
       id={`comment-${c.id}`}
@@ -164,6 +179,7 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
           <span className="font-semibold text-text">{author?.label ?? "SC2 Player"}</span>
         )}
         {author ? <ReviewerBadges author={author} /> : null}
+        {c.createdAt ? <CommentTime createdAt={c.createdAt} editedAt={c.editedAt} /> : null}
         {c.best ? (
           <span className="inline-flex items-center gap-1 text-caption font-bold text-success"><Star className="h-3.5 w-3.5" aria-hidden /> Best review</span>
         ) : c.helpful ? (
@@ -184,14 +200,7 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
       </div>
 
       {editing ? (
-        <div className="space-y-2">
-          <label className="sr-only" htmlFor={`edit-${c.id}`}>Edit comment</label>
-          <textarea id={`edit-${c.id}`} value={editBody} onChange={(e) => setEditBody(e.target.value)} rows={4} className="w-full rounded-lg border-2 border-line bg-bg px-3 py-2 text-body text-text" />
-          <div className="flex justify-end gap-2 text-caption font-semibold">
-            <button type="button" onClick={() => { setEditing(false); setEditBody(c.body); }} className="min-h-[32px] px-2 text-text-muted">Cancel</button>
-            <button type="button" disabled={busy} onClick={() => void act("", { body: editBody }, "PATCH").then((ok) => { if (ok) setEditing(false); })} className="min-h-[32px] rounded-full bg-accent px-3 text-white">Save</button>
-          </div>
-        </div>
+        <CommentEditor comment={c} durationSec={ctx.durationSec} onCancel={() => setEditing(false)} onSave={(body) => act("", { body }, "PATCH").then(Boolean)} />
       ) : (
         <ReviewMarkdown text={c.body} onSeek={(t) => ctx.onSeek(t, c.id)} maxSeconds={ctx.durationSec} />
       )}
@@ -230,18 +239,10 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
           <button type="button" onClick={() => setEditing(true)} className="min-h-[32px] rounded-full px-2 font-semibold text-text-muted hover:text-text">Edit</button>
         ) : null}
         {c.mine ? (
-          <button type="button" disabled={busy} onClick={() => { if (window.confirm("Delete this comment?")) void act("", {}, "DELETE"); }} className="min-h-[32px] rounded-full px-2 font-semibold text-text-muted hover:text-danger">Delete</button>
+          <button type="button" disabled={busy} onClick={() => setConfirm("delete")} className="min-h-[32px] rounded-full px-2 font-semibold text-text-muted hover:text-danger">Delete</button>
         ) : null}
-        {isSignedIn && !c.mine && author ? (
-          <MoreMenu
-            disabled={busy}
-            onReport={(reason) => act("/report", { reason }, "POST", "review_report").then((ok) => ok && setNotice("Thanks — a moderator will take a look."))}
-            // The asker can't be blocked from their own request (it would
-            // tie an anonymous asker to their account).
-            onBlock={author.isAsker ? null : () => act("/block", {}, "POST").then((ok) => ok && setNotice(`You won't see ${author.label}'s comments any more.`))}
-          />
-        ) : null}
-        {notice ? <span role="status" className="basis-full text-micro text-text-muted">{notice}</span> : null}
+        <ReviewMenu label="More actions" disabled={busy} items={menuItems}><MoreHorizontal className="h-4 w-4" aria-hidden /></ReviewMenu>
+        {notice ? <span role={noticeError ? "alert" : "status"} className={`basis-full text-micro ${noticeError ? "text-danger" : "text-text-muted"}`}>{notice}</span> : null}
       </footer>
 
       {replying ? (
@@ -265,38 +266,11 @@ function CommentCard({ comment: c, ctx, isReply = false }: { comment: ReviewComm
           }}
         />
       ) : null}
+      <ConfirmDialog open={confirm !== null} onClose={() => { if (!busy) setConfirm(null); }} intent="danger" loading={busy}
+        title={confirm === "delete" ? "Delete this comment?" : `Block ${author?.label ?? "this reviewer"}?`}
+        description={confirm === "delete" ? "It's replaced by [deleted] for everyone. Replies stay." : "You won't see their comments on any request or get notified about them. Undo it in My reviews > Blocked reviewers."}
+        confirmLabel={confirm === "delete" ? "Delete" : "Block"}
+        onConfirm={() => { void (async () => { const result = await act(confirm === "delete" ? "" : "/block", {}, confirm === "delete" ? "DELETE" : "POST"); setConfirm(null); if (result && confirm === "block") setNotice(`You won't see ${author?.label}'s comments any more.`); })(); }} />
     </article>
-  );
-}
-
-const REPORT_REASONS = ["Spam", "Abusive or hateful", "Off-topic", "Reveals someone's identity", "Other"] as const;
-
-function MoreMenu({ onReport, onBlock, disabled }: { onReport: (reason: string) => Promise<unknown>; onBlock: (() => Promise<unknown>) | null; disabled: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [reporting, setReporting] = useState(false);
-  return (
-    <span className="relative">
-      <button type="button" aria-expanded={open} aria-label="More actions" onClick={() => setOpen((v) => !v)} className="grid min-h-[32px] min-w-[32px] place-items-center rounded-full text-text-muted hover:text-text">
-        <MoreHorizontal className="h-4 w-4" aria-hidden />
-      </button>
-      {open ? (
-        <span role="menu" className="absolute right-0 z-20 mt-1 flex w-56 flex-col rounded-lg border-2 border-line bg-bg-surface p-1 shadow-hard">
-          {reporting ? (
-            REPORT_REASONS.map((reason) => (
-              <button key={reason} type="button" role="menuitem" disabled={disabled} onClick={() => { setOpen(false); setReporting(false); void onReport(reason); }} className="rounded px-2 py-2 text-left text-caption hover:bg-bg-elevated">
-                {reason}
-              </button>
-            ))
-          ) : (
-            <>
-              <button type="button" role="menuitem" onClick={() => setReporting(true)} className="rounded px-2 py-2 text-left text-caption hover:bg-bg-elevated">Report…</button>
-              {onBlock ? (
-                <button type="button" role="menuitem" disabled={disabled} onClick={() => { setOpen(false); if (window.confirm("Block this reviewer? You won't see their comments or get notified about them.")) void onBlock(); }} className="rounded px-2 py-2 text-left text-caption text-danger hover:bg-bg-elevated">Block reviewer</button>
-              ) : null}
-            </>
-          )}
-        </span>
-      ) : null}
-    </span>
   );
 }

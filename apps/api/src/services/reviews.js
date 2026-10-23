@@ -468,7 +468,7 @@ class ReviewsService {
    * Public board. Deliberately NOT personalised so the response is
    * cacheable (Cache-Control public, s-maxage=60 at the route).
    *
-   * @param {{sort?: unknown, matchup?: unknown, band?: unknown, tag?: unknown, unanswered?: unknown, cursor?: unknown, limit?: unknown}} query
+   * @param {{sort?: unknown, matchup?: unknown, race?: unknown, band?: unknown, tag?: unknown, unanswered?: unknown, cursor?: unknown, limit?: unknown}} query
    */
   async board(query) {
     const sort = query.sort === "new" || query.sort === "top" ? query.sort : "hot";
@@ -476,6 +476,7 @@ class ReviewsService {
     /** @type {Doc} */
     const filter = { listed: true };
     if (typeof query.matchup === "string" && /^[PTZ]v[PTZ]$/.test(query.matchup)) filter.matchup = query.matchup;
+    else if (typeof query.race === "string" && /^[PTZ]$/.test(query.race)) filter.matchup = { $regex: `^${query.race}v` };
     const band = bandFromId(query.band);
     if (band && query.band !== undefined && query.band !== "") filter["askerBand.id"] = band.id;
     if (typeof query.tag === "string" && /^[a-z_]{2,32}$/.test(query.tag)) filter.tags = query.tag;

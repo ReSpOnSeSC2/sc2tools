@@ -223,6 +223,7 @@ export function SC2BackdropScene({
   variant = "between-games",
   accent = DEFAULT_BACKDROP_ACCENT,
   layout,
+  headline: headlineOverride,
   message,
   countdownMs,
   staticMode = false,
@@ -232,6 +233,8 @@ export function SC2BackdropScene({
   accent?: string;
   /** Override the variant's natural layout mode. */
   layout?: BackdropLayout;
+  /** A Dock mode replaces copy while the URL keeps its backdrop. */
+  headline?: string | null;
   /** Optional line under the headline. ``full`` layouts only. */
   message?: string | null;
   /** Remaining countdown in ms, or null for none. ``full`` only. */
@@ -241,7 +244,7 @@ export function SC2BackdropScene({
 }) {
   const mode = layout ?? VARIANT_LAYOUT[variant] ?? "frame";
   const accentLayers = useAccentLayers(accent);
-  const headline = VARIANT_HEADLINE[variant];
+  const headline = headlineOverride === undefined ? VARIANT_HEADLINE[variant] : headlineOverride;
   const className = ["sc2bd", staticMode ? "sc2bd-static" : ""]
     .filter(Boolean)
     .join(" ");

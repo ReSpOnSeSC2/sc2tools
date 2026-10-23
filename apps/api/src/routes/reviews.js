@@ -177,6 +177,7 @@ function buildReviewsRouter(deps) {
     res.json(await deps.reviews.board({
       sort: first(req.query.sort),
       matchup: first(req.query.matchup),
+      race: first(req.query.race),
       band: first(req.query.band),
       tag: first(req.query.tag),
       unanswered: first(req.query.unanswered),

@@ -409,7 +409,7 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
         ) : (
           <div className="space-y-5">
             {token ? (
-              <div className="space-y-2 rounded-lg border border-border bg-bg-elevated/40 p-3">
+              <div id="stream-dock" className="scroll-mt-28 space-y-2 rounded-lg border border-border bg-bg-elevated/40 p-3">
                 <div className="flex items-center gap-2 text-body font-medium text-text">
                   <LayoutPanelLeft className="h-4 w-4 text-accent-cyan" aria-hidden />
                   Stream Dock

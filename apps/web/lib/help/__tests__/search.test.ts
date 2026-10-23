@@ -89,7 +89,7 @@ describe("searchHelp on the shipped articles", () => {
       sync: ["upload"],
     });
     expect(top("obs")).toBe("obs-overlay-setup");
-    expect(slugs("tray")).toContain("getting-started");
+    expect(slugs("tray")).toContain("desktop-app-tray");
     expect(slugs("tray")).toContain("desktop-app-overview");
     expect(slugs("sync")).toContain("desktop-app-overview");
     expect(slugs("sync")).toContain("my-game-didnt-show-up");

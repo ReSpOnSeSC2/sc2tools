@@ -55,6 +55,7 @@ const {
  *   adminGlobal: import('../services/adminGlobal').AdminGlobalService,
  *   adminGlobalTrends: import('../services/adminGlobalTrends').AdminGlobalTrendsService,
  *   supportMessages?: import('../services/supportMessages').SupportMessagesService,
+ *   announcements?: import('../services/announcements').AnnouncementsService,
  *   adminEvents: import('../services/adminEvents').AdminEventsService,
  *   backupStatus?: import('../services/backupStatus').BackupStatusService,
  *   analytics: import('../services/analytics').AnalyticsService,
@@ -520,6 +521,22 @@ function buildAdminRouter(deps) {
     } catch (err) { next(err); }
   });
 
+  router.get("/admin/announcements", async (_req, res, next) => {
+    try { res.set("Cache-Control", "private, no-store"); res.json({ banner: await deps.announcements?.current() || null }); }
+    catch (error) { next(error); }
+  });
+  router.put("/admin/announcements", async (req, res, next) => {
+    try {
+      if (!deps.announcements) throw Object.assign(new Error("unavailable"), { status: 503 });
+      res.json({ banner: await deps.announcements.save(req.body) });
+    } catch (error) { next(error); }
+  });
+  router.delete("/admin/announcements", async (req, res, next) => {
+    try {
+      if (!deps.announcements) throw Object.assign(new Error("unavailable"), { status: 503 });
+      res.json({ banner: await deps.announcements.end(req.body?.expectedRevision) });
+    } catch (error) { next(error); }
+  });
   router.get("/admin/events", async (req, res, next) => {
     try {
       const limit = parseLimit(req.query.limit);

@@ -46,6 +46,7 @@ const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndex
  *   adminAudit: import('mongodb').Collection<any>,
  *   supportEmailSync: import('mongodb').Collection<any>,
  *   sitePresence: import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>,
+ *   siteConfig: import('mongodb').Collection<any>,
  *   pulseAccounts: import('mongodb').Collection,
  *   pulseCharacterLinks: import('mongodb').Collection,
  *   playerChannels: import('mongodb').Collection,
@@ -139,6 +140,7 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     jobRuns: db.collection(COLLECTIONS.JOB_RUNS),
     adminAudit: db.collection(COLLECTIONS.ADMIN_AUDIT),
     supportEmailSync: db.collection(COLLECTIONS.SUPPORT_EMAIL_SYNC),
+    siteConfig: db.collection(COLLECTIONS.SITE_CONFIG),
     sitePresence: /** @type {import('mongodb').Collection<import('../services/siteStats').SitePresenceDoc>} */ (
       db.collection(COLLECTIONS.SITE_PRESENCE)
     ),
@@ -612,6 +614,9 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.communityBuilds.createIndex({ ownerUserId: 1, slug: 1 });
   await ctx.communityBuilds.createIndex({ removed: 1, votes: -1 });
   await ctx.communityBuilds.createIndex({ matchup: 1, removed: 1, votes: -1 });
+  await ctx.communityBuilds.createIndex({ removed: 1, "build.race": 1, "build.vsRace": 1, votes: -1 });
+  await ctx.communityBuilds.createIndex({ removed: 1, "build.skillLevel": 1, votes: -1 });
+  await ctx.communityBuilds.createIndex({ removed: 1, updatedAt: -1 });
 
   await ctx.communityReports.createIndex({ targetType: 1, targetId: 1 });
   await ctx.communityReports.createIndex({ targetType: 1, targetId: 1, resolvedAt: -1 });

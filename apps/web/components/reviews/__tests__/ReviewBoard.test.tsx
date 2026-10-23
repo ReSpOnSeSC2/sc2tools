@@ -1,11 +1,14 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({ push: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: harness.push }) }));
+vi.mock("../ReviewReplayDownload", () => ({ ReviewReplayDownload: () => <button>Download replay</button> }));
 
 import { ReviewBoardFilters } from "../ReviewBoardFilters";
 import { ReviewCard, age } from "../ReviewCard";
+import { ActiveFilterChips } from "../ActiveFilterChips";
+import { ReviewBoardPagination } from "../ReviewBoardPagination";
 import {
   boardQuery,
   commentClusters,
@@ -24,10 +27,10 @@ afterEach(() => {
 describe("board filters", () => {
   it("parse only known values and round-trip to the same URL", () => {
     const filters = parseBoardFilters({ sort: "top", matchup: "PvZ", band: "5", tag: "macro", unanswered: "1" });
-    expect(filters).toEqual({ sort: "top", matchup: "PvZ", band: 5, tag: "macro", unanswered: true });
+    expect(filters).toEqual({ sort: "top", race: null, matchup: "PvZ", band: 5, tag: "macro", unanswered: true });
     expect(boardQuery(filters)).toBe("?sort=top&matchup=PvZ&band=5&tag=macro&unanswered=1");
     expect(parseBoardFilters({ sort: "drop", matchup: "XvY", band: "9", tag: "<x>" })).toEqual({
-      sort: "hot", matchup: null, band: null, tag: null, unanswered: false,
+      sort: "hot", race: null, matchup: null, band: null, tag: null, unanswered: false,
     });
     expect(boardQuery(parseBoardFilters({}))).toBe("");
     expect(boardQuery(parseBoardFilters({}), { cursor: "abc" })).toBe("?cursor=abc");
@@ -43,6 +46,52 @@ describe("board filters", () => {
     expect(harness.push).toHaveBeenLastCalledWith("/reviews?sort=new&unanswered=1", { scroll: false });
     fireEvent.click(screen.getByRole("button", { name: "Hot" }));
     expect(harness.push).toHaveBeenLastCalledWith("/reviews", { scroll: false });
+  });
+
+  it("round-trips race and gives an exact matchup precedence over an incompatible race", () => {
+    expect(boardQuery(parseBoardFilters({ race: "P", unanswered: "1" }))).toBe("?race=P&unanswered=1");
+    expect(parseBoardFilters({ race: "T", matchup: "PvZ" })).toMatchObject({ race: null, matchup: "PvZ" });
+    expect(parseBoardFilters({ race: "Protoss" }).race).toBeNull();
+    expect(boardQuery({ ...parseBoardFilters({ matchup: "PvZ" }), race: "T" })).toBe("?matchup=PvZ");
+  });
+
+  it("restricts matchups to the chosen asker race and clears a mismatched matchup on race changes", () => {
+    const { rerender } = render(<ReviewBoardFilters filters={parseBoardFilters({ race: "P", matchup: "PvZ" })} />);
+    expect(within(screen.getByRole("combobox", { name: "Matchup" })).getAllByRole("option").map((option) => option.textContent)).toEqual(["All", "PvP", "PvT", "PvZ"]);
+    fireEvent.change(screen.getByRole("combobox", { name: "Race (asker race)" }), { target: { value: "T" } });
+    expect(harness.push).toHaveBeenLastCalledWith("/reviews?race=T", { scroll: false });
+    rerender(<ReviewBoardFilters filters={parseBoardFilters({ matchup: "PvZ" })} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Race (asker race)" }), { target: { value: "P" } });
+    expect(harness.push).toHaveBeenLastCalledWith("/reviews?race=P&matchup=PvZ", { scroll: false });
+  });
+
+  it("gives each rendered filter form unique label associations", () => {
+    render(<><ReviewBoardFilters filters={parseBoardFilters({})} /><ReviewBoardFilters filters={parseBoardFilters({})} /></>);
+    const races = screen.getAllByRole("combobox", { name: "Race (asker race)" });
+    expect(races).toHaveLength(2);
+    expect(races[0].id).not.toBe(races[1].id);
+    expect(screen.getAllByRole("combobox", { name: "Matchup" })).toHaveLength(2);
+  });
+
+  it("removes individual filters and clears everything while preserving the chosen sort", () => {
+    render(<ActiveFilterChips filters={parseBoardFilters({ sort: "new", race: "P", matchup: "PvZ", band: "4", tag: "macro", unanswered: "1" })} />);
+    expect(screen.getByRole("link", { name: "Remove filter Race: Protoss" }).getAttribute("href")).toBe("/reviews?sort=new&matchup=PvZ&band=4&tag=macro&unanswered=1");
+    expect(screen.getByRole("link", { name: "Remove filter Matchup: PvZ" }).getAttribute("href")).toBe("/reviews?sort=new&race=P&band=4&tag=macro&unanswered=1");
+    expect(screen.getByRole("link", { name: "Remove filter League: Diamond" }).getAttribute("href")).not.toContain("band=");
+    expect(screen.getByRole("link", { name: "Remove filter Focus: Macro" }).getAttribute("href")).not.toContain("tag=");
+    expect(screen.getByRole("link", { name: "Remove filter Unanswered" }).getAttribute("href")).not.toContain("unanswered=");
+    expect(screen.getByRole("link", { name: "Clear all" }).getAttribute("href")).toBe("/reviews?sort=new");
+  });
+
+  it("offers Newest only on older pages and keeps all filters in pagination links", () => {
+    const filters = parseBoardFilters({ race: "Z", tag: "scouting", unanswered: "1" });
+    const { rerender } = render(<ReviewBoardPagination filters={filters} nextCursor="next" />);
+    expect(screen.queryByRole("link", { name: /Newest/ })).toBeNull();
+    expect(screen.getByRole("link", { name: /Older requests/ }).getAttribute("href")).toBe("/reviews?race=Z&tag=scouting&unanswered=1&cursor=next");
+    rerender(<ReviewBoardPagination filters={filters} cursor="current" nextCursor="next" />);
+    expect(screen.getByText("Showing older requests")).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Newest/ }).getAttribute("href")).toBe("/reviews?race=Z&tag=scouting&unanswered=1");
+    expect(screen.getAllByRole("link").every((link) => link.getAttribute("rel") === "nofollow")).toBe(true);
   });
 });
 
@@ -62,6 +111,19 @@ describe("review card", () => {
       expect(link.textContent).toContain(text);
     }
     expect(age("2026-09-20T13:00:00Z", Date.parse("2026-09-27T13:00:00Z"))).toBe("7d ago");
+  });
+
+  it("keeps compact downloads in the metadata flow and outside the question link", () => {
+    const card = { id: "a", url: "/reviews/a", question: "Where should I have scouted?", matchup: "PvZ", askerBand: { id: 4, label: "Diamond" }, createdAt: "2026-09-27T10:00:00Z", reviewCount: 2, replayShared: true } as Card;
+    const { container } = render(<ul><ReviewCard card={card} now={Date.parse("2026-09-27T13:00:00Z")} variant="compact" /></ul>);
+    const link = screen.getByRole("link", { name: card.question });
+    const download = screen.getByRole("button", { name: "Download replay" });
+    expect(link.contains(download)).toBe(false);
+    expect(download.parentElement?.parentElement?.textContent).toContain("2 reviews");
+    expect(download.parentElement?.className).not.toContain("absolute");
+    expect(container.querySelector("img")).toBeNull();
+    expect(link.className).not.toMatch(/pr-(14|16)/);
+    expect(link.querySelector("p")?.className).toContain("line-clamp-2");
   });
 });
 

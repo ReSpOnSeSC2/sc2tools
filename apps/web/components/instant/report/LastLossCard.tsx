@@ -11,13 +11,12 @@
  *   <LastLossCard lastLoss={report.lastLoss} />
  */
 import { LossAutopsyCard } from "@/components/analyzer/game/LossAutopsyCard";
+import { formatReportDate } from "./ReportBits";
 import type { LastLoss } from "@/lib/instant/report";
 
 export interface LastLossCardProps {
   lastLoss: LastLoss | null;
 }
-
-const DATE_FORMAT: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric" };
 
 /**
  * "vs Squirtuoz · Tourmaline LE · May 8, 2026" — only the parts the game has.
@@ -26,8 +25,7 @@ const DATE_FORMAT: Intl.DateTimeFormatOptions = { year: "numeric", month: "short
  *   lossContext({ opponent: "Rex", map: null, date: "2026-05-08T19:08:12Z" }); // -> "vs Rex · May 8, 2026"
  */
 export function lossContext(game: LastLoss["game"]): string {
-  const parsed = game.date ? Date.parse(game.date) : Number.NaN;
-  const date = Number.isFinite(parsed) ? new Date(parsed).toLocaleDateString("en-US", DATE_FORMAT) : null;
+  const date = game.date ? formatReportDate(game.date) : null;
   return [game.opponent ? `vs ${game.opponent}` : null, game.map ?? null, date].filter(Boolean).join(" · ");
 }
 

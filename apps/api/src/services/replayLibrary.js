@@ -3,6 +3,7 @@
 const { ObjectId } = require("mongodb");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { REGION_LABELS } = require("../util/regionFromToonHandle");
+const { readArchiveOverview } = require("./replayArchiveSummary");
 const {
   BUILD_INTENT_LABEL_PROJECTION,
   OPP_INTENT_LABEL_PROJECTION,
@@ -86,15 +87,11 @@ class ReplayLibraryService {
       throw new Error("ReplayLibraryService requires db.games");
     }
     this.db = db;
+    this.archiveFacets = new Map();
   }
 
   /**
    * List one deterministic page, newest first.
-   *
-   * `sourceGames` is a strict, bounded, server-only companion array for
-   * GameVodLinksService. A route may pass it to that service, but must omit it
-   * from its JSON response. Keeping it separate makes accidental spreading of
-   * toon/Pulse identifiers into a public replay row much harder.
    *
    * `view: "detector"` (the public archive) labels, filters and searches rows
    * by the classifier's build and opponent strategy, never a build check-in
@@ -112,12 +109,14 @@ class ReplayLibraryService {
    *   cursor?: unknown,
    *   sort?: unknown,
    *   view?: ReplayLibraryView,
+   *   withSummary?: boolean,
    * }} [opts]
    * @returns {Promise<{
    *   items: Array<Record<string, any>>,
    *   nextCursor: string|null,
    *   hasMore: boolean,
    *   sourceGames: Array<Record<string, any>>,
+   *   summary?: any, facets?: any,
    * }>}
    */
   async list(userId, opts = {}) {
@@ -157,13 +156,14 @@ class ReplayLibraryService {
     const searchClause = replaySearchClause(opts.search, view);
     if (searchClause) clauses.push(searchClause);
 
+    const summaryMatch = clauses.length === 1 ? clauses[0] : { $and: [...clauses] };
     if (cursor) {
       clauses.push({ $or: replayCursorContinuationBranches(cursor) });
     }
 
     const match = clauses.length === 1 ? clauses[0] : { $and: clauses };
-    /** @type {Array<Record<string, any>>} */
-    const rows = await this.db.games
+    /** @type {[Array<Record<string, any>>, Record<string, any>]} */
+    const [rows, overview] = await Promise.all([this.db.games
       .find(match, { projection: REPLAY_LIBRARY_PROJECTION })
       .sort(
         sort === "date_asc"
@@ -171,7 +171,7 @@ class ReplayLibraryService {
           : { date: -1, _id: -1 },
       )
       .limit(limit + 1)
-      .toArray();
+      .toArray(), opts.withSummary ? readArchiveOverview(this.db.games, ownerId, summaryMatch, this.archiveFacets) : Promise.resolve({})]);
 
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
@@ -183,6 +183,7 @@ class ReplayLibraryService {
         : null,
       hasMore,
       sourceGames: page.map((row) => serializeReplayVodSource(row, view)),
+      ...overview,
     };
   }
 

@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Copy, Expand, Layers3, Search, SlidersHorizontal } from "lucide-react";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+import { buttonClassName } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { WIDGET_GROUPS, WIDGET_GUIDES, type WidgetGuide } from "@/lib/streamStudioLearn";
 
@@ -13,6 +14,8 @@ const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:rin
 /** Public learning examples only. Never opens an overlay socket or needs a token. */
 export function WidgetExplorer() {
   const [query, setQuery] = useState("");
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  useEffect(() => { setGalleryOpen(window.matchMedia?.("(min-width: 768px)").matches ?? false); }, []);
   const [group, setGroup] = useState<WidgetGuide["group"] | "all">("all");
   const [activeId, setActiveId] = useState("opponent");
   const [copied, setCopied] = useState(false);
@@ -117,7 +120,7 @@ export function WidgetExplorer() {
       </div>
 
       {filtered.length > 0 ? (
-        <details className="mt-4 rounded-md border-2 border-line bg-bg-surface">
+        <details open={galleryOpen} onToggle={(event) => setGalleryOpen(event.currentTarget.open)} className="mt-4 rounded-md border-2 border-line bg-bg-surface">
           <summary className={`min-h-12 cursor-pointer rounded-md px-4 py-3 text-body font-semibold text-text ${FOCUS}`}>
             Browse widget previews <span className="text-caption font-normal text-text-dim">({filtered.length})</span>
           </summary>
@@ -182,7 +185,7 @@ export function WidgetExplorer() {
 
 function WidgetDetail({ guide, onRelated, detailRef }: { guide: WidgetGuide; onRelated: (id: string) => void; detailRef: RefObject<HTMLElement | null> }) {
   return (
-    <article ref={detailRef} tabIndex={-1} aria-label={`${guide.name} guide`} className="min-w-0 scroll-mt-52 overflow-hidden rounded-md border-2 border-line bg-bg-surface shadow-hard focus:outline-none sm:scroll-mt-36 lg:scroll-mt-28">
+    <article ref={detailRef} tabIndex={-1} aria-label={`${guide.name} guide`} className="min-w-0 scroll-mt-28 overflow-hidden rounded-md border-2 border-line bg-bg-surface shadow-hard focus:outline-none">
       <header className="border-b border-border p-5 sm:p-7">
         <p className="text-caption font-semibold text-accent">{WIDGET_GROUPS.find((group) => group.id === guide.group)?.name}</p>
         <h3 className="mt-2 font-display text-3xl font-bold text-text">{guide.name}</h3>
@@ -221,7 +224,7 @@ function WidgetDetail({ guide, onRelated, detailRef }: { guide: WidgetGuide; onR
               <li key={step} className="flex items-start gap-3 text-body text-text-muted"><span className="inline-flex h-7 w-7 flex-none items-center justify-center rounded-full bg-accent/10 text-caption font-bold text-accent" aria-hidden>{index + 1}</span><span>{step}</span></li>
             ))}
           </ol>
-          <Link href={guide.settingsHref} className={`mt-5 inline-flex min-h-11 items-center gap-2 rounded-full border-2 border-line bg-accent px-5 py-2 text-body font-bold text-white shadow-hard hover:bg-accent-hover ${FOCUS}`}>Open the right settings<ArrowRight className="h-4 w-4" aria-hidden /></Link>
+          <Link href={guide.settingsHref} className={buttonClassName({ className: "mt-5" })}>Open the right settings<ArrowRight className="h-4 w-4" aria-hidden /></Link>
         </div>
         <div className="border-l-4 border-accent bg-accent/5 p-4">
           <h4 className="text-body font-semibold text-text">Your first successful test</h4>

@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { ArrowDown, ArrowLeft, ArrowRight, BookOpen, CheckCircle2, Compass, Layers3, Wrench } from "lucide-react";
+import { ArrowDown, ArrowLeft, ArrowRight, CheckCircle2, Layers3 } from "lucide-react";
+import { buttonClassName } from "@/components/ui/buttonStyles";
+import { LearnSectionNav } from "./LearnSectionNav";
 import { CrashCourse } from "./CrashCourse";
 import { WidgetExplorer } from "./WidgetExplorer";
 import { LearnTroubleshooting } from "./LearnTroubleshooting";
@@ -31,7 +33,7 @@ export function LearnPage() {
           <p className="kicker">Stream Studio · learn by doing</p>
           <h1 className="mt-4 font-serif text-[38px] font-semibold leading-[1.08] tracking-tight text-text sm:text-5xl md:text-[56px]">Your first overlay.<br />Then your whole stream.</h1>
           <p className="mt-5 max-w-xl text-body-lg text-text-muted">Never added a widget before? You&apos;re in the right place. Build one working scene, learn what each widget means, and add the pieces that suit your stream.</p>
-          <a href="#crash-course" className="mt-6 inline-flex min-h-12 items-center gap-2 rounded-full border-2 border-line bg-accent px-6 py-3 font-display text-body font-bold text-white shadow-hard hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg">Start the crash course<ArrowDown className="h-4 w-4" aria-hidden /></a>
+          <a href="#crash-course" className={buttonClassName({ size: "lg", className: "mt-6" })}>Start the crash course<ArrowDown className="h-4 w-4" aria-hidden /></a>
           <p className="mt-4 text-caption text-text-dim">Five short lessons · follow at your own pace · no account needed to learn</p>
         </div>
         <div className="rounded-md border-2 border-line bg-bg-surface p-5 shadow-hard sm:p-7">
@@ -49,11 +51,7 @@ export function LearnPage() {
         </div>
       </header>
 
-      <nav aria-label="Learning sections" className="sticky top-16 z-20 flex flex-wrap gap-2 rounded-md border-2 border-line bg-bg px-3 py-2 shadow-sm sm:gap-3">
-        {[{ href: "#crash-course", label: "Crash course", icon: BookOpen }, { href: "#starter-setups", label: "Starter setups", icon: Layers3 }, { href: "#widget-library", label: "Widget guide", icon: Compass }, { href: "#troubleshooting", label: "Fix a problem", icon: Wrench }].map(({ href, label, icon: Icon }) => (
-          <a key={href} href={href} className="inline-flex min-h-11 items-center gap-2 rounded-full px-3 text-caption font-semibold text-text-muted hover:bg-bg-elevated hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Icon className="h-4 w-4" aria-hidden />{label}</a>
-        ))}
-      </nav>
+      <LearnSectionNav />
 
       <CrashCourse />
 
@@ -79,7 +77,7 @@ export function LearnPage() {
       <LearnTroubleshooting />
       <section className="mt-16 flex flex-col gap-5 rounded-md border-2 border-line bg-accent/5 p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
         <div><h2 className="font-display text-h2 font-bold text-text">Make your first source work.</h2><p className="mt-2 text-body text-text-muted">Then come back here for the next piece. Your course progress stays in this browser.</p></div>
-        <Link href="/settings?tab=overlay" className="inline-flex min-h-12 flex-none items-center justify-center gap-2 rounded-full border-2 border-line bg-accent px-5 py-3 font-display font-bold text-white shadow-hard hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg">Go to Overlay settings<ArrowRight className="h-4 w-4" aria-hidden /></Link>
+        <Link href="/settings?tab=overlay" className={buttonClassName({ size: "lg", className: "flex-none" })}>Go to Overlay settings<ArrowRight className="h-4 w-4" aria-hidden /></Link>
       </section>
     </article>
   );

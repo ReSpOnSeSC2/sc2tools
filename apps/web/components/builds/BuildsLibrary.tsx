@@ -22,6 +22,7 @@ import { BuildFilterBar, type BuildFilterState } from "./BuildFilterBar";
 import { BuildPagination } from "./BuildPagination";
 import { BuildsPublicIntro } from "./BuildsPublicIntro";
 import { useCustomBuildPage } from "./useCustomBuildPage";
+import { BuildPublishIntent } from "./BuildPublishIntent";
 import type { BuildStats, CustomBuild, DecoratedBuild } from "./types";
 import type { BuildEditorSaveResult } from "./editor/BuildEditor.types";
 
@@ -89,9 +90,9 @@ const EMPTY_BUILDS: CustomBuild[] = [];
  * (no New build, Reclassify or filters, which all need an account).
  */
 export function BuildsLibrary() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, userId } = useAuth();
   if (!isLoaded || !isSignedIn) return <BuildsPublicIntro />;
-  return <BuildsLibraryInner />;
+  return <BuildsLibraryInner key={userId} />;
 }
 
 function BuildsLibraryInner() {
@@ -147,6 +148,7 @@ function BuildsLibraryInner() {
   const [editorBuild, setEditorBuild] = useState<CustomBuild | null>(null);
   const [richEditBuild, setRichEditBuild] = useState<CustomBuild | null>(null);
   const [richEditFocus, setRichEditFocus] = useState<"notes" | "preview" | undefined>();
+  const [richEditIntent, setRichEditIntent] = useState<"edit" | "duplicate">("edit");
   const [publishOpen, setPublishOpen] = useState(false);
   const [publishBuild, setPublishBuild] = useState<CustomBuild | null>(null);
   const [dossierBuild, setDossierBuild] = useState<CustomBuild | null>(null);
@@ -241,11 +243,17 @@ function BuildsLibraryInner() {
       // Opens the rich rule-based editor (the same modal used by
       // "Save as new build") pre-populated with the existing build.
       setRichEditBuild(target);
+      setRichEditIntent("edit");
       setRichEditFocus(initialFocus);
       setDossierBuild(null);
     },
     [items],
   );
+
+  const openDuplicate = (slug: string) => {
+    setRichEditBuild(items.find((build) => build.slug === slug) ?? null);
+    setRichEditIntent("duplicate"); setRichEditFocus(undefined); setDossierBuild(null);
+  };
 
   const openPublish = useCallback(
     (slug: string) => {
@@ -256,6 +264,10 @@ function BuildsLibraryInner() {
     },
     [items],
   );
+
+  const choosePublication = useCallback((build: CustomBuild) => {
+    setPublishBuild(build); setPublishOpen(true); setDossierBuild(null);
+  }, []);
 
   const askDelete = useCallback((slug: string) => {
     setDeletingSlug(slug);
@@ -397,7 +409,7 @@ function BuildsLibraryInner() {
   return (
     <>
       <PageHeader
-        eyebrow="Custom builds"
+        eyebrow="Build library"
         title="Your build library"
         description="Custom openers synced across devices. Save them privately, share them publicly, and match your replays automatically."
         actions={
@@ -510,6 +522,8 @@ function BuildsLibraryInner() {
                     onDelete={askDelete}
                     onPublish={openPublish}
                     onReclassify={reclassifyOne}
+                    onDuplicate={openDuplicate}
+                    onChanged={() => builds.mutate()}
                     reclassifying={reclassifyingSlug === b.slug}
                     reclassifyDisabled={
                       replayMatchingActive
@@ -539,6 +553,9 @@ function BuildsLibraryInner() {
           onEdit={openEdit}
           onPublish={openPublish}
           onDelete={askDelete}
+          onDuplicate={openDuplicate}
+          onReclassify={reclassifyOne}
+          onChanged={() => builds.mutate()}
         />
       ) : null}
       {editorOpen ? <BuildEditorSheet
@@ -550,16 +567,19 @@ function BuildsLibraryInner() {
       {richEditBuild ? <EditCustomBuildLauncher
         build={richEditBuild}
         initialFocus={richEditFocus}
+        intent={richEditIntent}
         onClose={() => setRichEditBuild(null)}
         onSaved={async (saved, result) => {
           await handleSaved(saved, result);
           setRichEditBuild(null);
         }}
       /> : null}
+      <BuildPublishIntent onChoose={choosePublication} onCreate={openCreate} />
       {publishOpen ? <BuildPublishModal
         open={publishOpen}
         onClose={() => setPublishOpen(false)}
         build={publishBuild}
+        onUnpublished={() => builds.mutate()}
         onPublished={handlePublished}
       /> : null}
       <ConfirmDialog
@@ -571,7 +591,7 @@ function BuildsLibraryInner() {
         title="Delete this build?"
         description={
           targetForDelete
-            ? `“${targetForDelete.name}” will be removed from your library on every signed-in device.`
+            ? `“${targetForDelete.name}” will be removed from your library on every signed-in device.${targetForDelete.isPublic ? " Its Community listing will also be removed." : ""}`
             : "This build will be removed from your library on every signed-in device."
         }
         confirmLabel="Delete build"

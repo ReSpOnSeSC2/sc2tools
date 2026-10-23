@@ -3,7 +3,7 @@ import { BuildsLibrary } from "@/components/builds/BuildsLibrary";
 
 export const metadata = {
   alternates: { canonical: "/builds" },
-  title: "Custom builds",
+  title: "Build library",
   description:
     "Your private library of StarCraft II openers — synced across devices, optionally shared with the community.",
 };

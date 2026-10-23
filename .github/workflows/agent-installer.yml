@@ -36,6 +36,7 @@ on:
 
 permissions:
   contents: write  # needed for softprops/action-gh-release on tag push
+  actions: read  # SignPath verifies workflow/artifact provenance
 
 concurrency:
   group: agent-installer-${{ github.ref }}
@@ -45,7 +46,7 @@ jobs:
   build:
     name: Build agent installer (Windows)
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
 
     defaults:
       run:
@@ -131,13 +132,100 @@ jobs:
           Add-Content -Path $env:GITHUB_PATH -Value $nsisDir
           Write-Host "Added $nsisDir to PATH"
 
-      - name: Build installer
+      - name: Check signing configuration
+        shell: pwsh
+        env:
+          SIGNPATH_ENABLED: ${{ vars.SIGNPATH_ENABLED }}
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_ORGANIZATION_ID: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          SIGNPATH_POLICY_SLUG: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          SIGNPATH_AGENT_CONFIG: ${{ vars.SIGNPATH_AGENT_CONFIG }}
+          SIGNPATH_INSTALLER_CONFIG: ${{ vars.SIGNPATH_INSTALLER_CONFIG }}
+        run: |
+          if ($env:SIGNPATH_ENABLED -eq 'true') {
+            foreach ($name in @('SIGNPATH_API_TOKEN','SIGNPATH_ORGANIZATION_ID','SIGNPATH_PROJECT_SLUG','SIGNPATH_POLICY_SLUG','SIGNPATH_AGENT_CONFIG','SIGNPATH_INSTALLER_CONFIG')) {
+              if (-not [Environment]::GetEnvironmentVariable($name)) { throw "Missing signing configuration: $name" }
+            }
+          } elseif ($env:GITHUB_REF -like 'refs/tags/agent-v*') {
+            throw 'Tagged installers require approved SignPath signing. Configure the owner prerequisites in packaging/README.md first.'
+          } else {
+            'Unsigned manual verification build; no signed-release claim.' | Add-Content $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Build agent bundle
         shell: pwsh
         run: |
-          .\packaging\build-installer.ps1 `
-            -Version '${{ steps.ver.outputs.version }}' `
-            -Installer `
-            -Clean
+          .\packaging\build-installer.ps1 -Version '${{ steps.ver.outputs.version }}' -Clean
+
+      - name: Upload unsigned inner executable for signing
+        if: vars.SIGNPATH_ENABLED == 'true'
+        id: unsigned-agent
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-agent-${{ steps.ver.outputs.version }}
+          path: apps/agent/dist/sc2tools-agent/sc2tools-agent.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign inner executable with SignPath Foundation
+        if: vars.SIGNPATH_ENABLED == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_AGENT_CONFIG }}
+          github-artifact-id: ${{ steps.unsigned-agent.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: ${{ runner.temp }}/signpath-agent
+
+      - name: Verify and place signed inner executable
+        if: vars.SIGNPATH_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          $signed = Join-Path $env:RUNNER_TEMP 'signpath-agent/sc2tools-agent.exe'
+          .\packaging\verify-signature.ps1 -Path $signed
+          Copy-Item -LiteralPath $signed -Destination 'dist/sc2tools-agent/sc2tools-agent.exe' -Force
+
+      - name: Package installer without rebuilding signed bundle
+        shell: pwsh
+        run: |
+          .\packaging\build-installer.ps1 -Version '${{ steps.ver.outputs.version }}' -Installer -PackageOnly
+
+      - name: Upload unsigned setup executable for signing
+        if: vars.SIGNPATH_ENABLED == 'true'
+        id: unsigned-setup
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-setup-${{ steps.ver.outputs.version }}
+          path: apps/agent/dist/SC2ToolsAgent-Setup-${{ steps.ver.outputs.version }}.exe
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Sign setup executable with SignPath Foundation
+        if: vars.SIGNPATH_ENABLED == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: ${{ vars.SIGNPATH_INSTALLER_CONFIG }}
+          github-artifact-id: ${{ steps.unsigned-setup.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: ${{ runner.temp }}/signpath-setup
+
+      - name: Verify and place signed setup executable
+        if: vars.SIGNPATH_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          $signed = Join-Path $env:RUNNER_TEMP 'signpath-setup/SC2ToolsAgent-Setup-${{ steps.ver.outputs.version }}.exe'
+          .\packaging\verify-signature.ps1 -Path $signed
+          .\packaging\verify-signature.ps1 -Path 'dist/sc2tools-agent/sc2tools-agent.exe'
+          Copy-Item -LiteralPath $signed -Destination 'dist/SC2ToolsAgent-Setup-${{ steps.ver.outputs.version }}.exe' -Force
+          'Inner executable and setup both have verified timestamped signatures.' | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Generate SHA-256 sidecar
         shell: pwsh

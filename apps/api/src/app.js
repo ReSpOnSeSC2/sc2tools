@@ -143,6 +143,8 @@ const { PlayerIdentitiesService } = require("./services/playerIdentities");
 const { buildPlayerIdentitiesRouter } = require("./routes/playerIdentities");
 const { NotificationsService } = require("./services/notifications");
 const { SupportMessagesService } = require("./services/supportMessages");
+const { AnnouncementsService } = require("./services/announcements");
+const { buildAnnouncementsRouter } = require("./routes/announcements");
 const { buildNotificationsRouter } = require("./routes/notifications");
 const { ReviewerReputationService } = require("./services/reviewerReputation");
 const { ReviewsService } = require("./services/reviews");
@@ -333,6 +335,7 @@ function makeServices(deps, clerk) {
     logger: deps.logger,
   });
   const supportMessages = new SupportMessagesService(deps.db, notifications, adminEvents);
+  const announcements = new AnnouncementsService(deps.db, { notifications, io: deps.io, logger: deps.logger });
   const identityDeletions = new IdentityDeletionsService(deps.db, { clerk, secret: deps.config.serverPepper, logger: deps.logger });
   const users = new UsersService(deps.db, { adminEvents, identityDeletions });
   // Pluggable backend for the per-game heavy blob. Defaults to
@@ -922,6 +925,7 @@ function makeServices(deps, clerk) {
     playerIdentities,
     notifications,
     supportMessages,
+    announcements,
     reviewerReputation,
     reviews,
   };
@@ -1088,6 +1092,7 @@ function registerRuntimeCapacityProviders(registry, services) {
  * @param {import('express').RequestHandler} auth
  */
 function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
+  app.use(SERVICE.ROUTE_PREFIX, buildAnnouncementsRouter({ announcements: services.announcements }));
 
   // Public routers (no `router.use(auth)` — public endpoints OR per-route
   // auth) MUST mount before any auth-using router. Express runs every
@@ -1167,6 +1172,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     SERVICE.ROUTE_PREFIX,
     buildAgentVersionRouter({
       adminAudit: services.adminAudit,
+      announcements: services.announcements,
       agentVersion: services.agentVersion,
       adminToken: deps.config.agentReleaseAdminToken,
       adminEvents: services.adminEvents,
@@ -1260,6 +1266,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildMeRouter({
+      announcements: services.announcements,
       users: services.users,
       games: services.games,
       gdpr: services.gdpr,
@@ -1376,6 +1383,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   app.use(
     SERVICE.ROUTE_PREFIX,
     buildAdminRouter({
+      announcements: services.announcements,
       supportMessages: services.supportMessages,
       jobLedger: services.jobLedger, adminAudit: services.adminAudit,
       protectedAdminIds: deps.config.adminUserIds || [],
@@ -1533,6 +1541,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildOverlayTokensRouter({
       overlayTokens: services.overlayTokens,
       overlayLive: services.overlayLive,
+      liveGameBroker: services.liveGameBroker,
       auth,
       io: deps.io,
     }),

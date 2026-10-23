@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+
+const useClientLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+const scopes: HTMLElement[] = [];
+const topScope = () => scopes.findLast((scope) => scope.isConnected);
 
 const FOCUSABLE_SELECTOR = ["a[href]", "button:not([disabled])", "input:not([disabled])", "select:not([disabled])", "textarea:not([disabled])", "[tabindex]:not([tabindex='-1'])"].join(",");
 
@@ -27,16 +31,20 @@ export function useFocusTrap({ open, containerRef, onClose, initialFocusRef }: {
 }) {
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  useEffect(() => {
+  useClientLayoutEffect(() => {
     if (!open) return;
+    const scope = containerRef.current;
+    if (!scope) return;
     const previous = document.activeElement;
+    scopes.push(scope);
     const onKey = (event: KeyboardEvent) => {
       const root = containerRef.current;
-      if (!root) return;
+      if (!root || topScope() !== root) return;
       const target = event.target instanceof Element ? event.target : document.activeElement;
       const activeDialog = target?.closest('[role="dialog"]');
       if (activeDialog && activeDialog !== root) return;
       if (event.key === "Escape") {
+        event.preventDefault();
         event.stopPropagation();
         onCloseRef.current();
       } else if (event.key === "Tab") {
@@ -53,11 +61,16 @@ export function useFocusTrap({ open, containerRef, onClose, initialFocusRef }: {
       }
     };
     document.addEventListener("keydown", onKey);
-    const initial = window.setTimeout(() => (initialFocusRef?.current ?? focusableInside(containerRef.current)[0] ?? containerRef.current)?.focus(), 0);
+    // Focus in the same commit. A zero-delay timer leaves a frame where a
+    // newly opened child still sends Escape to its parent's focused button.
+    (initialFocusRef?.current ?? focusableInside(scope)[0] ?? scope).focus();
     return () => {
-      window.clearTimeout(initial);
+      // React may already have detached the closing root before cleanup.
+      const wasTop = scopes.at(-1) === scope;
+      const index = scopes.lastIndexOf(scope);
+      if (index >= 0) scopes.splice(index, 1);
       document.removeEventListener("keydown", onKey);
-      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+      if (wasTop && previous instanceof HTMLElement && previous.isConnected) previous.focus();
     };
   }, [open, containerRef, initialFocusRef]);
 }

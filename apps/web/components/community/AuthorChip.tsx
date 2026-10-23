@@ -30,7 +30,7 @@ export function AuthorChip({
 }: AuthorChipProps) {
   const sizeCls = SIZE_CLASSES[size];
   const baseCls = [
-    "inline-flex items-center rounded-full border border-border bg-bg-elevated font-medium",
+    "inline-flex min-w-0 max-w-full items-center rounded-full border border-border bg-bg-elevated font-medium",
     sizeCls,
     className,
   ]
@@ -43,8 +43,8 @@ export function AuthorChip({
         className={[baseCls, "text-text-dim"].join(" ")}
         title="Anonymous author"
       >
-        <User className="h-3 w-3" aria-hidden />
-        Anonymous
+        <User className="h-3 w-3 shrink-0" aria-hidden />
+        <span className="truncate">Anonymous</span>
       </span>
     );
   }
@@ -56,10 +56,11 @@ export function AuthorChip({
         baseCls,
         "text-text transition-colors hover:border-accent-cyan/60 hover:bg-accent-cyan/10 hover:text-accent-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
       ].join(" ")}
-      title={`View ${build.authorName}'s profile`}
+      title={build.authorName}
+      aria-label={build.authorName}
     >
-      <User className="h-3 w-3" aria-hidden />
-      {build.authorName}
+      <User className="h-3 w-3 shrink-0" aria-hidden />
+      <span className="truncate">{build.authorName}</span>
     </Link>
   );
 }

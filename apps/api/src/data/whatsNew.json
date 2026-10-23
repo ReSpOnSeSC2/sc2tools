@@ -1,0 +1,30 @@
+[
+  {
+    "id": "personal-notifications-and-replies",
+    "date": "2026-10-23",
+    "title": "Your activity and report replies in one inbox",
+    "summary": "Notifications now bring together sync results, coaching updates and replies from SC2 Tools.",
+    "audience": "website",
+    "highlights": ["Find the bell beside your account menu, even when Reviews are unavailable.", "Filter the full inbox and choose which updates you receive.", "Read replies to your reports in Settings → Help → My reports."],
+    "helpSlug": "notifications",
+    "major": true
+  },
+  {
+    "id": "confirm-your-pc",
+    "date": "2026-10-23",
+    "title": "Check your PC before linking it",
+    "summary": "Pairing shows the PC details before you confirm and waits for its first real connection.",
+    "audience": "agent",
+    "highlights": ["Paste a pairing code or open the link from the desktop app.", "Check the PC name and operating system before confirming.", "Give devices a label and check their latest connection in Devices."],
+    "helpSlug": "install-and-pair"
+  },
+  {
+    "id": "stream-controls-recovery",
+    "date": "2026-10-23",
+    "title": "Stream controls recover without losing your draft",
+    "summary": "The Stream Dock explains connection trouble and keeps unsaved controls ready for Retry.",
+    "audience": "stream-studio",
+    "highlights": ["See when a control is reconnecting or still loading.", "Retry a failed save with your current form values.", "Polls, goals and scene controls confirm successful saves."],
+    "helpSlug": "stream-dock"
+  }
+]

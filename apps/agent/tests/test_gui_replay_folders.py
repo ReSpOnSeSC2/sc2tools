@@ -12,7 +12,7 @@ import textwrap
 import pytest
 
 
-def test_folder_list_reports_removals_and_keeps_unsaved_edits(
+def test_folder_list_applies_removals_immediately_and_keeps_canonical_updates(
     tmp_path: Path,
 ) -> None:
     if importlib.util.find_spec("PySide6") is None:
@@ -23,20 +23,28 @@ def test_folder_list_reports_removals_and_keeps_unsaved_edits(
     script = textwrap.dedent("""
         import sys
         from pathlib import Path
-        from PySide6 import QtCore, QtGui, QtWidgets
+        from PySide6 import QtCore, QtGui, QtTest, QtWidgets
         from sc2tools_agent.ui.gui import GuiUI, SettingsPayload, _GuiSignals, _MainWindow
 
         app = QtWidgets.QApplication([])
+        def wait_saved(win):
+            deadline = QtCore.QDeadlineTimer(5000)
+            while win._settings_save_pending and not deadline.hasExpired():
+                QtTest.QTest.qWait(10)
+            assert not win._settings_save_pending
         base = Path(sys.argv[1])
         live, ptr, extra, later = (
             str(base / name) for name in ("live", "ptr", "extra", "later")
         )
+        for raw in (live,ptr,extra,later):
+            Path(raw).mkdir()
         saved = []
 
         def save(payload):
             saved.append(payload)
             # The runner answers on this thread with the new watched list.
-            ui.set_replay_folders([Path(live), Path(extra)])
+            paths=list(dict.fromkeys([*[str(path) for path in payload.replay_folders],extra]))
+            ui.set_replay_folders([Path(raw) for raw in paths])
 
         ui = GuiUI(
             version="0.17.6", dashboard_url="https://example.test/app",
@@ -63,23 +71,25 @@ def test_folder_list_reports_removals_and_keeps_unsaved_edits(
 
         win._folder_list.item(1).setSelected(True)
         win._remove_folder_rows()
-        assert shown() == [live], shown()
+        assert shown() == [live,extra], shown()
+        assert [str(path) for path in saved[-1].replay_folders_removed]==[ptr]
 
-        # The agent starts watching a new folder while the edit is unsaved:
-        # it is appended, and the removed folder is not put back.
+        # A stale watcher notification cannot re-add the folder just removed.
         ui.set_replay_folders([Path(live), Path(ptr), Path(extra)])
         assert shown() == [live, extra], shown()
 
         win._click_save_settings()
+        wait_saved(win)
         payload = saved[-1]
         assert [str(p) for p in payload.replay_folders] == [live, extra]
-        assert [str(p) for p in payload.replay_folders_removed] == [ptr]
+        assert payload.replay_folders_removed == []
         assert shown() == [live, extra], shown()
 
         # With nothing unsaved, the watched list is shown as-is.
         ui.set_replay_folders([Path(live), Path(extra), Path(later)])
         assert shown() == [live, extra, later], shown()
         win._click_save_settings()
+        wait_saved(win)
         assert saved[-1].replay_folders_removed == []
 
         win._log_timer.stop()

@@ -101,14 +101,14 @@ def test_capture_checkbox_requires_consent_and_applies_immediately(tmp_path: Pat
         assert existing._replay_capture_check.isChecked()
         assert not existing._replay_capture_notice.isHidden()
         assert (len(prompts), len(saved)) == counts
-        worker = threading.Thread(target=lambda: existing.capture_test_ui.show_update_notice(
-            "Accurate replay capture is starting; CPU use may increase.", sticky=False,
+        worker = threading.Thread(target=lambda: existing.capture_test_ui.show_transient_notice(
+            "Accurate replay capture is starting; CPU use may increase.",
         ))
         worker.start()
         worker.join(timeout=2)
         assert not worker.is_alive()
         app.processEvents()
-        assert "CPU use may increase" in existing._update_notice.text()
+        assert "CPU use may increase" in existing._transient_notice.text()
         fresh._log_timer.stop()
         existing._log_timer.stop()
         fresh.deleteLater()

@@ -75,7 +75,7 @@ describe("Dock panel snapshot and save recovery", () => {
   it("keeps scene message and countdown on failure and retries newer values", async () => {
     const onPost = failingOnce();
     render(<DockScenes scene={null} broll={DEFAULT_STUDIO_STATE.broll} busy={false} onPost={onPost} />);
-    change("Optional message — e.g. grabbing water, back in 5", "Water break"); await click("⏸ BRB");
+    change("Optional message — e.g. grabbing water, back in 5", "Water break"); await click("BRB");
     change("Optional message — e.g. grabbing water, back in 5", "Back shortly");
     fireEvent.change(screen.getByRole("spinbutton", { name: "Countdown minutes" }), { target: { value: "10" } });
     const before = Date.now(); await act(async () => { await onPost.mock.calls[0][1]!(); });

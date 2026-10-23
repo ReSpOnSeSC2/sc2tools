@@ -1,3 +1,4 @@
+import { localOverlaySample } from "@/lib/overlayDemo.server";
 import { OverlayClient } from "@/components/OverlayClient";
 import { OVERLAY_THEME_PARAM } from "@/lib/overlayTheme";
 import { isOverlayCreditHidden, OVERLAY_CREDIT_PARAM } from "@/lib/overlayCredit";
@@ -34,5 +35,5 @@ export default async function OverlayPage({
     : null;
   // ``?credit=0`` hides the "Overlay by sc2tools.com" credit (lib/overlayCredit).
   const showCredit = !isOverlayCreditHidden(sp[OVERLAY_CREDIT_PARAM]);
-  return <OverlayClient token={token} themeParam={themeParam} showCredit={showCredit} />;
+  return <OverlayClient demo={sp.demo === "1" ? localOverlaySample() : undefined} token={token} themeParam={themeParam} showCredit={showCredit} />;
 }

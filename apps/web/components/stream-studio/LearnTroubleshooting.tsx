@@ -9,7 +9,7 @@ const PROBLEMS = [
   },
   {
     title: "Test works, but a real game shows nothing",
-    body: "The test uses sample data; it confirms the Browser Source can display the widget. Check Devices for a paired, recently seen agent on your gaming PC and keep it running. Live widgets need a detected match; result widgets need the completed replay to finish syncing. Opponent-history cards also need usable history. Browser-only replay analysis does not replace the agent's live connection.",
+    body: "Test checks sample rendering, not your agent's data path. During a detected live match, Settings asks before broadcasting samples: Preview here instead opens a local sample page; Send anyway shows viewers samples for about 20 seconds. Stop restores the current real opponent and session. Check Devices for a paired, recently seen agent and keep it running. Live widgets need a detected match; result widgets need the completed replay to finish syncing. Opponent-history cards also need usable history. Browser-only analysis does not replace the agent's live connection.",
     href: "/devices", action: "Check my agent",
   },
   {

@@ -16,6 +16,7 @@ vi.mock("@clerk/nextjs", () => ({
 
 vi.mock("@/lib/clientApi", () => ({
   apiCall: harness.apiCall,
+  useApi: () => ({ mutate: vi.fn() }),
 }));
 
 const build = {
@@ -52,6 +53,28 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe("BuildPublishModal community identity", () => {
+  it("offers Unpublish inside an existing listing and uses the same confirmation and owner repair", async () => {
+    harness.apiCall.mockResolvedValueOnce({ published: true, publicSlug: "public-three-gate", authorName: "Owner", publishAnonymously: false, mirrorPending: false }).mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ published: false, publicSlug: null, mirrorPending: false });
+    renderModal();
+    expect(await screen.findByRole("heading", { name: "Update your Community listing" })).toBeTruthy();
+    await waitFor(() => expect((screen.getByRole("button", { name: "Unpublish" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "Unpublish" }));
+    const buttons = screen.getAllByRole("button", { name: "Unpublish" });
+    fireEvent.click(buttons[buttons.length - 1]);
+    await waitFor(() => expect(harness.onClose).toHaveBeenCalledOnce());
+    expect(harness.apiCall.mock.calls.slice(1).map((call) => [call[1], call[2]?.method ?? "GET"])).toEqual([["/v1/community/builds/public-three-gate", "DELETE"], ["/v1/community/my-build-publication/pvt-three-gate", "GET"]]);
+  });
+
+  it("copies the successful publication's actual public link and names the menu path", async () => {
+    const writeText = vi.fn(async () => undefined); Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    harness.apiCall.mockResolvedValueOnce({ published: false, publicSlug: null, authorName: "Owner", publishAnonymously: false }).mockResolvedValueOnce({ slug: "different-public-slug" });
+    renderModal();
+    await waitFor(() => expect((screen.getByLabelText("Name shown publicly") as HTMLInputElement).value).toBe("Owner"));
+    expect(screen.getByText(/unpublish any time from the build's ⋯ menu/)).toBeTruthy();
+    await acknowledge(); fireEvent.click(screen.getByRole("button", { name: "Publish…" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Copy link" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/community/builds/different-public-slug`));
+  });
   it("loads the named default and publishes it unless anonymous is explicitly selected", async () => {
     harness.apiCall
       .mockResolvedValueOnce({
@@ -71,7 +94,7 @@ describe("BuildPublishModal community identity", () => {
       }) as HTMLInputElement).checked,
     ).toBe(false);
     await acknowledge();
-    fireEvent.click(screen.getByRole("button", { name: "Publish build" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish…" }));
 
     await waitFor(() => expect(harness.apiCall).toHaveBeenCalledTimes(2));
     const body = JSON.parse(harness.apiCall.mock.calls[1][2].body);
@@ -99,7 +122,7 @@ describe("BuildPublishModal community identity", () => {
     await waitFor(() => expect((anonymous as HTMLInputElement).checked).toBe(true));
     expect((screen.getByLabelText("Name shown publicly") as HTMLInputElement).disabled).toBe(true);
     await acknowledge();
-    fireEvent.click(screen.getByRole("button", { name: "Publish build" }));
+    fireEvent.click(screen.getByRole("button", { name: "Update listing" }));
 
     await waitFor(() => expect(harness.apiCall).toHaveBeenCalledTimes(2));
     const body = JSON.parse(harness.apiCall.mock.calls[1][2].body);
@@ -122,7 +145,7 @@ describe("BuildPublishModal community identity", () => {
     await acknowledge();
     expect(
       (screen.getByRole("button", {
-        name: "Publish build",
+        name: "Update listing",
       }) as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(harness.apiCall).toHaveBeenCalledTimes(1);
@@ -140,13 +163,13 @@ describe("BuildPublishModal community identity", () => {
     renderModal();
     await screen.findByLabelText("Name shown publicly");
     await acknowledge();
-    fireEvent.click(screen.getByRole("button", { name: "Publish build" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish…" }));
     expect(screen.getByRole("alert").textContent).toContain("Enter the name");
 
     fireEvent.change(screen.getByLabelText("Name shown publicly"), {
       target: { value: "Corrected Author" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Publish build" }));
+    fireEvent.click(screen.getByRole("button", { name: "Publish…" }));
     await waitFor(() => expect(harness.apiCall).toHaveBeenCalledTimes(2));
     expect(JSON.parse(harness.apiCall.mock.calls[1][2].body).authorName).toBe(
       "Corrected Author",

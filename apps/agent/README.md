@@ -107,14 +107,16 @@ agent falls back gracefully to tray+console.
 
 | Tab | Contents |
 | --- | -------- |
-| Dashboard | Status badge (Active / Paused / Pairing / Error), pairing card with requesting, code countdown, offline, expired, and unlinked recovery states; green pairing confirmation for four seconds, Synced / Queued / Last-upload stats, action buttons (Pause, Re-sync, Choose folder, Check for updates, Open dashboard). |
+| Dashboard | Shared status card (Starting / Connecting / Link this PC / Unlinked / Watching / Syncing / Paused / Needs attention / Error), its cause and next action, pairing code and recovery; green pairing confirmation for four seconds, upload totals when linked, separate update card and release notes. Status matches the sidebar and tray dot. Pause, Re-sync, Add folder, Check for updates, and Open dashboard actions. |
 | Recent uploads | Last ~100 replays the agent has handled, with timestamps and per-row status. Double-click reveals the replay in Explorer. |
 | Activity log | Incremental tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log`, with complete tracebacks, readable level filters, Ctrl+F search, follow/pause, copy selection or last 200 lines, and Open log folder. |
-| Settings | Replay folders and sync date range, start-up, updates, capture, build check-in and OBS. Save confirms what applied; API address, log level and parse concurrency name their restart requirement. The API field supports Reset to default and Test. |
+| Settings | Replay folders and sync date range, start-up, updates, capture, build check-in and OBS. Save confirms what applied; API address, log level and import speed name their restart requirement. The API field supports Reset to default and Test. |
 | Streams | Shared stream title and YouTube description, connected channels, and verified or accepted per-platform save results. |
 
-Closing the window minimises it to the tray (the agent keeps running).
-**Quit** lives on the tray menu - that fully exits the process.
+Closing the window hides it in the tray while syncing continues. A one-time reminder
+explains where it went. Launching the shortcut again brings that same window forward.
+Without a tray, Close offers Quit or Minimize and remembers the choice.
+Use **Quit** in the tray or **Quit SC2 Tools** below sidebar Help to fully exit.
 
 ### Streams
 
@@ -192,14 +194,53 @@ The sidebar **Help & support** link opens the desktop guide. The round **?** but
 
 | Item | What it does |
 | ---- | ------------ |
-| Status / last upload / watching | Three-line tooltip - read-only |
-| Open dashboard | Launches your browser at the SPA |
-| Pause syncing / Resume syncing | Persists across restarts; queue keeps draining but holds jobs |
-| Open log folder | Opens `%LOCALAPPDATA%\sc2tools\logs` in Explorer |
-| Re-sync from scratch | Clears the dedupe cursor + re-uploads every replay |
-| Choose replay folder | Native folder picker; the folder is watched alongside the auto-detected ones and persists in `state.replay_folders_override` |
-| Check for updates / Install update X.Y.Z | Polls the cloud release feed; on a fresh release, downloads + verifies + launches the installer |
-| Quit | Stops the agent |
+| Status lines | The same status and next action as the window; full headline in the tooltip. |
+| Install update vX | Requests the pending installer at the next safe moment. |
+| Open SC2 Tools | Default/double-click action; restores the running window. |
+| Open dashboard | Opens your account in the browser. |
+| Build check-in… | Opens a pending game check-in or its website queue. |
+| Pause syncing / Resume | Shared with the window and persisted across restarts. |
+| Pause → For 1 hour / Until I resume | Holds queued replays; a timed pause resumes automatically. |
+| More → Add replay folder… | Opens the window's Qt picker; applies immediately with Undo. |
+| More → Re-sync library… | Uses the window's confirmation and paused/date-filter guards. |
+| More → Open log folder | Opens the local logs in Explorer. |
+| More → Check for updates | Reports a ready version, up-to-date result, or failed check. |
+| Quit | Stops the agent. |
+
+Replay folder rows show region, toon handle, replay count, newest replay age, and
+Auto-detected / Added by you. Hover for the raw path, use Open in Explorer, or
+press Delete to remove a row. Add, Remove, and Auto-detect persist immediately;
+Undo restores the previous selection without resetting upload history. Redirected
+Windows Documents and localized OneDrive folders are included in detection.
+
+### Game Mode
+
+Settings → Performance offers Gentle (up to 2 workers, idle priority), Balanced
+(up to 4 workers, below normal priority), and Maximum (up to 12 workers, below
+normal priority), each limited by CPU count. Save and restart to apply the worker
+count. Existing custom worker limits remain until a speed is saved. On POSIX,
+background workers request nice(10).
+
+Pause history import while I'm in a game is on by default. The shared live-game
+gate holds new history parses and archive jobs through loading/play and for 20
+seconds after the match ends. Fresh rank-zero replays retain their priority lane.
+Automatic accurate replay capture does not start mid-match. Pause on battery also
+holds background work. A 120-second event silence or 45-minute match safety limit
+releases the gate; --no-live disables it. Manual Pause holds all queued syncing.
+
+The separate update card offers What's new (Markdown notes), Install now, and
+Later (24 hours). Optional automatic updates respect the saved setting; Install
+now still works when auto-update is off. Required updates defer at most 24 hours
+from first discovery. Every install waits for two idle minutes, stopped OBS
+outputs, and no capture. Failure leaves Retry and Download installer actions.
+Capture notices cannot erase an update. After a version change, an Updated toast
+and What's new link offer bundled notes even offline. Source checkouts use the
+manual installer path. No release is published by these source changes.
+
+Read [Tray and window](https://sc2tools.com/help/desktop-app-tray),
+[Status lights](https://sc2tools.com/help/desktop-app-status),
+[Performance](https://sc2tools.com/help/desktop-app-performance), and
+[Updates](https://sc2tools.com/help/desktop-app-updates).
 
 ## Parse pool modes
 
@@ -332,10 +373,18 @@ pwsh packaging\build-installer.ps1 -Installer
 
 The script reads the canonical version from
 `sc2tools_agent\__init__.py` and outputs
-`dist\SC2ToolsAgent-Setup-<version>.exe` (signed when `-SigningCert` is
-supplied). The installer drops a Start Menu
-shortcut, a desktop shortcut, and a per-user startup-folder shortcut
-(launched with `--start-minimized` so logging in does not pop a
-window). See [packaging/README.md](packaging/README.md) for the full
+`dist\SC2ToolsAgent-Setup-<version>.exe`. Local `-SigningCert` signs both
+the inner executable and setup. The release workflow uses owner-configured
+SignPath Foundation signing and verifies trusted timestamped signatures; absent
+credentials do not turn an unsigned build into a signed one. The installer drops a Start Menu
+shortcut and optional desktop shortcut. Installation options default Windows
+startup on for a first install; installer and Settings share the per-user
+`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\SC2ToolsAgent`
+value with `--start-minimized`. Legacy Startup shortcuts migrate to this value,
+and silent upgrades preserve the existing choice. The Finish page offers Launch
+now. Uninstall keeps pairing/settings/logs unless local-data removal is explicitly
+selected; original replay folders and cloud games are kept. See [packaging/README.md](packaging/README.md) for the full
 build pipeline including code signing and the release-feed publish
 step.
+
+Read [Install, start-up and uninstall](https://sc2tools.com/help/desktop-app-install).

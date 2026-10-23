@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   mechanics: vi.fn(),
   buildOrders: vi.fn(),
 }));
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: false }) }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
@@ -205,7 +206,7 @@ describe("PublicReplayLibrary", () => {
   it("explains expired pages once and leaves the notice out of subsequent pager URLs", () => {
     render(<PublicReplayLibrary data={PUBLIC_LIST} query={{ notice: "page-expired", sort: "date_asc", result: "win" }} />);
     expect(screen.getByRole("status").textContent).toContain("That page link expired. Showing the oldest replays.");
-    for (const name of ["Dismiss", /Older replays/i]) {
+    for (const name of ["Dismiss", /Newer replays/i]) {
       const href = screen.getByRole("link", { name }).getAttribute("href")!;
       const params = new URL(href, "https://sc2tools.test").searchParams;
       expect(params.has("notice")).toBe(false); expect(params.get("result")).toBe("win");
@@ -244,19 +245,16 @@ describe("PublicReplayLibrary", () => {
 
     const detailHref = `/players/${PLAYER_SLUG}/replays/game%2F42`;
     const analysisLinks = screen.getAllByRole("link", {
-      name: /Sign in to open replay analysis/i,
+      name: "Timeline, macro breakdown and both build orders. Sign in free to open.",
     });
-    expect(analysisLinks).toHaveLength(3);
+    expect(analysisLinks).toHaveLength(2);
     expect(analysisLinks.map((link) => link.getAttribute("href"))).toEqual(
-      Array(3).fill(detailHref),
+      Array(2).fill(detailHref),
     );
-    const macroLinks = screen.getAllByRole("link", {
+    const macroLinks = screen.queryAllByRole("link", {
       name: /Sign in to open macro breakdown/i,
     });
-    expect(macroLinks).toHaveLength(2);
-    expect(macroLinks.map((link) => link.getAttribute("href"))).toEqual(
-      Array(2).fill(`${detailHref}#macro-breakdown`),
-    );
+    expect(macroLinks).toHaveLength(0);
     expect(screen.getByRole("button", {
       name: "Share Reaver's replay page",
     })).toBeTruthy();
@@ -264,13 +262,12 @@ describe("PublicReplayLibrary", () => {
       name: "Share Reaver's replay page",
     }));
     await waitFor(() => expect(share).toHaveBeenCalledWith(expect.objectContaining({
-      url: `${window.location.origin}/players/${PLAYER_SLUG}/replays`,
+      url: `${window.location.origin}/players/${PLAYER_SLUG}/replays?search=cannon+rush&result=win&matchup=PvT&sort=date_asc&cursor=current%2Fcursor`,
     })));
-    expect(screen.getByText(/View the list and download replays without an account/i)).toBeTruthy();
-    expect(screen.getByText(/Sign in for Macro and Analysis/i)).toBeTruthy();
+    expect(screen.getByText(/Download any replay without an account · Sign in free for the full analysis/i)).toBeTruthy();
 
     const older = new URL(
-      screen.getByRole("link", { name: /Older replays/i }).getAttribute("href")!,
+      screen.getByRole("link", { name: /Newer replays/i }).getAttribute("href")!,
       "https://sc2tools.test",
     );
     expect(Object.fromEntries(older.searchParams)).toEqual({
@@ -281,16 +278,33 @@ describe("PublicReplayLibrary", () => {
       cursor: "older+/cursor",
     });
     const newest = new URL(
-      screen.getByRole("link", { name: /Back to newest/i }).getAttribute("href")!,
+      screen.getByRole("link", { name: /Back to oldest/i }).getAttribute("href")!,
       "https://sc2tools.test",
     );
     expect(newest.searchParams.has("cursor")).toBe(false);
     expect(newest.searchParams.get("search")).toBe("cannon rush");
-    expect(screen.getByText(/This list and its replay downloads are public/i)).toBeTruthy();
+    expect(screen.getByText(/Downloads are the original .SC2Replay file, which includes the in-game names and chat StarCraft II records./i)).toBeTruthy();
   });
 });
 
 describe("public replay list route", () => {
+  it.each(["7d", "30d"])("forwards rolling %s dates, map and build while keeping date keywords in the URL", async (range) => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-23T12:00:00Z"));
+    try {
+      mocks.getJsonWithStatus.mockResolvedValue({ data: PUBLIC_LIST, status: 200 });
+      const ui = await PlayerReplaysPage({ params: Promise.resolve({ player: PLAYER_SLUG }), searchParams: Promise.resolve({ range, map: "Alcyone LE", build: "Blink", cursor: "old", page: "3" }) });
+      const url = new URL(mocks.getJsonWithStatus.mock.calls[0][0], "https://example.test");
+      expect(url.searchParams.get("map")).toBe("Alcyone LE"); expect(url.searchParams.get("build")).toBe("Blink"); expect(url.searchParams.get("until")).toBe("2026-10-23T12:00:00.000Z");
+      expect(url.searchParams.get("since")).toBe(range === "7d" ? "2026-10-16T12:00:00.000Z" : "2026-09-23T12:00:00.000Z"); expect(url.searchParams.has("page")).toBe(false);
+      render(ui); expect(screen.getByRole("link", { name: `Remove filter: ${range === "7d" ? "Last 7 days" : "Last 30 days"}` }).getAttribute("href")).not.toContain("since");
+    } finally { vi.useRealTimers(); }
+  });
+  it("resolves this season through the shared preset and preserves that keyword", async () => {
+    mocks.getJsonWithStatus.mockResolvedValue({ data: PUBLIC_LIST, status: 200 });
+    render(await PlayerReplaysPage({ params: Promise.resolve({ player: PLAYER_SLUG }), searchParams: Promise.resolve({ range: "season", result: "win" }) }));
+    const url = new URL(mocks.getJsonWithStatus.mock.calls[0][0], "https://example.test"); expect(Number.isFinite(Date.parse(url.searchParams.get("since")!))).toBe(true); expect(Number.isFinite(Date.parse(url.searchParams.get("until")!))).toBe(true);
+    expect(screen.getByRole("link", { name: "Remove filter: Wins" }).getAttribute("href")).toBe(`/players/${PLAYER_SLUG}/replays?range=season`);
+  });
   it("recovers an expired cursor to the canonical first page while retaining filters", async () => {
     mocks.getJsonWithStatus.mockResolvedValueOnce({ data: null, status: 400 }).mockResolvedValueOnce({ data: PUBLIC_LIST, status: 200 });
     await expect(PlayerReplaysPage({ params: Promise.resolve({ player: "legacy-opaque-id" }), searchParams: Promise.resolve({ cursor: "expired", result: "win", sort: "date_asc", notice: "ignored" }) })).rejects.toThrow("NEXT_REDIRECT");

@@ -63,10 +63,16 @@ describe("PublicProfile (presentational)", () => {
   test("renders name, headline stats, matchup splits, and the viral CTA", () => {
     render(<PublicProfile profile={PROFILE} />);
     expect(screen.getByText("Reaver")).toBeTruthy();
-    expect(screen.getByText("vs T")).toBeTruthy();
+    expect(screen.getByText("vs Terran")).toBeTruthy();
+    expect(screen.getByText("vs Zerg")).toBeTruthy();
     expect(screen.getByText("PvT - Glaive Adept Timing")).toBeTruthy();
     // The "get your own" conversion CTA is the point of the page.
     expect(screen.getByText(/get yours at sc2tools\.com/i)).toBeTruthy();
+  });
+
+  test("unknown matchup races have an explicit label", () => {
+    render(<PublicProfile profile={{ ...PROFILE, matchups: [{ matchup: "vs Unknown", games: 1, wins: 1, losses: 0, winRate: 1 }] }} />);
+    expect(screen.getByText("vs Unknown race")).toBeTruthy();
   });
 
   test("carries no opponent identity fields (only aggregates are passed in)", () => {

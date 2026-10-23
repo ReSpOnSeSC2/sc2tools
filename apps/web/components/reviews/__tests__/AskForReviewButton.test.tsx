@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => ({
@@ -157,7 +157,8 @@ describe("AskForReviewDialog", () => {
     submitForm();
     const feedback = screen.getByRole("alert");
     expect(feedback.textContent).toBe("The range must sit inside the game.");
-    expect(start.getAttribute("aria-describedby")).toBe(feedback.id);
+    expect(start.getAttribute("aria-describedby")?.split(" ")).toContain(feedback.id);
+    expect(end.getAttribute("aria-describedby")?.split(" ")).toContain(feedback.id);
     expect(end.getAttribute("aria-invalid")).toBe("true");
     expect(harness.apiCall).not.toHaveBeenCalled();
   });
@@ -224,6 +225,60 @@ describe("AskForReviewDialog", () => {
 });
 
 describe("request time ranges", () => {
+  it("uses phone-safe text input and explains then corrects numeric seconds", () => {
+    render(<AskForReviewDialog {...PROPS} durationSec={852} onClose={vi.fn()} />);
+    const start = screen.getByLabelText("From (m:ss)"); const end = screen.getByLabelText("To (m:ss)");
+    expect(start.getAttribute("inputmode")).toBe("text"); expect(end.getAttribute("autocomplete")).toBe("off");
+    fireEvent.change(start, { target: { value: "500" } }); fireEvent.change(end, { target: { value: "9:00" } });
+    expect(screen.getByText(/500 reads as 8:20 \(seconds\). Did you mean 5:00/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Use 5:00" }));
+    expect((start as HTMLInputElement).value).toBe("5:00");
+    const echo = screen.getByText("Focus 5:00–9:00 of 14:12");
+    expect(echo.getAttribute("aria-live")).toBe("polite");
+    expect(start.getAttribute("aria-describedby")?.split(" ")).toContain(echo.id);
+    expect(end.getAttribute("aria-describedby")?.split(" ")).toContain(echo.id);
+  });
+
+  it("sets matching quick ranges, clamps them to the game and clears with Whole game", () => {
+    const { rerender } = render(<AskForReviewDialog {...PROPS} durationSec={450} onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Mid 5:00–7:30" }));
+    expect(screen.getByRole("button", { name: "Mid 5:00–7:30" }).getAttribute("aria-pressed")).toBe("true");
+    expect((screen.getByLabelText("To (m:ss)") as HTMLInputElement).value).toBe("7:30");
+    expect(screen.queryByRole("button", { name: /Late/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Whole game" }));
+    expect((screen.getByLabelText("From (m:ss)") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("To (m:ss)") as HTMLInputElement).value).toBe("");
+    rerender(<AskForReviewDialog {...PROPS} gameId="short" durationSec={120} onClose={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Early 0:00–2:00" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Mid/ })).toBeNull();
+  });
+
+  it("keeps dirty forms on scrim clicks and confirms Escape or Cancel, with Keep editing as the safe action", () => {
+    const close = vi.fn(); render(<AskForReviewDialog {...PROPS} onClose={close} />);
+    fillQuestion(); fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
+    expect(close).not.toHaveBeenCalled(); expect(screen.queryByRole("dialog", { name: "Discard this request?" })).toBeNull();
+    fireEvent.keyDown(screen.getByRole("textbox", { name: "Your question" }), { key: "Escape" });
+    const confirm = screen.getByRole("dialog", { name: "Discard this request?" });
+    fireEvent.click(within(confirm).getByRole("button", { name: "Keep editing" }));
+    expect((screen.getByRole("textbox", { name: "Your question" }) as HTMLTextAreaElement).value).toBe(QUESTION);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Discard this request?" })).getByRole("button", { name: "Discard" }));
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("does not close a submitting request and explains level and link-only visibility with associated hints", async () => {
+    let finish!: (value: { id: string; url: string }) => void;
+    harness.apiCall.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    const close = vi.fn(); render(<AskForReviewDialog {...PROPS} onClose={close} />);
+    const level = screen.getByRole("combobox", { name: "Who should review" });
+    const visibility = screen.getByRole("combobox", { name: "Visibility" });
+    expect(document.getElementById(level.getAttribute("aria-describedby")!)?.textContent).toContain("verified from their own ranked games");
+    expect(document.getElementById(visibility.getAttribute("aria-describedby")!)?.textContent).toContain("Anyone with the link can open it");
+    fillQuestion(); submitForm(); fireEvent.keyDown(screen.getByRole("textbox", { name: "Your question" }), { key: "Escape" });
+    expect(close).not.toHaveBeenCalled(); expect(screen.queryByRole("dialog", { name: "Discard this request?" })).toBeNull();
+    await act(async () => finish({ id: ID, url: `/reviews/${ID}` }));
+  });
+
   it("accepts optional ranges and clock formats within the game's duration", () => {
     expect(parseRange("", " ", 640)).toEqual({ value: null, error: null });
     expect(parseRange("5:00", "390", 640)).toEqual({ value: { startSec: 300, endSec: 390 }, error: null });

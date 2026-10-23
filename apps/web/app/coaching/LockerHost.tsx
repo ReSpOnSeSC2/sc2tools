@@ -12,8 +12,10 @@
 // the Next bundle, and the coaching UI stays out of the main chunks.
 
 import { useAuth } from "@clerk/nextjs";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 
 declare global {
   interface Window {
@@ -51,6 +53,8 @@ function parkLocker(host: HTMLDivElement) {
 export default function LockerHost() {
   const { getToken } = useAuth();
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -71,14 +75,20 @@ export default function LockerHost() {
     };
 
     if (lockerInitialized) {
+      setStatus("ready");
       return () => parkLocker(host);
     }
 
     async function mount(target: HTMLDivElement) {
+      setStatus("loading");
+      try {
       const res = await fetch("/coaching/locker-site.html");
-      if (!res.ok || cancelled || !hostRef.current) return;
+      if (cancelled) return;
+      if (!res.ok) throw new Error("Locker fetch failed");
       const text = await res.text();
+      if (cancelled || !hostRef.current) return;
       const doc = new DOMParser().parseFromString(text, "text/html");
+      target.replaceChildren();
 
       // Styles + static skeleton first, script last — the app's boot
       // expects #root, #state0 and #toast to exist when it runs.
@@ -99,6 +109,10 @@ export default function LockerHost() {
       }
       lockerInitialized = true;
       activeMountHost = host;
+      setStatus("ready");
+      } catch {
+        if (!cancelled) setStatus("error");
+      }
     }
 
     void mount(lockerRoot);
@@ -106,7 +120,11 @@ export default function LockerHost() {
       cancelled = true;
       parkLocker(host);
     };
-  }, [getToken]);
+  }, [getToken, attempt]);
 
-  return <div ref={hostRef} />;
+  return <>
+    {status === "loading" ? <div role="region" aria-busy="true" aria-label="Loading the Locker…" className="space-y-4"><div className="h-12 animate-pulse rounded-xl bg-bg-elevated" /><div className="grid gap-4 sm:grid-cols-2"><div className="h-64 animate-pulse rounded-xl bg-bg-elevated" /><div className="h-64 animate-pulse rounded-xl bg-bg-elevated" /></div></div> : null}
+    {status === "error" ? <Card><h2 className="text-h4 font-semibold text-text">The Locker couldn't load</h2><p className="mt-2 text-caption text-text-muted">Your coaching data is safe. Check your connection and try again.</p><Button className="mt-4" onClick={() => setAttempt((value) => value + 1)}>Try again</Button></Card> : null}
+    <div ref={hostRef} hidden={status !== "ready"} />
+  </>;
 }

@@ -115,7 +115,7 @@ export function MatchupBuildPicker({
         <Card>
           <EmptyStatePanel
             title="No builds eligible for this matchup"
-            description="The builds that come with SC2 Tools cover Protoss matchups for now. For Terran and Zerg, add builds with the right race and opponent race under Custom builds in the menu."
+            description="The builds that come with SC2 Tools cover Protoss matchups for now. For Terran and Zerg, add builds with the right race and opponent race in Build library."
           />
         </Card>
       ) : (
@@ -135,8 +135,8 @@ export function MatchupBuildPicker({
             />
           </Section>
           <Section
-            title="Your custom builds"
-            description="Your custom builds whose race and opponent race fit this matchup. Add more under Custom builds in the menu."
+            title="Build library"
+            description="Your custom builds whose race and opponent race fit this matchup. Add more in Build library."
           >
             {onSearchChange ? (
               <input

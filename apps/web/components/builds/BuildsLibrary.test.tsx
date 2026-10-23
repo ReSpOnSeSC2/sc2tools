@@ -20,6 +20,7 @@ const harness = vi.hoisted(() => ({
   ruleStatsData: [] as Array<Record<string, unknown>> | undefined,
   ruleStatsError: undefined as Error | undefined,
   statusData: undefined as undefined | Record<string, unknown>,
+  directBuild: undefined as undefined | Record<string, unknown>,
   paths: [] as string[],
   success: vi.fn(),
   error: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock("@/lib/clientApi", () => ({
   useApi: (path: string | null) => {
     if (!path) return { mutate: harness.mutateStats };
     harness.paths.push(path);
+    if (path === "/v1/custom-builds/direct-build") return { data: harness.directBuild, mutate: harness.mutateBuilds };
     const isList = path === "/v1/custom-builds" || path.startsWith("/v1/custom-builds?");
     const pageKey = path.includes("?") ? path.split("?")[1] : "";
     const listData = pageKey in harness.listPages ? harness.listPages[pageKey] : harness.listData;
@@ -161,7 +163,8 @@ vi.mock("./EditCustomBuildLauncher", () => ({
     </button>
   ) : null,
 }));
-vi.mock("./BuildPublishModal", () => ({ BuildPublishModal: () => null }));
+vi.mock("./BuildPublishModal", () => ({ BuildPublishModal: ({ build }: { build: { name: string } | null }) => <section aria-label="Publication fixture">{build?.name}</section> }));
+vi.mock("./PublishPickerModal", () => ({ PublishPickerModal: ({ onChoose }: { onChoose: (build: { slug: string; name: string; race: string }) => void }) => <button onClick={() => onChoose({ slug: "picked-build", name: "Picked build", race: "Protoss" })}>Choose publication fixture</button> }));
 vi.mock("@/components/ui/ConfirmDialog", () => ({ ConfirmDialog: () => null }));
 vi.mock("next/image", () => ({
   // eslint-disable-next-line @next/next/no-img-element
@@ -183,6 +186,7 @@ beforeEach(() => {
   harness.mutateStatus.mockReset();
   harness.mutateStatus.mockResolvedValue(undefined);
   harness.statusData = undefined;
+  harness.directBuild = undefined;
   harness.listData = {
     items: [{
       slug: "pvt-test",
@@ -205,6 +209,32 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("BuildsLibrary pagination", () => {
+  it("consumes the publish picker URL, then opens the selected build's publication window", async () => {
+    harness.query = "publish=1&sort=games"; render(<BuildsLibrary />);
+    await act(async () => { await vi.dynamicImportSettled(); });
+    expect(harness.replace).toHaveBeenCalledWith("/builds?sort=games", { scroll: false });
+    fireEvent.click(screen.getByRole("button", { name: "Choose publication fixture" }));
+    await act(async () => { await vi.dynamicImportSettled(); });
+    expect(screen.getByRole("region", { name: "Publication fixture" }).textContent).toBe("Picked build");
+  });
+  it("opens a direct source even when it is not on the current library page", async () => {
+    harness.query = "publish=direct-build"; harness.directBuild = { slug: "direct-build", name: "Direct private build", race: "Terran" };
+    const view = render(<BuildsLibrary />); await act(async () => { await vi.dynamicImportSettled(); });
+    expect(harness.replace).toHaveBeenCalledWith("/builds", { scroll: false });
+    expect(screen.getByRole("region", { name: "Publication fixture" }).textContent).toBe("Direct private build");
+    harness.query = ""; harness.userId = "another-user"; view.rerender(<BuildsLibrary />);
+    expect(screen.queryByRole("region", { name: "Publication fixture" })).toBeNull();
+  });
+  it("ignores the publication intent for signed-out library visitors", () => {
+    harness.query = "publish=1"; harness.isSignedIn = false; render(<BuildsLibrary />);
+    expect(harness.replace).not.toHaveBeenCalled(); expect(screen.queryByRole("button", { name: "Choose publication fixture" })).toBeNull();
+  });
+  it("drops an invalid publication source without requesting a private build", () => {
+    harness.query = "publish=https%3A%2F%2Fevil.invalid"; render(<BuildsLibrary />);
+    expect(harness.replace).toHaveBeenCalledWith("/builds", { scroll: false });
+    expect(harness.paths.some((path) => path.includes("evil"))).toBe(false);
+    expect(screen.queryByRole("region", { name: "Publication fixture" })).toBeNull();
+  });
   function page(start: number, count: number, nextCursor: string | null) {
     return {
       items: Array.from({ length: count }, (_, index) => ({

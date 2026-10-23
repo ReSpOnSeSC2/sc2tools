@@ -1,10 +1,15 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, StickyNote } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, ChevronRight, ExternalLink, StickyNote } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Card, EmptyState } from "@/components/ui/Card";
 import { Toggle } from "@/components/ui/Toggle";
+import { FilterPill } from "@/components/ui/FilterPill";
+import { SortableTh, useSort } from "@/components/ui/SortableTh";
+import { resultLabel } from "@/components/analyzer/game/types";
+import { StrategyLabel } from "@/components/definitions/StrategyLabel";
 import { BuildOrderTimeline } from "@/components/analyzer/charts/BuildOrderTimeline";
 import { MapLabel } from "@/components/maps/MapArtwork";
 import { useApi } from "@/lib/clientApi";
@@ -29,8 +34,8 @@ interface BuildOrderResp {
 
 /**
  * BuildGamesTable — recent games for a custom build with build-order
- * drilldown. Desktop renders a sortable-style table; mobile collapses
- * to stacked cards with the same data and the same expand action.
+ * drilldown. Keyboard disclosures and links work on both layouts;
+ * sorting and quick filters apply within the competitive/resume groups.
  *
  * Games on the build through a confirmed check-in carry a "Planned"
  * marker (naming the replay's own label) and show the player's check-in
@@ -40,14 +45,18 @@ export function BuildGamesTable({
   games,
   resumedGames = [],
   resumedCount = 0,
+  total,
 }: {
   games: BuildRecentGame[];
   resumedGames?: BuildRecentGame[];
   resumedCount?: number;
+  total?: number;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [showResumedGames, setShowResumedGames] = useState(false);
   const resumeNoteId = useId();
+  const [filter, setFilter] = useState("all");
+  const sort = useSort("date", "desc");
   const groupedGames = useMemo(() => {
     const resumedById = new Map<string, BuildRecentGame>();
 
@@ -74,16 +83,15 @@ export function BuildGamesTable({
       resumed: Array.from(resumedById.values()),
     };
   }, [games, resumedGames]);
-  const filteredCompetitive = groupedGames.competitive;
-  const filteredResumed = groupedGames.resumed;
-  const displayedGames = useMemo(
-    () =>
-      [
-        ...filteredCompetitive,
-        ...(showResumedGames ? filteredResumed : []),
-      ].sort(compareNewestFirst),
-    [filteredCompetitive, filteredResumed, showResumedGames],
-  );
+  const availableGames = [...groupedGames.competitive, ...(showResumedGames ? groupedGames.resumed : [])];
+  const filters = [
+    { key: "all", label: "All" }, { key: "win", label: "Wins" }, { key: "loss", label: "Losses" },
+    ...["P", "T", "Z"].filter((race) => availableGames.some((game) => game.opp_race?.[0]?.toUpperCase() === race)).map((race) => ({ key: race, label: `vs ${race}` })),
+  ];
+  const activeFilter = filters.some((item) => item.key === filter) ? filter : "all";
+  const filteredCompetitive = groupedGames.competitive.filter((game) => matchesFilter(game, activeFilter));
+  const filteredResumed = groupedGames.resumed.filter((game) => matchesFilter(game, activeFilter));
+  const displayedGames = [...sort.sortRows(filteredCompetitive, sortValue), ...(showResumedGames ? sort.sortRows(filteredResumed, sortValue) : [])];
   const totalResumed = Math.max(
     0,
     resumedCount,
@@ -91,17 +99,11 @@ export function BuildGamesTable({
   );
   const hasResumedGames = totalResumed > 0;
 
-  if (groupedGames.competitive.length === 0 && !hasResumedGames) {
-    return (
-      <Card title="Recent games">
-        <EmptyState sub="No games using this build yet. Once you play some, they list here newest-first." />
-      </Card>
-    );
-  }
   return (
     <Card
-      title={`Recent games · ${filteredCompetitive.length}${hasResumedGames ? " counted" : ""}`}
+      title={total != null && total > groupedGames.competitive.length ? `Latest ${groupedGames.competitive.length} of ${total} games` : `Recent games · ${groupedGames.competitive.length}`}
     >
+      {total != null && total > groupedGames.competitive.length ? <p className="mb-3 text-caption text-text-muted">Older games still count in every stat above.</p> : null}
       {hasResumedGames ? (
         <div className="mb-3 flex flex-col gap-2 rounded-lg border border-border bg-bg-elevated/40 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
           <p id={resumeNoteId} className="text-micro text-text-muted">
@@ -122,24 +124,25 @@ export function BuildGamesTable({
           </div>
         </div>
       ) : null}
+      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Filter recent games">
+        {filters.map((item) => <FilterPill key={item.key} active={activeFilter === item.key} onClick={() => setFilter(item.key)}>{item.label} <span className="tabular-nums">{availableGames.filter((game) => matchesFilter(game, item.key)).length}</span></FilterPill>)}
+      </div>
       {displayedGames.length === 0 ? (
-        <EmptyState
-          sub="No counted games using this build yet."
-        />
+        <div><EmptyState title={activeFilter === "all" ? "No counted games using this build yet." : "No games match this filter"} />{activeFilter !== "all" ? <button type="button" className="min-h-11 px-3 text-accent underline" onClick={() => setFilter("all")}>Clear</button> : null}</div>
       ) : (
         <>
           <div className="hidden md:block">
             <table className="w-full text-caption">
               <thead className="bg-bg-elevated text-micro uppercase tracking-wider text-text-muted">
                 <tr>
-                  <th className="w-6 px-2 py-1 text-left" aria-hidden />
-                  <th className="px-2 py-1 text-left">Date</th>
-                  <th className="px-2 py-1 text-left">Map</th>
+                  <SortableTh col="date" label="Date" {...sort} compact />
+                  <SortableTh col="map" label="Map" {...sort} compact />
                   <th className="px-2 py-1 text-left">Opponent</th>
                   <th className="px-2 py-1 text-left">Strategy</th>
-                  <th className="px-2 py-1 text-right">Macro</th>
-                  <th className="px-2 py-1 text-right">Length</th>
-                  <th className="px-2 py-1 text-right">Result</th>
+                  <SortableTh col="macro" label="Macro" {...sort} compact align="right" />
+                  <SortableTh col="length" label="Length" {...sort} compact align="right" />
+                  <SortableTh col="result" label="Result" {...sort} compact align="right" />
+                  <th className="px-2 py-1">Open</th>
                 </tr>
               </thead>
               <tbody>
@@ -178,13 +181,19 @@ export function BuildGamesTable({
   );
 }
 
-function compareNewestFirst(a: BuildRecentGame, b: BuildRecentGame): number {
-  const aTime = Date.parse(a.date);
-  const bTime = Date.parse(b.date);
-  if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) {
-    return bTime - aTime;
+function matchesFilter(game: BuildRecentGame, filter: string): boolean {
+  if (filter === "win" || filter === "loss") return !game.isResumedFromReplay && resultLabel(game.result) === (filter === "win" ? "Win" : "Loss");
+  return filter === "all" || game.opp_race?.[0]?.toUpperCase() === filter;
+}
+
+function sortValue(game: BuildRecentGame, column: string): string | number | null {
+  switch (column) {
+    case "map": return game.map?.toLowerCase() ?? null;
+    case "length": return game.duration ?? null;
+    case "macro": return game.macroScore ?? null;
+    case "result": return resultLabel(game.result);
+    default: return Date.parse(game.date) || 0;
   }
-  return b.date.localeCompare(a.date) || a.gameId.localeCompare(b.gameId);
 }
 
 function GameRow({
@@ -203,19 +212,14 @@ function GameRow({
           "cursor-pointer border-t border-border transition-colors",
           expanded ? "bg-bg-elevated/40" : "hover:bg-bg-elevated/40",
         ].join(" ")}
-        onClick={onToggle}
+        onClick={(event) => { if (!(event.target as HTMLElement).closest("a,button,input")) onToggle(); }}
         data-game-row-id={game.gameId}
         data-replay-resume={game.isResumedFromReplay ? "true" : undefined}
       >
-        <td className="px-2 py-1.5 text-text-dim" aria-hidden>
-          {expanded ? (
-            <ChevronDown className="h-4 w-4" aria-hidden />
-          ) : (
-            <ChevronRight className="h-4 w-4" aria-hidden />
-          )}
-        </td>
         <td className="px-2 py-1.5 font-mono text-text-muted">
-          {fmtDate(game.date)}
+          <button type="button" aria-expanded={expanded} aria-controls={`build-game-${game.gameId}-detail`} aria-label={`Build order from ${fmtDate(game.date)} vs ${game.opponent || "unknown opponent"}`} onClick={onToggle} className="inline-flex min-h-11 items-center gap-1 rounded px-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            {expanded ? <ChevronDown className="h-4 w-4 shrink-0" aria-hidden /> : <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />}{fmtDate(game.date)}
+          </button>
         </td>
         <td className="px-2 py-1.5 text-text">
           {game.map ? (
@@ -236,7 +240,7 @@ function GameRow({
             <span className="ml-1 text-text-dim">({game.opp_race[0]})</span>
           ) : null}
         </td>
-        <td className="px-2 py-1.5 text-text-muted">{game.opp_strategy || "—"}</td>
+        <td className="px-2 py-1.5 text-text-muted"><StrategyLabel label={game.opp_strategy || "—"} /></td>
         <td className="px-2 py-1.5 text-right tabular-nums">
           <MacroCell value={game.macroScore ?? null} />
         </td>
@@ -249,9 +253,10 @@ function GameRow({
             <GameResultBadge game={game} />
           </span>
         </td>
+        <td className="text-center"><OpenGameLink game={game} /></td>
       </tr>
       {expanded ? (
-        <tr className="bg-bg-elevated/20">
+        <tr id={`build-game-${game.gameId}-detail`} className="bg-bg-elevated/20">
           <td colSpan={8} className="space-y-2 px-2 pb-3 pt-1">
             <CheckInNotes game={game} />
             <BuildOrderExpansion gameId={game.gameId} game={game} />
@@ -286,6 +291,7 @@ function GameMobile({
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
+        aria-controls={`build-game-${game.gameId}-mobile-detail`}
         className="flex min-h-[44px] w-full items-start justify-between gap-3 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
         <div className="min-w-0 flex-1 space-y-1">
@@ -307,7 +313,6 @@ function GameMobile({
           )}
           <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-micro text-text-muted">
             <span className="truncate">opp: {game.opponent || "—"}</span>
-            <span className="truncate">strat: {game.opp_strategy || "—"}</span>
             <span>
               len: {game.duration ? fmtMinutes(game.duration) : "—"}
             </span>
@@ -321,8 +326,9 @@ function GameMobile({
           )}
         </span>
       </button>
+      <div className="px-3 pb-1 text-caption text-text-muted"><span>Strategy: <StrategyLabel label={game.opp_strategy || "—"} /></span><div><OpenGameLink game={game} mobile /></div></div>
       {expanded ? (
-        <div className="space-y-2 border-t border-border px-3 py-2">
+        <div id={`build-game-${game.gameId}-mobile-detail`} className="space-y-2 border-t border-border px-3 py-2">
           <CheckInNotes game={game} />
           <BuildOrderExpansion gameId={game.gameId} game={game} />
         </div>
@@ -344,13 +350,16 @@ function GameResultBadge({ game }: { game: BuildRecentGame }) {
     );
   }
 
-  const result = (game.result || "").toString();
-  const isWin = ["win", "victory"].includes(result.toLowerCase());
+  const label = resultLabel(game.result);
   return (
-    <Badge size="sm" variant={isWin ? "success" : "danger"}>
-      {isWin ? "Win" : "Loss"}
+    <Badge size="sm" variant={label === "Win" ? "success" : label === "Loss" ? "danger" : "neutral"}>
+      {label}
     </Badge>
   );
+}
+
+function OpenGameLink({ game, mobile = false }: { game: BuildRecentGame; mobile?: boolean }) {
+  return <Link href={`/app/game/${encodeURIComponent(game.gameId)}`} aria-label={`Open game vs ${game.opponent || "unknown opponent"} on ${game.map || "unknown map"}`} className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded text-link hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{mobile ? "Open game" : <ExternalLink className="h-4 w-4" aria-hidden />}</Link>;
 }
 
 /** "Planned" badge, plus a note icon when the check-in has notes. */
@@ -404,7 +413,7 @@ function BuildOrderExpansion({
   gameId: string;
   game: BuildRecentGame;
 }) {
-  const { data, isLoading, error } = useApi<BuildOrderResp>(
+  const { data, isLoading, error, mutate } = useApi<BuildOrderResp>(
     `/v1/games/${encodeURIComponent(gameId)}/build-order`,
   );
   if (isLoading) {
@@ -415,7 +424,7 @@ function BuildOrderExpansion({
     );
   }
   if (error) {
-    return <p className="text-caption text-danger">{error.message}</p>;
+    return <div className="rounded-md border border-danger/30 p-3 text-caption"><p>Couldn't load this game's build order.</p><button type="button" onClick={() => { void mutate(); }} className="min-h-11 text-link underline">Try again</button>{error.requestId ? <p className="break-all text-micro text-text-muted">Error ID: {error.requestId}</p> : null}</div>;
   }
   if (!data) return null;
   return (

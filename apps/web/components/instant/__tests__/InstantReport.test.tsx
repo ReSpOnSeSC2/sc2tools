@@ -3,7 +3,7 @@
  * section exists (ALL DATA IS REAL), built from the real warpgate payload.
  * The game-by-game section has its own suite (GamesSection.test.tsx).
  */
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildInstantReport, type InstantPayload, type InstantReport as Report } from "@/lib/instant/report";
@@ -15,7 +15,7 @@ import { MmrCard } from "../report/MmrCard";
 import { MostFacedCard, knownRace } from "../report/MostFacedCard";
 import { OPENERS_SHOWN, OpenersCard, OpponentOpenersCard } from "../report/OpenersCard";
 import { RecordByMatchupCard } from "../report/RecordByMatchupCard";
-import { winratePercent } from "../report/ReportBits";
+import { formatReportDate, winratePercent } from "../report/ReportBits";
 
 // MOCK: the lazily loaded macro chart is exercised in GamesSection.test.tsx;
 // here a stub keeps these card-level tests synchronous.
@@ -176,7 +176,7 @@ describe("report cards", () => {
     }));
     render(<OpenersCard rows={rows} />);
     expect(screen.getAllByRole("listitem")).toHaveLength(OPENERS_SHOWN);
-    expect(screen.getByText(/\+2 more openers/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Show all 7 openers" }).getAttribute("aria-expanded")).toBe("false");
   });
 });
 
@@ -223,5 +223,28 @@ describe("report card details", () => {
   it("describes the last loss with only the parts the game has", () => {
     expect(lossContext({ opponent: "Rex", map: null, date: "2026-05-08T19:08:12Z" })).toBe("vs Rex · May 8, 2026");
     expect(lossContext({ opponent: null, map: null, date: "not a date" })).toBe("");
+  });
+});
+
+
+describe("opener disclosures", () => {
+  it("expands eight rows in place, preserves button focus, and keeps cards independent", () => {
+    const rows = Array.from({ length: 8 }, (_, i) => ({ name: `Build ${i}`, games: 3, wins: i ? 2 : 0, losses: i ? 1 : 0, winrate: i ? 2 / 3 : 0 }));
+    render(<><OpenersCard rows={rows} /><OpponentOpenersCard rows={rows} /></>);
+    const own = within(screen.getByTestId("report-openers")); const other = within(screen.getByTestId("report-opp-openers"));
+    expect(own.getAllByRole("listitem")).toHaveLength(5);
+    const button = own.getByRole("button", { name: "Show all 8 openers" }); button.focus(); fireEvent.click(button);
+    expect(own.getAllByRole("listitem")).toHaveLength(8); expect(other.getAllByRole("listitem")).toHaveLength(5);
+    expect(document.activeElement).toBe(button); expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById(button.getAttribute("aria-controls")!)).toBe(own.getByRole("list"));
+    expect(own.getAllByRole("listitem")[0].querySelector('[aria-hidden="true"]')).toBeTruthy();
+    expect(own.getAllByRole("listitem")[0].querySelector('[style*="width"]')).toBeNull();
+    expect(own.getAllByRole("listitem")[1].querySelector('[style*="width"]')).not.toBeNull();
+    fireEvent.click(own.getByRole("button", { name: "Show fewer" })); expect(own.getAllByRole("listitem")).toHaveLength(5);
+    expect(screen.queryByText(/save your games to see them all/)).toBeNull();
+  });
+  it("uses the shared report date formatter for loss context", () => {
+    const date = "2026-01-02T01:30:00Z";
+    expect(lossContext({ opponent: null, map: null, date })).toBe(formatReportDate(date));
   });
 });

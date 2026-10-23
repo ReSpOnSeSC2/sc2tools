@@ -91,6 +91,17 @@ const testErrorHandler = (err, _req, res, _next) => {
 };
 
 describe("public replay archive routes", () => {
+  test("summary and facets are strictly allow-listed, numeric and bounded", async () => {
+    const deps = makeDeps();
+    deps.replayLibrary.list.mockResolvedValue({ items: [], sourceGames: [], hasMore: false, nextCursor: null,
+      summary: { total: 312, wins: 180, losses: 129, ties: 3, avgDurationSec: 785, userId: "secret", opponentNames: ["secret"] },
+      facets: { maps: ["Alcyone LE", { name: "secret" }, "Alcyone LE"], matchups: ["PvZ", "secret", { userId: "secret" }], owner: "secret" },
+    });
+    const response = await request(makeApp(deps)).get("/v1/public/replays/owner-1?map=Alcyone&build=Blink").expect(200);
+    expect(response.body.summary).toEqual({ total: 312, wins: 180, losses: 129, ties: 3, avgDurationSec: 785 });
+    expect(response.body.total).toBe(312); expect(response.body.facets).toEqual({ maps: ["Alcyone LE"], matchups: ["PvZ"] }); expect(JSON.stringify(response.body)).not.toContain("secret");
+    expect(deps.replayLibrary.list).toHaveBeenCalledWith("owner-1", expect.objectContaining({ withSummary: true, view: "detector", filters: { map: "alcyone", build: "Blink" } }));
+  });
   test("profile-only reads resolve sharing without listing rows or resolving VODs", async () => {
     const deps = makeDeps();
     const response = await request(makeApp(deps)).get("/v1/public/replays/owner-1?limit=1&fields=profile").expect(200);
