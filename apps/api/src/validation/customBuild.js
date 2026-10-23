@@ -48,7 +48,12 @@ const BUILD_FIELDS = Object.freeze([
   "publishAnonymously",
   "schemaVersion",
   "source",
+  "forkedFrom",
 ]);
+
+// Community slugs share the private slug alphabet and length cap.
+const COMMUNITY_SLUG_PATTERN = "^[a-zA-Z0-9._-]+$";
+const FORKED_FROM_TEXT_MAX = 40;
 
 const BUILD_SCHEMA = {
   type: "object",
@@ -219,6 +224,35 @@ const BUILD_SCHEMA = {
      * paths (list / stats / publish / community) must NEVER gate on it.
      */
     source: { type: "string", enum: ["manual", "auto-classify", "import"] },
+    /**
+     * Set when the build was saved from a community build ("Save to my
+     * library"): the public slug it came from, that publication's
+     * version (its last-updated ISO time) and when it was saved. The
+     * community page reads it to show "In your library" instead of
+     * saving a duplicate. Private: never part of the public snapshot.
+     * ``version``/``savedAt`` accept null because reads return absent
+     * leaves as null and a client may send a read build straight back.
+     */
+    forkedFrom: {
+      type: "object",
+      additionalProperties: false,
+      required: ["communitySlug"],
+      properties: {
+        communitySlug: {
+          type: "string",
+          minLength: 1,
+          maxLength: 80,
+          pattern: COMMUNITY_SLUG_PATTERN,
+        },
+        version: { type: ["string", "null"], maxLength: FORKED_FROM_TEXT_MAX },
+        savedAt: {
+          anyOf: [
+            { type: "string", format: "date-time", maxLength: FORKED_FROM_TEXT_MAX },
+            { type: "null" },
+          ],
+        },
+      },
+    },
   },
 };
 
@@ -310,6 +344,10 @@ function boundedBuildClone(raw) {
   for (const field of ["winConditions", "losesTo", "transitionsInto"]) {
     out[field] = boundedScalarArray(raw[field], STRATEGY_NOTES_MAX_ITEMS);
   }
+  out.forkedFrom = boundedObject(
+    raw.forkedFrom,
+    ["communitySlug", "version", "savedAt"],
+  );
   // Do not manufacture optional fields that were absent from the request.
   for (const field of [
     "signature",
@@ -318,6 +356,7 @@ function boundedBuildClone(raw) {
     "winConditions",
     "losesTo",
     "transitionsInto",
+    "forkedFrom",
   ]) {
     if (!Object.prototype.hasOwnProperty.call(raw, field)) delete out[field];
   }
@@ -337,17 +376,27 @@ function boundedScalarArray(value, max) {
  */
 function boundedObjectArray(value, max, fields) {
   if (!Array.isArray(value)) return value;
-  return value.slice(0, max + 1).map((item) => {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return item;
-    /** @type {Record<string, unknown>} */
-    const out = {};
-    for (const field of fields) {
-      if (Object.prototype.hasOwnProperty.call(item, field)) {
-        out[field] = item[field];
-      }
+  return value.slice(0, max + 1).map((item) => boundedObject(item, fields));
+}
+
+/**
+ * A plain object projected to its known leaves; any other value is
+ * returned as-is so AJV rejects it with a type error.
+ *
+ * @param {unknown} value
+ * @param {readonly string[]} fields
+ */
+function boundedObject(value, fields) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const item = /** @type {Record<string, unknown>} */ (value);
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  for (const field of fields) {
+    if (Object.prototype.hasOwnProperty.call(item, field)) {
+      out[field] = item[field];
     }
-    return out;
-  });
+  }
+  return out;
 }
 
 module.exports = {

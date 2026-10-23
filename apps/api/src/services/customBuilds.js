@@ -179,6 +179,9 @@ const CUSTOM_BUILD_READ_PROJECTION = Object.freeze({
   publishAnonymously: 1,
   schemaVersion: 1,
   source: 1,
+  "forkedFrom.communitySlug": 1,
+  "forkedFrom.version": 1,
+  "forkedFrom.savedAt": 1,
   createdAt: 1,
   updatedAt: 1,
   _schemaVersion: 1,
@@ -222,6 +225,19 @@ const CUSTOM_BUILD_READ_AGGREGATE_PROJECTION = Object.freeze({
   communityAuthorName: boundedMongoString("$communityAuthorName", 80),
   publishAnonymously: boundedMongoBoolean("$publishAnonymously"),
   source: boundedMongoString("$source", 32),
+  // Community provenance of a "Save to my library" copy (private; the
+  // community page uses it to find an existing copy). Null otherwise.
+  forkedFrom: {
+    $cond: [
+      { $eq: [{ $type: "$forkedFrom" }, "object"] },
+      {
+        communitySlug: boundedMongoString("$forkedFrom.communitySlug", 80),
+        version: boundedMongoString("$forkedFrom.version", 40),
+        savedAt: boundedMongoString("$forkedFrom.savedAt", 40),
+      },
+      null,
+    ],
+  },
   createdAt: boundedMongoDate("$createdAt"),
   updatedAt: boundedMongoDate("$updatedAt"),
   _schemaVersion: boundedMongoNumber("$_schemaVersion"),

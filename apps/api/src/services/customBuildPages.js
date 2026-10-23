@@ -35,8 +35,11 @@ function parseBuildPageOptions(raw = {}) {
   if (view && view !== "summary") throw invalidPage("Invalid build view.");
   const includeGeneric = raw.includeGeneric === true || raw.includeGeneric === "true";
   if (raw.includeGeneric !== undefined && ![true, false, "true", "false"].includes(raw.includeGeneric)) throw invalidPage("Invalid includeGeneric.");
+  // Copies saved from one community build ("Save to my library").
+  const forkedFrom = textOption(raw.forkedFrom, "forkedFrom", 80);
+  if (forkedFrom && !/^[a-zA-Z0-9._-]+$/.test(forkedFrom)) throw invalidPage("Invalid forkedFrom.");
   return {
-    limit, sort, matchup: matchup === "All" ? "" : matchup, hideEmpty, view, includeGeneric,
+    limit, sort, matchup: matchup === "All" ? "" : matchup, hideEmpty, view, includeGeneric, forkedFrom,
     search: textOption(raw.search, "search", 200),
     name: textOption(raw.name, "name", 200),
     normalizedName: textOption(raw.normalizedName, "normalizedName", 200),
@@ -123,6 +126,7 @@ async function listBuildPage(collection, games, userId, raw, projection) {
   /** @type {Record<string, any>[]} */
   const conditions = [];
   if (opts.name) conditions.push({ $or: [{ name: opts.name }, { slug: opts.name }] });
+  if (opts.forkedFrom) conditions.push({ "forkedFrom.communitySlug": opts.forkedFrom });
   if (opts.normalizedName) conditions.push({ $or: ["name", "slug"].map((field) => ({ [field]: { $regex: normalizedNameRegex(opts.normalizedName), $options: "i" } })) });
   if (opts.matchup) {
     const races = { P: "Protoss", T: "Terran", Z: "Zerg" };
