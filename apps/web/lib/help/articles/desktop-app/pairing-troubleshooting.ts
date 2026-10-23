@@ -3,7 +3,7 @@ import type { HelpArticle } from "@/lib/help/types";
 const article: HelpArticle = {
   slug: "pairing-troubleshooting",
   title: "Pairing problems",
-  summary: "Find your current code, confirm the right PC, and understand connection and update badges.",
+  summary: "Recover an expired code, confirm the right PC, and fix connection or unlinked-PC problems.",
   category: "desktop-app",
   audience: "all",
   updated: "2026-10-23",
