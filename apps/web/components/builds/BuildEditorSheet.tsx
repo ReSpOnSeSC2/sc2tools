@@ -12,6 +12,7 @@ import { Toggle } from "@/components/ui/Toggle";
 import { apiCall } from "@/lib/clientApi";
 import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import { useToast } from "@/components/ui/Toast";
+import { useBuildEditorCloseGuard } from "./editor/useBuildEditorCloseGuard";
 import { slugifyBuildName, type BuildSignatureItem } from "@/lib/build-events";
 import {
   PROXY_RULE_DISTANCE_HINT,
@@ -124,6 +125,7 @@ export function BuildEditorSheet({
   const profileDisplayName = useMyDisplayName();
   const isEdit = !!build;
   const [state, setState] = useState(() => fromBuild(build));
+  const [pristine, setPristine] = useState(() => JSON.stringify(fromBuild(build)));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [identityLoading, setIdentityLoading] = useState(false);
@@ -137,6 +139,7 @@ export function BuildEditorSheet({
     if (!open) return;
     let cancelled = false;
     setState(fromBuild(build));
+    setPristine(JSON.stringify(fromBuild(build)));
     setError(null);
     setSaving(false);
     setIdentityUnavailable(false);
@@ -155,6 +158,7 @@ export function BuildEditorSheet({
             communityAuthorName: settings.authorName || "",
             publishAnonymously: settings.publishAnonymously,
           }));
+          setPristine((snapshot) => JSON.stringify({ ...JSON.parse(snapshot), isPublic: settings.published, communityAuthorName: settings.authorName || "", publishAnonymously: settings.publishAnonymously }));
           setAuthoritativePublished(settings.published);
         })
         .catch(() => {
@@ -187,12 +191,17 @@ export function BuildEditorSheet({
             communityAuthorName: profileDisplayName.slice(0, 80),
           },
     );
+    setPristine((snapshot) => {
+      const initial = JSON.parse(snapshot) as ReturnType<typeof fromBuild>;
+      return initial.communityAuthorName ? snapshot : JSON.stringify({ ...initial, communityAuthorName: profileDisplayName.slice(0, 80) });
+    });
   }, [open, profileDisplayName]);
 
   const slugPreview = useMemo(() => {
     if (build?.slug) return build.slug;
     return slugifyBuildName(state.name) || "";
   }, [build?.slug, state.name]);
+  const guard = useBuildEditorCloseGuard({ open, dirty: JSON.stringify(state) !== pristine, saving, name: state.name, onClose });
 
   function update<K extends keyof typeof state>(
     key: K,
@@ -337,6 +346,7 @@ export function BuildEditorSheet({
         signature: cleanSignature,
         updatedAt: new Date().toISOString(),
       };
+      setPristine(JSON.stringify({ ...state, isPublic: actualIsPublic }));
       onSaved(saved);
       if (result?.community?.error) {
         setState((current) => ({ ...current, isPublic: actualIsPublic }));
@@ -410,9 +420,10 @@ export function BuildEditorSheet({
   }
 
   return (
+    <>
     <Modal
       open={open}
-      onClose={saving ? () => undefined : onClose}
+      onClose={guard.requestClose}
       title={isEdit ? "Edit build" : "New build"}
       description={
         isEdit
@@ -426,7 +437,7 @@ export function BuildEditorSheet({
         <ModalActions className="w-full justify-end">
           <Button
             variant="ghost"
-            onClick={onClose}
+            onClick={guard.requestClose}
             disabled={saving}
             type="button"
           >
@@ -451,6 +462,7 @@ export function BuildEditorSheet({
         }}
         className="space-y-5"
       >
+        <fieldset disabled={saving} className="contents">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Name" required htmlFor="be-name">
             <Input
@@ -600,8 +612,11 @@ export function BuildEditorSheet({
             {error}
           </div>
         ) : null}
+        </fieldset>
       </form>
     </Modal>
+    {guard.confirmation}
+    </>
   );
 }
 
