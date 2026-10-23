@@ -95,6 +95,19 @@ and `npm run backgrounds:export` writes the JPEGs), and use
 `<LogoMark>` (`/logo-64.webp`, ~2 KB) rather than `/logo.png` (~2 MB) for
 the brand mark in UI.
 
+## Build definitions (/definitions)
+
+`/definitions` lists every build label the replay engine can emit. The
+labels come from `apps/replay-engine/core/build_definitions.py`:
+`npm run definitions:gen` runs the engine's
+`scripts/export_build_definitions.py` (set `PYTHON` if `python3` isn't on
+your path) and rewrites `lib/build-definitions.generated.json`. Only a
+description that says more than the engine's belongs in
+`lib/build-definitions/wording.ts`. `lib/__tests__/buildDefinitionsParity.test.ts`
+fails when an engine label has no entry here, and the engine's
+`tests/test_build_definitions_export.py` fails when the generated file is
+stale.
+
 ## Public community activity
 
 The shared site and app headers display agent downloads, active agents, and
