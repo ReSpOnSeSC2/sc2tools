@@ -193,6 +193,24 @@ describe("OverlayClient — voice readout on the all-in-one URL", () => {
     expect(text.trim().endsWith("Good luck.")).toBe(true);
   });
 
+  it("keeps sample speech independent and does not repeat the real scouting line after Stop", () => {
+    render(<OverlayClient token="tok-1" />);
+    const socket = activeSocket as FakeSocket;
+    act(() => {
+      socket.fire("overlay:config", { enabledWidgets: ["scouting"], voicePrefs: { enabled: true, events: { scouting: true }, delayMs: 0 } });
+      socket.fire("overlay:liveGame", { type: "liveGameState", phase: "match_started", gameKey: "voice-real", capturedAt: 1,
+        opponent: { name: "RealOpponent", race: "Terran", profile: { mmr: 4200 } }, streamerHistory: { oppName: "RealOpponent", headToHead: { wins: 0, losses: 0 } } });
+      vi.advanceTimersByTime(2000);
+    });
+    expect(cap.speak).toHaveBeenCalledTimes(1);
+    act(() => socket.fire("overlay:live", { isTest: true, testNonce: "voice-sample", testWidget: "scouting", oppName: "TestOpponent", oppRace: "Zerg" }));
+    act(() => vi.advanceTimersByTime(2000));
+    expect(cap.speak).toHaveBeenCalledTimes(2); expect(cap.utterances[1].text).toContain("Facing TestOpponent");
+    act(() => socket.fire("overlay:clear", { scope: "test", widget: "scouting" }));
+    act(() => vi.advanceTimersByTime(2000));
+    expect(cap.speak).toHaveBeenCalledTimes(2);
+  });
+
   it("speaks 'First meeting.' when the cloud confirms a zero-zero record", () => {
     render(<OverlayClient token="tok-1" />);
     const socket = activeSocket as FakeSocket;

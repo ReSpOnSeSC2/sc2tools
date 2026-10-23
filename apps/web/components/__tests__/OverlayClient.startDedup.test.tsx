@@ -61,7 +61,9 @@ function payload(socket: FakeSocket, over: Partial<LiveGamePayload> = {}) {
 }
 function advance(ms: number) { act(() => vi.advanceTimersByTime(ms)); }
 function randomizerVisible(): boolean {
-  return screen.getByTestId("randomizer-start").parentElement?.style.display !== "none";
+  // The real reveal stays mounted while an independent sample covers it.
+  // Assert visibility across those distinct trees rather than a unique node.
+  return screen.getAllByTestId("randomizer-start").some((node) => !node.closest('[style*="display: none"]'));
 }
 function expectStartHidden() {
   expect(screen.queryByTestId("scouting-start")).toBeNull();

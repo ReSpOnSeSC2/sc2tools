@@ -37,7 +37,7 @@ const article: HelpArticle = {
       items: [
         "Open **Settings → Overlay**. Your overlay token is created for you the first time you open it, and every widget URL is listed with a **Copy** button. The token in the URL is the key to your overlay, so treat these URLs like passwords.",
         "Each widget has its own URL — add one OBS **Browser Source** per widget you want and position it freely. Backgrounds are transparent.",
-        "Press **Test** on any widget to render clearly-labelled sample content for ~20 seconds — place and style everything without waiting for a real game.",
+        "Press **Test** on a widget to show sample content for about 20 seconds. During a detected live match, Settings asks before sending: **Send anyway** puts samples on your on-air sources; **Preview here instead** opens a local sample page in a new tab and sends nothing to OBS. **Stop** or automatic expiry restores your real opponent and session, which keep updating beneath the sample.",
         "Widgets show up when something happens (a game starts or ends) and auto-hide between games; persistent HUDs like the session record stay up. Config changes reach OBS within about a minute of pressing Save — no Browser Source edits needed.",
       ],
     },

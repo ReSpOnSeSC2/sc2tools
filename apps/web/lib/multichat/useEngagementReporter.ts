@@ -14,6 +14,7 @@
 // reporting and the server deduping, the cost is a few XP ticks,
 // which isn't worth retry complexity inside OBS.
 
+import { useOverlayPreview } from "@/lib/overlayPreviewContext";
 import { useEffect, useRef } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import type { ChatMessage } from "./types";
@@ -37,11 +38,13 @@ export function useEngagementReporter(
   messages: ReadonlyArray<ChatMessage>,
   events: ReadonlyArray<ChatEvent>,
 ): void {
+  const preview = useOverlayPreview();
   const seenRef = useRef<Set<string>>(new Set());
   const pendingRef = useRef<WireEvent[]>([]);
   const mountedAtRef = useRef<number>(Date.now());
 
   useEffect(() => {
+    if (preview) return;
     const seen = seenRef.current;
     const pending = pendingRef.current;
     for (const m of messages) {
@@ -76,9 +79,10 @@ export function useEngagementReporter(
     if (seen.size > SEEN_CAP) {
       seenRef.current = new Set([...seen].slice(-SEEN_CAP / 2));
     }
-  }, [messages, events]);
+  }, [messages, events, preview]);
 
   useEffect(() => {
+    if (preview) return;
     let cancelled = false;
     const flush = async () => {
       const pending = pendingRef.current;
@@ -107,5 +111,5 @@ export function useEngagementReporter(
       clearInterval(timer);
       void flush();
     };
-  }, [token]);
+  }, [token, preview]);
 }

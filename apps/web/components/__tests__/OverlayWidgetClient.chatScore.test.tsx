@@ -62,6 +62,7 @@ describe("OverlayWidgetClient chat score subscription", () => {
 
   it("preserves the real score snapshot when a targeted chat demo is cleared", () => {
     render(<OverlayWidgetClient token="tok-score" widget="multichat" />);
+    const real = screen.getByTestId("chat-props");
     act(() => {
       activeSocket.fire("overlay:session", { wins: 3, losses: 2, games: 5 });
       activeSocket.fire("overlay:live", {
@@ -70,9 +71,12 @@ describe("OverlayWidgetClient chat score subscription", () => {
         session: { wins: 0, losses: 4, games: 4 },
       });
     });
-    expect(screen.getByTestId("chat-props").textContent).toBe("3:2 demo:multichat");
+    expect(screen.getAllByTestId("chat-props").map((node) => node.textContent)).toEqual(["3:2", "3:2 demo:multichat"]);
+    expect(real.closest<HTMLElement>('[data-overlay-layer="real"]')?.style.display).toBe("none");
 
     act(() => activeSocket.fire("overlay:clear", { widget: "multichat" }));
     expect(screen.getByTestId("chat-props").textContent).toBe("3:2");
+    expect(screen.getByTestId("chat-props")).toBe(real);
+    expect(real.closest<HTMLElement>('[data-overlay-layer="real"]')?.style.display).toBe("");
   });
 });

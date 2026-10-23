@@ -43,7 +43,7 @@ function sourceSetup(name: string): readonly string[] {
     `Open Settings → Overlay and enable ${name} in OBS Browser Source URLs.`,
     `Use Copy beside ${name} to copy its widget URL.`,
     "In OBS, add a Browser Source, paste the copied URL, and position it in your scene.",
-    `Keep that source loaded, then press Test beside ${name} in Settings.`,
+    `Keep that source loaded, then press Test beside ${name} in Settings. During a live match, use Preview here instead for a local sample, or confirm Send anyway to show samples to viewers for about 20 seconds. Stop restores the real data.`,
   ];
 }
 
