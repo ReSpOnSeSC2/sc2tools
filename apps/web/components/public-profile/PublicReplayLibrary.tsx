@@ -24,6 +24,7 @@ export interface PublicReplayQuery {
   matchup?: string;
   sort?: "date_desc" | "date_asc";
   cursor?: string;
+  notice?: "page-expired";
 }
 
 export function PublicReplayLibrary({
@@ -72,6 +73,7 @@ export function PublicReplayLibrary({
         </div>
       </Card>
 
+      {query.notice === "page-expired" ? <p role="status" className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-caption text-text">That page link expired. Showing the {query.sort === "date_asc" ? "oldest" : "newest"} replays. <Link href={queryHref(root, query, query.cursor ?? null)} className="inline-flex min-h-11 items-center font-semibold text-accent underline">Dismiss</Link></p> : null}
       <Card padded={false}>
         <form action={root} method="get" className="border-b-2 border-line p-4" role="search">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-end">

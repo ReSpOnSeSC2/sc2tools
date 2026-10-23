@@ -30,4 +30,13 @@ describe("AuthorProfile", () => {
     const link = screen.getByRole("link", { name: /player profile/i });
     expect(link.getAttribute("href")).toBe("/p/user%2042");
   });
+
+  test("escapes hostile author names inside JSON-LD without changing their data", () => {
+    const displayName = '</script><script>alert(1)</script>';
+    const { container } = render(<AuthorProfile profile={{ ...profile, displayName }} />);
+    const body = container.querySelector('script[type="application/ld+json"]')!.textContent!;
+    expect(body).not.toContain("</script");
+    expect(body).not.toContain("<");
+    expect(JSON.parse(body).name).toBe(displayName);
+  });
 });

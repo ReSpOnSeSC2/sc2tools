@@ -6,6 +6,7 @@ import { GlowHalo } from "@/components/ui/GlowHalo";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { fmtAgo } from "@/lib/format";
+import { serializeJsonLd } from "@/lib/reviewJsonLd";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorBuildsList } from "./AuthorBuildsList";
 import { AuthorStatsStrip } from "./AuthorStatsStrip";
@@ -46,7 +47,7 @@ export function AuthorProfile({ profile }: AuthorProfileProps) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify(personJsonLd),
+          __html: serializeJsonLd(personJsonLd),
         }}
       />
 

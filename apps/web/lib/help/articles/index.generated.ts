@@ -19,11 +19,13 @@ import analyzer_maps from "./analyzer/maps";
 import analyzer_opponents from "./analyzer/opponents";
 import analyzer_readingTheCharts from "./analyzer/reading-the-charts";
 import analyzer_replays from "./analyzer/replays";
+import analyzer_stockMarketLeaderboard from "./analyzer/stock-market-leaderboard";
 import analyzer_strategies from "./analyzer/strategies";
 import analyzer_today from "./analyzer/today";
 import analyzer_trends from "./analyzer/trends";
 import builds_buildCheckIn from "./builds/build-check-in";
 import builds_buildGuides from "./builds/build-guides";
+import builds_communityBuilds from "./builds/community-builds";
 import builds_customBuilds from "./builds/custom-builds";
 import builds_practiceGhostBuild from "./builds/practice-ghost-build";
 import builds_publishCommunityBuilds from "./builds/publish-community-builds";
@@ -74,11 +76,13 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_opponents,
   analyzer_readingTheCharts,
   analyzer_replays,
+  analyzer_stockMarketLeaderboard,
   analyzer_strategies,
   analyzer_today,
   analyzer_trends,
   builds_buildCheckIn,
   builds_buildGuides,
+  builds_communityBuilds,
   builds_customBuilds,
   builds_practiceGhostBuild,
   builds_publishCommunityBuilds,
