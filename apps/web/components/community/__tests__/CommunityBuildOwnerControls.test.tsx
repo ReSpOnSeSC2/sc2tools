@@ -61,6 +61,7 @@ describe("CommunityBuildOwnerControls", () => {
     );
 
     expect(screen.queryByRole("button", { name: /remove/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Your build options" })).toBeNull();
   });
 
   test("gives the compact card action a mobile-safe touch target", () => {
@@ -75,9 +76,29 @@ describe("CommunityBuildOwnerControls", () => {
 
     expect(
       screen
-        .getByRole("button", { name: "Remove “Blink Pressure” from Community" })
+        .getByRole("button", { name: "Your build options" })
         .className,
     ).toContain("min-h-[44px]");
+  });
+
+  test("opens owner actions by keyboard, wraps focus and preserves the two-step removal", async () => {
+    render(<CommunityBuildOwnerControls slug="blink-pressure" title="Blink Pressure" compact />);
+    const trigger = screen.getByRole("button", { name: "Your build options" });
+    trigger.focus(); fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    const menu = screen.getByRole("menu", { name: "Your build actions" });
+    const library = within(menu).getByRole("menuitem", { name: "Open my library" });
+    const remove = within(menu).getByRole("menuitem", { name: "Remove from Community…" });
+    await waitFor(() => expect(document.activeElement).toBe(library));
+    expect(library.getAttribute("href")).toBe("/builds");
+    fireEvent.keyDown(menu, { key: "ArrowUp" }); expect(document.activeElement).toBe(remove);
+    fireEvent.keyDown(menu, { key: "Home" }); expect(document.activeElement).toBe(library);
+    fireEvent.keyDown(menu, { key: "End" }); expect(document.activeElement).toBe(remove);
+    fireEvent.keyDown(menu, { key: "Escape" }); expect(screen.queryByRole("menu")).toBeNull(); expect(document.activeElement).toBe(trigger);
+    fireEvent.click(trigger); fireEvent.click(screen.getByRole("menuitem", { name: "Remove from Community…" }));
+    expect(screen.getByRole("heading", { name: "Remove “Blink Pressure” from Community?" })).toBeTruthy();
+    expect(harness.apiCall).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Keep published" }));
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
   test("requires both confirmation layers before removing and refreshing", async () => {

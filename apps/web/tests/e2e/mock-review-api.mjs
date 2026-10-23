@@ -16,6 +16,7 @@
 import http from "node:http";
 import { GUIDE_ROUTES } from "./mock-guides-api.mjs";
 import { communityFixture } from "./mock-community-api.mjs";
+import { COMMUNITY_DETAIL_ROUTES } from "./mock-community-detail-api.mjs";
 
 const PORT = Number(process.env.MOCK_API_PORT || 8080);
 const ID = "e2eReviewFixture";
@@ -122,6 +123,7 @@ const ROUTES = new Map([
   [`/v1/reviews/${ID}/analysis/map-playback`, PLAYBACK],
   [`/v1/reviews/${ID}/og`, { id: ID, question: REQUEST.question, matchup: "PvZ", map: REQUEST.game.map, result: "Loss", askerBand: "Diamond", reviewCount: 3, hasBest: true, status: "answered" }],
   ...GUIDE_ROUTES,
+  ...COMMUNITY_DETAIL_ROUTES,
 ]);
 
 const server = http.createServer((req, res) => {
