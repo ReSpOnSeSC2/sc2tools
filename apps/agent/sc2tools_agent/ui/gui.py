@@ -650,7 +650,15 @@ class GuiUI:
         window_geometry: Optional[str] = None,
         window_page: Optional[str] = None,
         on_window_state: Optional[Callable[[str, str], None]] = None,
+        on_pairing_retry: Optional[Callable[[], None]] = None,
+        on_pairing_refresh: Optional[Callable[[], None]] = None,
+        on_link_again: Optional[Callable[[], None]] = None,
+        on_sync_retry: Optional[Callable[[], None]] = None,
     ) -> None:
+        self._on_pairing_retry = on_pairing_retry or (lambda: None)
+        self._on_pairing_refresh = on_pairing_refresh or (lambda: None)
+        self._on_link_again = on_link_again or (lambda: None)
+        self._on_sync_retry = on_sync_retry or (lambda: None)
         self._window_geometry = window_geometry
         self._window_page = window_page
         self._on_window_state = on_window_state
@@ -708,6 +716,18 @@ class GuiUI:
         self._pending_replay_archive_status: Optional[tuple[int, int]] = None
 
     # ---------------- public sink interface ----------------
+
+    def on_pairing_state(self, state) -> None:
+        if self._signals:
+            self._signals.pairingState.emit(state)
+
+    def on_unlinked(self) -> None:
+        if self._signals:
+            self._signals.unlinked.emit()
+
+    def on_connection_state(self, kind, since, next_retry_at, waiting_count) -> None:
+        if self._signals:
+            self._signals.connectionState.emit(kind, since, next_retry_at, waiting_count)
 
     def show_pairing_code(self, code: str) -> None:
         if self._signals:
@@ -900,11 +920,14 @@ def _make_signals():
         # background threads never touch widgets directly. Qt routes
         # them onto the GUI thread automatically via the default
         # AutoConnection.
+        pairingState = QtCore.Signal(object)
+        unlinked = QtCore.Signal()
+        connectionState = QtCore.Signal(str, float, float, int)
         pairingCode = QtCore.Signal(str)
         paired = QtCore.Signal(str)
         status = QtCore.Signal(str)
         uploadSuccess = QtCore.Signal(str)
-        uploadFailed = QtCore.Signal(str, str)
+        uploadFailed = QtCore.Signal(str, object)
         pendingChanged = QtCore.Signal(int)
         updateAvailable = QtCore.Signal(str)
         # Free-text update-flow notice for the status card. ``sticky``
@@ -1285,6 +1308,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             v.addWidget(title)
 
             v.addWidget(self._build_status_card())
+            v.addWidget(self._build_connection_banner())
             v.addWidget(self._build_replay_archive_card())
             v.addWidget(self._build_pairing_card())
             v.addWidget(self._build_stats_row())
@@ -1402,54 +1426,64 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._update_notice.hide()
 
         def _build_pairing_card(self) -> QtWidgets.QFrame:
-            card = QtWidgets.QFrame()
-            card.setObjectName("cardElevated")
-            self._pairing_card = card
-
-            v = QtWidgets.QVBoxLayout(card)
-            v.setContentsMargins(20, 18, 20, 20)
-            v.setSpacing(12)
-
-            heading = QtWidgets.QLabel("Pair this device")
-            heading.setObjectName("h2")
-            v.addWidget(heading)
-
-            sub = QtWidgets.QLabel(
-                "Enter the code below at the pairing page to link this "
-                "agent to your SC2 Tools account.",
+            from .pairing_card import build_pairing_card
+            self._pairing_card = build_pairing_card(
+                self, QtCore=QtCore, QtWidgets=QtWidgets,
+                open_browser=lambda url: webbrowser.open(url, new=2),
+                copy_text=lambda code: QtWidgets.QApplication.clipboard().setText(code),
+                dashboard_url=ui._dashboard_url, retry_now=ui._on_pairing_retry,
+                new_code=ui._on_pairing_refresh, link_again=ui._on_link_again,
+                open_log=lambda: self.show_log("errors"),
+                open_help=lambda: self._open_help("pairing-troubleshooting"),
             )
-            sub.setObjectName("muted")
-            sub.setWordWrap(True)
-            v.addWidget(sub)
+            self._pairing_code_label = self._pairing_card.code_label
+            self._copy_btn = self._pairing_card.copy
+            return self._pairing_card
 
-            self._pairing_code_label = QtWidgets.QLabel("------")
-            self._pairing_code_label.setObjectName("code")
-            self._pairing_code_label.setAlignment(QtCore.Qt.AlignCenter)
-            v.addWidget(self._pairing_code_label)
+        def _build_connection_banner(self):
+            self._connection_kind = "online"
+            self._connection_retry_at = 0.0
+            self._connection_banner = QtWidgets.QFrame()
+            self._connection_banner.setObjectName("cardElevated")
+            row = QtWidgets.QHBoxLayout(self._connection_banner)
+            row.setContentsMargins(16, 12, 16, 12)
+            self._connection_text = QtWidgets.QLabel()
+            self._connection_text.setWordWrap(True)
+            row.addWidget(self._connection_text, 1)
+            self._connection_retry = QtWidgets.QPushButton("Retry now")
+            self._connection_retry.clicked.connect(ui._on_sync_retry)
+            row.addWidget(self._connection_retry)
+            self._connection_help = QtWidgets.QPushButton("Help")
+            self._connection_help.clicked.connect(lambda: self._open_help(
+                "desktop-app-sync-problems", self._connection_kind.replace("_", "-")))
+            row.addWidget(self._connection_help)
+            self._connection_timer = QtCore.QTimer(self)
+            self._connection_timer.setInterval(1000)
+            self._connection_timer.timeout.connect(self._paint_connection_banner)
+            self._connection_timer.start()
+            self._connection_banner.hide()
+            return self._connection_banner
 
-            row = QtWidgets.QHBoxLayout()
-            row.setSpacing(8)
+        def _on_connection_state(self, kind, since, next_retry_at, waiting_count):
+            self._connection_kind = kind
+            self._connection_retry_at = next_retry_at
+            self._connection_waiting = waiting_count
+            self._connection_banner.setVisible(kind != "online")
+            self._paint_connection_banner()
 
-            self._copy_btn = QtWidgets.QPushButton("Copy code")
-            self._copy_btn.clicked.connect(self._copy_pairing_code)
-            row.addWidget(self._copy_btn)
-
-            open_btn = QtWidgets.QPushButton("Open pairing page")
-            open_btn.setObjectName("primary")
-            open_btn.clicked.connect(self._open_pairing_page)
-            row.addWidget(open_btn)
-
-            row.addStretch(1)
-
-            self._pairing_url_label = QtWidgets.QLabel(ui._pairing_url)
-            self._pairing_url_label.setObjectName("dim")
-            self._pairing_url_label.setTextInteractionFlags(
-                QtCore.Qt.TextSelectableByMouse,
-            )
-            row.addWidget(self._pairing_url_label)
-
-            v.addLayout(row)
-            return card
+        def _paint_connection_banner(self):
+            import time
+            if self._connection_kind == "online":
+                return
+            names = {"offline": "Offline", "server_busy": "SC2 Tools is busy",
+                     "rate_limited": "Sync is taking a short break",
+                     "signed_out": "This PC needs to be linked again",
+                     "file": "Waiting for a replay file", "unknown": "Sync will retry"}
+            seconds = max(0, int(self._connection_retry_at - time.time()))
+            self._connection_text.setText(
+                f"{names.get(self._connection_kind, 'Sync will retry')}: "
+                f"{self._pending_count:,} replays waiting, retrying in {seconds} s")
+            self._connection_retry.setEnabled(True)
 
         def _build_stats_row(self) -> QtWidgets.QWidget:
             row = QtWidgets.QFrame()
@@ -1586,9 +1620,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             sub.setObjectName("muted")
             v.addWidget(sub)
 
-            self._recent_table = QtWidgets.QTableWidget(0, 3)
+            self._recent_table = QtWidgets.QTableWidget(0, 4)
             self._recent_table.setHorizontalHeaderLabels(
-                ["Time", "Replay", "Status"],
+                ["Time", "Replay", "Status", "Details"],
             )
             self._recent_table.verticalHeader().setVisible(False)
             self._recent_table.setEditTriggers(
@@ -2597,6 +2631,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         # ---- signal wiring ----
 
         def _wire_signals(self) -> None:
+            signals.pairingState.connect(self._on_pairing_state)
+            signals.unlinked.connect(self._on_unlinked)
+            signals.connectionState.connect(self._on_connection_state)
             signals.pairingCode.connect(self._on_pairing_code)
             signals.paired.connect(self._on_paired)
             signals.status.connect(self._on_status)
@@ -2621,6 +2658,17 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _on_build_checkin(self, method: str, args: object) -> None:
             self._checkin_host.dispatch(method, args)
 
+        def _on_pairing_state(self, state):
+            self._pairing_card.apply(state)
+            self._refresh_status_card()
+
+        def _on_unlinked(self):
+            self._paired = False
+            self._user_id = None
+            self._pairing_card.apply("unlinked")
+            self._refresh_status_card()
+            self._go_to_page("dashboard")
+
         def _on_pairing_code(self, code: str) -> None:
             self._paired = False
             self._status = f"Awaiting pairing — code {code}"
@@ -2636,7 +2684,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._paired = True
             self._user_id = user_id
             self._status = "paired"
-            self._refresh_pairing_card()
+            self._pairing_card.apply("paired")
             self._refresh_status_card()
 
         def _on_status(self, status: str) -> None:
@@ -2681,6 +2729,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._pending_count = int(count)
             self._paint_stats()
             self._request_stats_refresh()
+            self._paint_connection_banner()
 
         def _on_update_available(self, latest: str) -> None:
             self._update_pending = latest
@@ -2901,8 +2950,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _help_url(self, slug):
             return help_url(ui._dashboard_url, slug)
 
-        def _open_help(self, slug):
-            webbrowser.open(self._help_url(slug), new=2)
+        def _open_help(self, slug, anchor=""):
+            webbrowser.open(self._help_url(slug) + ("#" + anchor if anchor else ""), new=2)
 
         def _help_label(self, topic, slug):
             label = QtWidgets.QWidget()
@@ -3197,7 +3246,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _open_pairing_page(self) -> None:
             try:
-                webbrowser.open(ui._pairing_url, new=2)
+                self._pairing_card.act()
             except Exception:  # noqa: BLE001
                 log.exception("gui_open_pairing_failed")
 
@@ -3389,6 +3438,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _classify_status(self) -> tuple[str, str]:
             status_lower = (self._status or "").lower()
             if not self._paired:
+                if self._pairing_card.kind == "unlinked":
+                    return ("Unlinked", "badgeWarn")
                 return ("Pairing", "badgeWarn")
             if self._paused:
                 return ("Paused", "badgeWarn")
@@ -3400,6 +3451,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _format_status_lines(self) -> tuple[str, str]:
             if not self._paired:
+                recovery_copy = {
+                    "unlinked": ("This PC was unlinked from your account", "Choose Link again to resume safely."),
+                    "requesting": ("Getting your code…", "Keep the app open while it connects."),
+                    "unreachable": ("Can't reach sc2tools.com", "Check your internet connection; we'll keep trying."),
+                    "expired": ("This code expired", "Get a new code to link this PC."),
+                }
+                if self._pairing_card.kind in recovery_copy:
+                    return recovery_copy[self._pairing_card.kind]
                 primary = "Waiting for you to enter the pairing code"
                 secondary = (
                     f"Open {ui._pairing_url} on a logged-in browser "
@@ -3460,7 +3519,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _refresh_pairing_card(self) -> None:
             # Hide the whole pairing card once we're paired so the
             # dashboard's hero spot is freed up for the live stats.
-            self._pairing_card.setVisible(not self._paired)
+            if not self._paired:
+                self._pairing_card.show()
+            elif self._pairing_card.kind != "paired":
+                self._pairing_card.hide()
+
+        def _request_stats_refresh(self):
+            if not self._stats_refresh_timer.isActive():
+                self._stats_refresh_timer.start()
 
         def _request_stats_refresh(self):
             if not self._stats_refresh_timer.isActive():
@@ -3496,7 +3562,22 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             ts, name, ok, detail = record
             ts_item = QtWidgets.QTableWidgetItem(ts.strftime("%Y-%m-%d %H:%M:%S"))
             ts_item.setForeground(QtGui.QColor(_TEXT_MUTED))
-            status_item = QtWidgets.QTableWidgetItem("✓ " + detail if ok else "✗ " + detail)
+            title = detail if isinstance(detail, str) else detail.title
+            status_item = QtWidgets.QTableWidgetItem(("✓ " if ok else "✗ ") + str(title))
+            technical = getattr(detail, "detail", str(detail))
+            status_item.setToolTip(technical)
+            if not ok:
+                actions = QtWidgets.QWidget()
+                buttons = QtWidgets.QHBoxLayout(actions)
+                buttons.setContentsMargins(0, 0, 0, 0)
+                copy = QtWidgets.QPushButton("Copy details")
+                copy.clicked.connect(lambda: QtWidgets.QApplication.clipboard().setText(technical))
+                buttons.addWidget(copy)
+                help_btn = QtWidgets.QPushButton("Help")
+                help_btn.clicked.connect(lambda: self._open_help(
+                    "desktop-app-sync-problems", getattr(detail, "help_anchor", "rejected")))
+                buttons.addWidget(help_btn)
+                self._recent_table.setCellWidget(row, 3, actions)
             status_item.setForeground(QtGui.QColor(_SUCCESS if ok else _DANGER))
             self._recent_table.setItem(row, 0, ts_item)
             self._recent_table.setItem(row, 1, QtWidgets.QTableWidgetItem(name))

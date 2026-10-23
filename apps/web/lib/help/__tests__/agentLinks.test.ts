@@ -7,6 +7,7 @@ import { getArticle } from "../index";
 const AGENT_HELP_SLUGS = [
   "desktop-app-overview", "desktop-app-sync-range", "replay-folders",
   "obs-auto-scene-switching", "build-check-in", "desktop-app-activity-log",
+  "pairing-troubleshooting", "desktop-app-sync-problems",
 ];
 
 describe("desktop agent help links", () => {
