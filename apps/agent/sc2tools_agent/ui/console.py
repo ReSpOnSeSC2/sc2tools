@@ -56,7 +56,8 @@ class ConsoleUI:
         print(f"[agent] uploaded {filename} ({self._uploaded} total)")
 
     def on_upload_failed(self, filename: str, reason: str) -> None:
-        print(f"[agent] upload failed for {filename}: {getattr(reason, 'title', reason)}")
+        title = reason if isinstance(reason, str) else reason.title
+        print(f"[agent] upload failed for {filename}: {title}")
 
     def on_pending(self, count: int) -> None:
         with self._lock:

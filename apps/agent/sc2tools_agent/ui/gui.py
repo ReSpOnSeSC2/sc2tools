@@ -1444,7 +1444,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._connection_kind = "online"
             self._connection_retry_at = 0.0
             self._connection_banner = QtWidgets.QFrame()
+            self._connection_banner.setObjectName("cardElevated")
             row = QtWidgets.QHBoxLayout(self._connection_banner)
+            row.setContentsMargins(16, 12, 16, 12)
             self._connection_text = QtWidgets.QLabel()
             self._connection_text.setWordWrap(True)
             row.addWidget(self._connection_text, 1)
@@ -2658,6 +2660,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _on_pairing_state(self, state):
             self._pairing_card.apply(state)
+            self._refresh_status_card()
 
         def _on_unlinked(self):
             self._paired = False
@@ -3435,6 +3438,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _classify_status(self) -> tuple[str, str]:
             status_lower = (self._status or "").lower()
             if not self._paired:
+                if self._pairing_card.kind == "unlinked":
+                    return ("Unlinked", "badgeWarn")
                 return ("Pairing", "badgeWarn")
             if self._paused:
                 return ("Paused", "badgeWarn")
@@ -3446,6 +3451,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _format_status_lines(self) -> tuple[str, str]:
             if not self._paired:
+                recovery_copy = {
+                    "unlinked": ("This PC was unlinked from your account", "Choose Link again to resume safely."),
+                    "requesting": ("Getting your code…", "Keep the app open while it connects."),
+                    "unreachable": ("Can't reach sc2tools.com", "Check your internet connection; we'll keep trying."),
+                    "expired": ("This code expired", "Get a new code to link this PC."),
+                }
+                if self._pairing_card.kind in recovery_copy:
+                    return recovery_copy[self._pairing_card.kind]
                 primary = "Waiting for you to enter the pairing code"
                 secondary = (
                     f"Open {ui._pairing_url} on a logged-in browser "
@@ -3549,7 +3562,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             ts, name, ok, detail = record
             ts_item = QtWidgets.QTableWidgetItem(ts.strftime("%Y-%m-%d %H:%M:%S"))
             ts_item.setForeground(QtGui.QColor(_TEXT_MUTED))
-            title = getattr(detail, "title", detail)
+            title = detail if isinstance(detail, str) else detail.title
             status_item = QtWidgets.QTableWidgetItem(("✓ " if ok else "✗ ") + str(title))
             technical = getattr(detail, "detail", str(detail))
             status_item.setToolTip(technical)

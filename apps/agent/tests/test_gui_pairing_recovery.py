@@ -29,6 +29,8 @@ card.primary.click(); assert clicked[-1]=="retry"
 card.log.click(); assert win._stack.currentIndex()==2
 ui.on_unlinked(); app.processEvents()
 assert card.primary.text()=="Link again" and not win._paired
+assert win._status_badge.text()=="Unlinked"
+assert win._status_text.text()=="This PC was unlinked from your account"
 card.primary.click(); assert clicked[-1]=="link"
 ui.on_pairing_state(PairingUiState("expired")); app.processEvents()
 assert card.primary.text()=="Get a new code" and not card.code
@@ -67,5 +69,9 @@ next(button for button in buttons if button.text()=="Help").click()
 assert opened[-1].endswith("#rejected")
 ui.on_connection_state("online",time.time(),0,0); app.processEvents()
 assert not win._connection_banner.isVisible()
+ui.on_upload_success("uploaded.SC2Replay"); app.processEvents()
+assert win._recent_table.item(0,2).text()=="✓ Uploaded"
+ui.on_upload_failed("legacy.SC2Replay","Plain error"); app.processEvents()
+assert win._recent_table.item(0,2).text()=="✗ Plain error"
 win.hide()
 """)

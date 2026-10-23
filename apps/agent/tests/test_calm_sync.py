@@ -169,3 +169,14 @@ def test_queue_honors_retry_after_without_blocking_probe(tmp_path):
     assert 59 <= queue._retry_at - time.monotonic() <= 60
     queue.retry_now()
     assert queue._retry_at == 0
+
+
+def test_console_readable_error_and_plain_string(capsys):
+    from sc2tools_agent.ui.console import ConsoleUI
+    ui = ConsoleUI()
+    ui.on_upload_failed("one", "Plain error")
+    ui.on_upload_failed("two", classify(TerminalUploadError("technical")))
+    output = capsys.readouterr().out
+    assert "one: Plain error" in output
+    assert "two: This replay could not be accepted" in output
+    assert "built-in method" not in output
