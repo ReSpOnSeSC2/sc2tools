@@ -19,3 +19,11 @@ A real animation-frame race could overwrite an external seek with the prior play
 The chart's series/layout and static SVG layers are memoized; playback moves its cursor and readout without rebuilding the paths. Existing nearest-prior sample semantics stay unchanged. The modal retains its own replay and controls; the owner workspace renders one full replay, with a link from the modal to the complete page.
 
 No new API, secret, environment variable, migration, infrastructure, AI feature or AI API call. Recompute reuses the existing replay-analysis endpoint and never starts recording. Owner setup notes and Help anchors document that distinction.
+
+## Owner screenshot follow-up
+
+The phone replay HUD forced player identity and stats into the same narrow row. Below1280px, identity now sits above each side's stats; the clock has its own bounded column and the map name wraps. Full names remain accessible on each label. `node tests/manual/replay-hud.cjs` from apps/web (after a production build and Playwright install) checks12 geometry cases at320/375/390/430/768/1440px with normal and125% text, worst-case200/200 supply and100 workers. No overlaps, clipped stat labels/numbers or body overflow; real SVG icons/fonts are served locally. Screenshots are replay-hud-*.png.
+
+Upgrade timing follow-up: the existing API's `time` is construction/research start. HUD chips now use the already available `complete_time` exclusively; unknown completion times stay hidden.48 Page/Stage assertions pass, including the start-versus-completion regression. The final HUD build passes every unchanged budget (game311.8/440kB).
+
+PR693 holds this work. GitHub CI validates the current head; Vercel previews have hit a24-hour provider deployment quota. Do not hide that status or trigger empty commits/redeployment retries.

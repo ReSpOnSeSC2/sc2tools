@@ -4,7 +4,7 @@ import type { BuildEditorModalProps } from "@/components/builds/editor";
 import type { MacroBreakdownData } from "@/components/analyzer/macro/MacroBreakdownPanel.types";
 import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import { GameDetailPage } from "../GameDetailPage";
-import type { GameSummary } from "../types";
+import type { GameBuildOrderResponse, GameSummary } from "../types";
 import type { GameIntentState } from "@/lib/buildIntent";
 import { rawPayload } from "../replay/__tests__/fixtures";
 
@@ -161,6 +161,7 @@ function mockEndpoints({
   vodLinks,
   intent,
   playback = false,
+  buildOrder = BUILD_ORDER,
 }: {
   slim?: GameSummary;
   macro?: MacroBreakdownData | null;
@@ -168,6 +169,7 @@ function mockEndpoints({
   vodLinks?: GameVodLinksResponse;
   intent?: GameIntentState;
   playback?: boolean;
+  buildOrder?: GameBuildOrderResponse;
 } = {}) {
   const encodedId = encodeURIComponent(slim.gameId);
   useApiMock.mockImplementation((path: string | null) => {
@@ -193,7 +195,7 @@ function mockEndpoints({
           };
     }
     if (path === `/v1/games/${encodedId}/build-order`) {
-      return { data: BUILD_ORDER, error: undefined, isLoading: false };
+      return { data: buildOrder, error: undefined, isLoading: false };
     }
     if (path === `/v1/games/vod-links?gameId=${encodedId}`) {
       return { data: vodLinks, error: undefined, isLoading: false };
@@ -203,6 +205,19 @@ function mockEndpoints({
 }
 
 describe("GameDetailPage", () => {
+  it("uses the recorded upgrade completion rather than research start and omits unknown completion times", () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    mockEndpoints({ playback: true, buildOrder: { ...BUILD_ORDER, events: [
+      { time: 100, complete_time: 300, name: "MetabolicBoost", display: "Metabolic Boost", category: "upgrade" },
+      { time: 50, name: "UnknownTiming", display: "Unknown timing", category: "upgrade" },
+    ] } });
+    const view = render(<GameDetailPage gameId="g1" initialTimeSec={150} />);
+    const bar = screen.getByTestId("replay-top-bar");
+    expect(within(bar).queryByText("Metabolic Boost")).toBeNull();
+    view.rerender(<GameDetailPage gameId="g1" initialTimeSec={300} />);
+    expect(within(bar).getByText("Metabolic Boost")).toBeTruthy();
+    expect(within(bar).queryByText("Unknown timing")).toBeNull();
+  });
   it("seeks and reveals the mounted replay from a supply block, with banked resources and stable timestamp navigation", async () => {
     const canvas = vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     window.history.replaceState(null, "", "/app/game/g1?from=replays");

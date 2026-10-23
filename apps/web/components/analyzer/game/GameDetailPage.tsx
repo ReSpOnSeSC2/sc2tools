@@ -132,7 +132,7 @@ function GameDetailContent({
   }, [breakdown?.stats_events, breakdown?.opp_stats_events]);
   const upgrades = useMemo(() => {
     if (!buildReq.data) return undefined;
-    const rows = (events: GameBuildOrderResponse["events"] | undefined) => (events ?? []).filter((event) => event.category === "upgrade" && Number.isFinite(event.time)).map((event) => ({ time: event.time, name: event.display || event.name }));
+    const rows = (events: GameBuildOrderResponse["events"] | undefined) => (events ?? []).flatMap((event) => event.category === "upgrade" && typeof event.complete_time === "number" && Number.isFinite(event.complete_time) && event.complete_time >= 0 ? [{ time: event.complete_time, name: event.display || event.name }] : []);
     return { me: rows(buildReq.data.events), opp: rows(buildReq.data.opp_events) };
   }, [buildReq.data]);
 
