@@ -44,6 +44,31 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("BuildEditorSheet proxy requirements", () => {
+  it("guards unsaved form changes and keeps confirmation Escape inside the confirmation", async () => {
+    const onClose = vi.fn();
+    render(<BuildEditorSheet open build={null} onClose={onClose} onSaved={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "New opener" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    const keep = screen.getByRole("button", { name: "Keep editing" });
+    await waitFor(() => expect(document.activeElement).toBe(keep));
+    fireEvent.keyDown(keep, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not treat hydrated Community identity as a user edit", async () => {
+    harness.apiCall.mockResolvedValue({ published: true, authorName: "Profile name", publishAnonymously: false });
+    const onClose = vi.fn();
+    render(<BuildEditorSheet open build={{ slug: "saved", name: "Saved opener", race: "Protoss", isPublic: true, signature: [{ unit: "Gateway", count: 1, beforeSec: 100 }] }} onClose={onClose} onSaved={vi.fn()} />);
+    await waitFor(() => expect(harness.apiCall).toHaveBeenCalled());
+    await waitFor(() => expect((screen.getByLabelText("Name shown publicly") as HTMLInputElement).value).toBe("Profile name"));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+  });
   it("exposes the proxy option and persists it on a building signature", async () => {
     const onSaved = vi.fn();
     render(

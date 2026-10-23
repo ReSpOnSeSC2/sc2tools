@@ -41,7 +41,7 @@ vi.mock("@/components/ui/Toast", () => ({
   }),
 }));
 
-vi.mock("./BuildDossier", () => ({ BuildDossier: () => null }));
+vi.mock("./BuildDossier", () => ({ BuildDossier: ({ headerSlot }: { headerSlot?: (data: null) => React.ReactNode }) => headerSlot?.(null) ?? null }));
 vi.mock("./BuildPublishModal", () => ({ BuildPublishModal: () => null }));
 vi.mock("@/components/ui/ConfirmDialog", () => ({
   ConfirmDialog: ({ open, onConfirm }: { open: boolean; onConfirm: () => void }) =>
@@ -92,7 +92,7 @@ describe("BuildDetailView editor routing", () => {
     expect(screen.queryByTestId("signature-editor")).toBeNull();
   });
 
-  it("keeps signature-only builds in the manual step editor", () => {
+  it("opens signature-only builds in the same rich editor launcher", () => {
     harness.build = {
       slug: "legacy-pool",
       name: "Legacy Pool",
@@ -103,8 +103,8 @@ describe("BuildDetailView editor routing", () => {
     render(<BuildDetailView slug={harness.build.slug} />);
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
 
-    expect(screen.getByTestId("signature-editor")).toBeTruthy();
-    expect(screen.queryByTestId("rules-editor")).toBeNull();
+    expect(screen.getByTestId("rules-editor")).toBeTruthy();
+    expect(screen.queryByTestId("signature-editor")).toBeNull();
   });
 });
 
