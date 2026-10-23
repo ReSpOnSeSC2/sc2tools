@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { cellVerdict, verdictMeta } from "./guideUi";
 import { fmtCi, fmtCount, fmtCountNoun, fmtPct } from "@/lib/guides/format";
 import type { GuideCi } from "@/lib/guides/types";
 
@@ -55,14 +56,17 @@ function barTone(datum: CiBarDatum): string {
 /** Full spoken reading of one row. */
 export function ciBarRowLabel(datum: CiBarDatum): string {
   const players = typeof datum.users === "number" ? `, ${fmtCountNoun(datum.users, "player")}` : "";
-  return `${datum.label}: ${fmtPct(datum.winRate)} win rate, likely range ${fmtCi(datum.ci)}, ${fmtCount(datum.games)} games${players}`;
+  return `${datum.label}: ${fmtPct(datum.winRate)} win rate, likely range ${fmtCi(datum.ci)}, ${fmtCount(datum.games)} games${players}, ${verdictMeta(cellVerdict(datum)).phrase}`;
 }
 
 function RowBars({ datum }: { datum: CiBarDatum }) {
+  const patternId = `ci-even-${useId().replaceAll(":", "")}`;
+  const even = cellVerdict(datum) === "even";
   const low = toX(datum.ci.low);
   const high = toX(datum.ci.high);
   return (
     <svg width="100%" height={ROW_HEIGHT} aria-hidden="true" focusable="false" className="block min-w-0">
+      <defs><pattern id={patternId} width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" className="fill-accent-cyan/40" /><path d="M-1 1L1 -1M0 5L5 0M4 6L6 4" className="stroke-text-muted" strokeWidth="1" /></pattern></defs>
       <rect x="0" y={BAR_Y} width="100%" height={BAR_HEIGHT} rx={BAR_RADIUS} className="fill-bg-elevated" />
       <rect
         x="0"
@@ -70,7 +74,8 @@ function RowBars({ datum }: { datum: CiBarDatum }) {
         width={toX(datum.winRate)}
         height={BAR_HEIGHT}
         rx={BAR_RADIUS}
-        className={barTone(datum)}
+        className={even ? undefined : barTone(datum)}
+        fill={even ? `url(#${patternId})` : undefined}
         data-testid="ci-bar"
       />
       <line x1={COIN_FLIP_X} x2={COIN_FLIP_X} y1={0} y2={ROW_HEIGHT} className="stroke-text-dim" strokeDasharray="2 3" />
@@ -137,60 +142,72 @@ interface ChartRowProps {
   datum: CiBarDatum;
   tooltipId: string;
   isActive: boolean;
-  register: (node: HTMLLIElement | null) => void;
+  isPinned: boolean;
+  tabStop: boolean;
+  register: (node: HTMLButtonElement | null) => void;
   onActivate: (key: string | null) => void;
-  onKeyDown: (event: KeyboardEvent<HTMLLIElement>) => void;
+  onFocus: () => void;
+  onToggle: () => void;
+  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
 }
 
-function ChartRow({ datum, tooltipId, isActive, register, onActivate, onKeyDown }: ChartRowProps) {
+function ChartRow({ datum, tooltipId, isActive, isPinned, tabStop, register, onActivate, onFocus, onToggle, onKeyDown }: ChartRowProps) {
   return (
-    <li
+    <li className="relative"><button type="button"
       ref={register}
-      tabIndex={0}
+      tabIndex={tabStop ? 0 : -1}
+      aria-expanded={isPinned}
       aria-label={ciBarRowLabel(datum)}
       aria-describedby={isActive ? tooltipId : undefined}
       onMouseEnter={() => onActivate(datum.key)}
       onMouseLeave={() => onActivate(null)}
-      onFocus={() => onActivate(datum.key)}
+      onFocus={() => { onFocus(); onActivate(datum.key); }}
       onBlur={() => onActivate(null)}
+      onClick={onToggle}
       onKeyDown={onKeyDown}
-      className="relative grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-0.5 hover:bg-bg-elevated/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto]"
+      className="relative grid min-h-11 w-full grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-1 py-0.5 text-left hover:bg-bg-elevated/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto]"
     >
       <span aria-hidden className="truncate text-caption text-text">
         {datum.label}
       </span>
       <RowBars datum={datum} />
       <span aria-hidden className="whitespace-nowrap text-right text-caption tabular-nums text-text">
-        {fmtPct(datum.winRate)}
+        {fmtPct(datum.winRate)} {verdictMeta(cellVerdict(datum)).glyph}
         <span className="ml-1.5 text-micro text-text-dim">n={fmtCount(datum.games)}</span>
       </span>
-      {isActive ? <RowTooltip id={tooltipId} datum={datum} /> : null}
-    </li>
+    </button>{isActive ? <RowTooltip id={tooltipId} datum={datum} /> : null}</li>
   );
 }
 
 export function CiBarChart({ title, data }: CiBarChartProps) {
-  const [active, setActive] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
   const baseId = useId();
-  const rows = useRef<Array<HTMLLIElement | null>>([]);
-
-  const onKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLLIElement>, index: number) => {
+  const chart = useRef<HTMLElement>(null);
+  const rows = useRef<Array<HTMLButtonElement | null>>([]);
+  const active = preview ?? pinned;
+  useEffect(() => {
+    const outside = (event: PointerEvent) => { if (!chart.current?.contains(event.target as Node)) { setPinned(null); setPreview(null); } };
+    document.addEventListener("pointerdown", outside); return () => document.removeEventListener("pointerdown", outside);
+  }, []);
+  const toggle = (key: string) => { setPreview(null); setPinned((old) => old === key ? null : key); };
+  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
       if (event.key === "Escape") {
-        setActive(null);
+        setPinned(null); setPreview(null);
         return;
       }
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggle(data[index].key); return; }
       const target = nextIndex(event.key, index, data.length);
       if (target === null) return;
       event.preventDefault();
+      setActiveIndex(target);
       rows.current[target]?.focus();
-    },
-    [data.length],
-  );
+  }
 
   if (data.length === 0) return null;
   return (
-    <figure className="space-y-2" data-testid="ci-bar-chart">
+    <figure ref={chart} className="space-y-2" data-testid="ci-bar-chart">
       <ul role="list" aria-label={title} className="space-y-1">
         {data.map((datum, index) => (
           <ChartRow
@@ -198,16 +215,21 @@ export function CiBarChart({ title, data }: CiBarChartProps) {
             datum={datum}
             tooltipId={`${baseId}-tip-${index}`}
             isActive={active === datum.key}
+            isPinned={pinned === datum.key}
+            tabStop={index === Math.min(activeIndex, data.length - 1)}
             register={(node) => {
               rows.current[index] = node;
             }}
-            onActivate={setActive}
+            onActivate={setPreview}
+            onFocus={() => setActiveIndex(index)}
+            onToggle={() => toggle(datum.key)}
             onKeyDown={(event) => onKeyDown(event, index)}
           />
         ))}
       </ul>
       <figcaption className="text-micro text-text-dim">
         Bar = win rate over decided games · whisker = 95% likely range · dashed line = 50%.
+        {" "}▲ green: clearly above 50% · ● hatched: too close to call · ▼ red: clearly below 50%.
       </figcaption>
       <DataTable title={title} data={data} />
     </figure>

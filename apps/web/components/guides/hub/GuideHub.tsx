@@ -1,17 +1,18 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Section } from "@/components/ui/Section";
+import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { GuideEightWorkerVideos } from "@/components/guides/GuideEightWorkerVideos";
 import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
 import { GuideVideoRow } from "@/components/guides/GuideVideoRow";
 import { GuideVideoActions } from "@/components/guides/GuideVideoActions";
 import { MatchupGrid } from "@/components/guides/hub/MatchupGrid";
+import { GuideMapCard } from "@/components/guides/map/GuideMapCard";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { breadcrumbJsonLd } from "@/components/guides/guideSeo";
 import { GUIDE_SECONDARY_ACTION_CLASS, eraLabel } from "@/components/guides/guideUi";
 import { fmtCount, fmtGuideDate } from "@/lib/guides/format";
-import type { GuideIndexPayload } from "@/lib/guides/types";
+import type { GuideIndexMap, GuideIndexPayload } from "@/lib/guides/types";
 
 /**
  * Body of /guides: the 3×3 matchup grid with each matchup's top openers
@@ -26,16 +27,19 @@ const NO_TWELVE_WORKER_VIDEOS =
   "Build order videos for the 12-worker game are on the way. Subscribe to catch the first ones.";
 const VIDEO_PREVIEW_LIMIT = 8;
 
-function MapsTeaser({ count }: { count: number }) {
-  if (count === 0) return null;
+function MapsTeaser({ maps }: { maps: readonly GuideIndexMap[] }) {
+  if (maps.length === 0) return null;
   return (
     <Section
       id="maps"
       title="Map guides"
-      description={`Matchup win rates and the best openers on ${fmtCount(count)} ladder maps.`}
+      description={`Matchup win rates and the best openers on ${fmtCount(maps.length)} ladder maps.`}
     >
-      <Link href={guidePaths.maps()} className={GUIDE_SECONDARY_ACTION_CLASS}>
-        Browse map guides
+      <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {maps.slice(0, 6).map((map) => <li key={map.slug} className="min-w-0"><GuideMapCard map={map} /></li>)}
+      </ul>
+      <Link href={guidePaths.maps()} className={`${GUIDE_SECONDARY_ACTION_CLASS} mt-4`}>
+        All {fmtCount(maps.length)} map guides
         <ArrowRight className="h-4 w-4" aria-hidden />
       </Link>
     </Section>
@@ -56,8 +60,8 @@ export function GuideHub({ payload }: { payload: GuideIndexPayload }) {
           <p className="text-caption text-text-dim">Stats updated {fmtGuideDate(payload.computedAt)}</p>
         ) : null}
       </div>
-      <Section id="matchups" title="Matchups">
-        <MatchupGrid matchups={payload.matchups} period={eraLabel(payload.era)} />
+      <Section id="matchups" title="Matchups" description={`What's winning ${eraLabel(payload.era)}, from ranked 1v1 games uploaded to SC2 Tools.`}>
+        <MatchupGrid matchups={payload.matchups} />
       </Section>
       <GuideVideoRow
         id="channel"
@@ -68,7 +72,7 @@ export function GuideHub({ payload }: { payload: GuideIndexPayload }) {
           <GuideVideoActions channel={payload.channel} playlists={payload.playlists} showAll />
         }
       />
-      <MapsTeaser count={payload.maps.length} />
+      <MapsTeaser maps={payload.maps} />
       <GuideEightWorkerVideos
         videos={payload.eightWorkerVideos}
         playlistUrl={payload.playlists?.eightWorker}

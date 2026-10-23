@@ -3,6 +3,9 @@ import { GuideEightWorkerVideos } from "@/components/guides/GuideEightWorkerVide
 import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
 import { GuideNotEnoughGames } from "@/components/guides/GuideStates";
 import { GuideVideoSection } from "@/components/guides/GuideVideoSection";
+import { GuideSectionNav } from "@/components/guides/GuideSectionNav";
+import { GuideStatsLegend } from "@/components/guides/GuideStatsLegend";
+import { buildGuideSections } from "./buildGuideSections";
 import { BuildHero } from "@/components/guides/build/BuildHero";
 import { BuildArmySection } from "@/components/guides/build/BuildArmySection";
 import { BuildBandsSection, BuildLengthsSection } from "@/components/guides/build/BuildChartSections";
@@ -60,6 +63,21 @@ function PublishedBuild({
   payload: GuideBuildPublished;
   publishedPaths: ReadonlySet<string> | null;
 }) {
+  const sections = buildGuideSections(payload);
+  const content: Record<string, React.ReactNode> = {
+    video: <GuideVideoSection videos={payload.videos} />,
+    "win-rate-by-band": <BuildBandsSection bands={payload.bands} computedAt={payload.computedAt} />,
+    "key-timings": <BuildTimingsSection payload={payload} blurb={buildTimingsBlurb(payload)} />,
+    "your-record": <BuildTimingsSection payload={payload} blurb={buildTimingsBlurb(payload)} />,
+    army: <BuildArmySection army={payload.army} />,
+    "vs-openers": <BuildVsStrategySection rows={payload.vsStrategy} matchupSlug={payload.matchupSlug} />,
+    "when-it-wins": <BuildLengthsSection lengths={payload.lengths} />,
+    maps: <BuildMapsSection maps={payload.maps} publishedPaths={publishedPaths} />,
+    "macro-leaks": <BuildLeaksSection leaks={payload.leaks} macro={payload.macro} />,
+    related: <BuildRelatedSection related={payload.related} communityBuilds={payload.communityBuilds} examples={payload.examples} matchupSlug={payload.matchupSlug} />,
+    "coach-notes": <BuildNotesSection notes={payload.notes} />,
+    "eight-worker-videos": <GuideEightWorkerVideos title={EIGHT_WORKER_TITLE} videos={payload.eightWorkerVideos} />,
+  };
   return (
     <>
       <BuildHero
@@ -67,22 +85,10 @@ function PublishedBuild({
         intro={buildIntro(payload)}
         ghostTarget={buildGhostTargetFromGuide(payload)}
       />
-      <GuideVideoSection videos={payload.videos} />
-      <BuildBandsSection bands={payload.bands} />
-      <BuildTimingsSection payload={payload} blurb={buildTimingsBlurb(payload)} />
-      <BuildArmySection army={payload.army} />
-      <BuildVsStrategySection rows={payload.vsStrategy} matchupSlug={payload.matchupSlug} />
-      <BuildLengthsSection lengths={payload.lengths} />
-      <BuildMapsSection maps={payload.maps} publishedPaths={publishedPaths} />
-      <BuildLeaksSection leaks={payload.leaks} macro={payload.macro} />
-      <BuildRelatedSection
-        related={payload.related}
-        communityBuilds={payload.communityBuilds}
-        examples={payload.examples}
-        matchupSlug={payload.matchupSlug}
-      />
-      <BuildNotesSection notes={payload.notes} />
-      <GuideEightWorkerVideos title={EIGHT_WORKER_TITLE} videos={payload.eightWorkerVideos} />
+      <GuideSectionNav items={sections}>
+        {!sections.some((section) => section.id === "win-rate-by-band") ? <GuideStatsLegend computedAt={payload.computedAt} /> : null}
+        {sections.map((section) => <div key={section.id}>{content[section.id]}</div>)}
+      </GuideSectionNav>
     </>
   );
 }

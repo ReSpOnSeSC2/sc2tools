@@ -33,7 +33,8 @@ describe("GuideEightWorkerVideos", () => {
       expect(link.getAttribute("rel")).toBe("noopener noreferrer");
     }
     // No thumbnails and no player: the 12-worker videos stay the prominent ones.
-    expect(container.querySelector("img, iframe, button")).toBeNull();
+    expect(details.querySelector("img, iframe, button")).toBeNull();
+    expect(screen.getByRole("button", { name: "Copy link to 8-worker patch videos" })).toBeTruthy();
   });
 
   it("takes a title and links the 8-worker playlist only when it is a YouTube playlist URL", () => {

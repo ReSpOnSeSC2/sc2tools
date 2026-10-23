@@ -1,5 +1,4 @@
-import Link from "next/link";
-import { MapArtwork } from "@/components/maps/MapArtwork";
+import { GuideMapCard } from "./GuideMapCard";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
@@ -7,7 +6,7 @@ import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { breadcrumbJsonLd, type GuideCrumb } from "@/components/guides/guideSeo";
 import { GUIDE_PANEL_CLASS, eraLabel } from "@/components/guides/guideUi";
-import { fmtCount, fmtGuideDate } from "@/lib/guides/format";
+import { fmtGuideDate } from "@/lib/guides/format";
 import type { GuideIndexPayload } from "@/lib/guides/types";
 
 /**
@@ -39,16 +38,7 @@ export function MapsList({ payload }: { payload: GuideIndexPayload }) {
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {payload.maps.map((map) => (
             <li key={map.slug} className="min-w-0">
-              <Link
-                href={guidePaths.map(map.slug)}
-                className={`${GUIDE_PANEL_CLASS} flex items-center gap-3 p-3 hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg`}
-              >
-                <MapArtwork mapName={map.map} size="md" />
-                <span className="min-w-0">
-                  <span className="block break-words font-display text-h4 font-bold text-text">{map.map}</span>
-                  <span className="block text-caption tabular-nums text-text-dim">{fmtCount(map.games)} games</span>
-                </span>
-              </Link>
+              <GuideMapCard map={map} />
             </li>
           ))}
         </ul>
