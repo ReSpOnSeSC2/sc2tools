@@ -17,7 +17,6 @@
  *   "custom-over-catalog" declared custom "DT Rush", classified 2 Stargate Phoenix.
  */
 
-const fs = require("fs");
 const pino = require("pino");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 
@@ -40,7 +39,6 @@ const { AdminGlobalService } = require("../src/services/adminGlobal");
 const { AdminGlobalTrendsService } = require("../src/services/adminGlobalTrends");
 const { globalHistoryStages } = require("../src/services/adminGlobalTrendsScope");
 const { buildPlayerWindowsPipeline } = require("../src/services/fingerprintPopulationCalibration");
-const { MLService } = require("../src/services/ml");
 const { guideUserHash } = require("../src/util/guideHash");
 const {
   STARGATE,
@@ -237,27 +235,5 @@ describe("fingerprint population calibration", () => {
     expect(group).toMatchObject({ userId: USER, matchup: "PvZ" });
     expect(group.rows.map((row) => row.myBuild).sort())
       .toEqual([STARGATE, STARGATE, STARGATE, STARGATE, UNCLASSIFIED]);
-  });
-});
-
-describe("ML training labels", () => {
-  test("training rows use the classifier's label", async () => {
-    await seedAll((row) => ({ ...row, buildLog: BUILD_LOG }));
-    const ml = new MLService({ games: db.games });
-    const prepared = await ml._writeTrainingNdjson(USER);
-    try {
-      const rows = fs.readFileSync(prepared.path, "utf8").trim().split("\n").map((line) => JSON.parse(line));
-      const labels = Object.fromEntries(rows.map((row) => [row.gameId, row.myBuild]));
-      expect(labels).toEqual({
-        normal: STARGATE,
-        disagree: UNCLASSIFIED,
-        agree: STARGATE,
-        "void-over-stargate": STARGATE,
-        "custom-over-catalog": STARGATE,
-      });
-      expect(JSON.stringify(rows)).not.toMatch(/buildIntent|secret plan/);
-    } finally {
-      fs.rmSync(prepared.path, { force: true });
-    }
   });
 });

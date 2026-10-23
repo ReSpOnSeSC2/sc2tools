@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Removed
+
+- Retired the unused server model-training and prediction endpoints. Replay analysis continues to use fixed rules and statistics; the API image now installs only its server analysis dependencies.
+
 ### Review recovery
 
 - Failed request closure and reviewer preference saves show recovery actions; preferences roll back when saving fails.

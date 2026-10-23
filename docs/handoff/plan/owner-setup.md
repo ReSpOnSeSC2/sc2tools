@@ -1,5 +1,9 @@
 # Owner setup notes (accumulated)
 
+## Wave 2: retire-server-ml
+
+No new secrets or infrastructure. The API Dockerfile installs `apps/replay-engine/requirements-server.txt`, and image CI guards the actual installed dependencies and spatial CLI. Follow `docs/runbooks/retire-server-ml.md` for the read-only audit, dry run, and forward-only cleanup of `ml_models` and `ml_jobs`. The owner approved adding the migration, but production execution needs separate approval and was not performed during implementation. Do not restore the removed model tooling to run ordinary replay analysis.
+
 ## Wave 1 phase 2a
 
 ### data-states-recovery
