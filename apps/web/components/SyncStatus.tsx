@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useAuth } from "@clerk/nextjs";
-import { io, type Socket } from "socket.io-client";
-import { API_BASE } from "@/lib/clientApi";
+import { useEffect, useMemo, useState } from "react";
+import { useRealtimeState } from "@/components/realtime/RealtimeProvider";
+import { gamesChanged } from "@/lib/realtime/gamesRefresh";
 
 type Props = {
   total: number;
@@ -12,11 +11,7 @@ type Props = {
   compact?: boolean;
 };
 
-type ConnState =
-  | { kind: "connecting" }
-  | { kind: "connected" }
-  | { kind: "reconnecting"; attempts: number }
-  | { kind: "offline" };
+type ConnState = { kind: "connecting" | "connected" | "reconnecting" | "offline"; attempts: number };
 
 /**
  * Live game-count + latest-sync indicator. Subscribes to Socket.io
@@ -24,60 +19,25 @@ type ConnState =
  *
  * Connection UX:
  *  - Connected: cyan dot + pulse — taps the brand glow.
- *  - Polling/connecting: dim grey dot.
- *  - Reconnecting (>=3 attempts): warning amber.
+ *  - Connecting: dim grey dot.
+ *  - Reconnecting: warning amber.
  *  - Offline: danger red, shown after several attempts.
  *
  * All colors flow through CSS variables so the bar reads cleanly in
  * both light and dark themes.
  */
 export function SyncStatus({ total: initialTotal, latest, userId, compact = false }: Props) {
-  const { getToken } = useAuth();
   const [total, setTotal] = useState(initialTotal);
   const [latestAt, setLatestAt] = useState(latest);
-  const [conn, setConn] = useState<ConnState>({ kind: "connecting" });
-
-  useEffect(() => {
-    let socket: Socket | null = null;
-    let cancelled = false;
-    (async () => {
-      const token = await getToken();
-      if (cancelled || !token) return;
-      socket = io(API_BASE, {
-        auth: { token },
-        transports: ["websocket", "polling"],
-        reconnection: true,
-        reconnectionAttempts: Infinity,
-        reconnectionDelay: 500,
-        reconnectionDelayMax: 5000,
-      });
-      socket.on("connect", () => {
-        setConn({ kind: "connected" });
-        socket?.emit("subscribe:user", userId);
-      });
-      socket.on("disconnect", () => {
-        setConn({ kind: "reconnecting", attempts: 1 });
-      });
-      socket.io.on("reconnect_attempt", (n: number) => {
-        setConn(
-          n >= 6
-            ? { kind: "offline" }
-            : { kind: "reconnecting", attempts: n },
-        );
-      });
-      socket.io.on("reconnect", () => {
-        setConn({ kind: "connected" });
-      });
-      socket.on("games:changed", (msg: { count: number }) => {
-        setTotal((t) => t + (msg?.count || 0));
-        setLatestAt(new Date().toISOString());
-      });
-    })();
-    return () => {
-      cancelled = true;
-      socket?.disconnect();
-    };
-  }, [getToken, userId]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { setTotal(initialTotal); setLatestAt(latest); }, [initialTotal, latest, userId]);
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(timer); }, []);
+  const handlers = useMemo(() => ({ "games:changed": (payload: unknown) => {
+    const value = gamesChanged(payload);
+    if (value.inserted > 0) { setTotal((count) => count + value.inserted); setLatestAt(new Date().toISOString()); }
+  } }), []);
+  const realtime = useRealtimeState(handlers, true);
+  const conn: ConnState = { kind: realtime.status, attempts: realtime.attempts };
 
   const visual = visualForState(conn);
 
@@ -110,8 +70,9 @@ export function SyncStatus({ total: initialTotal, latest, userId, compact = fals
           ) : total}
         </span> games
         synced
-        {latestAt ? <span className={compact ? "sr-only sm:not-sr-only" : undefined}>{` · last ${formatRelative(latestAt)}`}</span> : null}
+        {latestAt ? <span title={new Date(latestAt).toLocaleString()} className={compact ? "sr-only sm:not-sr-only" : undefined}>{` · last ${formatRelative(latestAt, now)}`}</span> : null}
       </span>
+      {realtime.bulk ? <span role="status" className="max-w-[14rem] whitespace-normal text-micro text-text-muted">Syncing — charts refresh every 30 s</span> : null}
       {conn.kind === "reconnecting" && conn.attempts >= 3 ? (
         <span className={`text-caption text-warning ${compact ? "sr-only sm:not-sr-only" : ""}`}>
           retry {conn.attempts}…
@@ -154,7 +115,7 @@ function visualForState(conn: ConnState): Visual {
     case "connecting":
     default:
       return {
-        label: "Polling",
+        label: "Connecting…",
         dotClass: "bg-text-dim",
         textClass: "text-text-dim",
         pulse: false,
@@ -162,9 +123,9 @@ function visualForState(conn: ConnState): Visual {
   }
 }
 
-function formatRelative(iso: string): string {
+function formatRelative(iso: string, now: number): string {
   const d = new Date(iso);
-  const sec = Math.max(0, (Date.now() - d.getTime()) / 1000);
+  const sec = Math.max(0, (now - d.getTime()) / 1000);
   if (sec < 90) return `${Math.round(sec)}s ago`;
   if (sec < 3600) return `${Math.round(sec / 60)} min ago`;
   if (sec < 86400) return `${Math.round(sec / 3600)} hr ago`;

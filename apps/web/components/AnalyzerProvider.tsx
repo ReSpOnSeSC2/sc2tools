@@ -239,8 +239,8 @@ export function AnalyzerProvider({
   // Cloud-driven auto-refresh. The games ingest route fans out
   // ``games:changed`` to ``user:<userId>``; bumping ``dbRev`` invalidates
   // every ``useApiPaginated`` cache key downstream, so the Opponents
-  // table, KPI strip, charts, etc. re-fetch within a few hundred
-  // milliseconds of the agent posting a finished game. The handler
+  // table, KPI strip and charts re-fetch on the shared 2-second trailing
+  // clock (30 seconds during bulk imports). The handler
   // object is memoised so the socket effect doesn't reconnect every
   // render.
   const socketHandlers = useMemo(

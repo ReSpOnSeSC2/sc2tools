@@ -237,7 +237,7 @@ test("a declared custom build survives ingest, Save & Reclassify, rename and del
   expect(stored.myBuild).toBe("DT Rush v2");
   expect(stored.buildIntent.build).toEqual({ ...DT_REF, name: "DT Rush v2" });
   expect(emitted).toEqual([
-    { room: `user:${userId}`, event: "games:changed", data: { count: 1 } },
+    { room: `user:${userId}`, event: "games:changed", data: { count: 1, inserted: 0, bulk: true, reason: "reclassify" } },
   ]);
   const byName = await asUser("guard-token", request(app).get("/v1/builds"));
   expect(byName.status).toBe(200);

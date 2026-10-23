@@ -11,6 +11,8 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+- Share one authenticated realtime connection across user and admin surfaces; count newly inserted games accurately, coalesce chart refreshes during imports, and show admin connection recovery status.
+
 ### Experience polish
 
 - Settings show recoverable load failures, protect saved profile IDs, preview game-history deletion counts, and include both selected days in local time. Mobile tabs scroll into view and support arrow keys.

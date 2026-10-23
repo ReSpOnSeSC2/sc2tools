@@ -36,6 +36,15 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "A game normally appears a few seconds after it ends: the desktop app reads the replay, syncs it, and every open page updates on its own. If it doesn't, go through these checks in order.",
     },
+    { type: "heading", text: "What the header sync pill means", anchor: "header-sync-pill" },
+    {
+      type: "list",
+      items: [
+        "**Live** means this browser has an authenticated connection for updates. **Connecting**, **Reconnecting**, or **Offline** describes the browser connection, not whether your gaming PC is running. Check [Devices](/devices) for your desktop app.",
+        "**Games synced** increases for newly saved games. Re-syncing an existing game or changing its build label doesn't add another game. The latest sync time updates every 30 seconds; hover it for the exact time.",
+        "During a large import, **Syncing — charts refresh every 30 s** means the count can move before the charts. Ordinary game updates refresh the charts after about two quiet seconds. You can also reload the page to fetch the current data.",
+      ],
+    },
     { type: "heading", text: "1. Is it in Replays?", anchor: "check-replays" },
     {
       type: "paragraph",
@@ -85,7 +94,7 @@ const article: HelpArticle = {
       type: "steps",
       items: [
         "Press **Re-sync** in the app. It uploads every replay it can see again; games already synced aren't counted twice.",
-        "If the bar at the top of SC2 Tools says *Reconnecting*, the server is waking up. Your game is safe on your PC and the app keeps retrying: see [Something went wrong](/help/something-went-wrong).",
+        "If the bar at the top of SC2 Tools says *Reconnecting*, the browser is retrying its live connection. Your replay remains on your PC: see [Something went wrong](/help/something-went-wrong).",
         "Still not there? [Report a problem](/help/report-a-problem) with the time you played. In the app, **Open log folder** gets the log file to attach.",
       ],
     },
