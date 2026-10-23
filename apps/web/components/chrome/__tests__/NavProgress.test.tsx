@@ -19,7 +19,8 @@ it("delays feedback, completes on a route change, and times out cancelled naviga
   const pending = vi.fn(); const view = render(<><a href="/next">Next</a><NavProgress onPendingChange={pending} /></>);
   const link = view.container.querySelector("a")!; link.addEventListener("click", (event) => event.preventDefault());
   act(() => window.dispatchEvent(new Event("sc2tools:navigation-start"))); act(() => vi.advanceTimersByTime(149)); expect(view.container.querySelector("[data-nav-progress]")).toBeNull();
-  act(() => vi.advanceTimersByTime(1)); expect(view.container.querySelector("[data-nav-progress]")).toBeTruthy();
+  act(() => vi.advanceTimersByTime(1)); expect(view.container.querySelector<HTMLElement>("[data-nav-progress]")?.style.width).toBe("15%");
+  act(() => vi.advanceTimersByTime(20)); expect(view.container.querySelector<HTMLElement>("[data-nav-progress]")?.style.width).toBe("80%");
   route.path = "/next"; view.rerender(<><a href="/next">Next</a><NavProgress onPendingChange={pending} /></>); act(() => vi.advanceTimersByTime(200)); expect(view.container.querySelector("[data-nav-progress]")).toBeNull(); expect(pending).toHaveBeenLastCalledWith(false);
   act(() => window.dispatchEvent(new Event("sc2tools:navigation-start"))); act(() => vi.advanceTimersByTime(15000)); expect(view.container.querySelector("[data-nav-progress]")).toBeNull();
 });

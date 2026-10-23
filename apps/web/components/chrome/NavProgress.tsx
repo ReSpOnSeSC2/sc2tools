@@ -18,7 +18,11 @@ export function NavProgress({ onPendingChange }: { onPendingChange?: (pending: b
     function clear() { timers.current.forEach(clearTimeout); timers.current = []; }
     const start = () => {
       clear(); pending.current = true; setComplete(false); setWidth(15); onPendingChange?.(true);
-      timers.current.push(setTimeout(() => { setShown(true); setWidth(80); }, 150));
+      timers.current.push(setTimeout(() => {
+        setShown(true);
+        // Give the mounted bar a paint at its starting width before easing forward.
+        timers.current.push(setTimeout(() => setWidth(80), 20));
+      }, 150));
       timers.current.push(setTimeout(() => { pending.current = false; setShown(false); onPendingChange?.(false); }, 15000));
     };
     const click = (event: MouseEvent) => {
