@@ -54,8 +54,9 @@ describe("withinOneEdit", () => {
 
 describe("searchHelp on the shipped articles", () => {
   it("ranks the pairing walkthrough first for 'code expired'", () => {
-    expect(top("code expired")).toBe("getting-started");
-    expect(top("pairing code")).toBe("getting-started");
+    expect(top("code expired")).toBe("install-and-pair");
+    expect(top("pairing code")).toBe("install-and-pair");
+    expect(slugs("pairing code")).toContain("getting-started");
   });
 
   it("finds articles by title words, keywords and prefixes", () => {
@@ -76,7 +77,7 @@ describe("searchHelp on the shipped articles", () => {
 
   it("tolerates one typo in longer words, not in short ones", () => {
     expect(top("ovrlay setup")).toBe("obs-overlay-setup");
-    expect(top("randomiser")).toBe("build-check-in");
+    expect(top("randomiser")).toBe("randomizer");
     expect(slugs("kikc")).toEqual([]);
   });
 
@@ -89,7 +90,9 @@ describe("searchHelp on the shipped articles", () => {
     });
     expect(top("obs")).toBe("obs-overlay-setup");
     expect(slugs("tray")).toContain("getting-started");
-    expect(slugs("sync")).toContain("getting-started");
+    expect(slugs("tray")).toContain("desktop-app-overview");
+    expect(slugs("sync")).toContain("desktop-app-overview");
+    expect(slugs("sync")).toContain("my-game-didnt-show-up");
   });
 
   it("ignores filler words unless they are all there is", () => {

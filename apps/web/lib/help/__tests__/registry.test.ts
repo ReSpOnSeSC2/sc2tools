@@ -4,6 +4,8 @@ import {
   articlesByCategory,
   formatHelpDate,
   getArticle,
+  helpAnchorPath,
+  helpArticleAnchors,
   helpArticlePath,
   helpAudienceLabel,
   helpSettingsPath,
@@ -55,6 +57,20 @@ describe("help registry", () => {
     expect(getArticle("nope")).toBeUndefined();
     expect(helpArticlePath("stream-dock")).toBe("/help/stream-dock");
     expect(helpSettingsPath("stream-dock")).toBe("/settings?tab=help#stream-dock");
+    expect(helpAnchorPath("opponents", "net-mmr")).toBe("/help/opponents#net-mmr");
+  });
+
+  it("lists an article's section anchors in reading order", () => {
+    const article = fixture("anchored", {
+      body: [
+        { type: "heading", text: "First", anchor: "first" },
+        { type: "paragraph", text: "p" },
+        { type: "heading", text: "No anchor" },
+        { type: "heading", text: "Second", anchor: "second" },
+      ],
+    });
+    expect(helpArticleAnchors(article)).toEqual(["first", "second"]);
+    expect(helpArticleAnchors(fixture("plain"))).toEqual([]);
   });
 
   it("groups articles by topic in display order, skipping empty topics", () => {

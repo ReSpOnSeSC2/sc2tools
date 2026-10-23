@@ -8,9 +8,11 @@ import { HelpWidget } from "./HelpWidget";
 /**
  * Renders an article's blocks. One renderer for every surface:
  *
- *   - "page": the public /help/<slug> article (h2 sub-headings).
+ *   - "page": the public /help/<slug> article (h2 sub-headings, which
+ *     carry their `anchor` as id so /help/<slug>#<anchor> lands on them).
  *   - "compact": Settings → Help sections and the <HelpLink> sheet
- *     (h3 sub-headings, tighter rhythm).
+ *     (h3 sub-headings, tighter rhythm, no ids: Settings → Help shows
+ *     every article on one page, where anchors could repeat).
  *
  * Server-safe (no hooks); `links.onOpenArticle` is only passed by
  * client surfaces.
@@ -47,8 +49,9 @@ function Block({
       );
     case "heading": {
       const Heading = variant === "page" ? "h2" : "h3";
+      const anchor = variant === "page" ? block.anchor : undefined;
       return (
-        <Heading className={HEADING_CLASS[variant]}>
+        <Heading id={anchor} className={anchor ? `${HEADING_CLASS[variant]} scroll-mt-24` : HEADING_CLASS[variant]}>
           <HelpInline text={block.text} links={links} />
         </Heading>
       );

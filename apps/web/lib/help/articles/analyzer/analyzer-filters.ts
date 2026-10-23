@@ -37,13 +37,13 @@ const article: HelpArticle = {
     "no data",
     "wrong numbers",
   ],
-  updated: "2026-10-22",
+  updated: "2026-10-23",
   body: [
     {
       type: "paragraph",
       text: "The filter bar sits at the top of the analyzer. Opponents and each opponent's page, Strategies, Trends, Macro, Maps, Builds and Replays use these filters. Today includes cards with their own scope, listed below. Arcade and the page for a single game ignore the filter bar.",
     },
-    { type: "heading", text: "The defaults" },
+    { type: "heading", text: "The defaults", anchor: "defaults" },
     {
       type: "paragraph",
       text: "A new visit counts your **ranked 1v1 ladder games on the current 12-worker patch**, from every region, of any length, with **too-short games hidden**. Too-short games are replays under 45 seconds: disconnects and instant leaves where no build order happened.",
@@ -65,7 +65,17 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "Your choices are remembered on this device, so the next visit opens the way you left it.",
     },
-    { type: "heading", text: "Pick a matchup" },
+    { type: "heading", text: "Patch presets", anchor: "patch-presets" },
+    {
+      type: "paragraph",
+      text: "The first three date choices split your games by patch, using each game's own game version rather than its date: **After 5.0.17 · 12 workers** (the current game), **5.0.16 · 8 workers** (the patch that started players on 8 workers) and **Before 5.0.16 · 12 workers**. Openings and timings change with the starting workers, so keeping the patches apart keeps your numbers comparable. The other choices, such as **Last 30 days** or a season, go by date.",
+    },
+    { type: "heading", text: "Too-short games", anchor: "too-short" },
+    {
+      type: "paragraph",
+      text: "Games under 45 seconds are disconnects and instant leaves where no build order happened. **Hide too-short** leaves them out of every section, which is the default. Turn it off to count them too.",
+    },
+    { type: "heading", text: "Pick a matchup", anchor: "matchup" },
     {
       type: "steps",
       items: [
@@ -78,7 +88,7 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "With a keyboard, Tab to the matchup and use the arrow keys to move between the choices.",
     },
-    { type: "heading", text: "See and clear active filters" },
+    { type: "heading", text: "See and clear active filters", anchor: "active-filters" },
     {
       type: "paragraph",
       text: "Whenever a filter differs from the defaults, the **Active filters** row under the filter bar shows it as a chip, such as *Opponent race: Zerg* or *Regions: NA, EU*. Views may also have their own search or Min games control. If a number looks too low, check both this row and the controls beside that view.",
@@ -96,12 +106,12 @@ const article: HelpArticle = {
       title: "Filters picked in Strategies follow you across filtered views",
       text: "When you pick **My build** or **Opp strategy** in Strategies, that filter applies to filtered analyzer views (including Games in range, Opponents, Trends, Maps and Builds) until you clear it. Its chip says *set in Strategies*. These two reset when you reload the page; everything else in the filter bar is remembered.",
     },
-    { type: "heading", text: "On a phone" },
+    { type: "heading", text: "On a phone", anchor: "phone" },
     {
       type: "paragraph",
       text: "The date range stays at the top. The other filters sit behind the **Filters** button, which counts the filters other than the date range that differ from the defaults, for example *Filters · 2 active*. Tap it to open them, make your changes (they apply right away) and tap **Done**. The Active filters row works the same as on a computer.",
     },
-    { type: "heading", text: "Cards with their own scope" },
+    { type: "heading", text: "Cards with their own scope", anchor: "card-scope" },
     {
       type: "list",
       items: [
@@ -114,7 +124,7 @@ const article: HelpArticle = {
     },
     { type: "settingsLink", label: "Open Strategies", href: "/app/strategies" },
   ],
-  related: ["dashboard-and-analyzer"],
+  related: ["dashboard-and-analyzer", "today", "strategies", "reading-the-charts"],
 };
 
 export default article;

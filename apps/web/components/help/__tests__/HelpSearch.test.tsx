@@ -15,8 +15,8 @@ describe("HelpSearch", () => {
     type("code expired");
     const list = screen.getByRole("list", { name: "Search results" });
     const first = within(list).getAllByRole("link")[0];
-    expect(first.getAttribute("href")).toBe("/help/getting-started");
-    expect(first.textContent).toContain("Getting started (5 minutes)");
+    expect(first.getAttribute("href")).toBe("/help/install-and-pair");
+    expect(first.textContent).toContain("Install and link the desktop app");
     expect(first.textContent).toContain("Getting started · ");
     expect(screen.getByRole("status").textContent).toMatch(/^\d+ articles?$/);
   });

@@ -18,6 +18,7 @@ const ARTICLE: HelpArticle = {
   body: [
     { type: "paragraph", text: "Open [Devices](/devices), read [Getting started](/help/getting-started) or [the channel](https://www.youtube.com/@ReSpOnSeSC2). [bad](javascript:alert(1))" },
     { type: "heading", text: "A sub-heading" },
+    { type: "heading", text: "Anchored", anchor: "anchored" },
     { type: "steps", items: ["**First.** Do this.", "Then `that`."] },
     { type: "list", items: ["One *item*"] },
     { type: "callout", tone: "warning", title: "Careful", text: "Mind the gap." },
@@ -58,6 +59,12 @@ describe("HelpArticleBody", () => {
     expect(screen.getByRole("button", { name: /Copy for your bio/ })).toBeTruthy();
   });
 
+  it("gives anchored headings their id on the article page", () => {
+    renderBody();
+    expect(screen.getByRole("heading", { level: 2, name: "Anchored" }).id).toBe("anchored");
+    expect(screen.getByRole("heading", { level: 2, name: "A sub-heading" }).id).toBe("");
+  });
+
   it("renders safe links and leaves unsafe ones as text", () => {
     renderBody();
     expect(screen.getByRole("link", { name: "Devices" }).getAttribute("href")).toBe("/devices");
@@ -77,6 +84,8 @@ describe("HelpArticleBody", () => {
       links: { articleHref: (slug) => `/settings?tab=help#${slug}`, onOpenArticle },
     });
     expect(screen.getByRole("heading", { level: 3, name: "A sub-heading" })).toBeTruthy();
+    // Settings → Help lists every article on one page: no heading ids there.
+    expect(screen.getByRole("heading", { level: 3, name: "Anchored" }).id).toBe("");
     const link = screen.getByRole("link", { name: "Getting started" });
     expect(link.getAttribute("href")).toBe("/settings?tab=help#getting-started");
     fireEvent.click(link);

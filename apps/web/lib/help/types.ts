@@ -46,8 +46,13 @@ export type HelpWidgetId = "chat-commands";
 export type HelpBlock =
   /** A paragraph of text. */
   | { type: "paragraph"; text: string }
-  /** A sub-heading inside the article. */
-  | { type: "heading"; text: string }
+  /**
+   * A sub-heading inside the article. `anchor` gives it a stable id on
+   * the article page (/help/<slug>#<anchor>) so other parts of the app
+   * can link to one section: lowercase letters, digits and hyphens,
+   * unique within the article. Keep an anchor once it is published.
+   */
+  | { type: "heading"; text: string; anchor?: string }
   /** A numbered sequence the reader follows in order. */
   | { type: "steps"; items: string[] }
   /** A bulleted list. */

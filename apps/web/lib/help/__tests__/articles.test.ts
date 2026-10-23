@@ -9,7 +9,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { defaultTabVisibility, isSettingsTabId } from "@/components/analyzer/settings/SettingsShell";
 import { listHelpArticleFiles } from "@/scripts/gen-help-index.mjs";
-import { ALL_HELP_ARTICLES, getArticle, resolveLegacyAnchor } from "../index";
+import { ALL_HELP_ARTICLES, getArticle, helpArticleAnchors, resolveLegacyAnchor } from "../index";
 import { helpArticleLinks, helpBlockText } from "../articleText";
 import { isHelpCategoryId } from "../categories";
 import { helpArticleSlugFromHref, helpHrefKind } from "../inline";
@@ -44,7 +44,13 @@ function routeExists(segments: string[], dir = APP_DIR): boolean {
 function brokenInternalLink(href: string): string | null {
   const url = new URL(href, "https://sc2tools.com");
   const slug = helpArticleSlugFromHref(url.pathname);
-  if (slug) return getArticle(slug) ? null : `no help article "${slug}"`;
+  if (slug) {
+    const article = getArticle(slug);
+    if (!article) return `no help article "${slug}"`;
+    const anchor = url.hash.slice(1);
+    if (anchor && !helpArticleAnchors(article).includes(anchor)) return `no section #${anchor} in "${slug}"`;
+    return null;
+  }
   if (!routeExists(url.pathname.split("/").filter(Boolean))) return `no page at ${url.pathname}`;
   if (url.pathname === "/settings") {
     const tab = url.searchParams.get("tab");
@@ -71,6 +77,38 @@ describe("help articles", () => {
       "viewer-engagement",
       "troubleshooting-and-support",
       "backups-and-export",
+      // The how-tos for features that shipped without one.
+      "install-and-pair",
+      "browser-import",
+      "desktop-app-overview",
+      "replay-folders",
+      "today",
+      "analyzer-filters",
+      "opponents",
+      "strategies",
+      "trends",
+      "macro",
+      "maps",
+      "builds",
+      "replays",
+      "arcade",
+      "reading-the-charts",
+      "game-page",
+      "game-page-replay",
+      "game-page-accurate-playback",
+      "opponent-dossier",
+      "custom-builds",
+      "rules-explained",
+      "practice-ghost-build",
+      "randomizer",
+      "publish-community-builds",
+      "delete-account",
+      "public-profile",
+      "player-channels",
+      "voice",
+      "obs-auto-scene-switching",
+      "my-game-didnt-show-up",
+      "a-page-asked-me-to-sign-in",
     ]) {
       expect(getArticle(slug), slug).toBeDefined();
     }
@@ -136,10 +174,10 @@ describe("help articles", () => {
   });
 
   it("has a link checker that catches broken links", () => {
-    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/help/getting-started"]) {
+    for (const ok of ["/", "/sign-up", "/devices", "/app", "/settings", "/settings?tab=checkin", "/settings?tab=help#build-check-in", "/help/getting-started", "/help/opponents#net-mmr"]) {
       expect(brokenInternalLink(ok), ok).toBeNull();
     }
-    for (const broken of ["/nope", "/settings?tab=nope", "/settings?tab=import", "/settings?tab=help#nope", "/help/nope"]) {
+    for (const broken of ["/nope", "/settings?tab=nope", "/settings?tab=import", "/settings?tab=help#nope", "/help/nope", "/help/opponents#nope"]) {
       expect(brokenInternalLink(broken), broken).not.toBeNull();
     }
   });
@@ -179,6 +217,37 @@ describe("help articles", () => {
         }
         if (block.type === "steps" || block.type === "list") expect(block.items.length, article.slug).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it("gives section anchors a stable, unique id within each article", () => {
+    for (const article of ALL_HELP_ARTICLES) {
+      const anchors = helpArticleAnchors(article);
+      expect(new Set(anchors).size, `${article.slug}: repeated anchor`).toBe(anchors.length);
+      for (const anchor of anchors) expect(anchor, article.slug).toMatch(SLUG_RE);
+    }
+  });
+
+  it("covers each analyzer section: what it answers, how to drill in and how much data it needs", () => {
+    for (const slug of ["today", "opponents", "strategies", "trends", "macro", "maps", "builds", "arcade"]) {
+      const article = getArticle(slug);
+      expect(article?.category, slug).toBe("analyzer");
+      expect(helpArticleAnchors(article!), slug).toContain("sample-size");
+    }
+    // The anchors the filter bar's and the tables' info tips link to.
+    expect(helpArticleAnchors(getArticle("analyzer-filters")!)).toEqual(
+      expect.arrayContaining(["defaults", "patch-presets", "too-short", "matchup", "active-filters"]),
+    );
+    expect(helpArticleAnchors(getArticle("opponents")!)).toEqual(
+      expect.arrayContaining(["group-same-player", "mmr-impact", "net-mmr", "pulse-id"]),
+    );
+    expect(helpArticleAnchors(getArticle("reading-the-charts")!)).toContain("min-games");
+  });
+
+  it("says the numbers come from fixed rules, never AI, wherever stats are explained", () => {
+    for (const slug of ["dashboard-and-analyzer", "today", "opponents", "macro", "reading-the-charts", "game-page"]) {
+      const text = allTextFields(getArticle(slug)!).join(" ");
+      expect(text, slug).toMatch(/fixed rules, never AI/);
     }
   });
 

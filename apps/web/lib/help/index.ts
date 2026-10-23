@@ -36,6 +36,20 @@ export function helpSettingsPath(slug: string): string {
   return `/settings?tab=help#${slug}`;
 }
 
+/**
+ * Public URL of one section of an article (a heading's `anchor`).
+ *
+ * Example: `helpAnchorPath("opponents", "net-mmr")` → "/help/opponents#net-mmr".
+ */
+export function helpAnchorPath(slug: string, anchor: string): string {
+  return `${helpArticlePath(slug)}#${anchor}`;
+}
+
+/** The section anchors an article's headings declare, in reading order. */
+export function helpArticleAnchors(article: HelpArticle): string[] {
+  return article.body.flatMap((block) => (block.type === "heading" && block.anchor ? [block.anchor] : []));
+}
+
 function compareArticles(a: HelpArticle, b: HelpArticle): number {
   const order = (a.order ?? DEFAULT_ORDER) - (b.order ?? DEFAULT_ORDER);
   if (order !== 0) return order;

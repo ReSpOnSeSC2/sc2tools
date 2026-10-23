@@ -55,7 +55,7 @@ describe("/help", () => {
     expect(within(builds).getByRole("link", { name: /Build check-in/ }).getAttribute("href")).toBe("/help/build-check-in");
     // Topics with articles get a card; topics without articles yet stay hidden.
     expect(document.getElementById("account-data")).not.toBeNull();
-    expect(document.getElementById("desktop-app")).toBeNull();
+    expect(document.getElementById("desktop-app")).not.toBeNull();
     for (const category of HELP_CATEGORIES) {
       const hasArticles = ALL_HELP_ARTICLES.some((article) => article.category === category.id);
       expect(document.getElementById(category.id) !== null, category.id).toBe(hasArticles);
