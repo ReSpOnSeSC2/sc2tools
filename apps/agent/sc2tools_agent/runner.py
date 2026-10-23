@@ -391,9 +391,7 @@ def _run_headless(
             replay_folders=initial_replay_folders,
             on_pause=lambda paused: _handle_pause(cfg, state, upload, paused, ui=ui),
             on_pause_for=lambda until: _handle_pause(cfg, state, upload, True, ui=ui, until=until),
-            on_resync=lambda: _handle_replay_archive_resync(
-                cfg, state, upload,
-            ),
+            on_resync=lambda: _request_desktop_resync(cfg, state, recovery_cell),
             on_choose_folder=lambda picked: _handle_choose_folder(
                 cfg, state, picked, tray, log, upload=upload,
             ),
@@ -451,6 +449,7 @@ def _run_headless(
     recovery_cell.api = api
     recovery = RuntimeRecovery(cell=recovery_cell, cfg=cfg, state=state, ui=ui,
                                stop_event=stop_event)
+    recovery_cell.recent_history = _start_desktop_history(cfg, state, ui)
     upload = UploadQueue(
         on_connection_state=ui.on_connection_state,
         on_auth_failure=recovery.watchdog.failure,
@@ -462,11 +461,9 @@ def _run_headless(
             ui.on_upload_success(p.name),
             import_ctl.on_upload_success(p) if import_ctl else None,
         ),
-        on_failure=lambda p, exc: (
-            ui.on_upload_failed(p.name, classify(exc)),
-            import_ctl.on_upload_failure(p, exc) if import_ctl else None,
-        ),
+        on_failure=lambda p, exc: _desktop_upload_failed(ui, import_ctl, p, exc),
         on_pending_changed=ui.on_pending,
+        on_game_synced=ui.on_game_synced,
     )
     recovery_cell.upload = upload
     upload.set_activity_gate(activity_gate)
@@ -479,9 +476,7 @@ def _run_headless(
         on_capture_notice=lambda message: _notify_replay_capture(
             tray, console, None, message, log,
         ),
-        on_replay_skipped=lambda p, reason: (
-            import_ctl.on_replay_skipped(p, reason) if import_ctl else None
-        ),
+        on_replay_skipped=lambda p, reason: _desktop_replay_skipped(ui, import_ctl, p, reason),
         on_roots_changed=ui.on_folders,
     )
     import_ctl = ImportController(
@@ -493,6 +488,7 @@ def _run_headless(
         list_folders=lambda: [
             str(p) for p in _discover_replay_folders(cfg, state)
         ],
+        on_change=ui.on_import_progress,
     )
 
     recovery_cell.tray, recovery_cell.console, recovery_cell.ui = tray, console, ui
@@ -506,6 +502,8 @@ def _run_headless(
     recovery_cell.watcher = watcher
     recovery_cell.heartbeat = heartbeat
     recovery_cell.import_ctl = import_ctl
+    ui._import_ctl = import_ctl
+    import_ctl.set_hold(paused=state.paused)
 
     if state.device_token:
         on_macro, on_opp, on_full_resync = make_recompute_handlers(
@@ -643,6 +641,8 @@ def _run_headless(
             watcher.stop()
         if upload:
             upload.stop()
+        if recovery_cell.recent_history:
+            recovery_cell.recent_history.close()
         if tray:
             tray.stop()
     return 0
@@ -689,6 +689,7 @@ def _run_with_gui(
         replay_folders=list(dict.fromkeys([*initial_folders,*map(Path,state.replay_folders_override)])),
         autostart_enabled=autostart.is_enabled(),
         start_minimized=state.start_minimized,
+        notify_every_game=state.notify_every_game,
         # Surface the cached handle (cloud profile or prior auto-detect)
         # so the user sees what the agent will use when no override is
         # set. Empty when nothing has been resolved yet — the placeholder
@@ -748,9 +749,7 @@ def _run_with_gui(
         # restarts instead of resetting to 0 every launch.
         synced_count_provider=lambda: count_synced(state),
         on_pause=lambda paused: _handle_pause(cfg, state, cell.upload, paused, ui=cell.ui),
-        on_resync=lambda: _handle_replay_archive_resync(
-            cfg, state, cell.upload,
-        ),
+        on_resync=lambda: _request_desktop_resync(cfg, state, cell),
         on_choose_folder=lambda picked: _handle_choose_folder_gui(
             cfg, state, picked, cell, log,
         ),
@@ -763,6 +762,10 @@ def _run_with_gui(
         ),
         stream_status_provider=stream_service.status if stream_service else None,
         on_stream_action=stream_service.action if stream_service else None,
+        recent_games_enabled=True,
+        on_recent_retry=lambda paths, reason: _retry_desktop_replays(cfg, state, cell, paths, reason, log),
+        on_import_current_season=lambda: _handle_save_settings(cfg, state,
+            SettingsPayload(sync_filter_preset="current_season", sync_filter_since="", sync_filter_until=""), cell, log),
         on_save_settings=lambda payload: _handle_save_settings(
             cfg, state, payload, cell, log,
         ),
@@ -878,6 +881,8 @@ def _run_with_gui(
         cell.watcher.stop()
     if cell.upload:
         cell.upload.stop()
+    if cell.recent_history:
+        cell.recent_history.close()
     if cell.tray:
         cell.tray.stop()
     worker.join(timeout=4.0)
@@ -943,6 +948,7 @@ def _gui_boot_worker(
         recovery = RuntimeRecovery(cell=cell, cfg=cfg, state=state, ui=ui,
                                    stop_event=stop_event, controls=cell.pairing_controls)
         cell.recovery = recovery
+        cell.recent_history = _start_desktop_history(cfg, state, ui)
         upload = UploadQueue(
             on_connection_state=ui.on_connection_state,
             on_auth_failure=recovery.watchdog.failure,
@@ -954,11 +960,9 @@ def _gui_boot_worker(
                 ui.on_upload_success(p.name),
                 import_ctl.on_upload_success(p) if import_ctl else None,
             ),
-            on_failure=lambda p, exc: (
-                ui.on_upload_failed(p.name, classify(exc)),
-                import_ctl.on_upload_failure(p, exc) if import_ctl else None,
-            ),
+            on_failure=lambda p, exc: _desktop_upload_failed(ui, import_ctl, p, exc),
             on_pending_changed=ui.on_pending,
+            on_game_synced=ui.on_game_synced,
             # Late-bound: the build check-in starts with the live bridge.
             on_game_accepted=lambda *accepted: _handle_checkin_game_accepted(
                 cfg.state_dir, state, cell, *accepted,
@@ -974,9 +978,7 @@ def _gui_boot_worker(
             on_capture_notice=lambda message: _notify_replay_capture(
                 cell.tray, cell.console, cell.gui, message, log,
             ),
-            on_replay_skipped=lambda p, reason: (
-                import_ctl.on_replay_skipped(p, reason) if import_ctl else None
-            ),
+            on_replay_skipped=lambda p, reason: _desktop_replay_skipped(ui, import_ctl, p, reason),
             on_roots_changed=lambda folders: _show_replay_folders(
                 cell, folders,
             ),
@@ -990,6 +992,7 @@ def _gui_boot_worker(
             list_folders=lambda: [
                 str(p) for p in _discover_replay_folders(cfg, state)
             ],
+            on_change=ui.on_import_progress,
         )
         def _request_stop_for_update() -> None:
             # GUI mode shuts down by ending the Qt loop; the caller then
@@ -1010,6 +1013,8 @@ def _gui_boot_worker(
         cell.updater = updater
         cell.heartbeat = heartbeat
         cell.import_ctl = import_ctl
+        ui._import_ctl = import_ctl
+        import_ctl.set_hold(paused=state.paused)
 
         socket_client: Optional[SocketClient] = None
         if state.device_token:
@@ -1207,6 +1212,72 @@ def _handle_resync(
     if upload:
         upload.request_full_resync()
     logging.getLogger(__name__).info("agent_resync_requested")
+
+
+def _start_desktop_history(cfg, state, ui):
+    from .desktop_history import DesktopHistory
+    history = DesktopHistory(
+        cfg.state_dir,
+        owner_provider=lambda: state.user_id if state.is_paired else None,
+        state_provider=lambda: {"uploaded": state.uploaded.copy(), "paths_by_id": state.path_by_game_id.copy()},
+        on_snapshot=ui.on_recent_snapshot,
+    )
+    ui._recent_history = history
+    ui._game_notifications = lambda: state.notify_every_game
+    history.start()
+    return history
+
+
+def _desktop_upload_failed(ui, import_ctl, path, exc):
+    error = classify(exc)
+    ui.on_upload_failed(path.name, error)
+    if ui._recent_history:
+        ui._recent_history.problem(path, error)
+    import_ctl.on_upload_failure(path, exc)
+
+
+def _desktop_replay_skipped(ui, import_ctl, path, reason):
+    if ui._recent_history:
+        ui._recent_history.skipped(path, reason or "parse_failed")
+    import_ctl.on_replay_skipped(path, reason)
+
+
+def _request_desktop_resync(cfg, state, cell):
+    """The confirmation is on Qt; cursor writes and inventory never are."""
+    if not cell.resync_lock.acquire(blocking=False):
+        return
+
+    def run():
+        try:
+            _handle_replay_archive_resync(cfg, state, cell.upload)
+            if cell.watcher:
+                cell.watcher.request_immediate_sweep()
+            if cell.recent_history:
+                cell.recent_history.refresh()
+            if cell.import_ctl:
+                cell.import_ctl.maybe_start_auto_backfill(force_display=True)
+        except Exception:
+            logging.getLogger(__name__).warning("desktop_resync_failed")
+            if cell.ui:
+                cell.ui._notice("Could not start Re-sync. Your existing synced games are safe. Try again from Maintenance.")
+        finally:
+            cell.resync_lock.release()
+
+    threading.Thread(target=run, name="sc2tools-desktop-resync", daemon=False).start()
+
+
+def _retry_desktop_replays(cfg, state, cell, paths, reason, log):
+    """Called by the Recent games action worker, with the active filter intact."""
+    if cell.upload is None:
+        raise RuntimeError("Replay syncing is still starting. Try again shortly.")
+    retried = cell.upload.retry_selected(paths, reason=reason)
+    if cell.watcher:
+        cell.watcher.request_immediate_sweep()
+    if cell.recent_history:
+        cell.recent_history.refresh()
+    log.info("desktop_replay_retry_requested count=%d", len(retried))
+    if cell.ui:
+        cell.ui._notice(f"Retry requested for {len(retried):,} replay files. Your saved import date filter still applies.")
 
 
 def _handle_replay_archive_resync(
@@ -1573,6 +1644,8 @@ def _handle_save_settings(
         _apply_saved_replay_folders(cfg, state, cleaned, removed)
     if payload.start_minimized is not None:
         state.start_minimized = bool(payload.start_minimized)
+    if payload.notify_every_game is not None:
+        state.notify_every_game = payload.notify_every_game is True
     if payload.auto_update_enabled is not None:
         # Hot-applies: the updater reads this flag from state on every
         # poll (``_handle_update_available``'s consent gate), so no
@@ -3026,6 +3099,8 @@ class _RuntimeCell:
 
     __slots__ = (
         "api", "recovery", "pairing_controls", "activity_gate", "update_scheduler", "stream_service",
+        "recent_history",
+        "resync_lock",
         "gui",
         "tray",
         "console",
@@ -3049,6 +3124,8 @@ class _RuntimeCell:
     )
 
     def __init__(self) -> None:
+        self.recent_history = None
+        self.resync_lock = threading.Lock()
         self.stream_service = None
         self.activity_gate = None
         self.update_scheduler = None
@@ -3100,6 +3177,10 @@ class _Multiplexer:
         self._offline_since = 0.0
         self._offline_toasted = False
         self._recovered_count = 0
+        self._recent_history = None
+        self._import_ctl = None
+        self._game_notifications = lambda: False
+        self._notified_games = []
         self._sinks: List[Any] = [console]
         if tray:
             self._sinks.append(tray)
@@ -3141,6 +3222,8 @@ class _Multiplexer:
         self._change_status(analyzer_ok=ok, analyzer_diag=diag)
 
     def on_paused(self, paused, until=None):
+        if self._import_ctl:
+            self._import_ctl.set_hold(paused=paused)
         for sink in self._sinks:
             callback = getattr(sink, "on_paused", None)
             if callback: callback(paused, until)
@@ -3165,6 +3248,8 @@ class _Multiplexer:
 
     def on_unlinked(self) -> None:
         self._change_status(unlinked=True, paired=False)
+        if self._recent_history:
+            self._recent_history.refresh()
         for sink in self._sinks:
             callback = getattr(sink, "on_unlinked", None)
             if callback:
@@ -3172,6 +3257,8 @@ class _Multiplexer:
 
     def on_connection_state(self, kind, since, next_retry_at, waiting_count) -> None:
         import time
+        if self._import_ctl:
+            self._import_ctl.set_hold(connection=kind)
         if kind == "online":
             if self._offline_since:
                 self._notice(f"Back online: {self._recovered_count:,} replays synced")
@@ -3191,7 +3278,7 @@ class _Multiplexer:
 
     def _notice(self, message):
         for sink in self._sinks:
-            callback = getattr(sink, "show_notice", None)
+            callback = getattr(sink, "show_notice", None) or getattr(sink, "show_transient_notice", None)
             if callback:
                 callback(message)
 
@@ -3201,6 +3288,8 @@ class _Multiplexer:
 
     def on_paired(self, user_id: str) -> None:
         self._change_status(paired=True, unlinked=False)
+        if self._recent_history:
+            self._recent_history.refresh()
         for s in self._sinks:
             s.on_paired(user_id)
 
@@ -3214,6 +3303,37 @@ class _Multiplexer:
             self._recovered_count += 1
         for s in self._sinks:
             s.on_upload_success(name)
+
+    def on_game_synced(self, path, summary):
+        owner = summary.get("_owner")
+        if self._recent_history and owner != self._recent_history.owner_provider():
+            return
+        if self._recent_history:
+            self._recent_history.game_synced(path, summary)
+        for sink in self._sinks:
+            callback = getattr(sink, "on_game_synced", None)
+            if callback:
+                callback(path, summary)
+        identifier = summary.get("gameId")
+        notification_key = (owner, identifier)
+        if (self._game_notifications() and identifier and notification_key not in self._notified_games
+                and not summary.get("isHistory") and not summary.get("isResumed") and summary.get("result")):
+            self._notified_games = (self._notified_games + [notification_key])[-200:]
+            race = (summary.get("races") or {}).get("opponent")
+            race_copy = f" ({race[0]})" if race else ""
+            self._notice(f"{summary['result']} vs {summary.get('oppName') or 'Unknown opponent'}{race_copy} on {summary.get('map') or 'Unknown map'}")
+
+    def on_recent_snapshot(self, snapshot):
+        for sink in self._sinks:
+            callback = getattr(sink, "on_recent_snapshot", None)
+            if callback:
+                callback(snapshot)
+
+    def on_import_progress(self, snapshot):
+        for sink in self._sinks:
+            callback = getattr(sink, "on_import_progress", None)
+            if callback:
+                callback(snapshot)
 
     def on_upload_failed(self, name: str, reason) -> None:
         if getattr(reason, "counts_as_error", True):

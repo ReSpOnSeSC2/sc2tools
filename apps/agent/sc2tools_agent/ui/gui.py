@@ -504,6 +504,7 @@ class SettingsPayload:
         "replay_folders_removed",
         "autostart_enabled",
         "start_minimized",
+        "notify_every_game",
         "player_handle",
         "parse_concurrency",
         "upload_concurrency",
@@ -535,6 +536,7 @@ class SettingsPayload:
         replay_folders_removed: Optional[List[Path]] = None,
         autostart_enabled: Optional[bool] = None,
         start_minimized: Optional[bool] = None,
+        notify_every_game: Optional[bool] = None,
         player_handle: Optional[str] = None,
         parse_concurrency: Optional[int] = None,
         upload_concurrency: Optional[int] = None,
@@ -567,6 +569,7 @@ class SettingsPayload:
         self.replay_folders_removed = replay_folders_removed
         self.autostart_enabled = autostart_enabled
         self.start_minimized = start_minimized
+        self.notify_every_game = notify_every_game
         # Player handle (battleTag without the # discriminator, or any
         # substring that uniquely identifies the user in their own
         # replays). ``None`` means "no change"; an empty string clears
@@ -676,7 +679,13 @@ class GuiUI:
         on_install_update=None,
         on_update_later=None,
         on_restore_folders=None,
+        recent_games_enabled=False,
+        on_recent_retry=None,
+        on_import_current_season=None,
     ) -> None:
+        self._recent_games_enabled = recent_games_enabled
+        self._on_recent_retry = on_recent_retry or (lambda _paths, _reason: None)
+        self._on_import_current_season = on_import_current_season or (lambda: None)
         self._on_restore_folders = on_restore_folders
         self._on_install_update = on_install_update or (lambda: None)
         self._on_update_later = on_update_later or (lambda: None)
@@ -822,6 +831,15 @@ class GuiUI:
 
     def on_upload_success(self, filename: str) -> None:
         self._dispatch("uploadSuccess", filename)
+
+    def on_game_synced(self, path, summary) -> None:
+        self._dispatch("gameSynced", str(path), dict(summary))
+
+    def on_recent_snapshot(self, snapshot) -> None:
+        self._dispatch("recentSnapshot", snapshot)
+
+    def on_import_progress(self, snapshot) -> None:
+        self._dispatch("importProgress", snapshot)
 
     def on_upload_failed(self, filename: str, reason: str) -> None:
         self._dispatch("uploadFailed", filename, reason)
@@ -1013,6 +1031,9 @@ def _make_signals():
         paired = QtCore.Signal(str)
         status = QtCore.Signal(str)
         uploadSuccess = QtCore.Signal(str)
+        gameSynced = QtCore.Signal(str, object)
+        recentSnapshot = QtCore.Signal(object)
+        importProgress = QtCore.Signal(object)
         uploadFailed = QtCore.Signal(str, object)
         pendingChanged = QtCore.Signal(int)
         updateAvailable = QtCore.Signal(str)
@@ -1196,7 +1217,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         # the table; the cloud is the source of truth for the full list.
         _PAGE_KEYS = ("dashboard", "recent", "log", "settings", "streams")
         apiTestDone = QtCore.Signal(str, int, str)
-        MAX_RECENT = 100
+        MAX_RECENT = 200
         # Tail parsing and its record cap live in activity_log.py.
         LOG_TAIL_INTERVAL_MS = 1500
 
@@ -1222,7 +1243,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                                              folders=list(ui._replay_folders), phase="connecting")
             self._paired = ui._initial_paired
             self._user_id = ui._initial_user_id
-            self._uploaded_count = self._query_synced_count(default=0)
+            self._uploaded_count = 0 if ui._recent_games_enabled else self._query_synced_count(default=0)
+            self._history_facts = None
+            self._import_progress = {"phase": "idle"}
             self._folder_generation = 0
             self._folder_removed_instant = set()
             self._pending_count = 0
@@ -1369,7 +1392,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._nav_group.setExclusive(True)
 
             for index, label in enumerate(
-                ["Dashboard", "Recent uploads", "Activity log", "Settings", "Streams"],
+                ["Dashboard", "Recent games", "Activity log", "Settings", "Streams"],
             ):
                 btn = QtWidgets.QPushButton(label)
                 btn.setObjectName("navItem")
@@ -1408,7 +1431,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             version_lbl = QtWidgets.QLabel(f"v{ui._version}")
             version_lbl.setObjectName("dim")
-            layout.addWidget(version_lbl)
+            footer = QtWidgets.QHBoxLayout()
+            footer.addWidget(version_lbl)
+            self._updates_btn = QtWidgets.QPushButton("Updates")
+            self._updates_btn.setAccessibleName("Check for updates")
+            self._updates_btn.setToolTip("Check for updates")
+            self._updates_btn.setFlat(True)
+            self._updates_btn.clicked.connect(self._click_check_updates)
+            footer.addWidget(self._updates_btn)
+            layout.addLayout(footer)
 
             return frame
 
@@ -1444,9 +1475,18 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._stats_row = self._build_stats_row()
             v.addWidget(self._stats_row)
             v.addWidget(self._build_action_row())
+            from .game_dashboard import build_game_dashboard
+            self._game_dashboard = build_game_dashboard(self, QtCore=QtCore, QtWidgets=QtWidgets,
+                open_game=self._open_recent_game, pause=self._click_pause,
+                current_season=self._import_current_season,
+                open_website=self._open_checkin_queue, open_help=self._open_help)
+            v.addWidget(self._game_dashboard)
             v.addStretch(1)
-
-            return page
+            scroll = QtWidgets.QScrollArea()
+            scroll.setWidgetResizable(True)
+            scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+            scroll.setWidget(page)
+            return scroll
 
         def _build_replay_archive_card(self) -> QtWidgets.QFrame:
             card = QtWidgets.QFrame()
@@ -1555,6 +1595,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             actions.addStretch(1)
             grid.addLayout(actions, 4, 1, 1, 3)
             self._transient_notice = QtWidgets.QLabel()
+            self._transient_notice.setTextFormat(QtCore.Qt.PlainText)
             self._transient_notice.setWordWrap(True)
             self._transient_notice.hide()
             grid.addWidget(self._transient_notice, 5, 1, 1, 2)
@@ -1609,6 +1650,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             else: self._retry_status_timer.start()
             self._status_facts.connection = ConnectionFacts(kind, waiting_count, next_retry_at)
             self._refresh_status_card()
+            self._request_stats_refresh()
 
         def _paint_connection_banner(self):
             self._refresh_status_card()
@@ -1620,10 +1662,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             h.setSpacing(14)
 
             self._stat_synced = self._make_stat_card("Synced", "0")
-            self._stat_queued = self._make_stat_card("Queued", "0")
+            self._stat_queued = self._make_stat_card("Waiting", "0")
             self._stat_last = self._make_stat_card("Last upload", "—")
+            self._stat_failed = self._make_stat_card("Failed (24 h)", "0")
+            failures = QtWidgets.QPushButton("View problems")
+            failures.setFlat(True)
+            failures.clicked.connect(self._show_recent_problems)
+            self._stat_failed["frame"].layout().addWidget(failures)
 
-            for w in (self._stat_synced, self._stat_queued, self._stat_last):
+            for w in (self._stat_synced, self._stat_queued, self._stat_last, self._stat_failed):
                 h.addWidget(w["frame"], stretch=1)
 
             return row
@@ -1641,6 +1688,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             label_lbl = QtWidgets.QLabel(label)
             label_lbl.setObjectName("muted")
+            label_lbl.setWordWrap(True)
             v.addWidget(label_lbl)
 
             return {"frame": card, "value": value_lbl, "label": label_lbl}
@@ -1687,7 +1735,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "de-duplicates by game ID).",
             )
             resync_btn.clicked.connect(self._click_resync)
-            local_row.addWidget(resync_btn)
+            # Placed in Settings Maintenance below; keep it away from Pause.
 
             choose_btn = QtWidgets.QPushButton("Add replay folder…")
             self._choose_btn = choose_btn
@@ -1709,17 +1757,6 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             ext_row.setContentsMargins(0, 0, 0, 0)
             ext_row.addStretch(1)
 
-            self._updates_btn = QtWidgets.QPushButton("Check for updates")
-            self._updates_btn.setSizePolicy(
-                QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed,
-            )
-            self._updates_btn.setToolTip(
-                "Ask the release feed whether a newer agent build "
-                "exists. The result appears on the status card above.",
-            )
-            self._updates_btn.clicked.connect(self._click_check_updates)
-            ext_row.addWidget(self._updates_btn)
-
             dash_btn = QtWidgets.QPushButton("Open dashboard")
             dash_btn.setObjectName("primary")
             dash_btn.setSizePolicy(
@@ -1734,62 +1771,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         # ---- Recent tab ----
 
         def _build_recent_tab(self) -> QtWidgets.QWidget:
-            page = QtWidgets.QWidget()
-            v = QtWidgets.QVBoxLayout(page)
-            v.setContentsMargins(28, 24, 28, 24)
-            v.setSpacing(14)
-
-            title = QtWidgets.QLabel("Recent uploads")
-            title.setObjectName("h1")
-            v.addWidget(title)
-
-            sub = QtWidgets.QLabel(
-                "Most recent first. Double-click a row to reveal the "
-                "replay in Explorer.",
-            )
-            sub.setObjectName("muted")
-            v.addWidget(sub)
-
-            self._recent_table = QtWidgets.QTableWidget(0, 4)
-            self._recent_table.setHorizontalHeaderLabels(
-                ["Time", "Replay", "Status", "Details"],
-            )
-            self._recent_table.verticalHeader().setVisible(False)
-            self._recent_table.setEditTriggers(
-                QtWidgets.QAbstractItemView.NoEditTriggers,
-            )
-            self._recent_table.setSelectionBehavior(
-                QtWidgets.QAbstractItemView.SelectRows,
-            )
-            self._recent_table.setShowGrid(False)
-            self._recent_table.setAlternatingRowColors(False)
-            header = self._recent_table.horizontalHeader()
-            header.setSectionResizeMode(
-                0, QtWidgets.QHeaderView.ResizeToContents,
-            )
-            header.setSectionResizeMode(1, QtWidgets.QHeaderView.Stretch)
-            header.setSectionResizeMode(
-                2, QtWidgets.QHeaderView.ResizeToContents,
-            )
-            self._recent_table.itemDoubleClicked.connect(self._reveal_replay)
-            v.addWidget(self._recent_table, stretch=1)
-
-            # Empty state — a bare table reads as "broken"; say what
-            # will appear here and when. Swapped out by _refresh_recent
-            # the moment the first upload lands.
-            self._recent_empty = QtWidgets.QLabel(
-                "No uploads yet this session.\n"
-                "Play a ladder game (or drop a replay into a watched "
-                "folder) and it will appear here seconds later.",
-            )
-            self._recent_empty.setObjectName("muted")
-            self._recent_empty.setAlignment(QtCore.Qt.AlignCenter)
-            self._recent_empty.setWordWrap(True)
-            v.addWidget(self._recent_empty, stretch=2)
-            # Session starts with no rows — lead with the explanation.
-            self._recent_table.hide()
-
-            return page
+            from .recent_games import build_recent_games
+            self._recent_widget = build_recent_games(self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets,
+                open_game=self._open_recent_game, reveal=self._show_recent_file,
+                retry=self._retry_recent,
+                open_help=self._open_help)
+            self._recent_table, self._recent_empty = self._recent_widget.table, self._recent_widget.empty
+            return self._recent_widget
 
         # ---- Logs tab ----
 
@@ -2335,6 +2323,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             form.addRow("", self._minimized_check)
 
+            self._game_notifications_check = QtWidgets.QCheckBox("Notify me after every new game syncs")
+            self._game_notifications_check.setToolTip("Shows the result, opponent and map on this PC. Replay-history imports stay quiet.")
+            form.addRow("", self._game_notifications_check)
+
             # Auto-update consent — the state flag shipped in 0.13.4's
             # updater hardening but had no UI surface, so the only way
             # to opt out was hand-editing agent.json. Unchecking turns
@@ -2400,6 +2392,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             row.addWidget(save_btn)
             v.addLayout(row)
 
+            maintenance = QtWidgets.QGroupBox("Maintenance")
+            maintenance_layout = QtWidgets.QVBoxLayout(maintenance)
+            warning = QtWidgets.QLabel("Re-sync rebuilds your local upload cursor and revisits your replay library.")
+            warning.setWordWrap(True)
+            maintenance_layout.addWidget(warning)
+            self._resync_btn.setText("Re-sync replay library…")
+            self._resync_btn.setObjectName("dangerButton")
+            maintenance_layout.addWidget(self._resync_btn)
+            v.addWidget(maintenance)
             v.addStretch(1)
             scroller.setWidget(page)
             return scroller
@@ -2824,6 +2825,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             signals.paired.connect(self._on_paired)
             signals.status.connect(self._on_status)
             signals.uploadSuccess.connect(self._on_upload_success)
+            signals.gameSynced.connect(self._on_game_synced)
+            signals.recentSnapshot.connect(self._on_recent_snapshot)
+            signals.importProgress.connect(self._on_import_progress)
             signals.uploadFailed.connect(self._on_upload_failed)
             signals.pendingChanged.connect(self._on_pending_changed)
             signals.updateAvailable.connect(self._on_update_available)
@@ -2855,6 +2859,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._status_facts.unlinked = True
             self._paired = False
             self._user_id = None
+            self._on_recent_snapshot({"owner": None, "rows": [], "facts": {}, "today": {}, "skipped": []})
             self._pairing_card.apply("unlinked")
             self._refresh_status_card()
             self._go_to_page("dashboard")
@@ -2907,9 +2912,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 (datetime.now(), filename, True, "Uploaded"),
             )
             self._refresh_status_card()
-            self._paint_stats()
+            if not ui._recent_games_enabled:
+                self._paint_stats()
             self._request_stats_refresh()
-            self._insert_recent(self._recent[0])
+            if not ui._recent_games_enabled:
+                self._insert_recent(self._recent[0])
 
         def _on_upload_failed(self, filename: str, reason: str) -> None:
             if getattr(reason, "counts_as_error", True):
@@ -2918,14 +2925,54 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._recent.appendleft(
                 (datetime.now(), filename, False, reason or "Failed"),
             )
-            self._insert_recent(self._recent[0])
+            if not ui._recent_games_enabled:
+                self._insert_recent(self._recent[0])
             self._refresh_status_card()
 
         def _on_pending_changed(self, count: int) -> None:
             self._pending_count = int(count)
-            self._paint_stats()
+            if not ui._recent_games_enabled:
+                self._paint_stats()
             self._request_stats_refresh()
             self._paint_connection_banner()
+
+        def _on_game_synced(self, path, summary):
+            if self._paired and summary.get("_owner", self._user_id) == self._user_id:
+                self._recent_widget.append({**summary, "path": path, "status": "uploaded",
+                                            "updatedAt": datetime.now().astimezone().isoformat()})
+                self._request_stats_refresh()
+
+        def _on_recent_snapshot(self, snapshot):
+            if snapshot.get("owner") != self._user_id or not self._paired:
+                snapshot = {"rows": [], "facts": {}, "today": {}, "skipped": []}
+            self._history_facts = snapshot.get("facts", {})
+            self._recent_widget.set_rows(snapshot.get("rows", []), snapshot.get("skipped", []))
+            self._game_dashboard.set_snapshot(snapshot)
+            self._request_stats_refresh()
+
+        def _on_import_progress(self, snapshot):
+            self._import_progress = snapshot
+            self._request_stats_refresh()
+
+        def _show_recent_problems(self):
+            self._go_to_page("recent")
+            self._recent_widget.set_filter("problem")
+
+        def _open_recent_game(self, identifier):
+            from urllib.parse import quote
+            if isinstance(identifier, str) and identifier:
+                webbrowser.open(site_url(ui._dashboard_url, "/app/game/" + quote(identifier, safe="")), new=2)
+
+        def _show_recent_file(self, path):
+            if not path:
+                return
+            target = Path(path)
+            if not target.is_file():
+                self._show_transient_notice("This replay file is no longer on this PC.")
+            elif sys.platform == "win32":
+                subprocess.Popen(["explorer.exe", "/select," + str(target.resolve())])
+            else:
+                QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(str(target.resolve().parent)))
 
         def _on_release_notes(self, notes):
             self._release_notes = notes
@@ -2961,7 +3008,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _on_update_check_done(self, message: str) -> None:
             self._updates_btn.setEnabled(True)
-            self._updates_btn.setText("Check for updates")
+            self._updates_btn.setText("Updates")
             # Empty message = an update was found and the runner's
             # handler owns the (sticky) notice — leave it alone.
             if message:
@@ -3053,6 +3100,34 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self.activateWindow()
 
         # ---- click handlers ----
+
+        def _retry_recent(self, paths, reason):
+            def retry():
+                try:
+                    ui._on_recent_retry(paths, reason)
+                except Exception:
+                    ui.show_transient_notice("Could not retry these files. Check the Activity log and try again.")
+            threading.Thread(target=retry, name="sc2tools-recent-retry", daemon=False).start()
+
+        def _import_current_season(self):
+            if self._settings_save_pending:
+                self._show_transient_notice("Wait for the settings save to finish, then try again.")
+                return
+            context = dict(api_base=self._saved_api_base, preset="current_season", since_iso=None,
+                           until_iso=None, removals=self._folders_removed, dirty=self._folders_dirty,
+                           externalFilter=True)
+            self._settings_save_pending = True
+            self._settings_page.setEnabled(False)
+            self._game_dashboard.season.setEnabled(False)
+            self._refresh_status_card()
+            def persist():
+                error = None
+                try:
+                    ui._on_import_current_season()
+                except Exception:
+                    error = "Could not apply the season filter. Try again in Settings."
+                signals.settingsSaveDone.emit(context, error)
+            threading.Thread(target=persist, name="sc2tools-import-season", daemon=False).start()
 
         def _click_pause(self) -> None:
             if self._settings_save_pending:
@@ -3386,6 +3461,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 replay_folder=folders[0] if folders else None,
                 autostart_enabled=self._autostart_check.isChecked(),
                 start_minimized=self._minimized_check.isChecked(),
+                notify_every_game=self._game_notifications_check.isChecked(),
                 auto_update_enabled=self._autoupdate_check.isChecked(),
                 replay_capture_enabled=self._replay_capture_last_saved,
                 player_handle=self._handle_input.text().strip(),
@@ -3438,6 +3514,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _on_settings_save_done(self, context, error):
             self._settings_save_pending = False
             self._settings_page.setEnabled(True)
+            self._game_dashboard.season.setEnabled(True)
             self._save_settings_btn.setText("Save settings")
             if error:
                 self._folders_removed = context["removals"]
@@ -3446,6 +3523,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             else:
                 self._saved_api_base = context["api_base"]
                 preset = context["preset"]
+                if context.get("externalFilter"):
+                    self._filter_combo.setCurrentIndex(self._filter_combo.findData(preset))
                 self._active_filter_label = self._compute_filter_label(
                     preset=None if preset == "all" else preset,
                     since_iso=context["since_iso"], until_iso=context["until_iso"],
@@ -3749,6 +3828,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._status_facts.paused_until = until or None
             self._pause_btn.setText("Resume syncing" if paused else "Pause syncing")
             self._refresh_status_card()
+            self._request_stats_refresh()
 
         def _show_transient_notice(self, message):
             self._transient_notice.setText(message)
@@ -3792,6 +3872,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             needs_pairing = view.status in (AgentStatus.NEEDS_PAIRING, AgentStatus.UNLINKED)
             if hasattr(self,"_stats_row"):
                 self._stats_row.setVisible(not needs_pairing)
+            if hasattr(self, "_game_dashboard"):
+                self._game_dashboard.setVisible(not needs_pairing)
             for name in ("_pause_btn","_resync_btn","_choose_btn"):
                 button=getattr(self,name,None)
                 if button:
@@ -3853,20 +3935,28 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if not self._stats_refresh_timer.isActive():
                 self._stats_refresh_timer.start()
 
-        def _request_stats_refresh(self):
-            if not self._stats_refresh_timer.isActive():
-                self._stats_refresh_timer.start()
-
         def _refresh_stats(self) -> None:
             # Re-query on every repaint so a mid-session Re-sync (which
             # wipes the uploaded cursor) is reflected without waiting
             # for the next upload to land.
-            self._uploaded_count = self._query_synced_count(
-                default=self._uploaded_count,
-            )
+            if not ui._recent_games_enabled:
+                self._uploaded_count = self._query_synced_count(default=self._uploaded_count)
             self._paint_stats()
 
         def _paint_stats(self):
+            from .recent_games import relative_time
+            if ui._recent_games_enabled:
+                facts = self._history_facts
+                self._stat_synced["value"].setText(str(facts.get("synced", 0)) if facts is not None else "…")
+                self._stat_synced["label"].setText(f"Synced · +{facts.get('syncedToday', 0)} today" if facts else "Synced")
+                self._stat_last["value"].setText(relative_time(facts.get("lastUploadAt")) if facts and facts.get("lastUploadAt") else "—")
+                self._stat_failed["value"].setText(str(facts.get("failed24h", 0)) if facts else "0")
+                remaining = max(0, int(self._import_progress.get("remaining", 0)))
+                waiting = max(self._pending_count, remaining)
+                unknown = self._import_progress.get("phase") == "scanning" and not self._import_progress.get("inventoryKnown")
+                self._stat_queued["value"].setText("…" if unknown else str(waiting))
+                self._game_dashboard.set_progress(self._import_progress, paused=self._paused, connection=self._connection_kind)
+                return
             self._stat_synced["value"].setText(str(self._uploaded_count))
             self._stat_queued["value"].setText(str(self._pending_count))
             if self._last_upload:
@@ -3876,45 +3966,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._stat_last["value"].setText("—")
 
         def _insert_recent(self, record):
-            self._recent_empty.hide()
-            self._recent_table.show()
-            self._recent_table.insertRow(0)
-            self._paint_recent_row(0, record)
-            while self._recent_table.rowCount() > self.MAX_RECENT:
-                self._recent_table.removeRow(self.MAX_RECENT)
-
-        def _paint_recent_row(self, row, record):
             ts, name, ok, detail = record
-            ts_item = QtWidgets.QTableWidgetItem(ts.strftime("%Y-%m-%d %H:%M:%S"))
-            ts_item.setForeground(QtGui.QColor(_TEXT_MUTED))
-            title = detail if isinstance(detail, str) else detail.title
-            status_item = QtWidgets.QTableWidgetItem(("✓ " if ok else "✗ ") + str(title))
-            technical = getattr(detail, "detail", str(detail))
-            status_item.setToolTip(technical)
-            if not ok:
-                actions = QtWidgets.QWidget()
-                buttons = QtWidgets.QHBoxLayout(actions)
-                buttons.setContentsMargins(0, 0, 0, 0)
-                copy = QtWidgets.QPushButton("Copy details")
-                copy.clicked.connect(lambda: QtWidgets.QApplication.clipboard().setText(technical))
-                buttons.addWidget(copy)
-                help_btn = QtWidgets.QPushButton("Help")
-                help_btn.clicked.connect(lambda: self._open_help(
-                    "desktop-app-sync-problems", getattr(detail, "help_anchor", "rejected")))
-                buttons.addWidget(help_btn)
-                self._recent_table.setCellWidget(row, 3, actions)
-            status_item.setForeground(QtGui.QColor(_SUCCESS if ok else _DANGER))
-            self._recent_table.setItem(row, 0, ts_item)
-            self._recent_table.setItem(row, 1, QtWidgets.QTableWidgetItem(name))
-            self._recent_table.setItem(row, 2, status_item)
+            self._recent_widget.append({"path": name, "status": "uploaded" if ok else "problem",
+                "errorTitle": (detail if isinstance(detail, str) else detail.title) if not ok else "",
+                "errorKind": getattr(detail, "help_anchor", "rejected"),
+                "updatedAt": ts.astimezone().isoformat(), "error": getattr(detail, "detail", str(detail)) if not ok else ""})
 
         def _refresh_recent(self) -> None:
-            has_rows = bool(self._recent)
-            self._recent_empty.setVisible(not has_rows)
-            self._recent_table.setVisible(has_rows)
-            self._recent_table.setRowCount(len(self._recent))
-            for row, record in enumerate(self._recent):
-                self._paint_recent_row(row, record)
+            self._recent_widget.refresh_counts()
 
         def _populate_settings(self) -> None:
             initial = ui._initial_settings
@@ -3983,6 +4042,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._minimized_check.setChecked(
                 bool(initial.start_minimized),
             )
+            self._game_notifications_check.setChecked(initial.notify_every_game is True)
             # Default ON when the runner didn't say otherwise — matches
             # the state field's default so a fresh install reads true.
             self._autoupdate_check.setChecked(

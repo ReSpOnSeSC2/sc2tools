@@ -117,13 +117,14 @@ def test_recent_upload_burst_is_incremental_and_coalesces_counts(tmp_path):
         for index in range(500): win._on_upload_success(f"replay-{index}.SC2Replay")
         assert len(counts) <= 2
         assert not rebuilds
-        assert win._recent_table.rowCount() == 100
-        assert win._recent_table.item(0, 1).text() == "replay-499.SC2Replay"
-        assert win._recent_table.item(99, 1).text() == "replay-400.SC2Replay"
+        model = win._recent_table.model()
+        assert model.rowCount() == 200
+        assert model.visible[0]["path"] == "replay-499.SC2Replay"
+        assert model.visible[199]["path"] == "replay-300.SC2Replay"
         QtTest.QTest.qWait(300)
         assert len(counts) == 1
         assert win._stat_synced["value"].text() == "500"
         win._on_upload_failed("failure.SC2Replay", "network unavailable")
-        assert win._recent_table.rowCount() == 100
-        assert win._recent_table.item(0, 1).text() == "failure.SC2Replay"
+        assert model.rowCount() == 200
+        assert model.visible[0]["path"] == "failure.SC2Replay"
     ''')

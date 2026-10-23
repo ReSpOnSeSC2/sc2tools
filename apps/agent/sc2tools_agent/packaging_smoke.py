@@ -37,8 +37,9 @@ def _exercise_gui(report):
     ui = GuiUI(
         version=__version__, dashboard_url="", pairing_url="", api_base="",
         log_dir=directory, log_file=directory / "absent-smoke-log.txt",
-        replay_folders=[], initial_paused=True, initial_paired=False,
-        initial_user_id=None, initial_settings=SettingsPayload(),
+        replay_folders=[], initial_paused=True, initial_paired=True,
+        initial_user_id="packaging-fixture", initial_settings=SettingsPayload(),
+        recent_games_enabled=True,
         on_pause=inert, on_resync=inert, on_choose_folder=inert,
         on_check_updates=inert, on_save_settings=inert, on_quit=app.quit,
         stream_status_provider=lambda: snapshot, on_stream_action=None,
@@ -60,6 +61,27 @@ def _exercise_gui(report):
             if streams_index is None:
                 raise RuntimeError("The bundled Streams page did not construct.")
             window.resize(1120, 850)
+            report["stage"] = "dashboard_recent_paint"
+            from datetime import datetime, timezone
+            at = datetime.now(timezone.utc).isoformat()
+            ui.on_recent_snapshot({"owner": "packaging-fixture", "rows": [{"path": "fixture.SC2Replay",
+                "gameId": "offline-fixture", "dateIso": at, "status": "uploaded", "result": "Victory",
+                "races": {"own": "Protoss", "opponent": "Zerg"}, "oppName": "Sample opponent", "map": "Sample map"}],
+                "facts": {"synced": 1, "syncedToday": 1}, "today": {"wins": 1, "losses": 0, "games": 1}})
+            ui.on_import_progress({"phase": "importing", "total": 12, "completed": 4, "remaining": 8})
+            app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+            window._refresh_stats()
+            if window._game_dashboard.last_id != "offline-fixture" or window._game_dashboard.bar.maximum() != 12:
+                raise RuntimeError("The bundled game summary or import card did not render.")
+            for page in ("dashboard", "recent"):
+                window._go_to_page(page)
+                app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+                if window.grab().isNull():
+                    raise RuntimeError("The bundled game dashboard did not paint.")
+            if not isinstance(window._recent_table.model(), QtCore.QAbstractTableModel) or window._recent_table.model().rowCount() != 1:
+                raise RuntimeError("The bundled recent-game model did not load.")
+            if window._recent_table.horizontalHeader().sectionResizeMode(3) != QtWidgets.QHeaderView.Interactive:
+                raise RuntimeError("The bundled opponent column could not be resized.")
             window._nav_group.button(streams_index).setChecked(True)
             stack.setCurrentIndex(streams_index)
             app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
@@ -76,7 +98,8 @@ def _exercise_gui(report):
                     raise RuntimeError("The bundled check-in preview did not paint.")
                 card._dismiss_preview()
             report.update(qt_version=QtCore.qVersion(), qt_platform=app.platformName(),
-                          page_count=stack.count(), streams_painted=True, checkin_previews_painted=True)
+                          page_count=stack.count(), streams_painted=True, checkin_previews_painted=True,
+                          dashboard_recent_painted=True)
         except Exception as error:
             callback["error"] = error
         finally:

@@ -80,6 +80,7 @@ raise SystemExit(__main__.main())
     assert report["page_count"] == 5
     assert report["streams_painted"] is True
     assert report["checkin_previews_painted"] is True
+    assert report["dashboard_recent_painted"] is True
     assert set(tmp_path.iterdir()) == {destination}
 
 
