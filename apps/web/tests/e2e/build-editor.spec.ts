@@ -5,7 +5,7 @@ test("phone build editor keeps private notes and rule controls inside its modal"
   test.skip(testInfo.project.name !== "desktop-1280", "the touch-size viewport is set explicitly");
   await page.setViewportSize({ width: 375, height: 900 });
   await page.route("**/v1/public/preview-replay", (route) => route.fulfill({
-    status: 200, contentType: "application/json",
+    status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*", "access-control-allow-methods": "POST, OPTIONS", "access-control-allow-headers": "content-type" },
     body: JSON.stringify({
       ok: true, game_id: "synthetic-editor-phone", map: "Fixture Map", duration_sec: 600, date: "2026-10-23T00:00:00Z",
       players: [

@@ -16,6 +16,16 @@ corresponding GitHub Release.
 - Both build editors ask before discarding unsaved work. Save failures keep their complete message visible, and editor notifications use the shared toast layer.
 - The rich editor includes private notes, preserves notes and legacy signatures during metadata edits, and opens from every Edit action. Dossiers show authored rules, strategy notes and skill level beside personal notes.
 
+### Removed
+
+- Retired the unused server model-training and prediction endpoints. Replay analysis continues to use fixed rules and statistics; the API image now installs only its server analysis dependencies.
+
+### Community and public sharing
+
+- Community votes show your saved vote, support undo and keep their score correct during simultaneous voting. Reports use readable categories and optional details; Controversial favors divided votes. Public author and player names are escaped safely in structured data.
+- The Stock Market leaderboard opens on the last settled week, distinguishes locked portfolios from results, highlights your own rank and provides shareable week navigation. Player names remain visible only to signed-in players.
+- Public profiles keep temporary outages out of their page cache. Shared replay pages recover expired page links, retry busy services within a limit, share metadata reads and provide a public-friendly private-or-missing page.
+
 ### Experience polish
 
 - Settings show recoverable load failures, protect saved profile IDs, preview game-history deletion counts, and include both selected days in local time. Mobile tabs scroll into view and support arrow keys.

@@ -33,8 +33,6 @@ const { ensureGuideIndexes, startBackgroundIndexBuilds } = require("./guideIndex
  *   youtubeCreateOperations: import('mongodb').Collection,
  *   platformWebhookReceipts: import('mongodb').Collection,
  *   platformEvents: import('mongodb').Collection,
- *   mlModels: import('mongodb').Collection,
- *   mlJobs: import('mongodb').Collection,
  *   importJobs: import('mongodb').Collection,
  *   macroJobs: import('mongodb').Collection,
  *   agentReleases: import('mongodb').Collection,
@@ -124,8 +122,6 @@ async function connect({ uri, dbName, awaitBackgroundIndexes = false }, observab
     youtubeCreateOperations: db.collection(COLLECTIONS.YOUTUBE_CREATE_OPERATIONS),
     platformWebhookReceipts: db.collection(COLLECTIONS.PLATFORM_WEBHOOK_RECEIPTS),
     platformEvents: db.collection(COLLECTIONS.PLATFORM_EVENTS),
-    mlModels: db.collection(COLLECTIONS.ML_MODELS),
-    mlJobs: db.collection(COLLECTIONS.ML_JOBS),
     importJobs: db.collection(COLLECTIONS.IMPORT_JOBS),
     macroJobs: db.collection(COLLECTIONS.MACRO_JOBS),
     agentReleases: db.collection(COLLECTIONS.AGENT_RELEASES),
@@ -586,8 +582,6 @@ async function ensureIndexes(ctx, opts = {}) {
     },
   );
 
-  await ctx.mlModels.createIndex({ userId: 1, kind: 1 }, { unique: true });
-  await ctx.mlJobs.createIndex({ userId: 1, createdAt: -1 });
 
   await ctx.importJobs.createIndex({ userId: 1, createdAt: -1 });
   await ctx.macroJobs.createIndex({ userId: 1, createdAt: -1 });

@@ -236,7 +236,7 @@ class ArcadeService {
    * row is anonymous and the leaderboard shows "Anonymous N".
    *
    * @param {string} userId
-   * @param {{ weekKey: string, pnlPct: number, displayName?: string }} entry
+   * @param {{ weekKey: string, pnlPct: number, displayName?: string, settled?: boolean }} entry
    */
   async submitLeaderboard(userId, entry) {
     if (!entry || typeof entry !== "object") return false;
@@ -244,6 +244,7 @@ class ArcadeService {
     const pnl = Number(entry.pnlPct);
     if (!isWeekKey(weekKey)) return false;
     if (!Number.isFinite(pnl)) return false;
+    if (entry.settled !== undefined && typeof entry.settled !== "boolean") return false;
     const display = typeof entry.displayName === "string"
       ? entry.displayName.trim().slice(0, 60)
       : "";
@@ -255,6 +256,7 @@ class ArcadeService {
       pnlPct: clamp(pnl, -100, 1000),
       displayName: display,
       updatedAt: now,
+      ...(entry.settled !== undefined ? { settled: entry.settled } : {}),
     };
     stampVersion(doc, ARCADE_LEADERBOARD);
     await this._coll().updateOne(
@@ -356,24 +358,30 @@ class ArcadeService {
    * upstream.
    *
    * @param {string} weekKey
-   * @param {{ limit?: number }} [opts]
+   * @param {{ limit?: number, userId?: string }} [opts]
    */
   async listLeaderboard(weekKey, opts = {}) {
     if (!isWeekKey(weekKey)) {
-      return { weekKey, items: [] };
+      return { weekKey, items: [], participants: 0, settledCount: 0, you: null };
     }
     const limit = Math.min(Math.max(1, Number(opts.limit) || 50), 200);
-    const rows = await this._coll()
-      .find(
-        { weekKey },
-        { projection: { _id: 0, userId: 1, displayName: 1, pnlPct: 1 } },
-      )
-      .sort({ pnlPct: -1, updatedAt: 1 })
-      .limit(limit)
-      .toArray();
+    const coll = this._coll();
+    const settledFilter = { weekKey, $or: [{ settled: true }, { pnlPct: { $ne: 0 } }] };
+    const [rows, participants, settledCount, yours] = await Promise.all([
+      coll.aggregate([
+        { $match: { weekKey } },
+        { $addFields: { settled: { $or: [{ $eq: ["$settled", true] }, { $ne: ["$pnlPct", 0] }] } } },
+        { $sort: { settled: -1, pnlPct: -1, updatedAt: 1 } },
+        { $limit: limit },
+        { $project: { _id: 0, userId: 1, displayName: 1, pnlPct: 1, settled: 1 } },
+      ]).toArray(),
+      coll.countDocuments({ weekKey }),
+      coll.countDocuments(settledFilter),
+      opts.userId ? coll.findOne({ weekKey, userId: opts.userId }, { projection: { pnlPct: 1, settled: 1, updatedAt: 1 } }) : null,
+    ]);
     let anonCounter = 1;
     const items = rows.map((r, i) => ({
-      rank: i + 1,
+      rank: r.settled ? i + 1 : null,
       // Stable per-user anonymised handle so the same anonymous user
       // doesn't read as a different "Anonymous N" between page loads
       // within a week.
@@ -382,8 +390,21 @@ class ArcadeService {
         : `Anonymous ${anonCounter++}`,
       pnlPct: r.pnlPct,
       isAnonymous: !r.displayName || r.displayName.length === 0,
+      settled: Boolean(r.settled),
+      isYou: r.userId === opts.userId,
     }));
-    return { weekKey, items };
+    let you = null;
+    if (yours) {
+      const settled = yours.settled === true || yours.pnlPct !== 0;
+      const ahead = settled ? await coll.countDocuments({
+        $and: [settledFilter, { $or: [
+          { pnlPct: { $gt: yours.pnlPct } },
+          { pnlPct: yours.pnlPct, updatedAt: { $lt: yours.updatedAt } },
+        ] }],
+      }) : 0;
+      you = { rank: settled ? ahead + 1 : null, pnlPct: yours.pnlPct, settled };
+    }
+    return { weekKey, items, participants, settledCount, you };
   }
 }
 

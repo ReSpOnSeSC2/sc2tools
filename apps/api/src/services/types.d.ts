@@ -1210,17 +1210,6 @@ export interface CatalogService {
   playbackInfo(): object;
 }
 
-export interface MLService {
-  status(userId: string): Promise<object>;
-  train(
-    userId: string,
-    opts?: { kind?: string },
-  ): Promise<{ jobId: string; status: string }>;
-  predict(userId: string, payload: object): Promise<object>;
-  pregame(userId: string, payload: object): Promise<object>;
-  options(userId: string): Promise<object>;
-}
-
 export interface AgentVersionService {
   latest(opts?: { channel?: string; platform?: string }): Promise<object | null>;
   publish(payload: object): Promise<{ channel: string; version: string }>;

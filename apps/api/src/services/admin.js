@@ -31,7 +31,7 @@ const { disabledBrowserUploadStatus } = require("./replayFilesCors");
  * ``profiles`` are tiny system collections; ``device_pairings`` is
  * a TTL working-set; ``agent_releases`` is operational metadata.
  * Listing them by name avoids surfacing the dozens of internal
- * collections (mlJobs, importJobs, etc.) that the dashboard
+ * collections (importJobs, macroJobs, etc.) that the dashboard
  * doesn't render.
  */
 // Allowed values for the Users-tab segment filter. Anything outside
@@ -72,7 +72,6 @@ const DASHBOARD_COLLECTIONS = Object.freeze([
   COLLECTIONS.AGENT_RELEASES,
   COLLECTIONS.DEVICE_TOKENS,
   COLLECTIONS.OVERLAY_TOKENS,
-  COLLECTIONS.ML_MODELS,
   COLLECTIONS.PULSE_ACCOUNTS,
 ]);
 
