@@ -17,6 +17,8 @@ import re
 from pathlib import Path
 from typing import Iterable, Iterator, List, Optional, Union
 
+from .folder_info import FolderInfo, describe_folder
+
 # Sibling ``Documents`` folders a test client could write to instead of
 # ``StarCraft II``. Matching only these words keeps a user's backup copy
 # ("StarCraft II - Copy") from being watched and re-parsed.
@@ -26,7 +28,12 @@ _TEST_CLIENT_WORDS = ("ptr", "test", "beta")
 def candidate_documents_dirs() -> Iterator[Path]:
     """Yield plausible Documents-folder paths, in order of preference."""
     user = Path.home()
-    candidates = [
+    candidates = []
+    for resolver in (_known_documents_dir, _registry_documents_dir):
+        resolved = resolver()
+        if resolved is not None:
+            candidates.append(resolved)
+    candidates += [
         user / "Documents",
         user / "OneDrive" / "Documents",
         user / "OneDrive" / "Pictures" / "Documents",
@@ -43,6 +50,10 @@ def candidate_documents_dirs() -> Iterator[Path]:
         candidates.append(
             Path(user_profile) / "OneDrive" / "Pictures" / "Documents",
         )
+    # OneDrive business/localized Documents directories have arbitrary names.
+    for drive in safe_iterdir(user):
+        if drive.is_dir() and drive.name.casefold().startswith("onedrive"):
+            candidates.extend([drive, *[child for child in safe_iterdir(drive) if child.is_dir()]])
     seen: set[str] = set()
     for c in candidates:
         try:
@@ -54,6 +65,43 @@ def candidate_documents_dirs() -> Iterator[Path]:
         seen.add(key)
         if c.exists():
             yield c
+
+
+def _known_documents_dir() -> Optional[Path]:
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        import uuid
+        from ctypes import wintypes
+        guid = (ctypes.c_byte * 16).from_buffer_copy(uuid.UUID("FDD39AD0-238F-46AF-ADB4-6C85480369C7").bytes_le)
+        shell = ctypes.WinDLL("shell32")
+        function = shell.SHGetKnownFolderPath
+        function.argtypes = [ctypes.c_void_p, wintypes.DWORD, wintypes.HANDLE, ctypes.POINTER(ctypes.c_wchar_p)]
+        function.restype = ctypes.c_long
+        pointer = ctypes.c_wchar_p()
+        if function(ctypes.byref(guid), 0, None, ctypes.byref(pointer)) != 0:
+            return None
+        try:
+            return Path(pointer.value) if pointer.value else None
+        finally:
+            free = ctypes.WinDLL("ole32").CoTaskMemFree
+            free.argtypes = [ctypes.c_void_p]
+            free(ctypes.cast(pointer, ctypes.c_void_p))
+    except (OSError, AttributeError, ValueError):
+        return None
+
+
+def _registry_documents_dir() -> Optional[Path]:
+    if os.name != "nt":
+        return None
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders") as key:
+            value, _kind = winreg.QueryValueEx(key, "Personal")
+        return Path(os.path.expandvars(value)) if isinstance(value, str) else None
+    except (OSError, ImportError):
+        return None
 
 
 def find_all_replays_roots() -> List[Path]:

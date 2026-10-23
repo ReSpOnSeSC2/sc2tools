@@ -51,6 +51,17 @@ class AgentState:
     every successful upload; survives restarts (it's persisted to the
     same agent.json the rest of the state lives in)."""
 
+    tray_hint_shown: bool = False
+    close_without_tray: Optional[str] = None
+    paused_until: Optional[float] = None
+    background_import_speed: Optional[str] = None
+    pause_history_in_game: bool = True
+    pause_on_battery: bool = False
+    update_pending_version: Optional[str] = None
+    update_first_seen_at: Optional[float] = None
+    update_snoozed_until: Optional[float] = None
+    last_run_version: Optional[str] = None
+
     paused: bool = False
     """When True the watcher keeps observing but the upload queue is
     drained without sending - flipped by the tray/GUI "Pause syncing"
@@ -374,6 +385,16 @@ def load_state(state_dir: Path) -> AgentState:
         paired_at=raw.get("paired_at"),
         uploaded=uploaded,
         path_by_game_id=path_by_game_id,
+        tray_hint_shown=raw.get("tray_hint_shown") is True,
+        close_without_tray=raw.get("close_without_tray") if raw.get("close_without_tray") in ("quit", "minimize") else None,
+        paused_until=_coerce_timestamp(raw.get("paused_until")),
+        background_import_speed=raw.get("background_import_speed") if raw.get("background_import_speed") in ("gentle", "balanced", "maximum") else None,
+        pause_history_in_game=raw.get("pause_history_in_game") is not False,
+        pause_on_battery=raw.get("pause_on_battery") is True,
+        update_pending_version=_coerce_str(raw.get("update_pending_version")),
+        update_first_seen_at=_coerce_timestamp(raw.get("update_first_seen_at")),
+        update_snoozed_until=_coerce_timestamp(raw.get("update_snoozed_until")),
+        last_run_version=_coerce_str(raw.get("last_run_version")),
         paused=bool(raw.get("paused") or False),
         replay_folder_override=legacy_single,
         replay_folders_override=folders,
@@ -504,6 +525,11 @@ def _snapshot(state: AgentState) -> dict:
         ),
     )
     return asdict(stable)
+
+
+def _coerce_timestamp(value):
+    import math
+    return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0 else None
 
 
 def _coerce_geometry(value: object) -> Optional[str]:

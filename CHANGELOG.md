@@ -13,6 +13,13 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Desktop shortcuts restore the existing window, tray pause actions match the
+  window, and replay folder changes apply immediately with Undo and clear labels.
+- Desktop history imports and updates wait through games; performance profiles
+  reduce worker priority, and update notes and retry actions remain visible.
+- Desktop status cards and tray lights share the same state, cause and action,
+  including startup errors, disconnected queues and recent failed uploads.
+
 - Desktop pairing keeps trying through connection failures, refreshes codes,
   and recovers an unlinked PC without discarding queued replays or settings.
 - Desktop sync retains temporary failures with a retry countdown instead of

@@ -82,9 +82,12 @@ def test_obs_port_ignores_wheel_and_preserves_explicit_edits(tmp_path: Path) -> 
         port.setFocus()
         scrollbar.setValue(scrollbar.maximum() // 2)
         settings.ensureWidgetVisible(port)
+        app.processEvents()
         before = scrollbar.value()
-        wheel(port, -120)
-        assert scrollbar.value() > before
+        angle = 120 if before >= scrollbar.maximum() else -120
+        wheel(port, angle)
+        assert scrollbar.value() != before
+        assert (scrollbar.value() < before) is (angle > 0)
 
         port.setFocus()
         port.selectAll()

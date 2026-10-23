@@ -33,6 +33,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from collections import deque
 from datetime import datetime
@@ -47,7 +48,9 @@ log = logging.getLogger(__name__)
 # lives in ``config.py`` so the runner and GUI share a single
 # ceiling — see the comment block there for why 12.
 from .qt_helpers import guard_value_widgets, validate_api_base, probe_api_health
-from .help_links import help_url, help_button
+from .help_links import help_url, help_button, site_url
+from . import palette
+from ..status_model import StatusFacts, ConnectionFacts, AgentStatus, derive_status
 from ..config import _DEFAULT_API_BASE
 from ..config import PARSE_CONCURRENCY_USEFUL_MAX as _PARSE_CONCURRENCY_USEFUL_MAX  # noqa: E402
 
@@ -112,9 +115,9 @@ _TEXT_DIM = "#6b7280"
 _ACCENT = "#7c8cff"
 _ACCENT_HOVER = "#94a0ff"
 _ACCENT_CYAN = "#3ec0c7"
-_SUCCESS = "#3ec07a"
-_WARNING = "#e6b450"
-_DANGER = "#ff6b6b"
+_SUCCESS = palette.GREEN
+_WARNING = palette.AMBER
+_DANGER = palette.RED
 _BORDER = "#1f2533"
 _BORDER_STRONG = "#2a3142"
 
@@ -190,6 +193,7 @@ QLabel#code {{
     border-radius: 8px;
     padding: 14px 24px;
 }}
+QLabel#badgeInfo {{ color: {palette.CYAN}; background: rgba(59,195,202,0.15); border-radius: 10px; padding: 4px 10px; }}
 QLabel#badgeOk {{
     background-color: rgba(62, 192, 122, 0.16);
     color: {_SUCCESS};
@@ -492,6 +496,7 @@ class SettingsPayload:
     """
 
     __slots__ = (
+        "background_import_speed", "pause_history_in_game", "pause_on_battery",
         "api_base",
         "log_level",
         "replay_folder",
@@ -520,6 +525,9 @@ class SettingsPayload:
     def __init__(
         self,
         *,
+        background_import_speed: Optional[str] = None,
+        pause_history_in_game: Optional[bool] = None,
+        pause_on_battery: Optional[bool] = None,
         api_base: Optional[str] = None,
         log_level: Optional[str] = None,
         replay_folder: Optional[Path] = None,
@@ -544,6 +552,9 @@ class SettingsPayload:
         obs_switch_debounce_sec: Optional[float] = None,
         obs_switch_on_replays: Optional[bool] = None,
     ) -> None:
+        self.background_import_speed = background_import_speed
+        self.pause_history_in_game = pause_history_in_game
+        self.pause_on_battery = pause_on_battery
         self.api_base = api_base
         self.log_level = log_level
         self.replay_folder = replay_folder
@@ -654,11 +665,32 @@ class GuiUI:
         on_pairing_refresh: Optional[Callable[[], None]] = None,
         on_link_again: Optional[Callable[[], None]] = None,
         on_sync_retry: Optional[Callable[[], None]] = None,
+        state_dir: Optional[Path] = None,
+        tray_available: bool = True,
+        initial_tray_hint_shown: bool = False,
+        close_without_tray: Optional[str] = None,
+        on_tray_hint: Optional[Callable[[], None]] = None,
+        on_close_policy: Optional[Callable[[str], None]] = None,
+        on_install_update=None,
+        on_update_later=None,
+        on_restore_folders=None,
     ) -> None:
+        self._on_restore_folders = on_restore_folders
+        self._on_install_update = on_install_update or (lambda: None)
+        self._on_update_later = on_update_later or (lambda: None)
+        self._state_dir = state_dir
+        self._tray_available = tray_available
+        self._tray_hint_shown = initial_tray_hint_shown
+        self._close_without_tray = close_without_tray
+        self._on_tray_hint = on_tray_hint or (lambda: None)
+        self._on_close_policy = on_close_policy or (lambda _policy: None)
         self._on_pairing_retry = on_pairing_retry or (lambda: None)
         self._on_pairing_refresh = on_pairing_refresh or (lambda: None)
         self._on_link_again = on_link_again or (lambda: None)
         self._on_sync_retry = on_sync_retry or (lambda: None)
+        self._ui_event_lock = threading.RLock()
+        self._ui_ready = False
+        self._ui_events = deque(maxlen=256)
         self._window_geometry = window_geometry
         self._window_page = window_page
         self._on_window_state = on_window_state
@@ -715,51 +747,86 @@ class GuiUI:
         self._started_event = threading.Event()
         self._pending_replay_archive_status: Optional[tuple[int, int]] = None
 
+    def _dispatch(self, name, *args):
+        with self._ui_event_lock:
+            if not self._ui_ready or self._signals is None:
+                self._ui_events.append((name,args))
+                return
+        getattr(self._signals,name).emit(*args)
+
+    def _flush_ui_events(self):
+        with self._ui_event_lock:
+            self._ui_ready = True
+            events = list(self._ui_events)
+            self._ui_events.clear()
+            self._pending_replay_archive_status = None
+        for name,args in events:
+            getattr(self._signals,name).emit(*args)
+
     # ---------------- public sink interface ----------------
 
+    def choose_folder(self):
+        self._dispatch("chooseFolderRequested")
+
+    def request_resync(self):
+        self._dispatch("resyncRequested")
+
+    def check_updates(self):
+        self._dispatch("checkUpdatesRequested")
+
+    def on_phase(self, phase, detail=""):
+        self._dispatch("phaseChanged", phase, detail)
+
+    def on_analyzer_probe(self, ok, diag):
+        self._dispatch("analyzerProbe", ok, diag)
+
+    def on_status_view(self, view):
+        self._dispatch("statusView", view)
+
+    def on_paused(self, paused, until=None):
+        self._dispatch("pauseChanged", paused, float(until or 0))
+
+    def set_release_notes(self, notes):
+        self._dispatch("releaseNotes", notes)
+
+    def show_update_state(self, release, state, detail=""):
+        self._dispatch("updateState", release, state, detail)
+
+    def show_transient_notice(self, message):
+        self._dispatch("transientNotice", message)
+
     def on_pairing_state(self, state) -> None:
-        if self._signals:
-            self._signals.pairingState.emit(state)
+        self._dispatch("pairingState", state)
 
     def on_unlinked(self) -> None:
-        if self._signals:
-            self._signals.unlinked.emit()
+        self._dispatch("unlinked")
 
     def on_connection_state(self, kind, since, next_retry_at, waiting_count) -> None:
-        if self._signals:
-            self._signals.connectionState.emit(kind, since, next_retry_at, waiting_count)
+        self._dispatch("connectionState", kind, since, next_retry_at, waiting_count)
 
     def show_pairing_code(self, code: str) -> None:
-        if self._signals:
-            self._signals.pairingCode.emit(code)
+        self._dispatch("pairingCode", code)
 
     def on_paired(self, user_id: str) -> None:
-        if self._signals:
-            self._signals.paired.emit(user_id)
+        self._dispatch("paired", user_id)
 
     def on_status(self, status: str) -> None:
-        if self._signals:
-            self._signals.status.emit(status)
+        self._dispatch("status", status)
 
     def on_upload_success(self, filename: str) -> None:
-        if self._signals:
-            self._signals.uploadSuccess.emit(filename)
+        self._dispatch("uploadSuccess", filename)
 
     def on_upload_failed(self, filename: str, reason: str) -> None:
-        if self._signals:
-            self._signals.uploadFailed.emit(filename, reason)
+        self._dispatch("uploadFailed", filename, reason)
 
     def on_pending(self, count: int) -> None:
-        if self._signals:
-            self._signals.pendingChanged.emit(int(count))
+        self._dispatch("pendingChanged", int(count))
 
     def on_update_available(self, latest: str) -> None:
-        if self._signals:
-            self._signals.updateAvailable.emit(latest)
+        self._dispatch("updateAvailable", latest)
 
     def set_replay_folders(self, folders: List[Path]) -> None:
-        if self._signals:
-            self._signals.foldersChanged.emit([str(p) for p in folders])
+        self._dispatch("foldersChanged", [str(p) for p in folders])
 
     def show_settings_status(self, status: str) -> None:
         """Surface a settings-tab status line and refresh the
@@ -771,8 +838,7 @@ class GuiUI:
         summary (queued uploads dropped, previously-filtered replays
         re-enabled). The toast self-dismisses after ~5 s.
         """
-        if self._signals:
-            self._signals.settingsStatus.emit(str(status))
+        self._dispatch("settingsStatus", str(status))
 
     def show_update_notice(self, message: str, *, sticky: bool = False) -> None:
         """Surface an update-flow notice on the dashboard status card.
@@ -783,8 +849,7 @@ class GuiUI:
         needing a manual installer run. ``sticky`` notices persist
         until replaced; transient ones self-clear after a few seconds.
         """
-        if self._signals:
-            self._signals.updateNotice.emit(str(message), bool(sticky))
+        self._dispatch("updateNotice", str(message), bool(sticky))
 
     def on_replay_archive_status(
         self,
@@ -798,10 +863,9 @@ class GuiUI:
         soon as the window exists instead of racing the prompt away.
         """
         status = (max(0, int(missing_games)), max(0, int(total_games)))
-        if self._signals:
-            self._signals.replayArchiveStatus.emit(*status)
-        else:
+        if not self._ui_ready:
             self._pending_replay_archive_status = status
+        self._dispatch("replayArchiveStatus", *status)
 
     def build_checkin_view(self):
         """The view the build check-in controller paints through.
@@ -868,6 +932,12 @@ class GuiUI:
             QtWidgets=QtWidgets,
         )
         self._window = window
+        if self._state_dir is not None:
+            from ..activation import listen
+            try:
+                self._activation_server = listen(self._state_dir, window._on_show_requested, parent=window)
+            except OSError:
+                log.exception("window_activation_listener_failed")
 
         if self._pending_replay_archive_status is not None:
             self._signals.replayArchiveStatus.emit(
@@ -889,13 +959,11 @@ class GuiUI:
 
     def request_quit(self) -> None:
         """Ask the GUI to close (e.g. from the tray's Quit menu)."""
-        if self._signals:
-            self._signals.quitRequested.emit()
+        self._dispatch("quitRequested")
 
     def show_window(self) -> None:
         """Bring the window to the foreground (e.g. from a tray click)."""
-        if self._signals:
-            self._signals.showRequested.emit()
+        self._dispatch("showRequested")
 
     def started(self, timeout_sec: float = 10.0) -> bool:
         """Block until ``run()`` has built the window. Used by tests."""
@@ -920,6 +988,16 @@ def _make_signals():
         # background threads never touch widgets directly. Qt routes
         # them onto the GUI thread automatically via the default
         # AutoConnection.
+        phaseChanged = QtCore.Signal(str, str)
+        analyzerProbe = QtCore.Signal(bool, str)
+        statusView = QtCore.Signal(object)
+        pauseChanged = QtCore.Signal(bool, float)
+        transientNotice = QtCore.Signal(str)
+        updateState = QtCore.Signal(object, str, str)
+        releaseNotes = QtCore.Signal(str)
+        chooseFolderRequested = QtCore.Signal()
+        resyncRequested = QtCore.Signal()
+        checkUpdatesRequested = QtCore.Signal()
         pairingState = QtCore.Signal(object)
         unlinked = QtCore.Signal()
         connectionState = QtCore.Signal(str, float, float, int)
@@ -1123,13 +1201,21 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             # matches the system tray glyph.
             icon_path = Path(__file__).resolve().parent / "tray_icon.png"
             if icon_path.exists():
-                self.setWindowIcon(QtGui.QIcon(str(icon_path)))
+                icon = QtGui.QIcon()
+                pixmap = QtGui.QPixmap(str(icon_path))
+                for size in (16,24,32,48,64,256):
+                    icon.addPixmap(pixmap.scaled(size,size,QtCore.Qt.KeepAspectRatio,QtCore.Qt.SmoothTransformation))
+                self.setWindowIcon(icon)
 
             self._status = "starting"
             self._paused = ui._initial_paused
+            self._status_facts = StatusFacts(paired=ui._initial_paired, paused=ui._initial_paused,
+                                             folders=list(ui._replay_folders), phase="connecting")
             self._paired = ui._initial_paired
             self._user_id = ui._initial_user_id
             self._uploaded_count = self._query_synced_count(default=0)
+            self._folder_generation = 0
+            self._folder_removed_instant = set()
             self._pending_count = 0
             self._last_upload: Optional[tuple[str, datetime]] = None
             self._update_pending: Optional[str] = None
@@ -1181,11 +1267,18 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._refresh_status_card()
             self._refresh_stats()
             self._refresh_pairing_card()
+            self._status_timer = QtCore.QTimer(self)
+            self._status_timer.setInterval(30000)
+            self._status_timer.timeout.connect(self._refresh_status_card)
+            self._status_timer.start()
+            self._retry_status_timer = QtCore.QTimer(self)
+            self._retry_status_timer.setInterval(1000)
+            self._retry_status_timer.timeout.connect(self._refresh_status_card)
             self._populate_settings()
             self._saved_api_base = self._api_input.text().strip().rstrip("/")
             self._loaded_restart_values = (
                 self._saved_api_base, self._log_combo.currentText(),
-                int(self._concurrency_slider.value()),
+                ui._initial_settings.parse_concurrency or int(self._concurrency_slider.value()),
             )
             self._restore_window_state()
             # Unlike the other draft fields, this is a live safety switch: a
@@ -1204,6 +1297,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self._toggle_replay_capture,
             )
             self._refresh_capture_notice()
+            ui._flush_ui_events()
             self._tail_log_now()
 
             # Periodic log tail. Watchdog FS events on Windows are
@@ -1281,13 +1375,24 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             self._sidebar_status = QtWidgets.QLabel()
             self._sidebar_status.setObjectName("muted")
-            self._sidebar_status.setWordWrap(True)
+            self._sidebar_status.setWordWrap(False)
+            self._sidebar_status.setMinimumWidth(0)
+            self._sidebar_status.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
             layout.addWidget(self._sidebar_status)
 
             help_btn = QtWidgets.QPushButton("Help & support")
             help_btn.setFlat(True)
             help_btn.clicked.connect(lambda: self._open_help("desktop-app-overview"))
             layout.addWidget(help_btn)
+            quit_btn = QtWidgets.QPushButton("Quit SC2 Tools")
+            quit_btn.setFlat(True)
+            quit_btn.clicked.connect(ui._on_quit)
+            quit_row=QtWidgets.QWidget()
+            quit_layout=QtWidgets.QHBoxLayout(quit_row)
+            quit_layout.setContentsMargins(0,0,0,0)
+            quit_layout.addWidget(quit_btn)
+            quit_layout.addWidget(help_button(QtWidgets,"Window and tray",lambda:self._open_help("desktop-app-tray")))
+            layout.addWidget(quit_row)
 
             version_lbl = QtWidgets.QLabel(f"v{ui._version}")
             version_lbl.setObjectName("dim")
@@ -1308,10 +1413,20 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             v.addWidget(title)
 
             v.addWidget(self._build_status_card())
-            v.addWidget(self._build_connection_banner())
+            from .update_card import build_update_card
+            self._update_card = build_update_card(self, QtCore=QtCore, QtWidgets=QtWidgets,
+                install=lambda: self._run_update_action(ui._on_install_update),
+                later=lambda: self._run_update_action(ui._on_update_later),
+                download=lambda: webbrowser.open(site_url(ui._dashboard_url,"/download"),new=2),
+                help_button=help_button(QtWidgets,"Updates",lambda:self._open_help("desktop-app-updates")))
+            v.addWidget(self._update_card)
+            # The shared status card owns offline/busy recovery.
+            self._connection_kind = "online"
+            self._connection_retry_at = 0.0
             v.addWidget(self._build_replay_archive_card())
             v.addWidget(self._build_pairing_card())
-            v.addWidget(self._build_stats_row())
+            self._stats_row = self._build_stats_row()
+            v.addWidget(self._stats_row)
             v.addWidget(self._build_action_row())
             v.addStretch(1)
 
@@ -1408,6 +1523,37 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._notice_timer.setSingleShot(True)
             self._notice_timer.timeout.connect(self._clear_update_notice)
 
+            self._status_card = card
+            grid.addWidget(help_button(QtWidgets, "Status lights", lambda: self._open_help("desktop-app-status")), 0, 3)
+            actions = QtWidgets.QHBoxLayout()
+            self._status_action = QtWidgets.QPushButton()
+            self._status_action.clicked.connect(self._run_status_action)
+            actions.addWidget(self._status_action)
+            self._status_copy = QtWidgets.QPushButton("Copy details")
+            self._status_copy.clicked.connect(self._copy_status_details)
+            actions.addWidget(self._status_copy)
+            self._connection_help = QtWidgets.QPushButton("Why?")
+            self._connection_help.clicked.connect(lambda: self._open_help("desktop-app-sync-problems", self._connection_kind.replace("_", "-")))
+            self._connection_help.hide()
+            actions.addWidget(self._connection_help)
+            actions.addStretch(1)
+            grid.addLayout(actions, 4, 1, 1, 3)
+            self._transient_notice = QtWidgets.QLabel()
+            self._transient_notice.setWordWrap(True)
+            self._transient_notice.hide()
+            grid.addWidget(self._transient_notice, 5, 1, 1, 2)
+            self._release_notes = ""
+            self._whats_new_btn = QtWidgets.QPushButton("What's new")
+            self._whats_new_btn.clicked.connect(self._show_release_notes)
+            self._whats_new_btn.hide()
+            grid.addWidget(self._whats_new_btn,5,3)
+            self._transient_timer = QtCore.QTimer(self)
+            self._transient_timer.setSingleShot(True)
+            self._transient_timer.timeout.connect(self._transient_notice.hide)
+            self._folder_undo_dash = QtWidgets.QPushButton("Undo folder change")
+            self._folder_undo_dash.clicked.connect(self._undo_folder_change)
+            self._folder_undo_dash.hide()
+            grid.addWidget(self._folder_undo_dash, 6, 1)
             grid.setColumnStretch(1, 1)
             return card
 
@@ -1440,50 +1586,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._copy_btn = self._pairing_card.copy
             return self._pairing_card
 
-        def _build_connection_banner(self):
-            self._connection_kind = "online"
-            self._connection_retry_at = 0.0
-            self._connection_banner = QtWidgets.QFrame()
-            self._connection_banner.setObjectName("cardElevated")
-            row = QtWidgets.QHBoxLayout(self._connection_banner)
-            row.setContentsMargins(16, 12, 16, 12)
-            self._connection_text = QtWidgets.QLabel()
-            self._connection_text.setWordWrap(True)
-            row.addWidget(self._connection_text, 1)
-            self._connection_retry = QtWidgets.QPushButton("Retry now")
-            self._connection_retry.clicked.connect(ui._on_sync_retry)
-            row.addWidget(self._connection_retry)
-            self._connection_help = QtWidgets.QPushButton("Help")
-            self._connection_help.clicked.connect(lambda: self._open_help(
-                "desktop-app-sync-problems", self._connection_kind.replace("_", "-")))
-            row.addWidget(self._connection_help)
-            self._connection_timer = QtCore.QTimer(self)
-            self._connection_timer.setInterval(1000)
-            self._connection_timer.timeout.connect(self._paint_connection_banner)
-            self._connection_timer.start()
-            self._connection_banner.hide()
-            return self._connection_banner
-
         def _on_connection_state(self, kind, since, next_retry_at, waiting_count):
             self._connection_kind = kind
             self._connection_retry_at = next_retry_at
-            self._connection_waiting = waiting_count
-            self._connection_banner.setVisible(kind != "online")
-            self._paint_connection_banner()
+            if kind=="online": self._retry_status_timer.stop()
+            else: self._retry_status_timer.start()
+            self._status_facts.connection = ConnectionFacts(kind, waiting_count, next_retry_at)
+            self._refresh_status_card()
 
         def _paint_connection_banner(self):
-            import time
-            if self._connection_kind == "online":
-                return
-            names = {"offline": "Offline", "server_busy": "SC2 Tools is busy",
-                     "rate_limited": "Sync is taking a short break",
-                     "signed_out": "This PC needs to be linked again",
-                     "file": "Waiting for a replay file", "unknown": "Sync will retry"}
-            seconds = max(0, int(self._connection_retry_at - time.time()))
-            self._connection_text.setText(
-                f"{names.get(self._connection_kind, 'Sync will retry')}: "
-                f"{self._pending_count:,} replays waiting, retrying in {seconds} s")
-            self._connection_retry.setEnabled(True)
+            self._refresh_status_card()
 
         def _build_stats_row(self) -> QtWidgets.QWidget:
             row = QtWidgets.QFrame()
@@ -1549,6 +1661,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             local_row.addWidget(self._pause_btn)
 
             resync_btn = QtWidgets.QPushButton("Re-sync")
+            self._resync_btn = resync_btn
             resync_btn.setSizePolicy(
                 QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed,
             )
@@ -1561,6 +1674,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             local_row.addWidget(resync_btn)
 
             choose_btn = QtWidgets.QPushButton("Add replay folder…")
+            self._choose_btn = choose_btn
             choose_btn.setSizePolicy(
                 QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed,
             )
@@ -1835,7 +1949,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             _refresh_label(default_workers)
             concurrency_h.addWidget(self._concurrency_slider, 1)
             concurrency_h.addWidget(self._concurrency_value_label)
-            form.addRow("Parse concurrency", concurrency_block)
+            self._concurrency_slider.setEnabled(False)
+            form.addRow("Workers after restart", concurrency_block)
 
             # Upload concurrency. Replaces the older slider with a
             # 1-or-2 button group: those are the only values worth
@@ -2081,6 +2196,29 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             form.addRow(self._help_label("Sync date range", "desktop-app-sync-range"), filter_block)
 
+            performance = QtWidgets.QWidget()
+            performance_v = QtWidgets.QVBoxLayout(performance)
+            performance_v.setContentsMargins(0,0,0,0)
+            self._speed_combo = QtWidgets.QComboBox()
+            for label, key in (("Gentle", "gentle"),("Balanced", "balanced"),("Maximum", "maximum")):
+                self._speed_combo.addItem(label,key)
+            mode = ui._initial_settings.background_import_speed or "balanced"
+            self._speed_combo.setCurrentIndex(self._speed_combo.findData(mode))
+            performance_v.addWidget(self._speed_combo)
+            from ..game_activity import background_workers
+            self._speed_combo.currentIndexChanged.connect(lambda _index:self._concurrency_slider.setValue(
+                background_workers(self._speed_combo.currentData(),_PARSE_CONCURRENCY_USEFUL_MAX)))
+            performance_hint = QtWidgets.QLabel("Background worker speed applies after restarting SC2 Tools.")
+            performance_hint.setWordWrap(True)
+            performance_v.addWidget(performance_hint)
+            self._pause_history_check = QtWidgets.QCheckBox("Pause history import while I'm in a game")
+            self._pause_history_check.setChecked(ui._initial_settings.pause_history_in_game is not False)
+            self._battery_check = QtWidgets.QCheckBox("Pause on battery")
+            self._battery_check.setChecked(ui._initial_settings.pause_on_battery is True)
+            performance_v.addWidget(self._pause_history_check)
+            performance_v.addWidget(self._battery_check)
+            form.addRow(self._help_label("Performance", "desktop-app-performance"), performance)
+
             self._log_combo = QtWidgets.QComboBox()
             self._log_combo.addItems(["INFO", "DEBUG", "WARNING", "ERROR"])
             form.addRow("Log level", self._log_combo)
@@ -2107,7 +2245,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._folder_list.setSelectionMode(
                 QtWidgets.QAbstractItemView.ExtendedSelection,
             )
-            self._folder_list.setUniformItemSizes(True)
+            self._folder_list.setUniformItemSizes(False)
             self._folder_list.setAlternatingRowColors(False)
             self._folder_list.setMinimumHeight(96)
             self._folder_list.setHorizontalScrollBarPolicy(
@@ -2119,6 +2257,23 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 "you want synced.",
             )
             folder_v.addWidget(self._folder_list)
+            from .folder_rows import build_folder_rows
+            self._folder_rows = build_folder_rows(self._folder_list, QtCore=QtCore, QtGui=QtGui,
+                                                  QtWidgets=QtWidgets, open_folder=_open_path_in_explorer)
+            self._folder_delete = QtGui.QShortcut(QtGui.QKeySequence.Delete, self._folder_list)
+            self._folder_delete.setContext(QtCore.Qt.WidgetWithChildrenShortcut)
+            self._folder_delete.activated.connect(self._remove_folder_rows)
+            self._folder_empty = QtWidgets.QWidget()
+            empty_layout = QtWidgets.QVBoxLayout(self._folder_empty)
+            empty_layout.addWidget(QtWidgets.QLabel("We couldn't find StarCraft II replays"))
+            locate = QtWidgets.QPushButton("Locate folder…")
+            locate.clicked.connect(self._click_choose_folder)
+            empty_layout.addWidget(locate)
+            folder_v.addWidget(self._folder_empty)
+            self._folder_undo = QtWidgets.QPushButton("Undo folder change")
+            self._folder_undo.clicked.connect(self._undo_folder_change)
+            self._folder_undo.hide()
+            folder_v.addWidget(self._folder_undo)
 
             folder_btns = QtWidgets.QHBoxLayout()
             folder_btns.setSpacing(6)
@@ -2631,6 +2786,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         # ---- signal wiring ----
 
         def _wire_signals(self) -> None:
+            signals.phaseChanged.connect(self._on_phase)
+            signals.analyzerProbe.connect(self._on_analyzer_probe)
+            signals.statusView.connect(self._render_status_view)
+            signals.pauseChanged.connect(self._on_paused)
+            signals.transientNotice.connect(self._show_transient_notice)
+            signals.updateState.connect(self._on_update_state)
+            signals.releaseNotes.connect(self._on_release_notes)
+            signals.chooseFolderRequested.connect(self._click_choose_folder)
+            signals.resyncRequested.connect(self._click_archive_resync)
+            signals.checkUpdatesRequested.connect(self._click_check_updates)
             signals.pairingState.connect(self._on_pairing_state)
             signals.unlinked.connect(self._on_unlinked)
             signals.connectionState.connect(self._on_connection_state)
@@ -2659,10 +2824,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._checkin_host.dispatch(method, args)
 
         def _on_pairing_state(self, state):
+            if state.kind != "paired":
+                self._status_facts.unlinked = False
             self._pairing_card.apply(state)
             self._refresh_status_card()
 
         def _on_unlinked(self):
+            self._status_facts.unlinked = True
             self._paired = False
             self._user_id = None
             self._pairing_card.apply("unlinked")
@@ -2681,6 +2849,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self.raise_()
 
         def _on_paired(self, user_id: str) -> None:
+            self._status_facts.unlinked = False
             self._paired = True
             self._user_id = user_id
             self._status = "paired"
@@ -2709,8 +2878,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _on_upload_success(self, filename: str) -> None:
             self._uploaded_count += 1
-            self._pending_count = max(0, self._pending_count - 1)
+            # Pending count comes from the queue's authoritative callback.
             self._last_upload = (filename, datetime.now())
+            self._status_facts.last_upload_at = time.time()
             self._recent.appendleft(
                 (datetime.now(), filename, True, "Uploaded"),
             )
@@ -2720,16 +2890,44 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._insert_recent(self._recent[0])
 
         def _on_upload_failed(self, filename: str, reason: str) -> None:
+            if getattr(reason, "counts_as_error", True):
+                self._status_facts.terminal_failure_times.append(time.time())
+                self._status_facts.latest_failure_title = reason if isinstance(reason, str) else reason.title
             self._recent.appendleft(
                 (datetime.now(), filename, False, reason or "Failed"),
             )
             self._insert_recent(self._recent[0])
+            self._refresh_status_card()
 
         def _on_pending_changed(self, count: int) -> None:
             self._pending_count = int(count)
             self._paint_stats()
             self._request_stats_refresh()
             self._paint_connection_banner()
+
+        def _on_release_notes(self, notes):
+            self._release_notes = notes
+            self._whats_new_btn.setVisible(bool(notes))
+
+        def _show_release_notes(self):
+            dialog=QtWidgets.QDialog(self)
+            dialog.setWindowTitle("What's new in SC2 Tools")
+            dialog.resize(600,450)
+            layout=QtWidgets.QVBoxLayout(dialog)
+            browser=QtWidgets.QTextBrowser()
+            browser.setOpenExternalLinks(True)
+            browser.setMarkdown(self._release_notes or "Release notes aren't available yet.")
+            layout.addWidget(browser)
+            close=QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Close)
+            close.rejected.connect(dialog.reject)
+            layout.addWidget(close)
+            dialog.exec()
+
+        def _run_update_action(self, callback):
+            threading.Thread(target=callback, name="sc2tools-update-action", daemon=True).start()
+
+        def _on_update_state(self, release, state, detail):
+            self._update_card.apply(release,state,detail)
 
         def _on_update_available(self, latest: str) -> None:
             self._update_pending = latest
@@ -2745,7 +2943,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             # Empty message = an update was found and the runner's
             # handler owns the (sticky) notice — leave it alone.
             if message:
-                self._set_update_notice(message, sticky=False)
+                self._show_transient_notice(message)
 
         def _on_replay_archive_status(
             self,
@@ -2774,7 +2972,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._replay_archive_card.show()
 
         def _on_folders_changed(self, folders: List[str]) -> None:
+            self._folder_generation += 1
+            folders=[raw for raw in folders if str(raw) not in self._folder_removed_instant]
             ui._replay_folders = [Path(p) for p in folders]
+            missing = [str(path) for path in ui._initial_settings.replay_folders or [] if not Path(path).exists() and str(path) not in self._folder_removed_instant]
+            folders=list(dict.fromkeys([*folders,*missing]))
             if self._folders_dirty:
                 # Keep the user's unsaved edits; only add what is new.
                 shown = {
@@ -2807,10 +3009,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 for i in range(self._folder_list.count())
             ]
             if current == list(folders):
+                self._folder_rows.render()
+                self._folder_empty.setVisible(not current)
+                self._folder_list.setVisible(bool(current))
                 return
             self._folder_list.clear()
             for raw in folders:
                 self._folder_list.addItem(raw)
+            self._folder_rows.render()
+            self._folder_empty.setVisible(not folders)
+            self._folder_list.setVisible(bool(folders))
 
         def _on_quit_requested(self) -> None:
             self._really_quit = True
@@ -2836,7 +3044,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 log.exception("gui_pause_callback_failed")
 
         def _click_resync(self) -> None:
-            self._confirm_and_request_resync()
+            self._click_archive_resync()
 
         def _click_archive_resync(self) -> None:
             if self._paused:
@@ -2898,17 +3106,51 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             return True
 
         def _click_choose_folder(self) -> None:
-            picked = QtWidgets.QFileDialog.getExistingDirectory(
-                self,
-                "Choose your StarCraft II Replays folder",
-                str(ui._replay_folders[0]) if ui._replay_folders else "",
-            )
-            if not picked:
-                return
+            from .folder_rows import confirm_empty_folder
+            while True:
+                picked = QtWidgets.QFileDialog.getExistingDirectory(
+                    self, "Choose your StarCraft II Replays folder",
+                    str(ui._replay_folders[0]) if ui._replay_folders else "")
+                if not picked:
+                    return
+                if confirm_empty_folder(self, picked, QtWidgets):
+                    break
+            previous = [self._folder_list.item(i).text() for i in range(self._folder_list.count())]
             try:
-                ui._on_choose_folder(Path(picked))
-            except Exception:  # noqa: BLE001
+                generation = self._folder_generation
+                token = ui._on_choose_folder(Path(picked))
+                self._folder_undo_token = token
+                self._folder_removed_instant.discard(picked)
+                paths = previous + ([picked] if picked not in previous else [])
+                if self._folder_generation == generation:
+                    self._sync_folder_list_widget(paths)
+                self._folders_dirty = False
+                self._show_folder_undo(previous)
+                self._show_settings_toast("Replay folder added. You can undo this change.", "success")
+            except Exception:
                 log.exception("gui_choose_folder_failed")
+
+        def _show_folder_undo(self, previous):
+            self._folder_before = list(previous)
+            self._folder_undo.show()
+            self._folder_undo_dash.show()
+            self._show_transient_notice("Replay folder updated. Choose Undo to restore the previous folders.")
+
+        def _undo_folder_change(self):
+            before = getattr(self, "_folder_before", None)
+            if before is None:
+                return
+            self._folder_removed_instant.difference_update(before)
+            token = getattr(self,"_folder_undo_token",None)
+            if ui._on_restore_folders and isinstance(token,dict):
+                ui._on_restore_folders(token)
+            else:
+                ui._on_save_settings(SettingsPayload(replay_folders=[Path(raw) for raw in before]))
+                self._sync_folder_list_widget(before)
+            self._folder_undo.hide()
+            self._folder_undo_dash.hide()
+            self._folders_dirty = False
+            self._show_settings_toast("Replay folder change undone.", "success")
 
         def _click_check_updates(self) -> None:
             # The update check is a blocking HTTP round-trip (up to the
@@ -2917,7 +3159,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             # the outcome back on the GUI thread via updateCheckDone.
             self._updates_btn.setEnabled(False)
             self._updates_btn.setText("Checking…")
-            self._set_update_notice("Checking for updates…", sticky=True)
+            self._show_transient_notice("Checking for updates…")
 
             def _worker() -> None:
                 message = "Update check failed — see the activity log."
@@ -3066,7 +3308,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if self._log_combo.currentText() != loaded_log:
                 changed.append("Log level")
             if int(self._concurrency_slider.value()) != loaded_parse:
-                changed.append("Parse concurrency")
+                changed.append("Import speed")
             if api_base != loaded_api:
                 changed.append("API address")
             fields = (", ".join(changed[:-1]) + " and " + changed[-1]) if len(changed) > 1 else "".join(changed)
@@ -3092,6 +3334,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if checked_upload_conc <= 0:
                 checked_upload_conc = self._upload_conc_last_saved
             payload = SettingsPayload(
+                background_import_speed=self._speed_combo.currentData(),
+                pause_history_in_game=self._pause_history_check.isChecked(),
+                pause_on_battery=self._battery_check.isChecked(),
                 api_base=api_base if api_base != self._saved_api_base else None,
                 log_level=self._log_combo.currentText(),
                 replay_folders=folders,
@@ -3260,41 +3505,23 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             _open_path_in_explorer(ui._log_dir)
 
         def _add_folder_row(self) -> None:
-            seed = ""
-            if self._folder_list.count():
-                last = self._folder_list.item(self._folder_list.count() - 1)
-                if last is not None:
-                    seed = last.text()
-            elif ui._replay_folders:
-                seed = str(ui._replay_folders[0])
-            picked = QtWidgets.QFileDialog.getExistingDirectory(
-                self,
-                "Choose a StarCraft II Replays folder",
-                seed,
-            )
-            if not picked:
-                return
-            # Reject duplicates so the list never grows by re-adding the
-            # same path. We compare resolved paths so trailing slashes
-            # and case differences (Windows) collapse into one.
-            target = str(Path(picked).resolve())
-            for i in range(self._folder_list.count()):
-                existing = Path(self._folder_list.item(i).text())
-                try:
-                    if str(existing.resolve()) == target:
-                        return
-                except OSError:
-                    continue
-            self._folder_list.addItem(picked)
-            self._folders_dirty = True
+            self._click_choose_folder()
 
         def _remove_folder_rows(self) -> None:
-            for item in self._folder_list.selectedItems():
-                row = self._folder_list.row(item)
-                removed = self._folder_list.takeItem(row)
-                if removed is not None:
-                    self._folders_removed.append(removed.text())
-                    self._folders_dirty = True
+            previous = [self._folder_list.item(i).text() for i in range(self._folder_list.count())]
+            removed = [item.text() for item in self._folder_list.selectedItems()]
+            if not removed:
+                return
+            paths = [raw for raw in previous if raw not in removed]
+            self._folder_removed_instant.update(removed)
+            generation = self._folder_generation
+            self._folder_undo_token = ui._on_save_settings(SettingsPayload(replay_folders=[Path(raw) for raw in paths],
+                                                replay_folders_removed=[Path(raw) for raw in removed]))
+            if generation == self._folder_generation:
+                self._sync_folder_list_widget(paths)
+            self._folders_dirty = False
+            self._show_folder_undo(previous)
+            self._show_settings_toast("Replay folders removed. You can undo this change.", "success")
 
         def _auto_detect_folders(self) -> None:
             """Actively scan the StarCraft II Accounts tree and populate
@@ -3369,13 +3596,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             for entry in combined:
                 self._folder_list.addItem(entry)
 
+            self._folder_rows.render()
+            self._folder_removed_instant.difference_update(new_entries)
             if new_entries:
-                self._folders_dirty = True
+                self._folder_undo_token=ui._on_save_settings(SettingsPayload(replay_folders=[Path(raw) for raw in combined]))
+                self._folders_dirty = False
+                self._show_folder_undo(existing)
                 self._show_settings_toast(
                     f"Auto-detect added {len(new_entries)} folder"
-                    f"{'s' if len(new_entries) != 1 else ''} · "
-                    "click Save settings to apply",
-                )
+                    f"{'s' if len(new_entries) != 1 else ''}.", "success")
             else:
                 self._show_settings_toast(
                     "Auto-detect: no new folders found",
@@ -3418,82 +3647,119 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if self._really_quit:
                 event.accept()
                 return
+            if not ui._tray_available:
+                policy = ui._close_without_tray
+                if policy is None:
+                    dialog = QtWidgets.QMessageBox(self)
+                    dialog.setWindowTitle("Close SC2 Tools")
+                    dialog.setText("No tray icon is available. Quit SC2 Tools or minimize the window?")
+                    quit_button = dialog.addButton("Quit", QtWidgets.QMessageBox.AcceptRole)
+                    minimize = dialog.addButton("Minimize", QtWidgets.QMessageBox.RejectRole)
+                    dialog.setDefaultButton(minimize)
+                    dialog.exec()
+                    policy = "quit" if dialog.clickedButton() is quit_button else "minimize"
+                    ui._close_without_tray = policy
+                    ui._on_close_policy(policy)
+                if policy == "quit":
+                    event.accept()
+                    ui._on_quit()
+                else:
+                    event.ignore()
+                    self.showMinimized()
+                return
+            if not ui._tray_hint_shown:
+                ui._tray_hint_shown = True
+                ui._on_tray_hint()
             event.ignore()
             self.hide()
 
         # ---- refresh helpers ----
 
-        def _refresh_status_card(self) -> None:
-            badge_text, badge_obj = self._classify_status()
-            self._status_badge.setText(badge_text)
-            self._status_badge.setObjectName(badge_obj)
+        def _on_phase(self, phase, detail=""):
+            self._status_facts.phase = phase
+            if phase == "boot_error":
+                self._status_facts.boot_error = detail
+            self._refresh_status_card()
+
+        def _on_analyzer_probe(self, ok, diag):
+            self._status_facts.analyzer_ok = ok
+            self._status_facts.analyzer_diag = diag
+            self._refresh_status_card()
+
+        def _on_paused(self, paused, until=0):
+            self._paused = paused
+            self._status_facts.paused_until = until or None
+            self._pause_btn.setText("Resume syncing" if paused else "Pause syncing")
+            self._refresh_status_card()
+
+        def _show_transient_notice(self, message):
+            self._transient_notice.setText(message)
+            self._transient_notice.setVisible(bool(message))
+            self._transient_timer.start(8000)
+
+        def _refresh_status_card(self):
+            facts = self._status_facts
+            facts.paired, facts.paused = self._paired, self._paused
+            facts.pending_count = self._pending_count
+            facts.folders = list(ui._replay_folders)
+            facts.filter_label = self._active_filter_label
+            facts.update_pending = self._update_pending
+            facts.terminal_failure_times[:] = [stamp for stamp in facts.terminal_failure_times if time.time()-stamp <= 600]
+            if facts.connection.kind != "online":
+                facts.connection = ConnectionFacts(facts.connection.kind, self._pending_count, facts.connection.next_retry_at)
+            self._render_status_view(derive_status(facts, time.time()))
+
+        def _render_status_view(self, view):
+            self._status_view = view
+            self._status_badge.setText(view.badge_text)
+            badge = {"neutral":"badgeNeutral","ok":"badgeOk","info":"badgeInfo","warn":"badgeWarn","err":"badgeErr"}[view.tone]
+            self._status_badge.setObjectName(badge)
             self._status_badge.style().unpolish(self._status_badge)
             self._status_badge.style().polish(self._status_badge)
+            self._status_text.setText(view.headline)
+            self._status_sub.setText(view.cause)
+            paths = "\n".join(str(path) for path in ui._replay_folders)
+            self._status_text.setToolTip(paths if view.status==AgentStatus.WATCHING else view.headline)
+            full = f"● {view.badge_text} · {view.headline}"
+            self._sidebar_status.setToolTip(full)
+            width = max(80, self._sidebar_status.width())
+            self._sidebar_status.setText(self._sidebar_status.fontMetrics().elidedText(full, QtCore.Qt.ElideRight, width))
+            labels = {"retry":"Retry now","resume":"Resume","open_settings":"Manage" if view.status==AgentStatus.WATCHING else "Open Settings",
+                      "open_log":"Open log","pair_again":"Link again","view_failed":"View failed uploads"}
+            self._status_action.setText(labels.get(view.action,""))
+            self._status_action.setVisible(view.action is not None)
+            self._status_copy.setVisible(view.secondary_action=="copy_details")
+            self._connection_help.setVisible(view.status==AgentStatus.NEEDS_ATTENTION and self._connection_kind!="online")
+            needs_pairing = view.status in (AgentStatus.NEEDS_PAIRING, AgentStatus.UNLINKED)
+            if hasattr(self,"_stats_row"):
+                self._stats_row.setVisible(not needs_pairing)
+            for name in ("_pause_btn","_resync_btn","_choose_btn"):
+                button=getattr(self,name,None)
+                if button:
+                    button.setEnabled(not needs_pairing)
 
-            primary, secondary = self._format_status_lines()
-            self._status_text.setText(primary)
-            self._status_sub.setText(secondary)
-            self._sidebar_status.setText(f"{badge_text} · {primary}")
+        def _run_status_action(self):
+            action = self._status_view.action
+            if action=="retry": ui._on_sync_retry()
+            elif action=="resume": ui._on_pause(False)
+            elif action=="open_settings": self._go_to_page("settings")
+            elif action=="open_log": self.show_log("errors")
+            elif action=="pair_again": ui._on_link_again()
+            elif action=="view_failed": self._go_to_page("recent")
 
-        def _classify_status(self) -> tuple[str, str]:
-            status_lower = (self._status or "").lower()
-            if not self._paired:
-                if self._pairing_card.kind == "unlinked":
-                    return ("Unlinked", "badgeWarn")
-                return ("Pairing", "badgeWarn")
-            if self._paused:
-                return ("Paused", "badgeWarn")
-            if "error" in status_lower or "fail" in status_lower:
-                return ("Error", "badgeErr")
-            if "watching" in status_lower or "ready" in status_lower:
-                return ("Active", "badgeOk")
-            return ("Active", "badgeNeutral")
-
-        def _format_status_lines(self) -> tuple[str, str]:
-            if not self._paired:
-                recovery_copy = {
-                    "unlinked": ("This PC was unlinked from your account", "Choose Link again to resume safely."),
-                    "requesting": ("Getting your code…", "Keep the app open while it connects."),
-                    "unreachable": ("Can't reach sc2tools.com", "Check your internet connection; we'll keep trying."),
-                    "expired": ("This code expired", "Get a new code to link this PC."),
-                }
-                if self._pairing_card.kind in recovery_copy:
-                    return recovery_copy[self._pairing_card.kind]
-                primary = "Waiting for you to enter the pairing code"
-                secondary = (
-                    f"Open {ui._pairing_url} on a logged-in browser "
-                    "to finish."
-                )
-                return primary, secondary
-            if self._paused:
-                return (
-                    "Sync paused",
-                    "Replays will keep accumulating; press Resume to "
-                    "drain the queue.",
-                )
-            folders = list(ui._replay_folders or [])
-            if not folders:
-                folder_label = "(no folder configured)"
-            elif len(folders) == 1:
-                folder_label = str(folders[0])
-            else:
-                # Pluralise and enumerate every folder so the user can
-                # confirm at a glance that EVERY region/toon is being
-                # watched, not just the first one. Each path goes on its
-                # own line for readability — the muted secondary label
-                # word-wraps so this doesn't blow out the card width.
-                lines = "\n".join(f"  • {p}" for p in folders)
-                folder_label = f"{len(folders)} folders\n{lines}"
-            primary = "Watching for replays"
-            if len(folders) > 1:
-                primary = f"Watching {len(folders)} replay folders"
-            # Append the active sync-filter chip when one is set.
-            # Empty / None ⇒ no filter narrowing, omit the chip
-            # entirely so the ALL-time case stays uncluttered.
-            if self._active_filter_label:
-                primary = f"{primary}  ·  Filter: {self._active_filter_label}"
-            secondary = f"Folder: {folder_label}\nAPI: {ui._api_base}"
-            return primary, secondary
+        def _copy_status_details(self):
+            lines=[]
+            try:
+                for line in ui._log_file.read_text(encoding="utf-8",errors="replace").splitlines():
+                    if " ERROR " in line:
+                        lines.append(line)
+                lines=lines[-20:]
+            except OSError:
+                pass
+            details = f"SC2 Tools {ui._version}\nStatus: {self._status_view.status.value}\n"
+            details += self._status_facts.boot_error or self._status_facts.analyzer_diag
+            if lines: details += "\n" + "\n".join(lines)
+            QtWidgets.QApplication.clipboard().setText(details)
 
         def _compute_filter_label(
             self,
@@ -3650,6 +3916,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             elif ui._replay_folders:
                 seeded = [str(p) for p in ui._replay_folders]
             self._sync_folder_list_widget(seeded)
+            from ..game_activity import background_workers
+            self._concurrency_slider.setValue(background_workers(self._speed_combo.currentData(),_PARSE_CONCURRENCY_USEFUL_MAX))
             self._autostart_check.setChecked(
                 bool(initial.autostart_enabled),
             )

@@ -242,7 +242,8 @@ def test_gui_boot_wires_capture_notice_to_runtime_cell(tmp_path: Path, monkeypat
             log=logging.getLogger("test"), no_live=True, no_obs=True,
         )
     callbacks["notify_capture_start"]("Capture is using CPU")
-    cell.gui.show_update_notice.assert_called_once_with("Capture is using CPU", sticky=False)
+    cell.gui.show_transient_notice.assert_called_once_with("Capture is using CPU")
+    cell.gui.show_update_notice.assert_not_called()
     cell.tray.show_notice.assert_called_once_with("Capture is using CPU", title="Accurate replay capture")
     cell.console.on_status.assert_called_once_with("Capture is using CPU")
 

@@ -4,6 +4,17 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+- Launching a second shortcut restores the running window. Tray and window share
+  pause state, timed pauses resume automatically, and quitting is available in
+  the sidebar. Folder rows explain region/account, newest replay and missing
+  paths; both Add paths apply immediately with Undo.
+- Background history parsing, replay archiving, capture, and installer launches
+  respect game activity. Performance profiles request lower worker priority;
+  updates have persistent notes, safe-time installation, snooze and retry.
+- Dashboard, sidebar and tray share one structured status with a cause and next
+  action. Connection holds use that card, recent terminal failures expire, and
+  the padded logo shows a matching coloured status dot.
+
 - Pairing keeps running through outages, refreshes expiring codes, opens the
   browser with the current code, and offers recovery after a PC is unlinked.
 - Sync retries use capped backoff and wake when the connection returns.

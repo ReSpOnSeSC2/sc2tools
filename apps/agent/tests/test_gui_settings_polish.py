@@ -24,7 +24,7 @@ def test_save_preserves_runner_summary_and_one_timer(tmp_path):
 
 def test_api_reset_validation_and_restart_fields(tmp_path):
     run_gui_check(tmp_path, '''
-        ui, win = make_window(initial_settings=SettingsPayload(api_base="https://custom.example", log_level="INFO", parse_concurrency=2))
+        ui, win = make_window(initial_settings=SettingsPayload(api_base="https://custom.example", log_level="INFO", parse_concurrency=2, background_import_speed="gentle"))
         win._click_save_settings()
         assert saved[-1].api_base is None
         win._api_reset_btn.click()
@@ -42,9 +42,9 @@ def test_api_reset_validation_and_restart_fields(tmp_path):
         win._api_reset_btn.click()
         assert win._api_error.text() == ""
         win._log_combo.setCurrentText("DEBUG")
-        win._concurrency_slider.setValue(1)
+        win._speed_combo.setCurrentIndex(win._speed_combo.findData("maximum"))
         win._click_save_settings()
-        assert "Log level, Parse concurrency and API address change after you restart" in win._settings_status.text()
+        assert "Log level, Import speed and API address change after you restart" in win._settings_status.text()
         ui._on_save_settings = lambda payload: (_ for _ in ()).throw(ValueError("disk unavailable"))
         win._click_save_settings()
         assert win._settings_status.text() == "Couldn't save settings: disk unavailable"

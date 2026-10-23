@@ -30,10 +30,13 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, List, Optional
+
+from .tray_images import _square_pad, render_tray_image, dot_color
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +70,18 @@ class TrayUI:
         on_show_window: Optional[Callable[[], None]] = None,
         on_build_checkin: Optional[Callable[[], None]] = None,
         synced_count_provider: Optional[Callable[[], int]] = None,
+        initial_paused: bool = False,
+        initial_paused_until=None,
+        on_pause_for=None,
+        on_install_update=None,
     ) -> None:
+        self._on_pause_for = on_pause_for
+        self._on_install_update = on_install_update
+        self._status_view = None
+        self._icon_images = {}
+        self._icon_color = object()
+        self._base_icon = None
+        self._paused_until = initial_paused_until
         self._dashboard_url = dashboard_url
         self._log_dir = log_dir
         self._replay_folders: List[Path] = list(replay_folders or [])
@@ -95,7 +109,7 @@ class TrayUI:
         self._uploaded = self._query_synced(default=0)
         self._pending = 0
         self._paired = False
-        self._paused = False
+        self._paused = initial_paused
         self._last_upload_name: Optional[str] = None
         self._last_upload_at: Optional[datetime] = None
         self._update_pending: Optional[str] = None
@@ -108,6 +122,7 @@ class TrayUI:
 
         self._stop_cb = on_quit
         icon_img = self._load_icon_image()
+        self._base_icon = icon_img
 
         self._icon = pystray.Icon(
             "sc2tools-agent",
@@ -146,7 +161,7 @@ class TrayUI:
                 # Tray icons render best at 64×64 on Windows. RGBA so
                 # transparency around the logo doesn't get filled in.
                 img = img.convert("RGBA")
-                img = img.resize((64, 64), Image.LANCZOS)
+                img = _square_pad(img).resize((64, 64), Image.Resampling.LANCZOS)
                 return img
             except Exception:  # noqa: BLE001
                 # Asset is corrupt — fall through to the procedural icon.
@@ -169,6 +184,23 @@ class TrayUI:
             return default
 
     # ---------------- callbacks from the runner ----------------
+
+    def on_phase(self, phase, detail=""):
+        self.on_status(detail if phase=="boot_error" else phase)
+
+    def on_analyzer_probe(self, ok, diag):
+        if not ok:
+            self.on_status("Replay analyzer unavailable")
+
+    def on_paused(self, paused, until=None):
+        with self._lock:
+            self._paused, self._paused_until = paused, until
+        self._refresh()
+
+    def on_status_view(self, view):
+        with self._lock:
+            self._status_view = view
+        self._refresh()
 
     def show_notice(self, message: str, *, title: str = "SC2 Tools Agent") -> None:
         """Show an OS notification without opening or focusing a window."""
@@ -227,55 +259,40 @@ class TrayUI:
     # ---------------- menu builders ----------------
 
     def _build_menu(self, pystray):
-        items = [
-            pystray.MenuItem(self._title, None, enabled=False),
-            pystray.MenuItem(self._second_line, None, enabled=False),
-            pystray.MenuItem(self._third_line, None, enabled=False),
-            pystray.Menu.SEPARATOR,
-        ]
-        if self._on_show_window_cb is not None:
-            # ``default=True`` also makes a double-click on the tray
-            # icon fire this item. Without an explicit entry the main
-            # window was UNREACHABLE after a hide-to-tray close — the
-            # only way back was killing and relaunching the agent.
-            items.append(
-                pystray.MenuItem(
-                    "Open agent window",
-                    self._show_window_clicked,
-                    default=True,
-                ),
-            )
+        items = [pystray.MenuItem(self._title, None, enabled=False),
+                 pystray.MenuItem(self._second_line, None, enabled=False),
+                 pystray.MenuItem(self._third_line, None, enabled=False), pystray.Menu.SEPARATOR]
+        if self._update_pending and self._on_install_update:
+            items.append(pystray.MenuItem(f"Install update v{self._update_pending}", lambda *_: self._on_install_update()))
+        if self._on_show_window_cb:
+            items.append(pystray.MenuItem("Open SC2 Tools", self._show_window_clicked, default=True))
         items.append(pystray.MenuItem("Open dashboard", self._open_dashboard))
-        if self._on_build_checkin_cb is not None:
-            items.append(
-                pystray.MenuItem("Build check-in…", self._build_checkin_clicked),
-            )
-        items.extend(
-            [
-                pystray.MenuItem(self._pause_label, self._toggle_pause),
-                pystray.MenuItem(
-                    "Open log folder",
-                    self._open_log_folder,
-                    enabled=self._log_dir_enabled,
-                ),
-                pystray.MenuItem("Re-sync from scratch", self._resync_clicked),
-                pystray.MenuItem(
-                    "Choose replay folder…", self._choose_folder_clicked,
-                ),
-                pystray.MenuItem(
-                    "Check for updates", self._check_updates_clicked,
-                ),
-                pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Quit", self._quit_clicked),
-            ],
-        )
+        if self._on_build_checkin_cb:
+            items.append(pystray.MenuItem("Build check-in…", self._build_checkin_clicked))
+        items.append(pystray.MenuItem(self._pause_label, self._toggle_pause))
+        if self._on_pause_for:
+            items.append(pystray.MenuItem("Pause", pystray.Menu(
+                pystray.MenuItem("Pause for 1 hour", lambda *_: self._on_pause_for(time.time()+3600)),
+                pystray.MenuItem("Pause until I resume", lambda *_: self._on_pause_for(None)))))
+        items.append(pystray.Menu.SEPARATOR)
+        items.append(pystray.MenuItem("More", pystray.Menu(
+            pystray.MenuItem("Add replay folder…", self._choose_folder_clicked),
+            pystray.MenuItem("Re-sync library…", self._resync_clicked),
+            pystray.MenuItem("Open log folder", self._open_log_folder, enabled=self._log_dir_enabled),
+            pystray.MenuItem("Check for updates", self._check_updates_clicked))))
+        items.extend([pystray.Menu.SEPARATOR,pystray.MenuItem("Quit",self._quit_clicked)])
         return pystray.Menu(*items)
 
     # ---------------- per-menu-item helpers ----------------
 
     def _title(self, _icon) -> str:
         with self._lock:
+            if self._status_view:
+                deadline = " · " + self._status_view.cause if self._paused_until and self._paused else ""
+                return f"{self._status_view.badge_text} · {self._status_view.headline}{deadline}"
             paused_marker = "Paused · " if self._paused else ""
+            if self._paused and self._paused_until:
+                paused_marker = "Paused until " + datetime.fromtimestamp(self._paused_until).strftime("%H:%M") + " · "
             base = "Paired" if self._paired else self._status
             return (
                 f"{paused_marker}{base} · {self._uploaded} synced · "
@@ -362,6 +379,9 @@ class TrayUI:
     def _resync_clicked(self, _icon, _item) -> None:
         if not self._on_resync_cb:
             return
+        if self._paused:
+            self.show_notice("Resume syncing before re-syncing the replay library.")
+            return
         try:
             self._on_resync_cb()
         except Exception:  # noqa: BLE001
@@ -370,7 +390,11 @@ class TrayUI:
     def _choose_folder_clicked(self, _icon, _item) -> None:
         if not self._on_choose_folder_cb:
             return
-        # Run the picker in a thread so we don't block the tray loop.
+        if self._on_show_window_cb:
+            self._on_show_window_cb()
+            self._on_choose_folder_cb(None)
+            return
+        # Headless mode retains the standalone picker.
         threading.Thread(
             target=self._choose_folder_worker,
             name="sc2tools-folder-pick",
@@ -412,8 +436,22 @@ class TrayUI:
             return
         if hasattr(self._icon, "title"):
             try:
-                self._icon.title = self._tooltip()  # type: ignore[attr-defined]
+                self._icon.title = "SC2 Tools - " + self._status_view.headline if self._status_view else self._tooltip()
             except Exception:  # noqa: BLE001
+                pass
+        if self._status_view:
+            color = dot_color(self._status_view)
+            if color != self._icon_color:
+                base = self._base_icon or self._load_icon_image()
+                if color not in self._icon_images:
+                    self._icon_images[color] = render_tray_image(base, color)
+                self._icon.icon = self._icon_images[color]
+                self._icon_color = color
+        if hasattr(self._icon, "menu"):
+            try:
+                import pystray
+                self._icon.menu = self._build_menu(pystray)
+            except ImportError:
                 pass
         if hasattr(self._icon, "update_menu"):
             try:
