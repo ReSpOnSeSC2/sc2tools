@@ -3,8 +3,8 @@
  *
  * Clerk's `appearance.variables` field accepts color strings (hex/rgb)
  * but does NOT resolve CSS variable references at runtime, so the
- * palette below mirrors the tokens defined in app/globals.css. Keep
- * the two in sync — when a token changes there, change it here too.
+ * literal map in lib/theme/tokens.ts mirrors app/globals.css. A source
+ * parity test catches changes that must also update that map.
  *
  * `appearance.elements` accepts Tailwind class strings, which DO flow
  * through CSS variables, so element styling is shared across themes.
