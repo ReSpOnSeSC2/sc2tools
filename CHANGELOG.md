@@ -16,6 +16,15 @@ corresponding GitHub Release.
 - Game build orders show prior-sample supply with an approximation marker, worker/supply filters and aligned times. Either side can copy text, supply-first text, Markdown or SALT, print a compact cheat sheet, arm a confirmed Ghost target or open the custom-build editor.
 - Custom and Community definitions share the export menu, including rule-only definitions with their actual condition text. Game headers download available stats/casualties CSV and versioned JSON locally.
 
+### Coaching forms
+
+- Practice plans show inline field errors, focus the first field to fix, remember each student's time zone and summarize the actual target before assignment. Failed saves retain the draft for Retry.
+- Weekly availability highlights reversed or overlapping hours and prevents publication until they are corrected. Touching windows remain valid.
+
+### Admin inbox details
+
+- Activity and support message rows now open full details on tap, click, Enter or Space, with diagnostics, replies and account or infrastructure links. Closing returns focus to the row.
+
 ### Build detection
 
 - Both PvZ Archon Drop labels require a real Warp Prism completed by 6:00 and observed Archons. Ordinary or late Templar transitions keep their opener label instead of being counted as drops.

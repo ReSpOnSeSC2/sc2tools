@@ -115,6 +115,7 @@ beforeEach(() => {
   harness.sharingData = sharingPayload("accepted");
   harness.assignmentsData = assignmentPayload([]);
   harness.observedGamesByPath = {};
+  localStorage.clear();
   vi.clearAllMocks();
   harness.apiCall.mockResolvedValue({});
 });
@@ -237,6 +238,7 @@ describe("CoachingPractice", () => {
       recurrence: "once",
       timeZone: "UTC",
     });
+    expect(localStorage.getItem("sc2tools:coaching:tz:student-linked")).toBe("UTC");
     expect(typeof body.clientRequestId).toBe("string");
     expect(typeof body.startsOn).toBe("string");
     expect(typeof body.endsOn).toBe("string");
@@ -278,8 +280,8 @@ describe("CoachingPractice", () => {
 
     render(<CoachingPractice role="coach" />);
     fireEvent.click(screen.getAllByRole("button", { name: "Assign games" })[0]);
-    const starts = screen.getByLabelText("Starts");
-    const ends = screen.getByLabelText("Ends");
+    const starts = screen.getByLabelText(/^Starts/);
+    const ends = screen.getByLabelText(/^Ends/);
     fireEvent.click(screen.getByRole("button", { name: /Total 1v1 games/ }));
 
     expect((starts as HTMLInputElement).value).toBe("2026-08-31");
@@ -313,8 +315,8 @@ describe("CoachingPractice", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Assign games" })[0]);
     fireEvent.click(screen.getByRole("button", { name: /Total 1v1 games/ }));
 
-    const starts = screen.getByLabelText("Starts") as HTMLInputElement;
-    const ends = screen.getByLabelText("Ends") as HTMLInputElement;
+    const starts = screen.getByLabelText(/^Starts/) as HTMLInputElement;
+    const ends = screen.getByLabelText(/^Ends/) as HTMLInputElement;
     expect(starts.value).toBe("2026-09-07");
     expect(ends.value).toBe("2026-09-13");
 
@@ -342,8 +344,8 @@ describe("CoachingPractice", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Assign games" })[0]);
     fireEvent.click(screen.getByRole("button", { name: /Total 1v1 games/ }));
 
-    const starts = screen.getByLabelText("Starts") as HTMLInputElement;
-    const ends = screen.getByLabelText("Ends") as HTMLInputElement;
+    const starts = screen.getByLabelText(/^Starts/) as HTMLInputElement;
+    const ends = screen.getByLabelText(/^Ends/) as HTMLInputElement;
     fireEvent.change(starts, { target: { value: "2026-10-05" } });
     fireEvent.change(ends, { target: { value: "2026-10-18" } });
     fireEvent.change(screen.getByRole("combobox", { name: "Player's time zone" }), {
