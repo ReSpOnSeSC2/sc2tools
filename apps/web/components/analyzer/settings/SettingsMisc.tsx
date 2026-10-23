@@ -25,6 +25,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useDirtyForm } from "@/components/ui/useDirtyForm";
 import { TODAY_DEFAULT_TAB } from "@/components/analyzer/tabs";
 import { usePublishDirty } from "./SettingsContext";
+import { RestoreSetupChecklist } from "./RestoreSetupChecklist";
 
 type Misc = {
   defaultTab?: string;
@@ -157,6 +158,7 @@ export function SettingsMisc() {
                 </Link>
               }
             />
+            <RestoreSetupChecklist />
             <AnalyticsCookiesRow />
           </div>
         </Card>

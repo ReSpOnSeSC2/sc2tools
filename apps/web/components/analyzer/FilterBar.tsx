@@ -7,12 +7,17 @@ import {
   ANALYZER_REGIONS,
   PTR_REGION,
   activeRegionCodes,
+  describeActiveFilters,
+  summarizeFilters,
+  TOO_SHORT_SECONDS,
   useFilters,
 } from "@/lib/filterContext";
 import { PillButton } from "./FilterPill";
 import { FilterSheet } from "./FilterSheet";
 import { GameLengthFilter } from "./GameLengthFilter";
 import { MatchupPicker } from "./MatchupPicker";
+import { MoreFiltersPopover } from "./MoreFiltersPopover";
+import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 import {
   PRESETS,
   resolvePreset,
@@ -27,6 +32,25 @@ import type { LogicalSeason } from "@/lib/useSeasons";
 
 const SEASONS_TO_SHOW = 16;
 
+export function FilterBar() {
+  const { filters, seasons } = useFilters();
+  const [desktop, setDesktop] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia?.("(min-width: 768px)");
+    const update = () => setDesktop(media?.matches ?? true);
+    update(); media?.addEventListener?.("change", update);
+    return () => media?.removeEventListener?.("change", update);
+  }, []);
+  const extra = <><MapPoolToggle /><GameSizeToggle /><GameLengthFilter /><ExcludeTooShortToggle /><LazyHelpLink slug="analyzer-filters">How filters work</LazyHelpLink></>;
+  return <div className="space-y-3">
+    <div className="flex items-center gap-3">
+      <p className="min-w-0 flex-1 text-caption text-text-muted" aria-label="Current filters">{summarizeFilters(filters, seasons)}</p>
+      {desktop ? <MoreFiltersPopover count={describeActiveFilters(filters, { seasons }).length}>{extra}</MoreFiltersPopover> : <FilterSheet><DateFilter /><MatchupPicker /><RegionToggleRow />{extra}</FilterSheet>}
+    </div>
+    {desktop ? <div className="flex flex-wrap items-center gap-3"><DateFilter /><MatchupPicker /><RegionToggleRow /></div> : null}
+  </div>;
+}
+
 /**
  * Global filter bar that drives every analyzer tab: date range, matchup,
  * region, maps, players, game length and "Hide too-short". Selection is
@@ -35,8 +59,8 @@ const SEASONS_TO_SHOW = 16;
  * tabs at once. ActiveFilterChips, under the bar, lists whatever differs
  * from the defaults.
  *
- * Below `sm` only the date range stays inline; the other controls move
- * into the "Filters · N active" bottom sheet (FilterSheet).
+ * Below `md` only the summary and Filters button stay inline. Every facet
+ * moves into the phone editor; desktop keeps date, matchup and region inline.
  *
  * The date picker presents three groups:
  *   - Patch + quick presets (12-worker 5.0.17, the 8-worker 5.0.16 window,
@@ -50,11 +74,13 @@ const SEASONS_TO_SHOW = 16;
  * region, ESC closes it, the backdrop dismisses on tap, and every tap
  * target is at least 44px tall.
  */
-export function FilterBar() {
+function DateFilter() {
   const { filters, setFilters, seasons } = useFilters();
   const presetId: PresetId = filters.preset || "all";
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap({ open, containerRef: dialogRef, onClose: () => setOpen(false) });
   const [customStart, setCustomStart] = useState<string>(() =>
     filters.since ? toDateInputValue(new Date(filters.since)) : "",
   );
@@ -69,19 +95,6 @@ export function FilterBar() {
     setCustomStart(filters.since ? toDateInputValue(new Date(filters.since)) : "");
     setCustomEnd(filters.until ? toDateInputValue(new Date(filters.until)) : "");
   }, [filters.since, filters.until]);
-
-  // ESC closes the popover and returns focus to the trigger.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
 
   const apply = (id: PresetId, opts?: { since?: Date; until?: Date }) => {
     if (id === "custom") {
@@ -119,23 +132,6 @@ export function FilterBar() {
   // games included), so its range reads by patch: "5.0.16 → 5.0.17".
   const eightWorker = patchEraFor(presetId) === "before";
 
-  // Rendered inline from `sm` up, and inside the phone sheet below it.
-  const controls = (
-    <>
-      <MatchupPicker />
-
-      <RegionToggleRow />
-
-      <MapPoolToggle />
-
-      <GameSizeToggle />
-
-      <GameLengthFilter />
-
-      <ExcludeTooShortToggle />
-    </>
-  );
-
   return (
     <div className="flex flex-wrap items-center gap-3">
       <span className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-text-dim">
@@ -165,7 +161,9 @@ export function FilterBar() {
               onClick={() => setOpen(false)}
             />
             <div
+              ref={dialogRef}
               role="dialog"
+              tabIndex={-1}
               aria-modal="true"
               aria-label="Pick a date range"
               className={[
@@ -277,11 +275,6 @@ export function FilterBar() {
         </span>
       ) : null}
 
-      <FilterSheet>{controls}</FilterSheet>
-
-      <div className="hidden sm:contents">{controls}</div>
-
-      <LazyHelpLink slug="analyzer-filters" variant="icon" />
     </div>
   );
 }
@@ -305,20 +298,19 @@ function SegmentedFilter<T extends string>({
   onChange: (next: T | "all") => void;
 }) {
   return (
-    <div
-      role="group"
+    <fieldset
       aria-label={ariaLabel}
       className="inline-flex flex-wrap items-center gap-1.5"
     >
-      <span className="text-xs uppercase tracking-wider text-text-dim">
+      <legend className="mb-1 text-xs uppercase tracking-wider text-text-dim">
         {label}
-      </span>
+      </legend>
       <PillButton
         active={value === undefined || value === "all"}
         title={`All ${label.toLowerCase()}`}
         onClick={() => onChange("all")}
       >
-        All
+        {label === "Game type" ? "Both" : "All"}
       </PillButton>
       {options.map((opt) => {
         const on = value === opt.value;
@@ -333,7 +325,7 @@ function SegmentedFilter<T extends string>({
           </PillButton>
         );
       })}
-    </div>
+    </fieldset>
   );
 }
 
@@ -347,18 +339,18 @@ function MapPoolToggle() {
   const { filters, setFilters } = useFilters();
   return (
     <SegmentedFilter
-      label="Maps"
+      label="Game type"
       ariaLabel="Filter by ladder or custom games"
       value={filters.map_pool}
       options={[
         {
           value: "ladder",
-          label: "Ladder",
+          label: "Ranked ladder",
           title: "Only ranked ladder games",
         },
         {
           value: "nonladder",
-          label: "Custom",
+          label: "Custom games",
           title: "Only custom or unranked games",
         },
       ]}
@@ -377,7 +369,7 @@ function GameSizeToggle() {
   const { filters, setFilters } = useFilters();
   return (
     <SegmentedFilter
-      label="Players"
+      label="Game size"
       ariaLabel="Filter by game size"
       value={filters.game_size}
       options={[
@@ -445,14 +437,13 @@ function RegionToggleRow() {
   };
 
   return (
-    <div
-      role="group"
+    <fieldset
       aria-label="Filter by Battle.net region"
       className="inline-flex flex-wrap items-center gap-1.5"
     >
-      <span className="text-xs uppercase tracking-wider text-text-dim">
+      <legend className="mb-1 text-xs uppercase tracking-wider text-text-dim">
         Region
-      </span>
+      </legend>
       {ANALYZER_REGIONS.map((code) => {
         const on = active.has(code);
         return (
@@ -463,7 +454,7 @@ function RegionToggleRow() {
             aria-pressed={on}
             title={`${on ? "Hide" : "Show"} ${REGION_NAMES[code] ?? code} opponents`}
             className={[
-              "inline-flex min-h-[28px] items-center rounded-full border px-2 py-0.5",
+              "analyzer-filter-pill inline-flex min-h-8 items-center rounded-full border px-2 py-0.5",
               "text-micro font-medium uppercase tracking-wider tabular-nums",
               "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg",
               on
@@ -475,7 +466,7 @@ function RegionToggleRow() {
           </button>
         );
       })}
-    </div>
+    </fieldset>
   );
 }
 
@@ -519,7 +510,7 @@ function ExcludeTooShortToggle() {
         "transition-colors hover:text-text",
         "focus-within:text-text",
       ].join(" ")}
-      title="Drop replays that ended in under 45 seconds (no build order developed) from every tab and KPI. On by default."
+      title={`Drop replays that ended in under ${TOO_SHORT_SECONDS} seconds (no build order developed) from every tab and KPI. On by default.`}
     >
       <input
         type="checkbox"
@@ -533,10 +524,10 @@ function ExcludeTooShortToggle() {
           setFilters({ ...filters, exclude_too_short: e.target.checked })
         }
         className="h-3.5 w-3.5 cursor-pointer accent-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-        aria-label="Hide too-short games, under 45 seconds"
+        aria-label={`Hide games under ${TOO_SHORT_SECONDS} seconds`}
       />
       <span className={enabled ? "text-text" : undefined}>
-        Hide too-short
+        Hide games under {TOO_SHORT_SECONDS} s
       </span>
     </label>
   );

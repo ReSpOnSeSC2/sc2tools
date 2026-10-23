@@ -1,0 +1,20 @@
+import type { ReactNode } from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import { ArcadeTab } from "../ArcadeTab";
+vi.mock("@/components/builds/useCustomBuildCatalog", () => ({ CustomBuildCatalogProvider: ({ children }: { children: ReactNode }) => <>{children}</> }));
+vi.mock("../arcade/SeasonRecap", () => ({ SeasonRecap: () => null }));
+vi.mock("../arcade/surfaces/Today", () => ({ TodaySurface: () => <p>Daily challenges</p> }));
+vi.mock("../arcade/surfaces/QuickPlay", () => ({ QuickPlaySurface: () => <p>Quick play challenges</p> }));
+vi.mock("../arcade/surfaces/Collection", () => ({ CollectionSurface: () => null }));
+vi.mock("../arcade/surfaces/MyStats", () => ({ MyStatsSurface: () => null }));
+afterEach(cleanup);
+it("calls the daily surface Daily and keeps its navigation working", () => {
+  render(<ArcadeTab />);
+  const daily = screen.getByRole("tab", { name: "Daily" });
+  expect(daily.getAttribute("aria-selected")).toBe("true");
+  expect(screen.getByText("Daily challenges")).toBeTruthy();
+  fireEvent.click(screen.getByRole("tab", { name: "Quick Play" }));
+  expect(screen.getByText("Quick play challenges")).toBeTruthy();
+  fireEvent.click(daily); expect(screen.getByText("Daily challenges")).toBeTruthy();
+});
