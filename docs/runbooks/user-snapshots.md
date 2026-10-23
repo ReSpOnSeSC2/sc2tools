@@ -37,6 +37,8 @@ node apps/api/scripts/migrate-user-backups.js --apply
 
 Apply processes one legacy document at a time under the user's mutation fence. It preserves ID/type/creation date, completes the R2 upload, then replaces the embedded payload with metadata. A failed upload retains the old payload. Restarting skips migrated documents. Verify metadata and a private download in a non-production fixture; never run a production restore as a migration check. Legacy rows return `backup_migration_required` for download/preview/restore until migrated. No migration or restore has been executed against production by this change.
 
+Do not roll back to the embedded-only restore reader while streamed snapshots exist: that reader treats a missing payload as an empty account. Prefer a compatible forward fix. If an old API deployment is unavoidable, suspend restore/wipe routes before deployment and retain every backup object and metadata row until a compatible reader is available. Never convert a large archive back into one Mongo payload document.
+
 ## Repairs and account erasure
 
 `POST /v1/me/repair/{opponents|replay-archive|custom-builds}` takes a pre-action backup and returns 202. Each kind uses a one-hour CAS on `users.repairs`, holds the GDPR fence until completion, records status and emits one idempotent in-app `data.repair` notification. A setup failure before acceptance releases the attempt so it can be retried. There is no external message delivery.
