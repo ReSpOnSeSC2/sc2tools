@@ -1,0 +1,80 @@
+{
+  "links": [
+    {
+      "href": "https://cloud.mongodb.com/api/atlas/v2/groups/89abcdef0123456701234567/clusters/sample-cluster/backup/snapshots?pageNum=1&itemsPerPage=500",
+      "rel": "self"
+    }
+  ],
+  "results": [
+    {
+      "cloudProvider": "GCP",
+      "copyRegions": [],
+      "createdAt": "2026-08-11T12:04:11Z",
+      "description": "",
+      "expiresAt": "2026-08-13T12:04:11Z",
+      "frequencyType": "hourly",
+      "id": "66b8a0f3c1a2b3c4d5e6f701",
+      "masterKeyUUID": null,
+      "mongodVersion": "7.0.14",
+      "policyItems": ["66b8a0f3c1a2b3c4d5e6f7aa"],
+      "replicaSetName": "atlas-abc123-shard-0",
+      "snapshotType": "scheduled",
+      "status": "inProgress",
+      "storageSizeBytes": 0,
+      "type": "replicaSet"
+    },
+    {
+      "cloudProvider": "GCP",
+      "copyRegions": [],
+      "createdAt": "2026-08-11T06:03:55Z",
+      "description": "",
+      "expiresAt": "2026-08-13T06:03:55Z",
+      "frequencyType": "hourly",
+      "id": "66b8a0f3c1a2b3c4d5e6f702",
+      "mongodVersion": "7.0.14",
+      "policyItems": ["66b8a0f3c1a2b3c4d5e6f7aa"],
+      "replicaSetName": "atlas-abc123-shard-0",
+      "snapshotType": "scheduled",
+      "status": "completed",
+      "storageSizeBytes": 3954452070,
+      "type": "replicaSet"
+    },
+    {
+      "cloudProvider": "GCP",
+      "copyRegions": [],
+      "createdAt": "2026-08-10T18:02:40Z",
+      "description": "Before the August migration",
+      "expiresAt": "2026-08-17T18:02:40Z",
+      "frequencyType": "ondemand",
+      "id": "66b8a0f3c1a2b3c4d5e6f703",
+      "mongodVersion": "7.0.14",
+      "replicaSetName": "atlas-abc123-shard-0",
+      "snapshotType": "onDemand",
+      "status": "failed",
+      "storageSizeBytes": 0,
+      "type": "replicaSet"
+    },
+    {
+      "cloudProvider": "GCP",
+      "copyRegions": [],
+      "createdAt": "2026-08-10T00:01:12Z",
+      "description": "",
+      "expiresAt": "2026-08-17T00:01:12Z",
+      "frequencyType": "daily",
+      "id": "66b8a0f3c1a2b3c4d5e6f704",
+      "mongodVersion": "7.0.14",
+      "policyItems": ["66b8a0f3c1a2b3c4d5e6f7bb"],
+      "replicaSetName": "atlas-abc123-shard-0",
+      "snapshotType": "scheduled",
+      "status": "completed",
+      "storageSizeBytes": 3911002112,
+      "type": "replicaSet"
+    },
+    {
+      "createdAt": "not-a-date",
+      "id": "66b8a0f3c1a2b3c4d5e6f705",
+      "status": "completed"
+    }
+  ],
+  "totalCount": 5
+}

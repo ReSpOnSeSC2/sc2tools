@@ -415,6 +415,61 @@ describe("admin notification events", () => {
     expect(res.body.items[1].type).toBe("user_signup");
   });
 
+  test("backup_stale alerts keep only safe fields and land once per day", async () => {
+    const payload = {
+      reason: "stale",
+      lastSnapshotAt: "2026-08-09T12:00:00Z",
+      ageHours: 53.47,
+      latestStatus: "failed",
+      clusterName: "must-not-be-stored",
+    };
+    const opts = { ingestionKey: "backup_stale:2026-08-11" };
+    const first = await services.adminEvents.record("backup_stale", payload, opts);
+    const repeat = await services.adminEvents.record("backup_stale", payload, opts);
+
+    expect(repeat.eventId).toBe(first.eventId);
+    const rows = await db.adminEvents.find({ type: "backup_stale" }).toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].payload).toEqual({
+      reason: "stale",
+      lastSnapshotAt: "2026-08-09T12:00:00.000Z",
+      ageHours: 53.5,
+      latestStatus: "failed",
+    });
+
+    await sleep(8);
+    await services.adminEvents.record("backup_stale", {
+      reason: "missing",
+      lastSnapshotAt: null,
+      ageHours: null,
+      latestStatus: null,
+    });
+    await sleep(8);
+    await services.adminEvents.record("backup_stale", {
+      reason: "anything-else",
+      lastSnapshotAt: "not a date",
+      ageHours: -1,
+      latestStatus: "<b>",
+    });
+    const res = await asAdmin(
+      request(app).get("/v1/admin/events?type=backup_stale"),
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(3);
+    expect(res.body.items[0].payload).toEqual({
+      reason: "stale",
+      lastSnapshotAt: null,
+      ageHours: null,
+      latestStatus: null,
+    });
+    expect(res.body.items[1].payload).toEqual({
+      reason: "missing",
+      lastSnapshotAt: null,
+      ageHours: null,
+      latestStatus: null,
+    });
+  });
+
   test("unread view exposes nine recovered installs behind more than fifty newer read events", async () => {
     const user = await db.users.findOne({ clerkUserId: "clerk_admin" });
     const pairedAt = new Date("2026-09-01T12:00:00Z");

@@ -9,6 +9,13 @@ const DISK_METRIC_PERIOD = "PT1H";
 const PROCESS_METRIC_PERIOD = "PT1H";
 const SUSTAINED_SAMPLE_COUNT = 3;
 const MAX_CLUSTER_PROCESSES = 9;
+// Atlas's largest page. A default Cloud Backup policy keeps ~30 snapshots,
+// so one page always holds the newest one.
+const BACKUP_SNAPSHOT_PAGE_SIZE = 500;
+const SNAPSHOT_STATUSES = new Set(["queued", "inProgress", "completed", "failed"]);
+const BACKUP_FREQUENCIES = ["hourly", "daily", "weekly", "monthly", "yearly"];
+const RETENTION_UNITS = new Set(["days", "weeks", "months", "years"]);
+const MAX_RETENTION_ITEMS = 10;
 
 /**
  * Read-only MongoDB Atlas control-plane client. It deliberately returns an
@@ -65,6 +72,48 @@ class AtlasInfrastructureClient {
       cluster,
       billing,
       configErrorCode: cluster ? null : "atlas_cluster_unavailable",
+    };
+  }
+
+  /**
+   * Cloud Backup health for the configured cluster: the newest completed
+   * snapshot, the state of the newest snapshot of any kind, the schedule's
+   * next run, its retention policy and point-in-time restore. Snapshot ids,
+   * regions, hostnames and storage details never leave this method.
+   *
+   * Needs the Project Read Only role. The snapshot list is required; the
+   * schedule and cluster reads only add detail, so either failing leaves
+   * those fields null instead of failing the check.
+   */
+  async backupStatus() {
+    const project = encodeURIComponent(this.config.projectId);
+    const name = encodeURIComponent(this.config.clusterName);
+    const cluster = `/api/atlas/v2/groups/${project}/clusters/${name}`;
+    const [snapshots, schedule, settings] = await Promise.allSettled([
+      this._apiJson(
+        `${cluster}/backup/snapshots?itemsPerPage=${BACKUP_SNAPSHOT_PAGE_SIZE}`,
+      ),
+      this._apiJson(`${cluster}/backup/schedule`),
+      this._apiJson(cluster),
+    ]);
+    if (snapshots.status === "rejected") throw snapshots.reason;
+    const parsedSchedule = parseBackupSchedule(
+      schedule.status === "fulfilled" ? schedule.value : null,
+    );
+    const clusterBackup = parseClusterBackupSettings(
+      settings.status === "fulfilled" ? settings.value : null,
+    );
+    return {
+      ...parseBackupSnapshots(snapshots.value),
+      nextSnapshotAt: parsedSchedule.nextSnapshotAt,
+      retention: parsedSchedule.retention,
+      cloudBackupEnabled: clusterBackup.cloudBackupEnabled,
+      pointInTime: {
+        enabled: clusterBackup.pitEnabled,
+        windowDays: clusterBackup.pitEnabled
+          ? parsedSchedule.restoreWindowDays
+          : null,
+      },
     };
   }
 
@@ -338,6 +387,96 @@ function parseCluster(raw) {
     diskCapacityBytes: null,
     diskMeasuredAt: null,
     performance: null,
+  };
+}
+
+/**
+ * Newest completed snapshot plus the state of the newest snapshot of any
+ * kind (an in-progress or failed run is newer than the last good one).
+ * Only timestamps and an allowlisted status survive.
+ *
+ * @param {Record<string, any>} raw
+ */
+function parseBackupSnapshots(raw) {
+  const rows = Array.isArray(raw?.results) ? raw.results : [];
+  /** @type {string|null} */ let lastSnapshotAt = null;
+  /** @type {{createdAt: string, status: string}|null} */ let latest = null;
+  let completedSnapshotCount = 0;
+  for (const row of rows) {
+    const createdAt = validIso(row?.createdAt);
+    if (!createdAt) continue;
+    const status = SNAPSHOT_STATUSES.has(row?.status) ? row.status : "unknown";
+    if (!latest || createdAt > latest.createdAt) latest = { createdAt, status };
+    if (status !== "completed") continue;
+    completedSnapshotCount += 1;
+    if (!lastSnapshotAt || createdAt > lastSnapshotAt) lastSnapshotAt = createdAt;
+  }
+  return {
+    lastSnapshotAt,
+    latestStatus: latest ? latest.status : null,
+    completedSnapshotCount,
+  };
+}
+
+/**
+ * Next scheduled run, retention per frequency and the continuous-backup
+ * window from the cluster's backup schedule. A missing or unreadable
+ * schedule yields nulls rather than an error.
+ *
+ * @param {Record<string, any>|null} raw
+ */
+function parseBackupSchedule(raw) {
+  const policies = Array.isArray(raw?.policies) ? raw.policies : [];
+  const retention = policies
+    .flatMap((/** @type {any} */ policy) => Array.isArray(policy?.policyItems)
+      ? policy.policyItems
+      : [])
+    .map(parseRetentionItem)
+    .filter((/** @type {any} */ item) => item !== null)
+    .sort((/** @type {any} */ left, /** @type {any} */ right) =>
+      BACKUP_FREQUENCIES.indexOf(left.frequency)
+        - BACKUP_FREQUENCIES.indexOf(right.frequency))
+    .slice(0, MAX_RETENTION_ITEMS);
+  return {
+    nextSnapshotAt: validIso(raw?.nextSnapshot),
+    retention,
+    restoreWindowDays: positiveInteger(raw?.restoreWindowDays),
+  };
+}
+
+/**
+ * One schedule policy item as a plain summary. Atlas's frequencyInterval
+ * only means "every N hours" for hourly items (for weekly/monthly it is a
+ * day of the week/month), so it is kept for hourly items only.
+ *
+ * @param {Record<string, any>} item
+ */
+function parseRetentionItem(item) {
+  const frequency = String(item?.frequencyType || "");
+  const unit = String(item?.retentionUnit || "");
+  const keep = positiveInteger(item?.retentionValue);
+  if (!BACKUP_FREQUENCIES.includes(frequency)
+    || !RETENTION_UNITS.has(unit)
+    || keep === null) {
+    return null;
+  }
+  return {
+    frequency,
+    everyHours: frequency === "hourly"
+      ? positiveInteger(item?.frequencyInterval)
+      : null,
+    keep,
+    unit,
+  };
+}
+
+/** @param {Record<string, any>|null} raw */
+function parseClusterBackupSettings(raw) {
+  return {
+    cloudBackupEnabled: typeof raw?.backupEnabled === "boolean"
+      ? raw.backupEnabled
+      : null,
+    pitEnabled: typeof raw?.pitEnabled === "boolean" ? raw.pitEnabled : null,
   };
 }
 
@@ -846,6 +985,12 @@ function atlasError(code) {
   return err;
 }
 
+/** @param {unknown} value */
+function positiveInteger(value) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : null;
+}
+
 /** @param {number|undefined} value @param {number} fallback */
 function positiveMs(value, fallback) {
   return typeof value === "number" && Number.isFinite(value) && value > 0
@@ -858,6 +1003,8 @@ module.exports = {
   _internals: {
     atlasCostCategory,
     connectionHosts,
+    parseBackupSchedule,
+    parseBackupSnapshots,
     parseCluster,
     parseDiskMeasurements,
     parseProcessMeasurements,

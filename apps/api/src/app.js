@@ -44,6 +44,8 @@ const { PlaybackArtifactsService } = require("./services/playbackArtifacts");
 const {
   InfrastructureUsageService,
 } = require("./services/infrastructureUsage");
+const { AtlasInfrastructureClient } = require("./services/atlasInfrastructure");
+const { BackupStatusService } = require("./services/backupStatus");
 const { CustomBuildsService } = require("./services/customBuilds");
 const { BuildIntentsService } = require("./services/buildIntents");
 const { DevicePairingsService } = require("./services/devicePairings");
@@ -346,11 +348,17 @@ function makeServices(deps) {
   const playbackArtifacts = replayFiles ? new PlaybackArtifactsService({
     client: replayFiles.client, bucket: replayFiles.bucket, games: deps.db.games,
   }) : null;
+  // One read-only Atlas client (and OAuth token) shared by capacity
+  // monitoring and backup health; null when the service account is unset.
+  const atlasClient = deps.config.atlasAdmin
+    ? new AtlasInfrastructureClient({ config: deps.config.atlasAdmin })
+    : null;
   const infrastructureUsage = new InfrastructureUsageService({
     games: deps.db.games,
     mongoDb: deps.db.db,
     cloudflareAnalytics: deps.config.cloudflareAnalytics || null,
     atlasAdmin: deps.config.atlasAdmin || null,
+    atlasClient,
     renderAdmin: deps.config.renderAdmin || null,
   });
   // Cloud-side SC2Pulse resolver — drives the backfill cron's
@@ -788,6 +796,14 @@ function makeServices(deps) {
     pulseDirectory,
   });
   const adminGlobalTrends = new AdminGlobalTrendsService({ db: deps.db });
+  // Atlas Cloud Backup health + in-app snapshot counts for /admin/health;
+  // server.js runs the hourly stale-backup alert against the same cache.
+  const backupStatus = new BackupStatusService({
+    db: deps.db,
+    atlasClient,
+    adminEvents,
+    logger: deps.logger,
+  });
   // Google Analytics 4 reader for the admin Analytics tab. Pure
   // adapter over the GA4 Data API; ``config.analytics.enabled`` is
   // false when GA isn't wired up, in which case the routes return a
@@ -849,6 +865,7 @@ function makeServices(deps) {
     adminGlobal,
     adminGlobalTrends,
     adminEvents,
+    backupStatus,
     analytics,
     pulseMmr,
     pulseIntel,
@@ -1326,6 +1343,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       adminGlobal: services.adminGlobal,
       adminGlobalTrends: services.adminGlobalTrends,
       adminEvents: services.adminEvents,
+      backupStatus: services.backupStatus,
       analytics: services.analytics,
       gdpr: services.gdpr,
       games: services.games,

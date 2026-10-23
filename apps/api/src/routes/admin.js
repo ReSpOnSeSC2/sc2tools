@@ -14,6 +14,8 @@
  *
  *   GET  /admin/storage-stats       per-collection size + total
  *   GET  /admin/infrastructure      provider costs + capacity advisories
+ *   GET  /admin/backups             Atlas snapshot health + in-app snapshot
+ *                                    counts (Health page backups card)
  *   GET  /admin/users               paginated user list w/ activity
  *   GET  /admin/users/:userId       per-user detail snapshot
  *   POST /admin/users/:userId/rebuild-opponents
@@ -44,6 +46,7 @@ const {
  *   adminGlobal: import('../services/adminGlobal').AdminGlobalService,
  *   adminGlobalTrends: import('../services/adminGlobalTrends').AdminGlobalTrendsService,
  *   adminEvents: import('../services/adminEvents').AdminEventsService,
+ *   backupStatus?: import('../services/backupStatus').BackupStatusService,
  *   analytics: import('../services/analytics').AnalyticsService,
  *   gdpr: import('../services/gdpr').GdprService,
  *   games: import('../services/games').GamesService,
@@ -109,6 +112,22 @@ function buildAdminRouter(deps) {
       // never let a browser or shared CDN cache the response.
       res.set("Cache-Control", "private, no-store").json(
         await deps.admin.infrastructureSnapshot(),
+      );
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get("/admin/backups", async (_req, res, next) => {
+    try {
+      if (!deps.backupStatus) {
+        res.status(503).json({ error: { code: "backup_status_unavailable" } });
+        return;
+      }
+      // Same rule as /admin/infrastructure: operator-only, never cached by
+      // a browser or a shared CDN.
+      res.set("Cache-Control", "private, no-store").json(
+        await deps.backupStatus.adminSnapshot(),
       );
     } catch (err) {
       next(err);

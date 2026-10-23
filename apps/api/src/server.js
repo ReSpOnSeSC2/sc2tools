@@ -35,6 +35,7 @@ const {
   buildLadderMetaRecomputeJob,
 } = require("./jobs/ladderMetaRecomputeJob");
 const { buildReviewDigestJob } = require("./jobs/reviewDigestJob");
+const { buildBackupHealthJob } = require("./jobs/backupHealthJob");
 const sentry = require("./util/sentry");
 const { TrendsExplorerBackfill } = require("./services/trendsExplorerBackfill");
 const { startBrowserUploadCorsCheck } = require("./services/replayFilesCors");
@@ -347,6 +348,14 @@ async function main() {
   });
   reviewDigestJob.start();
 
+  // Hourly Atlas Cloud Backup check: one admin notification per day while
+  // the newest snapshot is overdue. Only with the Atlas service account.
+  const backupHealthJob = buildBackupHealthJob({
+    backupStatus: /** @type {any} */ (services).backupStatus,
+    logger,
+  });
+  backupHealthJob.start();
+
   // SC2 Tools Guides build-order videos: seed the committed channel
   // snapshot, then re-read the owner's YouTube RSS feed every 6 h. Only
   // with guides on (GUIDES_ENABLED) and a channel id configured.
@@ -405,6 +414,7 @@ async function main() {
     await fingerprintPopulationCalibrationJob.stop();
     await ladderMetaJob.stop();
     await reviewDigestJob.stop();
+    await backupHealthJob.stop();
     // Also waits for an admin-forced run when the schedule never started.
     await guideStatsJob.stop();
     // Admin-triggered guide backfill (never started at boot) and any
