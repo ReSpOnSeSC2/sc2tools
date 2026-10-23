@@ -24,7 +24,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/Stat";
 import { useToast } from "@/components/ui/Toast";
-import { fmtDate, fmtMinutes, fmtMmr } from "@/lib/format";
+import { fmtDate, fmtDateCompact, fmtMinutes, fmtMmr } from "@/lib/format";
 import { coerceRace, raceIconName } from "@/lib/race";
 
 export function PublicReplayAnalysis({ data }: { data: PublicReplayDetailResponse }) {
@@ -88,7 +88,7 @@ export function PublicReplayAnalysis({ data }: { data: PublicReplayDetailRespons
                   </>
                 ) : null}
                 {game.map ? <><span aria-hidden>·</span><MapLabel name={game.map} size="xs" /></> : null}
-                {game.date ? <><span aria-hidden>·</span><time suppressHydrationWarning dateTime={game.date}>{fmtDate(game.date)}</time></> : null}
+                {game.date ? <><span aria-hidden>·</span><time suppressHydrationWarning dateTime={game.date} title={fmtDate(game.date)}>{fmtDateCompact(game.date)}</time></> : null}
               </span>
             }
             actions={
@@ -203,7 +203,7 @@ export function PublicReplayAnalysis({ data }: { data: PublicReplayDetailRespons
         />
       </section>
 
-      <p className="text-center text-micro text-text-dim">This analysis was shared by {profile.displayName}. Page data omits SC2 Tools account and storage fields; downloading the original replay exposes its embedded metadata and a temporary storage URL.</p>
+      <p className="text-center text-micro text-text-dim">Shared by {profile.displayName}. Downloads are the original .SC2Replay file, which includes the in-game names and chat StarCraft II records.</p>
     </article>
   );
 }
@@ -234,7 +234,7 @@ function MacroLeakCard({ data }: { data: PublicReplayDetailResponse["macroBreakd
   );
 }
 
-type DisplayResult = "Win" | "Loss" | "Draw" | "Unknown";
+type DisplayResult = "Win" | "Loss" | "Tie" | "Unknown";
 
 function ResultBadge({ result }: { result: DisplayResult }) {
   return <Badge variant={result === "Win" ? "success" : result === "Loss" ? "danger" : "neutral"} size="sm">{result}</Badge>;
@@ -244,7 +244,7 @@ function normalizedResult(value?: string | null): DisplayResult {
   const normalized = value?.trim().toLowerCase();
   if (normalized === "win" || normalized === "victory") return "Win";
   if (normalized === "loss" || normalized === "defeat") return "Loss";
-  if (normalized === "draw" || normalized === "tie") return "Draw";
+  if (normalized === "draw" || normalized === "tie") return "Tie";
   return "Unknown";
 }
 

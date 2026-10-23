@@ -36,12 +36,14 @@ export function GameStreamLinks({
   compact = false,
   className = "",
   sharedPlayerName,
+  ariaLabel = "Game streams",
 }: {
   links?: readonly GameStreamLink[] | null;
   compact?: boolean;
   className?: string;
   /** Public-share context: replaces recipient-confusing “You” labels. */
   sharedPlayerName?: string | null;
+  ariaLabel?: string;
 }) {
   const safeLinks = (links ?? []).flatMap((link, index) => {
     const href = safeTimestampedHref(link);
@@ -57,8 +59,9 @@ export function GameStreamLinks({
       className={["inline-flex flex-wrap items-center gap-1.5", className]
         .filter(Boolean)
         .join(" ")}
-      aria-label="Game streams"
+      aria-label={ariaLabel}
     >
+      {compact ? <span className="text-micro font-semibold text-text-muted">POV ×{safeLinks.length}</span> : null}
       {(["me", "opponent"] as const).map((perspective) => {
         const group = safeLinks.filter(
           (link) => link.perspective === perspective,

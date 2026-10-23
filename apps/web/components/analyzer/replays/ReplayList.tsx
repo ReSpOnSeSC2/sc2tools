@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@clerk/nextjs";
 import {
   ArrowUpRight,
   BarChart3,
@@ -21,7 +22,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { AskForReviewButton } from "@/components/reviews/AskForReviewButton";
 import { PlannedBadge } from "@/components/build-checkin/PlannedBadge";
 import { Icon } from "@/components/ui/Icon";
-import { fmtDate, fmtMinutes, fmtMmr } from "@/lib/format";
+import { fmtDate, fmtDateCompact, fmtMinutes, fmtMmr } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { isReviewableGame } from "@/lib/reviews";
 import type { ReplayLibraryItem } from "./types";
@@ -49,6 +50,8 @@ export function ReplayList({
   emptyDescription = "Try a wider date range or clear the replay search filters. Synced games appear here automatically.",
 }: ReplayListProps) {
   const [macroGame, setMacroGame] = useState<ReplayLibraryItem | null>(null);
+  const { isLoaded, isSignedIn } = useAuth();
+  const publicLocked = isLoaded && !isSignedIn;
 
   if (items.length === 0) {
     return (
@@ -70,8 +73,8 @@ export function ReplayList({
   return (
     <>
       <div className="overflow-hidden">
-        <div className="hidden overflow-x-auto lg:block">
-          <table className="w-full min-w-[1120px] text-left text-caption">
+        <div className="hidden overflow-x-auto xl:block">
+          <table className="w-full min-w-[1040px] text-left text-caption">
             <caption className="sr-only">Replay history for {playerName}</caption>
             <thead className="border-b-2 border-line bg-bg-elevated/70 text-micro uppercase tracking-wider text-text-muted">
               <tr>
@@ -81,8 +84,7 @@ export function ReplayList({
                 <th scope="col" className="min-w-40 px-3 py-3 font-semibold">Map</th>
                 <th scope="col" className="min-w-56 px-3 py-3 font-semibold">Game plan</th>
                 <th scope="col" className="w-36 px-3 py-3 font-semibold">Vitals</th>
-                <th scope="col" className="w-28 px-3 py-3 font-semibold">Streams</th>
-                <th scope="col" className="w-48 px-4 py-3 text-right font-semibold">Open</th>
+                <th scope="col" className={`${owner ? "w-48" : "w-40"} px-4 py-3 text-right font-semibold`}>Open</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -94,6 +96,7 @@ export function ReplayList({
                   playerName={playerName}
                   publicRoot={publicRoot}
                   publicHandle={publicHandle}
+                  publicLocked={publicLocked}
                   onMacro={() => setMacroGame(game)}
                 />
               ))}
@@ -101,7 +104,7 @@ export function ReplayList({
           </table>
         </div>
 
-        <ul className="divide-y divide-border lg:hidden" role="list">
+        <ul className="divide-y divide-border lg:grid lg:grid-cols-2 xl:hidden" role="list">
           {items.map((game) => (
             <MobileReplayCard
               key={game.gameId}
@@ -110,6 +113,7 @@ export function ReplayList({
               playerName={playerName}
               publicRoot={publicRoot}
               publicHandle={publicHandle}
+              publicLocked={publicLocked}
               onMacro={() => setMacroGame(game)}
             />
           ))}
@@ -136,10 +140,11 @@ interface RowProps {
   playerName: string;
   publicRoot: string | null;
   publicHandle?: string;
+  publicLocked: boolean;
   onMacro: () => void;
 }
 
-function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, onMacro }: RowProps) {
+function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, publicLocked, onMacro }: RowProps) {
   const analysisHref = owner
     ? `/app/game/${encodeURIComponent(game.gameId)}`
     : `${publicRoot}/${encodeURIComponent(game.gameId)}`;
@@ -149,7 +154,7 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, o
         <ResultBadge result={game.result} />
       </td>
       <td className="px-3 py-3 align-middle text-text-muted"><ReplayDate value={game.date} /></td>
-      <td className="px-3 py-3 align-middle"><Matchup game={game} playerName={playerName} /></td>
+      <td className="px-3 py-3 align-middle"><Matchup game={game} playerName={playerName} />{game.streams?.length ? <GameStreamLinks links={game.streams} compact ariaLabel={`Streams for ${replayContext(game)}`} sharedPlayerName={owner ? undefined : playerName} className="mt-2" /> : null}</td>
       <td className="px-3 py-3 align-middle">
         {game.map ? (
           <MapLabel name={game.map} size="xs" preview className="max-w-48" />
@@ -159,16 +164,9 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, o
       </td>
       <td className="px-3 py-3 align-middle"><GamePlan game={game} owner={owner} /></td>
       <td className="px-3 py-3 align-middle"><Vitals game={game} /></td>
-      <td className="px-3 py-3 align-middle">
-        {game.streams?.length ? (
-          <GameStreamLinks links={game.streams} compact sharedPlayerName={owner ? undefined : playerName} />
-        ) : (
-          <span className="text-text-dim" aria-label="No matching stream recording">—</span>
-        )}
-      </td>
       <td className="px-4 py-3 align-middle">
         <div className="flex items-center justify-end gap-1.5">
-          {owner ? (
+          {owner ? <>
             <button
               type="button"
               onClick={onMacro}
@@ -177,15 +175,8 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, o
             >
               <Gauge className="h-4 w-4" aria-hidden /> Macro
             </button>
-          ) : (
-            <Link href={`${analysisHref}#macro-breakdown`} className={actionClass} aria-label={`Sign in to open macro breakdown for ${replayContext(game)}`}>
-              <Gauge className="h-4 w-4" aria-hidden /> Macro
-              <LockKeyhole className="h-3 w-3 text-text-dim" aria-hidden />
-            </Link>
-          )}
-          <Link href={analysisHref} className={actionClass} aria-label={`${owner ? "Open" : "Sign in to open"} replay analysis for ${replayContext(game)}`}>
+          <Link href={analysisHref} className={actionClass} aria-label={`Open replay analysis for ${replayContext(game)}`}>
             <BarChart3 className="h-4 w-4" aria-hidden /> Analysis
-            {!owner ? <LockKeyhole className="h-3 w-3 text-text-dim" aria-hidden /> : null}
           </Link>
           {owner && isReviewableGame(game) ? (
             <AskForReviewButton
@@ -197,7 +188,6 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, o
               ariaLabel={`Ask for a review of your game vs ${replayContext(game)}`}
             />
           ) : null}
-          {owner ? (
             <ReplayDownloadButton
               gameId={game.gameId}
               available={game.replayAvailable}
@@ -205,22 +195,14 @@ function DesktopReplayRow({ game, owner, playerName, publicRoot, publicHandle, o
               sizeBytes={game.replaySizeBytes}
               contextLabel={replayContext(game)}
             />
-          ) : publicHandle ? (
-            <PublicReplayDownloadButton
-              handle={publicHandle}
-              gameId={game.gameId}
-              available={game.replayAvailable}
-              sizeBytes={game.replaySizeBytes}
-              contextLabel={replayContext(game)}
-            />
-          ) : null}
+          </> : <PublicReplayActions game={game} href={analysisHref} handle={publicHandle} locked={publicLocked} />}
         </div>
       </td>
     </tr>
   );
 }
 
-function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, onMacro }: RowProps) {
+function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, publicLocked, onMacro }: RowProps) {
   const analysisHref = owner
     ? `/app/game/${encodeURIComponent(game.gameId)}`
     : `${publicRoot}/${encodeURIComponent(game.gameId)}`;
@@ -237,13 +219,13 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, o
           </div>
           <Matchup game={game} playerName={playerName} />
         </div>
-        <Link
+        {owner ? <Link
           href={analysisHref}
           aria-label={`${owner ? "Open" : "Sign in to open"} replay analysis for ${replayContext(game)}`}
           className="grid h-11 w-11 shrink-0 place-items-center rounded-full border-2 border-line bg-bg-elevated text-text transition-colors hover:border-accent hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <ArrowUpRight className="h-4 w-4" aria-hidden />
-        </Link>
+        </Link> : null}
       </div>
 
       <div className="mt-3 grid grid-cols-1 gap-3 rounded-lg border border-border bg-bg-elevated/35 p-3 sm:grid-cols-2">
@@ -257,19 +239,12 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, o
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {game.streams?.length ? <GameStreamLinks links={game.streams} sharedPlayerName={owner ? undefined : playerName} /> : null}
         <span className="min-w-2 flex-1" />
-        {owner ? (
+        {owner ? <>
           <button type="button" onClick={onMacro} className={mobileActionClass} aria-label={`Open macro breakdown for ${replayContext(game)}`}>
             <Gauge className="h-4 w-4" aria-hidden /> Macro breakdown
           </button>
-        ) : (
-          <Link href={`${analysisHref}#macro-breakdown`} className={mobileActionClass} aria-label={`Sign in to open macro breakdown for ${replayContext(game)}`}>
-            <Gauge className="h-4 w-4" aria-hidden /> Macro
-            <LockKeyhole className="h-3 w-3 text-text-dim" aria-hidden />
-          </Link>
-        )}
-        <Link href={analysisHref} className={mobileActionClass} aria-label={`${owner ? "Open" : "Sign in to open"} replay analysis for ${replayContext(game)}`}>
+        <Link href={analysisHref} className={mobileActionClass} aria-label={`Open replay analysis for ${replayContext(game)}`}>
           <Eye className="h-4 w-4" aria-hidden /> Analysis
-          {!owner ? <LockKeyhole className="h-3 w-3 text-text-dim" aria-hidden /> : null}
         </Link>
         {owner && isReviewableGame(game) ? (
           <AskForReviewButton
@@ -281,7 +256,6 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, o
             ariaLabel={`Ask for a review of your game vs ${replayContext(game)}`}
           />
         ) : null}
-        {owner ? (
           <div className="w-full sm:w-auto">
             <ReplayDownloadButton
               gameId={game.gameId}
@@ -292,18 +266,7 @@ function MobileReplayCard({ game, owner, playerName, publicRoot, publicHandle, o
               contextLabel={replayContext(game)}
             />
           </div>
-        ) : publicHandle ? (
-          <div className="w-full sm:w-auto">
-            <PublicReplayDownloadButton
-              handle={publicHandle}
-              gameId={game.gameId}
-              available={game.replayAvailable}
-              sizeBytes={game.replaySizeBytes}
-              mobile
-              contextLabel={replayContext(game)}
-            />
-          </div>
-        ) : null}
+        </> : <PublicReplayActions game={game} href={analysisHref} handle={publicHandle} locked={publicLocked} mobile />}
       </div>
     </li>
   );
@@ -396,13 +359,13 @@ function Vital({ label, value, tone = "text-text" }: { label: string; value: str
 function ReplayDate({ value }: { value?: string | null }) {
   if (!value) return <span className="text-text-dim">Date unavailable</span>;
   return (
-    <time suppressHydrationWarning dateTime={value} title={fullDate(value)} className="whitespace-nowrap text-text-muted">
-      {fmtDate(value)}
+    <time suppressHydrationWarning dateTime={value} title={fmtDate(value)} className="whitespace-nowrap text-text-muted">
+      {fmtDateCompact(value)}
     </time>
   );
 }
 
-type DisplayResult = "Win" | "Loss" | "Draw" | "Unknown";
+type DisplayResult = "Win" | "Loss" | "Tie" | "Unknown";
 
 function ResultBadge({ result }: { result?: string | null }) {
   const normalized = normalizeResult(result);
@@ -417,7 +380,7 @@ function normalizeResult(result?: string | null): DisplayResult {
   const normalized = result?.trim().toLowerCase();
   if (normalized === "win" || normalized === "victory") return "Win";
   if (normalized === "loss" || normalized === "defeat") return "Loss";
-  if (normalized === "draw" || normalized === "tie") return "Draw";
+  if (normalized === "draw" || normalized === "tie") return "Tie";
   return "Unknown";
 }
 
@@ -450,9 +413,14 @@ function replayContext(game: ReplayLibraryItem): string {
   return game.map ? `${opponent} on ${game.map}` : opponent;
 }
 
-function fullDate(value: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+const lockedAnalysisLabel = "Timeline, macro breakdown and both build orders. Sign in free to open.";
+function PublicReplayActions({ game, href, handle, locked, mobile = false }: { game: ReplayLibraryItem; href: string; handle?: string; locked: boolean; mobile?: boolean }) {
+  return <div className={`flex items-center gap-2 ${mobile ? "w-full" : "justify-end"}`}>
+    {handle ? <div className={mobile ? "min-w-0 flex-1" : undefined}><PublicReplayDownloadButton handle={handle} gameId={game.gameId} available={game.replayAvailable} sizeBytes={game.replaySizeBytes} contextLabel={replayContext(game)} mobile={mobile} primary /></div> : null}
+    <Link href={href} className={mobile ? mobileActionClass : actionClass} title={locked ? lockedAnalysisLabel : undefined} aria-label={locked ? lockedAnalysisLabel : `Open replay analysis for ${replayContext(game)}`}>
+      {locked ? <LockKeyhole className="h-3.5 w-3.5 flex-none text-text-dim" aria-hidden /> : <BarChart3 className="h-4 w-4 flex-none" aria-hidden />}<span>Analysis{locked ? <span className="block text-[10px] font-normal text-text-dim">Free account</span> : null}</span>
+    </Link>
+  </div>;
 }
 
 function headerMeta(game: ReplayLibraryItem, playerName: string): PanelHeaderMeta {

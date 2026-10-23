@@ -17,6 +17,7 @@ import http from "node:http";
 import { GUIDE_ROUTES } from "./mock-guides-api.mjs";
 import { communityFixture } from "./mock-community-api.mjs";
 import { COMMUNITY_DETAIL_ROUTES } from "./mock-community-detail-api.mjs";
+import { publicArchiveFixture } from "./mock-public-archive-api.mjs";
 
 const PORT = Number(process.env.MOCK_API_PORT || 8080);
 const ID = "e2eReviewFixture";
@@ -137,6 +138,8 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "content-type": "text/plain" }).end("ok");
     return;
   }
+  const archive = req.method === "GET" ? publicArchiveFixture(req.url || "/") : null;
+  if (archive) { res.writeHead(200, { "content-type": "application/json", ...cors }).end(JSON.stringify(archive)); return; }
   if (path === "/v1/public/replays/missing-shared-player") {
     res.writeHead(404, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: { code: "not_found" } }));

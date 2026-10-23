@@ -28,6 +28,11 @@ corresponding GitHub Release.
 - Search, sort and note filters stay in the address bar. Dossier links preserve the list's expanded rows and scroll position, with natural name sorting and numeric Pulse IDs.
 - Private note previews appear in the list. Unsaved drafts recover in the same tab, Ctrl/Cmd+Enter saves, and returning to the list asks before discarding edits. Replay history remains directly above notes.
 
+### Shared replay browsing
+
+- Replay archives combine instant search, matchup, result, map and rolling date filters with removable links, a filtered record and directional page navigation. Apply remains available without JavaScript.
+- Public replay cards fit laptop widths and put downloads before one clear Analysis action. Dates stay compact, ties use one name, and shared-file privacy copy explains the original replay's names and chat.
+
 ### Fixed
 
 - Account deletion now removes token-owned stream data and private sound files, ends the sign-in identity with durable retries, and offers an export-first inventory and confirmation flow. Review comments on other requests are anonymized; service backup retention follows the current configured schedule.

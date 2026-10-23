@@ -63,6 +63,8 @@ export interface ReplayLibraryResponse {
   page: ReplayLibraryPageInfo;
   /** Exact count for the active filters when the data store can supply it. */
   total?: number;
+  summary?: { total: number; wins: number; losses: number; ties: number; avgDurationSec: number | null };
+  facets?: { matchups: string[]; maps: string[] };
 }
 
 export interface ReplaySharingResponse {

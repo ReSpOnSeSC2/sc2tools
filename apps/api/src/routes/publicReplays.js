@@ -4,6 +4,7 @@ const express = require("express");
 const rateLimitModule = require("express-rate-limit");
 const { parseFilters } = require("../util/parseQuery");
 const { validateCasualtyEvents } = require("../validation/casualtyEvents");
+const { publicArchiveOverview } = require("./publicReplaySummary");
 
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
@@ -82,7 +83,7 @@ function buildPublicReplaysRouter(deps) {
       // opponent correction.
       const page = await deps.replayLibrary.list(
         shared.userId,
-        { ...parseReplayListQuery(req.query), view: "detector" },
+        { ...parseReplayListQuery(req.query), view: "detector", withSummary: true },
       );
       const vods = await resolveVods(
         deps.gameVods,
@@ -100,6 +101,7 @@ function buildPublicReplaysRouter(deps) {
           ),
         ),
         page: pageEnvelope(page),
+        ...publicArchiveOverview(page),
       });
     } catch (err) {
       next(err);
