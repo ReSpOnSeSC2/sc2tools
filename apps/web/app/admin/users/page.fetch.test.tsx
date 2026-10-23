@@ -2,11 +2,11 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, expect, it, vi } from "vitest";
 import { SWRConfig } from "swr";
 import UsersPage from "./page";
-import { navigation } from "../components/__tests__/navigationFixture";
+import { navigation, router } from "../components/__tests__/navigationFixture";
 vi.mock("next/navigation", () => import("../components/__tests__/navigationFixture"));
 const auth = vi.hoisted(() => ({ getToken: vi.fn(async () => "fixture-token"), isLoaded: true, isSignedIn: true, userId: "admin-fixture" }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => auth }));
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); navigation.defer = false; navigation.queued = []; vi.clearAllMocks(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 const row = { userId: "player", clerkUserId: "clerk-player", email: "player@example.test", gameCount: 12, opponentCount: 4, hasAgent: false, agentLastSeenAt: null, lastActivity: null, firstActivity: null, storageEstimateBytes: 0 };
 
 it("makes one HTTP search request after five keystrokes and retains rows while that request is pending", async () => {
@@ -28,4 +28,35 @@ it("makes one HTTP search request after five keystrokes and retains rows while t
   expect(screen.getByRole("table").closest('[aria-busy="true"]')).toBeTruthy(); expect(screen.getByRole("status").textContent).toContain("Updating");
   await act(async () => { release(new Response(JSON.stringify({ items: [row], nextBefore: null }))); await pending; });
   fireEvent.keyDown(input, { key: "Escape" }); expect(document.activeElement).toBe(input); expect((input as HTMLInputElement).value).toBe("");
+});
+
+it("Back wins when the old debounce becomes due before navigation effects can run", async () => {
+  navigation.visit("/admin/users?q=original");
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [row], nextBefore: null }))));
+  render(<SWRConfig value={{ provider: () => new Map(), revalidateOnFocus: false }}><UsersPage /></SWRConfig>);
+  await screen.findByRole("table"); vi.useFakeTimers();
+  const input = screen.getByRole("textbox", { name: "Search" }); fireEvent.change(input, { target: { value: "stale-draft" } });
+  act(() => vi.advanceTimersByTime(299));
+  // Deliver Back and the due timeout in one batch, before React flushes navigation effects.
+  await act(async () => { navigation.visit("/admin/users?q=restored&before=shared"); vi.advanceTimersByTime(1); await Promise.resolve(); });
+  expect(router.replace).not.toHaveBeenCalled(); expect(navigation.url).toBe("/admin/users?q=restored&before=shared");
+  expect((input as HTMLInputElement).value).toBe("restored");
+});
+
+it("preserves newer typing through a delayed own acknowledgement and resets it on external Back", async () => {
+  navigation.visit("/admin/users"); navigation.defer = true;
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ items: [row], nextBefore: null }))));
+  render(<SWRConfig value={{ provider: () => new Map(), revalidateOnFocus: false }}><UsersPage /></SWRConfig>);
+  await screen.findByRole("table"); vi.useFakeTimers(); const input = screen.getByRole("textbox", { name: "Search" });
+  fireEvent.change(input, { target: { value: "pla" } }); await act(async () => { vi.advanceTimersByTime(300); });
+  expect(navigation.queued.map(next => next.url)).toEqual(["/admin/users?q=pla"]);
+  fireEvent.change(input, { target: { value: "player" } });
+  await act(async () => { navigation.acknowledge(); await Promise.resolve(); });
+  expect((input as HTMLInputElement).value).toBe("player");
+  await act(async () => { vi.advanceTimersByTime(300); });
+  expect(navigation.queued.map(next => next.url)).toEqual(["/admin/users?q=player"]);
+  await act(async () => { navigation.acknowledge(); await Promise.resolve(); });
+  fireEvent.change(input, { target: { value: "unfinished" } });
+  await act(async () => { navigation.visit("/admin/users?q=pla"); vi.advanceTimersByTime(500); await Promise.resolve(); });
+  expect((input as HTMLInputElement).value).toBe("pla"); expect(navigation.queued).toHaveLength(0); expect(navigation.url).toBe("/admin/users?q=pla");
 });

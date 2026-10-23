@@ -25,7 +25,7 @@ const columns: AdminColumn<AdminUserRow>[] = [
 ];
 /** Search matches email, internal ID and Clerk ID; the activity cursor is shareable. */
 function UsersBody() {
-  const [state, set] = useAdminQueryState({ q: "", filter: "all", before: "" }, { allowed: { filter: filters.map(filter => filter.value) }, debounceMs: { q: 300 } });
+  const [state, set] = useAdminQueryState({ q: "", filter: "all", before: "" }, { allowed: { filter: filters.map(filter => filter.value) } });
   const paging = useAdminCursor(state.before, before => set({ before }));
   const params = new URLSearchParams({ limit: "50" });
   if (state.q.trim()) params.set("search", state.q.trim());

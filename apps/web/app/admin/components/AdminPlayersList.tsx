@@ -31,7 +31,7 @@ function columns(global: boolean): AdminColumn<Player>[] {
 
 export function AdminPlayersList({ userId }: { userId?: string }) {
   const global = !userId;
-  const [state, set] = useAdminQueryState({ q: "", race: "all", minGames: 0, sort: global ? "gameCount" : "lastSeen", order: "desc", page: 0 }, { allowed: { ...allowed, sort: allowed.sort.filter(key => global ? key !== "firstSeen" : key !== "trackedByUsers") }, debounceMs: { q: 300 } });
+  const [state, set] = useAdminQueryState({ q: "", race: "all", minGames: 0, sort: global ? "gameCount" : "lastSeen", order: "desc", page: 0 }, { allowed: { ...allowed, sort: allowed.sort.filter(key => global ? key !== "firstSeen" : key !== "trackedByUsers") } });
   const query = new URLSearchParams({ limit: "50", page: String(state.page), sort: state.sort, order: state.order });
   if (state.q.trim()) query.set("search", state.q.trim());
   if (state.race !== "all") query.set("race", state.race);
