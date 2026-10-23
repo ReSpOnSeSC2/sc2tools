@@ -7,6 +7,9 @@ import type { HelpArticle } from "../types";
 import analyzer_analyzerFilters from "./analyzer/analyzer-filters";
 import analyzer_dashboardAndAnalyzer from "./analyzer/dashboard-and-analyzer";
 import builds_buildCheckIn from "./builds/build-check-in";
+import builds_customBuilds from "./builds/custom-builds";
+import builds_publishCommunityBuilds from "./builds/publish-community-builds";
+import builds_rulesExplained from "./builds/rules-explained";
 import gettingStarted_gettingStarted from "./getting-started/getting-started";
 import gettingStarted_howToUseHelp from "./getting-started/how-to-use-help";
 import gettingStarted_installApp from "./getting-started/install-app";
@@ -23,6 +26,9 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_analyzerFilters,
   analyzer_dashboardAndAnalyzer,
   builds_buildCheckIn,
+  builds_customBuilds,
+  builds_publishCommunityBuilds,
+  builds_rulesExplained,
   gettingStarted_gettingStarted,
   gettingStarted_howToUseHelp,
   gettingStarted_installApp,
