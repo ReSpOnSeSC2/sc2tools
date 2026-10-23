@@ -9,7 +9,7 @@ vi.mock("@/components/onboarding/PairDeviceForm", () => ({ PairDeviceForm: () =>
 vi.mock("@/components/onboarding/useReleaseInfo", () => ({ useReleaseInfo: () => ({ data: { latest: "0.20.0" } }) }));
 
 beforeEach(() => { h.apiCall.mockReset(); h.apiCall.mockResolvedValue(null); h.mutate.mockReset(); h.data = { items: [] }; });
-afterEach(() => cleanup());
+afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function device(overrides = {}) {
   return { deviceId: "device-1", hostname: "GAMING-PC", createdAt: new Date(Date.now() - 86400_000).toISOString(), lastSeenAt: new Date().toISOString(), agentVersion: "0.19.0", agentOs: "Windows", ...overrides };
@@ -42,6 +42,18 @@ describe("Devices page cards", () => {
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Save label" })); });
     expect(h.apiCall.mock.calls[1][2]).toMatchObject({ method: "PATCH", body: JSON.stringify({ label: "Gaming desktop" }) });
     expect(screen.getByRole("status").textContent).toBe("Label saved.");
+  });
+
+  it("recognizes a new heartbeat received between status-clock ticks", () => {
+    const started = Date.now();
+    const clock = vi.spyOn(Date, "now").mockReturnValue(started);
+    h.data.items = [device({ lastSeenAt: null })];
+    const view = render(<DevicesPanel />);
+    expect(screen.getByText("Offline")).toBeTruthy();
+    clock.mockReturnValue(started + 1000);
+    h.data.items = [device()];
+    view.rerender(<DevicesPanel />);
+    expect(screen.getByText("Online")).toBeTruthy();
   });
 
   it("requires typed confirmation before unpairing and keeps the dialog available after a failure", async () => {
