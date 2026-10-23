@@ -303,18 +303,27 @@ function buildCommunityRouter(deps) {
       try {
         const auth = req.auth;
         if (!auth) throw new Error("auth_required");
-        const delta = Number(req.body?.delta);
-        await deps.community.vote(
+        const delta = req.body?.delta;
+        const result = await deps.community.vote(
           auth.userId,
           String(req.params.slug),
-          /** @type {1 | -1} */ (delta),
+          /** @type {1 | -1 | 0} */ (delta),
         );
-        res.status(204).end();
+        res.json({ votes: result.votes, myVote: result.myVote });
       } catch (err) {
         next(err);
       }
     },
   );
+
+  router.get("/community/builds/:slug/my-vote", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) throw new Error("auth_required");
+      const result = await deps.community.myVote(req.auth.userId, String(req.params.slug));
+      res.setHeader("Cache-Control", "private, no-store");
+      res.json(result);
+    } catch (err) { next(err); }
+  });
 
   router.post(
     "/community/reports",

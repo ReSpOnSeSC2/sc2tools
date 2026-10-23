@@ -91,6 +91,14 @@ const testErrorHandler = (err, _req, res, _next) => {
 };
 
 describe("public replay archive routes", () => {
+  test("profile-only reads resolve sharing without listing rows or resolving VODs", async () => {
+    const deps = makeDeps();
+    const response = await request(makeApp(deps)).get("/v1/public/replays/owner-1?limit=1&fields=profile").expect(200);
+    expect(response.body).toEqual({ profile: { handle: "owner-1", displayName: "Maru" }, items: [], page: { hasMore: false } });
+    expect(deps.replayLibrary.list).not.toHaveBeenCalled();
+    expect(deps.gameVods.resolveForGames).not.toHaveBeenCalled();
+  });
+
   test("does not add generic channel buttons to replays without a matching recording", async () => {
     const deps = makeDeps();
     deps.replayLibrary.list.mockResolvedValue({

@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/Select";
 import { Icon } from "@/components/ui/Icon";
 import { COMMON_MATCHUPS, raceIconName } from "@/lib/race";
 import { COMMUNITY_SORTS, type CommunitySort } from "./types";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 
 export interface CommunityFilterBarProps {
   initialMatchup: string;
@@ -98,6 +99,7 @@ export function CommunityFilterBar({
           <span className="sr-only md:not-sr-only">Sort</span>
           <Select
             aria-label="Sort"
+            aria-describedby="community-sort-hint"
             value={initialSort}
             onChange={(e) => setSort(e.target.value as CommunitySort)}
             className="min-w-[160px]"
@@ -110,6 +112,10 @@ export function CommunityFilterBar({
           </Select>
         </label>
       </div>
+      <p id="community-sort-hint" className="text-caption text-text-muted">
+        {COMMUNITY_SORTS.find((sort) => sort.value === initialSort)?.hint}{" "}
+        <LazyHelpLink slug="community-builds" anchor="sorting">How sorting works</LazyHelpLink>
+      </p>
       <nav
         aria-label="Filter by matchup"
         className="-mx-1 flex flex-wrap items-center gap-1.5 overflow-x-auto px-1 pb-1 md:flex-wrap"
