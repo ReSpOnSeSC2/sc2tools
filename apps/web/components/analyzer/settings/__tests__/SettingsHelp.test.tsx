@@ -142,6 +142,7 @@ describe("SettingsHelp", () => {
       fireEvent.change(screen.getByRole("searchbox", { name: "Search help" }), {
         target: { value: "stream dock" },
       });
+      await act(async () => { await vi.dynamicImportSettled(); });
       const results = await screen.findByRole("list", { name: "Search results" });
       const first = within(results).getAllByRole("link")[0];
       expect(first.getAttribute("href")).toBe("/settings?tab=help#stream-dock");
