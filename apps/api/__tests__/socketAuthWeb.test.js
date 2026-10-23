@@ -100,6 +100,7 @@ describe("attachSocketAuth (web tab)", () => {
     io.runConnect(socket);
     expect(socket.rooms).toContain("clerk:user_clerk_abc");
     expect(socket.rooms).toContain("user:internal-u1");
+    expect(socket.rooms).not.toContain("device-user:internal-u1");
     expect(resolveCalls).toEqual(["user_clerk_abc"]);
   });
 
@@ -193,5 +194,21 @@ describe("attachSocketAuth (web tab)", () => {
     await expect(
       io.runHandshake({ auth: { token: "jwt-placeholder" } }),
     ).rejects.toThrow("invalid_token");
+  });
+});
+
+describe("private scouting device room", () => {
+  test("only a resolved device joins its owner's private scouting room", async () => {
+    const io = setupIo();
+    attachSocketAuth(io, {
+      resolveDeviceToken: async () => ({ userId: "owner", deviceId: "pc" }),
+    });
+    const socket = await io.runHandshake({ auth: { deviceToken: "paired-token" } });
+    io.runConnect(socket);
+    expect(socket.rooms).toContain("user:owner");
+    expect(socket.rooms).toContain("device-user:owner");
+    socket.fire("subscribe:user", { userId: "other-owner" });
+    expect(socket.rooms).not.toContain("device-user:other-owner");
+    expect(socket.rooms).not.toContain("user:other-owner");
   });
 });

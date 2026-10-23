@@ -707,6 +707,15 @@ class ApiClient:
         """The cloud ``buildCheckin`` preference, defaults applied."""
         return self._interactive("GET", _CHECKIN_PREFS_PATH)
 
+    def get_scouting_brief(self, game_key: str) -> Dict[str, Any]:
+        """Current cached private scouting; interactive timeout, no retries."""
+        return self._interactive("GET", "/v1/agent/live/scouting?gameKey=" + quote(game_key, safe=""))
+
+    def put_opponent_note(self, pulse_id: str, notes: str) -> Dict[str, Any]:
+        """Save a private note; desktop entry never opts it into read-aloud."""
+        return self._interactive("PUT", "/v1/agent/opponents/" + quote(pulse_id, safe="") + "/notes",
+                                 body={"notes": notes, "notesReadAloud": False})
+
     def put_checkin_prefs(self, prefs: Dict[str, Any]) -> Dict[str, Any]:
         """Replace the ``buildCheckin`` preference; returns the saved value."""
         return self._interactive("PUT", _CHECKIN_PREFS_PATH, body=prefs)
