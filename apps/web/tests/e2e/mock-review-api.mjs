@@ -134,6 +134,21 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { "content-type": "text/plain" }).end("ok");
     return;
   }
+  if (path === "/v1/public/replays/missing-shared-player") {
+    res.writeHead(404, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "not_found" } }));
+    return;
+  }
+  if (path === "/v1/public/profile/missing-shared-player") {
+    res.writeHead(404, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "not_found" } }));
+    return;
+  }
+  if (path === "/v1/public/profile/unavailable-shared-player") {
+    res.writeHead(503, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: { code: "unavailable" } }));
+    return;
+  }
   if (req.method === "OPTIONS" && path.startsWith("/v1/reviews")) {
     res.writeHead(204, cors).end();
     return;

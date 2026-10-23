@@ -129,6 +129,8 @@ export async function getJson<T>(
  * 404 for missing resources — but must NOT 404 real content during a
  * transient API outage — need the distinction; ``getJson`` collapses
  * both cases to ``null``.
+ * Pass a positive revalidateSec to opt into Next's successful-response
+ * data cache; the default is uncached. Temporary failures retain their status.
  */
 export async function getJsonWithStatus<T>(
   path: string,

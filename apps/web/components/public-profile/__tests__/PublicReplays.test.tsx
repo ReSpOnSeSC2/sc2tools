@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+  usePathname: () => "/players/coach/replays",
+  useSearchParams: () => new URLSearchParams(),
   notFound: () => {
     const error = new Error("NEXT_NOT_FOUND");
     (error as Error & { digest: string }).digest = "NEXT_NOT_FOUND";
@@ -199,6 +202,15 @@ afterEach(() => {
 });
 
 describe("PublicReplayLibrary", () => {
+  it("explains expired pages once and leaves the notice out of subsequent pager URLs", () => {
+    render(<PublicReplayLibrary data={PUBLIC_LIST} query={{ notice: "page-expired", sort: "date_asc", result: "win" }} />);
+    expect(screen.getByRole("status").textContent).toContain("That page link expired. Showing the oldest replays.");
+    for (const name of ["Dismiss", /Older replays/i]) {
+      const href = screen.getByRole("link", { name }).getAttribute("href")!;
+      const params = new URL(href, "https://sc2tools.test").searchParams;
+      expect(params.has("notice")).toBe(false); expect(params.get("result")).toBe("win");
+    }
+  });
   it("renders share-safe replay rows and preserves filters across cursor links", async () => {
     const share = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "share", {
@@ -279,6 +291,24 @@ describe("PublicReplayLibrary", () => {
 });
 
 describe("public replay list route", () => {
+  it("recovers an expired cursor to the canonical first page while retaining filters", async () => {
+    mocks.getJsonWithStatus.mockResolvedValueOnce({ data: null, status: 400 }).mockResolvedValueOnce({ data: PUBLIC_LIST, status: 200 });
+    await expect(PlayerReplaysPage({ params: Promise.resolve({ player: "legacy-opaque-id" }), searchParams: Promise.resolve({ cursor: "expired", result: "win", sort: "date_asc", notice: "ignored" }) })).rejects.toThrow("NEXT_REDIRECT");
+    expect(mocks.redirect).toHaveBeenCalledWith(`/players/${PLAYER_SLUG}/replays?result=win&sort=date_asc&notice=page-expired`);
+    expect(mocks.getJsonWithStatus).toHaveBeenLastCalledWith("/v1/public/replays/legacy-opaque-id?limit=1&fields=profile");
+  });
+  it("does not redirect a bad request without a cursor", async () => {
+    mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: 400 });
+    render(await PlayerReplaysPage({ params: Promise.resolve({ player: "coach" }), searchParams: Promise.resolve({ search: "filter" }) }));
+    expect(mocks.redirect).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "Back to first page" }).getAttribute("href")).toBe("/players/coach/replays");
+  });
+  it("renders the busy variant and countdown for rate-limited archives", async () => {
+    mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: 429 });
+    render(await PlayerReplaysPage({ params: Promise.resolve({ player: "coach" }), searchParams: Promise.resolve({}) }));
+    expect(screen.getByRole("heading", { name: "Lots of visitors right now" })).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Retrying in 10…");
+  });
   it("renders a 200 response and serializes only validated query parameters", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: PUBLIC_LIST, status: 200 });
     const ui = await PlayerReplaysPage({
@@ -355,6 +385,7 @@ describe("public replay list metadata", () => {
   it("uses public player identity and an encoded canonical on 200", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: PUBLIC_LIST, status: 200 });
     const metadata = await generateListMetadata({
+      searchParams: Promise.resolve({}),
       params: Promise.resolve({ player: PLAYER_SLUG }),
     });
     expect(String(metadata.title)).toContain("Reaver's StarCraft II replays");
@@ -365,6 +396,7 @@ describe("public replay list metadata", () => {
   it("throws notFound before streaming metadata for a confirmed 404", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: 404 });
     await expect(generateListMetadata({
+      searchParams: Promise.resolve({}),
       params: Promise.resolve({ player: "missing" }),
     })).rejects.toThrow("NEXT_NOT_FOUND");
   });
@@ -372,6 +404,7 @@ describe("public replay list metadata", () => {
   it("returns neutral noindex metadata when the API is unreachable", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: null });
     const metadata = await generateListMetadata({
+      searchParams: Promise.resolve({}),
       params: Promise.resolve({ player: PLAYER_SLUG }),
     });
     expect(String(metadata.description)).toMatch(/temporarily unavailable/i);
@@ -381,6 +414,12 @@ describe("public replay list metadata", () => {
 });
 
 describe("authenticated shared replay detail route", () => {
+  it("uses the same busy recovery for a rate-limited shared analysis", async () => {
+    mocks.apiFetch.mockResolvedValue({ ok: false, status: 429, error: "busy" });
+    render(await SharedReplayAnalysisPage({ params: Promise.resolve({ player: PLAYER_SLUG, gameId: "game/42" }) }));
+    expect(screen.getByRole("heading", { name: "Lots of visitors right now" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
+  });
   it("loads share-scoped analysis with the signed-in server API client", async () => {
     mocks.apiFetch.mockResolvedValue({
       ok: true,
@@ -493,7 +532,8 @@ describe("authenticated shared replay detail route", () => {
 });
 
 describe("protected replay detail metadata", () => {
-  it("is generic, noindex and canonical without anonymously fetching analysis", async () => {
+  it("uses the authenticated analysis loader before emitting noindex metadata", async () => {
+    mocks.apiFetch.mockResolvedValue({ ok: true, status: 200, data: PUBLIC_DETAIL });
     const metadata = await generateDetailMetadata({
       params: Promise.resolve({ player: PLAYER_SLUG, gameId: "game/42" }),
     });
@@ -504,5 +544,10 @@ describe("protected replay detail metadata", () => {
     );
     expect(metadata.robots).toMatchObject({ index: false, follow: false });
     expect(mocks.getJsonWithStatus).not.toHaveBeenCalled();
+    expect(mocks.apiFetch).toHaveBeenCalledWith(`/v1/public/replays/${PLAYER_SLUG}/game%2F42`);
+  });
+  it("raises notFound before streaming when the shared analysis is absent", async () => {
+    mocks.apiFetch.mockResolvedValue({ ok: false, status: 404, error: "missing" });
+    await expect(generateDetailMetadata({ params: Promise.resolve({ player: PLAYER_SLUG, gameId: "missing" }) })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 });

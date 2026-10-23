@@ -1,3 +1,4 @@
+import { serializeJsonLd } from "@/lib/reviewJsonLd";
 /**
  * TryExplainer — the static, crawlable half of /try: what the in-browser
  * StarCraft II replay analyzer is, what its report shows, where replays
@@ -75,7 +76,7 @@ const LINK_CLASS = "font-semibold text-accent underline-offset-4 hover:underline
 export function TryExplainer() {
   return (
     <section aria-labelledby="try-explainer-title" className="mx-auto mt-16 max-w-4xl space-y-10 border-t border-border pt-12">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(WEB_APP_JSON_LD) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(WEB_APP_JSON_LD) }} />
       <div className="space-y-3">
         <h2 id="try-explainer-title" className="font-display text-h2 text-text">
           A free StarCraft II replay analyzer that runs in your browser
