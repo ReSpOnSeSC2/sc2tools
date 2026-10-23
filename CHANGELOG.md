@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Opponent lists and private notes
+
+- Search, sort and note filters stay in the address bar. Dossier links preserve the list's expanded rows and scroll position, with natural name sorting and numeric Pulse IDs.
+- Private note previews appear in the list. Unsaved drafts recover in the same tab, Ctrl/Cmd+Enter saves, and returning to the list asks before discarding edits. Replay history remains directly above notes.
+
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.

@@ -550,7 +550,7 @@ export function OpponentsTab({
                   align="right"
                   width="6.5rem"
                 />
-                <th className="w-8 px-1 py-1.5 text-right text-text-dim"><span className="sr-only">Open dossier</span><span aria-hidden>→</span></th>
+                <th className="relative w-8 px-1 py-1.5 text-right text-text-dim"><span className="sr-only">Open dossier</span><span aria-hidden>→</span></th>
               </tr>
             </thead>
             <tbody aria-busy={search !== deferredSearch || undefined} className={search !== deferredSearch ? "opacity-70" : undefined}>
@@ -600,7 +600,7 @@ const OpponentRow = memo(function OpponentRow({ row: o, expanded, onToggle, onOp
                         title={groupRowTitle(o)}
                       >
                         <span className="flex min-w-0 items-center gap-1">
-                          <OpponentLink opponent={o} onOpen={onOpen} className="truncate hover:underline">
+                          <OpponentLink opponent={o} onOpen={onOpen} className="min-w-[4rem] max-w-[12rem] truncate hover:underline">
                             {o.name || (
                               <span className="italic text-text-dim">unnamed</span>
                             )}
@@ -757,7 +757,7 @@ function IdentityRow({
             className="h-3 w-3 flex-shrink-0 text-text-dim"
             aria-hidden
           />
-          <OpponentLink opponent={identity} onOpen={onOpen} className="truncate hover:underline">
+          <OpponentLink opponent={identity} onOpen={onOpen} className="min-w-[4rem] max-w-[12rem] truncate hover:underline">
             {identity.name || (
               <span className="italic text-text-dim">unnamed</span>
             )}
