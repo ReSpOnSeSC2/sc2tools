@@ -1,5 +1,11 @@
 "use client";
 
+import { useDropTarget } from "./useDropTarget";
+import { useReplayAccept } from "./useReplayAccept";
+import { filesOf } from "./replayDropFiles";
+export { useReplayAccept } from "./useReplayAccept";
+export { collectDroppedFiles } from "./replayDropFiles";
+
 /**
  * ReplayIntake — where a visitor hands us replays: a drag-and-drop zone
  * (files, .zip archives or whole folders, walked with `webkitGetAsEntry`
@@ -31,16 +37,14 @@ import {
   useEffect,
   useId,
   useRef,
-  useState,
   type ChangeEvent,
-  type DragEvent,
   type FocusEvent,
   type ReactNode,
   type RefObject,
 } from "react";
 import { FileUp, FolderOpen, FolderSync, UploadCloud } from "lucide-react";
 import { Button } from "@/components/ui";
-import { REPLAY_INPUT_ACCEPT, replayInputAccept, type DateWindow, type ParseEstimate } from "@/lib/instant/fileIntake";
+import { type DateWindow, type ParseEstimate } from "@/lib/instant/fileIntake";
 import type { IntakeSource } from "@/lib/instant/types";
 import { DateWindowSelect } from "./DateWindowSelect";
 import { OsPathHints } from "./OsPathHints";
@@ -69,153 +73,6 @@ export interface ReplayIntakeProps {
    */
   focusKey?: number;
   className?: string;
-}
-
-/**
- * Stop walking a dropped folder tree after this many files, so dropping a
- * whole drive by mistake cannot run away. A full Accounts folder is far below.
- */
-const MAX_DROPPED_FILES = 50_000;
-
-function filesOf(list: FileList | null | undefined): File[] {
-  return list ? Array.from(list) : [];
-}
-
-function isFileEntry(entry: FileSystemEntry): entry is FileSystemFileEntry {
-  return entry.isFile;
-}
-
-function isDirectoryEntry(entry: FileSystemEntry): entry is FileSystemDirectoryEntry {
-  return entry.isDirectory;
-}
-
-/**
- * The drop's entries when it contains a folder, else null (plain files use
- * `dataTransfer.files`). Read synchronously: items expire after the event.
- */
-function droppedTreeRoots(transfer: DataTransfer | null | undefined): FileSystemEntry[] | null {
-  const items = transfer?.items ? Array.from(transfer.items) : [];
-  const roots = items
-    .map((item) => (typeof item.webkitGetAsEntry === "function" ? item.webkitGetAsEntry() : null))
-    .filter((entry): entry is FileSystemEntry => entry !== null);
-  return roots.some(isDirectoryEntry) ? roots : null;
-}
-
-async function readDirectory(directory: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
-  const reader = directory.createReader();
-  const readBatch = (): Promise<FileSystemEntry[]> =>
-    new Promise((resolve, reject) => reader.readEntries(resolve, reject));
-  const entries: FileSystemEntry[] = [];
-  // readEntries returns at most ~100 entries per call; an empty batch ends the listing.
-  for (let batch = await readBatch(); batch.length > 0; batch = await readBatch()) entries.push(...batch);
-  return entries;
-}
-
-/**
- * A dropped file carries no folder path. Give it the one a folder picker
- * would, so `makeIntakeFile` sees the toon folder (`1-S2-1-267727`) and the
- * player is identified exactly, like the desktop agent.
- */
-function withDroppedPath(file: File, fullPath: string): File {
-  const relativePath = fullPath.replace(/^\/+/, "");
-  // `webkitRelativePath` is a read-only prototype getter; an own property
-  // shadows it without copying the file's bytes.
-  if (relativePath) Object.defineProperty(file, "webkitRelativePath", { value: relativePath, configurable: true });
-  return file;
-}
-
-/** The entry's file with its folder path, or null when it cannot be read (broken link, revoked access). */
-function readFileEntry(entry: FileSystemFileEntry): Promise<File | null> {
-  return new Promise<File>((resolve, reject) => entry.file(resolve, reject)).then(
-    (file) => withDroppedPath(file, entry.fullPath),
-    () => null,
-  );
-}
-
-/** A directory's children, or none when it cannot be listed. */
-function readChildren(directory: FileSystemDirectoryEntry): Promise<FileSystemEntry[]> {
-  return readDirectory(directory).catch(() => []);
-}
-
-/**
- * Every file under the dropped entries, each carrying its folder path as
- * `webkitRelativePath`. Walks one folder level at a time and resolves each
- * level in parallel (one `entry.file()` round-trip per file would crawl on
- * a large Accounts folder). Unreadable entries are skipped; never rejects.
- *
- * Example:
- *   const files = await collectDroppedFiles([item.webkitGetAsEntry()]);
- *   files[0].webkitRelativePath; // -> "Accounts/1/1-S2-1-267727/Replays/Multiplayer/a.SC2Replay"
- */
-export async function collectDroppedFiles(roots: ReadonlyArray<FileSystemEntry>): Promise<File[]> {
-  const files: File[] = [];
-  let level: FileSystemEntry[] = [...roots];
-  while (level.length > 0 && files.length < MAX_DROPPED_FILES) {
-    const read = await Promise.all(level.filter(isFileEntry).map(readFileEntry));
-    files.push(...read.filter((file): file is File => file !== null));
-    level = (await Promise.all(level.filter(isDirectoryEntry).map(readChildren))).flat();
-  }
-  return files.slice(0, MAX_DROPPED_FILES);
-}
-
-/** `accept` for the picker, decided after mount (navigator is client-only). */
-function useReplayAccept(): string | undefined {
-  const [accept, setAccept] = useState<string | undefined>(REPLAY_INPUT_ACCEPT);
-  useEffect(() => {
-    setAccept(replayInputAccept(navigator.userAgent, navigator.maxTouchPoints));
-  }, []);
-  return accept;
-}
-
-/** Forward a dropped folder tree once it has been walked (see `collectDroppedFiles`). */
-function useFolderDrop(onDropFiles: (files: File[]) => void) {
-  const [reading, setReading] = useState(false);
-  const readTree = (roots: FileSystemEntry[]): void => {
-    setReading(true);
-    void collectDroppedFiles(roots).then((files) => {
-      setReading(false);
-      if (files.length > 0) onDropFiles(files);
-    });
-  };
-  return { reading, readTree };
-}
-
-/** Drop handlers; a depth counter keeps child elements from flickering the highlight. */
-function useDropTarget(disabled: boolean, onDropFiles: (files: File[]) => void, onIntent?: () => void) {
-  const [dragging, setDragging] = useState(false);
-  const depth = useRef(0);
-  const { reading, readTree } = useFolderDrop(onDropFiles);
-  const handlers = {
-    onDragEnter: (event: DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      if (disabled) return;
-      onIntent?.();
-      depth.current += 1;
-      setDragging(true);
-    },
-    onDragOver: (event: DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      if (event.dataTransfer) event.dataTransfer.dropEffect = disabled ? "none" : "copy";
-    },
-    onDragLeave: () => {
-      depth.current = Math.max(0, depth.current - 1);
-      if (depth.current === 0) setDragging(false);
-    },
-    onDrop: (event: DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      depth.current = 0;
-      setDragging(false);
-      if (disabled) return;
-      const roots = droppedTreeRoots(event.dataTransfer);
-      if (roots) {
-        readTree(roots);
-        return;
-      }
-      const files = filesOf(event.dataTransfer?.files);
-      if (files.length > 0) onDropFiles(files);
-    },
-  };
-  return { dragging, reading, handlers };
 }
 
 function IntakeStatus({ fileCount, estimate, maxFiles }: Pick<ReplayIntakeProps, "fileCount" | "estimate" | "maxFiles">) {

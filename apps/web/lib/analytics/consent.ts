@@ -21,6 +21,9 @@ export type ConsentState = "unset" | "granted" | "denied";
 
 const STORAGE_KEY = "sc2tools.analyticsConsent.v1";
 const EVENT_NAME = "sc2tools:analytics-consent";
+export const COOKIE_SETTINGS_EVENT = "sc2tools:open-cookie-settings";
+let memoryConsent: ConsentState = "unset";
+let memoryOnly = false;
 
 /**
  * The GA4 Measurement ID (``G-XXXXXXXXXX``). Defaults to the production
@@ -40,13 +43,14 @@ export function isAnalyticsConfigured(): boolean {
 /** Read the persisted consent state. SSR-safe (returns "unset"). */
 export function readConsent(): ConsentState {
   if (typeof window === "undefined") return "unset";
+  if (memoryOnly) return memoryConsent;
   try {
     const v = window.localStorage.getItem(STORAGE_KEY);
     return v === "granted" || v === "denied" ? v : "unset";
   } catch {
     // Private mode / disabled storage — treat as undecided so we never
     // silently track someone we couldn't record a choice for.
-    return "unset";
+    return memoryConsent;
   }
 }
 
@@ -61,13 +65,16 @@ export function readConsent(): ConsentState {
  * effect without a reload.
  */
 export function setConsent(state: Exclude<ConsentState, "unset">): void {
+  memoryConsent = state;
   if (typeof window === "undefined") return;
   // gtag.js stays loaded after its Script component unmounts. Google's
   // opt-out flag blocks automatic hits as well as our own events.
   window[`ga-disable-${GA_MEASUREMENT_ID}`] = state !== "granted";
   try {
     window.localStorage.setItem(STORAGE_KEY, state);
+    memoryOnly = false;
   } catch {
+    memoryOnly = true;
     // Storage unavailable — still fire the event so GA reacts for this
     // session; it just won't be remembered on the next visit.
   }
@@ -84,6 +91,14 @@ export function setConsent(state: Exclude<ConsentState, "unset">): void {
   }
   if (state === "denied") clearAnalyticsCookies();
 }
+
+/** Reopen the choice from the footer, policy or Settings. */
+export function openCookieSettings(): void {
+  window.dispatchEvent(new Event(COOKIE_SETTINGS_EVENT));
+}
+
+/** Stop an already loaded tracker and remove its cookies immediately. */
+export function withdrawConsent(): void { setConsent("denied"); }
 
 /** Google Analytics' own cookies: ``_ga``, ``_ga_<stream>``, ``_gid``, ``_gat*``. */
 const GA_COOKIE_RE = /^_(?:ga(?:_.+)?|gid|gat.*)$/;

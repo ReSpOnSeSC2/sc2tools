@@ -25,6 +25,19 @@ describe("history wipe restore audit", () => {
     if (h) await h.stop();
   });
 
+  test("dry runs count the identical range without deleting or taking a fence", async () => {
+    await h.db.games.insertMany([1,2,3].map(day=>({userId,gameId:'preview-'+day,date:new Date('2026-09-0'+day+'T00:00:00Z')})));
+    const fence = jest.spyOn(h.services.gdpr, '_acquireMutationFence');
+    const answer = await request(h.app).post('/v1/me/games/wipe').set('authorization','Bearer admin').send({since:'2026-09-02T00:00:00Z',until:'2026-09-03T00:00:00Z',dryRun:true});
+    expect(answer.status).toBe(200); expect(answer.body).toEqual({dryRun:true,counts:{games:1}});
+    expect(await h.db.games.countDocuments({userId,gameId:{$regex:'^preview-'}})).toBe(3); expect(fence).not.toHaveBeenCalled(); fence.mockRestore();
+    await h.db.games.deleteMany({userId,gameId:{$regex:'^preview-'}});
+  });
+  test.each([['2026-09-02','2026-09-02'],['2026-09-03','2026-09-02']])('rejects reversed or empty ranges before deletion', async (since,until) => {
+    const answer = await request(h.app).post('/v1/me/games/wipe').set('authorization','Bearer admin').send({since:since+'T00:00:00Z',until:until+'T00:00:00Z',dryRun:true});
+    expect(answer.status).toBe(400);expect(answer.body.error.message).toBe('since must be before until');
+  });
+
   test("records inclusive/exclusive bounds and preserves games outside them", async () => {
     await h.db.games.insertMany([1, 2, 3].map((day) => ({
       userId,

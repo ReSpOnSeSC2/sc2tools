@@ -1,0 +1,22 @@
+import { afterEach, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { LandingPageContent } from "../LandingPageContent";
+const mocks = vi.hoisted(() => ({ mode: "all" }));
+vi.mock("@/lib/instant/flag", () => ({ getInstantImportMode: () => mocks.mode }));
+vi.mock("@/components/landing/ReplayDemo", () => ({ ReplayDemo: () => <div>Build editor demo</div> }));
+vi.mock("@/components/landing/GuidesStrip", () => ({ GuidesStrip: () => null }));
+vi.mock("@/components/pwa/InstallPrompt", () => ({ InstallPrompt: () => null }));
+vi.mock("@/components/landing/RealGameShowcase", () => ({ RealGameShowcase: () => <div>Real game</div> }));
+afterEach(cleanup);
+it("puts the headline before product slides and gives the hero one browser try path", () => {
+  const { container } = render(<LandingPageContent />);
+  const heading = screen.getByRole("heading", { level: 1 });
+  const carousel = screen.getByRole("region", { name: "SC2 Tools product highlights" });
+  expect(heading.compareDocumentPosition(carousel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const hero = heading.closest("section")!;
+  expect(hero.querySelector('a[href="#replay-demo"]')).toBeNull();
+  expect(container.querySelectorAll("#replay-demo")).toHaveLength(1);
+  const practice = container.querySelector("#practice")!; const demo = container.querySelector("#replay-demo")!;
+  expect(practice.compareDocumentPosition(demo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(container.textContent).not.toMatch(/0\.18|Coming with/);
+});

@@ -1,102 +1,41 @@
 "use client";
-
-import { useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { Cookie } from "lucide-react";
-import { Card } from "@/components/ui/Card";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import {
-  isAnalyticsConfigured,
-  readConsent,
-  setConsent,
-  subscribeConsent,
-} from "@/lib/analytics/consent";
+import { COOKIE_SETTINGS_EVENT, isAnalyticsConfigured, readConsent, setConsent, subscribeConsent, withdrawConsent } from "@/lib/analytics/consent";
 
-/**
- * Cookie / analytics consent banner — GDPR opt-in.
- *
- * Shown until the visitor makes a choice. Strictly-necessary cookies
- * (Clerk session) are always set; the opt-in here governs ONLY Google
- * Analytics, which never loads until "Accept" is clicked (see
- * ``lib/analytics/consent`` and ``<GoogleAnalytics>``).
- *
- * The visible/hidden state is derived from the shared consent store via
- * ``useSyncExternalStore`` so a choice made here (or in another tab)
- * dismisses the banner everywhere and flips GA on/off instantly.
- *
- * When no GA measurement id is configured there's nothing to consent
- * to, so the banner stays hidden entirely.
- *
- * Layout:
- *   - Mobile: full-width sheet near the bottom, clear of the iOS home
- *     indicator and, inside the app, above the tab bar
- *     (`bottom-above-chrome`), so its buttons are never covered.
- *   - ≥sm: floats as a card in the bottom-right corner.
- */
 export function CookieBanner() {
-  const consent = useSyncExternalStore(
-    subscribeConsent,
-    readConsent,
-    () => "unset" as const,
-  );
-
-  // Hidden once a choice is made, and when there's no GA to gate.
-  if (!isAnalyticsConfigured() || consent !== "unset") return null;
-
-  return (
-    <div
-      data-cookie-banner
-      role="dialog"
-      aria-labelledby="cookie-title"
-      aria-describedby="cookie-body"
-      className={[
-        "fixed inset-x-0 bottom-above-chrome z-banner px-3",
-        "sm:left-auto sm:right-4 sm:inset-x-auto sm:max-w-md sm:px-0",
-      ].join(" ")}
-    >
-      <Card variant="elevated" padded={false}>
-        <div className="flex items-start gap-3 p-4">
-          <span
-            aria-hidden
-            className="mt-0.5 inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-accent-cyan/10 text-accent-cyan"
-          >
-            <Cookie className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1 space-y-2">
-            <p
-              id="cookie-title"
-              className="text-caption font-semibold text-text"
-            >
-              Cookies &amp; analytics
-            </p>
-            <p id="cookie-body" className="text-caption text-text-muted">
-              Cookies keep you signed in and prevent duplicate browser counts
-              in the users online total.
-              With your consent we also use Google Analytics to understand how
-              SC2 Tools is used — no ads, no data selling. See our{" "}
-              <Link
-                href="/legal/privacy"
-                className="font-medium text-accent hover:text-accent-hover"
-              >
-                Privacy Policy
-              </Link>
-              .
-            </p>
-            <div className="flex justify-end gap-2 pt-1">
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setConsent("denied")}
-              >
-                Reject
-              </Button>
-              <Button size="sm" onClick={() => setConsent("granted")}>
-                Accept
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Card>
+  const consent = useSyncExternalStore(subscribeConsent, readConsent, () => "unset" as const);
+  const [reopened, setReopened] = useState(false);
+  const panel = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLElement | null>(null);
+  function close() { setReopened(false); if (trigger.current?.isConnected) trigger.current.focus(); }
+  useEffect(() => {
+    const open = () => { trigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setReopened(true); };
+    window.addEventListener(COOKIE_SETTINGS_EVENT, open);
+    return () => window.removeEventListener(COOKIE_SETTINGS_EVENT, open);
+  }, []);
+  useEffect(() => { if (reopened) panel.current?.focus(); }, [reopened]);
+  useEffect(() => {
+    if (!reopened) return;
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { setReopened(false); if (trigger.current?.isConnected) trigger.current.focus(); }
+    };
+    document.addEventListener("keydown", escape);
+    return () => document.removeEventListener("keydown", escape);
+  }, [reopened]);
+  if (!isAnalyticsConfigured() || (consent !== "unset" && !reopened)) return null;
+  function choose(allow: boolean) { if (allow) setConsent("granted"); else withdrawConsent(); close(); }
+  return <div ref={panel} data-cookie-banner role="dialog" aria-labelledby="cookie-title" aria-describedby="cookie-body" tabIndex={-1}
+    onKeyDown={(event) => { if (event.key === "Escape" && reopened) { event.preventDefault(); close(); } }}
+    className="fixed inset-x-0 bottom-above-chrome z-banner px-3 focus:outline-none sm:left-auto sm:right-4 sm:max-w-md sm:px-0">
+    <div className="rounded-xl border-2 border-border bg-bg-surface p-4 shadow-hard">
+      <div className="flex items-center justify-between gap-3"><h2 id="cookie-title" className="text-body font-semibold text-text">{reopened ? "Cookie settings" : "Cookies & analytics"}</h2>
+        {reopened ? <button type="button" aria-label="Close cookie settings" onClick={close} className="grid h-11 w-11 place-items-center rounded focus-visible:ring-2 focus-visible:ring-accent"><X aria-hidden className="h-4 w-4" /></button> : null}</div>
+      {reopened ? <p role="status" className="text-caption text-text-muted">Analytics is currently {consent === "granted" ? "on" : "off"}</p> : null}
+      <p id="cookie-body" className="mt-2 text-caption text-text-muted">Essential cookies keep you signed in and count each browser once in players online. With your OK, Google Analytics shows us which features get used. No ads, no data selling. <Link href="/legal/privacy" className="text-accent underline hover:text-accent-hover">Privacy Policy</Link>.</p>
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:justify-end"><Button size="md" variant="secondary" onClick={() => choose(false)}>{reopened ? "Turn off analytics" : "Reject"}</Button><Button size="md" onClick={() => choose(true)}>{reopened ? "Allow analytics" : "Accept"}</Button></div>
     </div>
-  );
+  </div>;
 }

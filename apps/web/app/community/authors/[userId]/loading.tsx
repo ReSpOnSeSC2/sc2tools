@@ -1,6 +1,1 @@
-import { CommunityAuthorSkeleton } from "@/components/community/CommunitySkeletons";
-
-/** Shown while an author profile fetches: the page's own shape. */
-export default function CommunityAuthorLoading() {
-  return <CommunityAuthorSkeleton />;
-}
+export default function Loading() { return <div role="status" className="space-y-6"><span className="sr-only">Loading…</span><div aria-hidden className="space-y-4 motion-safe:animate-pulse"><div className="h-5 w-36 rounded bg-bg-elevated" /><div className="h-10 w-3/4 rounded bg-bg-elevated" /><div className="grid grid-cols-2 gap-3 md:grid-cols-3">{Array.from({length:3},(_,i)=><div key={i} className="h-24 rounded-xl bg-bg-elevated" />)}</div><div className="space-y-3 rounded-xl border border-border p-4">{Array.from({length:6},(_,i)=><div key={i} className="h-12 rounded bg-bg-elevated" />)}</div></div></div>; }

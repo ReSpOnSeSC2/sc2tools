@@ -9,6 +9,9 @@
  *   GET /legal/privacy  →  <PrivacyPage />
  */
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { LegalLayout, LegalHeading, legalSectionId } from "@/components/legal/LegalLayout";
+import { CookieSettingsButton } from "@/components/legal/CookieSettingsButton";
 import { ISSUES_URL } from "@/lib/siteLinks";
 
 export const metadata = {
@@ -31,11 +34,7 @@ const LIST_CLASS = "list-disc space-y-2 pl-6";
  */
 export default function PrivacyPage() {
   return (
-    <article className="prose prose-invert mx-auto max-w-3xl space-y-6">
-      <header>
-        <h1 className="text-3xl font-bold">Privacy Policy</h1>
-        <p className="text-text-muted">Last updated: {LAST_UPDATED}</p>
-      </header>
+    <LegalLayout title="Privacy Policy" updated={LAST_UPDATED} sections={[{"id":"what-we-collect","title":"What we collect"},{"id":"what-we-do-not-collect","title":"What we do NOT collect"},{"id":"where-the-data-lives","title":"Where the data lives"},{"id":"backups","title":"Backups"},{"id":"connected-accounts-and-stream-controls","title":"Connected accounts and stream controls"},{"id":"data-stored-in-your-browser","title":"Data stored in your browser"},{"id":"sharing","title":"Sharing"},{"id":"community-publishing","title":"Community publishing"},{"id":"aggregated-opponent-data","title":"Aggregated opponent data"},{"id":"your-rights","title":"Your rights"},{"id":"cookies","title":"Cookies"},{"id":"children","title":"Children"},{"id":"changes-to-this-policy","title":"Changes to this policy"},{"id":"contact","title":"Contact"}]} summary={<div className="mb-8 rounded-xl border border-border bg-bg-elevated p-5"><h2 className="text-h3 font-semibold">The short version</h2><ul className="mt-3 list-disc space-y-2 pl-5"><li>We process replay data, account details and streaming accounts you connect.</li><li>We do not sell your data or use advertising trackers.</li><li>Google Analytics runs only if you opt in.</li><li>Export your data or delete your account in Settings → Backups &amp; data.</li><li>Contact us through the issue tracker linked below.</li></ul></div>}>
 
       <p>
         SC2 Tools is a free, donation-supported analytics and streaming tool for StarCraft II
@@ -57,14 +56,14 @@ export default function PrivacyPage() {
       <Children />
       <PolicyChanges />
       <Contact />
-    </article>
+    </LegalLayout>
   );
 }
 
 function PolicySection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-3">
-      <h2 className="text-xl font-semibold">{title}</h2>
+      <LegalHeading id={legalSectionId(title)}>{title}</LegalHeading>
       {children}
     </section>
   );
@@ -80,9 +79,9 @@ function IssuesLink() {
 
 function DataSettingsLink() {
   return (
-    <a href={DATA_SETTINGS_HREF} className="underline">
+    <Link href={DATA_SETTINGS_HREF} className="underline">
       Settings → Backups &amp; data
-    </a>
+    </Link>
   );
 }
 
@@ -456,6 +455,8 @@ function YourRights() {
 function Cookies() {
   return (
     <PolicySection title="Cookies">
+      <p>You can change your choice any time from Cookie settings here or in the site footer.</p>
+      <CookieSettingsButton />
       <p>
         The site uses cookies for session login (Clerk), CSRF protection,
         and a short-lived first-party presence token for the public users

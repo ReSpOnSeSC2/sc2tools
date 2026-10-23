@@ -6,7 +6,9 @@
 import type { HelpArticle } from "../types";
 import accountData_backupsAndExport from "./account-data/backups-and-export";
 import accountData_deleteAccount from "./account-data/delete-account";
+import accountData_deletingGameHistory from "./account-data/deleting-game-history";
 import accountData_playerChannels from "./account-data/player-channels";
+import accountData_privacyCookies from "./account-data/privacy-cookies";
 import accountData_publicProfile from "./account-data/public-profile";
 import analyzer_analyzerFilters from "./analyzer/analyzer-filters";
 import analyzer_arcade from "./analyzer/arcade";
@@ -21,6 +23,7 @@ import analyzer_strategies from "./analyzer/strategies";
 import analyzer_today from "./analyzer/today";
 import analyzer_trends from "./analyzer/trends";
 import builds_buildCheckIn from "./builds/build-check-in";
+import builds_buildGuides from "./builds/build-guides";
 import builds_customBuilds from "./builds/custom-builds";
 import builds_practiceGhostBuild from "./builds/practice-ghost-build";
 import builds_publishCommunityBuilds from "./builds/publish-community-builds";
@@ -56,7 +59,9 @@ import troubleshooting_troubleshootingAndSupport from "./troubleshooting/trouble
 export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   accountData_backupsAndExport,
   accountData_deleteAccount,
+  accountData_deletingGameHistory,
   accountData_playerChannels,
+  accountData_privacyCookies,
   accountData_publicProfile,
   analyzer_analyzerFilters,
   analyzer_arcade,
@@ -71,6 +76,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_today,
   analyzer_trends,
   builds_buildCheckIn,
+  builds_buildGuides,
   builds_customBuilds,
   builds_practiceGhostBuild,
   builds_publishCommunityBuilds,

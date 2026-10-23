@@ -1,4 +1,5 @@
 "use client";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { useState } from "react";
 import { guidesEnabled } from "@/lib/guides/flags";
@@ -28,17 +29,8 @@ export default function AdminGuidesPage() {
   if (forbidden) return <ForbiddenCard />;
   return (
     <div className="space-y-10">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold">Guides</h1>
-        <p className="text-text-muted">
-          Coach&apos;s notes and videos for the community build guides, plus the nightly stats runs behind them. Every number on a guide comes from real games; nothing here can edit a statistic.
-        </p>
-        {guidesEnabled() ? null : (
-          <p role="note" className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-caption text-warning">
-            The public guide pages are switched off in this deployment (NEXT_PUBLIC_GUIDES_ENABLED). You can still prepare notes and videos; they appear once the flag is on.
-          </p>
-        )}
-      </header>
+      <AdminPageHeader anchor="guides" title="Guides" description="Manage published notes, videos and guide statistics." />
+      {guidesEnabled() ? null : <p role="note" className="rounded-lg border border-warning/30 bg-warning/5 p-3 text-caption text-warning">The public guide pages are switched off in this deployment (NEXT_PUBLIC_GUIDES_ENABLED). You can still prepare notes and videos; they appear once the flag is on.</p>}
       <GuideNotesEditor notes={notes} selection={selection} onSelect={setSelection} />
       <GuideVideosPanel videos={videos} notes={notes} selection={selection} />
       <GuideStatusPanel status={status} />

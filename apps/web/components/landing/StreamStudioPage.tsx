@@ -109,7 +109,7 @@ const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   },
   {
     q: "Can I change how it looks?",
-    a: "Yes. Settings → Overlay lets you pick the accent colour, size, opacity, corners, font and frame style, and toggle each widget on or off.",
+    a: "Yes. Settings → Overlay lets you pick the accent color, size, opacity, corners, font and frame style, and toggle each widget on or off.",
   },
   {
     q: `Can I hide the “${OVERLAY_CREDIT_TEXT}” credit?`,

@@ -41,10 +41,11 @@ import { MatchupSelector } from "./randomizer/MatchupSelector";
 import { MatchupBuildPicker } from "./randomizer/MatchupBuildPicker";
 import { RandomizerPreview } from "./randomizer/RandomizerPreview";
 import { usePublishDirty } from "./SettingsContext";
+import { SettingsLoadError } from "./SettingsLoadError";
 
 export function SettingsRandomizer() {
   const { getToken } = useAuth();
-  const { data, isLoading, mutate } = useApi<unknown>(
+  const { data, error, isLoading, mutate } = useApi<unknown>(
     "/v1/me/preferences/randomizer",
   );
   const { toast } = useToast();
@@ -102,6 +103,7 @@ export function SettingsRandomizer() {
   if (isLoading) {
     return <Skeleton rows={3} />;
   }
+  if (error && data === undefined) return <SettingsLoadError tab="Randomizer settings" error={error} retry={mutate} />;
 
   const customBuilds = customBuildsApi.data?.items ?? [];
   const activeCount = activeMatchupCount(draft);

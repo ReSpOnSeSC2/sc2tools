@@ -103,12 +103,10 @@ class AnalyticsService {
    * deltas), a daily timeseries, and the top pages / channels /
    * devices / countries breakdowns. Fanned out in parallel.
    *
-   * @param {{ days?: number }} [opts]
+   * @param {{ days?: number, from?: unknown, to?: unknown }} [opts]
    */
   async summary(opts = {}) {
-    const days = clampDays(opts.days);
-    const cur = currentRange(days);
-    const prev = previousRange(days);
+    const { days, cur, prev } = analyticsRange(opts);
 
     const [series, prevTotals, pages, channels, devices, countries] =
       await Promise.all([
@@ -284,6 +282,36 @@ const MIN_DAYS = 1;
 const MAX_DAYS = 365;
 const DEFAULT_DAYS = 28;
 
+/** @param {{days?: number, from?: unknown, to?: unknown}} opts */
+function analyticsRange(opts) {
+  if (opts.from === undefined && opts.to === undefined) {
+    const days = clampDays(opts.days);
+    return { days, cur: currentRange(days), prev: previousRange(days) };
+  }
+  const from = parseRangeDate(opts.from);
+  const to = parseRangeDate(opts.to);
+  const today = new Date().toISOString().slice(0, 10);
+  const days = from && to ? Math.round((to.getTime() - from.getTime()) / 86400000) + 1 : 0;
+  if (!from || !to || days < 1 || days > 365 || String(opts.to) > today) {
+    throw Object.assign(new Error("Use a valid from/to range ending no later than today, from 1 to 365 days inclusive."), { status: 400, code: "bad_request", expose: true });
+  }
+  return {
+    days,
+    cur: { startDate: String(opts.from), endDate: String(opts.to) },
+    prev: {
+      startDate: new Date(from.getTime() - days * 86400000).toISOString().slice(0, 10),
+      endDate: new Date(from.getTime() - 86400000).toISOString().slice(0, 10),
+    },
+  };
+}
+
+/** @param {unknown} value */
+function parseRangeDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? date : null;
+}
+
 /** @param {unknown} raw */
 function clampDays(raw) {
   const n = Number.parseInt(String(raw), 10);
@@ -424,4 +452,4 @@ function round(n, digits) {
   return Math.round(n * f) / f;
 }
 
-module.exports = { AnalyticsService };
+module.exports = { AnalyticsService, analyticsRange, _internals: { analyticsRange } };

@@ -1,4 +1,11 @@
 "use client";
+import { Field } from "@/components/ui/Field";
+import { Button } from "@/components/ui/Button";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { RequestError } from "@/components/ui/RequestError";
+import { AdminPagination } from "@/app/admin/components/AdminPagination";
+import { Input } from "@/components/ui/Input";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
@@ -91,7 +98,7 @@ export default function AdminUserOpponentsPage({
     userId,
   )}/opponents?${query.toString()}`;
 
-  const { data, error, isLoading } = useApi<OpponentsListResp>(path);
+  const { data, error, isLoading, isValidating, mutate } = useApi<OpponentsListResp>(path);
 
   useEffect(() => {
     if (data?.races) setKnownRaces(data.races);
@@ -106,30 +113,18 @@ export default function AdminUserOpponentsPage({
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <Link
+      <AdminPageHeader anchor="users-and-repairing-data" title="Opponents" description="Inspect the opponents recorded for this account." actions={<><Link
           href={`/admin/users/${encodeURIComponent(userId)}`}
           className="text-caption text-text-dim hover:text-text"
         >
           ← User detail
-        </Link>
-        <h1 className="text-3xl font-bold">Opponents</h1>
-        <p className="break-all font-mono text-caption text-text-dim">
-          {userId}
-        </p>
-        <p className="text-text-muted">
-          Full opponent history. Search by name or pulse id, filter by
-          race / minimum games, and sort by any column.
-        </p>
-      </header>
+        </Link></>} />
 
       <Card padded>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="flex flex-col gap-1 sm:col-span-2">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Search
-            </span>
-            <input
+          <Field label="Search">
+
+            <Input
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -139,12 +134,10 @@ export default function AdminUserOpponentsPage({
               autoCapitalize="none"
               autoCorrect="off"
             />
-          </label>
+          </Field>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Race
-            </span>
+          <Field label="Race">
+
             <Select
               selectSize="md"
               value={race}
@@ -160,13 +153,11 @@ export default function AdminUserOpponentsPage({
                 </option>
               ))}
             </Select>
-          </label>
+          </Field>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Min games
-            </span>
-            <input
+          <Field label="Min games">
+
+            <Input
               type="number"
               min={0}
               inputMode="numeric"
@@ -178,12 +169,10 @@ export default function AdminUserOpponentsPage({
               placeholder="0"
               className="h-10 w-full rounded-lg border border-border bg-bg-elevated px-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
             />
-          </label>
+          </Field>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Sort by
-            </span>
+          <Field label="Sort by">
+
             <Select
               selectSize="md"
               value={sort}
@@ -198,12 +187,10 @@ export default function AdminUserOpponentsPage({
                 </option>
               ))}
             </Select>
-          </label>
+          </Field>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Order
-            </span>
+          <Field label="Order">
+
             <button
               type="button"
               onClick={() => {
@@ -214,25 +201,17 @@ export default function AdminUserOpponentsPage({
             >
               {order === "desc" ? "Highest first ↓" : "Lowest first ↑"}
             </button>
-          </label>
+          </Field>
         </div>
       </Card>
 
-      {isLoading ? (
+      {error ? (
+        <RequestError error={error} onRetry={() => mutate()} />
+      ) : isLoading ? (
         <LoadingRows rows={10} />
-      ) : error ? (
-        <Card padded>
-          <p className="text-danger">
-            Failed to load opponents: {error.message}
-          </p>
-        </Card>
       ) : !data || data.items.length === 0 ? (
         <Card padded>
-          <p className="text-text-muted">
-            {total === 0 && !search && race === "all" && !minGames
-              ? "No opponents recorded yet."
-              : "No opponents match these filters."}
-          </p>
+          <EmptyStatePanel title="No opponents match this view" action={<Button variant="secondary" onClick={() => { setSearchInput(""); setSearch(""); setRace("all"); setMinGames(""); setPage(0); void mutate(); }}>{search || race !== "all" ? "Clear filters" : "Refresh"}</Button>} />
         </Card>
       ) : (
         <>
@@ -345,27 +324,7 @@ export default function AdminUserOpponentsPage({
             </div>
           </Card>
 
-          <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={page === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-            >
-              ← Previous
-            </button>
-            <span className="text-caption text-text-dim">
-              {rangeStart}–{rangeEnd} of {compactNumber(total)}
-            </span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!data.hasMore}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next →
-            </button>
-          </div>
+          <AdminPagination hasPrev={!(page === 0)} hasNext={!(!data.hasMore)} onPrev={() => setPage((p) => Math.max(0, p - 1))} onNext={() => setPage((p) => p + 1)} label={`${rangeStart}–${rangeEnd} of ${total.toLocaleString()}`} loading={isValidating} itemCount={data?.items.length ?? 0} />
         </>
       )}
     </div>

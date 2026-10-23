@@ -1,10 +1,14 @@
 "use client";
+import { RequestError } from "@/components/ui/RequestError";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { Button } from "@/components/ui/Button";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 
-import { useApi } from "@/lib/clientApi";
+import { useApi, type ClientApiError } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
 import {
   compactNumber,
@@ -79,30 +83,27 @@ export default function AdminDashboardPage() {
     storage.error?.status === 403;
   if (forbidden) return <ForbiddenCard />;
 
-  const loading = counts.isLoading && recent.isLoading && storage.isLoading;
-  if (loading) return <DashboardSkeleton />;
+  const loading = counts.isLoading && recent.isLoading && storage.isLoading
+    && !counts.error && !recent.error && !storage.error;
+  if (loading) return <div className="space-y-6"><AdminPageHeader anchor="daily-triage" title="Dashboard" description="Activity and database storage at a glance." /><DashboardSkeleton /></div>;
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-text-muted">
-          Live signup, download, and agent connection activity, plus per-collection
-          storage breakdown for this MongoDB cluster.
-        </p>
-      </header>
+      <AdminPageHeader anchor="daily-triage" title="Dashboard" description="Activity and database storage at a glance." />
 
-      <ActivitySection counts={counts.data ?? null} error={counts.error?.message ?? null} />
+      <ActivitySection counts={counts.data ?? null} error={counts.error ?? null} onRetry={() => counts.mutate()} />
 
       <RecentActivityCard
         events={merged}
         isLoading={recent.isLoading && merged.length === 0}
-        error={recent.error?.message ?? null}
+        error={recent.error ?? null}
+        onRetry={() => recent.mutate()}
       />
 
       <StorageSection
         data={storage.data ?? null}
-        error={storage.error?.message ?? null}
+        error={storage.error ?? null}
+        onRetry={() => storage.mutate()}
       />
     </div>
   );
@@ -111,16 +112,14 @@ export default function AdminDashboardPage() {
 function ActivitySection({
   counts,
   error,
+  onRetry,
 }: {
   counts: AdminEventCountsResp | null;
-  error: string | null;
+  error: ClientApiError | null;
+  onRetry: () => unknown;
 }) {
   if (error) {
-    return (
-      <Card padded>
-        <p className="text-danger">Failed to load activity: {error}</p>
-      </Card>
-    );
+    return <RequestError error={error} onRetry={onRetry} />;
   }
   const c = counts;
   const platforms = c?.downloadsByPlatform || {
@@ -182,10 +181,12 @@ function RecentActivityCard({
   events,
   isLoading,
   error,
+  onRetry,
 }: {
   events: AdminEvent[];
   isLoading: boolean;
-  error: string | null;
+  error: ClientApiError | null;
+  onRetry: () => unknown;
 }) {
   return (
     <Card padded={false}>
@@ -200,7 +201,9 @@ function RecentActivityCard({
           View all →
         </Link>
       </Card.Header>
-      {isLoading ? (
+      {error ? (
+        <RequestError error={error} onRetry={onRetry} />
+      ) : isLoading ? (
         <ul className="divide-y divide-border">
           {Array.from({ length: 4 }).map((_, i) => (
             <li key={i} className="flex animate-pulse gap-3 px-4 py-3">
@@ -212,12 +215,9 @@ function RecentActivityCard({
             </li>
           ))}
         </ul>
-      ) : error ? (
-        <div className="px-4 py-6 text-caption text-danger">{error}</div>
       ) : events.length === 0 ? (
-        <div className="px-4 py-6 text-caption text-text-muted">
-          No activity yet — new signups, agent downloads, and confirmed installs will appear here.
-        </div>
+        <EmptyStatePanel title="No activity yet" description="New signups, agent downloads and confirmed installs will appear here."
+          action={<Button variant="secondary" onClick={onRetry}>Refresh</Button>} />
       ) : (
         <ul className="divide-y divide-border">
           {events.map((event) => (
@@ -236,16 +236,14 @@ function RecentActivityCard({
 function StorageSection({
   data,
   error,
+  onRetry,
 }: {
   data: StorageStatsResp | null;
-  error: string | null;
+  error: ClientApiError | null;
+  onRetry: () => unknown;
 }) {
   if (error) {
-    return (
-      <Card padded>
-        <p className="text-danger">Failed to load storage stats: {error}</p>
-      </Card>
-    );
+    return <RequestError title="Storage stats unavailable" error={error} onRetry={onRetry} />;
   }
   if (!data) return null;
   return (

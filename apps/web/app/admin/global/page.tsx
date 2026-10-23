@@ -1,10 +1,17 @@
 "use client";
+import { Field } from "@/components/ui/Field";
+import { Button } from "@/components/ui/Button";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { AdminPagination } from "@/app/admin/components/AdminPagination";
+import { Input } from "@/components/ui/Input";
+import { RequestError } from "@/components/ui/RequestError";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { useApi } from "@/lib/clientApi";
+import { useApi, type ClientApiError } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
 import { Select } from "@/components/ui/Select";
 import { compactNumber, timeSince } from "../components/format";
@@ -66,25 +73,25 @@ export default function AdminGlobalPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold">Global</h1>
-        <p className="text-text-muted">
+      <AdminPageHeader anchor="global-trends" title="Global players" description="Platform-wide players and aggregate activity." />
+      <details className="text-caption text-text-muted"><summary>Learn more</summary><p className="text-text-muted">
           Everything the platform tracks, aggregated across every user —
           merged player records plus the most common strategies, builds,
           and maps. The same real opponent faced by several users is
           collapsed into a single record.
-        </p>
-      </header>
+        </p></details>
 
       <SummarySection
         data={summary.data ?? null}
-        error={summary.error?.message ?? null}
+        error={summary.error ?? null}
+        onRetry={() => summary.mutate()}
         isLoading={summary.isLoading}
       />
 
       <BreakdownsSection
         data={breakdowns.data ?? null}
-        error={breakdowns.error?.message ?? null}
+        error={breakdowns.error ?? null}
+        onRetry={() => breakdowns.mutate()}
         isLoading={breakdowns.isLoading}
       />
 
@@ -97,17 +104,15 @@ function SummarySection({
   data,
   error,
   isLoading,
+  onRetry,
 }: {
   data: GlobalSummaryResp | null;
-  error: string | null;
+  error: ClientApiError | null;
   isLoading: boolean;
+  onRetry: () => unknown;
 }) {
   if (error) {
-    return (
-      <Card padded>
-        <p className="text-danger">Failed to load summary: {error}</p>
-      </Card>
-    );
+    return <RequestError error={error} onRetry={onRetry} />;
   }
   if (isLoading && !data) {
     return (
@@ -158,17 +163,15 @@ function BreakdownsSection({
   data,
   error,
   isLoading,
+  onRetry,
 }: {
   data: GlobalBreakdownsResp | null;
-  error: string | null;
+  error: ClientApiError | null;
   isLoading: boolean;
+  onRetry: () => unknown;
 }) {
   if (error) {
-    return (
-      <Card padded>
-        <p className="text-danger">Failed to load trends: {error}</p>
-      </Card>
-    );
+    return <RequestError error={error} onRetry={onRetry} />;
   }
   return (
     <div className="grid gap-4 lg:grid-cols-3">
@@ -177,18 +180,21 @@ function BreakdownsSection({
         subtitle="most common across users"
         rows={data?.strategies ?? null}
         isLoading={isLoading}
+        onRetry={onRetry}
       />
       <BreakdownCard
         title="Our builds"
         subtitle="most played across users"
         rows={data?.builds ?? null}
         isLoading={isLoading}
+        onRetry={onRetry}
       />
       <BreakdownCard
         title="Maps"
         subtitle="most played across users"
         rows={data?.maps ?? null}
         isLoading={isLoading}
+        onRetry={onRetry}
       />
     </div>
   );
@@ -199,11 +205,13 @@ function BreakdownCard({
   subtitle,
   rows,
   isLoading,
+  onRetry,
 }: {
   title: string;
   subtitle: string;
   rows: GlobalBreakdownRow[] | null;
   isLoading: boolean;
+  onRetry: () => unknown;
 }) {
   const max = rows && rows.length > 0 ? rows[0].count : 0;
   return (
@@ -221,9 +229,7 @@ function BreakdownCard({
           ))}
         </ul>
       ) : !rows || rows.length === 0 ? (
-        <div className="px-4 py-6 text-caption text-text-muted">
-          No data yet.
-        </div>
+        <EmptyStatePanel size="sm" title="No data yet" action={<Button variant="secondary" onClick={onRetry}>Refresh</Button>} />
       ) : (
         <ul className="divide-y divide-border">
           {rows.map((row) => (
@@ -289,7 +295,7 @@ function PlayersSection() {
   query.set("sort", sort);
   query.set("order", order);
 
-  const { data, error, isLoading } = useApi<GlobalPlayersResp>(
+  const { data, error, isLoading, isValidating, mutate } = useApi<GlobalPlayersResp>(
     `/v1/admin/global/players?${query.toString()}`,
   );
 
@@ -310,11 +316,9 @@ function PlayersSection() {
 
       <Card padded>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="flex flex-col gap-1 sm:col-span-2">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Search
-            </span>
-            <input
+          <Field label="Search">
+
+            <Input
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
@@ -324,12 +328,10 @@ function PlayersSection() {
               autoCapitalize="none"
               autoCorrect="off"
             />
-          </label>
+          </Field>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Race
-            </span>
+          <Field label="Race">
+
             <Select
               selectSize="md"
               value={race}
@@ -345,13 +347,11 @@ function PlayersSection() {
                 </option>
               ))}
             </Select>
-          </label>
+          </Field>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Min games
-            </span>
-            <input
+          <Field label="Min games">
+
+            <Input
               type="number"
               min={0}
               inputMode="numeric"
@@ -363,12 +363,10 @@ function PlayersSection() {
               placeholder="0"
               className="h-10 w-full rounded-lg border border-border bg-bg-elevated px-3 text-body text-text placeholder:text-text-dim focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/40"
             />
-          </label>
+          </Field>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Sort by
-            </span>
+          <Field label="Sort by">
+
             <Select
               selectSize="md"
               value={sort}
@@ -383,12 +381,10 @@ function PlayersSection() {
                 </option>
               ))}
             </Select>
-          </label>
+          </Field>
 
-          <label className="flex flex-col gap-1">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Order
-            </span>
+          <Field label="Order">
+
             <button
               type="button"
               onClick={() => {
@@ -399,23 +395,17 @@ function PlayersSection() {
             >
               {order === "desc" ? "Highest first ↓" : "Lowest first ↑"}
             </button>
-          </label>
+          </Field>
         </div>
       </Card>
 
-      {isLoading && !data ? (
+      {error ? (
+        <RequestError error={error} onRetry={() => mutate()} />
+      ) : isLoading && !data ? (
         <LoadingRows rows={10} />
-      ) : error ? (
-        <Card padded>
-          <p className="text-danger">Failed to load players: {error.message}</p>
-        </Card>
       ) : !data || data.items.length === 0 ? (
         <Card padded>
-          <p className="text-text-muted">
-            {total === 0 && !search && race === "all" && !minGames
-              ? "No players tracked yet."
-              : "No players match these filters."}
-          </p>
+          <EmptyStatePanel title={total === 0 && !search && race === "all" && !minGames ? "No players tracked yet" : "No players match these filters"} action={<Button variant="secondary" onClick={() => { if (search || race !== "all" || minGames) { setSearchInput(""); setSearch(""); setRace("all"); setMinGames(""); setPage(0); } else void mutate(); }}>{search || race !== "all" || minGames ? "Clear filters" : "Refresh"}</Button>} />
         </Card>
       ) : (
         <>
@@ -522,27 +512,7 @@ function PlayersSection() {
             </div>
           </Card>
 
-          <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={page === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-            >
-              ← Previous
-            </button>
-            <span className="text-caption text-text-dim">
-              {rangeStart}–{rangeEnd} of {compactNumber(total)}
-            </span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!data.hasMore}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next →
-            </button>
-          </div>
+          <AdminPagination hasPrev={!(page === 0)} hasNext={!(!data.hasMore)} onPrev={() => setPage((p) => Math.max(0, p - 1))} onNext={() => setPage((p) => p + 1)} label={`${rangeStart}–${rangeEnd} of ${total.toLocaleString()}`} loading={isValidating} itemCount={data?.items.length ?? 0} />
         </>
       )}
     </div>
