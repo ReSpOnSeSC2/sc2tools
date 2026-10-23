@@ -20,7 +20,7 @@ function buildAdminOpsRouter(deps) {
       db.importJobs.find({userId},{projection:{_id:0,jobId:1,status:1,createdAt:1,updatedAt:1,total:1,completed:1,failed:1}}).sort({createdAt:-1}).limit(5).toArray(),
       deps.adminAudit.list({target:userId,limit:10}),
     ]);
-    res.json({userId,devices:devices.map((/** @type {any} */ d)=>({deviceId:d.deviceId,hostname:d.hostname,os:d.agentOs,version:d.agentVersion,lastSeenAt:d.lastSeenAt,online:d.lastSeenAt&&Date.now()-+new Date(d.lastSeenAt)<180000})),doctor,replayArchive,imports,audit:audit.items});
+    res.json({userId,devices:devices.map((/** @type {any} */ d)=>({deviceId:d.deviceId,hostname:d.hostname,os:d.agentOs,version:d.agentVersion,lastSeenAt:d.lastSeenAt,online:Boolean(d.lastSeenAt&&Date.now()-+new Date(d.lastSeenAt)<180000)})),doctor,replayArchive,imports,audit:audit.items});
   }catch(error){next(error);}});
   router.post("/users/:userId/revoke-admin",async(req,res,next)=>{try{res.locals.auditAction="admin.revoke";res.locals.auditTarget=String(req.params.userId);res.json(await roles.revoke(String(req.params.userId),req.auth?.userId||""));}catch(error){next(error);}});
   return router;

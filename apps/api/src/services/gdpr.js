@@ -472,6 +472,15 @@ class GdprService {
     // coaching surface immediately before removing the account row.
     addDeletionCounts(counts, await this._deleteCoachingData(userId, gdprFence));
     await gdprFence.assert();
+    // Retained operational history cannot keep an erased user's identity.
+    // Compare literal IDs; the audit payload contains counters only.
+    if (this.db.adminAudit) await this.db.adminAudit.updateMany(
+      { $or: [{ actorUserId: userId }, { target: userId }] },
+      [{ $set: {
+        actorUserId: { $cond: [{ $eq: ["$actorUserId", { $literal: userId }] }, null, "$actorUserId"] },
+        target: { $cond: [{ $eq: ["$target", { $literal: userId }] }, null, "$target"] },
+      } }],
+    );
     const clerkUserId = opts.clerkUserId || user?.clerkUserId;
     if (this.siteStats && clerkUserId) counts.sitePresence = await this.siteStats.deleteForClerkUser(clerkUserId);
     if (this.identityDeletions && clerkUserId) {
@@ -485,15 +494,6 @@ class GdprService {
     });
     if (!userRes.deletedCount && await this.db.users.findOne({ userId }, { projection: { _id: 1 } })) throw new Error("gdpr_operation_lease_lost");
     counts.users = userRes.deletedCount || 0;
-    // Retained operational history cannot keep an erased user's identity.
-    // Compare literal IDs; the audit payload contains counters only.
-    if (this.db.adminAudit) await this.db.adminAudit.updateMany(
-      { $or: [{ actorUserId: userId }, { target: userId }] },
-      [{ $set: {
-        actorUserId: { $cond: [{ $eq: ["$actorUserId", { $literal: userId }] }, null, "$actorUserId"] },
-        target: { $cond: [{ $eq: ["$target", { $literal: userId }] }, null, "$target"] },
-      } }],
-    );
     this.io?.in(`user:${userId}`).disconnectSockets(true);
     if (this.identityDeletions && clerkUserId && !opts.identityAlreadyDeleted) {
       await this.identityDeletions.activate(clerkUserId);
@@ -778,11 +778,14 @@ class GdprService {
     return this.db.games.countDocuments(this._gamesWipeFilter(userId, opts));
   }
 
-  /** @param {string} userId @param {{since?: Date|null, until?: Date|null}} [opts] */
+  /** @param {string} userId @param {{since?: Date|null, until?: Date|null, expectedGames?:number}} [opts] */
   async wipeGames(userId, opts = {}) {
     const gdprFence = await this._acquireMutationFence(userId, "wipe_games");
     try {
       await gdprFence.assert();
+      if (opts.expectedGames !== undefined && await this.countGamesForWipe(userId, opts) !== opts.expectedGames) {
+        throw Object.assign(new Error("Game count changed. Refresh the user and confirm the new count."), { status: 409, code: "game_count_changed" });
+      }
       await this._drainOpponentBuildOrderWriters(userId);
       if (this.customBuilds) await this.customBuilds.cancelUserReclassifications(userId);
       if (this.backups) await this.backups.create(userId, { type: "pre_action", label: "Before history deletion", assert: gdprFence.assert });
@@ -1151,6 +1154,22 @@ class GdprService {
       }
     }
     return { droppedRows, pulseBackfill };
+  }
+
+  /** Admin repairs share the same exclusive admission as owner repairs; an
+   * account erasure or ingest cannot recreate counters midway through rebuild.
+   * @param {string} userId */
+  async rebuildOpponentsForAdmin(userId) {
+    const fence = await this._acquireMutationFence(userId, "admin_rebuild_opponents");
+    try {
+      await fence.assert(); await this._drainOpponentBuildOrderWriters(userId);
+      if (this.customBuilds) await this.customBuilds.cancelUserReclassifications(userId);
+      if (this.backups) await this.backups.create(userId, { type: "pre_action", label: "Before admin opponent repair", assert: fence.assert });
+      const result = await this.rebuildOpponentsAndHealForUser(userId);
+      await fence.assert();
+      const [games, opponents, macroJobs] = await Promise.all([this.db.games.countDocuments({userId}), this.db.opponents.countDocuments({userId}), this.db.macroJobs.countDocuments({userId})]);
+      return { userId, ...result, games, opponents, macroJobs };
+    } finally { await this._releaseMutationFence(userId, fence); }
   }
 
   /** @param {string} userId */

@@ -145,7 +145,7 @@ function buildLadderMapBackfillJob(deps) {
     logger.info({ scanned, written }, "ladderMapBackfill_done");
     return { remaining, scanned, written, skipped: false };
   }
-  const run = observeJob(deps, "ladder-map-backfill", 24 * 60 * 60 * 1000, runWork, { disabled: disabled, envFlag: "SC2TOOLS_LADDER_BACKFILL_DISABLED" });
+  const run = observeJob(deps, "ladder-map-backfill", 24 * 60 * 60 * 1000, runWork, { disabled: disabled, scheduleDisabled: true, envFlag: "One-shot at boot / SC2TOOLS_LADDER_BACKFILL_DISABLED" });
 
   return {
     /** Kick off the backfill in the background. Never throws. */

@@ -4,6 +4,7 @@ import { SWRConfig } from "swr";
 import { useState, type ReactNode } from "react";
 import { AdminActionCard } from "./AdminActionCard";
 import { UserLookupField, type ResolvedAdminUser } from "./UserLookupField";
+import { AdminEventRow } from "./AdminEventRow";
 import { BackgroundJobs } from "./BackgroundJobs";
 const auth = vi.hoisted(() => ({ getToken: vi.fn(async () => "local-test-token") }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ ...auth, isLoaded: true, isSignedIn: true, userId: "admin" }) }));
@@ -63,4 +64,9 @@ it("job Run now confirms before requesting and retains Retry when the request fa
   expect(fetcher.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
   fireEvent.click(screen.getAllByRole("button", { name: "Run now" })[1]); expect(await screen.findByRole("alert")).toBeTruthy();
   await waitFor(() => expect((screen.getAllByRole("button", { name: "Run now" })[1] as HTMLButtonElement).disabled).toBe(false));
+});
+
+it("overdue job alerts have honest copy and a direct infrastructure link",()=>{
+  view(<ul><AdminEventRow event={{eventId:"overdue",type:"job_overdue",payload:{job:"guide-stats",intervalMs:3600000},createdAt:"2026-10-23T12:00:00Z",readAt:null}} unread/></ul>);
+  expect(screen.getByText("Background job overdue")).toBeTruthy();expect(screen.getByText(/guide-stats · no OK run for at least 3 intervals/)).toBeTruthy();expect(screen.getByRole("link",{name:"Open Infrastructure →"}).getAttribute("href")).toBe("/admin/health#background-jobs");expect(screen.queryByText(/Agent download/)).toBeNull();
 });

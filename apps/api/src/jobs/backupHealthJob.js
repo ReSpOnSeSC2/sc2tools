@@ -54,7 +54,7 @@ function buildBackupHealthJob(deps) {
   const firstDelay = deps.firstCheckDelayMs ?? FIRST_CHECK_DELAY_MS;
   const logger = deps.logger.child({ component: "backupHealth" });
   const check = singleFlightCheck(deps.backupStatus, logger, (error) => tick.failed(error));
-  const tick = observeJob(deps, "backup-health", interval, check, { disabled, envFlag: "SC2TOOLS_BACKUP_ALERT_DISABLED" });
+  const tick = observeJob(deps, "backup-health", interval, check, { disabled, firstDelayMs: firstDelay, envFlag: "SC2TOOLS_BACKUP_ALERT_DISABLED" });
   /** @type {NodeJS.Timeout[]} */
   let timers = [];
 

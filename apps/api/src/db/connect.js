@@ -312,9 +312,11 @@ async function ensureBuildIntentIndexes(ctx) {
 async function ensureIndexes(ctx, opts = {}) {
   await Promise.all([
     ctx.jobRuns.createIndex({ job: 1, startedAt: -1 }),
+    ctx.users.createIndex({ createdAt: -1, userId: 1 }),
     ctx.adminAudit.createIndex({ createdAt: 1 }, { expireAfterSeconds: 400 * 86400 }),
     ctx.adminAudit.createIndex({ target: 1, createdAt: -1 }),
     ctx.adminAudit.createIndex({ action: 1, createdAt: -1 }),
+    ctx.adminAudit.createIndex({ createdAt: -1, auditId: -1 }),
   ]);
   await ctx.playerIdentities.createIndex({ sourceKeys: 1 }, { unique: true, sparse: true });
   await ctx.playerIdentities.createIndex({ targetKeys: 1, active: 1 });

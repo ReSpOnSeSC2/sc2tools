@@ -120,7 +120,7 @@ class GuideStatsRecomputeJob {
     this.checkTimer = null;
     /** @type {Promise<GuideStatsJobSummary>|null} */
     this.inflight = null;
-    this.observedRun = observeJob(deps, "guide-stats", Math.min(this.schedule.intervalMs, CHECK_EVERY_MS), (opts) => this.runOnceWork(opts), { disabled: this.schedule.disabled, scheduleDisabled: deps.enabled === false, envFlag: "GUIDES_ENABLED / SC2TOOLS_GUIDE_STATS_DISABLED" });
+    this.observedRun = observeJob(deps, "guide-stats", Math.min(this.schedule.intervalMs, CHECK_EVERY_MS), (opts) => this.runOnceWork(opts), { disabled: this.schedule.disabled, scheduleDisabled: deps.enabled === false, firstDelayMs: this.schedule.startDelayMs, envFlag: "GUIDES_ENABLED / SC2TOOLS_GUIDE_STATS_DISABLED" });
   }
 
   /** Schedule the checks (no-op when already started or disabled). */

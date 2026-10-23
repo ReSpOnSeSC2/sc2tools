@@ -720,14 +720,7 @@ class AdminService {
    */
   async rebuildOpponentsForUser(userId) {
     if (!userId) throw new Error("userId required");
-    const result = await this.gdpr.rebuildOpponentsAndHealForUser(userId);
-    const [games, opponents, macroJobs] = await Promise.all([this.db.games.countDocuments({ userId }), this.db.opponents.countDocuments({ userId }), this.db.macroJobs.countDocuments({ userId })]);
-    return {
-      games, opponents, macroJobs,
-      userId,
-      droppedRows: result.droppedRows,
-      pulseBackfill: result.pulseBackfill,
-    };
+    return this.gdpr.rebuildOpponentsForAdmin(userId);
   }
 
   /**

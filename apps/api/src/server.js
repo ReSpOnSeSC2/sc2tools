@@ -369,7 +369,7 @@ async function main() {
     logger,
   });
   backupHealthJob.start();
-  const identityDeletionJob = buildIdentityDeletionJob({ service: /** @type {any} */ (services).identityDeletions, logger });
+  const identityDeletionJob = buildIdentityDeletionJob({ jobLedger: /** @type {any} */ (services).jobLedger, service: /** @type {any} */ (services).identityDeletions, logger });
   identityDeletionJob.start();
 
   // SC2 Tools Guides build-order videos: seed the committed channel

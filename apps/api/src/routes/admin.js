@@ -463,10 +463,11 @@ function buildAdminRouter(deps) {
         // GDPR.wipeGames is the single source of truth for cascading
         // a user's data delete (games + game_details + opponents
         // re-derive + macroJobs). The admin route just delegates.
-        const result = await deps.gdpr.wipeGames(
-          String(req.params.userId),
-          {},
-        );
+        const expectedGames = req.body?.expectedGames;
+        if (expectedGames !== undefined && (!Number.isSafeInteger(expectedGames) || expectedGames < 0)) {
+          res.status(400).json({ error: { code: "bad_request" } }); return;
+        }
+        const result = await deps.gdpr.wipeGames(String(req.params.userId), expectedGames === undefined ? {} : { expectedGames });
         res.locals.auditResult = result;
         res.status(202).json(result);
       } catch (err) {

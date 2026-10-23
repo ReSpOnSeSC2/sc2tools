@@ -17,10 +17,17 @@ class AdminActivationService {
     const since = weekStart(this.now() - (weeks - 1) * WEEK);
     const users = await this.db.users.find({ createdAt: { $gte: since } }, { projection: { _id: 0, userId: 1, email: 1, createdAt: 1, activation: 1 } }).sort({ createdAt: -1, userId: 1 }).limit(2001).toArray();
     const sampled = users.slice(0,2000), ids = sampled.map((/** @type {any} */ u) => u.userId);
-    const signups = sampled.map((/** @type {any} */ u) => u.createdAt);
     const [games, devices] = await Promise.all([
-      this.db.games.aggregate([{ $match: { userId: { $in: ids } } }, { $set: { signup: { $arrayElemAt: [signups, { $indexOfArray: [ids, "$userId"] }] } } }, { $group: { _id: "$userId", week2Return: { $max: { $and: [{ $gte: ["$createdAt", { $add: ["$signup", WEEK] }] }, { $lt: ["$createdAt", { $add: ["$signup", 2 * WEEK] }] }] } }, games: { $sum: 1 }, firstGame: { $min: "$createdAt" }, lastGame: { $max: "$createdAt" } } }]).toArray(),
-      this.db.deviceTokens.aggregate([{ $match: { userId: { $in: ids } } }, { $group: { _id: "$userId", pairedAt: { $min: "$createdAt" }, lastSeenAt: { $max: "$lastSeenAt" } } }]).toArray(),
+      this.db.users.aggregate([
+        { $match: { userId: { $in: ids } } },
+        { $lookup: { from: this.db.games.collectionName, let: { uid:"$userId", signup:"$createdAt" }, pipeline: [
+          { $match: { $expr: { $eq:["$userId","$$uid"] } } },
+          { $group: { _id:null, games:{$sum:1}, firstGame:{$min:"$createdAt"}, lastGame:{$max:"$createdAt"},
+            week2Return:{$max:{$and:[{$gte:["$createdAt",{$add:["$$signup",WEEK]}]},{$lt:["$createdAt",{$add:["$$signup",2*WEEK]}]}]}} } },
+        ], as:"gameStats" } },
+        { $project: { _id:"$userId", games:{$ifNull:[{$first:"$gameStats.games"},0]}, firstGame:{$first:"$gameStats.firstGame"}, lastGame:{$first:"$gameStats.lastGame"}, week2Return:{$first:"$gameStats.week2Return"} } },
+      ],{maxTimeMS:15000}).toArray(),
+      this.db.deviceTokens.aggregate([{ $match: { userId: { $in: ids } } }, { $group: { _id: "$userId", pairedAt: { $min: "$createdAt" }, lastSeenAt: { $max: "$lastSeenAt" } } }],{maxTimeMS:15000}).toArray(),
     ]);
     return buildCohorts(sampled, games, devices, { since, weeks, now: this.now(), truncated: users.length > 2000 });
   }

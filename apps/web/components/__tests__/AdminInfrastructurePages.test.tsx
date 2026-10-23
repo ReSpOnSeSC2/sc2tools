@@ -17,6 +17,8 @@ vi.mock("@/app/admin/components/useAdminEventsSocket", () => ({
   useAdminEventsSocket: () => undefined,
 }));
 
+vi.mock("@/app/admin/components/BackgroundJobs",()=>({BackgroundJobs:()=> <section><h2>Background jobs</h2></section>}));
+
 afterEach(() => {
   cleanup();
   useApiMock.mockReset();

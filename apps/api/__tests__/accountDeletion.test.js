@@ -33,7 +33,10 @@ describe("complete account erasure (HTTP + Mongo)", () => {
     } }));
   });
   beforeEach(async () => {
-    for (const collection of await db.db.collections()) await collection.deleteMany({});
+    for (const collection of await db.db.collections()) {
+      if (collection.collectionName === COLLECTIONS.JOB_RUNS) continue; // Global capped diagnostics contain no owner fixture data.
+      else await collection.deleteMany({});
+    }
     clerk.deleteUser.mockReset().mockResolvedValue(undefined);
     for (const name of ["owner", "other"]) await db.users.insertOne({ userId: `u_${name}`, clerkUserId: `clerk_${name}`, createdAt: new Date(), lastSeenAt: new Date() });
   });

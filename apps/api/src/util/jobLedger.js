@@ -1,6 +1,8 @@
 "use strict";
 
 const crypto = require("crypto");
+const { stampVersion } = require("../db/schemaVersioning");
+const { COLLECTIONS } = require("../config/constants");
 
 /** Durable bounded diagnostics. Ledger failure never changes a worker result.
  * Run-now uses the very same single-flight wrapper as scheduled invocations. */
@@ -8,11 +10,11 @@ class JobLedger {
   /** @param {{db:any,adminEvents?:any,now?:()=>number}} deps */
   constructor(deps) { this.db = deps.db; this.events = deps.adminEvents; this.now = deps.now || Date.now; /** @type {Map<string,any>} */ this.jobs = new Map(); this.alerted = new Set(); this.alertDay = ""; }
 
-  /** @param {string} name @param {number} intervalMs @param {(...args:any[])=>any} tick @param {{disabled?:boolean,envFlag?:string,manual?:boolean,scheduleDisabled?:boolean,minRecordIntervalMs?:number}} [options] */
+  /** @param {string} name @param {number} intervalMs @param {(...args:any[])=>any} tick @param {{disabled?:boolean,envFlag?:string,manual?:boolean,scheduleDisabled?:boolean,firstDelayMs?:number,minRecordIntervalMs?:number}} [options] */
   instrumentJob(name, intervalMs, tick, options = {}) {
     /** @type {any} */
     const state = { name, intervalMs, envFlag: options.envFlag || null, disabled: !!options.disabled, scheduleDisabled: !!options.scheduleDisabled,
-      manual: options.manual !== false, minRecordIntervalMs: options.minRecordIntervalMs || 0, lastRecordedAt: null, registeredAt: this.now(), lastStarted: null, lastOk: null, running: null, failure: null };
+      manual: options.manual !== false, firstDelayMs: options.firstDelayMs ?? intervalMs, minRecordIntervalMs: options.minRecordIntervalMs || 0, lastRecordedAt: null, registeredAt: this.now(), lastStarted: null, lastOk: null, running: null, failure: null };
     /** @param {any[]} args */
     const run = (...args) => this.run(state, tick, args);
     run.failed = (/** @type {unknown} */ error) => { state.failure = safeError(error); };
@@ -31,7 +33,8 @@ class JobLedger {
       try { result = await tick(...args); return result; }
       catch (error) { state.failure = safeError(error); throw error; }
       finally {
-        const status = state.failure || result?.reason === "failed" || result?.error ? "error" : lockHeld(result) ? "lock_held" : "ok";
+        if (!state.failure && (result?.reason === "failed" || result?.error)) state.failure = "job_failed";
+        const status = state.failure ? "error" : lockHeld(result) ? "lock_held" : "ok";
         if (status === "ok") state.lastOk = this.now();
         if (status !== "ok" || state.lastRecordedAt === null || this.now() - state.lastRecordedAt >= state.minRecordIntervalMs) {
         state.lastRecordedAt = this.now();
@@ -46,7 +49,7 @@ class JobLedger {
   }
 
   /** @param {Record<string,any>} row */
-  async write(row) { try { await this.db.jobRuns.insertOne({ runId: crypto.randomUUID(), ...row }); } catch { /* Observability is best effort. */ } }
+  async write(row) { try { await this.db.jobRuns.insertOne(stampVersion({ runId: crypto.randomUUID(), ...row }, COLLECTIONS.JOB_RUNS)); } catch { /* Observability is best effort. */ } }
 
   async snapshot() {
     const rows = await this.db.jobRuns.find({}, { projection: { _id: 0 } }).sort({ startedAt: -1 }).limit(5000).toArray();
@@ -68,7 +71,8 @@ class JobLedger {
     const job = this.jobs.get(name);
     if (!job || !job.state.manual) throw Object.assign(new Error("job_not_found"), { status: 404, code: "job_not_found" });
     if (job.state.disabled) throw Object.assign(new Error("job_disabled"), { status: 409, code: "job_disabled" });
-    await job.run();
+    try { await job.run(); } catch { throw Object.assign(new Error("Job failed. Check its last error and retry."), { status: 503, code: "job_failed" }); }
+    if (job.state.failure) throw Object.assign(new Error("Job failed. Check its last error and retry."), { status: 503, code: "job_failed" });
     return { ok: true, job: name };
   }
 }
@@ -79,13 +83,13 @@ function jobSnapshot(state, rows, now) {
   return { job: state.name, intervalMs: state.intervalMs, envFlag: state.envFlag, disabled: state.disabled || state.scheduleDisabled, running: !!state.running,
     canRun: state.manual && !state.disabled, lastOk: history.find((r) => r.status === "ok")?.startedAt || null,
     lastError: history.find((r) => r.status === "error") || null, durations: history.slice(0, 12).reverse().map((r) => r.durationMs), history,
-    nextDue: state.disabled || state.scheduleDisabled ? null : new Date((state.lastStarted || state.registeredAt) + state.intervalMs),
+    nextDue: state.disabled || state.scheduleDisabled ? null : new Date(state.lastStarted === null ? state.registeredAt + state.firstDelayMs : state.lastStarted + state.intervalMs),
     overdue: !state.disabled && !state.scheduleDisabled && now - (state.lastOk || state.registeredAt) >= 3 * state.intervalMs };
 }
 /** @param {unknown} error */
 function safeError(error) { const code = /** @type {any} */ (error)?.code; return typeof code === "string" && /^[a-zA-Z0-9_]{1,64}$/.test(code) ? code : "job_failed"; }
 /** @param {any} result */
-function lockHeld(result) { return result?.ranAsLeader === false || result?.reason === "lock_held" || result?.skipped === "lock_held"; }
+function lockHeld(result) { return result?.lockHeld === true || result?.ranAsLeader === false || result?.reason === "lock_held" || result?.skipped === "lock_held"; }
 /** Retain only bounded scalar counters, never payloads, URLs or user IDs. @param {any} result */
 function numericSummary(result) {
   if (typeof result === "number") return { count: result };

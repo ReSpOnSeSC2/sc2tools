@@ -24,7 +24,7 @@ function pendingSummaryMatch() {
 class TrendsExplorerBackfill {
   /** @param {{db:{gameDetails:import('mongodb').Collection},gameDetails:import('./gameDetails').GameDetailsService,logger?:any,jobLedger?:import("../util/jobLedger").JobLedger}} deps */
   constructor(deps) {
-    this.observedBatch = observeJob(deps, "trends-history", 5 * 60 * 1000, (options) => this.runBatch(options), { manual: false, minRecordIntervalMs: 5 * 60 * 1000, envFlag: "always enabled; successful batches sampled every 5 min" });
+    this.observedBatch = observeJob(deps, "trends-history", 5 * 60 * 1000, (options) => this.runBatch(options), { manual: false, firstDelayMs: 10000, minRecordIntervalMs: 5 * 60 * 1000, envFlag: "always enabled; successful batches sampled every 5 min" });
     this.collection = deps.db.gameDetails;
     this.details = deps.gameDetails;
     this.externalStore = /** @type {any} */ (deps.gameDetails.store)?.kind === "r2";
