@@ -1,180 +1,60 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { useAuth } from "@clerk/nextjs";
-
-import { apiCall, useApi } from "@/lib/clientApi";
-import { Card } from "@/components/ui/Card";
+import { useEffect, useMemo, useState } from "react";
+import { useApi } from "@/lib/clientApi";
+import { Button } from "@/components/ui/Button";
+import { Card, Skeleton } from "@/components/ui/Card";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { AdminPageHeader as PageHeader } from "@/app/admin/components/AdminPageHeader";
+import { RequestError } from "@/components/ui/RequestError";
+import { Field } from "@/components/ui/Field";
+import { Select } from "@/components/ui/Select";
 import { ForbiddenCard } from "../components/AdminFragments";
+import { ReportGroupCard } from "./ReportGroupCard";
+import { groupReports, TARGET_LABEL, type Report } from "./moderationGroups";
 
-type Report = {
-  id: string;
-  reporterUserId: string;
-  targetType: "build" | "opponent" | "review_request" | "review_comment";
-  targetId: string;
-  reason: string;
-  note?: string;
-  createdAt: string;
-  /** Registered targets (Replay Review Exchange) describe themselves. */
-  target?: {
-    title: string;
-    snippet: string;
-    href: string;
-    hidden: boolean;
-    status: string;
-  } | null;
-};
+type ReportsResp = { items: Report[]; total?: number; capped?: boolean };
+type Sort = "oldest" | "newest" | "reported";
 
-const TARGET_LABEL: Record<Report["targetType"], string> = {
-  build: "Community build",
-  opponent: "Opponent profile",
-  review_request: "Review request",
-  review_comment: "Review comment",
-};
-
-function isReviewTarget(r: Report) {
-  return r.targetType === "review_request" || r.targetType === "review_comment";
-}
-
-type ReportsResp = { items: Report[] };
-
-/**
- * /admin/moderation — community moderation queue.
- *
- * Same handler set the original ``/admin`` page used (POST
- * ``/v1/community/admin/reports/:id`` with ``{action: 'dismiss' |
- * 'remove'}``). Lifted into the new admin shell so the moderation
- * queue lives next to dashboard, users, tools, and health under a
- * single nav.
- */
 export default function AdminModerationPage() {
-  const { getToken } = useAuth();
-  const { data, error, isLoading, mutate } = useApi<ReportsResp>(
-    "/v1/community/admin/reports",
-  );
-  const [busy, setBusy] = useState(false);
-
-  async function resolve(id: string, action: "dismiss" | "remove") {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await apiCall(getToken, `/v1/community/admin/reports/${id}`, {
-        method: "POST",
-        body: JSON.stringify({ action }),
-      });
-      await mutate();
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <header className="space-y-2">
-          <h1 className="text-3xl font-bold">Moderation</h1>
-        </header>
-        <div className="h-32 animate-pulse rounded-xl bg-bg-elevated" />
-      </div>
-    );
-  }
-  if (error) {
-    if (error.status === 403) return <ForbiddenCard />;
-    return (
-      <Card padded>
-        <p className="text-danger">
-          Failed to load reports: {error.message}
-        </p>
-      </Card>
-    );
-  }
-
-  const items = data?.items || [];
-
+  const q = useApi<ReportsResp>("/v1/community/admin/reports");
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  useEffect(() => { if (q.data && !q.error) setLastChecked(new Date()); }, [q.data, q.error]);
+  const [filter, setFilter] = useState<"all" | Report["targetType"]>("all");
+  const [sort, setSort] = useState<Sort>("oldest");
+  const groups = useMemo(() => groupReports(q.data?.items ?? []), [q.data]);
+  const visible = groups.filter((g) => filter === "all" || g.reports[0].targetType === filter)
+    .sort((a, b) => sort === "reported" ? b.reports.length - a.reports.length || a.oldest - b.oldest
+      : sort === "newest" ? b.newest - a.newest : a.oldest - b.oldest);
+  if (q.error?.status === 403) return <ForbiddenCard />;
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold">Moderation queue</h1>
-        <p className="text-text-muted">
-          Open community reports awaiting review. Resolve by either
-          dismissing (no action) or removing (unpublishes the
-          target). Replay-review content is hidden automatically once
-          three different people report it; dismissing restores it and
-          settles every report on it, removing takes it down for good
-          (the author loses 20 review karma).
-        </p>
-      </header>
-
-      {items.length === 0 ? (
-        <Card padded>
-          <p className="text-text-muted">No open reports.</p>
-        </Card>
-      ) : (
-        <ul className="space-y-3">
-          {items.map((r) => (
-            <li key={r.id}>
-              <Card padded>
-                <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-                  <strong className="break-all">
-                    {TARGET_LABEL[r.targetType] ?? r.targetType} · {r.target?.title ?? r.targetId}
-                  </strong>
-                  <span className="text-caption text-text-dim">
-                    {new Date(r.createdAt).toLocaleString()}
-                  </span>
-                </div>
-                {r.target ? (
-                  <div className="mt-2 space-y-1 rounded-lg border border-border bg-bg-elevated/40 p-2 text-sm">
-                    <p className="break-words text-text">{r.target.snippet || "(no text)"}</p>
-                    <p className="text-caption text-text-dim">
-                      {r.target.hidden ? "Auto-hidden pending review · " : ""}
-                      Status: {r.target.status} ·{" "}
-                      <Link href={r.target.href} className="text-accent-cyan underline hover:text-accent-hover" target="_blank" rel="noreferrer">
-                        Open in context
-                      </Link>
-                    </p>
-                  </div>
-                ) : isReviewTarget(r) ? (
-                  <p className="mt-2 text-caption text-text-dim">The reported content no longer exists.</p>
-                ) : null}
-                <div className="mt-2 text-sm">
-                  <span className="font-semibold text-warning">Reason:</span>{" "}
-                  {r.reason}
-                </div>
-                {r.note ? (
-                  <p className="mt-2 rounded-lg border border-border bg-bg-elevated/40 p-2 text-sm">
-                    {r.note}
-                  </p>
-                ) : null}
-                <div className="mt-3 text-caption text-text-dim">
-                  Reporter:{" "}
-                  <code className="font-mono break-all">
-                    {r.reporterUserId}
-                  </code>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm"
-                    onClick={() => resolve(r.id, "dismiss")}
-                    disabled={busy}
-                  >
-                    {isReviewTarget(r) && r.target?.hidden ? "Dismiss & restore" : "Dismiss"}
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-danger text-white hover:opacity-90 text-sm"
-                    onClick={() => resolve(r.id, "remove")}
-                    disabled={busy}
-                  >
-                    Remove target
-                  </button>
-                </div>
-              </Card>
-            </li>
+      <PageHeader anchor="moderation" eyebrow="Admin" title="Moderation queue" description="Dismiss keeps the content; Remove takes it down."
+        actions={<Button variant="secondary" onClick={() => void q.mutate()} loading={q.isValidating}>Refresh</Button>} />
+      <details className="text-caption text-text-muted"><summary>How moderation works</summary>
+        <p>Review content is hidden after three distinct reports. Dismiss restores it; Remove takes it down and costs its author 20 review karma. Your resolution note is recorded. One decision clears all reports on the same target.</p>
+      </details>
+      {q.data?.capped ? <p role="status">Showing the oldest 100 of {q.data.total} open reports. Resolve these to see the rest.</p> : null}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap gap-2" aria-label="Filter reports by type">
+          <Button variant="secondary" size="sm" aria-pressed={filter === "all"} onClick={() => setFilter("all")}>All ({groups.length})</Button>
+          {Object.entries(TARGET_LABEL).filter(([kind]) => groups.some((g) => g.reports[0].targetType === kind)).map(([kind, label]) => (
+            <Button key={kind} variant="secondary" size="sm" aria-pressed={filter === kind} onClick={() => setFilter(kind as Report["targetType"])}>
+              {label} ({groups.filter((g) => g.reports[0].targetType === kind).length})
+            </Button>
           ))}
-        </ul>
-      )}
+        </div>
+        <Field label="Sort reports"><Select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+          <option value="oldest">Oldest first</option><option value="newest">Newest first</option><option value="reported">Most reported</option>
+        </Select></Field>
+      </div>
+      {q.error ? <RequestError error={q.error} onRetry={() => q.mutate()} title="Moderation queue" />
+        : !q.data ? <Skeleton rows={4} />
+          : visible.length ? <ul className="space-y-3">{visible.map((group) => <li key={group.key}>
+            <ReportGroupCard group={group} onResolved={() => q.mutate()} />
+          </li>)}</ul> : <Card><EmptyStatePanel title={groups.length ? "No reports match this type" : "Queue clear"}
+            description={groups.length ? "Choose another report type." : `No open reports. Last checked ${lastChecked?.toLocaleTimeString() ?? "not available"}.`}
+            action={<Button variant="secondary" onClick={() => groups.length ? setFilter("all") : void q.mutate()}>{groups.length ? "Clear filters" : "Refresh"}</Button>} /></Card>}
     </div>
   );
 }

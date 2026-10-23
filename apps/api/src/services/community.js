@@ -1421,6 +1421,7 @@ class CommunityService {
    * @param {string} pulseId
    */
   async aggregateOpponent(pulseId) {
+    if (await this._opponentRemoved(pulseId)) return null;
     const { filter, pulseCharacterId } = await this._opponentScope(pulseId);
     if (!(await this._opponentFloorMet(filter))) {
       return null;
@@ -1460,7 +1461,7 @@ class CommunityService {
     const cached = this.opponentAvailability.get(pulseId);
     if (cached && cached.expiresAt > now) return cached.available;
     const { filter } = await this._opponentScope(pulseId);
-    const available = await this._opponentFloorMet(filter);
+    const available = !(await this._opponentRemoved(pulseId)) && await this._opponentFloorMet(filter);
     // Re-insert so insertion order is answer age: the cap below drops
     // the oldest answers first.
     this.opponentAvailability.delete(pulseId);
@@ -1536,6 +1537,15 @@ class CommunityService {
   }
 
   // ── Moderation queue ─────────────────────────────────────────────
+
+  /** @param {string} pulseId */
+  async _opponentRemoved(pulseId) {
+    const decision = await this.db.communityReports.findOne(
+      { targetType: "opponent", targetId: pulseId, resolvedAt: { $ne: null } },
+      { projection: { _id: 0, resolution: 1 }, sort: { resolvedAt: -1 } },
+    );
+    return decision?.resolution === "remove";
+  }
 
   /**
    * @param {string} userId — reporter
@@ -1618,7 +1628,7 @@ class CommunityService {
     return { alreadyReported: false };
   }
 
-  /** @returns {Promise<{items: object[]}>} */
+  /** @returns {Promise<{items: object[], total: number, capped: boolean}>} */
   async listReports() {
     const items = await this.db.communityReports
       .find({ resolvedAt: null }, { projection: { _id: 0 } })
@@ -1635,7 +1645,33 @@ class CommunityService {
         if (item.targetType === kind) item.target = described.get(item.targetId) || null;
       }
     }
-    return { items };
+    await this._describeBuiltinReportTargets(items);
+    const total = await this.db.communityReports.countDocuments({ resolvedAt: null });
+    return { items, total, capped: total > 100 };
+  }
+
+  /** @param {Array<Record<string, any>>} items */
+  async _describeBuiltinReportTargets(items) {
+    /** @param {string} kind */
+    const ids = (kind) => [...new Set(items.filter((item) => item.targetType === kind).map((item) => item.targetId))];
+    const buildIds = ids("build");
+    const opponentIds = ids("opponent");
+    const [buildRows, opponentRows] = await Promise.all([
+      buildIds.length ? this.db.communityBuilds.find({ slug: { $in: buildIds } }, { projection: { _id: 0, slug: 1, title: 1, description: 1, removed: 1 } }).toArray() : [],
+      opponentIds.length ? this.db.opponents.find({ pulseId: { $in: opponentIds } }, { projection: { _id: 0, pulseId: 1, displayNameSample: 1 } }).toArray() : [],
+    ]);
+    const builds = new Map(buildRows.map((row) => [row.slug, row]));
+    const opponents = new Map(opponentRows.map((row) => [row.pulseId, row]));
+    const hidden = new Map(await Promise.all(opponentIds.map(async (id) => /** @type {[string, boolean]} */ ([id, await this._opponentRemoved(id)]))));
+    for (const item of items) {
+      if (item.targetType === "build") {
+        const target = builds.get(item.targetId);
+        item.target = target ? { title: target.title, snippet: target.description || "Community build", hidden: Boolean(target.removed) } : null;
+      } else if (item.targetType === "opponent") {
+        const target = opponents.get(item.targetId);
+        item.target = target ? { title: target.displayNameSample || item.targetId, snippet: "Public opponent profile", hidden: hidden.get(item.targetId) === true } : null;
+      }
+    }
   }
 
   /**
@@ -1644,49 +1680,39 @@ class CommunityService {
    * @param {{action: 'dismiss'|'remove', note?: string}} input
    */
   async resolveReport(adminUserId, reportId, input) {
-    const report = await this.db.communityReports.findOne({ id: reportId });
+    const note = String(input.note || "").slice(0, 500);
+    const report = await this.db.communityReports.findOne({ id: reportId, resolvedAt: null });
     if (!report) {
       const err = new Error("report_not_found");
       /** @type {any} */ (err).status = 404;
+      /** @type {any} */ (err).code = "report_not_found";
       throw err;
     }
     if (input.action === "remove" && report.targetType === "build") {
       await this.unpublish("admin", report.targetId, {
         adminUserId,
-        reason: input.note || "moderator_action",
+        reason: note || "moderator_action",
       });
     }
     const external = this.reportTargets.get(report.targetType) || null;
     if (external) {
-      if (input.action === "remove") await external.remove(report.targetId, adminUserId, input.note || "");
+      if (input.action === "remove") await external.remove(report.targetId, adminUserId, note);
       else await external.restore(report.targetId);
-      // A decision about registered content settles every open report on
-      // it — otherwise a dismissed-and-restored comment would sit in the
-      // queue under its other reports, still counting toward auto-hide.
-      await this.db.communityReports.updateMany(
+    }
+    // One decision settles every open report for the same target.
+    const result = await this.db.communityReports.updateMany(
         { targetType: report.targetType, targetId: report.targetId, resolvedAt: null },
         {
           $set: {
             resolvedAt: new Date(),
             resolvedBy: adminUserId,
             resolution: input.action,
-            resolutionNote: input.note || null,
+            resolutionNote: note || null,
           },
         },
       );
-      return;
-    }
-    await this.db.communityReports.updateOne(
-      { id: reportId },
-      {
-        $set: {
-          resolvedAt: new Date(),
-          resolvedBy: adminUserId,
-          resolution: input.action,
-          note: input.note || null,
-        },
-      },
-    );
+    if (report.targetType === "opponent") this.opponentAvailability.delete(report.targetId);
+    return { resolved: result.modifiedCount };
   }
 
   // ── Internals ────────────────────────────────────────────────────

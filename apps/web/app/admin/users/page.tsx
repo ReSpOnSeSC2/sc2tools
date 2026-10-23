@@ -1,4 +1,11 @@
 "use client";
+import { Field } from "@/components/ui/Field";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { RequestError } from "@/components/ui/RequestError";
+import { AdminPagination } from "@/app/admin/components/AdminPagination";
+import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -47,7 +54,7 @@ export default function AdminUsersPage() {
   if (before) params.set("before", before);
   const path = `/v1/admin/users?${params.toString()}`;
 
-  const { data, error, isLoading } = useApi<UsersListResp>(path);
+  const { data, error, isLoading, isValidating, mutate } = useApi<UsersListResp>(path);
 
   function nextPage() {
     if (data?.nextBefore) {
@@ -66,22 +73,13 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold">Users</h1>
-        <p className="text-text-muted">
-          All users, sorted by most recent activity (users with no games
-          yet appear by last sign-in). Click a row to open the per-user
-          detail with rebuild / wipe actions.
-        </p>
-      </header>
+      <AdminPageHeader anchor="users-and-repairing-data" title="Users" description="Find accounts and inspect their activity before repairing data." />
 
       <Card padded>
         <div className="space-y-3">
-          <label className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Search
-            </span>
-            <input
+          <Field label="Search">
+
+            <Input
               type="text"
               value={search}
               onChange={(e) => {
@@ -94,7 +92,7 @@ export default function AdminUsersPage() {
               autoCapitalize="none"
               autoCorrect="off"
             />
-          </label>
+          </Field>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
               Filter
@@ -102,7 +100,7 @@ export default function AdminUsersPage() {
             {FILTERS.map((f) => {
               const isActive = filter === f.value;
               return (
-                <button
+                <Button variant="secondary" size="sm"
                   key={f.value}
                   type="button"
                   aria-pressed={isActive}
@@ -118,22 +116,20 @@ export default function AdminUsersPage() {
                   ].join(" ")}
                 >
                   {f.label}
-                </button>
+                </Button>
               );
             })}
           </div>
         </div>
       </Card>
 
-      {isLoading ? (
+      {error ? (
+        <RequestError error={error} onRetry={() => mutate()} />
+      ) : isLoading ? (
         <LoadingRows rows={10} />
-      ) : error ? (
-        <Card padded>
-          <p className="text-danger">Failed to load users: {error.message}</p>
-        </Card>
       ) : !data || data.items.length === 0 ? (
         <Card padded>
-          <p className="text-text-muted">No matching users.</p>
+          <EmptyStatePanel title="No matching users" description="Try a wider search or another account filter." action={<Button variant="secondary" onClick={() => { if (search || filter !== "all") { setSearch(""); setFilter("all"); resetPaging(); } else void mutate(); }}>{search || filter !== "all" ? "Clear filters" : "Refresh"}</Button>} />
         </Card>
       ) : (
         <>
@@ -241,27 +237,7 @@ export default function AdminUsersPage() {
             </div>
           </Card>
 
-          <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={pageHistory.length <= 1}
-              onClick={prevPage}
-            >
-              ← Previous
-            </button>
-            <span className="text-caption text-text-dim">
-              {data.items.length} on this page
-            </span>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!data.nextBefore}
-              onClick={nextPage}
-            >
-              Next →
-            </button>
-          </div>
+          <AdminPagination hasPrev={!(pageHistory.length <= 1)} hasNext={!(!data.nextBefore)} onPrev={prevPage} onNext={nextPage} label={"Page " + pageHistory.length} loading={isValidating} itemCount={data?.items.length ?? 0} />
         </>
       )}
     </div>
