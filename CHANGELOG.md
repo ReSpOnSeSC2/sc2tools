@@ -17,6 +17,12 @@ corresponding GitHub Release.
 - Win rates include verdict symbols, charts use one keyboard Tab stop with pinnable details, and a shared legend plus Help article explains ranges, publishing floors and trends.
 - The guide hub previews busy map cards and links to all openers and counters. Map guides show a race matrix with honest mirror cells, enlarged artwork and neighboring maps.
 
+### Setup health and replay imports
+
+- Settings checks profile, desktop connection, updates, games and replay archive independently, with source-specific Retry and safe diagnostics for support.
+- Desktop import controls and the last ten jobs are available to every signed-in user. Browser import keeps its account flag; offline PCs cannot receive start commands.
+- Pair from the dashboard checklist, see setup progress, undo dismissal for five seconds, or restore the checklist from Settings.
+
 - Share one authenticated realtime connection across user and admin surfaces; count newly inserted games accurately, coalesce chart refreshes during imports, and show admin connection recovery status.
 
 ### Build editor safety

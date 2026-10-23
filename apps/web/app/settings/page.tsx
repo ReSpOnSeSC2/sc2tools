@@ -13,7 +13,6 @@ import { SettingsFoundation } from "@/components/analyzer/settings/SettingsFound
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { Skeleton } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { useInstantImport } from "@/lib/instant/useInstantImport";
 
 /*
  * Foundation is the default tab, so it ships with the page. Every other
@@ -64,8 +63,8 @@ const SettingsHelp = dynamic(
  * (e.g. `/settings?tab=import` from the dashboard's "Import in your
  * browser" links), as does a registered alias (`?tab=streaming`);
  * unknown or hidden tabs fall back to Foundation. SettingsShell maps old
- * hash-only links (`#overlay` with no `?tab=`). The Import tab only
- * exists while the Instant Analysis flag is on.
+ * hash-only links (`#overlay` with no `?tab=`). Import is available to every
+ * signed-in user; its browser tools follow the Instant Analysis flag.
  */
 export default function SettingsPage() {
   return (
@@ -123,11 +122,7 @@ function renderTab(id: SettingsTabId, origin: string) {
 function SettingsTabs() {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const requested = settingsTabFromParam(useSearchParams()?.get("tab"));
-  const instant = useInstantImport();
-  const isTabVisible = (id: SettingsTabId): boolean =>
-    id === "import" ? instant.enabled : defaultTabVisibility(id);
-  // Wait for the admin check before deciding a deep link to the Import tab.
-  if (requested === "import" && instant.loading) return <Skeleton rows={6} />;
+  const isTabVisible = defaultTabVisibility;
   const initialTab = requested && isTabVisible(requested) ? requested : undefined;
   return (
     <SettingsShell
