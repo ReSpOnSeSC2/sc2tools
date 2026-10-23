@@ -13,6 +13,11 @@ corresponding GitHub Release.
 
 - Share one authenticated realtime connection across user and admin surfaces; count newly inserted games accurately, coalesce chart refreshes during imports, and show admin connection recovery status.
 
+### Resumable setup
+
+- Setup remembers its step in the URL, recognizes paired PCs and existing games, and keeps browser import on its own Back path. Completed steps can be revisited.
+- Choose play or streaming goals, then see live import progress and relevant next actions on the new Done step. Goal saves merge with checklist preferences.
+
 ### Pairing and devices
 
 - Link a PC through one shared form, normalize pasted codes, check the PC details before confirming, and watch for its first connection. Prefilled codes never submit automatically.

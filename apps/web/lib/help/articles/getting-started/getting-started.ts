@@ -36,13 +36,16 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "**Create your account.** [Sign up](/sign-up) on the website. A short setup guide opens right after and walks you through the next steps.",
+        "**Welcome: choose your goals.** [Sign up](/sign-up), then use [Setup](/welcome) to choose **Improve my play**, **Upgrade my stream**, or both. Setup takes about five minutes; importing a large replay library can run longer in the background.",
         "**Install the desktop app.** Download it from the [Download](/download) page and install it on the PC you play on (Windows 10 or 11). It watches your replay folder; you never upload anything by hand. Step by step: [Install and link the desktop app](/help/install-and-pair).",
-        "**Pair it with your account.** The app opens showing a 6-digit pairing code. Click **Open pairing page**, or go to [Devices](/devices) yourself, and enter the code. The code expires after 10 minutes; if it does, close the app and open it again to get a new one.",
+        "**Pair it with your account.** The app shows a 6-digit code. Open its pairing page, or enter the code on [Devices](/devices), then confirm the PC. Setup checks for its connection. Already paired? The Pair circle has a check mark and Continue skips that step. See [Pairing problems](/help/pairing-troubleshooting) for expired codes and connection help.",
         "**Play or import a game.** Every ladder game is read automatically a few seconds after it ends and synced to your account. To fill your stats right away, press **Import my history** in the setup checklist on your dashboard to add the replays already on your PC.",
-        "**Read Today.** [Today](/app) is your between-games view: the live game while you play, your session record, streak and MMR, and the Daily Pulse strip with fresh insights from your own games every day. Builds, maps, trends and opponent history fill in as replays land.",
-        "**Find Settings and Stream Studio.** [Settings](/settings) holds your profile, overlay, build check-in and voice options, plus this help. Streaming? [Stream Studio](/stream-studio) is the overlay suite: in **Settings → Overlay**, copy a widget URL into an OBS Browser Source and press its **Test** button to see it live.",
+        "**Done: you're set.** Keep an eye on import progress, then open your latest game, check your SC2 identity, or follow the [Stream Studio crash course](/stream-studio/learn#crash-course). Your chosen goals determine the suggested next actions; every feature stays available.",
       ],
+    },
+    {
+      type: "paragraph",
+      text: "Refreshing keeps the step in the page URL. Completed numbered circles let you revisit earlier steps. If you choose browser import on Download, Back from Import returns to Download. Skip for now opens your dashboard; [Setup](/welcome) and the dashboard checklist help you continue later. Setup resumes at Import when a PC is paired, or Done when games have arrived, unless you explicitly revisit a step.",
     },
     {
       type: "callout",
