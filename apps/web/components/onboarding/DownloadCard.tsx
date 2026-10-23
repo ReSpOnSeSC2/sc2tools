@@ -19,6 +19,7 @@ import { gaEvent } from "@/lib/analytics/gtag";
 import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import type { DetectedOS } from "./types";
+import { MiniMarkdown } from "@/components/ui/MiniMarkdown";
 
 const OS_LABEL: Record<Exclude<DetectedOS, "unknown">, string> = {
   windows: "Windows",
@@ -108,9 +109,7 @@ export function DownloadCard({
               ▼
             </span>
           </summary>
-          <pre className="mt-3 max-h-[240px] overflow-auto whitespace-pre-wrap break-words text-caption text-text-muted">
-            {releaseNotes}
-          </pre>
+          <MiniMarkdown text={releaseNotes} className="mt-3 max-h-[240px] overflow-auto" />
         </details>
       ) : null}
     </article>

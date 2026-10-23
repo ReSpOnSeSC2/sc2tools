@@ -35,6 +35,8 @@ vi.mock("@/components/ui/ThemeToggle", () => ({ ThemeToggle: () => null }));
 vi.mock("../CoachingBookingAlert", () => ({ CoachingBookingAlert: () => null }));
 vi.mock("@/components/build-checkin/BuildCheckInAlert", () => ({ BuildCheckInAlert: () => null }));
 vi.mock("@/components/notifications/NotificationBell", () => ({ NotificationBell: () => null }));
+vi.mock("@/components/announcements/WhatsNewButton", () => ({ WhatsNewButton: () => null }));
+vi.mock("@/components/announcements/SiteIncidentBanner", () => ({ SiteIncidentBanner: () => null }));
 vi.mock("../SiteStats", () => ({ SiteStats: () => null }));
 vi.mock("@/lib/analytics/consent", () => ({
   COOKIE_SETTINGS_EVENT: "sc2tools:open-cookie-settings",

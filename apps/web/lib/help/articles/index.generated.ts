@@ -11,6 +11,7 @@ import accountData_notifications from "./account-data/notifications";
 import accountData_playerChannels from "./account-data/player-channels";
 import accountData_privacyCookies from "./account-data/privacy-cookies";
 import accountData_publicProfile from "./account-data/public-profile";
+import accountData_stayUpToDate from "./account-data/stay-up-to-date";
 import analyzer_analyzerFilters from "./analyzer/analyzer-filters";
 import analyzer_arcade from "./analyzer/arcade";
 import analyzer_builds from "./analyzer/builds";
@@ -71,6 +72,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   accountData_playerChannels,
   accountData_privacyCookies,
   accountData_publicProfile,
+  accountData_stayUpToDate,
   analyzer_analyzerFilters,
   analyzer_arcade,
   analyzer_builds,
