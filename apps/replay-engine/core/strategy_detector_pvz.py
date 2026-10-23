@@ -20,6 +20,7 @@ from .strategy_detector_helpers import (
 
 
 ALPHASTAR_ROBO_DEADLINE_SECONDS = 5 * 60 + 30
+ARCHON_DROP_PRISM_DEADLINE_SECONDS = 6 * 60
 STANDARD_MACRO_THIRD_FOLLOW_WINDOW_SECONDS = 4 * 60
 
 
@@ -256,14 +257,17 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     ):
         return "PvZ - AlphaStar Style (Oracle/Robo)"
 
-    # Archon Drop: a Stargate opener into Templar Archives and 2+
-    # Archons by 9:00. Checked BEFORE Stargate into Robo: the drop's
-    # Warp Prism needs a Robotics Facility, which used to let the
-    # Stargate-into-Robo rule claim every Archon drop.
+    # Archon Drop: a Stargate opener with a real Warp Prism completed
+    # by 6:00, followed by Templar Archives and 2+ real Archons by 9:00.
+    # Raw unit times are appearance/completion times, not the API's
+    # rewound training-start display times. Late transport and ordinary
+    # Templar transitions do not prove a drop. Keep this BEFORE Stargate
+    # into Robo so the drop's Robotics Facility does not hide it.
     if (
-        sg_time < twilight_time
+        stargate_first_tech
         and has_building("TemplarArchive", 540)
         and count_units("Archon", 540) >= 2
+        and count_units("WarpPrism", ARCHON_DROP_PRISM_DEADLINE_SECONDS) >= 1
     ):
         return "PvZ - Archon Drop"
 
@@ -398,14 +402,16 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
         and not has_building("RoboticsFacility", 600)
     ):
         return "PvZ - Adept Glaives (No Robo)"
-    # DT drop into Archon: needs Dark Shrine for the DTs and a
-    # Robotics Facility for the Warp Prism.
+    # DT drop into Archon: the real transport must complete by 6:00,
+    # with actual DT production AND an observed Archon morph by 9:00.
+    # DTs and tech alone cannot establish the Archon follow-up.
     if (
         twilight_time < building_time("DarkShrine")
         and has_building("DarkShrine", 540)
         and has_building("RoboticsFacility", 540)
         and count_units("DarkTemplar", 540) >= 3
-        and count_units("WarpPrism", 540) >= 1
+        and count_units("Archon", 540) >= 1
+        and count_units("WarpPrism", ARCHON_DROP_PRISM_DEADLINE_SECONDS) >= 1
     ):
         return "PvZ - DT drop into Archon Drop"
     # Standard DT Opener: Dark Shrine is built BEFORE any Stargate /

@@ -189,6 +189,43 @@ test("built bundle: the worker glue unzips replays with their entry times", { ti
   });
 });
 
+test("built bundle: both Archon Drop labels require real completion proof by 6:00", { timeout: SLOW_TIMEOUT_MS }, async () => {
+  const { pyodide } = await engine();
+  const fixture = await readJson(path.join(REPO_DIR, "apps", "replay-engine", "tests", "fixtures", "archon_drop_parity.json"));
+  // Use the same raw completion-clock examples as CPython and the agent.
+  // Load the detector from the VERIFIED archive, never from this checkout.
+  const result = pyodide.runPython([
+    "import copy, json",
+    "from core.strategy_detector_user import UserBuildDetector",
+    "from core.strategy_detector_opponent import OpponentStrategyDetector",
+    `fixture = json.loads(${JSON.stringify(JSON.stringify(fixture))})`,
+    "results = []",
+    "for kind, opening in fixture['openings'].items():",
+    "    for case in fixture['cases']:",
+    "        events = copy.deepcopy(opening['events'])",
+    "        for index in range(case.get('archons', opening['archons'])):",
+    "            events.append({'type': 'unit', 'name': 'Archon', 'time': 430 + index * 20, 'x': 10, 'y': 10})",
+    "        if case['prism'] is not None:",
+    "            events.append({'type': 'unit', 'name': 'WarpPrism', 'time': case['prism'], 'x': 10, 'y': 10})",
+    "        for event in events:",
+    "            if event['name'] == case.get('hallucinated'):",
+    "                event['hallucinated'] = True",
+    "        personal = UserBuildDetector(custom_builds=[]).detect_my_build('vs Zerg', events, my_race='Protoss', game_length_seconds=900)",
+    "        opponent = OpponentStrategyDetector(custom_builds=[]).get_strategy_name('Protoss', events, matchup='vs Protoss', my_race='Zerg', game_length_seconds=900)",
+    "        results.append({'kind': kind, 'id': case['id'], 'personal': personal, 'opponent': opponent})",
+    "json.dumps(results)",
+  ].join("\n"));
+  const rows = JSON.parse(result);
+  assert.equal(rows.length, Object.keys(fixture.openings).length * fixture.cases.length);
+  for (const row of rows) {
+    const opening = fixture.openings[row.kind];
+    const example = fixture.cases.find((entry) => entry.id === row.id);
+    if (example.matches) assert.equal(row.personal, opening.personal, `${row.kind}/${row.id}: valid drop`);
+    else assert.ok(!row.personal.includes("Archon Drop"), `${row.kind}/${row.id}: false drop ${row.personal}`);
+    assert.equal(row.opponent, opening.opponent, `${row.kind}/${row.id}: opponent taxonomy changed`);
+  }
+});
+
 test(
   "built bundle: envelopes are identical to the CPython goldens",
   {
