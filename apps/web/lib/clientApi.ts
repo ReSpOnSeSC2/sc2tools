@@ -347,6 +347,14 @@ function humanizeMessage(
     return details.length === 1 ? details[0] : details.join(" · ");
   }
   switch (code) {
+    case "pairing_not_found":
+      return "That code has expired or doesn't exist. Codes last 10 minutes and the app shows a new one automatically.";
+    case "pairing_already_claimed":
+      return "That code has already been linked. Use a fresh code shown in the SC2 Tools window on your PC.";
+    case "pairing_failed":
+      return "Couldn't link this PC. Check the code in the SC2 Tools window and try again.";
+    case "unpair_failed":
+      return "Couldn't unpair this PC. Please try again.";
     case "auth_required":
     case "unauthorized":
       return "You need to sign in again.";

@@ -16,6 +16,7 @@ import { usePlatformDetect } from "./usePlatformDetect";
 import { useIsMobileDevice } from "./useIsMobileDevice";
 import { SendToPcCard } from "./SendToPcCard";
 import { gaEvent } from "@/lib/analytics/gtag";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import type { DetectedOS } from "./types";
 
@@ -208,8 +209,9 @@ function NextSteps() {
       body: (
         <>
           showing a big 6-digit pairing code. Click <em>Open pairing
-          page</em>, sign into SC2 Tools in your browser, and paste the
-          code. Done.
+          page</em> and sign into SC2 Tools. The page opens with the code
+          already filled in, so click <em>Link this PC</em> and confirm the
+          PC details. <LazyHelpLink slug="install-and-pair">Install and linking help</LazyHelpLink>
         </>
       ),
     },

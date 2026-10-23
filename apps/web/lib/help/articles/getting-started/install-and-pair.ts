@@ -60,13 +60,13 @@ const article: HelpArticle = {
       type: "steps",
       items: [
         "The app opens on its own and shows a 6-digit code under **Pair this device**.",
-        "Click **Open pairing page**. Your browser opens [Devices](/devices); sign in if it asks.",
-        "Type the code under **Pairing code** and press **Pair device**. The app says it's paired within a few seconds and starts reading your replays.",
+        "Click **Open pairing page**. Your browser opens [Devices](/devices); sign in if it asks. Newer apps fill in the code for you; otherwise enter the code shown in the SC2 Tools window on your PC.",
+        "Click **Link this PC**, check the displayed PC details, and confirm. A prefilled code never links automatically. The page then checks for the app's connection.",
       ],
     },
     {
       type: "paragraph",
-      text: "The code works for 10 minutes. If it runs out, close the app and open it again for a new one.",
+      text: "The code works for 10 minutes. Use the current code shown by the app. If an older app still shows an expired code, close and reopen it. See [Pairing problems](/help/pairing-troubleshooting) if the app is linked but has not checked in.",
     },
     { type: "heading", text: "After that", anchor: "after-pairing" },
     {
@@ -85,7 +85,7 @@ const article: HelpArticle = {
     { type: "heading", text: "Unpair a PC", anchor: "unpair" },
     {
       type: "paragraph",
-      text: "On [Devices](/devices), press **Unpair** next to the PC. It stops syncing straight away; your games already synced stay in your account. To use it again, open the app on that PC and pair it with a new code.",
+      text: "On [Devices](/devices), press **Unpair** next to the PC, read the dialog and confirm. It stops syncing; your games already synced stay in your account. To use it again, open the app on that PC and pair it with a new code.",
     },
     {
       type: "callout",

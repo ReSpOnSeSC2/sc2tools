@@ -743,14 +743,17 @@ export interface DeviceListItem {
   createdAt: Date;
   lastSeenAt: Date | null;
   hostname?: string;
+  label?: string;
   agentVersion?: string;
   agentOs?: string;
   agentOsRelease?: string;
 }
 
 export interface DevicePairingsService {
-  start(): Promise<{ code: string; expiresAt: Date }>;
-  claim(userId: string, code: string): Promise<void>;
+  start(metadata?: { hostname?: string; os?: string; version?: string }, ip?: string): Promise<{ code: string; expiresAt: Date }>;
+  claim(userId: string, code: string, ip?: string): Promise<DevicePairingInfo>;
+  preview(code: string, ip?: string): Promise<DevicePairingInfo>;
+  setLabel(userId: string, deviceId: string, label: unknown): Promise<boolean>;
   poll(
     code: string,
   ): Promise<
@@ -758,9 +761,9 @@ export interface DevicePairingsService {
     | { status: "expired" }
     | { status: "ready"; deviceToken: string; userId: string }
   >;
-  findTokenByHash(hash: string): Promise<{ userId: string } | null>;
+  findTokenByHash(hash: string): Promise<{ userId: string; deviceId: string } | null>;
   listDevices(userId: string): Promise<DeviceListItem[]>;
-  latestAgent(userId: string): Promise<{ paired: boolean; version: string | null }>;
+  latestAgent(userId: string): Promise<{ paired: boolean; version: string | null; lastSeenAt: Date | null }>;
   revoke(userId: string, tokenHash: string): Promise<void>;
   revokeById(userId: string, deviceId: string): Promise<boolean>;
   recordHeartbeat(
@@ -773,6 +776,11 @@ export interface DevicePairingsService {
       hostname?: string;
     },
   ): Promise<{ receivedAt: Date }>;
+}
+
+export interface DevicePairingInfo {
+  sameNetwork: boolean;
+  device: { deviceId: string; hostname: string; os: string; version: string };
 }
 
 export interface OverlayTokensService {

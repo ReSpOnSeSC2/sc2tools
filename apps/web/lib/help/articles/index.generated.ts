@@ -30,6 +30,7 @@ import builds_publishCommunityBuilds from "./builds/publish-community-builds";
 import builds_randomizer from "./builds/randomizer";
 import builds_rulesExplained from "./builds/rules-explained";
 import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
+import desktopApp_pairingTroubleshooting from "./desktop-app/pairing-troubleshooting";
 import desktopApp_replayFolders from "./desktop-app/replay-folders";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
 import gamePage_gamePageReplay from "./game-page/game-page-replay";
@@ -83,6 +84,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_randomizer,
   builds_rulesExplained,
   desktopApp_desktopAppOverview,
+  desktopApp_pairingTroubleshooting,
   desktopApp_replayFolders,
   gamePage_gamePageAccuratePlayback,
   gamePage_gamePageReplay,

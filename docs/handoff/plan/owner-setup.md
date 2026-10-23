@@ -1,5 +1,9 @@
 # Owner setup notes (accumulated)
 
+## Wave 2: pairing-web-and-devices
+
+Deploy the Render API before the web changes: the shared form uses the new authenticated device-preview endpoint and the claim endpoint's 200 JSON response. Existing desktop apps keep working with the token-poll protocol; older apps can still enter codes manually. Newer agent-pairing-recovery releases open `/devices?code=XXXXXX&src=agent` and include bounded PC metadata at start. No new environment variables or infrastructure are required. Network comparison is a salted hint, never an authorization check; raw IP addresses are not stored, and an API restart safely turns an existing code's hint into a mismatch warning. Verify one PC link, its heartbeat, its label and a confirmed Unpair after deployment.
+
 ## Wave 1 phase 2a
 
 ### data-states-recovery
