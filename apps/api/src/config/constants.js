@@ -70,8 +70,6 @@ const COLLECTIONS = Object.freeze({
   YOUTUBE_CREATE_OPERATIONS: "youtube_create_operations",
   PLATFORM_WEBHOOK_RECEIPTS: "platform_webhook_receipts",
   PLATFORM_EVENTS: "platform_events",
-  ML_MODELS: "ml_models",
-  ML_JOBS: "ml_jobs",
   IMPORT_JOBS: "import_jobs",
   MACRO_JOBS: "macro_jobs",
   AGENT_RELEASES: "agent_releases",
@@ -181,7 +179,6 @@ const LIMITS = Object.freeze({
   PAIRING_CODE_LEN: 6,
   CSV_EXPORT_MAX_ROWS: 50000,
   TIMESERIES_MAX_BUCKETS: 365,
-  ML_TRAINING_MAX_GAMES: 50000,
   IMPORT_JOB_HISTORY: 50,
   MACRO_JOB_HISTORY: 50,
   // POST /v1/games/exists: ids per request. 500 ids x 200 ASCII chars is
