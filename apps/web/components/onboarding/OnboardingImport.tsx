@@ -23,12 +23,12 @@ export type OnboardingImportMode = "agent" | "browser";
  * backup box is ticked (it starts ticked when backups are available).
  * Skipping is fine either way.
  */
-export function OnboardingImport({ mode = "agent" }: { mode?: OnboardingImportMode }) {
-  return mode === "browser" ? <BrowserModeImport /> : <AgentModeImport />;
+export function OnboardingImport({ mode = "agent", onContinue }: { mode?: OnboardingImportMode; onContinue?: () => void }) {
+  return mode === "browser" ? <BrowserModeImport onContinue={onContinue} /> : <AgentModeImport onContinue={onContinue} />;
 }
 
 /** Browser mode: the compact import panel, then the dashboard. */
-function BrowserModeImport() {
+function BrowserModeImport({ onContinue }: { onContinue?: () => void }) {
   const router = useRouter();
   const [imported, setImported] = useState(false);
   return (
@@ -60,16 +60,16 @@ function BrowserModeImport() {
         <Button
           variant={imported ? "primary" : "secondary"}
           size="lg"
-          onClick={() => router.push("/app")}
+          onClick={onContinue || (() => router.push("/app"))}
         >
-          Open your dashboard →
+          {onContinue ? "Continue →" : "Open your dashboard →"}
         </Button>
       </div>
     </section>
   );
 }
 
-function AgentModeImport() {
+function AgentModeImport({ onContinue }: { onContinue?: () => void }) {
   const router = useRouter();
   const { getToken } = useAuth();
   const importStatus = useImportStatus();
@@ -157,12 +157,12 @@ function AgentModeImport() {
         <Button
           variant={showProgress ? "primary" : "ghost"}
           size="lg"
-          onClick={() => router.push("/app")}
+          onClick={onContinue || (() => router.push("/app"))}
           iconLeft={
             showProgress ? undefined : <Play className="h-4 w-4" aria-hidden />
           }
         >
-          {showProgress
+          {onContinue ? "Continue →" : showProgress
             ? "Open your dashboard →"
             : "Skip — I'll just play a game"}
         </Button>

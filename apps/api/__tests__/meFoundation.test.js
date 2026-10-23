@@ -196,6 +196,22 @@ describe("Settings Foundation backing API", () => {
     await db.importJobs.deleteMany({ userId: userDoc.userId });
   });
 
+  test("onboarding goals merge with concurrent checklist updates and existing fields", async () => {
+    await withAuth(request(app).put("/v1/me/preferences/onboarding")
+      .send({ downloadStartedAt: "2026-06-09T01:00:00.000Z", futureField: "$literal-data" }));
+    const results = await Promise.all([
+      withAuth(request(app).put("/v1/me/preferences/onboarding").send({ goals: ["improve", "stream"] })),
+      withAuth(request(app).put("/v1/me/preferences/onboarding").send({ dismissedAt: null })),
+    ]);
+    expect(results.every((result) => result.status === 200)).toBe(true);
+    const result = await withAuth(request(app).get("/v1/me/preferences/onboarding"));
+    expect(result.body).toMatchObject({ goals: ["improve", "stream"], dismissedAt: null,
+      downloadStartedAt: "2026-06-09T01:00:00.000Z", futureField: "$literal-data" });
+    const invalid = await withAuth(request(app).put("/v1/me/preferences/onboarding").send({ goals: ["unknown"] }));
+    expect(invalid.status).toBe(400);
+    expect((await withAuth(request(app).get("/v1/me/preferences/onboarding"))).body.goals).toEqual(["improve", "stream"]);
+  });
+
   describe("POST /v1/webhooks/clerk", () => {
     test("rejects requests without svix headers", async () => {
       const res = await request(app)

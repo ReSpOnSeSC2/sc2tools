@@ -5,13 +5,7 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { gaEvent } from "@/lib/analytics/gtag";
 import type { OnboardingStepId } from "./types";
-
-const STEPS: ReadonlyArray<{ id: OnboardingStepId; label: string }> = [
-  { id: "welcome", label: "Welcome" },
-  { id: "download", label: "Download" },
-  { id: "pair", label: "Pair" },
-  { id: "import", label: "Import" },
-];
+import { WELCOME_STEPS as STEPS } from "./welcomeState";
 
 export interface OnboardingHelpers {
   /** Move forward; clamped to the last step. */
@@ -28,6 +22,11 @@ export interface OnboardingHelpers {
 
 export interface OnboardingShellProps {
   initial?: OnboardingStepId;
+  activeStep?: OnboardingStepId;
+  onStepChange?: (step: OnboardingStepId) => void;
+  onNext?: () => void;
+  onPrevious?: () => void;
+  completedSteps?: OnboardingStepId[];
   /** Called when the wizard wants to leave (Skip / final CTA). */
   onClose: () => void;
   renderStep: (helpers: OnboardingHelpers) => ReactNode;
@@ -40,12 +39,12 @@ export interface OnboardingShellProps {
 }
 
 /**
- * 3-step onboarding wizard shell. Owns the step pointer, exposes
+ * Five-step onboarding wizard shell. Exposes the active step and
  * helpers to children, and renders a sticky bottom action bar that
  * respects iOS `safe-area-inset-bottom`.
  *
  * Responsive behaviour:
- *   - Mobile (≤640): step indicator becomes "Step 2 of 3" + a thin
+ *   - Mobile (≤640): numbered, accessible chips plus a thin
  *     progress bar so the row never overflows on a 375px viewport.
  *   - Desktop: numbered chips with checkmarks for completed steps.
  *
@@ -54,11 +53,20 @@ export interface OnboardingShellProps {
  */
 export function OnboardingShell({
   initial = "welcome",
+  activeStep,
+  onStepChange,
+  onNext,
+  onPrevious,
+  completedSteps,
   onClose,
   renderStep,
   hideDefaultNav = false,
 }: OnboardingShellProps) {
-  const [active, setActive] = useState<OnboardingStepId>(initial);
+  const [internal, setInternal] = useState<OnboardingStepId>(initial);
+  const active = activeStep || internal;
+  const setActive = useCallback((step: OnboardingStepId) => {
+    setInternal(step); onStepChange?.(step);
+  }, [onStepChange]);
   const idx = STEPS.findIndex((s) => s.id === active);
 
   // Funnel: one event per wizard mount, one per step transition. GA
@@ -70,10 +78,12 @@ export function OnboardingShell({
   const helpers = useMemo<OnboardingHelpers>(
     () => ({
       next: () => {
+        if (onNext) { onNext(); return; }
         const ni = Math.min(STEPS.length - 1, idx + 1);
         setActive(STEPS[ni].id);
       },
       prev: () => {
+        if (onPrevious) { onPrevious(); return; }
         const pi = Math.max(0, idx - 1);
         setActive(STEPS[pi].id);
       },
@@ -85,7 +95,7 @@ export function OnboardingShell({
       step: active,
       index: idx,
     }),
-    [idx, active],
+    [idx, active, onNext, onPrevious, setActive],
   );
 
   // Restore focus to the page heading on every step change so screen
@@ -103,7 +113,7 @@ export function OnboardingShell({
 
       <main className="flex-1 px-4 pb-24 pt-6 sm:px-6 sm:pt-10">
         <div className="mx-auto w-full max-w-2xl">
-          <StepIndicatorMobile idx={idx} total={STEPS.length} />
+          <StepIndicatorMobile idx={idx} total={STEPS.length} completed={completedSteps} onSelect={setActive} />
           {renderStep(helpers)}
         </div>
       </main>
@@ -159,21 +169,26 @@ function ProgressBar({ idx, total }: { idx: number; total: number }) {
   );
 }
 
-function StepIndicatorMobile({ idx, total }: { idx: number; total: number }) {
+function StepIndicatorMobile({ idx, total, completed, onSelect }: { idx: number; total: number; completed?: OnboardingStepId[]; onSelect: (step: OnboardingStepId) => void }) {
   return (
     <div
       className="mb-6 flex items-center gap-3"
-      role="presentation"
-      aria-hidden="true"
+      role="navigation"
+      aria-label="Setup steps"
     >
       {STEPS.map((s, i) => {
-        const done = i < idx;
+        const done = completed ? completed.includes(s.id) : i < idx;
         const current = i === idx;
         return (
           <div key={s.id} className="flex items-center gap-2">
-            <span
+            <button
+              type="button"
+              disabled={!done && !current}
+              onClick={() => onSelect(s.id)}
+              aria-current={current ? "step" : undefined}
+              aria-label={`${s.label}${done ? " (complete)" : ""}`}
               className={[
-                "inline-flex h-7 w-7 items-center justify-center rounded-full border text-caption font-semibold transition-colors",
+                "inline-flex h-9 w-9 items-center justify-center rounded-full border text-caption font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 disabled:cursor-default",
                 current
                   ? "border-accent-cyan bg-accent-cyan/15 text-accent-cyan shadow-halo-cyan"
                   : done
@@ -182,7 +197,7 @@ function StepIndicatorMobile({ idx, total }: { idx: number; total: number }) {
               ].join(" ")}
             >
               {done ? <Check className="h-3.5 w-3.5" aria-hidden /> : i + 1}
-            </span>
+            </button>
             <span
               className={[
                 "hidden text-caption font-medium sm:inline",
@@ -198,7 +213,7 @@ function StepIndicatorMobile({ idx, total }: { idx: number; total: number }) {
             {i < total - 1 ? (
               <span
                 className={[
-                  "h-px w-6 sm:w-10",
+                  "h-px w-2 sm:w-5",
                   i < idx ? "bg-success/60" : "bg-border",
                 ].join(" ")}
               />
