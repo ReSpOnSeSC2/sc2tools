@@ -27,6 +27,21 @@ as 9f7cc88c. Its native client uses a separate plain-text card, safe relative li
 tray menu/one toast per hash, and expiry without another network check. The full
 suite includes this client. API/web announcements can deploy independently;
 notices remain optional in the existing version response.
+Latest integration 72f97d29 includes main 8d44f069 and recovery 4ce7befa.
+The native notes disclosure now uses palette-colored painted arrows; four Qt
+checks and refreshed screenshots confirm both states. Exact-CI production build
+and unchanged budgets pass (/app 237.2/240 kB).
+
+The subsequent Windows CI timing failure exposed a real synchronous settings
+write on the Qt thread. Manual Save now captures/validates on Qt, disables the
+form while a non-daemon persistence worker commits, and returns completion/error
+through Qt signals. Sidebar navigation/timers remain responsive while the actual
+global writer lock is held; geometry persistence defers until that Save finishes.
+The handler still returns only after the real durable commit. The old handler
+wall-clock test is replaced by actual durability plus this native responsiveness
+contract, rather than excluding a UI stall from its measurement. Settings/state
+focused checks passed 103; final full-suite verification is pending this fix.
+
 No canonical version bump, release tag, signed installer claim, or publication.
 The owner coordinates the final accepted Wave 2 version and pushes the tag after
 integrated verification. No AI feature/call and no infrastructure changes.

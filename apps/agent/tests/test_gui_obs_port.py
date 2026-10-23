@@ -26,6 +26,11 @@ def test_obs_port_ignores_wheel_and_preserves_explicit_edits(tmp_path: Path) -> 
         from sc2tools_agent.ui.gui import GuiUI, SettingsPayload, _GuiSignals, _MainWindow
 
         app = QtWidgets.QApplication([])
+        def wait_saved(win):
+            deadline = QtCore.QDeadlineTimer(5000)
+            while win._settings_save_pending and not deadline.hasExpired():
+                QtTest.QTest.qWait(10)
+            assert not win._settings_save_pending
         base = Path(sys.argv[1])
         saved = []
         ui = GuiUI(
@@ -100,6 +105,7 @@ def test_obs_port_ignores_wheel_and_preserves_explicit_edits(tmp_path: Path) -> 
         assert port.value() == 4460
         assert port.minimum() == 1 and port.maximum() == 65535
         win._click_save_settings()
+        wait_saved(win)
         assert saved[-1].obs_port == 4460
 
         win._log_timer.stop()
