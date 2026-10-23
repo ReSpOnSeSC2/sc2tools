@@ -27,7 +27,7 @@ const article: HelpArticle = {
     "dashboard",
     "new user",
   ],
-  updated: "2026-10-22",
+  updated: "2026-10-23",
   body: [
     {
       type: "paragraph",
@@ -52,10 +52,14 @@ const article: HelpArticle = {
     },
     {
       type: "paragraph",
+      text: "Your [build library](/builds) needs a free account; [Community builds](/community) and [Definitions](/definitions) are public. See [Which pages are public?](/help/a-page-asked-me-to-sign-in) for the full list.",
+    },
+    {
+      type: "paragraph",
       text: "Stuck on a step? Search Help for the words on your screen, or see [Troubleshooting & support](/help/troubleshooting-and-support).",
     },
   ],
-  related: ["how-to-use-help", "settings-overview", "dashboard-and-analyzer", "obs-overlay-setup"],
+  related: ["how-to-use-help", "settings-overview", "dashboard-and-analyzer", "obs-overlay-setup", "a-page-asked-me-to-sign-in"],
 };
 
 export default article;

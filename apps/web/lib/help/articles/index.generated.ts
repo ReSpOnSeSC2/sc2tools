@@ -10,6 +10,7 @@ import builds_buildCheckIn from "./builds/build-check-in";
 import builds_customBuilds from "./builds/custom-builds";
 import builds_publishCommunityBuilds from "./builds/publish-community-builds";
 import builds_rulesExplained from "./builds/rules-explained";
+import gettingStarted_aPageAskedMeToSignIn from "./getting-started/a-page-asked-me-to-sign-in";
 import gettingStarted_gettingStarted from "./getting-started/getting-started";
 import gettingStarted_howToUseHelp from "./getting-started/how-to-use-help";
 import gettingStarted_installApp from "./getting-started/install-app";
@@ -29,6 +30,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_customBuilds,
   builds_publishCommunityBuilds,
   builds_rulesExplained,
+  gettingStarted_aPageAskedMeToSignIn,
   gettingStarted_gettingStarted,
   gettingStarted_howToUseHelp,
   gettingStarted_installApp,
