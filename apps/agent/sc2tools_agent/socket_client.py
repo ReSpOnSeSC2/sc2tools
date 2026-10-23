@@ -93,6 +93,13 @@ class SocketClient:
         self._sio: Any = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
+    def with_device_token(self, token: str) -> "SocketClient":
+        """Rebuild a stopped socket with its existing event handlers."""
+        names = ("recompute_games", "recompute_opp_build", "full_resync", "import_scan",
+                 "import_start", "import_cancel", "import_pick_folder", "bot_lab", "build_intent_changed")
+        callbacks = {"on_" + name: getattr(self, "_on_" + name) for name in names}
+        return SocketClient(base_url=self._base_url, device_token=token, **callbacks)
+
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
             return

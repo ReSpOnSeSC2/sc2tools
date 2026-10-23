@@ -53,8 +53,8 @@ describe("withinOneEdit", () => {
 });
 
 describe("searchHelp on the shipped articles", () => {
-  it("ranks the pairing walkthrough first for 'code expired'", () => {
-    expect(top("code expired")).toBe("install-and-pair");
+  it("ranks the recovery article for an expired code and the walkthrough for pairing", () => {
+    expect(top("code expired")).toBe("pairing-troubleshooting");
     expect(top("pairing code")).toBe("install-and-pair");
     expect(slugs("pairing code")).toContain("getting-started");
   });
@@ -62,7 +62,7 @@ describe("searchHelp on the shipped articles", () => {
   it("finds articles by title words, keywords and prefixes", () => {
     expect(top("build check-in")).toBe("build-check-in");
     expect(top("browser source")).toBe("obs-overlay-setup");
-    expect(top("pair")).toBe("getting-started");
+    expect(top("pair")).toBe("pairing-troubleshooting");
     expect(top("tikt")).toBe("multi-platform-chat");
     expect(top("stream dock")).toBe("stream-dock");
     expect(top("!rank")).toBe("viewer-engagement");

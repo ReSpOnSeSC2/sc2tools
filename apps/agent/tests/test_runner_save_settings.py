@@ -233,7 +233,8 @@ def test_gui_boot_wires_capture_notice_to_runtime_cell(tmp_path: Path, monkeypat
     monkeypatch.setattr(runner, "_discover_replay_folders", lambda *_: [])
     monkeypatch.setattr(runner, "_ensure_player_handle", lambda *_: None)
     monkeypatch.setattr(runner, "make_recompute_handlers", register)
-    cell = SimpleNamespace(tray=Mock(), console=Mock(), gui=Mock())
+    cell = runner._RuntimeCell()
+    cell.tray, cell.console, cell.gui = Mock(), Mock(), Mock()
     with pytest.raises(HandlersReached):
         runner._gui_boot_worker(
             cfg=_cfg(tmp_path), state=AgentState(device_token="t", user_id="u"),

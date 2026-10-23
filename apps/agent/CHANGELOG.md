@@ -2,6 +2,17 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## Unreleased
+
+- Pairing keeps running through outages, refreshes expiring codes, opens the
+  browser with the current code, and offers recovery after a PC is unlinked.
+- Sync retries use capped backoff and wake when the connection returns.
+  Queued replays stay queued; Recent uploads shows terminal outcomes with
+  readable errors and details to copy.
+- The coordinated Wave 2 release version and installer tag are assigned after
+  all accepted desktop changes have passed integrated checks. The owner pushes
+  the tag; see `docs/runbooks/agent-wave2-release.md` in the repository root.
+
 ## 0.19.0
 
 ### Added - Build check-in

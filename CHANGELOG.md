@@ -11,6 +11,14 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Desktop pairing keeps trying through connection failures, refreshes codes,
+  and recovers an unlinked PC without discarding queued replays or settings.
+- Desktop sync retains temporary failures with a retry countdown instead of
+  repeating error rows; final replay outcomes have readable details and help.
+
+
 ### Experience polish
 
 - Settings show recoverable load failures, protect saved profile IDs, preview game-history deletion counts, and include both selected days in local time. Mobile tabs scroll into view and support arrow keys.

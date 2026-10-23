@@ -687,3 +687,29 @@ def test_default_requests_keep_three_attempts() -> None:
         with pytest.raises(ApiError):
             api.get_profile()
     assert m.call_count == 3
+
+
+def test_device_unauthorized_is_specific_and_pairing_sends_metadata():
+    from sc2tools_agent.api_client import DeviceUnauthorized
+    api = ApiClient(base_url="http://x", device_token="old")
+    with patch("requests.request", return_value=_mock_response(401, {"error": {"code": "revoked"}})) as request:
+        with pytest.raises(DeviceUnauthorized):
+            api.get_profile()
+        assert request.call_count == 1
+    with patch("requests.request", return_value=_mock_response(200, {"code": "123456", "expiresAt": "2026-10-23T00:00:00Z"})) as request:
+        api.start_pairing()
+        metadata = request.call_args.kwargs["json"]
+        assert set(metadata) == {"hostname", "os", "version"}
+        assert all(isinstance(value, str) for value in metadata.values())
+        assert "authorization" not in request.call_args.kwargs["headers"]
+
+
+def test_batch_retry_after_is_handed_to_interruptible_queue():
+    api = ApiClient(base_url="http://x", device_token="token")
+    response = _mock_response(429, {"error": {"code": "rate_limited"}}, headers={"Retry-After": "60"})
+    with patch("requests.request", return_value=response) as request, patch("time.sleep") as sleep:
+        with pytest.raises(ApiError) as raised:
+            api.upload_games_batch([{"gameId": "g1"}])
+        assert raised.value.retry_after_seconds == 60
+        assert request.call_count == 1
+        sleep.assert_not_called()
