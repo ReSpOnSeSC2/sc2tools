@@ -33,6 +33,7 @@ import builds_publishCommunityBuilds from "./builds/publish-community-builds";
 import builds_randomizer from "./builds/randomizer";
 import builds_rulesExplained from "./builds/rules-explained";
 import desktopApp_desktopAppActivityLog from "./desktop-app/desktop-app-activity-log";
+import desktopApp_desktopAppInstall from "./desktop-app/desktop-app-install";
 import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
 import desktopApp_desktopAppPerformance from "./desktop-app/desktop-app-performance";
 import desktopApp_desktopAppStatus from "./desktop-app/desktop-app-status";
@@ -97,6 +98,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   builds_randomizer,
   builds_rulesExplained,
   desktopApp_desktopAppActivityLog,
+  desktopApp_desktopAppInstall,
   desktopApp_desktopAppOverview,
   desktopApp_desktopAppPerformance,
   desktopApp_desktopAppStatus,

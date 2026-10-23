@@ -4,6 +4,10 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+- Desktop installation and Settings share one Windows startup switch; upgrades
+  preserve choices and uninstall offers explicit local-data removal. Signing
+  preparation verifies both executables before release checksums are generated.
+
 - Launching a second shortcut restores the running window. Tray and window share
   pause state, timed pauses resume automatically, and quitting is available in
   the sidebar. Folder rows explain region/account, newest replay and missing

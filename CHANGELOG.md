@@ -13,6 +13,10 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Desktop installation and Settings share one Windows startup switch; upgrades
+  preserve choices and uninstall offers explicit local-data removal. Signing
+  preparation verifies both executables before release checksums are generated.
+
 - Desktop shortcuts restore the existing window, tray pause actions match the
   window, and replay folder changes apply immediately with Undo and clear labels.
 - Desktop history imports and updates wait through games; performance profiles
