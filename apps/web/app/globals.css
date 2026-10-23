@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .analyzer-filter-sheet .analyzer-filter-pill { min-height: 44px; }
+  @media (pointer: coarse) { .analyzer-filter-pill { min-height: 44px; } }
+}
+
 /* ============================================================
  * Design tokens — light + dark themes
  *

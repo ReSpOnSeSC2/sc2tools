@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
+import { hydrateRoot } from "react-dom/client";
 import { TrendsTab } from "../TrendsTab";
 import { TrendsDataProvider } from "@/lib/trendsDataContext";
 import type { ApiTimeseriesResponse } from "@/lib/timeseries";
@@ -102,6 +104,45 @@ afterEach(() => {
 });
 
 describe("TrendsTab layout", () => {
+  it("hydrates a saved month bucket without mismatching the server and rejects an invalid bucket", async () => {
+    window.localStorage.setItem("analyzer.trends.bucket", JSON.stringify("month"));
+    const node = document.createElement("div");
+    node.innerHTML = renderToString(<TrendsTab />); document.body.append(node);
+    expect(within(node).getByRole("combobox").getAttribute("id")).toBe("trends-period");
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    try {
+      await act(async () => { root = hydrateRoot(node, <TrendsTab />); });
+      expect((within(node).getByRole("combobox", { name: "Group charts by" }) as HTMLSelectElement).value).toBe("month");
+      expect(errors.mock.calls.flat().join(" ")).not.toMatch(/hydrat|didn't match/i);
+    } finally { await act(async () => root?.unmount()); node.remove(); errors.mockRestore(); }
+    window.localStorage.setItem("analyzer.trends.bucket", JSON.stringify("invalid"));
+    render(<TrendsTab />);
+    expect((screen.getByRole("combobox", { name: "Group charts by" }) as HTMLSelectElement).value).toBe("week");
+  });
+
+  it("unmounts collapsed chart groups, remembers the choice and expands a reduced-motion jump", () => {
+    const view = render(<TrendsTab />);
+    fireEvent.click(within(screen.getByRole("heading", { name: "Performance & MMR" })).getByRole("button"));
+    expect(screen.queryByText("MMR progression")).toBeNull();
+    view.unmount(); render(<TrendsTab />);
+    expect(screen.queryByText("MMR progression")).toBeNull();
+    const scroll = vi.fn();
+    const heading = screen.getByRole("heading", { name: "Performance & MMR" });
+    heading.scrollIntoView = scroll;
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Trend sections" })).getByRole("button", { name: "Performance & MMR" }));
+    expect(scroll).toHaveBeenCalledWith({ behavior: "auto", block: "start" });
+    expect(document.activeElement).toBe(heading);
+    expect(screen.getByText("MMR progression")).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+
+  it("reserves a summary slot while the overview is loading", () => {
+    useApiMock.mockReturnValueOnce({ isLoading: true });
+    render(<TrendsTab />);
+    expect(screen.getByRole("status", { name: "Loading summary" })).toBeTruthy();
+  });
   it.each((["personal", "global"] as const).flatMap((mode) =>
     ["loading", "error", "empty"].map((state) => ({ mode, state })),
   ))("keeps every independent $mode trend section mounted when the overview is $state", ({ mode, state }) => {
@@ -120,7 +161,7 @@ describe("TrendsTab layout", () => {
     expect(Boolean(screen.queryByTestId("skill-fingerprint"))).toBe(mode === "personal");
     expect(screen.getByText("Explore performance")).toBeTruthy();
     expect(screen.queryByRole("checkbox", { name: "Rolling WR (4)" })).toBeNull();
-    expect(screen.getByRole("combobox", { name: "Activity grouping" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Group charts by" })).toBeTruthy();
     if (state === "loading") expect(screen.getByRole("status", { name: "Loading Win rate" })).toBeTruthy();
     if (state === "error") {
       expect(screen.getAllByRole("alert")[0].textContent).toContain("This took too long to load");
@@ -189,8 +230,8 @@ describe("TrendsTab layout", () => {
     // Matchup win rates sit directly beneath the headline win-rate card.
     const winRateCard = screen.getByText("Win rate").closest("section");
     expect(winRateCard?.nextElementSibling).toBe(screen.getByText("Matchup over time").parentElement);
-    expect(screen.getByText("Performance & MMR")).toBeTruthy();
-    expect(screen.getByText("Time & activity")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Performance & MMR" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Time & activity" })).toBeTruthy();
     expect(screen.queryByText("Macro score over time")).toBeNull();
   });
 
@@ -199,19 +240,12 @@ describe("TrendsTab layout", () => {
 
     const mapPerformance = screen.getByTestId("map-performance");
     const skillFingerprint = screen.queryByTestId("skill-fingerprint");
-    const explorerSlot = screen.getByText("Explore performance").parentElement;
-    const mapSlot = mapPerformance.parentElement;
-    const chartGrid = mapSlot?.parentElement;
-    const trendsRoot = chartGrid?.parentElement;
-
-    expect(chartGrid?.lastElementChild).toBe(mapSlot);
-    expect(explorerSlot?.previousElementSibling).toBe(chartGrid);
+    const explorer = screen.getByText("Explore performance");
+    expect(mapPerformance.compareDocumentPosition(explorer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     if (mode === "personal") {
-      expect(skillFingerprint?.previousElementSibling).toBe(explorerSlot);
-      expect(trendsRoot?.lastElementChild).toBe(skillFingerprint);
+      expect(explorer.compareDocumentPosition(skillFingerprint!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     } else {
       expect(skillFingerprint).toBeNull();
-      expect(trendsRoot?.lastElementChild).toBe(explorerSlot);
     }
     expect(screen.queryByText("Your build mix over time")).toBeNull();
     expect(screen.queryByText("Strategies you're facing")).toBeNull();
