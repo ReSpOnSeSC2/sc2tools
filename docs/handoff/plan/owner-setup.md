@@ -1,5 +1,9 @@
 # Owner setup notes (accumulated)
 
+## Wave 2: analyzer-home-polish-2 / analyzer-home-polish-3
+
+No new secrets, environment variables or infrastructure. Filter wire values and request scopes stay compatible. Today stores its editor visibility at `analyzer.today.showFilters`; Trends keeps `analyzer.trends.bucket` and adds `analyzer.trends.collapsed`. These preferences stay on the current browser. Invalid stored values fall back safely. Help describes the summary, the phone editor and the scope of Today/Arcade. No account data migration or production data modification is needed.
+
 ## Wave 2: pairing-web-and-devices
 
 Deploy the Render API before the web changes: the shared form uses the new authenticated device-preview endpoint and the claim endpoint's 200 JSON response. Existing desktop apps keep working with the token-poll protocol; older apps can still enter codes manually. Newer agent-pairing-recovery releases open `/devices?code=XXXXXX&src=agent` and include bounded PC metadata at start. No new environment variables or infrastructure are required. Network comparison is a salted hint, never an authorization check; raw IP addresses are not stored, and an API restart safely turns an existing code's hint into a mismatch warning. Verify one PC link, its heartbeat, its label and a confirmed Unpair after deployment.

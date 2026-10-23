@@ -49,6 +49,7 @@ function state(): AnalyzerFilters {
 describe("FilterBar game-scope controls", () => {
   it("starts on ranked ladder and 1v1", () => {
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     const maps = screen.getByRole("group", {
       name: "Filter by ladder or custom games",
     });
@@ -58,7 +59,7 @@ describe("FilterBar game-scope controls", () => {
 
     expect(
       within(maps)
-        .getByRole("button", { name: "Ladder" })
+        .getByRole("button", { name: "Ranked ladder" })
         .getAttribute("aria-pressed"),
     ).toBe("true");
     expect(
@@ -71,6 +72,7 @@ describe("FilterBar game-scope controls", () => {
 
   it("keeps active choices selected and uses explicit All to clear", () => {
     render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     const maps = screen.getByRole("group", {
       name: "Filter by ladder or custom games",
     });
@@ -78,17 +80,17 @@ describe("FilterBar game-scope controls", () => {
       name: "Filter by game size",
     });
 
-    fireEvent.click(within(maps).getByRole("button", { name: "Ladder" }));
+    fireEvent.click(within(maps).getByRole("button", { name: "Ranked ladder" }));
     fireEvent.click(within(players).getByRole("button", { name: "1v1" }));
     expect(state()).toMatchObject({ map_pool: "ladder", game_size: "1v1" });
 
-    fireEvent.click(within(maps).getByRole("button", { name: "All" }));
+    fireEvent.click(within(maps).getByRole("button", { name: "Both" }));
     expect(state()).toMatchObject({ map_pool: "all", game_size: "1v1" });
 
     fireEvent.click(within(players).getByRole("button", { name: "All" }));
     expect(state()).toMatchObject({ map_pool: "all", game_size: "all" });
 
-    fireEvent.click(within(maps).getByRole("button", { name: "Custom" }));
+    fireEvent.click(within(maps).getByRole("button", { name: "Custom games" }));
     fireEvent.click(within(players).getByRole("button", { name: "Team" }));
     expect(state()).toMatchObject({
       map_pool: "nonladder",

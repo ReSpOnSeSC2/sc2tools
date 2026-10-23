@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Analyzer filters and Trends
+
+- Filters have a readable summary, a full phone editor and focused desktop controls. Today explains its scope and remembers whether its editor is open; Arcade keeps its own scope.
+- Trends remembers grouping without hydration mismatches, provides section links and persistent collapsible chart groups, and keeps summary loading/errors in place.
+- Date, length and filter popovers share dialog keyboard behavior, respect hidden controls and return focus. Touch controls use larger targets and plain labels.
+
 ### Build editor safety
 
 - Both build editors ask before discarding unsaved work. Save failures keep their complete message visible, and editor notifications use the shared toast layer.
