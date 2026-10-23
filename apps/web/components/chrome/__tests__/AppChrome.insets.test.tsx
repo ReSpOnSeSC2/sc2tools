@@ -24,7 +24,7 @@ vi.mock("next/navigation", () => ({
 }));
 vi.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: async () => null, userId: "u1", isLoaded: true, isSignedIn: true }),
-  UserButton: () => null,
+  UserButton: Object.assign(() => null, { MenuItems: () => null, Link: () => null, Action: () => null }),
   ClerkLoading: () => null,
   SignedIn: ({ children }: { children: ReactNode }) => <>{children}</>,
   SignedOut: () => null,

@@ -57,4 +57,18 @@ describe("curated updates and public incident notices", () => {
     await h.db.users.updateOne({ userId: h.userId("admin") }, { $set: { "preferences.notifications": { muted: ["whats_new"] } } });
     await h.services.announcements.deliverMajors(h.userId("admin")); expect(await h.db.notifications.countDocuments({ userId: h.userId("admin") })).toBe(0);
   });
+
+  test("a real account visit delivers major updates and a seen-only write preserves onboarding choices", async () => {
+    const userId = h.userId("ann");
+    await h.db.users.updateOne({ userId }, { $set: { "preferences.onboarding": { goals: ["improve", "stream"], dismissedAt: "retained", futureField: { enabled: true } } } });
+    await as("ann", request(h.app).get("/v1/me")).expect(200);
+    const seenAt = "2026-10-23T12:01:00.000Z";
+    await as("ann", request(h.app).put("/v1/me/preferences/onboarding")).send({ whatsNewSeenAt: seenAt }).expect(200);
+    const user = await h.db.users.findOne({ userId });
+    expect(user.preferences.onboarding).toEqual({ goals: ["improve", "stream"], dismissedAt: "retained", futureField: { enabled: true }, whatsNewSeenAt: seenAt });
+    await h.services.notifications.markRead(userId, { all: true });
+    await as("ann", request(h.app).get("/v1/me")).expect(200);
+    expect(await h.db.notifications.countDocuments({ userId, kind: "whats_new" })).toBe(1);
+    expect((await h.services.notifications.unreadCount(userId)).count).toBe(0);
+  });
 });
