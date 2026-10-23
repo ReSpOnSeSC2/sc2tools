@@ -113,8 +113,9 @@ describe("SettingsShell ?tab= sync", () => {
   });
 
   it("ignores a URL tab that isn't shown", () => {
-    const view = render(shell("checkin"));
-    view.rerender(shell("import"));
+    const visible = (id: SettingsTabId) => id !== "import";
+    const view = render(<SettingsShell initialTab="checkin" isTabVisible={visible} renderTab={(id) => <p>panel {id}</p>} />);
+    view.rerender(<SettingsShell initialTab="import" isTabVisible={visible} renderTab={(id) => <p>panel {id}</p>} />);
     expect(activePanel()).toBe("panel checkin");
   });
 });

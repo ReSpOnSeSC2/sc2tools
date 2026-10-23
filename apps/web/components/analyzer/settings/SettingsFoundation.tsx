@@ -15,6 +15,8 @@ import { Card, Skeleton } from "@/components/ui/Card";
 import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { Section } from "@/components/ui/Section";
 import { fmtAgo } from "@/lib/format";
+import { SetupHealthCard } from "./SetupHealthCard";
+import { CopyUserId } from "./SetupDiagnostics";
 
 type Me = {
   userId: string;
@@ -67,6 +69,10 @@ const QUICK_LINKS: ReadonlyArray<{
 ];
 
 export function SettingsFoundation() {
+  return <div className="space-y-6"><SetupHealthCard /><AccountSummary /></div>;
+}
+
+function AccountSummary() {
   const me = useApi<Me>("/v1/me");
   if (me.error && me.data === undefined) return <SettingsLoadError tab="Foundation settings" error={me.error} retry={me.mutate} />;
 
@@ -156,13 +162,13 @@ function SummaryRowItem({ label, value, Icon, mono }: SummaryRow) {
       <dd
         className={[
           "min-w-0 text-right text-body text-text",
-          mono ? "truncate font-mono text-caption" : "",
+          mono ? "break-all font-mono text-caption" : "",
         ]
           .filter(Boolean)
           .join(" ")}
         title={mono ? value : undefined}
       >
-        {value}
+        {mono ? <CopyUserId value={value} /> : value}
       </dd>
     </div>
   );

@@ -58,21 +58,13 @@ export type SettingsTabId =
   | "help";
 
 /**
- * Tabs that stay hidden unless the page opts in through `isTabVisible`
- * (the browser Import tab is behind the Instant Analysis rollout flag).
- */
-const OPT_IN_TABS: ReadonlySet<SettingsTabId> = new Set<SettingsTabId>([
-  "import",
-]);
-
-/**
- * Default tab visibility: every tab except the opt-in ones.
+ * Every registered tab is available; browser import is gated inside Import.
  *
  * Example:
- *   defaultTabVisibility("import"); // -> false
+ *   defaultTabVisibility("import"); // -> true
  */
 export function defaultTabVisibility(id: SettingsTabId): boolean {
-  return !OPT_IN_TABS.has(id);
+  return TABS.some((tab) => tab.id === id);
 }
 
 /**
