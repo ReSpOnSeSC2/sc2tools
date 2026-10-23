@@ -634,7 +634,7 @@ describe("replay file routes - browser (Clerk) backup", () => {
 function fakeCollection(overrides = {}) {
   return {
     findOne: jest.fn(async () => null),
-    find: jest.fn(() => ({ toArray: jest.fn(async () => []) })),
+    find: jest.fn(() => ({ toArray: jest.fn(async () => []), batchSize() { return this; }, async *[Symbol.asyncIterator]() {} })),
     deleteMany: jest.fn(async () => ({ deletedCount: 0 })),
     deleteOne: jest.fn(async () => ({ deletedCount: 0 })),
     updateOne: jest.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),

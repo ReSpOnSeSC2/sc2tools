@@ -47,6 +47,13 @@ class SiteStatsService {
     }
   }
 
+  /** @param {string} clerkUserId */
+  async deleteForClerkUser(clerkUserId) {
+    const result = await this.db.sitePresence.deleteMany({ identityKey: this.hash(`account:${clerkUserId}`) });
+    this.snapshot = null;
+    return result.deletedCount || 0;
+  }
+
   /** @returns {Promise<SiteStatsSnapshot>} */
   async readCounts() {
     const now = new Date(this.now());

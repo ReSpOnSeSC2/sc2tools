@@ -26,7 +26,7 @@ const article: HelpArticle = {
   body: [
     {
       type: "paragraph",
-      text: "You can delete your SC2 Tools account and everything stored for it at any time, from [Settings → Backups & data](/settings?tab=backups). It can't be undone.",
+      text: "Delete your SC2 Tools account from [Settings → Backups & data](/settings?tab=backups). This permanently removes live account data and ends your sign-in identity. Comments on other people's review requests are anonymized instead of removed.",
     },
     { type: "heading", text: "Before you delete", anchor: "before" },
     {
@@ -43,22 +43,25 @@ const article: HelpArticle = {
       items: [
         "Open [Settings → Backups & data](/settings?tab=backups).",
         "Under **Export & delete account (GDPR)**, press **Delete my account**.",
-        "Type `DELETE` to confirm and press **Delete account**. You're taken back to the home page.",
+        "Step 1 offers **Download my data**. Keep the JSON export if you need it, or Continue without an export.",
+        "Step 2 shows live counts of what is removed and anonymized, plus the current database backup retention window. If the inventory cannot load, press Retry inventory.",
+        "Step 3 asks you to type `DELETE` exactly, then press **Delete account permanently**. You are signed out and taken to the account-deleted page.",
       ],
     },
     { type: "heading", text: "What's removed", anchor: "what-is-removed" },
     {
       type: "list",
       items: [
-        "Your games, opponents, notes, custom builds, settings, overlay links, paired devices and snapshots, and your connected Twitch, Kick and YouTube accounts.",
+        "Your games, analysis, opponents, notes, custom builds, settings, overlay links, paired devices, private snapshots, sounds, Stream Studio/viewer/prediction records and connected Twitch, Kick and YouTube credentials.",
         "Your original replay files and map playback recordings.",
         "Builds you published to Community, the channels you linked to your player identity, and your public profile and replay page, whose links stop working.",
-        "Copies inside our daily database backups aren't edited; they're deleted on their own when those backups expire. See [Backups, snapshots and export](/help/backups-and-export) and the [privacy policy](/legal/privacy).",
+        "Your coaching relationships, review requests and their threads, notifications and private support message text. Comments you wrote on other people's review requests remain as [deleted user]. Activity records lose account identifiers.",
+        "Copies already inside service database backups are not edited individually. They expire under the configured schedule shown in the dialog, account-deleted page and [privacy policy](/legal/privacy). If the current window cannot be read, the page says so; contact support for the schedule.",
       ],
     },
     {
       type: "paragraph",
-      text: "Signing in again later with the same login starts a new, empty account.",
+      text: "If the sign-in provider is temporarily unavailable, identity deletion is retried automatically. The deleted identity cannot reopen the account while that retry is pending. After completion, a keyed guard remains for 30 days to reject old sessions and late identity events; it contains no plain user ID or email. A paired PC that receives an unauthorized response shows **This PC was unlinked** and stops automatic sync. Pair again only after deliberately creating a new account.",
     },
     { type: "heading", text: "Only want a fresh start?", anchor: "delete-history-instead" },
     {

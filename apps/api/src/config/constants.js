@@ -77,6 +77,7 @@ const COLLECTIONS = Object.freeze({
   COMMUNITY_REPORTS: "community_reports",
   USER_BACKUPS: "user_backups",
   BACKUP_RESTORE_STAGING: "backup_restore_staging",
+  PENDING_IDENTITY_DELETIONS: "pending_identity_deletions",
   ARCADE_LEADERBOARD: "arcade_leaderboard",
   // Admin notification feed — one row per signup/download event.
   // Drives the /admin Dashboard counters + /admin/notifications feed.

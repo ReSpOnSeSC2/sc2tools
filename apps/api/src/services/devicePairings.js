@@ -4,6 +4,7 @@ const { ObjectId } = require("mongodb");
 const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { randomDigits, randomToken, sha256 } = require("../util/hash");
 const { stampVersion } = require("../db/schemaVersioning");
+const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 
 const PAIRING_TTL_MS = LIMITS.PAIRING_CODE_TTL_SEC * 1000;
 // One API instance serves the ten-minute code lifetime. A restart safely turns
@@ -35,6 +36,7 @@ class DevicePairingsService {
    * @param {{
    *   devicePairings: import('mongodb').Collection,
    *   deviceTokens: import('mongodb').Collection,
+   *   users: import('mongodb').Collection,
    * }} db
    * @param {{ adminEvents?: import('./adminEvents').AdminEventsService,
    *   logger?: import('pino').Logger, ipSalt?: string }} [opts]
@@ -157,6 +159,16 @@ class DevicePairingsService {
       // Token was already issued; subsequent polls don't re-issue.
       return /** @type {const} */ ({ status: "expired" });
     }
+    // Poll is intentionally public: the generic authenticated-write fence
+    // cannot cover token issuance. Admit it before consuming a claimed code
+    // so a late poll cannot recreate a device after account erasure.
+    let lease;
+    try { lease = await claimUserDataLease(this.db.users, row.userId); }
+    catch (error) {
+      if (/** @type {any} */ (error)?.status === 409) return /** @type {const} */ ({ status: "expired" });
+      throw error;
+    }
+    try {
     const token = randomToken(32);
     const tokenHash = sha256(token);
     const now = new Date();
@@ -197,6 +209,7 @@ class DevicePairingsService {
       deviceToken: token,
       userId: String(row.userId),
     };
+    } finally { await lease.release(); }
   }
 
   /**

@@ -8,6 +8,7 @@
  * Example:
  *   GET /legal/privacy  →  <PrivacyPage />
  */
+import { BackupRetention } from "@/components/legal/BackupRetention";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { LegalLayout, LegalHeading, legalSectionId } from "@/components/legal/LegalLayout";
@@ -247,22 +248,19 @@ function WhereDataLives() {
 function Backups() {
   return (
     <PolicySection title="Backups">
+      <BackupRetention />
       <ul className={LIST_CLASS}>
         <li>
-          <strong>Daily database backups.</strong> MongoDB Atlas takes
-          automatic snapshots of the whole SC2 Tools database every day.
-          They are encrypted, stay with MongoDB Atlas, and are deleted
-          automatically when their
-          retention period in our backup schedule ends. We use them only to
-          recover the service after a failure or data loss; they are not a
-          way to restore one account on request.
+          <strong>Service database backups.</strong> MongoDB Atlas keeps whole-database snapshots under our configured backup schedule. They are encrypted and used to recover the service after failures. They are not a way to restore one account on request.
         </li>
         <li>
           <strong>Snapshots you take.</strong> A snapshot you take in{" "}
           <DataSettingsLink /> is a copy of your own account data, stored in
-          the same database, that you can restore yourself. It stays until
-          you delete your account. Snapshots do not contain original replay
-          files or replay-detail payloads.
+          private Cloudflare R2 storage. We retain up to 5 manual snapshots,
+          2 weekly automatic snapshots, and 3 snapshots taken before destructive
+          data actions. Older copies in each category expire as new ones are
+          taken. All private snapshots are removed when you delete your account.
+          Snapshots do not contain original replay files or replay-detail payloads.
         </li>
         <li>
           <strong>Your export.</strong> The JSON export is the copy you keep
@@ -438,16 +436,14 @@ function AggregatedOpponentData() {
 function YourRights() {
   return (
     <PolicySection title="Your rights">
-      <p>
-        You can export your structured account data as a JSON archive,
-        download stored replay originals from replay history, or delete your
-        replay history or account permanently from <DataSettingsLink />.
-        Deletion is hard — there is no recovery. Copies in our daily database
-        backups expire on their own, as described under Backups. If you live
-        in the EU, UK,
-        or California, you have additional rights under GDPR and CCPA; open a
-        ticket at <IssuesLink /> to exercise them.
-      </p>
+      <p>You can export your structured account data as JSON, download original replay files from replay history, or delete your replay history or account from <DataSettingsLink />. The deletion dialog shows a live inventory before you confirm.</p>
+      <ul className={LIST_CLASS}>
+        <li>Account deletion removes your profile, preferences, games and analysis, original replay and playback files, notes, custom and published builds, devices, overlay links, Stream Studio and viewer records, sounds, connected streaming credentials, notifications, private snapshots and coaching relationships.</li>
+        <li>Your review requests and their threads are deleted. Comments you wrote on other people&apos;s requests remain with the author shown as [deleted user]. Service activity records lose their account identifiers; private support message text and replies are removed.</li>
+        <li>We delete your sign-in identity after the live data purge. Provider failures leave a minimal retry record until deletion succeeds. Completed deletion keeps only a keyed guard for 30 days to reject old sessions and late identity events.</li>
+      </ul>
+      <BackupRetention />
+      <p>Copies already inside database backups are not edited individually. To ask about access, correction or deletion rights, contact us at <IssuesLink />.</p>
     </PolicySection>
   );
 }
