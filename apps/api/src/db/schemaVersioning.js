@@ -48,6 +48,8 @@ const VERSION_KEY = "_schemaVersion";
  * @type {Readonly<Record<string, SchemaSpec>>}
  */
 const REGISTRY = Object.freeze({
+  [COLLECTIONS.JOB_RUNS]: { collection: COLLECTIONS.JOB_RUNS, currentVersion: 1, versionKey: VERSION_KEY },
+  [COLLECTIONS.ADMIN_AUDIT]: { collection: COLLECTIONS.ADMIN_AUDIT, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.SITE_CONFIG]: { collection: COLLECTIONS.SITE_CONFIG, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.PENDING_IDENTITY_DELETIONS]: { collection: COLLECTIONS.PENDING_IDENTITY_DELETIONS, currentVersion: 1, versionKey: VERSION_KEY },
   [COLLECTIONS.BACKUP_RESTORE_STAGING]: { collection: COLLECTIONS.BACKUP_RESTORE_STAGING, currentVersion: 1, versionKey: VERSION_KEY },

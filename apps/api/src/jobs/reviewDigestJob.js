@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 const { isoWeekStart } = require("../services/reviewerReputation");
 
@@ -27,6 +28,7 @@ const SEND_HOUR_UTC = 15;
 
 /**
  * @param {{
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   reviews: {sendWeeklyDigest(opts: {weekKey: string}): Promise<{notified: number}>},
  *   logger: import('pino').Logger,
  *   enabled: boolean,
@@ -51,7 +53,7 @@ function buildReviewDigestJob(deps) {
   /** @type {Promise<void> | null} */
   let inflight = null;
 
-  async function tick() {
+  async function tickWork() {
     if (inflight) return inflight;
     inflight = (async () => {
       try {
@@ -61,6 +63,7 @@ function buildReviewDigestJob(deps) {
         const res = await deps.reviews.sendWeeklyDigest({ weekKey });
         if (res.notified > 0) logger.info({ weekKey, notified: res.notified }, "review_digest_sent");
       } catch (err) {
+        tick.failed(err);
         logger.warn(
           { err: err instanceof Error ? err.message : String(err) },
           "review_digest_error",
@@ -71,6 +74,7 @@ function buildReviewDigestJob(deps) {
     })();
     return inflight;
   }
+  const tick = observeJob(deps, "review-digest", interval, tickWork, { disabled: disabled, envFlag: "SC2TOOLS_REVIEW_DIGEST_DISABLED" });
 
   return {
     start() {

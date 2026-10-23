@@ -251,6 +251,7 @@ describe("BuildCheckInCard — notes", () => {
     harness.intent = intent({ status: "confirmed", applied: true, build: { key: "custom:dt-3-gate", name: "DT into 3 Gate", slug: "dt-3-gate", source: "custom" }, notes: "Old" });
     harness.apiCall.mockResolvedValue({ ...confirmedResponse("custom:dt-3-gate", "DT into 3 Gate", "New note") });
     renderCard();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     const textarea = screen.getByLabelText(/What threw the build off/) as HTMLTextAreaElement;
     expect(textarea.value).toBe("Old");
     expect(textarea.maxLength).toBe(1000);
@@ -313,6 +314,37 @@ describe("BuildCheckInCard — notes", () => {
 });
 
 describe("BuildCheckInCard — other states", () => {
+  it("opens and closes a confirmed summary without losing notes or keyboard position", () => {
+    harness.intent = intent({ ...confirmedResponse("custom:dt", "DT into 3 Gate", `  ${"😀".repeat(141)}\n note  `) });
+    renderCard();
+    const summary = screen.getByTestId("build-checkin-summary");
+    expect(summary.textContent).toContain("Checked in: DT into 3 Gate");
+    expect(summary.textContent).toContain("1 note");
+    expect(summary.textContent).toContain(`${"😀".repeat(140)}…`);
+    expect(summary.textContent).not.toContain("Opponent:");
+    const edit = screen.getByRole("button", { name: "Edit" });
+    expect(edit.getAttribute("aria-expanded")).toBe("false");
+    edit.focus(); fireEvent.click(edit);
+    const card = screen.getByTestId("build-checkin-card");
+    expect(document.activeElement).toBe(card);
+    const textarea = screen.getByLabelText(/What threw the build off/) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "Unsaved note" } });
+    expect(screen.getByRole("button", { name: "Done" }).hasAttribute("disabled")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
+    expect(screen.getByTestId("build-checkin-summary")).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Edit" }));
+  });
+
+  it("keeps a confirmed deep-link build editor expanded", async () => {
+    harness.intent = intent({ ...confirmedResponse("custom:dt", "DT"), options: OPTIONS });
+    harness.buildOrder = { my_race: "Protoss", opp_race: "Zerg", events: [{ time: 30, name: "Gateway", is_building: true }] };
+    render(<BuildCheckInCard gameId="g1" initialNewBuild="you" />);
+    await screen.findByRole("dialog", { name: "Build editor" });
+    expect(screen.queryByTestId("build-checkin-summary")).toBeNull();
+    expect(screen.getByTestId("build-checkin-card")).toBeTruthy();
+  });
+
   it("shows a compact action for an unchecked game that expands into the card", () => {
     harness.intent = intent({ status: "none", suggestion: null });
     renderCard();
@@ -343,6 +375,8 @@ describe("BuildCheckInCard — other states", () => {
       detected: { name: "PvZ - 2 Stargate Phoenix", slug: null, key: "pvz-2-stargate-phoenix" },
     });
     renderCard();
+    expect(screen.getByTestId("build-checkin-summary").textContent).toContain("Checked in: PvZ - 2 Stargate Phoenix");
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
     expect(screen.getByText("Checked in")).toBeTruthy();
     expect(screen.getByText(/matches your plan/)).toBeTruthy();
     expect(screen.getByText("This game counts toward it in your stats.")).toBeTruthy();

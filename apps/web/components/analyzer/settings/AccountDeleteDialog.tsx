@@ -14,7 +14,7 @@ const LABELS: Record<string, string> = {
   builds: "Custom builds", devices: "Paired devices", overlayTokens: "Overlay links", snapshots: "Private snapshots", sounds: "Stream sounds",
   publishedBuilds: "Published builds", reports: "Community reports", connectedAccounts: "Connected streaming accounts", notifications: "Notifications",
   reviewRequests: "Review requests", reviewThreadComments: "Comments on your review requests", playerChannels: "Player channel submissions",
-  streamRows: "Stream Studio, viewer and prediction records", reviewComments: "Comments on other review requests", activityEvents: "Service activity records",
+  streamRows: "Stream Studio, viewer and prediction records", reviewComments: "Comments on other review requests", activityEvents: "Service activity records", auditRows: "Admin audit records",
 };
 
 export default function AccountDeleteDialog({ onClose, onExport }: { onClose: () => void; onExport: () => Promise<boolean> }) {

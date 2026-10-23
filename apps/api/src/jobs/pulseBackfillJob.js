@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 /**
  * Pulse-character-id backfill cron.
@@ -37,6 +38,7 @@ const LOCK_LEAD_MS = 60 * 1000;
 
 /**
  * @param {{
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   db: import('../db/connect').DbContext,
  *   opponents: import('../services/opponents').OpponentsService,
  *   logger: import('pino').Logger,
@@ -149,7 +151,7 @@ function buildPulseBackfillJob(deps) {
    *
    * @returns {Promise<TickResult|null>}
    */
-  async function runOnce() {
+  async function runOnceWork() {
     if (disabled) {
       logger.debug("pulse_backfill_disabled");
       return null;
@@ -160,12 +162,14 @@ function buildPulseBackfillJob(deps) {
       try {
         await ensureLockIndex();
       } catch (err) {
+        runOnce.failed(err);
         logger.warn({ err }, "pulse_backfill_index_failed");
       }
       let leader = false;
       try {
         leader = await acquireLock();
       } catch (err) {
+        runOnce.failed(err);
         logger.warn({ err }, "pulse_backfill_lock_acquire_failed");
       }
       if (!leader) {
@@ -209,6 +213,7 @@ function buildPulseBackfillJob(deps) {
             summary.updated += r.updated;
             summary.skipped += r.skipped;
           } catch (err) {
+        runOnce.failed(err);
             logger.warn(
               { err, userId },
               "pulse_backfill_user_failed",
@@ -236,6 +241,7 @@ function buildPulseBackfillJob(deps) {
               summary.revealed += r.revealed;
               summary.revealUpdated += r.updated;
             } catch (err) {
+        runOnce.failed(err);
               logger.warn(
                 { err, userId },
                 "pulse_backfill_reveal_user_failed",
@@ -256,6 +262,7 @@ function buildPulseBackfillJob(deps) {
       inFlight = null;
     }
   }
+  const runOnce = observeJob(deps, "pulse-backfill", intervalMs, runOnceWork, { disabled: disabled, envFlag: "SC2TOOLS_PULSE_BACKFILL_DISABLED" });
 
   function start() {
     if (started || timer) return;
@@ -268,7 +275,7 @@ function buildPulseBackfillJob(deps) {
     // Don't fire immediately on boot — give the API a beat to
     // settle. The first tick lands one interval after start.
     timer = setInterval(() => {
-      runOnce().catch((err) => logger.warn({ err }, "pulse_backfill_tick_failed"));
+      runOnce().catch((/** @type {any} */ err) => logger.warn({ err }, "pulse_backfill_tick_failed"));
     }, intervalMs);
     if (typeof timer.unref === "function") timer.unref();
   }

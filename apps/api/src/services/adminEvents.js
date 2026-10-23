@@ -13,6 +13,7 @@ const EVENT_TYPES = Object.freeze({
   AGENT_CONNECTED: "agent_connected",
   USER_MESSAGE: "user_message",
   BACKUP_STALE: "backup_stale",
+  JOB_OVERDUE: "job_overdue",
 });
 
 /** @type {Set<string>} */
@@ -647,6 +648,7 @@ function sanitisePayload(type, raw) {
       } : {}),
     };
   }
+  if (type === EVENT_TYPES.JOB_OVERDUE) return { job: toCleanString(payload.job, 64), intervalMs: Number(payload.intervalMs) || 0 };
   if (type === EVENT_TYPES.BACKUP_STALE) return backupStalePayload(payload);
   return payload;
 }

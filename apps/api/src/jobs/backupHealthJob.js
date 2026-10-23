@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 /**
  * Stale-backup alert. Checks the newest Atlas Cloud Backup snapshot every
@@ -31,6 +32,7 @@ const FIRST_CHECK_DELAY_MS = 2 * 60 * 1000;
  * @param {{
  *   backupStatus: BackupAlertSource,
  *   logger: import('pino').Logger,
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   intervalMs?: number,
  *   firstCheckDelayMs?: number,
  * }} deps
@@ -51,7 +53,8 @@ function buildBackupHealthJob(deps) {
   );
   const firstDelay = deps.firstCheckDelayMs ?? FIRST_CHECK_DELAY_MS;
   const logger = deps.logger.child({ component: "backupHealth" });
-  const tick = singleFlightCheck(deps.backupStatus, logger);
+  const check = singleFlightCheck(deps.backupStatus, logger, (error) => tick.failed(error));
+  const tick = observeJob(deps, "backup-health", interval, check, { disabled, firstDelayMs: firstDelay, envFlag: "SC2TOOLS_BACKUP_ALERT_DISABLED" });
   /** @type {NodeJS.Timeout[]} */
   let timers = [];
 
@@ -83,8 +86,9 @@ function buildBackupHealthJob(deps) {
  *
  * @param {BackupAlertSource} backupStatus
  * @param {import('pino').Logger} logger
+ * @param {(error:unknown)=>void} onError
  */
-function singleFlightCheck(backupStatus, logger) {
+function singleFlightCheck(backupStatus, logger, onError) {
   /** @type {Promise<void> | null} */
   let inflight = null;
   const tick = () => {
@@ -96,6 +100,7 @@ function singleFlightCheck(backupStatus, logger) {
           logger.warn({ reason: result.reason }, "backup_stale_alert_raised");
         }
       } catch (err) {
+        onError(err);
         logger.warn(
           { err: err instanceof Error ? err.message : String(err) },
           "backup_health_check_error",

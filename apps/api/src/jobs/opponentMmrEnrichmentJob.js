@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 /**
  * Forward-only opponent ladder-metadata enrichment cron.
@@ -66,6 +67,7 @@ const LEAGUE_IDS = /** @type {Readonly<Record<string, number>>} */ (Object.freez
 
 /**
  * @param {{
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   db: import('../db/connect').DbContext,
  *   pulseMmr: { getRaceBreakdown(ids: string[], opts?: object): Promise<Array<any>> },
  *   logger: import('pino').Logger,
@@ -102,7 +104,7 @@ function buildOpponentMmrEnrichmentJob(deps) {
   let inFlight = null;
   let started = false;
 
-  async function runOnce() {
+  async function runOnceWork() {
     if (config.disabled) return null;
     if (inFlight) return inFlight;
     inFlight = runCycle(context);
@@ -112,6 +114,7 @@ function buildOpponentMmrEnrichmentJob(deps) {
       inFlight = null;
     }
   }
+  const runOnce = observeJob(deps, "opponent-mmr-enrichment", config.intervalMs, runOnceWork, { disabled: config.disabled, envFlag: "SC2TOOLS_OPPONENT_MMR_ENRICHMENT_DISABLED" });
 
   function start() {
     if (started || timer) return;
@@ -121,7 +124,7 @@ function buildOpponentMmrEnrichmentJob(deps) {
     }
     started = true;
     const trigger = () => {
-      runOnce().catch((err) => logger.warn({ err }, "opponent_mmr_enrichment_tick_failed"));
+      runOnce().catch((/** @type {any} */ err) => logger.warn({ err }, "opponent_mmr_enrichment_tick_failed"));
     };
     // Begin healing immediately after a deploy; subsequent bounded batches
     // stay on the normal interval.
@@ -201,7 +204,7 @@ function publicConfig(config) {
 async function runCycle(context) {
   const startedAt = context.now();
   const summary = emptySummary();
-  await context.lock.ensureIndexes().catch((err) => {
+  await context.lock.ensureIndexes().catch((/** @type {any} */ err) => {
     context.logger.warn({ err }, "opponent_mmr_enrichment_index_failed");
   });
   const owner = await acquireCycleLock(context);

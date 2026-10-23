@@ -1,6 +1,7 @@
 "use strict";
 
 const express = require("express");
+const { buildDoctor, withReplayResyncState, emptyReplayArchiveCounts } = require("../services/doctor");
 const { NOTIFICATIONS_PREF_TYPE, sanitizeNotificationPrefs } = require("../services/notificationPrefs");
 const { validateProfile } = require("../validation/profile");
 const { publicDataRetention } = require("../services/dataInventory");
@@ -544,85 +545,18 @@ function buildMeRouter(deps) {
     },
   );
 
+  router.post("/me/activation/download", deps.auth, async (req, res, next) => {
+    try { if (!req.auth || req.auth.source !== "clerk") { res.status(403).json({ error: { code: "clerk_session_required" } }); return; }
+      await deps.users.recordDownload(req.auth.userId); res.status(204).end();
+    } catch (error) { next(error); }
+  });
+
   router.get("/me/doctor", deps.auth, async (req, res, next) => {
     try {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
 
-      /** @type {Array<{id: string, severity: 'info'|'warn'|'error', message: string, cta?: {label: string, href: string}}>} */
-      const warnings = [];
-
-      const [profile, devices, gameStats, replayCounts, replayArchivePrefs] = await Promise.all([
-        deps.users.getProfile(auth.userId),
-        deps.pairings.listDevices(auth.userId),
-        deps.games.stats(auth.userId),
-        deps.replayArchiveEnabled
-          ? deps.games.replayArchiveStatus(auth.userId)
-          : Promise.resolve(emptyReplayArchiveCounts()),
-        deps.users.getPreferences(auth.userId, "replayArchive"),
-      ]);
-      const replayArchive = withReplayResyncState(
-        replayCounts,
-        replayArchivePrefs,
-        Boolean(deps.replayArchiveEnabled),
-      );
-
-      // Any one identity signal is enough: the replay matcher keys off
-      // displayName first, pulse ids drive MMR lookups, and battleTag
-      // is auto-backfilled from SC2Pulse once a pulse id exists. Only
-      // nag when ALL of them are missing — warning on a bare
-      // ``!battleTag`` produced a false positive for every user whose
-      // profile was populated by auto-detection.
-      const hasIdentity = Boolean(
-        profile.battleTag ||
-          profile.displayName ||
-          (Array.isArray(profile.pulseIds) && profile.pulseIds.length > 0),
-      );
-      if (!hasIdentity) {
-        warnings.push({
-          id: "no_profile",
-          severity: "warn",
-          message:
-            "Your SC2 profile isn't set up yet. Add your BattleTag or a Pulse ID to see opponent matchup stats.",
-          cta: { label: "Set up profile", href: "/settings?tab=profile" },
-        });
-      }
-
-      if (devices.length === 0) {
-        warnings.push({
-          id: "no_agent",
-          severity: "warn",
-          message:
-            "The latest SC2 Tools Agent needs to be turned on or installed.",
-          cta: { label: "Install latest agent", href: "/download" },
-        });
-      }
-
-      if (gameStats.total === 0) {
-        warnings.push({
-          id: "no_games",
-          severity: "info",
-          message:
-            "No games recorded yet. The agent will import your recent replays automatically after pairing.",
-        });
-      }
-
-      if (replayArchive.requiresResync) {
-        const count = replayArchive.missingGames;
-        warnings.push({
-          id: "replay_archive_incomplete",
-          severity: "warn",
-          message:
-            `${count.toLocaleString("en-US")} saved ${count === 1 ? "game is" : "games are"} `
-            + "missing the original replay file. Update to the latest desktop "
-            + "agent, then open it and click Re-sync once. The agent will "
-            + "archive replay files still on this PC; files already deleted "
-            + "locally will remain unavailable.",
-          cta: { label: "Update agent", href: "/download" },
-        });
-      }
-
-      res.json({ ok: warnings.filter((w) => w.severity !== "info").length === 0, warnings });
+      res.json(await buildDoctor(deps, auth.userId));
     } catch (err) {
       next(err);
     }
@@ -960,47 +894,3 @@ module.exports = {
   _internals: { withReplayResyncState },
 };
 
-/**
- * A missing object does not necessarily mean the user skipped the rollout:
- * old files may have been deleted from their PC. Stop the one-time prompt as
- * soon as the latest agent has actually requested a full local re-sync, while
- * continuing to expose the honest archived/missing counts.
- *
- * @param {{totalGames: number, archivedGames: number, missingGames: number, archiveComplete: boolean}} counts
- * @param {Record<string, unknown>} prefs
- * @param {boolean} enabled
- */
-function withReplayResyncState(counts, prefs, enabled) {
-  const backfillVersion =
-    prefs
-    && typeof prefs.version === "number"
-    && Number.isInteger(prefs.version)
-      ? prefs.version
-      : 0;
-  const resyncRequestedAt =
-    backfillVersion >= 1
-    && prefs
-    && typeof prefs.resyncRequestedAt === "string"
-      ? prefs.resyncRequestedAt
-      : null;
-  return {
-    ...counts,
-    enabled,
-    backfillVersion,
-    resyncRequestedAt,
-    requiresResync:
-      enabled
-      && counts.totalGames > 0
-      && counts.missingGames > 0
-      && (backfillVersion < 1 || !resyncRequestedAt),
-  };
-}
-
-function emptyReplayArchiveCounts() {
-  return {
-    totalGames: 0,
-    archivedGames: 0,
-    missingGames: 0,
-    archiveComplete: true,
-  };
-}

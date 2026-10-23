@@ -16,6 +16,10 @@ vi.mock("@/lib/agentDownloadEvents.server", () => ({
     forwardAgentDownloadEventMock(...args),
 }));
 
+const attribution = vi.hoisted(() => ({ token:vi.fn(async()=>"signed-in-token"), auth:vi.fn(), record:vi.fn(async(_token:string|null)=>{}) }));
+vi.mock("@clerk/nextjs/server",()=>({auth:(...args:unknown[])=>attribution.auth(...args)}));
+vi.mock("@/lib/activationDownload.server",()=>({recordAuthenticatedDownload:(token:string|null)=>attribution.record(token)}));
+
 import { dynamic, POST } from "./route";
 
 const INSTALLER_URL =
@@ -23,6 +27,8 @@ const INSTALLER_URL =
 
 describe("POST /api/download/agent", () => {
   beforeEach(() => {
+    attribution.auth.mockReset().mockResolvedValue({getToken:attribution.token});
+    attribution.token.mockClear();attribution.record.mockClear();
     afterMock.mockReset();
     forwardAgentDownloadEventMock.mockReset();
     forwardAgentDownloadEventMock.mockResolvedValue(true);
@@ -59,6 +65,17 @@ describe("POST /api/download/agent", () => {
       version: "0.15.20",
       channel: "stable",
     });
+  });
+
+  it("attributes a real signed-in hand-off only after response and keeps ordinary event delivery", async () => {
+    const res=await POST(request(INSTALLER_URL,{cookie:"__session=test-session"}));expect(res.status).toBe(303);
+    expect(attribution.token).toHaveBeenCalledOnce();expect(attribution.record).not.toHaveBeenCalled();
+    await afterMock.mock.calls[0][0]();expect(attribution.record).toHaveBeenCalledWith("signed-in-token");expect(forwardAgentDownloadEventMock).toHaveBeenCalledOnce();
+  });
+  it("never blocks the installer if signed-in attribution cannot authenticate", async () => {
+    attribution.auth.mockRejectedValueOnce(new Error("session unavailable"));
+    const res=await POST(request(INSTALLER_URL,{cookie:"__session=test-session"}));expect(res.status).toBe(303);
+    await afterMock.mock.calls[0][0]();expect(attribution.record).toHaveBeenCalledWith(null);expect(forwardAgentDownloadEventMock).toHaveBeenCalledOnce();
   });
 
   it("rejects untrusted redirect targets without recording", async () => {

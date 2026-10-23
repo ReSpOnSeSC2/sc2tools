@@ -1,4 +1,5 @@
 "use strict";
+const { observeJob } = require("../util/jobLedger");
 
 /**
  * Nightly rebuild for player-level fingerprint population calibration.
@@ -17,6 +18,7 @@ const MIN_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
  * @param {{
+ *   jobLedger?: import("../util/jobLedger").JobLedger,
  *   calibration: { recompute: () => Promise<Record<string, any>> },
  *   logger: import('pino').Logger,
  *   intervalMs?: number,
@@ -54,7 +56,7 @@ function buildFingerprintPopulationCalibrationRecomputeJob(deps) {
   let inflight = null;
   let started = false;
 
-  async function tick() {
+  async function tickWork() {
     if (inflight) return inflight;
     inflight = (async () => {
       try {
@@ -67,6 +69,7 @@ function buildFingerprintPopulationCalibrationRecomputeJob(deps) {
           "fingerprint_population_calibration_recomputed",
         );
       } catch (error) {
+        tick.failed(error);
         logger.warn(
           { error: error instanceof Error ? error.message : String(error) },
           "fingerprint_population_calibration_recompute_error",
@@ -77,6 +80,7 @@ function buildFingerprintPopulationCalibrationRecomputeJob(deps) {
     })();
     return inflight;
   }
+  const tick = observeJob(deps, "fingerprint-calibration", intervalMs, tickWork, { disabled: disabled, envFlag: "SC2TOOLS_FINGERPRINT_CALIBRATION_RECOMPUTE_DISABLED" });
 
   return {
     start() {
