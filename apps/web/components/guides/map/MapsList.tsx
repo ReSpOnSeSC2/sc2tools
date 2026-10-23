@@ -1,4 +1,4 @@
-import { GuideMapCard } from "./GuideMapCard";
+import { MapViews } from "./MapViews";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
@@ -35,13 +35,7 @@ export function MapsList({ payload }: { payload: GuideIndexPayload }) {
         ) : null}
       </div>
       {payload.maps.length > 0 ? (
-        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {payload.maps.map((map) => (
-            <li key={map.slug} className="min-w-0">
-              <GuideMapCard map={map} />
-            </li>
-          ))}
-        </ul>
+        <MapViews maps={payload.maps} />
       ) : (
         <div className={GUIDE_PANEL_CLASS}>
           <EmptyStatePanel size="md" title="No map guides yet" description="Map guides appear once enough ladder games are in." />

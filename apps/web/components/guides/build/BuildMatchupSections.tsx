@@ -2,16 +2,12 @@ import Link from "next/link";
 import { GuideSection as Section } from "@/components/guides/GuideSection";
 import { WinRateCell } from "@/components/guides/WinRateCell";
 import { canLinkGuidePath, guidePaths } from "@/components/guides/guideMetadata";
+import { BuildAllMaps, BuildMatchupGroup } from "./BuildMatchupTables";
 import {
   GUIDE_LINK_CLASS,
   GUIDE_PANEL_CLASS,
-  GUIDE_TABLE_CLASS,
-  GUIDE_TABLE_WRAP_CLASS,
-  GUIDE_TD_CLASS,
-  GUIDE_TD_NUM_CLASS,
-  GUIDE_TH_CLASS,
-  GUIDE_TH_NUM_CLASS,
-  GUIDE_THEAD_CLASS,
+  cellVerdict,
+  verdictMeta,
 } from "@/components/guides/guideUi";
 import { fmtCount } from "@/lib/guides/format";
 import type { GuideMapCell, GuideVsStrategyRow } from "@/lib/guides/types";
@@ -49,43 +45,21 @@ export function BuildVsStrategySection({
 }) {
   if (rows.length === 0) return null;
   const sorted = rankVsStrategyRows(rows);
+  const groups = [
+    { verdict: "win", label: "Favoured" },
+    { verdict: "even", label: "Too close to call" },
+    { verdict: "loss", label: "Unfavoured" },
+  ] as const;
   return (
     <Section
       id="vs-openers"
       title="What it beats and loses to"
       description="Win rate against each opponent opener, ranked by the low end of its likely range."
     >
-      <div className={GUIDE_TABLE_WRAP_CLASS}>
-        <table className={GUIDE_TABLE_CLASS}>
-          <caption className="sr-only">Win rate by opponent opener</caption>
-          <thead className={GUIDE_THEAD_CLASS}>
-            <tr>
-              <th scope="col" className={GUIDE_TH_CLASS}>Opponent opener</th>
-              <th scope="col" className={GUIDE_TH_NUM_CLASS}>Win rate</th>
-              <th scope="col" className={GUIDE_TH_NUM_CLASS}>Games</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {sorted.map((row) => (
-              <tr key={row.strategyKey}>
-                <th scope="row" className={`${GUIDE_TD_CLASS} text-left font-medium`}>
-                  {row.published ? (
-                    <Link href={guidePaths.counter(matchupSlug, row.strategySlug)} className={GUIDE_LINK_CLASS}>
-                      {row.name}
-                    </Link>
-                  ) : (
-                    row.name
-                  )}
-                </th>
-                <td className={GUIDE_TD_NUM_CLASS}>
-                  <WinRateCell winRate={row.winRate} ci={row.ci} />
-                </td>
-                <td className={GUIDE_TD_NUM_CLASS}>{fmtCount(row.games)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <div className="space-y-6">{groups.map(({ verdict, label }) => {
+        const grouped = sorted.filter((row) => cellVerdict(row) === verdict);
+        return grouped.length ? <div key={verdict} className="space-y-2"><h3 className="text-body font-semibold text-text"><span aria-hidden>{verdictMeta(verdict).glyph} </span>{label} ({grouped.length})</h3><BuildMatchupGroup rows={grouped} matchupSlug={matchupSlug} label={label} collapsible={verdict !== "win"} /></div> : null;
+      })}</div>
     </Section>
   );
 }
@@ -155,6 +129,7 @@ export function BuildMapsSection({
         <MapList title="Best maps" maps={best} publishedPaths={publishedPaths} />
         {worst.length > 0 ? <MapList title="Toughest maps" maps={worst} publishedPaths={publishedPaths} /> : null}
       </div>
+      {maps.length > 6 ? <BuildAllMaps maps={maps} publishedPaths={publishedPaths === null ? null : [...publishedPaths]} /> : null}
     </Section>
   );
 }

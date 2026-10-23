@@ -203,7 +203,7 @@ describe("/guides/[matchup]/[build] page", () => {
     expect(row?.textContent).toContain("7:38"); // p75 458 s
     expect(row?.textContent).toContain("7:16 vs 7:29"); // winners 436 s vs losers 449 s
     expect(within(table).getByRole("rowheader", { name: /Stargate started/ })).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Sign in to compare your timings" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Sign in to see your own timings next to these" })).toBeTruthy();
   });
 
   it("still offers the personal win-rate comparison on a published build with no community timings yet", async () => {
@@ -297,8 +297,8 @@ describe("/guides/[matchup]/[build] page numbers", () => {
     const solid = { ...first, strategyKey: "Zerg - Solid", strategySlug: "solid", name: "Solid", ...fixtureCell(400, 60, 240) };
     mocks.fetchGuideBuild.mockResolvedValue(ok({ ...FIXTURE_BUILD_PUBLISHED, vsStrategy: [thin, solid] }));
     await renderPage();
-    const table = screen.getByRole("table", { name: "Win rate by opponent opener" });
-    const names = within(table).getAllByRole("rowheader").map((cell) => cell.textContent);
+    const section = screen.getByRole("heading", { name: "What it beats and loses to" }).closest("section")!;
+    const names = within(section).getAllByRole("rowheader").map((cell) => cell.textContent);
     expect(names).toEqual(["Solid", "Thin"]);
   });
 

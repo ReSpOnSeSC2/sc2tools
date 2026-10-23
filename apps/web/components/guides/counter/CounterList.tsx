@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { GuideBreadcrumbs } from "@/components/guides/GuideBreadcrumbs";
 import { GuideJsonLd } from "@/components/guides/GuideJsonLd";
-import { CounterLinks } from "@/components/guides/matchup/CounterLinks";
+import { CounterBrowser } from "./CounterBrowser";
 import { guidePaths } from "@/components/guides/guideMetadata";
 import { breadcrumbJsonLd, type GuideCrumb } from "@/components/guides/guideSeo";
 import { GUIDE_PANEL_CLASS, myRaceWord, oppRaceWord } from "@/components/guides/guideUi";
@@ -36,14 +36,14 @@ export function CounterList({ payload }: { payload: GuideMatchupPayload }) {
         <PageHeader
           eyebrow={`${payload.matchup} counter guides`}
           title={`How to beat ${opp} openers`}
-          description={`Pick the ${opp} opener you keep losing to and see which ${myRaceWord(payload.matchup)} openers beat it most reliably on ladder.`}
+          description={`Your win rate against each ${opp} opener. Pick one to see which ${myRaceWord(payload.matchup)} openers beat it most reliably on ladder.`}
         />
         {payload.computedAt ? (
           <p className="text-caption text-text-dim">Stats updated {fmtGuideDate(payload.computedAt)}</p>
         ) : null}
       </div>
       {payload.counters.length > 0 ? (
-        <CounterLinks counters={payload.counters} matchupSlug={payload.slug} includeUnpublished />
+        <CounterBrowser counters={payload.counters} matchupSlug={payload.slug} />
       ) : (
         <div className={GUIDE_PANEL_CLASS}>
           <EmptyStatePanel size="md" title="No counter guides yet" description="Check back once more games are in." />

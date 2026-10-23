@@ -266,6 +266,29 @@ describe("shapeMatchupPayload / shapeIndexPayload", () => {
   });
 });
 
+describe("compact guide list aggregates", () => {
+  test("counter links expose validated aggregate rates and tolerate pre-run/old docs", () => {
+    const counter = { strategyKey: TWELVE_POOL, strategySlug: "12-pool", published: true, ...cell(150, 6, 0.4) };
+    const read = (row) => shapeMatchupPayload({ matchup: "PvZ", era: "after", band: null, doc: { published: true, games: 400, users: 12, computedAt: AT, builds: [], counters: [row] }, buildDocs: [], videos: [] }).counters[0];
+    expect(read({ ...counter, userId: "private" })).toMatchObject({ winRate: 0.5, ci: { low: 0.4, high: 0.5 } });
+    expect(read(counter)).not.toHaveProperty("users");
+    for (const invalid of [{ users: 4 }, { winRate: 1.1 }, { ci: { low: 0.8, high: 0.2 } }, { ci: { low: -0.1, high: 0.4 } }, { winRate: undefined, ci: undefined }, { published: false, games: 20 }]) {
+      expect(read({ ...counter, ...invalid })).toMatchObject({ winRate: null, ci: null });
+    }
+    const noDoc = shapeMatchupPayload({ matchup: "PvZ", era: "after", band: null, doc: null, buildDocs: [], videos: [] });
+    expect(noDoc.counters.every((row) => row.winRate === null && row.ci === null)).toBe(true);
+  });
+
+  test("map index cells are compact, non-mirror, bounded, floor-gated and omit malformed rates", () => {
+    const pvz = { ...cell(150, 6, 0.4), matchup: "PvZ", openers: [{ userId: "private" }], userId: "private" };
+    const mapDocs = [{ published: true, map: "Site Delta LE", mapSlug: "site-delta-le", games: 500, cells: [pvz, pvz, { ...pvz, matchup: "PvP" }, { ...pvz, matchup: "PvT", users: 4 }, { ...pvz, matchup: "ZvT", winRate: NaN }, { ...pvz, matchup: "TvZ", ci: { low: 0.2, high: 1.2 } }] }];
+    const out = shapeIndexPayload({ era: "after", computedAt: AT, matchupDocs: [], mapDocs, videos: [], channel: null });
+    expect(out.maps[0].cells).toEqual([{ matchup: "PvZ", games: 150, winRate: 0.5, ci: { low: 0.4, high: 0.5 } }]);
+    expect(JSON.stringify(out)).not.toContain("private");
+  });
+
+});
+
 describe("shapeSitemapPayload", () => {
   const docs = [
     { kind: "matchup", matchup: "PvZ", published: true },
