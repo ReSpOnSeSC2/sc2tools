@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 export interface LegalSectionLink { id: string; title: string }
 export function legalSectionId(title: string): string { return title.toLowerCase().replace(/^[0-9]+[. ]*/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""); }
 export function LegalHeading({ id, children }: { id: string; children: string }) {
-  return <h2 id={id} className="group scroll-mt-24 text-h3 font-semibold text-text">{children}<a href={"#" + id} aria-label={"Link to section: " + children} className="ml-2 text-accent opacity-0 group-hover:opacity-100 focus-visible:opacity-100">#</a></h2>;
+  return <h2 id={id} aria-labelledby={id + "-title"} className="group scroll-mt-24 text-h3 font-semibold text-text"><span id={id + "-title"}>{children}</span><a href={"#" + id} aria-label={"Link to section: " + children} className="ml-2 text-accent opacity-0 group-hover:opacity-100 focus-visible:opacity-100">#</a></h2>;
 }
 /** Shared server-rendered policy typography, navigation and print presentation. */
 export function LegalLayout({ title, updated, summary, sections, children }: { title: string; updated: string; summary?: ReactNode; sections: readonly LegalSectionLink[]; children: ReactNode }) {
