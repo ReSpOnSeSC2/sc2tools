@@ -18,6 +18,7 @@ const ARTICLE: HelpArticle = {
   body: [
     { type: "paragraph", text: "Open [Devices](/devices), read [Getting started](/help/getting-started) or [the channel](https://www.youtube.com/@ReSpOnSeSC2). [bad](javascript:alert(1))" },
     { type: "heading", text: "A sub-heading" },
+    { type: "heading", text: "Anchored", anchor: "anchored" },
     { type: "steps", items: ["**First.** Do this.", "Then `that`."] },
     { type: "list", items: ["One *item*"] },
     { type: "callout", tone: "warning", title: "Careful", text: "Mind the gap." },
@@ -58,6 +59,12 @@ describe("HelpArticleBody", () => {
     expect(screen.getByRole("button", { name: /Copy for your bio/ })).toBeTruthy();
   });
 
+  it("gives anchored headings their id on the article page", () => {
+    renderBody();
+    expect(screen.getByRole("heading", { level: 2, name: "Anchored" }).id).toBe("anchored");
+    expect(screen.getByRole("heading", { level: 2, name: "A sub-heading" }).id).toBe("");
+  });
+
   it("renders safe links and leaves unsafe ones as text", () => {
     renderBody();
     expect(screen.getByRole("link", { name: "Devices" }).getAttribute("href")).toBe("/devices");
@@ -77,9 +84,35 @@ describe("HelpArticleBody", () => {
       links: { articleHref: (slug) => `/settings?tab=help#${slug}`, onOpenArticle },
     });
     expect(screen.getByRole("heading", { level: 3, name: "A sub-heading" })).toBeTruthy();
+    // Settings → Help lists every article on one page: no heading ids there.
+    expect(screen.getByRole("heading", { level: 3, name: "Anchored" }).id).toBe("");
     const link = screen.getByRole("link", { name: "Getting started" });
     expect(link.getAttribute("href")).toBe("/settings?tab=help#getting-started");
     fireEvent.click(link);
     expect(onOpenArticle).toHaveBeenCalledWith("getting-started");
+  });
+
+  it("gives anchored headings an id on the page and a data anchor when compact", () => {
+    const article: HelpArticle = {
+      ...ARTICLE,
+      body: [
+        { type: "heading", anchor: "who-can-review", text: "Who can review" },
+        { type: "heading", text: "No anchor" },
+      ],
+    };
+    const { unmount } = render(<HelpArticleBody article={article} />);
+    const page = screen.getByRole("heading", { level: 2, name: "Who can review" });
+    expect(page.id).toBe("who-can-review");
+    expect(page.className).toContain("scroll-mt-24");
+    expect(screen.getByRole("heading", { level: 2, name: "No anchor" }).id).toBe("");
+    unmount();
+
+    // Settings → Help shows many articles at once: no ids that could clash.
+    render(<HelpArticleBody article={article} variant="compact" />);
+    const compact = screen.getByRole("heading", { level: 3, name: "Who can review" });
+    expect(compact.id).toBe("");
+    expect(compact.getAttribute("data-help-anchor")).toBe("who-can-review");
+    expect(compact.getAttribute("tabindex")).toBe("-1");
+    expect(screen.getByRole("heading", { level: 3, name: "No anchor" }).hasAttribute("data-help-anchor")).toBe(false);
   });
 });

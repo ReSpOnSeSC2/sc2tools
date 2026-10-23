@@ -95,14 +95,18 @@ export const TODAY_DEFAULT_TAB = "today";
 /**
  * The section a saved "Default tab" preference sends Today to, or null
  * to stay on Today (no choice, "today", or a tab that no longer exists).
+ * The Settings picker saves TabIds; a section's URL slug ("maps") is
+ * read as its tab too.
  *
  * Example:
  *   defaultTabRedirect("battlefield"); // -> "battlefield"
+ *   defaultTabRedirect("maps"); // -> "battlefield"
  *   defaultTabRedirect("today"); // -> null
  */
 export function defaultTabRedirect(pref: string | null | undefined): TabId | null {
-  if (pref === TODAY_DEFAULT_TAB) return null;
-  return isTabId(pref) ? pref : null;
+  if (!pref || pref === TODAY_DEFAULT_TAB) return null;
+  if (isTabId(pref)) return pref;
+  return tabForSlug(pref)?.id ?? null;
 }
 
 export function slugForTab(id: TabId): SectionSlug {

@@ -63,4 +63,24 @@ describe("/reviews for a signed-out visitor", () => {
     expect(screen.queryByRole("region", { name: "How the Review Exchange works" })).toBeNull();
     expect(screen.getByRole("link", { name: "My reviews" })).toBeTruthy();
   });
+
+  it("links the header to the full guide", async () => {
+    await renderBoard();
+    const link = await screen.findByRole("link", { name: "How it works" });
+    expect(link.getAttribute("href")).toBe("/help/replay-reviews");
+    expect(link.closest("header")).not.toBeNull();
+  });
+});
+
+describe("/reviews for a signed-in player", () => {
+  it("explains where asking starts, without a hover-only hint", async () => {
+    harness.signedIn = true;
+    await renderBoard();
+    const ask = screen.getByRole("link", { name: "Ask about one of your games" });
+    expect(ask.getAttribute("href")).toBe("/app/replays");
+    expect(ask.hasAttribute("title")).toBe(false);
+    const howTo = await screen.findByRole("link", { name: "How to ask" });
+    expect(howTo.getAttribute("href")).toBe("/help/replay-reviews#asking-for-a-review");
+    expect((await screen.findByRole("link", { name: "How it works" })).getAttribute("href")).toBe("/help/replay-reviews");
+  });
 });

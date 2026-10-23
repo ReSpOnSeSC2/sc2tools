@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MessageSquareText } from "lucide-react";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { MyReviews } from "@/components/reviews/MyReviews";
 import { reviewsRollout } from "@/lib/reviews";
@@ -26,9 +27,14 @@ export default function MyReviewsPage() {
         title="My reviews"
         description="The replays you've asked about, the reviews you've written, and the reviewers you've blocked."
         actions={
-          <Link href="/reviews" className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated">
-            Review board
-          </Link>
+          <>
+            <LazyHelpLink slug="replay-reviews" className="inline-flex min-h-11 items-center text-caption font-semibold">
+              How it works
+            </LazyHelpLink>
+            <Link href="/reviews" className="inline-flex min-h-[44px] items-center rounded-full border-2 border-line px-5 font-semibold text-text hover:bg-bg-elevated">
+              Review board
+            </Link>
+          </>
         }
       />
       <MyReviews />

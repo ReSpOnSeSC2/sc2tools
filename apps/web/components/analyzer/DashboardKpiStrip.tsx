@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { ChevronDown, Gamepad2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { Gamepad2, RefreshCw } from "lucide-react";
 import { useApi } from "@/lib/clientApi";
 import {
   describeActiveFilters,
   filtersToQuery,
   useFilters,
 } from "@/lib/filterContext";
+import { WinRateLabel } from "@/components/analyzer/WinRateTimeframeMenu";
 import { GlowHalo } from "@/components/ui/GlowHalo";
+import { hasQueryData, type QueryLike } from "@/components/ui/QueryState";
+import { SkeletonBar } from "@/components/ui/Skeleton";
 import { StatCard } from "@/components/ui/Stat";
 import { fmtMmr, pct1, wrColor } from "@/lib/format";
 import {
@@ -20,7 +24,6 @@ import {
   type Period,
 } from "@/lib/timeseries";
 import {
-  PRESETS,
   DEFAULT_PRESET,
   normalizePresetId,
   resolvePreset,
@@ -30,21 +33,8 @@ import {
 
 const LS_KEY = "analyzer.kpi.winRatePreset";
 
-const WIN_RATE_PRESET_OPTIONS: PresetId[] = [
-  "after_5_0_17",
-  "patch_5_0_16",
-  "before_5_0_16",
-  "current_season",
-  "today",
-  "last_week",
-  "last_7d",
-  "this_month",
-  "last_30d",
-  "last_90d",
-  "this_year",
-  "last_year",
-  "all",
-];
+/** Where the MMR card sends a player with no Pulse ID: the Pulse ID help on Settings → Profile. */
+const PULSE_ID_SETTINGS_HREF = "/settings?tab=profile#pulse-id-help";
 
 function readStoredPreset(): PresetId | null {
   if (typeof window === "undefined") return null;
@@ -67,12 +57,19 @@ function writeStoredPreset(value: PresetId): void {
 }
 
 /**
- * Top-of-dashboard KPI strip — Games today, customizable Win Rate,
- * Active Streak, MMR, and the game count inside the active global filters.
+ * Top-of-dashboard KPI strip — Today's session (games and W-L),
+ * customizable Win Rate, Active Streak, MMR, and the game count inside
+ * the active global filters.
  *
  * The Win Rate card has a preset picker so the user can ask "what's
  * my win rate this season?" or "in the last 30 days?" without
  * touching the global filter. Sticky per-tab choice via localStorage.
+ *
+ * Every game-derived card keys its request on `dbRev`, so a finished
+ * game (games:changed) refreshes the whole strip, not only Games in
+ * range. Each card shows "—" while it loads, and "—" with a
+ * "Couldn't load · Retry" hint when its request failed, so a failure
+ * never reads as a real 0.
  */
 export function DashboardKpiStrip() {
   const { filters, seasons, dbRev } = useFilters();
@@ -125,7 +122,7 @@ export function DashboardKpiStrip() {
     filters.max_minutes,
   ]);
 
-  // Global series — used for Games today. Streak is fetched from a
+  // Global series — used for Today's session. Streak is fetched from a
   // dedicated /v1/streak endpoint that walks games one-by-one (the
   // day-bucketed series can't represent streak correctly because a
   // single mixed day collapses the count to 0).
@@ -134,7 +131,7 @@ export function DashboardKpiStrip() {
   // a user with a multi-year history matches the full lifetime range,
   // which makes the server's `_fitInterval` widen `day` → `week` to
   // stay under the bucket cap. Weekly buckets are keyed by start-of-week
-  // and never match `todayKeyIn(tz)`, so "Games today" silently flips
+  // and never match `todayKeyIn(tz)`, so the session card silently flips
   // to 0 once UTC rolls over even though games exist in the user's
   // local today. Filtering to today keeps the matched span < 24h, which
   // pins the interval at `day` and produces a single bucket that lines
@@ -160,10 +157,10 @@ export function DashboardKpiStrip() {
     filters.max_minutes,
   ]);
   const globalSeries = useApi<ApiTimeseriesResponse>(
-    `/v1/timeseries${globalSeriesQuery}`,
+    `/v1/timeseries${globalSeriesQuery}#${dbRev}`,
   );
-  const gamesToday = useMemo(
-    () => computeGamesToday(apiToPeriods(globalSeries.data, tz), tz),
+  const todayRecord = useMemo(
+    () => computeTodayRecord(apiToPeriods(globalSeries.data, tz), tz),
     [globalSeries.data, tz],
   );
 
@@ -180,13 +177,14 @@ export function DashboardKpiStrip() {
   const selectedRangeSeries = useApi<ApiTimeseriesResponse>(
     `/v1/timeseries${selectedRangeQuery}#${dbRev}`,
   );
-  const selectedRangeTotal = useMemo(() => {
-    if (!selectedRangeSeries.data) return null;
-    return apiToPeriods(selectedRangeSeries.data, tz).reduce(
-      (sum, period) => sum + (period.games || 0),
-      0,
-    );
-  }, [selectedRangeSeries.data, tz]);
+  const selectedRangeTotal = useMemo(
+    () =>
+      apiToPeriods(selectedRangeSeries.data, tz).reduce(
+        (sum, period) => sum + (period.games || 0),
+        0,
+      ),
+    [selectedRangeSeries.data, tz],
+  );
   // The card counts every global filter, not only the date range, so say
   // when the matchup, region or a Strategies drill-down narrows it too.
   const otherFilterCount = useMemo(
@@ -213,32 +211,41 @@ export function DashboardKpiStrip() {
     min_minutes: filters.min_minutes,
     max_minutes: filters.max_minutes,
   });
-  const streakResp = useApi<StreakResponse>(`/v1/streak${streakQuery}`);
+  const streakResp = useApi<StreakResponse>(`/v1/streak${streakQuery}#${dbRev}`);
   const streak = streakResp.data ?? { kind: null, count: 0, lastGameAt: null };
 
   // Win rate uses its own series scoped by the chosen preset.
   const wrSeries = useApi<ApiTimeseriesResponse>(
-    `/v1/timeseries${wrQuery}`,
+    `/v1/timeseries${wrQuery}#${dbRev}`,
   );
   const wrStats = useMemo(
     () => computeWrStats(apiToPeriods(wrSeries.data, tz)),
     [wrSeries.data, tz],
   );
 
-  const placeholder = globalSeries.isLoading ? "—" : "0";
-  const streakPlaceholder = streakResp.isLoading ? "—" : "0";
-  const wrPlaceholder = wrSeries.isLoading ? "—" : "0";
+  const sessionStatus = kpiStatus(globalSeries);
+  const wrStatus = kpiStatus(wrSeries);
+  const streakStatus = kpiStatus(streakResp);
+  const rangeStatus = kpiStatus(selectedRangeSeries);
 
   return (
     <div
-      className="grid auto-rows-fr grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5"
+      className="grid auto-rows-fr grid-cols-2 gap-3 lg:grid-cols-5"
       data-testid="dashboard-kpi-strip"
     >
       <LeadStat
-        label="Games today"
-        value={gamesToday ?? placeholder}
+        label="Today's session"
+        value={
+          sessionStatus === "ready" ? <SessionGames games={todayRecord.games} /> : "—"
+        }
         icon={<Gamepad2 className="h-4 w-4" aria-hidden />}
-        hint={gamesToday ? "Keep the streak alive" : "No games yet today"}
+        hint={
+          sessionStatus === "ready" ? (
+            <SessionRecord record={todayRecord} />
+          ) : (
+            <KpiPendingHint status={sessionStatus} what="today's session" q={globalSeries} />
+          )
+        }
       />
 
       <StatCard
@@ -250,19 +257,25 @@ export function DashboardKpiStrip() {
           />
         }
         value={
-          wrStats.totalGames > 0 ? (
+          wrStatus !== "ready" ? (
+            "—"
+          ) : wrStats.totalGames > 0 ? (
             <span style={{ color: wrColor(wrStats.winRate, wrStats.totalGames) }}>
               {pct1(wrStats.winRate)}
             </span>
           ) : (
-            wrPlaceholder
+            "0"
           )
         }
         hint={
           <>
-            {wrStats.totalGames > 0
-              ? `${wrStats.wins}–${wrStats.losses} over ${wrStats.totalGames} games`
-              : "No games in this window"}
+            {wrStatus !== "ready" ? (
+              <KpiPendingHint status={wrStatus} what="your win rate" q={wrSeries} />
+            ) : wrStats.totalGames > 0 ? (
+              `${wrStats.wins}–${wrStats.losses} over ${wrStats.totalGames} games`
+            ) : (
+              "No games in this window"
+            )}
             {/* This card keeps its own timeframe (the menu by its label),
                 so a date range picked in the filter bar leaves it as is. */}
             <span className="mt-0.5 block text-micro text-text-dim">
@@ -276,7 +289,9 @@ export function DashboardKpiStrip() {
       <StatCard
         label="Active streak"
         value={
-          streak.count > 0 && streak.kind ? (
+          streakStatus !== "ready" ? (
+            "—"
+          ) : streak.count > 0 && streak.kind ? (
             <span
               className={
                 streak.kind === "win" ? "text-success" : "text-danger"
@@ -286,15 +301,21 @@ export function DashboardKpiStrip() {
               <span className="ml-0.5 tabular-nums">{streak.count}</span>
             </span>
           ) : (
-            streakPlaceholder
+            "0"
           )
         }
         hint={
-          streak.count > 0 && streak.kind
-            ? streak.kind === "win"
-              ? "Riding a win streak"
-              : "Reset, review, re-queue"
-            : "Tied or no recent games"
+          streakStatus !== "ready" ? (
+            <KpiPendingHint status={streakStatus} what="your streak" q={streakResp} />
+          ) : streak.count > 0 && streak.kind ? (
+            streak.kind === "win" ? (
+              "Riding a win streak"
+            ) : (
+              "Reset, review, re-queue"
+            )
+          ) : (
+            "Tied or no recent games"
+          )
         }
         size="md"
       />
@@ -302,20 +323,26 @@ export function DashboardKpiStrip() {
       <StatCard
         label="Games in range"
         value={
-          selectedRangeTotal === null ? (
-            "—"
-          ) : (
+          rangeStatus === "ready" ? (
             <span className="tabular-nums">
               {selectedRangeTotal.toLocaleString()}
             </span>
+          ) : (
+            "—"
           )
         }
         hint={
-          selectedRangeSeries.isLoading
-            ? "Loading selected range"
-            : selectedRangeSeries.error
-              ? "Unable to load selected range"
-              : selectedRangeLabel
+          // The label names the filters, not the answer, so it stays up
+          // while the count loads.
+          rangeStatus === "failed" ? (
+            <KpiPendingHint
+              status={rangeStatus}
+              what="games in range"
+              q={selectedRangeSeries}
+            />
+          ) : (
+            selectedRangeLabel
+          )
         }
         size="md"
       />
@@ -323,93 +350,126 @@ export function DashboardKpiStrip() {
   );
 }
 
-function WinRateLabel({
-  currentPreset,
-  onPick,
-  seasons,
+type KpiStatus = "loading" | "failed" | "ready";
+
+/**
+ * Which state a card's request is in, in the data-states order: ready
+ * while there is an answer to show (hasQueryData — a background
+ * refresh that fails keeps it), failed when the request errored with
+ * nothing current to show, otherwise loading.
+ */
+function kpiStatus<T>(q: QueryLike<T>): KpiStatus {
+  if (hasQueryData(q)) return "ready";
+  return q.error ? "failed" : "loading";
+}
+
+/** The hint line of a card that has no answer to show yet. */
+function KpiPendingHint({
+  status,
+  what,
+  q,
 }: {
-  currentPreset: PresetId;
-  onPick: (id: PresetId) => void;
-  seasons: ReturnType<typeof useFilters>["seasons"];
+  status: Exclude<KpiStatus, "ready">;
+  /** What failed to load, for screen readers: "Couldn't load your streak." */
+  what: string;
+  q: QueryLike<unknown>;
 }) {
-  const [open, setOpen] = useState(false);
-  const label = `Win rate · ${shortLabelFor(currentPreset, seasons)}`;
-
-  // ESC closes the menu — same UX as the global FilterBar.
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
+  if (status === "failed") return <KpiRetry what={what} onRetry={() => q.mutate()} />;
+  // A bar shaped like the hint line, not "Loading…" text.
   return (
-    <span className="relative inline-flex items-center gap-1">
-      <span>{label}</span>
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Change Win Rate timeframe"
-        onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-7 w-7 items-center justify-center rounded text-text-dim hover:bg-bg-elevated hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-      </button>
-
-      {open ? (
-        <>
-          <button
-            type="button"
-            aria-label="Close timeframe menu"
-            className="fixed inset-0 z-30"
-            onClick={() => setOpen(false)}
-          />
-          <div
-            role="menu"
-            className="absolute right-0 top-full z-40 mt-1 w-56 max-w-[80vw] rounded-lg border border-border bg-bg-surface p-1 text-left shadow-card"
-          >
-            {WIN_RATE_PRESET_OPTIONS.map((id) => {
-              const friendly =
-                id === "current_season"
-                  ? `Current season${
-                      seasons.find((s) => s.isCurrent)
-                        ? ` (${seasons.find((s) => s.isCurrent)?.number})`
-                        : ""
-                    }`
-                  : PRESETS.find((p) => p.id === id)?.label || id;
-              const selected = currentPreset === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={selected}
-                  onClick={() => {
-                    onPick(id);
-                    setOpen(false);
-                  }}
-                  className={[
-                    "flex min-h-[40px] w-full items-center rounded px-2 py-1.5 text-left text-sm",
-                    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                    selected
-                      ? "bg-accent/15 text-accent"
-                      : "text-text-muted hover:bg-bg-elevated hover:text-text",
-                  ].join(" ")}
-                >
-                  {friendly}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      ) : null}
-    </span>
+    <>
+      <SkeletonBar className="mt-1 h-3 w-24 max-w-full" />
+      <span className="sr-only">Loading</span>
+    </>
   );
 }
 
+/**
+ * A card's failed state: "Couldn't load · Retry" in its hint line.
+ * Retry re-runs that card's request. Like RequestError's Retry it stays
+ * focusable while the request runs, reports aria-busy and ignores
+ * repeat presses. The connection banner covers a dropped connection,
+ * so the card itself stays short.
+ */
+function KpiRetry({ what, onRetry }: { what: string; onRetry: () => unknown }) {
+  const [retrying, setRetrying] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  async function retry() {
+    if (retrying) return;
+    setRetrying(true);
+    try {
+      await onRetry();
+    } catch {
+      // SWR keeps the error on the response, so this hint stays.
+    } finally {
+      if (mounted.current) setRetrying(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void retry();
+      }}
+      aria-busy={retrying || undefined}
+      className="-mx-1 inline-flex min-h-8 items-center gap-1.5 rounded px-1 text-left text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <RefreshCw
+        className={[
+          "h-3.5 w-3.5 shrink-0 text-warning",
+          retrying ? "motion-safe:animate-spin" : "",
+        ].join(" ")}
+        aria-hidden
+      />
+      <span>
+        Couldn&apos;t load<span className="sr-only"> {what}.</span>
+        <span aria-hidden> ·</span>{" "}
+        <span className="font-semibold text-accent">
+          {retrying ? "Retrying…" : "Retry"}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+/** "6 games": the count at headline size, the unit a step smaller. */
+function SessionGames({ games }: { games: number }) {
+  return (
+    <>
+      <span className="tabular-nums">{games}</span>{" "}
+      <span className="text-h4">{games === 1 ? "game" : "games"}</span>
+    </>
+  );
+}
+
+/** "4W 2L" for today's games, spelled out for screen readers. */
+function SessionRecord({ record }: { record: TodayRecord }) {
+  if (record.games === 0) return <>No games yet today</>;
+  const { wins, losses } = record;
+  return (
+    <>
+      <span aria-hidden className="tabular-nums">{`${wins}W ${losses}L`}</span>
+      <span className="sr-only">
+        {`${wins} ${wins === 1 ? "win" : "wins"}, ${losses} ${losses === 1 ? "loss" : "losses"}`}
+      </span>
+    </>
+  );
+}
+
+/**
+ * The lead card. It spans both columns on phones so five cards stack
+ * as 1, 2, 2 instead of leaving an orphan; app/app/loading.tsx and the
+ * layout skeleton use the same classes so nothing shifts on load.
+ * The test id stays put for the planned "This session" card.
+ */
 function LeadStat({
   label,
   value,
@@ -417,12 +477,15 @@ function LeadStat({
   icon,
 }: {
   label: string;
-  value: React.ReactNode;
-  hint?: React.ReactNode;
-  icon?: React.ReactNode;
+  value: ReactNode;
+  hint?: ReactNode;
+  icon?: ReactNode;
 }) {
   return (
-    <div className="relative isolate flex h-full flex-col overflow-hidden rounded-lg shadow-halo-cyan">
+    <div
+      data-testid="kpi-today-session"
+      className="relative isolate col-span-2 flex h-full flex-col overflow-hidden rounded-lg shadow-halo-cyan lg:col-span-1"
+    >
       <GlowHalo color="cyan" position="top-left" size={120} opacity={0.9} />
       <StatCard
         label={
@@ -481,18 +544,35 @@ interface MmrResponse {
  * stat.
  */
 function MmrPerRegionStat() {
-  const { data, isLoading } = useApi<MmrResponse>("/v1/me/mmr");
+  // Not keyed on dbRev: each request asks SC2Pulse once per Pulse ID.
+  const mmr = useApi<MmrResponse>("/v1/me/mmr");
+  const { data } = mmr;
   const entries = data?.entries || [];
+  const status = kpiStatus(mmr);
 
-  if (isLoading) {
-    return <StatCard label="MMR" value="—" hint="Loading SC2Pulse" size="md" />;
+  if (status !== "ready") {
+    return (
+      <StatCard
+        label="MMR"
+        value="—"
+        hint={<KpiPendingHint status={status} what="your MMR" q={mmr} />}
+        size="md"
+      />
+    );
   }
   if (entries.length === 0) {
     return (
       <StatCard
         label="MMR"
         value="—"
-        hint="Add a Pulse ID in Settings"
+        hint={
+          <Link
+            href={PULSE_ID_SETTINGS_HREF}
+            className="rounded-sm text-accent hover:text-accent-hover hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            Add a Pulse ID in Settings
+          </Link>
+        }
         size="md"
       />
     );
@@ -554,22 +634,35 @@ function MmrPerRegionStat() {
   );
 }
 
+interface TodayRecord {
+  games: number;
+  wins: number;
+  losses: number;
+}
+
 /**
- * Find today's bucket in the day-resolution timeseries by IANA-tz date
- * key. We don't trust the array tail because clock skew or a hidden
- * preset could hide today; a keyed `find` is more forgiving.
+ * Today's games and W-L from the day-resolution timeseries, found by
+ * IANA-tz date key. We don't trust the array tail because clock skew or
+ * a hidden preset could hide today; a keyed `find` is more forgiving.
+ * No bucket for today means no games yet: a real zero. (Loading and
+ * failed requests are told apart by the caller, from the request.)
  *
- * Returns ``null`` when the series is empty so the caller can render a
- * loading placeholder instead of a hard zero.
+ * Example:
+ *   computeTodayRecord([{ date: todayKey, games: 6, wins: 4, losses: 2, … }], tz);
+ *   // -> { games: 6, wins: 4, losses: 2 }
  */
-function computeGamesToday(
+export function computeTodayRecord(
   series: Period[],
   timeZone: string,
-): number | null {
-  if (series.length === 0) return null;
-  const todayKey = todayKeyIn(timeZone);
-  const todayPeriod = series.find((p) => p.date === todayKey);
-  return todayPeriod ? todayPeriod.games || 0 : 0;
+  now: Date = new Date(),
+): TodayRecord {
+  const todayKey = todayKeyIn(timeZone, now);
+  const today = series.find((p) => p.date === todayKey);
+  return {
+    games: today?.games || 0,
+    wins: today?.wins || 0,
+    losses: today?.losses || 0,
+  };
 }
 
 function computeWrStats(series: Period[]): {

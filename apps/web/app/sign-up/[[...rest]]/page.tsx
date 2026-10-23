@@ -80,7 +80,7 @@ const BULLETS: ReadonlyArray<MarketingBullet> = [
   },
   {
     icon: ShieldCheck,
-    text: "Per-opener W-L, per-map veto data, and dossiers that survive opponent name changes.",
+    text: "Per-opener W-L, per-map win rates, and dossiers that survive opponent name changes.",
   },
 ];
 

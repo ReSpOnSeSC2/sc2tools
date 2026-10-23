@@ -1,28 +1,15 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { DailyPulse } from "@/components/analyzer/DailyPulse";
 import { DashboardKpiStrip } from "@/components/analyzer/DashboardKpiStrip";
 import { LadderPulse } from "@/components/analyzer/LadderPulse";
-import {
-  defaultTabRedirect,
-  hrefForTab,
-  opponentDossierHref,
-} from "@/components/analyzer/tabs";
+import { hrefForTab, opponentDossierHref } from "@/components/analyzer/tabs";
 import { AgentUpgradeNotice } from "@/components/dashboard/AgentUpgradeNotice";
 import { LiveGamePanel } from "@/components/dashboard/LiveGamePanel";
 import { useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
 import { SectionBoundary } from "@/components/ui/SectionBoundary";
-import { useApi } from "@/lib/clientApi";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
-
-/**
- * Applied at most once per browser session so the preference lands you
- * on your chosen section, but navigating back to Today afterwards
- * doesn't bounce you away again.
- */
-const DEFAULT_TAB_APPLIED_KEY = "sc2tools.defaultTabApplied";
 
 /**
  * TodayView — the /app landing surface. Everything here is the
@@ -30,34 +17,15 @@ const DEFAULT_TAB_APPLIED_KEY = "sc2tools.defaultTabApplied";
  * running match, the KPI strip, Daily Pulse, and Ladder Pulse
  * whose cards deep-link into the routed sections.
  *
- * Also honours Settings → "Default tab": users who chose a section as
- * their landing spot are redirected there once per session, preserving
- * the old dashboard's behaviour now that sections are real routes.
- * "Today (default)" and no choice at all both stay here.
+ * Settings → "Default tab" is applied by the /app page on the server
+ * (app/app/page.tsx), before this renders, and only for the first /app
+ * page of a browser session. Today itself never redirects, so clicking
+ * Today always shows Today.
  */
 export function TodayView() {
   const router = useRouter();
   const me = useDashboardMe();
   const { enabled: browserImportEnabled } = useInstantImport();
-
-  const { data: misc } = useApi<{ defaultTab?: string }>(
-    "/v1/me/preferences/misc",
-  );
-  const redirected = useRef(false);
-  useEffect(() => {
-    if (redirected.current) return;
-    const explicitToday = new URLSearchParams(window.location.search).get("view") === "today";
-    const target = explicitToday ? null : defaultTabRedirect(misc?.defaultTab);
-    if (!explicitToday && !target) return;
-    try {
-      if (window.sessionStorage.getItem(DEFAULT_TAB_APPLIED_KEY)) return;
-      window.sessionStorage.setItem(DEFAULT_TAB_APPLIED_KEY, "1");
-    } catch {
-      /* storage unavailable — apply once per mount instead */
-    }
-    redirected.current = true;
-    if (target) router.replace(hrefForTab(target));
-  }, [misc, router]);
 
   return (
     <div className="space-y-5">

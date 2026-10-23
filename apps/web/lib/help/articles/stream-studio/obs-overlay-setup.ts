@@ -21,7 +21,7 @@ const article: HelpArticle = {
     "transparent",
     "stream",
   ],
-  updated: "2026-10-22",
+  updated: "2026-10-23",
   body: [
     {
       type: "settingsLink",
@@ -35,7 +35,7 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "In **Settings → Overlay**, create (or copy) an overlay token — the token IS the key, so treat the URLs like passwords.",
+        "Open **Settings → Overlay**. Your overlay token is created for you the first time you open it, and every widget URL is listed with a **Copy** button. The token in the URL is the key to your overlay, so treat these URLs like passwords.",
         "Each widget has its own URL — add one OBS **Browser Source** per widget you want and position it freely. Backgrounds are transparent.",
         "Press **Test** on any widget to render clearly-labelled sample content for ~20 seconds — place and style everything without waiting for a real game.",
         "Widgets show up when something happens (a game starts or ends) and auto-hide between games; persistent HUDs like the session record stay up. Config changes reach OBS within about a minute of pressing Save — no Browser Source edits needed.",
@@ -43,7 +43,7 @@ const article: HelpArticle = {
     },
     { type: "settingsLink", label: "Open Settings → Overlay", href: "/settings?tab=overlay" },
   ],
-  related: ["multi-platform-chat", "stream-dock", "troubleshooting-and-support"],
+  related: ["multi-platform-chat", "stream-dock", "obs-auto-scene-switching", "voice", "troubleshooting-and-support"],
 };
 
 export default article;

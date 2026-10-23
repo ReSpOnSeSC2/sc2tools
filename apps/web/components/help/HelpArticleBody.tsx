@@ -8,9 +8,11 @@ import { HelpWidget } from "./HelpWidget";
 /**
  * Renders an article's blocks. One renderer for every surface:
  *
- *   - "page": the public /help/<slug> article (h2 sub-headings).
+ *   - "page": the public /help/<slug> article (h2 sub-headings, which
+ *     carry their `anchor` as id so /help/<slug>#<anchor> lands on them).
  *   - "compact": Settings → Help sections and the <HelpLink> sheet
- *     (h3 sub-headings, tighter rhythm).
+ *     (h3 sub-headings, tighter rhythm, no ids: Settings → Help shows
+ *     every article on one page, where anchors could repeat).
  *
  * Server-safe (no hooks); `links.onOpenArticle` is only passed by
  * client surfaces.
@@ -27,6 +29,12 @@ const TONES: Record<HelpCalloutTone, { box: string; icon: typeof Info; iconClass
 const HEADING_CLASS: Record<HelpArticleBodyVariant, string> = {
   page: "pt-2 font-display text-h4 font-bold text-text",
   compact: "pt-1 text-body font-semibold text-text",
+};
+
+/** Section headings: clear the sticky site header; no ring on script focus. */
+const ANCHOR_CLASS: Record<HelpArticleBodyVariant, string> = {
+  page: "scroll-mt-24",
+  compact: "focus:outline-none",
 };
 
 function Block({
@@ -47,8 +55,20 @@ function Block({
       );
     case "heading": {
       const Heading = variant === "page" ? "h2" : "h3";
+      // A section anchor is the element id on the article page, so the
+      // browser handles /help/<slug>#<id>. Compact surfaces can show many
+      // articles at once (Settings → Help), so they mark it with a data
+      // attribute instead; <HelpLink anchor> focuses it inside its sheet.
+      const anchorProps = !block.anchor
+        ? {}
+        : variant === "page"
+          ? { id: block.anchor }
+          : { "data-help-anchor": block.anchor, tabIndex: -1 };
       return (
-        <Heading className={HEADING_CLASS[variant]}>
+        <Heading
+          {...anchorProps}
+          className={block.anchor ? `${HEADING_CLASS[variant]} ${ANCHOR_CLASS[variant]}` : HEADING_CLASS[variant]}
+        >
           <HelpInline text={block.text} links={links} />
         </Heading>
       );
