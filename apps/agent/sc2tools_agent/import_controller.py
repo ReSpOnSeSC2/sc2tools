@@ -358,27 +358,23 @@ class ImportController:
         try:
             out = self._api.import_agent_start({"total": total})
         except Exception as exc:  # noqa: BLE001
-            # Older API without the route (404) or offline — the sweep
-            # still runs, just without the card.
+            # Offline/older API must not strand the desktop card at its
+            # initial inventory while normal background uploads continue.
             log.info("auto_backfill_register_failed: %s", exc)
-            if force_display:
-                import uuid
-                local_id = "local:" + uuid.uuid4().hex
-                if total:
-                    self._activate(local_id, total)
-                else:
-                    self._post_progress({"jobId": local_id, "phase": "import", "total": 0,
-                                         "completed": 0, "errors": 0, "remaining": 0, "done": True})
+            if total:
+                self._activate("local:offline", total)
+            elif force_display:
+                self._post_progress({"jobId": "local:offline", "phase": "import", "total": 0,
+                                     "completed": 0, "errors": 0, "remaining": 0, "done": True})
             return
         job_id = out.get("jobId") if isinstance(out, dict) else None
         if not job_id:
             log.info("auto_backfill_register_no_job_id resp=%r", out)
-            if force_display:
-                if total:
-                    self._activate("local:manual", total)
-                else:
-                    self._post_progress({"jobId": "local:manual", "phase": "import", "total": 0,
-                                         "remaining": 0, "done": True})
+            if total:
+                self._activate("local:unregistered", total)
+            elif force_display:
+                self._post_progress({"jobId": "local:unregistered", "phase": "import", "total": 0,
+                                     "remaining": 0, "done": True})
             return
         # Adopting a job that survived an agent restart (auto-update
         # mid-backfill): seed our counters from the job's prior

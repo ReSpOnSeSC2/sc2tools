@@ -102,6 +102,27 @@ def test_empty_offline_manual_resync_finishes_without_an_indefinite_spinner(monk
     assert not api.progress_calls
 
 
+def test_startup_history_continues_local_accounting_when_cloud_registration_fails(monkeypatch):
+    from pathlib import Path
+    from tests.test_import_controller import FakeApi, FakeWatcher, wait_for
+    monkeypatch.setattr("sc2tools_agent.import_controller._REPORT_INTERVAL_SEC", .02)
+    api, watcher = FakeApi(), FakeWatcher(pending=30)
+    def offline(_body):
+        raise ConnectionError("offline fixture")
+    monkeypatch.setattr(api, "import_agent_start", offline)
+    controller = ImportController(api=api, watcher=watcher)
+    try:
+        controller.maybe_start_auto_backfill()  # Normal startup, not manual Re-sync.
+        for index in range(30):
+            controller.on_upload_success(Path(str(index)))
+        watcher.pending = 0
+        assert wait_for(lambda: controller.snapshot()["phase"] == "done")
+        assert controller.snapshot()["completed"] == 30
+        assert api.progress_calls == []
+    finally:
+        controller.stop()
+
+
 def test_controller_hold_excludes_pause_and_outage_from_rate_samples():
     from tests.test_import_controller import FakeApi, FakeWatcher
     now = [0]

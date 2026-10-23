@@ -47,3 +47,12 @@ def test_failed_retry_write_restores_exact_cursor(tmp_path, monkeypatch):
     with pytest.raises(OSError):
         queue.retry_selected(reason="parse_failed")
     assert state.uploaded == before
+
+
+@pytest.mark.parametrize("marker", ["filtered", "skipped:filtered"])
+def test_date_filter_retry_recognizes_both_stored_marker_formats(tmp_path, marker):
+    job = _game(tmp_path, "filtered.SC2Replay")
+    state = AgentState(uploaded={str(job.file_path): marker, "unrelated": "skipped:parse_failed"})
+    queue = UploadQueue(cfg=_cfg(tmp_path), state=state, api=_StubApi())
+    assert queue.retry_selected(reason="filtered") == [str(job.file_path)]
+    assert state.uploaded == {"unrelated": "skipped:parse_failed"}

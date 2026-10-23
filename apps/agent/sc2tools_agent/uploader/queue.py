@@ -1015,7 +1015,10 @@ class UploadQueue:
             chosen = {}
             for path, marker in self._state.uploaded.items():
                 wanted = "filtered" if reason == "filtered" else "skipped:" + str(reason)
-                matches = marker == wanted if reason else path in selected
+                if reason == "filtered":
+                    matches = marker in {"filtered", "skipped:filtered"}
+                else:
+                    matches = marker == wanted if reason else path in selected
                 if matches and path not in self._pending_paths and Path(path).is_file():
                     chosen[path] = marker
             for path in chosen:
