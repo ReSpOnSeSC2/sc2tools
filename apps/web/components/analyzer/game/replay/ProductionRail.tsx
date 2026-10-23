@@ -224,6 +224,14 @@ function ProductionRailImpl({
             role="tab"
             id={`${uid}-tab-${id}`}
             aria-selected={tab === id}
+            tabIndex={tab === id ? 0 : -1}
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              const next = event.key === "Home" ? "queue" : event.key === "End" ? "field" : tab === "queue" ? "field" : "queue";
+              onTabChange(next);
+              (event.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[role="tab"]')[next === "queue" ? 0 : 1])?.focus();
+            }}
             aria-controls={`${uid}-panel-${id}`}
             onClick={() => onTabChange(id)}
             className={`flex-1 ${chipClass(tab === id)}`}

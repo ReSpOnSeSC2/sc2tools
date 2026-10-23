@@ -32,11 +32,10 @@
  *  - Nothing here subscribes to rAF, and no panel touches the sprite
  *    module's per-frame state.
  *
- * RESPONSIVE. One instance of each rail (no duplicated DOM, no
- * duplicated ids), repositioned with flex ``order``: three columns at
- * ``xl``, and below that a single column with the MAP FIRST and the
- * rails stacked under it, each capped and scrolling. The map never
- * shrinks to make room for a rail.
+ * RESPONSIVE. Desktop keeps both rails. Below ``xl``, the map and dock
+ * precede one switchable rail panel, collapsed initially on phones.
+ * Only the selected rail renders, with no duplicate ids or subscriptions.
+ * The map never shrinks to make room for a rail.
  *
  * LAYOUT / SIZING CONTRACT. At ``xl`` the stage has a DEFINITE height
  * (``min(88vh, 1040px)``) and lays out as a player: the top bar and the
@@ -55,7 +54,8 @@
  * the light theme.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { MapPlayback } from "@/lib/mapReplay";
 import type { PatchEra } from "@/lib/meta";
 import {
@@ -161,6 +161,17 @@ export function ReplayStage({
   const [productionSide, setProductionSide] = useState<ReplaySide>("me");
   const [productionTab, setProductionTab] = useState<ProductionTab>("queue");
   const [buildFilter, setBuildFilter] = useState<BuildFilter>("both");
+  const [wide, setWide] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [panelTab, setPanelTab] = useState<"production" | "build">("production");
+  const panelId = useId();
+  useEffect(() => {
+    const desktop = window.matchMedia?.("(min-width: 1280px)") ?? { matches: window.innerWidth >= 1280, addEventListener: undefined, removeEventListener: undefined };
+    const phone = window.matchMedia?.("(max-width: 767px)") ?? { matches: window.innerWidth < 768, addEventListener: undefined, removeEventListener: undefined };
+    const update = () => { setWide(desktop.matches); setPanelOpen(!phone.matches); };
+    update(); desktop.addEventListener?.("change", update); phone.addEventListener?.("change", update);
+    return () => { desktop.removeEventListener?.("change", update); phone.removeEventListener?.("change", update); };
+  }, []);
   const [showWorkers, setShowWorkers] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -229,7 +240,7 @@ export function ReplayStage({
          tokens against ``STAGE_BG`` so the panels are legible whatever
          theme the page is in; ``:fullscreen`` (globals.css) releases
          the height cap. */
-      className={`${REPLAY_SCOPE_CLASS} flex flex-col overflow-hidden rounded-xl border border-border xl:h-[min(88vh,1040px)] xl:min-h-[34rem]`}
+      className={`${REPLAY_SCOPE_CLASS} flex flex-col overflow-clip rounded-xl border border-border xl:h-[min(88vh,1040px)] xl:min-h-[34rem]`}
       style={{
         background: STAGE_BG,
         ...(maxHeightPx ? { height: `${maxHeightPx}px` } : null),
@@ -247,7 +258,7 @@ export function ReplayStage({
       />
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-2 xl:flex-row xl:items-stretch xl:gap-2.5 xl:p-2.5">
-        {showProduction ? (
+        {wide && showProduction ? (
           <ProductionRail
             model={model}
             playback={playback}
@@ -290,7 +301,7 @@ export function ReplayStage({
           />
         </div>
 
-        {showBuildOrder ? (
+        {wide && showBuildOrder ? (
           <BuildOrderRail
             model={model}
             t={time}
@@ -310,6 +321,7 @@ export function ReplayStage({
         ) : null}
       </div>
 
+      <div className="sticky bottom-[var(--chrome-bottom,0px)] z-10 pb-[env(safe-area-inset-bottom)] xl:static">
       <TransportDock
         t={time}
         gameLength={model.gameLength}
@@ -335,6 +347,32 @@ export function ReplayStage({
           oppName={oppName}
         />
       </TransportDock>
+      </div>
+      {!wide && !mobileCompact ? <section data-testid="replay-mobile-panel" className="border-t border-border">
+        <button className="flex min-h-11 w-full items-center justify-between px-3 text-caption md:hidden"
+          aria-expanded={panelOpen} onClick={() => setPanelOpen((open) => !open)}>Show production &amp; build order {panelOpen ? <ChevronUp className="h-4 w-4" aria-hidden /> : <ChevronDown className="h-4 w-4" aria-hidden />}</button>
+        {panelOpen ? <>
+          <div role="tablist" aria-label="Replay panels" className="flex gap-2 p-2">
+            {(["production", "build"] as const).map((tab) => <button key={tab} role="tab"
+              id={`${panelId}-${tab}`} aria-controls={`${panelId}-panel`}
+              className="min-h-11 flex-1 rounded border border-border px-3 text-caption"
+              aria-selected={panelTab === tab} tabIndex={panelTab === tab ? 0 : -1}
+              onClick={() => setPanelTab(tab)} onKeyDown={(event) => {
+                if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                event.preventDefault(); const next = event.key === "Home" ? "production" : event.key === "End" ? "build" : panelTab === "production" ? "build" : "production";
+                setPanelTab(next); (event.currentTarget.parentElement?.querySelectorAll<HTMLElement>('[role="tab"]')[next === "production" ? 0 : 1])?.focus();
+              }}>{tab === "production" ? "Production" : "Build order"}</button>)}
+          </div>
+          <div id={`${panelId}-panel`} role="tabpanel" aria-labelledby={`${panelId}-${panelTab}`} className="max-h-72 overflow-auto">
+            {panelTab === "production" ? <ProductionRail model={model} playback={playback} side={productionSide} t={time}
+              tab={productionTab} onTabChange={setProductionTab} onSideChange={setProductionSide} myName={myName} oppName={oppName} />
+            : <BuildOrderRail model={model} t={time} filter={buildFilter} onFilterChange={setBuildFilter} showWorkers={showWorkers}
+              onShowWorkersChange={setShowWorkers} autoScroll={autoScroll} onAutoScrollChange={setAutoScroll} onSeek={seek}
+              buildName={buildName} buildMatchPct={buildMatchPct} myName={myName} oppName={oppName} />}
+          </div>
+        </> : null}
+      </section> : null}
+
     </section>
   );
 }

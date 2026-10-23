@@ -1,6 +1,8 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { useRef } from "react";
+import { usePageSearchShortcut } from "@/lib/usePageSearchShortcut";
+import { Search, X } from "lucide-react";
 import { Field } from "@/components/ui/Field";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
@@ -29,7 +31,10 @@ export interface BuildFilterBarProps {
   onChange: (next: BuildFilterState) => void;
   /** Optional sample-size summary shown to the right of the filter. */
   total: number;
-  shown: number;
+  libraryTotal?: number | null;
+  onSearchCommit?: () => void;
+  updating?: boolean;
+  onClearFilters?: () => void;
 }
 
 const SORT_OPTIONS: ReadonlyArray<{ value: BuildSortKey; label: string }> = [
@@ -52,8 +57,11 @@ export function BuildFilterBar({
   value,
   onChange,
   total,
-  shown,
+  libraryTotal, onSearchCommit, updating, onClearFilters,
 }: BuildFilterBarProps) {
+  const searchRef = useRef<HTMLInputElement>(null);
+  usePageSearchShortcut(searchRef);
+  const activeCount = Number(!!value.search) + Number(value.matchup !== "All") + Number(value.hideEmpty);
   function update<K extends keyof BuildFilterState>(
     key: K,
     next: BuildFilterState[K],
@@ -72,19 +80,23 @@ export function BuildFilterBar({
           htmlFor="builds-search"
           className="min-w-0 flex-1"
         >
-          <div className="relative">
+          <div id="builds-search-wrap" className="relative">
             <Search
               aria-hidden
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-dim"
             />
             <Input
+              ref={searchRef}
+              onKeyDown={(event) => { if (event.key === "Enter") onSearchCommit?.(); }}
               id="builds-search"
               value={value.search}
               onChange={(e) => update("search", e.target.value)}
               placeholder="Search builds, matchups, openers…"
-              className="pl-9"
+              className="pl-9 pr-12"
               autoComplete="off"
+              maxLength={200}
             />
+            {value.search ? <button type="button" aria-label="Clear search" onClick={() => update("search", "")} className="absolute right-0 top-0 flex h-11 w-11 items-center justify-center"><X className="h-4 w-4" aria-hidden /></button> : null}
           </div>
         </Field>
         <Field
@@ -119,9 +131,10 @@ export function BuildFilterBar({
           <span>Hide empty</span>
         </label>
       </div>
-      <div className="text-caption text-text-dim" aria-live="polite">
-        Showing <span className="text-text">{shown}</span> of {total}{" "}
-        build{total === 1 ? "" : "s"}
+      <div className="flex flex-wrap items-center gap-3 text-caption text-text-dim" aria-live="polite">
+        <span>{activeCount ? libraryTotal != null ? `${total} of ${libraryTotal} builds match` : `${total} builds match` : `${total} build${total === 1 ? "" : "s"}`}</span>
+        {updating ? <span role="status">Updating…</span> : null}
+        {activeCount > 0 && onClearFilters ? <button className="min-h-11 px-2 text-accent" onClick={onClearFilters}>Clear filters ({activeCount})</button> : null}
       </div>
     </section>
   );

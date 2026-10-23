@@ -132,7 +132,7 @@ export function BuildCard({
                     <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
                   }
                 >
-                  Reclassifying…
+                  Re-matching…
                 </Badge>
               ) : null}
             </div>
@@ -602,7 +602,7 @@ function BuildKebab({
                       <RefreshCw className="h-4 w-4" aria-hidden />
                     )
                   }
-                  label={reclassifying ? "Reclassifying…" : "Reclassify replays"}
+                  label={reclassifying ? "Re-matching…" : "Re-match replays"}
                   disabled={reclassifying || reclassifyDisabled}
                   onClick={() => {
                     closeMenu(true);

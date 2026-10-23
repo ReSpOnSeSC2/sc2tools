@@ -240,7 +240,7 @@ describe("BuildUnitRollEditor", () => {
         onChange={onChange}
       />,
     );
-    expect(screen.getByText("Showing 101–101 of 160 builds")).toBeTruthy();
+    expect(screen.getByText("Page 3 of 4 · builds 101–101 of 160")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(nextPage).toHaveBeenCalledOnce();
     fireEvent.change(screen.getByRole("searchbox", { name: "Search custom builds for randomizer" }), { target: { value: "Older" } });

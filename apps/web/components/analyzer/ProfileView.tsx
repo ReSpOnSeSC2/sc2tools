@@ -6,6 +6,11 @@ import { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import Link from "next/link";
 import { ChevronLeft, ExternalLink, Users } from "lucide-react";
+import { DossierFilterBar } from "./DossierFilterBar";
+import { Button } from "@/components/ui/Button";
+import { useToastOptional } from "@/components/ui/Toast";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
+import { isOpponentKey } from "@/lib/opponentCache";
 import { useApi } from "@/lib/clientApi";
 import {
   filtersToQuery,
@@ -171,6 +176,8 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   // must not silently re-introduce custom or team games after the list
   // was narrowed to ladder 1v1.
   const { filters, dbRev } = useFilters();
+  const debouncedDbRev = useDebouncedValue(dbRev, 2000);
+  const toast = useToastOptional()?.toast;
   const myName = useMyDisplayName();
   // Same "Group same player" toggle the Opponents tab persists. When
   // on, the API folds every identity SC2Pulse links to this player
@@ -183,7 +190,8 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   );
   const profileQuery = buildProfileQuery(filters, groupByPlayer);
   const profile = useApi<OpponentProfileResp>(
-    `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}`,
+    `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}#${debouncedDbRev}`,
+    { keepPreviousData: true },
   );
   const { data, mutate } = profile;
   // Per-race SC2Pulse breakdown — fetched in parallel (live, cached
@@ -205,6 +213,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
   // table and the by-map / by-strategy summary cards below it. The
   // chips inside the H2H header surface the active filter and clear
   // it on tap.
+  const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null);
   const [selectedMap, setSelectedMap] = useState<string | null>(null);
   const [selectedBuildMatchup, setSelectedBuildMatchup] =
     useState<BuildMatchupSelection | null>(null);
@@ -213,21 +222,23 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
 
   const games: ProfileGame[] = useMemo(() => data?.games || [], [data?.games]);
   const filteredGames = useMemo(() => {
-    if (!selectedMap && !selectedBuildMatchup) return games;
+    if (!selectedMap && !selectedBuildMatchup && !selectedStrategy) return games;
     return games.filter((g) => {
       if (selectedMap && (g.map || "") !== selectedMap) return false;
+      if (selectedStrategy && g.opp_strategy !== selectedStrategy) return false;
       if (selectedBuildMatchup) {
         if ((g.my_build || "") !== selectedBuildMatchup.myBuild) return false;
         if ((g.opp_strategy || "") !== selectedBuildMatchup.oppStrategy) return false;
       }
       return true;
     });
-  }, [games, selectedMap, selectedBuildMatchup]);
+  }, [games, selectedMap, selectedBuildMatchup, selectedStrategy]);
   const replayHistoryQuery = buildOpponentReplayHistoryQuery(
     filters,
     groupByPlayer,
     selectedMap,
     selectedBuildMatchup,
+    selectedStrategy,
   );
   const replayHistoryPath =
     `/v1/opponents/${encodeURIComponent(pulseId)}/games${replayHistoryQuery}`;
@@ -254,7 +265,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
     );
   }
   if (!data) return <OpponentNotFound />;
-  const filterActive = !!selectedMap || !!selectedBuildMatchup;
+  const filterActive = !!selectedMap || !!selectedBuildMatchup || !!selectedStrategy;
   const t = filterActive
     ? totalsFromGames(filteredGames)
     : data.totals || { wins: 0, losses: 0, total: 0, winRate: 0 };
@@ -333,24 +344,34 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
             <PublicProfileLink href={publicHref} />
           ) : null}
         </div>
-        <div className="grid w-full grid-cols-2 gap-3 sm:w-auto sm:grid-cols-4">
-          <Stat label="Games" value={t.total || 0} />
-          <Stat label="W" value={t.wins || 0} color="rgb(var(--success))" />
-          <Stat label="L" value={t.losses || 0} color="rgb(var(--danger))" />
+        <div className={`grid w-full grid-cols-2 gap-3 sm:w-auto sm:grid-cols-4 ${filterActive ? "[&>div]:border-accent" : ""}`}>
+          <Stat label={filterActive ? "Games (filtered)" : "Games"} value={t.total || 0} />
+          <Stat label={filterActive ? "W (filtered)" : "W"} value={t.wins || 0} color="rgb(var(--success))" />
+          <Stat label={filterActive ? "L (filtered)" : "L"} value={t.losses || 0} color="rgb(var(--danger))" />
           <Stat
-            label="WR"
+            label={filterActive ? "WR (filtered)" : "WR"}
             value={pct1(t.winRate)}
             color={wrColor(t.winRate, t.total)}
           />
         </div>
       </header>
 
+      {profile.error ? <div role="status" className="flex items-center gap-3 text-caption text-warning">
+        <span>Couldn't refresh after your last game</span><Button variant="ghost" size="sm" onClick={() => mutate()}>Retry</Button>
+      </div> : null}
+      <DossierFilterBar filters={[
+        ...(selectedMap ? [{ key: "map", label: "Map", value: selectedMap, clear: () => setSelectedMap(null) }] : []),
+        ...(selectedStrategy ? [{ key: "strategy", label: "Their strategy", value: selectedStrategy, clear: () => setSelectedStrategy(null) }] : []),
+        ...(selectedBuildMatchup ? [{ key: "build", label: "Build", value: `${selectedBuildMatchup.myBuild} vs ${selectedBuildMatchup.oppStrategy}`, clear: () => setSelectedBuildMatchup(null) }] : []),
+      ]} onClear={() => { setSelectedMap(null); setSelectedStrategy(null); setSelectedBuildMatchup(null); }} />
+      {filterActive && data.gamesTruncated ? <p className="text-caption text-text-muted">Filtered summary uses the latest analyzed games. Replay history below searches your full history.</p> : null}
       <OpponentReplayHistory
         // A query-scope or database revision change must reset cursor history
         // to page one. Remounting avoids briefly applying an old opaque cursor
         // to a new filter set.
         key={`${replayHistoryPath}:${dbRev}`}
         path={replayHistoryPath}
+        selectedMap={selectedMap} onSelectMap={setSelectedMap} maps={Object.keys(data.byMap || {})}
         initialGames={filteredGames}
         profileTruncated={data.gamesTruncated}
         targetGameId={pendingGameId}
@@ -376,10 +397,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
 
       {identitySubmissionEnabled ? (
         <OpponentIdentitySubmission pulseId={pulseId} onChanged={() => {
-          void refreshCache((key) => Array.isArray(key) && (
-            key[0] === "player-channels"
-            || (key[0] === "authenticated-api" && typeof key[2] === "string" && key[2].startsWith("/v1/opponents"))
-          ));
+          void refreshCache(isOpponentKey(pulseId));
         }} />
       ) : null}
 
@@ -399,6 +417,12 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
 
       <OpponentDiagnosticsPanel
         collapsible
+        initiallyExpanded={!data.pulseCharacterId || !data.mmr}
+        onRetried={async (response) => {
+          await refreshCache(isOpponentKey(pulseId));
+          if (response.resolvedPulseCharacterId) toast?.success("Pulse data refreshed");
+          else toast?.info("Still couldn't find their SC2Pulse profile");
+        }}
         diagnosticsPath={`/v1/opponents/${encodeURIComponent(pulseId)}/diagnostics`}
         retryPath={`/v1/opponents/${encodeURIComponent(pulseId)}/retry-pulse`}
       />
@@ -411,7 +435,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
             <ul className="space-y-2 text-sm">
               {byMap.map((m) => (
                 <li key={m.name}>
-                  <div className="flex justify-between">
+                  <button className="flex min-h-11 w-full items-center justify-between text-left" aria-pressed={selectedMap === m.name} onClick={() => setSelectedMap(selectedMap === m.name ? null : m.name)}>
                     <span>{m.name}</span>
                     <span
                       className="tabular-nums"
@@ -419,7 +443,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
                     >
                       {m.wins}-{m.losses} · {pct1(m.winRate)}
                     </span>
-                  </div>
+                  </button>
                   <WrBar wins={m.wins} losses={m.losses} />
                 </li>
               ))}
@@ -433,7 +457,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
             <ul className="space-y-2 text-sm">
               {byStrategy.map((s) => (
                 <li key={s.name}>
-                  <div className="flex justify-between">
+                  <button className="flex min-h-11 w-full items-center justify-between text-left" aria-pressed={selectedStrategy === s.name} onClick={() => { setSelectedStrategy(selectedStrategy === s.name ? null : s.name); setSelectedBuildMatchup(null); }}>
                     <span>{s.name}</span>
                     <span
                       className="tabular-nums"
@@ -441,7 +465,7 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
                     >
                       {s.wins}-{s.losses} · {pct1(s.winRate)}
                     </span>
-                  </div>
+                  </button>
                   <WrBar wins={s.wins} losses={s.losses} />
                 </li>
               ))}
@@ -455,12 +479,12 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
           inside the Cards would otherwise overflow the page. */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div className="min-w-0">
-          <Card title="Build tendencies (top 5 strategies)">
+          <Card title={<span>Build tendencies (top 5 strategies){filterActive ? <small className="ml-2 font-normal text-text-dim">All games, not filtered</small> : null}</span>}>
             <StrategyTendencyChart strategies={data.topStrategies || []} />
           </Card>
         </div>
         <div className="min-w-0">
-          <Card title="Likely strategies next">
+          <Card title={<span>Likely strategies next{filterActive ? <small className="ml-2 font-normal text-text-dim">All games, not filtered</small> : null}</span>}>
             <PredictedStrategiesList
               predictions={data.predictedStrategies || []}
             />
@@ -475,11 +499,12 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
         selectedMap={selectedMap}
         onSelectMap={setSelectedMap}
         selectedBuildMatchup={selectedBuildMatchup}
-        onSelectBuildMatchup={setSelectedBuildMatchup}
+        onSelectBuildMatchup={(selection) => { setSelectedBuildMatchup(selection); setSelectedStrategy(null); }}
         onSelectGame={handleSelectGame}
       />
 
       <WhereGamesEndSection
+        filtered={filterActive}
         finalPhaseDistribution={data.phases?.finalPhaseDistribution}
       />
 
@@ -580,11 +605,13 @@ export function buildOpponentReplayHistoryQuery(
   mergeLinked?: boolean,
   selectedMap?: string | null,
   selectedBuildMatchup?: BuildMatchupSelection | null,
+  selectedStrategy?: string | null,
 ): string {
   return buildProfileQuery(
     {
       ...filters,
       ...(selectedMap ? { map: selectedMap } : {}),
+      ...(selectedStrategy ? { opp_strategy: selectedStrategy } : {}),
       ...(selectedBuildMatchup
         ? {
             build: selectedBuildMatchup.myBuild,
@@ -795,9 +822,10 @@ function ProfilePulseLine({
  * empty card.
  */
 function WhereGamesEndSection({
-  finalPhaseDistribution,
+  finalPhaseDistribution, filtered,
 }: {
   finalPhaseDistribution?: BuildPhasePayload["finalPhaseDistribution"];
+  filtered?: boolean;
 }) {
   const total =
     (finalPhaseDistribution?.early || 0) +
@@ -807,7 +835,7 @@ function WhereGamesEndSection({
     (finalPhaseDistribution?.late || 0);
   if (total === 0) return null;
   return (
-    <Card title="Where games end">
+    <Card title={<span>Where games end{filtered ? <small className="ml-2 font-normal text-text-dim">All games, not filtered</small> : null}</span>}>
       <WhereGamesEndBar finalPhaseDistribution={finalPhaseDistribution} />
     </Card>
   );

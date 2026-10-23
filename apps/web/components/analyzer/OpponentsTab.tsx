@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, memo, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -91,6 +91,8 @@ export function OpponentsTab({
 }) {
   const { filters, dbRev } = useFilters();
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
+  const [visibleCount, setVisibleCount] = useState(200);
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_OPP, 1);
   const [groupByPlayer, setGroupByPlayer] = useLocalStorageState<boolean>(
     LS_GROUP_BY_PLAYER,
@@ -117,6 +119,9 @@ export function OpponentsTab({
   const {
     items: rawItems,
     isLoading,
+    isRefreshing,
+    isLoadingMore,
+    isStale,
     error,
     pagesFetched,
     hitMaxPages,
@@ -234,10 +239,10 @@ export function OpponentsTab({
   // `search` query param is a no-op for the legacy endpoint, so
   // filter here.
   const searchedItems = useMemo(() => {
-    const q = search.trim();
+    const q = deferredSearch.trim();
     if (!q) return groups;
     return groups.filter((g) => groupMatchesSearch(g, q));
-  }, [groups, search]);
+  }, [groups, deferredSearch]);
 
   const filteredItems = useMemo(
     () =>
@@ -249,9 +254,10 @@ export function OpponentsTab({
     [searchedItems, minGames, mmrImpactFilter],
   );
 
+  const { sortRows } = sort;
   const items = useMemo(
-    () => sort.sortRows(filteredItems, (row, col) => (row as any)[col]),
-    [filteredItems, sort],
+    () => sortRows(filteredItems, (row, col) => (row as any)[col]),
+    [filteredItems, sortRows],
   );
   // Rows only the Min games picker is hiding, for the empty state.
   const hiddenByMinGames = searchedItems.filter(
@@ -261,19 +267,22 @@ export function OpponentsTab({
   const mergedNameCount = normalised.length - groups.length;
   const channelsFor = usePlayerChannels(normalised);
 
-  const toggleGroup = (pulseId: string) => {
+  useEffect(() => setVisibleCount(200), [search, sort.sortBy, sort.sortDir, minGames, mmrImpactFilter, groupByPlayer]);
+
+  const toggleGroup = useCallback((pulseId: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(pulseId)) next.delete(pulseId);
       else next.add(pulseId);
       return next;
     });
-  };
+  }, []);
 
   const showSkeleton = isLoading && rawItems.length === 0;
 
   return (
     <div className="space-y-4">
+      {isLoadingMore ? <p className="text-caption text-text-muted">MMR leaders (still loading)</p> : null}
       <MmrImpactLeaders
         mostWon={mmrLeaders.mostWon}
         mostLost={mmrLeaders.mostLost}
@@ -325,7 +334,8 @@ export function OpponentsTab({
           </span>
         </label>
         <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
-          <span className="text-xs text-text-dim">
+          <span aria-live="polite" className="text-xs text-text-dim">
+            {isRefreshing ? "Updating… · " : isLoadingMore ? `Loading more opponents… (${rawItems.length.toLocaleString()} so far) · ` : ""}
             {items.length.toLocaleString()} of {groups.length.toLocaleString()}
             {groupByPlayer ? " players" : ""} shown
             {groupByPlayer && mergedNameCount > 0
@@ -347,10 +357,15 @@ export function OpponentsTab({
         </div>
       </div>
 
+      {rawItems.length > 0 && error ? <div role="alert" className="flex items-center gap-3 text-caption text-warning">
+        <span>{isStale ? "Couldn't refresh after your last game. Showing the list from before." : "Couldn't load every opponent. Showing the rows already loaded."}</span>
+        <Button size="sm" variant="secondary" onClick={retryOpponents} loading={isRefreshing}>Try again</Button>
+      </div> : null}
+
       {/* A failed load is never "no opponents match": the list could
           not be read at all. The empty state sits outside the wide
           table so it stays readable on a phone. */}
-      {error ? (
+      {error && rawItems.length === 0 ? (
         <RequestError error={error} onRetry={retryOpponents} title="Opponents" filtered />
       ) : !showSkeleton && items.length === 0 ? (
         <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard">
@@ -477,7 +492,7 @@ export function OpponentsTab({
                 <th className="w-8 px-1 py-1.5 text-right text-text-dim">→</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody aria-busy={search !== deferredSearch || undefined} className={search !== deferredSearch ? "opacity-70" : undefined}>
               {showSkeleton ? (
                 <tr>
                   <td colSpan={12} className="px-3 py-3">
@@ -485,8 +500,29 @@ export function OpponentsTab({
                   </td>
                 </tr>
               ) : (
-                items.map((o) => (
-                  <Fragment key={o.pulseId}>
+                items.slice(0, visibleCount).map((o) => (
+                  <OpponentRow key={o.pulseId} row={o} expanded={expandedGroups.has(o.pulseId)}
+                    onToggle={toggleGroup} onOpen={onOpen} channelsFor={channelsFor} />
+                ))
+              )}
+            </tbody>
+          </table>
+          {items.length > visibleCount ? <Button variant="secondary" className="m-3"
+            onClick={() => setVisibleCount((count) => count + 200)}>
+            Show 200 more (of {items.length.toLocaleString()})
+          </Button> : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const OpponentRow = memo(function OpponentRow({ row: o, expanded, onToggle, onOpen, channelsFor }: {
+  row: OpponentGroup<Opp>; expanded: boolean; onToggle: (id: string) => void;
+  onOpen: (id: string) => void; channelsFor: ReturnType<typeof usePlayerChannels>;
+}) {
+  return (
+                  <Fragment>
                     <tr
                       onClick={() => onOpen(o.pulseId)}
                       className="group cursor-pointer border-t border-border hover:bg-accent/10"
@@ -510,8 +546,8 @@ export function OpponentsTab({
                           {o.groupSize > 1 ? (
                             <AliasChip
                               group={o}
-                              expanded={expandedGroups.has(o.pulseId)}
-                              onToggle={() => toggleGroup(o.pulseId)}
+                              expanded={expanded}
+                              onToggle={() => onToggle(o.pulseId)}
                             />
                           ) : null}
                         </span>
@@ -550,7 +586,7 @@ export function OpponentsTab({
                         <OpponentOpenButton opponent={o} onOpen={onOpen} />
                       </td>
                     </tr>
-                    {o.groupSize > 1 && expandedGroups.has(o.pulseId)
+                    {o.groupSize > 1 && expanded
                       ? o.identities.map((identity) => (
                           <IdentityRow
                             key={identity.pulseId}
@@ -561,15 +597,8 @@ export function OpponentsTab({
                         ))
                       : null}
                   </Fragment>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
   );
-}
+});
 
 function matchesMmrImpactFilter(
   opponent: OpponentGroup<Opp>,
