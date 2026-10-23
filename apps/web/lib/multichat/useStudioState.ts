@@ -12,6 +12,7 @@
 // widgets must render safely even if a hostile payload reaches the
 // socket room.
 
+import { useOverlayPreview } from "@/lib/overlayPreviewContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/clientApi";
 import { CHAT_PLATFORMS, type ChatPlatform } from "./types";
@@ -531,7 +532,8 @@ export function useStudioState(
   studioEvent: unknown,
   options?: { enabled?: boolean },
 ): StudioState & { loaded: boolean; snapshotReady: boolean } {
-  const enabled = options?.enabled ?? true;
+  const preview = useOverlayPreview();
+  const enabled = !preview && (options?.enabled ?? true);
   const [state, setState] = useState<StudioState>(DEFAULT_STUDIO_STATE);
   // ``loaded`` preserves the existing "first request finished" contract for
   // non-moderation widgets. ``snapshotReady`` is deliberately stricter: it is

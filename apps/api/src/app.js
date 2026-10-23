@@ -1481,6 +1481,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
     buildOverlayTokensRouter({
       overlayTokens: services.overlayTokens,
       overlayLive: services.overlayLive,
+      liveGameBroker: services.liveGameBroker,
       auth,
       io: deps.io,
     }),

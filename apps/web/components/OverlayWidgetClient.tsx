@@ -9,6 +9,9 @@ import {
   type CSSProperties,
   type RefObject,
 } from "react";
+import { OverlayLocalPreviewFrame, localPreviewRandomizer } from "@/components/overlay/OverlayLocalPreviewFrame";
+import { OverlayPreviewContext } from "@/lib/overlayPreviewContext";
+import { useOverlayTestLayer, type TestClear } from "@/components/overlay/useOverlayTestLayer";
 import type { Socket } from "socket.io-client";
 import type {
   LiveGameEnvelope,
@@ -115,8 +118,20 @@ import {
  *    `TEST_DURATION_MS` so the persistent panels don't sit on the
  *    scene forever after a Test click.
  */
-export function OverlayWidgetClient(props: Parameters<typeof ConnectedOverlayWidgetClient>[0]) {
+export function OverlayWidgetClient(props: Parameters<typeof ConnectedOverlayWidgetClient>[0] & { demo?: LiveGamePayload }) {
+  if (props.demo) return <LocalWidgetPreview {...props} sample={props.demo} />;
   return <ConnectedOverlayWidgetClient key={`${props.token}:${props.widget}`} {...props} />;
+}
+
+function LocalWidgetPreview({ token, widget, themeParam, ghostParam, sample }: Parameters<typeof ConnectedOverlayWidgetClient>[0] & { sample: LiveGamePayload }) {
+  const randomizer = useMemo(localPreviewRandomizer, []);
+  const theme = useMemo(() => themeToCssVars(decodeOverlayTheme(themeParam || null)), [themeParam]);
+  return <div className="overlay-widget-frame" style={{ position: "relative", minHeight: "100vh", ...theme }}>
+    <style>{`.overlay-widget-frame .widget-shell { top: 0 !important; left: 0 !important; right: auto !important; bottom: auto !important; transform: none !important; }`}</style>
+    <OverlayLocalPreviewFrame sample={sample}>{(live) => <WidgetRenderer widget={widget as WidgetId} token={token} live={live} liveGame={null}
+      session={live.session as SessionSummary || null} randomizer={randomizer} randomizerIntent={null} onRandomizerSpin={() => {}} visible
+      ghostParam={ghostParam || null} studioEvent={null} engagementEvent={null} voicePrefs={null} />}</OverlayLocalPreviewFrame>
+  </div>;
 }
 
 function ConnectedOverlayWidgetClient({
@@ -143,6 +158,7 @@ function ConnectedOverlayWidgetClient({
   ghostParam?: string | null;
 }) {
   const [live, setLive] = useState<LiveGamePayload | null>(null);
+  const testLayer = useOverlayTestLayer(token);
   const [liveGame, setLiveGame] = useState<LiveGameEnvelope | null>(null);
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [enabled, setEnabled] = useState<boolean>(true);
@@ -184,9 +200,15 @@ function ConnectedOverlayWidgetClient({
     setStudioEvent,
     setEngagementEvent,
     setConnectionStatus,
+    testLayer.receiveLive,
+    testLayer.receiveSession,
+    testLayer.clear,
     widget === "randomizer" ? onBuildIntent : null,
   );
   useClearStalePostGameOnGameKeyChange(liveGame, live, setLive);
+  const showingTest = testLayer.targets(widget as WidgetId);
+  const shownLive = showingTest ? testLayer.live : live;
+  const shownGame = showingTest ? null : liveGame;
   const randomizerCheckin = useRandomizerCheckin(socketRef, live, liveGame, buildIntents);
   useWidgetVisibility(
     widget as WidgetId,
@@ -267,7 +289,7 @@ function ConnectedOverlayWidgetClient({
   // `voice-readout.js` which was only included from scouting.html.
   const enableVoiceHere = widget === "scouting";
   const voice = useVoiceReadout(
-    enableVoiceHere ? live : null,
+    enableVoiceHere ? shownLive : null,
     enableVoiceHere ? voicePrefs : null,
     // Pass the agent's pre-game envelope as a secondary trigger so the
     // scouting readout waits for confirmed gameplay and opponent identity —
@@ -280,7 +302,7 @@ function ConnectedOverlayWidgetClient({
   // running sequence through a brief loading/menu/reconnect transition.
   const retainRandomizer = widget === "randomizer";
   if (connectionStatus === "invalid") return <><OverlaySetupCard reason="invalid-token" /><OverlayCheckBadge status="invalid" /></>;
-  if (!effectiveEnabled || (!visible && !ghostArmed && !alwaysVisible && !retainRandomizer)) {
+  if (!effectiveEnabled || (!showingTest && !visible && !ghostArmed && !alwaysVisible && !retainRandomizer)) {
     return (
       <>
         <div style={{ background: "transparent" }} />
@@ -305,7 +327,7 @@ function ConnectedOverlayWidgetClient({
           minHeight: "100vh",
           width: "100%",
           background: "transparent",
-          display: retainRandomizer && !visible ? "none" : undefined,
+          display: retainRandomizer && !visible && !showingTest ? "none" : undefined,
           ...themeVars,
         } as CSSProperties
       }
@@ -321,6 +343,7 @@ function ConnectedOverlayWidgetClient({
         }
       `}</style>
       <OverlayCheckBadge status={connectionStatus} live={hasActiveOverlayGame(liveGame)} />
+      <div data-overlay-layer="real" style={{ display: showingTest ? "none" : undefined }}>
       <WidgetRenderer
         widget={widget as WidgetId}
         token={token}
@@ -336,6 +359,24 @@ function ConnectedOverlayWidgetClient({
         engagementEvent={engagementEvent}
         voicePrefs={voicePrefs}
       />
+      </div>
+      {showingTest ? <OverlayPreviewContext.Provider value={true}><div data-overlay-layer="test" className="absolute inset-0 z-10">
+      <WidgetRenderer
+        widget={widget as WidgetId}
+        token={token}
+        live={shownLive}
+        liveGame={shownGame}
+        session={widget === "session" ? testLayer.session : session}
+        randomizer={randomizer}
+        randomizerIntent={null}
+        onRandomizerSpin={() => {}}
+        visible={true}
+        ghostParam={effectiveGhostParam}
+        studioEvent={studioEvent}
+        engagementEvent={engagementEvent}
+        voicePrefs={voicePrefs}
+      />
+      </div></OverlayPreviewContext.Provider> : null}
       {/* Only mounted while widget content is on screen (this branch)
           — a transparent between-games scene stays fully transparent
           even when the socket is down. */}
@@ -569,6 +610,9 @@ function useOverlayWidgetSocket(
   setStudioEvent: (msg: unknown) => void,
   setEngagementEvent: (msg: unknown) => void,
   setConnectionStatus: (status: OverlayConnectionStatus) => void,
+  onTestLive: (msg: LiveGamePayload) => void,
+  onTestSession: (msg: SessionSummary) => void,
+  onClear: (msg: TestClear) => void,
   onBuildIntent: ((msg: unknown) => void) | null,
 ): RefObject<Socket | null> {
   const socketRef = useRef<Socket | null>(null);
@@ -604,6 +648,7 @@ function useOverlayWidgetSocket(
       // events carry their destination so neighbouring sources do not
       // light up (Ghost Build used to trigger the full layout here).
       if (!payloadTargetsWidget(msg, widget as WidgetId)) return;
+      if (msg?.isTest) { onTestLive(msg); return; }
       setLive(msg);
       if (msg && typeof msg.gameKey === "string") {
         gameKeyRef.current = msg.gameKey;
@@ -678,7 +723,7 @@ function useOverlayWidgetSocket(
       // The chat score header keeps its real session while another
       // Browser Source tests the session card. Chat demos use their
       // own targeted live payload and timer.
-      if (widget === "multichat" && msg?.isTest) return;
+      if (msg?.isTest) { if (widget === "session") onTestSession(msg); return; }
       if (msg && typeof msg === "object") setSession(msg);
     });
     // Stream Studio state (highlight / poll / goals / recap trigger) —
@@ -693,27 +738,7 @@ function useOverlayWidgetSocket(
     // Build check-in state (hold / suppress) for the randomizer's spin
     // gate; replayed by the cloud on connect and resync.
     if (onBuildIntent) socket.on("overlay:buildIntent", onBuildIntent);
-    // Streamer cancelled the test fire — clear local state so the
-    // widget vanishes immediately instead of waiting for the natural
-    // visibility timer to expire. ``msg.widget`` narrows the clear to
-    // a single widget id; null clears every panel on this token.
-    socket.on(
-      "overlay:clear",
-      (msg: { widget?: string | null } | undefined) => {
-        const target = msg?.widget;
-        if (!target || target === widget) {
-          if (widget === "session") {
-            setSession(null);
-          } else {
-            setLive(null);
-            setLiveGame(null);
-            gameKeyRef.current = null;
-            liveGameKeyRef.current = null;
-            stickyHistoryRef.current = null;
-          }
-        }
-      },
-    );
+    socket.on("overlay:clear", onClear);
     // Reconnect resync + heartbeat/drift detection + connection
     // status — shared with the all-in-one OverlayClient via
     // ``attachOverlayResilience`` (see that module for the rationale:
@@ -740,6 +765,9 @@ function useOverlayWidgetSocket(
     setStudioEvent,
     setEngagementEvent,
     setConnectionStatus,
+    onTestLive,
+    onTestSession,
+    onClear,
     onBuildIntent,
   ]);
   return socketRef;

@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Fixed
+
+- Overlay Test now uses a temporary sample layer: Stop restores current real opponent/session data. Live matches require confirmation, with a local preview option that sends nothing to OBS.
+
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.
