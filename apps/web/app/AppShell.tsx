@@ -16,6 +16,7 @@ import { AppChrome } from "@/components/chrome/AppChrome";
 import { isAppSurfacePath } from "@/components/chrome/appNav";
 import { SiteStats } from "@/components/chrome/SiteStats";
 import { SitePresence } from "@/components/chrome/SitePresence";
+import { RealtimeProvider } from "@/components/realtime/RealtimeProvider";
 
 const MAIN_CLASS =
   "mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8";
@@ -62,6 +63,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (isAppSurfacePath(pathname)) {
     return (
       <ClerkProvider appearance={clerkAppearanceBase}>
+        <RealtimeProvider>
         <ToastProvider>
           <a
             href="#main-content"
@@ -75,12 +77,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           {analyticsAllowed ? <GoogleAnalytics /> : null}
           <ServiceWorkerRegister />
         </ToastProvider>
+        </RealtimeProvider>
       </ClerkProvider>
     );
   }
 
   return (
     <ClerkProvider appearance={clerkAppearanceBase}>
+      <RealtimeProvider>
       <ToastProvider>
         <a
           href="#main-content"
@@ -99,6 +103,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {analyticsAllowed ? <GoogleAnalytics /> : null}
         <ServiceWorkerRegister />
       </ToastProvider>
+      </RealtimeProvider>
     </ClerkProvider>
   );
 }

@@ -5,7 +5,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   type ReactNode,
 } from "react";
 import dynamic from "next/dynamic";
@@ -188,31 +187,12 @@ function FrameFilters({ today }: { today: boolean }) {
  */
 function useRefreshWhileOnboarding(needsRefreshOnGames: boolean): void {
   const router = useRouter();
-  const refreshTimer = useRef<number | null>(null);
   const socketHandlers = useMemo(
-    () =>
-      needsRefreshOnGames
-        ? {
-            "games:changed": () => {
-              if (refreshTimer.current != null) return;
-              refreshTimer.current = window.setTimeout(() => {
-                refreshTimer.current = null;
-                router.refresh();
-              }, 1500);
-            },
-          }
-        : null,
+    () => needsRefreshOnGames ? { "games:changed": () => router.refresh() } : null,
     [needsRefreshOnGames, router],
   );
+  // The shared realtime client already coalesces every chart refresh.
   useUserSocket(socketHandlers);
-  useEffect(
-    () => () => {
-      if (refreshTimer.current != null) {
-        window.clearTimeout(refreshTimer.current);
-      }
-    },
-    [],
-  );
 }
 
 /**

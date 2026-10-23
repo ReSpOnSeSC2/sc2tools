@@ -319,7 +319,7 @@ describe("build check-in routes", () => {
       expect(row.buildIntent).not.toHaveProperty("gameKey");
       expect(row._schemaVersion).toBe(8);
       expect(h.io.events("games:changed")).toEqual([
-        { room: `user:${user.userId}`, event: "games:changed", payload: { count: 1 } },
+        { room: `user:${user.userId}`, event: "games:changed", payload: { count: 1, inserted: 0, bulk: false, reason: "build_intent" } },
       ]);
       expect(h.io.events("build-intent:changed")).toEqual([
         { room: `user:${user.userId}`, event: "build-intent:changed", payload: { gameId: "confirm-me" } },

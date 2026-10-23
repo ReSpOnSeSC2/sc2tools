@@ -90,39 +90,23 @@ describe("BuildCheckInProvider", () => {
     expect(screen.getByRole("button").textContent).toBe("consumer:1");
   });
 
-  it("coalesces bursts of ingest pings into one refresh", () => {
-    render(
-      <BuildCheckInProvider>
-        <Consumer />
-      </BuildCheckInProvider>,
-    );
-    act(() => {
-      harness.handlers?.["games:changed"]({ count: 25 });
-      vi.advanceTimersByTime(500);
-      harness.handlers?.["games:changed"]({ count: 25 });
-      vi.advanceTimersByTime(500);
-      harness.handlers?.["games:changed"]({ count: 25 });
-    });
-    expect(screen.getByRole("button").textContent).toBe("consumer:0");
-    act(() => {
-      vi.advanceTimersByTime(600);
-    });
+  it("applies the shared client's already-coalesced game refresh without another delay", () => {
+    render(<BuildCheckInProvider><Consumer /></BuildCheckInProvider>);
+    act(() => { harness.handlers?.["games:changed"]({ count: 75, inserted: 50, bulk: true }); vi.advanceTimersByTime(0); });
     expect(screen.getByRole("button").textContent).toBe("consumer:1");
-    act(() => {
-      vi.advanceTimersByTime(5000);
-    });
+    act(() => vi.advanceTimersByTime(5000));
     expect(screen.getByRole("button").textContent).toBe("consumer:1");
   });
 
-  it("lets a check-in ping jump ahead of a pending ingest refresh", () => {
+  it("a coalesced game refresh clears a pending check-in refresh", () => {
     render(
       <BuildCheckInProvider>
         <Consumer />
       </BuildCheckInProvider>,
     );
     act(() => {
-      harness.handlers?.["games:changed"]({ count: 1 });
       harness.handlers?.["build-intent:changed"]({ gameId: "g1" });
+      harness.handlers?.["games:changed"]({ count: 1 });
       vi.advanceTimersByTime(200);
     });
     expect(screen.getByRole("button").textContent).toBe("consumer:1");
