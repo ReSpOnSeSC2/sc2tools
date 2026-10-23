@@ -19,9 +19,9 @@ const express = require("express");
 function buildDevicePairingsRouter(deps) {
   const router = express.Router();
 
-  router.post("/device-pairings/start", async (_req, res, next) => {
+  router.post("/device-pairings/start", async (req, res, next) => {
     try {
-      const result = await deps.pairings.start();
+      const result = await deps.pairings.start(req.body || {}, req.ip || "");
       res.json(result);
     } catch (err) {
       next(err);
@@ -49,11 +49,25 @@ function buildDevicePairingsRouter(deps) {
         });
         return;
       }
-      await deps.pairings.claim(auth.userId, code);
-      res.status(204).end();
+      res.json(await deps.pairings.claim(auth.userId, code, req.ip || ""));
     } catch (err) {
       next(err);
     }
+  });
+
+  router.get("/device-pairings/:code/preview", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) return res.status(401).json({ error: { code: "auth_required" } });
+      return res.json(await deps.pairings.preview(String(req.params.code), req.ip || ""));
+    } catch (err) { next(err); }
+  });
+
+  router.patch("/devices/:deviceId", deps.auth, async (req, res, next) => {
+    try {
+      if (!req.auth) return res.status(401).json({ error: { code: "auth_required" } });
+      const found = await deps.pairings.setLabel(req.auth.userId, String(req.params.deviceId), req.body?.label);
+      return found ? res.status(204).end() : res.status(404).json({ error: { code: "device_not_found" } });
+    } catch (err) { next(err); }
   });
 
   router.get("/devices", deps.auth, async (req, res, next) => {

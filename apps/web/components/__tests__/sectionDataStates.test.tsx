@@ -16,6 +16,8 @@ vi.mock("@/lib/clientApi", () => ({
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, getToken: async () => "t" }) }));
 vi.mock("@/lib/useMyDisplayName", () => ({ useMyDisplayName: () => "Me" }));
+vi.mock("@/components/onboarding/PairDeviceForm", () => ({ PairDeviceForm: () => <p>Pairing form</p> }));
+vi.mock("@/components/onboarding/useReleaseInfo", () => ({ useReleaseInfo: () => ({ data: undefined }) }));
 
 import { MmrStatsPanel } from "@/components/analyzer/mmr/MmrStatsPanel";
 import { BuildAgingCurve } from "@/components/analyzer/mmr/BuildAgingCurve";

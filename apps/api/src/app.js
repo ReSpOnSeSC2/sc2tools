@@ -472,7 +472,7 @@ function makeServices(deps) {
     logger: deps.logger,
   });
   const replayLibrary = new ReplayLibraryService(deps.db);
-  const pairings = new DevicePairingsService(deps.db, { adminEvents, notifications, logger: deps.logger });
+  const pairings = new DevicePairingsService(deps.db, { adminEvents, logger: deps.logger });
   const overlayTokens = new OverlayTokensService(deps.db);
   const platformIntegrations = new PlatformIntegrationsService(deps.db, {
     config: deps.config.platformIntegrations || { enabled: false },

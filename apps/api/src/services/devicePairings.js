@@ -6,6 +6,14 @@ const { randomDigits, randomToken, sha256 } = require("../util/hash");
 const { stampVersion } = require("../db/schemaVersioning");
 
 const PAIRING_TTL_MS = LIMITS.PAIRING_CODE_TTL_SEC * 1000;
+// One API instance serves the ten-minute code lifetime. A restart safely turns
+// the network hint into a mismatch; raw addresses are never persisted.
+const PROCESS_IP_SALT = randomToken(32);
+
+/** @param {unknown} value @param {number} max */
+function safeMetadata(value, max) {
+  return typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, "").trim().slice(0, max) : "";
+}
 
 /**
  * Device-pairing flow. Stages:
@@ -29,8 +37,7 @@ class DevicePairingsService {
    *   deviceTokens: import('mongodb').Collection,
    * }} db
    * @param {{ adminEvents?: import('./adminEvents').AdminEventsService,
-   *   notifications?: import('./notifications').NotificationsService,
-   *   logger?: import('pino').Logger }} [opts]
+   *   logger?: import('pino').Logger, ipSalt?: string }} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
@@ -38,14 +45,18 @@ class DevicePairingsService {
     this.logger = opts.logger || null;
     /** @type {((userId: string, metadata: any) => Promise<void>)|null} */
     this.onHeartbeat = null;
+    this.ipSalt = opts.ipSalt || PROCESS_IP_SALT;
   }
 
   /**
    * Step 1. Agent kicks off pairing.
    *
+   * @param {{hostname?: unknown, os?: unknown, version?: unknown}|null} [metadata]
+   * @param {string} [ip]
    * @returns {Promise<{code: string, expiresAt: Date}>}
    */
-  async start() {
+  async start(metadata = {}, ip = "") {
+    const input = metadata && typeof metadata === "object" ? metadata : {};
     const now = Date.now();
     const expiresAt = new Date(now + PAIRING_TTL_MS);
     // Loop a few times to handle the (cosmologically unlikely) collision.
@@ -61,6 +72,11 @@ class DevicePairingsService {
               claimedAt: null,
               userId: null,
               consumedAt: null,
+              deviceId: new ObjectId(),
+              hostname: safeMetadata(input.hostname, 64),
+              os: safeMetadata(input.os, 64),
+              version: safeMetadata(input.version, 40),
+              startIpHash: ip ? sha256(`${this.ipSalt}\0${ip}`) : null,
             },
             COLLECTIONS.DEVICE_PAIRINGS,
           ),
@@ -81,14 +97,39 @@ class DevicePairingsService {
    * @param {string} userId
    * @param {string} code
    */
-  async claim(userId, code) {
-    if (!userId || !code) throw httpErr(400, "bad_request");
+  async claim(userId, code, ip = "") {
+    if (!userId || !/^\d{6}$/.test(code)) throw httpErr(400, "bad_request");
     const res = await this.db.devicePairings.findOneAndUpdate(
       { code, userId: null, expiresAt: { $gt: new Date() } },
       { $set: { userId, claimedAt: new Date() } },
       { returnDocument: "after" },
     );
-    if (!res) throw httpErr(404, "pairing_not_found");
+    // Read failure state only after the atomic claim, so expiry and a racing
+    // claimant get the correct response without a preview/claim time window.
+    if (!res) {
+      await this.preview(code, ip);
+      throw httpErr(409, "pairing_already_claimed");
+    }
+    return this.pairingInfo(res, ip);
+  }
+
+  /** Authenticated preview for the explicit device confirmation.
+   * @param {string} code @param {string} [ip]
+   */
+  async preview(code, ip = "") {
+    if (!/^\d{6}$/.test(code)) throw httpErr(400, "bad_request");
+    const row = await this.db.devicePairings.findOne({ code, expiresAt: { $gt: new Date() } });
+    if (!row) throw httpErr(404, "pairing_not_found");
+    if (row.userId) throw httpErr(409, "pairing_already_claimed");
+    return this.pairingInfo(row, ip);
+  }
+
+  /** @param {Record<string, any>} row @param {string} ip */
+  pairingInfo(row, ip) {
+    return {
+      sameNetwork: Boolean(ip && row.startIpHash && row.startIpHash === sha256(`${this.ipSalt}\0${ip}`)),
+      device: { deviceId: String(row.deviceId || row._id), hostname: row.hostname || "", os: row.os || "", version: row.version || "" },
+    };
   }
 
   /**
@@ -119,23 +160,38 @@ class DevicePairingsService {
     const token = randomToken(32);
     const tokenHash = sha256(token);
     const now = new Date();
-    await this.db.deviceTokens.insertOne(
+    const claimed = await this.db.devicePairings.findOneAndUpdate(
+      { code, userId: row.userId, consumedAt: null, expiresAt: { $gt: now } },
+      { $set: { consumedAt: now } },
+      { returnDocument: "after" },
+    );
+    if (!claimed) return /** @type {const} */ ({ status: "expired" });
+    try { await this.db.deviceTokens.insertOne(
       stampVersion(
         {
           tokenHash,
+          _id: row.deviceId || row._id,
           userId: row.userId,
           createdAt: now,
-          lastSeenAt: now,
+          lastSeenAt: null,
+          hostname: row.hostname || "",
+          agentOs: row.os || "",
+          agentVersion: row.version || "",
           pairingCode: code,
           revokedAt: null,
         },
         COLLECTIONS.DEVICE_TOKENS,
       ),
-    );
-    await this.db.devicePairings.updateOne(
-      { code },
-      { $set: { consumedAt: now } },
-    );
+    ); } catch (err) {
+      // A lost write acknowledgement can throw after Mongo inserted the row.
+      // Never reopen a code that already issued a token; its reserved id also
+      // prevents duplicate device rows. Retry only a confirmed failed insert.
+      const issued = await this.db.deviceTokens.findOne(
+        { _id: row.deviceId || row._id }, { projection: { _id: 1 } },
+      );
+      if (!issued) await this.db.devicePairings.updateOne({ code, consumedAt: now }, { $set: { consumedAt: null } });
+      throw err;
+    }
     return {
       status: /** @type {'ready'} */ ("ready"),
       deviceToken: token,
@@ -180,6 +236,7 @@ class DevicePairingsService {
    *   createdAt: Date,
    *   lastSeenAt: Date | null,
    *   hostname?: string,
+   *   label?: string,
    *   agentVersion?: string,
    *   agentOs?: string,
    *   agentOsRelease?: string,
@@ -189,7 +246,10 @@ class DevicePairingsService {
     const rows = await this.db.deviceTokens
       .find(
         { userId, revokedAt: null },
-        { projection: { tokenHash: 0 } },
+        // Explicit public fields keep pairing codes and future private auth
+        // metadata out of the web response as well as the bearer-token hash.
+        { projection: { _id: 1, userId: 1, createdAt: 1, lastSeenAt: 1,
+          hostname: 1, label: 1, agentVersion: 1, agentOs: 1, agentOsRelease: 1 } },
       )
       .sort({ lastSeenAt: -1 })
       .toArray();
@@ -259,7 +319,7 @@ class DevicePairingsService {
     let _id;
     try {
       _id = new ObjectId(deviceId);
-    } catch (_e) {
+    } catch {
       return false;
     }
     const res = await this.db.deviceTokens.updateOne(
@@ -267,6 +327,17 @@ class DevicePairingsService {
       { $set: { revokedAt: new Date() } },
     );
     return res.matchedCount > 0;
+  }
+
+  /** @param {string} userId @param {string} deviceId @param {unknown} label */
+  async setLabel(userId, deviceId, label) {
+    if (typeof label !== "string" || label.trim().length > 40 || /[\u0000-\u001f\u007f]/.test(label)) throw httpErr(400, "bad_request");
+    if (!ObjectId.isValid(deviceId)) return false;
+    const result = await this.db.deviceTokens.updateOne(
+      { _id: new ObjectId(deviceId), userId, revokedAt: null },
+      { $set: { label: label.trim() } },
+    );
+    return result.matchedCount > 0;
   }
 
   /**
@@ -288,20 +359,20 @@ class DevicePairingsService {
     /** @type {Record<string, unknown>} */
     const update = { lastSeenAt: now };
     if (body && typeof body.version === "string") {
-      update.agentVersion = body.version.slice(0, 64);
+      update.agentVersion = safeMetadata(body.version, 64);
     }
     if (body && typeof body.os === "string") {
-      update.agentOs = body.os.slice(0, 32);
+      update.agentOs = safeMetadata(body.os, 32);
     }
     if (body && typeof body.osRelease === "string") {
-      update.agentOsRelease = body.osRelease.slice(0, 64);
+      update.agentOsRelease = safeMetadata(body.osRelease, 64);
     }
     // Hostnames are usually short and ASCII, but we cap defensively
     // (a 64-char limit easily fits any practical machine name) and
     // ignore empty strings so an unset hostname doesn't blow away a
     // previously-recorded one.
     if (body && typeof body.hostname === "string") {
-      const trimmed = body.hostname.trim().slice(0, 64);
+      const trimmed = safeMetadata(body.hostname, 64);
       if (trimmed) update.hostname = trimmed;
     }
     const device = await this.db.deviceTokens.findOneAndUpdate(

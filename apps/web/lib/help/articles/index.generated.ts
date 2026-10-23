@@ -36,6 +36,7 @@ import builds_rulesExplained from "./builds/rules-explained";
 import desktopApp_desktopAppActivityLog from "./desktop-app/desktop-app-activity-log";
 import desktopApp_desktopAppOverview from "./desktop-app/desktop-app-overview";
 import desktopApp_desktopAppSyncRange from "./desktop-app/desktop-app-sync-range";
+import desktopApp_pairingTroubleshooting from "./desktop-app/pairing-troubleshooting";
 import desktopApp_replayFolders from "./desktop-app/replay-folders";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
 import gamePage_gamePageReplay from "./game-page/game-page-replay";
@@ -95,6 +96,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   desktopApp_desktopAppActivityLog,
   desktopApp_desktopAppOverview,
   desktopApp_desktopAppSyncRange,
+  desktopApp_pairingTroubleshooting,
   desktopApp_replayFolders,
   gamePage_gamePageAccuratePlayback,
   gamePage_gamePageReplay,
