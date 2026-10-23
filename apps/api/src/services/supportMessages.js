@@ -56,7 +56,7 @@ class SupportMessagesService {
   async _notify(row, action) {
     const common = { href: "/settings?tab=help#my-reports", groupKey: `support:${row.eventId}` };
     if (action.statusChanged) await this.notifications.notify(row.payload.userId, {
-      ...common, groupKey: `support-status:${row.eventId}`, kind: "support.status",
+      ...common, groupKey: `support-status:${row.eventId}:${action.id}`, kind: "support.status",
       eventKey: `support-status:${row.eventId}:${action.id}`,
       title: `Report status: ${STATUS_LABELS[action.status]}`, body: row.payload.subject,
     });

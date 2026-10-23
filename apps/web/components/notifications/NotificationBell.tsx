@@ -75,6 +75,7 @@ function Bell_({ compact }: { compact: boolean }) {
   const [scopeReady, setScopeReady] = useState(false);
   const [scopeVersion, setScopeVersion] = useState(0);
   const [readError, setReadError] = useState(false);
+  const failedMarkAll = useRef(false);
   const [readRetry, setReadRetry] = useState(0);
   const acknowledged = useRef(new Map<string, string>());
   const pendingReads = useRef(new Set<string>());
@@ -213,6 +214,7 @@ function Bell_({ compact }: { compact: boolean }) {
   }
   async function markAllRead() {
     if (markingAll || count === 0) return;
+    failedMarkAll.current = false;
     setMarkingAll(true);
     try {
       await apiCall(tokenRef.current, "/v1/me/notifications/read", { method: "POST", body: JSON.stringify({ all: true }) });
@@ -220,7 +222,7 @@ function Bell_({ compact }: { compact: boolean }) {
       const readAt = new Date().toISOString();
       setItems((current) => current.map((row) => { acknowledged.current.set(notificationVersion(row), readAt); return { ...row, readAt }; }));
       setReadError(false); void mutateUnread();
-    } catch { if (mounted.current) setReadError(true); }
+    } catch { if (mounted.current) { failedMarkAll.current = true; setReadError(true); } }
     finally { if (mounted.current) setMarkingAll(false); }
   }
 
@@ -281,7 +283,7 @@ function Bell_({ compact }: { compact: boolean }) {
       {open ? <NotificationPanel items={items} style={panelStyle} ready={scopeReady} loading={!!(list.isLoading || list.isValidating)}
         listError={!!list.error} unreadError={!!unread.error} readError={readError} view={view} selectView={selectView} onClose={closePanel}
         retryList={() => { if (!scopeReady) setScopeVersion((value) => value + 1); else void list.mutate(); }}
-        retryUnread={() => void mutateUnread()} retryRead={() => { failedReads.current.clear(); setReadError(false); setReadRetry((value) => value + 1); }}
+        retryUnread={() => void mutateUnread()} retryRead={() => { if (failedMarkAll.current) { void markAllRead(); return; } failedReads.current.clear(); setReadError(false); setReadRetry((value) => value + 1); }}
         onMore={nextCursor ? () => setCursor(nextCursor) : null} markAll={markAllRead} markingAll={markingAll} unread={count} openedNew={openedNew.current} /> : null}
     </div>
   );

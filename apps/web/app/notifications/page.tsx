@@ -44,6 +44,7 @@ function NotificationsCenter() {
     finally { setSaving(false); }
   }
   async function markOne(id: string) {
+    setWriteError(null);
     retryWrite.current = () => markOne(id);
     try { await apiCall(getToken, "/v1/me/notifications/read", { method: "POST", body: JSON.stringify({ ids: [id] }) }); refresh(); }
     catch (error) { setWriteError(error as ClientApiError); }

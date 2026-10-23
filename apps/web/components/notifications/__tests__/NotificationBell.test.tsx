@@ -329,4 +329,17 @@ describe("notification center panel behavior", () => {
     expect(rows.ann.every((row) => row.readAt)).toBe(true);
     expect((within(panel).getByRole("button", { name: "Mark all read" }) as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it("retries a failed mark-all action for rows beyond the visible page", async () => {
+    rows.ann = Array.from({ length: 25 }, (_, i) => notification(`retry-all-${i}`));
+    render(<Bell />); const panel = await open(25);
+    await screen.findByRole("button", { name: "Notifications, 5 unread" });
+    failRead = true; fireEvent.click(within(panel).getByRole("button", { name: "Mark all read" }));
+    await within(panel).findByRole("alert");
+    failRead = false; fireEvent.click(within(panel).getByRole("button", { name: "Retry" }));
+    await screen.findByRole("button", { name: "Notifications" });
+    expect(rows.ann.every((row) => row.readAt)).toBe(true);
+    expect(readCalls().filter((call) => JSON.parse(call[1]?.body as string).all === true)).toHaveLength(2);
+    expect(within(panel).queryByRole("alert")).toBeNull();
+  });
 });

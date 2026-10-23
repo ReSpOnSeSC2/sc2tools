@@ -102,6 +102,16 @@ describe("always-on notification center and support loop", () => {
     expect(await h.db.notifications.countDocuments({ userId: h.userId("ann"), kind: "support.reply" })).toBe(1);
   });
 
+  test("keeps successive unread status transitions accurate instead of folding an old status title", async () => {
+    const report = await as("ann", request(h.app).post("/v1/messages")).send({ subject: "Status history", message: "Please check this issue." });
+    const endpoint = `/v1/admin/messages/${report.body.eventId}`;
+    await as("admin", request(h.app).patch(endpoint)).send({ expectedRevision: 0, requestId: "status_looking_001", status: "looking" }).expect(200);
+    await as("admin", request(h.app).patch(endpoint)).send({ expectedRevision: 1, requestId: "status_fixed_002", status: "fixed" }).expect(200);
+    const rows = await h.db.notifications.find({ userId: h.userId("ann"), kind: "support.status" }).toArray();
+    expect(rows.map((row) => row.title).sort()).toEqual(["Report status: Fixed", "Report status: Looking into it"]);
+    expect((await as("ann", request(h.app).get("/v1/messages/mine"))).body.items[0].status).toBe("fixed");
+  });
+
   test("a report anonymized during an admin edit cannot receive a reply", async () => {
     const report = await as("ann", request(h.app).post("/v1/messages")).send({ subject: "Erase race", message: "Please check this issue." });
     const eventId = report.body.eventId;
