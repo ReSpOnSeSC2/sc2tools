@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Coaching forms
+
+- Practice plans show inline field errors, focus the first field to fix, remember each student's time zone and summarize the actual target before assignment. Failed saves retain the draft for Retry.
+- Weekly availability highlights reversed or overlapping hours and prevents publication until they are corrected. Touching windows remain valid.
+
 ### Admin inbox details
 
 - Activity and support message rows now open full details on tap, click, Enter or Space, with diagnostics, replies and account or infrastructure links. Closing returns focus to the row.
