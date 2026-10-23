@@ -57,3 +57,8 @@ No new environment variable, secret, migration or release is required. Deploy th
 ### game-page-macro-workspace / one-game-clock
 
 No new environment variable, secret, database migration or desktop release is required. Deploy the web normally. Recompute reuses the existing authenticated macro request and the paired desktop app; keep that app open with access to the original replay. It reparses the replay and does not record StarCraft II. Timestamp links and metric preferences are browser features. Missing measured banked resources stay hidden.
+
+
+### Build supply and exports
+
+No environment variable, collection, migration or paid service is required. The API enriches display build events from already-stored player stats; it does not change raw classifier timestamps. After deployment, open an owned game, choose Builds, verify prior-sample supply and use either column’s menu. Header CSV/JSON exports run locally. Custom/Community rule-only definitions copy their matching conditions, and signature deadlines remain identified. Help: `/help/build-orders-export`. No production reanalysis is performed by this change.

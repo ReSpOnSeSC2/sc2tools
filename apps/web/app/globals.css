@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+@media print {
+  @page { size: A4; margin: 12mm; }
+  body:has([data-build-print-sheet]) > *:not([data-build-print-sheet]) { display: none !important; }
+  [data-build-print-sheet] { display: block !important; color: #000; background: #fff; font: 11px/1.4 sans-serif; }
+  [data-build-print-sheet] h1 { margin: 0 0 4mm; font-size: 18px; }
+  [data-build-print-sheet] p { margin: 0 0 5mm; }
+  [data-build-print-sheet] pre { white-space: pre-wrap; overflow-wrap: anywhere; columns: 2; column-gap: 8mm; font: 10px/1.4 monospace; }
+}
+
 @layer components {
   .analyzer-filter-sheet .analyzer-filter-pill { min-height: 44px; }
   @media (pointer: coarse) { .analyzer-filter-pill { min-height: 44px; } }

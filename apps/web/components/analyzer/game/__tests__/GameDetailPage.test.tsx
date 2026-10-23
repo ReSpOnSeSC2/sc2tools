@@ -376,7 +376,9 @@ describe("GameDetailPage", () => {
 
     // BUILD_ORDER says Zerg vs Terran. Those replay-derived values must win
     // over the conflicting slim summary so the build cannot enter PvZ.
-    expect(await screen.findByRole("button", { name: "Use as Ghost Build target" })).toBeTruthy();
+    const myColumn = await screen.findByTestId("build-column-me");
+    expect(within(myColumn).getByRole("button", { name: "Use as Ghost Build target" }).title).toContain("ZvT");
+    expect(within(screen.getByTestId("build-column-opp")).getByRole("button", { name: "Use as Ghost Build target" }).title).toContain("TvZ");
     expect(screen.queryByRole("button", { name: "Save for PvZ" })).toBeNull();
   });
 
@@ -453,7 +455,8 @@ describe("GameDetailPage", () => {
     expect(download.textContent).toContain("Download replay");
     expect(download.getAttribute("title")).toContain("125 KB");
     const actionLine = screen.getByRole("toolbar", { name: "Game actions" });
-    const actions = Array.from(actionLine.querySelectorAll("a,button"));
+    const actions = Array.from(actionLine.querySelectorAll("a,button")).filter(action => !action.closest("details"));
+    expect(within(actionLine).getByText("Export")).toBeTruthy();
     expect(actions).toEqual([screen.getByRole("button", { name: "Share this game as an image" }), download, link]);
     expect(useApiMock).toHaveBeenCalledWith(
       "/v1/games/vod-links?gameId=g1",

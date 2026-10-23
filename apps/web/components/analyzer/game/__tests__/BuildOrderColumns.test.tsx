@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { buildLogToEvents } from "@/lib/build-events";
 import { BuildOrderColumns } from "../BuildOrderColumns";
 
@@ -14,6 +14,18 @@ vi.mock("next/image", () => ({
 afterEach(() => cleanup());
 
 describe("BuildOrderColumns", () => {
+  it("filters both workspace columns and shows prior measured supply without future guesses", () => {
+    const seek = vi.fn();
+    render(<BuildOrderColumns onSeek={seek} myEvents={[{ time: 1, name: "Pylon" }, { time: 30, name: "Probe" }, { time: 40, name: "Gateway" }, { time: 40, name: "Zealot", supply: 19 }]} oppEvents={[{ time: 40, name: "Marine" }]} workspace={{ myMeta: { title: "Mine", sourceUrl: "/g" }, oppMeta: { title: "Theirs", sourceUrl: "/g" }, myStats: [{ time: 20, food_used: 17 }], oppStats: [{ time: 60, food_used: 25 }] }} />);
+    const mine = within(screen.getByTestId("build-column-me")), theirs = within(screen.getByTestId("build-column-opp"));
+    expect(mine.queryByText("Probe")).toBeNull(); expect(mine.getByText("Pylon")).toBeTruthy(); expect(mine.getByText("≈17")).toBeTruthy(); expect(mine.getByText("19")).toBeTruthy();
+    expect(theirs.getByText("—")).toBeTruthy();
+    fireEvent.click(mine.getByRole("button", { name: "Jump to 0:40 Gateway" })); expect(seek).toHaveBeenCalledWith(40);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Show workers" })); expect(mine.getByText("Probe")).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Supply buildings" })); expect(mine.queryByText("Pylon")).toBeNull();
+    fireEvent.change(screen.getByRole("textbox", { name: "Filter steps" }), { target: { value: "Marine" } });
+    expect(mine.queryByText("Gateway")).toBeNull(); expect(mine.getByText("No steps match these filters.")).toBeTruthy(); expect(theirs.getByText("Marine")).toBeTruthy();
+  });
   it("parses [m:ss] build-log lines into two labelled columns", () => {
     const myEvents = buildLogToEvents(
       ["[0:17] SpawningPool", "[1:05] Zergling", "[2:30] RoachWarren"],

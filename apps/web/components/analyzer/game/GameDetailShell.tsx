@@ -46,9 +46,11 @@ export function GameDetailShell({
   planned,
   oppStrategyLabel,
   oppCorrected,
+  exportAction,
 }: {
   game: GameSummary;
   children: ReactNode;
+  exportAction?: ReactNode;
   opponentContext?: OpponentNavigationContext | null;
   streamLinks?: GameStreamLink[] | null;
   /** Effective build label from the live check-in state; the slim row's otherwise. */
@@ -148,6 +150,7 @@ export function GameDetailShell({
               className="flex min-h-9 w-full flex-wrap items-center justify-end gap-2"
             >
               <ShareGameButton game={game} />
+              {exportAction}
               <ReplayDownloadButton
                 gameId={game.gameId}
                 available={replayAvailable}
