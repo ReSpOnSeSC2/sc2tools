@@ -98,9 +98,9 @@ describe("SettingsShell legacy #tab links", () => {
     expect(window.location.hash).toBe("#platform-connections");
   });
 
-  it("waits for a tab that appears later (Import waits on a flag)", () => {
+  it("waits for a tab a caller temporarily hides", () => {
     window.history.replaceState(null, "", "/settings#import");
-    const view = render(shell(undefined, defaultTabVisibility));
+    const view = render(shell(undefined, (id) => id !== "import"));
     expect(activePanel()).toBe("panel foundation");
     expect(window.location.hash).toBe("#import");
     view.rerender(shell(undefined, () => true));

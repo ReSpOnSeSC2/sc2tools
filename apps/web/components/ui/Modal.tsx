@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useId,
   useRef,
@@ -12,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { lockBodyScroll } from "@/lib/bodyScrollLock";
+import { useFocusTrap } from "@/lib/a11y/useFocusTrap";
 
 /**
  * Modal — portal-based dialog with focus trap and Esc-close.
@@ -84,47 +84,14 @@ export function Modal({
   const titleId = useId();
   const descId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
-  const previouslyFocusedRef = useRef<Element | null>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+  useFocusTrap({ open, containerRef: dialogRef, onClose, initialFocusRef });
 
   // Body scroll lock + Esc + focus management
   useEffect(() => {
     if (!open) return;
-    previouslyFocusedRef.current = document.activeElement;
     const unlockScroll = lockBodyScroll();
-
-    const onKey = (e: KeyboardEvent) => {
-      // Portalled child dialogs own Escape and Tab while they have focus.
-      const target = e.target instanceof Element ? e.target : document.activeElement;
-      const activeDialog = target?.closest('[role="dialog"]');
-      if (activeDialog && activeDialog !== dialogRef.current) return;
-      if (e.key === "Escape") {
-        e.stopPropagation();
-        onCloseRef.current();
-      } else if (e.key === "Tab") {
-        trapTab(e, dialogRef.current);
-      }
-    };
-    document.addEventListener("keydown", onKey);
-
-    // Focus the dialog itself once mounted; consumers can override
-    // by adding autoFocus on a child element.
-    const initFocus = window.setTimeout(() => {
-      const focusables = focusableInside(dialogRef.current);
-      (initialFocusRef?.current ?? focusables[0] ?? dialogRef.current)?.focus();
-    }, 0);
-
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      unlockScroll();
-      window.clearTimeout(initFocus);
-      const prev = previouslyFocusedRef.current as HTMLElement | null;
-      if (prev?.isConnected && typeof prev.focus === "function") {
-        prev.focus();
-      }
-    };
-  }, [open, initialFocusRef]);
+    return unlockScroll;
+  }, [open]);
 
   if (!open) return null;
   if (typeof window === "undefined") return null;
@@ -213,50 +180,6 @@ export function Modal({
     </div>,
     document.body,
   );
-}
-
-/* ============================================================
- * Focus-trap helpers
- * ============================================================ */
-
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
-
-function focusableInside(root: HTMLElement | null): HTMLElement[] {
-  if (!root) return [];
-  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (el) => !el.hasAttribute("data-focus-trap-skip"),
-  );
-}
-
-function trapTab(e: KeyboardEvent, root: HTMLElement | null): void {
-  if (!root) return;
-  const els = focusableInside(root);
-  if (els.length === 0) {
-    e.preventDefault();
-    root.focus();
-    return;
-  }
-  const first = els[0];
-  const last = els[els.length - 1];
-  const active = document.activeElement;
-  if (e.shiftKey) {
-    if (active === first || !root.contains(active)) {
-      e.preventDefault();
-      last.focus();
-    }
-  } else {
-    if (active === last) {
-      e.preventDefault();
-      first.focus();
-    }
-  }
 }
 
 /* Exported for callers that want to render a basic actions row inside `footer`. */

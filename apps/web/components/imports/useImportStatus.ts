@@ -66,6 +66,7 @@ export function isBenignImportSkip(code: string): boolean {
 }
 
 export type ImportStatusState = {
+  error?: unknown;
   /** Latest job (any status), or null before the first job ever. */
   job: ImportJob | null;
   /** True while a job is scanning/running. */
@@ -136,7 +137,7 @@ export function mergeProgressEvent(
  * Settings panel — so all four read identical numbers.
  */
 export function useImportStatus(): ImportStatusState {
-  const { data, isLoading, mutate } = useApi<StatusResp>("/v1/import/status", {
+  const { data, error, isLoading, mutate } = useApi<StatusResp>("/v1/import/status", {
     // Poll slowly as the socket fallback; the socket path delivers the
     // real-time feel.
     refreshInterval: importStatusRefreshInterval,
@@ -272,6 +273,7 @@ export function useImportStatus(): ImportStatusState {
     pct,
     etaSeconds,
     isLoading,
+    error,
     refresh: () => void mutate(),
   };
 }

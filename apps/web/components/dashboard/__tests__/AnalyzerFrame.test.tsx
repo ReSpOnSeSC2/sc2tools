@@ -4,7 +4,7 @@
  * Folder Sync only when browser import is enabled. Router, sockets, the
  * analyzer provider, the filter bar and the Folder Sync runner are MOCKS.
  */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,16 +12,15 @@ const mocks = vi.hoisted(() => ({ browserImport: false, pathname: "/app" }));
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }), usePathname: () => mocks.pathname }));
 vi.mock("next/dynamic", () => ({
-  default: () =>
-    function FolderSyncAutoRunnerMock() {
-      return <div data-testid="folder-sync-auto-runner" />;
-    },
+  default: (loader: unknown) => String(loader).includes("FilterBar")
+    ? function FilterBarMock() { return <div data-testid="filter-editor" />; }
+    : function FolderSyncAutoRunnerMock() { return <div data-testid="folder-sync-auto-runner" />; },
 }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ getToken: async () => "token" }) }));
 vi.mock("@/lib/clientApi", () => ({ apiCall: vi.fn() }));
 vi.mock("@/components/AnalyzerProvider", () => ({ AnalyzerProvider: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock("@/components/analyzer/DoctorBanner", () => ({ DoctorBanner: () => null }));
-vi.mock("@/components/analyzer/FilterBar", () => ({ FilterBar: () => null }));
+vi.mock("@/components/analyzer/FilterBar", () => ({ FilterBar: () => <div data-testid="filter-editor" /> }));
 vi.mock("@/components/analyzer/ActiveFilterChips", () => ({
   ActiveFilterChips: () => <div data-testid="active-filter-chips" />,
 }));
@@ -40,6 +39,7 @@ const NEW_USER: DashboardMe = { userId: "u1", source: "cloud", games: { total: 0
 beforeEach(() => {
   mocks.browserImport = false;
   mocks.pathname = "/app";
+  window.localStorage.clear();
 });
 
 afterEach(cleanup);
@@ -63,6 +63,23 @@ describe("onboardingView", () => {
 });
 
 describe("AnalyzerFrame", () => {
+  it("keeps Today scope clear, remembers its editor toggle and retains active chips", () => {
+    const me = { ...NEW_USER, games: { total: 3, latest: null } };
+    const view = render(<AnalyzerFrame me={me}>PAGE</AnalyzerFrame>);
+    expect(screen.getByText("Filters shape the analysis sections. Today shows your live session.")).toBeTruthy();
+    expect(screen.queryByTestId("filter-editor")).toBeNull();
+    expect(screen.getByTestId("active-filter-chips")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show filters" }));
+    expect(screen.getByTestId("filter-editor")).toBeTruthy();
+    view.unmount(); render(<AnalyzerFrame me={me}>PAGE</AnalyzerFrame>);
+    expect(screen.getByTestId("filter-editor")).toBeTruthy();
+  });
+  it("does not show filter controls or scope chips on Arcade", () => {
+    mocks.pathname = "/app/arcade";
+    render(<AnalyzerFrame me={{ ...NEW_USER, games: { total: 3, latest: null } }}>PAGE</AnalyzerFrame>);
+    expect(screen.queryByTestId("filter-editor")).toBeNull();
+    expect(screen.queryByTestId("active-filter-chips")).toBeNull();
+  });
   it("renders the side-by-side choice for a new browser-import account", () => {
     mocks.browserImport = true;
     render(<AnalyzerFrame me={NEW_USER}>PAGE</AnalyzerFrame>);

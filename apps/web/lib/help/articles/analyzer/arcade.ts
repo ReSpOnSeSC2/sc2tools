@@ -42,7 +42,7 @@ const article: HelpArticle = {
       type: "table",
       head: ["Tab", "What's there"],
       rows: [
-        ["Today", "**Daily Quests**, the **Daily Drop** (one quiz) and the **Daily Run** (one game). They change every day at midnight."],
+        ["Daily", "**Daily Quests**, the **Daily Drop** (one quiz) and the **Daily Run** (one game). They change every day at midnight."],
         ["Quick Play", "Every quiz and game, to play any time. Filter by **Quizzes** or **Games** and by how long they take."],
         ["Collection", "Your **Card binder**, with a card for every build you've played, and the **Cosmetics shop**."],
         ["My Stats", "Your streak, level, accuracy and minerals, and your record in each mode."],

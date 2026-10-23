@@ -6,7 +6,17 @@ import {
   PTR_REGION,
   filtersToQuery,
   normalizeGameLengthBounds,
+  summarizeFilters,
 } from "../filterContext";
+
+describe("plain filter summary", () => {
+  it("names every default facet in order", () => {
+    expect(summarizeFilters(DEFAULT_ANALYZER_FILTERS)).toBe("Current patch · Ranked ladder · 1v1 · All regions · Any length");
+  });
+  it("keeps stored values while explaining mixed facets and a matchup", () => {
+    expect(summarizeFilters({ preset: "all", map_pool: "nonladder", game_size: "team", regions: "NA,EU", min_minutes: 10, max_minutes: 20, race: "P", opp_race: "Z" })).toMatch(/All time · Custom games · Team games · NA, EU · .*10.*20.* · P vs Z/);
+  });
+});
 
 function params(query: string): URLSearchParams {
   return new URLSearchParams(query.startsWith("?") ? query.slice(1) : query);
