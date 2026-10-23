@@ -1,248 +1,46 @@
 "use client";
-import { Field } from "@/components/ui/Field";
-import { EmptyStatePanel } from "@/components/ui/EmptyState";
-import { RequestError } from "@/components/ui/RequestError";
-import { AdminPagination } from "@/app/admin/components/AdminPagination";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
-
-import { useState } from "react";
-import Link from "next/link";
-
+import { Suspense } from "react";
 import { useApi } from "@/lib/clientApi";
 import { Card } from "@/components/ui/Card";
-import { compactNumber, timeSince } from "../components/format";
+import { Button } from "@/components/ui/Button";
+import { RequestError } from "@/components/ui/RequestError";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { AdminPageHeader } from "../components/AdminPageHeader";
+import { AdminPagination } from "../components/AdminPagination";
+import { AdminSearchField } from "../components/AdminSearchField";
+import { AdminTable, type AdminColumn } from "../components/AdminTable";
 import { ForbiddenCard, LoadingRows } from "../components/AdminFragments";
-import type { UserListFilter, UsersListResp } from "../components/adminTypes";
+import { useAdminQueryState } from "../components/useAdminQueryState";
+import { useAdminCursor } from "../components/useAdminCursor";
+import { timeSince } from "../components/format";
+import type { AdminUserRow, UsersListResp } from "../components/adminTypes";
 
-const FILTERS: ReadonlyArray<{ value: UserListFilter; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "with_games", label: "Has games" },
-  { value: "no_games", label: "No games yet" },
-  { value: "with_agent", label: "Has agent" },
+const filters = [{ value: "all", label: "All" }, { value: "with_games", label: "Has games" }, { value: "no_games", label: "No games yet" }, { value: "with_agent", label: "Has agent" }];
+const columns: AdminColumn<AdminUserRow>[] = [
+  { key: "user", label: "User", mobile: "title", render: row => <><span>{row.email || "(no email on file)"}</span><span className="block break-all font-mono text-caption text-text-muted">{row.clerkUserId || row.userId}</span>{row.hasAgent ? <AgentBadge lastSeen={row.agentLastSeenAt} /> : null}</> },
+  { key: "games", label: "Games", align: "right", mobile: "field", render: row => row.gameCount.toLocaleString() },
+  { key: "opponents", label: "Opponents", align: "right", mobile: "field", render: row => row.opponentCount.toLocaleString() },
+  { key: "lastActivity", label: "Last activity", align: "right", mobile: "field", render: row => timeSince(row.lastActivity) },
+  { key: "firstActivity", label: "First replay", align: "right", mobile: "field", render: row => timeSince(row.firstActivity) },
 ];
-
-/**
- * /admin/users — paginated list of users sorted by lastActivity.
- *
- * The list is the entry point for everything the Tools tab can do
- * to a single user; clicking a row navigates to ``/admin/users/<id>``
- * which renders a per-user detail with one-click actions.
- *
- * Search uses the API's ``search`` query, which is a case-insensitive
- * regex against ``userId`` / ``clerkUserId`` (no PII fields). The
- * page is intentionally not infinite-scroll — pagination is keyed on
- * the lastActivity cursor so the URL always points at a stable page.
- */
-export default function AdminUsersPage() {
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<UserListFilter>("all");
-  const [before, setBefore] = useState<string | null>(null);
-  const [pageHistory, setPageHistory] = useState<Array<string | null>>([null]);
-
-  // Search / filter changes invalidate the cursor — jump back to page 1.
-  function resetPaging() {
-    setBefore(null);
-    setPageHistory([null]);
-  }
-
-  const params = new URLSearchParams();
-  params.set("limit", "50");
-  if (search.trim()) params.set("search", search.trim());
-  if (filter !== "all") params.set("filter", filter);
-  if (before) params.set("before", before);
-  const path = `/v1/admin/users?${params.toString()}`;
-
-  const { data, error, isLoading, isValidating, mutate } = useApi<UsersListResp>(path);
-
-  function nextPage() {
-    if (data?.nextBefore) {
-      setPageHistory((h) => [...h, data.nextBefore]);
-      setBefore(data.nextBefore);
-    }
-  }
-  function prevPage() {
-    if (pageHistory.length <= 1) return;
-    const popped = pageHistory.slice(0, -1);
-    setPageHistory(popped);
-    setBefore(popped[popped.length - 1] ?? null);
-  }
-
-  if (error && error.status === 403) return <ForbiddenCard />;
-
-  return (
-    <div className="space-y-6">
-      <AdminPageHeader anchor="users-and-repairing-data" title="Users" description="Find accounts and inspect their activity before repairing data." />
-
-      <Card padded>
-        <div className="space-y-3">
-          <Field label="Search">
-
-            <Input
-              type="text"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                resetPaging();
-              }}
-              placeholder="email, userId, or clerkUserId fragment…"
-              className="w-full rounded-lg border border-border bg-bg-surface px-3 py-2 font-mono text-sm text-text placeholder:text-text-dim focus:border-accent focus:outline-none"
-              spellCheck={false}
-              autoCapitalize="none"
-              autoCorrect="off"
-            />
-          </Field>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-              Filter
-            </span>
-            {FILTERS.map((f) => {
-              const isActive = filter === f.value;
-              return (
-                <Button variant="secondary" size="sm"
-                  key={f.value}
-                  type="button"
-                  aria-pressed={isActive}
-                  onClick={() => {
-                    setFilter(f.value);
-                    resetPaging();
-                  }}
-                  className={[
-                    "rounded-full border px-3 py-1 text-caption transition-colors",
-                    isActive
-                      ? "border-accent-cyan/60 bg-accent-cyan/15 text-text"
-                      : "border-border bg-bg-surface text-text-muted hover:bg-bg-elevated hover:text-text",
-                  ].join(" ")}
-                >
-                  {f.label}
-                </Button>
-              );
-            })}
-          </div>
-        </div>
-      </Card>
-
-      {error ? (
-        <RequestError error={error} onRetry={() => mutate()} />
-      ) : isLoading ? (
-        <LoadingRows rows={10} />
-      ) : !data || data.items.length === 0 ? (
-        <Card padded>
-          <EmptyStatePanel title="No matching users" description="Try a wider search or another account filter." action={<Button variant="secondary" onClick={() => { if (search || filter !== "all") { setSearch(""); setFilter("all"); resetPaging(); } else void mutate(); }}>{search || filter !== "all" ? "Clear filters" : "Refresh"}</Button>} />
-        </Card>
-      ) : (
-        <>
-          {/* Mobile: stacked list. Desktop: table. */}
-          <Card padded={false}>
-            <div className="block md:hidden">
-              <ul className="divide-y divide-border">
-                {data.items.map((u) => (
-                  <li key={u.userId}>
-                    <Link
-                      href={`/admin/users/${encodeURIComponent(u.userId)}`}
-                      className="flex flex-col gap-2 px-4 py-3 hover:bg-bg-elevated/40"
-                    >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <span className="truncate text-body font-semibold text-text">
-                          {u.email ?? "(no email on file)"}
-                        </span>
-                        <span className="text-caption text-text-dim">
-                          {timeSince(u.lastActivity)}
-                        </span>
-                      </div>
-                      <span className="truncate font-mono text-caption text-text-dim">
-                        {u.clerkUserId ?? u.userId}
-                      </span>
-                      <div className="flex items-center gap-3 text-caption text-text-muted">
-                        <span>
-                          <strong className="text-text">
-                            {compactNumber(u.gameCount)}
-                          </strong>{" "}
-                          games
-                        </span>
-                        <span>
-                          <strong className="text-text">
-                            {compactNumber(u.opponentCount)}
-                          </strong>{" "}
-                          opponents
-                        </span>
-                        {u.hasAgent ? (
-                          <AgentBadge lastSeen={u.agentLastSeenAt} />
-                        ) : null}
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="hidden md:block">
-              <table className="w-full text-sm">
-                <thead className="bg-bg-elevated/40 text-left text-caption uppercase tracking-wider text-text-dim">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">User</th>
-                    <th className="px-4 py-3 text-right font-semibold">Games</th>
-                    <th className="px-4 py-3 text-right font-semibold">
-                      Opponents
-                    </th>
-                    <th className="px-4 py-3 text-right font-semibold">
-                      Last activity
-                    </th>
-                    <th
-                      className="px-4 py-3 text-right font-semibold"
-                      title="Date of the user's earliest replay in the database"
-                    >
-                      First replay
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {data.items.map((u) => (
-                    <tr
-                      key={u.userId}
-                      className="cursor-pointer transition-colors hover:bg-bg-elevated/30"
-                    >
-                      <td className="px-4 py-2">
-                        <Link
-                          href={`/admin/users/${encodeURIComponent(u.userId)}`}
-                          className="block"
-                        >
-                          <div className="font-medium text-text">
-                            {u.email ?? "(no email on file)"}
-                          </div>
-                          <div className="font-mono text-caption text-text-dim">
-                            {u.clerkUserId ?? u.userId}
-                          </div>
-                          {u.hasAgent ? (
-                            <AgentBadge lastSeen={u.agentLastSeenAt} />
-                          ) : null}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-text">
-                        {u.gameCount.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-text">
-                        {u.opponentCount.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-text-muted">
-                        {timeSince(u.lastActivity)}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums text-text-muted">
-                        {timeSince(u.firstActivity)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          <AdminPagination hasPrev={!(pageHistory.length <= 1)} hasNext={!(!data.nextBefore)} onPrev={prevPage} onNext={nextPage} label={"Page " + pageHistory.length} loading={isValidating} itemCount={data?.items.length ?? 0} />
-        </>
-      )}
-    </div>
-  );
+/** Search matches email, internal ID and Clerk ID; the activity cursor is shareable. */
+function UsersBody() {
+  const [state, set] = useAdminQueryState({ q: "", filter: "all", before: "" }, { allowed: { filter: filters.map(filter => filter.value) }, debounceMs: { q: 300 } });
+  const paging = useAdminCursor(state.before, before => set({ before }));
+  const params = new URLSearchParams({ limit: "50" });
+  if (state.q.trim()) params.set("search", state.q.trim());
+  if (state.filter !== "all") params.set("filter", state.filter);
+  if (state.before) params.set("before", state.before);
+  const request = useApi<UsersListResp>(`/v1/admin/users?${params}`, { keepPreviousData: true });
+  if (request.error?.status === 403) return <ForbiddenCard />;
+  return <div className="space-y-6"><AdminPageHeader anchor="users-and-repairing-data" title="Users" description="Find accounts and inspect their activity before repairing data." />
+    <Card padded><AdminSearchField value={state.q} onChange={q => set({ q })} placeholder="Email, userId, or Clerk ID" /><div className="mt-3 flex flex-wrap gap-2">{filters.map(filter => <Button key={filter.value} variant="secondary" size="sm" aria-pressed={state.filter === filter.value} onClick={() => set({ filter: filter.value })}>{filter.label}</Button>)}</div></Card>
+    <AdminTable columns={columns} rows={request.data?.items || []} rowKey={row => row.userId} rowHref={row => `/admin/users/${encodeURIComponent(row.userId)}`} loading={!request.data && request.isLoading} updating={!!request.data && request.isValidating} caption="User accounts"
+      error={request.error ? <RequestError error={request.error} onRetry={() => request.mutate()} /> : null} empty={<Card padded><EmptyStatePanel title="No matching users" description="Try a wider search or another account filter." action={<Button variant="secondary" onClick={() => { set({ q: "", filter: "all" }); void request.mutate(); }}>Clear filters</Button>} /></Card>} />
+    <AdminPagination hasPrev={paging.hasPrev} prevLabel={paging.prevLabel} hasNext={!!request.data?.nextBefore} onPrev={paging.previous} onNext={() => paging.next(request.data?.nextBefore || "")} label={paging.page} loading={request.isValidating} itemCount={request.data?.items.length || 0} />
+  </div>;
 }
+export default function AdminUsersPage() { return <Suspense fallback={<LoadingRows rows={8} />}><UsersBody /></Suspense>; }
 
 /**
  * Small pill marking a user who has paired at least one agent, with the

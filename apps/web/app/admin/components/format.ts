@@ -6,6 +6,9 @@
 const BYTE_UNITS = ["B", "kB", "MB", "GB", "TB"] as const;
 const BINARY_BYTE_UNITS = ["B", "KiB", "MiB", "GiB", "TiB"] as const;
 
+export function raceLabel(race: string): string { return !race || race === "U" ? "Unknown" : race; }
+export function pctLabel(fraction: number): string { return Number.isFinite(fraction) ? `${Math.round(fraction * 100)}%` : "—"; }
+
 /**
  * Render a byte count using metric units (1 kB = 1000 B), matching
  * how Atlas renders storage in its UI. We deliberately do NOT use
