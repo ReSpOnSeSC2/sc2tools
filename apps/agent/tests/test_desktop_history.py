@@ -78,3 +78,33 @@ def test_owner_change_during_slow_write_fences_published_snapshot(tmp_path, monk
     finally:
         release.set()
         worker.close()
+
+
+def test_temporary_disk_failure_retains_pending_live_rows_and_recovers(tmp_path, monkeypatch):
+    failed, recovered = threading.Event(), threading.Event()
+    writes, snapshots = [], []
+    original = RecentGamesStore.record_many
+    def once(store, entries):
+        writes.append([row["gameId"] for row in entries])
+        if len(writes) == 1:
+            failed.set()
+            raise OSError("temporary fixture disk lock")
+        return original(store, entries)
+    monkeypatch.setattr(RecentGamesStore, "record_many", once)
+    def published(value):
+        snapshots.append(value)
+        if len(value.get("rows", [])) == 2:
+            recovered.set()
+    worker = DesktopHistory(tmp_path, owner_provider=lambda: "owner", state_provider=lambda: {}, on_snapshot=published)
+    worker.game_synced("first", {"gameId": "first"})
+    worker.start()
+    try:
+        assert failed.wait(3)
+        worker.game_synced("second", {"gameId": "second"})
+        assert recovered.wait(15)
+        assert {row["gameId"] for row in snapshots[-1]["rows"]} == {"first", "second"}
+        assert any(value.get("localError") for value in snapshots)
+        assert not snapshots[-1]["localError"]
+        assert len(RecentGamesStore(tmp_path, owner="owner").snapshot()) == 2
+    finally:
+        worker.close()

@@ -64,8 +64,15 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
                 if role == QtCore.Qt.DisplayRole:
                     return f"History import · {row['count']} games" if column == 0 else ""
                 if role == QtCore.Qt.DecorationRole and column == 0:
-                    return QtWidgets.QApplication.style().standardIcon(
+                    icon = QtWidgets.QApplication.style().standardIcon(
                         QtWidgets.QStyle.SP_ArrowDown if self.history_expanded else QtWidgets.QStyle.SP_ArrowRight)
+                    pixmap = icon.pixmap(16, 16)
+                    painter = QtGui.QPainter(pixmap)
+                    painter.setCompositionMode(QtGui.QPainter.CompositionMode_SourceIn)
+                    palette = parent.palette() if parent else QtWidgets.QApplication.palette()
+                    painter.fillRect(pixmap.rect(), palette.color(QtGui.QPalette.WindowText))
+                    painter.end()
+                    return QtGui.QIcon(pixmap)
                 return None
             if role == QtCore.Qt.ToolTipRole:
                 at = parse_time(row.get("dateIso") or row.get("updatedAt"))
@@ -208,7 +215,10 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             self.table.setShowGrid(False)
             self.table.verticalHeader().hide()
             self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
-            self.table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Stretch)
+            # Keep opponent names usable at the supported minimum window size;
+            # the remaining columns can scroll instead of squeezing this to 30px.
+            self.table.horizontalHeader().setSectionResizeMode(3, QtWidgets.QHeaderView.Interactive)
+            self.table.setColumnWidth(3, 150)
             self.table.horizontalHeader().setStretchLastSection(True)
             self.table.doubleClicked.connect(self._activate)
             self.table.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)

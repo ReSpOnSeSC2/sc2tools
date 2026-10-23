@@ -34,7 +34,7 @@ const article: HelpArticle = {
       "For a successful row, **Re-analyze** requests that file again. Games are upserted rather than counted twice. Skipped files and reason-specific retry are explained in [Importing your replay history](/help/desktop-app-import).",
     ] },
     { type: "heading", text: "Game notifications and maintenance", anchor: "actions" },
-    { type: "paragraph", text: "Enable **Settings → Notify me after every new game syncs**, then Save, for a local result message with opponent and map. It starts off; history imports and resumed games stay quiet. **Re-sync replay library…** is at the bottom of Settings in **Maintenance**. **Check for updates** is beside the version in the sidebar." },
+    { type: "paragraph", text: "Enable **Settings → Notify me after every new game syncs**, then Save, for a local result message with opponent and map. It starts off; history imports and resumed games stay quiet. **Re-sync replay library…** is at the bottom of Settings in **Maintenance**. **Updates** beside the version in the sidebar checks for a new release." },
   ],
   related: ["desktop-app-import", "desktop-app-overview", "desktop-app-sync-problems", "desktop-app-activity-log"],
 };

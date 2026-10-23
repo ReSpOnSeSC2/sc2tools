@@ -108,7 +108,7 @@ agent falls back gracefully to tray+console.
 
 | Tab | Contents |
 | --- | -------- |
-| Dashboard | Shared status and recovery; Last game and locally tracked Today W–L/MMR; Synced with today's uploads, Waiting, persistent relative Last upload, Failed (24 h), and history-import progress. Pause and Open dashboard remain here; Re-sync is in Settings → Maintenance and Check for updates is beside the sidebar version. |
+| Dashboard | Shared status and recovery; Last game and locally tracked Today W–L/MMR; Synced with today's uploads, Waiting, persistent relative Last upload, Failed (24 h), and history-import progress. Pause and Open dashboard remain here; Re-sync is in Settings → Maintenance and Updates is beside the sidebar version. |
 | Recent games | Latest 200 local outcomes, kept across restarts. When, result, matchup, opponent, map, length, own MMR and status; status/date filters and collapsed history imports. Double-click opens game analysis. Right-click selects the exact replay in Explorer, copies its path/error, retries or re-analyzes; select failed rows for Retry failed. |
 | Activity log | Incremental tail of `%LOCALAPPDATA%\sc2tools\logs\agent.log`, with complete tracebacks, readable level filters, Ctrl+F search, follow/pause, copy selection or last 200 lines, and Open log folder. |
 | Settings | Replay folders and sync date range, start-up, updates, capture, build check-in and OBS. Save confirms what applied; API address, log level and import speed name their restart requirement. The API field supports Reset to default and Test. |
@@ -135,7 +135,7 @@ The import card shows counts and measured throughput; ETA appears only after
 enough samples and is hidden while paused or waiting for a connection. **Only
 import this season** applies just that saved filter. **View on website** opens
 your dashboard. Manual **Settings → Maintenance → Re-sync replay library…**
-uses the same progress card, including when cloud progress reporting is offline.
+  uses the same progress card, including when cloud progress reporting is offline.
 
 In **Recent games → Skipped**, older markers have an unknown date and appear
 only under All dates. **Retry these** for an unresolved player, unreadable replay,

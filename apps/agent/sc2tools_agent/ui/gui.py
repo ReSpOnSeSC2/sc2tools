@@ -1433,7 +1433,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             version_lbl.setObjectName("dim")
             footer = QtWidgets.QHBoxLayout()
             footer.addWidget(version_lbl)
-            self._updates_btn = QtWidgets.QPushButton("Check for updates")
+            self._updates_btn = QtWidgets.QPushButton("Updates")
+            self._updates_btn.setAccessibleName("Check for updates")
+            self._updates_btn.setToolTip("Check for updates")
             self._updates_btn.setFlat(True)
             self._updates_btn.clicked.connect(self._click_check_updates)
             footer.addWidget(self._updates_btn)
@@ -1593,6 +1595,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             actions.addStretch(1)
             grid.addLayout(actions, 4, 1, 1, 3)
             self._transient_notice = QtWidgets.QLabel()
+            self._transient_notice.setTextFormat(QtCore.Qt.PlainText)
             self._transient_notice.setWordWrap(True)
             self._transient_notice.hide()
             grid.addWidget(self._transient_notice, 5, 1, 1, 2)
@@ -3005,7 +3008,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _on_update_check_done(self, message: str) -> None:
             self._updates_btn.setEnabled(True)
-            self._updates_btn.setText("Check for updates")
+            self._updates_btn.setText("Updates")
             # Empty message = an update was found and the runner's
             # handler owns the (sticky) notice — leave it alone.
             if message:

@@ -42,8 +42,8 @@ const article: HelpArticle = {
       type: "table",
       head: ["Page", "What it's for"],
       rows: [
-        ["Dashboard", "Status (Active, Paused, Pairing or Error), how many replays are synced and queued, the last upload, and the main buttons. While the app isn't linked yet, it also shows your pairing code."],
-        ["Recent uploads", "The replays the app handled most recently and how each one went. Double-click a row to show the file in Explorer."],
+        ["Dashboard", "Shared status and recovery, Last game, locally tracked Today record, upload totals and history-import progress. Re-sync is in Settings Maintenance; Updates is beside the sidebar version. While unlinked, it shows your pairing code."],
+        ["Recent games", "Up to 200 local outcomes across restarts, with status/date filters and collapsed history imports. Double-click a game for website analysis; right-click for its exact replay file, Retry or Copy error. See [Your recent games](/help/desktop-app-recent-games)."],
         ["Activity log", "What the app is doing right now, with complete tracebacks, level filters, search, follow controls, copy actions and **Open log folder**. See [Find and copy an error](/help/desktop-app-activity-log)."],
         ["Settings", "Replay folders, what to sync, start-up and updates, map replay capture, build check-in and OBS scene switching."],
         ["Streams", "Set one stream title for your connected YouTube, Twitch and Kick accounts."],
