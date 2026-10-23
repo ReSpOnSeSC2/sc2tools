@@ -30,6 +30,7 @@ export function ReviewComposer({
   initialTime,
   parentId = null,
   draftPin,
+  nextPinNumber = 1,
   pinMode,
   onTogglePinMode,
   onClearPin,
@@ -45,6 +46,7 @@ export function ReviewComposer({
   initialTime: number;
   parentId?: string | null;
   draftPin: DraftPin | null;
+  nextPinNumber?: number;
   pinMode: boolean;
   onTogglePinMode: () => void;
   onClearPin: () => void;
@@ -136,7 +138,7 @@ export function ReviewComposer({
           {draftPin ? (
             <span className="inline-flex min-h-[32px] items-center gap-1 rounded-full border border-warning/60 bg-warning/10 px-2.5 font-semibold text-text" data-testid="composer-pin">
               <MapPin className="h-3.5 w-3.5 text-warning" aria-hidden />
-              Pin at ({Math.round(draftPin.x)}, {Math.round(draftPin.y)})
+              Pinned on map · becomes pin {nextPinNumber}
               <button type="button" onClick={onClearPin} aria-label="Remove map pin" className="ml-1 rounded-full p-0.5 hover:bg-bg-elevated">
                 <X className="h-3.5 w-3.5" aria-hidden />
               </button>

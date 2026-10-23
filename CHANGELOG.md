@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Review recovery
+
+- Failed request closure and reviewer preference saves show recovery actions; preferences roll back when saving fails.
+- Review-board and written-review loading failures show clear Retry states.
+- Map pins belong to each composer, so posting or cancelling a reply preserves the pin on your separate top-level comment.
+
 ### Repair follow-up
 
 - Build library pages load editors and charts when needed, reducing their initial JavaScript; public build pages remain visible while sign-in loads.
