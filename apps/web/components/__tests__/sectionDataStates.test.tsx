@@ -87,13 +87,14 @@ const SECTIONS: Array<[string, () => ReactElement, RegExp | null]> = [
   ["Devices", () => <DevicesPanel />, /No devices paired yet|Failed to load/],
 ];
 
-describe("migrated sections show Retry when their request fails", () => {
+describe("migrated sections offer recovery when their request fails", () => {
   it.each(SECTIONS)("%s", async (_name, renderSection, falseState) => {
     render(renderSection());
     expect(screen.getAllByTestId("request-error").length).toBeGreaterThan(0);
+    if (_name === "Settings account") expect(screen.getByText("Couldn't load your Foundation settings")).toBeTruthy();
     if (falseState) expect(screen.queryByText(falseState)).toBeNull();
     await act(async () => {
-      fireEvent.click(screen.getAllByRole("button", { name: "Retry" })[0]);
+      fireEvent.click(screen.getAllByRole("button", { name: _name === "Settings account" ? "Try again" : "Retry" })[0]);
     });
     expect(harness.mutate).toHaveBeenCalled();
   });

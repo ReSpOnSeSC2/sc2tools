@@ -78,7 +78,7 @@ describe("admin unread activity", () => {
     scenario.items = Array.from({ length: 61 }, (_, index) => message(index));
     scenario.unreadCount = 61;
     render(<AdminNotificationsPage />);
-    fireEvent.click(screen.getByRole("button", { name: "Older →" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(lastFeedPath()).toContain(`before=${encodeURIComponent(CURSOR)}`);
     expect(screen.getByText("Report 60")).toBeTruthy();
     expect(screen.queryByText("Report 0")).toBeNull();
@@ -103,7 +103,7 @@ describe("admin unread activity", () => {
     scenario.items = Array.from({ length: 61 }, (_, index) => message(index));
     scenario.unreadCount = 61;
     const { rerender } = render(<AdminNotificationsPage />);
-    fireEvent.click(screen.getByRole("button", { name: "Older →" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     scenario.items = [message(0)];
     scenario.unreadCount = 1;
     rerender(<AdminNotificationsPage />);
@@ -189,10 +189,10 @@ describe("admin unread activity", () => {
     serverRows = [incoming, ...initial];
     emit(incoming);
     rerender(<AdminNotificationsPage />);
-    expect(screen.getByRole("button", { name: "Older →" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(true);
     await act(async () => { finishRefresh(); });
     rerender(<AdminNotificationsPage />);
-    fireEvent.click(screen.getByRole("button", { name: "Older →" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByText("Report 49")).toBeTruthy();
     expect(screen.getByText("Report 50")).toBeTruthy();
   });

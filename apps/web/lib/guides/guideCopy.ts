@@ -617,3 +617,12 @@ export function buildMapIntro(payload: GuideMapPayload | null | undefined): Guid
     thinLine("map-thin", payload.games),
   ]);
 }
+
+
+export const EIGHT_WORKER_GUIDE_NOTE = "Guide pages cover the 12-worker game, so openers aren't linked here.";
+
+/** The exact scope used by both the visible summary and table caption. */
+export function filterSummaryText({ count, band, era }: { count: number; band: import("./types").GuideBand | null; era: GuideEra }): string {
+  const opponents = band ? `${band.label}${band.type === "mmr" ? " MMR" : ""} opponents` : "all opponents";
+  return `Showing ${count} ${count === 1 ? "opener" : "openers"} vs ${opponents} · ${era === "before" ? "8 starting workers (patch 5.0.16)" : "12 starting workers"}`;
+}

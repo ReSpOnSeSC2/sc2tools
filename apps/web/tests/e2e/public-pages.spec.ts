@@ -15,6 +15,8 @@ import { expect, test, type Locator, type Page, type TestInfo } from "@playwrigh
  */
 
 const PAGES: Array<{ path: string; expectText: RegExp }> = [
+  { path: "/legal/privacy", expectText: /Privacy Policy/ },
+  { path: "/legal/terms", expectText: /Terms of Service/ },
   { path: "/", expectText: /opponent|build|replay/i },
   { path: "/guides", expectText: /build order guides/i },
   { path: "/guides/pvz", expectText: /PvZ build orders/i },
@@ -51,6 +53,28 @@ test("public profiles keep missing and temporary server statuses distinct", asyn
   expect(unavailable?.status()).toBeGreaterThanOrEqual(500);
   await expect(page.getByRole("heading", { name: "Profile temporarily unavailable" })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Try again", exact: true })).toBeVisible();
+
+});
+
+test("phone landing headline holds its position while the carousel waits", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const heading = page.getByRole("heading", { level: 1 }).first();
+  const before = await heading.boundingBox();
+  await page.waitForTimeout(6000);
+  const after = await heading.boundingBox();
+  expect(Math.abs((after?.y ?? 0) - (before?.y ?? 0))).toBeLessThanOrEqual(1);
+  const overflow = await page.evaluate(() => ({ width: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth, wide: Array.from(document.querySelectorAll("body *")).filter((node) => node.getBoundingClientRect().right > document.documentElement.clientWidth + 1).slice(0, 8).map((node) => ({ tag: node.tagName, className: node.className, width: node.getBoundingClientRect().width })) }));
+  expect(overflow.width, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport + 1);
+});
+
+test("phone privacy contents links reach the Cookies section", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 844 });
+  await page.goto("/legal/privacy");
+  await page.getByText("On this page", { exact: true }).last().click();
+  await page.getByRole("navigation", { name: "On this page" }).last().getByRole("link", { name: "Cookies", exact: true }).click();
+  await expect(page).toHaveURL(/#cookies$/);
+  await expect(page.locator("h2#cookies")).toBeInViewport();
 });
 
 for (const { path, expectText } of PAGES) {
@@ -188,6 +212,19 @@ const GUIDE_STATS: Array<{ path: string; locate: (page: Page) => Locator; stat: 
 ];
 
 test.describe("guide pages at 375 and 1440 px", () => {
+  test("filtered opener controls stay inside a 375px page", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop-1280", "the viewport is set per test; run it once");
+    await page.setViewportSize({ width: 375, height: 900 });
+    const response = await page.goto("/guides/pvz?band=league:4");
+    expect(response?.status()).toBe(200);
+    const filters = page.getByRole("navigation", { name: "Filter openers" });
+    await expect(filters).toBeVisible();
+    await expect(filters.getByRole("link", { name: "All opponents", exact: true })).toHaveAttribute("href", "/guides/pvz");
+    await expect(page.getByRole("navigation", { name: "Matchups" }).getByRole("link")).toHaveCount(9);
+    await filters.getByRole("button", { name: "By MMR" }).click();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  });
+
   for (const width of [375, 1440]) {
     test(`headline stats visible with no horizontal scroll at ${width}px`, async ({ page }, testInfo) => {
       test.skip(testInfo.project.name !== "desktop-1280", "the viewport is set per test; run it once");

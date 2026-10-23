@@ -1,5 +1,7 @@
 "use client";
 
+import { useChromeBreadcrumb } from "@/components/chrome/ChromeContext";
+
 import { useMemo, useState } from "react";
 import { useSWRConfig } from "swr";
 import Link from "next/link";
@@ -238,6 +240,8 @@ function ProfileBody({ pulseId }: { pulseId: string }) {
 
   // A 404 means "not in your history"; a 503, 5xx or dropped connection
   // means the dossier couldn't be built right now, and gets Retry.
+  useChromeBreadcrumb(profile.data ? { backHref: "/app/opponents", backLabel: "Back to Opponents", trail: [{ label: "Opponents", href: "/app/opponents" }, { label: profile.data.name || profile.data.pulseId || pulseId }] } : null);
+
   if (!hasQueryData(profile)) {
     return (
       <QueryState

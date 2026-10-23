@@ -5,7 +5,8 @@ import { AdminShell } from "./components/AdminShell";
 
 // Admin pages are client components; they share this tab title.
 export const metadata: Metadata = {
-  title: "Admin",
+  title: "Dashboard · Admin",
+  robots: { index: false },
 };
 
 /**

@@ -1,4 +1,8 @@
 "use client";
+import { Button } from "@/components/ui/Button";
+import { RequestError } from "@/components/ui/RequestError";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { use, useState } from "react";
 import Link from "next/link";
@@ -39,10 +43,11 @@ export default function AdminUserDetailPage({
     `/v1/admin/users/${encodeURIComponent(userId)}`,
   );
 
-  if (isLoading) {
+  if (error?.status === 403) return <ForbiddenCard />;
+  if (isLoading && !error) {
     return (
       <div className="space-y-6">
-        <div className="h-8 w-64 animate-pulse rounded bg-bg-elevated" />
+        <AdminPageHeader anchor="users-and-repairing-data" title="User" description="Account identity, activity and targeted data tools." /><div className="h-8 w-64 animate-pulse rounded bg-bg-elevated" />
         <div className="h-32 animate-pulse rounded-xl bg-bg-elevated" />
         <div className="h-64 animate-pulse rounded-xl bg-bg-elevated" />
       </div>
@@ -50,37 +55,18 @@ export default function AdminUserDetailPage({
   }
   if (error) {
     if (error.status === 403) return <ForbiddenCard />;
-    return (
-      <Card padded>
-        <p className="text-danger">
-          Failed to load user: {error.message}
-        </p>
-      </Card>
-    );
+    return <div className="space-y-6"><AdminPageHeader anchor="users-and-repairing-data" title="User" description="Account identity, activity and targeted data tools." /><RequestError error={error} onRetry={() => mutate()} /></div>;
   }
   if (!data) return null;
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <Link
+      <AdminPageHeader anchor="users-and-repairing-data" title="User" description="Account identity, activity and targeted data tools." actions={<><Link
           href="/admin/users"
           className="text-caption text-text-dim hover:text-text"
         >
           ← All users
-        </Link>
-        <h1 className="break-all text-3xl font-bold">
-          {data.email ?? data.userId}
-        </h1>
-        <p className="break-all font-mono text-caption text-text-dim">
-          {data.userId}
-        </p>
-        {data.clerkUserId ? (
-          <p className="break-all font-mono text-caption text-text-dim">
-            clerk: {data.clerkUserId}
-          </p>
-        ) : null}
-      </header>
+        </Link></>} /><p className="break-all text-body text-text">{data.email ?? data.userId}</p><p className="break-all font-mono text-caption text-text-dim">{data.userId}{data.clerkUserId ? " · Clerk: " + data.clerkUserId : ""}</p>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <MetricStat
@@ -147,9 +133,7 @@ export default function AdminUserDetailPage({
           </div>
         </Card.Header>
         {data.opponents.top.length === 0 ? (
-          <div className="px-4 py-8 text-center text-text-muted">
-            No opponents recorded yet.
-          </div>
+          <EmptyStatePanel title="No opponents recorded yet" action={<Button variant="secondary" onClick={() => mutate()}>Refresh</Button>} />
         ) : (
           <table className="w-full text-sm">
             <thead className="bg-bg-elevated/40 text-left text-caption uppercase tracking-wider text-text-dim">
@@ -259,13 +243,13 @@ function GrantAdminAction({
           Can&apos;t promote — this account has no linked sign-in identity.
         </p>
       ) : state.kind === "idle" ? (
-        <button
+        <Button variant="primary" size="sm"
           type="button"
-          className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
+          className="mt-3"
           onClick={() => setState({ kind: "confirm" })}
         >
           Grant admin
-        </button>
+        </Button>
       ) : null}
       {state.kind === "confirm" ? (
         <div className="mt-3">
@@ -332,13 +316,13 @@ function RebuildOpponentsAction({
         from their <code>games</code>. Use after a buggy re-sync.
       </p>
       {state.kind === "idle" ? (
-        <button
+        <Button variant="primary" size="sm"
           type="button"
-          className="mt-3 inline-flex items-center gap-2 rounded-lg px-4 py-[0.55rem] font-semibold transition-colors bg-accent text-bg hover:bg-accent-hover"
+          className="mt-3"
           onClick={() => setState({ kind: "confirm" })}
         >
           Rebuild
-        </button>
+        </Button>
       ) : null}
       {state.kind === "confirm" ? (
         <div className="mt-3">

@@ -1,4 +1,9 @@
 "use client";
+import { Button } from "@/components/ui/Button";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { RequestError } from "@/components/ui/RequestError";
+import { AdminPagination } from "@/app/admin/components/AdminPagination";
+import { AdminPageHeader } from "@/app/admin/components/AdminPageHeader";
 
 import { use, useState } from "react";
 import Link from "next/link";
@@ -62,37 +67,18 @@ export default function AdminGlobalPlayerPage({
 
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <Link
+      <AdminPageHeader anchor="global-trends" title="Global player" description="Cross-user player statistics and recent games." actions={<><Link
           href="/admin/global"
           className="text-caption text-text-dim hover:text-text"
         >
           ← Global players
-        </Link>
-        <h1 className="text-3xl font-bold">
-          {profile.data?.displayNameSample || "Player"}
-        </h1>
-        <p className="break-all font-mono text-caption text-text-dim">
-          {pulseId}
-        </p>
-        <p className="text-text-muted">
-          Everything the platform knows about this player, merged across
-          every user who has faced them — combined record, who&apos;s
-          tracking them, the strategies they play, and every game on
-          record. Click a game for its full build order and macro.
-        </p>
-      </header>
+        </Link></>} />
+      <p className="break-all text-body text-text">{profile.data?.displayNameSample || "Player"} · <span className="font-mono text-caption">{pulseId}</span></p>
 
       {profile.isLoading && !profile.data ? (
         <LoadingRows rows={5} />
       ) : profile.error ? (
-        <Card padded>
-          <p className="text-danger">
-            {profile.error.status === 404
-              ? "No platform user is tracking this player."
-              : `Failed to load profile: ${profile.error.message}`}
-          </p>
-        </Card>
+        <RequestError error={profile.error} onRetry={() => profile.mutate()} />
       ) : profile.data ? (
         <>
           <SummarySection data={profile.data} />
@@ -314,7 +300,7 @@ function GamesSection({ pulseId }: { pulseId: string }) {
   const query = new URLSearchParams();
   query.set("limit", String(PAGE_SIZE));
   if (before) query.set("before", before);
-  const { data, error, isLoading } = useApi<GlobalPlayerGamesResp>(
+  const { data, error, isLoading, isValidating, mutate } = useApi<GlobalPlayerGamesResp>(
     `/v1/admin/global/players/${encodeURIComponent(
       pulseId,
     )}/games?${query.toString()}`,
@@ -339,15 +325,13 @@ function GamesSection({ pulseId }: { pulseId: string }) {
     <div className="space-y-3">
       <h2 className="text-xl font-semibold">All games</h2>
 
-      {isLoading && !data ? (
+      {error ? (
+        <RequestError error={error} onRetry={() => mutate()} />
+      ) : isLoading && !data ? (
         <LoadingRows rows={8} />
-      ) : error ? (
-        <Card padded>
-          <p className="text-danger">Failed to load games: {error.message}</p>
-        </Card>
       ) : !data || data.items.length === 0 ? (
         <Card padded>
-          <p className="text-text-muted">No games recorded against this player.</p>
+          <EmptyStatePanel title="No games recorded against this player" action={<Button variant="secondary" onClick={() => void mutate()}>Refresh</Button>} />
         </Card>
       ) : (
         <div className="lg:grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)] lg:gap-4">
@@ -400,27 +384,7 @@ function GamesSection({ pulseId }: { pulseId: string }) {
               </ul>
             </Card>
 
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={pageHistory.length <= 1}
-                onClick={prevPage}
-              >
-                ← Previous
-              </button>
-              <span className="text-caption text-text-dim">
-                {data.items.length} on this page
-              </span>
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 hard-press rounded-full px-5 py-[0.55rem] font-display font-bold border-2 border-line bg-bg-surface text-text hover:bg-bg-elevated text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                disabled={!data.nextBefore}
-                onClick={nextPage}
-              >
-                Next →
-              </button>
-            </div>
+            <AdminPagination hasPrev={!(pageHistory.length <= 1)} hasNext={!(!data.nextBefore)} onPrev={prevPage} onNext={nextPage} label={"Page " + pageHistory.length} loading={isValidating} itemCount={data?.items.length ?? 0} />
           </div>
 
           {/* Detail — hidden on mobile until a game is selected. */}

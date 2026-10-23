@@ -45,6 +45,12 @@ function useTabs(): TabsContextValue {
   return ctx;
 }
 
+/** IDs shared by alternate responsive triggers and the actual tab panel. */
+export function useTabIds(value: string) {
+  const { baseId } = useTabs();
+  return { triggerId: `${baseId}-trigger-${value}`, panelId: `${baseId}-panel-${value}` };
+}
+
 export interface TabsProps {
   value: string;
   onValueChange: (next: string) => void;

@@ -10,6 +10,8 @@ import {
   CartesianGrid,
 } from "recharts";
 
+import { useChartTheme } from "@/lib/useChartTheme";
+import { shareLabel, publicPageHref } from "./analyticsExport";
 import { Card } from "@/components/ui/Card";
 import { compactNumber } from "../../components/format";
 import type {
@@ -28,11 +30,6 @@ import type {
  * real GA4 payload passed down from the page; these components never
  * fetch or fabricate.
  */
-
-const COLOR_GRID = "#1f2533";
-const COLOR_TEXT_DIM = "#6b7280";
-const COLOR_USERS = "#22d3ee"; // accent-cyan-ish
-const COLOR_SESSIONS = "#7c8cff"; // accent
 
 // ---- KPI cards -------------------------------------------------------
 
@@ -114,6 +111,7 @@ function DeltaBadge({ delta }: { delta: number | null }) {
 // ---- traffic timeseries ---------------------------------------------
 
 export function TrafficChart({ points }: { points: TimeseriesPoint[] }) {
+  const { border: COLOR_GRID, textDim: COLOR_TEXT_DIM, accentCyan: COLOR_USERS, accent: COLOR_SESSIONS } = useChartTheme();
   if (points.length === 0) {
     return (
       <Card title="Traffic over time">
@@ -178,6 +176,7 @@ export function TrafficChart({ points }: { points: TimeseriesPoint[] }) {
 }
 
 function ChartLegend() {
+  const { accentCyan: COLOR_USERS, accent: COLOR_SESSIONS } = useChartTheme();
   return (
     <div className="flex items-center gap-3 text-micro">
       <LegendDot color={COLOR_USERS} label="Active users" />
@@ -228,7 +227,7 @@ function TrafficTooltip({ active, label, payload }: TooltipProps) {
 
 // ---- breakdown tables -----------------------------------------------
 
-export function TopPagesTable({ rows }: { rows: TopPage[] }) {
+export function TopPagesTable({ rows, total = rows.reduce((sum, row) => sum + row.views, 0) }: { rows: TopPage[]; total?: number }) {
   return (
     <BreakdownCard title="Top pages" empty="No page views yet.">
       {rows.length > 0 ? (
@@ -238,6 +237,7 @@ export function TopPagesTable({ rows }: { rows: TopPage[] }) {
               <th className="px-4 py-2.5 font-semibold">Page</th>
               <th className="px-4 py-2.5 text-right font-semibold">Views</th>
               <th className="px-4 py-2.5 text-right font-semibold">Users</th>
+              <th className="px-4 py-2.5 text-right font-semibold">Share</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -245,7 +245,7 @@ export function TopPagesTable({ rows }: { rows: TopPage[] }) {
               <tr key={row.path} className="hover:bg-bg-elevated/30">
                 <td className="max-w-0 px-4 py-2">
                   <div className="truncate font-mono text-text" title={row.path}>
-                    {row.path}
+                    {publicPageHref(row.path) ? <a href={publicPageHref(row.path)!} target="_blank" rel="noreferrer" className="text-accent-cyan underline">{row.path}<span className="sr-only"> (opens in new tab)</span></a> : row.path}
                   </div>
                   {row.title ? (
                     <div className="truncate text-caption text-text-dim" title={row.title}>
@@ -259,6 +259,7 @@ export function TopPagesTable({ rows }: { rows: TopPage[] }) {
                 <td className="px-4 py-2 text-right tabular-nums text-text-muted">
                   {compactNumber(row.activeUsers)}
                 </td>
+                <td className="px-4 py-2 text-right tabular-nums">{shareLabel(row.views, total)}</td>
               </tr>
             ))}
           </tbody>
@@ -279,6 +280,7 @@ export function BarBreakdown({
   rows: Array<{ label: string; value: number }>;
 }) {
   const max = rows.reduce((m, r) => Math.max(m, r.value), 0);
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
   return (
     <BreakdownCard title={title} empty={empty}>
       {rows.length > 0 ? (
@@ -290,7 +292,7 @@ export function BarBreakdown({
                   {row.label}
                 </span>
                 <span className="tabular-nums text-caption text-text-muted">
-                  {compactNumber(row.value)}
+                  {row.value.toLocaleString()} · {shareLabel(row.value, total)}
                 </span>
               </div>
               <div className="h-1.5 w-full overflow-hidden rounded-full bg-bg-elevated">
@@ -353,15 +355,16 @@ function formatRate(rate: number): string {
   return `${Math.round(rate * 100)}%`;
 }
 
-/** Seconds → "m:ss" (or "h:mm" past an hour). */
-function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "0:00";
+/** Human-readable duration with explicit units. */
+export function formatDuration(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "0s";
   const total = Math.round(seconds);
   const h = Math.floor(total / 3600);
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
-  if (h > 0) return `${h}:${String(m).padStart(2, "0")}`;
-  return `${m}:${String(s).padStart(2, "0")}`;
+  if (h > 0) return h + "h " + String(m).padStart(2, "0") + "m";
+  if (m > 0) return m + "m " + s + "s";
+  return s + "s";
 }
 
 const MONTHS = [
