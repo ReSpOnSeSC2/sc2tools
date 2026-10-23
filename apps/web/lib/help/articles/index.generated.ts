@@ -29,6 +29,7 @@ import analyzer_today from "./analyzer/today";
 import analyzer_trends from "./analyzer/trends";
 import builds_buildCheckIn from "./builds/build-check-in";
 import builds_buildGuides from "./builds/build-guides";
+import builds_buildOrdersExport from "./builds/build-orders-export";
 import builds_communityBuilds from "./builds/community-builds";
 import builds_customBuilds from "./builds/custom-builds";
 import builds_practiceGhostBuild from "./builds/practice-ghost-build";
@@ -103,6 +104,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_trends,
   builds_buildCheckIn,
   builds_buildGuides,
+  builds_buildOrdersExport,
   builds_communityBuilds,
   builds_customBuilds,
   builds_practiceGhostBuild,

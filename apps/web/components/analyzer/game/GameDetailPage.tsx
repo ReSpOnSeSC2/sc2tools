@@ -17,6 +17,7 @@ import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import type { AutopsyGame } from "@/lib/lossAutopsy";
 import { GameDetailShell } from "./GameDetailShell";
+import { GameExportMenu } from "./GameExportMenu";
 import dynamic from "next/dynamic";
 import { GameWorkspaceNav } from "./GameWorkspaceNav";
 import { RecomputeAnalysisAction, useRecomputeAvailability } from "./RecomputeAnalysisAction";
@@ -25,6 +26,7 @@ import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { MapReplaySection } from "./MapReplaySection";
 import { MechanicsPanel } from "./MechanicsPanel";
 const BuildOrderColumns = dynamic(() => import("./BuildOrderColumns").then((value) => value.BuildOrderColumns), { loading: () => <div role="status" aria-label="Loading build orders" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
+const BuildWorkspaceActions = dynamic(() => import("./BuildWorkspaceActions").then(value => value.BuildWorkspaceActions));
 const GameMacroSection = dynamic(() => import("./GameMacroSection").then((value) => value.GameMacroSection), { loading: () => <div role="status" aria-label="Loading macro breakdown" className="h-64 animate-pulse rounded-lg bg-bg-elevated" /> });
 import { LossAutopsyCard } from "./LossAutopsyCard";
 import { ArmGhostFromLogButton, GhostGradeCard } from "./GhostGradeCard";
@@ -218,6 +220,7 @@ function GameDetailContent({
   return (
     <GameDetailShell
       game={game}
+      exportAction={<GameExportMenu game={game} buildOrders={buildReq.data} macroBreakdown={breakdown} pending={buildStatus === "loading" || macroStatus === "loading"} />}
       opponentContext={opponentContext}
       streamLinks={streamLinks}
       buildLabel={checkinBuild ? checkinBuild.label : undefined}
@@ -290,6 +293,13 @@ function GameDetailContent({
       /></SectionBoundary>
 
       <SectionBoundary key={`build orders:${game.gameId}`} label="build orders" title="Build orders hit a problem"><BuildOrderColumns
+        workspace={{
+          myMeta: { title: checkinBuild?.label ?? buildReq.data?.my_build ?? game.myBuild ?? "My build", matchup: `${ghostMyRace || "Unknown"} vs ${ghostOpponentRace || "Unknown"}`, author: myName, sourceUrl: `/app/game/${encodeURIComponent(game.gameId)}#builds` },
+          oppMeta: { title: checkinOpponent?.label ?? buildReq.data?.opp_strategy ?? game.opponent?.strategy ?? "Opponent build", matchup: `${ghostOpponentRace || "Unknown"} vs ${ghostMyRace || "Unknown"}`, author: oppName, sourceUrl: `/app/game/${encodeURIComponent(game.gameId)}#builds` },
+          myStats: breakdown?.stats_events, oppStats: breakdown?.opp_stats_events,
+          mySaveAction: <BuildWorkspaceActions events={buildReq.data?.events || []} name={checkinBuild?.label ?? game.myBuild ?? "My build"} race={ghostMyRace} vsRace={ghostOpponentRace} gameId={game.gameId} ghost={false} />,
+          oppAction: <BuildWorkspaceActions events={buildReq.data?.opp_events || []} name={checkinOpponent?.label ?? game.opponent?.strategy ?? "Opponent build"} race={ghostOpponentRace} vsRace={ghostMyRace} gameId={game.gameId} opponent />,
+        }}
         onSeek={clock.seek} currentTime={clock.t}
         error={buildStatus === "error" ? buildReq.error : undefined} onRetry={() => buildReq.mutate()}
         myEvents={buildReq.data?.events}
@@ -304,9 +314,10 @@ function GameDetailContent({
         myAction={
           buildLogLines && buildLogLines.length > 0 ? (
             <ArmGhostFromLogButton
+              className="min-h-11 w-full justify-start"
               gameId={game.gameId}
               name={
-                buildReq.data?.my_build
+                checkinBuild?.label ?? buildReq.data?.my_build
                 ?? game.myBuild
                 ?? (game.map ? `Build from ${game.map}` : "My build")
               }
