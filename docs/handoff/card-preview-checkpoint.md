@@ -28,3 +28,21 @@ Ctrl+Enter remains the card confirmation shortcut. Help/README/Unreleased entrie
 are updated. Real Qt regressions include glyph metrics, actions, timer dispatch,
 drag/reset, keyboard focus and native no-activation flags. Full suite, frozen
 package smoke, screenshots, web checks and draft PR remain required.
+
+
+## Integrated verification checkpoint
+
+Current main `441582d0` (including merged scouting #691) merged cleanly at
+`78032e52`. Source controller business logic is unchanged. All 187 focused checks
+pass. The first full suite found one new test's 40 ms fixed wait was too short
+for actual Qt timer delivery under package-build load; the other 2,151 tests
+passed. The regression now waits for the actual Qt timeout signal with a bounded
+1-second deadline and still asserts the production timer is 90 seconds, active,
+and closes the card. The timeout/package subset passes **24 checks**.
+
+The offline frozen-GUI diagnostic now actually paints both previews through
+production Settings callbacks, in addition to the five pages/Streams check,
+without state/service/thread/network bootstrap. Three reviewed native screenshots
+are in `docs/handoff/screenshots/desktop-card-preview-*.png`; final chip styling
+and final source/full/package/web checks are in progress. Both web types and all
+72 help checks passed before the final main integration; rerun after it.

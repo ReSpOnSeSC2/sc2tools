@@ -123,8 +123,9 @@ class CardWindow(QtWidgets.QWidget):
         self._dragged = False
         self._previous_foreground: Optional[int] = None
         self.is_preview = False
-        self.preview_chip = plain_label("Preview - nothing is saved", "checkinMuted")
+        self.preview_chip = plain_label("Preview - nothing is saved", "checkinPreview")
         self.preview_chip.setAccessibleName("Preview - nothing is saved")
+        self.preview_chip.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Fixed)
         self.preview_chip.hide()
         self._preview_timer = QtCore.QTimer(self)
         self._preview_timer.setSingleShot(True)

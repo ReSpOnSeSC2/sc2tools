@@ -81,6 +81,13 @@ QLabel {{
     background-color: transparent;
     border: none;
 }}
+QLabel#checkinPreview {{
+    color: {_ACCENT_CYAN};
+    background-color: {_SUBTLE};
+    border: 1px solid {_BORDER_STRONG};
+    border-radius: 6px;
+    padding: 3px 6px;
+}}
 QLabel#checkinEyebrow {{
     color: {_TEXT_MUTED};
     font-size: 10px;

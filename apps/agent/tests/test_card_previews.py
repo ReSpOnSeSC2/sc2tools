@@ -86,8 +86,10 @@ def test_preview_escape_and_timeout_are_local_and_real_card_replaces_immediately
     host.show_preview(POSTGAME); preview = host.window(POSTGAME)
     # Real elapsed Qt timer dispatch, shortened only after checking the contract.
     assert preview._preview_timer.interval() == 90_000
+    assert preview._preview_timer.isActive()
+    elapsed = QtTest.QSignalSpy(preview._preview_timer.timeout)
     preview._preview_timer.setInterval(15)
-    QtTest.QTest.qWait(40)
+    assert elapsed.wait(1000), "the real Qt preview timeout was not delivered"
     assert not preview.isVisible() and recorder.calls == []
     host.show_preview(LOADING); preview = host.window(LOADING)
     preview._preview_escape.activated.emit()
@@ -132,7 +134,9 @@ def test_settings_controls_work_when_checkins_are_off_and_feedback_expires(app, 
     group.preview_postgame.click(); assert host.window(POSTGAME).is_preview
     group.reset_positions.click(); assert group.positions_status.text() == "Positions reset"
     assert group._position_feedback.interval() == 3000
-    group._position_feedback.setInterval(15); QtTest.QTest.qWait(40)
+    elapsed = QtTest.QSignalSpy(group._position_feedback.timeout)
+    group._position_feedback.setInterval(15)
+    assert elapsed.wait(1000), "the real Qt position-feedback timeout was not delivered"
     assert group.positions_status.text() == ""
     group.queue_link.click(); assert reset == [True, "queue"] and recorder.calls == []
     group.deleteLater(); app.processEvents()

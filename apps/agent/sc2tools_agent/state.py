@@ -287,8 +287,6 @@ class AgentState:
     ``"postgame"`` → ``[x, y]`` in logical screen pixels. Absent means
     the default spot beside the game."""
 
-    last_known_race: Optional[str] = None
-    last_known_race_at: Optional[str] = None
     build_checkin_prefs: Optional[Dict[str, bool]] = None
     # Scouting visibility is local to this PC; cloud check-in switches retain
     # their three-boolean contract for older web and desktop clients.
@@ -297,6 +295,10 @@ class AgentState:
     (``enabled`` / ``askAtLoading`` / ``askAfterGame``). The cloud stays
     the source of truth; this copy only decides the cards while the
     first read of a session has not answered (offline at login)."""
+
+    # Appended to preserve existing positional AgentState constructor fields.
+    last_known_race: Optional[str] = None
+    last_known_race_at: Optional[str] = None
 
     @property
     def is_paired(self) -> bool:

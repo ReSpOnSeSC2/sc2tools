@@ -66,8 +66,17 @@ def _exercise_gui(report):
             painted = window.grab()
             if not isinstance(painted, QtGui.QPixmap) or painted.isNull():
                 raise RuntimeError("The bundled window did not paint.")
+            report["stage"] = "checkin_preview_paint"
+            settings = window._checkin_settings
+            for kind, control in (("loading", settings.preview_loading), ("postgame", settings.preview_postgame)):
+                control.click()
+                card = window._checkin_host.window(kind)
+                app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+                if not card.is_preview or not card.isVisible() or card.grab().isNull():
+                    raise RuntimeError("The bundled check-in preview did not paint.")
+                card._dismiss_preview()
             report.update(qt_version=QtCore.qVersion(), qt_platform=app.platformName(),
-                          page_count=stack.count(), streams_painted=True)
+                          page_count=stack.count(), streams_painted=True, checkin_previews_painted=True)
         except Exception as error:
             callback["error"] = error
         finally:
@@ -87,6 +96,7 @@ def _exercise_gui(report):
     finally:
         timer.stop()
         if ui._window is not None:
+            ui._window._checkin_host.close()
             for child_timer in ui._window.findChildren(QtCore.QTimer):
                 child_timer.stop()
             ui._window.hide()
