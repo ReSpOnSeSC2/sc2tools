@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { AppChrome } from "../AppChrome";
@@ -516,5 +516,24 @@ describe("pinned rail and accessible More", () => {
     render(<AppChrome>Content</AppChrome>);
     expect(within(screen.getByRole("navigation", { name: "Quick sections" })).getByRole("link", { name: "Builds" })).toBeTruthy();
     const account = screen.getByRole("list", { name: "Account menu" }); for (const name of ["Settings", "Devices", "Help"]) expect(within(account).getByRole("link", { name })).toBeTruthy();
+  });
+});
+
+
+describe("responsive More and install availability", () => {
+  it("closes More when the desktop breakpoint starts matching", () => {
+    const callbacks = new Set<() => void>(); const media = { matches: false, addEventListener: (_: string, callback: () => void) => callbacks.add(callback), removeEventListener: (_: string, callback: () => void) => callbacks.delete(callback) };
+    vi.stubGlobal("matchMedia", vi.fn(() => media)); render(<AppChrome>Content</AppChrome>); fireEvent.click(screen.getByRole("button", { name: "More" })); expect(screen.getByRole("dialog")).toBeTruthy();
+    act(() => { media.matches = true; callbacks.forEach((callback) => callback()); }); expect(screen.queryByRole("dialog")).toBeNull();
+  });
+  it("uses the LogIn icon for the signed-out sign-in tab", () => {
+    harness.signedIn = false; render(<AppChrome>Content</AppChrome>);
+    const link = within(screen.getByRole("navigation", { name: "Quick sections" })).getByRole("link", { name: "Sign in" }); expect(link.querySelector("svg")?.classList.contains("lucide-log-in")).toBe(true);
+  });
+  it("hides the install row in an already installed app", () => {
+    vi.spyOn(navigator, "userAgent", "get").mockReturnValue("iPhone Version/17 Mobile Safari/604");
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({ matches: query === "(display-mode: standalone)", addEventListener: vi.fn(), removeEventListener: vi.fn() })));
+    render(<AppChrome>Content</AppChrome>); fireEvent.click(screen.getByRole("button", { name: "More" }));
+    expect(within(screen.getByRole("dialog", { name: "More sections" })).queryByRole("button", { name: "Install app" })).toBeNull();
   });
 });

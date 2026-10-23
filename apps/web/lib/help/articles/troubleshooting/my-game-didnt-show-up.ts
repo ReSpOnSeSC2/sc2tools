@@ -40,8 +40,8 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "**Agent online** means your linked desktop app has a recent heartbeat. **Agent offline** shows when it was last seen; **No desktop app linked** means you need to link a PC. Click the pill for exact last-seen and upload times, your total games and **Open Devices**. The separate **Realtime updates** detail describes this browser connection.",
-        "The game count increases for newly saved games. Re-syncing an existing game or changing its build label doesn't add another game. The latest upload time updates every 30 seconds; hover it for the exact time.",
+        "**Agent online** means your linked desktop app has a recent heartbeat. **Agent offline** shows when it was last seen; **No desktop app linked** means you need to link a PC. Click the pill for exact last-seen and latest-game times, your total games and **Open Devices**. The separate **Realtime updates** detail describes this browser connection.",
+        "The game count increases for newly saved games. Re-syncing an existing game or changing its build label doesn't add another game. The latest game time is when you played, not when its replay uploaded. Its relative label updates every 30 seconds; hover it for the exact time.",
         "During a large import, **Syncing — charts refresh every 30 s** means the count can move before the charts. Ordinary game updates refresh the charts after about two quiet seconds. You can also reload the page to fetch the current data.",
       ],
     },

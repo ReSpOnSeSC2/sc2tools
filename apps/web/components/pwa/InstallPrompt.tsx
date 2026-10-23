@@ -59,7 +59,7 @@ function writeDismissedAt(ts: number): void {
 }
 
 export function InstallPrompt() {
-  const { available, installed, platform: detected, promptInstall } = useInstallState();
+  const { available, installed, platform: detected, promptInstall, promptVersion } = useInstallState();
   const platform: Platform = detected.startsWith("ios") ? "ios" : detected === "android" ? "android" : "other";
   const [dismissed, setDismissed] = useState(false);
   const [showIosSheet, setShowIosSheet] = useState(false);
@@ -78,7 +78,7 @@ export function InstallPrompt() {
 
   useEffect(() => {
     if (available) { writeDismissedAt(0); setDismissed(false); }
-  }, [available]);
+  }, [available, promptVersion]);
   useEffect(() => {
     if (installed) { setStatus("installed"); writeDismissedAt(Date.now()); }
   }, [installed]);

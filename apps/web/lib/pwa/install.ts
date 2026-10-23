@@ -19,7 +19,7 @@ export function detectInstallPlatform(): InstallPlatform {
   if (/Android/i.test(ua)) return "android";
   return /Chrome|Chromium|Edg\//i.test(ua) ? "desktop-chromium" : "unsupported";
 }
-const INITIAL = { available: false, platform: "unsupported" as InstallPlatform, installed: false };
+const INITIAL = { available: false, platform: "unsupported" as InstallPlatform, installed: false, promptVersion: 0 };
 let state = INITIAL;
 let deferred: BeforeInstallPromptEvent | null = null;
 let listening = false;
@@ -35,7 +35,7 @@ export function startInstallCapture(): void {
     listening = true;
     window.addEventListener("beforeinstallprompt", (event) => {
       event.preventDefault(); deferred = event as BeforeInstallPromptEvent;
-      publish({ available: true, platform: detectInstallPlatform(), installed: false });
+      publish({ available: true, platform: detectInstallPlatform(), installed: false, promptVersion: state.promptVersion + 1 });
     });
     window.addEventListener("appinstalled", () => {
       deferred = null; publish({ ...state, available: false, installed: true });

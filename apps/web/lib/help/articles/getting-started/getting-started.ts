@@ -31,7 +31,7 @@ const article: HelpArticle = {
   body: [
     {
       type: "paragraph",
-      text: "SC2 Tools reads your StarCraft II replays and turns them into stats, scouting notes and stream widgets. Setup takes about five minutes. The pill at the top of the app shows whether your desktop app is online and when it last uploaded.",
+      text: "SC2 Tools reads your StarCraft II replays and turns them into stats, scouting notes and stream widgets. Setup takes about five minutes. The pill at the top of the app shows whether your desktop app is online and when your latest game was played.",
     },
     {
       type: "steps",

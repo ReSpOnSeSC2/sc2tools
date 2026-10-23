@@ -400,6 +400,11 @@ test("installed-app navigation has a self-contained offline fallback", async ({ 
     await expect(page.getByRole("heading", { name: "You're offline" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
     await expect(page.getByText(/desktop app keeps your replays/)).toBeVisible();
+    await Promise.all([
+      page.waitForEvent("framenavigated"),
+      page.getByRole("button", { name: "Try again" }).click(),
+    ]);
+    await expect(page.getByRole("heading", { name: "You're offline" })).toBeVisible();
     await testInfo.attach("offline-page", { body: await page.screenshot(), contentType: "image/png" });
   } finally { await context.setOffline(false); }
 });

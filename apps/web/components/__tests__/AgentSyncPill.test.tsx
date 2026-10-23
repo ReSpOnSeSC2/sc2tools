@@ -13,13 +13,13 @@ beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date("2026-10-23T12:
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 function mount() { return render(<AgentSyncPill />, { wrapper: ({ children }: { children: ReactNode }) => <SWRConfig value={{ provider: () => cache }}>{children}</SWRConfig> }); }
 it("uses heartbeat state and exposes connected transport only as secondary detail", () => {
-  mount(); const pill = screen.getByRole("button", { name: /Agent online · 12,345 games · last upload 2 min ago/ });
+  mount(); const pill = screen.getByRole("button", { name: /Agent online · 12,345 games · latest game 2 min ago/ });
   expect(h.live).not.toHaveBeenCalled(); expect(screen.queryByText("Polling")).toBeNull(); fireEvent.click(pill);
   expect(screen.getByRole("dialog", { name: "Desktop app details" }).textContent).toContain("Realtime updates: Connected");
   expect(screen.getByRole("link", { name: "Open Devices" }).getAttribute("href")).toBe("/devices");
 });
 it("ticks relative time with no new event and eventually marks a stale heartbeat offline", () => {
-  mount(); act(() => vi.advanceTimersByTime(30_000)); expect(screen.getByRole("button", { name: /last upload 3 min ago/ })).toBeTruthy();
+  mount(); act(() => vi.advanceTimersByTime(30_000)); expect(screen.getByRole("button", { name: /latest game 3 min ago/ })).toBeTruthy();
   act(() => vi.advanceTimersByTime(150_000)); expect(screen.getByRole("button", { name: /Agent offline · last seen 3 min ago/ })).toBeTruthy();
 });
 it("distinguishes no linked app, stale app and a loading account", () => {
@@ -38,6 +38,15 @@ it("bumps only inserted rows in SWR and follows authoritative revalidation after
   h.me = { ...h.me!, games: { total: 13000, latest: new Date().toISOString() } };
   await act(async () => { h.coalesced["games:changed"]({ count: 4, inserted: 2 }); }); expect(screen.getByRole("button", { name: /13,000 games/ })).toBeTruthy();
   view.unmount(); mount(); expect(screen.getByRole("button", { name: /13,000 games/ })).toBeTruthy();
+});
+it("keeps the authoritative played time while an older replay is imported today", async () => {
+  h.me!.games.latest = "2026-10-01T12:00:00Z";
+  mount(); await act(async () => {});
+  await act(async () => { h.immediate["games:changed"]({ count: 1, inserted: 1 }); });
+  expect(screen.getByRole("button", { name: /12,346 games · latest game 22 d ago/ })).toBeTruthy();
+  expect(screen.queryByText(/last upload/i)).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: /Agent online/ }));
+  expect(screen.getByRole("dialog").textContent).toContain("Latest game:");
 });
 it("uses exactly the150second heartbeat boundary and rejects invalid timestamps", () => {
   const now = Date.now(); expect(agentPresence(new Date(now - 149999).toISOString(), now)).toBe("online"); expect(agentPresence(new Date(now - 150000).toISOString(), now)).toBe("offline"); expect(agentPresence("bad", now)).toBe("offline"); expect(agentPresence(null, now)).toBe("offline");
