@@ -783,8 +783,8 @@ class UsersService {
 
   /**
    * Merge-replace the preferences sub-document for a given type key.
-   * The entire sub-object is replaced atomically so stale keys don't
-   * accumulate; callers should always send the full preferences object.
+   * The sub-object is replaced atomically, except onboarding: independent
+   * checklist and goals updates merge fields so callers can send a patch.
    *
    * @param {string} userId
    * @param {string} type
@@ -792,6 +792,17 @@ class UsersService {
    * @returns {Promise<Record<string, unknown>>}
    */
   async updatePreferences(userId, type, prefs) {
+    if (type === "onboarding") {
+      // Independent checklist, goals and What's New writes must not replace
+      // each other's fields. A literal merge is atomic and treats payload
+      // values as data, including any strings that resemble Mongo syntax.
+      await this.db.users.updateOne({ userId }, [{ $set: {
+        "preferences.onboarding": { $mergeObjects: [
+          { $ifNull: ["$preferences.onboarding", {}] }, { $literal: prefs },
+        ] },
+      } }]);
+      return this.getPreferences(userId, type);
+    }
     await this.db.users.updateOne(
       { userId },
       { $set: { [`preferences.${type}`]: prefs } },

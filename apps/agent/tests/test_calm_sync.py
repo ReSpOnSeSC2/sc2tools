@@ -94,15 +94,32 @@ def test_live_job_keeps_lane_while_history_waits(tmp_path):
     live = replace(live, priority=True)
     queue.submit(history)
     queue._defer_connection(ConnectionError())
+    # Keep history deferred throughout the assertion, even on a busy runner.
+    # Hold the live request until we observe that it bypassed that delay.
+    queue._retry_at = time.monotonic() + 60
+    live_started = threading.Event()
+    release_live = threading.Event()
+    upload = api.upload_games_batch
+
+    def hold_live(games):
+        if any(game["gameId"] == live.game.game_id for game in games):
+            live_started.set()
+            assert release_live.wait(5)
+        return upload(games)
+
+    api.upload_games_batch = hold_live
     done = threading.Event()
     queue._on_success = lambda _: done.set()
     queue.start()
     try:
         queue.submit(live)
-        assert done.wait(1)
-        assert api.calls[0]["gameId"] == live.game.game_id
+        assert live_started.wait(5)
         assert queue.is_pending(history.file_path)
+        release_live.set()
+        assert done.wait(5)
+        assert api.calls[0]["gameId"] == live.game.game_id
     finally:
+        release_live.set()
         queue.stop()
 
 

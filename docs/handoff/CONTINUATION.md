@@ -1,43 +1,39 @@
 # Upgrade continuation
 
-The owner requested the entire handoff program and no AI features or AI API calls. Preserve the existing infrastructure and ship tested PRs in dependency order.
+The owner requested the entire handoff program, including waves 2–6, and no AI features or AI API calls. Preserve the existing infrastructure and ship tested PRs in dependency order.
 
-## Shipped repair
+## Repair and Wave 1 complete
 
-- PR #647 had already merged when this continuation began. Its description is now filled accurately.
-- PR #648 repaired all 12 confirmed findings and the bundle failure, and placed opponent replay history immediately above notes. Every GitHub check passed before squash merge at `4533af74034bafdb43a384ea3afde2b1a26ca3bf`.
-- Original branch `claude/build-selection-tracking-en3jx0` received a merge of repaired main without rebasing. Its merge tree exactly matches green main.
-- The original review and every disposition are in `review-findings-phase2a.md` and `review-resolution-phase2a.md`.
-- Full local repair web suite: 5,869 passed, 1 skipped. Local full API coverage exhausted the default 4 GB Node heap; focused regressions and the full GitHub API job passed.
+- PR #647 had already merged at the start. Its description is filled accurately.
+- PR #648 repaired all 12 confirmed findings and the bundle failure, and put opponent replay history immediately above notes. Every applicable GitHub check passed before merge. The original branch received repaired main without rebasing.
+- Review evidence: review-findings-phase2a.md and review-resolution-phase2a.md (all 44 dispositions).
+- All 25 Wave 1 phase 2b packs are merged with green applicable CI and Vercel: #649 (three supplied patches), #650 (reviews), #651 (guides 1/2), #652 (settings, landing, consent, navigation), #653 (game/opponents/builds), #654 (admin), #656 (streamer), #658 (desktop GUI 1/2), #657 (community/public sharing).
+- Completed Wave 1 main: 3368867dffc7837734cdb202f0204159b2460992. Replay history remains directly above opponent notes.
 
-## Phase 2b shipped
+## Wave 2 shipped
 
-PR #649 merged all three supplied patches with green CI:
+- #655 retired unused server model training. Squash d51e07b0. All applicable CI, the Docker dependency/spatial smoke and Vercel passed. The approved collection migration remains manual and has not run in production.
+- #659 completed web pairing and device management. Squash e36cd9cb. All applicable CI and Vercel passed. Deploy its API before the web; existing agent token polling stays compatible.
 
-- help-content-backfill
-- analyzer-home-polish-1
-- reviews-coaching-docs-1
+## Wave 2 prepared
 
-Integration preserves lazy help links, accurate filter scope, explicit `?view=today`, review rollout behavior, and heading anchors. The registry has 48 articles. Help search loads the heavy index on demand: `/help` is 150.1 kB against its unchanged 185 kB budget. All route budgets pass. Full web suite before the search split: 5,949 passed, 1 skipped; after the split, 119 affected tests passed. TypeScript and strict changed-file lint pass.
+Each remains a draft until final integration and CI are green; a branch is not completion.
 
-PR #650 shipped review recovery and per-composer map pins. PR #651 shipped both guide packs. PR #654 shipped all three admin packs. PR #652 shipped settings, public-site, consent and navigation polish. PR #653 shipped game-page, opponents and builds polish at `e83984cb`. Each had green applicable GitHub jobs and Vercel before squash merge. Replay history remains directly above opponent notes.
+- #660, codex/wave2-realtime, 54644dc3: one authenticated user/admin connection, accurate inserted counts, immediate status counters and batched expensive refreshes. All eight user consumers and three admin consumers tested together. 331 web tests, 71 API tests, types/lint/build/budgets and screenshots passed before final Wave 1 integration; remote rerun pending.
+- #661, codex/wave2-agent-recovery, 6cd944c0: non-quitting pairing recovery, credential refresh/upload hold and calm queue retries. Full exact-head local suite: 2,006 passed, one skipped, 78 subtests. All remote gates passed at that head. Still needs #659 and current main integrated before rollout.
+- #662, codex/wave2-guides-polish, ce4efa57: guide packs 3/4/5; 448 tests, types/lint, all budgets, 21 production browser checks and four inspected screenshots. Completed Wave 1 integrated; latest remote rerun pending.
+- #663, codex/wave2-welcome: resumable five-step setup, atomic goal patches, honest completed chips, browser Back path, live Done step and goal-specific actions. 122 affected web tests, ten real-Mongo/HTTP API tests, types/strict web lint and phone/desktop fixture renders passed. Production /welcome 167.4/245 kB, all budgets unchanged. All remote checks passed at a024c7fa; current main integration is being verified.
 
-## Remaining phase 2b work
+## Approval scope
 
-All item specifications remain in `plan/phase2b-items.json`. Area branches are preparation, not claims of completion:
+Automatic review initially rejected the irreversible ml_models/ml_jobs cleanup migration. The human explicitly replied “Approve adding the migration.” The approved migration is included in #655 and tested only against temporary MongoDB. This does not authorize running it against production. No production database was changed. Read docs/runbooks/retire-server-ml.md before any separately authorized execution.
 
-- PR #657, `codex/wave1-phase2b-community`: community-polish-1/2 and profiles-replays-polish-1. Actual production 404/5xx and responsive behavior verified; an older smoke test now expects the fixture's real network failure instead of accepting a false 200. CI rerunning at `cad55915`.
-- PR #658, `codex/wave1-phase2b-agent-polish`: agent-gui-polish-1/2. Real offscreen Qt coverage and full local agent suite passed. CI exposed a Windows slider wheel case and a help-search expectation; fixes are in progress. This branch is not shipped yet.
-- PR #656, `codex/wave1-phase2b-streamer`: streamer-polish-1. Shared overlay reconnect/terminal states and six Dock panels' snapshot/save recovery implemented. Local focused suites, production budgets and screenshots pass. CI rerunning at `51daf736` after aligning the old settings skeleton assertion; responsive smoke and Vercel passed.
+## Active follow-on work
 
-After those PRs are tested and merged, all 25 phase 2b packs are shipped. Continue waves 2–6 in `plan/final-plan.json` and write the complete owner setup guide at `docs/SETUP_GUIDE.md`. Do not mark a pack done just because it has a branch.
+- API agent: notification-center full spec/augments, including support/coaching producers, muting and inbox UI. It owns notifications preference routing; preserve the welcome branch's separate atomic onboarding merge in users.updatePreferences.
+- Chrome agent: builds-polish-2 first, then 3/4/5 in a separate draft. It owns build editor/library code and optional focusCancel/initialFocusRef primitives.
+- Desktop agent: agent-window-tray-folders, agent-match-aware and agent-gui-polish-3 in a new branch based on #661. It owns runner/GUI/queue. Installer/autostart follows separately.
+- Defer canonical agent version bump and owner-pushed release tag until all coordinated Wave 2 agent changes are integrated and validated. Do not claim a signed installer without actual signing credentials.
+- Root continues welcome and settings-onboarding-polish-2. Then proceed through every remaining item in plan/final-plan.json and write the complete owner setup guide at docs/SETUP_GUIDE.md.
 
-## Wave 2 preparation
-
-- Draft PR #655, `codex/retire-server-ml`: removes unused server model training, keeps one-release authenticated 410 responses, splits server/desktop Python requirements, adds an actual-image dependency guard and spatial smoke, help and a runbook. All GitHub jobs, actual Docker image build, Python/parity and Vercel passed at `e084859a`. Hold its merge until remaining Wave 1 work ships.
-- The automatic approval reviewer blocked adding the irreversible `ml_models` / `ml_jobs` cleanup migration. The human explicitly replied **“Approve adding the migration”**. The approved migration is now in #655, tested only against temporary MongoDB. This does **not** authorize executing it against production. No production database was changed. Runbook: `docs/runbooks/retire-server-ml.md`; owner setup notes record the same limit.
-- `codex/wave2-pairing-web`: shared normalized code form with explicit PC preview/confirmation, bounded connection polling, device cards/labels/unpair recovery, metadata-aware atomic pairing API and help are implemented. Local validation: 178 web tests in 24 suites and 30 real-Mongo/API tests in two suites, TypeScript and strict changed-file lint pass. Final main integration and production rebuild precede its draft PR. Deploy API before web; the desktop URL/metadata change belongs to the coordinated agent release.
-- `codex/wave2-realtime`: user/admin shared connection and batched refresh work is in progress in an independent worktree. Overlay and Dock token sockets remain separate.
-- Later guide polish packs 3–5 are in progress independently. Agent pairing recovery and calm sync use a separate branch based on #658. Defer the canonical agent version bump and owner-pushed tag until all coordinated Wave 2 agent changes are integrated and validated.
-
-The primary `C:\SC2TOOLS` checkout has unrelated owner edits. Work stays in isolated worktrees under `.worktrees`; never stage dependency junctions or rewritten ladder-map-pool data. Use explicit staging paths.
+The primary C:\\SC2TOOLS checkout has unrelated owner edits. Work stays in isolated worktrees under .worktrees. Stage explicit paths; never stage node_modules junctions or test-rewritten ladder-map-pool data.

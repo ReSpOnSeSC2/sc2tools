@@ -18,9 +18,11 @@ import type { OnboardingHelpers } from "./OnboardingShell";
 export function OnboardingDownload({
   helpers,
   onBrowserImport,
+  alreadyPaired = false,
 }: {
   helpers: OnboardingHelpers;
   onBrowserImport?: () => void;
+  alreadyPaired?: boolean;
 }) {
   return (
     <section
@@ -45,6 +47,8 @@ export function OnboardingDownload({
 
       <DownloadCard />
 
+      <Button variant="ghost" onClick={() => helpers.goTo(alreadyPaired ? "import" : "pair")}>{alreadyPaired ? "A PC is already paired — continue to import" : "Already installed? Pair it now"}</Button>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         {onBrowserImport ? (
           <Button variant="secondary" size="lg" onClick={onBrowserImport}>
@@ -54,7 +58,7 @@ export function OnboardingDownload({
         <Button
           size="lg"
           onClick={helpers.next}
-          aria-label="I downloaded the agent — continue to pairing"
+          aria-label={alreadyPaired ? "Continue to import — PC already paired" : "I downloaded the agent — continue to pairing"}
         >
           I downloaded it →
         </Button>
