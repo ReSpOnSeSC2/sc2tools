@@ -1,116 +1,55 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Trophy } from "lucide-react";
+import { SignedIn, SignedOut, useAuth } from "@clerk/nextjs";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { CloudOff, LogIn, Medal, Trophy } from "lucide-react";
+import { weekKey } from "@/components/analyzer/arcade/ArcadeEngine";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
+import { EmptyStatePanel } from "@/components/ui/EmptyState";
+import { SkeletonBar as Skeleton } from "@/components/ui/Skeleton";
+import { signInHref } from "@/lib/authLinks";
 import { useApi } from "@/lib/clientApi";
-import { Card, EmptyState, Skeleton } from "@/components/ui/Card";
-import { weekKey as computeWeekKey } from "@/components/analyzer/arcade/ArcadeEngine";
+import { formatWeekRange, shiftWeekKey, weekKeyToRange } from "@/lib/isoWeek";
+import { useState } from "react";
 
-interface ApiRow {
-  rank: number;
-  displayName: string;
-  pnlPct: number;
-  isAnonymous: boolean;
-}
-interface ApiResp {
-  weekKey: string;
-  items: ApiRow[];
+interface ApiRow { rank: number | null; displayName: string; pnlPct: number; isAnonymous: boolean; settled: boolean; isYou: boolean }
+interface ApiResponse { weekKey: string; items: ApiRow[]; participants: number; settledCount: number; you: { rank: number | null; pnlPct: number; settled: boolean } | null }
+const pnl = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
+function selectedWeek(raw: string | null, current: string) { return raw && weekKeyToRange(raw) && raw <= current ? raw : shiftWeekKey(current, -1); }
+function currentWeek() { return weekKey(new Date(), Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"); }
+
+export function LeaderboardSkeleton() {
+  return <div aria-label="Loading leaderboard" role="status" className="space-y-3"><Skeleton className="h-20 w-full" />{Array.from({ length: 5 }, (_, index) => <div key={index} className="grid grid-cols-[40px_1fr_70px] gap-4"><Skeleton className="h-8" /><Skeleton className="h-8" /><Skeleton className="h-8" /></div>)}</div>;
 }
 
-/**
- * LeaderboardTab — Stock Market weekly P&L. Opt-in display, anonymised
- * by default. Privacy: rows show display name (or "Anonymous N"),
- * weekly P&L %, and rank — NEVER the underlying portfolio.
- */
 export function LeaderboardTab() {
-  const tz = useMemo(
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-    [],
-  );
-  const [wk, setWk] = useState<string>(() => computeWeekKey(new Date(), tz));
-  const { data, isLoading, error } = useApi<ApiResp>(
-    `/v1/arcade/leaderboard?weekKey=${encodeURIComponent(wk)}`,
-  );
+  const { isLoaded } = useAuth();
+  const search = useSearchParams();
+  if (!isLoaded) return <LeaderboardSkeleton />;
+  const week = search.get("week");
+  const returnTo = `/community/leaderboard${week && weekKeyToRange(week) && week <= currentWeek() ? `?week=${week}` : ""}`;
+  return <><SignedIn><LeaderboardBoard /></SignedIn><SignedOut><EmptyStatePanel icon={<LogIn aria-hidden />} title="Sign in to see this week's leaderboard" description="The board shows player names, so it's only visible to signed-in players. Portfolios always stay private." action={<div className="flex flex-wrap justify-center gap-4"><Link href={signInHref(returnTo)} className="inline-flex min-h-11 items-center font-semibold text-accent underline">Sign in</Link><Link href="/sign-up" className="inline-flex min-h-11 items-center font-semibold text-accent underline">Sign up free</Link></div>} /></SignedOut></>;
+}
 
-  return (
-    <div className="space-y-4">
-      <Card>
-        <div className="flex flex-wrap items-center gap-3">
-          <Trophy className="h-5 w-5 text-warning" aria-hidden />
-          <div className="flex-1">
-            <h2 className="text-body font-semibold text-text">Stock Market — Weekly P&amp;L</h2>
-            <p className="text-caption text-text-muted">
-              Players who opted into the public leaderboard. Rows show rank, display name (or
-              anonymous handle), and weekly P&amp;L %. Portfolios stay private.
-            </p>
-          </div>
-          <label className="text-caption text-text-muted">
-            Week
-            <input
-              type="text"
-              value={wk}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (/^\d{4}-W\d{2}$/.test(v)) setWk(v);
-              }}
-              aria-label="ISO week key (e.g. 2026-W19)"
-              className="ml-2 h-9 w-28 rounded-lg border-2 border-line bg-bg-surface px-2 font-mono text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-            />
-          </label>
-        </div>
-      </Card>
-
-      {isLoading ? (
-        <Skeleton rows={6} />
-      ) : error ? (
-        <Card>
-          <EmptyState
-            title="Couldn't load leaderboard"
-            sub={error.message || "Try again in a moment."}
-          />
-        </Card>
-      ) : !data?.items?.length ? (
-        <Card>
-          <EmptyState
-            title="No entries yet for this week"
-            sub="Lock a Stock Market portfolio in Arcade and opt into the leaderboard to appear here."
-          />
-        </Card>
-      ) : (
-        <Card padded={false}>
-          <table className="w-full text-caption">
-            <thead className="border-b border-border bg-bg-elevated text-left text-text-dim">
-              <tr>
-                <th className="px-3 py-2">Rank</th>
-                <th className="px-3 py-2">Player</th>
-                <th className="px-3 py-2 text-right">Weekly P&amp;L</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.items.map((r) => (
-                <tr key={`${r.rank}-${r.displayName}`} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2 font-mono tabular-nums text-text">#{r.rank}</td>
-                  <td className="px-3 py-2 text-text">
-                    {r.displayName}
-                    {r.isAnonymous ? (
-                      <span className="ml-1 text-text-dim">(anonymous)</span>
-                    ) : null}
-                  </td>
-                  <td
-                    className={[
-                      "px-3 py-2 text-right font-mono tabular-nums",
-                      r.pnlPct > 0 ? "text-success" : r.pnlPct < 0 ? "text-danger" : "text-text-dim",
-                    ].join(" ")}
-                  >
-                    {r.pnlPct > 0 ? "+" : ""}
-                    {r.pnlPct.toFixed(2)}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      )}
-    </div>
-  );
+function LeaderboardBoard() {
+  const search = useSearchParams(); const router = useRouter();
+  const current = currentWeek(); const viewed = selectedWeek(search.get("week"), current);
+  const [limit, setLimit] = useState(50);
+  const query = useApi<ApiResponse>(`/v1/arcade/leaderboard?weekKey=${viewed}&limit=${limit}`);
+  const choose = (week: string) => { setLimit(50); router.replace(`/community/leaderboard?week=${week}`, { scroll: false }); };
+  return <div className="space-y-4">
+    <Card><div className="flex flex-wrap items-center gap-3"><Trophy className="h-5 w-5 text-warning" aria-hidden /><h2 className="text-body font-semibold">Weekly P&amp;L</h2><LazyHelpLink slug="stock-market-leaderboard">How the leaderboard works</LazyHelpLink></div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><Button variant="secondary" onClick={() => choose(shiftWeekKey(viewed, -1))}>‹ Prev week</Button><span className="text-caption font-semibold">{formatWeekRange(viewed)}</span><Button variant="secondary" disabled={viewed === current} onClick={() => choose(shiftWeekKey(viewed, 1))}>Next week ›</Button>{viewed !== current ? <Button variant="ghost" onClick={() => choose(current)}>This week</Button> : null}</div>
+      {viewed === current ? <div className="mt-3"><Badge variant="warning">In progress — results post after the week ends</Badge></div> : null}
+    </Card>
+    {query.isLoading || query.isPreviousData ? <LeaderboardSkeleton /> : query.error ? <EmptyStatePanel icon={<CloudOff aria-hidden />} title="Couldn't load the leaderboard" description="Try again in a moment." action={<Button onClick={() => void query.mutate()}>Retry</Button>} /> : query.data ? <>
+      <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-caption" role="status">{query.data.you ? query.data.you.settled && viewed !== current ? `Your rank: #${query.data.you.rank} of ${query.data.participants} · ${pnl(query.data.you.pnlPct)}` : "You're on this week's board — locked" : <>You&apos;re not on this board. Opt in when you lock a portfolio. <Link href="/app/arcade" className="font-semibold text-accent underline">Open the Stock Market</Link></>}</div>
+      {!query.data.items.length ? <EmptyStatePanel title="No one has posted for this week yet" action={<Link href="/app/arcade" className="inline-flex min-h-11 items-center font-semibold text-accent underline">Open the Stock Market</Link>} /> : <Card padded={false}><div className="overflow-x-auto"><table className="w-full text-caption"><caption className="sr-only">Stock Market weekly P&amp;L, {formatWeekRange(viewed)}</caption><thead className="border-b border-border bg-bg-elevated text-left text-text-dim"><tr><th className="px-3 py-2">Rank</th><th className="px-3 py-2">Player</th><th className="px-3 py-2 text-right">Weekly P&amp;L</th></tr></thead><tbody>{query.data.items.map((row, index) => <tr key={index} className={`border-b border-border last:border-0 ${row.isYou ? "bg-accent/10" : ""}`}><td className="px-3 py-3">{row.settled && row.rank && viewed !== current ? <span className="inline-flex items-center gap-1">{row.rank <= 3 ? <Medal aria-label={`${["1st", "2nd", "3rd"][row.rank - 1]} place`} className={`h-4 w-4 ${["text-warning", "text-text-muted", "text-orange-600"][row.rank - 1]}`} /> : null}{row.rank}</span> : "—"}</td><td className="px-3 py-3">{row.displayName} {row.isYou ? <Badge>You</Badge> : null}</td><td className={`px-3 py-3 text-right tabular-nums ${row.settled ? "text-text" : "text-text-dim"}`}>{viewed === current ? "Locked" : row.settled ? pnl(row.pnlPct) : "Awaiting result"}</td></tr>)}</tbody></table></div></Card>}
+      {query.data.participants > query.data.items.length && limit < 200 ? <Button variant="secondary" onClick={() => setLimit(200)}>Show more</Button> : null}
+    </> : null}
+  </div>;
 }

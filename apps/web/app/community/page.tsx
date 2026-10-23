@@ -18,11 +18,11 @@ import {
 
 const METADATA: Metadata = {
   alternates: { canonical: "/community" },
-  title: "Community",
+  title: "Community builds",
   description:
     "Player-published StarCraft II build orders + the Stock Market weekly P&L leaderboard. Filter by matchup, sort by top, new, or controversial, and save any build to your private library.",
   openGraph: {
-    title: "Community — SC2 Tools",
+    title: "Community builds — SC2 Tools",
     description:
       "Player-published StarCraft II build orders + the Stock Market weekly P&L leaderboard.",
     images: [{ url: "/og.jpg", width: 1200, height: 630 }],
@@ -116,7 +116,7 @@ export default async function CommunityPage({
             Community
           </span>
         }
-        title="Community"
+        title="Community builds"
         description="Player-published builds and the weekly Stock Market leaderboard. Vote, save to your private library, or publish your own."
         actions={
           <Link

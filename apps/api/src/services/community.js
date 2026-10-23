@@ -1221,21 +1221,20 @@ class CommunityService {
         { $match: filter },
         {
           $addFields: {
-            engagement: {
-              $add: [
-                { $size: { $ifNull: ["$upvotes", []] } },
-                { $size: { $ifNull: ["$downvotes", []] } },
-              ],
-            },
+            up: { $size: { $ifNull: ["$upvotes", []] } },
+            down: { $size: { $ifNull: ["$downvotes", []] } },
           },
         },
-        { $sort: { engagement: -1, publishedAt: -1 } },
+        { $addFields: { total: { $add: ["$up", "$down"] }, minV: { $min: ["$up", "$down"] }, maxV: { $max: ["$up", "$down"] } } },
+        { $addFields: { controversy: { $cond: [
+          { $and: [{ $gte: ["$total", 4] }, { $gt: ["$minV", 0] }] },
+          { $pow: ["$total", { $divide: ["$minV", "$maxV"] }] }, 0,
+        ] } } },
+        { $sort: { controversy: -1, minV: -1, total: -1, publishedAt: -1 } },
         { $skip: page.offset },
         { $limit: page.limit + 1 },
-        // This is an inclusion projection. Mongo permits `_id: 0` alongside
-        // inclusions, but excluding the computed `engagement` field here as
-        // well makes the projection illegally mixed. Because engagement is
-        // not included by PUBLIC_AGGREGATE_PROJECTION, it is already omitted.
+        // Keep the public inclusion projection last so vote arrays and
+        // computed ranking fields never leave the service.
         { $project: PUBLIC_AGGREGATE_PROJECTION },
       ])
       .toArray();
@@ -1365,41 +1364,47 @@ class CommunityService {
   /**
    * @param {string} userId
    * @param {string} slug
-   * @param {1 | -1} delta
+   * @param {1 | -1 | 0} delta
    */
   async vote(userId, slug, delta) {
-    if (delta !== 1 && delta !== -1) {
-      const err = new Error("delta must be ±1");
+    if (delta !== 1 && delta !== -1 && delta !== 0) {
+      const err = new Error("delta must be -1, 0 or 1");
       /** @type {any} */ (err).status = 400;
       throw err;
     }
-    // We store one vote per (userId, slug) by stashing the vote inside
-    // the build doc via $addToSet; rolling our own vote table is overkill
-    // for the volumes we expect.
-    const arr = delta === 1 ? "upvotes" : "downvotes";
-    const opposite = delta === 1 ? "downvotes" : "upvotes";
-    await this.db.communityBuilds.updateOne(
+    // Return the preimage from the same atomic pipeline write. It gives us
+    // both the old vote and this operation's authoritative resulting score,
+    // even while other accounts vote concurrently.
+    const before = await this.db.communityBuilds.findOneAndUpdate(
       { slug, removed: false },
-      {
-        $addToSet: { [arr]: userId },
-        // Computed-key $pull fights the driver's PullOperator mapped
-        // type — the key is one of two literal array fields at runtime.
-        $pull: /** @type {any} */ ({ [opposite]: userId }),
-      },
+      [
+        { $set: {
+          upvotes: { [delta === 1 ? "$setUnion" : "$setDifference"]: [{ $ifNull: ["$upvotes", []] }, [userId]] },
+          downvotes: { [delta === -1 ? "$setUnion" : "$setDifference"]: [{ $ifNull: ["$downvotes", []] }, [userId]] },
+        } },
+        { $set: { votes: { $subtract: [{ $size: "$upvotes" }, { $size: "$downvotes" }] } } },
+      ],
+      { returnDocument: "before", projection: { upvotes: 1, downvotes: 1 } },
     );
-    // Refresh the cached `votes` count.
+    if (!before) throw Object.assign(new Error("build_not_found"), { status: 404, code: "build_not_found" });
+    const up = new Set(Array.isArray(before.upvotes) ? before.upvotes : []);
+    const down = new Set(Array.isArray(before.downvotes) ? before.downvotes : []);
+    const old = up.has(userId) ? 1 : down.has(userId) ? -1 : 0;
+    if (delta === 1) up.add(userId); else up.delete(userId);
+    if (delta === -1) down.add(userId); else down.delete(userId);
+    return { votes: up.size - down.size, myVote: delta, changed: old !== delta };
+  }
+
+  /** @param {string} userId @param {string} slug */
+  async myVote(userId, slug) {
     const row = await this.db.communityBuilds.findOne(
-      { slug },
-      { projection: { upvotes: 1, downvotes: 1 } },
+      { slug, removed: false },
+      { projection: { upvotes: 1, downvotes: 1, votes: 1 } },
     );
-    if (row) {
-      const u = Array.isArray(row.upvotes) ? row.upvotes.length : 0;
-      const d = Array.isArray(row.downvotes) ? row.downvotes.length : 0;
-      await this.db.communityBuilds.updateOne(
-        { slug },
-        { $set: { votes: u - d } },
-      );
-    }
+    if (!row) throw Object.assign(new Error("build_not_found"), { status: 404, code: "build_not_found" });
+    const up = Array.isArray(row.upvotes) ? row.upvotes : [];
+    const down = Array.isArray(row.downvotes) ? row.downvotes : [];
+    return { votes: up.length - down.length, myVote: up.includes(userId) ? 1 : down.includes(userId) ? -1 : 0 };
   }
 
   // ── K-anonymous opponent profiles ────────────────────────────────

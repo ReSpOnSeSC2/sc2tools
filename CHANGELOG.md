@@ -13,6 +13,12 @@ corresponding GitHub Release.
 
 - Personal notifications now cover sync, required agent updates, community and coaching activity, plus report replies; add filters, muting, full history and My reports.
 
+### Community and public sharing
+
+- Community votes show your saved vote, support undo and keep their score correct during simultaneous voting. Reports use readable categories and optional details; Controversial favors divided votes. Public author and player names are escaped safely in structured data.
+- The Stock Market leaderboard opens on the last settled week, distinguishes locked portfolios from results, highlights your own rank and provides shareable week navigation. Player names remain visible only to signed-in players.
+- Public profiles keep temporary outages out of their page cache. Shared replay pages recover expired page links, retry busy services within a limit, share metadata reads and provide a public-friendly private-or-missing page.
+
 ### Experience polish
 
 - Settings show recoverable load failures, protect saved profile IDs, preview game-history deletion counts, and include both selected days in local time. Mobile tabs scroll into view and support arrow keys.
