@@ -6,6 +6,15 @@ import { ABOVE_CHROME_CSS, Z_LAYERS, aboveChromeBottomPx } from "./bottomLayer";
 afterEach(cleanup);
 
 describe("SaveBar placement", () => {
+  it("can keep a long mobile message above the action row without changing the default layout", () => {
+    render(<SaveBar visible stackOnMobile onSave={vi.fn()} message="Unpublished availability changes" />);
+    expect(screen.getByText("Unpublished availability changes").closest(".pointer-events-auto")?.className).toContain("flex-col items-stretch sm:flex-row");
+  });
+  it("keeps invalid drafts from saving without preventing Reset", () => {
+    render(<SaveBar visible saveDisabled onSave={vi.fn()} onReset={vi.fn()} />);
+    expect((screen.getByRole("button", { name: /Save changes/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /Discard/ }) as HTMLButtonElement).disabled).toBe(false);
+  });
   it("floats above the mobile tab bar using var(--chrome-bottom)", () => {
     render(<SaveBar visible onSave={() => {}} />);
     const bar = screen.getByRole("region", { name: "Unsaved changes" });

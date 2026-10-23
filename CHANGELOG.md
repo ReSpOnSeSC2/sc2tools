@@ -42,6 +42,11 @@ corresponding GitHub Release.
 - Build menus add Duplicate, public links and Unpublish; listing labels and delete warnings agree across every surface. Cards show last played and low-sample cues, with a Last played library sort.
 - Definitions group rules by race and matchup, keep filters in the URL, and reveal focused entries from strategy links in dossiers and check-ins.
 
+### Coaching workspace
+
+- Coaching shows your role, coach or students, with keyboard tab navigation and badges for waiting practice requests and unread session alerts.
+- Availability drafts survive tab switches and can be published or reset from the save bar. Booked session times keep their published time zone, and a failed Locker load offers a safe retry.
+
 ### Guide reading and map navigation
 
 - Long guides have section navigation, shareable heading links and anchors that clear the sticky header. Army snapshots share one desktop growth table and switchable phone cards.

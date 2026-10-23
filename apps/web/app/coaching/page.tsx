@@ -11,14 +11,14 @@
 
 import { RedirectToSignIn, useAuth } from "@clerk/nextjs";
 import { Suspense } from "react";
-import CoachingWorkspace from "./CoachingWorkspace";
+import CoachingWorkspace, { CoachingShellSkeleton } from "./CoachingWorkspace";
 
 export default function CoachingPage() {
   const { isLoaded, isSignedIn } = useAuth();
-  if (!isLoaded) return null;
+  if (!isLoaded) return <CoachingShellSkeleton />;
   if (!isSignedIn) return <RedirectToSignIn />;
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<CoachingShellSkeleton />}>
       <CoachingWorkspace />
     </Suspense>
   );
