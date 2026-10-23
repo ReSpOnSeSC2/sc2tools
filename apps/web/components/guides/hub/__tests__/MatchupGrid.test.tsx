@@ -30,12 +30,18 @@ const PVP: GuideIndexMatchup = {
 };
 
 describe("MatchupGrid", () => {
-  it("names the era the win rates cover, not one week", () => {
-    render(<MatchupGrid matchups={[PVP, PVT]} period="with 12 starting workers" />);
-    expect(screen.getByText("What's winning with 12 starting workers")).toBeTruthy();
+  it("leaves the era to the section and keeps the opener links independent", () => {
+    const { container } = render(<MatchupGrid matchups={[PVP, PVT]} />);
+    expect(screen.queryByText(/What's winning/)).toBeNull();
     expect(screen.queryByText(/this week/i)).toBeNull();
     expect(screen.getByRole("link", { name: "Robo First" }).getAttribute("href")).toBe("/guides/pvt/robo-first");
     expect(screen.getByText("408 games")).toBeTruthy();
+    expect(container.querySelectorAll("[data-stretched-guide-link]")).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "Robo First" }).className).toContain("z-10");
+    expect(screen.getByRole("link", { name: "All 1 opener →" }).getAttribute("href")).toBe("/guides/pvt");
+    expect(screen.getByRole("link", { name: "How to beat Terran openers →" }).getAttribute("href")).toBe("/guides/pvt/counter");
+    expect(screen.getByText(/too close to call/).className).toContain("sr-only");
+    expect(container.querySelector('[data-race-icon="Protoss"]')?.getAttribute("src")).toContain("protoss.svg");
   });
 
   it("says a matchup without a published opener needs more games", () => {
