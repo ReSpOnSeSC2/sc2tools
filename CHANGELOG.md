@@ -43,6 +43,9 @@ corresponding GitHub Release.
 
 ### Added
 
+- **Admin console guide:** every admin tab has a matching Help link, a clear page title, grouped navigation and shared pagination. The guide covers moderation, account repairs, infrastructure and GA4 setup.
+- **Web analytics:** custom date ranges up to 365 days, share percentages, links to public pages and CSV exports for top pages and acquisition channels.
+
 - **Help & support menu:** a Help & support menu (life-buoy icon) in the app top bar (under More on phones,
   plus Help and Report a problem in your avatar menu) has help search, the
   Stream Studio course, the desktop app download and a new report form for
@@ -81,6 +84,9 @@ corresponding GitHub Release.
   use Help".
 
 ### Fixed
+
+- Moderation groups reports by target, confirms removals, records notes and shows failures with Retry. One decision clears every open report on the target; opponent removals now hide the public profile.
+- Infrastructure keeps provider checks and backups visible when an operational probe fails, with independent Retry and Refresh controls. Charts follow the selected theme and status indicators include text and icons.
 
 - **When something can't load:** a section that can't load now says why and
   offers Retry, with an Error ID you can copy, instead of wrongly showing

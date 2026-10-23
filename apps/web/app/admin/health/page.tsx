@@ -1,7 +1,11 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { AdminPageHeader as PageHeader } from "@/app/admin/components/AdminPageHeader";
+import { Button } from "@/components/ui/Button";
+import { RequestError } from "@/components/ui/RequestError";
 import { useApi } from "@/lib/clientApi";
-import { Card } from "@/components/ui/Card";
+import { StatusTile, type Tone } from "../components/StatusTile";
 import { formatDuration, timeSince } from "../components/format";
 import { ForbiddenCard } from "../components/AdminFragments";
 import { InfrastructureOverview } from "../components/InfrastructureOverview";
@@ -33,201 +37,43 @@ import type {
  * polling on every browser refresh.
  */
 export default function AdminHealthPage() {
-  const health = useApi<HealthResp>(
-    "/v1/admin/health",
-    { refreshInterval: 30_000 },
-  );
-  const infrastructure = useApi<AdminInfrastructureResp>(
-    "/v1/admin/infrastructure",
-    { refreshInterval: 5 * 60_000 },
-  );
-  const { data, error, isLoading } = health;
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <header className="space-y-2">
-          <h1 className="text-3xl font-bold">Infrastructure</h1>
-        </header>
-        <div className="grid gap-3 md:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-32 animate-pulse rounded-xl bg-bg-elevated" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-  if (error) {
-    if (error.status === 403) return <ForbiddenCard />;
-    return (
-      <Card padded>
-        <p className="text-danger">Health probe failed: {error.message}</p>
-      </Card>
-    );
-  }
-  if (infrastructure.error?.status === 403) return <ForbiddenCard />;
-  if (!data) return null;
-
+  const health = useApi<HealthResp>("/v1/admin/health", { refreshInterval: 30_000 });
+  const infrastructure = useApi<AdminInfrastructureResp>("/v1/admin/infrastructure", { refreshInterval: 5 * 60_000 });
+  const [lastSuccess, setLastSuccess] = useState<number | null>(null);
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (health.data && !health.error) setLastSuccess(Date.now());
+  }, [health.data, health.error]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 5000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const data = health.data;
+  if (health.error?.status === 403 || infrastructure.error?.status === 403) return <ForbiddenCard />;
   return (
     <div className="space-y-6">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold">Infrastructure</h1>
-        <p className="text-text-muted">
-          Costs, capacity, and dependency health. Provider status is checked
-          every five minutes and may reflect cached upstream data; operational
-          checks refresh every 30 seconds.
-        </p>
-      </header>
-
-      {!infrastructure.data ? (
-        <CredentialExpiryWarning credential={data.mongo.atlas.credential} />
-      ) : null}
-
-      <InfrastructureOverview
-        data={infrastructure.data ?? null}
-        error={infrastructure.error?.message ?? null}
-        isLoading={infrastructure.isLoading}
-      />
-
+      <PageHeader anchor="infrastructure" eyebrow="Admin" title="Infrastructure" description="Provider costs, capacity, backups and operational health."
+        actions={<Button variant="secondary" loading={health.isValidating || infrastructure.isValidating}
+          onClick={() => { void Promise.allSettled([health.mutate(), infrastructure.mutate()]); }}>Refresh now</Button>} />
+      <p className="text-caption text-text-dim">{lastSuccess === null ? "Operational checks have not completed yet." : "Operational checks updated " + Math.max(0, Math.floor((now - lastSuccess) / 1000)) + "s ago"}</p>
+      {!infrastructure.data && data ? <CredentialExpiryWarning credential={data.mongo.atlas.credential} /> : null}
+      <InfrastructureOverview data={infrastructure.data ?? null} error={infrastructure.error ?? null}
+        isLoading={infrastructure.isLoading} onRetry={() => infrastructure.mutate()} />
       <DatabaseBackupsCard />
-
-      <div className="space-y-1">
-        <h2 className="text-h3 font-semibold text-text">Operational health</h2>
-        <p className="text-body text-text-muted">
-          Live application dependencies and the current API process.
-        </p>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <StatusTile
-          label="MongoDB"
-          tone={data.mongo.ok ? "ok" : "error"}
-          primary={
-            data.mongo.ok
-              ? `${data.mongo.latencyMs ?? "?"} ms`
-              : "down"
-          }
-          secondary={data.mongo.error || "ping responded ok"}
-        />
-        <StatusTile
-          label="Original replay store"
-          tone={data.runtime.replayFilesStore === "r2" ? "ok" : "error"}
-          primary={backendLabel(data.runtime.replayFilesStore)}
-          secondary={
-            data.runtime.replayFilesStore === "r2"
-              ? "Original replay uploads and signed downloads enabled"
-              : "Original replay files are not being archived"
-          }
-        />
-        <BrowserBackupTile runtime={data.runtime} />
-        <StatusTile
-          label="Game-details store"
-          tone="ok"
-          primary={backendLabel(data.runtime.gameDetailsStore)}
-          secondary={
-            data.runtime.gameDetailsStore === "r2"
-              ? "Cloudflare R2 / S3-compatible"
-              : "MongoDB game_details collection"
-          }
-        />
-        <StatusTile
-          label="Uptime"
-          tone="ok"
-          primary={formatDuration(data.uptime.uptimeSeconds)}
-          secondary={`since ${new Date(data.uptime.startedAt).toLocaleString()}`}
-        />
-      </div>
-
-      <Card padded>
-        <h3 className="text-caption font-semibold uppercase tracking-wider text-text">
-          Runtime
-        </h3>
-        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div>
-            <dt className="text-caption text-text-dim">Node version</dt>
-            <dd className="mt-1 font-mono text-body text-text">
-              {data.runtime.nodeVersion}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-caption text-text-dim">
-              Original replay backend
-            </dt>
-            <dd className="mt-1 font-mono text-body text-text">
-              {backendLabel(data.runtime.replayFilesStore)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-caption text-text-dim">
-              Game-details backend
-            </dt>
-            <dd className="mt-1 font-mono text-body text-text">
-              {data.runtime.gameDetailsStore}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-caption text-text-dim">Server started</dt>
-            <dd className="mt-1 text-body text-text">
-              {new Date(data.uptime.startedAt).toLocaleString()}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-caption text-text-dim">Mongo round-trip</dt>
-            <dd className="mt-1 text-body text-text">
-              {data.mongo.ok ? `${data.mongo.latencyMs ?? "?"} ms` : "—"}
-            </dd>
-          </div>
-        </dl>
-      </Card>
+      <section aria-labelledby="operational-health-heading" className="space-y-3">
+        <h2 id="operational-health-heading" className="text-h3 font-semibold text-text">Operational health</h2>
+        {health.error ? <RequestError title="API health check failed" error={health.error} onRetry={() => health.mutate()} />
+          : !data ? <div role="status" className="grid gap-3 md:grid-cols-3"><span className="sr-only">Loading operational health…</span>{[0, 1, 2].map((i) => <div key={i} className="h-32 animate-pulse rounded-xl bg-bg-elevated" />)}</div>
+            : <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <StatusTile label="MongoDB" tone={data.mongo.ok ? "ok" : "error"} primary={data.mongo.ok ? String(data.mongo.latencyMs ?? "?") + " ms" : "down"} secondary={data.mongo.error || "ping responded ok"} />
+              <StatusTile label="Original replay store" tone={data.runtime.replayFilesStore === "r2" ? "ok" : "error"} primary={backendLabel(data.runtime.replayFilesStore)} secondary={data.runtime.replayFilesStore === "r2" ? "Original replay uploads and signed downloads enabled" : "Original replay files are not being archived"} />
+              <BrowserBackupTile runtime={data.runtime} />
+              <StatusTile label="Game-details store" tone="ok" primary={backendLabel(data.runtime.gameDetailsStore)} secondary={data.runtime.gameDetailsStore === "r2" ? "Cloudflare R2 / S3-compatible" : "MongoDB game_details collection"} />
+              <StatusTile label="Uptime" tone="ok" primary={formatDuration(data.uptime.uptimeSeconds)} secondary={"since " + new Date(data.uptime.startedAt).toLocaleString()} />
+            </div>}
+      </section>
+      {data ? <p className="text-caption text-text-dim">Runtime · Node {data.runtime.nodeVersion}</p> : null}
     </div>
-  );
-}
-
-type Tone = "ok" | "warning" | "error" | "neutral";
-
-function StatusTile({
-  label,
-  tone,
-  primary,
-  secondary,
-  notes = [],
-}: {
-  label: string;
-  tone: Tone;
-  primary: string;
-  secondary?: string;
-  /** Extra caption lines under `secondary` (hidden when empty). */
-  notes?: ReadonlyArray<string>;
-}) {
-  const dot = {
-    ok: "bg-success shadow-[0_0_0_4px_rgba(34,197,94,0.15)]",
-    warning: "bg-warning shadow-[0_0_0_4px_rgba(234,179,8,0.15)]",
-    error: "bg-danger shadow-[0_0_0_4px_rgba(239,68,68,0.15)]",
-    neutral: "bg-text-dim shadow-[0_0_0_4px_rgba(148,163,184,0.12)]",
-  }[tone];
-  return (
-    <Card padded>
-      <div className="flex items-center justify-between">
-        <span className="text-caption font-semibold uppercase tracking-wider text-text-dim">
-          {label}
-        </span>
-        <span
-          className={`inline-block h-2.5 w-2.5 rounded-full ${dot}`}
-          aria-hidden
-        />
-      </div>
-      <div className="mt-2 text-2xl font-semibold tabular-nums text-text">
-        {primary}
-      </div>
-      {secondary ? (
-        <p className="mt-1 text-caption text-text-dim">{secondary}</p>
-      ) : null}
-      {notes.map((note) => (
-        <p key={note} className="mt-1 text-caption text-text-dim">
-          {note}
-        </p>
-      ))}
-    </Card>
   );
 }
 
