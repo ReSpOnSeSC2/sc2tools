@@ -3,12 +3,12 @@
 Branch `codex/wave3-private-scouting`, isolated worktree
 `C:/SC2TOOLS/.worktrees/wave3-private-scouting`. Original dependency base
 `ecb3035e`; root merged the accepted dependency heads through integration #687,
-main `da80e2338f60d70a90f254155a4498e8af099dc7`. Merge that main before final CI.
+main `da80e2338f60d70a90f254155a4498e8af099dc7`, merged cleanly at `5ea17640`.
 
 Read the complete final-plan specs/augments/audit/howto for
 `agent-private-scouting-card` and dependent `agent-gui-expansion-1`.
-The first implementation is complete; final integration/broader checks and draft
-PR remain. The preview/reset/keyboard expansion is a separate following pack and
+The first implementation, integration and local checks are complete. Draft PR
+and remote CI follow. The preview/reset/keyboard expansion is a separate following pack and
 is not implemented yet. Root owns merges/shared focus helpers. Other frozen
 worktrees are unchanged. No AI features/calls, new infrastructure, version bump,
 tag, release, installer execution or signing.
@@ -34,20 +34,28 @@ tag, release, installer execution or signing.
 
 ## Verification checkpoint
 
-- 330 affected native/actor/model/transport/legacy check-in/wiring tests pass,
-  including actual Qt editing/actions, elision, capture-exclusion request and
-  retained non-activation flags/no explicit activation calls.
-- 38 latest API projection/enrichment tests pass after discovering the real
-  profile-only live payload and canonical toon-ID format. Before that correction,
-  33 focused + 64 actual Mongo-backed API bridge/socket/opponent checks passed.
-  Re-run the combined affected API suite after main integration.
-- API typecheck and strict new-file lint pass. Existing large API modules keep
-  their baseline function-length warnings (zero errors).
-- Full agent/API checks, help registry/type checks, screenshots and draft PR
-  remain required. No native capture/foreground guarantee is claimed: Qt's
-  offscreen backend ignores these native flags on the frozen baseline too.
-  Representative post-game geometry is 360x475 collapsed, 360x671 with More,
-  and 360x397 with the private note open (pickers hide while editing).
+- Final integrated full agent suite: **2,131 passed, 1 platform skip, 78
+  subtests** (158.93 s). Includes 20 latest native/actor checks for realistic
+  font metrics and preventing a cached note crossing resolved account identity.
+- Integrated API projection/cache/auth/socket privacy/broker/enrichment/opponent
+  notes suite: **82 passed**. Both API and web typecheck pass. New API files and
+  touched help leaves have strict lint with zero warnings; existing large API
+  modules retain baseline function-length warnings (zero errors).
+- All help registry/links/content/search checks: **72 passed**, 70 articles.
+- Real unsigned PyInstaller one-folder bundle built successfully. Its PYZ table
+  includes the new scouting model/actor/UI modules. The frozen offline GUI
+  diagnostic reports success with Qt 6.12.0, all five pages and Streams painted.
+  This diagnostic does not initialize user state, pairing, replay services or OBS.
+- Three actual offscreen screenshots with sample data and installed Segoe UI font
+  registered are in `docs/handoff/screenshots/desktop-private-scouting-*.png`.
+  Loading full 320x353, slim 320x210, private note expanded 360x380. The native
+  regressions verify plain-text elision, separate notes, retries, capture-exclusion
+  requests, retained non-activation flags and no explicit activation calls.
+- No native capture/foreground guarantee is claimed: Qt's offscreen backend ignores
+  these native flags on the frozen baseline too. No installer was executed or
+  published, and no version bump, signature or release was requested.
+- Exact-CI web production build and every unchanged bundle budget pass, including
+  /help 151.2/185 kB and /help/[slug] 179.4/200 kB.
 
 ## Next pack
 

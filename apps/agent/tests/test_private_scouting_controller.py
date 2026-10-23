@@ -168,3 +168,13 @@ def test_explicit_reenable_restores_cached_scouting_but_not_a_dismissed_card():
     h.ctl.dismiss_scouting(key); h.pump()
     h.ctl.set_scouting_enabled(True); h.pump()
     assert len(h.view.of("show_loading")) == 2
+
+
+def test_new_postgame_card_does_not_copy_another_resolved_accounts_note():
+    h = Harness().boot(); key = h.new_key(); h.send(envelope("match_loading", key))
+    h.ctl.on_scouting_brief(brief(key)); h.pump()
+    game = h.ctl._games[key]
+    # A replay may bind the authoritative account before the first end card.
+    game.opponent_pulse_id = "1-S2-1-99"
+    card = h.ctl._new_card(game)
+    assert card.opponent_pulse_id == "1-S2-1-99" and card.opponent_note == ""

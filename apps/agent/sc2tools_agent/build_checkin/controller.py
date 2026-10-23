@@ -1448,6 +1448,8 @@ class BuildCheckinController(ScoutingControllerMixin):
 
     def _new_card(self, game: LiveGame) -> PostgameCard:
         seq = next(self._card_seq)
+        pulse_id = game.opponent_pulse_id or (game.scouting.pulse_id if game.scouting is not None else None)
+        private_note = game.scouting.note if game.scouting is not None and game.scouting.pulse_id == pulse_id else ""
         card = PostgameCard(
             card_id=f"checkin-{seq}",
             seq=seq,
@@ -1459,8 +1461,8 @@ class BuildCheckinController(ScoutingControllerMixin):
             result=game.result,
             local_declared=game.declared,
             game_id=game.game_id,
-            opponent_note=game.scouting.note if game.scouting is not None else "",
-            opponent_pulse_id=game.opponent_pulse_id or (game.scouting.pulse_id if game.scouting is not None else None),
+            opponent_note=private_note,
+            opponent_pulse_id=pulse_id,
         )
         game.card_id = card.card_id
         self._cards[card.card_id] = card

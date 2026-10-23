@@ -1,10 +1,11 @@
 import os
 from dataclasses import replace
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6 import QtCore, QtTest, QtWidgets
+from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
 from sc2tools_agent.build_checkin.scouting import ScoutingStripModel
 from sc2tools_agent.ui import win32_window
@@ -17,7 +18,18 @@ from tests.build_checkin_fakes import Harness
 
 @pytest.fixture
 def app():
-    return QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    # Windows' offscreen plugin has no system font database. Load the installed
+    # UI font so elision/layout assertions exercise real glyph metrics.
+    if not QtGui.QFontDatabase.families():
+        fonts = Path(os.environ.get("SystemRoot", "C:/Windows")) / "Fonts"
+        for name in ("segoeui.ttf", "segoeuib.ttf", "seguisb.ttf", "seguisym.ttf"):
+            source = fonts / name
+            if source.is_file():
+                QtGui.QFontDatabase.addApplicationFont(str(source))
+        if "Segoe UI" in QtGui.QFontDatabase.families():
+            application.setFont(QtGui.QFont("Segoe UI", 9))
+    return application
 
 
 @pytest.fixture
