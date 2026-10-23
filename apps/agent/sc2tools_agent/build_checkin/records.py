@@ -103,6 +103,7 @@ class LiveGame:
     result: Optional[str] = None
     ended_at: Optional[float] = None
     game_id: Optional[str] = None
+    opponent_pulse_id: Optional[str] = None
 
     live: Optional[LiveState] = None
     gen: int = 0

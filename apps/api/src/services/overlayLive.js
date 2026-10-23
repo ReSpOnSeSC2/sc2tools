@@ -659,6 +659,7 @@ class OverlayLiveService {
     );
     if (opponentNotes) payload.opponentNotes = opponentNotes;
     payload.opponentIdentityMatched = oppRow?.matchedBy !== "display_name";
+    if (oppRow && payload.opponentIdentityMatched) payload.opponentPulseId = oppRow.pulseId;
 
     if (oppRow) {
       const wins = Number(oppRow.wins) || 0;

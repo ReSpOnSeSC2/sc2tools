@@ -31,6 +31,13 @@ def _record(raw: Any) -> Optional[tuple[int, int]]:
     return (wins, losses) if wins is not None and losses is not None else None
 
 
+def toon_identity(value: Any) -> Optional[str]:
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    return value if len(value) <= 80 and re.fullmatch(r"\d+-S2-\d+-\d+", value) else None
+
+
 def _timestamp(value: Any) -> Optional[float]:
     if not isinstance(value, str):
         return None
@@ -81,8 +88,7 @@ def parse_scouting_brief(raw: Any, game_key: str) -> Optional[ScoutingBrief]:
     answer = raw.get("bestAnswer") if isinstance(raw.get("bestAnswer"), dict) else {}
     samples, n = _count(forecast.get("samples")), _count(forecast.get("n"))
     opening_valid = samples is not None and n is not None and 0 < samples <= n
-    pulse = plain_text(raw.get("pulseId"), 80)
-    pulse_id = pulse if re.fullmatch(r"\d+-\d+-\d+-\d+", pulse) else None
+    pulse_id = toon_identity(raw.get("pulseId"))
     # Build the one permitted dossier path from the validated identity; never
     # open a server-provided arbitrary URL, scheme, host or query string.
     path = f"/app/opponents/{pulse_id}" if pulse_id else "/app/opponents"
@@ -97,7 +103,7 @@ def parse_scouting_brief(raw: Any, game_key: str) -> Optional[ScoutingBrief]:
         opening_samples=samples if opening_valid else None,
         opening_n=n if opening_valid else None,
         best_build=plain_text(answer.get("build"), 160),
-        best_record=_record(answer), note=plain_text(raw.get("note"), 500),
+        best_record=_record(answer), note=plain_text(raw.get("note"), 500) if pulse_id else "",
         pulse_id=pulse_id, dossier_path=path,
     )
 

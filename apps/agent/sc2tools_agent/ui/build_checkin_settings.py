@@ -29,7 +29,7 @@ HINT_NO_LIVE = (
 HINT_CONNECTING = "Available once the agent is connected to sc2tools.com."
 HINT_LOADING = "Loading your check-in settings…"
 HINT_UNSUPPORTED = "Your sc2tools server doesn't support build check-ins yet."
-HINT_READY = "Saved to your sc2tools.com account. Changes apply right away."
+HINT_READY = "Check-in choices are saved to your account. Scouting visibility is saved on this PC."
 HINT_SAVE_FAILED = "Couldn't save that change. Check your connection and try again."
 
 INTRO = (

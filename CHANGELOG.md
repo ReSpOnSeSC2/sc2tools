@@ -13,6 +13,10 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Desktop loading cards show bounded, private opponent scouting through a
+  device-only channel. Scouting can stay on without loading build choices;
+  after-game cards save a separate private note for the identified opponent.
+
 - Desktop installation and Settings share one Windows startup switch; upgrades
   preserve choices and uninstall offers explicit local-data removal. Signing
   preparation verifies both executables before release checksums are generated.

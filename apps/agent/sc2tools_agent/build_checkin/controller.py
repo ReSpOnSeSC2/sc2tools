@@ -1297,6 +1297,7 @@ class BuildCheckinController(ScoutingControllerMixin):
             return True
         self._bind_game(game, game_id)
         card = self._cards.get(game.card_id) if game.card_id else None
+        self._bind_scouting_identity(game, card, game_obj)
         if self._supported is False or not self._prefs.enabled:
             return True
         if card is None:
@@ -1459,7 +1460,7 @@ class BuildCheckinController(ScoutingControllerMixin):
             local_declared=game.declared,
             game_id=game.game_id,
             opponent_note=game.scouting.note if game.scouting is not None else "",
-            opponent_pulse_id=game.scouting.pulse_id if game.scouting is not None else None,
+            opponent_pulse_id=game.opponent_pulse_id or (game.scouting.pulse_id if game.scouting is not None else None),
         )
         game.card_id = card.card_id
         self._cards[card.card_id] = card

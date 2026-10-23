@@ -11,7 +11,7 @@ NOW = datetime(2026, 10, 23, 12, tzinfo=timezone.utc).timestamp()
 
 def payload():
     return {
-        "gameKey": "current", "oppName": "Opponent", "pulseId": "1-1-1-42",
+        "gameKey": "current", "oppName": "Opponent", "pulseId": "1-S2-1-42",
         "h2h": {"w": 3, "l": 2},
         "lastMet": {"at": "2026-10-21T12:00:00Z", "result": "Loss", "map": "Alcyone"},
         "forecast": {"name": "12 Pool", "share": 0.6, "samples": 3, "n": 5},
@@ -26,7 +26,7 @@ def test_full_scouting_renders_the_actual_record_opening_and_private_note():
     assert model.record_line == "You 3–2 · last met 2 days ago (L on Alcyone)"
     assert model.opening_line == "Usually: 12 Pool (3 of last 5) · Best: Hatch First 3–1"
     assert model.note == "Private note"
-    assert model.dossier_path == "/app/opponents/1-1-1-42"
+    assert model.dossier_path == "/app/opponents/1-S2-1-42"
 
 
 def test_first_meeting_and_unknown_are_distinct_without_invented_tendencies():
@@ -72,7 +72,7 @@ def test_timezone_offsets_and_future_dates_never_make_negative_age():
     assert "last met today" in scouting_model(brief, NOW - 3 * 86_400).record_line
 
 
-@pytest.mark.parametrize("identity", ["https://bad.invalid", "../other", "1-1-1-42?redirect=x", "1-1-1-42/elsewhere"])
+@pytest.mark.parametrize("identity", ["https://bad.invalid", "../other", "1-S2-1-42?redirect=x", "1-S2-1-42/elsewhere"])
 def test_dossier_target_comes_only_from_validated_toon_identity(identity):
     raw = payload(); raw["pulseId"] = identity
     brief = parse_scouting_brief(raw, "current")

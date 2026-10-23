@@ -9,13 +9,27 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from .scouting import parse_scouting_brief, plain_text, scouting_model
+from .scouting import parse_scouting_brief, plain_text, scouting_model, toon_identity
 from .view import HIDE_DISMISSED, HIDE_DISABLED
 
 SCOUTING_RETRY_SEC = 5.0
 
 
 class ScoutingControllerMixin:
+    def _bind_scouting_identity(self, game: Any, card: Any, replay: Any) -> None:
+        opponent = getattr(replay, "opponent", None)
+        if not isinstance(opponent, dict):
+            return
+        identity = toon_identity(opponent.get("toonHandle")) or toon_identity(opponent.get("pulseId"))
+        if identity is None:
+            return
+        game.opponent_pulse_id = identity
+        if card is not None and card.opponent_pulse_id != identity:
+            card.opponent_pulse_id = identity
+            if not card.opponent_note_touched:
+                card.opponent_note = ""
+                card.opponent_note_status = ""
+
     def on_scouting_brief(self, payload: Any) -> None:
         self._post(self._receive_scouting, payload)
 
@@ -34,7 +48,7 @@ class ScoutingControllerMixin:
         self._enforce_prefs()
         game = self._current_game()
         if game is not None:
-            self._render_loading(game)
+            self._show_or_refresh_scouting(game)
 
     def _receive_scouting(self, payload: Any) -> None:
         game = self._current_game()
@@ -44,6 +58,9 @@ class ScoutingControllerMixin:
         if brief is None or (game.opp_name and brief.opponent_name.casefold() != game.opp_name.casefold()):
             return
         game.scouting = brief
+        self._show_or_refresh_scouting(game)
+
+    def _show_or_refresh_scouting(self, game: Any) -> None:
         if not self._prefs.loading_cards and self._loading_may_show(game) and (
             game.loading is None or (not game.loading.visible and game.loading.hidden_reason == HIDE_DISABLED)
         ):

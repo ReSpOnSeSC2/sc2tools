@@ -10,7 +10,7 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 function envelope(key = "current") {
   return {
     type: "liveGameState", phase: "match_loading", gameKey: key,
-    opponent: { name: "Opponent", toonHandle: "1-1-1-42" },
+    opponent: { name: "Opponent", toonHandle: "1-S2-1-42" },
     streamerHistory: {
       oppName: "Opponent", headToHead: { wins: 3, losses: 2 },
       recentGames: [{ result: "Loss", map: "Alcyone", oppBuild: "12 Pool", date: "2026-10-21T12:00:00Z" }],
@@ -25,11 +25,11 @@ describe("private scouting projection and broker", () => {
   test("projects actual cached counts and private note without extra lookups", () => {
     const brief = buildScoutingBrief(envelope());
     expect(brief).toMatchObject({
-      gameKey: "current", oppName: "Opponent", pulseId: "1-1-1-42",
+      gameKey: "current", oppName: "Opponent", pulseId: "1-S2-1-42",
       h2h: { w: 3, l: 2 }, lastMet: { at: "2026-10-21T12:00:00.000Z", result: "Loss", map: "Alcyone" },
       forecast: { name: "12 Pool", samples: 3, n: 5, share: 0.6 },
       bestAnswer: { build: "Hatch First", w: 3, l: 1 }, note: "Private note",
-      dossierUrl: "/app/opponents/1-1-1-42",
+      dossierUrl: "/app/opponents/1-S2-1-42",
     });
   });
   test("first meeting preserves zero record; missing data never invents a forecast", () => {
@@ -37,6 +37,16 @@ describe("private scouting projection and broker", () => {
     expect(buildScoutingBrief(env)).toMatchObject({ h2h: { w: 0, l: 0 }, last3: [], lastMet: null, forecast: null, bestAnswer: null, note: "" });
     delete env.streamerHistory;
     expect(buildScoutingBrief(env)).toBeNull();
+  });
+  test("real live envelopes without toon handles use only a resolved Pulse identity", () => {
+    const env = envelope(); delete env.opponent.toonHandle;
+    env.opponent.profile = { pulse_character_id: 42 };
+    env.streamerHistory.opponentIdentityMatched = true;
+    env.streamerHistory.opponentPulseId = "1-S2-1-42";
+    expect(buildScoutingBrief(env).pulseId).toBe("1-S2-1-42");
+    env.streamerHistory.opponentIdentityMatched = false;
+    expect(buildScoutingBrief(env).pulseId).toBeNull();
+    expect(buildScoutingBrief(env).note).toBe("");
   });
   test("rejects stale identity, inactive/replay envelopes and oversized keys", () => {
     const env = envelope(); env.streamerHistory.oppName = "Somebody else";
@@ -111,16 +121,16 @@ describe("device-only scouting routes", () => {
   test("Clerk/browser credentials cannot read or edit through the device API", async () => {
     const h = setup("clerk");
     expect((await request(h.app).get("/v1/agent/live/scouting?gameKey=current")).status).toBe(403);
-    expect((await request(h.app).put("/v1/agent/opponents/1-1-1-42/notes").send({ notes: "x", notesReadAloud: false })).status).toBe(403);
+    expect((await request(h.app).put("/v1/agent/opponents/1-S2-1-42/notes").send({ notes: "x", notesReadAloud: false })).status).toBe(403);
     expect(h.broker.latest).not.toHaveBeenCalled(); expect(h.opponents.updateNotes).not.toHaveBeenCalled();
   });
   test("reuses web validation, owner-scoped service and enrichment invalidation", async () => {
-    const h = setup(); const url = "/v1/agent/opponents/1-1-1-42/notes";
+    const h = setup(); const url = "/v1/agent/opponents/1-S2-1-42/notes";
     expect((await request(h.app).put(url).send({ notes: "x".repeat(501), notesReadAloud: false })).status).toBe(400);
     expect(h.opponents.updateNotes).not.toHaveBeenCalled();
     const response = await request(h.app).put(url).send({ notes: "new note", notesReadAloud: false });
     expect(response.status).toBe(200);
-    expect(h.opponents.updateNotes).toHaveBeenCalledWith("owner", "1-1-1-42", { notes: "new note", notesReadAloud: false });
+    expect(h.opponents.updateNotes).toHaveBeenCalledWith("owner", "1-S2-1-42", { notes: "new note", notesReadAloud: false });
     expect(h.overlayLive.invalidateEnrichmentForOpponent).toHaveBeenCalledWith("owner", "Opponent", "42");
     expect(response.body).toEqual({ notes: "new note", notesReadAloud: false });
   });

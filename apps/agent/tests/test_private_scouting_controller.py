@@ -2,7 +2,7 @@ from tests.build_checkin_fakes import Harness, ManualExecutor, OPP, cloud_game, 
 
 
 def brief(key, *, note="Private note", opponent=OPP):
-    return {"gameKey": key, "oppName": opponent, "pulseId": "1-1-1-42",
+    return {"gameKey": key, "oppName": opponent, "pulseId": "1-S2-1-42",
             "h2h": {"w": 3, "l": 2}, "note": note}
 
 
@@ -18,8 +18,10 @@ def drain(h):
     raise AssertionError("scouting actor did not settle")
 
 
-def upload(h, key):
+def upload(h, key, pulse_id=None):
     game = cloud_game("game-1", started=int(key.rsplit("|", 1)[1]) / 1000 + 8)
+    if pulse_id is not None:
+        game.opponent["toonHandle"] = pulse_id
     h.api.games[game.game_id] = game_state(game.game_id)
     h.accept(game)
 
@@ -94,7 +96,7 @@ def test_dossier_uses_safe_local_origin_and_visibility_setting_has_own_persisten
     key = h.new_key(); h.send(envelope("match_loading", key))
     h.ctl.on_scouting_brief({**brief(key), "dossierUrl": "https://bad.invalid"}); h.pump()
     h.ctl.open_scouting_dossier(key); h.pump()
-    assert h.opened == ["https://sc2tools.test/app/opponents/1-1-1-42"]
+    assert h.opened == ["https://sc2tools.test/app/opponents/1-S2-1-42"]
     cloud_writes = list(h.api.calls_to("put_checkin_prefs"))
     h.ctl.set_scouting_enabled(False); h.pump()
     assert saved == [False] and model(h).scouting is None
@@ -109,10 +111,10 @@ def test_postgame_private_note_uses_opponent_endpoint_and_preserves_game_notes()
     h.play(key)
     upload(h, key)
     card = h.view.last("show_postgame", "update_postgame")
-    assert card.opponent_note == "Private note" and card.opponent_pulse_id == "1-1-1-42"
+    assert card.opponent_note == "Private note" and card.opponent_pulse_id == "1-S2-1-42"
     h.ctl.update_opponent_note(card.card_id, "Next time: watch the ramp "); h.pump()
     h.ctl.save_opponent_note(card.card_id, "Next time: watch the ramp "); h.pump()
-    assert writes == [("1-1-1-42", "Next time: watch the ramp ")]
+    assert writes == [("1-S2-1-42", "Next time: watch the ramp ")]
     saved = h.view.last("update_postgame")
     assert saved.opponent_note_status == "Saved for next time."
     assert saved.notes == ""  # game check-in notes are a separate field
@@ -139,3 +141,30 @@ def test_private_note_waits_for_replay_upload_before_writing_a_new_opponent():
     h.api.put_opponent_note = lambda *args: writes.append(args)
     h.ctl.save_opponent_note(card.card_id, "Next time"); h.pump()
     assert not writes
+
+
+def test_replay_identity_enables_first_meeting_note_without_a_live_pulse_lookup():
+    h = Harness().boot(); key = h.new_key(); h.play(key)
+    assert h.view.last("show_postgame", "update_postgame").opponent_pulse_id is None
+    upload(h, key, "1-S2-1-99")
+    assert h.view.last("show_postgame", "update_postgame").opponent_pulse_id == "1-S2-1-99"
+
+
+def test_replay_identity_drops_an_untouched_note_from_a_different_toon():
+    h = Harness().boot(); key = h.new_key(); h.send(envelope("match_loading", key))
+    h.ctl.on_scouting_brief(brief(key)); h.pump(); h.play(key)
+    upload(h, key, "1-S2-1-99")
+    value = h.view.last("show_postgame", "update_postgame")
+    assert value.opponent_pulse_id == "1-S2-1-99" and value.opponent_note == ""
+
+
+def test_explicit_reenable_restores_cached_scouting_but_not_a_dismissed_card():
+    h = Harness(); h.api.prefs["askAtLoading"] = False; h.boot()
+    key = h.new_key(); h.send(envelope("match_loading", key))
+    h.ctl.on_scouting_brief(brief(key)); h.pump()
+    h.ctl.set_scouting_enabled(False); h.pump()
+    h.ctl.set_scouting_enabled(True); h.pump()
+    assert len(h.view.of("show_loading")) == 2
+    h.ctl.dismiss_scouting(key); h.pump()
+    h.ctl.set_scouting_enabled(True); h.pump()
+    assert len(h.view.of("show_loading")) == 2

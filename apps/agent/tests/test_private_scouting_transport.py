@@ -66,7 +66,7 @@ def test_device_scouting_and_note_calls_are_encoded_private_and_interactive():
     api = ApiClient(base_url="https://example.test", device_token="paired")
     with patch("requests.request", return_value=response(200, {"ok": True})) as send:
         api.get_scouting_brief("key/name?private")
-        api.put_opponent_note("1-1-1-42", "Private note")
+        api.put_opponent_note("1-S2-1-42", "Private note")
     assert send.call_args_list[0].args == ("GET", "https://example.test/v1/agent/live/scouting?gameKey=key%2Fname%3Fprivate")
     assert send.call_args_list[1].kwargs["json"] == {"notes": "Private note", "notesReadAloud": False}
     for call in send.call_args_list:

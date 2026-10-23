@@ -27,6 +27,12 @@ function timestamp(value) {
   const time = raw ? Date.parse(raw) : NaN;
   return Number.isFinite(time) ? new Date(time).toISOString() : null;
 }
+/** @param {unknown} value @returns {string|null} */
+function toonIdentity(value) {
+  if (typeof value !== "string") return null;
+  const id = value.trim();
+  return id.length <= 80 && /^\d+-S2-\d+-\d+$/.test(id) ? id : null;
+}
 
 /**
  * Bounded plain-data view of the already-computed current enrichment. No I/O.
@@ -45,8 +51,9 @@ function buildScoutingBrief(envelope) {
   if (!oppName) return null;
   const historyName = text(history.oppName, 120);
   if (historyName && historyName.toLowerCase() !== oppName.toLowerCase()) return null;
-  const rawPulse = text(envelope.opponent?.toonHandle, 80);
-  const pulseId = /^\d+-\d+-\d+-\d+$/.test(rawPulse) ? rawPulse : null;
+  const ownToon = toonIdentity(envelope.opponent?.toonHandle);
+  const resolvedToon = history.opponentIdentityMatched === true ? toonIdentity(history.opponentPulseId) : null;
+  const pulseId = ownToon || resolvedToon;
   // Legacy display-name matches can be a different barcode account. Keep
   // those records out of this private card, while exact-toon notes remain safe.
   const records = history.opponentIdentityMatched === false ? {} : history;
@@ -81,7 +88,7 @@ function buildScoutingBrief(envelope) {
     bestAnswer: build && total !== null && answerWins !== null
       ? { build, w: answerWins, l: total - answerWins } : null,
     cheese: share(records.cheeseProbability),
-    note: text(history.opponentNotes?.text, 500),
+    note: pulseId ? text(history.opponentNotes?.text, 500) : "",
     dossierUrl: pulseId ? `/app/opponents/${encodeURIComponent(pulseId)}` : "/app/opponents",
   };
   return Buffer.byteLength(JSON.stringify(brief), "utf8") <= SCOUTING_BRIEF_MAX_BYTES ? brief : null;

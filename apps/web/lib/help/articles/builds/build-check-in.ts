@@ -116,7 +116,7 @@ const article: HelpArticle = {
       ],
     },
   ],
-  related: ["dashboard-and-analyzer", "getting-started"],
+  related: ["desktop-scouting", "dashboard-and-analyzer", "getting-started"],
 };
 
 export default article;
