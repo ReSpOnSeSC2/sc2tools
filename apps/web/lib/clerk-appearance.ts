@@ -3,8 +3,8 @@
  *
  * Clerk's `appearance.variables` field accepts color strings (hex/rgb)
  * but does NOT resolve CSS variable references at runtime, so the
- * palette below mirrors the tokens defined in app/globals.css. Keep
- * the two in sync — when a token changes there, change it here too.
+ * literal map in lib/theme/tokens.ts mirrors app/globals.css. A source
+ * parity test catches changes that must also update that map.
  *
  * `appearance.elements` accepts Tailwind class strings, which DO flow
  * through CSS variables, so element styling is shared across themes.
@@ -16,34 +16,24 @@
  */
 import type { Appearance } from "@clerk/types";
 import type { Theme } from "@/lib/theme";
+import { THEME_TOKENS } from "@/lib/theme/tokens";
 
-const DARK_VARS = {
-  colorPrimary: "#157d8c",
-  colorBackground: "#11141b",
-  colorInputBackground: "#161a23",
-  colorInputText: "#e6e8ee",
-  colorText: "#e6e8ee",
-  colorTextSecondary: "#9aa3b2",
-  colorTextOnPrimaryBackground: "#ffffff",
-  colorDanger: "#ff6b6b",
-  colorSuccess: "#3ec07a",
-  colorWarning: "#e6b450",
-  colorNeutral: "#9aa3b2",
-} as const;
-
-const LIGHT_VARS = {
-  colorPrimary: "#0e7d8c",
-  colorBackground: "#ffffff",
-  colorInputBackground: "#fafbff",
-  colorInputText: "#0e1118",
-  colorText: "#0e1118",
-  colorTextSecondary: "#5a6378",
-  colorTextOnPrimaryBackground: "#ffffff",
-  colorDanger: "#d6494e",
-  colorSuccess: "#22a35a",
-  colorWarning: "#b78224",
-  colorNeutral: "#5a6378",
-} as const;
+function palette(theme: Theme) {
+  const tokens = THEME_TOKENS[theme];
+  return {
+    colorPrimary: tokens.accent,
+    colorBackground: tokens["bg-surface"],
+    colorInputBackground: tokens["bg-elevated"],
+    colorInputText: tokens.text,
+    colorText: tokens.text,
+    colorTextSecondary: tokens["text-muted"],
+    colorTextOnPrimaryBackground: "#ffffff",
+    colorDanger: tokens.danger,
+    colorSuccess: tokens.success,
+    colorWarning: tokens.warning,
+    colorNeutral: tokens["text-muted"],
+  };
+}
 
 const SHARED_VARS = {
   borderRadius: "0.5rem",
@@ -114,12 +104,12 @@ export const clerkAppearanceBase: Appearance = {
 };
 
 export const clerkAppearanceDark: Appearance = {
-  variables: { ...SHARED_VARS, ...DARK_VARS },
+  variables: { ...SHARED_VARS, ...palette("dark") },
   elements: SHARED_ELEMENTS,
 };
 
 export const clerkAppearanceLight: Appearance = {
-  variables: { ...SHARED_VARS, ...LIGHT_VARS },
+  variables: { ...SHARED_VARS, ...palette("light") },
   elements: SHARED_ELEMENTS,
 };
 
