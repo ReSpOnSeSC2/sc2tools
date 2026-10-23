@@ -86,7 +86,7 @@ const article: HelpArticle = {
       items: [
         "Press **Re-sync** in the app. It uploads every replay it can see again; games already synced aren't counted twice.",
         "If the bar at the top of SC2 Tools says *Reconnecting*, the server is waking up. Your game is safe on your PC and the app keeps retrying: see [Something went wrong](/help/something-went-wrong).",
-        "Still not there? [Report a problem](/help/report-a-problem) with the time you played. In the app, **Open log folder** gets the log file to attach.",
+        "Still not there? [Report a problem](/help/report-a-problem) with the time you played. In the app, **Activity log → Errors only → Copy → Copy last 200 lines** gets the relevant error, including its traceback. See [Find and copy an error](/help/desktop-app-activity-log).",
       ],
     },
   ],
