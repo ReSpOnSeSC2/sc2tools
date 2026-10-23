@@ -169,10 +169,11 @@ export function FilterBar() {
               aria-modal="true"
               aria-label="Pick a date range"
               className={[
-                // Mobile: full-width sheet anchored to the bottom; desktop:
-                // popover anchored under the trigger. Either way it
-                // never exceeds the viewport.
-                "fixed inset-x-2 bottom-2 z-40 max-h-[80vh] overflow-y-auto rounded-xl border border-border bg-bg-surface p-4 shadow-card",
+                // Mobile: full-width sheet anchored to the bottom, above the
+                // app's tab bar (bottom-above-chrome, z-sheet); desktop:
+                // popover anchored under the trigger. Either way it never
+                // exceeds the viewport.
+                "fixed inset-x-2 bottom-above-chrome z-sheet max-h-[80vh] overflow-y-auto rounded-xl border border-border bg-bg-surface p-4 shadow-card",
                 "sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-0 sm:right-auto sm:top-full sm:mt-1 sm:max-h-[70vh] sm:w-[min(92vw,640px)] sm:rounded-lg sm:p-3",
               ].join(" ")}
             >

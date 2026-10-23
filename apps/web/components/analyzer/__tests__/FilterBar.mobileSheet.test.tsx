@@ -129,6 +129,18 @@ describe("FilterBar phone sheet", () => {
     expect(screen.queryByRole("dialog", { name: "Filters" })).toBeNull();
   });
 
+  it("opens the phone date picker above the app's tab bar", () => {
+    render(<Harness />);
+    // The date range button sits right after its "Date range" label.
+    const label = screen.getByText("Date range");
+    const trigger = within(label.nextElementSibling as HTMLElement).getByRole("button");
+    fireEvent.click(trigger);
+    const picker = screen.getByRole("dialog", { name: "Pick a date range" });
+    expect(picker.className).toContain("bottom-above-chrome");
+    expect(picker.className).toContain("z-sheet");
+    expect(picker.className).not.toMatch(/(^|\s)bottom-2(\s|$)/);
+  });
+
   it("links the filters help article from the bar", () => {
     render(<Harness />);
     const help = screen.getByRole("link", { name: "Help: Filters: date, matchup, region and more" });
