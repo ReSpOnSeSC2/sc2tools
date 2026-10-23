@@ -1,3 +1,4 @@
+import { SignedIn, SignedOut } from "@clerk/nextjs";
 import type { ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -36,7 +37,6 @@ import { PRODUCT_FACTS } from "@/lib/productFacts";
 export function LandingPageContent() {
   return (
     <>
-      <LandingMasthead />
       <LandingHero />
       <RealGameShowcase />
       <OutcomeRail />
@@ -57,19 +57,6 @@ export function LandingPageContent() {
 /* CURRENT LANDING — one product story across Analyze / Practice /  */
 /* Stream, with real and clearly-labelled illustrative examples.     */
 /* =============================================================== */
-
-function LandingMasthead() {
-  return (
-    <header className="border-y border-border-strong">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 py-3">
-        <span className="kicker">SC2 Tools</span>
-        <span className="font-mono text-caption text-text-dim">
-          Analyze · Practice · Stream
-        </span>
-      </div>
-    </header>
-  );
-}
 
 function LandingHero() {
   return (
@@ -119,7 +106,9 @@ function LandingHero() {
 function HeroCtas() {
   const instant = getInstantImportMode() === "all";
   return (
-    <div className="mt-7 flex flex-wrap items-center gap-3">
+    <div className="mt-7 flex min-h-[44px] flex-wrap items-center gap-3">
+      <SignedIn><SignedInCtas /></SignedIn>
+      <SignedOut>
       <CtaLink
         href="/download"
         iconLeft={<Download className="h-5 w-5" aria-hidden />}
@@ -144,8 +133,13 @@ function HeroCtas() {
           Try a replay
         </CtaLink>
       )}
+      </SignedOut>
     </div>
   );
+}
+
+function SignedInCtas() {
+  return <><CtaLink href="/app" iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Open your dashboard</CtaLink><CtaLink href="/changelog" variant="secondary">What's new</CtaLink></>;
 }
 
 function LandingCarousel() {
@@ -518,6 +512,7 @@ function LandingHowItWorks() {
             <span className="block font-serif text-display-lg font-normal leading-none text-editorial">{step.num}</span>
             <h3 className="mt-4 font-serif text-h3 font-semibold text-text">{step.title}</h3>
             <p className="mt-2 text-body text-text-muted">{step.body}</p>
+            {step.num === "01" && getInstantImportMode() === "all" ? <p className="mt-2 text-caption text-text-muted">On a Mac or Chromebook? <Link href="/try" className="font-semibold text-accent-cyan underline underline-offset-2">Analyze replays in your browser</Link></p> : null}
           </div>
         ))}
       </div>
@@ -550,9 +545,10 @@ function LandingFinalCta() {
           <em className="font-serif italic text-editorial">Put them to work.</em>
         </h2>
         <p className="mt-5 max-w-2xl text-body-lg text-text-muted">Free to start, no card needed. Sync privately across devices and add OBS whenever you are ready.</p>
-        <div className="mt-7 flex flex-wrap items-center gap-3">
-          <CtaLink href="/download" iconLeft={<Download className="h-5 w-5" aria-hidden />} iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Download the agent</CtaLink>
-          <CtaLink href="/community" variant="secondary" iconLeft={<Users className="h-5 w-5" aria-hidden />}>Browse community builds</CtaLink>
+        <div className="mt-7 flex min-h-[44px] flex-wrap items-center gap-3">
+          <SignedIn><SignedInCtas /></SignedIn>
+          <SignedOut><CtaLink href="/download" iconLeft={<Download className="h-5 w-5" aria-hidden />} iconRight={<ArrowRight className="h-5 w-5" aria-hidden />}>Download the agent</CtaLink>
+          <CtaLink href="/community" variant="secondary" iconLeft={<Users className="h-5 w-5" aria-hidden />}>Browse community builds</CtaLink></SignedOut>
         </div>
       </div>
     </section>

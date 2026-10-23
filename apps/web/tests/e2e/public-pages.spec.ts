@@ -38,6 +38,26 @@ const PAGES: Array<{ path: string; expectText: RegExp }> = [
     : []),
 ];
 
+test("phone sign-in puts the form before collapsed optional marketing", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/sign-in");
+  const form = page.getByRole("region", { name: "Account form" });
+  await expect(form).toBeVisible();
+  await expect(form.getByText("Welcome back to your replay history.")).toBeVisible();
+  const disclosure = page.getByText("Why sign up?", { exact: true }).locator("..");
+  await expect(disclosure).not.toHaveAttribute("open");
+  expect(await form.evaluate((node) => node.getBoundingClientRect().top)).toBeLessThan(844);
+  const email = form.locator('input[name="identifier"], input[type="email"]').first();
+  if (await email.count()) {
+    const box = await email.boundingBox();
+    expect(box).not.toBeNull(); expect(box!.y).toBeGreaterThanOrEqual(0); expect(box!.y + box!.height).toBeLessThanOrEqual(844);
+  } else {
+    // CI uses a deliberately nonexistent Clerk frontend. Assert the actual
+    // form shell here; email geometry is also verified by the component fixture.
+    test.info().annotations.push({ type: "Clerk fixture", description: "Live Clerk widget unavailable with the dummy CI key; form-shell order/viewport verified." });
+  }
+});
+
 test("changelog filters updates and exposes its public RSS feed", async ({ page, request }) => {
   const response = await page.goto("/changelog");
   expect(response?.status()).toBe(200);

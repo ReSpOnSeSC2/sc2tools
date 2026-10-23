@@ -48,6 +48,10 @@ function decodeOnce(value: string): string | null {
  *   safeAuthRedirect("/try?resume=1&x=//evil"); // -> null
  *   safeAuthRedirect("https://evil.com");       // -> null
  */
+export function isTryResumeRedirect(value: string | null): boolean {
+  return safeAuthRedirect(value) === TRY_RESUME_PATH;
+}
+
 export function safeAuthRedirect(value: string | null): string | null {
   if (value === null || value === "") return null;
   if (value === TRY_RESUME_PATH) return TRY_RESUME_PATH;

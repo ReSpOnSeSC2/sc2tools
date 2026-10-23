@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Sign-in and browser analysis
+
+- Sign-in and sign-up put the form first on phones, explain which browser-analyzed games will be saved and share the site colors. Returning visitors have a direct dashboard link.
+- Browser reports expand every opener in place with record bars. Choose the replay date window before selecting files; busy analysis keeps that choice locked.
+
 ### Added
 
 - Read curated updates in What's New, the public changelog and RSS. Service notices explain active incidents and expire automatically; installer release notes are easier to read.

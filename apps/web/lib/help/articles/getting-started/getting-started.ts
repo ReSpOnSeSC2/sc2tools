@@ -36,7 +36,7 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "**Welcome: choose your goals.** [Sign up](/sign-up), then use [Setup](/welcome) to choose **Improve my play**, **Upgrade my stream**, or both. Setup takes about five minutes; importing a large replay library can run longer in the background.",
+        "**Welcome: choose your goals.** [Sign up](/sign-up). Signing up from [/try](/try) saves the games you analyzed there. Otherwise, use [Setup](/welcome) to choose **Improve my play**, **Upgrade my stream**, or both. Setup takes about five minutes; importing a large replay library can run longer in the background.",
         "**Install the desktop app.** Download it from the [Download](/download) page and install it on the PC you play on (Windows 10 or 11). It watches your replay folder; you never upload anything by hand. Step by step: [Install and link the desktop app](/help/install-and-pair).",
         "**Pair it with your account.** The app shows a 6-digit code. Open its pairing page, or enter the code on [Devices](/devices), then confirm the PC. Setup checks for its connection. Already paired? The Pair circle has a check mark and Continue skips that step. See [Pairing problems](/help/pairing-troubleshooting) for expired codes and connection help.",
         "**Play or import a game.** Every ladder game is read automatically a few seconds after it ends and synced to your account. To fill your stats right away, press **Import my history** in the setup checklist on your dashboard to add the replays already on your PC.",
