@@ -13,6 +13,9 @@ corresponding GitHub Release.
 
 ### Fixed
 
+- Saving desktop settings keeps the window responsive while the durable write
+  finishes; completion and errors return to the window without losing edits.
+
 - Desktop shortcuts restore the existing window, tray pause actions match the
   window, and replay folder changes apply immediately with Undo and clear labels.
 - Desktop history imports and updates wait through games; performance profiles

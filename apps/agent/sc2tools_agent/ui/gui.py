@@ -1023,6 +1023,7 @@ def _make_signals():
         replayArchiveStatus = QtCore.Signal(int, int)
         foldersChanged = QtCore.Signal(list)
         settingsStatus = QtCore.Signal(str)
+        settingsSaveDone = QtCore.Signal(object, object)
         # Result of a Test-connection or Build-scenes round-trip. The
         # payload dict carries ``kind`` plus whatever that operation
         # discovered; see ``_on_obs_probe_done``.
@@ -1244,6 +1245,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._settings_toast_timer.setSingleShot(True)
             self._settings_toast_timer.timeout.connect(self._settings_status.clear)
             self._save_ack = False
+            self._settings_save_pending = False
             self._settings_restart_notice = ""
             self.apiTestDone.connect(self._on_api_test_done)
             self._window_state_timer = QtCore.QTimer(self)
@@ -2382,7 +2384,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._settings_status = QtWidgets.QLabel("")
             self._settings_status.setObjectName("muted")
             row.addWidget(self._settings_status)
-            save_btn = QtWidgets.QPushButton("Save settings")
+            self._settings_page = page
+            save_btn = self._save_settings_btn = QtWidgets.QPushButton("Save settings")
             save_btn.setObjectName("primary")
             save_btn.clicked.connect(self._click_save_settings)
             row.addWidget(save_btn)
@@ -2822,6 +2825,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             )
             signals.foldersChanged.connect(self._on_folders_changed)
             signals.settingsStatus.connect(self._on_settings_status)
+            signals.settingsSaveDone.connect(self._on_settings_save_done)
             signals.obsProbeDone.connect(self._on_obs_probe_done)
             signals.buildCheckin.connect(self._on_build_checkin)
             signals.quitRequested.connect(self._on_quit_requested)
@@ -3270,6 +3274,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 timer.start()
 
         def _save_window_state(self):
+            if self._settings_save_pending:
+                self._window_state_timer.start()
+                return
             if not self.isVisible() or self.isMinimized() or not ui._on_window_state:
                 return
             try:
@@ -3307,6 +3314,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._go_to_page(ui._window_page if self._paired and ui._window_page in self._PAGE_KEYS else "dashboard")
 
         def _click_save_settings(self) -> None:
+            if self._settings_save_pending:
+                return
             if not self._validate_api_address():
                 self._show_settings_toast("Fix the API address before saving.", "error")
                 self._api_input.setFocus()
@@ -3374,36 +3383,54 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 ),
                 obs_switch_on_replays=self._obs_replay_check.isChecked(),
             )
-            # Cleared before the save call: the runner answers with the
-            # new watched list on this thread, which must replace the
-            # list widget rather than merge into the saved edits.
-            unsaved_removals = self._folders_removed
-            unsaved_edits = self._folders_dirty
+            context = dict(api_base=api_base, preset=preset, since_iso=since_iso,
+                           until_iso=until_iso, removals=self._folders_removed,
+                           dirty=self._folders_dirty)
             self._folders_removed = []
             self._folders_dirty = False
-            try:
-                self._save_ack = False
-                ui._on_save_settings(payload)
-                self._saved_api_base = api_base
-                # Refresh the dashboard's filter chip immediately —
-                # the runner-side ``show_settings_status`` will also
-                # repaint, but updating now means the chip is correct
-                # the moment the toast appears. Treats ``"all"`` as a
-                # cleared filter so the chip disappears when the user
-                # widens the window.
+            self._save_ack = False
+            self._settings_save_pending = True
+            self._settings_page.setEnabled(False)
+            self._save_settings_btn.setText("Saving…")
+            self._show_settings_toast("Saving settings…")
+            self._settings_toast_timer.stop()
+            self._refresh_status_card()
+
+            def persist():
+                error = None
+                try:
+                    ui._on_save_settings(payload)
+                except Exception as exc:  # noqa: BLE001
+                    log.exception("gui_save_settings_failed")
+                    error = str(exc) or type(exc).__name__
+                try:
+                    signals.settingsSaveDone.emit(context, error)
+                except RuntimeError:
+                    # The durable write still finishes if the window quits.
+                    log.debug("settings_save_finished_after_window_closed")
+
+            # Keep this short-lived persistence worker alive through Quit so a
+            # completed Save cannot silently lose its atomic state commit.
+            threading.Thread(target=persist, name="sc2tools-settings-save", daemon=False).start()
+
+        def _on_settings_save_done(self, context, error):
+            self._settings_save_pending = False
+            self._settings_page.setEnabled(True)
+            self._save_settings_btn.setText("Save settings")
+            if error:
+                self._folders_removed = context["removals"]
+                self._folders_dirty = context["dirty"]
+                self._show_settings_toast(f"Couldn't save settings: {error}", "error")
+            else:
+                self._saved_api_base = context["api_base"]
+                preset = context["preset"]
                 self._active_filter_label = self._compute_filter_label(
                     preset=None if preset == "all" else preset,
-                    since_iso=since_iso,
-                    until_iso=until_iso,
+                    since_iso=context["since_iso"], until_iso=context["until_iso"],
                 )
-                self._refresh_status_card()
                 if not self._save_ack:
                     self._show_settings_toast("Saved." + self._settings_restart_notice, "success")
-            except Exception as exc:  # noqa: BLE001
-                log.exception("gui_save_settings_failed")
-                self._folders_removed = unsaved_removals
-                self._folders_dirty = unsaved_edits
-                self._show_settings_toast(f"Couldn't save settings: {exc}", "error")
+            self._refresh_status_card()
 
         def _refresh_capture_notice(self) -> None:
             self._replay_capture_notice.setVisible(
@@ -3745,7 +3772,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             for name in ("_pause_btn","_resync_btn","_choose_btn"):
                 button=getattr(self,name,None)
                 if button:
-                    button.setEnabled(not needs_pairing)
+                    button.setEnabled(not needs_pairing and not (name == "_choose_btn" and self._settings_save_pending))
 
         def _run_status_action(self):
             action = self._status_view.action

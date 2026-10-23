@@ -4,6 +4,9 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+- Saving desktop settings keeps the window responsive while the durable write
+  finishes; completion and errors return to the window without losing edits.
+
 - Launching a second shortcut restores the running window. Tray and window share
   pause state, timed pauses resume automatically, and quitting is available in
   the sidebar. Folder rows explain region/account, newest replay and missing
