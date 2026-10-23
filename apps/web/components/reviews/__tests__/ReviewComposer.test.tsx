@@ -69,7 +69,8 @@ describe("ReviewComposer", () => {
     const { onPosted } = renderComposer({ draftPin: { x: 40.44, y: 61.26, t: 312 } });
     fireEvent.click(screen.getByRole("button", { name: "End range here" }));
     expect(screen.getByTestId("composer-time").textContent).toContain("5:12–5:30");
-    expect(screen.getByTestId("composer-pin").textContent).toContain("Pin at (40, 61)");
+    expect(screen.getByTestId("composer-pin").textContent).toContain("Pinned on map · becomes pin 1");
+    expect(screen.getByTestId("composer-pin").textContent).not.toContain("40, 61");
     fireEvent.change(screen.getByLabelText("Comment"), { target: { value: "  Hold the blink until 5:40.  " } });
     fireEvent.click(screen.getByRole("button", { name: "Comment at 5:12" }));
     await waitFor(() => expect(onPosted).toHaveBeenCalledWith("c1"));
