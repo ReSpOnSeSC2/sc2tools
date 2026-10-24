@@ -14,6 +14,7 @@ log = logging.getLogger(__name__)
 def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidgets):
     from .build_checkin_widgets import BuildList, button, card_stylesheet, plain_label, set_tone
     from .private_scouting import OpponentNoteEditor
+    from .qt_helpers import build_flow_layout
 
     class CompanionBuilds(QtWidgets.QWidget):
         def __init__(self):
@@ -42,19 +43,27 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
             self.refresh()
 
         def _build_ui(self):
-            layout = QtWidgets.QVBoxLayout(self)
+            outer = QtWidgets.QVBoxLayout(self)
+            outer.setContentsMargins(0, 0, 0, 0)
+            self.scroll = QtWidgets.QScrollArea()
+            self.scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+            self.scroll.setWidgetResizable(True)
+            self.scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            content = QtWidgets.QWidget()
+            self.scroll.setWidget(content)
+            outer.addWidget(self.scroll)
+            layout = QtWidgets.QVBoxLayout(content)
             layout.setContentsMargins(14, 12, 14, 12)
             layout.setSpacing(10)
             title = plain_label("BUILD CHECK-INS", "checkinEyebrow")
             layout.addWidget(title)
-            choices = QtWidgets.QHBoxLayout()
+            choices = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets, spacing=10)
             self.loading_toggle = QtWidgets.QCheckBox("Pre-game build selector")
             self.postgame_toggle = QtWidgets.QCheckBox("Post-game build selector")
             self.loading_toggle.toggled.connect(lambda checked: self._change_pref("ask_at_loading", checked))
             self.postgame_toggle.toggled.connect(lambda checked: self._change_pref("ask_after_game", checked))
             choices.addWidget(self.loading_toggle)
             choices.addWidget(self.postgame_toggle)
-            choices.addStretch()
             self.refresh_button = button("Refresh settings", "checkinSmall")
             self.refresh_button.clicked.connect(self._refresh_settings)
             choices.addWidget(self.refresh_button)
@@ -64,7 +73,13 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
             self.tabs = QtWidgets.QTabWidget()
             self.tabs.addTab(self._loading_tab(), "Pre-game")
             self.tabs.addTab(self._postgame_tab(), "Post-game")
+            self.tabs.setMinimumHeight(280)
             layout.addWidget(self.tabs)
+            for wrapped in content.findChildren(QtWidgets.QLabel):
+                if wrapped.wordWrap():
+                    policy = wrapped.sizePolicy()
+                    policy.setVerticalPolicy(QtWidgets.QSizePolicy.Minimum)
+                    wrapped.setSizePolicy(policy)
 
         def _loading_tab(self):
             tab = QtWidgets.QWidget()
@@ -191,7 +206,7 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
             self.opponent_note.edited.connect(lambda text: self._private_note_action("update_opponent_note", text))
             self.opponent_note.save_requested.connect(lambda text: self._private_note_action("save_opponent_note", text))
             body.addWidget(self.opponent_note)
-            actions = QtWidgets.QHBoxLayout()
+            actions = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
             self.confirm = button("Confirm", "checkinPrimary")
             self.confirm.clicked.connect(self._confirm)
             self.change_own = button("Change build")
@@ -202,7 +217,6 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
             self.later.clicked.connect(self._later)
             for control in (self.confirm, self.change_own, self.no_build):
                 actions.addWidget(control)
-            actions.addStretch()
             actions.addWidget(self.later)
             body.addLayout(actions)
             layout.addWidget(self.postgame_body)

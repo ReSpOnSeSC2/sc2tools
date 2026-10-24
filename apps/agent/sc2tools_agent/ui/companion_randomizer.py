@@ -47,11 +47,15 @@ def randomizer_context(snapshot, *, now=None):
 
 def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
     """Create a lazy-Qt panel; account requests always run on daemon workers."""
+    from .qt_helpers import build_flow_layout
 
     def label(text):
         widget = QtWidgets.QLabel(text)
         widget.setTextFormat(QtCore.Qt.PlainText)
         widget.setWordWrap(True)
+        policy = widget.sizePolicy()
+        policy.setVerticalPolicy(QtWidgets.QSizePolicy.Minimum)
+        widget.setSizePolicy(policy)
         return widget
 
     class CompanionRandomizer(QtWidgets.QWidget):
@@ -92,12 +96,21 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self.enabled_check.setEnabled(False)
 
         def _build_ui(self):
-            layout = QtWidgets.QVBoxLayout(self)
+            outer = QtWidgets.QVBoxLayout(self)
+            outer.setContentsMargins(0, 0, 0, 0)
+            self.scroll = QtWidgets.QScrollArea()
+            self.scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+            self.scroll.setWidgetResizable(True)
+            self.scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            content = QtWidgets.QWidget()
+            self.scroll.setWidget(content)
+            outer.addWidget(self.scroll)
+            layout = QtWidgets.QVBoxLayout(content)
             heading = label("RANDOMIZER SETTINGS")
             heading.setObjectName("companionHeading")
             layout.addWidget(heading)
             layout.addWidget(label("Edit the overlay widget's build pool here. Draws, animation, sounds and spoken announcements stay in the widget; build check-in shows its saved pick."))
-            row = QtWidgets.QHBoxLayout()
+            row = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
             self.matchup_select = QtWidgets.QComboBox()
             self.matchup_select.addItems(MATCHUPS)
             self.matchup_select.currentTextChanged.connect(self._matchup_changed)
@@ -106,7 +119,6 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.enabled_check.setEnabled(False)
             self.enabled_check.toggled.connect(self._enabled_changed)
             row.addWidget(self.enabled_check)
-            row.addStretch(1)
             self.refresh_button = QtWidgets.QPushButton("Refresh pool")
             self.refresh_button.clicked.connect(self.refresh)
             row.addWidget(self.refresh_button)
@@ -118,6 +130,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.pool.setHeaderLabels(["ELIGIBLE BUILD", "WEIGHT"])
             self.pool.setRootIsDecorated(False)
             self.pool.setAlternatingRowColors(True)
+            self.pool.setMinimumHeight(180)
             self.pool.itemChanged.connect(self._pool_changed)
             self.pool.header().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
             layout.addWidget(self.pool, 1)

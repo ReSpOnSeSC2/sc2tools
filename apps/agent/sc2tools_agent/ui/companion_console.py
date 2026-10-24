@@ -22,7 +22,8 @@ QFrame#companionConsole {{
 QFrame#consoleProfile, QFrame#consoleDisplay {{
     background: {theme.SURFACE}; border: 2px solid {theme.BORDER}; border-radius: 10px;
 }}
-QWidget#consoleHome, QStackedWidget#consolePages, QScrollArea#consoleProfileScroll,
+QWidget#consoleHome, QScrollArea#consoleHomeScroll, QStackedWidget#consolePages, QScrollArea#consoleProfileScroll,
+QScrollArea#consoleHomeScroll > QWidget > QWidget,
 QScrollArea#consoleProfileScroll > QWidget > QWidget {{ background: transparent; border: none; }}
 QFrame#companionConsole QLabel {{ color: {theme.TEXT}; background: transparent; border: none; }}
 QLabel#consoleBrand {{ font-size: 18px; font-weight: 800; letter-spacing: 2px; }}
@@ -359,9 +360,8 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             self.home_button.clicked.connect(lambda: self.navigate("home"))
             navigation_row.addWidget(self.back_button)
             navigation_row.addWidget(self.home_button)
-            self.breadcrumb = QtWidgets.QLabel()
-            self.breadcrumb.setObjectName("consoleBreadcrumb")
-            self.breadcrumb.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            self.breadcrumb = SummaryLine("consoleBreadcrumb")
+            self.breadcrumb.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
             navigation_row.addWidget(self.breadcrumb, 1)
             display_layout.addLayout(navigation_row)
             self.game_controls = QtWidgets.QWidget()
@@ -388,9 +388,16 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             layout.addLayout(self.body_layout, 1)
 
         def _build_home(self):
+            scroll = QtWidgets.QScrollArea()
+            scroll.setObjectName("consoleHomeScroll")
+            scroll.setAccessibleName("Companion home and tools")
+            scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+            scroll.setWidgetResizable(True)
+            scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             page = QtWidgets.QWidget()
             page.setObjectName("consoleHome")
             layout = QtWidgets.QVBoxLayout(page)
+            layout.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
             layout.setContentsMargins(16, 16, 16, 16)
             layout.setSpacing(12)
             heading = QtWidgets.QLabel("MATCH DOSSIER")
@@ -414,7 +421,8 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
                 layout.addWidget(button)
                 self.home_actions[title] = button
             layout.addStretch()
-            return page
+            scroll.setWidget(page)
+            return scroll
 
         def register_page(self, route, widget, title):
             if route in self._pages:
@@ -577,7 +585,8 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             if route in {"scouting", "game"} and self._game_title:
                 parts.append(self._game_title)
             text = "  /  ".join(parts)
-            self.breadcrumb.setText(text)
+            self.breadcrumb.set_full_text(text)
+            self.breadcrumb.setAccessibleName(text)
             self.breadcrumb.setToolTip(text)
 
         def _workspace_changed(self, index):

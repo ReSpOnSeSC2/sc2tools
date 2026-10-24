@@ -4,6 +4,17 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+## 0.23.1
+
+### Fixed - Companion resizing
+- Wrap build-selector, Ghost, Randomizer and assistance controls instead of
+  clipping their labels when switching to smaller layouts.
+- Scroll Home, Builds and Randomizer vertically rather than compressing text,
+  action buttons or build-pool rows. Keep the existing window sizes unchanged.
+- Reflow team cards immediately on resize, size their header to its controls,
+  and shorten long display names visually while retaining their full accessible text.
+- Elide long navigation breadcrumbs cleanly and retain the full path in a tooltip.
+
 ## 0.23.0
 
 ### Added - Native Session record and game-safe mouse input

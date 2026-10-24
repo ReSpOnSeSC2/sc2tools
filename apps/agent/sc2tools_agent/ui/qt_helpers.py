@@ -98,3 +98,80 @@ def guard_value_widgets(root, QtCore=None, QtWidgets=None):
             if isinstance(widget, QtWidgets.QScrollBar):
                 continue
             install_wheel_guard(widget, QtCore)
+
+
+def build_flow_layout(parent=None, *, QtCore, QtWidgets, spacing=8):
+    class FlowLayout(QtWidgets.QLayout):
+        def __init__(self):
+            super().__init__(parent)
+            self._items = []
+            self.setContentsMargins(0, 0, 0, 0)
+            self.setSpacing(spacing)
+
+        def addItem(self, item):
+            self._items.append(item)
+            self.invalidate()
+
+        def count(self):
+            return len(self._items)
+
+        def itemAt(self, index):
+            return self._items[index] if 0 <= index < len(self._items) else None
+
+        def takeAt(self, index):
+            if 0 <= index < len(self._items):
+                item = self._items.pop(index)
+                self.invalidate()
+                return item
+            return None
+
+        def expandingDirections(self):
+            return QtCore.Qt.Orientations()
+
+        def hasHeightForWidth(self):
+            return True
+
+        def heightForWidth(self, width):
+            return self._arrange(QtCore.QRect(0, 0, width, 0), False)
+
+        def minimumSize(self):
+            size = QtCore.QSize()
+            for item in self._items:
+                if not item.isEmpty():
+                    size = size.expandedTo(item.minimumSize())
+            margins = self.contentsMargins()
+            return size + QtCore.QSize(margins.left() + margins.right(), margins.top() + margins.bottom())
+
+        def sizeHint(self):
+            items = [item for item in self._items if not item.isEmpty()]
+            margins = self.contentsMargins()
+            width = sum(item.sizeHint().width() for item in items) + max(0, len(items) - 1) * self.spacing()
+            height = max((item.sizeHint().height() for item in items), default=0)
+            return QtCore.QSize(width + margins.left() + margins.right(), height + margins.top() + margins.bottom())
+
+        def setGeometry(self, rectangle):
+            super().setGeometry(rectangle)
+            self._arrange(rectangle, True)
+
+        def _arrange(self, rectangle, place):
+            margins = self.contentsMargins()
+            available = rectangle.adjusted(margins.left(), margins.top(), -margins.right(), -margins.bottom())
+            left, top = available.x(), available.y()
+            row_height = 0
+            for item in self._items:
+                if item.isEmpty():
+                    continue
+                hint = item.sizeHint().expandedTo(item.minimumSize())
+                width = min(hint.width(), max(1, available.width()))
+                height = max(hint.height(), item.heightForWidth(width)) if item.hasHeightForWidth() else hint.height()
+                if left > available.x() and left + width > available.x() + available.width():
+                    left = available.x()
+                    top += row_height + self.spacing()
+                    row_height = 0
+                if place:
+                    item.setGeometry(QtCore.QRect(left, top, width, height))
+                left += width + self.spacing()
+                row_height = max(row_height, height)
+            return top - rectangle.y() + row_height + margins.bottom()
+
+    return FlowLayout()

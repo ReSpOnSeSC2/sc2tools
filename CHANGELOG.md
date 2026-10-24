@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.23.1 - Responsive Companion layouts
+- Fix clipped text and controls when switching Companion sizes, including build
+  selectors, Ghost, Randomizer, assistance modes and team rosters. Preserve the
+  approved window sizes and saved selections; use vertical scrolling and natural
+  control wrapping instead of squeezing content.
+
 ### Agent 0.23.0 - Native Session record and game-safe panels
 - Add an optional, default-off Session panel using the OBS widget's canonical
   four-hour-inactivity W-L record and elapsed time, with matching race artwork.

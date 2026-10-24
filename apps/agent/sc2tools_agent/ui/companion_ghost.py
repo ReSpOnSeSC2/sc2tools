@@ -50,10 +50,15 @@ def _display(name):
 
 
 def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
+    from .qt_helpers import build_flow_layout
+
     def label(text):
         widget = QtWidgets.QLabel(text)
         widget.setTextFormat(QtCore.Qt.PlainText)
         widget.setWordWrap(True)
+        policy = widget.sizePolicy()
+        policy.setVerticalPolicy(QtWidgets.QSizePolicy.Minimum)
+        widget.setSizePolicy(policy)
         return widget
 
     def tree():
@@ -302,7 +307,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.compare_button.clicked.connect(self._compare_reference)
             reference_actions.addWidget(self.compare_button)
             library_layout.addLayout(reference_actions)
-            actions = QtWidgets.QHBoxLayout()
+            actions = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
             self.refresh_button = QtWidgets.QPushButton("Refresh replays")
             self.refresh_button.clicked.connect(self.refresh)
             self.more_button = QtWidgets.QPushButton("Load older replays")
@@ -392,7 +397,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.history_reference.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
             self.history_reference.currentIndexChanged.connect(self._history_reference_changed)
             history_layout.addWidget(self.history_reference)
-            history_row = QtWidgets.QHBoxLayout()
+            history_row = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
             self.history_entry = QtWidgets.QComboBox()
             self.history_entry.setMinimumContentsLength(20)
             self.history_entry.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)

@@ -73,6 +73,8 @@ def effective_mode_features(value, snapshot=None):
 
 
 def build_companion_modes(parent, *, QtCore, QtWidgets):
+    from .ui.qt_helpers import build_flow_layout
+
     class ModeControls(QtWidgets.QWidget):
         changed = QtCore.Signal(dict)
 
@@ -82,16 +84,19 @@ def build_companion_modes(parent, *, QtCore, QtWidgets):
             layout = QtWidgets.QVBoxLayout(self)
             layout.setContentsMargins(0, 0, 0, 0)
             layout.setSpacing(5)
-            choices = QtWidgets.QHBoxLayout()
+            choices = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
+            mode_choice = QtWidgets.QWidget()
+            mode_choice_layout = QtWidgets.QHBoxLayout(mode_choice)
+            mode_choice_layout.setContentsMargins(0, 0, 0, 0)
             title = QtWidgets.QLabel("SAVED MODE")
             title.setObjectName("companionAccent")
-            choices.addWidget(title)
+            mode_choice_layout.addWidget(title)
             self.mode_select = QtWidgets.QComboBox()
             for key, caption in MODES:
                 self.mode_select.addItem(caption, key)
             self.mode_select.currentIndexChanged.connect(self._mode_changed)
-            choices.addWidget(self.mode_select)
-            choices.addStretch()
+            mode_choice_layout.addWidget(self.mode_select)
+            choices.addWidget(mode_choice)
             self.hotkey_check = QtWidgets.QCheckBox("Global hide/show shortcut")
             self.hotkey_check.toggled.connect(self._hotkey_changed)
             choices.addWidget(self.hotkey_check)
@@ -103,14 +108,17 @@ def build_companion_modes(parent, *, QtCore, QtWidgets):
             self.details = QtWidgets.QWidget()
             detail_layout = QtWidgets.QVBoxLayout(self.details)
             detail_layout.setContentsMargins(0, 0, 0, 0)
-            detail_layout.addWidget(QtWidgets.QLabel("Local preset gates only. Shared account switches and pin choices still apply."))
-            grid = QtWidgets.QGridLayout()
-            for index, (feature, caption) in enumerate(FEATURES):
+            help_text = QtWidgets.QLabel("Local preset gates only. Shared account switches and pin choices still apply.")
+            help_text.setTextFormat(QtCore.Qt.PlainText)
+            help_text.setWordWrap(True)
+            detail_layout.addWidget(help_text)
+            features = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
+            for feature, caption in FEATURES:
                 checkbox = QtWidgets.QCheckBox(caption)
                 checkbox.toggled.connect(lambda checked, key=feature: self._feature_changed(key, checked))
                 self.feature_checks[feature] = checkbox
-                grid.addWidget(checkbox, index // 3, index % 3)
-            detail_layout.addLayout(grid)
+                features.addWidget(checkbox)
+            detail_layout.addLayout(features)
             self.explanation = QtWidgets.QLabel()
             self.explanation.setTextFormat(QtCore.Qt.PlainText)
             self.explanation.setWordWrap(True)
@@ -118,6 +126,7 @@ def build_companion_modes(parent, *, QtCore, QtWidgets):
             layout.addWidget(self.explanation)
             self.hotkey_status = QtWidgets.QLabel("Shortcut off · Ctrl+Shift+F10")
             self.hotkey_status.setTextFormat(QtCore.Qt.PlainText)
+            self.hotkey_status.setWordWrap(True)
             self.hotkey_status.setObjectName("companionMuted")
             detail_layout.addWidget(self.hotkey_status)
             layout.addWidget(self.details)
@@ -125,6 +134,7 @@ def build_companion_modes(parent, *, QtCore, QtWidgets):
             self.customize_button.toggled.connect(self.details.setVisible)
             self.save_status = QtWidgets.QLabel()
             self.save_status.setTextFormat(QtCore.Qt.PlainText)
+            self.save_status.setWordWrap(True)
             self.save_status.setObjectName("companionMuted")
             layout.addWidget(self.save_status)
             self.save_status.hide()
