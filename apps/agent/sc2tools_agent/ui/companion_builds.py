@@ -28,6 +28,7 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
             self._assistance_enabled = True
             self._pre_game_gate = True
             self._post_game_gate = True
+            self._randomizer_gate = True
             self._mode_name = "Ladder"
             self._prefs = None
             self._prefs_seen = False
@@ -102,8 +103,8 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
             roll = QtWidgets.QHBoxLayout(self.roll_strip)
             roll.setContentsMargins(0, 0, 0, 0)
             self.roll_label = plain_label("", "checkinMuted", wrap=True)
-            self.roll_now = button("Roll in widget", "checkinSmall")
-            self.roll_now.setToolTip("Release the check-in hold so the overlay widget can draw. The Companion does not roll or play randomizer audio.")
+            self.roll_now = button("Randomize", "checkinSmall")
+            self.roll_now.setToolTip("Select and save one build for this match. Reveal animation, sounds and speech stay in the separate widget.")
             self.roll_now.clicked.connect(lambda: self._loading_action("roll_now"))
             roll.addWidget(self.roll_label, 1)
             roll.addWidget(self.roll_now)
@@ -312,6 +313,7 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
         def set_feature_gates(self, gates):
             self._pre_game_gate = gates.get("preGameSelector") is not False
             self._post_game_gate = gates.get("postGameSelector") is not False
+            self._randomizer_gate = gates.get("randomizer") is not False
             self._mode_name = str(gates.get("mode") or "Ladder").capitalize()
             self._render_availability()
             self._render_controls()
@@ -441,6 +443,8 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
             loading = self.loading_model
             loading_enabled = enabled and self._pre_game_gate and prefs.loading_cards and self._loading_open and loading is not None and not loading.saving and not loading.scouting_only
             self.loading_body.setEnabled(loading_enabled)
+            self.roll_strip.setVisible(bool(loading and loading.randomizer and self._randomizer_gate))
+            self.roll_now.setEnabled(loading_enabled and self._randomizer_gate)
             if loading is not None:
                 self.loading_builds.set_rows_enabled(loading_enabled and not loading.waiting_for_matchup)
             postgame = self.postgame_model
@@ -454,6 +458,8 @@ def build_companion_builds(parent, *, controller_provider, QtCore, QtGui, QtWidg
                 self.add_opponent_build.setEnabled(postgame_enabled and postgame.can_add_build)
 
         def _loading_action(self, method, *args):
+            if method == "roll_now" and not self._randomizer_gate:
+                return
             model = self.loading_model
             if not self._pre_game_gate or not (self._prefs or CheckinPrefs()).loading_cards or not self._loading_open or model is None or model.saving or model.scouting_only:
                 return

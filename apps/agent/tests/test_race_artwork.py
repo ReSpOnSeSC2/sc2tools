@@ -20,7 +20,7 @@ def test_artwork_import_is_qt_free_and_has_no_global_image_reads():
 
 
 @pytest.mark.parametrize("source_size", [(1024, 1024), (1254, 1254), (960, 1280)])
-@pytest.mark.parametrize("target_size", [(280, 68), (340, 78), (520, 480), (1024, 800),
+@pytest.mark.parametrize("target_size", [(280, 68), (340, 78), (360, 40), (420, 44), (520, 480), (1024, 800),
                                          (1920, 1080), (3840, 2160)])
 def test_all_sizes_keep_corners_and_center_ornaments_uniform_without_painting_the_center(source_size, target_size):
     source_width, source_height = source_size

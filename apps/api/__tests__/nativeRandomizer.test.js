@@ -8,6 +8,17 @@ const { startFullApp, signIn, randomizerPrefs, setPrefs, addOverlayToken } = req
 
 const PHOENIX = "pvz-2-stargate-phoenix";
 const ROBO = "pvz-robo-opener";
+const { selectedBuildId } = require("../src/services/buildIntentNativeRandomizer");
+
+test("canonical selection honors zero weights and the all-zero uniform fallback", () => {
+  const config = { useCustomWeights: true, builds: [
+    { id: PHOENIX, name: "Phoenix", weight: 0 }, { id: ROBO, name: "Robo", weight: 5 },
+  ] };
+  for (let index = 0; index < 50; index += 1) expect(selectedBuildId(config, `seed-${index}`)).toBe(ROBO);
+  config.builds[1].weight = 0;
+  const selected = new Set(Array.from({ length: 50 }, (_, index) => selectedBuildId(config, `seed-${index}`)));
+  expect(selected).toEqual(new Set([PHOENIX, ROBO]));
+});
 
 describe("native companion canonical randomizer", () => {
   let harness;
@@ -48,6 +59,43 @@ describe("native companion canonical randomizer", () => {
     const replies = await Promise.all(Array.from({ length: 6 }, () => roll().expect(200)));
     expect(new Set(replies.map((reply) => reply.body.randomizer.key)).size).toBe(1);
     expect(harness.io.events("build-intent:changed")).toHaveLength(1);
+  });
+
+  test("explicit check-in draws without an open widget and publishes its canonical reveal", async () => {
+    await addOverlayToken(harness.db, user.userId, "explicit-roll-token", ["randomizer"]);
+    const first = await roll({ matchup: "PvZ", releaseHold: true, revealInWidget: true }).expect(200);
+    const event = harness.io.events("overlay:buildIntent").find((entry) => entry.payload.gameKey === key);
+    expect(event.payload.suppressRandomizer).toBe(false);
+    expect(event.payload.randomizer).toEqual({ key: first.body.randomizer.key,
+      name: first.body.randomizer.name, source: "catalog" });
+    const again = await roll({ matchup: "PvZ", releaseHold: true, revealInWidget: true }).expect(200);
+    expect(again.body.randomizer).toEqual(first.body.randomizer);
+    expect(harness.io.events("build-intent:changed")).toHaveLength(1);
+  });
+
+  test("skips unavailable pool entries without changing saved preferences", async () => {
+    const config = randomizerPrefs("PvZ", ["custom:deleted-build", PHOENIX]);
+    await setPrefs(harness.db, user.userId, { randomizer: config });
+    const result = await roll({ matchup: "PvZ", releaseHold: true, revealInWidget: true }).expect(200);
+    expect(result.body.randomizer.key).toBe(PHOENIX);
+    const account = await harness.db.users.findOne({ userId: user.userId });
+    expect(account.preferences.randomizer).toEqual(config);
+  });
+
+  test("no available candidates gives an actionable error without saving a pick", async () => {
+    await setPrefs(harness.db, user.userId, { randomizer: randomizerPrefs("PvZ", ["custom:deleted-build"]) });
+    expect((await roll({ matchup: "PvZ", releaseHold: true, revealInWidget: true }).expect(409)).body.error.code).toBe("unknown_build");
+    expect((await harness.services.buildIntents.getLive(user.userId, key)).randomizer).toBeNull();
+  });
+
+  test("widget configuration excludes stale entries and preference changes reach open sources", async () => {
+    await addOverlayToken(harness.db, user.userId, "updated-pool-token", ["randomizer"]);
+    const config = randomizerPrefs("PvZ", ["custom:deleted-build", PHOENIX]);
+    await setPrefs(harness.db, user.userId, { randomizer: config });
+    await harness.services.buildIntents.preferencesChanged(user.userId, "randomizer");
+    const event = harness.io.events("overlay:config").find((entry) => entry.room === "overlay:updated-pool-token");
+    expect(event.payload.randomizer.matchups.PvZ.builds.map((build) => build.id)).toEqual([PHOENIX]);
+    expect((await harness.db.users.findOne({ userId: user.userId })).preferences.randomizer).toEqual(config);
   });
 
   test("loading holds wait for check-in; explicit Roll now releases the hold", async () => {

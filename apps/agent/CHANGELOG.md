@@ -6,12 +6,22 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ### Added - Compact scouting control
 - Toggle the floating scouting report directly from the compact opponent card.
-  Use clear Scouting and Expand text buttons without increasing the window size.
+  Use a slim transparent 420 × 44 strip with opponent identity, race, MMR, your
+  record and win rate, and one original race-themed Scouting control. Compact has no box or
+  decorative border. Window actions move to its context menu.
   While StarCraft II has focus, only this button accepts clicks; the rest of
   compact and every floating report passes clicks through. Alt+Tab restores controls.
 - Share Detailed view's build-vs-build cards, unit icons, upgrades, Ghost reference
   actions and 3/6/10-minute/full-build controls with the floating scouting report.
   Its selected replay follows the live opponent independently of library browsing.
+
+### Fixed - Check-in Randomize without an open widget
+- Make Randomize select and save one build directly rather than waiting for an
+  external widget to roll. Repeated clicks and connected displays reuse that result.
+- Keep the native Randomizer settings page silent and its saved result read-only.
+  Animation, sound effects and spoken results remain in the separate widget.
+- Skip unavailable builds in the saved pool without deleting preferences, refresh
+  open widgets after pool changes, and show actionable selection failures with retry.
 
 ### Fixed - Opponent reset and consistent Agent menu
 - Clear compact opponent identity and record between matches and on stale telemetry;

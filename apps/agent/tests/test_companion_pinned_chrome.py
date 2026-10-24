@@ -93,7 +93,10 @@ def test_each_pin_has_themed_controls_native_drag_resize_and_no_windows_titlebar
         assert panel.testAttribute(QtCore.Qt.WA_ShowWithoutActivating)
         assert not panel.testAttribute(QtCore.Qt.WA_QuitOnClose)
         controls = panel.identity_card if {kind!r} == "opponent" else panel.window_controls
-        assert controls.minimize_button.isVisible() and controls.close_button.isVisible()
+        assert controls.minimize_button.isVisible() == ({kind!r} != "opponent")
+        assert controls.close_button.isVisible() == ({kind!r} != "opponent")
+        if {kind!r} == "opponent":
+            assert controls.scouting_button.isVisible()
         assert controls.minimize_button.accessibleName()
         assert controls.close_button.accessibleName()
         if {kind!r} != "opponent":
@@ -114,7 +117,7 @@ def test_each_pin_has_themed_controls_native_drag_resize_and_no_windows_titlebar
             return QtGui.QMouseEvent(QtCore.QEvent.MouseButtonPress, QtCore.QPointF(position),
                 QtCore.QPointF(position), QtCore.Qt.LeftButton, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier)
         assert interactions.eventFilter(title, mouse(QtCore.QPoint(15, 12)))
-        assert interactions.eventFilter(panel, mouse(QtCore.QPoint(1, 45)))
+        assert interactions.eventFilter(panel, mouse(QtCore.QPoint(1, 20 if {kind!r} == "opponent" else 45)))
         assert calls == ["move", QtCore.Qt.LeftEdge]
         controls.minimize_button.click()
         app.processEvents()
@@ -136,7 +139,7 @@ def test_each_pin_uses_packaged_race_art_without_idle_motion_or_changing_its_con
             app.processEvents()
             effects = panel._race_effects
             assert effects.skin == skin and effects.motion_enabled
-            assert effects.overlay.isVisible()
+            assert effects.overlay.isVisible() == ({kind!r} != "opponent")
             assert effects.overlay.artwork.image_for_skin(skin) is not None
             assert effects.overlay.testAttribute(QtCore.Qt.WA_TransparentForMouseEvents)
             assert effects.overlay.focusPolicy() == QtCore.Qt.NoFocus

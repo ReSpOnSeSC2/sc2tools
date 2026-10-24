@@ -695,6 +695,10 @@ class ApiClient:
         """Read the live record of a game (``LiveState``); 404 when absent."""
         return self._interactive("GET", _live_intent_path(game_key))
 
+    def roll_live_randomizer(self, game_key: str, matchup: str) -> Dict[str, Any]:
+        return self._interactive("POST", _live_intent_path(game_key) + "/randomizer",
+            body={"matchup": matchup, "releaseHold": True, "revealInWidget": True})
+
     def get_game_intent(
         self,
         game_id: str,

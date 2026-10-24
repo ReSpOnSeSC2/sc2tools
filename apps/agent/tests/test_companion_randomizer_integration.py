@@ -22,7 +22,7 @@ def wait_until(app, predicate):
     assert predicate()
 
 
-def test_embedded_selector_only_releases_widget_hold_and_displays_its_canonical_pick():
+def test_embedded_selector_requests_a_saved_pick_without_running_native_animation():
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     key = "Opponent|Streamer|1790000000000"
     state = {"calls": [], "roll": None, "declared": None}
@@ -38,6 +38,7 @@ def test_embedded_selector_only_releases_widget_hold_and_displays_its_canonical_
             if not self.released:
                 self.releases += 1
                 self.released = True
+                state["roll"] = {"key": "build", "name": "Saved canonical build"}
 
     controller = Controller()
 
@@ -77,12 +78,12 @@ def test_embedded_selector_only_releases_widget_hold_and_displays_its_canonical_
                                  randomizer=RandomizerStripModel("Randomizer will roll", can_roll_now=True))
         page.dispatch_build_checkin("show_loading", (model,))
         route = page.workspace_tabs.currentWidget()
-        assert page.build_selectors.roll_now.text() == "Roll in widget"
+        assert page.build_selectors.roll_now.text() == "Randomize"
         page.build_selectors.roll_now.click()
         page.build_selectors.roll_now.click()
         app.processEvents()
         assert controller.releases == 1
-        assert not state["roll"]
+        assert state["roll"]["key"] == "build"
         assert not [call for call in state["calls"] if call["action"] == "randomizer_roll"]
         assert page.workspace_tabs.currentWidget() is route
         assert not page.randomizer_page.isWindow()

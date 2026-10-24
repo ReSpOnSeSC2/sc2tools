@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "randomizer",
   title: "Build randomizer: let a draw pick your build",
   summary:
-    "Configure a shared build pool in Companion or on the website. The Randomizer widget performs the draw, animation, sounds and spoken result; native check-ins only show its saved pick.",
+    "Configure a shared pool, then Randomize from check-in even without an open widget. Every display uses one saved result; animation, sounds and speech stay in the widget.",
   category: "builds",
   audience: "player",
   signedInOnly: true,
@@ -25,12 +25,12 @@ const article: HelpArticle = {
     "live preview",
     "roll now",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-24",
   body: [
-    { type: "callout", tone: "info", title: "Widget-only Randomizer", text: "The Companion configuration steps below cover the Companion 0.23.0 verification preview, which is not included in the current stable download. Website settings and the Randomizer widget remain separate. See [Companion preview availability](/help/desktop-companion)." },
+    { type: "callout", tone: "info", title: "Agent 0.24.1 and later", text: "Update the [Windows agent](/download) for the check-in Randomize control. The separate widget handles animated reveals and audio. See [Desktop Companion](/help/desktop-companion)." },
     {
       type: "paragraph",
-      text: "The Randomizer widget picks from your selected pool for the current matchup. **Companion → Randomizer** silently configures the shared account settings and shows an existing saved pick; it does not draw. Current-game animation, sound effects and spoken results belong only to the widget, opened in a browser or OBS Browser Source. Native scouting voice is a separate feature and remains available.",
+      text: "**Companion → Randomizer** silently configures the shared account settings and shows the saved pick. In the loading check-in, **Randomize** selects and saves one build even without an open widget. The widget uses that same result for animation, sound effects and speech. Native scouting voice is a separate feature and remains available.",
     },
     { type: "heading", text: "Set it up", anchor: "setup" },
     {
@@ -39,7 +39,7 @@ const article: HelpArticle = {
         "Open **Companion → Randomizer** and choose a matchup. Your current concrete matchup is selected when a game arrives.",
         "Turn on **Enable randomizer for this matchup**.",
         "Check the eligible builds and press **Save selected pool**. Turn the matchup switch on or off whenever you want; these changes are saved to your account.",
-        "Open the **Build randomizer** widget from [Settings → Overlay](/settings?tab=overlay) in a browser or OBS Browser Source. The widget must be open to perform its current-game roll; Companion has no native current-game Randomizer popup or draw engine.",
+        "Click **Randomize** in the loading check-in to select a build. Open the **Build randomizer** widget from [Settings → Overlay](/settings?tab=overlay) if you want its animated reveal and audio; the check-in button works when the widget is closed.",
         "For custom weights, search and the animated preview, open [Settings → Randomizer](/settings?tab=randomizer). Leave **Use custom weights** off for equal odds or adjust each weight, then press **Save changes**.",
         "Use the widget's controls for Randomizer visuals, sound effects and spoken results. Companion's Randomizer configuration page is silent; its scouting voice setting does not enable Randomizer speech.",
       ],
@@ -66,8 +66,8 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "The widget respects the loading check-in's decision hold when configured. If a check-in card offers **Roll in widget**, that only releases the widget's wait; it does not roll in the native app.",
-        "A build you declared yourself takes priority. A retry, refresh or second connected display reuses the first saved pick for the game. Native check-in cards show the widget's already selected result, without drawing or playing another reveal.",
+        "The widget respects the loading check-in's decision hold when configured. **Randomize** selects and saves a build directly and releases that hold. The native app does not open a Randomizer animation window or play Randomizer audio.",
+        "A build you declared yourself takes priority. A retry, refresh or second connected display reuses the first saved pick for the game. The widget reveals the saved selection instead of choosing a second build.",
         "The drawn build is marked **Rolled** and is suggested as your plan after the game. It only counts toward a build's record once you confirm the check-in.",
       ],
     },
@@ -75,9 +75,9 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "Check that the Randomizer widget is open, this exact matchup is enabled, and its saved pool contains at least one eligible build.",
+        "Enable this exact matchup and save at least one eligible build. Unavailable entries are skipped without deleting your preferences. If selection fails, check the message and press **Randomize** again after correcting the pool or connection.",
         "The matchup must be concrete. Random or unresolved races wait; finished games, replays, team games and games against the computer do not trigger a current-game widget draw.",
-        "The paired desktop agent must be running and reporting the current game. Opening Companion's configuration page alone does not perform a roll, and there is no native fallback when the widget is closed.",
+        "The paired desktop agent must be running and reporting the current game. Opening the configuration page alone does not select a build. Use **Randomize** in check-in; open the separate widget only for its visuals and audio.",
       ],
     },
     { type: "settingsLink", label: "Open Settings → Randomizer", href: "/settings?tab=randomizer" },

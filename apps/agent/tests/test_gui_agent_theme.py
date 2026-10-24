@@ -122,7 +122,7 @@ def test_compact_hides_both_agent_chrome_surfaces_and_expand_restores_same_setti
         win._agent_companion_button.click()
         assert win._set_window_size("Compact")
         app.processEvents()
-        assert (win.width(), win.height()) == (340, 78)
+        assert (win.width(), win.height()) == (420, 44)
         assert page.compact_card.isVisible()
         assert not page.console.isVisible()
         assert not win._sidebar.isVisible()

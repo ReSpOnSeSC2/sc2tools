@@ -28,7 +28,7 @@ for team_size in (2, 4):
     roster.select(next(row["key"] for row in roster.enemies if row["name"] == "Library opponent"))
     page._refresh_team_roster()
     wait_until(lambda: bool(page._team_details) and bool(page.build_chains["my"].steps) and bool(page.build_chains["opp"].steps))
-    for title, width, height in (("Compact", 340, 78), ("Standard", 520, 480), ("Detailed", 1024, 800)):
+    for title, width, height in (("Compact", 420, 44), ("Standard", 520, 480), ("Detailed", 1024, 800)):
         assert win._set_window_size(title)
         app.processEvents()
         QtTest.QTest.qWait(100)

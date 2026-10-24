@@ -27,7 +27,7 @@ const article: HelpArticle = {
   ],
   updated: "2026-10-23",
   body: [
-    { type: "callout", tone: "info", title: "Native Companion preview", text: "The native Ghost steps below require the Companion 0.21.0 preview, which is not included in the current stable download. Website targets and optional OBS setup remain separate. See [Companion preview availability](/help/desktop-companion)." },
+    { type: "callout", tone: "info", title: "Agent 0.24.1 and later", text: "Update the [Windows agent](/download) for the native Ghost controls below. Website targets and optional OBS setup remain available. See [Desktop Companion](/help/desktop-companion)." },
     {
       type: "paragraph",
       text: "Build Order Ghost follows a replay's timed opening against your current game clock. In the Windows **Companion → Build Order Ghost** tab you can configure and use the native panel without OBS. Choose a source, inspect its actual steps and assign it to a matchup before turning the panel on.",

@@ -11,10 +11,17 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
-### Agent 0.24.1 - Compact scouting and consistent menus
+### Agent 0.24.1 - Compact scouting and reliable Randomize
 - Open/close the detailed floating scouting report from compact. Only its scouting
   button accepts clicks while StarCraft II has focus; other overlay areas pass
   clicks through. Restore normal controls with Alt+Tab.
+- Simplify compact into transparent opponent/stat text with one race-themed control;
+  keep expand, minimize, close and Agent options in its context menu.
+- Select and save one build directly from check-in's Randomize button, even when
+  no Randomizer widget is open. Reuse the same result in every display; keep
+  animation, sounds and speech in the separate widget. Show failures and allow retry.
+- Skip unavailable pool entries without changing saved preferences, and refresh
+  connected widgets when Randomizer settings change.
 - Reuse Detailed view's paired build cards, icons, upgrades, time ranges and Ghost
   reference actions in the report; keep its replay tied to the live opponent.
 - Clear compact opponent identity and record between matches or stale telemetry.

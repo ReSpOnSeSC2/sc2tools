@@ -890,6 +890,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def __init__(self) -> None:
             super().__init__()
             self.setWindowFlag(QtCore.Qt.FramelessWindowHint, True)
+            self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
             self.setWindowTitle(f"SC2 Tools Agent  ·  v{ui._version}")
             self.resize(1220, 800)
             self.setMinimumSize(480, 360)
@@ -3337,6 +3338,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _apply_window_chrome(self):
             compact = self._compact_window_active()
             companion = self._stack.currentWidget() is self._companion_page
+            for surface in (self, self.centralWidget(), self._agent_frame, self._agent_display, self._stack):
+                if surface.property("textOverlay") != compact:
+                    surface.setProperty("textOverlay", compact)
+                    surface.style().unpolish(surface)
+                    surface.style().polish(surface)
+                    surface.update()
             self._update_responsive_chrome()
             self._agent_brandbar.setVisible(not companion)
             self._agent_toolbar.setVisible(not companion)
@@ -3447,6 +3454,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._go_to_page(key)
             if ui._window_geometry:
                 self.restoreGeometry(QtCore.QByteArray.fromBase64(ui._window_geometry.encode("ascii")))
+                if self._compact_window_active() and self.width() <= 360 and self.height() in {68, 78}:
+                    self.resize(420, 44)
             screens = QtWidgets.QApplication.screens()
             if screens:
                 rects = screen_rects(screens)

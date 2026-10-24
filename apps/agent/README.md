@@ -125,7 +125,7 @@ quitting the agent closes them all. Session can remain visible between games;
 its timer, record, latest-known MMR and rating region use your owned Session feed.
 Rating region is not verified active-server detection.
 
-The **Scouting** button on the compact opponent card opens or closes the floating
+The race-themed **Scouting** button on the compact opponent strip opens or closes the floating
 **Scouting** report without changing the Companion size or your saved pin choice.
 It uses the same paired build cards as Detailed view, including unit icons,
 upgrade timings, Ghost reference buttons and 3/6/10-minute or full-build ranges.
@@ -135,6 +135,11 @@ matches, compact clears the opponent and waits for the next match.
 While StarCraft II has focus, only the compact **Scouting** button accepts clicks.
 Other compact controls and floating panel areas pass clicks through to the game.
 Use Alt+Tab to another application to restore normal overlay interaction.
+Right-click the strip to expand Companion, minimize, close or open the shared
+Agent menu. These window actions are kept off the compact strip itself.
+Compact uses a transparent background with text and one original control: a
+Protoss crystal, Terran scanner, Zerg organic eye or Default shield. Race
+borders remain on expanded views and the other panels.
 
 Native panel positions are remembered locally without changing their sizes.
 Removed-monitor positions are restored safely onto an available screen. Use
@@ -152,10 +157,12 @@ The **Build selectors** screen contains the pre-game plan and post-game check-in
 Choices, opponent corrections, and notes use the same records as the website
 and floating game cards. Their independent switches can be changed at any time.
 The **Randomizer settings** screen silently manages the matchup's eligible pool
-and shows the widget's saved pick. Draws, animation, sounds and Randomizer speech
-stay in the separate widget, not the native Agent. Hidden settings do not poll
+and shows the saved pick. In the loading check-in, **Randomize** selects and saves
+one build even when the separate widget is closed. Every display uses that same
+result; animation, sounds and Randomizer speech stay in the separate widget.
+Selection failures show a message and allow retry. Hidden settings do not poll
 the account; opening them refreshes the saved pool. Failed saves retain the draft
-and allow retry. Build check-in receives the widget pick independently.
+and allow retry. The settings page displays the saved result without drawing again.
 **Build Order Ghost** arms a recorded replay target for
 each matchup and follows the live game clock in an optional floating panel.
 Each feature has its own on/off control. Turn **In-game assistance** off
@@ -174,7 +181,7 @@ admin examples. Star per-build references, filter the replay library, restore
 earlier reference versions, and compare completed replay timings against them.
 Choose **Compact**, **Standard**, **Detailed**, or **Full workspace** from
 the size picker. Compact shows opponent name, race, MMR, your W–L record against
-them, and your win percentage, with a small expand button. No league field is
+them, and your win percentage, with one race-themed Scouting button. No league field is
 added. Standard keeps a compact opponent summary and switchable profile, scouting
 and tool pages. Detailed adds more tech steps and upgrades, with a portrait rail
 when the screen has enough room; Full workspace exposes full replay

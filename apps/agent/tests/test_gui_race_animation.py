@@ -156,6 +156,7 @@ for size, target in (("Compact", page.compact_card), ("Standard", page.console))
     win._set_window_size(size)
     app.processEvents()
     assert effects._frame_target is target
+    assert overlay.isVisible() == (size != "Compact")
     assert overlay.geometry() == QtCore.QRect(target.mapTo(win, QtCore.QPoint()), target.size())
     if size == "Standard":
         caption_position = page.live_label.mapTo(win, QtCore.QPoint())

@@ -50,15 +50,15 @@ function selectedBuildId(config, seed) {
     if (!raw || typeof raw.id !== "string" || !raw.id || raw.id.length > 200
         || typeof raw.name !== "string" || !raw.name.trim()) continue;
     const number = Number(raw.weight);
-    unique.set(raw.id, { id: raw.id, weight: config.useCustomWeights === true && Number.isFinite(number) && number > 0 ? number : 1 });
+    unique.set(raw.id, { id: raw.id, weight: config.useCustomWeights === true ? (Number.isFinite(number) && number > 0 ? number : 0) : 1 });
   }
   const builds = [...unique.values()];
   if (!builds.length) return null;
   const total = builds.reduce((sum, build) => sum + build.weight, 0);
-  const picked = seededRandom(seed)() * total;
+  const picked = seededRandom(seed)() * (total > 0 ? total : builds.length);
   let cumulative = 0;
   for (const build of builds) {
-    cumulative += build.weight;
+    cumulative += total > 0 ? build.weight : 1;
     if (picked < cumulative) return build.id;
   }
   return builds[builds.length - 1].id;
@@ -67,8 +67,31 @@ function selectedBuildId(config, seed) {
 /**
  * @param {import('./buildIntentLive').BuildIntentLive} service
  * @param {string} userId
+ * @param {string} matchup
+ * @param {Record<string, any>} config
  * @param {string} gameKey
- * @param {{matchup:string,releaseHold:boolean}} body
+ */
+async function resolveAvailableBuild(service, userId, matchup, config, gameKey) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const options = await service.options.forMatchup(userId, matchup);
+    const availableKeys = new Set(options.builds.map((build) => build.key));
+    const builds = [];
+    for (const build of Array.isArray(config.builds) && config.builds.length <= 500 ? config.builds : []) {
+      if (build && availableKeys.has(build.id)) builds.push(build);
+    }
+    const buildId = selectedBuildId({ ...config, builds }, `${matchup}:${gameKey}`);
+    const ref = buildId ? await service.options.resolveKey(userId, matchup, buildId) : null;
+    if (ref) return ref;
+    service.options.invalidate(userId);
+  }
+  return null;
+}
+
+/**
+ * @param {import('./buildIntentLive').BuildIntentLive} service
+ * @param {string} userId
+ * @param {string} gameKey
+ * @param {{matchup:string,releaseHold:boolean,revealInWidget?:boolean}} body
  */
 async function nativeRandomizerRoll(service, userId, gameKey, body) {
   let latest = currentEnvelope(service, userId, gameKey);
@@ -95,14 +118,13 @@ async function nativeRandomizerRoll(service, userId, gameKey, body) {
     throw new BuildIntentError(409, "hold_active", "Waiting for the loading check-in. Choose Roll now or wait for the match to start.");
   }
   const config = /** @type {Record<string, any>} */ (prefs.randomizer).matchups[matchup];
-  const buildId = selectedBuildId(config, `${matchup}:${gameKey}`);
-  const ref = buildId ? await service.options.resolveKey(userId, matchup, buildId) : null;
-  if (!ref) throw new BuildIntentError(409, "unknown_build", "The selected pool contains an unavailable build. Edit the pool and try again.");
+  const ref = await resolveAvailableBuild(service, userId, matchup, config, gameKey);
+  if (!ref) throw new BuildIntentError(409, "unknown_build", "No available builds remain in this pool. Edit the pool and try again.");
   currentEnvelope(service, userId, gameKey, matchup);
   const currentPrefs = await readBuildIntentPrefs(service.users, userId);
   const currentConfig = /** @type {Record<string, any>} */ (currentPrefs.randomizer).matchups?.[matchup];
   if (!randomizerPool(currentPrefs.randomizer, matchup).enabled
-      || !currentConfig || selectedBuildId(currentConfig, `${matchup}:${gameKey}`) !== buildId) {
+      || !currentConfig || JSON.stringify([currentConfig.useCustomWeights, currentConfig.builds]) !== JSON.stringify([config.useCustomWeights, config.builds])) {
     throw new BuildIntentError(409, "pool_changed", "The randomizer pool changed. Refresh before rolling.");
   }
   const finalEnvelope = currentEnvelope(service, userId, gameKey, matchup);
@@ -113,7 +135,8 @@ async function nativeRandomizerRoll(service, userId, gameKey, body) {
   const updated = await service.collection.findOneAndUpdate(
     { userId, gameKey, gameId: null, randomizer: null, declared: null },
     { $set: {
-      randomizer: { ...ref, at: now, verifiedPool: true, native: true },
+      randomizer: { ...ref, at: now, verifiedPool: true, native: body.revealInWidget !== true,
+                    widgetReveal: body.revealInWidget === true },
       hold: { ...(doc.hold || {}), released: true },
       expiresAt: new Date(now.getTime() + BUILD_INTENT.LIVE_ANSWERED_TTL_MS), updatedAt: now,
     } },

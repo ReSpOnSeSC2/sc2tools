@@ -257,7 +257,7 @@ class BuildIntentLive {
     return doc ? this._state(userId, doc) : null;
   }
 
-  /** @param {string} userId @param {string} gameKey @param {{matchup:string,releaseHold:boolean}} body */
+  /** @param {string} userId @param {string} gameKey @param {{matchup:string,releaseHold:boolean,revealInWidget?:boolean}} body */
   nativeRoll(userId, gameKey, body) {
     return nativeRandomizerRoll(this, userId, gameKey, body);
   }

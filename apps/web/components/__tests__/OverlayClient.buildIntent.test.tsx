@@ -140,6 +140,16 @@ describe("all-in-one overlay randomizer — build check-in", () => {
     expect(reveals).toEqual(["pvt-blink-stalkers"]);
   });
 
+  it("reveals the canonical check-in result without writing a duplicate roll", () => {
+    setup();
+    act(() => socket.fire("overlay:buildIntent", { gameKey: GAME, suppressRandomizer: false, holdRemainingMs: 0,
+      randomizer: { key: "custom:saved", name: "Already selected build", source: "custom" } }));
+    envelope();
+    expect(reveals).toEqual(["custom:saved"]);
+    expect(revealOnScreen()).toBe(true);
+    expect(socket.rolls()).toEqual([]);
+  });
+
   it("hides a running reveal when a different build is declared", () => {
     setup();
     envelope();

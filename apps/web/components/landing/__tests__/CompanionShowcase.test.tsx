@@ -19,12 +19,10 @@ describe("desktop Companion landing showcase", () => {
     expect(section.textContent).toContain("Ladder, Customs, Teams, Practice and Review presets");
     expect(section.textContent).toContain("optional Ctrl+Shift+F10");
     expect(section.textContent).toContain("automatic check-ins and randomizer draws remain 1v1-only");
-    expect(section.textContent).toContain("Companion preview");
-    expect(section.textContent).toContain("Companion 0.23.0 verification preview is for local verification only and is not available in the current stable download");
-    expect(section.textContent).toContain("A signed public release is pending");
-    expect(section.textContent).toContain("unsigned verification builds are separate test artifacts");
+    expect(section.textContent).toContain("Use Agent 0.24.1 or later");
+    expect(section.textContent).not.toContain("verification preview");
     expect(section.textContent).toContain("Choose how much you see");
-    expect(section.textContent).toContain("name, race and MMR, plus your W–L and win percentage against this opponent");
+    expect(section.textContent).toContain("transparent opponent text, race, MMR, your W–L and win percentage");
     expect(section.textContent).not.toContain("name, race and MMR only");
     expect(section.textContent).toContain("build icon chains");
     expect(section.textContent).toContain("upgrade completion chains");
@@ -38,9 +36,9 @@ describe("desktop Companion landing showcase", () => {
     expect(section.textContent).toContain("Standard");
     expect(section.textContent).toContain("Detailed");
     expect(section.textContent).toContain("Full workspace");
-    const compact = within(section).getByRole("img", { name: /Compact Companion showing a sample opponent/ });
-    expect(compact.getAttribute("width")).toBe("340");
-    expect(compact.getAttribute("height")).toBe("78");
+    const compact = within(section).getByRole("img", { name: /Transparent Compact Companion/ });
+    expect(compact.getAttribute("width")).toBe("420");
+    expect(compact.getAttribute("height")).toBe("44");
     expect(section.textContent).toContain("520 × 480: selected opponent information");
     expect(section.textContent).toContain("1024 × 800");
     expect(section.textContent).toContain("3 minutes, then choose 6 minutes, 10 minutes or Full build order");
@@ -48,12 +46,11 @@ describe("desktop Companion landing showcase", () => {
     expect(section.textContent).toContain("Compact layout · actual interface with sample data");
   });
 
-  it("keeps verification availability clear and presents race borders as a static optional comparison", () => {
+  it("explains updating the live Agent and presents race borders as a static optional comparison", () => {
     const { container } = render(<CompanionShowcase />);
-    const availability = within(container).getByRole("note", { name: "Companion preview availability" });
-    expect(availability.textContent).toContain("0.23.0 verification preview");
-    expect(availability.textContent).toContain("local verification only");
-    expect(availability.querySelector("strong")?.textContent).toContain("not available in the current stable download");
+    const availability = within(container).getByRole("note", { name: "Companion availability" });
+    expect(availability.textContent).toContain("Update from the shared Agent menu");
+    expect(availability.querySelector("strong")?.textContent).toContain("0.24.1 or later");
     expect(container.textContent).toContain("Default preserves the current purple appearance");
     expect(container.textContent).toContain("Optional Protoss, Terran and Zerg borders");
     expect(container.textContent).toContain("independent of player and opponent race");
@@ -109,18 +106,17 @@ describe("desktop Companion landing showcase", () => {
 
   it("keeps Randomizer playback in the widget without retiring native scouting voice", () => {
     const { container } = render(<CompanionShowcase />);
-    for (const phrase of ["Configure the pool. Let the widget roll.", "silently configures your shared pool",
-      "read-only saved result", "Randomizer animation, sound and spoken results stay in the widget",
-      "no native current-game Randomizer popup or draw engine",
+    for (const phrase of ["Choose a pool. Randomize from check-in.", "silently configure the shared pool",
+      "Randomize saves one build even without an open widget", "Randomizer animation, sound and spoken results stay in the widget",
+      "no native current-game Randomizer popup",
       "Native scouting voice is unaffected by widget-only Randomizer playback"]) {
       expect(container.textContent).toContain(phrase);
     }
-    const settings = within(container).getByRole("img", { name: /Companion Randomizer pool configuration and the saved widget result/ });
+    const settings = within(container).getByRole("img", { name: /Companion Randomizer pool configuration and the saved result/ });
     expect(settings.getAttribute("src")).toContain("companion-randomizer.png");
     expect(settings.getAttribute("width")).toBe("900");
     expect(settings.getAttribute("height")).toBe("480");
-    expect(container.textContent).toContain("Actual desktop settings only · sample pool and read-only widget pick");
-    expect(container.textContent).toContain("not a native live-draw popup");
-    expect(container.textContent).not.toContain("roll one shared saved pick");
+    expect(container.textContent).toContain("sample pool and read-only saved pick");
+    expect(container.textContent).toContain("Randomize is in check-in");
   });
 });

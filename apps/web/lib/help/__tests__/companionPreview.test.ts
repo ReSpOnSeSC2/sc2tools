@@ -2,27 +2,26 @@ import { describe, expect, it } from "vitest";
 import { getArticle } from "../index";
 import { helpBlockText } from "../articleText";
 
-describe("Companion preview availability", () => {
-  it("distinguishes native preview instructions from the current stable installer", () => {
-    const currentPreview = new Set(["desktop-companion", "install-app", "randomizer", "build-check-in"]);
+describe("Companion release documentation", () => {
+  it("points to the current Agent update flow rather than obsolete test previews", () => {
     for (const slug of ["desktop-companion", "install-app", "randomizer", "practice-ghost-build", "build-check-in", "desktop-app-overview"]) {
       const article = getArticle(slug);
       expect(article, slug).toBeDefined();
       const text = article!.body.map(helpBlockText).join(" ");
-      expect(text, slug).toContain(`Companion ${currentPreview.has(slug) ? "0.23.0 verification" : "0.21.0"} preview`);
-      expect(text, slug).toContain("current stable download");
+      expect(text, slug).toContain("0.24.1");
+      expect(text, slug).not.toContain("verification preview");
+      expect(text, slug).not.toContain("not included in the current stable download");
     }
     for (const slug of ["desktop-companion", "install-app"]) {
       const first = getArticle(slug)!.body[0];
       expect(first.type).toBe("callout");
-      expect(helpBlockText(first)).toContain("signed public release is pending");
-      expect(helpBlockText(first)).toContain("unsigned verification builds are separate test artifacts");
+      expect(helpBlockText(first)).toContain("Check for updates");
     }
   });
 
   it("documents the small layouts, themed controls and stored replay ranges", () => {
     const text = getArticle("desktop-companion")!.body.map(helpBlockText).join(" ");
-    for (const phrase of ["340 × 78", "520 × 480", "1024 × 800", "minimize", "close", "3 minutes", "6 minutes", "10 minutes", "Full build order", "Scouting preview", "repeated production", "Default", "Protoss", "Terran", "Zerg", "animations off"]) {
+    for (const phrase of ["420 × 44", "transparent", "race-themed", "520 × 480", "1024 × 800", "minimize", "close", "3 minutes", "6 minutes", "10 minutes", "Full build order", "Scouting preview", "repeated production", "Default", "Protoss", "Terran", "Zerg", "animations off"]) {
       expect(text).toContain(phrase);
     }
   });
@@ -64,21 +63,22 @@ describe("Companion preview availability", () => {
     }
   });
 
-  it("removes native Randomizer rolls across the related setup guides", () => {
+  it("documents explicit check-in selection and widget-only playback", () => {
     for (const slug of ["desktop-companion", "randomizer", "build-check-in", "install-app"]) {
       const text = getArticle(slug)!.body.map(helpBlockText).join(" ");
       expect(text, slug).toContain("widget");
       expect(text, slug).not.toContain("standalone randomizer");
       expect(text, slug).not.toContain("native randomizer waits");
       expect(text, slug).not.toContain("native Companion roll suppresses");
-      expect(text, slug).not.toContain("without needing OBS");
-      expect(text, slug).not.toContain("Companion draws immediately");
+      expect(text, slug).toContain("Randomize");
+      expect(text, slug).toContain("without an open widget");
+      expect(text, slug).not.toContain("Roll in widget");
     }
     const article = getArticle("desktop-companion")!;
     const text = article.body.map(helpBlockText).join(" ");
     for (const phrase of ["animation, sounds and spoken results are widget-only", "no native current-game Randomizer window",
-      "automatic/manual draw engine", "saved result is read-only", "already selected result rather than drawing again",
-      "Roll in widget", "Native scouting voice is unaffected by widget-only Randomizer playback"]) {
+      "saved result is read-only", "reuse the same saved result", "failure shows a message and allows retry",
+      "Native scouting voice is unaffected by widget-only Randomizer playback"]) {
       expect(text).toContain(phrase);
     }
     const settings = article.body.find(block => block.type === "image" && block.src === "/landing/companion-randomizer.png");

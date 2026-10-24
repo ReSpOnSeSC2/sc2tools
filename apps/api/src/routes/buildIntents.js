@@ -192,8 +192,9 @@ function registerLiveRoutes(router, deps, limiters) {
       return;
     }
     if (!body || typeof body !== "object" || Array.isArray(body)
-        || Object.keys(body).some((key) => !["matchup", "releaseHold"].includes(key))
-        || !parseMatchupParam(body.matchup) || typeof body.releaseHold !== "boolean") {
+        || Object.keys(body).some((key) => !["matchup", "releaseHold", "revealInWidget"].includes(key))
+        || !parseMatchupParam(body.matchup) || typeof body.releaseHold !== "boolean"
+        || (body.revealInWidget !== undefined && typeof body.revealInWidget !== "boolean")) {
       sendError(res, 400, "invalid_request", "Provide a matchup and an explicit hold choice.");
       return;
     }

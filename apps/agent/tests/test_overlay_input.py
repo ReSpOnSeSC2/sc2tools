@@ -86,6 +86,8 @@ def test_hidden_native_scouting_control_receives_mouse_activation_without_focus(
         from sc2tools_agent.ui.overlay_input import NativeClickThrough, build_scouting_control, _StyleApi, INPUT_STYLES
         app = QtWidgets.QApplication([])
         window = QtWidgets.QWidget()
+        window.setWindowFlag(QtCore.Qt.FramelessWindowHint, True)
+        window.setAttribute(QtCore.Qt.WA_TranslucentBackground)
         source = QtWidgets.QToolButton(window)
         source.setObjectName("opponentCardScout")
         source.setAccessibleName("Toggle scouting panel")
@@ -97,12 +99,16 @@ def test_hidden_native_scouting_control_receives_mouse_activation_without_focus(
         user32.SendMessageW.restype = ctypes.c_ssize_t
         try:
             handle = int(control.winId())
+            original = native._api.style(int(window.winId()))
+            assert original & 0x80000
             assert native.set_click_through(int(window.winId()), True)
             assert native._api.style(int(window.winId())) & INPUT_STYLES == INPUT_STYLES
             assert not native._api.style(handle) & 0x20
             assert native._api.style(handle) & 0x08000000
             assert user32.SendMessageW(handle, 0x0021, int(window.winId()), (0x0201 << 16) | 1) == 3
             assert not window.isVisible() and not control.isVisible()
+            assert native.set_click_through(int(window.winId()), False)
+            assert native._api.style(int(window.winId())) == original
         finally:
             native.restore_all()
             control.close()
@@ -121,7 +127,7 @@ class Native:
         return True
     def restore_all(self): self.locked.clear()
 window = QtWidgets.QWidget()
-window.resize(340, 78)
+window.resize(420, 44)
 source = QtWidgets.QToolButton(window)
 source.setObjectName("opponentCardScout")
 source.setAccessibleName("Toggle scouting panel")
@@ -150,6 +156,7 @@ try:
     assert control.text() == "Scouting"
     assert control.windowFlags() & QtCore.Qt.WindowDoesNotAcceptFocus
     assert control.testAttribute(QtCore.Qt.WA_ShowWithoutActivating)
+    assert control.testAttribute(QtCore.Qt.WA_TranslucentBackground)
     assert control.focusPolicy() == QtCore.Qt.NoFocus
     assert control.parentWidget() is window
     assert control.geometry().topLeft() == source.mapToGlobal(QtCore.QPoint())
@@ -366,7 +373,7 @@ def test_all_native_pins_and_only_main_compact_follow_foreground_without_focus_o
         app.processEvents()
         controller.refresh()
         assert int(window.winId()) in native.locked and len(native.locked) == 5
-        assert window.size().toTuple() == (340, 78)
+        assert window.size().toTuple() == (420, 44)
         panels[0].showMinimized()
         app.processEvents()
         minimized = panels[0].windowState()

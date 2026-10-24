@@ -160,6 +160,7 @@ def build_scouting_control(source, *, QtCore, QtWidgets):
             super().__init__(source.window())
             self.setWindowFlags(flags)
             self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
+            self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
             self.setAttribute(QtCore.Qt.WA_QuitOnClose, False)
             self.setFocusPolicy(QtCore.Qt.NoFocus)
             self.setCursor(QtCore.Qt.PointingHandCursor)

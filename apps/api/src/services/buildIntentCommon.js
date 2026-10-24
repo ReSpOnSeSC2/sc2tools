@@ -145,7 +145,7 @@ function holdRemainingMs(hold, nowMs) {
  * The only payload an overlay room receives about a check-in.
  * @param {Record<string, any>} doc a build_intent_live row
  * @param {number} nowMs
- * @returns {{ gameKey: string, suppressRandomizer: boolean, holdRemainingMs: number }}
+ * @returns {{ gameKey: string, suppressRandomizer: boolean, holdRemainingMs: number, randomizer?: {key:string,name:string,source:string} }}
  */
 function overlayPayload(doc, nowMs) {
   const declared = doc.declared && typeof doc.declared === "object" ? doc.declared : null;
@@ -154,6 +154,8 @@ function overlayPayload(doc, nowMs) {
     gameKey: String(doc.gameKey),
     suppressRandomizer: roll?.native === true || (Boolean(declared) && (!roll || declared.key !== roll.key)),
     holdRemainingMs: holdRemainingMs(doc.hold, nowMs),
+    ...(roll?.widgetReveal === true && typeof roll.key === "string" && typeof roll.name === "string"
+      ? { randomizer: { key: roll.key, name: roll.name, source: roll.source === "custom" ? "custom" : "catalog" } } : {}),
   };
 }
 
@@ -199,9 +201,10 @@ class BuildIntentNotifier {
   /**
    * Fan ``overlay:buildIntent`` out to every active overlay token room.
    * @param {string} userId
-   * @param {{ gameKey: string, suppressRandomizer: boolean, holdRemainingMs: number }} payload
+   * @param {Record<string, any>} payload
+   * @param {string} [eventName]
    */
-  async overlay(userId, payload) {
+  async overlay(userId, payload, eventName = "overlay:buildIntent") {
     if (!this.io) return;
     let tokens;
     try {
@@ -217,7 +220,7 @@ class BuildIntentNotifier {
     for (const row of tokens) {
       if (!row || typeof row.token !== "string") continue;
       try {
-        this.io.to(`overlay:${row.token}`).emit("overlay:buildIntent", payload);
+        this.io.to(`overlay:${row.token}`).emit(eventName, payload);
       } catch {
         // One failed room must not stop the rest.
       }

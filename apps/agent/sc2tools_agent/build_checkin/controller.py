@@ -69,6 +69,7 @@ from .models import (
     CHECKING_REPLAY,
     STATUS_DECLARE_OFFLINE,
     STATUS_DECLARE_UNAVAILABLE,
+    STATUS_RANDOMIZER_REQUEST_FAILED,
     STATUS_REPLAY_UNAVAILABLE,
     STATUS_SAVE_FAILED,
     STATUS_SAVE_UNKNOWN_BUILD,
@@ -1124,10 +1125,13 @@ class BuildCheckinController(ScoutingControllerMixin):
 
     def _handle_roll_now(self, game_key: Any) -> None:
         game = self._live_game_for_action(game_key)
-        if game is None or game.released:
+        if (game is None or game.randomizer_request_inflight or not game.matchup or self._locked(game)
+                or (game.live is not None and game.live.randomizer is not None)):
             return
-        game.released = True
-        self._enqueue_live_op(game, LiveOp("release"))
+        game.randomizer_request_inflight = True
+        if game.loading is not None:
+            game.loading.status = ""
+        self._enqueue_live_op(game, LiveOp("randomize"))
         self._render_loading(game)
 
     def _handle_not_now(self, game_key: Any) -> None:
@@ -1174,6 +1178,10 @@ class BuildCheckinController(ScoutingControllerMixin):
         self._send_live_op(game, op)
 
     def _send_live_op(self, game: LiveGame, op: LiveOp) -> None:
+        if op.action == "randomize":
+            self._call(self._on_live_write, (game.game_key, game.next_gen(), op),
+                       self._api.roll_live_randomizer, game.game_key, game.matchup)
+            return
         body: Dict[str, Any] = {"action": op.action}
         if op.action == "declare":
             body["buildKey"] = op.build_key
@@ -1211,6 +1219,8 @@ class BuildCheckinController(ScoutingControllerMixin):
             return
         if game.op_inflight is op:
             game.op_inflight = None
+        if op.action == "randomize":
+            game.randomizer_request_inflight = False
         mine = (
             op.action == "declare"
             and game.declared is not None
@@ -1224,6 +1234,14 @@ class BuildCheckinController(ScoutingControllerMixin):
             )
             if failure.code == "already_bound" and failure.game_id:
                 self._bind_game(game, failure.game_id)
+            if op.action in {"release", "randomize"} and game.game_id is None and not self._locked(game):
+                if game.loading is not None and not (game.live and game.live.randomizer):
+                    game.loading.status = {
+                        "randomizer_disabled": "Randomizer is off for this matchup. Enable it in Randomizer settings.",
+                        "unknown_build": "No available builds remain in this pool. Update Randomizer settings and try again.",
+                        "pool_changed": "The pool changed while choosing. Try Randomize again.",
+                        "stale_game": "This match is no longer current. Wait for the next match.",
+                    }.get(failure.code, STATUS_RANDOMIZER_REQUEST_FAILED)
             if mine:
                 if failure.code == "unknown_build":
                     game.declared = None
@@ -1238,11 +1256,18 @@ class BuildCheckinController(ScoutingControllerMixin):
                     self._maybe_open_shell(game)
                     self._maybe_resend_declaration(game)
         else:
+            if op.action in {"release", "randomize"} and game.loading is not None and game.loading.status == STATUS_RANDOMIZER_REQUEST_FAILED:
+                game.loading.status = ""
             if mine:
                 game.declared_synced = True
                 game.declare_failed = False
                 _log.info("build_checkin_declared")
             state = parse_live_state(value, key)
+            if op.action == "randomize":
+                if state is not None and state.randomizer is not None:
+                    game.released = True
+                elif game.loading is not None:
+                    game.loading.status = STATUS_RANDOMIZER_REQUEST_FAILED
             if state is not None:
                 self._apply_live_state(game, state, gen)
         self._run_live_ops(game)
@@ -1288,6 +1313,8 @@ class BuildCheckinController(ScoutingControllerMixin):
             return  # an older request answered after a newer one
         game.live_applied_gen = gen
         game.live = state
+        if state.randomizer is not None and game.loading is not None and game.loading.status == STATUS_RANDOMIZER_REQUEST_FAILED:
+            game.loading.status = ""
         if state.prefs is not None:
             self._apply_state_prefs(state.prefs)
         if state.game_id:

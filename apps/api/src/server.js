@@ -147,7 +147,7 @@ async function main() {
     resolveVoicePrefs: (userId) =>
       /** @type {any} */ (services).users.getPreferences(userId, "voice"),
     resolveRandomizerPrefs: (userId) =>
-      /** @type {any} */ (services).users.getPreferences(userId, "randomizer"),
+      /** @type {any} */ (services).buildIntents.overlayRandomizerConfig(userId),
     // Build check-in: the current live game's hold / suppress state (no
     // build names), replayed to overlays on connect and resync, and the
     // randomizer widget's roll reports.

@@ -18,12 +18,12 @@ def test_four_named_layouts_have_distinct_information_levels():
     assert normalize_information_layout("compact") == "compact"
     assert normalize_information_layout("unknown") == "standard"
     assert normalize_information_layout(None) == "standard"
-    assert minimum_window_size("compact") == (280, 68)
+    assert minimum_window_size("compact") == (360, 40)
     assert all(minimum_window_size(level) == (480, 360) for level in ("standard", "detailed", "full", "unknown"))
 
 
 @pytest.mark.parametrize("name,expected", [
-    ("Compact", (340, 78)), ("Standard", (520, 480)), ("Detailed", (1024, 800)),
+    ("Compact", (420, 44)), ("Standard", (520, 480)), ("Detailed", (1024, 800)),
 ])
 def test_normal_sizes_use_logical_pixels_and_keep_the_existing_screen(name, expected):
     placement = fit_window_preset(name, (-2560, -200, 2560, 1440), position=(-100, 1000), frame=(16, 40))
@@ -35,7 +35,7 @@ def test_normal_sizes_use_logical_pixels_and_keep_the_existing_screen(name, expe
 
 def test_presets_clamp_to_small_work_areas_including_window_decorations():
     for name in ("Compact", "Standard", "Detailed"):
-        expected = (100, 30, 312, 78) if name == "Compact" else (100, 30, 312, 170)
+        expected = (100, 30, 312, 44) if name == "Compact" else (100, 30, 312, 170)
         assert fit_window_preset(name, (100, 30, 320, 200), position=(5000, -5000), frame=(8, 30)) == expected
     with pytest.raises(ValueError):
         fit_window_preset("Full workspace", (0, 0, 1920, 1080))
@@ -43,12 +43,29 @@ def test_presets_clamp_to_small_work_areas_including_window_decorations():
 
 def test_labels_require_matching_geometry_and_density_and_allow_custom_manual_sizes():
     available = (0, 0, 1920, 1080)
-    assert window_size_label((340, 78), available=available, layout="compact") == "Compact"
+    assert window_size_label((420, 44), available=available, layout="compact") == "Compact"
     assert window_size_label((400, 210), available=available, layout="compact") == "Custom"
     assert window_size_label((1200, 900), available=available, layout="full") == "Custom"
     assert window_size_label((1024, 800), available=available, layout="detailed", frame=(16, 40)) == "Detailed"
     assert window_size_label((1920, 1080), available=available, layout="full", maximized=True) == "Full workspace"
     assert window_size_label((1920, 1080), available=available, layout="compact", maximized=True) == "Custom"
+
+
+@pytest.mark.parametrize("legacy_size", [(340, 78), (280, 68)])
+def test_saved_legacy_compact_geometry_migrates_to_the_slim_strip(tmp_path, legacy_size):
+    run_gui_check(tmp_path, f'''
+        legacy = QtWidgets.QWidget()
+        legacy.resize(*{legacy_size!r})
+        legacy.move(80, 90)
+        geometry = bytes(legacy.saveGeometry().toBase64()).decode("ascii")
+        ui, window = make_window(window_page="companion", window_information_layout="compact", window_geometry=geometry)
+        assert window.size().toTuple() == (420, 44)
+        assert window.pos().toTuple() == (80, 90)
+        assert window._window_information_layout == "compact"
+        window._companion_page.shutdown()
+        window._race_effects.shutdown()
+        window.hide()
+    ''')
 
 
 def test_real_window_presets_resize_change_density_and_restore_normal_chrome(tmp_path):
@@ -79,7 +96,7 @@ def test_real_window_presets_resize_change_density_and_restore_normal_chrome(tmp
         assert layouts == ["compact", "standard", "detailed", "full"]
         page.windowSizeRequested.emit("compact")
         app.processEvents()
-        assert (win.width(), win.height()) == (340, 78)
+        assert (win.width(), win.height()) == (420, 44)
         assert not win._sidebar.isVisible()
         page.compact_enlarge.click()
         app.processEvents()
@@ -127,7 +144,7 @@ def test_saved_compact_geometry_and_density_restore_without_new_preset_or_write(
             window_information_layout="compact", on_window_information_layout=layouts.append)
         restored.show()
         app.processEvents()
-        assert (restored.width(), restored.height()) == (340, 78)
+        assert (restored.width(), restored.height()) == (420, 44)
         assert restored._companion_page.current_density() == "compact"
         assert not restored._sidebar.isVisible()
         assert layouts == ["compact"]

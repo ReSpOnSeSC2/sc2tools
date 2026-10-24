@@ -122,7 +122,7 @@ for skin in ("default", "protoss", "terran", "zerg"):
         for iteration in range(5):
             app.processEvents()
         if preset == "Compact":
-            assert win.size().toTuple() == (340, 78)
+            assert win.size().toTuple() == (420, 44)
             assert page.compact_card.isVisible()
             continue
         for route in ("home", "profile", "scouting", "builds", "randomizer", "ghost", "opponents", "settings"):

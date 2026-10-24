@@ -58,6 +58,9 @@ QWidget {{
 QLabel, QCheckBox, QRadioButton {{ background: transparent; }}
 QWidget:disabled {{ color: {TEXT_DIM}; }}
 QMainWindow, QWidget#agentRoot {{ background: {BG}; }}
+QMainWindow[textOverlay="true"], QWidget#agentRoot[textOverlay="true"],
+QFrame#agentFrame[textOverlay="true"], QFrame#agentDisplay[textOverlay="true"],
+QStackedWidget#agentPageStack[textOverlay="true"] {{ background: transparent; border: none; }}
 QFrame#agentFrame {{
     background: {CONSOLE_GRADIENT};
     border: 2px solid {ACCENT};

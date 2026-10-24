@@ -3,7 +3,7 @@ from __future__ import annotations
 
 
 WINDOW_SIZE_PRESETS = (
-    ("Compact", "compact", (340, 78)),
+    ("Compact", "compact", (420, 44)),
     ("Standard", "standard", (520, 480)),
     ("Detailed", "detailed", (1024, 800)),
     ("Full workspace", "full", None),
@@ -16,7 +16,7 @@ def normalize_information_layout(value: object) -> str:
 
 
 def minimum_window_size(layout: str) -> tuple[int, int]:
-    return (280, 68) if layout == "compact" else (480, 360)
+    return (360, 40) if layout == "compact" else (480, 360)
 
 
 def fit_window_preset(

@@ -20,10 +20,10 @@ const PANELS = [
   {
     image: "/landing/companion-randomizer.png",
     width: 900, height: 480,
-    caption: "Actual desktop settings only · sample pool and read-only widget pick, not a native live-draw popup.",
-    alt: "Companion Randomizer pool configuration and the saved widget result, using sample data",
-    title: "Configure the pool. Let the widget roll.",
-    text: "Companion silently configures your shared pool and displays the widget's saved pick. Randomizer animation, sound and spoken results stay in the widget. There is no native current-game Randomizer popup or draw engine.",
+    caption: "Actual desktop settings · sample pool and read-only saved pick. Randomize is in check-in.",
+    alt: "Companion Randomizer pool configuration and the saved result, using sample data",
+    title: "Choose a pool. Randomize from check-in.",
+    text: "Randomize saves one build even without an open widget. Companion settings silently configure the shared pool and display the saved pick. Randomizer animation, sound and spoken results stay in the widget. There is no native current-game Randomizer popup.",
   },
   {
     image: "/landing/companion-ghost.png",
@@ -39,7 +39,7 @@ export function CompanionShowcase() {
     <section id="desktop-companion" aria-labelledby="companion-showcase-title" className="scroll-mt-24 border-t border-line py-16 md:py-24">
       <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] lg:items-end">
         <div className="min-w-0">
-          <p className="kicker">Windows desktop Companion preview</p>
+          <p className="kicker">Windows desktop Companion</p>
           <h2 id="companion-showcase-title" className="mt-4 max-w-2xl font-serif text-4xl font-semibold leading-tight text-text md:text-5xl">
             Your ladder desk, beside the game.
           </h2>
@@ -52,11 +52,11 @@ export function CompanionShowcase() {
             <SlidersHorizontal className="mt-1 h-5 w-5 shrink-0 text-accent-cyan" aria-hidden />
             <p className="text-body">One game assistance switch, plus separate controls for Session, scouting, opponent panels, spoken scouting reports, build selectors and Ghost. Turn them on or off whenever you need.</p>
           </div>
-          <p className="mt-4 text-caption text-text-muted">Runs without OBS for native scouting, Session, build selectors and Ghost. Randomizer draws and their visuals, sounds and speech belong only to its browser or OBS widget; Companion provides silent configuration and a read-only saved result.</p>
+          <p className="mt-4 text-caption text-text-muted">Runs without OBS for native scouting, Session, build selectors and Ghost. Randomize from check-in even when the separate widget is closed. Connected displays share one saved result; the widget handles animation, sounds and speech.</p>
           <p className="mt-3 text-caption text-text-muted">Home and Back keep browsing simple. Separate opponent and game arrows retain your place; Assistance and Agent menus keep the controls nearby.</p>
           <p className="mt-3 text-caption text-text-muted">Opt in to native Windows system-voice reports for fresh human 1v1 games or the selected confirmed live enemy in Hybrid team mode. Native scouting voice is unaffected by widget-only Randomizer playback. Voice, master and mode switches work together. OBS voice settings stay separate; keep only one scouting voice enabled to avoid duplicate audio.</p>
           <p className="mt-3 text-caption text-text-muted">Save your own Ladder, Customs, Teams, Practice and Review presets. Customize each feature locally, with an optional Ctrl+Shift+F10 master shortcut. Hybrid adds confirmed enemy selection for team scouting; automatic check-ins and randomizer draws remain 1v1-only.</p>
-          <p role="note" aria-label="Companion preview availability" className="mt-4 rounded-sm border border-warning/40 bg-bg-surface p-3 text-caption text-text-muted"><strong className="font-semibold text-text">Companion 0.23.0 verification preview is for local verification only and is not available in the current stable download.</strong> A signed public release is pending; unsigned verification builds are separate test artifacts. Session requires pairing and an available SC2 Tools connection. Team scouting also needs fresh live SC2 telemetry; unknown history and MMR stay unavailable.</p>
+          <p role="note" aria-label="Companion availability" className="mt-4 rounded-sm border border-warning/40 bg-bg-surface p-3 text-caption text-text-muted"><strong className="font-semibold text-text">Use Agent 0.24.1 or later for these controls.</strong> Update from the shared Agent menu or download the Windows installer. Session requires pairing and an available SC2 Tools connection. Team scouting also needs fresh live SC2 telemetry; unknown history and MMR stay unavailable.</p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Link href="/download" className="inline-flex min-h-11 items-center gap-2 rounded-sm bg-accent-cyan px-4 py-2 text-caption font-bold text-[#071b22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
               <Download className="h-4 w-4" aria-hidden />Download current stable agent
@@ -67,15 +67,15 @@ export function CompanionShowcase() {
           </div>
         </div>
       </div>
-      <div className="mt-9 grid min-w-0 gap-6 rounded-md border border-border bg-bg-surface p-4 sm:p-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-center">
-        <figure className="mx-auto w-full min-w-0 max-w-[340px] lg:mx-0">
-          <Image src="/landing/companion-compact.png" alt="Compact Companion showing a sample opponent's name, race and MMR, your record and win percentage, plus expand, minimize and close controls" width={340} height={78} sizes="(max-width: 380px) 100vw, 340px" className="h-auto w-full rounded-md" />
+      <div className="mt-9 grid min-w-0 gap-6 rounded-md border border-border bg-bg-surface p-4 sm:p-6 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:items-center">
+        <figure className="mx-auto w-full min-w-0 max-w-[420px] lg:mx-0">
+          <Image src="/landing/companion-compact.png" alt="Transparent Compact Companion with a sample opponent's name, race, MMR, your record and win percentage, and a race-themed Scouting control" width={420} height={44} sizes="(max-width: 460px) 100vw, 420px" className="h-auto w-full" />
           <figcaption className="mt-2 text-micro text-text-dim">Compact layout · actual interface with sample data.</figcaption>
         </figure>
         <div className="min-w-0">
           <h3 className="font-serif text-2xl font-semibold text-text">Choose how much you see.</h3>
           <ul className="mt-4 grid gap-3 text-caption text-text-muted sm:grid-cols-2">
-            <li><strong className="text-text">Compact</strong> — 340 × 78: name, race and MMR, plus your W–L and win percentage against this opponent. A small expand button opens Standard.</li>
+            <li><strong className="text-text">Compact</strong> — 420 × 44: transparent opponent text, race, MMR, your W–L and win percentage. One race-themed Scouting control opens or closes the detailed report. Right-click for window actions.</li>
             <li><strong className="text-text">Standard</strong> — 520 × 480: selected opponent information, including name, race, MMR, your W–L and win percentage, above both players&apos; build icon chains and recorded timings.</li>
             <li><strong className="text-text">Detailed</strong> — 1024 × 800: compare both tech trees and upgrade completion chains with more room.</li>
             <li><strong className="text-text">Full workspace</strong> — full stored build orders, notes, history, filters and replay tools.</li>
@@ -88,7 +88,7 @@ export function CompanionShowcase() {
         <p className="mt-3 max-w-prose text-body text-text-muted">The optional native Session panel is off by default. Pin your wins, losses and elapsed session time with the same race border as Companion. It shares the OBS widget&apos;s four-hour-inactivity record, not a calendar-day total, and does not require OBS or an active match.</p>
         <p className="mt-3 max-w-prose text-body text-text-muted">Your own latest-known MMR and rating region appear only when owned Session metadata provides them. Active server detection is unavailable from SC2&apos;s local API; missing values stay unavailable, not zero or an opponent&apos;s rating.</p>
         <p className="mt-3 max-w-prose text-body text-text-muted">Session reuses existing owned overlay access. If access is missing, setup requires explicit confirmation; polling and reconnects never create credentials automatically. The independent switch stops Session; master assistance off hides it without resetting its record or saved choice. Stale observations expire after 90 seconds.</p>
-        <p className="mt-3 max-w-prose text-body text-text-muted">Pinned panels and main Compact automatically pass clicks through only while StarCraft II is the verified foreground application. Alt+Tab away to unlock their controls. Standard stays interactive. Existing minimize and close-to-tray behavior is unchanged.</p>
+        <p className="mt-3 max-w-prose text-body text-text-muted">Pinned panels and main Compact automatically pass clicks through while StarCraft II is the verified foreground application. Only Compact&apos;s Scouting control stays clickable to open or close the shared detailed report. Alt+Tab away to unlock other controls. Standard stays interactive. Existing minimize and close-to-tray behavior is unchanged.</p>
         <figure className="mx-auto mt-6 w-full min-w-0 max-w-[720px]">
           <div className="overflow-hidden rounded-md border border-border-strong bg-[#10131f]">
             <Image src="/landing/companion-session.png" alt="Native Session record panels in Default, Protoss, Terran and Zerg styles, with sample wins, losses, elapsed time and your latest-known MMR and rating region" width={720} height={285} sizes="(max-width: 720px) 100vw, 720px" className="h-auto w-full" />
@@ -140,7 +140,7 @@ export function CompanionShowcase() {
           </div>
         ))}
       </div>
-      <p className="mt-6 max-w-prose text-caption text-text-muted">Pinned Opponent and Scouting panels share the frameless race artwork and matching minimize/close controls. Legacy Recent games details fill in gradually from already synced owned metadata, without resyncing or resetting upload history. Activity log excludes credential-bearing OBS SDK logs and repetitive connection-refused tracebacks; OBS remains optional.</p>
+      <p className="mt-6 max-w-prose text-caption text-text-muted">Pinned Opponent stays transparent; Scouting shares the Detailed build comparison and themed frame. Legacy Recent games details fill in gradually from already synced owned metadata, without resyncing or resetting upload history. Activity log excludes credential-bearing OBS SDK logs and repetitive connection-refused tracebacks; OBS remains optional.</p>
       <div className="mt-8 flex items-start gap-3 border-t border-border pt-5 text-caption text-text-muted">
         <Star className="mt-0.5 h-4 w-4 shrink-0 text-editorial" aria-hidden />
         <p>Star a reference replay for each build from Builds or Opponents. Keep your own examples handy, or practice from an example an admin has explicitly published.</p>

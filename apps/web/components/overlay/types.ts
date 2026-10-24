@@ -603,6 +603,7 @@ export interface OverlayBuildIntent {
   suppressRandomizer: boolean;
   /** Hold left at send time; never compared against a server clock. */
   holdRemainingMs: number;
+  randomizer?: { key: string; name: string; source: "catalog" | "custom" };
 }
 
 /**
@@ -616,6 +617,7 @@ export interface RandomizerIntentGate {
   suppressRandomizer: boolean;
   /** Local ``Date.now()`` deadline of a pending hold; 0 when none. */
   holdDeadlineMs: number;
+  randomizer?: OverlayBuildIntent["randomizer"];
 }
 
 /** Reported by ``RandomizerWidget`` the moment a reveal starts. */

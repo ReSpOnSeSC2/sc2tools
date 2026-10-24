@@ -19,10 +19,13 @@ def test_companion_console_owns_navigation_and_hides_agent_sidebar_at_every_dens
             assert win._stack.currentWidget() is page
             assert not win._sidebar.isVisible(), level
             if level == "compact":
-                assert (win.width(), win.height()) == (340, 78)
+                assert (win.width(), win.height()) == (420, 44)
                 assert page.compact_card.isVisible()
                 assert not page.console.isVisible()
-                page.compact_card.enlarge_button.click()
+                context = page._build_team_context_menu(page.compact_card)
+                actions = {action.text(): action for action in context.actions()}
+                assert actions["Agent"].menu() is page.agent_menu_button.menu()
+                actions["Expand Companion"].trigger()
                 app.processEvents()
                 assert page.current_density() == "standard"
                 assert page.console.isVisible()
@@ -62,7 +65,7 @@ def test_explicit_agent_request_from_compact_expands_before_opening_settings(tmp
         win._set_window_size("Compact")
         app.processEvents()
         assert not win._sidebar.isVisible()
-        assert (win.width(), win.height()) == (340, 78)
+        assert (win.width(), win.height()) == (420, 44)
         page.agentPageRequested.emit("settings")
         app.processEvents()
         assert win._stack.currentIndex() == 3

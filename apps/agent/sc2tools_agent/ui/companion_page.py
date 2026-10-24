@@ -18,6 +18,7 @@ from . import theme
 
 _STYLE = f"""
 QWidget#companionDesk, QWidget#companionContent, QWidget#companionPanel {{ background: {theme.BG}; color: {theme.TEXT}; }}
+QWidget#companionDesk[textOverlay="true"], QWidget#companionPanel[textOverlay="true"] {{ background: transparent; border: none; }}
 QWidget#companionDesk QLabel, QWidget#companionPanel QLabel {{ color: {theme.TEXT}; background: transparent; }}
 QFrame#companionCard {{ background: {theme.SURFACE}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 12px; }}
 QLabel#companionTitle {{ font-size: 25px; font-weight: 700; color: {theme.TEXT}; }}
@@ -244,6 +245,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             super().__init__(None, flags)
             self.owner = owner
             self.kind = kind
+            self.setProperty("textOverlay", kind == "opponent")
+            if kind == "opponent":
+                self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
             self._context = {}
             self._scope = None
             self._source_id = None
@@ -1127,13 +1131,21 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
         def _team_context_menu(self, target, position):
             menu = self._build_team_context_menu(target)
             if menu is not None:
-                menu.exec(target.mapToGlobal(position))
+                try:
+                    menu.exec(target.mapToGlobal(position))
+                finally:
+                    menu.deleteLater()
 
         def _build_team_context_menu(self, target):
             roster = self.team_roster_state
-            if not roster.candidate:
-                return None
             menu = QtWidgets.QMenu(target)
+            menu.addAction("Expand Companion", target.enlarge_button.click)
+            menu.addAction("Minimize", target.minimize_button.click)
+            menu.addAction("Close", target.close_button.click)
+            menu.addMenu(self.agent_menu_button.menu()).setText("Agent")
+            if not roster.candidate:
+                return menu
+            menu.addSeparator()
             if roster.ready:
                 menu.addAction("Previous enemy", lambda: self._step_opponent(-1))
                 menu.addAction("Next enemy", lambda: self._step_opponent(1))
@@ -1258,6 +1270,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             if not temporary:
                 self._return_density = None
             compact = level == "compact"
+            if self.property("textOverlay") != compact:
+                self.setProperty("textOverlay", compact)
+                self.style().unpolish(self)
+                self.style().polish(self)
             for widget in self._normal_chrome:
                 widget.setVisible(not compact and (widget is not self.window_size_notice or bool(self.window_size_notice.text())))
             margin = 0 if compact else 4 if level == "standard" else 8
@@ -1453,7 +1469,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             if not active:
                 self.compact_card.set_waiting(in_game=in_game)
             self._set_team_mmr_source(self.compact_card, context)
-            self.compact_card.setToolTip(("Selected live enemy · right-click to switch enemies or confirm teams. " + context.get("mmrSource", "")) if context.get("teamHybrid") else "Current live opponent" if active else "Opponent telemetry unavailable" if in_game else "Waiting for next match")
+            self.compact_card.setToolTip((("Selected live enemy · right-click to switch enemies or confirm teams. " + context.get("mmrSource", "")) if context.get("teamHybrid") else "Current live opponent" if active else "Opponent telemetry unavailable" if in_game else "Waiting for next match") + " · Alt+Tab, then right-click for window and Agent options.")
             self.team_roster_widget.render(self.team_roster_state, self._opponents, self._team_details)
             self.team_roster_page.render(self.team_roster_state, self._opponents, self._team_details)
             self.team_roster_summary.render(self.team_roster_state, self._opponents, self._team_details)

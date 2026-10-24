@@ -68,7 +68,7 @@ const article: HelpArticle = {
       ],
     },
     { type: "heading", text: "Settings", anchor: "settings" },
-    { type: "paragraph", text: "The **Companion 0.21.0 preview** adds an interactive scouting desk, independent game panels, embedded build selectors, a standalone randomizer and replay-based practice. It is not included in the current stable download. [Desktop Companion preview](/help/desktop-companion) explains availability, its tabs and master assistance switch. OBS is optional." },
+    { type: "paragraph", text: "**Agent 0.24.1 and later** includes an interactive Companion scouting desk, independent game panels, embedded build selectors and replay-based practice. Randomize in check-in saves one shared build; its animation and audio stay in the separate widget. [Desktop Companion](/help/desktop-companion) explains its tabs and master assistance switch. OBS is optional." },
     {
       type: "table",
       head: ["Setting", "What it does"],

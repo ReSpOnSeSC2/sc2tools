@@ -21,6 +21,7 @@ on any install.
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 log = logging.getLogger(__name__)
@@ -128,6 +129,7 @@ class BuildCheckinHost:
         self._models: Dict[str, Any] = {}
         self._panels_enabled = True
         self._feature_gates = {LOADING: True, POSTGAME: True}
+        self._randomizer_enabled = True
         self._closed = False
         self._preview_race = preview_race or (lambda: None)
         self._on_reset_positions = on_reset_positions
@@ -147,7 +149,7 @@ class BuildCheckinHost:
         self._dismiss_previews()
         self._models[LOADING] = model
         if self._panel_enabled(LOADING):
-            self.window(LOADING).show_model(model)
+            self.window(LOADING).show_model(self._model_for_view(LOADING, model))
 
     def _update_loading(self, model: Any) -> None:
         current = self._models.get(LOADING)
@@ -155,7 +157,7 @@ class BuildCheckinHost:
             self._models[LOADING] = model
         window = self._windows.get(LOADING)
         if self._panel_enabled(LOADING) and window is not None and window.owns(model.game_key):
-            window.update_model(model)
+            window.update_model(self._model_for_view(LOADING, model))
 
     def _hide_loading(self, game_key: str, reason: str) -> None:
         current = self._models.get(LOADING)
@@ -205,14 +207,19 @@ class BuildCheckinHost:
             return
         for kind, model in self._models.items():
             if self._panel_enabled(kind):
-                self.window(kind).show_model(model)
+                self.window(kind).show_model(self._model_for_view(kind, model))
 
     def _panel_enabled(self, kind: str) -> bool:
         return self._panels_enabled and self._feature_gates.get(kind, False)
 
+    def _model_for_view(self, kind, model):
+        return replace(model, randomizer=None) if kind == LOADING and not self._randomizer_enabled else model
+
     def set_feature_gates(self, gates: Mapping[str, Any]) -> None:
         if self._closed:
             return
+        randomizer_changed = self._randomizer_enabled != (gates.get("randomizer") is not False)
+        self._randomizer_enabled = gates.get("randomizer") is not False
         for kind, key in ((LOADING, "preGameSelector"), (POSTGAME, "postGameSelector")):
             enabled = gates.get(key) is True
             if enabled == self._feature_gates[kind]:
@@ -223,7 +230,11 @@ class BuildCheckinHost:
                 if window is not None:
                     window.dismiss("mode_disabled")
             elif kind in self._models:
-                self.window(kind).show_model(self._models[kind])
+                self.window(kind).show_model(self._model_for_view(kind, self._models[kind]))
+        if randomizer_changed and self._panel_enabled(LOADING) and LOADING in self._models:
+            window = self._windows.get(LOADING)
+            if window is not None:
+                window.update_model(self._model_for_view(LOADING, self._models[LOADING]))
 
     # ---------------------------------------------------------- windows
 
@@ -240,6 +251,8 @@ class BuildCheckinHost:
 
     def act(self, action: str, *args: Any) -> None:
         """Call a controller action; a missing controller is a no-op."""
+        if action == "roll_now" and not self._randomizer_enabled:
+            return
         controller = self._controller()
         fn = getattr(controller, action, None) if controller is not None else None
         if not callable(fn):

@@ -248,8 +248,8 @@ def test_loading_model_waiting_and_titles() -> None:
 def test_loading_model_strip_states() -> None:
     game = _game()
     assert _loading(game).randomizer.can_roll_now is True
-    game.released = True
-    assert _loading(game).randomizer.label == "🎲 Rolling the randomizer…"
+    game.randomizer_request_inflight = True
+    assert _loading(game).randomizer.label == "🎲 Choosing a build…"
     game.live = LiveState(game_key="k", randomizer=DT, randomizer_enabled=True)
     strip = _loading(game, options=_options()).randomizer
     assert (strip.label, strip.rolled_key, strip.can_roll_now) == (

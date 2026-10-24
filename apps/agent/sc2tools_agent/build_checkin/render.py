@@ -88,7 +88,7 @@ def loading_model(
                 rolled_key=roll.key,
                 rolled_name=roll.name,
             )
-        elif game.released:
+        elif game.randomizer_request_inflight:
             strip = RandomizerStripModel(label=RANDOMIZER_ROLLING)
         else:
             strip = RandomizerStripModel(

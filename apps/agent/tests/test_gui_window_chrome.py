@@ -39,13 +39,15 @@ def test_agent_uses_themed_window_buttons_without_native_titlebar_and_keeps_tray
         win.show()
         win._set_window_size("Compact")
         app.processEvents()
-        assert win.size() == QtCore.QSize(340, 78)
+        assert win.size() == QtCore.QSize(420, 44)
         card = win._companion_page.compact_card
-        card.minimizeRequested.emit()
+        menu = win._companion_page._build_team_context_menu(card)
+        actions = {action.text(): action for action in menu.actions()}
+        actions["Minimize"].trigger()
         app.processEvents()
         assert win.isMinimized()
         win.showNormal()
-        card.closeRequested.emit()
+        actions["Close"].trigger()
         app.processEvents()
         assert not win.isVisible()
         win._companion_page.shutdown()

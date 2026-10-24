@@ -140,9 +140,12 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
             super().__init__(parent)
             self.setObjectName("opponentIdentityCard")
             self.layout_mode = layout
+            self.setProperty("textOverlay", not profile)
+            if not profile:
+                self.setAttribute(QtCore.Qt.WA_TranslucentBackground)
             self._skin = "default"
             self.setProperty("raceSkin", "default")
-            self.setMinimumSize(220, 340) if profile else self.setMinimumSize(280, 68)
+            self.setMinimumSize(220, 340) if profile else self.setMinimumSize(360, 40)
             self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
             self.setStyleSheet("QWidget#opponentIdentityCard { background: transparent; } QLabel { background: transparent; border: none; font-family: 'Segoe UI', sans-serif; }")
             self.portrait = Portrait(self)
@@ -182,13 +185,13 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
             self.enlarge_button.clicked.connect(lambda _checked=False: self.enlargeRequested.emit())
             self.scouting_button = QtWidgets.QToolButton(self)
             self.scouting_button.setObjectName("opponentCardScout")
-            self.scouting_button.setText("Scouting")
+            self.scouting_button.setText("")
             self.scouting_button.setAccessibleName("Toggle scouting panel")
             self.scouting_button.setToolTip("Open scouting report")
             self.scouting_button.setCheckable(True)
             self.scouting_button.setFocusPolicy(QtCore.Qt.NoFocus)
             self.scouting_button.setCursor(QtCore.Qt.PointingHandCursor)
-            self.scouting_button.setStyleSheet(self._enlarge_base_style)
+            self._style_scouting_button()
             self.scouting_button.setVisible(not profile)
             self.scouting_button.clicked.connect(lambda _checked=False: self.scoutingRequested.emit())
             self.minimize_button = QtWidgets.QToolButton(self)
@@ -204,14 +207,22 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
                 button.setStyleSheet(theme.WINDOW_CONTROLS_STYLE)
                 button.setCursor(QtCore.Qt.PointingHandCursor)
                 button.clicked.connect(lambda _checked=False, requested=signal: requested.emit())
-                button.setVisible(not profile)
+                button.hide()
             if not profile:
                 self.portrait.hide()
+                self.enlarge_button.hide()
+                for text_label in (self.name_label, self.race_caption, self.mmr_caption, self.record_caption,
+                                   self.win_rate_caption, self.race_label, self.mmr_label, self.record_label, self.win_rate_label):
+                    shadow = QtWidgets.QGraphicsDropShadowEffect(text_label)
+                    shadow.setColor(QtGui.QColor(0, 0, 0, 220))
+                    shadow.setBlurRadius(3)
+                    shadow.setOffset(0, 1)
+                    text_label.setGraphicsEffect(shadow)
             self._compact_font = None
             self.set_identity()
 
         def sizeHint(self):
-            return QtCore.QSize(260, 380) if profile else QtCore.QSize(340, 78)
+            return QtCore.QSize(260, 380) if profile else QtCore.QSize(420, 44)
 
         def set_identity(self, name=None, race=None, mmr=None, *, wins=None, losses=None):
             self.identity = opponent_identity(name, race, mmr)
@@ -237,10 +248,20 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
                 selector = "QToolButton#" + button.objectName()
                 extra = "" if self._skin == "default" else f"{selector} {{ background: {colors['frame']}; border-color: {colors['border']}; }} {selector}:hover {{ background: {colors['plate']}; border-color: {colors['accent']}; }}"
                 button.setStyleSheet(self._enlarge_base_style + extra)
+            self._style_scouting_button()
             for button in (self.minimize_button, self.close_button):
                 extra = "" if self._skin == "default" else f"QToolButton#{button.objectName()} {{ background: {colors['frame']}; border-color: {colors['border']}; }}"
                 button.setStyleSheet(theme.WINDOW_CONTROLS_STYLE + extra)
             self.update()
+
+        def _style_scouting_button(self):
+            from .scouting_glyph import build_scouting_icon
+            self.scouting_button.setIcon(build_scouting_icon(self._skin, QtCore=QtCore, QtGui=QtGui))
+            self.scouting_button.setIconSize(QtCore.QSize(20, 20))
+            self.scouting_button.setStyleSheet(
+                "QToolButton, QToolButton:hover, QToolButton:checked, QToolButton:pressed, QToolButton:disabled "
+                "{ background: transparent; border: none; padding: 0; }"
+            )
 
         def set_scouting_state(self, *, opened, enabled):
             self.scouting_button.setChecked(opened)
@@ -256,28 +277,28 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
 
         def _place_contents(self):
             if not profile:
-                small = self.width() < 310 or self.height() < 74
+                small = self.width() < 400
                 if small != self._compact_font:
                     self._compact_font = small
-                    self.name_label.setStyleSheet(f"color: {theme.TEXT}; font-size: {16 if small else 17}px; font-weight: 700;")
+                    self.name_label.setStyleSheet(f"color: {theme.TEXT}; font-size: {12 if small else 13}px; font-weight: 700;")
                     for caption in (self.race_caption, self.mmr_caption, self.record_caption, self.win_rate_caption):
-                        caption.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: {8 if small else 9}px; font-weight: 600;")
+                        caption.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: 8px; font-weight: 600;")
                     for value in (self.race_label, self.mmr_label, self.record_label, self.win_rate_label):
-                        value.setStyleSheet(f"color: {theme.TEXT}; font-size: {13 if small else 14}px; font-weight: 600;")
-                self.enlarge_button.setGeometry(self.width() - 104, 5, 50, 22)
-                self.scouting_button.setGeometry(self.width() - 168, 5, 62, 22)
-                self.minimize_button.setGeometry(self.width() - 52, 5, 22, 22)
-                self.close_button.setGeometry(self.width() - 28, 5, 22, 22)
-                self.name_label.setGeometry(12, 3 if small else 5, max(1, self.width() - 188), 22 if small else 24)
-                column_width = max(1, (self.width() - 24) // 4)
-                self._record_top = self.height() - 41
-                for column, (caption, value) in enumerate(((self.race_caption, self.race_label),
-                                                         (self.mmr_caption, self.mmr_label),
-                                                         (self.record_caption, self.record_label),
-                                                         (self.win_rate_caption, self.win_rate_label))):
-                    left = 12 + column * column_width
-                    caption.setGeometry(left, self._record_top, column_width - 3, 11)
-                    value.setGeometry(left, self._record_top + 12, column_width - 3, 22)
+                        value.setStyleSheet(f"color: {theme.TEXT}; font-size: {12 if small else 13}px; font-weight: 600;")
+                self.scouting_button.setGeometry(self.width() - 30, (self.height() - 22) // 2, 22, 22)
+                available = self.width() - 46
+                name_width = round(available * 0.25)
+                self.name_label.setGeometry(10, (self.height() - 20) // 2, name_width - 6, 20)
+                left = 10 + name_width
+                self._record_top = (self.height() - 29) // 2
+                for proportion, caption, value in ((0.15, self.race_caption, self.race_label),
+                                                    (0.14, self.mmr_caption, self.mmr_label),
+                                                    (0.23, self.record_caption, self.record_label),
+                                                    (0.23, self.win_rate_caption, self.win_rate_label)):
+                    column_width = round(available * proportion)
+                    caption.setGeometry(left, self._record_top, column_width - 4, 11)
+                    value.setGeometry(left, self._record_top + 11, column_width - 4, 18)
+                    left += column_width
                 self.name_label._update_elision()
                 return
             self.enlarge_button.setGeometry(self.width() - 58, 5, 50, 22)
@@ -320,21 +341,11 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
             self._place_contents()
 
         def paintEvent(self, event):
+            if not profile:
+                return
             painter = QtGui.QPainter(self)
             painter.setRenderHint(QtGui.QPainter.Antialiasing)
             colors = palette_for_skin(self._skin) if self._skin != "default" else None
-            if not profile:
-                rectangle = QtCore.QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-                painter.setPen(QtGui.QPen(QtGui.QColor(colors["border"] if colors else theme.ACCENT), 1))
-                painter.setBrush(QtGui.QColor(colors["frame"] if colors else theme.BUTTON))
-                painter.drawRoundedRect(rectangle, 8, 8)
-                inset = rectangle.adjusted(3, 3, -3, -3)
-                painter.setPen(QtGui.QPen(QtGui.QColor(colors["plate"] if colors else theme.BORDER), 1))
-                painter.setBrush(QtGui.QColor(colors["surface"] if colors else theme.SURFACE))
-                painter.drawRoundedRect(inset, 5, 5)
-                painter.setPen(QtGui.QPen(QtGui.QColor(colors["border"] if colors else theme.BORDER_STRONG), 1))
-                painter.drawLine(12, self._record_top - 4, self.width() - 12, self._record_top - 4)
-                return
             outer = QtCore.QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
             bezel = QtGui.QLinearGradient(0, 0, 0, self.height())
             bezel.setColorAt(0, QtGui.QColor(colors["border"] if colors else "#ba52e7"))

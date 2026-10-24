@@ -40,7 +40,7 @@ def test_compact_card_has_identity_record_real_artwork_and_one_expand_action(tmp
     run_card_check(tmp_path, '''
         from sc2tools_agent.ui.opponent_card import build_opponent_card
         card = build_opponent_card(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
-        card.resize(340, 78)
+        card.resize(420, 44)
         card.show()
         calls = []
         card.enlargeRequested.connect(lambda: calls.append("expand"))
@@ -55,7 +55,10 @@ def test_compact_card_has_identity_record_real_artwork_and_one_expand_action(tmp
         assert all(label.textFormat() == QtCore.Qt.PlainText for label in card.findChildren(QtWidgets.QLabel))
         assert card.enlarge_button.accessibleName() == "Enlarge Companion"
         assert card.enlarge_button.text() == "Expand"
-        assert card.scouting_button.text() == "Scouting"
+        assert card.scouting_button.text() == ""
+        assert card.scouting_button.isVisible()
+        assert not card.enlarge_button.isVisible()
+        assert [button for button in card.findChildren(QtWidgets.QToolButton) if button.isVisible()] == [card.scouting_button]
         assert card.portrait.isHidden()
         card.enlarge_button.click()
         assert calls == ["expand"]
@@ -69,26 +72,23 @@ def test_small_compact_geometry_keeps_fields_and_button_inside_the_card(tmp_path
         from sc2tools_agent.ui.opponent_card import build_opponent_card
         card = build_opponent_card(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
         card.set_identity("A very long opponent name that must not cover the portrait or rating", "Protoss", 5189, wins=0, losses=12)
-        card.resize(280, 68)
+        card.resize(360, 40)
         card.show()
         app.processEvents()
-        assert card.size().toTuple() == (280, 68)
-        for child in [card.name_label, card.race_label, card.mmr_label, card.race_caption, card.mmr_caption, card.enlarge_button, card.scouting_button,
-                      card.minimize_button, card.close_button,
+        assert card.size().toTuple() == (360, 40)
+        for child in [card.name_label, card.race_label, card.mmr_label, card.race_caption, card.mmr_caption, card.scouting_button,
                       card.record_caption, card.record_label, card.win_rate_caption, card.win_rate_label]:
             assert card.rect().contains(child.geometry()), (child.objectName(), child.geometry().getRect())
         assert card.portrait.isHidden()
-        assert card.name_label.geometry().right() < card.scouting_button.geometry().left()
-        assert card.scouting_button.geometry().right() < card.enlarge_button.geometry().left()
-        for button in (card.scouting_button, card.enlarge_button):
-            assert button.fontMetrics().horizontalAdvance(button.text()) + 4 <= button.width()
+        assert card.name_label.geometry().right() < card.race_caption.geometry().left()
+        assert card.win_rate_label.geometry().right() < card.scouting_button.geometry().left()
         assert card.name_label.text() != card.name_label.full_text
         assert card.name_label.toolTip() == card.name_label.full_text
         assert card.race_label.fontMetrics().horizontalAdvance(card.race_label.text()) <= card.race_label.width()
         assert card.mmr_label.fontMetrics().horizontalAdvance(card.mmr_label.text()) <= card.mmr_label.width()
         assert card.record_label.fontMetrics().horizontalAdvance(card.record_label.text()) <= card.record_label.width()
         assert card.win_rate_label.text() == "0%"
-        assert card.record_caption.geometry().top() > card.name_label.geometry().bottom()
+        assert card.record_caption.geometry().bottom() < card.record_label.geometry().top()
         assert card.grab().save(str(base / "opponent-small.png"))
         card.close()
     ''')
@@ -102,8 +102,8 @@ def test_slim_bar_window_buttons_emit_only_explicit_requests(tmp_path):
         card.show()
         card.set_identity("GoldChain", "Zerg", 5189, wins=3, losses=2)
         app.processEvents()
-        assert card.size().toTuple() == (340, 78)
-        assert card.minimumSize().toTuple() == (280, 68)
+        assert card.size().toTuple() == (420, 44)
+        assert card.minimumSize().toTuple() == (360, 40)
         requests = []
         card.enlargeRequested.connect(lambda: requests.append("enlarge"))
         card.minimizeRequested.connect(lambda: requests.append("minimize"))
@@ -111,8 +111,7 @@ def test_slim_bar_window_buttons_emit_only_explicit_requests(tmp_path):
         for button, name in ((card.enlarge_button, "Enlarge Companion"),
                              (card.minimize_button, "Minimize Companion"),
                              (card.close_button, "Close Companion")):
-            assert button.isVisible() and button.accessibleName() == name
-            assert card.rect().contains(button.geometry())
+            assert not button.isVisible() and button.accessibleName() == name
             button.click()
         assert requests == ["enlarge", "minimize", "close"]
         assert card.isVisible()
@@ -122,7 +121,23 @@ def test_slim_bar_window_buttons_emit_only_explicit_requests(tmp_path):
     ''')
 
 
-@pytest.mark.parametrize("layout,size", [("compact", (340, 78)), ("profile", (260, 380))])
+def test_original_scouting_glyphs_are_distinct_transparent_and_highlight_when_open(tmp_path):
+    run_card_check(tmp_path, '''
+        from sc2tools_agent.ui.scouting_glyph import build_scouting_icon
+        rendered = []
+        for skin in ("default", "protoss", "terran", "zerg"):
+            icon = build_scouting_icon(skin, QtCore=QtCore, QtGui=QtGui)
+            normal = icon.pixmap(QtCore.QSize(24, 24), QtGui.QIcon.Normal, QtGui.QIcon.Off).toImage()
+            selected = icon.pixmap(QtCore.QSize(24, 24), QtGui.QIcon.Normal, QtGui.QIcon.On).toImage()
+            assert normal != selected
+            assert normal.pixelColor(0, 0).alpha() == 0
+            assert all(normal != previous for previous in rendered)
+            assert normal.save(str(base / (skin + "-scouting-glyph.png")))
+            rendered.append(normal)
+    ''')
+
+
+@pytest.mark.parametrize("layout,size", [("compact", (420, 44)), ("profile", (260, 380))])
 def test_race_skins_repaint_only_cosmetics_and_default_restores_original_pixels(tmp_path, layout, size):
     run_card_check(tmp_path, f'''
         from sc2tools_agent.ui.opponent_card import build_opponent_card
@@ -176,7 +191,7 @@ def test_missing_assets_and_identity_use_neutral_placeholders_without_network(tm
     run_card_check(tmp_path, '''
         from sc2tools_agent.ui.opponent_card import build_opponent_card
         card = build_opponent_card(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, icon_root=base / "no-assets")
-        card.resize(340, 78)
+        card.resize(420, 44)
         card.set_identity("<b>Not markup</b>", "Unknown", None)
         card.show()
         app.processEvents()

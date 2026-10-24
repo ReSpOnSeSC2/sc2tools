@@ -355,7 +355,8 @@ def create_race_effects(window, *, QtCore, QtGui, QtWidgets, compact_bezel=False
             target = self._frame_target
             origin = QtCore.QPoint() if target is window else target.mapTo(window, QtCore.QPoint())
             self.overlay.setGeometry(QtCore.QRect(origin, target.size()))
-            self.overlay.setVisible(not self._closed and self.skin != "default" and window.isVisible() and target.isVisible())
+            self.overlay.setVisible(not self._closed and self.skin != "default" and window.isVisible() and target.isVisible()
+                                    and window.property("textOverlay") is not True and target.property("textOverlay") is not True)
             if self.overlay.isVisible():
                 self.overlay.raise_()
                 self.overlay.update()
@@ -385,7 +386,9 @@ def create_race_effects(window, *, QtCore, QtGui, QtWidgets, compact_bezel=False
 
         def play_expand(self):
             self.cancel()
-            if self._closed or not self.motion_enabled or self.skin == "default" or not window.isVisible() or window.isMinimized() or not self._frame_target.isVisible():
+            if (self._closed or not self.motion_enabled or self.skin == "default" or not window.isVisible()
+                    or window.isMinimized() or not self._frame_target.isVisible()
+                    or window.property("textOverlay") is True or self._frame_target.property("textOverlay") is True):
                 return False
             self._clock.start()
             self.overlay.progress = 0.0
