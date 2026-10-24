@@ -60,6 +60,33 @@ scroll.close()
 ''')
 
 
+def test_companion_scrolling_does_not_change_unfocused_value_controls(tmp_path):
+    run_gui_check(tmp_path, THEMED_SETUP.replace("FONT_SIZE", "10") + '''
+ui, win = make_window(window_page="companion")
+page = win._companion_page
+win._go_to_page("companion")
+win.show()
+page.console.navigate("randomizer")
+app.processEvents()
+for control in page.findChildren(QtWidgets.QComboBox):
+    assert getattr(control, "_sc2_wheel_guard", None) is not None
+combo = page.randomizer_page.matchup_select
+page.console.home_button.setFocus()
+app.processEvents()
+assert not combo.hasFocus()
+before = combo.currentIndex()
+event = QtGui.QWheelEvent(QtCore.QPointF(5, 5), QtCore.QPointF(5, 5), QtCore.QPoint(),
+                         QtCore.QPoint(0, -120), QtCore.Qt.NoButton, QtCore.Qt.NoModifier,
+                         QtCore.Qt.NoScrollPhase, False)
+app.sendEvent(combo, event)
+assert combo.currentIndex() == before
+assert not event.isAccepted()
+page.shutdown()
+win._really_quit = True
+win.close()
+''')
+
+
 @pytest.mark.parametrize("font_size,scale_factor", [(10, "1"), (10, "1.25"), (12, "1.5")])
 def test_real_themed_shell_preserves_header_navigation_across_all_size_changes(tmp_path, monkeypatch, font_size, scale_factor):
     monkeypatch.setenv("QT_SCALE_FACTOR", scale_factor)

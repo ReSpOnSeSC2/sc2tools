@@ -14,6 +14,9 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 - Reflow team cards immediately on resize, size their header to its controls,
   and shorten long display names visually while retaining their full accessible text.
 - Elide long navigation breadcrumbs cleanly and retain the full path in a tooltip.
+- Keep scrolling from changing unfocused Companion dropdown values.
+- Keep the Session timer, MMR and rating region clear of every themed border,
+  including when resizing across the compact-frame threshold.
 
 ## 0.23.0
 

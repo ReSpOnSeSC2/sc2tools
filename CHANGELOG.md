@@ -16,6 +16,8 @@ corresponding GitHub Release.
   selectors, Ghost, Randomizer, assistance modes and team rosters. Preserve the
   approved window sizes and saved selections; use vertical scrolling and natural
   control wrapping instead of squeezing content.
+- Keep the Session timer readable above the themed bottom border at all supported
+  display scales and when the panel is resized.
 
 ### Agent 0.23.0 - Native Session record and game-safe panels
 - Add an optional, default-off Session panel using the OBS widget's canonical

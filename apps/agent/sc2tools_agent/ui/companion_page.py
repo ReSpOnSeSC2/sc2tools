@@ -439,6 +439,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._speech_pending_key = None
             self._speech_pending_at = None
             self._build_ui()
+            from .qt_helpers import guard_value_widgets
+            guard_value_widgets(self, QtCore, QtWidgets)
             from .companion_speech import build_scouting_speech
             self.scouting_speech = (speech_factory or build_scouting_speech)(self, QtCore=QtCore)
             self.scouting_speech.statusChanged.connect(self.voice_status.setText)

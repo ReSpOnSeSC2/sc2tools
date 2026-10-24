@@ -124,8 +124,8 @@ def build_companion_session(parent=None, *, QtCore, QtGui, QtWidgets):
             self.setAttribute(QtCore.Qt.WA_StyledBackground)
             self.setStyleSheet(_STYLE)
             layout = QtWidgets.QVBoxLayout(self)
-            layout.setContentsMargins(12, 9, 12, 9)
-            layout.setSpacing(3)
+            layout.setContentsMargins(16, 16, 16, 16)
+            layout.setSpacing(0)
             self.header = QtWidgets.QWidget(self)
             header = QtWidgets.QHBoxLayout(self.header)
             header.setContentsMargins(0, 0, 0, 0)
@@ -157,7 +157,8 @@ def build_companion_session(parent=None, *, QtCore, QtGui, QtWidgets):
             self._timer = QtCore.QTimer(self)
             self._timer.setInterval(1000)
             self._timer.timeout.connect(self._render)
-            self._race_effects = create_race_effects(self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+            self._race_effects = create_race_effects(self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets,
+                                                     compact_bezel=True)
             self._window_interactions = install_window_interactions(
                 self, drag_widgets=[self.header, self.wins_label, self.losses_label, self.rating_label,
                                     self.region_label, self.elapsed_label],
@@ -176,6 +177,7 @@ def build_companion_session(parent=None, *, QtCore, QtGui, QtWidgets):
         def _render(self):
             if self._closed:
                 return
+            self.layout().activate()
             view = session_presentation(self._snapshot)
             self._presentation = view
             for widget, key in ((self.wins_label, "winsText"), (self.losses_label, "lossesText")):
@@ -184,7 +186,9 @@ def build_companion_session(parent=None, *, QtCore, QtGui, QtWidgets):
                 font.setBold(True)
                 for pixels in range(29, 9, -1):
                     font.setPixelSize(pixels)
-                    if QtGui.QFontMetrics(font).horizontalAdvance(text) <= max(1, widget.width()):
+                    metrics = QtGui.QFontMetrics(font)
+                    if (metrics.horizontalAdvance(text) <= max(1, widget.width())
+                            and metrics.height() <= max(1, widget.height())):
                         break
                 widget.setFont(font)
                 widget.setStyleSheet(f"font-size: {pixels}px; font-weight: 700;")

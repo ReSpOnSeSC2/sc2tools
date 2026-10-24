@@ -58,7 +58,7 @@ def frame_pieces(source_width, source_height, target_width, target_height, *, no
     return tuple(pieces)
 
 
-def create_race_artwork(*, QtCore, QtGui, asset_root=None):
+def create_race_artwork(*, QtCore, QtGui, asset_root=None, compact_bezel=False):
     root = (Path(asset_root) if asset_root is not None else Path(__file__).parent / "assets" / "races").resolve()
 
     class RaceArtwork:
@@ -83,7 +83,8 @@ def create_race_artwork(*, QtCore, QtGui, asset_root=None):
             if image is None:
                 return False
             pieces = frame_pieces(image.width(), image.height(), rectangle.width(), rectangle.height(),
-                                  normal_corner=ZERG_NORMAL_CORNER if skin == "zerg" else NORMAL_CORNER)
+                                  normal_corner=COMPACT_CORNER if compact_bezel else
+                                  ZERG_NORMAL_CORNER if skin == "zerg" else NORMAL_CORNER)
             if not pieces:
                 return False
             painter.save()

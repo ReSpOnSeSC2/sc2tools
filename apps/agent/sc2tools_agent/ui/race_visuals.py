@@ -83,7 +83,7 @@ QToolButton#windowClose:hover, QFrame#companionConsole QToolButton#windowClose:h
 """
 
 
-def create_race_effects(window, *, QtCore, QtGui, QtWidgets):
+def create_race_effects(window, *, QtCore, QtGui, QtWidgets, compact_bezel=False):
     """Decorate this window without changing its geometry, focus or input routing."""
 
     class RaceOverlay(QtWidgets.QWidget):
@@ -98,7 +98,7 @@ def create_race_effects(window, *, QtCore, QtGui, QtWidgets):
             self.setAccessibleName("Decorative race border")
             self.skin = "default"
             self.progress = None
-            self.artwork = create_race_artwork(QtCore=QtCore, QtGui=QtGui)
+            self.artwork = create_race_artwork(QtCore=QtCore, QtGui=QtGui, compact_bezel=compact_bezel)
             self.hide()
 
         def _color(self, key, alpha=255):
@@ -147,7 +147,7 @@ def create_race_effects(window, *, QtCore, QtGui, QtWidgets):
                     self._hatch(painter, rectangle, progress, alpha)
 
         def _protoss_border(self, painter, rectangle):
-            compact = rectangle.height() < 140
+            compact = compact_bezel or rectangle.height() < 140
             depth = 3.2 if compact else 10.5
             scale = depth / 10.5
 
