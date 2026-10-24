@@ -167,8 +167,14 @@ def build_scouting_control(source, *, QtCore, QtWidgets):
             self.setObjectName(source.objectName())
             self.setAccessibleName(source.accessibleName())
             self.setCheckable(True)
-            self.clicked.connect(lambda _checked=False: source.click())
+            self.clicked.connect(self._activate_source)
             self._signature = None
+
+        def _activate_source(self, _checked=False):
+            if source.property("compactAction") in {"expand", "unavailable"}:
+                self.setChecked(source.isChecked())
+                return
+            source.click()
 
         def sync(self):
             signature = (source.icon().cacheKey(), source.iconSize().toTuple(), source.styleSheet(),
@@ -258,7 +264,7 @@ def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, 
             sources = list(scouting_buttons_provider())
             for source in sources:
                 owner = source.window()
-                visible = (locked and source.isVisible() and source.isEnabled()
+                visible = (locked and source.isVisible() and source.isEnabled() and source.property("compactAction") != "expand"
                            and not owner.isMinimized() and owner.property("gameClickThrough") is True)
                 control = self._scouting_controls.get(source)
                 if visible:

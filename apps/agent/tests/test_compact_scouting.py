@@ -64,7 +64,7 @@ def test_scouting_panel_uses_its_live_replay_and_detailed_cards_while_library_se
     assert page.game_select.currentData() == selected
 
 
-def test_ending_or_losing_a_live_match_clears_opponent_fields_and_disables_scouting(companion):
+def test_ending_or_losing_a_live_match_clears_opponent_fields_and_keeps_expand_available(companion):
     page, state, app = companion
     page.set_density("compact")
     for phase in ("match_ended", "menu", "offline"):
@@ -76,14 +76,22 @@ def test_ending_or_losing_a_live_match_clears_opponent_fields_and_disables_scout
         page._update_overlays()
         assert page.compact_card.identity == {"name": "—", "race": "—", "mmr": "—"}
         assert page.compact_card.record["text"] == "—"
-        assert not page.compact_card.scouting_button.isEnabled()
+        assert page.compact_card.scouting_button.isEnabled()
+        assert page.compact_card.scouting_button.property("compactAction") == "expand"
+        assert not page.compact_card.scouting_button.isCheckable()
         assert not any(panel.isVisible() for panel in page.overlays.values())
         assert page.overlays["opponent"].identity_card.identity["name"] == "—"
         assert page.overlays["scouting"]._key is None
     page._snapshot["liveGame"].update(phase="match_in_progress", capturedAt=time.time() - 31)
     page._update_overlays()
-    assert not page.compact_card.scouting_button.isEnabled()
+    assert page.compact_card.scouting_button.isEnabled()
+    assert page.compact_card.scouting_button.property("compactAction") == "expand"
     assert page.compact_card.identity["name"] == "—"
+    requests = []
+    page.windowSizeRequested.connect(requests.append)
+    page.compact_card.scouting_button.click()
+    assert requests == ["standard"]
+    assert not page.overlays["scouting"].isVisible()
 
 
 def test_manual_scouting_close_survives_polling_and_master_off_hides_the_report(companion):
@@ -97,7 +105,8 @@ def test_manual_scouting_close_survives_polling_and_master_off_hides_the_report(
     page.compact_card.scouting_button.click()
     assert panel.isVisible()
     page.set_preference("overlaysEnabled", False)
-    assert not panel.isVisible() and not page.compact_card.scouting_button.isEnabled()
+    assert not panel.isVisible() and page.compact_card.scouting_button.isEnabled()
+    assert page.compact_card.scouting_button.property("compactAction") == "expand"
 
 
 def test_explicit_scouting_pin_choice_overrides_temporary_toggle_and_a_new_match_resets_dismissal(companion):

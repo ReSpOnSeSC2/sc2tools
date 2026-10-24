@@ -94,6 +94,35 @@ def test_small_compact_geometry_keeps_fields_and_button_inside_the_card(tmp_path
     ''')
 
 
+def test_compact_control_expands_when_scouting_is_unavailable_and_switches_back_for_live_reports(tmp_path):
+    run_card_check(tmp_path, '''
+        from sc2tools_agent.ui.opponent_card import build_opponent_card
+        card = build_opponent_card(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+        actions = []
+        card.enlargeRequested.connect(lambda: actions.append("expand"))
+        card.scoutingRequested.connect(lambda: actions.append("scout"))
+        card.set_scouting_state(opened=False, enabled=False, allow_expand=True)
+        button = card.scouting_button
+        assert button.isEnabled() and not button.isCheckable()
+        assert button.accessibleName() == "Expand Companion"
+        assert "Standard" in button.toolTip()
+        button.click()
+        assert actions == ["expand"]
+        card.set_scouting_state(opened=False, enabled=True, allow_expand=True)
+        assert button.isEnabled() and button.isCheckable()
+        assert button.accessibleName() == "Toggle scouting panel"
+        button.click()
+        assert actions == ["expand", "scout"]
+        card.set_scouting_state(opened=True, enabled=True, allow_expand=True)
+        assert button.isChecked() and "Close scouting" in button.toolTip()
+        card.set_scouting_state(opened=False, enabled=False, allow_expand=True)
+        assert not button.isChecked() and not button.isCheckable()
+        button.click()
+        assert actions == ["expand", "scout", "expand"]
+        card.close()
+    ''')
+
+
 def test_slim_bar_window_buttons_emit_only_explicit_requests(tmp_path):
     run_card_check(tmp_path, '''
         from sc2tools_agent.ui.opponent_card import build_opponent_card

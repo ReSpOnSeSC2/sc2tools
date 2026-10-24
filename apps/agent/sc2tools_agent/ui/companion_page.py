@@ -560,6 +560,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.session_panel = build_companion_session(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
             self.session_panel.userClosed.connect(lambda: self.session_check.setChecked(False))
             for card in (self.compact_card, self.overlays["opponent"].identity_card):
+                card.set_scouting_state(opened=False, enabled=False, allow_expand=True)
                 card.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
                 card.customContextMenuRequested.connect(lambda position, target=card: self._team_context_menu(target, position))
             self._position_overlays()
@@ -2333,7 +2334,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                         panel.update_context({})
             self._panel_restore_requests.clear()
             for card in (self.compact_card, self.overlays["opponent"].identity_card):
-                card.set_scouting_state(opened=self.overlays["scouting"].isVisible(), enabled=allowed)
+                card.set_scouting_state(opened=self.overlays["scouting"].isVisible(), enabled=allowed, allow_expand=True)
             self._ensure_build_order()
             self._sync_session_panel()
             self._render_information_layout()

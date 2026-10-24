@@ -189,11 +189,12 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
             self.scouting_button.setAccessibleName("Toggle scouting panel")
             self.scouting_button.setToolTip("Open scouting report")
             self.scouting_button.setCheckable(True)
+            self.scouting_button.setProperty("compactAction", "scout")
             self.scouting_button.setFocusPolicy(QtCore.Qt.NoFocus)
             self.scouting_button.setCursor(QtCore.Qt.PointingHandCursor)
             self._style_scouting_button()
             self.scouting_button.setVisible(not profile)
-            self.scouting_button.clicked.connect(lambda _checked=False: self.scoutingRequested.emit())
+            self.scouting_button.clicked.connect(self._activate_compact_control)
             self.minimize_button = QtWidgets.QToolButton(self)
             self.close_button = QtWidgets.QToolButton(self)
             for button, name, text, title, signal in (
@@ -263,10 +264,20 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
                 "{ background: transparent; border: none; padding: 0; }"
             )
 
-        def set_scouting_state(self, *, opened, enabled):
-            self.scouting_button.setChecked(opened)
-            self.scouting_button.setEnabled(enabled)
+        def _activate_compact_control(self, _checked=False):
+            if self.scouting_button.property("compactAction") == "expand":
+                self.enlargeRequested.emit()
+            else:
+                self.scoutingRequested.emit()
+
+        def set_scouting_state(self, *, opened, enabled, allow_expand=False):
+            self.scouting_button.setProperty("compactAction", "scout" if enabled else "expand" if allow_expand else "unavailable")
+            self.scouting_button.setCheckable(enabled)
+            self.scouting_button.setChecked(opened if enabled else False)
+            self.scouting_button.setEnabled(enabled or allow_expand)
+            self.scouting_button.setAccessibleName("Toggle scouting panel" if enabled else "Expand Companion" if allow_expand else "Scouting unavailable")
             self.scouting_button.setToolTip(("Close" if opened else "Open") + " scouting report" if enabled else
+                                            "Expand Companion · Standard view" if allow_expand else
                                             "Scouting is available during a live match with In-game assistance enabled and an allowed mode.")
 
         def set_waiting(self, *, in_game=False):

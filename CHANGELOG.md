@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.24.2 - Working Compact expansion
+- Make the race button expand the main Companion when scouting is unavailable;
+  retain its live-game scouting toggle and protected game clicks.
+- Reopen the main app in Standard from the tray or shortcut, keeping the pinned
+  opponent strip compact and preserving automatic background startup.
+
 ### Agent 0.24.1 - Compact scouting and reliable Randomize
 - Open/close the detailed floating scouting report from compact. Only its scouting
   button accepts clicks while StarCraft II has focus; other overlay areas pass

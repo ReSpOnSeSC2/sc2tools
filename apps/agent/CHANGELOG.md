@@ -2,6 +2,16 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.24.2
+
+### Fixed - Compact expansion and reopening
+- Make the race button open Standard when scouting is unavailable, including
+  between matches. During eligible live games it still toggles the scouting report.
+- Open the main app in Standard when explicitly launching it or reopening it from
+  the tray or shortcut. Preserve compact pinned panels and background startup.
+- Keep expansion clicks out of the game's click-through exception; only the live
+  scouting action accepts clicks while StarCraft II has focus.
+
 ## 0.24.1
 
 ### Added - Compact scouting control

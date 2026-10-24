@@ -640,6 +640,7 @@ class GuiUI:
         if self._start_minimized:
             log.info("gui_starting_minimized")
         else:
+            window._prepare_explicit_open()
             window.show()
 
         self._started_event.set()
@@ -2926,7 +2927,12 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._checkin_host.close()
             QtWidgets.QApplication.instance().quit()
 
+        def _prepare_explicit_open(self) -> None:
+            if self._compact_window_active():
+                self._set_window_size("Standard")
+
         def _on_show_requested(self) -> None:
+            self._prepare_explicit_open()
             self.showNormal()
             self.raise_()
             self.activateWindow()

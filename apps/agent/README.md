@@ -125,16 +125,19 @@ quitting the agent closes them all. Session can remain visible between games;
 its timer, record, latest-known MMR and rating region use your owned Session feed.
 Rating region is not verified active-server detection.
 
-The race-themed **Scouting** button on the compact opponent strip opens or closes the floating
-**Scouting** report without changing the Companion size or your saved pin choice.
+The race-themed button on the compact opponent strip expands **Standard** when
+scouting is unavailable, including between matches. During an eligible live game,
+it opens or closes the floating **Scouting** report without changing the Companion
+size or your saved pin choice. Opening the Agent from its shortcut or tray also
+opens Standard if you left the main window in Compact; pinned panels keep their size.
 It uses the same paired build cards as Detailed view, including unit icons,
 upgrade timings, Ghost reference buttons and 3/6/10-minute or full-build ranges.
 It follows the live opponent even while you browse another profile. Between
 matches, compact clears the opponent and waits for the next match.
 
-While StarCraft II has focus, only the compact **Scouting** button accepts clicks.
+While StarCraft II has focus, only the compact button's **Scouting** action accepts clicks.
 Other compact controls and floating panel areas pass clicks through to the game.
-Use Alt+Tab to another application to restore normal overlay interaction.
+Use Alt+Tab to another application to restore normal overlay interaction or expand.
 Right-click the strip to expand Companion, minimize, close or open the shared
 Agent menu. These window actions are kept off the compact strip itself.
 Compact uses a transparent background with text and one original control: a
@@ -181,7 +184,7 @@ admin examples. Star per-build references, filter the replay library, restore
 earlier reference versions, and compare completed replay timings against them.
 Choose **Compact**, **Standard**, **Detailed**, or **Full workspace** from
 the size picker. Compact shows opponent name, race, MMR, your W–L record against
-them, and your win percentage, with one race-themed Scouting button. No league field is
+them, and your win percentage, with one race-themed control. No league field is
 added. Standard keeps a compact opponent summary and switchable profile, scouting
 and tool pages. Detailed adds more tech steps and upgrades, with a portrait rail
 when the screen has enough room; Full workspace exposes full replay

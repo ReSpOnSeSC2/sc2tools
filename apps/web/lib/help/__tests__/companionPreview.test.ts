@@ -8,7 +8,7 @@ describe("Companion release documentation", () => {
       const article = getArticle(slug);
       expect(article, slug).toBeDefined();
       const text = article!.body.map(helpBlockText).join(" ");
-      expect(text, slug).toContain("0.24.1");
+      expect(text, slug).toContain(slug === "desktop-companion" ? "0.24.2" : "0.24.1");
       expect(text, slug).not.toContain("verification preview");
       expect(text, slug).not.toContain("not included in the current stable download");
     }

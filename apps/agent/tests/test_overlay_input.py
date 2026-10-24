@@ -166,6 +166,15 @@ try:
     assert source.isChecked() and control.isChecked()
     control.click()
     assert not panel.isVisible() and not source.isChecked()
+    source.setProperty("compactAction", "expand")
+    controller.refresh()
+    assert not control.isVisible() and window.property("gameClickThrough") is True
+    control.click()
+    assert not panel.isVisible() and not source.isChecked()
+    assert not control.isChecked()
+    source.setProperty("compactAction", "scout")
+    controller.refresh()
+    assert control.isVisible()
     source.setEnabled(False)
     controller.refresh()
     assert not control.isVisible() and window.property("gameClickThrough") is True

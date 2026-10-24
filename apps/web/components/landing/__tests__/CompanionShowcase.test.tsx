@@ -19,7 +19,7 @@ describe("desktop Companion landing showcase", () => {
     expect(section.textContent).toContain("Ladder, Customs, Teams, Practice and Review presets");
     expect(section.textContent).toContain("optional Ctrl+Shift+F10");
     expect(section.textContent).toContain("automatic check-ins and randomizer draws remain 1v1-only");
-    expect(section.textContent).toContain("Use Agent 0.24.1 or later");
+    expect(section.textContent).toContain("Use Agent 0.24.2 or later");
     expect(section.textContent).not.toContain("verification preview");
     expect(section.textContent).toContain("Choose how much you see");
     expect(section.textContent).toContain("transparent opponent text, race, MMR, your W–L and win percentage");
@@ -50,7 +50,7 @@ describe("desktop Companion landing showcase", () => {
     const { container } = render(<CompanionShowcase />);
     const availability = within(container).getByRole("note", { name: "Companion availability" });
     expect(availability.textContent).toContain("Update from the shared Agent menu");
-    expect(availability.querySelector("strong")?.textContent).toContain("0.24.1 or later");
+    expect(availability.querySelector("strong")?.textContent).toContain("0.24.2 or later");
     expect(container.textContent).toContain("Default preserves the current purple appearance");
     expect(container.textContent).toContain("Optional Protoss, Terran and Zerg borders");
     expect(container.textContent).toContain("independent of player and opponent race");
