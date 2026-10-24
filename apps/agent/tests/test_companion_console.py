@@ -133,12 +133,12 @@ def test_console_pages_and_controls_fit_narrow_workspace(console):
     shell.navigate("scouting")
     shell.set_breadcrumb(opponent_name="A long opponent name", game_title="A long map and replay description")
     app.processEvents()
-    for button in [shell.home_button, shell.back_button, shell.previous_game, shell.next_game,
-                   shell.previous_player, shell.next_player, *shell.destination_buttons.values()]:
+    for button in [shell.home_button, shell.back_button, shell.previous_game, shell.next_game, shell.browse_button]:
         point = button.mapTo(shell, button.rect().bottomRight())
         assert shell.rect().contains(point)
     assert shell.display_panel.width() > 300
-    assert shell.profile_panel.isVisible()
+    assert not shell.profile_panel.isVisible()
+    assert shell.browse_button.isVisible()
     assert shell.content_stack.currentWidget() is scouting
 
 
@@ -176,3 +176,107 @@ def test_existing_workspace_keeps_all_four_pages_mounted_and_legacy_navigation()
     assert workspace.tabBar().isHidden()
     shell.deleteLater()
     app.processEvents()
+
+
+def test_small_console_keeps_all_routes_profile_and_drafts_accessible_without_resetting_context(console):
+    shell, profile, scouting, notes, tools, library, app = console
+    shell.navigate("scouting", opponent_id="one", game_id="game-one")
+    original_profile_parent = profile.parentWidget()
+    shell.resize(520, 480)
+    app.processEvents()
+    assert not shell.profile_panel.isVisible()
+    assert shell.browse_button.isVisible()
+    for route in ("home", "opponents", "profile", "scouting", "builds", "randomizer", "ghost"):
+        assert route in shell.browse_actions
+        shell.browse_actions[route].trigger()
+        app.processEvents()
+        assert shell.current_route() == route
+        assert shell.context()["opponentId"] == "one" and shell.context()["gameId"] == "game-one"
+        if route == "profile":
+            assert shell.profile_panel.isVisible()
+            assert shell.profile_panel.parentWidget() is shell.profile_host
+    shell.resize(1024, 800)
+    app.processEvents()
+    assert shell.profile_panel.isVisible() and not shell.browse_button.isVisible()
+    assert shell.current_route() == "ghost"
+    assert notes.toPlainText() == "Unsaved scouting note"
+    assert profile.parentWidget() is original_profile_parent
+
+
+def test_brand_actions_wrap_instead_of_hiding_or_overflowing_small_windows(console):
+    from PySide6 import QtWidgets
+
+    shell, profile, scouting, notes, tools, library, app = console
+    controls = []
+    for title in ("Full workspace", "Read scouting report", "Assistance", "Agent"):
+        button = QtWidgets.QPushButton(title)
+        shell.brand_actions.addWidget(button)
+        controls.append(button)
+    window_controls = QtWidgets.QWidget()
+    window_controls.setFixedSize(86, 24)
+    shell.brand_actions.addWidget(window_controls)
+    controls.append(window_controls)
+    for width in (520, 480, 1024, 520):
+        shell.resize(width, 480)
+        app.processEvents()
+        assert shell.width() == width
+        for widget in controls:
+            assert widget.isVisible()
+            assert shell.brand_actions_widget.rect().contains(widget.geometry()), (width, widget.geometry(), shell.brand_actions_widget.rect())
+            assert shell.rect().contains(widget.mapTo(shell, widget.rect().bottomRight()))
+        if width < 800:
+            assert not shell.brand_edition.isVisible()
+            required_width = sum(max(widget.sizeHint().width(), widget.minimumWidth()) for widget in controls)
+            required_width += shell.brand_actions.spacing() * (len(controls) - 1)
+            if required_width > shell.brand_actions_widget.width():
+                assert len({widget.y() for widget in controls}) > 1
+
+
+def test_narrow_header_shows_truthful_selected_profile_summary_without_changing_navigation(console):
+    from PySide6 import QtCore
+
+    shell, profile, scouting, notes, tools, library, app = console
+    shell.navigate("scouting", opponent_id="one", game_id="game-one")
+    previous_context = shell.context()
+    shell.set_opponent_summary("Nightshade", "Zerg", 4268, 3, 2)
+    shell.resize(520, 480)
+    app.processEvents()
+    assert shell.opponent_summary.isVisible()
+    assert shell.opponent_summary_identity.full_text == "Nightshade · Zerg · MMR 4268"
+    assert shell.opponent_summary_record.full_text == "Your record 3W · 2L · 60%"
+    for label in (shell.opponent_summary_identity, shell.opponent_summary_record):
+        assert label.textFormat() == QtCore.Qt.PlainText
+        assert "Selected opponent profile" in label.toolTip()
+        assert label.fontMetrics().horizontalAdvance(label.text()) <= label.width()
+    assert shell.context() == previous_context
+    assert notes.toPlainText() == "Unsaved scouting note"
+    shell.set_opponent_summary("<b>" + "A very long opponent name " * 5, "unknown", None, None, 5)
+    app.processEvents()
+    assert "MMR —" in shell.opponent_summary_identity.full_text
+    assert shell.opponent_summary_record.full_text == "Your record — · —"
+    assert shell.opponent_summary_identity.text() != shell.opponent_summary_identity.full_text
+    shell.resize(1024, 800)
+    app.processEvents()
+    assert shell.opponent_summary.isHidden() and shell.profile_panel.isVisible()
+
+
+def test_window_controls_attach_to_far_right_top_row_without_losing_wrapped_actions(console):
+    from PySide6 import QtWidgets
+
+    shell, profile, scouting, notes, tools, library, app = console
+    controls = QtWidgets.QWidget()
+    controls.setFixedSize(86, 24)
+    action = QtWidgets.QPushButton("Assistance")
+    shell.brand_actions.addWidget(action)
+    shell.brand_actions.addWidget(controls)
+    shell.attach_window_controls(controls)
+    assert shell.brand_actions.count() == 1
+    shell.set_opponent_summary("Nightshade", "Zerg", 4268, 3, 2)
+    for width in (520, 480, 1024, 520):
+        shell.resize(width, 480)
+        app.processEvents()
+        assert controls.isVisible() and action.isVisible()
+        assert shell.brand_widget.rect().contains(controls.geometry())
+        assert controls.geometry().right() == shell.brand_widget.rect().right()
+        assert controls.y() < shell.brand_actions_widget.y() if width < 800 else controls.y() == 0
+        assert shell.opponent_summary.isVisible() is (width < 800)

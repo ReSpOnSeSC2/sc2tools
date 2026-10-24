@@ -85,7 +85,7 @@ from .replay_finder import (
     watched_replay_folders,
 )
 from .replay_pipeline import probe_analyzer
-from .state import AgentState, count_synced, load_state, save_state
+from .state import AgentState, COMPANION_SKINS, _STATE_SAVE_LOCK, count_synced, load_state, save_state
 from .sync_filter import SyncFilter
 from .ui import (
     ConsoleUI,
@@ -831,6 +831,9 @@ def _run_with_gui(
         window_geometry=state.window_geometry,
         window_information_layout=state.window_information_layout,
         on_window_information_layout=lambda layout: _remember_information_layout(cfg.state_dir, state, layout),
+        window_skin=state.companion_skin,
+        window_animations=state.companion_animations,
+        on_window_appearance=lambda skin, animations: _remember_window_appearance(cfg.state_dir, state, skin, animations),
         window_page=state.window_page,
         on_window_state=lambda geometry, page: _remember_window_state(
             cfg.state_dir, state, geometry, page,
@@ -1274,11 +1277,28 @@ def _handle_resync(
 
 
 def _start_desktop_history(cfg, state, ui):
+    from .companion import CompanionClient
     from .desktop_history import DesktopHistory
+
+    def session():
+        with _STATE_SAVE_LOCK:
+            return (state.user_id, state.device_token) if state.is_paired else (None, None)
+
+    def connection():
+        with _STATE_SAVE_LOCK:
+            return cfg.api_base, state.device_token if state.is_paired else None
+
+    def inventory():
+        with _STATE_SAVE_LOCK:
+            return {"uploaded": state.uploaded.copy(), "paths_by_id": state.path_by_game_id.copy()}
+
+    client = CompanionClient(connection)
     history = DesktopHistory(
         cfg.state_dir,
-        owner_provider=lambda: state.user_id if state.is_paired else None,
-        state_provider=lambda: {"uploaded": state.uploaded.copy(), "paths_by_id": state.path_by_game_id.copy()},
+        owner_provider=lambda: session()[0],
+        session_provider=session,
+        state_provider=inventory,
+        game_reader=lambda game_id: client.action({"action": "game_summary", "gameId": game_id}),
         on_snapshot=ui.on_recent_snapshot,
     )
     ui._recent_history = history
@@ -1590,6 +1610,19 @@ def _remember_information_layout(state_dir, state, layout):
     except OSError:
         state.window_information_layout = previous
         raise
+
+
+def _remember_window_appearance(state_dir, state, skin, animations):
+    if not isinstance(skin, str) or skin not in COMPANION_SKINS or type(animations) is not bool:
+        raise ValueError("Choose a supported Companion skin and an on/off animation setting.")
+    with _STATE_SAVE_LOCK:
+        previous = state.companion_skin, state.companion_animations
+        state.companion_skin, state.companion_animations = skin, animations
+        try:
+            save_state(state_dir, state)
+        except Exception:
+            state.companion_skin, state.companion_animations = previous
+            raise
 
 
 def _handle_save_settings(
@@ -2193,6 +2226,10 @@ def _configure_logging(cfg: AgentConfig) -> Path:
     )
     root = logging.getLogger()
     root.setLevel(_log_level_from_env())
+    obs_sdk = logging.getLogger("obsws_python")
+    obs_sdk.handlers.clear()
+    obs_sdk.addHandler(logging.NullHandler())
+    obs_sdk.propagate = False
     for handler in list(root.handlers):
         root.removeHandler(handler)
     console = logging.StreamHandler()

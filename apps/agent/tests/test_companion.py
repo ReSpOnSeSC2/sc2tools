@@ -84,6 +84,68 @@ def test_directory_and_notes_use_owned_endpoints_and_bounded_inputs():
     assert len(calls) == before
 
 
+def test_game_build_order_preserves_stored_events_and_encodes_owned_replay_path():
+    calls = []
+    payload = {
+        "ok": True, "game_id": "replay/a?b#c", "my_status": "ok", "opp_status": "ok",
+        "events": [
+            {"name": "Barracks", "category": "building", "time": 60, "is_building": True},
+            {"name": "Marine", "category": "unit", "time": 90, "complete_time": 108},
+            {"name": "Marine", "category": "unit", "time": 840, "complete_time": 858},
+        ],
+        "opp_events": [{"name": "Spire", "category": "building", "time": 720}],
+    }
+    client = CompanionClient(lambda: ("https://api.example.test", "paired-device-token"),
+        transport=lambda *args, **kwargs: calls.append((args, kwargs)) or response(payload))
+    result = client.action({"action": "game_build_order", "gameId": "replay/a?b#c",
+                            "userId": "someone-else"})
+    assert result is payload
+    assert calls[0][0] == ("GET", "https://api.example.test/v1/games/replay%2Fa%3Fb%23c/build-order")
+    assert calls[0][1] == {
+        "headers": {"Authorization": "Bearer paired-device-token", "Accept": "application/json"},
+        "params": None, "json": None, "timeout": (3.05, 8), "allow_redirects": False,
+    }
+
+
+@pytest.mark.parametrize("game_id", [None, True, 12, "", " ", " replay", "replay ", ".", "..",
+                                         "replay\nother", "replay\x00other", "x" * 201, "\ud800"])
+def test_game_build_order_rejects_invalid_replays_before_network(game_id):
+    client = CompanionClient(lambda: ("https://api.example.test", "paired-device-token"),
+        transport=lambda *args, **kwargs: pytest.fail("Invalid replay must not make a request"))
+    with pytest.raises(CompanionError, match="valid replay"):
+        client.action({"action": "game_build_order", "gameId": game_id})
+
+
+def test_game_build_order_requires_pairing_and_uses_the_current_device_session():
+    connection = ["https://api.example.test", None]
+    calls = []
+    client = CompanionClient(lambda: connection,
+        transport=lambda *args, **kwargs: calls.append((args, kwargs)) or response({"game_id": "replay"}))
+    with pytest.raises(CompanionError, match="Pair this agent"):
+        client.action({"action": "game_build_order", "gameId": "replay"})
+    assert not calls
+    connection[1] = "newly-paired-device-token"
+    client.action({"action": "game_build_order", "gameId": "replay"})
+    assert calls[0][1]["headers"]["Authorization"] == "Bearer newly-paired-device-token"
+
+
+@pytest.mark.parametrize("status", [401, 403, 404])
+def test_game_build_order_denials_are_not_replaced_with_scouting_data(status):
+    client = CompanionClient(lambda: ("https://api.example.test", "private-device-token"),
+        transport=lambda *args, **kwargs: response({"secret": "private-server-data"}, status))
+    with pytest.raises(CompanionError) as failure:
+        client.action({"action": "game_build_order", "gameId": "unowned-or-missing"})
+    assert "private" not in str(failure.value)
+
+
+def test_game_build_order_keeps_empty_extraction_status_without_fabricating_events():
+    payload = {"ok": True, "game_id": "replay", "my_status": "empty",
+               "opp_status": "not_extracted", "events": [], "opp_events": []}
+    client = CompanionClient(lambda: ("https://api.example.test", "token"),
+        transport=lambda *args, **kwargs: response(payload))
+    assert client.action({"action": "game_build_order", "gameId": "replay"}) == payload
+
+
 def test_overlay_preferences_persist_without_repairing_or_network(tmp_path):
     state = AgentState(device_token="same-pairing", uploaded={"replay": "2026-10-23"})
 

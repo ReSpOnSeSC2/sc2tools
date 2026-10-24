@@ -1,7 +1,7 @@
 """Widgets shared by the build check-in cards.
 
 * :func:`card_stylesheet` — the cards' self-contained dark style, built
-  from the agent palette in ``gui.py``. It is set on each card window,
+  from the shared Companion theme. It is set on each card window,
   so it wins over the application style sheet inside the card.
 * :class:`BuildRow` — one pickable build, painted by hand: the name is
   drawn as plain text (never rich text), elided to fit, with the record
@@ -22,19 +22,25 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from PySide6 import QtCore, QtGui, QtWidgets
 
-from .gui import (
-    _ACCENT,
-    _ACCENT_CYAN,
-    _BORDER,
-    _BORDER_STRONG,
-    _DANGER,
-    _ELEVATED,
-    _SUBTLE,
-    _SUCCESS,
-    _TEXT,
-    _TEXT_DIM,
-    _TEXT_MUTED,
-    _WARNING,
+from .theme import (
+    ACCENT as _ACCENT,
+    ACCENT_CYAN as _ACCENT_CYAN,
+    ACCENT_HOVER as _ACCENT_HOVER,
+    BORDER as _BORDER,
+    BORDER_STRONG as _BORDER_STRONG,
+    BUTTON as _BUTTON,
+    BUTTON_CHECKED as _BUTTON_CHECKED,
+    BUTTON_HOVER as _BUTTON_HOVER,
+    DANGER as _DANGER,
+    ELEVATED as _ELEVATED,
+    FOCUS as _FOCUS,
+    SUBTLE as _SUBTLE,
+    SUCCESS as _SUCCESS,
+    SURFACE as _SURFACE,
+    TEXT as _TEXT,
+    TEXT_DIM as _TEXT_DIM,
+    TEXT_MUTED as _TEXT_MUTED,
+    WARNING as _WARNING,
 )
 
 ROW_HEIGHT = 30
@@ -45,7 +51,7 @@ MORE_VISIBLE_ROWS = 6
 CHIP_TONES: Dict[str, Tuple[str, str]] = {
     # tone → (background, foreground)
     "rolled": ("rgba(230, 180, 80, 0.18)", _WARNING),
-    "usual": ("rgba(124, 140, 255, 0.18)", _ACCENT),
+    "usual": (_SUBTLE, _ACCENT),
     "reason": ("rgba(62, 192, 199, 0.18)", _ACCENT_CYAN),
     "suggested": ("rgba(62, 192, 199, 0.12)", _ACCENT_CYAN),
 }
@@ -64,7 +70,7 @@ NO_MATCH = "No builds match your search."
 
 
 def card_stylesheet() -> str:
-    """The cards' style sheet (agent palette, compact sizes)."""
+    """The cards' style sheet (Companion palette, compact sizes)."""
     return f"""
 QWidget {{
     background-color: transparent;
@@ -73,7 +79,7 @@ QWidget {{
     font-size: 12px;
 }}
 QFrame#card {{
-    background-color: rgba(17, 20, 27, 0.95);
+    background-color: {_SURFACE};
     border: 1px solid {_BORDER_STRONG};
     border-radius: 14px;
 }}
@@ -129,17 +135,17 @@ QLabel#checkinChanged {{ color: {_ACCENT_CYAN}; font-size: 11px; font-weight: 60
 QLabel#checkinLocked[saving="true"] {{ color: {_TEXT_MUTED}; }}
 QLabel#checkinPrompt {{ font-size: 13px; }}
 QFrame#checkinStrip {{
-    background-color: rgba(124, 140, 255, 0.10);
-    border: 1px solid rgba(124, 140, 255, 0.35);
+    background-color: {_SUBTLE};
+    border: 1px solid {_BORDER_STRONG};
     border-radius: 8px;
 }}
 QFrame#checkinIntroBox {{
-    background-color: rgba(62, 192, 199, 0.08);
-    border: 1px solid rgba(62, 192, 199, 0.30);
+    background-color: {_ELEVATED};
+    border: 1px solid {_BORDER_STRONG};
     border-radius: 8px;
 }}
 QPushButton {{
-    background-color: {_ELEVATED};
+    background-color: {_BUTTON};
     color: {_TEXT};
     border: 1px solid {_BORDER_STRONG};
     border-radius: 7px;
@@ -148,22 +154,22 @@ QPushButton {{
     font-weight: 500;
 }}
 QPushButton:hover {{
-    background-color: {_SUBTLE};
-    border-color: {_ACCENT};
+    background-color: {_BUTTON_HOVER};
+    border-color: {_ACCENT_HOVER};
 }}
 QPushButton:pressed {{ background-color: {_BORDER_STRONG}; }}
-QPushButton:focus {{ border-color: {_ACCENT}; }}
+QPushButton:focus {{ border-color: {_FOCUS}; }}
 QPushButton#checkinPrimary {{
-    background-color: {_ACCENT_CYAN};
-    color: #0b0d12;
-    border-color: {_ACCENT_CYAN};
+    background-color: {_BUTTON_CHECKED};
+    color: {_TEXT};
+    border-color: {_ACCENT};
     font-weight: 600;
 }}
 QPushButton#checkinPrimary:hover {{
-    background-color: #72d8d8;
-    border-color: #72d8d8;
+    background-color: {_BUTTON_HOVER};
+    border-color: {_ACCENT_HOVER};
 }}
-QPushButton#checkinPrimary:focus {{ border-color: #ffffff; }}
+QPushButton#checkinPrimary:focus {{ border-color: {_FOCUS}; }}
 QPushButton#checkinQuiet {{
     background-color: transparent;
     border-color: transparent;
@@ -197,9 +203,9 @@ QPushButton#checkinLink:focus, QPushButton#checkinMoreToggle:focus {{
 }}
 QPushButton#checkinMoreToggle {{ color: {_TEXT_MUTED}; font-weight: 600; }}
 QPushButton:disabled, QPushButton#checkinPrimary:disabled {{
-    background-color: #141924;
-    color: #606d80;
-    border-color: #202938;
+    background-color: {_ELEVATED};
+    color: {_TEXT_DIM};
+    border-color: {_BORDER};
 }}
 QPushButton#checkinLink:disabled, QPushButton#checkinQuiet:disabled {{
     background-color: transparent;
@@ -213,7 +219,7 @@ QLineEdit#checkinSearch, QPlainTextEdit#checkinNotes {{
     border-radius: 7px;
     padding: 4px 8px;
     selection-background-color: {_ACCENT};
-    selection-color: #0b0d12;
+    selection-color: {_TEXT};
 }}
 QLineEdit#checkinSearch:focus, QPlainTextEdit#checkinNotes:focus {{
     border-color: {_ACCENT_CYAN};

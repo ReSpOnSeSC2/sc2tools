@@ -3,9 +3,9 @@ from __future__ import annotations
 
 
 WINDOW_SIZE_PRESETS = (
-    ("Compact", "compact", (360, 240)),
-    ("Standard", "standard", (1200, 900)),
-    ("Detailed", "detailed", (1440, 1080)),
+    ("Compact", "compact", (340, 78)),
+    ("Standard", "standard", (520, 480)),
+    ("Detailed", "detailed", (1024, 800)),
     ("Full workspace", "full", None),
 )
 INFORMATION_LAYOUTS = frozenset(preset[1] for preset in WINDOW_SIZE_PRESETS)
@@ -13,6 +13,10 @@ INFORMATION_LAYOUTS = frozenset(preset[1] for preset in WINDOW_SIZE_PRESETS)
 
 def normalize_information_layout(value: object) -> str:
     return value if isinstance(value, str) and value in INFORMATION_LAYOUTS else "standard"
+
+
+def minimum_window_size(layout: str) -> tuple[int, int]:
+    return (280, 68) if layout == "compact" else (480, 360)
 
 
 def fit_window_preset(
@@ -26,7 +30,7 @@ def fit_window_preset(
     requested = next((size for title, _layout, size in WINDOW_SIZE_PRESETS if title == name), None)
     if requested is None:
         raise ValueError("Unknown normal-window preset")
-    minimum = minimum or ((300, 210) if name == "Compact" else (820, 540))
+    minimum = minimum or minimum_window_size(next(level for title, level, _size in WINDOW_SIZE_PRESETS if title == name))
     origin_x, origin_y, available_width, available_height = available
     frame_width, frame_height = (max(0, dimension) for dimension in frame)
     maximum_width = max(1, available_width - frame_width)

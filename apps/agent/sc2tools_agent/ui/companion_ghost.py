@@ -7,7 +7,34 @@ import math
 import re
 import threading
 
-from ..companion_ghost import GhostSession, MATCHUPS, concrete_race, normalize_ghost_state, normalize_target, supports_ghost_game
+from ..companion_ghost import GhostError, GhostSession, TeamGhostSession, MATCHUPS, concrete_race, normalize_ghost_state, normalize_target, supports_ghost_game
+from . import theme
+
+
+_STYLE = f"""
+QWidget#ghostDesk, QWidget#ghostPanel {{ background: {theme.SURFACE}; color: {theme.TEXT}; }}
+QWidget#ghostDesk QLabel, QWidget#ghostDesk QCheckBox,
+QWidget#ghostPanel QLabel {{ color: {theme.TEXT}; background: transparent; }}
+QWidget#ghostDesk QLineEdit, QWidget#ghostDesk QComboBox,
+QWidget#ghostDesk QTreeWidget, QWidget#ghostPanel QTreeWidget {{
+    background: {theme.ELEVATED}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG};
+    border-radius: 5px; padding: 5px; selection-background-color: {theme.BUTTON_CHECKED};
+}}
+QWidget#ghostDesk QPushButton {{
+    background: {theme.BUTTON}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG};
+    border-radius: 5px; padding: 7px 10px;
+}}
+QWidget#ghostDesk QPushButton:hover {{ background: {theme.BUTTON_HOVER}; border-color: {theme.ACCENT_HOVER}; }}
+QWidget#ghostDesk QPushButton:focus, QWidget#ghostDesk QLineEdit:focus,
+QWidget#ghostDesk QComboBox:focus {{ border-color: {theme.FOCUS}; }}
+QWidget#ghostDesk QPushButton:disabled {{ color: {theme.TEXT_DIM}; background: {theme.ELEVATED}; border-color: {theme.BORDER}; }}
+QWidget#ghostDesk QHeaderView::section, QWidget#ghostPanel QHeaderView::section {{
+    background: {theme.SUBTLE}; color: {theme.TEXT_MUTED}; padding: 6px;
+}}
+QWidget#ghostDesk QTabWidget::pane {{ border: 1px solid {theme.BORDER_STRONG}; }}
+QWidget#ghostDesk QTabBar::tab {{ color: {theme.TEXT_MUTED}; background: {theme.SURFACE}; padding: 8px 12px; }}
+QWidget#ghostDesk QTabBar::tab:selected {{ color: {theme.TEXT}; background: {theme.BUTTON_CHECKED}; }}
+"""
 
 
 def _clock(value):
@@ -64,7 +91,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
 
     def source_page(content):
         content.setObjectName("ghostSource")
-        content.setStyleSheet("QWidget#ghostSource { background: #101827; }")
+        content.setStyleSheet(f"QWidget#ghostSource {{ background: {theme.SURFACE}; }}")
         scroll = QtWidgets.QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
@@ -77,21 +104,51 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
 
     class GhostPanel(QtWidgets.QWidget):
         def __init__(self, owner):
-            super().__init__(None, QtCore.Qt.Tool | QtCore.Qt.WindowStaysOnTopHint)
+            super().__init__(None, QtCore.Qt.Tool | QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.FramelessWindowHint)
             self.owner = owner
+            self.setObjectName("ghostPanel")
             self.setWindowTitle("SC2TOOLS · Build Order Ghost")
             self.setFont(QtGui.QFont("Segoe UI", 10))
             self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
             self.setAttribute(QtCore.Qt.WA_QuitOnClose, False)
-            self.setStyleSheet("QWidget { background: #101827; color: #e8edf8; } QTreeWidget { background: #192338; } QHeaderView::section { background: #22334a; color: #8be5dc; padding: 6px; }")
+            self.setStyleSheet(_STYLE)
             layout = QtWidgets.QVBoxLayout(self)
+            layout.setContentsMargins(32, 30, 32, 28)
             self.title = label("Build Order Ghost")
+            self.header = QtWidgets.QFrame(self)
+            header_layout = QtWidgets.QHBoxLayout(self.header)
+            header_layout.setContentsMargins(0, 0, 0, 0)
+            header_layout.addWidget(self.title, 1)
+            from .window_chrome import build_window_controls, install_window_interactions
+            self.window_controls = build_window_controls(self.header, window=self, QtCore=QtCore, QtWidgets=QtWidgets)
+            self.window_controls.maximize_button.hide()
+            header_layout.addWidget(self.window_controls)
             self.subtitle = label("")
             self.steps = tree()
             self.note = label("Target schedule only · elapsed time does not confirm that you built a step.")
-            for widget in (self.title, self.subtitle, self.steps, self.note):
+            for widget in (self.header, self.subtitle, self.steps, self.note):
                 layout.addWidget(widget)
+            self.setMinimumSize(420, 275)
             self.resize(510, 315)
+            from .race_visuals import create_race_effects
+            self._race_effects = create_race_effects(self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+            self._window_interactions = install_window_interactions(
+                self, drag_widgets=[self.header], QtCore=QtCore, QtWidgets=QtWidgets, can_maximize=lambda: False,
+            )
+
+        def set_appearance(self, skin, animations):
+            from .race_visuals import css_for_skin, normalize_skin
+            skin = normalize_skin(skin)
+            override = css_for_skin(skin)
+            for widget in (self, *self.findChildren(QtWidgets.QWidget)):
+                base_style = widget.property("pinnedRaceBaseStyle")
+                if base_style is None and widget.styleSheet():
+                    base_style = widget.styleSheet()
+                    widget.setProperty("pinnedRaceBaseStyle", base_style)
+                if base_style is not None:
+                    widget.setStyleSheet(base_style + override)
+            self._race_effects.apply_skin(skin)
+            self._race_effects.set_motion_enabled(animations)
 
         def closeEvent(self, event):
             if not self.owner._closed:
@@ -114,7 +171,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                     status = "Earlier target"
                 row = add_step(self.steps, step, status)
                 if index == current:
-                    row.setForeground(0, QtGui.QBrush(QtGui.QColor("#80e3d4")))
+                    row.setForeground(0, QtGui.QBrush(QtGui.QColor(theme.ACCENT_CYAN)))
             self.note.setText("Target timeline finished · completion is not verified." if view["complete"] else
                               "Target schedule only · elapsed time does not confirm a built step.")
 
@@ -129,9 +186,13 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._assistance_reason = "Hidden by the master assistance switch"
             self._state = normalize_ghost_state(None)
             self._session = GhostSession()
+            self._team_session = TeamGhostSession()
+            self._team_context = None
+            self._team_game = False
             self._busy = set()
             self._revision = 0
             self._desired_enabled = None
+            self._panel_restore_requested = False
             self._pending_saves = []
             self._games = []
             self._examples = []
@@ -144,6 +205,8 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._cursor = None
             self._preview = None
             self._preview_matchup = None
+            self._preview_race = None
+            self._preview_manual = False
             self._pending_local = None
             self._player_targets = []
             self._signals = Signals(self)
@@ -151,7 +214,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.panel = GhostPanel(self)
             self.setObjectName("ghostDesk")
             self.setFont(QtGui.QFont("Segoe UI", 10))
-            self.setStyleSheet("QWidget#ghostDesk { background: #101827; color: #e8edf8; } QWidget#ghostDesk QLabel, QWidget#ghostDesk QCheckBox { color: #e8edf8; background: transparent; } QWidget#ghostDesk QLineEdit, QWidget#ghostDesk QComboBox, QWidget#ghostDesk QTreeWidget { background: #192338; color: #e8edf8; border: 1px solid #34465e; border-radius: 5px; padding: 5px; } QWidget#ghostDesk QPushButton { background: #273b56; color: #e8edf8; border: 1px solid #47678a; border-radius: 5px; padding: 7px 10px; } QWidget#ghostDesk QPushButton:disabled { color: #8390a3; background: #192338; border-color: #34465e; } QWidget#ghostDesk QHeaderView::section { background: #22334a; color: #8be5dc; padding: 6px; } QWidget#ghostDesk QTabWidget::pane { border: 1px solid #34465e; } QWidget#ghostDesk QTabBar::tab { color: #bdcde0; background: #1b2b40; padding: 8px 12px; } QWidget#ghostDesk QTabBar::tab:selected { color: #8be5dc; background: #293d56; }")
+            self.setStyleSheet(_STYLE)
             self.setAcceptDrops(True)
             outer = QtWidgets.QVBoxLayout(self)
             outer.setContentsMargins(0, 0, 0, 0)
@@ -161,19 +224,19 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
             content = QtWidgets.QWidget()
             content.setObjectName("ghostContent")
-            content.setStyleSheet("QWidget#ghostContent { background: #101827; }")
+            content.setStyleSheet(f"QWidget#ghostContent {{ background: {theme.SURFACE}; }}")
             layout = QtWidgets.QVBoxLayout(content)
             scroll.setWidget(content)
             outer.addWidget(scroll)
             self.scroll = scroll
             layout.addWidget(label("BUILD ORDER GHOST"))
-            layout.addWidget(label("Choose one of your replay build orders for each matchup. Ghost follows SC2's game clock in its own always-on-top panel."))
+            layout.addWidget(label("Assign replay builds for 1v1 matchups, or explicitly follow a same-race target in your current confirmed team game. Ghost follows SC2's game clock in its own always-on-top panel."))
             self.enabled_toggle = QtWidgets.QCheckBox("Show Build Order Ghost during matching games")
             self.enabled_toggle.toggled.connect(self._set_enabled)
             layout.addWidget(self.enabled_toggle)
             self.status = label("Loading saved Ghost settings…")
             layout.addWidget(self.status)
-            self.live_status = label("1v1 only · targets follow recorded replay timings")
+            self.live_status = label("1v1 automatic · teams manual · targets follow recorded replay timings")
             layout.addWidget(self.live_status)
             slots = QtWidgets.QHBoxLayout()
             self.matchup = QtWidgets.QComboBox()
@@ -189,7 +252,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             local = QtWidgets.QWidget()
             local_layout = QtWidgets.QVBoxLayout(local)
             local_layout.setAlignment(QtCore.Qt.AlignTop)
-            local_layout.addWidget(label("Open any .SC2Replay from this PC, or drop a replay onto Ghost. Both players' available build orders can become your target."))
+            local_layout.addWidget(label("Open any .SC2Replay from this PC, or drop a replay onto Ghost. Choose any available human player's build. Team replay targets are manual-only and never become a 1v1 matchup."))
             self.local_button = QtWidgets.QPushButton("Choose local .SC2Replay…")
             self.local_button.clicked.connect(self._choose_local)
             local_layout.addWidget(self.local_button)
@@ -307,6 +370,16 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             name_row.addWidget(self.target_name)
             name_row.addWidget(self.arm_button)
             layout.addLayout(name_row)
+            self.team_arm_button = QtWidgets.QPushButton("Use this target in current team game")
+            self.team_arm_button.setAccessibleName("Use this target in current team game")
+            self.team_arm_button.setToolTip("Manual for this game, account, confirmed own player and selected enemy only. The target race must match your own race. Turning assistance off clears this temporary choice.")
+            self.team_arm_button.clicked.connect(self._arm_team)
+            self.team_arm_button.setEnabled(False)
+            layout.addWidget(self.team_arm_button)
+            self.team_target_status = label("Confirm your own player and enemies before using a manual team target.")
+            layout.addWidget(self.team_target_status)
+            self.team_arm_button.hide()
+            self.team_target_status.hide()
             self.players = QtWidgets.QTabWidget()
             self.players.currentChanged.connect(self._player_changed)
             self.preview_steps = tree()
@@ -318,7 +391,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.history_toggle.setCheckable(True)
             self.history_toggle.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
             self.history_toggle.setArrowType(QtCore.Qt.RightArrow)
-            self.history_toggle.setStyleSheet("QToolButton { background: #22334a; color: #c4d7ec; border: 1px solid #34465e; border-radius: 4px; padding: 6px 10px; }")
+            self.history_toggle.setStyleSheet(f"QToolButton {{ background: {theme.BUTTON}; color: {theme.TEXT_MUTED}; border: 1px solid {theme.BORDER_STRONG}; border-radius: 4px; padding: 6px 10px; }} QToolButton:hover {{ background: {theme.BUTTON_HOVER}; color: {theme.TEXT}; }} QToolButton:focus {{ border-color: {theme.FOCUS}; }}")
             self.history_toggle.toggled.connect(self._toggle_history)
             layout.addWidget(self.history_toggle)
             history_group = QtWidgets.QGroupBox()
@@ -502,6 +575,9 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self._call("save", self._pending_saves.pop(0))
 
         def _set_enabled(self, enabled):
+            self._panel_restore_requested = bool(enabled)
+            if not enabled:
+                self._team_session.clear_target()
             self._desired_enabled = bool(enabled)
             self._state["enabled"] = bool(enabled)
             self.enabled_toggle.blockSignals(True)
@@ -793,7 +869,10 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
         def _clear_preview(self):
             self._preview = None
             self._preview_matchup = None
+            self._preview_race = None
+            self._preview_manual = False
             self.arm_button.setEnabled(False)
+            self.team_arm_button.setEnabled(False)
             self._player_targets = []
             self.players.blockSignals(True)
             while self.players.count():
@@ -819,13 +898,16 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             if not isinstance(candidates, list):
                 candidates = [{"name": "Replay player", "target": result.get("target"), "matchup": result.get("matchup")}]
             choices = []
-            for candidate in candidates[:8]:
+            for candidate in candidates[:16]:
                 if not isinstance(candidate, dict):
                     continue
                 target = normalize_target(candidate.get("target"))
                 matchup = candidate.get("matchup")
-                if target and matchup in MATCHUPS:
+                race = concrete_race(candidate.get("race")) or (matchup[0] if matchup in MATCHUPS else None)
+                manual = candidate.get("manualOnly") is True
+                if target and race and (matchup in MATCHUPS or manual):
                     choices.append({"name": str(candidate.get("name") or "Replay player")[:80], "target": target, "matchup": matchup,
+                                    "race": race, "manualOnly": manual,
                                     "side": candidate.get("id") if candidate.get("id") in ("you", "opponent") else None})
             self._clear_preview()
             if not choices:
@@ -841,10 +923,10 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                 preview.setMinimumHeight(220)
                 for step in choice["target"]["steps"]:
                     add_step(preview, step, "Target " + step["timing"])
-                self.players.addTab(preview, choice["name"] + " · " + choice["matchup"])
+                self.players.addTab(preview, choice["name"] + " · " + (choice["matchup"] or choice["race"] + " · team replay"))
             self.players.blockSignals(False)
             self._player_changed(0)
-            self.notice.setText("Choose the player tab whose build you want to follow, then assign its exact matchup.")
+            self.notice.setText("Choose a human player's build. A 1v1 source can be assigned to its exact matchup; a team source can only be explicitly used in your current confirmed same-race team game.")
 
         def _player_changed(self, index):
             if not 0 <= index < len(self._player_targets):
@@ -852,13 +934,16 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             choice = self._player_targets[index]
             self._preview = choice["target"]
             self._preview_matchup = choice["matchup"]
+            self._preview_race = choice["race"]
+            self._preview_manual = choice["manualOnly"]
             if self.sources.currentIndex() == 1 and choice.get("side"):
                 self.reference_side.setCurrentIndex(self.reference_side.findData(choice["side"]))
             self.preview_steps = self.players.widget(index)
             self.target_name.setText(self._preview["name"])
-            self.preview_label.setText(choice["name"] + " · " + self._preview_matchup + " · " + str(len(self._preview["steps"])) + " timed steps")
-            self.arm_button.setText("Use for " + self._preview_matchup)
-            self.arm_button.setEnabled(True)
+            self.preview_label.setText(choice["name"] + " · " + (self._preview_matchup or self._preview_race + " · team replay · manual only") + " · " + str(len(self._preview["steps"])) + " timed steps")
+            self.arm_button.setText("Use for " + self._preview_matchup if self._preview_matchup else "Team replay · manual only")
+            self.arm_button.setEnabled(self._preview_matchup in MATCHUPS and not self._preview_manual)
+            self._render()
 
         def _choose_local(self):
             initial = self._replay_folders[0] if self._replay_folders else str(Path.home() / "Documents" / "StarCraft II")
@@ -905,7 +990,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self._call("target", {"action": "ghost_target", "gameId": game_id})
 
         def _arm(self):
-            if self._preview and self._preview_matchup in MATCHUPS:
+            if self._preview and self._preview_matchup in MATCHUPS and not self._preview_manual:
                 name = self.target_name.text().strip()
                 if not name:
                     self.notice.setText("Give this target a name first.")
@@ -914,6 +999,24 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self.matchup.setCurrentText(self._preview_matchup)
                 self._save({"matchup": self._preview_matchup, "target": target})
                 self.notice.setText("Saving this replay target for " + self._preview_matchup + ".")
+
+        def _arm_team(self):
+            if not self._assistance_enabled or not self._state["enabled"]:
+                self.notice.setText("Turn on Ghost and in-game assistance before using this temporary team target.")
+                return
+            name = self.target_name.text().strip()
+            if not self._preview or not name:
+                self.notice.setText("Preview a player's replay build and give the target a name first.")
+                return
+            try:
+                self._team_session.arm({**self._preview, "name": name}, self._preview_race)
+            except GhostError as error:
+                self.notice.setText(str(error))
+                self._render()
+                return
+            self._panel_restore_requested = True
+            self.notice.setText("Manual team target is active for this game only. Changing player, enemy or game, or turning assistance off, clears it. No 1v1 assignment is changed.")
+            self._render()
 
         def refresh(self):
             if self._closed:
@@ -938,10 +1041,24 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
 
         def update_snapshot(self, snapshot):
             self._session.update_snapshot(snapshot)
+            self._team_session.update_snapshot(snapshot)
+            envelope = snapshot.get("liveGame") if isinstance(snapshot, dict) else None
+            players = envelope.get("players") if isinstance(envelope, dict) else None
+            self._team_game = bool(isinstance(envelope, dict) and
+                (isinstance(players, list) and len(players) > 2 or not supports_ghost_game(envelope)))
+            self._render()
+
+        def set_team_context(self, context):
+            self._team_context = context if isinstance(context, dict) else None
+            self._team_session.update_context(self._team_context)
             self._render()
 
         def set_assistance_enabled(self, enabled, reason=None):
+            if enabled and not self._assistance_enabled:
+                self._panel_restore_requested = True
             self._assistance_enabled = bool(enabled)
+            if not enabled:
+                self._team_session.clear_target()
             self._assistance_reason = reason[:180] if isinstance(reason, str) and reason else "Hidden by the master assistance switch"
             self._render()
 
@@ -955,7 +1072,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.examples_matchup_filter.setVisible(full)
 
         def overview_summary(self, limit=3):
-            view, status = self._session.view(self._state)
+            view, status = self._current_view()
             if not self._state["enabled"]:
                 return "Ghost is off"
             if not self._assistance_enabled:
@@ -965,22 +1082,43 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             steps = view["target"]["steps"][view["index"]:view["index"] + max(1, min(3, limit))]
             return view["target"]["name"] + "\n" + "\n".join(_clock(step["t"]) + " · " + _display(step["name"]) + " · " + step["timing"] for step in steps)
 
+        def _current_view(self):
+            if self._team_game or self._team_context is not None:
+                return self._team_session.view()
+            return self._session.view(self._state)
+
         def _render(self):
             if self._closed:
                 return
-            view, status = self._session.view(self._state)
+            if not self._state["enabled"] or not self._assistance_enabled:
+                self._team_session.clear_target()
+            view, status = self._current_view()
+            manual = self._team_game or self._team_context is not None or self._preview_manual
+            self.team_arm_button.setVisible(manual)
+            self.team_target_status.setVisible(manual)
+            can_arm = bool(self._preview and self._assistance_enabled and self._state["enabled"]
+                           and self._team_session.can_arm(self._preview_race))
+            self.team_arm_button.setEnabled(can_arm)
+            self.team_target_status.setText(status if not can_arm else "Same-race target ready. Use it explicitly for this confirmed team game; it is not saved to a 1v1 matchup.")
             self.status.setText(status if self._state["enabled"] and self._assistance_enabled else
                                 "Ghost is off · Turn it on above to follow an assigned replay target." if not self._state["enabled"] else self._assistance_reason + " · Targets stay saved.")
-            self.live_status.setText(f"{len(self._state['slots'])} of 9 matchups assigned · 1v1 only · "
+            self.live_status.setText(f"{len(self._state['slots'])} of 9 matchups assigned · 1v1 automatic / teams manual · "
                                     + (f"Live {view['matchup']} · SC2 clock {_clock(view['clock'])}" if view else status))
             visible = bool(self._state["enabled"] and self._assistance_enabled and view)
             if visible:
                 self.panel.paint_view(view)
-            self.panel.setVisible(visible)
+                if self._panel_restore_requested:
+                    self.panel.showNormal()
+                    self._panel_restore_requested = False
+                elif not self.panel.isVisible():
+                    self.panel.show()
+            else:
+                self.panel.hide()
 
         def shutdown(self):
             self._closed = True
             self.timer.stop()
+            self._team_session.clear_target()
             self.panel.close()
 
     return GhostPage()

@@ -37,7 +37,7 @@ def build_scouting_report(context):
         parts.append("Race: " + race + ".")
     mmr = context.get("mmr")
     if type(mmr) in {int, float} and math.isfinite(mmr) and 0 < mmr <= 100000:
-        parts.append(f"MMR: {round(mmr)}.")
+        parts.append(f"Historical one versus one MMR: {round(mmr)}. This is not a team rating." if context.get("teamHybrid") else f"MMR: {round(mmr)}.")
     verified = context.get("opponentIdentityMatched") is not False
     record = context.get("headToHead") if verified else None
     if isinstance(record, dict):

@@ -17,7 +17,7 @@ def default_modes():
     enabled = {key: True for key, _label in FEATURES}
     disabled = {key: False for key, _label in FEATURES}
     return {"version": 1, "active": "ladder", "hotkeyEnabled": False, "profiles": {
-        "ladder": dict(enabled), "customs": dict(enabled), "teams": dict(disabled),
+        "ladder": dict(enabled), "customs": dict(enabled), "teams": {**disabled, "opponentOverlay": True, "scoutingOverlay": True, "scoutingReadAloud": True, "ghost": True},
         "practice": {**disabled, "preGameSelector": True, "postGameSelector": True, "ghost": True},
         "review": dict(disabled),
     }}
@@ -148,7 +148,7 @@ def build_companion_modes(parent, *, QtCore, QtWidgets):
             active = self._state["active"]
             allowed = [caption for feature, caption in FEATURES if self._state["profiles"][active][feature]]
             if active == "teams":
-                return "Teams preset · team-game guidance is unsupported. Scouting and Ghost wait for verified human 1v1 data."
+                return "Teams Hybrid · confirm yourself and enemy membership for live roster scouting. Historical MMR is not team MMR. Ghost needs an explicit target for this game; automatic 1v1 check-ins and randomizer stay off."
             if not allowed:
                 return dict(MODES)[active] + " preset · game assistance hidden; account switches and pin choices stay saved."
             if len(allowed) == len(FEATURES):

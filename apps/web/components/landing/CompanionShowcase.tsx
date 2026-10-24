@@ -6,14 +6,26 @@ const PANELS = [
   {
     image: "/landing/companion-selectors.png",
     alt: "Native Companion build selectors with current matchup and independent check-in controls, using sample data",
-    title: "Choose a plan. Or let your pool choose.",
-    text: "Pick builds before and after a game, correct your opponent's build, or draw from your shared randomizer pool. Each match keeps one saved pick.",
+    title: "Choose your opening before the game.",
+    text: "Pick your plan in the native 1v1 build selector. Keep loading prompts and after-game check-ins independently enabled without opening an OBS source.",
+  },
+  {
+    image: "/landing/companion-postgame.png",
+    alt: "Native Companion after-game check-in with your build and the opponent's strategy, using sample 1v1 data",
+    title: "Review both builds after the game.",
+    text: "Confirm or correct your opening and the opponent's strategy after an eligible 1v1 match. Automatic check-ins remain 1v1-only, not inferred for team games.",
+  },
+  {
+    image: "/landing/companion-randomizer.png",
+    alt: "Native Companion randomizer with a selected matchup and saved eligible build pool, using sample 1v1 data",
+    title: "Let your saved pool choose.",
+    text: "Choose eligible builds for each matchup and roll one shared saved pick for a 1v1 game. The randomizer does not automatically draw for team games.",
   },
   {
     image: "/landing/companion-ghost.png",
     alt: "Native Build Order Ghost with replay sources, player preview and matchup target, using sample data",
     title: "Practice from the replay you trust.",
-    text: "Open a local replay or choose from your synced games. Preview either player's build order, assign it to a matchup, and follow its timing steps beside the game.",
+    text: "Open a local replay or choose from your synced games. Preview a human player's build order and save a 1v1 matchup target, or explicitly arm a temporary target for a confirmed current team game.",
   },
 ] as const;
 
@@ -27,7 +39,7 @@ export function CompanionShowcase() {
             Your ladder desk, beside the game.
           </h2>
           <p className="mt-5 max-w-prose text-body-lg text-text-muted">
-            Browse a purple two-panel scouting console: opponent portrait on the left, replay build chains on the right. Compare the openings and tech steps from your previous games, then pin just the panels you want while you play.
+            Browse an interactive desktop scouting console. Keep the selected opponent&apos;s name, race, MMR and your record in view, compare both players&apos; replay build chains, then pin just the panels you want while you play.
           </p>
         </div>
         <div className="min-w-0">
@@ -37,9 +49,9 @@ export function CompanionShowcase() {
           </div>
           <p className="mt-4 text-caption text-text-muted">Runs without OBS. Stream overlays remain an optional way to show selected features to viewers.</p>
           <p className="mt-3 text-caption text-text-muted">Home and Back keep browsing simple. Separate opponent and game arrows retain your place; Assistance and Agent menus keep the controls nearby.</p>
-          <p className="mt-3 text-caption text-text-muted">Opt in to native Windows system-voice reports for fresh human 1v1 games. Voice, master and mode switches work together. OBS voice settings stay separate; keep only one scouting voice enabled to avoid duplicate audio.</p>
-          <p className="mt-3 text-caption text-text-muted">Save your own Ladder, Customs, Teams, Practice and Review presets. Customize each feature locally, with an optional Ctrl+Shift+F10 master shortcut. Team-game guidance is not supported.</p>
-          <p className="mt-4 rounded-sm border border-warning/40 bg-bg-surface p-3 text-caption text-text-muted">Companion 0.21.1 is a preview, not included in the current stable download. A signed public release is pending; unsigned verification builds are separate test artifacts.</p>
+          <p className="mt-3 text-caption text-text-muted">Opt in to native Windows system-voice reports for fresh human 1v1 games or the selected confirmed live enemy in Hybrid team mode. Voice, master and mode switches work together. OBS voice settings stay separate; keep only one scouting voice enabled to avoid duplicate audio.</p>
+          <p className="mt-3 text-caption text-text-muted">Save your own Ladder, Customs, Teams, Practice and Review presets. Customize each feature locally, with an optional Ctrl+Shift+F10 master shortcut. Hybrid adds confirmed enemy selection for team scouting; automatic check-ins and randomizer draws remain 1v1-only.</p>
+          <p role="note" aria-label="Companion preview availability" className="mt-4 rounded-sm border border-warning/40 bg-bg-surface p-3 text-caption text-text-muted"><strong className="font-semibold text-text">Companion 0.22.0 verification preview is for local verification only and is not available in the current stable download.</strong> A signed public release is pending; unsigned verification builds are separate test artifacts. Team scouting requires a paired agent, an available SC2 Tools connection and fresh live SC2 telemetry; unknown history and MMR stay unavailable.</p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Link href="/download" className="inline-flex min-h-11 items-center gap-2 rounded-sm bg-accent-cyan px-4 py-2 text-caption font-bold text-[#071b22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
               <Download className="h-4 w-4" aria-hidden />Download current stable agent
@@ -50,27 +62,52 @@ export function CompanionShowcase() {
           </div>
         </div>
       </div>
-      <div className="mt-9 grid min-w-0 gap-6 rounded-md border border-border bg-bg-surface p-4 sm:p-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:items-center">
-        <figure className="mx-auto w-full min-w-0 max-w-[360px] lg:mx-0">
-          <Image src="/landing/companion-compact.png" alt="Compact Companion showing a sample opponent's name, race and MMR, your record and your win rate against that opponent, plus an expand button" width={360} height={240} sizes="(max-width: 400px) 100vw, 360px" className="h-auto w-full rounded-md" />
+      <div className="mt-9 grid min-w-0 gap-6 rounded-md border border-border bg-bg-surface p-4 sm:p-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)] lg:items-center">
+        <figure className="mx-auto w-full min-w-0 max-w-[340px] lg:mx-0">
+          <Image src="/landing/companion-compact.png" alt="Compact Companion showing a sample opponent's name, race and MMR, your record and win percentage, plus expand, minimize and close controls" width={340} height={78} sizes="(max-width: 380px) 100vw, 340px" className="h-auto w-full rounded-md" />
           <figcaption className="mt-2 text-micro text-text-dim">Compact layout · actual interface with sample data.</figcaption>
         </figure>
         <div className="min-w-0">
           <h3 className="font-serif text-2xl font-semibold text-text">Choose how much you see.</h3>
           <ul className="mt-4 grid gap-3 text-caption text-text-muted sm:grid-cols-2">
-            <li><strong className="text-text">Compact</strong> — name, race and MMR, plus your W–L and win percentage against this opponent. A small expand button opens Standard.</li>
-            <li><strong className="text-text">Standard</strong> — both players&apos; opening icon chains with key replay timings.</li>
-            <li><strong className="text-text">Detailed</strong> — more tech steps and upgrade completion chains.</li>
-            <li><strong className="text-text">Full workspace</strong> — full openings, notes, history, filters and replay tools.</li>
+            <li><strong className="text-text">Compact</strong> — 340 × 78: name, race and MMR, plus your W–L and win percentage against this opponent. A small expand button opens Standard.</li>
+            <li><strong className="text-text">Standard</strong> — 520 × 480: selected opponent information, including name, race, MMR, your W–L and win percentage, above both players&apos; build icon chains and recorded timings.</li>
+            <li><strong className="text-text">Detailed</strong> — 1024 × 800: compare both tech trees and upgrade completion chains with more room.</li>
+            <li><strong className="text-text">Full workspace</strong> — full stored build orders, notes, history, filters and replay tools.</li>
           </ul>
+          <p className="mt-4 text-caption text-text-muted">Start with 3 minutes, then choose 6 minutes, 10 minutes or Full build order for both build and upgrade chains. Workers and supply are optional. Full build order shows all available stored events; older replay uploads can be incomplete.</p>
         </div>
+      </div>
+      <div className="mt-9 min-w-0 rounded-md border border-border bg-bg-surface p-4 sm:p-6" aria-labelledby="companion-team-hybrid-title">
+        <h3 id="companion-team-hybrid-title" className="font-serif text-2xl font-semibold text-text">Hybrid team scouting, without guessing teams.</h3>
+        <p className="mt-3 max-w-prose text-body text-text-muted">Compact follows one selected enemy; expanded layouts show the enemy roster. Standard keeps a small team summary with an Enemy roster button; Detailed and Full workspace show scrollable enemy cards. If authoritative team IDs are missing, explicitly confirm your own player and mark teammates and enemies. Right-click Compact to switch enemies without making the bar taller.</p>
+        <p className="mt-3 max-w-prose text-body text-text-muted">Historical 1v1 MMR and head-to-head records are labeled as history, not current team-ladder ratings. Ambiguous identities remain unlinked until confirmed. Pinned panels and eligible speech follow the selected confirmed enemy.</p>
+        <p className="mt-3 max-w-prose text-body text-text-muted">For team Ghost, preview a player whose race matches yours and choose Use this target in current team game. The temporary target clears when the game, roster, account, selected enemy or assistance state changes; saved 1v1 targets stay untouched. Full individual team-replay build streams require the original local replay.</p>
+        <figure className="mx-auto mt-6 w-full min-w-0 max-w-[1024px]">
+          <div className="overflow-hidden rounded-md border border-border-strong bg-[#10131f]">
+            <Image src="/landing/companion-team-hybrid.png" alt="Detailed Companion Hybrid team roster with a selected enemy, historical 1v1 records and timed build chains, using sample data" width={1024} height={800} sizes="(max-width: 1024px) 100vw, 1024px" className="h-auto w-full" />
+          </div>
+          <figcaption className="mt-3 text-micro text-text-dim">Actual Detailed layout · 1024 × 800 · confirmed sample team roster, not current team ratings.</figcaption>
+        </figure>
       </div>
       <figure className="mt-9 min-w-0">
         <div className="overflow-hidden rounded-md border border-border-strong bg-[#10131f] shadow-hard">
-          <Image src="/landing/companion-workspace.png" alt="SC2 Tools purple Companion console with opponent portrait, Home and Back navigation and both players' replay timelines, using sample data" width={1440} height={1080} sizes="(max-width: 1280px) 100vw, 1200px" className="h-auto w-full" />
+          <Image src="/landing/companion-workspace.png" alt="SC2 Tools purple Companion console with opponent portrait, Home and Back navigation and both players' replay timelines, using sample data" width={1440} height={900} sizes="(max-width: 1280px) 100vw, 1200px" className="h-auto w-full" />
         </div>
         <figcaption className="mt-3 text-micro text-text-dim">Actual desktop interface · screenshots use sample data.</figcaption>
       </figure>
+      <div className="mt-10 min-w-0" aria-labelledby="companion-race-skins-title">
+        <h3 id="companion-race-skins-title" className="font-serif text-2xl font-semibold text-text">Keep Default, or choose a race border.</h3>
+        <p className="mt-3 max-w-prose text-body text-text-muted">Default preserves the current purple appearance unchanged. Optional Protoss, Terran and Zerg borders use original generated textured artwork: gold and cyan armor, blue steel, and organic shell. They are visual choices, independent of player and opponent race.</p>
+        <p className="mt-2 max-w-prose text-body text-text-muted">Responsive frames preserve corner details across Compact, Standard, Detailed and Full workspace, without stretching the artwork over your information.</p>
+        <p className="mt-2 max-w-prose text-body text-text-muted">Matching expansion animations run only when you explicitly expand the window. Turn animations off at any time for instant size changes.</p>
+        <figure className="mx-auto mt-6 w-full min-w-0 max-w-[1040px]">
+          <div className="overflow-hidden rounded-md border border-border-strong bg-[#10131f]">
+            <Image src="/landing/companion-race-skins.png" alt="Static comparison of Default purple, Protoss, Terran and Zerg Companion borders using sample data" width={1040} height={1016} sizes="(max-width: 1040px) 100vw, 1040px" className="h-auto w-full" />
+          </div>
+          <figcaption className="mt-3 text-micro text-text-dim">Static race-art comparison for the 0.22.0 local verification preview · actual desktop interface with sample data.</figcaption>
+        </figure>
+      </div>
       <div className="mt-10 grid min-w-0 gap-8 md:grid-cols-2">
         {PANELS.map((panel) => (
           <div key={panel.image} className="min-w-0">
@@ -82,6 +119,7 @@ export function CompanionShowcase() {
           </div>
         ))}
       </div>
+      <p className="mt-6 max-w-prose text-caption text-text-muted">Pinned Opponent and Scouting panels share the frameless race artwork and matching minimize/close controls. Legacy Recent games details fill in gradually from already synced owned metadata, without resyncing or resetting upload history. Activity log excludes credential-bearing OBS SDK logs and repetitive connection-refused tracebacks; OBS remains optional.</p>
       <div className="mt-8 flex items-start gap-3 border-t border-border pt-5 text-caption text-text-muted">
         <Star className="mt-0.5 h-4 w-4 shrink-0 text-editorial" aria-hidden />
         <p>Star a reference replay for each build from Builds or Opponents. Keep your own examples handy, or practice from an example an admin has explicitly published.</p>

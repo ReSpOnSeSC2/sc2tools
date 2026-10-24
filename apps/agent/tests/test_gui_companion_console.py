@@ -19,7 +19,7 @@ def test_companion_console_owns_navigation_and_hides_agent_sidebar_at_every_dens
             assert win._stack.currentWidget() is page
             assert not win._sidebar.isVisible(), level
             if level == "compact":
-                assert (win.width(), win.height()) == (360, 240)
+                assert (win.width(), win.height()) == (340, 78)
                 assert page.compact_card.isVisible()
                 assert not page.console.isVisible()
                 page.compact_card.enlarge_button.click()
@@ -37,7 +37,8 @@ def test_companion_console_owns_navigation_and_hides_agent_sidebar_at_every_dens
                 menu_actions[label].trigger()
                 app.processEvents()
                 assert win._stack.currentIndex() == index, (label, win._stack.currentIndex())
-                assert win._sidebar.isVisible(), label
+                assert win._sidebar.isVisible() == (win.width() >= 900), label
+                assert win._agent_menu_button.isVisible(), label
                 assert page.current_density() == level
                 assert layouts == before
                 win._nav_group.button(5).click()
@@ -61,11 +62,12 @@ def test_explicit_agent_request_from_compact_expands_before_opening_settings(tmp
         win._set_window_size("Compact")
         app.processEvents()
         assert not win._sidebar.isVisible()
-        assert (win.width(), win.height()) == (360, 240)
+        assert (win.width(), win.height()) == (340, 78)
         page.agentPageRequested.emit("settings")
         app.processEvents()
         assert win._stack.currentIndex() == 3
-        assert win._sidebar.isVisible()
+        assert not win._sidebar.isVisible()
+        assert win._agent_menu_button.isVisible()
         assert page.current_density() == "standard"
         assert layouts == ["compact", "standard"]
         assert win.width() > 360 and win.height() > 190

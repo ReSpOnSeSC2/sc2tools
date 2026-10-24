@@ -163,7 +163,11 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             explanation.setWordWrap(True)
             explanation.setObjectName("muted")
             layout.addWidget(explanation)
-            controls = QtWidgets.QHBoxLayout()
+            self.controls_panel = QtWidgets.QWidget()
+            self.controls_panel.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            self._controls_layout = QtWidgets.QGridLayout(self.controls_panel)
+            self._controls_layout.setContentsMargins(0, 0, 0, 0)
+            self._controls_narrow = None
             self.filters = {}
             self.group = QtWidgets.QButtonGroup(self)
             self.group.setExclusive(True)
@@ -174,15 +178,13 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
                 button.clicked.connect(lambda _checked=False, status=key: self.set_filter(status))
                 self.group.addButton(button)
                 self.filters[key] = button
-                controls.addWidget(button)
             self.filters["all"].setChecked(True)
             self.date = QtWidgets.QComboBox()
             self.date.setAccessibleName("Recent games date range")
             for label, days in (("All dates", None), ("Last 24 hours", 1), ("Last 7 days", 7)):
                 self.date.addItem(label, days)
             self.date.currentIndexChanged.connect(self._date_changed)
-            controls.addWidget(self.date)
-            layout.addLayout(controls)
+            layout.addWidget(self.controls_panel)
             self.table = QtWidgets.QTableView()
             self.table.setModel(self.model)
             class ResultDelegate(QtWidgets.QStyledItemDelegate):
@@ -234,6 +236,32 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
             layout.addWidget(self.skip_panel)
             self.refresh_counts()
 
+        def _reflow_controls(self):
+            if not hasattr(self, "date"):
+                return
+            widgets = [*self.filters.values(), self.date]
+            spacing = max(0, self._controls_layout.horizontalSpacing())
+            required = sum(widget.minimumSizeHint().width() for widget in widgets) + spacing * (len(widgets) - 1)
+            available = max(1, self.width() - self.layout().contentsMargins().left() - self.layout().contentsMargins().right())
+            narrow = available < required
+            if narrow == self._controls_narrow:
+                return
+            self._controls_narrow = narrow
+            while self._controls_layout.count():
+                self._controls_layout.takeAt(0)
+            for column in range(5):
+                self._controls_layout.setColumnStretch(column, 0)
+            for index, widget in enumerate(widgets):
+                if narrow:
+                    self._controls_layout.addWidget(widget, index // 3, index % 3, 1, 2 if index == 4 else 1)
+                else:
+                    self._controls_layout.addWidget(widget, 0, index)
+            self._controls_layout.setColumnStretch(2 if narrow else 4, 1)
+
+        def resizeEvent(self, event):
+            super().resizeEvent(event)
+            self._reflow_controls()
+
         def refresh_counts(self):
             counts = self.model.counts()
             if self.model.days is None:
@@ -241,6 +269,7 @@ def build_recent_games(parent, *, QtCore, QtGui, QtWidgets, open_game, reveal, r
                 counts["skipped"] += self.unknown_skipped
             for key, button in self.filters.items():
                 button.setText(f"{button.property('filterLabel')} ({counts[key]})")
+            self._reflow_controls()
             self.empty.setVisible(self.model.rowCount() == 0 and not (
                 self.unknown_skipped and self.model.days is None and self.model.status in {"all", "skipped"}))
             self.table.setVisible(self.model.rowCount() > 0)

@@ -67,3 +67,26 @@ def test_zerg_born_structure_is_construction_start_but_morph_is_completion(monke
     assert [(step["name"], step["t"], step["timing"]) for step in result["players"][0]["target"]["steps"]] == [
         ("Hatchery", 43, "started"), ("Lair", 254, "completed"),
     ]
+
+
+def test_team_replay_offers_each_human_without_inventing_a_one_on_one_matchup(monkeypatch):
+    import sys
+
+    extractor = Mock(return_value=([
+        {"type": "building", "subtype": "init", "time": 43, "name": "Gateway"},
+    ], [], {}))
+    monkeypatch.setitem(sys.modules, "core.event_extractor", SimpleNamespace(extract_events=extractor))
+    replay = SimpleNamespace(players=[
+        SimpleNamespace(pid=1, name="Own player", play_race="Protoss", is_human=True),
+        SimpleNamespace(pid=2, name="Ally", play_race="Terran", is_human=True),
+        SimpleNamespace(pid=3, name="Enemy", play_race="Zerg", is_human=True),
+        SimpleNamespace(pid=4, name="Computer", play_race="Terran", is_human=False),
+        SimpleNamespace(pid=5, name="Observer", play_race="Zerg", is_observer=True),
+    ])
+    result = targets_from_replay(replay, "local:team-hash", "Team.SC2Replay")
+    assert [choice["name"] for choice in result["players"]] == ["Own player", "Ally", "Enemy"]
+    assert [choice["race"] for choice in result["players"]] == ["P", "T", "Z"]
+    assert all(choice["manualOnly"] is True and choice["matchup"] is None and choice["opponentRace"] is None
+               for choice in result["players"])
+    assert all("team replay" in choice["target"]["name"] for choice in result["players"])
+    assert [call.args[1] for call in extractor.call_args_list] == [1, 2, 3]

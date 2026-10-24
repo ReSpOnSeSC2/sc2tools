@@ -27,7 +27,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.setObjectName("streamStudio")
             self.setWidgetResizable(True)
             self.setFrameShape(QtWidgets.QFrame.NoFrame)
-            self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+            self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
             self.busy = False
             self.title_dirty = False
             self.description_dirty = False
@@ -47,12 +47,31 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self._obs_generation = 0
             self._obs_account_mode = None
             self.setWidget(self._content())
+            self._responsive_rows = self.widget().findChildren(QtWidgets.QHBoxLayout)
+            self._narrow_layout = None
+            self._update_responsive_rows()
             self.completed.connect(self._completed)
             self.timer = QtCore.QTimer(self)
             self.timer.setInterval(2000)
             self.timer.timeout.connect(self.refresh)
             self.timer.start()
             self.refresh()
+
+        def resizeEvent(self, event):
+            super().resizeEvent(event)
+            if hasattr(self, "_responsive_rows"):
+                self._update_responsive_rows()
+
+        def _update_responsive_rows(self):
+            narrow = self.viewport().width() < 800
+            if narrow == self._narrow_layout:
+                return
+            self._narrow_layout = narrow
+            direction = QtWidgets.QBoxLayout.TopToBottom if narrow else QtWidgets.QBoxLayout.LeftToRight
+            for row in self._responsive_rows:
+                row.setDirection(direction)
+            for toggle in self.widget().findChildren(QtWidgets.QToolButton, "studioDisclosureToggle"):
+                toggle.setText(toggle.property("compactTitle") if narrow else toggle.property("fullTitle"))
 
         def _label(self, text, muted=False, *, name=None):
             label = QtWidgets.QLabel(text)
@@ -103,6 +122,9 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             toggle = QtWidgets.QToolButton()
             toggle.setObjectName("studioDisclosureToggle")
             toggle.setText(title + "  ·  " + detail)
+            toggle.setProperty("compactTitle", title)
+            toggle.setProperty("fullTitle", title + "  ·  " + detail)
+            toggle.setToolTip(detail)
             toggle.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
             toggle.setArrowType(QtCore.Qt.RightArrow)
             toggle.setCheckable(True)

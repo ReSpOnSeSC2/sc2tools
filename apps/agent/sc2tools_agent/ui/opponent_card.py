@@ -4,6 +4,9 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
+from . import theme
+from .race_visuals import normalize_skin, palette_for_skin
+
 
 _RACES = {
     "p": "Protoss", "protoss": "Protoss", "t": "Terran", "terran": "Terran",
@@ -129,12 +132,16 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
 
     class OpponentCard(QtWidgets.QWidget):
         enlargeRequested = QtCore.Signal()
+        minimizeRequested = QtCore.Signal()
+        closeRequested = QtCore.Signal()
 
         def __init__(self):
             super().__init__(parent)
             self.setObjectName("opponentIdentityCard")
             self.layout_mode = layout
-            self.setMinimumSize(220, 340) if profile else self.setMinimumSize(280, 200)
+            self._skin = "default"
+            self.setProperty("raceSkin", "default")
+            self.setMinimumSize(220, 340) if profile else self.setMinimumSize(280, 68)
             self.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
             self.setStyleSheet("QWidget#opponentIdentityCard { background: transparent; } QLabel { background: transparent; border: none; font-family: 'Segoe UI', sans-serif; }")
             self.portrait = Portrait(self)
@@ -180,11 +187,29 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
             self.enlarge_button.setToolTip("Enlarge Companion · Standard view")
             self.enlarge_button.setCursor(QtCore.Qt.PointingHandCursor)
             self.enlarge_button.setStyleSheet("QToolButton { color: #f8eeff; background: #572080; border: 1px solid #bc7ce7; border-radius: 4px; font: bold 17px 'Segoe UI'; padding: 0; } QToolButton:hover { background: #7932aa; } QToolButton:focus { border: 2px solid #a8f3ec; }")
+            self._enlarge_base_style = self.enlarge_button.styleSheet()
             self.enlarge_button.clicked.connect(lambda _checked=False: self.enlargeRequested.emit())
+            self.minimize_button = QtWidgets.QToolButton(self)
+            self.close_button = QtWidgets.QToolButton(self)
+            for button, name, text, title, signal in (
+                (self.minimize_button, "windowMinimize", "−", "Minimize Companion", self.minimizeRequested),
+                (self.close_button, "windowClose", "×", "Close Companion", self.closeRequested),
+            ):
+                button.setObjectName(name)
+                button.setText(text)
+                button.setAccessibleName(title)
+                button.setToolTip(title)
+                button.setStyleSheet(theme.WINDOW_CONTROLS_STYLE)
+                button.setCursor(QtCore.Qt.PointingHandCursor)
+                button.clicked.connect(lambda _checked=False, requested=signal: requested.emit())
+                button.setVisible(not profile)
+            if not profile:
+                self.portrait.hide()
+            self._compact_font = None
             self.set_identity()
 
         def sizeHint(self):
-            return QtCore.QSize(260, 380) if profile else QtCore.QSize(360, 240)
+            return QtCore.QSize(260, 380) if profile else QtCore.QSize(340, 78)
 
         def set_identity(self, name=None, race=None, mmr=None, *, wins=None, losses=None):
             self.identity = opponent_identity(name, race, mmr)
@@ -202,7 +227,42 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
             self.setAccessibleDescription(f"Name: {self.identity['name']}. Race: {self.identity['race']}. MMR: {self.identity['mmr']}. Your record: {self.record['text']}. Your win rate: {self.record['winRate']}.")
             self._place_contents()
 
+        def set_skin(self, skin):
+            self._skin = normalize_skin(skin)
+            self.setProperty("raceSkin", self._skin)
+            colors = palette_for_skin(self._skin)
+            extra = "" if self._skin == "default" else f"QToolButton#opponentCardEnlarge {{ background: {colors['frame']}; border-color: {colors['border']}; }} QToolButton#opponentCardEnlarge:hover {{ background: {colors['plate']}; border-color: {colors['accent']}; }}"
+            self.enlarge_button.setStyleSheet(self._enlarge_base_style + extra)
+            for button in (self.minimize_button, self.close_button):
+                extra = "" if self._skin == "default" else f"QToolButton#{button.objectName()} {{ background: {colors['frame']}; border-color: {colors['border']}; }}"
+                button.setStyleSheet(theme.WINDOW_CONTROLS_STYLE + extra)
+            self.update()
+
         def _place_contents(self):
+            if not profile:
+                small = self.width() < 310 or self.height() < 74
+                if small != self._compact_font:
+                    self._compact_font = small
+                    self.name_label.setStyleSheet(f"color: {theme.TEXT}; font-size: {16 if small else 17}px; font-weight: 700;")
+                    for caption in (self.race_caption, self.mmr_caption, self.record_caption, self.win_rate_caption):
+                        caption.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: {8 if small else 9}px; font-weight: 600;")
+                    for value in (self.race_label, self.mmr_label, self.record_label, self.win_rate_label):
+                        value.setStyleSheet(f"color: {theme.TEXT}; font-size: {13 if small else 14}px; font-weight: 600;")
+                self.enlarge_button.setGeometry(self.width() - 76, 5, 22, 22)
+                self.minimize_button.setGeometry(self.width() - 52, 5, 22, 22)
+                self.close_button.setGeometry(self.width() - 28, 5, 22, 22)
+                self.name_label.setGeometry(12, 3 if small else 5, max(1, self.width() - 96), 22 if small else 24)
+                column_width = max(1, (self.width() - 24) // 4)
+                self._record_top = self.height() - 41
+                for column, (caption, value) in enumerate(((self.race_caption, self.race_label),
+                                                         (self.mmr_caption, self.mmr_label),
+                                                         (self.record_caption, self.record_label),
+                                                         (self.win_rate_caption, self.win_rate_label))):
+                    left = 12 + column * column_width
+                    caption.setGeometry(left, self._record_top, column_width - 3, 11)
+                    value.setGeometry(left, self._record_top + 12, column_width - 3, 22)
+                self.name_label._update_elision()
+                return
             self.enlarge_button.setGeometry(self.width() - 30, 5, 22, 22)
             content_width = max(1, self.width() - 32)
             content_height = max(1, self.height() - 51)
@@ -245,35 +305,50 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
         def paintEvent(self, event):
             painter = QtGui.QPainter(self)
             painter.setRenderHint(QtGui.QPainter.Antialiasing)
+            colors = palette_for_skin(self._skin) if self._skin != "default" else None
+            if not profile:
+                rectangle = QtCore.QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+                painter.setPen(QtGui.QPen(QtGui.QColor(colors["border"] if colors else theme.ACCENT), 1))
+                painter.setBrush(QtGui.QColor(colors["frame"] if colors else theme.BUTTON))
+                painter.drawRoundedRect(rectangle, 8, 8)
+                inset = rectangle.adjusted(3, 3, -3, -3)
+                painter.setPen(QtGui.QPen(QtGui.QColor(colors["plate"] if colors else theme.BORDER), 1))
+                painter.setBrush(QtGui.QColor(colors["surface"] if colors else theme.SURFACE))
+                painter.drawRoundedRect(inset, 5, 5)
+                painter.setPen(QtGui.QPen(QtGui.QColor(colors["border"] if colors else theme.BORDER_STRONG), 1))
+                painter.drawLine(12, self._record_top - 4, self.width() - 12, self._record_top - 4)
+                return
             outer = QtCore.QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
             bezel = QtGui.QLinearGradient(0, 0, 0, self.height())
-            bezel.setColorAt(0, QtGui.QColor("#ba52e7"))
-            bezel.setColorAt(0.16, QtGui.QColor("#8735bd"))
-            bezel.setColorAt(0.6, QtGui.QColor("#61268b"))
-            bezel.setColorAt(1, QtGui.QColor("#412055"))
-            painter.setPen(QtGui.QPen(QtGui.QColor("#bc77df"), 1))
+            bezel.setColorAt(0, QtGui.QColor(colors["border"] if colors else "#ba52e7"))
+            bezel.setColorAt(0.16, QtGui.QColor(colors["frame"] if colors else "#8735bd"))
+            bezel.setColorAt(0.6, QtGui.QColor(colors["frame"] if colors else "#61268b"))
+            bezel.setColorAt(1, QtGui.QColor(colors["plate"] if colors else "#412055"))
+            painter.setPen(QtGui.QPen(QtGui.QColor(colors["border"] if colors else "#bc77df"), 1))
             painter.setBrush(bezel)
             painter.drawRoundedRect(outer, 11, 11)
             inset = QtCore.QRectF(6, 29, max(1, self.width() - 12), max(1, self.height() - 35))
             panel = QtGui.QLinearGradient(inset.topLeft(), inset.bottomRight())
-            panel.setColorAt(0, QtGui.QColor("#1c112c"))
-            panel.setColorAt(1, QtGui.QColor("#100b19"))
-            painter.setPen(QtGui.QPen(QtGui.QColor("#342040"), 1))
+            panel.setColorAt(0, QtGui.QColor(colors["surface"] if colors else "#1c112c"))
+            panel.setColorAt(1, QtGui.QColor(colors["surface"] if colors else "#100b19"))
+            painter.setPen(QtGui.QPen(QtGui.QColor(colors["plate"] if colors else "#342040"), 1))
             painter.setBrush(panel)
             painter.drawRoundedRect(inset, 6, 6)
-            painter.setPen(QtGui.QPen(QtGui.QColor("#4c2d61"), 1))
+            painter.setPen(QtGui.QPen(QtGui.QColor(colors["border"] if colors else "#4c2d61"), 1))
             painter.drawLine(16, self._record_top - 9, self.width() - 16, self._record_top - 9)
-            painter.setPen(QtGui.QPen(QtGui.QColor(240, 198, 255, 90), 1))
+            shine = QtGui.QColor(colors["glow"]) if colors else QtGui.QColor(240, 198, 255)
+            shine.setAlpha(90)
+            painter.setPen(QtGui.QPen(shine, 1))
             painter.drawLine(13, 3, self.width() - 13, 3)
             jewel = QtGui.QRadialGradient(16, 13, 11)
-            jewel.setColorAt(0, QtGui.QColor("#bcfaff"))
-            jewel.setColorAt(0.45, QtGui.QColor("#35d4ed"))
-            jewel.setColorAt(1, QtGui.QColor("#176c9b"))
-            painter.setPen(QtGui.QPen(QtGui.QColor("#244b77"), 1))
+            jewel.setColorAt(0, QtGui.QColor(colors["glow"] if colors else "#bcfaff"))
+            jewel.setColorAt(0.45, QtGui.QColor(colors["accent"] if colors else "#35d4ed"))
+            jewel.setColorAt(1, QtGui.QColor(colors["frame"] if colors else "#176c9b"))
+            painter.setPen(QtGui.QPen(QtGui.QColor(colors["plate"] if colors else "#244b77"), 1))
             painter.setBrush(jewel)
             painter.drawEllipse(QtCore.QPointF(18, 16), 7, 7)
             painter.setPen(QtCore.Qt.NoPen)
-            painter.setBrush(QtGui.QColor("#df96ee"))
+            painter.setBrush(QtGui.QColor(colors["accent"] if colors else "#df96ee"))
             painter.drawEllipse(QtCore.QPointF(34, 16), 2, 2)
 
     return OpponentCard()

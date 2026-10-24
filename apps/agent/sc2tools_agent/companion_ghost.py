@@ -420,3 +420,93 @@ class GhostSession:
         index = max(0, passed - 1)
         return {"target": target, "clock": clock, "matchup": matchup, "index": index,
                 "passed": passed, "complete": passed == len(target["steps"])}, "Following " + matchup + " target timings"
+
+
+class TeamGhostSession:
+    def __init__(self):
+        self._snapshot = {}
+        self._context = None
+        self._identity = None
+        self._target = None
+
+    def _current(self, *, now=None):
+        from .team_roster import roster_candidate
+
+        candidate = roster_candidate(self._snapshot, now=now)
+        context = self._context
+        if not candidate or not isinstance(context, dict) or context.get("confirmed") is not True:
+            return None
+        if not isinstance(candidate["accountKey"], str) or not 0 < len(candidate["accountKey"]) <= 128:
+            return None
+        signature = (candidate["accountKey"], candidate["gameKey"],
+                     tuple((row["key"], row["team"]) for row in candidate["players"]))
+        if (context.get("gameKey") != candidate["gameKey"] or context.get("accountKey") != candidate["accountKey"]
+                or context.get("rosterSignature") != signature):
+            return None
+        own_key = context.get("ownKey")
+        selected = context.get("selectedEnemyKey")
+        enemies = context.get("enemyKeys")
+        players = {row["key"]: row for row in candidate["players"]}
+        if (not isinstance(own_key, str) or own_key not in players
+                or not isinstance(enemies, list) or not enemies or any(not isinstance(key, str) for key in enemies)
+                or not set(enemies) <= players.keys() or own_key in enemies or selected not in enemies
+                or not players.keys() - set(enemies) - {own_key}):
+            return None
+        own = players[own_key]
+        if context.get("user") != own or not concrete_race(own.get("race")):
+            return None
+        envelope = self._snapshot["liveGame"]
+        if envelope.get("phase") not in {"match_loading", "match_started", "match_in_progress"}:
+            return None
+        identity = (signature, own_key, selected, tuple(sorted(enemies)), concrete_race(own["race"]))
+        return identity, own, envelope
+
+    def _reconcile(self, *, now=None):
+        current = self._current(now=now)
+        identity = current[0] if current else None
+        if identity != self._identity:
+            self.clear_target()
+            self._identity = identity
+        return current
+
+    def update_snapshot(self, snapshot, *, now=None):
+        self._snapshot = deepcopy(snapshot) if isinstance(snapshot, dict) else {}
+        self._reconcile(now=now)
+
+    def update_context(self, context, *, now=None):
+        self._context = deepcopy(context) if isinstance(context, dict) else None
+        self._reconcile(now=now)
+
+    def clear_target(self):
+        self._target = None
+
+    def can_arm(self, race, *, now=None):
+        current = self._reconcile(now=now)
+        return bool(current and concrete_race(race) == concrete_race(current[1]["race"]))
+
+    def arm(self, target, race, *, now=None):
+        if not self.can_arm(race, now=now):
+            raise GhostError("Confirm your current team roster and choose a target matching your own race.")
+        normalized = normalize_target(target)
+        if normalized is None:
+            raise GhostError("Preview a valid timed replay build first.")
+        self._target = normalized
+
+    def view(self, *, now=None):
+        current = self._reconcile(now=now)
+        if not current:
+            return None, "Confirm your own player and enemy roster for this fresh team game."
+        if not self._target:
+            return None, "Choose a replay build and explicitly use it in this team game. No 1v1 target is selected automatically."
+        envelope = current[2]
+        if envelope.get("phase") not in {"match_started", "match_in_progress"}:
+            return None, "Manual team target is ready for this game to start."
+        clock = envelope.get("displayTime")
+        if not _number(clock):
+            return None, "Waiting for the SC2 game clock"
+        target = deepcopy(self._target)
+        passed = sum(step["t"] <= clock for step in target["steps"])
+        race = {"P": "Protoss", "T": "Terran", "Z": "Zerg"}[concrete_race(current[1]["race"])]
+        return {"target": target, "clock": clock, "matchup": "Team · " + race,
+                "index": max(0, passed - 1), "passed": passed,
+                "complete": passed == len(target["steps"]), "manualTeam": True}, "Following manual team target timings · not verified production"

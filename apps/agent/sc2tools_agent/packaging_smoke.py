@@ -115,9 +115,66 @@ def _exercise_gui(report):
                 app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
                 if not companion.workspace_tabs.currentWidget().isVisible() or window.grab().isNull():
                     raise RuntimeError("A bundled Companion tool did not paint.")
+            report["stage"] = "window_layouts_and_race_skins"
+            if not window.windowFlags() & QtCore.Qt.FramelessWindowHint:
+                raise RuntimeError("The bundled agent still uses native window chrome.")
+            for title in ("Compact", "Standard", "Detailed", "Full workspace"):
+                if not window._set_window_size(title):
+                    raise RuntimeError("A bundled Companion layout could not open.")
+                app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+                if window.grab().isNull():
+                    raise RuntimeError("A bundled Companion layout did not paint.")
+            from .ui.race_artwork import create_race_artwork
+            artwork = create_race_artwork(QtCore=QtCore, QtGui=QtGui)
+            for skin in ("protoss", "terran", "zerg"):
+                if artwork.image_for_skin(skin) is None:
+                    raise RuntimeError("Bundled race frame artwork is missing or invalid.")
+            for skin in ("default", "protoss", "terran", "zerg"):
+                window._set_window_size("Compact")
+                companion.appearance_skin.setCurrentIndex(companion.appearance_skin.findData(skin))
+                window._set_window_size("Standard")
+                app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+                if companion.compact_card.property("raceSkin") != skin or window.grab().isNull():
+                    raise RuntimeError("A bundled race skin did not paint.")
+                effects = window._race_effects
+                effects.set_motion_enabled(False)
+                if effects.timer.isActive():
+                    raise RuntimeError("Disabling animation did not stop its timer.")
+                effects.set_motion_enabled(True)
+            companion.appearance_skin.setCurrentIndex(companion.appearance_skin.findData("default"))
+            report["stage"] = "pinned_panels_and_team_roster"
+            panels = [*companion.overlays.values(), companion.ghost_page.panel]
+            for panel in panels:
+                if not panel.windowFlags() & QtCore.Qt.FramelessWindowHint or panel.grab().isNull():
+                    raise RuntimeError("A bundled pinned panel did not paint with themed chrome.")
+                if any(panel.findChild(QtWidgets.QToolButton, name) is None
+                       for name in ("windowMinimize", "windowClose")):
+                    raise RuntimeError("A bundled pinned panel is missing its window controls.")
+            from time import time
+            from .team_roster import TeamRoster
+            roster = TeamRoster()
+            roster.update({"paired": True, "accountKey": "packaging-fixture", "liveGame": {
+                "phase": "match_in_progress", "gameKey": "offline-team-fixture", "isReplay": False,
+                "capturedAt": time(), "displayTime": 60, "user": {"name": "Sample player"},
+                "players": [{"id": index + 1, "name": name, "race": race, "type": "user"}
+                            for index, (name, race) in enumerate((("Sample player", "Protoss"),
+                                ("Sample teammate", "Terran"), ("Sample enemy one", "Zerg"),
+                                ("Sample enemy two", "Terran")))]}})
+            keys = {row["name"]: row["key"] for row in roster.players}
+            roster.confirm(keys["Sample player"], [keys["Sample enemy one"], keys["Sample enemy two"]])
+            window._set_window_size("Detailed")
+            app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+            companion.team_roster_widget.render(roster, [], {})
+            companion.team_roster_widget.show()
+            app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+            if (not roster.ready or len(companion.team_roster_widget._buttons) != 2
+                    or companion.team_roster_widget.grab().isNull() or window.grab().isNull()):
+                raise RuntimeError("The bundled confirmed team roster did not paint.")
             report.update(qt_version=QtCore.qVersion(), qt_platform=app.platformName(),
                           page_count=stack.count(), streams_painted=True, companion_painted=True,
-                          checkin_previews_painted=True, dashboard_recent_painted=True)
+                          checkin_previews_painted=True, dashboard_recent_painted=True,
+                          window_chrome_painted=True, companion_layouts_painted=4, race_skins_painted=4,
+                          race_artwork_loaded=3, pinned_panels_painted=3, team_roster_painted=True)
         except Exception as error:
             callback["error"] = error
         finally:

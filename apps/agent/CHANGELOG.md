@@ -4,6 +4,66 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+## 0.22.0
+
+### Added - Hybrid team Companion
+- Compact follows the selected enemy; expanded layouts show the enemy roster.
+  Confirm your player and teammate/enemy roles when authoritative team IDs are
+  unavailable. Team scouting labels historical 1v1 MMR and head-to-head records
+  rather than inventing current team ratings or aggregate team records.
+- Arm Ghost explicitly for one confirmed team game from a selected replay player
+  or example. Local team replays expose individual human-player build previews.
+  Temporary targets clear on session, identity, roster, enemy, or assistance
+  changes and do not overwrite saved 1v1 targets. Automatic team check-ins and
+  randomizer draws remain disabled.
+
+### Fixed - Consistent panels and private history recovery
+- Pinned panels use the same frameless race artwork and themed minimize/close
+  controls as Companion. Default retains the original purple appearance.
+- Fill incomplete legacy Recent games receipts gradually from owned cloud game
+  metadata without resyncing, re-uploading, or modifying the replay cursor.
+  Preserve source paths, upload timestamps, richer new rows, and account scope;
+  sort by actual played time and recover available Today record details.
+- Keep OBS SDK credentials and repetitive connection-refused tracebacks out of
+  the Activity log while retaining sanitized connection status.
+- Refresh the illustrated how-to and landing showcase for the 0.22.0 local
+  verification preview, separate from the current public stable download.
+
+## 0.21.3 - 2026-10-23
+
+### Changed - Smaller Companion and themed window controls
+- Compact becomes a slim opponent bar with race, MMR, your head-to-head record,
+  win percentage, expand, minimize, and close controls. Standard is 520 × 480;
+  Detailed is 1024 × 800, with all pages and tools accessible at every size.
+- Replace the Windows title bar with matching minimize, maximize/restore, and
+  close buttons. Header dragging, edge resizing, and close-to-tray remain.
+- Narrow layouts collapse navigation into menus and retain unsaved settings.
+- Optional Protoss, Terran, and Zerg console skins use original generated
+  textured artwork: gold and cyan, blue steel, and organic shell respectively.
+  Responsive frames preserve corner details across all four window sizes.
+  Default retains the original purple console unchanged; skins and short
+  expansion effects are local, persistent choices independent of opponent race.
+
+### Added - Expandable replay build orders
+- Both players' icon chains default to three minutes, with six-minute,
+  ten-minute, and full stored build-order ranges independent of window size.
+- Load the selected owned replay's stored events, preserving repeated production
+  steps and recorded timing types. Worker/supply steps can be included.
+- Clearly label incomplete scouting previews, missing events, and retry states;
+  viewing a different range never changes a saved Ghost target.
+
+## 0.21.2
+
+### Changed - One desktop console
+- Dashboard, Recent games, Activity log, Settings, and Streams share the
+  Companion's purple console frame, dark inset panels, typography, and controls.
+- Agent navigation, return-to-Companion actions, menus, dialogs, check-in cards,
+  and pinned panels use the same visual language without replacing controllers.
+- Changing pages keeps the window size, information layout, selected encounters,
+  and unsaved settings intact. Compact retains its small opponent-only layout.
+- Assistance controls explain the master switch and always-on-top panels in plain
+  language, including that scouting timings come from previous replay history.
+
 ## 0.21.1 - 2026-10-23
 
 ### Changed - Reference-led Companion console

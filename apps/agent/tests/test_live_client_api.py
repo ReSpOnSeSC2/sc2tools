@@ -28,6 +28,7 @@ from sc2tools_agent.live.event_bus import EventBus
 from sc2tools_agent.live.types import (
     LiveLifecycleEvent,
     LiveLifecyclePhase,
+    envelope_for,
 )
 
 
@@ -46,6 +47,43 @@ def _bad_status(status: int) -> MagicMock:
     m.text = ""
     m.json.side_effect = ValueError("no body")
     return m
+
+
+@pytest.mark.parametrize("flag", ["isObserver", "is_observer", "sourceObserver", "sourceIsObserver", "source_is_observer"])
+def test_explicit_source_observer_flag_survives_parse_and_blocks_team_roster(flag):
+    from sc2tools_agent.team_roster import roster_candidate
+    from tests.test_team_roster import snapshot
+
+    payload = snapshot()["liveGame"]
+    payload[flag] = True
+    session = _StubSession()
+    session.queue("http://localhost:6119/game", _ok(payload))
+    poller, _seen = _make_poller(session)
+    state = poller._fetch_game()
+    assert state.is_observer is True
+    envelope = envelope_for(LiveLifecycleEvent(phase=LiveLifecyclePhase.MATCH_IN_PROGRESS, captured_at=1000,
+                                              game_state=state, game_key="observer-team"))
+    assert envelope["isObserver"] is True
+    assert roster_candidate({"paired": True, "liveGame": envelope}, now=1000) is None
+
+
+def test_absent_observer_metadata_leaves_legacy_envelope_unchanged_and_preserves_optional_team_id():
+    from tests.test_team_roster import snapshot
+
+    payload = snapshot()["liveGame"]
+    payload["players"][0]["teamId"] = 1
+    payload["players"][1]["team"] = True
+    session = _StubSession()
+    session.queue("http://localhost:6119/game", _ok(payload))
+    poller, _seen = _make_poller(session)
+    state = poller._fetch_game()
+    assert state.is_observer is False
+    assert state.players[0].team_id == 1
+    assert state.players[1].team_id is None
+    envelope = envelope_for(LiveLifecycleEvent(phase=LiveLifecyclePhase.MATCH_IN_PROGRESS, game_state=state))
+    assert "isObserver" not in envelope
+    assert envelope["players"][0]["team_id"] == 1
+    assert "team_id" not in envelope["players"][1]
 
 
 class _StubSession:

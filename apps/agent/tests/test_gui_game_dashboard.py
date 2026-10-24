@@ -72,7 +72,7 @@ assert revealed==[["explorer.exe","/select,"+str(file.resolve())]]
 assert opened==["https://example.test/app/game/game%2Fa%3Fb%23c"]
 assert isinstance(win._resync_btn.parentWidget(),QtWidgets.QGroupBox)
 assert win._resync_btn.parentWidget().title()=="Maintenance"
-assert win._updates_btn.parentWidget().objectName()=="sidebar"
+assert win._updates_btn.parentWidget() is win._sidebar
 assert win._updates_btn.text()=="Updates" and win._updates_btn.accessibleName()=="Check for updates"
 win.resize(820,600);win._go_to_page("recent");app.processEvents()
 assert win._recent_table.columnWidth(3)>=140

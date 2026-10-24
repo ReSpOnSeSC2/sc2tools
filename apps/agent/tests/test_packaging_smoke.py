@@ -82,6 +82,12 @@ raise SystemExit(__main__.main())
     assert report["checkin_previews_painted"] is True
     assert report["dashboard_recent_painted"] is True
     assert report["companion_painted"] is True
+    assert report["window_chrome_painted"] is True
+    assert report["companion_layouts_painted"] == 4
+    assert report["race_skins_painted"] == 4
+    assert report["race_artwork_loaded"] == 3
+    assert report["pinned_panels_painted"] == 3
+    assert report["team_roster_painted"] is True
     assert set(tmp_path.iterdir()) == {destination}
 
 

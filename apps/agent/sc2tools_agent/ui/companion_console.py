@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from copy import deepcopy
 
+from . import theme
+from .opponent_card import opponent_identity, opponent_record
+
 
 _UNSET = object()
 _DESTINATIONS = (
@@ -11,36 +14,39 @@ _DESTINATIONS = (
     ("randomizer", "Randomizer"),
     ("ghost", "Build Order Ghost"),
 )
-_STYLE = """
-QFrame#companionConsole {
-    background: qlineargradient(x1:0,y1:0,x2:1,y2:1,stop:0 #7737b3,stop:0.5 #56218a,stop:1 #9146c8);
-    border: 2px solid #ae6de0; border-radius: 18px; color: #f2eaff;
-}
-QFrame#consoleProfile, QFrame#consoleDisplay {
-    background: #151021; border: 2px solid #341b50; border-radius: 10px;
-}
+_STYLE = f"""
+QFrame#companionConsole {{
+    background: {theme.CONSOLE_GRADIENT};
+    border: 2px solid {theme.ACCENT}; border-radius: 18px; color: {theme.TEXT};
+}}
+QFrame#consoleProfile, QFrame#consoleDisplay {{
+    background: {theme.SURFACE}; border: 2px solid {theme.BORDER}; border-radius: 10px;
+}}
 QWidget#consoleHome, QStackedWidget#consolePages, QScrollArea#consoleProfileScroll,
-QScrollArea#consoleProfileScroll > QWidget > QWidget { background: transparent; border: none; }
-QFrame#companionConsole QLabel { color: #f0e8ff; background: transparent; border: none; }
-QLabel#consoleBrand { font-size: 18px; font-weight: 800; letter-spacing: 2px; }
-QLabel#consoleEdition { color: #e0c5f5; font-size: 10px; letter-spacing: 2px; }
-QLabel#consoleBreadcrumb { color: #ba9ed4; font-size: 12px; }
-QLabel#consoleGameTitle { color: #9fe8b2; font-size: 12px; font-weight: 600; }
-QLabel#consolePageHeading { font-size: 23px; font-weight: 700; color: #e6d3fb; }
-QLabel#consolePageDescription { color: #af9cbe; font-size: 13px; }
-QFrame#companionConsole QPushButton, QFrame#companionConsole QToolButton {
-    background: #42205d; color: #f4e9ff; border: 1px solid #9164b0;
+QScrollArea#consoleProfileScroll > QWidget > QWidget {{ background: transparent; border: none; }}
+QFrame#companionConsole QLabel {{ color: {theme.TEXT}; background: transparent; border: none; }}
+QLabel#consoleBrand {{ font-size: 18px; font-weight: 800; letter-spacing: 2px; }}
+QLabel#consoleEdition {{ color: {theme.TEXT_MUTED}; font-size: 10px; letter-spacing: 2px; }}
+QLabel#consoleBreadcrumb {{ color: {theme.TEXT_MUTED}; font-size: 12px; }}
+QLabel#consoleGameTitle {{ color: {theme.ACCENT_CYAN}; font-size: 12px; font-weight: 600; }}
+QLabel#consolePageHeading {{ font-size: 23px; font-weight: 700; color: {theme.TEXT}; }}
+QLabel#consolePageDescription {{ color: {theme.TEXT_MUTED}; font-size: 13px; }}
+QLabel#consoleOpponentIdentity {{ color: {theme.TEXT}; font-size: 11px; font-weight: 600; }}
+QLabel#consoleOpponentRecord {{ color: {theme.TEXT_MUTED}; font-size: 10px; }}
+QFrame#companionConsole QPushButton, QFrame#companionConsole QToolButton {{
+    background: {theme.BUTTON}; color: {theme.TEXT}; border: 1px solid {theme.BORDER_STRONG};
     border-radius: 6px; padding: 7px 10px; font-weight: 600;
-}
-QFrame#companionConsole QPushButton:hover, QFrame#companionConsole QToolButton:hover {
-    background: #62317f; border-color: #cf9cf2;
-}
-QFrame#companionConsole QPushButton:checked { background: #8146a3; border-color: #deb6fa; }
-QFrame#companionConsole QPushButton:disabled, QFrame#companionConsole QToolButton:disabled {
-    background: #251b30; color: #786486; border-color: #44304f;
-}
-QPushButton#consoleHomeAction { text-align: left; padding: 12px 16px; }
-QFrame#consoleDivider { background: #422653; border: none; max-height: 1px; }
+}}
+QFrame#companionConsole QPushButton:hover, QFrame#companionConsole QToolButton:hover {{
+    background: {theme.BUTTON_HOVER}; border-color: {theme.ACCENT_HOVER};
+}}
+QFrame#companionConsole QPushButton:focus, QFrame#companionConsole QToolButton:focus {{ border-color: {theme.FOCUS}; }}
+QFrame#companionConsole QPushButton:checked {{ background: {theme.BUTTON_CHECKED}; border-color: {theme.ACCENT_HOVER}; }}
+QFrame#companionConsole QPushButton:disabled, QFrame#companionConsole QToolButton:disabled {{
+    background: {theme.ELEVATED}; color: {theme.TEXT_DIM}; border-color: {theme.BORDER};
+}}
+QPushButton#consoleHomeAction {{ text-align: left; padding: 12px 16px; }}
+QFrame#consoleDivider {{ background: {theme.BORDER}; border: none; max-height: 1px; }}
 """
 
 
@@ -102,6 +108,87 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
     callbacks can acknowledge a selection without creating navigation loops.
     """
 
+    class WrappingActions(QtWidgets.QLayout):
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.items = []
+            self.setContentsMargins(0, 0, 0, 0)
+            self.setSpacing(6)
+
+        def addItem(self, item):
+            self.items.append(item)
+            self.invalidate()
+
+        def count(self):
+            return len(self.items)
+
+        def itemAt(self, index):
+            return self.items[index] if 0 <= index < len(self.items) else None
+
+        def takeAt(self, index):
+            return self.items.pop(index) if 0 <= index < len(self.items) else None
+
+        def expandingDirections(self):
+            return QtCore.Qt.Orientations()
+
+        def hasHeightForWidth(self):
+            return True
+
+        def heightForWidth(self, width):
+            return self._arrange(QtCore.QRect(0, 0, width, 0), False)
+
+        def setGeometry(self, rectangle):
+            super().setGeometry(rectangle)
+            self._arrange(rectangle, True)
+
+        def sizeHint(self):
+            return self.minimumSize()
+
+        def minimumSize(self):
+            result = QtCore.QSize()
+            for item in self.items:
+                if not item.isEmpty():
+                    result = result.expandedTo(item.minimumSize())
+            return result
+
+        def _arrange(self, rectangle, place):
+            left, top, row_height = rectangle.x(), rectangle.y(), 0
+            for item in self.items:
+                if item.isEmpty():
+                    continue
+                hint = item.sizeHint()
+                width = min(hint.width(), max(1, rectangle.width()))
+                if left > rectangle.x() and left + width > rectangle.x() + rectangle.width():
+                    left = rectangle.x()
+                    top += row_height + self.spacing()
+                    row_height = 0
+                if place:
+                    item.setGeometry(QtCore.QRect(left, top, width, hint.height()))
+                left += width + self.spacing()
+                row_height = max(row_height, hint.height())
+            return top - rectangle.y() + row_height
+
+    class SummaryLine(QtWidgets.QLabel):
+        def __init__(self, name):
+            super().__init__()
+            self.setObjectName(name)
+            self.setTextFormat(QtCore.Qt.PlainText)
+            self.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            self.setMinimumWidth(0)
+            self.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            self.full_text = ""
+
+        def set_full_text(self, text):
+            self.full_text = text
+            self._elide()
+
+        def _elide(self):
+            self.setText(self.fontMetrics().elidedText(self.full_text, QtCore.Qt.ElideRight, max(1, self.width())))
+
+        def resizeEvent(self, event):
+            super().resizeEvent(event)
+            self._elide()
+
     class CompanionConsole(QtWidgets.QFrame):
         routeChanged = QtCore.Signal(str)
         navigationChanged = QtCore.Signal(dict)
@@ -119,8 +206,11 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             self._opponent_name = ""
             self._game_title = ""
             self._rendering_workspace = False
+            self._narrow = None
+            self._window_controls = None
             self._workspace_routes = [route for route, _title in _DESTINATIONS]
             self._build_ui()
+            self.register_page("profile", self.profile_host, "Opponent profile")
             if workspace_tabs is not None:
                 if workspace_tabs.count() != len(self._workspace_routes):
                     raise ValueError("Console workspace requires its four existing live pages")
@@ -139,6 +229,7 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
                 self.register_page("opponents", opponents_widget, "Opponent library")
             self.register_page("home", home_widget or self._build_home(), "Home")
             self._render_navigation()
+            self._update_responsive()
 
         def _button(self, text, accessible_name=None):
             button = QtWidgets.QPushButton(text)
@@ -148,23 +239,47 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
 
         def _build_ui(self):
             layout = QtWidgets.QVBoxLayout(self)
+            layout.setSizeConstraint(QtWidgets.QLayout.SetNoConstraint)
             layout.setContentsMargins(14, 12, 14, 14)
             layout.setSpacing(10)
-            brand_row = QtWidgets.QHBoxLayout()
+            self.brand_widget = QtWidgets.QWidget()
+            self.brand_grid = QtWidgets.QGridLayout(self.brand_widget)
+            self.brand_grid.setContentsMargins(0, 0, 0, 0)
+            self.brand_grid.setSpacing(6)
+            self.brand_identity = QtWidgets.QWidget()
+            brand_row = QtWidgets.QHBoxLayout(self.brand_identity)
+            brand_row.setContentsMargins(0, 0, 0, 0)
             emblem = QtWidgets.QLabel()
             emblem.setFixedSize(23, 23)
-            emblem.setStyleSheet("background: #64d8eb; border: 2px solid #b0edfa; border-radius: 11px;")
+            emblem.setStyleSheet(f"background: {theme.ACCENT_CYAN}; border: 2px solid {theme.FOCUS}; border-radius: 11px;")
             brand_row.addWidget(emblem)
             brand = QtWidgets.QLabel("SC2 TOOLS")
             brand.setObjectName("consoleBrand")
             brand_row.addWidget(brand)
             edition = QtWidgets.QLabel("COMPANION")
             edition.setObjectName("consoleEdition")
+            self.brand_edition = edition
             brand_row.addWidget(edition)
-            brand_row.addStretch()
-            self.brand_actions = QtWidgets.QHBoxLayout()
-            brand_row.addLayout(self.brand_actions)
-            layout.addLayout(brand_row)
+            self.opponent_summary = QtWidgets.QWidget()
+            self.opponent_summary.setAccessibleName("Selected opponent profile")
+            self.opponent_summary.setMinimumWidth(0)
+            self.opponent_summary.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            summary_layout = QtWidgets.QVBoxLayout(self.opponent_summary)
+            summary_layout.setContentsMargins(0, 0, 0, 0)
+            summary_layout.setSpacing(0)
+            self.opponent_summary_identity = SummaryLine("consoleOpponentIdentity")
+            self.opponent_summary_record = SummaryLine("consoleOpponentRecord")
+            summary_layout.addWidget(self.opponent_summary_identity)
+            summary_layout.addWidget(self.opponent_summary_record)
+            brand_row.addWidget(self.opponent_summary, 1)
+            self.set_opponent_summary()
+            self.brand_actions_widget = QtWidgets.QWidget()
+            self.brand_actions = WrappingActions(self.brand_actions_widget)
+            self.brand_actions_widget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+            self.brand_grid.addWidget(self.brand_identity, 0, 0)
+            self.brand_grid.addWidget(self.brand_actions_widget, 0, 1)
+            self.brand_grid.setColumnStretch(1, 1)
+            layout.addWidget(self.brand_widget)
             self.body_layout = QtWidgets.QHBoxLayout()
             self.body_layout.setSpacing(12)
             self.profile_panel = QtWidgets.QFrame()
@@ -206,12 +321,26 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
                 profile_layout.addWidget(button)
                 self.destination_buttons[route] = button
             self.body_layout.addWidget(self.profile_panel)
+            self.profile_host = QtWidgets.QWidget()
+            self.profile_host_layout = QtWidgets.QVBoxLayout(self.profile_host)
+            self.profile_host_layout.setContentsMargins(0, 0, 0, 0)
+            self.profile_hint = QtWidgets.QLabel("The selected opponent profile and tools are shown in the left rail.")
+            self.profile_hint.setWordWrap(True)
+            self.profile_host_layout.addWidget(self.profile_hint)
             self.display_panel = QtWidgets.QFrame()
             self.display_panel.setObjectName("consoleDisplay")
             display_layout = QtWidgets.QVBoxLayout(self.display_panel)
             display_layout.setContentsMargins(12, 10, 12, 12)
             display_layout.setSpacing(10)
             navigation_row = QtWidgets.QHBoxLayout()
+            self.browse_button = QtWidgets.QToolButton()
+            self.browse_button.setText("Browse")
+            self.browse_button.setAccessibleName("Browse Companion pages and opponent profile")
+            self.browse_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+            self.browse_menu = QtWidgets.QMenu(self.browse_button)
+            self.browse_button.setMenu(self.browse_menu)
+            self.browse_actions = {}
+            navigation_row.addWidget(self.browse_button)
             self.back_button = self._button("‹ Back")
             self.back_button.clicked.connect(self.back)
             self.home_button = self._button("Home")
@@ -322,6 +451,29 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             self._game_title = str(game_title or "")
             self._render_navigation()
 
+        def set_opponent_summary(self, name=None, race=None, mmr=None, wins=None, losses=None):
+            identity = opponent_identity(name, race, mmr)
+            record = opponent_record(wins, losses)
+            first_line = f"{identity['name']} · {identity['race']} · MMR {identity['mmr']}"
+            second_line = f"Your record {record['text']} · {record['winRate']}"
+            description = "Selected opponent profile. " + first_line + ". " + second_line
+            self.opponent_summary_identity.set_full_text(first_line)
+            self.opponent_summary_record.set_full_text(second_line)
+            for widget in (self.opponent_summary, self.opponent_summary_identity, self.opponent_summary_record):
+                widget.setToolTip(description)
+                widget.setAccessibleDescription(description)
+
+        def attach_window_controls(self, widget):
+            for index in range(self.brand_actions.count() - 1, -1, -1):
+                if self.brand_actions.itemAt(index).widget() is widget:
+                    self.brand_actions.takeAt(index)
+            if self._window_controls is not None and self._window_controls is not widget:
+                self.brand_grid.removeWidget(self._window_controls)
+                self._window_controls.hide()
+            self._window_controls = widget
+            self.brand_grid.addWidget(widget, 0, 2, QtCore.Qt.AlignTop | QtCore.Qt.AlignRight)
+            widget.show()
+
         def set_game_navigation(self, index, total, title=""):
             valid = isinstance(index, int) and not isinstance(index, bool) and isinstance(total, int) and not isinstance(total, bool) and 0 <= index < total
             self.previous_game.setEnabled(valid and index > 0)
@@ -339,11 +491,44 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             if level not in {"compact", "standard", "detailed", "full"}:
                 raise ValueError("Unknown Companion information layout")
             self._density = level
-            self.profile_panel.setFixedWidth(252 if level in {"compact", "standard"} else 280)
+            if not self._narrow:
+                self.profile_panel.setFixedWidth(252 if level in {"compact", "standard"} else 280)
             self.layout().setSpacing(8 if level == "standard" else 10)
+
+        def resizeEvent(self, event):
+            super().resizeEvent(event)
+            self._update_responsive()
+
+        def _update_responsive(self):
+            narrow = self.width() < 800
+            if narrow == self._narrow:
+                return
+            self._narrow = narrow
+            self.brand_grid.removeWidget(self.brand_identity)
+            self.brand_grid.removeWidget(self.brand_actions_widget)
+            self.brand_grid.addWidget(self.brand_identity, 0, 0, 1, 2 if narrow else 1)
+            self.brand_grid.addWidget(self.brand_actions_widget, 1 if narrow else 0, 0 if narrow else 1, 1, 3 if narrow else 1)
+            self.brand_edition.setVisible(not narrow)
+            self.opponent_summary.setVisible(narrow)
+            self.browse_button.setVisible(narrow)
+            self.profile_hint.setVisible(not narrow)
+            if narrow:
+                self.body_layout.removeWidget(self.profile_panel)
+                self.profile_panel.setMinimumWidth(0)
+                self.profile_panel.setMaximumWidth(16777215)
+                self.profile_host_layout.addWidget(self.profile_panel, 1)
+            else:
+                self.profile_host_layout.removeWidget(self.profile_panel)
+                self.body_layout.insertWidget(0, self.profile_panel)
+                self.profile_panel.setFixedWidth(252 if self._density in {"compact", "standard"} else 280)
+            self.profile_panel.show()
+            self.updateGeometry()
 
         def current_density(self):
             return self._density
+
+        def minimumSizeHint(self):
+            return QtCore.QSize(280, 160)
 
         def _render_navigation(self):
             route = self.current_route()
@@ -357,6 +542,11 @@ def build_companion_console(parent, *, profile_widget, scouting_widget=None, too
             self.back_button.setEnabled(len(self._navigation.history()) > 1)
             self.home_button.setEnabled(route != "home")
             self.game_controls.setVisible(route in {"scouting", "history", "game"})
+            for destination in self._pages:
+                if destination not in self.browse_actions:
+                    action = self.browse_menu.addAction(self._titles[destination])
+                    action.triggered.connect(lambda _checked=False, target=destination: self.navigate(target))
+                    self.browse_actions[destination] = action
             for destination, button in self.destination_buttons.items():
                 button.setEnabled(destination in self._pages)
                 button.setChecked(destination == route)

@@ -25,6 +25,7 @@ from typing import Dict, List, Optional
 from .companion_modes import normalize_modes
 
 STATE_FILENAME = "agent.json"
+COMPANION_SKINS = frozenset({"default", "protoss", "terran", "zerg"})
 
 # Every subsystem shares one mutable AgentState and persists the whole object.
 # Atomic replace protects readers from partial JSON, but without writer
@@ -95,6 +96,8 @@ class AgentState:
     window_geometry: Optional[str] = None
     window_information_layout: str = "standard"
     window_page: Optional[str] = None
+    companion_skin: str = "default"
+    companion_animations: bool = True
 
     api_base_override: Optional[str] = None
     """If set, takes precedence over the ``SC2TOOLS_API_BASE`` env var
@@ -425,6 +428,8 @@ def load_state(state_dir: Path) -> AgentState:
         window_geometry=_coerce_geometry(raw.get("window_geometry")),
         window_information_layout=_coerce_information_layout(raw.get("window_information_layout")),
         window_page=_coerce_window_page(raw.get("window_page")),
+        companion_skin=_coerce_companion_skin(raw.get("companion_skin")),
+        companion_animations=raw.get("companion_animations") if type(raw.get("companion_animations")) is bool else True,
         api_base_override=_coerce_str(raw.get("api_base_override")),
         log_level_override=_coerce_str(raw.get("log_level_override")),
         autostart_enabled=bool(raw.get("autostart_enabled") or False),
@@ -548,6 +553,8 @@ def _snapshot(state: AgentState) -> dict:
         window_geometry=_coerce_geometry(state.window_geometry),
         window_information_layout=_coerce_information_layout(state.window_information_layout),
         window_page=_coerce_window_page(state.window_page),
+        companion_skin=_coerce_companion_skin(state.companion_skin),
+        companion_animations=state.companion_animations if type(state.companion_animations) is bool else True,
         uploaded=dict(state.uploaded),
         path_by_game_id=dict(state.path_by_game_id),
         companion_preferences=dict(state.companion_preferences),
@@ -610,6 +617,10 @@ def _coerce_mmr(value: object) -> Optional[int]:
 
 def _coerce_information_layout(value: object) -> str:
     return value if isinstance(value, str) and value in {"compact", "standard", "detailed", "full"} else "standard"
+
+
+def _coerce_companion_skin(value: object) -> str:
+    return value if isinstance(value, str) and value in COMPANION_SKINS else "default"
 
 
 def _coerce_int(value: object) -> Optional[int]:

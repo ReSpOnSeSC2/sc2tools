@@ -7,6 +7,7 @@ import json
 import math
 from pathlib import Path
 import threading
+from types import SimpleNamespace
 
 from .state import _replace_state_file
 
@@ -71,6 +72,47 @@ def build_game_summary(game, accepted, *, history=False):
         "ladderRace": getattr(game, "my_ladder_race", None) or own_race,
         "isHistory": bool(history), "isResumed": getattr(game, "is_resumed_from_replay", False) is True,
     }
+
+
+def summary_from_cloud_game(payload, game_id):
+    if not isinstance(payload, dict) or payload.get("gameId") != game_id:
+        return {}
+    opponent = payload.get("opponent") if isinstance(payload.get("opponent"), dict) else {}
+    own_race = payload.get("myRace")
+    opp_race = opponent.get("race")
+    ladder_race = payload.get("myLadderRace")
+    name = opponent.get("displayName") or opponent.get("name")
+    summary = build_game_summary(SimpleNamespace(
+        game_id=game_id, date_iso=payload.get("date"), result=payload.get("result"),
+        my_race=own_race if isinstance(own_race, str) and own_race in RACES else None,
+        opponent={"race": opp_race if isinstance(opp_race, str) and opp_race in RACES else None,
+                  "displayName": name if isinstance(name, str) else None},
+        map_name=payload.get("map") if isinstance(payload.get("map"), str) else "",
+        duration_sec=payload.get("durationSec"),
+        my_mmr=payload.get("myMmr"), my_toon_handle=payload.get("myToonHandle"),
+        my_ladder_race=ladder_race if isinstance(ladder_race, str) and ladder_race in RACES else None,
+        is_ladder_game=payload.get("isLadderGame"),
+        is_resumed_from_replay=payload.get("isResumedFromReplay"),
+    ), {"gameId": game_id})
+    summary.pop("isHistory", None)
+    if type(payload.get("isResumedFromReplay")) is not bool:
+        summary["isResumed"] = None
+    return summary
+
+
+def needs_game_metadata(row):
+    identifier = row.get("gameId")
+    if (row.get("status") != "uploaded" or not isinstance(identifier, str)
+            or not 0 < len(identifier) <= 200 or identifier != identifier.strip()
+            or identifier in {".", ".."} or any(ord(character) < 32 or ord(character) == 127 for character in identifier)
+            or not isinstance(row.get("path"), str) or not row["path"]):
+        return False
+    races = row.get("races") if isinstance(row.get("races"), dict) else {}
+    return (row.get("seeded") is True or not parse_time(row.get("dateIso"))
+            or not isinstance(row.get("result"), str) or row["result"] not in {"Victory", "Defeat", "Tie"}
+            or not isinstance(races.get("own"), str) or races["own"] not in RACES
+            or not isinstance(races.get("opponent"), str) or races["opponent"] not in RACES
+            or any(row.get(field) in (None, "") for field in ("oppName", "map", "durationSec")))
 
 
 def today_summary(rows, *, now=None):
@@ -164,6 +206,56 @@ class RecentGamesStore:
         with self.lock:
             return copy.deepcopy(list(reversed(self.rows)))
 
+    def metadata_candidates(self):
+        with self.lock:
+            return copy.deepcopy([row for row in reversed(self.rows)
+                                  if row.get("owner") == self.owner and needs_game_metadata(row)])
+
+    def enrich_metadata(self, candidate, summary, *, can_commit=lambda: True):
+        fields = ("dateIso", "result", "oppName", "map", "durationSec", "mmr", "isLadder",
+                  "region", "ladderRace", "isResumed")
+        with self.lock:
+            if (candidate.get("owner") != self.owner or not can_commit()
+                    or summary.get("gameId") != candidate.get("gameId")):
+                return False
+            before = self.rows
+            rows = copy.deepcopy(before)
+            changed = False
+            for row in rows:
+                if (row.get("owner") != self.owner or row.get("path") != candidate.get("path")
+                        or row.get("gameId") != candidate.get("gameId") or not needs_game_metadata(row)
+                        or row.get("updatedAt") != candidate.get("updatedAt")):
+                    continue
+                for field in fields:
+                    if row.get(field) in (None, "") and summary.get(field) is not None:
+                        row[field] = copy.deepcopy(summary[field])
+                        changed = True
+                races = row.get("races") if isinstance(row.get("races"), dict) else {}
+                for side in ("own", "opponent"):
+                    value = summary.get("races", {}).get(side)
+                    if races.get(side) in (None, "") and value in RACES:
+                        races[side] = value
+                        changed = True
+                if races:
+                    row["races"] = races
+                if row.get("seeded") and not needs_game_metadata({**row, "seeded": False}):
+                    row.pop("seeded", None)
+                    changed = True
+            if not changed or not can_commit():
+                return False
+            minimum = datetime.min.replace(tzinfo=timezone.utc)
+            rows.sort(key=lambda row: parse_time(row.get("dateIso") if row.get("status") == "uploaded" else row.get("updatedAt"))
+                      or parse_time(row.get("updatedAt")) or minimum)
+            self.rows = rows
+            try:
+                if not self._save(can_commit=can_commit):
+                    self.rows = before
+                    return False
+            except OSError:
+                self.rows = before
+                raise
+            return True
+
     def record(self, path, summary, *, status="uploaded", detail=None, now=None):
         now = now or datetime.now(timezone.utc)
         row = {**summary, "owner": self.owner, "path": str(path), "status": status,
@@ -208,7 +300,7 @@ class RecentGamesStore:
                 self.rows = before
                 raise
 
-    def _save(self):
+    def _save(self, *, can_commit=None):
         # Same-directory durable replacement keeps a crash from truncating the
         # required JSONL file. The writer is called off the Qt thread.
         import os
@@ -221,9 +313,12 @@ class RecentGamesStore:
                     stream.write(json.dumps(row, ensure_ascii=False, separators=(",", ":")) + "\n")
                 stream.flush()
                 os.fsync(stream.fileno())
+            if can_commit is not None and not can_commit():
+                return False
             # Reuse the state writer's bounded Windows sharing-violation
             # retry; antivirus/indexer reads can briefly hold this file too.
             _replace_state_file(temporary, self.path)
+            return True
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)

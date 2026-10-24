@@ -11,6 +11,43 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.22.0 - Hybrid team Companion and history recovery
+- Add Hybrid team scouting: Compact follows one selected enemy; expanded views
+  show the enemy roster. Confirm your identity and teammate/enemy assignments
+  when the live client does not provide authoritative team IDs. Historical 1v1
+  MMR and records are labeled, never presented as current team-ladder ratings.
+- Explicitly arm a temporary Ghost target for the current confirmed team game;
+  local team replays can preview a chosen human player's build. Team play never
+  automatically selects a 1v1 Ghost slot, check-in, or randomizer pick.
+- Pinned panels share the frameless race-art appearance and matching minimize
+  and close controls. Default retains the purple design unchanged.
+- Gradually enrich incomplete legacy Recent games receipts from owned cloud
+  metadata, preserving upload history, source paths, pairing, and replay files
+  without resyncing. Played dates restore chronological history and Today stats.
+- Suppress credential-bearing third-party OBS logs and repetitive connection
+  tracebacks while retaining sanitized managed connection status.
+- Update the local verification preview's how-to and illustrated landing section;
+  this is not a claim that a signed stable release has been published.
+
+### Agent 0.21.3 - Compact opponent bar and expandable build orders
+- Slim horizontal Compact bar, smaller Standard/Detailed layouts, responsive
+  navigation, and themed window controls instead of the Windows title bar.
+- Three-, six-, ten-minute, and full stored replay build-order icon chains with
+  optional worker/supply events, repeated production, and explicit preview states.
+- Preserve tray behavior, settings drafts, selected encounters, and Ghost targets.
+- Optional race skins use original generated textured artwork: gold-and-cyan
+  Protoss, blue-steel Terran, and organic Zerg. Responsive frames preserve corner
+  details across Compact, Standard, Detailed, and Full workspace. Default keeps
+  the purple design unchanged.
+- Optional expansion animations add Protoss energy warp, Terran mechanical
+  deployment, and Zerg morphing; turning them off keeps size changes instant.
+
+### Agent 0.21.2 - Consistent desktop console
+- Extend the Companion's purple console styling across every agent page,
+  shared control, check-in card, and pinned game panel.
+- Keep navigation and settings drafts stable when switching pages, and clarify
+  the master assistance switch and always-on-top opponent/scouting controls.
+
 ### Agent 0.21.1 - Companion console and scouting voice
 - Reference-led purple dossier UI with portrait-based Compact, W–L and win
   percentage, icon build chains, and context-preserving screen navigation.

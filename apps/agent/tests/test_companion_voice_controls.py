@@ -366,3 +366,53 @@ def test_manual_read_revalidates_permission_and_identity_at_click_time(tmp_path,
         page.read_report_button.click()
         assert len(speaker.attempts) == 1
     ''')
+
+
+def test_account_rotation_stops_private_note_readout_even_when_live_game_key_is_unchanged(tmp_path):
+    run_voice_check(tmp_path, '''
+        enable_voice()
+        old = put_game(key="unchanged-game")
+        page._account_key = "old-account"
+        render()
+        assert speaker.active
+        before = len(speaker.events)
+        fresh = deepcopy(old)
+        fresh["streamerHistory"]["opponentNotes"]["text"] = "New account note"
+        page._requests["snapshot"] = 4242
+        page._completed({"channel": "snapshot", "request": 4242, "payload": {"action": "snapshot"},
+                         "result": {"paired": True, "accountKey": "new-account", "liveGame": fresh,
+                                    "preferences": deepcopy(state["preferences"]), "modes": default_modes()}})
+        events = speaker.events[before:]
+        assert events and events[0][0] == "stop"
+        assert all("Current opponent scouting note" not in str(value) for kind, value in events if kind == "speak")
+        assert page._account_key == "new-account"
+    ''')
+
+
+def test_team_voice_waits_for_bound_history_then_reads_opted_in_notes_before_deadline(tmp_path):
+    run_voice_check(tmp_path, '''
+        from tests.test_team_roster import snapshot as team_snapshot
+        enable_voice()
+        original_job = page._job
+        page._job = lambda channel, payload: None if channel.startswith("team_history:") else original_job(channel, payload)
+        page._opponents = [{"pulseId": "enemy-z-owned", "name": "Enemy Z", "race": "Zerg"}]
+        page._snapshot = team_snapshot()
+        page._snapshot["liveGame"]["capturedAt"] = time.time()
+        page._snapshot_healthy = True
+        page._refresh_team_roster()
+        roster = page.team_roster_state
+        keys = {row["name"]: row["key"] for row in roster.players}
+        roster.confirm(keys["Me"], [keys["Enemy Z"], keys["Enemy T"]])
+        page._refresh_team_roster()
+        assert roster.bindings[keys["Enemy Z"]] == "enemy-z-owned"
+        assert not speaker.attempts
+        assert page._speech_pending_key is not None
+        page._team_details["enemy-z-owned"] = {"name": "Enemy Z", "totals": {"wins": 2, "losses": 1},
+                                               "notes": "Late-arriving opted-in scouting note", "notesReadAloud": True}
+        page._team_selection_changed()
+        assert len(speaker.attempts) == 1
+        assert "Late-arriving opted-in scouting note" in speaker.attempts[0]
+        assert ":identity:enemy-z-owned" in page._speech_game_key
+        render()
+        assert len(speaker.attempts) == 1
+    ''')

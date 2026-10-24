@@ -20,9 +20,7 @@ Architectural notes
 * Imports of ``PySide6`` are guarded so this module can be imported on
   CI / headless boxes without the GUI extras installed — the agent
   degrades to console+tray. ``can_use_gui()`` does the probe.
-* Styling intentionally mirrors the website's dark theme tokens
-  (``apps/web/app/globals.css``) so users get a coherent look from the
-  installer through the desktop window into the dashboard.
+* Every desktop page and panel shares the Companion console theme.
 """
 
 from __future__ import annotations
@@ -99,376 +97,24 @@ def _qt():
     return QtCore, QtGui, QtWidgets
 
 
-# ---------------------------------------------------------------------
-# Stylesheet — dark theme matched to apps/web/app/globals.css.
-# ---------------------------------------------------------------------
+from . import theme
 
-# Pulled verbatim from globals.css :root[data-theme="dark"]. Keep these
-# in sync if the website palette is rebranded.
-_BG = "#0b0d12"
-_SURFACE = "#11141b"
-_ELEVATED = "#161a23"
-_SUBTLE = "#1c2230"
-_TEXT = "#e6e8ee"
-_TEXT_MUTED = "#9aa3b2"
-_TEXT_DIM = "#6b7280"
-_ACCENT = "#7c8cff"
-_ACCENT_HOVER = "#94a0ff"
-_ACCENT_CYAN = "#3ec0c7"
+_BG = theme.BG
+_SURFACE = theme.SURFACE
+_ELEVATED = theme.ELEVATED
+_SUBTLE = theme.SUBTLE
+_TEXT = theme.TEXT
+_TEXT_MUTED = theme.TEXT_MUTED
+_TEXT_DIM = theme.TEXT_DIM
+_ACCENT = theme.ACCENT
+_ACCENT_HOVER = theme.ACCENT_HOVER
+_ACCENT_CYAN = theme.ACCENT_CYAN
 _SUCCESS = palette.GREEN
 _WARNING = palette.AMBER
 _DANGER = palette.RED
-_BORDER = "#1f2533"
-_BORDER_STRONG = "#2a3142"
-
-
-_STYLE = f"""
-QWidget {{
-    background-color: {_BG};
-    color: {_TEXT};
-    font-family: 'Segoe UI', 'Inter', system-ui, -apple-system, Arial, sans-serif;
-    font-size: 13px;
-}}
-/* Labels inherit the window background from the QWidget rule above,
-   which paints a darker box behind every caption sitting on a card.
-   Make them transparent by default; the badge / code styles below
-   win via higher specificity where they set explicit backgrounds. */
-QLabel {{
-    background: transparent;
-}}
-QLabel#settingsToastOk {{ color: {_SUCCESS}; }}
-QLabel#settingsToastErr, QLabel#fieldError {{ color: {_DANGER}; }}
-QToolButton#helpLink {{ border: 1px solid {_BORDER_STRONG}; border-radius: 10px; color: {_TEXT_MUTED}; }}
-QCheckBox {{
-    background: transparent;
-}}
-QFrame#card {{
-    background-color: {_SURFACE};
-    border: 1px solid {_BORDER};
-    border-radius: 14px;
-}}
-QFrame#cardElevated {{
-    background-color: {_ELEVATED};
-    border: 1px solid {_BORDER_STRONG};
-    border-radius: 14px;
-}}
-QFrame#cardArchive {{
-    background-color: rgba(124, 140, 255, 0.10);
-    border: 1px solid {_ACCENT};
-    border-radius: 10px;
-}}
-QFrame#sidebar {{
-    background-color: {_SURFACE};
-    border-right: 1px solid {_BORDER};
-}}
-QLabel#h1 {{
-    font-size: 26px;
-    font-weight: 600;
-    color: {_TEXT};
-}}
-QLabel#h2 {{
-    font-size: 16px;
-    font-weight: 600;
-    color: {_TEXT};
-}}
-QLabel#muted {{
-    color: {_TEXT_MUTED};
-}}
-QLabel#dim {{
-    color: {_TEXT_DIM};
-}}
-QLabel#stat {{
-    font-size: 24px;
-    font-weight: 600;
-    color: {_TEXT};
-}}
-QLabel#code {{
-    font-family: 'Cascadia Mono', 'Consolas', 'Menlo', monospace;
-    font-size: 44px;
-    font-weight: 700;
-    letter-spacing: 8px;
-    color: {_ACCENT};
-    background-color: {_SUBTLE};
-    border: 1px solid {_BORDER_STRONG};
-    border-radius: 8px;
-    padding: 14px 24px;
-}}
-QLabel#badgeInfo {{ color: {palette.CYAN}; background: rgba(59,195,202,0.15); border-radius: 10px; padding: 4px 10px; }}
-QLabel#badgeOk {{
-    background-color: rgba(62, 192, 122, 0.16);
-    color: {_SUCCESS};
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-weight: 600;
-}}
-QLabel#badgeWarn {{
-    background-color: rgba(230, 180, 80, 0.16);
-    color: {_WARNING};
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-weight: 600;
-}}
-QLabel#badgeErr {{
-    background-color: rgba(255, 107, 107, 0.16);
-    color: {_DANGER};
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-weight: 600;
-}}
-QLabel#badgeNeutral {{
-    background-color: rgba(124, 140, 255, 0.16);
-    color: {_ACCENT};
-    border-radius: 12px;
-    padding: 4px 12px;
-    font-weight: 600;
-}}
-QPushButton {{
-    background-color: {_ELEVATED};
-    color: {_TEXT};
-    border: 1px solid {_BORDER_STRONG};
-    border-radius: 8px;
-    padding: 8px 14px;
-    font-weight: 500;
-    min-height: 20px;
-    text-align: center;
-}}
-QPushButton:hover {{
-    background-color: {_SUBTLE};
-    border-color: {_ACCENT};
-}}
-QPushButton:pressed {{
-    background-color: {_BORDER_STRONG};
-}}
-QPushButton#primary {{
-    background-color: {_ACCENT_CYAN};
-    color: #0b0d12;
-    border: 1px solid {_ACCENT_CYAN};
-    font-weight: 600;
-}}
-QPushButton#primary:hover {{
-    background-color: #72d8d8;
-    border-color: #72d8d8;
-}}
-QPushButton#danger {{
-    border-color: rgba(255, 107, 107, 0.4);
-    color: {_DANGER};
-}}
-QPushButton#danger:hover {{
-    background-color: rgba(255, 107, 107, 0.1);
-    border-color: {_DANGER};
-}}
-QPushButton#navItem {{
-    background-color: transparent;
-    border: none;
-    border-radius: 6px;
-    padding: 9px 14px;
-    text-align: left;
-    color: {_TEXT_MUTED};
-    font-weight: 500;
-}}
-QPushButton#navItem:hover {{
-    background-color: {_ELEVATED};
-    color: {_TEXT};
-}}
-QPushButton#navItem:checked {{
-    background-color: {_ELEVATED};
-    color: {_TEXT};
-    border-left: 3px solid {_ACCENT_CYAN};
-}}
-QLineEdit, QComboBox, QPlainTextEdit {{
-    background-color: {_ELEVATED};
-    color: {_TEXT};
-    border: 1px solid {_BORDER_STRONG};
-    border-radius: 8px;
-    padding: 8px 10px;
-    selection-background-color: {_ACCENT};
-    selection-color: #0b0d12;
-}}
-QLineEdit:focus, QComboBox:focus, QPlainTextEdit:focus {{
-    border-color: {_ACCENT_CYAN};
-}}
-QComboBox::drop-down {{
-    border: none;
-}}
-QCheckBox {{
-    color: {_TEXT};
-    spacing: 8px;
-}}
-QCheckBox::indicator {{
-    width: 16px;
-    height: 16px;
-    border: 1px solid {_BORDER_STRONG};
-    border-radius: 3px;
-    background-color: {_ELEVATED};
-}}
-QCheckBox::indicator:checked {{
-    background-color: {_ACCENT};
-    border-color: {_ACCENT};
-}}
-QTableWidget {{
-    background-color: {_SURFACE};
-    border: 1px solid {_BORDER};
-    border-radius: 8px;
-    gridline-color: {_BORDER};
-    selection-background-color: rgba(124, 140, 255, 0.18);
-    selection-color: {_TEXT};
-}}
-QTableWidget::item {{
-    padding: 6px 8px;
-    border-bottom: 1px solid {_BORDER};
-}}
-QHeaderView::section {{
-    background-color: {_ELEVATED};
-    color: {_TEXT_MUTED};
-    border: none;
-    border-bottom: 1px solid {_BORDER_STRONG};
-    padding: 8px;
-    font-weight: 600;
-}}
-QPlainTextEdit#log {{
-    font-family: 'Cascadia Mono', 'Consolas', 'Menlo', monospace;
-    font-size: 12px;
-    background-color: {_BG};
-    border: 1px solid {_BORDER};
-    border-radius: 8px;
-    color: {_TEXT_MUTED};
-}}
-QScrollBar:vertical {{
-    background: transparent;
-    width: 10px;
-    margin: 4px 2px;
-}}
-QScrollBar::handle:vertical {{
-    background: {_BORDER_STRONG};
-    border-radius: 4px;
-    min-height: 24px;
-}}
-QScrollBar::handle:vertical:hover {{
-    background: {_ACCENT};
-}}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-    height: 0;
-}}
-QPushButton:disabled, QPushButton#primary:disabled {{
-    background-color: #141924;
-    color: #606d80;
-    border-color: #202938;
-}}
-QPushButton#quietButton {{
-    background-color: transparent;
-    border: 1px solid transparent;
-    color: #b4c0d0;
-    padding: 6px 10px;
-}}
-QPushButton#quietButton:hover {{
-    background-color: #1d2635;
-    border-color: #334053;
-    color: #edf2f8;
-}}
-QPushButton#quietButton:disabled {{
-    background-color: transparent;
-    color: #596577;
-    border-color: transparent;
-}}
-QWidget#studioContent, QScrollArea#streamStudio {{
-    background-color: #0e131d;
-}}
-QWidget#studioTransparent {{
-    background: transparent;
-}}
-QFrame#studioCard, QFrame#studioDestination {{
-    background-color: #151d2a;
-    border: 1px solid #293548;
-    border-radius: 14px;
-}}
-QFrame#studioCommand {{
-    background-color: #172131;
-    border: 1px solid #344459;
-    border-radius: 16px;
-}}
-QLineEdit#streamTitle {{
-    font-size: 19px;
-    font-weight: 600;
-    background-color: #0e1724;
-    border-color: #35465e;
-    padding: 8px 14px;
-}}
-QLineEdit#streamTitle:focus {{
-    border-color: {_ACCENT_CYAN};
-}}
-QLabel#studioEyebrow {{
-    color: #9dabbf;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 1px;
-}}
-QLabel#studioCounter {{
-    color: #96a7bb;
-    font-size: 12px;
-}}
-QLabel#studioNotice {{
-    color: #b8c8dc;
-    font-size: 12px;
-}}
-QLabel#studioDestinationTitle {{
-    font-size: 16px;
-    font-weight: 600;
-    color: #f0f4fa;
-}}
-QLabel#canvasLandscape, QLabel#canvasPortrait {{
-    background-color: #1c2c40;
-    border: 1px solid #4b6380;
-    border-radius: 5px;
-    color: #9cbbd6;
-    font-size: 10px;
-    font-weight: 600;
-}}
-QLabel#studioBadge {{
-    background-color: #242e3e;
-    border: 1px solid #344154;
-    border-radius: 8px;
-    padding: 4px 9px;
-    font-size: 11px;
-    font-weight: 600;
-    color: #bcc9da;
-}}
-QLabel#studioBadge[tone="good"] {{
-    background-color: #143b33;
-    border-color: #285b4e;
-    color: #8be5bd;
-}}
-QLabel#studioBadge[tone="live"] {{
-    background-color: #442831;
-    border-color: #78404e;
-    color: #ffabba;
-}}
-QLabel#studioBadge[tone="warning"] {{
-    background-color: #3e3321;
-    border-color: #665132;
-    color: #f3cf8b;
-}}
-QToolButton#studioDisclosureToggle {{
-    background-color: #151d2a;
-    border: 1px solid #293548;
-    border-radius: 10px;
-    color: #aebcd0;
-    text-align: left;
-    padding: 11px 14px;
-    font-weight: 500;
-}}
-QToolButton#studioDisclosureToggle:hover, QToolButton#studioDisclosureToggle:checked {{
-    background-color: #1a2636;
-    border-color: #3a4a60;
-    color: #edf3fa;
-}}
-QComboBox QAbstractItemView {{
-    background-color: #172131;
-    color: {_TEXT};
-    border: 1px solid #344459;
-    selection-background-color: #284b58;
-    selection-color: #ffffff;
-}}
-"""
+_BORDER = theme.BORDER
+_BORDER_STRONG = theme.BORDER_STRONG
+_STYLE = theme.STYLE
 
 
 # ---------------------------------------------------------------------
@@ -669,6 +315,9 @@ class GuiUI:
         on_window_state: Optional[Callable[[str, str], None]] = None,
         window_information_layout: str = "standard",
         on_window_information_layout: Optional[Callable[[str], None]] = None,
+        window_skin: str = "default",
+        window_animations: bool = True,
+        on_window_appearance: Optional[Callable[[str, bool], None]] = None,
         on_pairing_retry: Optional[Callable[[], None]] = None,
         on_pairing_refresh: Optional[Callable[[], None]] = None,
         on_link_again: Optional[Callable[[], None]] = None,
@@ -711,6 +360,10 @@ class GuiUI:
         from .window_sizes import normalize_information_layout
         self._window_information_layout = normalize_information_layout(window_information_layout)
         self._on_window_information_layout = on_window_information_layout
+        from .race_visuals import normalize_skin
+        self._window_skin = normalize_skin(window_skin)
+        self._window_animations = window_animations if type(window_animations) is bool else True
+        self._on_window_appearance = on_window_appearance
         self._version = version
         self._dashboard_url = dashboard_url
         self._pairing_url = pairing_url
@@ -1231,9 +884,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def __init__(self) -> None:
             super().__init__()
+            self.setWindowFlag(QtCore.Qt.FramelessWindowHint, True)
             self.setWindowTitle(f"SC2 Tools Agent  ·  v{ui._version}")
             self.resize(1220, 800)
-            self.setMinimumSize(820, 540)
+            self.setMinimumSize(480, 360)
 
             # Window icon — reuse the tray PNG so the alt-tab thumbnail
             # matches the system tray glyph.
@@ -1368,17 +1022,97 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _build_layout(self) -> None:
             central = QtWidgets.QWidget()
+            central.setObjectName("agentRoot")
             self.setCentralWidget(central)
 
-            outer = QtWidgets.QHBoxLayout(central)
-            outer.setContentsMargins(0, 0, 0, 0)
-            outer.setSpacing(0)
+            self._outer_layout = QtWidgets.QVBoxLayout(central)
+            self._outer_layout.setContentsMargins(10, 10, 10, 10)
+            self._outer_layout.setSpacing(0)
+            self._agent_frame = QtWidgets.QFrame()
+            self._agent_frame.setObjectName("agentFrame")
+            self._agent_frame.setProperty("companion", False)
+            self._outer_layout.addWidget(self._agent_frame)
+            self._frame_layout = QtWidgets.QVBoxLayout(self._agent_frame)
+            self._frame_layout.setContentsMargins(14, 12, 14, 14)
+            self._frame_layout.setSpacing(10)
+            self._agent_brandbar = QtWidgets.QWidget()
+            self._agent_brandbar.setObjectName("agentBrandbar")
+            brand_row = QtWidgets.QHBoxLayout(self._agent_brandbar)
+            brand_row.setContentsMargins(0, 0, 0, 0)
+            brand_row.setSpacing(10)
+            emblem = QtWidgets.QLabel()
+            emblem.setObjectName("agentBrandOrb")
+            emblem.setFixedSize(23, 23)
+            brand_row.addWidget(emblem)
+            brand = QtWidgets.QLabel("SC2 TOOLS")
+            brand.setObjectName("agentBrand")
+            brand_row.addWidget(brand)
+            edition = QtWidgets.QLabel("AGENT")
+            edition.setObjectName("agentEdition")
+            brand_row.addWidget(edition)
+            self._agent_edition = edition
+            brand_row.addStretch()
+            version = QtWidgets.QLabel(f"v{ui._version}")
+            version.setObjectName("agentEdition")
+            brand_row.addWidget(version)
+            self._agent_version = version
+            self._agent_menu_button = QtWidgets.QToolButton()
+            self._agent_menu_button.setText("Agent")
+            self._agent_menu_button.setAccessibleName("Agent pages and settings")
+            self._agent_menu_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+            menu = QtWidgets.QMenu(self._agent_menu_button)
+            for title, route in (("Companion", "companion"), ("Dashboard", "dashboard"), ("Recent games", "recent"), ("Streams", "streams"), ("Activity log", "log"), ("Settings", "settings")):
+                menu.addAction(title, lambda _checked=False, destination=route: self._go_to_page(destination))
+            menu.addSeparator()
+            menu.addAction("Help & support", lambda: self._open_help("desktop-app-overview"))
+            menu.addAction("Check for updates", self._click_check_updates)
+            menu.addSeparator()
+            menu.addAction("Quit SC2 Tools", ui._on_quit)
+            self._agent_menu_button.setMenu(menu)
+            brand_row.addWidget(self._agent_menu_button)
+            from .window_chrome import build_window_controls
+            self._agent_window_controls = build_window_controls(self._agent_brandbar, window=self, QtCore=QtCore, QtWidgets=QtWidgets)
+            brand_row.addWidget(self._agent_window_controls)
+            self._frame_layout.addWidget(self._agent_brandbar)
+            body = QtWidgets.QHBoxLayout()
+            body.setContentsMargins(0, 0, 0, 0)
+            body.setSpacing(12)
+            self._frame_layout.addLayout(body, 1)
+            self._agent_body = body
 
             self._sidebar = self._build_sidebar()
-            outer.addWidget(self._sidebar)
+            body.addWidget(self._sidebar)
 
+            self._agent_display = QtWidgets.QFrame()
+            self._agent_display.setObjectName("agentDisplay")
+            self._agent_display.setProperty("companion", False)
+            display_layout = QtWidgets.QVBoxLayout(self._agent_display)
+            display_layout.setContentsMargins(0, 0, 0, 0)
+            display_layout.setSpacing(0)
+            self._agent_toolbar = QtWidgets.QWidget()
+            self._agent_toolbar.setObjectName("agentPageToolbar")
+            toolbar = QtWidgets.QHBoxLayout(self._agent_toolbar)
+            toolbar.setContentsMargins(12, 10, 12, 0)
+            toolbar.setSpacing(8)
+            self._agent_companion_button = QtWidgets.QPushButton("‹ Companion")
+            self._agent_companion_button.setToolTip("Return to Companion without losing your place or unsaved settings.")
+            self._agent_companion_button.clicked.connect(lambda: self._go_to_page("companion"))
+            toolbar.addWidget(self._agent_companion_button)
+            home_button = QtWidgets.QPushButton("Home")
+            home_button.setAccessibleName("Agent dashboard")
+            home_button.clicked.connect(lambda: self._go_to_page("dashboard"))
+            toolbar.addWidget(home_button)
+            self._agent_section_label = QtWidgets.QLabel()
+            self._agent_section_label.setObjectName("agentBreadcrumb")
+            self._agent_section_label.setTextFormat(QtCore.Qt.PlainText)
+            self._agent_section_label.setMinimumWidth(0)
+            self._agent_section_label.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            toolbar.addWidget(self._agent_section_label, 1)
+            display_layout.addWidget(self._agent_toolbar)
             self._stack = QtWidgets.QStackedWidget()
-            outer.addWidget(self._stack, stretch=1)
+            self._stack.setObjectName("agentPageStack")
+            display_layout.addWidget(self._stack, stretch=1)
+            body.addWidget(self._agent_display, stretch=1)
 
             self._stack.addWidget(self._build_dashboard())
             self._stack.addWidget(self._build_recent_tab())
@@ -1397,31 +1131,50 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 checkin_controller_provider=ui._build_checkin_controller,
             )
             self._stack.addWidget(self._companion_page)
+            for index in range(self._stack.count()):
+                page = self._stack.widget(index)
+                page.setProperty("agentPage", page is not self._companion_page)
             self._normal_stack_policy = self._stack.sizePolicy()
             self._companion_page.windowSizeRequested.connect(self._set_window_size)
             self._companion_page.agentPageRequested.connect(self._go_to_page)
             if hasattr(self._companion_page, "set_density"):
                 self._companion_page.set_density(ui._window_information_layout)
                 self._companion_page.densityChanged.connect(self._information_layout_changed)
+            console = self._companion_page.console
+            self._companion_window_controls = build_window_controls(console, window=self, QtCore=QtCore, QtWidgets=QtWidgets)
+            console.attach_window_controls(self._companion_window_controls)
+            self._companion_page.compact_card.minimizeRequested.connect(self.showMinimized)
+            self._companion_page.compact_card.closeRequested.connect(self.close)
+            from .window_chrome import install_window_interactions
+            self._window_interactions = install_window_interactions(
+                self, drag_widgets=[self._agent_brandbar, console.brand_widget, self._companion_page.compact_card],
+                QtCore=QtCore, QtWidgets=QtWidgets, can_maximize=lambda: not self._compact_window_active(),
+            )
+            from .race_visuals import create_race_effects
+            self._race_effects = create_race_effects(self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+            QtWidgets.QApplication.instance().aboutToQuit.connect(self._race_effects.shutdown)
+            self._companion_page.set_appearance(ui._window_skin, ui._window_animations)
+            self._companion_page.appearanceChanged.connect(self._window_appearance_changed)
+            self._apply_window_appearance()
 
         def _build_sidebar(self) -> QtWidgets.QWidget:
             frame = QtWidgets.QFrame()
-            frame.setObjectName("sidebar")
-            frame.setFixedWidth(220)
+            frame.setObjectName("agentSidebar")
+            frame.setFixedWidth(240)
 
             layout = QtWidgets.QVBoxLayout(frame)
-            layout.setContentsMargins(16, 18, 16, 16)
-            layout.setSpacing(6)
+            layout.setContentsMargins(10, 10, 10, 10)
+            layout.setSpacing(8)
 
-            brand = QtWidgets.QLabel("SC2 Tools")
+            brand = QtWidgets.QLabel("Your agent")
             brand.setObjectName("h2")
             layout.addWidget(brand)
 
-            tagline = QtWidgets.QLabel("Your StarCraft companion")
-            tagline.setObjectName("dim")
+            tagline = QtWidgets.QLabel("Sync, history and streaming")
+            tagline.setObjectName("muted")
             layout.addWidget(tagline)
 
-            layout.addSpacing(20)
+            layout.addSpacing(8)
 
             self._nav_group = QtWidgets.QButtonGroup(self)
             self._nav_group.setExclusive(True)
@@ -1693,9 +1446,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def _build_stats_row(self) -> QtWidgets.QWidget:
             row = QtWidgets.QFrame()
-            h = QtWidgets.QHBoxLayout(row)
+            h = QtWidgets.QGridLayout(row)
             h.setContentsMargins(0, 0, 0, 0)
             h.setSpacing(14)
+            self._stats_layout = h
 
             self._stat_synced = self._make_stat_card("Synced", "0")
             self._stat_queued = self._make_stat_card("Waiting", "0")
@@ -1706,8 +1460,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             failures.clicked.connect(self._show_recent_problems)
             self._stat_failed["frame"].layout().addWidget(failures)
 
-            for w in (self._stat_synced, self._stat_queued, self._stat_last, self._stat_failed):
-                h.addWidget(w["frame"], stretch=1)
+            self._stat_cards = (self._stat_synced, self._stat_queued, self._stat_last, self._stat_failed)
+            for column, card in enumerate(self._stat_cards):
+                h.addWidget(card["frame"], 0, column)
+                h.setColumnStretch(column, 1)
 
             return row
 
@@ -1855,13 +1611,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             scroller = QtWidgets.QScrollArea()
             scroller.setWidgetResizable(True)
             scroller.setFrameShape(QtWidgets.QFrame.NoFrame)
-            scroller.setHorizontalScrollBarPolicy(
-                QtCore.Qt.ScrollBarAlwaysOff,
-            )
+            scroller.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAsNeeded)
 
             page = QtWidgets.QWidget()
             v = QtWidgets.QVBoxLayout(page)
-            v.setContentsMargins(28, 24, 28, 24)
+            v.setContentsMargins(10, 18, 10, 18)
             v.setSpacing(14)
 
             title = QtWidgets.QLabel("Settings")
@@ -1871,10 +1625,11 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             form_card = QtWidgets.QFrame()
             form_card.setObjectName("card")
             form = QtWidgets.QFormLayout(form_card)
-            form.setContentsMargins(20, 18, 20, 18)
+            form.setContentsMargins(12, 14, 12, 14)
             form.setHorizontalSpacing(20)
             form.setVerticalSpacing(14)
             form.setLabelAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+            form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
 
             self._api_test_generation = 0
             self._api_input = QtWidgets.QLineEdit()
@@ -2037,7 +1792,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             # so the toggle group looks native.
             _toggle_qss = (
                 "QPushButton {"
-                f" background: {_SUBTLE};"
+                f" background: {theme.BUTTON};"
                 f" color: {_TEXT_MUTED};"
                 f" border: 1px solid {_BORDER_STRONG};"
                 " border-radius: 6px;"
@@ -2045,16 +1800,16 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 " font-weight: 600;"
                 "}"
                 "QPushButton:hover {"
-                f" background: {_ELEVATED};"
+                f" background: {theme.BUTTON_HOVER};"
                 f" color: {_TEXT};"
                 "}"
                 "QPushButton:checked {"
-                f" background: {_ACCENT};"
+                f" background: {theme.BUTTON_CHECKED};"
                 " color: white;"
                 f" border-color: {_ACCENT};"
                 "}"
                 "QPushButton:checked:hover {"
-                f" background: {_ACCENT_HOVER};"
+                f" background: {theme.BUTTON_HOVER};"
                 f" border-color: {_ACCENT_HOVER};"
                 "}"
             )
@@ -2549,6 +2304,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             outer.addWidget(self._obs_enable_check)
 
             conn = QtWidgets.QFormLayout()
+            conn.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
             conn.setHorizontalSpacing(20)
             conn.setVerticalSpacing(10)
             conn.setLabelAlignment(
@@ -2617,6 +2373,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             outer.addLayout(btns)
 
             scenes_form = QtWidgets.QFormLayout()
+            scenes_form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
             scenes_form.setHorizontalSpacing(20)
             scenes_form.setVerticalSpacing(8)
             scenes_form.setLabelAlignment(
@@ -3414,6 +3171,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             button = self._nav_group.button(index)
             if button is not None:
                 button.setChecked(True)
+            titles = {"companion": "Companion", "dashboard": "Dashboard", "recent": "Recent games", "log": "Activity log", "settings": "Settings", "streams": "Streams"}
+            self._agent_section_label.setText("Agent  /  " + titles.get(key, "Dashboard"))
             self._companion_page.set_active(key == "companion")
             self._apply_window_chrome()
             self._schedule_window_state()
@@ -3445,6 +3204,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
         def resizeEvent(self, event):
             super().resizeEvent(event)
+            if hasattr(self, "_companion_page"):
+                self._update_responsive_chrome()
             self._update_window_size_label()
             self._schedule_window_state()
 
@@ -3453,6 +3214,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             if event.type() == QtCore.QEvent.WindowStateChange:
                 self._update_window_size_label()
                 self._schedule_window_state()
+                effects = getattr(self, "_race_effects", None)
+                if effects is not None and self.isMaximized() and not event.oldState() & QtCore.Qt.WindowMaximized:
+                    effects.play_expand()
 
         def _window_size_screen(self):
             return self.screen() or QtWidgets.QApplication.primaryScreen()
@@ -3471,14 +3235,92 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _compact_window_active(self):
             return self._window_information_layout == "compact" and self._stack.currentWidget() is self._companion_page
 
+        def _apply_window_appearance(self):
+            from .race_visuals import css_for_skin
+            application = QtWidgets.QApplication.instance()
+            if application.property("raceBaseStyle") is None:
+                application.setProperty("raceBaseStyle", application.styleSheet())
+            override = css_for_skin(ui._window_skin)
+            application_style = application.property("raceBaseStyle") + override
+            if application.styleSheet() != application_style:
+                application.setStyleSheet(application_style)
+            widgets = [self, *self.findChildren(QtWidgets.QWidget)]
+            for widget in widgets:
+                base_style = widget.property("raceBaseStyle")
+                if base_style is None and widget.styleSheet():
+                    base_style = widget.styleSheet()
+                    widget.setProperty("raceBaseStyle", base_style)
+                if base_style is not None:
+                    widget_style = base_style + override
+                    if widget.styleSheet() != widget_style:
+                        widget.setStyleSheet(widget_style)
+                set_skin = getattr(widget, "set_skin", None)
+                if callable(set_skin):
+                    set_skin(ui._window_skin)
+            self._race_effects.apply_skin(ui._window_skin)
+            self._race_effects.set_motion_enabled(ui._window_animations)
+            panels = [*self._companion_page.overlays.values(), self._companion_page.ghost_page.panel]
+            for panel in panels:
+                panel.set_appearance(ui._window_skin, ui._window_animations)
+
+        def _window_appearance_changed(self, skin, animations):
+            from .race_visuals import normalize_skin
+            previous = (ui._window_skin, ui._window_animations)
+            requested = (normalize_skin(skin), animations is True)
+            if requested == previous:
+                return
+            try:
+                if ui._on_window_appearance:
+                    ui._on_window_appearance(*requested)
+            except Exception:
+                log.exception("gui_window_appearance_save_failed")
+                self._companion_page.set_appearance(*previous)
+                self._companion_page.set_appearance_notice("Couldn't save appearance. Your previous skin and animation choice are unchanged. Try again.")
+                return
+            ui._window_skin, ui._window_animations = requested
+            self._companion_page.set_appearance_notice("")
+            self._apply_window_appearance()
+
+        def _update_responsive_chrome(self):
+            narrow = self.width() < 900
+            companion = self._stack.currentWidget() is self._companion_page
+            self._sidebar.setVisible(not companion and not narrow)
+            self._agent_edition.setVisible(not narrow)
+            self._agent_version.setVisible(not narrow)
+            columns = 2 if narrow else 4
+            if getattr(self, "_stats_columns", None) != columns:
+                self._stats_columns = columns
+                for column in range(4):
+                    self._stats_layout.setColumnStretch(column, 1 if column < columns else 0)
+                for index, card in enumerate(self._stat_cards):
+                    self._stats_layout.removeWidget(card["frame"])
+                    self._stats_layout.addWidget(card["frame"], index // columns, index % columns)
+
         def _apply_window_chrome(self):
             compact = self._compact_window_active()
-            self._sidebar.setVisible(self._stack.currentWidget() is not self._companion_page)
+            companion = self._stack.currentWidget() is self._companion_page
+            self._update_responsive_chrome()
+            self._agent_brandbar.setVisible(not companion)
+            self._agent_toolbar.setVisible(not companion)
+            self._outer_layout.setContentsMargins(*((0, 0, 0, 0) if companion else (10, 10, 10, 10)))
+            self._frame_layout.setContentsMargins(*((0, 0, 0, 0) if companion else (14, 12, 14, 14)))
+            self._frame_layout.setSpacing(0 if companion else 10)
+            self._agent_body.setSpacing(0 if companion else 12)
+            for widget in (self._agent_frame, self._agent_display):
+                if widget.property("companion") != companion:
+                    widget.setProperty("companion", companion)
+                    widget.style().unpolish(widget)
+                    widget.style().polish(widget)
+                    widget.update()
+            effects = getattr(self, "_race_effects", None)
+            if effects is not None:
+                effects.set_frame_target(self._companion_page.compact_card if compact else self._companion_page.console if companion else self._agent_frame)
             if compact:
                 self._stack.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Ignored)
             else:
                 self._stack.setSizePolicy(self._normal_stack_policy)
-            minimum = (300, 210) if compact else (820, 540)
+            from .window_sizes import minimum_window_size
+            minimum = minimum_window_size("compact" if compact else "standard")
             screen = self._window_size_screen()
             if screen is not None:
                 available = screen.availableGeometry()
@@ -3521,6 +3363,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             screen = self._window_size_screen()
             if screen is None:
                 return False
+            previous_area = self.width() * self.height()
             level = preset[1]
             try:
                 if ui._on_window_information_layout:
@@ -3554,6 +3397,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._update_window_size_label()
             QtCore.QTimer.singleShot(0, self._update_window_size_label)
             self._schedule_window_state()
+            if self.isVisible() and level != "compact" and self.width() * self.height() > previous_area:
+                self._race_effects.play_expand()
             return True
 
         def _restore_window_state(self):
@@ -3570,7 +3415,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 target = QtWidgets.QApplication.primaryScreen().availableGeometry()
                 if point is not None:
                     target = next((screen.availableGeometry() for screen in screens if screen.availableGeometry().contains(QtCore.QPoint(*point))), target)
-                minimum = (300, 210) if self._compact_window_active() else (820, 540)
+                from .window_sizes import minimum_window_size
+                minimum = minimum_window_size("compact" if self._compact_window_active() else "standard")
                 frame_size = self._window_frame_size()
                 self.setMinimumSize(min(minimum[0], max(1, target.width() - frame_size[0])), min(minimum[1], max(1, target.height() - frame_size[1])))
                 if point is None:

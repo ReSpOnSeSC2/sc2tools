@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 from copy import deepcopy
+import hashlib
 import re
 from urllib.parse import quote, urlparse
 
@@ -83,7 +84,7 @@ class CompanionClient:
         if action == "snapshot":
             preferences = normalize_preferences(self._preferences_provider())
             modes = {"modes": normalize_modes(self._modes_provider())} if self._modes_provider else {}
-            _, token = self._connection_provider()
+            base, token = self._connection_provider()
             if not token:
                 return {"paired": False, "liveGame": None, "live": None,
                         "preferences": preferences, **modes}
@@ -96,12 +97,26 @@ class CompanionClient:
                 game_key = envelope.get("gameKey")
                 if not (game_key and isinstance(live, dict) and live.get("gameKey") == game_key):
                     live = None
-            return {"paired": True,
+            return {"paired": True, "accountKey": hashlib.sha256((base + "\0" + token).encode("utf-8")).hexdigest(),
                     "liveGame": envelope,
                     "live": live,
                     "preferences": preferences, **modes}
         if action in {"randomizer_state", "randomizer_settings", "randomizer_roll"}:
             return self._randomizer_action(request)
+        if action in {"game_build_order", "game_summary"}:
+            game_id = request.get("gameId")
+            if (not isinstance(game_id, str) or not game_id.strip()
+                    or game_id != game_id.strip() or len(game_id) > 200
+                    or game_id in {".", ".."}
+                    or any(ord(character) < 32 or ord(character) == 127 for character in game_id)):
+                raise CompanionError("Select a valid replay first.")
+            try:
+                encoded_id = quote(game_id, safe="")
+            except UnicodeEncodeError:
+                raise CompanionError("Select a valid replay first.") from None
+            if action == "game_summary":
+                return self._request("GET", "/v1/games/" + encoded_id, missing_ok=True)
+            return self._request("GET", "/v1/games/" + encoded_id + "/build-order")
         if action == "opponents":
             params = {"limit": 100}
             before = request.get("before")
@@ -246,4 +261,10 @@ class CompanionClient:
             raise CompanionError("Companion data could not be read. Please refresh.") from None
         if not isinstance(payload, dict):
             raise CompanionError("Companion data could not be read. Please refresh.")
+        try:
+            current_connection = tuple(self._connection_provider())
+        except (TypeError, ValueError):
+            current_connection = None
+        if current_connection != (base, token):
+            raise CompanionError("Your agent pairing changed. Refresh before using account data.")
         return payload

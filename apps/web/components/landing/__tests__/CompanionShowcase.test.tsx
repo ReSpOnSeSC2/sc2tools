@@ -10,7 +10,7 @@ describe("desktop Companion landing showcase", () => {
     const section = within(container).getByRole("region", { name: "Your ladder desk, beside the game." });
     expect(within(section).getByRole("link", { name: "Download current stable agent" }).getAttribute("href")).toBe("/download");
     expect(within(section).getByRole("link", { name: "Explore Companion" }).getAttribute("href")).toBe("/help/desktop-companion");
-    expect(section.querySelectorAll("img")).toHaveLength(4);
+    expect(section.querySelectorAll("img")).toHaveLength(8);
     expect(section.textContent).toContain("screenshots use sample data");
     expect(section.textContent).toContain("Runs without OBS");
     expect(section.textContent).toContain("One game assistance switch");
@@ -18,15 +18,15 @@ describe("desktop Companion landing showcase", () => {
     expect(section.textContent).toContain("explicitly published");
     expect(section.textContent).toContain("Ladder, Customs, Teams, Practice and Review presets");
     expect(section.textContent).toContain("optional Ctrl+Shift+F10");
-    expect(section.textContent).toContain("Team-game guidance is not supported");
+    expect(section.textContent).toContain("automatic check-ins and randomizer draws remain 1v1-only");
     expect(section.textContent).toContain("Companion preview");
-    expect(section.textContent).toContain("Companion 0.21.1 is a preview, not included in the current stable download");
+    expect(section.textContent).toContain("Companion 0.22.0 verification preview is for local verification only and is not available in the current stable download");
     expect(section.textContent).toContain("A signed public release is pending");
     expect(section.textContent).toContain("unsigned verification builds are separate test artifacts");
     expect(section.textContent).toContain("Choose how much you see");
     expect(section.textContent).toContain("name, race and MMR, plus your W–L and win percentage against this opponent");
     expect(section.textContent).not.toContain("name, race and MMR only");
-    expect(section.textContent).toContain("opening icon chains");
+    expect(section.textContent).toContain("build icon chains");
     expect(section.textContent).toContain("upgrade completion chains");
     expect(section.textContent).toContain("Home and Back");
     expect(section.textContent).toContain("Separate opponent and game arrows");
@@ -39,8 +39,50 @@ describe("desktop Companion landing showcase", () => {
     expect(section.textContent).toContain("Detailed");
     expect(section.textContent).toContain("Full workspace");
     const compact = within(section).getByRole("img", { name: /Compact Companion showing a sample opponent/ });
-    expect(compact.getAttribute("width")).toBe("360");
-    expect(compact.getAttribute("height")).toBe("240");
+    expect(compact.getAttribute("width")).toBe("340");
+    expect(compact.getAttribute("height")).toBe("78");
+    expect(section.textContent).toContain("520 × 480: selected opponent information");
+    expect(section.textContent).toContain("1024 × 800");
+    expect(section.textContent).toContain("3 minutes, then choose 6 minutes, 10 minutes or Full build order");
+    expect(section.textContent).toContain("all available stored events");
     expect(section.textContent).toContain("Compact layout · actual interface with sample data");
+  });
+
+  it("keeps verification availability clear and presents race borders as a static optional comparison", () => {
+    const { container } = render(<CompanionShowcase />);
+    const availability = within(container).getByRole("note", { name: "Companion preview availability" });
+    expect(availability.textContent).toContain("0.22.0 verification preview");
+    expect(availability.textContent).toContain("local verification only");
+    expect(availability.querySelector("strong")?.textContent).toContain("not available in the current stable download");
+    expect(container.textContent).toContain("Default preserves the current purple appearance");
+    expect(container.textContent).toContain("Optional Protoss, Terran and Zerg borders");
+    expect(container.textContent).toContain("independent of player and opponent race");
+    expect(container.textContent).toContain("only when you explicitly expand the window");
+    expect(container.textContent).toContain("Turn animations off at any time for instant size changes");
+    const comparison = within(container).getByRole("img", { name: /Static comparison of Default purple, Protoss, Terran and Zerg/ });
+    expect(comparison.getAttribute("width")).toBe("1040");
+    expect(comparison.getAttribute("height")).toBe("1016");
+    expect(comparison.getAttribute("src")).toContain("companion-race-skins.png");
+    expect(container.querySelector("video, audio, iframe")).toBeNull();
+  });
+
+  it("explains Hybrid team identity, manual Ghost limits and safe legacy history recovery", () => {
+    const { container } = render(<CompanionShowcase />);
+    const text = container.textContent;
+    for (const phrase of ["Compact follows one selected enemy", "expanded layouts show the enemy roster",
+      "Enemy roster", "explicitly confirm your own player", "Right-click Compact", "Historical 1v1 MMR",
+      "not current team-ladder ratings", "Ambiguous identities remain unlinked until confirmed",
+      "Use this target in current team game", "saved 1v1 targets stay untouched",
+      "original local replay", "without resyncing or resetting upload history",
+      "credential-bearing OBS SDK logs", "fresh live SC2 telemetry"]) {
+      expect(text).toContain(phrase);
+    }
+    expect(text).not.toContain("Team-game guidance is not supported");
+    expect(within(container).getByRole("img", { name: /Native Companion after-game check-in/ }).getAttribute("src")).toContain("companion-postgame.png");
+    expect(within(container).getByRole("img", { name: /Native Companion randomizer with a selected matchup/ }).getAttribute("src")).toContain("companion-randomizer.png");
+    const team = within(container).getByRole("img", { name: /Detailed Companion Hybrid team roster/ });
+    expect(team.getAttribute("src")).toContain("companion-team-hybrid.png");
+    expect(team.getAttribute("width")).toBe("1024");
+    expect(team.getAttribute("height")).toBe("800");
   });
 });

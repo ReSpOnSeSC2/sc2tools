@@ -90,6 +90,12 @@ TRAY_ICON = ICON_DIR / "tray_icon.png"
 if TRAY_ICON.exists():
     DATAS.append((str(TRAY_ICON), "sc2tools_agent/ui"))
 
+CONTROL_ICONS = ICON_DIR / "assets" / "controls"
+DATAS.append((str(CONTROL_ICONS), "sc2tools_agent/ui/assets/controls"))
+
+RACE_ARTWORK = ICON_DIR / "assets" / "races"
+DATAS.append((str(RACE_ARTWORK), "sc2tools_agent/ui/assets/races"))
+
 COMPANION_ICONS = REPO_ROOT / "apps" / "web" / "public" / "icons" / "sc2"
 if COMPANION_ICONS.exists():
     DATAS.append((str(COMPANION_ICONS), "sc2tools_agent/ui/assets/sc2"))

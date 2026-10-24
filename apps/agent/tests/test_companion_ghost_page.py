@@ -252,7 +252,7 @@ def test_ghost_status_distinguishes_switch_stale_team_and_missing_matchup(ghost_
     page.update_snapshot(live_snapshot(capturedAt=time.time() - 100))
     assert "fresh SC2 telemetry" in page.status.text()
     page.update_snapshot(live_snapshot(playerCount=4))
-    assert "1v1 games only" in page.status.text()
+    assert "Confirm your own player and enemy roster" in page.status.text()
     page.update_snapshot(live_snapshot(opponent={"race": "Zerg"}))
     assert "No replay target assigned to PvZ" in page.status.text()
     assert "1 of 9 matchups assigned" in page.live_status.text()

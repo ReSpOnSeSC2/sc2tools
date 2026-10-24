@@ -52,9 +52,10 @@ def companion():
                     "two": {"name": "Library two", "last5GamesScouting": []}},
         "calls": [], "threads": [],
         "ghost_references": {},
+        "trace": [],
     }
 
-    def handler(payload):
+    def dispatch(payload):
         state["calls"].append(deepcopy(payload))
         state["threads"].append(threading.get_ident())
         action = payload["action"]
@@ -102,9 +103,28 @@ def companion():
             return {"ghost": {"v": 1, "enabled": False, "slots": {}}, "references": deepcopy(state["ghost_references"])}
         raise AssertionError(action)
 
+    def handler(payload):
+        state["trace"].append(("start", payload["action"], time.monotonic()))
+        try:
+            return dispatch(payload)
+        finally:
+            state["trace"].append(("finish", payload["action"], time.monotonic()))
+
     page = build_companion_page(None, handler=handler, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
     page.timer.stop()
-    wait_until(app, lambda: page._detail.get("name") == "Library one")
+    try:
+        wait_until(app, lambda: page._detail.get("name") == "Library one")
+    except AssertionError:
+        diagnostic = {"paired": page._paired, "healthy": page._snapshot_healthy,
+                      "requests": page._requests, "selected": page._selected_id,
+                      "detail_name": page._detail.get("name"), "opponents": len(page._opponents),
+                      "directory_loaded": page._directory_loaded, "list_rows": page.opponent_list.count(),
+                      "notice": page.notice.text(), "trace": state["trace"],
+                      "workers": [worker.name for worker in threading.enumerate() if worker.name.startswith("companion-")]}
+        page.shutdown()
+        page.deleteLater()
+        app.processEvents()
+        pytest.fail("Companion fixture did not settle: " + repr(diagnostic))
     yield page, state, app
     page.shutdown()
     page.deleteLater()
@@ -123,6 +143,24 @@ def test_handler_calls_run_off_the_gui_thread_and_real_timelines_render(companio
     assert mine.topLevelItem(1).text(2) == "Completed"
     assert page.trees["upgrades"]["my"].topLevelItem(0).text(0) == "Blink"
     assert page.trees["build"]["my"].topLevelItem(0).text(2) == "Recorded"
+
+
+def test_assistance_controls_explain_saved_choices_and_historical_pins(companion):
+    page, state, app = companion
+    assert {key: page.preference_checks[key].text() for key in ("overlaysEnabled", "opponentOverlay", "scoutingOverlay")} == {
+        "overlaysEnabled": "In-game assistance",
+        "opponentOverlay": "Keep opponent on top",
+        "scoutingOverlay": "Keep scouting on top",
+    }
+    master_tip = page.preference_checks["overlaysEnabled"].toolTip()
+    assert "replay syncing and browsing continue" in master_tip
+    assert "choices stay saved" in master_tip
+    opponent_tip = page.preference_checks["opponentOverlay"].toolTip()
+    assert "above other windows" in opponent_tip and "mode" in opponent_tip
+    scouting_tip = page.preference_checks["scoutingOverlay"].toolTip()
+    assert "Historical scouting" in scouting_tip and "not live enemy tracking" in scouting_tip
+    assert "Turning it off keeps your choices" in page.assistance_help.text()
+    assert "not replay syncing or browsing" in page.assistance_help.text()
 
 
 def test_explicit_library_refresh_synchronizes_all_workspaces_without_polling_them_each_tick(companion, monkeypatch):
@@ -234,7 +272,7 @@ def test_mode_save_failure_rolls_back_and_teams_never_unhides_unknown_team_guida
     wait_until(app, lambda: not page._mode_busy)
     assert not page.mode_gates()["ghost"]
     assert not page.mode_gates()["scoutingOverlay"]
-    assert "team-game guidance is unsupported" in controls.explanation.text()
+    assert "confirm yourself and enemy membership" in controls.explanation.text()
     assert not any(panel.isVisible() for panel in page.overlays.values())
     state["snapshot"]["liveGame"]["players"] = [{"type": "user"}] * 2
     page.refresh()
@@ -401,8 +439,11 @@ def test_live_context_expires_abandoned_active_match():
     assert active
 
 
-@pytest.mark.parametrize("timestamp", [None, True, float("nan"), time.time() + 60, time.time() - 31])
-def test_live_context_rejects_unknown_stale_or_future_clock(timestamp):
+@pytest.mark.parametrize(("timestamp", "offset"), [(None, None), (True, None), (float("nan"), None), (None, 60), (None, -31)],
+                         ids=["missing", "boolean", "not-finite", "future", "stale"])
+def test_live_context_rejects_unknown_stale_or_future_clock(timestamp, offset):
+    if offset is not None:
+        timestamp = time.time() + offset
     active, _context = _live_context({"liveGame": {"phase": "match_in_progress", "capturedAt": timestamp,
                                                    "opponent": {"name": "Current"}}})
     assert not active
@@ -558,6 +599,9 @@ def test_four_information_layouts_change_visible_data_and_keep_full_details_avai
     assert page.chain_labels["my"].text() == "Blink expand"
     assert page.chain_labels["opp"].text() == "Bio timing"
     assert page.overview_recent.topLevelItemCount() == 1
+    assert page.build_time_range.currentData() == 180
+    assert len(page.build_chains["my"].steps) == 1
+    page.build_time_range.setCurrentIndex(page.build_time_range.findData(360))
     assert len(page.build_chains["my"].steps) == 2
     assert page.upgrade_chains["my"].isHidden()
     page.set_density("detailed")

@@ -17,13 +17,17 @@ def targets_from_replay(replay, source_id, source_label):
 
     players = [player for player in getattr(replay, "players", [])
                if not getattr(player, "is_observer", False)]
-    if len(players) != 2:
-        raise GhostError("Choose a one-versus-one replay with two players.")
+    if not 2 <= len(players) <= 16:
+        raise GhostError("Choose a replay with two to sixteen players.")
+    manual_only = len(players) != 2
     choices = []
-    for player, opponent in (players, list(reversed(players))):
+    for player in players:
+        if getattr(player, "is_human", True) is False or getattr(player, "is_ai", False) is True:
+            continue
+        opponent = next(other for other in players if other is not player)
         mine = concrete_race(getattr(player, "play_race", None))
-        theirs = concrete_race(getattr(opponent, "play_race", None))
-        if not mine or not theirs:
+        theirs = concrete_race(getattr(opponent, "play_race", None)) if not manual_only else None
+        if not mine or not manual_only and not theirs:
             continue
         events, _, _ = extract_events(replay, player.pid)
         steps = []
@@ -39,12 +43,13 @@ def targets_from_replay(replay, source_id, source_label):
             if len(steps) == MAX_GHOST_STEPS:
                 break
         name = str(getattr(player, "name", "Player"))[:64]
-        target = normalize_target({"v": 1, "name": f"{mine}v{theirs} · {name}"[:80],
+        matchup = mine + "v" + theirs if not manual_only else None
+        target = normalize_target({"v": 1, "name": f"{matchup or mine + ' · team replay'} · {name}"[:80],
                                    "sourceGameId": source_id + ":" + str(player.pid),
                                    "steps": steps})
         if target:
             choices.append({"id": str(player.pid), "name": name, "race": mine,
-                            "opponentRace": theirs, "matchup": mine + "v" + theirs,
+                            "opponentRace": theirs, "matchup": matchup, "manualOnly": manual_only,
                             "target": target})
     if not choices:
         raise GhostError("This replay has no supported timed build steps. Try another replay.")
