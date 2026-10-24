@@ -154,7 +154,9 @@ def test_assistance_controls_explain_saved_choices_and_historical_pins(companion
     }
     master_tip = page.preference_checks["overlaysEnabled"].toolTip()
     assert "replay syncing and browsing continue" in master_tip
-    assert "choices stay saved" in master_tip
+    assert "Off hides or stops native assistance" in master_tip
+    assert "Randomizer draws, animation and audio stay in the separate overlay widget" in master_tip
+    assert "controlled by its own settings" in master_tip
     opponent_tip = page.preference_checks["opponentOverlay"].toolTip()
     assert "above other windows" in opponent_tip and "mode" in opponent_tip
     scouting_tip = page.preference_checks["scoutingOverlay"].toolTip()

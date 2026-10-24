@@ -47,7 +47,10 @@ def test_team_confirmation_preserves_compact_size_and_only_reveals_confirmed_ene
     assert not page.mode_gates()["randomizer"]
     assert not page.mode_gates()["preGameSelector"]
     assert "unavailable in team games" in page.build_selectors.hint.text()
-    assert "do not auto-roll" in page.randomizer_page.status.text()
+    randomizer_status = page.randomizer_page.status.text()
+    assert "Team games have no native 1v1 widget-pick guidance" in randomizer_status
+    assert "Pool settings remain available" in randomizer_status
+    assert "overlay widget runs separately" in randomizer_status
     page._select_team_enemy(keys["Ally"])
     assert page.compact_name.text() == "Library one"
     page._step_opponent(1)

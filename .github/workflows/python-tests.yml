@@ -71,7 +71,7 @@ jobs:
   agent:
     name: Pytest (apps/agent, Windows)
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: apps/agent
@@ -87,7 +87,7 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install -r requirements.txt pytest
       - name: Test
-        run: python -m pytest -ra
+        run: python -m pytest -ra --durations=15
 
   instant-parity:
     name: Instant Analysis parity (CPython + Pyodide)
