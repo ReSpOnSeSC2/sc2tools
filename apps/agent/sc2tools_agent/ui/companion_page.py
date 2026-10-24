@@ -173,7 +173,7 @@ def _live_context(snapshot):
 
 def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                          checkin_controller_provider=None, speech_factory=None,
-                         panel_positions=None, on_panel_positions=None):
+                         panel_positions=None, on_panel_positions=None, agent_menu=None):
     """Build a lazy-Qt page; all handler calls run in daemon workers."""
     icon_root = _icon_root()
 
@@ -955,11 +955,13 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.agent_menu_button.setText("Agent")
             self.agent_menu_button.setAccessibleName("Agent pages and settings")
             self.agent_menu_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
-            menu = QtWidgets.QMenu(self.agent_menu_button)
-            for title, route in (("Dashboard", "dashboard"), ("Recent games", "recent"), ("Settings", "settings"), ("Streams", "streams"), ("Logs", "log")):
-                menu.addAction(title, lambda _checked=False, destination=route: self.agentPageRequested.emit(destination))
-            menu.addSeparator()
-            menu.addAction("Border & animations…", self.show_appearance_settings)
+            menu = agent_menu
+            if menu is None:
+                menu = QtWidgets.QMenu(self.agent_menu_button)
+                for title, route in (("Dashboard", "dashboard"), ("Recent games", "recent"), ("Settings", "settings"), ("Streams", "streams"), ("Logs", "log")):
+                    menu.addAction(title, lambda _checked=False, destination=route: self.agentPageRequested.emit(destination))
+                menu.addSeparator()
+                menu.addAction("Border & animations…", self.show_appearance_settings)
             self.agent_menu_button.setMenu(menu)
             self.console.brand_actions.addWidget(self.agent_menu_button)
             from .team_roster import build_team_roster

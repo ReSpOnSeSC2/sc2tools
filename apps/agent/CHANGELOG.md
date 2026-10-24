@@ -2,6 +2,14 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.24.1
+
+### Fixed - Consistent Agent menu
+- Share one Agent dropdown across Companion and every Agent page, including
+  Check for updates, Help & support, Border & animations and Quit SC2 Tools.
+- Open update checks on the Dashboard so progress and results are visible;
+  disable duplicate checks and restore both menu and button actions afterward.
+
 ## 0.24.0
 
 ### Fixed - Account isolation and recovery

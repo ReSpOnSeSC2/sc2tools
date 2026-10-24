@@ -133,6 +133,10 @@ The Companion requires the matching API update for account data. Update the
 installed agent through the existing update flow; a second installation or
 pairing is not needed. OBS browser sources and Build check-in remain available.
 
+The **Agent** dropdown is shared by Companion and every Agent page. It includes
+navigation, **Border & animations…**, **Help & support**, **Check for updates** and
+**Quit SC2 Tools**. Update checks open the Dashboard so progress and results are visible.
+
 The **Build selectors** screen contains the pre-game plan and post-game check-in.
 Choices, opponent corrections, and notes use the same records as the website
 and floating game cards. Their independent switches can be changed at any time.

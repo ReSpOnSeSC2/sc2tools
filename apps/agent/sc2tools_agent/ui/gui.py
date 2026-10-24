@@ -1065,12 +1065,14 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._agent_menu_button.setText("Agent")
             self._agent_menu_button.setAccessibleName("Agent pages and settings")
             self._agent_menu_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
-            menu = QtWidgets.QMenu(self._agent_menu_button)
+            self._agent_menu = QtWidgets.QMenu(self)
+            menu = self._agent_menu
             for title, route in (("Companion", "companion"), ("Dashboard", "dashboard"), ("Recent games", "recent"), ("Streams", "streams"), ("Activity log", "log"), ("Settings", "settings")):
                 menu.addAction(title, lambda _checked=False, destination=route: self._go_to_page(destination))
             menu.addSeparator()
+            menu.addAction("Border & animations…", self._open_companion_appearance)
             menu.addAction("Help & support", lambda: self._open_help("desktop-app-overview"))
-            menu.addAction("Check for updates", self._click_check_updates)
+            self._check_updates_action = menu.addAction("Check for updates", self._check_updates_from_menu)
             menu.addSeparator()
             menu.addAction("Quit SC2 Tools", ui._on_quit)
             self._agent_menu_button.setMenu(menu)
@@ -1136,6 +1138,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 checkin_controller_provider=ui._build_checkin_controller,
                 panel_positions=ui._companion_panel_positions,
                 on_panel_positions=ui._on_companion_panel_positions,
+                agent_menu=self._agent_menu,
             )
             self._stack.addWidget(self._companion_page)
             for index in range(self._stack.count()):
@@ -2834,6 +2837,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
         def _on_update_check_done(self, message: str) -> None:
             self._updates_btn.setEnabled(True)
             self._updates_btn.setText("Updates")
+            self._check_updates_action.setEnabled(True)
             # Empty message = an update was found and the runner's
             # handler owns the (sticky) notice — leave it alone.
             if message:
@@ -3083,13 +3087,24 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._folders_dirty = False
             self._show_settings_toast("Replay folder change undone.", "success")
 
+        def _open_companion_appearance(self):
+            self._go_to_page("companion")
+            self._companion_page.show_appearance_settings()
+
+        def _check_updates_from_menu(self):
+            self._go_to_page("dashboard")
+            self._click_check_updates()
+
         def _click_check_updates(self) -> None:
+            if not self._updates_btn.isEnabled():
+                return
             # The update check is a blocking HTTP round-trip (up to the
             # urllib timeout). Running it on the Qt thread froze the
             # whole window for the duration — spawn a worker and land
             # the outcome back on the GUI thread via updateCheckDone.
             self._updates_btn.setEnabled(False)
             self._updates_btn.setText("Checking…")
+            self._check_updates_action.setEnabled(False)
             self._show_transient_notice("Checking for updates…")
 
             def _worker() -> None:

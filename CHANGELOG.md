@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.24.1 - Consistent Agent menu
+- Use the same Agent dropdown on Companion and every Agent page. Include update
+  checks, help, appearance and quit; show update progress/results on Dashboard
+  and prevent duplicate checks while a request is running.
+
 ### Agent 0.24.0 - Account recovery and remembered panel positions
 - Isolate Companion, Ghost, check-in, replay archives and Streams work across
   account changes. Recover stuck selectors and save retries while preserving
