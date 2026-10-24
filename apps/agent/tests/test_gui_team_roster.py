@@ -39,14 +39,21 @@ for team_size in (2, 4):
         else:
             assert page.team_roster_summary.isVisible() if title == "Standard" else page.team_roster_widget.isVisible()
             assert len(page.team_roster_widget._buttons) == team_size
-            assert page.team_roster_widget.height() <= (32 if title == "Standard" else 200)
             if title == "Standard":
+                summary = page.team_roster_summary
+                assert summary.height() >= summary._heading.heightForWidth(summary.width())
+                for control in (summary.status, summary.open_roster, summary.configure):
+                    assert summary.rect().contains(control.geometry()), (team_size, summary.size(), control.geometry())
+                assert summary.open_roster.height() >= summary.open_roster.minimumSizeHint().height()
+                assert summary.configure.height() >= summary.configure.minimumSizeHint().height()
                 page.team_roster_summary.open_roster.click()
                 app.processEvents()
                 assert page.console.current_route() == "team-roster"
                 assert len(page.team_roster_page._buttons) == team_size
                 page.console.navigate("scouting")
                 app.processEvents()
+            else:
+                assert page.team_roster_widget.height() <= 200
         if title == "Standard":
             win.grab().save(str(base / ("team-" + str(team_size) + "v" + str(team_size) + "-standard.png")))
             for side in ("my", "opp"):
@@ -62,6 +69,7 @@ for team_size in (2, 4):
     app.processEvents()
     assert win.isMaximized()
     assert len(page.team_roster_widget._buttons) == team_size
+    assert page.team_roster_widget.height() <= 200
     assert page.team_roster_widget.scroll.viewport().height() >= 90
     finish(win, page, effects)
 ''')
