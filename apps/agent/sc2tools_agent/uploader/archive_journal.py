@@ -48,10 +48,28 @@ def _normalized_path(value: Path | str) -> str:
 class ReplayArchiveTask:
     file_path: Path
     game_id: str
+    owner: Optional[str] = None
 
     @property
-    def key(self) -> tuple[str, str]:
-        return (_normalized_path(self.file_path), self.game_id)
+    def key(self) -> tuple[str, ...]:
+        identity = (_normalized_path(self.file_path), self.game_id)
+        return (*identity, self.owner) if self.owner is not None else identity
+
+
+def _task_from_key(key):
+    return ReplayArchiveTask(Path(key[0]), key[1], key[2] if len(key) == 3 else None)
+
+
+def _task_record(task, operation):
+    record = {"op": operation, "path": _normalized_path(task.file_path), "gameId": task.game_id}
+    if task.owner is not None:
+        record["owner"] = task.owner
+    return record
+
+
+def _valid_owner(owner):
+    return owner is None or (isinstance(owner, str) and 0 < len(owner) <= 256
+                             and not any(ord(character) < 32 or ord(character) == 127 for character in owner))
 
 
 class ReplayArchiveJournalError(RuntimeError):
@@ -72,23 +90,23 @@ class ReplayArchiveJournal:
         # The value is process-local retry metadata. Keeping it alongside the
         # already-required durable index avoids a second unbounded cooldown
         # map when thousands of cloud-backed replay paths are offline.
-        self._pending: dict[tuple[str, str], tuple[float, int]] = {}
+        self._pending: dict[tuple[str, ...], tuple[float, int]] = {}
         self._buffered_acks: list[dict[str, str]] = []
         self._last_ack_flush = time.monotonic()
         self._record_count = 0
         self._unhealthy: Optional[ReplayArchiveJournalError] = None
         self._load()
 
-    def pending_count(self) -> int:
+    def pending_count(self, *, owner=None) -> int:
         with self._lock:
-            return len(self._pending)
+            return sum(owner is None or len(key) == 2 or key[2] == owner for key in self._pending)
 
     def current_game_id(self, file_path: Path | str) -> Optional[str]:
         """Compatibility lookup for callers that know one path maps once."""
         with self._lock:
             target = _normalized_path(file_path)
             return next(
-                (gid for path_str, gid in self._pending if path_str == target),
+                (key[1] for key in self._pending if key[0] == target),
                 None,
             )
 
@@ -120,8 +138,9 @@ class ReplayArchiveJournal:
     def next_tasks(
         self,
         *,
-        excluded: set[tuple[str, str]],
+        excluded: set[tuple[str, ...]],
         limit: int,
+        owner=None,
     ) -> list[ReplayArchiveTask]:
         """Return at most ``limit`` unscheduled tasks in journal order."""
         if limit <= 0:
@@ -130,12 +149,12 @@ class ReplayArchiveJournal:
         with self._lock:
             self._require_healthy_locked()
             now = time.monotonic()
-            for (path_str, game_id), (not_before, _attempt) in self._pending.items():
-                if (path_str, game_id) in excluded:
+            for key, (not_before, _attempt) in self._pending.items():
+                if key in excluded or owner is not None and len(key) == 3 and key[2] != owner:
                     continue
                 if not_before > now:
                     continue
-                out.append(ReplayArchiveTask(Path(path_str), game_id))
+                out.append(_task_from_key(key))
                 if len(out) >= limit:
                     break
         return out
@@ -145,12 +164,14 @@ class ReplayArchiveJournal:
         tasks: Iterable[ReplayArchiveTask],
     ) -> int:
         """Durably add/replace tasks, using one fsync for the whole batch."""
-        deduped: dict[tuple[str, str], ReplayArchiveTask] = {}
+        deduped: dict[tuple[str, ...], ReplayArchiveTask] = {}
         for task in tasks:
             path_str = _normalized_path(task.file_path)
             game_id = str(task.game_id).strip()
+            if not _valid_owner(task.owner):
+                raise ValueError("Invalid replay archive ownership.")
             if path_str and game_id:
-                clean = ReplayArchiveTask(Path(path_str), game_id)
+                clean = ReplayArchiveTask(Path(path_str), game_id, task.owner)
                 deduped[clean.key] = clean
         if not deduped:
             return 0
@@ -164,14 +185,7 @@ class ReplayArchiveJournal:
             ]
             if not changed:
                 return 0
-            records = [
-                {
-                    "op": "enqueue",
-                    "path": str(task.file_path),
-                    "gameId": task.game_id,
-                }
-                for task in changed
-            ]
+            records = [_task_record(task, "enqueue") for task in changed]
             # Persist before publishing into the in-memory index. If this
             # raises, the caller does not advance state.uploaded and retries
             # the accepted ingest; a valid append prefix is harmless.
@@ -204,13 +218,7 @@ class ReplayArchiveJournal:
                 if task.key not in self._pending:
                     continue
                 self._pending.pop(task.key, None)
-                self._buffered_acks.append(
-                    {
-                        "op": "ack",
-                        "path": path_str,
-                        "gameId": task.game_id,
-                    },
-                )
+                self._buffered_acks.append(_task_record(task, "ack"))
                 removed += 1
             if removed:
                 self._flush_acks_locked(force=durable)
@@ -262,12 +270,14 @@ class ReplayArchiveJournal:
             op = record.get("op")
             path_str = record.get("path")
             game_id = record.get("gameId")
+            owner = record.get("owner")
             if (
                 op not in ("enqueue", "ack")
                 or not isinstance(path_str, str)
                 or not path_str
                 or not isinstance(game_id, str)
                 or not game_id
+                or not _valid_owner(owner)
             ):
                 if is_last and not terminated:
                     saw_torn_tail = True
@@ -277,7 +287,7 @@ class ReplayArchiveJournal:
                 )
             self._record_count += 1
             path_str = _normalized_path(path_str)
-            key = (path_str, game_id)
+            key = ReplayArchiveTask(Path(path_str), game_id, owner).key
             if op == "enqueue":
                 self._pending[key] = (0.0, 0)
             else:
@@ -308,7 +318,7 @@ class ReplayArchiveJournal:
             # this process retries it instead of waiting for a restart to
             # replay the still-present enqueue records.
             for record in records:
-                self._pending[(record["path"], record["gameId"])] = (
+                self._pending[ReplayArchiveTask(Path(record["path"]), record["gameId"], record.get("owner")).key] = (
                     0.0,
                     0,
                 )
@@ -370,14 +380,10 @@ class ReplayArchiveJournal:
         )
         try:
             with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as fh:
-                for path_str, game_id in self._pending:
+                for key in self._pending:
                     fh.write(
                         json.dumps(
-                            {
-                                "op": "enqueue",
-                                "path": path_str,
-                                "gameId": game_id,
-                            },
+                            _task_record(_task_from_key(key), "enqueue"),
                             separators=(",", ":"),
                         ),
                     )

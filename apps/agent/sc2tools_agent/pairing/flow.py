@@ -15,7 +15,7 @@ from typing import Callable, Optional
 from .. import __version__
 from ..api_client import ApiClient
 from ..config import AgentConfig
-from ..state import AgentState, save_state
+from ..state import AgentState, _STATE_SAVE_LOCK, save_state
 
 log = logging.getLogger(__name__)
 POLL_INTERVAL_SEC = 3.0
@@ -107,9 +107,15 @@ def ensure_paired(*, cfg: AgentConfig, state: AgentState, api: ApiClient,
                 token, user_id = result.get("deviceToken"), result.get("userId")
                 if not token or not user_id:
                     raise ValueError("pairing ready response has no token or account")
-                state.device_token, state.user_id = str(token), str(user_id)
-                state.paired_at = now().isoformat()
-                save_state(cfg.state_dir, state)
+                with _STATE_SAVE_LOCK:
+                    previous = state.device_token, state.user_id, state.paired_at
+                    state.device_token, state.user_id = str(token), str(user_id)
+                    state.paired_at = now().isoformat()
+                    try:
+                        save_state(cfg.state_dir, state)
+                    except OSError:
+                        state.device_token, state.user_id, state.paired_at = previous
+                        raise
                 emit(PairingUiState("paired"))
                 return True
             if result.get("status") == "expired":

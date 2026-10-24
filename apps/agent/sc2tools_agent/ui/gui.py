@@ -334,6 +334,8 @@ class GuiUI:
         recent_games_enabled=False,
         on_recent_retry=None,
         on_import_current_season=None,
+        companion_panel_positions: Optional[dict] = None,
+        on_companion_panel_positions: Optional[Callable[[dict], None]] = None,
     ) -> None:
         self._recent_games_enabled = recent_games_enabled
         self._on_recent_retry = on_recent_retry or (lambda _paths, _reason: None)
@@ -357,6 +359,9 @@ class GuiUI:
         self._window_geometry = window_geometry
         self._window_page = window_page
         self._on_window_state = on_window_state
+        from ..panel_positions import normalize_panel_positions
+        self._companion_panel_positions = normalize_panel_positions(companion_panel_positions)
+        self._on_companion_panel_positions = on_companion_panel_positions
         from .window_sizes import normalize_information_layout
         self._window_information_layout = normalize_information_layout(window_information_layout)
         self._on_window_information_layout = on_window_information_layout
@@ -1129,6 +1134,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self, handler=ui._on_companion_action, QtCore=QtCore,
                 QtGui=QtGui, QtWidgets=QtWidgets,
                 checkin_controller_provider=ui._build_checkin_controller,
+                panel_positions=ui._companion_panel_positions,
+                on_panel_positions=ui._on_companion_panel_positions,
             )
             self._stack.addWidget(self._companion_page)
             for index in range(self._stack.count()):
@@ -1290,20 +1297,22 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             card.hide()
             self._replay_archive_card = card
 
-            row = QtWidgets.QHBoxLayout(card)
+            from .qt_helpers import build_flow_layout
+            row = build_flow_layout(card, QtCore=QtCore, QtWidgets=QtWidgets, spacing=18)
             row.setContentsMargins(20, 16, 20, 16)
-            row.setSpacing(18)
-
-            copy = QtWidgets.QVBoxLayout()
+            copy_body = QtWidgets.QWidget()
+            copy = QtWidgets.QVBoxLayout(copy_body)
+            copy.setContentsMargins(0, 0, 0, 0)
             copy.setSpacing(4)
             heading = QtWidgets.QLabel("Enable original replay downloads")
             heading.setObjectName("h2")
+            heading.setWordWrap(True)
             copy.addWidget(heading)
             self._replay_archive_text = QtWidgets.QLabel("")
             self._replay_archive_text.setObjectName("muted")
             self._replay_archive_text.setWordWrap(True)
             copy.addWidget(self._replay_archive_text)
-            row.addLayout(copy, stretch=1)
+            row.addWidget(copy_body)
 
             self._replay_archive_button = QtWidgets.QPushButton(
                 "Re-sync replay library",
@@ -1335,7 +1344,9 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
 
             self._status_text = QtWidgets.QLabel("Initialising…")
             self._status_text.setObjectName("h2")
-            grid.addWidget(self._status_text, 0, 1)
+            self._status_text.setWordWrap(True)
+            self._status_text.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
+            grid.addWidget(self._status_text, 0, 1, 1, 2)
 
             self._status_sub = QtWidgets.QLabel("")
             self._status_sub.setObjectName("muted")
@@ -1343,13 +1354,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._status_sub.setTextInteractionFlags(
                 QtCore.Qt.TextSelectableByMouse,
             )
-            grid.addWidget(self._status_sub, 1, 1)
+            grid.addWidget(self._status_sub, 2, 0, 1, 4)
 
             self._update_badge = QtWidgets.QLabel("")
             self._update_badge.setObjectName("badgeWarn")
             self._update_badge.hide()
             grid.addWidget(
-                self._update_badge, 0, 2, alignment=QtCore.Qt.AlignRight,
+                self._update_badge, 1, 0, 1, 4, alignment=QtCore.Qt.AlignLeft,
             )
 
             # Update-flow notice line — populated by the runner's
@@ -1361,7 +1372,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._update_notice.setObjectName("muted")
             self._update_notice.setWordWrap(True)
             self._update_notice.hide()
-            grid.addWidget(self._update_notice, 2, 1, 1, 2)
+            grid.addWidget(self._update_notice, 3, 0, 1, 4)
             self._replay_capture_notice = QtWidgets.QLabel(
                 "Automatic replay capture is on. New and re-synced replays "
                 "are recorded with StarCraft II before upload. This can use "
@@ -1370,14 +1381,15 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._replay_capture_notice.setObjectName("muted")
             self._replay_capture_notice.setWordWrap(True)
             self._replay_capture_notice.hide()
-            grid.addWidget(self._replay_capture_notice, 3, 1, 1, 2)
+            grid.addWidget(self._replay_capture_notice, 4, 0, 1, 4)
             self._notice_timer = QtCore.QTimer(self)
             self._notice_timer.setSingleShot(True)
             self._notice_timer.timeout.connect(self._clear_update_notice)
 
             self._status_card = card
             grid.addWidget(help_button(QtWidgets, "Status lights", lambda: self._open_help("desktop-app-status")), 0, 3)
-            actions = QtWidgets.QHBoxLayout()
+            from .qt_helpers import build_flow_layout
+            actions = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
             self._status_action = QtWidgets.QPushButton()
             self._status_action.clicked.connect(self._run_status_action)
             actions.addWidget(self._status_action)
@@ -1388,25 +1400,24 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._connection_help.clicked.connect(lambda: self._open_help("desktop-app-sync-problems", self._connection_kind.replace("_", "-")))
             self._connection_help.hide()
             actions.addWidget(self._connection_help)
-            actions.addStretch(1)
-            grid.addLayout(actions, 4, 1, 1, 3)
+            grid.addLayout(actions, 5, 0, 1, 4)
             self._transient_notice = QtWidgets.QLabel()
             self._transient_notice.setTextFormat(QtCore.Qt.PlainText)
             self._transient_notice.setWordWrap(True)
             self._transient_notice.hide()
-            grid.addWidget(self._transient_notice, 5, 1, 1, 2)
+            grid.addWidget(self._transient_notice, 6, 0, 1, 4)
             self._release_notes = ""
             self._whats_new_btn = QtWidgets.QPushButton("What's new")
             self._whats_new_btn.clicked.connect(self._show_release_notes)
             self._whats_new_btn.hide()
-            grid.addWidget(self._whats_new_btn,5,3)
+            actions.addWidget(self._whats_new_btn)
             self._transient_timer = QtCore.QTimer(self)
             self._transient_timer.setSingleShot(True)
             self._transient_timer.timeout.connect(self._transient_notice.hide)
             self._folder_undo_dash = QtWidgets.QPushButton("Undo folder change")
             self._folder_undo_dash.clicked.connect(self._undo_folder_change)
             self._folder_undo_dash.hide()
-            grid.addWidget(self._folder_undo_dash, 6, 1)
+            grid.addWidget(self._folder_undo_dash, 7, 0, 1, 4, alignment=QtCore.Qt.AlignLeft)
             grid.setColumnStretch(1, 1)
             return card
 
@@ -2201,6 +2212,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             v.addWidget(maintenance)
             v.addStretch(1)
             scroller.setWidget(page)
+            from .qt_helpers import install_responsive_forms
+            self._settings_responsive_forms = install_responsive_forms(scroller, QtCore=QtCore, QtWidgets=QtWidgets)
             return scroller
 
         def _populate_obs_settings(self, initial) -> None:

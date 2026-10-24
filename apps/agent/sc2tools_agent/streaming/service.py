@@ -7,10 +7,13 @@ only rearms a previously prepared session after both outputs and events end.
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
+from functools import wraps
 import json
 from pathlib import Path
 import threading
 import time
+import uuid
 
 from .obs_reader import OutputReader, DEFAULT_OUTPUTS
 from .youtube_pair_backend import PairBackend, atomic_json
@@ -36,6 +39,14 @@ PLATFORM_CHECK_SECONDS = 60
 CATALOG_IDLE_MESSAGE = "Connect YouTube to load your channel and reusable keys."
 CATALOG_LOADING_MESSAGE = "Loading your YouTube channel and reusable keys…"
 PLATFORM_TITLES = {"youtube": "YouTube", "twitch": "Twitch", "kick": "Kick"}
+
+
+def cloud_bound(method):
+    @wraps(method)
+    def guarded(self, *args, **kwargs):
+        with self.operations, self._cloud_operation():
+            return method(self, *args, **kwargs)
+    return guarded
 
 
 def shared_title(value):
@@ -98,8 +109,98 @@ class StreamService:
         self.platform_status = {}
         self.next_platform_check = 0
         self.prompt = ""
+        self._cloud_context = self._connection_context()
+        self._setup_account_key = self.backend.config.get("cloud_account_key")
+        self._verified_cloud_channel = None
         self._cached = {}
         self._publish()
+
+    def _connection_context(self):
+        read = getattr(self.cloud_client, "context", None)
+        return read() if callable(read) else None
+
+    def _setup_matches(self, context):
+        if context is None or self.account_mode == "local":
+            return True
+        configured = bool(self.backend.config.get("expected_channel_id") or self.backend.state.get("pair"))
+        session_owner = self.backend.state.get("cloud_account_key", self._setup_account_key)
+        return bool(context.get("accountKey")) and (not configured or self._setup_account_key == context["accountKey"]
+            and (not self.backend.state.get("pair") or session_owner == context["accountKey"]))
+
+    def _sync_cloud_owner(self, context):
+        if self.account_mode != "sc2tools" or context == self._cloud_context:
+            return
+        self._cloud_context = context
+        self.backend.connected = self.backend.writes_enabled = False
+        self.backend.api = None
+        self.backend.state["cloud_verified"] = False
+        self.adapters = {}
+        self.platform_status = {}
+        self.platform_results = {}
+        self._verified_cloud_channel = None
+        self._reset_catalog()
+        self.next_platform_check = 0
+        self.consent_poll_until = self.youtube_consent_until = 0
+        with self.snapshot_lock:
+            self.prompt = ""
+        self.message = "SC2Tools pairing changed. Refresh connections; existing broadcasts are preserved."
+
+    @contextmanager
+    def _cloud_operation(self):
+        context = self._connection_context() if self.account_mode == "sc2tools" else None
+        if context is None:
+            yield
+            return
+        self._sync_cloud_owner(context)
+        try:
+            with self.cloud_client.operation(context):
+                yield
+        except Exception:
+            self._sync_cloud_owner(self._connection_context())
+            raise
+
+    def _scope_snapshot(self, snapshot, *, cached=False):
+        if self.account_mode != "sc2tools":
+            snapshot.update(accountKey=None, connectionKey=None)
+            return snapshot
+        context = self._connection_context()
+        if context is None:
+            return snapshot
+        changed = context != self._cloud_context or cached and snapshot.get("connectionKey") != context["connectionKey"]
+        snapshot.update(accountKey=context["accountKey"], connectionKey=context["connectionKey"])
+        unavailable = changed or not context["connectionKey"]
+        if unavailable:
+            snapshot.update(catalog={"channels": [], "streams": []}, platform_results={},
+                platforms={}, auth_prompt="", metadata=copy.deepcopy(DEFAULT_CONFIG["metadata"]), metadata_saved=False,
+                catalog_status={"state": "idle", "message": CATALOG_IDLE_MESSAGE},
+                message="SC2Tools pairing changed. Refresh connections; existing broadcasts are preserved.")
+        if unavailable or not self._setup_matches(context):
+            snapshot.update(metadata=copy.deepcopy(DEFAULT_CONFIG["metadata"]), metadata_saved=False)
+            connected = not unavailable and bool(self.backend.connected and self.backend.api)
+            snapshot["youtube"] = {"connected": connected, "phase": "disabled" if connected else "authorization_required",
+                "channels": {}, "watch_urls": {}, "pair_ready": False, "auto_rearm_enabled": False}
+            snapshot["configured"] = False
+            snapshot["configuration"] = {**snapshot.get("configuration", {}), "channel_id": None,
+                "horizontal_id": None, "portrait_id": None, "auto_rearm": False}
+            if not unavailable:
+                snapshot["message"] = "Choose and save YouTube setup for this account. Existing broadcasts are preserved."
+        return snapshot
+
+    def _claim_legacy_setup(self):
+        context = self._connection_context()
+        if self.account_mode != "sc2tools" or context is None or self._setup_account_key or not context["accountKey"]:
+            return
+        channel = self.backend.config.get("expected_channel_id")
+        if not channel or self._verified_cloud_channel != channel or [row.get("id") for row in self.catalog["channels"]] != [channel]:
+            return
+        self.cloud_client.assert_context(self._cloud_context)
+        config = copy.deepcopy(self.backend.config)
+        config["cloud_account_key"] = context["accountKey"]
+        self.backend.state["cloud_account_key"] = context["accountKey"]
+        self.backend._save()
+        atomic_json(self.config_path, config)
+        self.backend.config = config
+        self._setup_account_key = context["accountKey"]
 
     def _publish(self):
         youtube = self.backend.public_status()
@@ -125,6 +226,7 @@ class StreamService:
                 "auto_rearm": self.backend.config.get("auto_rearm", False) if self.setup_saved else None,
                 "output_names": copy.deepcopy(self.backend.config.get("output_names", DEFAULT_OUTPUTS))},
         }
+        snapshot = self._scope_snapshot(snapshot)
         with self.snapshot_lock:
             self._cached = snapshot
         return copy.deepcopy(snapshot)
@@ -134,7 +236,7 @@ class StreamService:
         with self.snapshot_lock:
             result = copy.deepcopy(self._cached)
             result["auth_prompt"] = self.prompt
-            return result
+        return self._scope_snapshot(result, cached=True)
 
     def authorization_prompt(self):
         with self.snapshot_lock:
@@ -149,12 +251,14 @@ class StreamService:
     def _outputs(self):
         return self.reader(self.backend.config.get("output_names", DEFAULT_OUTPUTS))
 
+    @cloud_bound
     def _attach_youtube(self):
         if self.account_mode == "sc2tools":
             if not self.cloud_client:
                 raise ValueError("Pair this agent with your SC2Tools account first.")
             from .cloud_client import CloudGoogleAPI
             statuses = self.cloud_client.statuses()
+            self._verified_cloud_channel = statuses.get("youtube", {}).get("platformUserId")
             if statuses.get("youtube", {}).get("streamingReady") is not True:
                 raise ValueError("Connect YouTube and approve stream-control permission first.")
             self.backend.api = CloudGoogleAPI(self.cloud_client, lambda: self.backend.config.get("expected_channel_id"))
@@ -208,6 +312,7 @@ class StreamService:
         self.catalog_status = {"state": "ready", "attempts": 0, "http_status": None, "retry_pending": False, "message": message}
         self.next_catalog_attempt = 0
         self.catalog_reload_pending = False
+        self._claim_legacy_setup()
 
     def _reset_catalog(self, message=CATALOG_IDLE_MESSAGE):
         self.catalog = {"channels": [], "streams": []}
@@ -221,6 +326,7 @@ class StreamService:
         self.next_catalog_attempt = 0
         self.catalog_status["attempts"] = 0
 
+    @cloud_bound
     def _discover_youtube(self, *, explicit=False):
         """Load the authorized channel and its reusable keys; never choose any of them.
 
@@ -241,6 +347,8 @@ class StreamService:
             self._publish()
             return True
         except Exception as error:
+            if getattr(error, "pairing_changed", False):
+                raise
             now = time.monotonic()
             status = getattr(error, "http_status", None)
             status = status if type(status) is int and 100 <= status <= 599 else None
@@ -274,11 +382,19 @@ class StreamService:
         account = youtube_status.get("platformUserId") if isinstance(youtube_status, dict) else None
         return isinstance(account, str) and bool(account) and self.catalog["channels"][0]["id"] != account
 
+    @cloud_bound
     def action(self, payload):
         with self.operations:
             if self.stop_event.is_set():
                 raise ValueError("Stream controls are shutting down.")
             kind = payload.get("action")
+            context = self._connection_context() if self.account_mode == "sc2tools" else None
+            if context is not None:
+                if any(key in payload and payload[key] != context[key] for key in ("accountKey", "connectionKey")):
+                    from .cloud_client import CloudStreamError
+                    raise CloudStreamError("SC2Tools pairing changed. Refresh connections before continuing.", pairing_changed=True)
+                if not self._setup_matches(context) and kind in {"prepare", "recover", "set_metadata", "fetch_obs_connection", "pause_auto", "resume_auto"}:
+                    raise ValueError("Save YouTube setup for this account before continuing. Existing broadcasts are preserved.")
             with self.snapshot_lock:
                 self.prompt = ""
             if kind == "set_metadata":
@@ -312,6 +428,8 @@ class StreamService:
                             self.platform_results[name] = {"ok": verified or offline, "message": message,
                                 "title_verified": verified, "title_status": status.get("titleStatus", "verified" if verified else "unverified")}
                         except Exception as error:
+                            if getattr(error, "pairing_changed", False):
+                                raise
                             # An inconclusive write/readback is not evidence that
                             # OAuth was revoked. Only explicit authorization loss
                             # clears a previously verified connection.
@@ -356,7 +474,10 @@ class StreamService:
             elif kind == "fetch_obs_connection":
                 # This secret response goes directly to the requesting control.
                 # It must never enter a status snapshot, config, or service cache.
-                return {"obs_connection": self._obs_connection(payload)}
+                result = {"obs_connection": self._obs_connection(payload)}
+                if context is not None:
+                    result.update(accountKey=context["accountKey"], connectionKey=context["connectionKey"])
+                return result
             elif kind == "configure_youtube":
                 self._configure(payload)
             elif kind in {"pause_auto", "resume_auto"}:
@@ -462,16 +583,40 @@ class StreamService:
             auto_rearm=payload.get("auto_rearm") is True, output_names=names)
         config["streams"] = {scope: {"reusable_stream_id": selected_id, "privacy": privacy,
             "made_for_kids": payload["made_for_kids"]} for scope, selected_id in zip(DEFAULT_OUTPUTS, selected)}
-        if self.backend.state.get("pair"):
+        context = self._connection_context() if self.account_mode == "sc2tools" else None
+        replace_owner = context is not None and not self._setup_matches(context)
+        if context is not None:
+            if not context["accountKey"]:
+                raise ValueError("Pair this agent before saving YouTube setup.")
+            self.cloud_client.assert_context(self._cloud_context)
+            config["cloud_account_key"] = context["accountKey"]
+        if self.backend.state.get("pair") and not replace_owner:
             try:
                 self.backend.verify_future_configuration(config, self._outputs())
             except Exception:
                 raise ValueError("Finish both YouTube broadcasts and stop both outputs before changing future visibility. The current channel and keys are preserved.") from None
+        if replace_owner:
+            archive = {"config": self.backend.config, "state": self.backend.state, "metadata": self.backend.metadata}
+            atomic_json(self.directory / ("youtube-recovery." + uuid.uuid4().hex + ".private.json"), archive)
+            metadata = copy.deepcopy(DEFAULT_CONFIG["metadata"])
+            config["metadata"] = metadata
+            state = {"version": 2, "pair": None, "metadata_revision": 0, "auto_rearm_armed": False,
+                "last_outputs": {scope: None for scope in DEFAULT_OUTPUTS}, "next_poll": 0,
+                "next_prepare_attempt": 0, "code": "ok", "metadata": metadata, "cloud_verified": False,
+                "cloud_account_key": context["accountKey"]}
         atomic_json(self.config_path, config)
         self.backend.config = config
+        if context is not None:
+            self._setup_account_key = context["accountKey"]
+        if replace_owner:
+            self.backend.state = state
+            self.backend.metadata = metadata
+            self.backend._save()
+            self.backend._save_template()
         self.setup_saved = True
         self.message = "YouTube configured. Prepare session before starting the two Aitum YouTube outputs."
 
+    @cloud_bound
     def _connect_cloud(self, platform):
         if not self.cloud_client:
             raise ValueError("Pair this agent with your SC2Tools account first.")
@@ -491,6 +636,7 @@ class StreamService:
             self._request_catalog_reload()
         self.message = "Complete " + PLATFORM_TITLES[platform] + " authorization in your browser. This page updates automatically once SC2Tools confirms it."
 
+    @cloud_bound
     def _refresh_cloud_connections(self):
         if self.account_mode != "sc2tools" or not self.cloud_client:
             raise ValueError("SC2Tools account connections are unavailable in local setup.")
@@ -507,6 +653,7 @@ class StreamService:
             self.platform_status[platform] = {**row, "connected": row.get("streamingReady") is True}
             self.adapters[platform] = CloudTitleAdapter(self.cloud_client, platform)
         youtube = statuses.get("youtube", {})
+        self._verified_cloud_channel = youtube.get("platformUserId")
         self.backend.connected = youtube.get("streamingReady") is True
         if self.backend.connected:
             self.backend.api = CloudGoogleAPI(self.cloud_client, lambda: self.backend.config.get("expected_channel_id"))
@@ -519,6 +666,14 @@ class StreamService:
         elif self.catalog["channels"] or self.catalog_status.get("state") != "idle":
             self._reset_catalog()
         self._publish()
+
+    @cloud_bound
+    def _runtime_tick(self):
+        if not self._setup_matches(self._connection_context()):
+            return
+        result = self.backend.runtime_tick(self._outputs())
+        if not result.get("ok", False):
+            self.message = " ".join(result.get("messages", []))
 
     def _connections_message(self, default):
         if self.backend.connected and self.catalog_status.get("state") == "failed":
@@ -598,9 +753,7 @@ class StreamService:
                 continue
             try:
                 if self.backend.connected and self.backend.config.get("runtime_enabled"):
-                    result = self.backend.runtime_tick(self._outputs())
-                    if not result.get("ok", False):
-                        self.message = " ".join(result.get("messages", []))
+                    self._runtime_tick()
                 if time.monotonic() >= self.next_platform_check:
                     before = self._connection_flags()
                     if self.account_mode == "sc2tools":

@@ -172,7 +172,8 @@ def _live_context(snapshot):
 
 
 def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
-                         checkin_controller_provider=None, speech_factory=None):
+                         checkin_controller_provider=None, speech_factory=None,
+                         panel_positions=None, on_panel_positions=None):
     """Build a lazy-Qt page; all handler calls run in daemon workers."""
     icon_root = _icon_root()
 
@@ -210,14 +211,14 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
     def icon(name, kind):
         return load_icon(name, kind, QtGui=QtGui, root=icon_root)
 
-    def timeline():
+    def timeline(minimum_height=245):
         tree = QtWidgets.QTreeWidget()
         tree.setColumnCount(3)
         tree.setHeaderLabels(["TECH / UNIT", "TIME", "EVENT"])
         tree.setRootIsDecorated(False)
         tree.setAlternatingRowColors(True)
         tree.setIconSize(QtCore.QSize(30, 30))
-        tree.setMinimumHeight(245)
+        tree.setMinimumHeight(minimum_height)
         tree.header().setSectionResizeMode(0, QtWidgets.QHeaderView.Stretch)
         tree.header().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
         tree.header().setSectionResizeMode(2, QtWidgets.QHeaderView.ResizeToContents)
@@ -281,14 +282,32 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.window_controls.maximize_button.hide()
                 header_layout.addWidget(self.window_controls)
                 layout.insertWidget(0, self.header)
+                layout.removeWidget(self.subtitle)
+                layout.removeWidget(self.detail)
+                self.scouting_scroll = QtWidgets.QScrollArea()
+                self.scouting_scroll.setFrameShape(QtWidgets.QFrame.NoFrame)
+                self.scouting_scroll.setWidgetResizable(True)
+                self.scouting_scroll.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
+                self.scouting_scroll.setAccessibleName("Historical scouting builds and tech steps")
+                body = QtWidgets.QWidget()
+                body.setObjectName("companionContent")
+                body_layout = QtWidgets.QVBoxLayout(body)
+                body_layout.setContentsMargins(0, 0, 0, 0)
+                body_layout.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
+                body_layout.addWidget(self.subtitle)
+                body_layout.addWidget(self.detail)
                 self.games = QtWidgets.QComboBox()
                 self.games.currentIndexChanged.connect(self._game_changed)
-                layout.addWidget(self.games)
+                body_layout.addWidget(self.games)
                 self.builds = label("", "Accent")
-                layout.addWidget(self.builds)
-                self.tree = timeline()
+                body_layout.addWidget(self.builds)
+                self.tree = timeline(minimum_height=96)
                 self.tree.setHeaderLabels(["HISTORICAL TECH STEP", "TIME", "EVENT"])
-                layout.addWidget(self.tree)
+                body_layout.addWidget(self.tree, 1)
+                self.scouting_scroll.setWidget(body)
+                layout.addWidget(self.scouting_scroll, 1)
+                from .qt_helpers import guard_value_widgets
+                guard_value_widgets(self.scouting_scroll, QtCore, QtWidgets)
             if kind == "opponent":
                 from .window_sizes import minimum_window_size
                 self.setMinimumSize(*minimum_window_size("compact"))
@@ -452,6 +471,15 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 card.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
                 card.customContextMenuRequested.connect(lambda position, target=card: self._team_context_menu(target, position))
             self._position_overlays()
+            from ..panel_positions import build_panel_position_manager
+            self._panel_positions = build_panel_position_manager(
+                self, panels={**self.overlays, "session": self.session_panel, "ghost": self.ghost_page.panel},
+                positions=panel_positions, defaults_provider=self._default_panel_positions,
+                preview_provider=lambda kind: kind in {"opponent", "scouting"} and self.preview_button.isChecked(),
+                on_positions=on_panel_positions, QtCore=QtCore, QtWidgets=QtWidgets,
+            )
+            self.reset_panel_positions.clicked.connect(self._panel_positions.reset)
+            self._panel_positions.statusChanged.connect(self._panel_position_status)
             self.completed.connect(self._completed)
             self.timer = QtCore.QTimer(self)
             self.timer.setInterval(3000)
@@ -517,6 +545,12 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.preview_button.setCheckable(True)
             self.preview_button.toggled.connect(self._preview_panels_changed)
             controls.addWidget(self.preview_button, 0, QtCore.Qt.AlignLeft)
+            self.reset_panel_positions = QtWidgets.QPushButton("Reset panel positions")
+            self.reset_panel_positions.setToolTip("Restore Opponent, Scouting, Session and Ghost to their default positions on this PC. Sizes and enabled choices stay unchanged.")
+            controls.addWidget(self.reset_panel_positions, 0, QtCore.Qt.AlignLeft)
+            self.panel_position_notice = label("", "Muted")
+            self.panel_position_notice.hide()
+            controls.addWidget(self.panel_position_notice)
             controls_layout.addLayout(controls)
             self.session_check = QtWidgets.QCheckBox("Keep session record on top")
             self.session_check.setAccessibleName("Keep session record on top")
@@ -1478,14 +1512,24 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                     self.game_select.setCurrentIndex(index)
 
         def _position_overlays(self):
+            positions = self._default_panel_positions()
+            for kind, panel in self.overlays.items():
+                panel.move(*positions[kind])
+
+        def _default_panel_positions(self):
             screen = self.screen()
             if screen is None:
-                return
+                return {kind: [0, 0] for kind in ("opponent", "scouting", "session", "ghost")}
             area = screen.availableGeometry()
             opponent = self.overlays["opponent"]
             scouting = self.overlays["scouting"]
-            opponent.move(area.right() - opponent.width() - 20, area.top() + 60)
-            scouting.move(area.right() - scouting.width() - 20, area.top() + 300)
+            return {"opponent": [area.right() - opponent.width() - 20, area.top() + 60],
+                    "scouting": [area.right() - scouting.width() - 20, area.top() + 300],
+                    "session": [0, 0], "ghost": [0, 0]}
+
+        def _panel_position_status(self, text):
+            self.panel_position_notice.setText(text)
+            self.panel_position_notice.setVisible(bool(text))
 
         def _job(self, channel, payload):
             if self._closed or not callable(handler):
@@ -1813,6 +1857,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
 
         def _clear_library(self):
             self._snapshot_healthy = False
+            self._panel_positions.cancel_pending()
             self._requests.pop("session_stats", None)
             self._requests.pop("session_setup", None)
             self.session_setup_button.setEnabled(False)
@@ -1831,6 +1876,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._requests.pop("directory", None)
             self._requests.pop("opponent", None)
             self._requests.pop("notes", None)
+            self._requests.pop("ghost_reference", None)
+            self._ghost_references = {}
             self._requests.pop("game_build_order", None)
             self._build_order_inflight = None
             self._build_order_cache.clear()
@@ -2041,8 +2088,11 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
         def _save_ghost_reference(self, side):
             game_id = self.game_select.currentData()
             if game_id and "ghost_reference" not in self._requests:
-                self._job("ghost_reference", {"action": "ghost_reference", "gameId": game_id,
-                                               "side": side, "clear": self._is_ghost_reference(side)})
+                request = {"action": "ghost_reference", "gameId": game_id,
+                           "side": side, "clear": self._is_ghost_reference(side)}
+                if isinstance(self._account_key, str) and self._account_key:
+                    request["accountKey"] = self._account_key
+                self._job("ghost_reference", request)
                 self._update_ghost_reference_buttons()
 
         def _notes_changed(self, *_args, track=True):
@@ -2204,6 +2254,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             if self._closed:
                 return
             self._closed = True
+            self._panel_positions.shutdown()
             self.timer.stop()
             self.session_panel.shutdown()
             self.session_panel.deleteLater()

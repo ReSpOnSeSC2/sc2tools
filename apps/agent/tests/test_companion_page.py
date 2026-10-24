@@ -41,7 +41,7 @@ def companion():
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     preferences = {"overlaysEnabled": True, "opponentOverlay": True, "scoutingOverlay": True}
     state = {
-        "snapshot": {"paired": True, "preferences": preferences, "modes": default_modes(), "liveGame": {
+        "snapshot": {"paired": True, "accountKey": "fixture-owner", "preferences": preferences, "modes": default_modes(), "liveGame": {
             "phase": "match_in_progress", "gameKey": "current", "displayTime": 50, "capturedAt": time.time(),
             "opponent": {"name": "Live opponent", "race": "Terran", "profile": {"mmr": 4000}},
             "streamerHistory": {"last5GamesScouting": [game()], "headToHead": {"wins": 2, "losses": 1}},
@@ -554,11 +554,11 @@ def test_previous_encounter_can_star_each_players_build_reference(companion):
     page.ghost_reference_buttons["you"].click()
     wait_until(app, lambda: "you" in state["ghost_references"])
     wait_until(app, lambda: page.ghost_reference_buttons["you"].text().startswith("★"))
-    assert {"action": "ghost_reference", "gameId": "game-1", "side": "you", "clear": False} in state["calls"]
+    assert {"action": "ghost_reference", "gameId": "game-1", "side": "you", "clear": False, "accountKey": "fixture-owner"} in state["calls"]
     page.ghost_reference_buttons["opponent"].click()
     wait_until(app, lambda: "opponent" in state["ghost_references"])
     wait_until(app, lambda: page.ghost_reference_buttons["opponent"].text().startswith("★"))
-    assert {"action": "ghost_reference", "gameId": "game-1", "side": "opponent", "clear": False} in state["calls"]
+    assert {"action": "ghost_reference", "gameId": "game-1", "side": "opponent", "clear": False, "accountKey": "fixture-owner"} in state["calls"]
     page.ghost_reference_buttons["you"].click()
     wait_until(app, lambda: "you" not in state["ghost_references"])
     assert "opponent" in state["ghost_references"]

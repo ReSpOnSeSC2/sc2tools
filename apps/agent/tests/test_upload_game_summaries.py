@@ -3,7 +3,7 @@ from dataclasses import replace
 import pytest
 
 from sc2tools_agent.state import AgentState
-from sc2tools_agent.uploader.queue import UploadQueue
+from sc2tools_agent.uploader.queue import UploadQueue, _UploadSessionChanged
 from tests.test_upload_queue import _cfg, _game, _StubApi
 
 
@@ -62,5 +62,7 @@ def test_relink_during_request_cannot_label_old_account_metadata_as_new_account(
     summaries = []
     queue = UploadQueue(cfg=_cfg(tmp_path), state=state, api=RelinkingAPI(), on_game_synced=lambda *args: summaries.append(args))
     job = _game(tmp_path, "old-account.SC2Replay")
-    (queue._upload_one(job) if single else queue._upload_batch([job]))
+    with pytest.raises(_UploadSessionChanged):
+        (queue._upload_one(job) if single else queue._upload_batch([job]))
     assert summaries == []
+    assert not state.uploaded and not state.path_by_game_id

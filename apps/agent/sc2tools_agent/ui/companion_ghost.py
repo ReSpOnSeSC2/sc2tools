@@ -7,7 +7,7 @@ import math
 import re
 import threading
 
-from ..companion_ghost import GhostError, GhostSession, TeamGhostSession, MATCHUPS, concrete_race, normalize_ghost_state, normalize_target, supports_ghost_game
+from ..companion_ghost import GhostError, GhostSession, TeamGhostSession, MATCHUPS, concrete_race, local_ghost_state, normalize_ghost_state, normalize_target, supports_ghost_game
 from . import theme
 from .sc2_icons import load_icon
 
@@ -185,6 +185,11 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._team_context = None
             self._team_game = False
             self._busy = set()
+            self._requests = {}
+            self._request_sequence = 0
+            self._account_generation = 0
+            self._account_key = None
+            self._owner_context_known = False
             self._revision = 0
             self._desired_enabled = None
             self._panel_restore_requested = False
@@ -443,8 +448,18 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
         def _call(self, channel, payload):
             if self._closed or not callable(handler) or channel in self._busy:
                 return False
+            local_setting = channel == "save" and "matchup" not in payload
+            if self._owner_context_known and not self._account_key and channel != "local" and not local_setting:
+                return False
+            if self._owner_context_known and channel != "local":
+                payload = {**payload, "accountKey": self._account_key}
             self._busy.add(channel)
+            self._request_sequence += 1
+            request_id = self._request_sequence
+            self._requests[channel] = request_id
             revision = self._revision
+            generation = self._account_generation
+            owner = self._account_key
             signal = self._signals
 
             def work():
@@ -457,7 +472,9 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
                     response = {"channel": channel, "payload": payload, "revision": revision, "result": result}
                 except Exception as error:
                     message = str(error) if isinstance(error, ValueError) else "Ghost could not load this data. Please refresh."
-                    response = {"channel": channel, "payload": payload, "revision": revision, "error": message[:180]}
+                    response = {"channel": channel, "payload": payload, "revision": revision, "error": message[:180],
+                                "pairingChanged": getattr(error, "code", None) == "pairing_changed"}
+                response.update(requestId=request_id, generation=generation, owner=owner)
                 if not self._closed:
                     try:
                         signal.result.emit(response)
@@ -471,6 +488,21 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             if self._closed:
                 return
             channel = response["channel"]
+            if response.get("requestId") != self._requests.get(channel):
+                return
+            if channel != "local" and (response.get("generation") != self._account_generation or response.get("owner") != self._account_key):
+                return
+            if response.get("pairingChanged"):
+                self._reset_account_data()
+                self.notice.setText("Your agent pairing changed. Refresh Ghost before using account data.")
+                return
+            result = response.get("result")
+            if (channel != "local" and self._owner_context_known and isinstance(result, dict)
+                    and "accountKey" in result and result["accountKey"] != self._account_key):
+                self._reset_account_data()
+                self.notice.setText("Your agent pairing changed. Refresh Ghost before using account data.")
+                return
+            self._requests.pop(channel, None)
             self._busy.discard(channel)
             if response.get("error"):
                 self.notice.setText(response["error"])
@@ -560,6 +592,9 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
         def _save(self, changes):
             if self._closed:
                 return
+            if self._owner_context_known and not self._account_key and "matchup" in changes:
+                self.notice.setText("Pair this agent before assigning a replay build. Local previews stay available.")
+                return
             self._revision += 1
             self._pending_saves.append({"action": "ghost_save", **changes})
             self._next_save()
@@ -567,7 +602,8 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
         def _next_save(self):
             if "save" not in self._busy and self._pending_saves:
                 self.enabled_toggle.setEnabled(False)
-                self._call("save", self._pending_saves.pop(0))
+                if not self._call("save", self._pending_saves.pop(0)):
+                    self.enabled_toggle.setEnabled(True)
 
         def _set_enabled(self, enabled):
             self._panel_restore_requested = bool(enabled)
@@ -730,9 +766,10 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
         def _update_reference_button(self):
             self.reference_button.setText("★ Clear this build's reference replay" if self._is_reference() else
                                           "☆ Use as this build's reference replay")
-            self.reference_button.setEnabled(bool(self.games.currentData()) and "reference" not in self._busy)
+            ready = not self._owner_context_known or bool(self._account_key)
+            self.reference_button.setEnabled(ready and bool(self.games.currentData()) and "reference" not in self._busy)
             if hasattr(self, "compare_button"):
-                self.compare_button.setEnabled(bool(self.games.currentData()) and "comparison" not in self._busy)
+                self.compare_button.setEnabled(ready and bool(self.games.currentData()) and "comparison" not in self._busy)
 
         def _save_reference(self):
             game_id = self.games.currentData()
@@ -937,7 +974,8 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.target_name.setText(self._preview["name"])
             self.preview_label.setText(choice["name"] + " · " + (self._preview_matchup or self._preview_race + " · team replay · manual only") + " · " + str(len(self._preview["steps"])) + " timed steps")
             self.arm_button.setText("Use for " + self._preview_matchup if self._preview_matchup else "Team replay · manual only")
-            self.arm_button.setEnabled(self._preview_matchup in MATCHUPS and not self._preview_manual)
+            ready = not self._owner_context_known or bool(self._account_key)
+            self.arm_button.setEnabled(ready and self._preview_matchup in MATCHUPS and not self._preview_manual)
             self._render()
 
         def _choose_local(self):
@@ -1022,6 +1060,9 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
         def apply_account_result(self, result):
             if self._closed or not isinstance(result, dict):
                 return
+            if (self._owner_context_known and (not self._account_key or
+                    "accountKey" in result and result["accountKey"] != self._account_key)):
+                return
             if isinstance(result.get("ghost"), dict):
                 self._accept_state(result["ghost"])
             if isinstance(result.get("references"), dict):
@@ -1034,13 +1075,65 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._update_history_controls()
             self._render()
 
+        def _reset_account_data(self):
+            self._account_generation += 1
+            self._revision += 1
+            self._busy.intersection_update({"local"})
+            self._requests = {channel: request_id for channel, request_id in self._requests.items() if channel == "local"}
+            self._pending_saves.clear()
+            self._desired_enabled = None
+            self._panel_restore_requested = False
+            self._state = local_ghost_state(self._state)
+            self._games = []
+            self._examples = []
+            self._references = {}
+            self._history = {}
+            self._selected_library_game_id = None
+            self._selected_example_id = None
+            self._cursor = None
+            self._team_context = None
+            self._team_session.clear_target()
+            self._team_session.update_context(None)
+            self._team_session.update_snapshot({})
+            self._session.update_snapshot({})
+            self.enabled_toggle.setEnabled(callable(handler))
+            self.more_button.setEnabled(False)
+            self._update_library_filters()
+            self._fill_games()
+            self._fill_examples()
+            self._clear_comparison()
+            self._update_history_controls()
+            if not (self.sources.currentIndex() == 0 and self._preview
+                    and self._preview["sourceGameId"].startswith("local:")):
+                self._clear_preview()
+            self._show_slot()
+            self.referencesChanged.emit({})
+            self.panel.hide()
+
         def update_snapshot(self, snapshot):
+            source = snapshot if isinstance(snapshot, dict) else {}
+            if "paired" in source or "accountKey" in source:
+                owner = source.get("accountKey") if source.get("paired") is True else None
+                owner = owner if isinstance(owner, str) and owner else None
+                changed = not self._owner_context_known or owner != self._account_key
+                self._owner_context_known = True
+                self._account_key = owner
+                if changed:
+                    self._reset_account_data()
+                    if owner:
+                        self.refresh()
+                        if self.sources.currentIndex() == 2:
+                            self._call("examples", {"action": "ghost_examples"})
             self._session.update_snapshot(snapshot)
             self._team_session.update_snapshot(snapshot)
             envelope = snapshot.get("liveGame") if isinstance(snapshot, dict) else None
             players = envelope.get("players") if isinstance(envelope, dict) else None
             self._team_game = bool(isinstance(envelope, dict) and
                 (isinstance(players, list) and len(players) > 2 or not supports_ghost_game(envelope)))
+            ready = not self._owner_context_known or bool(self._account_key)
+            self.refresh_button.setEnabled(ready and callable(handler))
+            self.examples_button.setEnabled(ready and callable(handler))
+            self.arm_button.setEnabled(ready and bool(self._preview) and self._preview_matchup in MATCHUPS and not self._preview_manual)
             self._render()
 
         def set_team_context(self, context):

@@ -175,3 +175,36 @@ def build_flow_layout(parent=None, *, QtCore, QtWidgets, spacing=8):
             return top - rectangle.y() + row_height + margins.bottom()
 
     return FlowLayout()
+
+
+def install_responsive_forms(scroll, *, QtCore, QtWidgets, breakpoint=640):
+    class ResponsiveForms(QtCore.QObject):
+        def __init__(self):
+            super().__init__(scroll)
+            self._narrow = None
+            self._closed = False
+            self._viewport = scroll.viewport()
+            self._viewport.installEventFilter(self)
+            scroll.destroyed.connect(self._on_destroyed)
+            self.refresh()
+
+        def _on_destroyed(self, *_args):
+            self._closed = True
+
+        def refresh(self):
+            if self._closed:
+                return
+            narrow = self._viewport.width() < breakpoint
+            if narrow == self._narrow or scroll.widget() is None:
+                return
+            self._narrow = narrow
+            for form in scroll.widget().findChildren(QtWidgets.QFormLayout):
+                form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapAllRows if narrow else QtWidgets.QFormLayout.WrapLongRows)
+                form.setLabelAlignment((QtCore.Qt.AlignLeft if narrow else QtCore.Qt.AlignRight) | QtCore.Qt.AlignVCenter)
+
+        def eventFilter(self, watched, event):
+            if not self._closed and watched is self._viewport and event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.Show):
+                self.refresh()
+            return False
+
+    return ResponsiveForms()

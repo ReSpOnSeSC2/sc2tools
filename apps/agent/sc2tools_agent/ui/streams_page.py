@@ -46,6 +46,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self._obs_identity = None
             self._obs_generation = 0
             self._obs_account_mode = None
+            self._account_context = None
+            self._job_generation = 0
             self.setWidget(self._content())
             self._responsive_rows = self.widget().findChildren(QtWidgets.QHBoxLayout)
             self._narrow_layout = None
@@ -374,7 +376,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 button.setCursor(QtCore.Qt.PointingHandCursor)
                 button.clicked.connect(lambda _checked=False, item=field, text=message: self.copy_obs_detail(item, text))
             self.obs_reveal = QtWidgets.QCheckBox("Reveal key")
-            self.obs_reveal.toggled.connect(lambda checked: self.obs_key.setEchoMode(QtWidgets.QLineEdit.Normal if checked else QtWidgets.QLineEdit.Password))
+            self.obs_reveal.toggled.connect(self.reveal_obs_key)
             for control in (self.obs_fetch_button, self.obs_copy_server, self.obs_copy_key, self.obs_reveal):
                 obs_actions.addWidget(control)
             obs_actions.addStretch()
@@ -447,7 +449,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 return
             try:
                 state = provider()
-                if self.busy:
+                if self.busy and self._owner_context(state) == self._account_context:
                     if state.get("auth_prompt"):
                         self.notice.setText(state["auth_prompt"])
                     return
@@ -456,7 +458,18 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 self._clear_obs_connection()
                 self.notice.setText("Stream controls are unavailable. Restart SC2Tools to reconnect.")
 
+        def _owner_context(self, state):
+            return (state.get("account_mode"), state.get("accountKey"), state.get("connectionKey"))
+
         def render(self, state):
+            context = self._owner_context(state)
+            if context != self._account_context:
+                self._account_context = context
+                self._job_generation += 1
+                self.busy = False
+                self.title_dirty = self.description_dirty = self.description_draft = self.setup_dirty = False
+                self.setup_edits.clear()
+                self._clear_obs_connection()
             if state.get("account_mode") != self._obs_account_mode:
                 self._clear_obs_connection()
             self._obs_account_mode = state.get("account_mode")
@@ -652,11 +665,19 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.notice.setText(message)
             self._buttons()
             obs_generation = self._obs_generation
+            self._job_generation += 1
+            job_generation = self._job_generation
+            account_context = self._account_context
+            payload = dict(payload)
+            for key in ("accountKey", "connectionKey"):
+                if key in self.state:
+                    payload[key] = self.state[key]
             def work():
                 try:
                     value = handler(payload)
                     if payload["action"] == "fetch_obs_connection":
-                        result = {"obs_connection": value.get("obs_connection"), "action": payload["action"], "obs_generation": obs_generation}
+                        result = {"obs_connection": value.get("obs_connection"), "action": payload["action"], "obs_generation": obs_generation,
+                            **{key: value[key] for key in ("accountKey", "connectionKey") if key in value}}
                     else:
                         result = {"state": value, "action": payload["action"]}
                 except ValueError as error:
@@ -664,15 +685,23 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                     result = {"error": message, "action": payload["action"]}
                 except Exception:
                     result = {"error": "The action did not complete. Check your connection and setup, then try again.", "action": payload["action"]}
+                result.update(job_generation=job_generation, account_context=account_context)
                 self.completed.emit(result)
             threading.Thread(target=work, name="sc2tools-stream-action", daemon=True).start()
 
         def _completed(self, result):
+            self.refresh()
+            if "job_generation" in result and (result["job_generation"] != self._job_generation or result.get("account_context") != self._account_context):
+                return
             self.busy = False
             if result.get("action") == "fetch_obs_connection" and "obs_connection" in result:
                 self.refresh()
                 self._accept_obs_connection(result)
             elif "state" in result:
+                if "account_context" in result and self._owner_context(result["state"]) != self._account_context:
+                    self.refresh()
+                    self._buttons()
+                    return
                 if result["action"] == "set_metadata":
                     self.title_dirty = self.description_dirty = False
                     self.description_draft = False
@@ -746,7 +775,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
         def _accept_obs_connection(self, result):
             value = result.get("obs_connection")
             selection = self._obs_selection()
-            if result.get("obs_generation") != self._obs_generation or not self.obs_toggle.isChecked() or not isinstance(value, dict) or selection is None or any(value.get(key) != expected for key, expected in selection.items()):
+            owner_changed = any(key in self.state and result.get(key) != self.state[key] for key in ("accountKey", "connectionKey"))
+            if owner_changed or result.get("obs_generation") != self._obs_generation or not self.obs_toggle.isChecked() or not isinstance(value, dict) or selection is None or any(value.get(key) != expected for key, expected in selection.items()):
                 self._clear_obs_connection()
                 self.notice.setText("Connection details cleared because the selected destination changed or the panel closed.")
                 return
@@ -763,9 +793,15 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.notice.setText("Connection details fetched for " + self.obs_destination.currentText() + ". The key is hidden.")
 
         def copy_obs_detail(self, field, message):
+            self.refresh()
             if not self.busy and self._obs_identity == self._obs_selection() and field.text():
                 QtWidgets.QApplication.clipboard().setText(field.text())
                 self.notice.setText(message)
+
+        def reveal_obs_key(self, checked):
+            self.refresh()
+            available = not self.busy and self._obs_identity == self._obs_selection() and bool(self.obs_key.text())
+            self.obs_key.setEchoMode(QtWidgets.QLineEdit.Normal if checked and available else QtWidgets.QLineEdit.Password)
 
         def hideEvent(self, event):
             self._clear_obs_connection()

@@ -33,6 +33,22 @@ def test_pairing_is_reused_and_credentials_are_not_returned():
     assert calls[0][1]["allow_redirects"] is False
 
 
+@pytest.mark.parametrize("changed_connection", [
+    ("https://api.example.test", "new-account"),
+    ("https://other-api.example.test", "old-account"),
+])
+def test_snapshot_rejects_pairing_changes_before_the_request(changed_connection):
+    calls = []
+    original = ("https://api.example.test", "old-account")
+    connections = iter([original, changed_connection, changed_connection])
+    client = CompanionClient(lambda: next(connections), transport=lambda *args, **kwargs: (
+        calls.append((args, kwargs)) or response({"liveGame": {"phase": "menu"}})
+    ))
+    with pytest.raises(CompanionError, match="pairing changed"):
+        client.action({"action": "snapshot"})
+    assert not calls
+
+
 @pytest.mark.parametrize("phase", ["match_in_progress", "match_ended"])
 @pytest.mark.parametrize("game_key,old_key", [("new", "old"), (None, "old"), ("new", None)])
 def test_new_match_drops_stale_postgame_scouting(game_key, old_key, phase):

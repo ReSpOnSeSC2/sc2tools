@@ -17,6 +17,7 @@ from sc2tools_agent.api_client import (
 from sc2tools_agent.config import AgentConfig
 from sc2tools_agent.replay_pipeline import CloudGame
 from sc2tools_agent.state import AgentState
+from sc2tools_agent.session_stats import session_account_key
 from sc2tools_agent.uploader.queue import (
     TerminalUploadError,
     UploadJob,
@@ -84,6 +85,9 @@ class _StubApi:
             },
         )
         return {"ok": True, "wrote": True}
+
+    def get_game_summary(self, game_id: str) -> Dict[str, Any]:
+        return {"gameId": game_id}
 
 
 def _cfg(
@@ -189,7 +193,7 @@ def test_accepted_game_journals_original_before_success_callback(
     def _success(path: Path) -> None:
         durable = ReplayArchiveJournal(tmp_path)
         assert durable.contains(
-            ReplayArchiveTask(path, f"id-{path.name}"),
+            ReplayArchiveTask(path, f"id-{path.name}", q._archive_owner(q._upload_context())),
         )
         events.append(f"success:{path.name}")
 
@@ -487,11 +491,11 @@ def test_archive_journal_checkpoint_failure_suspends_before_next_upload(
     monkeypatch.setattr(q._archive_journal, "acknowledge_many", _fail_ack)
     q.start()
     try:
-        assert _wait_for(lambda: api.archive_calls == 1, timeout=2.0)
         assert _wait_for(lambda: q._archive_journal_error is not None)
         time.sleep(0.3)
-        assert api.archive_calls == 1
-        assert q.archive_pending_count() == len(tasks)
+        assert api.archive_calls == 0
+        assert q.archive_pending_count() == len(tasks) + 1
+        assert all(q._archive_journal.contains(task) for task in tasks)
     finally:
         q.stop()
 
@@ -1493,10 +1497,10 @@ def test_parallel_mmr_pushes_preserve_newest_cloud_and_local_value(
             return {"ok": True, "wrote": True}
 
     class _SignalingUploadQueue(UploadQueue):
-        def _maybe_push_last_mmr(self, job: UploadJob) -> None:
+        def _maybe_push_last_mmr(self, job: UploadJob, *, context=None) -> None:
             if job.file_path == newer.file_path:
                 newer_push_attempted.set()
-            super()._maybe_push_last_mmr(job)
+            super()._maybe_push_last_mmr(job, context=context)
 
     state = AgentState(device_token="t")
     api = _MmrRaceApi()
@@ -2700,7 +2704,7 @@ def test_rejected_playback_publication_still_commits_synced_game(tmp_path):
     assert successes == [job.file_path]
     # The original replay still enters its durable private-backup journal.
     assert ReplayArchiveJournal(tmp_path).contains(
-        ReplayArchiveTask(job.file_path, "id-rejected-playback.SC2Replay"),
+        ReplayArchiveTask(job.file_path, "id-rejected-playback.SC2Replay", q._archive_owner(q._upload_context())),
     )
 
 
@@ -2838,7 +2842,8 @@ def test_game_accepted_fires_after_success_for_live_jobs_only(
     accepted = [event for event in events if event[0] == "accepted"]
     assert accepted == [(
         "accepted", "live.SC2Replay", "id-live.SC2Replay", "id-live.SC2Replay",
-        {"gameId": "id-live.SC2Replay", "created": True},
+        {"gameId": "id-live.SC2Replay", "created": True,
+         "_uploadAccountKey": session_account_key(_cfg(tmp_path).api_base, "t")},
     )]
     assert events.index(("success", "live.SC2Replay")) < events.index(accepted[0])
 
@@ -2909,5 +2914,6 @@ def test_legacy_single_upload_mirrors_game_accepted(tmp_path: Path) -> None:
 
     assert accepted == [(
         "single.SC2Replay", "id-single.SC2Replay",
-        {"gameId": "id-single.SC2Replay", "created": True},
+        {"gameId": "id-single.SC2Replay", "created": True,
+         "_uploadAccountKey": session_account_key(_cfg(tmp_path).api_base, "t")},
     )]

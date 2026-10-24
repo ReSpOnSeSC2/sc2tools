@@ -113,7 +113,7 @@ class CompanionClient:
             if not token:
                 return {"paired": False, "liveGame": None, "live": None,
                         "preferences": preferences, **modes}
-            snapshot = self._request("GET", "/v1/me/live/snapshot")
+            snapshot = self._request("GET", "/v1/me/live/snapshot", expected_connection=(base, token))
             envelope = snapshot.get("liveGame")
             live = snapshot.get("overlayLive")
             if isinstance(envelope, dict) and envelope.get("phase") in {

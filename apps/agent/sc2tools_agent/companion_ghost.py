@@ -10,15 +10,22 @@ import threading
 import time
 from urllib.parse import quote
 
+from .session_stats import session_account_key
+
 
 MATCHUPS = tuple(mine + "v" + theirs for mine in "PTZ" for theirs in "PTZ")
 MAX_GHOST_STEPS = 250
 MAX_GHOST_SECONDS = 14400
 WORKERS = {"probe", "scv", "drone", "mule"}
+_UNBOUND = object()
 
 
 class GhostError(ValueError):
     """A bounded, user-readable Ghost configuration error."""
+
+    def __init__(self, message, *, code=None):
+        super().__init__(message)
+        self.code = code
 
 
 def concrete_race(value):
@@ -100,8 +107,24 @@ def normalize_ghost_state(value):
     local_only = value.get("localOnlyMatchups", [])
     if not isinstance(local_only, list) or len(local_only) > len(MATCHUPS) or any(matchup not in MATCHUPS for matchup in local_only):
         return empty
+    owner = value.get("accountKey")
+    owner = owner if isinstance(owner, str) and re.fullmatch(r"[0-9a-f]{64}", owner) else None
     return {"v": 1, "enabled": value["enabled"], "slots": slots,
+            **({"accountKey": owner} if owner else {}),
             **({"localOnlyMatchups": [matchup for matchup in MATCHUPS if matchup in local_only]} if local_only else {})}
+
+
+def local_ghost_state(value):
+    state = normalize_ghost_state(value)
+    local = set(state.get("localOnlyMatchups", ()))
+    state["slots"] = {matchup: target for matchup, target in state["slots"].items()
+                      if matchup in local and target["sourceGameId"].startswith("local:")}
+    state.pop("accountKey", None)
+    if state["slots"]:
+        state["localOnlyMatchups"] = [matchup for matchup in MATCHUPS if matchup in state["slots"]]
+    else:
+        state.pop("localOnlyMatchups", None)
+    return state
 
 
 def replay_target(game, build, game_id):
@@ -143,13 +166,51 @@ def replay_target(game, build, game_id):
 
 
 class GhostClient:
-    def __init__(self, request, preferences_provider, save_preferences):
+    def __init__(self, request, preferences_provider, save_preferences, *, connection_provider=None):
         self._request = request
         self._preferences_provider = preferences_provider
         self._save_preferences = save_preferences
+        self._connection_provider = connection_provider
+        self._account_connection = _UNBOUND
         self._lock = threading.RLock()
         self._references = {}
         self._history = {}
+
+    def _connection(self):
+        if self._connection_provider is None:
+            return _UNBOUND
+        try:
+            connection = tuple(self._connection_provider())
+        except (TypeError, ValueError):
+            raise GhostError("Your agent pairing changed. Refresh Ghost before using account data.", code="pairing_changed") from None
+        if len(connection) != 2 or not isinstance(connection[0], str) or connection[1] is not None and not isinstance(connection[1], str):
+            raise GhostError("Your agent pairing changed. Refresh Ghost before using account data.", code="pairing_changed")
+        return connection
+
+    def _assert_connection(self, connection):
+        if connection is not _UNBOUND and self._connection() != connection:
+            raise GhostError("Your agent pairing changed. Refresh Ghost before using account data.", code="pairing_changed")
+
+    def _owner(self, connection):
+        return session_account_key(*connection) if connection is not _UNBOUND and connection[1] else None
+
+    def _state_for_connection(self, connection):
+        state = normalize_ghost_state(self._preferences_provider())
+        if connection is _UNBOUND:
+            return state
+        owner = self._owner(connection)
+        if state.get("accountKey") != owner or owner is None:
+            state = local_ghost_state(state)
+        if owner:
+            state["accountKey"] = owner
+        else:
+            state.pop("accountKey", None)
+        return state
+
+    def _save_state(self, state, connection):
+        self._assert_connection(connection)
+        self._save_preferences(deepcopy(state))
+        self._assert_connection(connection)
 
     def _merge_account(self, state, account, *, synced_matchups=()):
         if (not isinstance(account, dict) or type(account.get("v")) is not int or account["v"] != 1
@@ -206,17 +267,43 @@ class GhostClient:
     def action(self, request):
         if not isinstance(request, dict):
             raise GhostError("Choose a Ghost action.")
+        connection = self._connection()
+        owner = self._owner(connection)
+        if connection is not _UNBOUND and "accountKey" in request and request["accountKey"] != owner:
+            raise GhostError("Your agent pairing changed. Refresh Ghost before using account data.", code="pairing_changed")
+        with self._lock:
+            self._assert_connection(connection)
+            if connection != self._account_connection:
+                self._references = {}
+                self._history = {}
+                self._account_connection = connection
+        def account_request(method, path, **options):
+            self._assert_connection(connection)
+            if connection is not _UNBOUND:
+                options["expected_connection"] = connection
+            try:
+                result = self._request(method, path, **options)
+            except Exception:
+                self._assert_connection(connection)
+                raise
+            self._assert_connection(connection)
+            return result
+        result = self._action(request, account_request, connection)
+        self._assert_connection(connection)
+        return {**result, "accountKey": owner} if connection is not _UNBOUND else result
+
+    def _action(self, request, account_request, connection):
         action = request.get("action")
         if action == "ghost_state":
             with self._lock:
-                state = normalize_ghost_state(self._preferences_provider())
+                state = self._state_for_connection(connection)
                 try:
-                    account = self._request("GET", "/v1/me/ghost-builds")
+                    account = account_request("GET", "/v1/me/ghost-builds")
                     if not self._merge_account(state, account):
                         raise GhostError("Account builds are unavailable.")
                 except Exception:
                     return self._result(state, warning="Account builds are unavailable. Using targets saved on this PC.")
-                self._save_preferences(deepcopy(state))
+                self._save_state(state, connection)
                 return self._result(state)
         if action == "ghost_save":
             if not ("enabled" in request or "matchup" in request):
@@ -232,7 +319,7 @@ class GhostClient:
                     if target is None:
                         raise GhostError("Choose a valid timed replay build.")
             with self._lock:
-                state = normalize_ghost_state(self._preferences_provider())
+                state = self._state_for_connection(connection)
                 if "enabled" in request:
                     state["enabled"] = request["enabled"]
                 if "matchup" in request:
@@ -243,16 +330,16 @@ class GhostClient:
                     local_only = set(state.get("localOnlyMatchups", ()))
                     local_only.add(request["matchup"])
                     state["localOnlyMatchups"] = [matchup for matchup in MATCHUPS if matchup in local_only]
-                self._save_preferences(deepcopy(state))
+                self._save_state(state, connection)
                 if "matchup" not in request:
                     return self._result(state)
                 try:
-                    account = self._request("PUT", "/v1/me/ghost-builds", body={"matchup": request["matchup"], "target": target})
+                    account = account_request("PUT", "/v1/me/ghost-builds", body={"matchup": request["matchup"], "target": target})
                     if not self._merge_account(state, account, synced_matchups=(request["matchup"],)):
                         raise GhostError("Account builds are unavailable.")
                 except Exception:
                     return self._result(state, warning="Saved on this PC. Account sync is unavailable; assign the target again to retry.")
-                self._save_preferences(deepcopy(state))
+                self._save_state(state, connection)
                 return self._result(state)
         if action == "ghost_reference":
             game_id = request.get("gameId")
@@ -262,17 +349,17 @@ class GhostClient:
                     or re.search(r"[\x00-\x1f\x7f]", game_id) or side not in ("you", "opponent") or type(clear) is not bool):
                 raise GhostError("Select a replay and player for this build reference.")
             with self._lock:
-                state = normalize_ghost_state(self._preferences_provider())
-                account = self._request("PUT", "/v1/me/ghost-builds/reference", body={"gameId": game_id, "side": side, "clear": clear})
+                state = self._state_for_connection(connection)
+                account = account_request("PUT", "/v1/me/ghost-builds/reference", body={"gameId": game_id, "side": side, "clear": clear})
                 references = account.get("references") if isinstance(account, dict) else None
                 affected = [reference.get("matchup") for reference in references.values()
                             if isinstance(reference, dict) and reference.get("gameId") == game_id and reference.get("side", "you") == side] if isinstance(references, dict) and not clear else []
                 if not self._merge_account(state, account, synced_matchups=affected):
                     raise GhostError("The reference replay could not be synced. Please refresh.")
-                self._save_preferences(deepcopy(state))
+                self._save_state(state, connection)
                 return self._result(state)
         if action == "ghost_examples":
-            result = self._request("GET", "/v1/ghost-examples")
+            result = account_request("GET", "/v1/ghost-examples")
             items = result.get("items") if isinstance(result, dict) else None
             return {"items": [row for row in items[:100] if isinstance(row, dict)] if isinstance(items, list) else []}
         if action == "ghost_reference_restore":
@@ -284,15 +371,15 @@ class GhostClient:
                     or any(re.search(r"[\x00-\x1f\x7f]", value) for value in (key, revision, expected or ""))):
                 raise GhostError("Choose a saved reference from history, then refresh before restoring it.")
             with self._lock:
-                state = normalize_ghost_state(self._preferences_provider())
-                account = self._request("PUT", "/v1/me/ghost-builds/reference/restore", body={
+                state = self._state_for_connection(connection)
+                account = account_request("PUT", "/v1/me/ghost-builds/reference/restore", body={
                     "referenceKey": key, "revision": revision, "expectedCurrentRevision": expected,
                 })
                 reference = account.get("references", {}).get(key) if isinstance(account, dict) and isinstance(account.get("references"), dict) else None
                 affected = [reference["matchup"]] if isinstance(reference, dict) and reference.get("matchup") in MATCHUPS else []
                 if not self._merge_account(state, account, synced_matchups=affected):
                     raise GhostError("The saved reference could not be restored. Refresh history and try again.")
-                self._save_preferences(deepcopy(state))
+                self._save_state(state, connection)
                 return self._result(state)
         if action == "ghost_comparison":
             game_id, side = request.get("gameId"), request.get("side", "you")
@@ -305,7 +392,7 @@ class GhostClient:
             params = {"gameId": game_id, "side": side}
             if build_key is not None:
                 params["buildKey"] = build_key
-            result = self._request("GET", "/v1/me/ghost-builds/comparison", params=params)
+            result = account_request("GET", "/v1/me/ghost-builds/comparison", params=params)
             if not isinstance(result, dict) or result.get("status") not in ("ready", "no_reference", "source_replay", "replay_pending"):
                 raise GhostError("This replay's reference comparison is unavailable.")
             rows = result.get("rows")
@@ -314,7 +401,7 @@ class GhostClient:
             example_id = request.get("exampleId")
             if not isinstance(example_id, str) or not 0 < len(example_id) <= 128 or re.search(r"[\x00-\x1f\x7f]", example_id):
                 raise GhostError("Choose a curated replay example first.")
-            result = self._request("GET", "/v1/ghost-examples/" + quote(example_id, safe=""))
+            result = account_request("GET", "/v1/ghost-examples/" + quote(example_id, safe=""))
             target = normalize_target(result.get("target")) if isinstance(result, dict) else None
             matchup = result.get("matchup") if isinstance(result, dict) else None
             if target is None or matchup not in MATCHUPS:
@@ -327,7 +414,7 @@ class GhostClient:
                 if not isinstance(before, str) or not 0 < len(before) <= 64:
                     raise GhostError("Refresh the replay library and try again.")
                 params["before"] = before
-            result = self._request("GET", "/v1/games", params=params)
+            result = account_request("GET", "/v1/games", params=params)
             return {"items": result.get("items", [])[:50] if isinstance(result.get("items"), list) else [],
                     "nextBefore": result.get("nextBefore")}
         if action == "ghost_target":
@@ -336,10 +423,10 @@ class GhostClient:
                     or re.search(r"[\x00-\x1f\x7f]", game_id)):
                 raise GhostError("Select a replay from your library first.")
             path = "/v1/games/" + quote(game_id, safe="")
-            game = self._request("GET", path)
+            game = account_request("GET", path)
             if not supports_ghost_game(game):
                 raise GhostError("Build Order Ghost supports one-versus-one replays. Team and free-for-all targets are unavailable.")
-            build = self._request("GET", path + "/build-order")
+            build = account_request("GET", path + "/build-order")
             if not isinstance(game, dict) or not isinstance(build, dict):
                 raise GhostError("This replay's build order is unavailable.")
             players = []

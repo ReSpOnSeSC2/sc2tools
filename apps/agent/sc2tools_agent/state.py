@@ -317,6 +317,7 @@ class AgentState:
     # Appended to preserve existing positional AgentState constructor fields.
     last_known_race: Optional[str] = None
     last_known_race_at: Optional[str] = None
+    companion_panel_positions: Dict[str, List[int]] = field(default_factory=dict)
 
     @property
     def is_paired(self) -> bool:
@@ -490,6 +491,7 @@ def load_state(state_dir: Path) -> AgentState:
         show_scouting_at_loading=raw.get("show_scouting_at_loading") is not False,
         last_known_race=raw.get("last_known_race") if raw.get("last_known_race") in ("Protoss", "Terran", "Zerg") else None,
         last_known_race_at=_coerce_str(raw.get("last_known_race_at")),
+        companion_panel_positions=_coerce_panel_positions(raw.get("companion_panel_positions")),
     )
 
 
@@ -558,6 +560,7 @@ def _snapshot(state: AgentState) -> dict:
         companion_skin=_coerce_companion_skin(state.companion_skin),
         companion_animations=state.companion_animations if type(state.companion_animations) is bool else True,
         companion_session_enabled=state.companion_session_enabled is True,
+        companion_panel_positions=_coerce_panel_positions(state.companion_panel_positions),
         uploaded=dict(state.uploaded),
         path_by_game_id=dict(state.path_by_game_id),
         companion_preferences=dict(state.companion_preferences),
@@ -732,6 +735,12 @@ def _coerce_positions(value: object) -> Dict[str, List[int]]:
         ):
             out[key] = [int(point[0]), int(point[1])]
     return out
+
+
+def _coerce_panel_positions(value: object) -> Dict[str, List[int]]:
+    from .panel_positions import normalize_panel_positions
+
+    return normalize_panel_positions(value)
 
 
 _CHECKIN_PREF_KEYS = ("enabled", "askAtLoading", "askAfterGame")

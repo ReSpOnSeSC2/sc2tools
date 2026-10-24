@@ -11,6 +11,16 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.24.0 - Account recovery and remembered panel positions
+- Isolate Companion, Ghost, check-in, replay archives and Streams work across
+  account changes. Recover stuck selectors and save retries while preserving
+  same-account drafts and completed post-game cards.
+- Stop hidden Randomizer settings from polling; keep draws and audio widget-only.
+- Fix narrow Scouting, Settings and recovery layouts and harden installer
+  download validation, redirects, transfer limits and interrupted-file cleanup.
+- Remember native panel positions, recover safely when monitors change and add
+  an Assistance reset action without changing panel sizes or feature switches.
+
 ### Agent 0.23.1 - Responsive Companion layouts
 - Fix clipped text and controls when switching Companion sizes, including build
   selectors, Ghost, Randomizer, assistance modes and team rosters. Preserve the

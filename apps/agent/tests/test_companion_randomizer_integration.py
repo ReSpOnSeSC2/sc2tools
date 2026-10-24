@@ -68,8 +68,11 @@ def test_embedded_selector_only_releases_widget_hold_and_displays_its_canonical_
     page.timer.stop()
     page.randomizer_page.timer.stop()
     page.ghost_page.timer.stop()
+    page.show()
+    page.console.navigate("randomizer")
     try:
         wait_until(app, lambda: page.randomizer_page._loaded and not page.randomizer_page._busy)
+        page.console.navigate("builds")
         model = LoadingCardModel(game_key=key, matchup="PvZ", waiting_for_matchup=False,
                                  randomizer=RandomizerStripModel("Randomizer will roll", can_roll_now=True))
         page.dispatch_build_checkin("show_loading", (model,))
@@ -84,13 +87,17 @@ def test_embedded_selector_only_releases_widget_hold_and_displays_its_canonical_
         assert page.workspace_tabs.currentWidget() is route
         assert not page.randomizer_page.isWindow()
         state["roll"] = {"key": "build", "name": "Saved canonical build"}
+        reads = len([call for call in state["calls"] if call["action"] == "randomizer_state"])
         page.randomizer_page.refresh()
-        wait_until(app, lambda: not page.randomizer_page._busy and "Saved canonical build" in page.randomizer_page.result_label.text())
+        app.processEvents()
+        assert len([call for call in state["calls"] if call["action"] == "randomizer_state"]) == reads
         page.dispatch_build_checkin("update_loading", (replace(model,
             randomizer=RandomizerStripModel("Widget drew: " + state["roll"]["name"],
                 rolled_key="build", rolled_name=state["roll"]["name"])),))
         assert page.build_selectors.roll_label.text() == "Widget drew: Saved canonical build"
         assert not page.build_selectors.roll_now.isVisible()
+        page.console.navigate("randomizer")
+        wait_until(app, lambda: not page.randomizer_page._busy and "Saved canonical build" in page.randomizer_page.result_label.text())
         assert "Saved canonical build" in page.randomizer_page.result_label.text()
 
         state["roll"] = None

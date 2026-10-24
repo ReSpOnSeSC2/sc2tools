@@ -6,6 +6,8 @@ from ..recent_games import parse_time
 
 
 def build_game_dashboard(parent, *, QtCore, QtWidgets, open_game, pause, current_season, open_website, open_help):
+    from .qt_helpers import build_flow_layout
+
     class GameDashboard(QtWidgets.QWidget):
         def __init__(self):
             super().__init__(parent)
@@ -41,7 +43,7 @@ def build_game_dashboard(parent, *, QtCore, QtWidgets, open_game, pause, current
             self.import_detail = QtWidgets.QLabel("")
             self.import_detail.setWordWrap(True)
             progress.addWidget(self.import_detail)
-            actions = QtWidgets.QHBoxLayout()
+            actions = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
             self.pause = QtWidgets.QPushButton("Pause")
             self.pause.clicked.connect(pause)
             actions.addWidget(self.pause)

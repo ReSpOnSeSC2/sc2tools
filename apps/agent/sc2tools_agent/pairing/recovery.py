@@ -26,13 +26,17 @@ class RuntimeRecovery:
     def unlinked(self):
         if self.cell.upload:
             self.cell.upload.hold_auth(True)
-        self.state.device_token = None
-        try:
-            save_state(self.cfg.state_dir, self.state)
-        except OSError:
-            log.exception("unlinked_state_save_failed")
+        with _STATE_SAVE_LOCK:
+            self.state.device_token = None
+            try:
+                save_state(self.cfg.state_dir, self.state)
+            except OSError:
+                log.exception("unlinked_state_save_failed")
         if self.cell.socket_client:
             self.cell.socket_client.stop()
+        controller = self.cell.build_checkin
+        if controller is not None and callable(getattr(controller, "on_connection_changed", None)):
+            controller.on_connection_changed()
         self.ui.on_unlinked()
         if not self.cell.gui:
             self.link_again()
@@ -51,22 +55,28 @@ class RuntimeRecovery:
                 )
                 if not paired or self.stop_event.is_set():
                     return
-                api = ApiClient(self.cfg.api_base, self.state.device_token)
-                self.cell.api = api
-                if self.cell.upload:
-                    self.cell.upload.replace_api(api)
-                for service in (self.cell.heartbeat, self.cell.import_ctl, self.cell.build_checkin):
-                    if service:
-                        service._api = api
-                self._replace_transport(self.cell.live_transport, api)
                 with _STATE_SAVE_LOCK:
+                    if not self.state.device_token:
+                        return
+                    api = ApiClient(self.cfg.api_base, self.state.device_token)
+                    self.cell.api = api
+                    if self.cell.upload:
+                        self.cell.upload.replace_api(api)
+                    for service in (self.cell.heartbeat, self.cell.import_ctl, self.cell.build_checkin):
+                        if service:
+                            service._api = api
+                    self._replace_transport(self.cell.live_transport, api)
                     socket_client = self.cell.socket_client
                     if socket_client:
                         socket_client = socket_client.with_device_token(self.state.device_token)
-                        socket_client.set_session_enabled(self.state.companion_session_enabled)
                         self.cell.socket_client = socket_client
+                    session_enabled = self.state.companion_session_enabled
                 if socket_client:
+                    socket_client.set_session_enabled(session_enabled)
                     socket_client.start()
+                controller = self.cell.build_checkin
+                if controller is not None and callable(getattr(controller, "on_connection_changed", None)):
+                    controller.on_connection_changed()
                 self.watchdog.reset()
                 if self.cell.upload:
                     self.cell.upload.hold_auth(False)

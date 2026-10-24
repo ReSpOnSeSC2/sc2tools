@@ -38,10 +38,18 @@ def preview(page, race="Protoss"):
                                    "manualOnly": True, "matchup": None, "target": target()}]})
 
 
-def test_manual_team_source_can_only_arm_explicitly_for_current_same_race_roster(ghost_page):
-    page, app, saved, calls, threads = ghost_page
+def current_owner_team_snapshot(page, app, saved):
     source = team_snapshot()
     page.update_snapshot(source)
+    wait_until(app, lambda: page._account_key == source["accountKey"] and not page._busy)
+    assert page._state["slots"] == saved[0]["slots"]
+    assert "PvT" in page._state["slots"]
+    return source
+
+
+def test_manual_team_source_can_only_arm_explicitly_for_current_same_race_roster(ghost_page):
+    page, app, saved, calls, threads = ghost_page
+    source = current_owner_team_snapshot(page, app, saved)
     page.set_team_context(team_context(source))
     page.set_assistance_enabled(True)
     before = deepcopy(saved[0])
@@ -66,8 +74,7 @@ def test_manual_team_source_can_only_arm_explicitly_for_current_same_race_roster
 
 def test_manual_team_off_and_master_or_mode_off_clear_temporary_choice_without_erasing_one_on_one_slots(ghost_page):
     page, app, saved, calls, threads = ghost_page
-    source = team_snapshot()
-    page.update_snapshot(source)
+    source = current_owner_team_snapshot(page, app, saved)
     page.set_team_context(team_context(source))
     page.set_assistance_enabled(True)
     preview(page)
@@ -93,9 +100,8 @@ def test_manual_team_off_and_master_or_mode_off_clear_temporary_choice_without_e
 
 def test_team_race_mismatch_stale_telemetry_replay_new_game_and_enemy_change_never_rearm_implicitly(ghost_page):
     page, app, saved, calls, threads = ghost_page
-    source = team_snapshot()
+    source = current_owner_team_snapshot(page, app, saved)
     selected = team_context(source)
-    page.update_snapshot(source)
     page.set_team_context(selected)
     page.set_assistance_enabled(True)
     preview(page, "Terran")
@@ -125,8 +131,7 @@ def test_team_race_mismatch_stale_telemetry_replay_new_game_and_enemy_change_nev
 
 def test_one_on_one_source_can_be_used_manually_in_teams_without_changing_saved_matchup(ghost_page):
     page, app, saved, calls, threads = ghost_page
-    source = team_snapshot()
-    page.update_snapshot(source)
+    source = current_owner_team_snapshot(page, app, saved)
     page.set_team_context(team_context(source))
     page.set_assistance_enabled(True)
     page._show_targets({"target": target(), "matchup": "PvT"})

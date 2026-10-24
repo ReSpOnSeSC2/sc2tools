@@ -154,6 +154,17 @@ class ApiClient:
             raise PermissionError("agent_not_paired")
         return self._get("/v1/me/profile", auth=True)
 
+    def get_game_summary(self, game_id: str) -> Dict[str, Any]:
+        if (not isinstance(game_id, str) or not 0 < len(game_id) <= 200
+                or game_id != game_id.strip() or game_id in {".", ".."}
+                or any(ord(character) < 32 or ord(character) == 127 for character in game_id)):
+            raise ValueError("Select a valid replay.")
+        try:
+            encoded = quote(game_id, safe="")
+        except UnicodeEncodeError:
+            raise ValueError("Select a valid replay.") from None
+        return self._interactive("GET", "/v1/games/" + encoded)
+
     # ---------------- Game ingest ----------------
     def upload_game(self, game: Dict[str, Any]) -> Dict[str, Any]:
         if not self.device_token:

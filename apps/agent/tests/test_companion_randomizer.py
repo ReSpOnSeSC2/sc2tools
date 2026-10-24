@@ -65,6 +65,7 @@ def panel():
         raise AssertionError(action)
 
     widget = build_companion_randomizer(None, handler=handler, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+    widget.show()
     widget.timer.stop()
     widget.update_snapshot(snapshot())
     wait_until(app, lambda: widget._loaded and not widget._busy)

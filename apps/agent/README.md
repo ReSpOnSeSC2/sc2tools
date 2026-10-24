@@ -115,13 +115,19 @@ construction **started** from unit, upgrade, and morph **completed** times.
 Missing replay details stay unavailable; the app does not infer enemy tech
 during a live game.
 
-Enable **Opponent** or **Scouting** independently to keep a separate panel
-above the game. The master overlay switch hides both panels while preserving
-your individual choices. All switches start off on an upgraded install and
-persist with the agent's settings. Panels follow the active opponent even
+Enable **Opponent**, **Scouting**, **Session**, or **Build Order Ghost** independently
+to keep separate panels above the game. The master assistance switch hides
+native panels while preserving your individual choices. Updates preserve your
+saved choices. Opponent and Scouting follow the active opponent even
 while you browse someone else, stay visible through the match, and hide in
 menus and replays. Closing the main window keeps enabled panels running;
-quitting the agent closes them all.
+quitting the agent closes them all. Session can remain visible between games;
+its timer, record, latest-known MMR and rating region use your owned Session feed.
+Rating region is not verified active-server detection.
+
+Native panel positions are remembered locally without changing their sizes.
+Removed-monitor positions are restored safely onto an available screen. Use
+**Assistance → Reset panel positions** to return to the default placement.
 
 The Companion requires the matching API update for account data. Update the
 installed agent through the existing update flow; a second installation or
@@ -130,15 +136,23 @@ pairing is not needed. OBS browser sources and Build check-in remain available.
 The **Build selectors** screen contains the pre-game plan and post-game check-in.
 Choices, opponent corrections, and notes use the same records as the website
 and floating game cards. Their independent switches can be changed at any time.
-The **Randomizer** screen manages the matchup's eligible pool and rolls without an
-OBS browser source. **Build Order Ghost** arms a recorded replay target for
+The **Randomizer settings** screen silently manages the matchup's eligible pool
+and shows the widget's saved pick. Draws, animation, sounds and Randomizer speech
+stay in the separate widget, not the native Agent. Hidden settings do not poll
+the account; opening them refreshes the saved pool. Failed saves retain the draft
+and allow retry. Build check-in receives the widget pick independently.
+**Build Order Ghost** arms a recorded replay target for
 each matchup and follows the live game clock in an optional floating panel.
-Each feature has its own on/off control. Turn **Game assistance enabled** off
+Each feature has its own on/off control. Turn **In-game assistance** off
 to hide every game panel and pause native assistance without clearing settings.
 
 Save local **Ladder**, **Customs**, **Teams**, **Practice**, and **Review** presets
 under **Customize mode**. Preset gates never rewrite shared account settings;
-actual team-game scouting and Ghost guidance remain unsupported. The optional
+Hybrid team scouting supports a selected enemy and an expanded roster, with
+explicit identity/team confirmation when authoritative IDs are unavailable.
+Team ratings are labeled as historical 1v1 data, not invented current team MMR.
+Team Ghost must be armed explicitly for the confirmed game; automatic check-ins
+and Randomizer draws remain limited to supported human 1v1 matches. The optional
 **Ctrl+Shift+F10** shortcut toggles assistance without leaving the game.
 Ghost accepts local replay files, account replays, and explicitly published
 admin examples. Star per-build references, filter the replay library, restore
@@ -146,12 +160,18 @@ earlier reference versions, and compare completed replay timings against them.
 Choose **Compact**, **Standard**, **Detailed**, or **Full workspace** from
 the size picker. Compact shows opponent name, race, MMR, your W–L record against
 them, and your win percentage, with a small expand button. No league field is
-added. Standard shows a persistent portrait beside both opening icon chains;
-Detailed adds more tech steps and upgrades; Full workspace exposes full replay
+added. Standard keeps a compact opponent summary and switchable profile, scouting
+and tool pages. Detailed adds more tech steps and upgrades, with a portrait rail
+when the screen has enough room; Full workspace exposes full replay
 timelines and notes. Home, Back, opponent arrows, game arrows, and Previous
 encounters let you browse without losing selected replays or unsaved notes.
 Manual size and information layout are retained. The **Agent** menu opens the
 existing Dashboard, Settings, Streams, Recent games, and Logs.
+
+Cloud replay targets, references and late replies are fenced to the current
+account. Unpairing or switching accounts clears private cloud-derived Ghost data;
+explicit local replay targets remain local. Pending replay archives also retain
+their owner, and older unowned tasks require an owned-game check before resuming.
 
 **Voice on/off** in the Companion header controls spoken scouting independently
 of pinned panels. **Assistance → Read scouting report aloud in Companion** is

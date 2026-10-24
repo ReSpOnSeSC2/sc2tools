@@ -10,6 +10,7 @@ ApiClient side; if the queue is busy, new replays park in memory.
 from __future__ import annotations
 
 import itertools
+import hashlib
 import logging
 import queue
 import random
@@ -32,7 +33,7 @@ from ..errors import classify
 from ..game_activity import on_battery
 from ..config import AgentConfig
 from ..replay_pipeline import CloudGame
-from ..state import AgentState, save_state
+from ..state import AgentState, _STATE_SAVE_LOCK, save_state
 from ..sync_filter import SyncFilter
 from .archive_journal import (
     ReplayArchiveJournal,
@@ -189,6 +190,20 @@ class _PausedBeforeNetwork(Exception):
     """Pause won the race while an ingest worker waited for a shared slot."""
 
 
+class _UploadSessionChanged(_PausedBeforeNetwork):
+    def __init__(self, context):
+        super().__init__("The linked upload session changed.")
+        self.context = context
+
+
+@dataclass(frozen=True)
+class _UploadContext:
+    api: Any
+    owner: Optional[str]
+    token: Optional[str]
+    generation: int
+
+
 class _FilteredOutError(TerminalUploadError):
     """Job dropped at upload time because the active sync filter
     excludes it. Distinct from a transport failure or a server-side
@@ -248,6 +263,8 @@ class UploadQueue:
         self._cfg = cfg
         self._state = state
         self._api = api
+        self._api_generation = 0
+        self._pending_owners = {}
         self._q: queue.PriorityQueue[Tuple[int, int, UploadJob]] = (
             queue.PriorityQueue(maxsize=1000)
         )
@@ -268,6 +285,8 @@ class UploadQueue:
             Tuple[float, int, ReplayArchiveTask, int]
         ] = queue.PriorityQueue(maxsize=_ARCHIVE_READY_LIMIT)
         self._archive_sequence = itertools.count()
+        self._archive_verify_after = 0.0
+        self._archive_owner_warning_at = 0.0
         self._archive_scheduled: set[tuple[str, str]] = set()
         self._archive_lane_not_before = 0.0
         self._archive_lane_failures = 0
@@ -546,6 +565,8 @@ class UploadQueue:
                 log.debug("dedupe_skip_pending %s", job.file_path.name)
                 return False
             self._pending_paths.add(path_key)
+            with _STATE_SAVE_LOCK:
+                self._pending_owners[path_key] = self._owner_identity(self._upload_context())
         with self._archive_lock:
             self._archive_idle_since = None
         self._archive_wake.set()
@@ -578,10 +599,10 @@ class UploadQueue:
 
     def archive_pending_count(self) -> int:
         """Number of accepted originals still awaiting private storage."""
-        return self._archive_journal.pending_count()
+        return self._archive_journal.pending_count(owner=self._archive_owner(self._upload_context()))
 
     def _notify_archive_pending(self) -> None:
-        count = self._archive_journal.pending_count()
+        count = self.archive_pending_count()
         try:
             self._on_archive_pending_changed(count)
         except Exception:  # noqa: BLE001
@@ -592,6 +613,7 @@ class UploadQueue:
 
     def _hydrate_archive_ready(self) -> None:
         """Page durable tasks into the bounded in-memory ready queue."""
+        owner = self._archive_owner(self._upload_context())
         with self._archive_lock:
             available = max(0, _ARCHIVE_READY_LIMIT - self._archive_q.qsize())
             if available <= 0:
@@ -599,6 +621,7 @@ class UploadQueue:
             tasks = self._archive_journal.next_tasks(
                 excluded=set(self._archive_scheduled),
                 limit=available,
+                owner=owner,
             )
             now = time.monotonic()
             for task in tasks:
@@ -681,6 +704,12 @@ class UploadQueue:
             except queue.Empty:
                 continue
             try:
+                context = self._upload_context()
+                owner = self._archive_owner(context)
+                if task.owner is not None and task.owner != owner:
+                    with self._archive_lock:
+                        self._archive_scheduled.discard(task.key)
+                    continue
                 now = time.monotonic()
                 if ready_at > now:
                     self._archive_stop.wait(min(0.5, ready_at - now))
@@ -737,13 +766,50 @@ class UploadQueue:
                     )
                     continue
 
+                if task.owner is None:
+                    if time.monotonic() < self._archive_verify_after:
+                        self._archive_journal.defer(task, not_before=self._archive_verify_after, attempt=attempt)
+                        with self._archive_lock:
+                            self._archive_scheduled.discard(task.key)
+                        self._archive_stop.wait(0.1)
+                        continue
+                    self._archive_verify_after = time.monotonic() + 1.0
+                    verifier = getattr(context.api, "get_game_summary", None)
+                    metadata = None
+                    if callable(verifier):
+                        with self._network_gate.hold(2):
+                            self._require_upload_context(context)
+                            try:
+                                metadata = verifier(task.game_id)
+                            except Exception:
+                                self._require_upload_context(context)
+                                raise
+                            self._require_upload_context(context)
+                    if not isinstance(metadata, dict) or metadata.get("gameId") != task.game_id:
+                        if time.monotonic() >= self._archive_owner_warning_at:
+                            log.warning("replay_archive_ownership_unavailable; retaining legacy backup tasks")
+                            self._archive_owner_warning_at = time.monotonic() + 60
+                        self._archive_journal.defer(task, not_before=time.monotonic() + 60, attempt=attempt)
+                        with self._archive_lock:
+                            self._archive_scheduled.discard(task.key)
+                        continue
+                    owned_task = ReplayArchiveTask(task.file_path, task.game_id, owner)
+                    with _STATE_SAVE_LOCK:
+                        self._require_upload_context(context)
+                        self._archive_journal.enqueue_many([owned_task])
+                        self._archive_journal.acknowledge_many([task], durable=True)
+                    with self._archive_lock:
+                        self._archive_scheduled.discard(task.key)
+                    self._schedule_archive_task(owned_task)
+                    continue
+
                 upload = getattr(
-                    self._api,
+                    context.api,
                     "upload_replay_file_durable",
                     None,
                 )
                 if not callable(upload):
-                    upload = getattr(self._api, "upload_replay_file", None)
+                    upload = getattr(context.api, "upload_replay_file", None)
                 try:
                     if not callable(upload):
                         raise RuntimeError(
@@ -768,13 +834,16 @@ class UploadQueue:
                                 with self._archive_lock:
                                     self._archive_scheduled.discard(task.key)
                                 continue
+                            self._require_upload_context(context)
                             stored = bool(upload(task.game_id, task.file_path))
+                            self._require_upload_context(context)
                 except ReplayArchiveJournalError:
                     # The outer boundary suspends the lane until restart.
                     # Never misclassify poisoned local durability as a cloud
                     # outage and continue probing the unhealthy journal.
                     raise
                 except ReplayArchiveSourceUnavailable as exc:
+                    self._require_upload_context(context)
                     next_attempt = attempt + 1
                     delay = min(
                         _ARCHIVE_RETRY_MAX_SEC,
@@ -803,6 +872,7 @@ class UploadQueue:
                     )
                     continue
                 except Exception as exc:  # noqa: BLE001
+                    self._require_upload_context(context)
                     # Transport/429/5xx/rolling-route failures affect the
                     # entire archival capability, not one replay. Open a
                     # lane-wide circuit breaker so an outage causes one probe
@@ -835,10 +905,12 @@ class UploadQueue:
                 # 400, 413, or an explicitly deleted owned game). Both are
                 # final; missing/inaccessible local sources and transient
                 # cloud failures raise above and leave the task intact.
-                self._archive_journal.acknowledge_many(
-                    [task],
-                    durable=True,
-                )
+                with _STATE_SAVE_LOCK:
+                    self._require_upload_context(context)
+                    self._archive_journal.acknowledge_many(
+                        [task],
+                        durable=True,
+                    )
                 with self._archive_lock:
                     self._archive_scheduled.discard(task.key)
                     self._archive_lane_failures = 0
@@ -856,6 +928,9 @@ class UploadQueue:
                         task.game_id,
                     )
                 self._notify_archive_pending()
+            except _UploadSessionChanged:
+                with self._archive_lock:
+                    self._archive_scheduled.discard(task.key)
             except ReplayArchiveJournalError as exc:
                 # Do not upload another byte while acknowledgements cannot be
                 # made durable. The current task remains in the journal and
@@ -865,6 +940,10 @@ class UploadQueue:
                     self._archive_journal_error = exc
                 log.exception("replay_archive_journal_suspended")
             except Exception as exc:  # noqa: BLE001
+                if not self._upload_context_current(context):
+                    with self._archive_lock:
+                        self._archive_scheduled.discard(task.key)
+                    continue
                 self._on_auth_failure(exc)
                 # A non-poisoning checkpoint error is still lane-wide: until
                 # acknowledgements work, uploading another file can only
@@ -955,6 +1034,8 @@ class UploadQueue:
         with self._lock:
             before = len(self._pending_paths)
             self._pending_paths.difference_update(keys)
+            for key in keys:
+                self._pending_owners.pop(key, None)
             changed = len(self._pending_paths) != before
         if changed:
             self._notify_pending()
@@ -996,7 +1077,53 @@ class UploadQueue:
         self._archive_wake.set()
 
     def replace_api(self, api: ApiClient) -> None:
-        self._api = api
+        with _STATE_SAVE_LOCK:
+            self._api = api
+            self._api_generation += 1
+
+    def _upload_context(self):
+        with _STATE_SAVE_LOCK:
+            return _UploadContext(self._api, self._state.user_id,
+                                  self._state.device_token, self._api_generation)
+
+    def _archive_owner(self, context):
+        base = self._owner_identity(context)[0]
+        identity = "user:" + context.owner if context.owner else "device:" + str(context.token or "unpaired")
+        return hashlib.sha256((base + "\0" + identity).encode("utf-8")).hexdigest()
+
+    def _owner_identity(self, context):
+        base = getattr(context.api, "base_url", self._cfg.api_base)
+        base = base.rstrip("/") if isinstance(base, str) else self._cfg.api_base.rstrip("/")
+        return base, ("user", context.owner) if context.owner else ("device", context.token)
+
+    def _upload_context_current(self, context):
+        with _STATE_SAVE_LOCK:
+            return (context.api is self._api and context.generation == self._api_generation
+                    and context.owner == self._state.user_id and context.token == self._state.device_token
+                    and getattr(context.api, "device_token", context.token) == context.token)
+
+    def _require_upload_context(self, context):
+        if not self._upload_context_current(context):
+            raise _UploadSessionChanged(context)
+
+    def _owned_upload_jobs(self, jobs, context):
+        identity = self._owner_identity(context)
+        with self._lock:
+            foreign = [job for job in jobs if self._pending_owners.get(str(job.file_path), identity) != identity]
+        self._release_pending(foreign)
+        foreign_paths = {str(job.file_path) for job in foreign}
+        return [job for job in jobs if str(job.file_path) not in foreign_paths]
+
+    def _retain_after_session_change(self, jobs, context):
+        with _STATE_SAVE_LOCK:
+            same_owner = self._owner_identity(context) == self._owner_identity(self._upload_context())
+        if same_owner:
+            for job in jobs:
+                if self.is_pending(job.file_path):
+                    self._retry_q.put_nowait(self._queue_item(job))
+        else:
+            self._release_pending(jobs)
+        self._ingest_stop.wait(0.1)
 
     def retry_now(self) -> None:
         with self._connection_lock:
@@ -1154,6 +1281,7 @@ class UploadQueue:
                     save_state(self._cfg.state_dir, self._state)
                     for job in dropped_jobs:
                         self._pending_paths.discard(str(job.file_path))
+                        self._pending_owners.pop(str(job.file_path), None)
             except Exception:  # noqa: BLE001
                 # These items have already been removed from their source
                 # queues. Retain them until the state cursor can be saved;
@@ -1336,11 +1464,18 @@ class UploadQueue:
                     source_q.task_done()
                 self._ingest_stop.wait(1.0)
                 continue
+            context = self._upload_context()
             try:
-                self._upload_batch(batch)
+                self._upload_batch(batch, context=context)
+                self._require_upload_context(context)
                 self._grow_batch_size_after_success(len(batch))
                 self._connection_success()
+            except _UploadSessionChanged as exc:
+                self._retain_after_session_change(batch, exc.context)
             except _PausedBeforeNetwork:
+                if not self._upload_context_current(context):
+                    self._retain_after_session_change(batch, context)
+                    continue
                 # Pause was clicked after batch assembly while this worker
                 # waited for the global request gate. Retain every still-live
                 # reservation without a failure callback or adaptive shrink.
@@ -1349,6 +1484,9 @@ class UploadQueue:
                         self._retry_q.put_nowait(self._queue_item(job))
                 self._ingest_stop.wait(0.1)
             except ReplayIngestBusy as exc:
+                if not self._upload_context_current(context):
+                    self._retain_after_session_change(batch, context)
+                    continue
                 # Intentional server admission control is neither a broken
                 # payload nor a capacity signal for adaptive batch sizing.
                 # Keep every path reserved, yield for Retry-After once, then
@@ -1372,7 +1510,8 @@ class UploadQueue:
                 # individually inside ``_upload_batch`` via the
                 # ``rejected`` array of the response.
                 try:
-                    with self._lock:
+                    with self._lock, _STATE_SAVE_LOCK:
+                        self._require_upload_context(context)
                         for job in batch:
                             log.error(
                                 "upload_rejected %s: %s",
@@ -1382,7 +1521,14 @@ class UploadQueue:
                         save_state(self._cfg.state_dir, self._state)
                         for job in batch:
                             self._pending_paths.discard(str(job.file_path))
+                            self._pending_owners.pop(str(job.file_path), None)
+                except _UploadSessionChanged:
+                    self._retain_after_session_change(batch, context)
+                    continue
                 except Exception as persist_exc:  # noqa: BLE001
+                    if not self._upload_context_current(context):
+                        self._retain_after_session_change(batch, context)
+                        continue
                     # The server outcome is terminal, but until its local
                     # cursor is durable these popped jobs must stay owned
                     # by a worker. Retain them instead of killing this
@@ -1397,6 +1543,8 @@ class UploadQueue:
                     self._notify_pending()
                     self._connection_success()
                     for job in batch:
+                        if not self._upload_context_current(context):
+                            break
                         try:
                             self._on_failure(job.file_path, exc)
                         except Exception:  # noqa: BLE001
@@ -1405,6 +1553,9 @@ class UploadQueue:
                                 job.file_path.name,
                             )
             except Exception as exc:  # noqa: BLE001
+                if not self._upload_context_current(context):
+                    self._retain_after_session_change(batch, context)
+                    continue
                 log.warning(
                     "upload_batch_failed size=%d: %s",
                     len(batch), exc,
@@ -1422,7 +1573,7 @@ class UploadQueue:
                 for _ in batch:
                     source_q.task_done()
 
-    def _upload_batch(self, batch: List[UploadJob]) -> None:
+    def _upload_batch(self, batch: List[UploadJob], *, context=None) -> None:
         """POST a batch of games as one HTTP request, then mirror the
         per-game ``accepted`` / ``rejected`` arrays back into
         ``state.uploaded``.
@@ -1438,6 +1589,10 @@ class UploadQueue:
         """
         if not batch:
             return
+        context = context or self._upload_context()
+        batch = self._owned_upload_jobs(batch, context)
+        if not batch:
+            raise _PausedBeforeNetwork()
         # Defense-in-depth filter check at the moment of upload. The
         # watcher applies the filter post-parse, but if the user
         # changed the filter between parse and upload (typical queue
@@ -1464,7 +1619,8 @@ class UploadQueue:
             if filtered_out:
                 label = sync_filter.short_label()
                 err = _FilteredOutError(f"Outside sync window {label}")
-                with self._lock:
+                with self._lock, _STATE_SAVE_LOCK:
+                    self._require_upload_context(context)
                     for job in filtered_out:
                         log.info(
                             "upload_dropped_by_filter %s date_iso=%s "
@@ -1479,6 +1635,7 @@ class UploadQueue:
                     save_state(self._cfg.state_dir, self._state)
                     for job in filtered_out:
                         self._pending_paths.discard(str(job.file_path))
+                        self._pending_owners.pop(str(job.file_path), None)
                 self._notify_pending()
                 for job in filtered_out:
                     try:
@@ -1518,13 +1675,15 @@ class UploadQueue:
                 missing_game_ids, len(batch),
             )
             err = _ServerRejectedError("missing gameId in upload payload")
-            with self._lock:
+            with self._lock, _STATE_SAVE_LOCK:
+                self._require_upload_context(context)
                 for job in invalid_jobs:
                     path_str = str(job.file_path)
                     self._state.uploaded[path_str] = "rejected"
                 save_state(self._cfg.state_dir, self._state)
                 for job in invalid_jobs:
                     self._pending_paths.discard(str(job.file_path))
+                    self._pending_owners.pop(str(job.file_path), None)
             self._notify_pending()
             for job in invalid_jobs:
                 try:
@@ -1551,12 +1710,18 @@ class UploadQueue:
             if self.is_paused():
                 raise _PausedBeforeNetwork()
             try:
-                summary_owner = self._state.user_id
-                result = self._api.upload_games_batch(payloads)
+                self._require_upload_context(context)
+                summary_owner = context.owner
+                result = context.api.upload_games_batch(payloads)
             except ApiError as exc:
+                self._require_upload_context(context)
                 if 400 <= exc.status < 500 and exc.status not in (401, 403, 408, 429):
                     raise _ServerRejectedError(str(exc)) from exc
                 raise
+            except Exception:
+                self._require_upload_context(context)
+                raise
+            self._require_upload_context(context)
         try:
             self._on_auth_success()
         except Exception:
@@ -1574,7 +1739,7 @@ class UploadQueue:
                 artifact = getattr(jobs[0].game, "playback_artifact_path", None)
                 if artifact:
                     self._publish_playback(
-                        jobs[0], gid, Path(artifact), ingest_priority,
+                        jobs[0], gid, Path(artifact), ingest_priority, context=context,
                     )
 
         # Parsed stats and the exact replay file form one durable operation:
@@ -1584,6 +1749,7 @@ class UploadQueue:
         # history ingest request behind a large file PUT.
         archive_tasks: list[ReplayArchiveTask] = []
         for acc in accepted:
+            self._require_upload_context(context)
             gid = acc.get("gameId") if isinstance(acc, dict) else None
             jobs = by_id.get(gid) if isinstance(gid, str) else None
             if jobs and isinstance(gid, str):
@@ -1602,26 +1768,38 @@ class UploadQueue:
                         jobs[0].file_path.name,
                         gid,
                     )
-                    archived_task = ReplayArchiveTask(jobs[0].file_path, gid)
+                    archived_task = ReplayArchiveTask(jobs[0].file_path, gid, self._archive_owner(context))
                     if self._archive_journal.contains(archived_task):
-                        self._archive_journal.acknowledge_many(
-                            [archived_task],
-                            durable=True,
-                        )
+                        with _STATE_SAVE_LOCK:
+                            self._require_upload_context(context)
+                            self._archive_journal.acknowledge_many(
+                                [archived_task],
+                                durable=True,
+                            )
                         with self._archive_lock:
                             self._archive_scheduled.discard(
                                 archived_task.key,
                             )
+                    with _STATE_SAVE_LOCK:
+                        self._require_upload_context(context)
+                        self._archive_journal.acknowledge_many(
+                            [ReplayArchiveTask(archived_task.file_path, archived_task.game_id)], durable=True,
+                        )
                 else:
                     archive_tasks.append(
-                        ReplayArchiveTask(jobs[0].file_path, gid),
+                        ReplayArchiveTask(jobs[0].file_path, gid, self._archive_owner(context)),
                     )
         if archive_tasks:
             # If this raises (disk full, permission failure, corrupt journal),
             # the upload batch stays reserved and retries. The server upsert
             # is idempotent, so accepted analysis can never outrun its durable
             # private-backup obligation.
-            self._archive_journal.enqueue_many(archive_tasks)
+            with _STATE_SAVE_LOCK:
+                self._require_upload_context(context)
+                self._archive_journal.enqueue_many(archive_tasks)
+                self._archive_journal.acknowledge_many(
+                    [ReplayArchiveTask(task.file_path, task.game_id) for task in archive_tasks], durable=True,
+                )
 
         accepted_jobs: List[UploadJob] = []
         accepted_summaries: List[Tuple[UploadJob, Dict[str, Any]]] = []
@@ -1629,7 +1807,8 @@ class UploadQueue:
         rejected_jobs: List[Tuple[UploadJob, str]] = []
         retryable_jobs: List[Tuple[UploadJob, str]] = []
         terminal_paths: set[str] = set()
-        with self._lock:
+        with self._lock, _STATE_SAVE_LOCK:
+            self._require_upload_context(context)
             now_iso = datetime.now(timezone.utc).isoformat()
             for acc in accepted:
                 gid = acc.get("gameId") if isinstance(acc, dict) else None
@@ -1680,6 +1859,8 @@ class UploadQueue:
             if accepted_jobs or rejected_jobs:
                 save_state(self._cfg.state_dir, self._state)
                 self._pending_paths.difference_update(terminal_paths)
+                for path in terminal_paths:
+                    self._pending_owners.pop(path, None)
 
         for task in archive_tasks:
             self._schedule_archive_task(task)
@@ -1690,8 +1871,10 @@ class UploadQueue:
         # the lock — they may take a network round-trip and we don't
         # want to hold the state lock that long.
         for job, accepted_row in accepted_summaries:
-            self._notify_game_synced(job, accepted_row, summary_owner)
+            self._notify_game_synced(job, accepted_row, summary_owner, context=context)
         for job in accepted_jobs:
+            if not self._upload_context_current(context):
+                break
             try:
                 self._on_success(job.file_path)
             except Exception:  # noqa: BLE001
@@ -1700,6 +1883,8 @@ class UploadQueue:
                     job.file_path.name,
                 )
         for job, err_msg in rejected_jobs:
+            if not self._upload_context_current(context):
+                break
             log.error("upload_rejected %s: %s", job.file_path.name, err_msg)
             try:
                 self._on_failure(job.file_path, _ServerRejectedError(err_msg))
@@ -1714,13 +1899,13 @@ class UploadQueue:
             # those callbacks so GUI/tray/console cannot double-decrement.
             self._notify_pending()
         for job, gid, acc in accepted_live:
-            self._notify_game_accepted(job, gid, acc)
+            self._notify_game_accepted(job, gid, acc, context=context)
         # Sticky-MMR: pushing one MMR per accepted game would make
         # N redundant API calls for the older entries (each would
         # short-circuit on the date check after the newest had
         # already updated state). Compute the newest dated job ONCE
         # and only push for that.
-        self._push_last_mmr_for_newest(accepted_jobs)
+        self._push_last_mmr_for_newest(accepted_jobs, context=context)
 
         # Sanity check: every batched gameId should appear in either
         # accepted or rejected. A server that drops a game silently
@@ -1733,6 +1918,7 @@ class UploadQueue:
             | {r.get("gameId") for r in rejected if isinstance(r, dict)}
         )
         for gid, jobs in by_id.items():
+            self._require_upload_context(context)
             if gid in seen:
                 continue
             for job in jobs:
@@ -1761,6 +1947,8 @@ class UploadQueue:
         game_id: Any,
         artifact: Path,
         priority: int,
+        *,
+        context=None,
     ) -> None:
         """Publish an accepted game's recording before its cursor advances.
 
@@ -1769,15 +1957,19 @@ class UploadQueue:
         backpressure always propagate without counting as failures.
         """
         key = str(job.file_path)
+        context = context or self._upload_context()
         try:
             with self._playback_publish_lock:
                 with self._network_gate.hold(priority):
                     if self.is_paused():
                         raise _PausedBeforeNetwork()
-                    self._api.upload_playback_artifact(game_id, artifact)
+                    self._require_upload_context(context)
+                    context.api.upload_playback_artifact(game_id, artifact)
+                    self._require_upload_context(context)
         except (_PausedBeforeNetwork, ReplayIngestBusy):
             raise
         except Exception as exc:  # noqa: BLE001
+            self._require_upload_context(context)
             permanent = _playback_failure_is_permanent(exc)
             with self._lock:
                 attempts = self._playback_failures.get(key, 0) + 1
@@ -1850,7 +2042,7 @@ class UploadQueue:
             payload.pop("resumedReplayGameIds", None)
         return payload
 
-    def _push_last_mmr_for_newest(self, jobs: List[UploadJob]) -> None:
+    def _push_last_mmr_for_newest(self, jobs: List[UploadJob], *, context=None) -> None:
         """Run sticky-MMR push for the newest dated game in ``jobs``.
 
         ``_maybe_push_last_mmr`` is correct when called per-job, but
@@ -1884,7 +2076,7 @@ class UploadQueue:
             if game_date > newest_date:
                 newest = job
         if newest is not None:
-            self._maybe_push_last_mmr(newest)
+            self._maybe_push_last_mmr(newest, context=context)
 
     def _upload_one(self, job: UploadJob) -> None:
         """Legacy single-game upload path. v0.5.8 routes everything
@@ -1898,6 +2090,9 @@ class UploadQueue:
         # out-of-window replay through. Keep the symmetric check on
         # both real upload paths so importer-of-_upload_one code (and
         # any future re-exports) gets the same guarantee.
+        context = self._upload_context()
+        if not self._owned_upload_jobs([job], context):
+            raise _PausedBeforeNetwork()
         sync_filter = SyncFilter.from_state(
             preset=getattr(self._state, "sync_filter_preset", None),
             since_iso=getattr(self._state, "sync_filter_since", None),
@@ -1913,10 +2108,12 @@ class UploadQueue:
                 job.file_path.name, date_iso, label,
             )
             path_str = str(job.file_path)
-            with self._lock:
+            with self._lock, _STATE_SAVE_LOCK:
+                self._require_upload_context(context)
                 self._state.uploaded[path_str] = "filtered"
                 save_state(self._cfg.state_dir, self._state)
                 self._pending_paths.discard(path_str)
+                self._pending_owners.pop(path_str, None)
             self._notify_pending()
             self._on_failure(
                 job.file_path,
@@ -1927,8 +2124,14 @@ class UploadQueue:
         with self._network_gate.hold(0 if job.priority else 1):
             if self.is_paused():
                 raise _PausedBeforeNetwork()
-            summary_owner = self._state.user_id
-            result = self._api.upload_game(self._payload_for_job(job))
+            self._require_upload_context(context)
+            summary_owner = context.owner
+            try:
+                result = context.api.upload_game(self._payload_for_job(job))
+            except Exception:
+                self._require_upload_context(context)
+                raise
+            self._require_upload_context(context)
         accepted_rows = result.get("accepted") or []
         accepted_row = accepted_rows[0] if accepted_rows else {}
         accepted = bool(
@@ -1943,28 +2146,34 @@ class UploadQueue:
         artifact = getattr(job.game, "playback_artifact_path", None)
         if artifact:
             self._publish_playback(
-                job, game_id, Path(artifact), 0 if job.priority else 1,
+                job, game_id, Path(artifact), 0 if job.priority else 1, context=context,
             )
         if isinstance(game_id, str) and game_id:
-            task = ReplayArchiveTask(job.file_path, game_id)
+            task = ReplayArchiveTask(job.file_path, game_id, self._archive_owner(context))
             marker = (
                 accepted_row.get("replayArchive")
                 if isinstance(accepted_row, dict)
                 else None
             )
-            if replay_file_matches_archive_marker(job.file_path, marker):
-                if self._archive_journal.contains(task):
+            available = replay_file_matches_archive_marker(job.file_path, marker)
+            with _STATE_SAVE_LOCK:
+                self._require_upload_context(context)
+                if available:
                     self._archive_journal.acknowledge_many(
-                        [task],
+                        [task, ReplayArchiveTask(task.file_path, task.game_id)],
                         durable=True,
                     )
-                task = None
-            else:
-                self._archive_journal.enqueue_many([task])
+                    task = None
+                else:
+                    self._archive_journal.enqueue_many([task])
+                    self._archive_journal.acknowledge_many(
+                        [ReplayArchiveTask(task.file_path, task.game_id)], durable=True,
+                    )
         else:
             task = None
         path_str = str(job.file_path)
-        with self._lock:
+        with self._lock, _STATE_SAVE_LOCK:
+            self._require_upload_context(context)
             self._state.uploaded[path_str] = (
                 datetime.now(timezone.utc).isoformat()
             )
@@ -1978,19 +2187,21 @@ class UploadQueue:
                 self._state.path_by_game_id[game_id] = path_str
             save_state(self._cfg.state_dir, self._state)
             self._pending_paths.discard(path_str)
+            self._pending_owners.pop(path_str, None)
         if task is not None:
             self._schedule_archive_task(task)
             self._notify_archive_pending()
-        self._notify_game_synced(job, accepted_row, summary_owner)
+        self._notify_game_synced(job, accepted_row, summary_owner, context=context)
         try:
-            self._on_success(job.file_path)
+            if self._upload_context_current(context):
+                self._on_success(job.file_path)
         finally:
             # See the batched path above: success sinks decrement first,
             # then this authoritative count corrects any local estimate.
             self._notify_pending()
         accepted_id = accepted_row.get("gameId")
         if job.priority and isinstance(accepted_id, str):
-            self._notify_game_accepted(job, accepted_id, accepted_row)
+            self._notify_game_accepted(job, accepted_id, accepted_row, context=context)
         # Sticky-MMR ping. The session widget falls back to this
         # profile field whenever no game in the user's cloud history
         # carries ``myMmr`` (Tier-2 / Tier-3 / Tier-4 / Tier-5 of
@@ -1999,10 +2210,11 @@ class UploadQueue:
         # date — never push an older replay's MMR over a newer one,
         # otherwise re-syncing 12k old replays would reset the sticky
         # MMR to whatever the streamer's rating was three seasons ago.
-        self._maybe_push_last_mmr(job)
+        self._maybe_push_last_mmr(job, context=context)
 
-    def _notify_game_synced(self, job: UploadJob, accepted_row: Dict[str, Any], owner=None) -> None:
-        if self._on_game_synced is None or owner != self._state.user_id:
+    def _notify_game_synced(self, job: UploadJob, accepted_row: Dict[str, Any], owner=None, *, context=None) -> None:
+        if (self._on_game_synced is None or owner != self._state.user_id
+                or context is not None and not self._upload_context_current(context)):
             return
         try:
             from ..recent_games import build_game_summary
@@ -2019,19 +2231,26 @@ class UploadQueue:
         job: UploadJob,
         game_id: str,
         accepted_row: Dict[str, Any],
+        *,
+        context=None,
     ) -> None:
         callback = self._on_game_accepted
-        if callback is None:
+        if callback is None or context is not None and not self._upload_context_current(context):
             return
         try:
-            callback(job.file_path, job.game, game_id, dict(accepted_row))
+            row = dict(accepted_row)
+            if context is not None and context.token:
+                from ..session_stats import session_account_key
+
+                row["_uploadAccountKey"] = session_account_key(self._owner_identity(context)[0], context.token)
+            callback(job.file_path, job.game, game_id, row)
         except Exception:  # noqa: BLE001
             log.exception(
                 "upload_game_accepted_callback_failed %s",
                 job.file_path.name,
             )
 
-    def _maybe_push_last_mmr(self, job: UploadJob) -> None:
+    def _maybe_push_last_mmr(self, job: UploadJob, *, context=None) -> None:
         """Push the streamer's MMR to the cloud profile if it's the most
         recent we've seen.
 
@@ -2047,6 +2266,9 @@ class UploadQueue:
         # A Public Test Realm rating is not the streamer's ladder MMR, and
         # SC2Pulse has no PTR ladder to correct it from.
         if _is_ptr_game(job.game):
+            return
+        context = context or self._upload_context()
+        if not self._upload_context_current(context):
             return
         my_mmr = getattr(job.game, "my_mmr", None)
         if not isinstance(my_mmr, int) or not (500 <= my_mmr <= 9999):
@@ -2069,7 +2291,8 @@ class UploadQueue:
             )
             try:
                 with self._network_gate.hold(0 if job.priority else 1):
-                    self._api.patch_last_mmr(
+                    self._require_upload_context(context)
+                    context.api.patch_last_mmr(
                         mmr=my_mmr,
                         captured_at=game_date,
                         region=region,
@@ -2082,7 +2305,9 @@ class UploadQueue:
                     exc,
                 )
                 return
-            with self._lock:
+            with self._lock, _STATE_SAVE_LOCK:
+                if not self._upload_context_current(context):
+                    return
                 self._state.last_known_mmr = my_mmr
                 self._state.last_known_mmr_date_iso = game_date
                 if region:

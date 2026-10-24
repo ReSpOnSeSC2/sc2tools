@@ -742,8 +742,12 @@ def _run_with_gui(
             state.companion_modes = previous
             raise
 
+    def companion_connection():
+        with _STATE_SAVE_LOCK:
+            return cfg.api_base, state.device_token
+
     companion = CompanionClient(
-        lambda: (cfg.api_base, state.device_token),
+        companion_connection,
         preferences_provider=lambda: state.companion_preferences,
         save_preferences=save_companion_preferences,
         modes_provider=lambda: state.companion_modes,
@@ -755,18 +759,26 @@ def _run_with_gui(
     from .companion_ghost import GhostClient
 
     def save_companion_ghost(preferences):
-        previous = state.companion_ghost
-        state.companion_ghost = dict(preferences)
-        try:
-            save_state(cfg.state_dir, state)
-        except OSError:
-            state.companion_ghost = previous
-            raise
+        from .session_stats import session_account_key
+
+        with _STATE_SAVE_LOCK:
+            account_key = preferences.get("accountKey")
+            if account_key is not None and (not state.device_token or
+                    account_key != session_account_key(cfg.api_base, state.device_token)):
+                raise ValueError("The linked account changed. Refresh Ghost and try again.")
+            previous = state.companion_ghost
+            state.companion_ghost = dict(preferences)
+            try:
+                save_state(cfg.state_dir, state)
+            except OSError:
+                state.companion_ghost = previous
+                raise
 
     ghost = GhostClient(
         companion._request,
         preferences_provider=lambda: state.companion_ghost,
         save_preferences=save_companion_ghost,
+        connection_provider=companion_connection,
     )
 
     def companion_action(request):
@@ -839,6 +851,8 @@ def _run_with_gui(
         window_skin=state.companion_skin,
         window_animations=state.companion_animations,
         on_window_appearance=lambda skin, animations: _remember_window_appearance(cfg.state_dir, state, skin, animations),
+        companion_panel_positions=dict(state.companion_panel_positions),
+        on_companion_panel_positions=lambda positions: _remember_companion_panel_positions(cfg.state_dir, state, positions),
         window_page=state.window_page,
         on_window_state=lambda geometry, page: _remember_window_state(
             cfg.state_dir, state, geometry, page,
@@ -1142,6 +1156,15 @@ def _gui_boot_worker(
             cell.live_bridge = live_bridge
             cell.live_transport = live_transport
             cell.live_metrics_logger = live_metrics_logger
+
+            def checkin_connection():
+                with _STATE_SAVE_LOCK:
+                    return cfg.api_base, state.device_token
+
+            def checkin_identity():
+                with _STATE_SAVE_LOCK:
+                    return cfg.api_base, state.device_token, state.user_id
+
             # Subscribed before the bridge starts so no envelope is missed.
             cell.build_checkin = start_build_checkin(
                 api=api,
@@ -1150,6 +1173,8 @@ def _gui_boot_worker(
                 state_dir=cfg.state_dir,
                 dashboard_url=_dashboard_url_from_api(cfg.api_base),
                 view=build_checkin_view_for(cell.gui),
+                connection_provider=checkin_connection,
+                identity_provider=checkin_identity,
             )
         else:
             log.info("live_bridge_disabled_via_flag")
@@ -1629,6 +1654,20 @@ def _remember_window_appearance(state_dir, state, skin, animations):
             save_state(state_dir, state)
         except Exception:
             state.companion_skin, state.companion_animations = previous
+            raise
+
+
+def _remember_companion_panel_positions(state_dir, state, positions):
+    from .panel_positions import normalize_panel_positions
+
+    normalized = normalize_panel_positions(positions)
+    with _STATE_SAVE_LOCK:
+        previous = state.companion_panel_positions
+        state.companion_panel_positions = normalized
+        try:
+            save_state(state_dir, state)
+        except OSError:
+            state.companion_panel_positions = previous
             raise
 
 
@@ -2207,7 +2246,18 @@ def _handle_checkin_game_accepted(state_dir: Path, state: AgentState, cell: Any,
             return None
     race = canonical_race(getattr(game, "my_race", None))
     played = getattr(game, "date_iso", None)
-    with _CHECKIN_PREVIEW_RACE_LOCK:
+    with _CHECKIN_PREVIEW_RACE_LOCK, _STATE_SAVE_LOCK:
+        row = accepted[1] if len(accepted) > 1 and isinstance(accepted[1], dict) else {}
+        owner_key = row.get("_uploadAccountKey")
+        if owner_key is not None:
+            from .session_stats import session_account_key
+
+            api = getattr(cell, "api", None)
+            base = getattr(api, "base_url", None)
+            token = getattr(api, "device_token", None)
+            if (not isinstance(base, str) or not token or token != state.device_token
+                    or owner_key != session_account_key(base.rstrip("/"), token)):
+                return
         instant, previous = timestamp(played), timestamp(state.last_known_race_at)
         if race in ("Protoss", "Terran", "Zerg") and instant is not None and (previous is None or instant > previous):
             state.last_known_race, state.last_known_race_at = race, played
@@ -2215,9 +2265,9 @@ def _handle_checkin_game_accepted(state_dir: Path, state: AgentState, cell: Any,
                 save_state(state_dir, state)
             except OSError:
                 logging.getLogger("sc2tools_agent").warning("checkin_preview_race_save_failed")
-    controller = getattr(cell, "build_checkin", None)
-    if controller is not None:
-        controller.on_game_accepted(path, game, *accepted)
+        controller = getattr(cell, "build_checkin", None)
+        if controller is not None:
+            controller.on_game_accepted(path, game, *accepted)
 
 
 def _remember_build_checkin_position(
@@ -3225,7 +3275,16 @@ def _build_stream_service(cfg, state, *, no_obs=False):
             }
 
         from .streaming.cloud_client import CloudStreamingClient
-        cloud = CloudStreamingClient(lambda: (cfg.api_base, state.device_token))
+
+        def stream_connection():
+            with _STATE_SAVE_LOCK:
+                return cfg.api_base, state.device_token
+
+        def stream_identity():
+            with _STATE_SAVE_LOCK:
+                return cfg.api_base, state.device_token, state.user_id
+
+        cloud = CloudStreamingClient(stream_connection, identity_provider=stream_identity)
         return StreamService(cfg.state_dir, obs_settings, no_obs=no_obs, cloud_client=cloud)
     except Exception:
         # Do not put credentials, callback URLs or platform responses in the

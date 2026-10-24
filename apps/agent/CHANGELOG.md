@@ -2,7 +2,28 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
-## Unreleased
+## 0.24.0
+
+### Fixed - Account isolation and recovery
+- Bind Companion snapshots, Ghost requests and reference writes to the captured
+  account connection; clear private cloud caches and reject late account replies.
+- Fence replay-upload acceptance, check-in callbacks and durable archive tasks
+  across account/API changes. Legacy archives require owned-game verification.
+- Release stuck build-selector requests after relinking, retry same-owner drafts
+  safely and keep completed post-game cards completed.
+- Clear Streams catalogs and OBS secrets when pairing changes, reject stale
+  actions, and pause another account's saved broadcast setup until verified.
+- Require trusted HTTPS update URLs, validate redirects before following them,
+  bound installer sizes, reject malformed metadata and clean interrupted downloads.
+- Restore Randomizer save retries and error visibility without enabling native
+  draws or audio; stop hidden settings from polling account endpoints.
+- Keep Scouting pins, update recovery, import/archive actions and Settings forms
+  readable at small sizes without changing the approved window dimensions.
+
+### Added - Remembered native panel positions
+- Remember Opponent, Scouting, Session and Ghost positions locally, restore safely
+  when monitors change, and provide an Assistance reset action. Preview and
+  programmatic moves do not overwrite saved placement.
 
 ## 0.23.1
 

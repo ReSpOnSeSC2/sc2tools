@@ -87,10 +87,8 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.completed.connect(self._completed)
             self.timer = QtCore.QTimer(self)
             self.timer.setInterval(3000)
-            self.timer.timeout.connect(self.refresh)
-            if callable(handler):
-                self.timer.start()
-            else:
+            self.timer.timeout.connect(self._refresh_visible)
+            if not callable(handler):
                 self.status.setText("The randomizer connects when the agent service is available.")
                 self.refresh_button.setEnabled(False)
                 self.enabled_check.setEnabled(False)
@@ -162,7 +160,11 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self._loaded = False
                 self._pool_dirty = False
                 self._pool_revision += 1
+                self._status_error = False
+                self.save_pool_button.setEnabled(False)
                 self.pool.clear()
+                self.status.setText("Open Randomizer settings to load this account's pool." if self._snapshot.get("paired") is True else
+                                    "Pair your agent to load your randomizer settings.")
             context = randomizer_context(self._snapshot)
             if context != self._context:
                 self._context = context
@@ -180,11 +182,14 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self.context_label.setText("Waiting for a current one-on-one matchup… You can still edit any pool.")
             self._render_result()
             self._render_switch()
-            if self._snapshot.get("paired") is True and (not self._loaded or self._needs_refresh):
+            if self.isVisible() and self._snapshot.get("paired") is True and (not self._loaded or self._needs_refresh):
                 self.refresh()
 
         def refresh(self):
             if self._closed or not callable(handler) or self._snapshot.get("paired") is not True:
+                return
+            if not self.isVisible():
+                self._needs_refresh = True
                 return
             if self._busy:
                 self._needs_refresh = True
@@ -192,6 +197,20 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._needs_refresh = False
             self._request("state", {"action": "randomizer_state", "matchup": self.matchup_select.currentText(),
                                     "gameKey": self._context[0] if self._context else None})
+
+        def _refresh_visible(self):
+            if self.isVisible():
+                self.refresh()
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            if not self._closed and callable(handler):
+                self.timer.start()
+                self.refresh()
+
+        def hideEvent(self, event):
+            super().hideEvent(event)
+            self.timer.stop()
 
         def set_assistance_enabled(self, enabled, reason=None):
             changed = self._assistance != bool(enabled)
@@ -208,10 +227,15 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
         def _request(self, kind, payload):
             if self._closed or kind not in {"state", "settings"}:
                 return
+            if kind == "state" and not self.isVisible():
+                self._needs_refresh = True
+                return
             self._busy = True
             self._status_error = False
             if kind == "settings":
                 self._inflight_settings = payload
+            else:
+                self.status.setText("Loading widget pool…")
             self._render_result()
             context = self._context
             selected = self.matchup_select.currentText()
@@ -265,6 +289,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 if kind == "state" and current and selected and not self._pending_settings:
                     self._render_pool(result.get("options") or {})
             self._inflight_settings = {}
+            self.save_pool_button.setEnabled(self._pool_dirty and self._loaded and self._snapshot.get("paired") is True)
             self._render_switch()
             self._render_result()
             self._drain()
@@ -325,7 +350,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self.status.setText("Choose your pool and enable this matchup. The overlay widget draws; build check-in displays its pick.")
 
         def _pool_changed(self, _item, _column):
-            if not self._rendering:
+            if not self._rendering and self._loaded and self._snapshot.get("paired") is True:
                 self._pool_dirty = True
                 self._pool_revision += 1
                 self.save_pool_button.setEnabled(True)
@@ -338,6 +363,8 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._drain()
 
         def _save_pool(self):
+            if not self._pool_dirty or not self._loaded or self._snapshot.get("paired") is not True:
+                return
             keys = [self.pool.topLevelItem(index).data(0, QtCore.Qt.UserRole)
                     for index in range(self.pool.topLevelItemCount())
                     if self.pool.topLevelItem(index).checkState(0) == QtCore.Qt.Checked]
@@ -356,6 +383,8 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self.result_label.setText("Widget pick · " + str(self._intent["randomizer"].get("name") or "Saved build"))
             else:
                 self.result_label.setText("No build has been drawn for the current game.")
+            if self._status_error or self._busy:
+                return
             if not self._assistance:
                 self.status.setText(self._assistance_reason)
             elif not self._status_error and not self._busy:
