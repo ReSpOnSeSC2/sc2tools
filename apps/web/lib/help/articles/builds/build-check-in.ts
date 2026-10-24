@@ -10,6 +10,7 @@ const article: HelpArticle = {
   signedInOnly: true,
   keywords: [
     "check-in",
+    "check-ins",
     "check in",
     "planned build",
     "what's the plan",
