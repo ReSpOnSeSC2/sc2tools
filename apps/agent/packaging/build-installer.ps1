@@ -105,6 +105,25 @@ function Sign-AgentFile([string]$FilePath) {
     & (Join-Path $PSScriptRoot "verify-signature.ps1") -Path $FilePath
 }
 
+function Get-GuiSmokeDiagnostic([string]$ReportPath) {
+    $diagnostic = "Report: $ReportPath"
+    if (-not (Test-Path -LiteralPath $ReportPath -PathType Leaf)) {
+        return "$diagnostic (not written)"
+    }
+    try {
+        $report = Get-Content -LiteralPath $ReportPath -Raw | ConvertFrom-Json -ErrorAction Stop
+        foreach ($field in @("stage", "error_type", "agent_version", "qt_platform")) {
+            $value = $report.$field
+            if ($value -is [string] -and $value -cmatch '^[A-Za-z0-9_.+-]{1,80}$') {
+                $diagnostic += "; ${field}=$value"
+            }
+        }
+    } catch {
+        return "$diagnostic (unreadable or invalid JSON)"
+    }
+    return $diagnostic
+}
+
 if ($PackageOnly -and (-not $Installer -or $Clean)) {
     throw '-PackageOnly requires -Installer and cannot be combined with -Clean.'
 }
@@ -204,28 +223,33 @@ Invoke-Step "Checking the packaged GUI offline" {
     $guiSmokeReport = Join-Path $guiSmokeDir "report.json"
     $previousSmokeReport = [System.Environment]::GetEnvironmentVariable("SC2TOOLS_GUI_SMOKE_REPORT")
     $previousQtPlatform = [System.Environment]::GetEnvironmentVariable("QT_QPA_PLATFORM")
+    $guiSmokeTimeoutMs = 60000
     try {
         $env:SC2TOOLS_GUI_SMOKE_REPORT = $guiSmokeReport
         $env:QT_QPA_PLATFORM = "offscreen"
         $guiSmokeProcess = Start-Process -FilePath $ExePath -WorkingDirectory $guiSmokeDir -WindowStyle Hidden -PassThru
-        if (-not $guiSmokeProcess.WaitForExit(15000)) {
+        if (-not $guiSmokeProcess.WaitForExit($guiSmokeTimeoutMs)) {
             Stop-Process -Id $guiSmokeProcess.Id -Force -ErrorAction SilentlyContinue
-            throw "The packaged GUI smoke check timed out. Report: $guiSmokeReport"
+            throw "The packaged GUI smoke check timed out after $($guiSmokeTimeoutMs / 1000) seconds. $(Get-GuiSmokeDiagnostic $guiSmokeReport)"
         }
         $guiSmokeProcess.Refresh()
         if ($guiSmokeProcess.ExitCode -ne 0) {
-            throw "The packaged GUI smoke check failed (exit $($guiSmokeProcess.ExitCode)). Report: $guiSmokeReport"
+            throw "The packaged GUI smoke check failed (exit $($guiSmokeProcess.ExitCode)). $(Get-GuiSmokeDiagnostic $guiSmokeReport)"
         }
         if (-not (Test-Path -LiteralPath $guiSmokeReport -PathType Leaf)) {
-            throw "The packaged GUI smoke check did not produce its report."
+            throw "The packaged GUI smoke check did not produce its report. $(Get-GuiSmokeDiagnostic $guiSmokeReport)"
         }
-        $guiSmokeResult = Get-Content -LiteralPath $guiSmokeReport -Raw | ConvertFrom-Json
+        try {
+            $guiSmokeResult = Get-Content -LiteralPath $guiSmokeReport -Raw | ConvertFrom-Json -ErrorAction Stop
+        } catch {
+            throw "The packaged GUI smoke report was unreadable or invalid JSON. $(Get-GuiSmokeDiagnostic $guiSmokeReport)"
+        }
         if ($guiSmokeResult.schema -ne 1 -or $guiSmokeResult.ok -ne $true `
             -or $guiSmokeResult.agent_version -ne $AgentVersion `
             -or $guiSmokeResult.qt_platform -ne "offscreen" `
             -or $guiSmokeResult.streams_painted -ne $true `
             -or $guiSmokeResult.companion_painted -ne $true) {
-            throw "The packaged GUI smoke report did not confirm the expected window/version. Report: $guiSmokeReport"
+            throw "The packaged GUI smoke report did not confirm the expected window/version. $(Get-GuiSmokeDiagnostic $guiSmokeReport)"
         }
         Write-Host "Packaged Qt $($guiSmokeResult.qt_version): window, Streams and Companion pages painted." -ForegroundColor Green
     } finally {

@@ -126,6 +126,37 @@ def test_observations_use_recorded_completion_and_never_guess_invalid_times():
     assert source["events"][16]["time"] == 50
 
 
+def test_unknown_replay_unit_categories_paint_icons_in_both_chains_and_full_timelines(desk_factory):
+    gate = threading.Event()
+    page, state, app = desk_factory(initial_gate=gate)
+    source = {
+        "ok": True, "game_id": "replay-0", "my_status": "ok", "opp_status": "ok",
+        "events": [
+            {"name": "Sentry", "category": "unknown", "is_building": False, "time": 90, "complete_time": 125},
+            {"name": "Phoenix", "category": "unknown", "is_building": False, "time": 100, "complete_time": 150},
+        ],
+        "opp_events": [
+            {"name": "Phoenix", "category": "unknown", "is_building": False, "time": 110, "complete_time": 160},
+            {"name": "Sentry", "category": "unknown", "is_building": False, "time": 120, "complete_time": 170},
+        ],
+    }
+    original = deepcopy(source)
+    state["orders"][("one", "replay-0")] = source
+    gate.set()
+    wait_until(app, lambda: ("one", "replay-0") in page._build_order_cache)
+    for side in ("my", "opp"):
+        observed = _stored_build_events(source, side)
+        chain = page.build_chains[side]
+        assert chain.events == observed
+        assert all(event["kind"] == "unknown" and event["timing"] == "completed" for event in observed)
+        assert [step.time_label.text() for step in chain.steps] == (["2:05", "2:30"] if side == "my" else ["2:40", "2:50"])
+        for index, step in enumerate(chain.steps):
+            assert step.icon_label.text() == ""
+            assert not step.icon_label.pixmap().isNull()
+            assert not page.trees["build"][side].topLevelItem(index).icon(0).pixmap(30, 30).isNull()
+    assert source == original
+
+
 def test_shared_time_range_loads_full_stored_source_once_and_has_no_density_caps(desk_factory):
     page, state, app = desk_factory()
     wait_until(app, lambda: ("one", "replay-0") in page._build_order_cache)

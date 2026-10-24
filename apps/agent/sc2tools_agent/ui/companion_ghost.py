@@ -9,6 +9,7 @@ import threading
 
 from ..companion_ghost import GhostError, GhostSession, TeamGhostSession, MATCHUPS, concrete_race, normalize_ghost_state, normalize_target, supports_ghost_game
 from . import theme
+from .sc2_icons import load_icon
 
 
 _STYLE = f"""
@@ -67,18 +68,7 @@ def build_companion_ghost(parent, *, handler, QtCore, QtGui, QtWidgets):
         return widget
 
     def step_icon(step):
-        packaged = Path(__file__).resolve().parent / "assets" / "sc2"
-        root = packaged if packaged.is_dir() else Path(__file__).resolve().parents[3] / "web" / "public" / "icons" / "sc2"
-        token = re.sub(r"[^a-z0-9]", "", step["name"].lower())
-        token = {"blinktech": "blink", "shieldwall": "combatshield", "punishergrenades": "concussive",
-                 "warpgateresearch": "warpgate", "zerglingmovementspeed": "metabolicboost"}.get(token, token)
-        directory = {"building": "buildings", "unit": "units", "upgrade": "upgrades"}.get(step["kind"])
-        if directory:
-            for extension in (".png", ".svg"):
-                path = root / directory / (token + extension)
-                if path.is_file():
-                    return QtGui.QIcon(str(path))
-        return QtGui.QIcon()
+        return load_icon(step["name"], step["kind"], QtGui=QtGui)
 
     def add_step(widget, step, status):
         row = QtWidgets.QTreeWidgetItem([_display(step["name"]), _clock(step["t"]),

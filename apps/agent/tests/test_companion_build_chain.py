@@ -293,6 +293,17 @@ def test_observed_labels_and_raw_icon_names_are_preserved(chain):
     assert source[2].get("timing") is None
 
 
+def test_unknown_categories_still_request_offline_icons_without_reclassifying_observations(chain):
+    widget, calls, app = chain
+    source = [{"name": "Sentry", "timeSec": 125, "kind": "unknown", "timing": "completed"},
+              {"name": "Phoenix", "timeSec": 150, "kind": "unknown", "timing": "recorded"}]
+    widget.set_events(source)
+    settle(app)
+    assert calls == [("Sentry", "unknown"), ("Phoenix", "unknown")]
+    assert widget.events == source
+    assert all(step.icon_label.text() == "" and not step.icon_label.pixmap().isNull() for step in widget.steps)
+
+
 @pytest.mark.parametrize("value", [None, True, False, -1, float("nan"), float("inf"), "12"])
 def test_invalid_times_never_become_guessed_timestamps(value):
     assert _event_time(value) == "—"

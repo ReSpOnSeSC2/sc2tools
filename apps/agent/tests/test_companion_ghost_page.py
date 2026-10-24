@@ -147,6 +147,33 @@ def test_arbitrary_local_file_shows_both_players_and_selected_side_arms_matching
     assert all(worker != threading.get_ident() for worker in threads)
 
 
+def test_ghost_preview_paints_unknown_units_and_warp_gate_research_from_offline_assets(ghost_page):
+    page, app, saved, calls, threads = ghost_page
+    source = {"v": 1, "name": "Icon reference", "sourceGameId": "icons", "steps": [
+        {"t": 100, "name": "Sentry", "kind": "other", "timing": "completed"},
+        {"t": 120, "name": "Phoenix", "kind": "other", "timing": "recorded"},
+        {"t": 140, "name": "WarpGateResearch", "kind": "upgrade", "timing": "started"},
+    ]}
+    original = deepcopy(source)
+    page._show_targets({"players": [{"id": "you", "name": "Player one", "matchup": "PvT", "target": source}]})
+    assert page.preview_steps.topLevelItemCount() == 3
+    assert [step["kind"] for step in page._preview["steps"]] == ["other", "other", "upgrade"]
+    assert [step["timing"] for step in page._preview["steps"]] == ["completed", "recorded", "started"]
+    page._state["slots"]["PvT"] = deepcopy(page._preview)
+    page.set_assistance_enabled(True)
+    page.update_snapshot(live_snapshot(0))
+    assert page.panel.isVisible() and page.panel.steps.topLevelItemCount() == 3
+    for tree in (page.preview_steps, page.panel.steps):
+        for index in range(3):
+            icon = tree.topLevelItem(index).icon(0)
+            pixmap = icon.pixmap(26, 26)
+            assert not pixmap.isNull()
+            image = pixmap.toImage().convertToFormat(QtGui.QImage.Format_RGBA8888)
+            pixels = image.constBits().tobytes()
+            assert any(pixels[3::4]) and len(set(pixels)) > 4
+    assert source == original
+
+
 def test_replay_library_and_admin_examples_use_background_actions(ghost_page):
     page, app, saved, calls, threads = ghost_page
     page.sources.setCurrentIndex(1)

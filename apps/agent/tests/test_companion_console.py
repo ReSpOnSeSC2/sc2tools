@@ -194,7 +194,7 @@ def test_small_console_keeps_all_routes_profile_and_drafts_accessible_without_re
         assert shell.context()["opponentId"] == "one" and shell.context()["gameId"] == "game-one"
         if route == "profile":
             assert shell.profile_panel.isVisible()
-            assert shell.profile_panel.parentWidget() is shell.profile_host
+            assert shell.profile_panel.parentWidget() is shell.profile_route_scroll.viewport()
     shell.resize(1024, 800)
     app.processEvents()
     assert shell.profile_panel.isVisible() and not shell.browse_button.isVisible()
@@ -280,3 +280,93 @@ def test_window_controls_attach_to_far_right_top_row_without_losing_wrapped_acti
         assert controls.geometry().right() == shell.brand_widget.rect().right()
         assert controls.y() < shell.brand_actions_widget.y() if width < 800 else controls.y() == 0
         assert shell.opponent_summary.isVisible() is (width < 800)
+
+
+def test_narrow_profile_uses_two_tool_columns_and_returns_to_the_unchanged_wide_rail(console):
+    from PySide6 import QtCore
+
+    shell, profile, scouting, notes, tools, library, app = console
+    profile_parent = profile.parentWidget()
+    shell.resize(442, 374)
+    shell.navigate("profile", opponent_id="one", game_id="game-one")
+    app.processEvents()
+    assert shell.size().toTuple() == (442, 374)
+    assert shell.profile_route_scroll.isVisible()
+    buttons = list(shell.destination_buttons.values())
+    assert buttons[0].y() == buttons[1].y()
+    assert buttons[2].y() == buttons[3].y() > buttons[0].y()
+    assert buttons[0].x() < buttons[1].x()
+    assert shell.profile_scroll.verticalScrollBarPolicy() == QtCore.Qt.ScrollBarAlwaysOff
+    assert profile.parentWidget() is profile_parent
+    shell.resize(1024, 800)
+    shell.set_density("detailed")
+    app.processEvents()
+    assert shell.profile_panel.parentWidget() is shell
+    assert shell.profile_panel.width() == 280
+    assert shell.profile_route_scroll.isHidden()
+    assert shell.profile_scroll.minimumHeight() == 0
+    assert shell.profile_scroll.verticalScrollBarPolicy() == QtCore.Qt.ScrollBarAsNeeded
+    assert len({button.y() for button in buttons}) == 4
+    assert profile.parentWidget() is profile_parent
+    assert notes.toPlainText() == "Unsaved scouting note"
+
+
+def test_real_standard_profile_scroll_reveals_portrait_identity_record_and_all_tools_without_resizing(tmp_path):
+    from tests._gui_offscreen import run_gui_check
+
+    run_gui_check(tmp_path, '''
+        import os
+        from sc2tools_agent.ui import theme
+        fonts = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
+        for filename in ("segoeui.ttf", "segoeuib.ttf", "seguisb.ttf"):
+            font_path = fonts / filename
+            if font_path.is_file():
+                QtGui.QFontDatabase.addApplicationFont(str(font_path))
+        app.setStyleSheet(theme.STYLE)
+        ui, window = make_window(window_page="companion")
+        window.show()
+        window._set_window_size("Standard")
+        page = window._companion_page
+        page._selected_id = "sample-opponent"
+        shell = page.console
+        card = page.profile_card
+        card.set_identity("LetaIeX", "Protoss", 5321, wins=12, losses=8)
+        shell.set_player_navigation(1, 100)
+        shell.set_opponent_summary("LetaIeX", "Protoss", 5321, 12, 8)
+        shell.navigate("profile", opponent_id="sample-opponent")
+        for tick in range(10):
+            app.processEvents()
+        assert window.size().toTuple() == (520, 480)
+        assert shell.profile_scroll.viewport().height() >= card.minimumHeight()
+        assert shell.profile_scroll.verticalScrollBar().maximum() == 0
+        scroll = shell.profile_route_scroll
+        assert scroll.verticalScrollBar().maximum() > 0
+        assert scroll.viewport().height() >= card.portrait.height()
+        original_geometry = window.geometry()
+        labels = (card.portrait, card.name_label, card.race_label, card.mmr_label,
+                  card.record_label, card.win_rate_label)
+        for widget in labels:
+            scroll.ensureWidgetVisible(widget, 0, 0)
+            app.processEvents()
+            position = widget.mapTo(scroll.viewport(), QtCore.QPoint())
+            assert scroll.viewport().rect().contains(QtCore.QRect(position, widget.size())), widget.objectName()
+        assert card.name_label.full_text == "LetaIeX"
+        assert card.race_label.text() == "Protoss" and card.mmr_label.text() == "5321"
+        assert card.record_label.text() == "12W · 8L" and card.win_rate_label.text() == "60%"
+        scroll.ensureWidgetVisible(card.record_label, 0, 0)
+        app.processEvents()
+        assert window.grab().save(str(base / "standard-profile-record.png"))
+        for route, button in shell.destination_buttons.items():
+            shell.navigate("profile")
+            scroll.ensureWidgetVisible(button, 0, 0)
+            app.processEvents()
+            position = button.mapTo(scroll.viewport(), QtCore.QPoint())
+            assert scroll.viewport().rect().contains(QtCore.QRect(position, button.size()))
+            button.click()
+            assert shell.current_route() == route
+            assert shell.context()["opponentId"] == "sample-opponent"
+        assert window.geometry() == original_geometry
+        window._race_effects.shutdown()
+        page.shutdown()
+        window.hide()
+    ''')

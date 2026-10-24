@@ -127,7 +127,7 @@ def build_build_chain(parent, *, QtCore, QtGui, QtWidgets, icon_provider):
             widget.setToolTip(description + "\n" + event["name"])
             widget.icon_label = self._label("", "chainIcon")
             widget.icon_label.setFixedSize(44, 44)
-            icon = icon_provider(event["name"], event["kind"]) if callable(icon_provider) and event["kind"] in {"building", "unit", "upgrade"} else None
+            icon = icon_provider(event["name"], event["kind"]) if callable(icon_provider) else None
             pixmap = icon.pixmap(QtCore.QSize(38, 38)) if isinstance(icon, QtGui.QIcon) else icon if isinstance(icon, QtGui.QPixmap) else None
             if pixmap is not None and not pixmap.isNull():
                 widget.icon_label.setPixmap(pixmap.scaled(38, 38, QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation))

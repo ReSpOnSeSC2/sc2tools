@@ -51,7 +51,7 @@ export function CompanionShowcase() {
           <p className="mt-3 text-caption text-text-muted">Home and Back keep browsing simple. Separate opponent and game arrows retain your place; Assistance and Agent menus keep the controls nearby.</p>
           <p className="mt-3 text-caption text-text-muted">Opt in to native Windows system-voice reports for fresh human 1v1 games or the selected confirmed live enemy in Hybrid team mode. Voice, master and mode switches work together. OBS voice settings stay separate; keep only one scouting voice enabled to avoid duplicate audio.</p>
           <p className="mt-3 text-caption text-text-muted">Save your own Ladder, Customs, Teams, Practice and Review presets. Customize each feature locally, with an optional Ctrl+Shift+F10 master shortcut. Hybrid adds confirmed enemy selection for team scouting; automatic check-ins and randomizer draws remain 1v1-only.</p>
-          <p role="note" aria-label="Companion preview availability" className="mt-4 rounded-sm border border-warning/40 bg-bg-surface p-3 text-caption text-text-muted"><strong className="font-semibold text-text">Companion 0.22.0 verification preview is for local verification only and is not available in the current stable download.</strong> A signed public release is pending; unsigned verification builds are separate test artifacts. Team scouting requires a paired agent, an available SC2 Tools connection and fresh live SC2 telemetry; unknown history and MMR stay unavailable.</p>
+          <p role="note" aria-label="Companion preview availability" className="mt-4 rounded-sm border border-warning/40 bg-bg-surface p-3 text-caption text-text-muted"><strong className="font-semibold text-text">Companion 0.22.1 verification preview is for local verification only and is not available in the current stable download.</strong> A signed public release is pending; unsigned verification builds are separate test artifacts. Team scouting requires a paired agent, an available SC2 Tools connection and fresh live SC2 telemetry; unknown history and MMR stay unavailable.</p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <Link href="/download" className="inline-flex min-h-11 items-center gap-2 rounded-sm bg-accent-cyan px-4 py-2 text-caption font-bold text-[#071b22] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg">
               <Download className="h-4 w-4" aria-hidden />Download current stable agent
@@ -105,7 +105,7 @@ export function CompanionShowcase() {
           <div className="overflow-hidden rounded-md border border-border-strong bg-[#10131f]">
             <Image src="/landing/companion-race-skins.png" alt="Static comparison of Default purple, Protoss, Terran and Zerg Companion borders using sample data" width={1040} height={1016} sizes="(max-width: 1040px) 100vw, 1040px" className="h-auto w-full" />
           </div>
-          <figcaption className="mt-3 text-micro text-text-dim">Static race-art comparison for the 0.22.0 local verification preview · actual desktop interface with sample data.</figcaption>
+          <figcaption className="mt-3 text-micro text-text-dim">Static race-art comparison for the 0.22.1 local verification preview · actual desktop interface with sample data.</figcaption>
         </figure>
       </div>
       <div className="mt-10 grid min-w-0 gap-8 md:grid-cols-2">

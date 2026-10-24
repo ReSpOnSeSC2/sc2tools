@@ -11,6 +11,14 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.22.1 - Replay unit icons and installer verification
+- Show bundled unit icons for replay steps whose source category is unknown,
+  including Sentry and Phoenix, without inventing event categories or timings.
+- Fix the clipped Standard opponent profile with a scrollable card and narrow
+  tool navigation; expose Border & animations directly in the Companion menu.
+- Give the expanded packaged-GUI verification a bounded 60-second cold-start
+  budget and sanitized failure diagnostics on Windows build runners.
+
 ### Agent 0.22.0 - Hybrid team Companion and history recovery
 - Add Hybrid team scouting: Compact follows one selected enemy; expanded views
   show the enemy roster. Confirm your identity and teammate/enemy assignments

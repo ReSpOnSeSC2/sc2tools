@@ -4,7 +4,6 @@ from __future__ import annotations
 from collections import OrderedDict
 from copy import deepcopy
 import math
-from pathlib import Path
 import re
 import threading
 import time
@@ -13,6 +12,7 @@ from ..companion_modes import build_companion_modes, effective_mode_features, no
 from ..team_roster import TeamRoster, TEAM_FEATURES, roster_candidate
 from .opponent_card import opponent_record
 from .companion_build_chain import TIME_RANGES
+from .sc2_icons import icon_root as _icon_root, icon_token as _icon_token, load_icon
 from . import theme
 
 
@@ -50,40 +50,6 @@ QWidget#companionDesk QTabWidget::pane {{ border: 1px solid {theme.BORDER_STRONG
 QWidget#companionDesk QTabBar::tab {{ background: {theme.SURFACE}; color: {theme.TEXT_MUTED}; padding: 9px 14px; }}
 QWidget#companionDesk QTabBar::tab:selected {{ background: {theme.BUTTON_CHECKED}; color: {theme.TEXT}; }}
 """
-
-_ICON_ALIASES = {
-    "blinktech": "blink", "stimpack": "stim", "shieldwall": "combatshield",
-    "punishergrenades": "concussive", "concussiveshells": "concussive",
-    "psistormtech": "psistorm", "psionicstorm": "psistorm",
-    "adeptpiercingattack": "resonatingglaives", "darktemplarblinkupgrade": "shadowstride",
-    "zerglingmovementspeed": "metabolicboost", "zerglingmetabolicboost": "metabolicboost",
-    "zerglingattackspeed": "adrenalglands", "overlordspeed": "pneumatizedcarapace",
-    "centrificalhooks": "centrifugalhooks", "evolvemuscularaugments": "muscularaugments",
-    "evolvegroovedspines": "groovedspines", "lurkerrange": "seismicspines",
-    "diggingclaws": "adaptivetalons", "bansheecloak": "cloak", "cloakingfield": "cloak",
-    "templararchives": "templararchive", "lurkermpden": "lurkerden", "lurkermp": "lurker",
-    "banelingcocoon": "baneling", "ravagercocoon": "ravager", "broodlordcocoon": "broodlord",
-}
-
-
-def _icon_token(name, kind):
-    token = re.sub(r"[^a-z0-9]", "", name.lower())
-    if kind == "race":
-        return {"p": "protoss", "t": "terran", "z": "zerg", "r": "random"}.get(token, token)
-    addon = re.fullmatch(r"(?:barracks|factory|starport)(techlab|reactor)", token)
-    if kind == "building" and addon:
-        return addon.group(1)
-    tiered = re.fullmatch(r"(.+?)level([1-3])", token)
-    if kind == "upgrade" and tiered:
-        family, tier = tiered.groups()
-        family = re.sub(r"^terranvehicleandship(?:plating|armors?)$", "terranvehiclearmor", family)
-        family = re.sub(r"^terranshiparmors?$", "terranvehiclearmor", family)
-        family = re.sub(r"armors$", "armor", family)
-        family = re.sub(r"^zerg(melee|missile|flyer)(?:weapons|attacks)$", r"zerg\1attacks", family)
-        family = re.sub(r"^zerg(ground|flyer)(?:armor|carapace)$", r"zerg\1carapace", family)
-        return family + tier
-    return _ICON_ALIASES.get(token, token)
-
 
 def _display_name(name):
     prefix, separator, remainder = name.partition(" · ")
@@ -205,11 +171,6 @@ def _live_context(snapshot):
     return False, post
 
 
-def _icon_root():
-    packaged = Path(__file__).resolve().parent / "assets" / "sc2"
-    return packaged if packaged.is_dir() else Path(__file__).resolve().parents[3] / "web" / "public" / "icons" / "sc2"
-
-
 def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                          checkin_controller_provider=None, speech_factory=None):
     """Build a lazy-Qt page; all handler calls run in daemon workers."""
@@ -247,13 +208,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._elide()
 
     def icon(name, kind):
-        token = _icon_token(name, kind)
-        directory = {"building": "buildings", "unit": "units", "upgrade": "upgrades", "race": "races"}.get(kind, "buildings")
-        for extension in (".png", ".svg"):
-            path = icon_root / directory / (token + extension)
-            if path.is_file():
-                return QtGui.QIcon(str(path))
-        return QtGui.QIcon()
+        return load_icon(name, kind, QtGui=QtGui, root=icon_root)
 
     def timeline():
         tree = QtWidgets.QTreeWidget()
@@ -944,6 +899,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             menu = QtWidgets.QMenu(self.agent_menu_button)
             for title, route in (("Dashboard", "dashboard"), ("Recent games", "recent"), ("Settings", "settings"), ("Streams", "streams"), ("Logs", "log")):
                 menu.addAction(title, lambda _checked=False, destination=route: self.agentPageRequested.emit(destination))
+            menu.addSeparator()
+            menu.addAction("Border & animations…", self.show_appearance_settings)
             self.agent_menu_button.setMenu(menu)
             self.console.brand_actions.addWidget(self.agent_menu_button)
             from .team_roster import build_team_roster

@@ -4,6 +4,18 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+## 0.22.1
+
+### Fixed - Replay icons and installer verification
+- Resolve replay steps with incomplete categories against the bundled unit,
+  building, and upgrade icons, including Sentry and Phoenix, without changing
+  their recorded event categories or timings.
+- Add a direct Border & animations action in the Companion Agent menu.
+- Keep the full opponent card scrollable in narrow Standard profile views,
+  instead of clipping it to a thin strip, without changing window dimensions.
+- Allow the expanded packaged-GUI verification up to 60 seconds on cold Windows
+  runners and report sanitized diagnostic stages when verification fails.
+
 ## 0.22.0
 
 ### Added - Hybrid team Companion

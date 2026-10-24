@@ -20,7 +20,7 @@ describe("desktop Companion landing showcase", () => {
     expect(section.textContent).toContain("optional Ctrl+Shift+F10");
     expect(section.textContent).toContain("automatic check-ins and randomizer draws remain 1v1-only");
     expect(section.textContent).toContain("Companion preview");
-    expect(section.textContent).toContain("Companion 0.22.0 verification preview is for local verification only and is not available in the current stable download");
+    expect(section.textContent).toContain("Companion 0.22.1 verification preview is for local verification only and is not available in the current stable download");
     expect(section.textContent).toContain("A signed public release is pending");
     expect(section.textContent).toContain("unsigned verification builds are separate test artifacts");
     expect(section.textContent).toContain("Choose how much you see");
@@ -51,7 +51,7 @@ describe("desktop Companion landing showcase", () => {
   it("keeps verification availability clear and presents race borders as a static optional comparison", () => {
     const { container } = render(<CompanionShowcase />);
     const availability = within(container).getByRole("note", { name: "Companion preview availability" });
-    expect(availability.textContent).toContain("0.22.0 verification preview");
+    expect(availability.textContent).toContain("0.22.1 verification preview");
     expect(availability.textContent).toContain("local verification only");
     expect(availability.querySelector("strong")?.textContent).toContain("not available in the current stable download");
     expect(container.textContent).toContain("Default preserves the current purple appearance");
