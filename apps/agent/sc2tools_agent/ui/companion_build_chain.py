@@ -277,8 +277,13 @@ def build_build_chain(parent, *, QtCore, QtGui, QtWidgets, icon_provider):
                 self.updateGeometry()
                 return
             available = max(1, self.scroll.viewport().width() - 4)
-            tile_width = min(self._tile_width, available)
-            columns = min(len(self.steps), max(1, (available + 8) // (tile_width + 8)))
+            preferred_columns = max(1, (available + 8) // (self._tile_width + 8))
+            # A narrow comparison card can fit two or three legible tiles even
+            # when its preferred 112/120px tile would leave a single column.
+            # Keep the 44px icons and text sizes; share the row's width instead.
+            compact_columns = min(3, max(1, (available + 8) // (80 + 8)))
+            columns = min(len(self.steps), max(preferred_columns, compact_columns))
+            tile_width = min(self._tile_width, max(1, (available - 8 * (columns - 1)) // columns))
             while self.grid.count():
                 self.grid.takeAt(0)
             for index, widget in enumerate(self.steps):

@@ -339,7 +339,7 @@ def test_grid_wraps_at_narrow_widths_without_horizontal_overflow(chain):
     widget.set_events(events(8))
     settle(app)
     assert widget._columns == 4
-    for width, columns in ((280, 2), (150, 1), (560, 4)):
+    for width, columns in ((280, 3), (150, 1), (560, 4)):
         widget.resize(width, 180)
         settle(app)
         assert widget._columns == columns
@@ -396,9 +396,36 @@ def test_identical_normalized_snapshots_preserve_tiles_scroll_and_icon_calls(cha
     assert len(calls) == icon_calls
     widget.resize(280, 180)
     settle(app)
-    assert widget._columns == 2
+    assert widget._columns == 3
     assert all(current is previous for current, previous in zip(widget.steps, tiles))
     assert widget.scroll.horizontalScrollBar().maximum() == 0
+
+
+@pytest.mark.parametrize("density", ["standard", "detailed", "full"])
+def test_narrow_cards_share_row_width_for_two_or_three_readable_steps(chain, density):
+    widget, calls, app = chain
+    widget.set_time_range(None)
+    source = events(12)
+    widget.set_events(source)
+    widget.set_density(density)
+    tiles = tuple(widget.steps)
+    icon_calls = len(calls)
+    for width, columns in ((230, 2), (300, 3), (560, 4), (230, 2)):
+        widget.resize(width, 200)
+        settle(app)
+        assert widget._columns == columns
+        assert widget.grid.itemAtPosition(0, columns - 1).widget() is tiles[columns - 1]
+        assert widget.grid.itemAtPosition(1, 0).widget() is tiles[columns]
+        assert widget.scroll.horizontalScrollBar().maximum() == 0
+        assert widget.content.width() <= widget.scroll.viewport().width()
+        for step in widget.steps:
+            assert step.width() >= 80
+            assert step.icon_label.size() == QtCore.QSize(44, 44)
+            assert step.geometry().right() < widget.content.width()
+            assert step.time_label.width() >= step.time_label.sizeHint().width()
+        assert all(current is previous for current, previous in zip(widget.steps, tiles))
+    assert len(calls) == icon_calls
+    assert [step.observation["timeSec"] for step in widget.steps] == [event["timeSec"] for event in source]
 
 
 def test_changed_event_or_limit_updates_tiles_and_unchanged_density_never_reflows(chain, monkeypatch):

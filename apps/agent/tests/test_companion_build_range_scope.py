@@ -308,7 +308,7 @@ def test_pinned_opponent_uses_compact_size_and_its_window_controls(desk_factory)
     assert page._preferences["opponentOverlay"] is False
 
 
-def test_standard_uses_one_line_status_and_two_player_cards(desk_factory):
+def test_standard_uses_one_line_status_and_keeps_both_build_cards_readable(desk_factory):
     page, state, app = desk_factory()
     wait_until(app, lambda: ("one", "replay-0") in page._build_order_cache)
     page.resize(480, 440)
@@ -320,11 +320,13 @@ def test_standard_uses_one_line_status_and_two_player_cards(desk_factory):
     assert not page.build_source_status.wordWrap()
     assert page.build_source_status.toolTip() == page.build_source_status.full_text
     assert page.build_options_menu.actions()[0].defaultWidget().isAncestorOf(page.include_workers_supply)
-    assert page.chain_cards[0].y() == page.chain_cards[1].y()
-    assert page.chain_cards[0].x() < page.chain_cards[1].x()
     for side in ("my", "opp"):
         chain = page.build_chains[side]
         assert chain._tile_width == 80
+        assert chain._columns >= 2
+    page.resize(600, 440)
+    wait_until(app, lambda: page.chain_cards[0].y() == page.chain_cards[1].y())
+    assert page.chain_cards[0].x() < page.chain_cards[1].x()
     page.include_workers_supply.setChecked(True)
     assert any(event["name"] == "Probe" for event in page.build_chains["my"].events)
 
@@ -405,6 +407,20 @@ def test_real_standard_main_window_fits_two_columns_and_first_observed_timings(t
                 assert viewport.rect().contains(rectangle), (side, viewport.size().toTuple(), rectangle)
         summary = page.console.opponent_summary.toolTip()
         assert "Selected opponent" in summary and "4321" in summary and "75%" in summary
+        win._set_window_size("Detailed")
+        for width in (650, 500, 760, 1024, 650):
+            win.resize(width, 800)
+            deadline = QtCore.QDeadlineTimer(3000)
+            while not deadline.hasExpired():
+                QtTest.QTest.qWait(10)
+                if all(chain._columns >= 2 and chain.scroll.horizontalScrollBar().maximum() == 0
+                       for chain in page.build_chains.values()):
+                    break
+            for side in ("my", "opp"):
+                chain = page.build_chains[side]
+                assert chain._columns >= 2, (width, side, chain.scroll.viewport().size().toTuple())
+                assert chain.scroll.horizontalScrollBar().maximum() == 0, (width, side, chain.content.size().toTuple(), chain.scroll.viewport().size().toTuple())
+                assert chain.steps[0].icon_label.size() == QtCore.QSize(44, 44)
         page.shutdown()
         win.hide()
     ''')

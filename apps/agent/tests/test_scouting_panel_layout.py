@@ -22,8 +22,11 @@ def test_scouting_pin_keeps_controls_and_timings_accessible_inside_themed_frame(
         panel = page.overlays["scouting"]
         games = [{"gameId": "first", "myBuild": "PvT - Two base Blink into macro",
                   "oppStrategy": "TvP - Three Barracks timing", "map": "An example map",
-                  "myTechMilestones": [{"name": "Cybernetics Core", "timeSec": 85, "kind": "building", "timing": "started"}],
-                  "oppTechMilestones": [{"name": "Stimpack", "timeSec": 180, "kind": "upgrade", "timing": "completed"}]},
+                  "myTechMilestones": [{"name": name, "timeSec": 85 + index, "kind": "building", "timing": "started"}
+                                       for index, name in enumerate(("Cybernetics Core", "Gateway", "Stargate", "Robotics Facility"))],
+                  "oppTechMilestones": [{"name": "Stimpack", "timeSec": 180, "kind": "upgrade", "timing": "completed"}] +
+                                       [{"name": name, "timeSec": 90 + index, "kind": "building", "timing": "started"}
+                                        for index, name in enumerate(("Barracks", "Factory", "Starport"))]},
                  {"gameId": "second", "myBuild": "A longer alternative build name", "oppStrategy": "A different opponent opening"}]
         panel.update_context({"name": "NorthStar Example Opponent", "race": "Terran", "mmr": 4300,
                               "headToHead": {"wins": 3, "losses": 2}, "last5GamesScouting": games})
@@ -31,7 +34,7 @@ def test_scouting_pin_keeps_controls_and_timings_accessible_inside_themed_frame(
         try:
             for skin in ("default", "protoss", "terran", "zerg"):
                 panel.set_appearance(skin, False)
-                for width, height in ((650, 450), (420, 300), (650, 600), (420, 300), (650, 450)):
+                for width, height in ((650, 450), (500, 450), (420, 300), (650, 600), (420, 300), (650, 450)):
                     panel.resize(width, height)
                     panel.show()
                     QtTest.QTest.qWait(10)
@@ -51,7 +54,10 @@ def test_scouting_pin_keeps_controls_and_timings_accessible_inside_themed_frame(
                     for side in ("my", "opp"):
                         card = panel.comparison.chain_cards[0 if side == "my" else 1]
                         assert card.geometry().right() < panel.comparison.width()
-                        assert panel.comparison.build_chains[side].scroll.horizontalScrollBar().maximum() == 0
+                        chain = panel.comparison.build_chains[side]
+                        assert chain.scroll.horizontalScrollBar().maximum() == 0
+                        assert chain._columns >= 2, (skin, (width, height), side, chain.scroll.viewport().size().toTuple())
+                        assert chain.steps[0].icon_label.size() == QtCore.QSize(44, 44)
                         button = panel.comparison.chain_reference_buttons["you" if side == "my" else "opponent"]
                         assert card.rect().contains(button.geometry())
                     started = panel.comparison.build_chains["my"].steps[0]

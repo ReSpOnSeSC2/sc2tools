@@ -16,6 +16,8 @@ corresponding GitHub Release.
   retain its live-game scouting toggle and protected game clicks.
 - Reopen the main app in Standard from the tray or shortcut, keeping the pinned
   opponent strip compact and preserving automatic background startup.
+- Fit two or three readable build steps per row in narrow scouting cards instead
+  of leaving space beside a single icon, including the floating scouting report.
 
 ### Agent 0.24.1 - Compact scouting and reliable Randomize
 - Open/close the detailed floating scouting report from compact. Only its scouting

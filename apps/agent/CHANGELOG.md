@@ -11,6 +11,8 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   the tray or shortcut. Preserve compact pinned panels and background startup.
 - Keep expansion clicks out of the game's click-through exception; only the live
   scouting action accepts clicks while StarCraft II has focus.
+- Fit two or three full-size build icons per row in narrower scouting cards by
+  sharing available row space, including Detailed and the floating scouting panel.
 
 ## 0.24.1
 

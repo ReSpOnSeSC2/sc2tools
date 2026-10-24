@@ -18,6 +18,7 @@ def build_scouting_comparison(parent, *, QtCore, QtGui, QtWidgets, icon_provider
             self.chain_cards_layout.setContentsMargins(0, 0, 0, 0)
             self.chain_cards_layout.setSpacing(10)
             self._density = "detailed"
+            self._stacked = None
             self._references = {}
             for position, (side, title) in enumerate((("my", "YOUR BUILD ORDER"), ("opp", "OPPONENT BUILD ORDER"))):
                 card = QtWidgets.QFrame()
@@ -76,7 +77,26 @@ def build_scouting_comparison(parent, *, QtCore, QtGui, QtWidgets, icon_provider
                 label.setStyleSheet("font-size: 12px; font-weight: 600;" if standard else "")
                 self.build_chains[side].setMinimumHeight(156 if standard else 166)
                 self.build_chains[side].set_tile_width(80 if standard else None)
+            self._reflow_cards()
             self._refresh_references()
+
+        def _reflow_cards(self):
+            # Keep two readable steps in each card. At the smallest panel
+            # widths, put the cards one above the other rather than squeezing
+            # both builds into single-icon columns.
+            scrollbar = self.style().pixelMetric(QtWidgets.QStyle.PM_ScrollBarExtent)
+            frame = max(card.frameWidth() for card in self.chain_cards)
+            minimum_card = 2 * 80 + 8 + 4 + scrollbar + 2 * (frame + (8 if self._density == "standard" else 12))
+            stacked = self.width() < 2 * minimum_card + self.chain_cards_layout.spacing()
+            if stacked == self._stacked:
+                return
+            self._stacked = stacked
+            for card in self.chain_cards:
+                self.chain_cards_layout.removeWidget(card)
+            for index, card in enumerate(self.chain_cards):
+                self.chain_cards_layout.addWidget(card, index if stacked else 0, 0 if stacked else index)
+            self.chain_cards_layout.setColumnStretch(1, 0 if stacked else 1)
+            self.updateGeometry()
 
         def set_reference(self, side, *, selected, enabled):
             self._references[side] = (selected, enabled)
@@ -92,6 +112,7 @@ def build_scouting_comparison(parent, *, QtCore, QtGui, QtWidgets, icon_provider
 
         def resizeEvent(self, event):
             super().resizeEvent(event)
+            self._reflow_cards()
             self._refresh_references()
 
         def set_side(self, side, name, events, horizon):
