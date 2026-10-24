@@ -429,6 +429,12 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._appearance_animations = True
             self._return_density = None
             self._spoken_game_keys = []
+            self._session_enabled = False
+            self._session_saved = False
+            self._session_busy = False
+            self._session_queued = False
+            self._session_loaded = False
+            self._session_last_fetch = 0.0
             self._speech_game_key = None
             self._speech_pending_key = None
             self._speech_pending_at = None
@@ -437,6 +443,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.scouting_speech = (speech_factory or build_scouting_speech)(self, QtCore=QtCore)
             self.scouting_speech.statusChanged.connect(self.voice_status.setText)
             self.overlays = {kind: CompanionPanel(self, kind) for kind in ("opponent", "scouting")}
+            from .companion_session import build_companion_session
+            self.session_panel = build_companion_session(QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
+            self.session_panel.userClosed.connect(lambda: self.session_check.setChecked(False))
             for card in (self.compact_card, self.overlays["opponent"].identity_card):
                 card.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
                 card.customContextMenuRequested.connect(lambda position, target=card: self._team_context_menu(target, position))
@@ -507,6 +516,21 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.preview_button.toggled.connect(self._preview_panels_changed)
             controls.addWidget(self.preview_button, 0, QtCore.Qt.AlignLeft)
             controls_layout.addLayout(controls)
+            self.session_check = QtWidgets.QCheckBox("Keep session record on top")
+            self.session_check.setAccessibleName("Keep session record on top")
+            self.session_check.setToolTip("Show session wins, losses, elapsed time and your latest-known rating between games. In-game assistance off hides this panel too, without resetting the record.")
+            self.session_check.setEnabled(False)
+            self.session_check.toggled.connect(self._session_setting_changed)
+            controls_layout.addWidget(self.session_check)
+            controls_layout.addWidget(label("Uses the same four-hour-inactivity session as the OBS session widget, not a calendar-day total.", "Muted"))
+            self.session_setup_button = QtWidgets.QPushButton("Connect Session stats…")
+            self.session_setup_button.setEnabled(False)
+            self.session_setup_button.setToolTip("Use your private stats connection, or create one after you confirm. No OBS or browser source is needed.")
+            self.session_setup_button.clicked.connect(self._setup_session)
+            controls_layout.addWidget(self.session_setup_button, 0, QtCore.Qt.AlignLeft)
+            self.session_notice = label("", "Muted")
+            self.session_notice.hide()
+            controls_layout.addWidget(self.session_notice)
             self.assistance_help = label("Master switch for panels, voice and build guidance—not replay syncing or browsing. Turning it off keeps your choices. Pinned panels stay on top when your mode allows; scouting is past replay information, not live enemy tracking.", "Muted")
             self.assistance_help.setObjectName("companionAssistanceHelp")
             controls_layout.addWidget(self.assistance_help)
@@ -1508,6 +1532,70 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
         def refresh(self):
             if "snapshot" not in self._requests:
                 self._job("snapshot", {"action": "snapshot"})
+            self._sync_session_panel()
+
+        def _apply_session_setting(self, enabled):
+            self._session_enabled = enabled is True
+            blocker = QtCore.QSignalBlocker(self.session_check)
+            self.session_check.setChecked(self._session_enabled)
+            del blocker
+            self._sync_session_panel()
+
+        def _session_setting_changed(self, enabled):
+            self._session_enabled = enabled is True
+            self._session_last_fetch = 0.0
+            self._requests.pop("session_stats", None)
+            self.session_panel.update_session({})
+            self._sync_session_panel()
+            if self._session_busy:
+                self._session_queued = True
+            else:
+                self._save_session_setting()
+
+        def _save_session_setting(self):
+            self._session_busy = True
+            self._job("session_save", {"action": "session_settings", "enabled": self._session_enabled})
+
+        def _setup_session(self):
+            if (not self._paired or not self._snapshot_healthy or not self._account_key or not callable(handler)
+                    or "session_setup" in self._requests):
+                return
+            owner = self._account_key
+            answer = QtWidgets.QMessageBox.question(
+                self, "Connect Session stats",
+                "Use your account's private Session stats connection? If none exists, this creates one named Native Companion Session. "
+                "It lets this agent read your session record without OBS. You can revoke it in your overlay settings.",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No,
+            )
+            if answer != QtWidgets.QMessageBox.Yes or self._closed:
+                return
+            if owner != self._account_key or not self._paired or not self._snapshot_healthy:
+                self.session_notice.setText("Your pairing changed. Refresh before connecting Session stats.")
+                self.session_notice.show()
+                return
+            self.session_setup_button.setEnabled(False)
+            self.session_setup_button.setText("Connecting…")
+            self.session_notice.setText("Checking your private Session connection…")
+            self.session_notice.show()
+            self._job("session_setup", {"action": "session_setup", "confirmed": True, "accountKey": owner})
+
+        def _sync_session_panel(self):
+            if not hasattr(self, "session_panel"):
+                return
+            self.session_setup_button.setEnabled(bool(self._paired and self._snapshot_healthy and self._account_key and callable(handler)
+                                                      and "session_setup" not in self._requests))
+            visible = self._session_enabled and self.assistance_enabled()
+            self.session_panel.set_enabled(visible)
+            if not self._session_enabled or not self._snapshot_healthy:
+                self._requests.pop("session_stats", None)
+                self._session_last_fetch = 0.0
+                self.session_panel.update_session({})
+            if not visible or not self._account_key or not callable(handler):
+                return
+            now = time.monotonic()
+            if "session_stats" not in self._requests and now - self._session_last_fetch >= 10:
+                self._session_last_fetch = now
+                self._job("session_stats", {"action": "session_stats", "accountKey": self._account_key})
 
         def refresh_library(self):
             self.refresh()
@@ -1539,6 +1627,44 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 return
             self._requests.pop(channel, None)
             payload = response["payload"]
+            if channel == "session_setup":
+                self.session_setup_button.setText("Connect Session stats…")
+                result = response.get("result")
+                if not self._paired or payload.get("accountKey") != self._account_key:
+                    self._sync_session_panel()
+                    return
+                if response.get("error") or not isinstance(result, dict) or result.get("ready") is not True or result.get("accountKey") != self._account_key:
+                    self.session_notice.setText("Session stats could not be connected. Check your pairing and connection, then try again.")
+                else:
+                    self.session_notice.setText("Session connection ready. Enable the Session panel; stats may take a few moments to arrive.")
+                    self._session_last_fetch = 0.0
+                self.session_notice.show()
+                self._sync_session_panel()
+                return
+            if channel == "session_stats":
+                result = response.get("result")
+                if (self._session_enabled and self._snapshot_healthy and payload.get("accountKey") == self._account_key
+                        and isinstance(result, dict) and result.get("accountKey") == self._account_key):
+                    self.session_panel.update_session(result)
+                else:
+                    self.session_panel.update_session({})
+                return
+            if channel == "session_save":
+                self._session_busy = False
+                if not response.get("error"):
+                    self._session_saved = response["result"].get("enabled") is True
+                if self._session_queued:
+                    self._session_queued = False
+                    self._save_session_setting()
+                elif response.get("error"):
+                    self._apply_session_setting(self._session_saved)
+                    self.session_notice.setText("Session panel setting was not saved. Check your disk, then try again.")
+                    self.session_notice.show()
+                else:
+                    self._session_last_fetch = 0.0
+                    self._apply_session_setting(self._session_saved)
+                    self.session_notice.hide()
+                return
             if channel == "game_build_order":
                 self._finish_build_order(response)
                 return
@@ -1547,11 +1673,16 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 return
             if channel == "modes_load":
                 self.mode_controls.setEnabled(callable(handler))
+                self.session_check.setEnabled(callable(handler))
                 if not self._preference_busy:
                     for checkbox in self.preference_checks.values():
                         checkbox.setEnabled(callable(handler))
                 if not response.get("error"):
                     result = response["result"]
+                    if not self._session_loaded:
+                        self._session_loaded = True
+                        self._session_saved = result.get("sessionEnabled") is True
+                        self._apply_session_setting(self._session_saved)
                     if response.get("revision") == self._preferences_revision and not self._preference_busy:
                         self._apply_preferences(result.get("preferences") or {})
                     if response.get("modeRevision") == self._mode_revision and not self._mode_busy:
@@ -1681,6 +1812,14 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
 
         def _clear_library(self):
             self._snapshot_healthy = False
+            self._requests.pop("session_stats", None)
+            self._requests.pop("session_setup", None)
+            self.session_setup_button.setEnabled(False)
+            self.session_setup_button.setText("Connect Session stats…")
+            self.session_notice.hide()
+            self._session_last_fetch = 0.0
+            self.session_panel.update_session({})
+            self.session_panel.set_enabled(False)
             self._stop_report()
             self._spoken_game_keys.clear()
             self.team_roster_state.reset()
@@ -2042,6 +2181,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 else:
                     panel.hide()
             self._panel_restore_requests.clear()
+            self._sync_session_panel()
             self._render_information_layout()
             self._update_speech()
 
@@ -2064,6 +2204,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 return
             self._closed = True
             self.timer.stop()
+            self.session_panel.shutdown()
+            self.session_panel.deleteLater()
             self.scouting_speech.shutdown()
             self._requests.clear()
             self._build_order_inflight = None

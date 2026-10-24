@@ -4,7 +4,7 @@ import threading
 
 from ..api_client import ApiClient
 from ..auth_watchdog import AuthWatchdog
-from ..state import save_state
+from ..state import _STATE_SAVE_LOCK, save_state
 from .flow import PairingControls, ensure_paired
 
 log = logging.getLogger(__name__)
@@ -59,9 +59,14 @@ class RuntimeRecovery:
                     if service:
                         service._api = api
                 self._replace_transport(self.cell.live_transport, api)
-                if self.cell.socket_client:
-                    self.cell.socket_client = self.cell.socket_client.with_device_token(self.state.device_token)
-                    self.cell.socket_client.start()
+                with _STATE_SAVE_LOCK:
+                    socket_client = self.cell.socket_client
+                    if socket_client:
+                        socket_client = socket_client.with_device_token(self.state.device_token)
+                        socket_client.set_session_enabled(self.state.companion_session_enabled)
+                        self.cell.socket_client = socket_client
+                if socket_client:
+                    socket_client.start()
                 self.watchdog.reset()
                 if self.cell.upload:
                     self.cell.upload.hold_auth(False)

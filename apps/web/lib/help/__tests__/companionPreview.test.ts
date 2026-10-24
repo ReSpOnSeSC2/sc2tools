@@ -8,7 +8,7 @@ describe("Companion preview availability", () => {
       const article = getArticle(slug);
       expect(article, slug).toBeDefined();
       const text = article!.body.map(helpBlockText).join(" ");
-      expect(text, slug).toContain(`Companion ${slug === "desktop-companion" ? "0.22.1 verification" : "0.21.0"} preview`);
+      expect(text, slug).toContain(`Companion ${slug === "desktop-companion" ? "0.23.0 verification" : "0.21.0"} preview`);
       expect(text, slug).toContain("current stable download");
     }
     for (const slug of ["desktop-companion", "install-app"]) {
@@ -40,5 +40,26 @@ describe("Companion preview availability", () => {
       expect(article.body.some(block => block.type === "image" && block.src === source)).toBe(true);
     }
     expect(text).not.toContain("Actual team-game guidance is unsupported");
+  });
+
+  it("explains Session opt-in, source limits and game-only click-through without changing close behavior", () => {
+    const text = getArticle("desktop-companion")!.body.map(helpBlockText).join(" ");
+    for (const phrase of ["Keep session record on top", "Assistance → Connect Session stats…", "confirmation defaults to", "off by default", "four-hour-inactivity",
+      "not a calendar-day total", "explicitly confirm before creating access", "never create or recreate credentials automatically",
+      "own latest-known MMR", "rating region", "Active server detection is unavailable", "em dash, not zero",
+      "90 seconds", "In-game assistance off hides Session without resetting", "stop its Session connection",
+      "StarCraft II is the verified foreground application", "Alt+Tab away", "Standard stays interactive",
+      "X", "without switching off your already enabled pinned panels", "does not change minimize or close behavior"]) {
+      expect(text).toContain(phrase);
+    }
+    expect(text).not.toContain("automatically creates an overlay token");
+    const gallery = getArticle("desktop-companion")!.body.find(block => block.type === "image" && block.src === "/landing/companion-session.png");
+    expect(gallery?.type).toBe("image");
+    if (gallery?.type === "image") {
+      expect(gallery.alt).toContain("sample session record");
+      expect(gallery.caption).toContain("150 × 138");
+      expect(gallery.caption).toContain("sample data");
+      expect(gallery.caption).toContain("not a verified active server");
+    }
   });
 });

@@ -6,10 +6,12 @@ import threading
 from copy import deepcopy
 import hashlib
 import re
+import math
 from urllib.parse import quote, urlparse
 
 import requests
 from .companion_modes import normalize_modes, validate_modes
+from .session_stats import normalize_session, session_account_key
 
 
 DEFAULT_PREFERENCES = {
@@ -38,19 +40,41 @@ class CompanionError(ValueError):
 
 class CompanionClient:
     def __init__(self, connection_provider, *, preferences_provider=None,
-                 save_preferences=None, modes_provider=None, save_modes=None, transport=None):
+                 save_preferences=None, modes_provider=None, save_modes=None, transport=None,
+                 session_provider=None, session_settings_provider=None, save_session_settings=None):
         self._connection_provider = connection_provider
         self._preferences_provider = preferences_provider or (lambda: {})
         self._save_preferences = save_preferences
         self._modes_provider = modes_provider
         self._save_modes = save_modes
+        self._session_provider = session_provider
+        self._session_settings_provider = session_settings_provider or (lambda: False)
+        self._save_session_settings = save_session_settings
         self._transport = transport or requests.request
         self._preference_lock = threading.RLock()
+        self._session_setup_lock = threading.Lock()
 
     def action(self, request):
         if not isinstance(request, dict):
             raise CompanionError("Choose a Companion action.")
         action = request.get("action")
+        if action == "session_settings":
+            with self._preference_lock:
+                if "enabled" in request:
+                    if type(request["enabled"]) is not bool:
+                        raise CompanionError("The Session window must be on or off.")
+                    if self._save_session_settings is None:
+                        raise CompanionError("The local Session setting could not be saved.")
+                    try:
+                        self._save_session_settings(request["enabled"])
+                    except OSError:
+                        raise CompanionError("The local Session setting could not be saved. Check your disk and try again.") from None
+                return {"enabled": self._session_settings_provider() is True}
+        if action == "session_stats":
+            return self._session_stats()
+        if action == "session_setup":
+            with self._session_setup_lock:
+                return self._session_setup(request)
         if action == "companion_modes":
             with self._preference_lock:
                 if "modes" in request:
@@ -66,7 +90,8 @@ class CompanionClient:
                         raise CompanionError("Local Companion modes could not be saved. Check your disk and try again.") from None
                 modes = normalize_modes(self._modes_provider() if self._modes_provider else {})
                 preferences = normalize_preferences(self._preferences_provider())
-            return {"modes": modes, **({"preferences": preferences} if "modes" not in request else {})}
+            return {"modes": modes, **({"preferences": preferences,
+                "sessionEnabled": self._session_settings_provider() is True} if "modes" not in request else {})}
         if action == "preferences":
             updates = request.get("preferences")
             if not isinstance(updates, dict) or any(
@@ -152,6 +177,64 @@ class CompanionClient:
             })
         raise CompanionError("This Companion action is unavailable.")
 
+    def _session_stats(self):
+        base, token = self._connection_provider()
+        result = {"paired": bool(token), "session": None, "receivedAt": None, "source": "overlay-session",
+                  "ownRating": None, "activeRegion": None, "activeRegionSource": "unavailable"}
+        if not token:
+            return result
+        owner = session_account_key(base, token)
+        result["accountKey"] = owner
+        cached = self._session_provider() if self._session_provider else None
+        if tuple(self._connection_provider()) != (base, token):
+            raise CompanionError("Your agent pairing changed. Refresh before using account data.")
+        if (not isinstance(cached, dict) or cached.get("paired") is not True
+                or cached.get("accountKey") != owner or cached.get("source") != "overlay-session"):
+            return result
+        received = cached.get("receivedAt")
+        if type(received) not in {float, int} or not math.isfinite(received):
+            return result
+        session = normalize_session(cached.get("session"))
+        if session is not None:
+            result.update(session=session, receivedAt=received)
+            result["ownRating"] = {"mmr": session.get("mmrCurrent"), "region": session.get("region"),
+                "source": "overlay-session", "status": "latest-known", "regionStatus": "rating-region"}
+        return result
+
+    def _session_setup(self, request):
+        if request.get("confirmed") is not True:
+            raise CompanionError("Confirm setting up your private Session connection first.")
+        connection = tuple(self._connection_provider())
+        base, token = connection
+        if not token:
+            raise CompanionError("Pair this agent with your SC2 Tools account first.")
+        owner = session_account_key(base, token)
+        if request.get("accountKey") != owner:
+            raise CompanionError("Your agent pairing changed. Refresh before setting up Session.")
+        body = self._request("GET", "/v1/overlay-tokens", expected_connection=connection)
+        items = body.get("items")
+        if not isinstance(items, list):
+            raise CompanionError("Your Session connection could not be checked. Refresh and try again.")
+        active = False
+        for item in items:
+            if not isinstance(item, dict):
+                raise CompanionError("Your Session connection could not be checked. Refresh and try again.")
+            if item.get("revokedAt"):
+                continue
+            overlay_token = item.get("token")
+            if not isinstance(overlay_token, str) or not overlay_token or len(overlay_token) > 512:
+                raise CompanionError("Your Session connection could not be checked. Refresh and try again.")
+            active = True
+        if tuple(self._connection_provider()) != connection:
+            raise CompanionError("Your agent pairing changed. Refresh before setting up Session.")
+        if not active:
+            created = self._request("POST", "/v1/overlay-tokens",
+                body={"label": "Native Companion Session"}, expected_connection=connection)
+            overlay_token = created.get("token")
+            if not isinstance(overlay_token, str) or not overlay_token or len(overlay_token) > 512:
+                raise CompanionError("Your Session connection could not be confirmed. Refresh and try again.")
+        return {"ready": True, "accountKey": owner}
+
     def _randomizer_action(self, request):
         action = request["action"]
         matchup = request.get("matchup")
@@ -207,8 +290,10 @@ class CompanionClient:
         saved = self._request("PUT", "/v1/me/preferences/randomizer", body=config)
         return {"config": saved}
 
-    def _request(self, method, path, *, params=None, body=None, missing_ok=False):
+    def _request(self, method, path, *, params=None, body=None, missing_ok=False, expected_connection=None):
         base, token = self._connection_provider()
+        if expected_connection is not None and (base, token) != expected_connection:
+            raise CompanionError("Your agent pairing changed. Refresh before using account data.")
         if not token:
             raise CompanionError("Pair this agent with your SC2 Tools account first.")
         try:

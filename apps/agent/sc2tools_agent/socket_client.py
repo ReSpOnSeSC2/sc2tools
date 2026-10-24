@@ -41,8 +41,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional  # noqa: F401
+
+from .session_stats import normalize_session, session_account_key
 
 log = logging.getLogger(__name__)
 _ENGINE_REBUILD_LOCK = threading.Lock()
@@ -66,8 +70,11 @@ class SocketClient:
         on_bot_lab: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
         on_build_intent_changed: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_scouting_brief: Optional[Callable[[Dict[str, Any]], None]] = None,
+        overlay_token_provider: Optional[Callable[[str], Optional[str]]] = None,
+        session_enabled: bool = False,
     ) -> None:
         self._base_url = base_url.rstrip("/")
+        self._account_base_url = base_url
         self._device_token = device_token
         self._on_recompute_games = on_recompute_games
         self._on_recompute_opp_build = on_recompute_opp_build
@@ -88,6 +95,13 @@ class SocketClient:
         # preference did. Only ids and the prefs flag travel.
         self._on_build_intent_changed = on_build_intent_changed
         self._on_scouting_brief = on_scouting_brief
+        self._overlay_token_provider = overlay_token_provider
+        self._session_enabled = session_enabled is True
+        self._session_lock = threading.RLock()
+        self._session_generation = 0
+        self._session_data = None
+        self._session_sio: Any = None
+        self._device_connected = False
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         # Lazily imported in start() so test environments that don't
@@ -100,7 +114,42 @@ class SocketClient:
         names = ("recompute_games", "recompute_opp_build", "full_resync", "import_scan",
                  "import_start", "import_cancel", "import_pick_folder", "bot_lab", "build_intent_changed", "scouting_brief")
         callbacks = {"on_" + name: getattr(self, "_on_" + name) for name in names}
-        return SocketClient(base_url=self._base_url, device_token=token, **callbacks)
+        return SocketClient(base_url=self._account_base_url, device_token=token,
+            overlay_token_provider=self._overlay_token_provider,
+            session_enabled=self._session_enabled, **callbacks)
+
+    def session_snapshot(self) -> Dict[str, Any]:
+        with self._session_lock:
+            return deepcopy(self._session_data) if self._session_data else {
+                "paired": bool(self._device_token),
+                "accountKey": session_account_key(self._account_base_url, self._device_token),
+                "session": None, "receivedAt": None, "source": "overlay-session",
+            }
+
+    def set_session_enabled(self, enabled: bool) -> None:
+        enabled = enabled is True
+        with self._session_lock:
+            if enabled == self._session_enabled:
+                return
+            self._session_enabled = enabled
+            self._invalidate_session()
+            session_sio = self._session_sio
+        if not enabled:
+            self._disconnect_session(session_sio)
+
+    def _invalidate_session(self) -> None:
+        with self._session_lock:
+            self._session_generation += 1
+            self._session_data = None
+
+    def _disconnect_session(self, session_sio) -> None:
+        loop = self._loop
+        if session_sio is not None and loop is not None and not loop.is_closed():
+            disconnect = session_sio.disconnect()
+            try:
+                asyncio.run_coroutine_threadsafe(disconnect, loop)
+            except RuntimeError:
+                disconnect.close()
 
     def start(self) -> None:
         if self._thread is not None and self._thread.is_alive():
@@ -130,6 +179,8 @@ class SocketClient:
 
     def stop(self) -> None:
         self._stop.set()
+        self._invalidate_session()
+        self._disconnect_session(self._session_sio)
         sio = self._sio
         loop = self._loop
         if sio is not None and loop is not None:
@@ -148,10 +199,19 @@ class SocketClient:
 
         @sio.event
         async def connect() -> None:  # noqa: ARG001
+            with self._session_lock:
+                self._device_connected = not self._stop.is_set()
+                self._invalidate_session()
             log.info("socket_client_connected base=%s", self._base_url)
 
         @sio.event
         async def disconnect() -> None:  # noqa: ARG001
+            with self._session_lock:
+                self._device_connected = False
+                self._invalidate_session()
+                session_sio = self._session_sio
+            if session_sio is not None:
+                await session_sio.disconnect()
             log.info("socket_client_disconnected")
 
         @sio.on("bot-lab:request")
@@ -322,7 +382,7 @@ class SocketClient:
         self._loop = loop
         asyncio.set_event_loop(loop)
         try:
-            loop.run_until_complete(self._connect_and_wait())
+            loop.run_until_complete(self._run_clients())
         except Exception:  # noqa: BLE001
             log.exception("socket_client_loop_failed")
         finally:
@@ -331,6 +391,102 @@ class SocketClient:
             except Exception:  # noqa: BLE001
                 pass
             self._loop = None
+
+    async def _run_clients(self) -> None:
+        session_task = asyncio.create_task(self._connect_session_and_wait())
+        try:
+            await self._connect_and_wait()
+        finally:
+            session_task.cancel()
+            await asyncio.gather(session_task, return_exceptions=True)
+            self._invalidate_session()
+
+    def _session_active(self, session_sio, generation) -> bool:
+        return (not self._stop.is_set() and self._device_connected and self._session_enabled
+                and self._session_sio is session_sio and self._session_generation == generation)
+
+    def _wire_session_handlers(self, session_sio, generation) -> None:
+        @session_sio.on("overlay:session")
+        async def on_session(payload) -> None:
+            with self._session_lock:
+                if not self._session_active(session_sio, generation):
+                    return
+                session = normalize_session(payload)
+                if session is None:
+                    return
+                self._session_data = {
+                    "paired": True, "accountKey": session_account_key(self._account_base_url, self._device_token),
+                    "session": session, "receivedAt": time.time(), "source": "overlay-session",
+                }
+
+        @session_sio.event
+        async def disconnect() -> None:
+            with self._session_lock:
+                if self._session_sio is session_sio:
+                    self._invalidate_session()
+
+    async def _session_retry_delay(self, seconds) -> None:
+        for _ in range(seconds):
+            if self._stop.is_set() or not self._session_enabled:
+                break
+            await asyncio.sleep(1)
+
+    async def _connect_session_and_wait(self) -> None:
+        while not self._stop.is_set():
+            if not self._session_enabled or not self._device_connected or self._overlay_token_provider is None:
+                await asyncio.sleep(1)
+                continue
+            with self._session_lock:
+                generation = self._session_generation
+            session_sio = None
+            wait_task = None
+            try:
+                overlay_token = await asyncio.to_thread(self._overlay_token_provider, self._device_token)
+                with self._session_lock:
+                    current = (generation == self._session_generation and self._session_enabled
+                               and self._device_connected and not self._stop.is_set())
+                if not current:
+                    continue
+                if not isinstance(overlay_token, str) or not overlay_token:
+                    await self._session_retry_delay(30)
+                    continue
+                import socketio
+
+                session_sio = socketio.AsyncClient(reconnection=False, logger=False, engineio_logger=False)
+                with self._session_lock:
+                    if (generation != self._session_generation or not self._session_enabled
+                            or not self._device_connected or self._stop.is_set()):
+                        continue
+                    self._session_sio = session_sio
+                self._wire_session_handlers(session_sio, generation)
+                await session_sio.connect(self._base_url, auth={"overlayToken": overlay_token},
+                    transports=["websocket", "polling"], wait_timeout=10)
+                wait_task = asyncio.create_task(session_sio.wait())
+                while self._session_active(session_sio, generation):
+                    try:
+                        await asyncio.wait_for(asyncio.shield(wait_task), timeout=30)
+                        break
+                    except asyncio.TimeoutError:
+                        if self._session_active(session_sio, generation):
+                            await session_sio.emit("overlay:resync")
+            except asyncio.CancelledError:
+                raise
+            except Exception as error:
+                log.debug("session_socket_unavailable type=%s", type(error).__name__)
+            finally:
+                if session_sio is not None:
+                    try:
+                        await session_sio.disconnect()
+                    except Exception:
+                        pass
+                if wait_task is not None:
+                    wait_task.cancel()
+                    await asyncio.gather(wait_task, return_exceptions=True)
+                with self._session_lock:
+                    if self._session_sio is session_sio:
+                        self._session_sio = None
+                        self._invalidate_session()
+            await self._session_retry_delay(5)
 
     async def _connect_and_wait(self) -> None:
         sio = self._sio

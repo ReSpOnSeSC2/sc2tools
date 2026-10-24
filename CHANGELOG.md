@@ -11,6 +11,19 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.23.0 - Native Session record and game-safe panels
+- Add an optional, default-off Session panel using the OBS widget's canonical
+  four-hour-inactivity W-L record and elapsed time, with matching race artwork.
+  The master assistance switch hides it without resetting its record or choice.
+- Label your own latest-known MMR and rating region honestly; active server
+  detection is unavailable from SC2's local API. Missing fields stay unavailable,
+  rather than showing zero, an opponent rating or a guessed current server.
+- Session reuses an owned overlay token; creating missing access requires an
+  explicit setup confirmation, never an automatic polling or reconnect action.
+- Make pinned panels and main Compact click-through only while verified SC2 is
+  foreground. Alt+Tab away unlocks them; Standard stays interactive. Existing
+  minimize, close-to-tray and pinned-panel behavior is unchanged.
+
 ### Agent 0.22.1 - Replay unit icons and installer verification
 - Show bundled unit icons for replay steps whose source category is unknown,
   including Sentry and Phoenix, without inventing event categories or timings.

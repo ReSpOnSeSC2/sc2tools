@@ -98,6 +98,7 @@ class AgentState:
     window_page: Optional[str] = None
     companion_skin: str = "default"
     companion_animations: bool = True
+    companion_session_enabled: bool = False
 
     api_base_override: Optional[str] = None
     """If set, takes precedence over the ``SC2TOOLS_API_BASE`` env var
@@ -430,6 +431,7 @@ def load_state(state_dir: Path) -> AgentState:
         window_page=_coerce_window_page(raw.get("window_page")),
         companion_skin=_coerce_companion_skin(raw.get("companion_skin")),
         companion_animations=raw.get("companion_animations") if type(raw.get("companion_animations")) is bool else True,
+        companion_session_enabled=raw.get("companion_session_enabled") is True,
         api_base_override=_coerce_str(raw.get("api_base_override")),
         log_level_override=_coerce_str(raw.get("log_level_override")),
         autostart_enabled=bool(raw.get("autostart_enabled") or False),
@@ -555,6 +557,7 @@ def _snapshot(state: AgentState) -> dict:
         window_page=_coerce_window_page(state.window_page),
         companion_skin=_coerce_companion_skin(state.companion_skin),
         companion_animations=state.companion_animations if type(state.companion_animations) is bool else True,
+        companion_session_enabled=state.companion_session_enabled is True,
         uploaded=dict(state.uploaded),
         path_by_game_id=dict(state.path_by_game_id),
         companion_preferences=dict(state.companion_preferences),

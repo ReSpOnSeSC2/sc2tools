@@ -10,7 +10,7 @@ describe("desktop Companion landing showcase", () => {
     const section = within(container).getByRole("region", { name: "Your ladder desk, beside the game." });
     expect(within(section).getByRole("link", { name: "Download current stable agent" }).getAttribute("href")).toBe("/download");
     expect(within(section).getByRole("link", { name: "Explore Companion" }).getAttribute("href")).toBe("/help/desktop-companion");
-    expect(section.querySelectorAll("img")).toHaveLength(8);
+    expect(section.querySelectorAll("img")).toHaveLength(9);
     expect(section.textContent).toContain("screenshots use sample data");
     expect(section.textContent).toContain("Runs without OBS");
     expect(section.textContent).toContain("One game assistance switch");
@@ -20,7 +20,7 @@ describe("desktop Companion landing showcase", () => {
     expect(section.textContent).toContain("optional Ctrl+Shift+F10");
     expect(section.textContent).toContain("automatic check-ins and randomizer draws remain 1v1-only");
     expect(section.textContent).toContain("Companion preview");
-    expect(section.textContent).toContain("Companion 0.22.1 verification preview is for local verification only and is not available in the current stable download");
+    expect(section.textContent).toContain("Companion 0.23.0 verification preview is for local verification only and is not available in the current stable download");
     expect(section.textContent).toContain("A signed public release is pending");
     expect(section.textContent).toContain("unsigned verification builds are separate test artifacts");
     expect(section.textContent).toContain("Choose how much you see");
@@ -51,7 +51,7 @@ describe("desktop Companion landing showcase", () => {
   it("keeps verification availability clear and presents race borders as a static optional comparison", () => {
     const { container } = render(<CompanionShowcase />);
     const availability = within(container).getByRole("note", { name: "Companion preview availability" });
-    expect(availability.textContent).toContain("0.22.1 verification preview");
+    expect(availability.textContent).toContain("0.23.0 verification preview");
     expect(availability.textContent).toContain("local verification only");
     expect(availability.querySelector("strong")?.textContent).toContain("not available in the current stable download");
     expect(container.textContent).toContain("Default preserves the current purple appearance");
@@ -84,5 +84,27 @@ describe("desktop Companion landing showcase", () => {
     expect(team.getAttribute("src")).toContain("companion-team-hybrid.png");
     expect(team.getAttribute("width")).toBe("1024");
     expect(team.getAttribute("height")).toBe("800");
+  });
+
+  it("describes optional Session, honest rating metadata and foreground-only click-through", () => {
+    const { container } = render(<CompanionShowcase />);
+    expect(within(container).getByRole("heading", { name: "Your Session record, between games too." })).toBeDefined();
+    for (const phrase of ["Session panel is off by default", "four-hour-inactivity record", "not a calendar-day total",
+      "does not require OBS or an active match", "own latest-known MMR and rating region",
+      "Active server detection is unavailable", "setup requires explicit confirmation",
+      "never create credentials automatically", "master assistance off hides it without resetting",
+      "expire after 90 seconds", "StarCraft II is the verified foreground application", "Alt+Tab away",
+      "Standard stays interactive", "Existing minimize and close-to-tray behavior is unchanged"]) {
+      expect(container.textContent).toContain(phrase);
+    }
+    expect(container.textContent).not.toContain("verified current server");
+    const gallery = within(container).getByRole("img", { name: /Native Session record panels in Default, Protoss, Terran and Zerg styles/ });
+    expect(gallery.getAttribute("src")).toContain("companion-session.png");
+    expect(gallery.getAttribute("width")).toBe("720");
+    expect(gallery.getAttribute("height")).toBe("285");
+    expect(gallery.getAttribute("sizes")).toBe("(max-width: 720px) 100vw, 720px");
+    expect(container.textContent).toContain("Actual native panels · 150 × 138 each · sample data");
+    expect(container.textContent).toContain("rating region are not a verified active server");
+    expect(container.querySelectorAll("img")).toHaveLength(9);
   });
 });

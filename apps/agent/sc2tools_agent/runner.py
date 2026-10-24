@@ -533,6 +533,8 @@ def _run_headless(
             on_import_cancel=import_ctl.handle_cancel_request,
             on_import_pick_folder=import_ctl.handle_pick_folder_request,
             on_bot_lab=BotLabController(cfg.state_dir, state).handle,
+            overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
+            session_enabled=state.companion_session_enabled,
         )
 
     live_transport: Optional[FanOutTransport] = None
@@ -562,7 +564,7 @@ def _run_headless(
     )
     stream_service = _build_stream_service(cfg, state, no_obs=no_obs)
     recovery_cell.stream_service = stream_service
-    recovery_cell.socket_client = socket_client
+    _publish_companion_socket(recovery_cell, state, socket_client)
     recovery_cell.live_transport = live_transport
 
     try:
@@ -746,6 +748,9 @@ def _run_with_gui(
         save_preferences=save_companion_preferences,
         modes_provider=lambda: state.companion_modes,
         save_modes=save_companion_modes,
+        session_provider=lambda: cell.socket_client.session_snapshot() if cell.socket_client else None,
+        session_settings_provider=lambda: state.companion_session_enabled,
+        save_session_settings=lambda enabled: _set_companion_session(cfg.state_dir, state, cell, enabled),
     )
     from .companion_ghost import GhostClient
 
@@ -1103,6 +1108,8 @@ def _gui_boot_worker(
                 on_import_cancel=import_ctl.handle_cancel_request,
                 on_import_pick_folder=import_ctl.handle_pick_folder_request,
                 on_bot_lab=BotLabController(cfg.state_dir, state).handle,
+                overlay_token_provider=lambda token: ApiClient(base_url=cfg.api_base, device_token=token).get_overlay_token(interactive=True),
+                session_enabled=state.companion_session_enabled,
                 on_build_intent_changed=lambda ping: (
                     cell.build_checkin.on_intent_changed(ping)
                     if getattr(cell, "build_checkin", None) else None
@@ -1112,7 +1119,7 @@ def _gui_boot_worker(
                     if getattr(cell, "build_checkin", None) else None
                 ),
             )
-        cell.socket_client = socket_client
+        _publish_companion_socket(cell, state, socket_client)
 
         if not no_live:
             (
@@ -1623,6 +1630,33 @@ def _remember_window_appearance(state_dir, state, skin, animations):
         except Exception:
             state.companion_skin, state.companion_animations = previous
             raise
+
+
+def _remember_companion_session(state_dir, state, enabled):
+    if type(enabled) is not bool:
+        raise ValueError("Choose an on/off Session panel setting.")
+    with _STATE_SAVE_LOCK:
+        previous = state.companion_session_enabled
+        state.companion_session_enabled = enabled
+        try:
+            save_state(state_dir, state)
+        except Exception:
+            state.companion_session_enabled = previous
+            raise
+
+
+def _set_companion_session(state_dir, state, cell, enabled):
+    with _STATE_SAVE_LOCK:
+        _remember_companion_session(state_dir, state, enabled)
+        if cell.socket_client:
+            cell.socket_client.set_session_enabled(enabled)
+
+
+def _publish_companion_socket(cell, state, socket_client):
+    with _STATE_SAVE_LOCK:
+        cell.socket_client = socket_client
+        if socket_client:
+            socket_client.set_session_enabled(state.companion_session_enabled)
 
 
 def _handle_save_settings(

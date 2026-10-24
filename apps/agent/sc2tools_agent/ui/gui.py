@@ -1153,6 +1153,13 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             from .race_visuals import create_race_effects
             self._race_effects = create_race_effects(self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
             QtWidgets.QApplication.instance().aboutToQuit.connect(self._race_effects.shutdown)
+            from .overlay_input import install_overlay_input
+            self._overlay_input = install_overlay_input(
+                self, panels_provider=lambda: [*self._companion_page.overlays.values(),
+                    self._companion_page.ghost_page.panel, self._companion_page.session_panel],
+                compact_provider=self._compact_window_active, QtCore=QtCore,
+            )
+            QtWidgets.QApplication.instance().aboutToQuit.connect(self._overlay_input.shutdown)
             self._companion_page.set_appearance(ui._window_skin, ui._window_animations)
             self._companion_page.appearanceChanged.connect(self._window_appearance_changed)
             self._apply_window_appearance()
@@ -3259,7 +3266,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                     set_skin(ui._window_skin)
             self._race_effects.apply_skin(ui._window_skin)
             self._race_effects.set_motion_enabled(ui._window_animations)
-            panels = [*self._companion_page.overlays.values(), self._companion_page.ghost_page.panel]
+            panels = [*self._companion_page.overlays.values(), self._companion_page.ghost_page.panel,
+                      self._companion_page.session_panel]
             for panel in panels:
                 panel.set_appearance(ui._window_skin, ui._window_animations)
 
@@ -3328,6 +3336,8 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self.setMinimumSize(min(minimum[0], max(1, available.width() - frame[0])), min(minimum[1], max(1, available.height() - frame[1])))
             else:
                 self.setMinimumSize(*minimum)
+            if hasattr(self, "_overlay_input"):
+                self._overlay_input.refresh()
 
         def _fit_current_window_to_screen(self):
             screen = self._window_size_screen()

@@ -86,7 +86,8 @@ raise SystemExit(__main__.main())
     assert report["companion_layouts_painted"] == 4
     assert report["race_skins_painted"] == 4
     assert report["race_artwork_loaded"] == 3
-    assert report["pinned_panels_painted"] == 3
+    assert report["pinned_panels_painted"] == 4
+    assert report["session_panel_painted"] is True
     assert report["team_roster_painted"] is True
     assert set(tmp_path.iterdir()) == {destination}
 

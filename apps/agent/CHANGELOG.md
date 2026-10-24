@@ -4,6 +4,27 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+## 0.23.0
+
+### Added - Native Session record and game-safe mouse input
+- Optional, default-off Session panel shares the OBS widget's authoritative
+  four-hour-inactivity record: wins, losses and elapsed session time. It remains
+  available between games and uses the same local race artwork and controls.
+- Show your own latest-known MMR and rating region when provided by owned
+  Session metadata. These are not opponent ratings or active-server detection;
+  the local SC2 API does not expose the active server. Missing values stay
+  unavailable instead of becoming zero or guessed region labels.
+- Reuse an existing owned overlay token for Session access. When none exists,
+  setup requires explicit confirmation; polling and reconnects never create or
+  recreate credentials automatically. Account, connection and freshness guards
+  prevent stale records or another account's information from reappearing.
+- In-game assistance off hides Session without resetting its record or saved
+  choice. Its independent switch turns the panel and its Session connection off.
+- Pinned panels and the main Compact bar automatically pass clicks through only
+  while StarCraft II is the verified foreground application. Alt+Tab away
+  restores interaction; Standard and other expanded layouts stay interactive.
+  Existing minimize and close-to-tray behavior is unchanged.
+
 ## 0.22.1
 
 ### Fixed - Replay icons and installer verification

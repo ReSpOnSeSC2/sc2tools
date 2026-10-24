@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from time import time
 
 from . import __version__
 
@@ -143,14 +144,21 @@ def _exercise_gui(report):
                 effects.set_motion_enabled(True)
             companion.appearance_skin.setCurrentIndex(companion.appearance_skin.findData("default"))
             report["stage"] = "pinned_panels_and_team_roster"
-            panels = [*companion.overlays.values(), companion.ghost_page.panel]
+            companion.session_panel.update_session({"paired": True, "accountKey": "packaging-fixture",
+                "source": "overlay-session", "receivedAt": time(),
+                "session": {"wins": 2, "losses": 1, "games": 3, "region": "EU", "sessionStartedAt": at},
+                "ownRating": {"mmr": 5157, "source": "overlay-session", "status": "latest-known"}})
+            companion.session_panel.set_enabled(True)
+            app.processEvents(QtCore.QEventLoop.ExcludeUserInputEvents)
+            if companion.session_panel.wins_label.text() != "2W" or companion.session_panel._presentation["mmr"] != 5157:
+                raise RuntimeError("The bundled Session record or own rating did not paint.")
+            panels = [*companion.overlays.values(), companion.ghost_page.panel, companion.session_panel]
             for panel in panels:
                 if not panel.windowFlags() & QtCore.Qt.FramelessWindowHint or panel.grab().isNull():
                     raise RuntimeError("A bundled pinned panel did not paint with themed chrome.")
                 if any(panel.findChild(QtWidgets.QToolButton, name) is None
                        for name in ("windowMinimize", "windowClose")):
                     raise RuntimeError("A bundled pinned panel is missing its window controls.")
-            from time import time
             from .team_roster import TeamRoster
             roster = TeamRoster()
             roster.update({"paired": True, "accountKey": "packaging-fixture", "liveGame": {
@@ -174,7 +182,7 @@ def _exercise_gui(report):
                           page_count=stack.count(), streams_painted=True, companion_painted=True,
                           checkin_previews_painted=True, dashboard_recent_painted=True,
                           window_chrome_painted=True, companion_layouts_painted=4, race_skins_painted=4,
-                          race_artwork_loaded=3, pinned_panels_painted=3, team_roster_painted=True)
+                          race_artwork_loaded=3, pinned_panels_painted=4, session_panel_painted=True, team_roster_painted=True)
         except Exception as error:
             callback["error"] = error
         finally:
@@ -195,6 +203,7 @@ def _exercise_gui(report):
         timer.stop()
         if ui._window is not None:
             ui._window._checkin_host.close()
+            ui._window._companion_page.session_panel.shutdown()
             for child_timer in ui._window.findChildren(QtCore.QTimer):
                 child_timer.stop()
             ui._window.hide()
