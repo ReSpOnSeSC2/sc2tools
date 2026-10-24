@@ -452,3 +452,22 @@ def test_changed_event_or_limit_updates_tiles_and_unchanged_density_never_reflow
     reflow.assert_called_once_with()
     widget.set_density("detailed")
     reflow.assert_called_once_with()
+
+
+def test_same_viewport_does_not_rebuild_layout_or_request_more_geometry(chain, monkeypatch):
+    widget, calls, app = chain
+    widget.set_events(events(40))
+    settle(app)
+    layout_add = Mock(wraps=widget.grid.addWidget)
+    adjust = Mock(wraps=widget.content.adjustSize)
+    monkeypatch.setattr(widget.grid, "addWidget", layout_add)
+    monkeypatch.setattr(widget.content, "adjustSize", adjust)
+    for _ in range(20):
+        widget._reflow()
+    assert layout_add.call_count == 0
+    assert adjust.call_count == 0
+    widget.resize(280, 180)
+    settle(app)
+    assert widget._columns == 3
+    assert layout_add.call_count > 0
+    assert widget.scroll.horizontalScrollBar().maximum() == 0

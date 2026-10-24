@@ -1627,6 +1627,8 @@ def _notify_replay_capture(tray, console, gui, message: str, log) -> None:
 
 
 def _remember_window_state(state_dir, state, geometry, page):
+    if state.window_geometry == geometry and state.window_page == page:
+        return
     state.window_geometry = geometry
     state.window_page = page
     save_state(state_dir, state)
@@ -1634,6 +1636,8 @@ def _remember_window_state(state_dir, state, geometry, page):
 
 def _remember_information_layout(state_dir, state, layout):
     if layout not in {"compact", "standard", "detailed", "full"}:
+        return
+    if state.window_information_layout == layout:
         return
     previous = state.window_information_layout
     state.window_information_layout = layout

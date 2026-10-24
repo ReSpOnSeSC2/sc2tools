@@ -1071,7 +1071,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                     "rosterSignature": roster.signature, "selectedEnemyKey": roster.selected_key,
                     "confirmed": True, "enemyKeys": list(roster.enemy_keys)}
 
-        def _refresh_team_roster(self):
+        def _refresh_team_roster(self, *, update=True):
             previous = self.team_roster_state.signature
             changed = self.team_roster_state.update(self._snapshot)
             if changed:
@@ -1090,7 +1090,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                     self._job(channel, {"action": "opponent", "pulseId": pulse_id,
                                        "teamGameKey": self.team_roster_state.candidate["gameKey"],
                                        "teamSignature": self.team_roster_state.signature})
-            self._team_selection_changed()
+            self._team_selection_changed(update=update)
 
         def _finish_team_history(self, response):
             payload = response["payload"]
@@ -1107,7 +1107,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._team_details[pulse_id] = response["result"]
             self._team_selection_changed()
 
-        def _team_selection_changed(self):
+        def _team_selection_changed(self, *, update=True):
             roster = self.team_roster_state
             if roster.ready:
                 pulse_id = roster.bindings.get(roster.selected_key)
@@ -1119,9 +1119,11 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                     self._detail = deepcopy(detail)
                     self._render_detail()
                 self.console.set_context(opponent_id=pulse_id, game_id=self.game_select.currentData())
-            self._render_information_layout()
-            if hasattr(self, "overlays"):
-                self._update_overlays()
+            if update:
+                if hasattr(self, "overlays"):
+                    self._update_overlays()
+                else:
+                    self._render_information_layout()
 
         def _select_team_enemy(self, key):
             if self.team_roster_state.select(key):
@@ -1877,8 +1879,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 if response.get("revision") == self._preferences_revision and not self._preference_busy:
                     self._apply_preferences(result.get("preferences") or {})
                 if response.get("modeRevision") == self._mode_revision and not self._mode_busy:
-                    self._apply_modes(result.get("modes", self._modes), saved=True)
-                self._refresh_team_roster()
+                    self._apply_modes(result.get("modes", self._modes), saved=True, update=False)
+                self._refresh_team_roster(update=False)
                 active, context = self.live_context()
                 if not paired:
                     self.live_label.setText("Pair your agent on Dashboard to open your scouting library.")
@@ -1892,7 +1894,6 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self._update_overlays()
                 self.randomizer_page.update_snapshot(result)
                 self.ghost_page.update_snapshot(result)
-                self._render_information_layout()
             elif channel == "directory":
                 self._directory_loaded = True
                 rows = result.get("items") or []
@@ -2227,7 +2228,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 checkbox.setEnabled(False)
             self._job("preferences", {"action": "preferences", "preferences": dict(self._preferences)})
 
-        def _apply_modes(self, modes, *, saved=False):
+        def _apply_modes(self, modes, *, saved=False, update=True):
             previous_hotkey = self._modes["hotkeyEnabled"]
             self._modes = normalize_modes(modes)
             self.mode_controls.set_state(self._modes)
@@ -2236,7 +2237,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             if not self._modes_loaded or previous_hotkey != self._modes["hotkeyEnabled"]:
                 self.hotkeyEnabledChanged.emit(self._modes["hotkeyEnabled"])
             self._modes_loaded = True
-            self._update_overlays()
+            if update:
+                self._update_overlays()
 
         def _modes_changed(self, modes):
             if self._closed or not callable(handler):

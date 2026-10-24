@@ -55,6 +55,7 @@ def build_build_chain(parent, *, QtCore, QtGui, QtWidgets, icon_provider):
             self._batch_limit = BATCH_SIZE
             self._density = "standard"
             self._columns = 0
+            self._layout_signature = None
             self._tile_width = 112
             self._tile_width_override = None
             self.setStyleSheet(f"""
@@ -179,6 +180,7 @@ def build_build_chain(parent, *, QtCore, QtGui, QtWidgets, icon_provider):
             self._render_events()
 
         def _render_events(self):
+            self._layout_signature = None
             normalized = self.events
             unknown_count = sum(event["timeSec"] is None for event in normalized)
             eligible = normalized if self._time_range is None else [event for event in normalized
@@ -254,6 +256,7 @@ def build_build_chain(parent, *, QtCore, QtGui, QtWidgets, icon_provider):
                 return
             self._density = density
             self._tile_width = self._preferred_tile_width()
+            self._layout_signature = None
             self._columns = 0
             self._reflow()
 
@@ -269,6 +272,7 @@ def build_build_chain(parent, *, QtCore, QtGui, QtWidgets, icon_provider):
                 return
             self._tile_width_override = width
             self._tile_width = self._preferred_tile_width()
+            self._layout_signature = None
             self._columns = 0
             self._reflow()
 
@@ -284,12 +288,16 @@ def build_build_chain(parent, *, QtCore, QtGui, QtWidgets, icon_provider):
             compact_columns = min(3, max(1, (available + 8) // (80 + 8)))
             columns = min(len(self.steps), max(preferred_columns, compact_columns))
             tile_width = min(self._tile_width, max(1, (available - 8 * (columns - 1)) // columns))
+            short_names = self._density == "standard" and self._tile_width <= 90
+            signature = (columns, tile_width, short_names, self.steps[0].name_label.font().key())
+            if signature == self._layout_signature:
+                return
+            self._layout_signature = signature
             while self.grid.count():
                 self.grid.takeAt(0)
             for index, widget in enumerate(self.steps):
                 row, column = divmod(index, columns)
                 widget.setFixedWidth(tile_width)
-                short_names = self._density == "standard" and self._tile_width <= 90
                 widget.name_label.setWordWrap(not short_names)
                 widget.name_label.setFixedHeight(18 if short_names else 34)
                 title = widget.name_label.full_title
@@ -305,7 +313,7 @@ def build_build_chain(parent, *, QtCore, QtGui, QtWidgets, icon_provider):
             self.updateGeometry()
 
         def eventFilter(self, watched, event):
-            if watched is self.scroll.viewport() and event.type() == QtCore.QEvent.Resize:
+            if watched is self.scroll.viewport() and event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.FontChange):
                 self._reflow_timer.start(0)
             return super().eventFilter(watched, event)
 

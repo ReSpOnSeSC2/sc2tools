@@ -2,6 +2,19 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.24.3
+
+### Fixed - Reduce work while games are loading and running
+- Apply each live snapshot to Companion panels once instead of refreshing the
+  same panels and replay views several times through mode and roster callbacks.
+- Pause expensive replay-folder discovery and inventory scans during matches
+  when Pause history imports in game is enabled. Keep resync requests queued
+  until the match ends; filesystem events still handle newly finished replays.
+- Reuse unchanged build-chain layouts instead of removing and reinserting their
+  widgets on repeated viewport events. Keep responsive rows and font changes.
+- Skip rewriting the local replay state for unchanged window geometry, page or
+  size settings, reducing disk work with large replay libraries.
+
 ## 0.24.2
 
 ### Fixed - Compact expansion and reopening

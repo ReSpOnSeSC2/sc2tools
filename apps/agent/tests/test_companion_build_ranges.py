@@ -172,3 +172,18 @@ def test_cache_and_failures_are_bounded_and_old_cached_entries_refetch_after_evi
         deliver(error="Connection unavailable")
         assert len(page._build_order_failures) <= 12
     assert ("one", "range-0") not in page._build_order_failures
+
+
+def test_one_live_snapshot_updates_overlays_and_library_once(companion, monkeypatch):
+    page, state, app = companion
+    wait_until(app, lambda: not page._requests)
+    from unittest.mock import Mock
+    overlays = Mock(wraps=page._update_overlays)
+    render = Mock(wraps=page._render_information_layout)
+    monkeypatch.setattr(page, "_update_overlays", overlays)
+    monkeypatch.setattr(page, "_render_information_layout", render)
+    page.refresh()
+    wait_until(app, lambda: "snapshot" not in page._requests)
+    assert overlays.call_count == 1
+    assert render.call_count == 1
+    assert page.overlays["opponent"].identity_card.identity["name"] == "Live opponent"

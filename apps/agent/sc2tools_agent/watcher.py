@@ -865,6 +865,12 @@ class ReplayWatcher:
             return
         with self._history_lock:
             self._history_pause_invalidated = False
+        # A match pauses expensive folder discovery and inventory walks too,
+        # rather than merely holding the parser after scanning the library.
+        # Preserve queued resync requests; live filesystem events still use
+        # their independent ingestion path and the next idle sweep catches up.
+        if self._background_held():
+            return
         # Startup, periodic, and user-requested sweeps share a single
         # expensive inventory refresh. Parsing remains concurrent.
         with self._sweep_lock:

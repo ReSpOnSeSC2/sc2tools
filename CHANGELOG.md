@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.24.3 - Reduce game-time background and UI work
+- Refresh Companion panels once per live snapshot, reuse unchanged icon-chain
+  layouts, and avoid rewriting state for unchanged window preferences.
+- Hold replay-library scans as well as history parsing during matches when the
+  in-game history pause is enabled, preserving queued resyncs and live file events.
+
 ### Agent 0.24.2 - Working Compact expansion
 - Make the race button expand the main Companion when scouting is unavailable;
   retain its live-game scouting toggle and protected game clicks.

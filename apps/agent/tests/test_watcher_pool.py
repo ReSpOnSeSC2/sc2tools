@@ -813,6 +813,26 @@ def test_cached_inventory_detects_replay_added_after_first_sweep(
     assert second in submitted
 
 
+def test_in_game_pause_defers_folder_scans_and_preserves_resync_until_idle(monkeypatch, watcher_factory):
+    from unittest.mock import Mock
+    monkeypatch.setenv("SC2TOOLS_PARSE_USE_PROCESSES", "0")
+    watcher = watcher_factory()
+    watcher._activity_gate = SimpleNamespace(busy=True)
+    watcher._test_upload._resync = True
+    discover = Mock(return_value=[])
+    signatures = Mock(return_value=())
+    monkeypatch.setattr(watcher, "_discover_roots", discover)
+    monkeypatch.setattr(watcher, "_root_inventory_signatures", signatures)
+    for _ in range(10):
+        watcher._sweep_once()
+    assert discover.call_count == signatures.call_count == 0
+    assert watcher._test_upload._resync is True
+    watcher._activity_gate.busy = False
+    watcher._sweep_once()
+    assert discover.call_count == 1
+    assert watcher._test_upload._resync is False
+
+
 def test_filter_change_during_inventory_walk_discards_stale_snapshot(
     monkeypatch, watcher_factory,
 ) -> None:
