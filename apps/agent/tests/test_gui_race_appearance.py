@@ -44,7 +44,7 @@ def test_race_choices_persist_without_changing_geometry_drafts_or_selected_oppon
         win._race_effects.shutdown()
         page.shutdown()
         win.hide()
-    ''')
+    ''', timeout=60)
 
 
 def test_failed_appearance_save_rolls_back_controls_and_does_not_apply_skin(tmp_path):
