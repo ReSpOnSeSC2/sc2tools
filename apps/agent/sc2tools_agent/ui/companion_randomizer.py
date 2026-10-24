@@ -1,4 +1,4 @@
-"""Silent pool settings and the overlay widget's persisted pick."""
+"""Silent pool settings and the shared persisted Randomizer pick."""
 
 from __future__ import annotations
 
@@ -107,7 +107,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             heading = label("RANDOMIZER SETTINGS")
             heading.setObjectName("companionHeading")
             layout.addWidget(heading)
-            layout.addWidget(label("Edit the overlay widget's build pool here. Draws, animation, sounds and spoken announcements stay in the widget; build check-in shows its saved pick."))
+            layout.addWidget(label("Edit the shared build pool here. Use Randomize in build check-in to select a build, even without an open widget. Animation, sounds and speech stay in the separate widget."))
             row = build_flow_layout(QtCore=QtCore, QtWidgets=QtWidgets)
             self.matchup_select = QtWidgets.QComboBox()
             self.matchup_select.addItems(MATCHUPS)
@@ -347,7 +347,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             if not self.pool.topLevelItemCount():
                 self.status.setText("No eligible builds for this matchup. Refresh after adding a build to your account.")
             elif not self._context:
-                self.status.setText("Choose your pool and enable this matchup. The overlay widget draws; build check-in displays its pick.")
+                self.status.setText("Choose your pool and enable this matchup. Use Randomize in build check-in; the overlay widget handles animation and audio.")
 
         def _pool_changed(self, _item, _column):
             if not self._rendering and self._loaded and self._snapshot.get("paired") is True:
@@ -380,7 +380,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             elif self._intent.get("declared"):
                 self.result_label.setText("Declared build · " + str(self._intent["declared"].get("name") or "Your chosen build"))
             elif self._intent.get("randomizer"):
-                self.result_label.setText("Widget pick · " + str(self._intent["randomizer"].get("name") or "Saved build"))
+                self.result_label.setText("Saved pick · " + str(self._intent["randomizer"].get("name") or "Saved build"))
             else:
                 self.result_label.setText("No build has been drawn for the current game.")
             if self._status_error or self._busy:
@@ -391,10 +391,10 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 if self._intent.get("declared"):
                     self.status.setText("Your declared plan takes priority. No random draw replaces it.")
                 elif self._intent.get("randomizer"):
-                    self.status.setText("Read-only widget result. The Companion does not draw, animate or announce it.")
+                    self.status.setText("Read-only saved result. Animation, sounds and speech stay in the overlay widget.")
                 elif self._loaded and self._context and self._matchup_config(self._context[1]).get("enabled") is not True:
                     self.status.setText("The randomizer is off for this matchup. Your saved pool is kept.")
                 elif self._loaded:
-                    self.status.setText("Waiting for the overlay widget's draw. Its saved pick appears in build check-in; no native randomizer runs.")
+                    self.status.setText("Use Randomize in build check-in to select a build. The overlay widget is optional for animation and audio.")
 
     return CompanionRandomizer()

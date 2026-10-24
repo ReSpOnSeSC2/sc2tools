@@ -621,7 +621,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             controls = QtWidgets.QVBoxLayout()
             self.preference_checks = {}
             assistance_tooltips = {
-                "overlaysEnabled": "Master switch for native pinned panels, spoken scouting, build selectors and Ghost. Off hides or stops native assistance; replay syncing and browsing continue. Randomizer draws, animation and audio stay in the separate overlay widget, controlled by its own settings.",
+                "overlaysEnabled": "Master switch for native pinned panels, spoken scouting, build selectors and Ghost. Off hides or stops native assistance; replay syncing and browsing continue. Randomize selects a shared build from check-in. Its animation and audio stay in the separate overlay widget, controlled by its own settings.",
                 "opponentOverlay": "Keep the current opponent card above other windows during a game, even when the main window is minimized. Requires In-game assistance and a mode that allows the opponent panel.",
                 "scoutingOverlay": "Keep previous encounters, build-vs-build and recorded replay timings above other windows during a game. Historical scouting only—not live enemy tracking. Requires In-game assistance and an allowed mode.",
             }

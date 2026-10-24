@@ -102,7 +102,7 @@ def test_only_observes_the_widget_pick_and_cannot_draw_or_redraw(panel):
         wait_until(app, lambda: not widget._busy)
     widget._request("roll", {"action": "randomizer_roll"})
     assert not [call for call in state["calls"] if call["action"] == "randomizer_roll"]
-    assert "Read-only widget result" in widget.status.text()
+    assert "Read-only saved result" in widget.status.text()
 
 
 def test_busy_read_and_unchanged_master_never_launch_a_native_draw(panel):
