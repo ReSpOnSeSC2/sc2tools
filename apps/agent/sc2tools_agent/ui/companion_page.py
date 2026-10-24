@@ -513,6 +513,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._modes_queued = False
             self._paired = False
             self._directory_loaded = False
+            self._library_last_refresh = 0.0
             self._opponents = []
             self._cursor = None
             self._selected_id = None
@@ -1562,7 +1563,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._update_overlays()
 
         def scouting_buttons(self):
-            return [self.compact_card.scouting_button, self.overlays["opponent"].identity_card.scouting_button]
+            opponent = self.overlays["opponent"]
+            if opponent.isVisible() and not opponent.isMinimized():
+                return [opponent.identity_card.scouting_button]
+            return [self.compact_card.scouting_button]
 
         def _step_opponent(self, step):
             if self.team_roster_state.ready:
@@ -1737,8 +1741,22 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.randomizer_page.refresh()
             self.ghost_page.refresh()
             if self._paired and "directory" not in self._requests:
+                self._library_last_refresh = time.monotonic()
                 self._job("directory", {"action": "opponents"})
             if self._paired and self._selected_id and "opponent" not in self._requests:
+                self._job("opponent", {"action": "opponent", "pulseId": self._selected_id})
+
+        def _refresh_idle_library(self):
+            envelope = self._snapshot.get("liveGame")
+            phase = envelope.get("phase") if isinstance(envelope, dict) else None
+            if (not self._paired or not self.isVisible() or self._density == "compact"
+                    or phase in {"match_loading", "match_started", "match_in_progress"}
+                    or "directory" in self._requests
+                    or time.monotonic() - self._library_last_refresh < 30):
+                return
+            self._library_last_refresh = time.monotonic()
+            self._job("directory", {"action": "opponents", "autoRefresh": True})
+            if self._selected_id and "opponent" not in self._requests:
                 self._job("opponent", {"action": "opponent", "pulseId": self._selected_id})
 
         def load_more(self):
@@ -1890,21 +1908,29 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 else:
                     self.live_label.setText("Ready for your next match · browse your replay history below")
                 if paired and not self._directory_loaded and "directory" not in self._requests:
+                    self._library_last_refresh = time.monotonic()
                     self._job("directory", {"action": "opponents"})
+                elif paired and self._directory_loaded:
+                    self._refresh_idle_library()
                 self._update_overlays()
                 self.randomizer_page.update_snapshot(result)
                 self.ghost_page.update_snapshot(result)
             elif channel == "directory":
                 self._directory_loaded = True
+                self._library_last_refresh = time.monotonic()
                 rows = result.get("items") or []
                 if payload.get("before"):
                     known = {str(row.get("pulseId")) for row in self._opponents}
                     self._opponents.extend(row for row in rows if str(row.get("pulseId")) not in known)
+                elif payload.get("autoRefresh"):
+                    known = {str(row.get("pulseId")) for row in rows}
+                    self._opponents = rows + [row for row in self._opponents if str(row.get("pulseId")) not in known]
                 else:
                     self._opponents = rows
-                self._cursor = result.get("nextCursor") or result.get("nextBefore")
+                if not payload.get("autoRefresh"):
+                    self._cursor = result.get("nextCursor") or result.get("nextBefore")
                 self.load_more_button.setEnabled(bool(self._cursor))
-                self._filter_opponents()
+                self._filter_opponents(preserve_scroll=bool(payload.get("autoRefresh")))
                 self._refresh_team_roster()
                 self.notice.setText(f"{len(self._opponents)} opponents loaded · search filters this library" if rows or self._opponents else "No opponents yet. Import replays with this agent to build your scouting library.")
             elif channel == "opponent":
@@ -1964,6 +1990,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._build_order_cache.clear()
             self._build_order_failures.clear()
             self._directory_loaded = False
+            self._library_last_refresh = 0.0
             self._opponents = []
             self._selected_id = None
             self._detail = {}
@@ -1972,8 +1999,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.opponent_list.clear()
             self._render_detail()
 
-        def _filter_opponents(self):
+        def _filter_opponents(self, *, preserve_scroll=False):
             query = self.search.text().casefold().strip()
+            scroll = self.opponent_list.verticalScrollBar().value()
             blocked = QtCore.QSignalBlocker(self.opponent_list)
             self.opponent_list.clear()
             selected = None
@@ -1994,6 +2022,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.library_count.setText(f"{visible} of {len(self._opponents)} shown" if visible else "No opponents match this search" if self._opponents else "No opponents loaded")
             if self._selected_id is None and self.opponent_list.count():
                 self.opponent_list.setCurrentRow(0)
+            if preserve_scroll:
+                self.opponent_list.verticalScrollBar().setValue(scroll)
 
         def _opponent_selected(self, item, previous=None):
             if item is None:

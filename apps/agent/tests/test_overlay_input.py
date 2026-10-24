@@ -381,10 +381,14 @@ def test_all_native_pins_and_only_main_compact_follow_foreground_without_focus_o
         window._set_window_size("Compact")
         app.processEvents()
         controller.refresh()
-        assert int(window.winId()) in native.locked and len(native.locked) == 5
+        assert not window.isVisible()
+        assert int(window.winId()) not in native.locked and len(native.locked) == 4
         assert window.size().toTuple() == (420, 44)
         panels[0].showMinimized()
+        window.showNormal()
         app.processEvents()
+        controller.refresh()
+        assert window.isVisible() and int(window.winId()) in native.locked
         minimized = panels[0].windowState()
         foreground[0] = False
         controller.refresh()
@@ -424,6 +428,95 @@ def test_all_native_pins_and_only_main_compact_follow_foreground_without_focus_o
         window._race_effects.shutdown()
         window.hide()
     ''')
+
+
+def test_collapsing_companion_keeps_one_pinned_identity_and_one_live_control(tmp_path):
+    run_gui_check(tmp_path, '''
+        from sc2tools_agent.ui.overlay_input import install_overlay_input
+        from shiboken6 import isValid
+        class Native:
+            def set_click_through(self, hwnd, locked): return True
+            def restore_all(self): pass
+        ui, window = make_window(window_page="companion")
+        page = window._companion_page
+        page.timer.stop()
+        page.ghost_page.timer.stop()
+        page.set_active = lambda active: None
+        window._overlay_input.shutdown()
+        window._overlay_input = controller = install_overlay_input(
+            window, panels_provider=lambda: list(page.overlays.values()),
+            compact_provider=window._compact_window_active, QtCore=QtCore, QtWidgets=QtWidgets,
+            scouting_buttons_provider=page.scouting_buttons, native=Native(), foreground_provider=lambda: True)
+        controller.timer.stop()
+        page.inputTargetsChanged.connect(controller.refresh)
+        page._paired = page._snapshot_healthy = True
+        page._preferences.update(overlaysEnabled=True, opponentOverlay=False, scoutingOverlay=False)
+        context = {"name": "Nightshade", "race": "Zerg", "mmr": 5100,
+                   "headToHead": {"wins": 1, "losses": 0}}
+        page.live_context = lambda: (True, context)
+        page._scouting_toggle_allowed = lambda: True
+        window.show()
+        window._set_window_size("Compact")
+        page._update_overlays()
+        app.processEvents()
+        controller.refresh()
+        opponent = page.overlays["opponent"]
+        first = controller._scouting_controls[page.compact_card.scouting_button]
+        assert window.isVisible() and first.isVisible() and not opponent.isVisible()
+        try:
+            page._preferences["opponentOverlay"] = True
+            page._update_overlays()
+            app.processEvents()
+            controller.refresh()
+            assert not window.isVisible() and opponent.isVisible()
+            assert not isValid(first) or not first.isVisible()
+            control = controller._scouting_controls[opponent.identity_card.scouting_button]
+            assert control.isVisible()
+            assert len([widget for widget in controller._scouting_controls.values() if widget.isVisible()]) == 1
+            opponent.move(80, 45)
+            app.processEvents()
+            position = opponent.pos()
+            control.click()
+            assert page.overlays["scouting"].isVisible()
+            control.click()
+            assert not page.overlays["scouting"].isVisible()
+            for _ in range(3):
+                window._on_show_requested()
+                app.processEvents()
+                assert window.isVisible() and page.current_density() == "standard"
+                assert not page.compact_card.isVisible() and opponent.isVisible()
+                assert window._set_window_size("Compact")
+                app.processEvents()
+                assert not window.isVisible() and opponent.isVisible()
+                assert opponent.pos() == position
+                assert len([widget for widget in controller._scouting_controls.values() if widget.isVisible()]) == 1
+                assert len([widget for widget in app.topLevelWidgets()
+                            if widget.objectName() == "opponentCardScout" and widget.isVisible()]) == 1
+            # Re-showing saved Compact cannot recreate the duplicate. Explicit
+            # tray/shortcut open above still opens the normal Standard workspace.
+            window.showNormal()
+            app.processEvents()
+            assert not window.isVisible() and opponent.isVisible()
+            page._preferences["opponentOverlay"] = False
+            page._update_overlays()
+            window.showNormal()
+            app.processEvents()
+            controller.refresh()
+            assert window.isVisible() and page.compact_card.isVisible()
+            assert not opponent.isVisible()
+            active = list(controller._scouting_controls.values())
+            assert len(active) == 1 and active[0].isVisible()
+            window.hide()
+            assert not active[0].isVisible()
+            # An old input proxy must not activate a now-hidden source.
+            active[0].click()
+            assert not page.overlays["scouting"].isVisible()
+        finally:
+            controller.shutdown()
+            page.shutdown()
+            window._race_effects.shutdown()
+            window.hide()
+    ''', timeout=60)
 
 
 def test_main_gui_wires_all_pin_kinds_and_shuts_down_native_controller_without_changing_close_policy(tmp_path):

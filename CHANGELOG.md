@@ -11,6 +11,14 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.24.4 - One Compact opponent display
+- Fold Compact into the visible pinned opponent HUD, preserving its position and
+  one scouting control; reopen the main Agent in Standard.
+- Remove obsolete scouting input controls and hide them with their source window
+  so collapsing does not leave an extra icon on the desktop or over a game.
+- Refresh the visible Companion library between games so new uploads appear
+  automatically, preserving browsing context and avoiding extra match-time requests.
+
 ### Agent 0.24.3 - Reduce game-time background and UI work
 - Refresh Companion panels once per live snapshot, reuse unchanged icon-chain
   layouts, and avoid rewriting state for unchanged window preferences.

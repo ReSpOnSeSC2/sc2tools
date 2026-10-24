@@ -171,7 +171,8 @@ def build_scouting_control(source, *, QtCore, QtWidgets):
             self._signature = None
 
         def _activate_source(self, _checked=False):
-            if source.property("compactAction") in {"expand", "unavailable"}:
+            if (not source.isVisible() or not source.isEnabled() or source.window().isMinimized()
+                    or source.property("compactAction") in {"expand", "unavailable"}):
                 self.setChecked(source.isChecked())
                 return
             source.click()
@@ -277,7 +278,9 @@ def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, 
                     control.hide()
             for source in tuple(self._scouting_controls):
                 if source not in sources:
-                    self._scouting_controls.pop(source).close()
+                    control = self._scouting_controls.pop(source)
+                    control.close()
+                    control.deleteLater()
 
         def shutdown(self):
             if not self._closed:

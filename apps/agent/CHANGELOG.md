@@ -2,6 +2,18 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.24.4
+
+### Fixed - One Compact opponent display
+- Fold the main Compact window into the visible pinned opponent HUD, preserving
+  its position and leaving one race-themed scouting control. Explicitly opening
+  the Agent still restores Standard; Compact remains available without a visible pin.
+- Remove obsolete scouting input controls when switching surfaces and hide them
+  immediately with the main window, preventing stray clickable icons after collapse.
+- Refresh the visible opponent library and selected history about every 30 seconds
+  between matches so uploaded games appear without manual refresh. Preserve loaded
+  pages, replay selection and notes drafts; skip automatic library refresh in matches.
+
 ## 0.24.3
 
 ### Fixed - Reduce work while games are loading and running

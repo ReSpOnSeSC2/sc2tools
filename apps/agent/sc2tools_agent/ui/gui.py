@@ -1172,6 +1172,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 compact_provider=self._compact_window_active, QtCore=QtCore, QtWidgets=QtWidgets,
                 scouting_buttons_provider=self._companion_page.scouting_buttons,
             )
+            self._companion_page.inputTargetsChanged.connect(self._coalesce_compact_opponent)
             self._companion_page.inputTargetsChanged.connect(self._overlay_input.refresh)
             QtWidgets.QApplication.instance().aboutToQuit.connect(self._overlay_input.shutdown)
             self._companion_page.set_appearance(ui._window_skin, ui._window_animations)
@@ -3262,6 +3263,26 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 if effects is not None and self.isMaximized() and not event.oldState() & QtCore.Qt.WindowMaximized:
                     effects.play_expand()
 
+        def showEvent(self, event):
+            super().showEvent(event)
+            QtCore.QTimer.singleShot(0, self._coalesce_compact_opponent)
+
+        def hideEvent(self, event):
+            super().hideEvent(event)
+            controller = getattr(self, "_overlay_input", None)
+            if controller is not None:
+                controller.refresh()
+
+        def _coalesce_compact_opponent(self):
+            page = getattr(self, "_companion_page", None)
+            if page is None or not self._compact_window_active() or not self.isVisible():
+                return
+            opponent = page.overlays["opponent"]
+            if opponent.isVisible() and not opponent.isMinimized():
+                # The pinned HUD already owns the compact identity and scouting
+                # control. Keep its saved position; explicit reopen uses Standard.
+                self.hide()
+
         def _window_size_screen(self):
             return self.screen() or QtWidgets.QApplication.primaryScreen()
 
@@ -3379,6 +3400,7 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
                 self.setMinimumSize(min(minimum[0], max(1, available.width() - frame[0])), min(minimum[1], max(1, available.height() - frame[1])))
             else:
                 self.setMinimumSize(*minimum)
+            self._coalesce_compact_opponent()
             if hasattr(self, "_overlay_input"):
                 self._overlay_input.refresh()
 

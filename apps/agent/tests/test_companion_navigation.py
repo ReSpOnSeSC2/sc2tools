@@ -158,6 +158,62 @@ def test_routes_and_density_keep_notes_drafts_selected_game_and_feature_preferen
     _assert_replay(page, "one-second", "Stargate expand", "Stargate")
 
 
+def test_idle_library_refresh_adds_recent_opponents_and_games_without_resetting_browsing(navigation, monkeypatch):
+    from unittest.mock import Mock
+    page, state, app = navigation
+    wait_until(app, lambda: not page._requests)
+    page.console.next_game.click()
+    page.notes.setPlainText("Keep this unsaved note")
+    selected = page._selected_id
+    page._opponents.append({"pulseId": "older-page", "displayName": "Loaded earlier", "race": "Zerg"})
+    page._cursor = "older-page-cursor"
+    state["items"].insert(0, {"pulseId": "new-zerg", "displayName": "New opponent", "race": "Zerg"})
+    state["details"]["one"]["last5GamesScouting"].insert(0, game("newest-game"))
+    for name in ("build_selectors", "randomizer_page", "ghost_page"):
+        monkeypatch.setattr(getattr(page, name), "refresh", Mock())
+    state["snapshot"]["liveGame"] = {"phase": "menu"}
+    page._library_last_refresh = time.monotonic() - 31
+    calls_before = len(state["calls"])
+    page.refresh()
+    wait_until(app, lambda: page._games and page._games[0]["gameId"] == "newest-game"
+               and not page._requests)
+    assert page.opponent_list.item(0).data(QtCore.Qt.UserRole) == "new-zerg"
+    assert page._opponents[-1]["pulseId"] == "older-page"
+    assert page._cursor == "older-page-cursor"
+    assert page._selected_id == selected
+    assert page.game_select.currentData() == "one-second"
+    assert page.notes.toPlainText() == "Keep this unsaved note"
+    assert page.console.current_route() == "scouting"
+    directory_calls = [call for call in state["calls"][calls_before:] if call["action"] == "opponents"]
+    assert len(directory_calls) == 1 and directory_calls[0]["autoRefresh"] is True
+    page.refresh()
+    wait_until(app, lambda: not page._requests)
+    assert len([call for call in state["calls"][calls_before:] if call["action"] == "opponents"]) == 1
+    for name in ("build_selectors", "randomizer_page", "ghost_page"):
+        getattr(page, name).refresh.assert_not_called()
+
+
+@pytest.mark.parametrize("blocked", ["match_loading", "match_started", "match_in_progress", "hidden", "compact", "unpaired", "pending"])
+def test_automatic_library_refresh_does_no_work_during_matches_or_when_not_browsing(navigation, monkeypatch, blocked):
+    from unittest.mock import Mock
+    page, state, app = navigation
+    wait_until(app, lambda: not page._requests)
+    page._snapshot["liveGame"] = {"phase": blocked if blocked.startswith("match_") else "menu"}
+    if blocked == "hidden":
+        page.hide()
+    elif blocked == "compact":
+        page.set_density("compact")
+    elif blocked == "unpaired":
+        page._paired = False
+    elif blocked == "pending":
+        page._requests["directory"] = 999
+    page._library_last_refresh = 0
+    dispatch = Mock()
+    monkeypatch.setattr(page, "_job", dispatch)
+    page._refresh_idle_library()
+    dispatch.assert_not_called()
+
+
 def test_history_destination_opens_exact_game_and_back_retains_history_context(navigation):
     page, state, app = navigation
     page.console.navigate("history")
