@@ -244,6 +244,11 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             super().__init__(None, flags)
             self.owner = owner
             self.kind = kind
+            self._context = {}
+            self._scope = None
+            self._source_id = None
+            self._key = None
+            self._games = []
             self.setObjectName("companionPanel")
             self.setWindowTitle("SC2TOOLS · " + kind.title())
             self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
@@ -262,6 +267,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 layout.setContentsMargins(0, 0, 0, 0)
                 self.identity_card = build_opponent_card(self, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, icon_root=icon_root)
                 self.identity_card.enlargeRequested.connect(owner._enlarge_from_panel)
+                self.identity_card.scoutingRequested.connect(owner._toggle_scouting_panel)
                 if hasattr(self.identity_card, "minimizeRequested"):
                     self.identity_card.minimizeRequested.connect(self.showMinimized)
                 if hasattr(self.identity_card, "closeRequested"):
@@ -299,11 +305,43 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.games = QtWidgets.QComboBox()
                 self.games.currentIndexChanged.connect(self._game_changed)
                 body_layout.addWidget(self.games)
-                self.builds = label("", "Accent")
-                body_layout.addWidget(self.builds)
-                self.tree = timeline(minimum_height=96)
-                self.tree.setHeaderLabels(["HISTORICAL TECH STEP", "TIME", "EVENT"])
-                body_layout.addWidget(self.tree, 1)
+                from .qt_helpers import build_flow_layout
+                controls = QtWidgets.QWidget()
+                actions = build_flow_layout(controls, QtCore=QtCore, QtWidgets=QtWidgets)
+                actions.addWidget(label("Range", "Muted"))
+                self.build_time_range = QtWidgets.QComboBox()
+                self.build_time_range.setAccessibleName("Scouting panel build order time range")
+                for title, seconds in TIME_RANGES:
+                    self.build_time_range.addItem(title, seconds)
+                self.build_time_range.currentIndexChanged.connect(self._range_changed)
+                actions.addWidget(self.build_time_range)
+                self.options_button = QtWidgets.QToolButton()
+                self.options_button.setText("Options")
+                self.options_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+                options = QtWidgets.QMenu(self.options_button)
+                self.include_workers_supply = QtWidgets.QCheckBox("Include workers and supply")
+                option = QtWidgets.QWidgetAction(options)
+                option.setDefaultWidget(self.include_workers_supply)
+                options.addAction(option)
+                self.options_button.setMenu(options)
+                self.include_workers_supply.toggled.connect(self._range_changed)
+                actions.addWidget(self.options_button)
+                self.retry = QtWidgets.QPushButton("Retry")
+                self.retry.clicked.connect(lambda: owner._retry_build_order(self._key))
+                self.retry.hide()
+                actions.addWidget(self.retry)
+                body_layout.addWidget(controls)
+                self.source_status = SourceStatus()
+                body_layout.addWidget(self.source_status)
+                self.comparison_title = label("BUILD VS BUILD", "Heading")
+                body_layout.addWidget(self.comparison_title)
+                from .companion_scouting import build_scouting_comparison
+                self.comparison = build_scouting_comparison(body, QtCore=QtCore, QtGui=QtGui,
+                                                            QtWidgets=QtWidgets, icon_provider=icon)
+                self.comparison.ghostRequested.connect(self._save_reference)
+                body_layout.addWidget(self.comparison, 1)
+                self.observation_note = label("Replay observations · Started and Completed keep their original meaning.", "Muted")
+                body_layout.addWidget(self.observation_note)
                 self.scouting_scroll.setWidget(body)
                 layout.addWidget(self.scouting_scroll, 1)
                 from .qt_helpers import guard_value_widgets
@@ -323,7 +361,6 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 QtCore=QtCore, QtWidgets=QtWidgets, can_maximize=lambda: False,
             )
             self._signature = None
-            self._games = []
 
         def set_appearance(self, skin, animations):
             from .race_visuals import css_for_skin, normalize_skin
@@ -343,10 +380,13 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
 
         def closeEvent(self, event):
             if not self.owner._closed:
+                if self.kind == "scouting":
+                    self.owner._manual_scouting_open = False
+                    self.owner._manual_scouting_dismissed = True
                 self.owner.set_preference(self.kind + "Overlay", False)
             event.accept()
 
-        def update_context(self, context):
+        def update_context(self, context, *, scope=None):
             self.title.setText(_name(context) if context else "Preview · choose an opponent")
             record = context.get("headToHead") or context.get("totals") or context
             parts = [str(value) for value in [context.get("race") or context.get("oppRace"), context.get("league"), context.get("region")] if value]
@@ -361,10 +401,15 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                                                 mmr=context.get("mmr", context.get("oppMmr")),
                                                 wins=record.get("wins"), losses=record.get("losses"))
                 return
+            self._context = context
+            scope = scope if scope is not None else (context.get("pulseId"), _name(context))
+            changed = scope != self._scope
+            self._scope = scope
+            self._source_id = str(context.get("pulseId") or ("live:" + repr(scope)))
             self.detail.setText("Previous games against this opponent · replay timings")
             games = context.get("last5GamesScouting") or []
-            if games != self._games:
-                selected = self.games.currentData()
+            if changed or games != self._games:
+                selected = None if changed else self.games.currentData()
                 self._games = games
                 blocked = QtCore.QSignalBlocker(self.games)
                 self.games.clear()
@@ -375,20 +420,59 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                     self.games.setCurrentIndex(match)
                 del blocked
                 self._game_changed()
-            if not games:
-                self.builds.setText("No previous replay scouting available")
-                fill_timeline(self.tree, [])
+            self.render_build_data()
 
         def _game_changed(self):
             index = self.games.currentIndex()
-            if index < 0 or index >= len(self._games):
+            game = self._games[index] if 0 <= index < len(self._games) else {}
+            self._key = (self._source_id, str(game["gameId"])) if game.get("gameId") else None
+            self.render_build_data()
+            self.owner._ensure_build_order()
+
+        def _range_changed(self, *_args):
+            horizon = self.build_time_range.currentData()
+            self.owner.build_time_range.setCurrentIndex(self.owner.build_time_range.findData(horizon))
+            self.owner.include_workers_supply.setChecked(self.include_workers_supply.isChecked())
+            self.render_build_data()
+
+        def sync_options(self, horizon, include_supply):
+            blocked_range = QtCore.QSignalBlocker(self.build_time_range)
+            blocked_supply = QtCore.QSignalBlocker(self.include_workers_supply)
+            self.build_time_range.setCurrentIndex(self.build_time_range.findData(horizon))
+            self.include_workers_supply.setChecked(include_supply)
+            del blocked_range, blocked_supply
+            self.render_build_data()
+
+        def _save_reference(self, side):
+            if self._key:
+                self.owner._save_ghost_reference_for(self._key[1], side)
+
+        def render_build_data(self):
+            if self.kind != "scouting":
                 return
-            game = self._games[index]
-            self.builds.setText(_builds(game))
-            events = [{**event, "iconName": event["name"], "name": ("YOU · " if side == "my" else "OPP · ") + event["name"]}
-                      for side in ("my", "opp") for event in _events(game, side)]
-            events.sort(key=lambda event: event["timeSec"] if _time(event["timeSec"]) != "—" else float("inf"))
-            fill_timeline(self.tree, events)
+            index = self.games.currentIndex()
+            game = self._games[index] if 0 <= index < len(self._games) else {}
+            stored = self.owner._build_order_cache.get(self._key)
+            self.comparison_title.setText("BUILD VS BUILD · " + str(game.get("map") or "Previous encounter") if game else "No previous replay scouting available")
+            for side, field in (("my", "myBuild"), ("opp", "oppStrategy")):
+                source = stored[side] if stored is not None else _events(game, side)
+                source = _filter_build_events(source, include_workers_supply=self.include_workers_supply.isChecked())
+                name = game.get(field) or (game.get("oppBuild") if side == "opp" else None)
+                self.comparison.set_side(side, name, source, self.build_time_range.currentData())
+            failed = self._key in self.owner._build_order_failures
+            self.retry.setVisible(bool(self._key and failed))
+            self.retry.setEnabled(self.owner._build_order_inflight is None)
+            if not game:
+                status = "No earlier encounter is available for this opponent."
+            elif stored is None:
+                status = "Scouting preview · stored replay load failed. Retry to load all steps." if failed else "Scouting preview · loading stored replay events. Later and repeated steps may be omitted."
+            else:
+                status = "Stored replay events · You: " + str(len(stored["my"])) + " · Opponent: " + str(len(stored["opp"])) + ". Older uploads may be incomplete."
+            self.source_status.setText(status)
+            for side, button in self.comparison.chain_reference_buttons.items():
+                selected = bool(self._key and self.owner._is_ghost_reference_for(self._key[1], side))
+                self.comparison.set_reference(side, selected=selected,
+                    enabled=bool(self._key and self.owner._paired and "ghost_reference" not in self.owner._requests))
 
     def _game_title(game, index):
         return f"{index + 1}. {str(game.get('result') or 'Game').upper()} · {_time(game.get('durationSec'))} · {game.get('map') or 'Unknown map'} · {str(game.get('date') or '')[:10]}"
@@ -405,6 +489,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
         appearanceChanged = QtCore.Signal(str, bool)
         windowSizeRequested = QtCore.Signal(str)
         agentPageRequested = QtCore.Signal(str)
+        inputTargetsChanged = QtCore.Signal()
 
         def __init__(self):
             super().__init__(parent)
@@ -442,6 +527,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._build_order_failures = OrderedDict()
             self._build_order_inflight = None
             self._panel_restore_requests = set()
+            self._manual_scouting_open = False
+            self._manual_scouting_dismissed = False
+            self._scouting_game_scope = None
             self._ghost_references = {}
             self._density = "full"
             self._appearance_skin = "default"
@@ -826,6 +914,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.compact_mmr = self.compact_card.mmr_label
             self.compact_enlarge = self.compact_card.enlarge_button
             self.compact_card.enlargeRequested.connect(lambda: self.windowSizeRequested.emit("standard"))
+            self.compact_card.scoutingRequested.connect(self._toggle_scouting_panel)
             layout.addWidget(self.compact_card, 1)
 
             self.overview = QtWidgets.QScrollArea()
@@ -855,50 +944,16 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             open_details.clicked.connect(self.open_full_details)
             overview_layout.addWidget(open_details)
             self.overview.setWidget(overview_body)
-            from .companion_build_chain import build_build_chain
+            from .companion_scouting import build_scouting_comparison
             self.overview_dossier_title = label("SELECTED GAME · BUILD VS BUILD", "Heading")
             overview_layout.insertWidget(0, self.overview_dossier_title)
-            self.build_chains = {}
-            self.upgrade_chains = {}
-            self.upgrade_headings = {}
-            self.chain_labels = {}
-            self.chain_headings = {}
-            self.chain_reference_buttons = {}
-            self.chain_cards = []
-            chain_cards_body = QtWidgets.QWidget()
-            self.chain_cards_layout = QtWidgets.QGridLayout(chain_cards_body)
-            self.chain_cards_layout.setContentsMargins(0, 0, 0, 0)
-            self.chain_cards_layout.setSpacing(10)
-            overview_layout.insertWidget(1, chain_cards_body, 1)
-            for position, (side, title) in enumerate((("my", "YOUR BUILD ORDER"), ("opp", "OPPONENT BUILD ORDER"))):
-                card = QtWidgets.QFrame()
-                card.setObjectName("companionCard")
-                card_layout = QtWidgets.QVBoxLayout(card)
-                card_layout.setContentsMargins(12, 12, 12, 12)
-                card_layout.setSpacing(8)
-                heading = label(title, "Accent")
-                self.chain_headings[side] = heading
-                card_layout.addWidget(heading)
-                build_name = label("Unclassified build", "Heading")
-                card_layout.addWidget(build_name)
-                chain = build_build_chain(card, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, icon_provider=icon)
-                card_layout.addWidget(chain, 1)
-                upgrade_heading = label("UPGRADES · OBSERVED TIMINGS", "Accent")
-                upgrade_chain = build_build_chain(card, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, icon_provider=icon)
-                card_layout.addWidget(upgrade_heading)
-                upgrade_chain.setMaximumHeight(180)
-                card_layout.addWidget(upgrade_chain)
-                self.upgrade_headings[side] = upgrade_heading
-                self.upgrade_chains[side] = upgrade_chain
-                star = QtWidgets.QPushButton("☆ Use this build as Ghost")
-                chosen_side = "you" if side == "my" else "opponent"
-                star.clicked.connect(lambda _checked=False, selected_side=chosen_side: self._save_ghost_reference(selected_side))
-                card_layout.addWidget(star)
-                self.build_chains[side] = chain
-                self.chain_labels[side] = build_name
-                self.chain_reference_buttons[chosen_side] = star
-                self.chain_cards.append(card)
-                self.chain_cards_layout.addWidget(card, position, 0)
+            self.scouting_comparison = build_scouting_comparison(
+                overview_body, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets, icon_provider=icon)
+            for name in ("build_chains", "upgrade_chains", "upgrade_headings", "chain_labels", "chain_headings",
+                         "chain_reference_buttons", "chain_cards", "chain_cards_layout"):
+                setattr(self, name, getattr(self.scouting_comparison, name))
+            self.scouting_comparison.ghostRequested.connect(self._save_ghost_reference)
+            overview_layout.insertWidget(1, self.scouting_comparison, 1)
             self.chain_observation_note = label("Replay observations · Started and Completed keep their original meaning.", "Muted")
             overview_layout.insertWidget(2, self.chain_observation_note)
             self.scouting_stack.addWidget(self.overview)
@@ -1216,23 +1271,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.scouting_stack.setCurrentWidget(self.dossier if level == "full" else self.overview)
             self.overview_dossier_title.setVisible(level != "standard")
             self.chain_observation_note.setVisible(level != "standard")
-            for index, card in enumerate(self.chain_cards):
-                self.chain_cards_layout.addWidget(card, 0, index)
-                self.chain_cards_layout.setColumnStretch(index, 1)
-                card.layout().setContentsMargins(*(8, 8, 8, 8) if level == "standard" else (12, 12, 12, 12))
-                card.layout().setSpacing(4 if level == "standard" else 8)
-            for side in self.upgrade_chains:
-                self.upgrade_chains[side].setVisible(level == "detailed")
-                self.upgrade_headings[side].setVisible(level == "detailed")
-                self.chain_headings[side].setText(("YOU" if side == "my" else "OPPONENT") if level == "standard" else ("YOUR BUILD ORDER" if side == "my" else "OPPONENT BUILD ORDER"))
-                self.chain_labels[side].setWordWrap(level != "standard")
-                self.chain_labels[side].setMaximumHeight(20 if level == "standard" else 16777215)
-                self.chain_labels[side].setMinimumWidth(0)
-                self.chain_labels[side].setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Preferred)
-                self.chain_labels[side].setStyleSheet("font-size: 12px; font-weight: 600;" if level == "standard" else "")
-                self.build_chains[side].setMinimumHeight(156 if level == "standard" else 166)
-                if hasattr(self.build_chains[side], "set_tile_width"):
-                    self.build_chains[side].set_tile_width(80 if level == "standard" else None)
+            self.scouting_comparison.set_density(level)
             self.console.set_density(level)
             self.details_bar.setVisible(not compact and bool(self._return_density))
             self.full_details_button.hide()
@@ -1267,26 +1306,36 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             horizon = self.build_time_range.currentData()
             for chain in [*getattr(self, "build_chains", {}).values(), *getattr(self, "upgrade_chains", {}).values()]:
                 chain.set_time_range(horizon)
+            if hasattr(self, "overlays"):
+                self.overlays["scouting"].sync_options(horizon, self.include_workers_supply.isChecked())
             self._render_information_layout()
 
         def _ensure_build_order(self):
-            key = self._current_build_key()
-            if not self._paired or not key or not callable(handler):
+            if not self._paired or not callable(handler) or self._build_order_inflight is not None:
                 return
-            if key in self._build_order_cache:
-                self._build_order_cache.move_to_end(key)
+            panel = self.overlays.get("scouting") if hasattr(self, "overlays") else None
+            keys = [panel._key if panel is not None and panel.isVisible() else None, self._current_build_key()]
+            for key in keys:
+                if key in self._build_order_cache:
+                    self._build_order_cache.move_to_end(key)
+                    continue
+                if not key or key in self._build_order_failures:
+                    continue
+                self._build_order_inflight = key
+                request = {"action": "game_build_order", "gameId": key[1], "opponentId": key[0]}
+                if self._account_key:
+                    request["accountKey"] = self._account_key
+                self._job("game_build_order", request)
                 return
-            if key in self._build_order_failures or self._build_order_inflight is not None:
-                return
-            self._build_order_inflight = key
-            self._job("game_build_order", {"action": "game_build_order", "gameId": key[1], "opponentId": key[0]})
 
-        def _retry_build_order(self):
-            key = self._current_build_key()
+        def _retry_build_order(self, key=None):
+            key = key if isinstance(key, tuple) else self._current_build_key()
             if key:
                 self._build_order_failures.pop(key, None)
             self._ensure_build_order()
             self._render_information_layout()
+            if hasattr(self, "overlays"):
+                self.overlays["scouting"].render_build_data()
 
         def _finish_build_order(self, response):
             payload = response["payload"]
@@ -1314,6 +1363,8 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                     self._build_order_failures.popitem(last=False)
             if key == self._current_build_key():
                 self._render_information_layout()
+            if hasattr(self, "overlays"):
+                self.overlays["scouting"].render_build_data()
             self._ensure_build_order()
 
         def _render_build_data(self, game):
@@ -1325,17 +1376,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 source = stored[side] if stored is not None else _events(game, side)
                 source = _filter_build_events(source, include_workers_supply=include_supply)
                 build_name = game.get(build_key) or (game.get("oppBuild") if side == "opp" else None)
-                self.chain_labels[side].setText(str(build_name or "Unclassified build"))
-                self.chain_labels[side].setToolTip(str(build_name or "Unclassified build"))
-                self.build_chains[side].set_time_range(horizon)
-                self.build_chains[side].set_events(source)
-                self.build_chains[side].set_density(self._density)
-                self.build_chains[side].summary.setWordWrap(self._density != "standard")
-                self.build_chains[side].summary.setMaximumHeight(16 if self._density == "standard" else 16777215)
-                self.build_chains[side].summary.setSizePolicy(QtWidgets.QSizePolicy.Ignored, QtWidgets.QSizePolicy.Fixed if self._density == "standard" else QtWidgets.QSizePolicy.Preferred)
-                self.build_chains[side].summary.setToolTip(self.build_chains[side].summary.text())
-                self.upgrade_chains[side].set_time_range(horizon)
-                self.upgrade_chains[side].set_events([event for event in source if event["kind"] == "upgrade"])
+                self.scouting_comparison.set_side(side, build_name, source, horizon)
                 for kind, trees in self.trees.items():
                     if stored is None:
                         timeline_events = _events(game, side, full=kind == "build", upgrades=kind == "upgrades")
@@ -1395,7 +1436,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             if type(stamp) not in {int, float} or not math.isfinite(stamp) or not -5 <= time.time() - stamp <= 30:
                 active = False
             if not active:
-                context = {} if in_game else self._detail
+                context = {}
             context = context if isinstance(context, dict) else {}
             direct = envelope.get("opponent") if active and not context.get("teamHybrid") and isinstance(envelope.get("opponent"), dict) else None
             name = str(direct.get("revealedName") or direct.get("name") or "—") if direct is not None else str(context.get("revealedName") or context.get("name") or context.get("displayName") or context.get("displayNameSample") or "—")
@@ -1409,8 +1450,10 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             record = context.get("headToHead") or context.get("totals") or {}
             record = record if isinstance(record, dict) else {}
             self.compact_card.set_identity(name=name, race=race, mmr=mmr, wins=record.get("wins"), losses=record.get("losses"))
+            if not active:
+                self.compact_card.set_waiting(in_game=in_game)
             self._set_team_mmr_source(self.compact_card, context)
-            self.compact_card.setToolTip(("Selected live enemy · right-click to switch enemies or confirm teams. " + context.get("mmrSource", "")) if context.get("teamHybrid") else "Current live opponent" if active else "Opponent telemetry unavailable" if in_game else "Selected opponent profile")
+            self.compact_card.setToolTip(("Selected live enemy · right-click to switch enemies or confirm teams. " + context.get("mmrSource", "")) if context.get("teamHybrid") else "Current live opponent" if active else "Opponent telemetry unavailable" if in_game else "Waiting for next match")
             self.team_roster_widget.render(self.team_roster_state, self._opponents, self._team_details)
             self.team_roster_page.render(self.team_roster_state, self._opponents, self._team_details)
             self.team_roster_summary.render(self.team_roster_state, self._opponents, self._team_details)
@@ -1483,6 +1526,24 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self.window().showNormal()
             self.window().raise_()
             self.window().activateWindow()
+
+        def _scouting_toggle_allowed(self):
+            active, _context = self.live_context()
+            return bool(self._snapshot_healthy and self._paired and active and self.assistance_enabled()
+                        and self.mode_gates()["scoutingOverlay"])
+
+        def _toggle_scouting_panel(self):
+            if not self._scouting_toggle_allowed():
+                return
+            opened = self.overlays["scouting"].isVisible()
+            self._manual_scouting_open = not opened
+            self._manual_scouting_dismissed = opened
+            if not opened:
+                self._panel_restore_requests.add("scouting")
+            self._update_overlays()
+
+        def scouting_buttons(self):
+            return [self.compact_card.scouting_button, self.overlays["opponent"].identity_card.scouting_button]
 
         def _step_opponent(self, step):
             if self.team_roster_state.ready:
@@ -2071,7 +2132,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             self._update_ghost_reference_buttons()
 
         def _is_ghost_reference(self, side):
-            game_id = self.game_select.currentData()
+            return self._is_ghost_reference_for(self.game_select.currentData(), side)
+
+        def _is_ghost_reference_for(self, game_id, side):
             return bool(game_id) and any(isinstance(reference, dict) and reference.get("side", "you") == side
                                         and (reference.get("gameId") or (reference.get("target") or {}).get("sourceGameId")) == game_id
                                         for reference in self._ghost_references.values())
@@ -2082,16 +2145,17 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 title = "Use my build as Ghost" if side == "you" else "Use opponent's build as Ghost"
                 button.setText(("★ " if self._is_ghost_reference(side) else "☆ ") + title)
                 button.setEnabled(bool(game_id) and "ghost_reference" not in self._requests)
-                chain_button = self.chain_reference_buttons[side]
-                chain_button.setText(("★ " if self._is_ghost_reference(side) else "☆ ") + ("Ghost" if self._density == "standard" else "Use this build as Ghost"))
-                chain_button.setToolTip("Clear this Ghost reference" if self._is_ghost_reference(side) else "Use this entire stored build as the Ghost reference")
-                chain_button.setEnabled(button.isEnabled())
+                self.scouting_comparison.set_reference(side, selected=self._is_ghost_reference(side), enabled=button.isEnabled())
+            if hasattr(self, "overlays"):
+                self.overlays["scouting"].render_build_data()
 
         def _save_ghost_reference(self, side):
-            game_id = self.game_select.currentData()
-            if game_id and "ghost_reference" not in self._requests:
+            self._save_ghost_reference_for(self.game_select.currentData(), side)
+
+        def _save_ghost_reference_for(self, game_id, side):
+            if self._paired and game_id and "ghost_reference" not in self._requests:
                 request = {"action": "ghost_reference", "gameId": game_id,
-                           "side": side, "clear": self._is_ghost_reference(side)}
+                           "side": side, "clear": self._is_ghost_reference_for(game_id, side)}
                 if isinstance(self._account_key, str) and self._account_key:
                     request["accountKey"] = self._account_key
                 self._job("ghost_reference", request)
@@ -2127,6 +2191,9 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             if self._closed or not callable(handler) or key not in self._preferences:
                 return
             self._preferences[key] = bool(value)
+            if key == "scoutingOverlay":
+                self._manual_scouting_open = False
+                self._manual_scouting_dismissed = False
             if value and key in {"overlaysEnabled", "opponentOverlay", "scoutingOverlay"}:
                 self._panel_restore_requests.update({"opponent", "scouting"} if key == "overlaysEnabled" else {key.removesuffix("Overlay")})
             self._apply_preferences(self._preferences)
@@ -2218,13 +2285,26 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 summary += " Pinned but hidden by preset: " + ", ".join(blocked_pins) + "."
             self.mode_controls.explanation.setText(summary)
             active, context = self.live_context()
+            active = bool(active and self._snapshot_healthy and self._paired)
             preview = self.preview_button.isChecked()
             if preview and not active:
                 context = self._detail
+            scope = (self._account_key, envelope.get("gameKey"), self.team_roster_state.selected_key) if active else None
+            if scope != self._scouting_game_scope:
+                self._scouting_game_scope = scope
+                self._manual_scouting_open = False
+                self._manual_scouting_dismissed = False
+            allowed = self._scouting_toggle_allowed()
+            if not allowed:
+                self._manual_scouting_open = False
+                self._manual_scouting_dismissed = False
             for kind, panel in self.overlays.items():
-                visible = enabled and self._preferences[kind + "Overlay"] and gates[kind + "Overlay"] and (active or preview)
+                selected = self._preferences[kind + "Overlay"]
+                if kind == "scouting" and active:
+                    selected = (selected and not self._manual_scouting_dismissed) or self._manual_scouting_open
+                visible = enabled and selected and gates[kind + "Overlay"] and (active or preview)
                 if visible:
-                    panel.update_context(context)
+                    panel.update_context(context, scope=scope)
                     if kind == "opponent":
                         self._set_team_mmr_source(panel.identity_card, context)
                     if kind in self._panel_restore_requests:
@@ -2233,10 +2313,16 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                         panel.show()
                 else:
                     panel.hide()
+                    if not active and not preview:
+                        panel.update_context({})
             self._panel_restore_requests.clear()
+            for card in (self.compact_card, self.overlays["opponent"].identity_card):
+                card.set_scouting_state(opened=self.overlays["scouting"].isVisible(), enabled=allowed)
+            self._ensure_build_order()
             self._sync_session_panel()
             self._render_information_layout()
             self._update_speech()
+            self.inputTargetsChanged.emit()
 
         def set_active(self, active):
             if active:

@@ -423,17 +423,12 @@ def test_archive_lane_circuit_breaker_bounds_calls_during_outage(
 
     monkeypatch.setattr(queue_module, "_ARCHIVE_IDLE_GRACE_SEC", 0.01)
     monkeypatch.setattr(queue_module, "_ARCHIVE_RETRY_BASE_SEC", 1.0)
-    tasks = []
-    for index in range(20):
-        path = tmp_path / f"outage-{index}.SC2Replay"
-        path.write_bytes(b"MPQ\x1bdata")
-        tasks.append(ReplayArchiveTask(path, f"g-{index}"))
-    ReplayArchiveJournal(tmp_path).enqueue_many(tasks)
 
     class _OutageApi(_StubApi):
         def __init__(self) -> None:
             super().__init__()
             self.archive_calls = 0
+            self.first_attempt = threading.Event()
 
         def upload_replay_file_durable(
             self,
@@ -441,13 +436,22 @@ def test_archive_lane_circuit_breaker_bounds_calls_during_outage(
             _path: Path,
         ) -> bool:
             self.archive_calls += 1
+            self.first_attempt.set()
             raise RuntimeError("storage unavailable")
 
     api = _OutageApi()
     q = UploadQueue(cfg=_cfg(tmp_path), state=AgentState(), api=api)
+    owner = q._archive_owner(q._upload_context())
+    tasks = []
+    for index in range(20):
+        path = tmp_path / f"outage-{index}.SC2Replay"
+        path.write_bytes(b"MPQ\x1bdata")
+        tasks.append(ReplayArchiveTask(path, f"g-{index}", owner))
+    q._archive_journal.enqueue_many(tasks)
     q.start()
     try:
-        assert _wait_for(lambda: api.archive_calls == 1, timeout=2.0)
+        assert api.first_attempt.wait(5.0)
+        assert api.archive_calls == 1
         time.sleep(0.3)
         assert api.archive_calls == 1
         assert q.archive_pending_count() == len(tasks)

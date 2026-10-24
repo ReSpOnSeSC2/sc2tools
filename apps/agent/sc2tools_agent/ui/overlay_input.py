@@ -142,13 +142,69 @@ def sc2_has_foreground():
     return win32_window.is_sc2_window(win32_window.foreground_window())
 
 
-def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, native=None, foreground_provider=None):
+def mouse_activation_reply(message):
+    if sys.platform != "win32" or not message:
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    native_message = wintypes.MSG.from_address(int(message))
+    return (True, 3) if native_message.message == 0x0021 else None
+
+
+def build_scouting_control(source, *, QtCore, QtWidgets):
+    class ScoutingControl(QtWidgets.QToolButton):
+        def __init__(self):
+            flags = (QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint
+                     | QtCore.Qt.WindowDoesNotAcceptFocus)
+            super().__init__(source.window())
+            self.setWindowFlags(flags)
+            self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
+            self.setAttribute(QtCore.Qt.WA_QuitOnClose, False)
+            self.setFocusPolicy(QtCore.Qt.NoFocus)
+            self.setCursor(QtCore.Qt.PointingHandCursor)
+            self.setObjectName(source.objectName())
+            self.setAccessibleName(source.accessibleName())
+            self.setCheckable(True)
+            self.clicked.connect(lambda _checked=False: source.click())
+            self._signature = None
+
+        def sync(self):
+            signature = (source.icon().cacheKey(), source.iconSize().toTuple(), source.styleSheet(),
+                         source.toolTip(), source.isChecked(), source.text(), source.toolButtonStyle())
+            if signature != self._signature:
+                self.setIcon(source.icon())
+                self.setIconSize(source.iconSize())
+                self.setText(source.text())
+                self.setToolButtonStyle(source.toolButtonStyle())
+                self.setStyleSheet(source.styleSheet())
+                self.setToolTip(source.toolTip())
+                self.setChecked(source.isChecked())
+                self._signature = signature
+            position = source.mapToGlobal(QtCore.QPoint())
+            geometry = QtCore.QRect(position, source.size())
+            if geometry != self.geometry():
+                self.setGeometry(geometry)
+            if not self.isVisible():
+                self.show()
+                self.raise_()
+
+        def nativeEvent(self, event_type, message):
+            reply = mouse_activation_reply(message)
+            return reply if reply is not None else super().nativeEvent(event_type, message)
+
+    return ScoutingControl()
+
+
+def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, native=None, foreground_provider=None,
+                          scouting_buttons_provider=None, QtWidgets=None):
     class OverlayInput(QtCore.QObject):
         def __init__(self):
             super().__init__(window)
             self._native = native if native is not None else NativeClickThrough()
             self._foreground = foreground_provider or sc2_has_foreground
             self._handles = {}
+            self._scouting_controls = {}
             self._closed = False
             self._updating = False
             self.timer = QtCore.QTimer(self)
@@ -184,16 +240,49 @@ def install_overlay_input(window, *, panels_provider, compact_provider, QtCore, 
                         else:
                             current[hwnd] = widget
                 self._handles = current
+                self._sync_scouting_controls(locked)
             except RuntimeError:
                 self._native.restore_all()
+                for control in self._scouting_controls.values():
+                    try:
+                        control.hide()
+                    except RuntimeError:
+                        pass
             finally:
                 self._updating = False
+
+        def _sync_scouting_controls(self, locked):
+            if scouting_buttons_provider is None or QtWidgets is None:
+                return
+            sources = list(scouting_buttons_provider())
+            for source in sources:
+                owner = source.window()
+                visible = (locked and source.isVisible() and source.isEnabled()
+                           and not owner.isMinimized() and owner.property("gameClickThrough") is True)
+                control = self._scouting_controls.get(source)
+                if visible:
+                    if control is None:
+                        control = build_scouting_control(source, QtCore=QtCore, QtWidgets=QtWidgets)
+                        control.clicked.connect(lambda _checked=False: self.refresh())
+                        self._scouting_controls[source] = control
+                    control.sync()
+                elif control is not None:
+                    control.hide()
+            for source in tuple(self._scouting_controls):
+                if source not in sources:
+                    self._scouting_controls.pop(source).close()
 
         def shutdown(self):
             if not self._closed:
                 self._closed = True
                 self.timer.stop()
                 self._native.restore_all()
+                for control in self._scouting_controls.values():
+                    try:
+                        control.close()
+                    except RuntimeError:
+                        pass
+                self._scouting_controls.clear()
                 for widget in self._handles.values():
                     try:
                         widget.setProperty("gameClickThrough", False)

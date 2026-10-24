@@ -11,7 +11,13 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
-### Agent 0.24.1 - Consistent Agent menu
+### Agent 0.24.1 - Compact scouting and consistent menus
+- Open/close the detailed floating scouting report from compact. Only its scouting
+  button accepts clicks while StarCraft II has focus; other overlay areas pass
+  clicks through. Restore normal controls with Alt+Tab.
+- Reuse Detailed view's paired build cards, icons, upgrades, time ranges and Ghost
+  reference actions in the report; keep its replay tied to the live opponent.
+- Clear compact opponent identity and record between matches or stale telemetry.
 - Use the same Agent dropdown on Companion and every Agent page. Include update
   checks, help, appearance and quit; show update progress/results on Dashboard
   and prevent duplicate checks while a request is running.

@@ -162,6 +162,27 @@ def test_game_build_order_keeps_empty_extraction_status_without_fabricating_even
     assert client.action({"action": "game_build_order", "gameId": "replay"}) == payload
 
 
+@pytest.mark.parametrize("action", ["game_build_order", "game_summary"])
+def test_queued_replay_reads_reject_a_changed_owner_before_network(action):
+    from sc2tools_agent.companion_ghost import session_account_key
+
+    original = ("https://api.example.test", "old-account")
+    client = CompanionClient(lambda: (original[0], "new-account"),
+        transport=lambda *args, **kwargs: pytest.fail("Previous account's replay must not use new pairing"))
+    with pytest.raises(CompanionError, match="account changed"):
+        client.action({"action": action, "gameId": "replay", "accountKey": session_account_key(*original)})
+
+
+@pytest.mark.parametrize("action", ["game_build_order", "game_summary"])
+def test_replay_read_captures_pairing_and_rejects_changes_before_request(action):
+    original = ("https://api.example.test", "old-account")
+    connections = iter([original, (original[0], "new-account")])
+    client = CompanionClient(lambda: next(connections),
+        transport=lambda *args, **kwargs: pytest.fail("Pairing changed before replay request"))
+    with pytest.raises(CompanionError, match="pairing changed"):
+        client.action({"action": action, "gameId": "replay"})
+
+
 def test_overlay_preferences_persist_without_repairing_or_network(tmp_path):
     state = AgentState(device_token="same-pairing", uploaded={"replay": "2026-10-23"})
 

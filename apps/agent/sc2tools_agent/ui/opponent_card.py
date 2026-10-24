@@ -132,6 +132,7 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
 
     class OpponentCard(QtWidgets.QWidget):
         enlargeRequested = QtCore.Signal()
+        scoutingRequested = QtCore.Signal()
         minimizeRequested = QtCore.Signal()
         closeRequested = QtCore.Signal()
 
@@ -172,23 +173,24 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
                 label.setAlignment(QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter)
             self.enlarge_button = QtWidgets.QToolButton(self)
             self.enlarge_button.setObjectName("opponentCardEnlarge")
-            expand_icon = QtGui.QPixmap(32, 32)
-            expand_icon.setDevicePixelRatio(2)
-            expand_icon.fill(QtCore.Qt.transparent)
-            icon_painter = QtGui.QPainter(expand_icon)
-            icon_painter.setRenderHint(QtGui.QPainter.Antialiasing)
-            icon_painter.setPen(QtGui.QPen(QtGui.QColor("#f8eeff"), 1.5))
-            for start, end in [((4, 12), (12, 4)), ((7, 4), (12, 4)), ((12, 4), (12, 9)), ((3, 6), (3, 13)), ((3, 13), (10, 13))]:
-                icon_painter.drawLine(QtCore.QPointF(*start), QtCore.QPointF(*end))
-            icon_painter.end()
-            self.enlarge_button.setIcon(QtGui.QIcon(expand_icon))
-            self.enlarge_button.setIconSize(QtCore.QSize(16, 16))
+            self.enlarge_button.setText("Expand")
             self.enlarge_button.setAccessibleName("Enlarge Companion")
             self.enlarge_button.setToolTip("Enlarge Companion · Standard view")
             self.enlarge_button.setCursor(QtCore.Qt.PointingHandCursor)
-            self.enlarge_button.setStyleSheet("QToolButton { color: #f8eeff; background: #572080; border: 1px solid #bc7ce7; border-radius: 4px; font: bold 17px 'Segoe UI'; padding: 0; } QToolButton:hover { background: #7932aa; } QToolButton:focus { border: 2px solid #a8f3ec; }")
+            self.enlarge_button.setStyleSheet("QToolButton { color: #f8eeff; background: #572080; border: 1px solid #bc7ce7; border-radius: 4px; font: 600 11px 'Segoe UI'; padding: 0; } QToolButton:hover { background: #7932aa; } QToolButton:focus { border: 2px solid #a8f3ec; } QToolButton:checked { border: 2px solid #a8f3ec; }")
             self._enlarge_base_style = self.enlarge_button.styleSheet()
             self.enlarge_button.clicked.connect(lambda _checked=False: self.enlargeRequested.emit())
+            self.scouting_button = QtWidgets.QToolButton(self)
+            self.scouting_button.setObjectName("opponentCardScout")
+            self.scouting_button.setText("Scouting")
+            self.scouting_button.setAccessibleName("Toggle scouting panel")
+            self.scouting_button.setToolTip("Open scouting report")
+            self.scouting_button.setCheckable(True)
+            self.scouting_button.setFocusPolicy(QtCore.Qt.NoFocus)
+            self.scouting_button.setCursor(QtCore.Qt.PointingHandCursor)
+            self.scouting_button.setStyleSheet(self._enlarge_base_style)
+            self.scouting_button.setVisible(not profile)
+            self.scouting_button.clicked.connect(lambda _checked=False: self.scoutingRequested.emit())
             self.minimize_button = QtWidgets.QToolButton(self)
             self.close_button = QtWidgets.QToolButton(self)
             for button, name, text, title, signal in (
@@ -231,12 +233,26 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
             self._skin = normalize_skin(skin)
             self.setProperty("raceSkin", self._skin)
             colors = palette_for_skin(self._skin)
-            extra = "" if self._skin == "default" else f"QToolButton#opponentCardEnlarge {{ background: {colors['frame']}; border-color: {colors['border']}; }} QToolButton#opponentCardEnlarge:hover {{ background: {colors['plate']}; border-color: {colors['accent']}; }}"
-            self.enlarge_button.setStyleSheet(self._enlarge_base_style + extra)
+            for button in (self.enlarge_button, self.scouting_button):
+                selector = "QToolButton#" + button.objectName()
+                extra = "" if self._skin == "default" else f"{selector} {{ background: {colors['frame']}; border-color: {colors['border']}; }} {selector}:hover {{ background: {colors['plate']}; border-color: {colors['accent']}; }}"
+                button.setStyleSheet(self._enlarge_base_style + extra)
             for button in (self.minimize_button, self.close_button):
                 extra = "" if self._skin == "default" else f"QToolButton#{button.objectName()} {{ background: {colors['frame']}; border-color: {colors['border']}; }}"
                 button.setStyleSheet(theme.WINDOW_CONTROLS_STYLE + extra)
             self.update()
+
+        def set_scouting_state(self, *, opened, enabled):
+            self.scouting_button.setChecked(opened)
+            self.scouting_button.setEnabled(enabled)
+            self.scouting_button.setToolTip(("Close" if opened else "Open") + " scouting report" if enabled else
+                                            "Scouting is available during a live match with In-game assistance enabled and an allowed mode.")
+
+        def set_waiting(self, *, in_game=False):
+            self.set_identity()
+            self.name_label.set_full_text("Waiting for opponent" if in_game else "Waiting for next match")
+            self.setAccessibleName("Waiting for opponent")
+            self.setAccessibleDescription("No current opponent information is available.")
 
         def _place_contents(self):
             if not profile:
@@ -248,10 +264,11 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
                         caption.setStyleSheet(f"color: {theme.TEXT_MUTED}; font-size: {8 if small else 9}px; font-weight: 600;")
                     for value in (self.race_label, self.mmr_label, self.record_label, self.win_rate_label):
                         value.setStyleSheet(f"color: {theme.TEXT}; font-size: {13 if small else 14}px; font-weight: 600;")
-                self.enlarge_button.setGeometry(self.width() - 76, 5, 22, 22)
+                self.enlarge_button.setGeometry(self.width() - 104, 5, 50, 22)
+                self.scouting_button.setGeometry(self.width() - 168, 5, 62, 22)
                 self.minimize_button.setGeometry(self.width() - 52, 5, 22, 22)
                 self.close_button.setGeometry(self.width() - 28, 5, 22, 22)
-                self.name_label.setGeometry(12, 3 if small else 5, max(1, self.width() - 96), 22 if small else 24)
+                self.name_label.setGeometry(12, 3 if small else 5, max(1, self.width() - 188), 22 if small else 24)
                 column_width = max(1, (self.width() - 24) // 4)
                 self._record_top = self.height() - 41
                 for column, (caption, value) in enumerate(((self.race_caption, self.race_label),
@@ -263,7 +280,7 @@ def build_opponent_card(parent=None, *, QtCore, QtGui, QtWidgets, icon_root=None
                     value.setGeometry(left, self._record_top + 12, column_width - 3, 22)
                 self.name_label._update_elision()
                 return
-            self.enlarge_button.setGeometry(self.width() - 30, 5, 22, 22)
+            self.enlarge_button.setGeometry(self.width() - 58, 5, 50, 22)
             content_width = max(1, self.width() - 32)
             content_height = max(1, self.height() - 51)
             if profile:

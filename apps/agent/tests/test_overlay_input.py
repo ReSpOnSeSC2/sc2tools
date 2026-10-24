@@ -57,6 +57,134 @@ def test_native_hit_testing_uses_layered_transparency_and_restores_only_owned_bi
     assert overlay_input.REFRESH_FLAGS == 0x0037
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native mouse activation")
+def test_scouting_mouse_activation_accepts_click_without_activating_or_eating_it():
+    import ctypes
+    from ctypes import wintypes
+
+    message = wintypes.MSG()
+    message.message = 0x0021
+    assert overlay_input.mouse_activation_reply(ctypes.addressof(message)) == (True, 3)
+    message.message = 0x0201
+    assert overlay_input.mouse_activation_reply(ctypes.addressof(message)) is None
+    assert overlay_input.mouse_activation_reply(0) is None
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows native Qt event delivery")
+def test_hidden_native_scouting_control_receives_mouse_activation_without_focus(tmp_path):
+    import os
+    from pathlib import Path
+    import subprocess
+    import textwrap
+
+    environment = dict(os.environ, QT_QPA_PLATFORM="windows")
+    environment["PYTHONPATH"] = str(Path(__file__).resolve().parents[1])
+    result = subprocess.run([sys.executable, "-c", textwrap.dedent('''
+        import ctypes
+        from ctypes import wintypes
+        from PySide6 import QtCore, QtWidgets
+        from sc2tools_agent.ui.overlay_input import NativeClickThrough, build_scouting_control, _StyleApi, INPUT_STYLES
+        app = QtWidgets.QApplication([])
+        window = QtWidgets.QWidget()
+        source = QtWidgets.QToolButton(window)
+        source.setObjectName("opponentCardScout")
+        source.setAccessibleName("Toggle scouting panel")
+        source.resize(22, 22)
+        control = build_scouting_control(source, QtCore=QtCore, QtWidgets=QtWidgets)
+        native = NativeClickThrough(api=_StyleApi())
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+        user32.SendMessageW.restype = ctypes.c_ssize_t
+        try:
+            handle = int(control.winId())
+            assert native.set_click_through(int(window.winId()), True)
+            assert native._api.style(int(window.winId())) & INPUT_STYLES == INPUT_STYLES
+            assert not native._api.style(handle) & 0x20
+            assert native._api.style(handle) & 0x08000000
+            assert user32.SendMessageW(handle, 0x0021, int(window.winId()), (0x0201 << 16) | 1) == 3
+            assert not window.isVisible() and not control.isVisible()
+        finally:
+            native.restore_all()
+            control.close()
+            window.close()
+    ''')], capture_output=True, text=True, timeout=30, env=environment)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_only_the_scouting_control_receives_input_over_locked_windows_and_alt_tab_restores_controls(tmp_path):
+    run_gui_check(tmp_path, '''
+from sc2tools_agent.ui.overlay_input import install_overlay_input
+class Native:
+    def __init__(self): self.locked = set()
+    def set_click_through(self, handle, locked):
+        self.locked.add(handle) if locked else self.locked.discard(handle)
+        return True
+    def restore_all(self): self.locked.clear()
+window = QtWidgets.QWidget()
+window.resize(340, 78)
+source = QtWidgets.QToolButton(window)
+source.setObjectName("opponentCardScout")
+source.setAccessibleName("Toggle scouting panel")
+source.setText("Scouting")
+source.setGeometry(172, 5, 62, 22)
+source.setCheckable(True)
+other = QtWidgets.QToolButton(window)
+other.setGeometry(236, 5, 50, 22)
+panel = QtWidgets.QWidget()
+panel.resize(650, 450)
+source.clicked.connect(lambda checked: panel.setVisible(checked))
+window.show()
+app.processEvents()
+foreground = [True]
+native = Native()
+controller = install_overlay_input(window, panels_provider=lambda: [panel], compact_provider=lambda: True,
+    scouting_buttons_provider=lambda: [source], QtCore=QtCore, QtWidgets=QtWidgets,
+    native=native, foreground_provider=lambda: foreground[0])
+controller.timer.stop()
+try:
+    controller.refresh()
+    assert window.property("gameClickThrough") is True
+    assert list(controller._scouting_controls) == [source]
+    control = controller._scouting_controls[source]
+    assert control.isVisible()
+    assert control.text() == "Scouting"
+    assert control.windowFlags() & QtCore.Qt.WindowDoesNotAcceptFocus
+    assert control.testAttribute(QtCore.Qt.WA_ShowWithoutActivating)
+    assert control.focusPolicy() == QtCore.Qt.NoFocus
+    assert control.parentWidget() is window
+    assert control.geometry().topLeft() == source.mapToGlobal(QtCore.QPoint())
+    assert control.size() == source.size()
+    control.click()
+    assert panel.isVisible() and panel.property("gameClickThrough") is True
+    assert source.isChecked() and control.isChecked()
+    control.click()
+    assert not panel.isVisible() and not source.isChecked()
+    source.setEnabled(False)
+    controller.refresh()
+    assert not control.isVisible() and window.property("gameClickThrough") is True
+    source.setEnabled(True)
+    foreground[0] = False
+    controller.refresh()
+    assert not control.isVisible() and not native.locked
+    assert not window.property("gameClickThrough") and other.isEnabled()
+    foreground[0] = True
+    controller.refresh()
+    window.move(70, 90)
+    app.processEvents()
+    controller.refresh()
+    assert control.geometry().topLeft() == source.mapToGlobal(QtCore.QPoint())
+    window.showMinimized()
+    app.processEvents()
+    controller.refresh()
+    assert not control.isVisible()
+finally:
+    controller.shutdown()
+    panel.close()
+    window.close()
+assert not native.locked and not controller._scouting_controls
+''')
+
+
 @pytest.mark.parametrize("original", [WS_EX_LAYERED, INPUT_STYLES, WS_EX_TRANSPARENT | 0x08000000])
 def test_existing_layering_or_native_flags_are_never_discarded(original):
     api = FakeStyleApi(original)

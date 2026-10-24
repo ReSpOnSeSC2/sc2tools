@@ -642,4 +642,5 @@ def test_compact_identity_uses_fresh_direct_opponent_fields_without_inference(co
     assert page.compact_card.identity == {"name": "—", "race": "—", "mmr": "—"}
     page._snapshot = {"liveGame": {"phase": "menu"}}
     page._render_information_layout()
-    assert page.compact_card.identity == {"name": "Browsed player", "race": "Zerg", "mmr": "4700"}
+    assert page.compact_card.identity == {"name": "—", "race": "—", "mmr": "—"}
+    assert page.compact_card.name_label.full_text == "Waiting for next match"

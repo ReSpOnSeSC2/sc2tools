@@ -54,6 +54,8 @@ def test_compact_card_has_identity_record_real_artwork_and_one_expand_action(tmp
         assert card.record == {"wins": 2, "losses": 1, "text": "2W · 1L", "winRate": "66.7%"}
         assert all(label.textFormat() == QtCore.Qt.PlainText for label in card.findChildren(QtWidgets.QLabel))
         assert card.enlarge_button.accessibleName() == "Enlarge Companion"
+        assert card.enlarge_button.text() == "Expand"
+        assert card.scouting_button.text() == "Scouting"
         assert card.portrait.isHidden()
         card.enlarge_button.click()
         assert calls == ["expand"]
@@ -71,12 +73,15 @@ def test_small_compact_geometry_keeps_fields_and_button_inside_the_card(tmp_path
         card.show()
         app.processEvents()
         assert card.size().toTuple() == (280, 68)
-        for child in [card.name_label, card.race_label, card.mmr_label, card.race_caption, card.mmr_caption, card.enlarge_button,
+        for child in [card.name_label, card.race_label, card.mmr_label, card.race_caption, card.mmr_caption, card.enlarge_button, card.scouting_button,
                       card.minimize_button, card.close_button,
                       card.record_caption, card.record_label, card.win_rate_caption, card.win_rate_label]:
             assert card.rect().contains(child.geometry()), (child.objectName(), child.geometry().getRect())
         assert card.portrait.isHidden()
-        assert card.name_label.geometry().right() < card.enlarge_button.geometry().left()
+        assert card.name_label.geometry().right() < card.scouting_button.geometry().left()
+        assert card.scouting_button.geometry().right() < card.enlarge_button.geometry().left()
+        for button in (card.scouting_button, card.enlarge_button):
+            assert button.fontMetrics().horizontalAdvance(button.text()) + 4 <= button.width()
         assert card.name_label.text() != card.name_label.full_text
         assert card.name_label.toolTip() == card.name_label.full_text
         assert card.race_label.fontMetrics().horizontalAdvance(card.race_label.text()) <= card.race_label.width()

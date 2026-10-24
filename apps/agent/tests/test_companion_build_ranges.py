@@ -19,6 +19,8 @@ def _order(game_id, *, name="Gateway", times=(40, 180, 360, 600, 900)):
 def controlled_builds(companion, monkeypatch):
     page, state, app = companion
     wait_until(app, lambda: "game_build_order" not in page._requests)
+    page.set_preference("scoutingOverlay", False)
+    wait_until(app, lambda: not page._preference_busy)
     original = page._job
     pending = []
 

@@ -129,6 +129,11 @@ class CompanionClient:
         if action in {"randomizer_state", "randomizer_settings", "randomizer_roll"}:
             return self._randomizer_action(request)
         if action in {"game_build_order", "game_summary"}:
+            connection = tuple(self._connection_provider())
+            expected_owner = request.get("accountKey")
+            if expected_owner is not None and (not connection[1] or
+                    expected_owner != hashlib.sha256((connection[0] + "\0" + connection[1]).encode("utf-8")).hexdigest()):
+                raise CompanionError("Your linked account changed. Refresh the scouting report and try again.")
             game_id = request.get("gameId")
             if (not isinstance(game_id, str) or not game_id.strip()
                     or game_id != game_id.strip() or len(game_id) > 200
@@ -140,8 +145,8 @@ class CompanionClient:
             except UnicodeEncodeError:
                 raise CompanionError("Select a valid replay first.") from None
             if action == "game_summary":
-                return self._request("GET", "/v1/games/" + encoded_id, missing_ok=True)
-            return self._request("GET", "/v1/games/" + encoded_id + "/build-order")
+                return self._request("GET", "/v1/games/" + encoded_id, missing_ok=True, expected_connection=connection)
+            return self._request("GET", "/v1/games/" + encoded_id + "/build-order", expected_connection=connection)
         if action == "opponents":
             params = {"limit": 100}
             before = request.get("before")

@@ -4,7 +4,18 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## 0.24.1
 
-### Fixed - Consistent Agent menu
+### Added - Compact scouting control
+- Toggle the floating scouting report directly from the compact opponent card.
+  Use clear Scouting and Expand text buttons without increasing the window size.
+  While StarCraft II has focus, only this button accepts clicks; the rest of
+  compact and every floating report passes clicks through. Alt+Tab restores controls.
+- Share Detailed view's build-vs-build cards, unit icons, upgrades, Ghost reference
+  actions and 3/6/10-minute/full-build controls with the floating scouting report.
+  Its selected replay follows the live opponent independently of library browsing.
+
+### Fixed - Opponent reset and consistent Agent menu
+- Clear compact opponent identity and record between matches and on stale telemetry;
+  disable the scouting toggle until a current opponent is available.
 - Share one Agent dropdown across Companion and every Agent page, including
   Check for updates, Help & support, Border & animations and Quit SC2 Tools.
 - Open update checks on the Dashboard so progress and results are visible;

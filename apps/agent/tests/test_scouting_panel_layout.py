@@ -41,16 +41,25 @@ def test_scouting_pin_keeps_controls_and_timings_accessible_inside_themed_frame(
                     assert safe.contains(panel.header.geometry())
                     assert safe.contains(panel.scouting_scroll.geometry())
                     assert panel.scouting_scroll.horizontalScrollBar().maximum() == 0
-                    for widget in (panel.subtitle, panel.detail, panel.games, panel.builds, panel.tree):
+                    for widget in (panel.subtitle, panel.detail, panel.games, panel.build_time_range,
+                                   panel.comparison_title, panel.observation_note):
                         panel.scouting_scroll.ensureWidgetVisible(widget)
                         QtTest.QTest.qWait(5)
                         viewport = panel.scouting_scroll.viewport()
                         rectangle = QtCore.QRect(widget.mapTo(viewport, QtCore.QPoint()), widget.size())
                         assert viewport.rect().contains(rectangle), (skin, (width, height), widget.objectName(), rectangle, viewport.rect())
-                    assert panel.tree.topLevelItem(0).text(1) == "1:25"
-                    assert panel.tree.topLevelItem(0).text(2) == "Started"
-                    assert panel.tree.topLevelItem(1).text(1) == "3:00"
-                    assert panel.tree.topLevelItem(1).text(2) == "Completed"
+                    for side in ("my", "opp"):
+                        card = panel.comparison.chain_cards[0 if side == "my" else 1]
+                        assert card.geometry().right() < panel.comparison.width()
+                        assert panel.comparison.build_chains[side].scroll.horizontalScrollBar().maximum() == 0
+                        button = panel.comparison.chain_reference_buttons["you" if side == "my" else "opponent"]
+                        assert card.rect().contains(button.geometry())
+                    started = panel.comparison.build_chains["my"].steps[0]
+                    completed = panel.comparison.upgrade_chains["opp"].steps[0]
+                    assert started.time_label.text() == "1:25"
+                    assert started.timing_label.text() == "Started"
+                    assert completed.time_label.text() == "3:00"
+                    assert completed.timing_label.text() == "Completed"
             assert getattr(panel.games, "_sc2_wheel_guard", None) is not None
             panel.games.setCurrentIndex(1)
             panel.update_context({"name": "NorthStar Example Opponent", "last5GamesScouting": games})

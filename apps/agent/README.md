@@ -125,6 +125,17 @@ quitting the agent closes them all. Session can remain visible between games;
 its timer, record, latest-known MMR and rating region use your owned Session feed.
 Rating region is not verified active-server detection.
 
+The **Scouting** button on the compact opponent card opens or closes the floating
+**Scouting** report without changing the Companion size or your saved pin choice.
+It uses the same paired build cards as Detailed view, including unit icons,
+upgrade timings, Ghost reference buttons and 3/6/10-minute or full-build ranges.
+It follows the live opponent even while you browse another profile. Between
+matches, compact clears the opponent and waits for the next match.
+
+While StarCraft II has focus, only the compact **Scouting** button accepts clicks.
+Other compact controls and floating panel areas pass clicks through to the game.
+Use Alt+Tab to another application to restore normal overlay interaction.
+
 Native panel positions are remembered locally without changing their sizes.
 Removed-monitor positions are restored safely onto an available screen. Use
 **Assistance → Reset panel positions** to return to the default placement.

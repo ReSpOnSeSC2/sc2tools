@@ -34,13 +34,14 @@ def test_team_confirmation_preserves_compact_size_and_only_reveals_confirmed_ene
     page.refresh()
     wait_until(app, lambda: bool(page.team_roster_state.candidate))
     assert not page.team_roster_state.ready
-    assert page.compact_name.text() == "—"
+    assert page.compact_card.identity["name"] == "—"
+    assert page.compact_name.full_text == "Waiting for opponent"
     assert not page.mode_gates()["scoutingOverlay"]
     assert page.compact_card.contextMenuPolicy() == QtCore.Qt.CustomContextMenu
     before = page.minimumSize()
     keys = confirm(page)
     wait_until(app, lambda: bool(page._team_details.get("one")))
-    assert page.compact_name.text() == "Library one"
+    assert page.compact_name.full_text == "Library one"
     assert page.minimumSize() == before
     assert not page.team_roster_widget.isVisible()
     assert page.mode_gates()["scoutingOverlay"]
@@ -52,9 +53,9 @@ def test_team_confirmation_preserves_compact_size_and_only_reveals_confirmed_ene
     assert "Pool settings remain available" in randomizer_status
     assert "overlay widget runs separately" in randomizer_status
     page._select_team_enemy(keys["Ally"])
-    assert page.compact_name.text() == "Library one"
+    assert page.compact_name.full_text == "Library one"
     page._step_opponent(1)
-    assert page.compact_name.text() == "Library two"
+    assert page.compact_name.full_text == "Library two"
     assert page.team_ghost_context()["ownKey"] == keys["Me"]
     assert page.team_ghost_context()["confirmed"] is True
 

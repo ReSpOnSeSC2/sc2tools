@@ -104,7 +104,7 @@ def test_each_pin_has_themed_controls_native_drag_resize_and_no_windows_titlebar
         assert not interactions._drag_target(controls.minimize_button)
         assert not interactions._drag_target(controls.close_button)
         if {kind!r} != "opponent":
-            assert not interactions._drag_target(panel.steps if {kind!r} == "ghost" else panel.tree)
+            assert not interactions._drag_target(panel.steps if {kind!r} == "ghost" else panel.comparison.build_chains["my"])
         calls = []
         panel.windowHandle = lambda: SimpleNamespace(
             startSystemMove=lambda: calls.append("move") or True,

@@ -1167,8 +1167,10 @@ def _MainWindow(*, ui, signals, QtCore, QtGui, QtWidgets):  # noqa: N802
             self._overlay_input = install_overlay_input(
                 self, panels_provider=lambda: [*self._companion_page.overlays.values(),
                     self._companion_page.ghost_page.panel, self._companion_page.session_panel],
-                compact_provider=self._compact_window_active, QtCore=QtCore,
+                compact_provider=self._compact_window_active, QtCore=QtCore, QtWidgets=QtWidgets,
+                scouting_buttons_provider=self._companion_page.scouting_buttons,
             )
+            self._companion_page.inputTargetsChanged.connect(self._overlay_input.refresh)
             QtWidgets.QApplication.instance().aboutToQuit.connect(self._overlay_input.shutdown)
             self._companion_page.set_appearance(ui._window_skin, ui._window_animations)
             self._companion_page.appearanceChanged.connect(self._window_appearance_changed)
