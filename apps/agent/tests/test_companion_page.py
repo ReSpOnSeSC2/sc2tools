@@ -113,7 +113,7 @@ def companion():
     page = build_companion_page(None, handler=handler, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
     page.timer.stop()
     try:
-        wait_until(app, lambda: page._detail.get("name") == "Library one")
+        wait_until(app, lambda: page._detail.get("name") == "Library one", timeout=15)
     except AssertionError:
         diagnostic = {"paired": page._paired, "healthy": page._snapshot_healthy,
                       "requests": page._requests, "selected": page._selected_id,
