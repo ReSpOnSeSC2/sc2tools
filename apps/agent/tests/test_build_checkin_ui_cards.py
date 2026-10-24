@@ -210,7 +210,7 @@ def test_loading_card_renders_header_strip_and_rows(harness) -> None:
     assert "WHAT'S THE PLAN?" in text
     assert "PvZ · vs Foo" in text
     assert "New: tell us your plan" in text and "Got it" in text
-    assert RANDOMIZER_WILL_ROLL in text and "Roll now" in text
+    assert RANDOMIZER_WILL_ROLL in text and "Roll in widget" in text
     assert "YOUR BUILDS" in text
     assert "More builds…  (8)" in text
     assert "Not now" in text and "Don't ask at loading" in text

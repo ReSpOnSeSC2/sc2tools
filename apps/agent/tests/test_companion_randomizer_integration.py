@@ -1,4 +1,5 @@
 from copy import deepcopy
+from dataclasses import replace
 import os
 import time
 
@@ -21,7 +22,7 @@ def wait_until(app, predicate):
     assert predicate()
 
 
-def test_embedded_selector_roll_now_releases_controller_hold_and_requests_one_native_pick():
+def test_embedded_selector_only_releases_widget_hold_and_displays_its_canonical_pick():
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     key = "Opponent|Streamer|1790000000000"
     state = {"calls": [], "roll": None, "declared": None}
@@ -72,12 +73,24 @@ def test_embedded_selector_roll_now_releases_controller_hold_and_requests_one_na
         model = LoadingCardModel(game_key=key, matchup="PvZ", waiting_for_matchup=False,
                                  randomizer=RandomizerStripModel("Randomizer will roll", can_roll_now=True))
         page.dispatch_build_checkin("show_loading", (model,))
+        route = page.workspace_tabs.currentWidget()
+        assert page.build_selectors.roll_now.text() == "Roll in widget"
         page.build_selectors.roll_now.click()
-        wait_until(app, lambda: state["roll"] is not None and not page.randomizer_page._busy)
         page.build_selectors.roll_now.click()
         app.processEvents()
         assert controller.releases == 1
-        assert len([call for call in state["calls"] if call["action"] == "randomizer_roll"]) == 1
+        assert not state["roll"]
+        assert not [call for call in state["calls"] if call["action"] == "randomizer_roll"]
+        assert page.workspace_tabs.currentWidget() is route
+        assert not page.randomizer_page.isWindow()
+        state["roll"] = {"key": "build", "name": "Saved canonical build"}
+        page.randomizer_page.refresh()
+        wait_until(app, lambda: not page.randomizer_page._busy and "Saved canonical build" in page.randomizer_page.result_label.text())
+        page.dispatch_build_checkin("update_loading", (replace(model,
+            randomizer=RandomizerStripModel("Widget drew: " + state["roll"]["name"],
+                rolled_key="build", rolled_name=state["roll"]["name"])),))
+        assert page.build_selectors.roll_label.text() == "Widget drew: Saved canonical build"
+        assert not page.build_selectors.roll_now.isVisible()
         assert "Saved canonical build" in page.randomizer_page.result_label.text()
 
         state["roll"] = None
@@ -86,14 +99,14 @@ def test_embedded_selector_roll_now_releases_controller_hold_and_requests_one_na
         wait_until(app, lambda: not page.randomizer_page._busy and "My plan" in page.randomizer_page.result_label.text())
         page.build_selectors.roll_now.click()
         app.processEvents()
-        assert len([call for call in state["calls"] if call["action"] == "randomizer_roll"]) == 1
+        assert not [call for call in state["calls"] if call["action"] == "randomizer_roll"]
 
         page.preference_checks["overlaysEnabled"].setChecked(False)
         app.processEvents()
         assert page.build_selectors.loading_toggle.isEnabled()
         assert page.build_selectors.postgame_toggle.isEnabled()
         assert page.randomizer_page.enabled_check.isEnabled()
-        assert not page.randomizer_page.roll_button.isEnabled()
+        assert not hasattr(page.randomizer_page, "roll_button")
     finally:
         page.shutdown()
         page.deleteLater()

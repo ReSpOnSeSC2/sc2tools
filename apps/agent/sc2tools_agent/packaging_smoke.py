@@ -11,6 +11,13 @@ from . import __version__
 SMOKE_REPORT_ENV = "SC2TOOLS_GUI_SMOKE_REPORT"
 
 
+def _request_gui_quit(ui, app):
+    if ui._window is not None:
+        ui._window._on_quit_requested()
+    else:
+        app.quit()
+
+
 def _exercise_gui(report):
     # Import Qt directly. can_use_gui() deliberately permits headless fallback
     # for source installs, which must not turn a broken release into a pass.
@@ -186,7 +193,7 @@ def _exercise_gui(report):
         except Exception as error:
             callback["error"] = error
         finally:
-            app.quit()
+            _request_gui_quit(ui, app)
 
     report["stage"] = "window_startup"
     timer = QtCore.QTimer()

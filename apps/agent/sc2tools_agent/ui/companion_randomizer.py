@@ -1,4 +1,4 @@
-"""Native controls for the shared build randomizer and its persisted live pick."""
+"""Silent pool settings and the overlay widget's persisted pick."""
 
 from __future__ import annotations
 
@@ -63,21 +63,21 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self._closed = False
             self._busy = False
             self._context = None
+            self._account_key = None
+            self._request_generation = 0
             self._snapshot = {}
             self._config = {}
             self._intent = {}
             self._intent_context = None
             self._inflight_settings = {}
             self._assistance = True
-            self._assistance_reason = "Game assistance is off. Your matchup settings remain saved."
+            self._assistance_reason = "Native game assistance is off. Pool settings remain available; overlay widget draws and audio run separately."
             self._pending_settings = {}
             self._needs_refresh = False
             self._loaded = False
             self._pool_dirty = False
             self._pool_revision = 0
             self._rendering = False
-            self._retry_at = 0
-            self._explicit_roll = None
             self._status_error = False
             self._build_ui()
             self.completed.connect(self._completed)
@@ -93,10 +93,10 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
 
         def _build_ui(self):
             layout = QtWidgets.QVBoxLayout(self)
-            heading = label("BUILD RANDOMIZER")
+            heading = label("RANDOMIZER SETTINGS")
             heading.setObjectName("companionHeading")
             layout.addWidget(heading)
-            layout.addWidget(label("Use your account's build pool. Each real match keeps one shared pick, with or without an OBS source."))
+            layout.addWidget(label("Edit the overlay widget's build pool here. Draws, animation, sounds and spoken announcements stay in the widget; build check-in shows its saved pick."))
             row = QtWidgets.QHBoxLayout()
             self.matchup_select = QtWidgets.QComboBox()
             self.matchup_select.addItems(MATCHUPS)
@@ -128,10 +128,6 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.result_label = label("No build has been drawn for the current game.")
             self.result_label.setObjectName("companionAccent")
             layout.addWidget(self.result_label)
-            self.roll_button = QtWidgets.QPushButton("Roll now")
-            self.roll_button.setEnabled(False)
-            self.roll_button.clicked.connect(lambda: self._roll(True))
-            layout.addWidget(self.roll_button)
             self.status = label("Pair your agent to load your randomizer settings.")
             self.status.setObjectName("companionMuted")
             layout.addWidget(self.status)
@@ -140,13 +136,25 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             if self._closed:
                 return
             self._snapshot = snapshot if isinstance(snapshot, dict) else {}
+            owner = self._snapshot.get("accountKey")
+            if self._snapshot.get("paired") is not True or owner != self._account_key:
+                self._account_key = owner
+                self._request_generation += 1
+                self._busy = False
+                self._config = {}
+                self._intent = {}
+                self._intent_context = None
+                self._inflight_settings = {}
+                self._pending_settings.clear()
+                self._loaded = False
+                self._pool_dirty = False
+                self._pool_revision += 1
+                self.pool.clear()
             context = randomizer_context(self._snapshot)
             if context != self._context:
                 self._context = context
                 self._intent = {}
                 self._intent_context = None
-                self._retry_at = 0
-                self._explicit_roll = None
                 if context:
                     blocked = QtCore.QSignalBlocker(self.matchup_select)
                     self.matchup_select.setCurrentText(context[1])
@@ -175,26 +183,17 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
         def set_assistance_enabled(self, enabled, reason=None):
             changed = self._assistance != bool(enabled)
             self._assistance = bool(enabled)
-            self._assistance_reason = reason or "Game assistance is off. Your matchup settings remain saved."
-            if not self._assistance:
-                self._explicit_roll = None
+            self._assistance_reason = reason or "Native game assistance is off. Pool settings remain available; overlay widget draws and audio run separately."
             self._render_result()
             if changed and self._assistance:
                 self.refresh()
-
-        def request_roll_now(self):
-            if self._closed or not self._assistance or not self._context:
-                return
-            self._explicit_roll = self._context
-            self._retry_at = 0
-            self._drain()
 
         def shutdown(self):
             self._closed = True
             self.timer.stop()
 
         def _request(self, kind, payload):
-            if self._closed:
+            if self._closed or kind not in {"state", "settings"}:
                 return
             self._busy = True
             self._status_error = False
@@ -204,6 +203,11 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             context = self._context
             selected = self.matchup_select.currentText()
             revision = self._pool_revision
+            self._request_generation += 1
+            generation = self._request_generation
+            owner = self._account_key
+            if isinstance(owner, str) and owner:
+                payload = {**payload, "accountKey": owner}
 
             def work():
                 try:
@@ -212,14 +216,16 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                     answer = {"error": str(error) if isinstance(error, CompanionError) else "The randomizer request failed. Refresh to try again."}
                 try:
                     self.completed.emit({"kind": kind, "payload": payload, "context": context,
-                                         "selected": selected, "revision": revision, **answer})
+                                         "selected": selected, "revision": revision,
+                                         "generation": generation, "owner": owner, **answer})
                 except RuntimeError:
                     pass
 
             threading.Thread(target=work, name="companion-randomizer", daemon=True).start()
 
         def _completed(self, answer):
-            if self._closed:
+            if (self._closed or answer.get("generation") != self._request_generation
+                    or answer.get("owner") != self._account_key):
                 return
             self._busy = False
             kind = answer["kind"]
@@ -230,7 +236,6 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 self._status_error = True
                 if current:
                     self.status.setText(answer["error"])
-                self._retry_at = time.monotonic() + 5
             elif isinstance(result, dict):
                 self._status_error = False
                 if kind in {"state", "settings"} and (kind == "settings" or (current and selected and not self._pending_settings)):
@@ -238,9 +243,6 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                     self._loaded = True
                 if kind == "state" and current:
                     self._intent = result.get("intent") or {}
-                    self._intent_context = self._context
-                if kind == "roll" and current:
-                    self._intent = result
                     self._intent_context = self._context
                 if kind == "settings":
                     self.status.setText("Randomizer settings saved to your account.")
@@ -261,22 +263,8 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 matchup = next(iter(self._pending_settings))
                 updates = self._pending_settings.pop(matchup)
                 self._request("settings", {"action": "randomizer_settings", "matchup": matchup, **updates})
-            elif self._explicit_roll == self._context and self._context:
-                if time.monotonic() < self._retry_at:
-                    return
-                if not self._assistance or self._intent.get("declared") or self._intent.get("randomizer"):
-                    self._explicit_roll = None
-                elif self._can_roll():
-                    self._explicit_roll = None
-                    self._roll(True)
-                elif self._intent_context != self._context or not self._loaded:
-                    self.refresh()
-                else:
-                    self._explicit_roll = None
             elif self._needs_refresh:
                 self.refresh()
-            elif time.monotonic() >= self._retry_at:
-                self._maybe_roll()
 
         def _matchup_changed(self, _text):
             self._pool_dirty = False
@@ -321,7 +309,7 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             if not self.pool.topLevelItemCount():
                 self.status.setText("No eligible builds for this matchup. Refresh after adding a build to your account.")
             elif not self._context:
-                self.status.setText("Choose your pool and enable this matchup. The next live match receives one shared pick.")
+                self.status.setText("Choose your pool and enable this matchup. The overlay widget draws; build check-in displays its pick.")
 
         def _pool_changed(self, _item, _column):
             if not self._rendering:
@@ -346,24 +334,13 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
             self.save_pool_button.setEnabled(False)
             self._drain()
 
-        def _can_roll(self):
-            if self._closed or self._busy or not self._assistance or not self._context or self._pending_settings:
-                return False
-            config = self._matchup_config(self._context[1])
-            return bool(config.get("enabled") is True and config.get("builds")
-                        and self._intent_context == self._context
-                        and self._intent.get("gameKey") in {None, self._context[0]}
-                        and not self._intent.get("declared") and not self._intent.get("randomizer")
-                        and not self._intent.get("gameId"))
-
         def _render_result(self):
-            self.roll_button.setEnabled(self._can_roll())
             if not self._context:
                 self.result_label.setText("No build has been drawn for the current game.")
             elif self._intent.get("declared"):
                 self.result_label.setText("Declared build · " + str(self._intent["declared"].get("name") or "Your chosen build"))
             elif self._intent.get("randomizer"):
-                self.result_label.setText("Shared pick · " + str(self._intent["randomizer"].get("name") or "Saved build"))
+                self.result_label.setText("Widget pick · " + str(self._intent["randomizer"].get("name") or "Saved build"))
             else:
                 self.result_label.setText("No build has been drawn for the current game.")
             if not self._assistance:
@@ -372,26 +349,10 @@ def build_companion_randomizer(parent, *, handler, QtCore, QtGui, QtWidgets):
                 if self._intent.get("declared"):
                     self.status.setText("Your declared plan takes priority. No random draw replaces it.")
                 elif self._intent.get("randomizer"):
-                    self.status.setText("This game's saved pick is shared by every connected display.")
+                    self.status.setText("Read-only widget result. The Companion does not draw, animate or announce it.")
                 elif self._loaded and self._context and self._matchup_config(self._context[1]).get("enabled") is not True:
                     self.status.setText("The randomizer is off for this matchup. Your saved pool is kept.")
-
-        def _maybe_roll(self):
-            if not self._can_roll():
-                return
-            envelope = self._snapshot.get("liveGame") or {}
-            if envelope.get("phase") == "match_loading":
-                prefs = self._intent.get("prefs") or {}
-                if self._intent.get("holdRemainingMs", 0) > 0 or (prefs.get("enabled") is not False and prefs.get("askAtLoading") is not False):
-                    self.status.setText("Waiting for the loading check-in. Choose Roll now or wait for the match to start.")
-                    return
-            self._roll(False)
-
-        def _roll(self, release_hold):
-            if not self._can_roll() or randomizer_context(self._snapshot) != self._context:
-                return
-            self.status.setText("Drawing the shared build…")
-            self._request("roll", {"action": "randomizer_roll", "gameKey": self._context[0],
-                                   "matchup": self._context[1], "releaseHold": release_hold})
+                elif self._loaded:
+                    self.status.setText("Waiting for the overlay widget's draw. Its saved pick appears in build check-in; no native randomizer runs.")
 
     return CompanionRandomizer()

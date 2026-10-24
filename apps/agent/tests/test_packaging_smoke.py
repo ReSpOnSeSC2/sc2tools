@@ -7,11 +7,22 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import pytest
 
 from sc2tools_agent import __main__ as entrypoint
 from sc2tools_agent import packaging_smoke
+
+
+@pytest.mark.parametrize("window_exists", [True, False])
+def test_smoke_quits_through_production_policy_instead_of_hiding_to_tray(window_exists):
+    calls = []
+    window = SimpleNamespace(_on_quit_requested=lambda: calls.append("production-quit")) if window_exists else None
+    ui = SimpleNamespace(_window=window)
+    application = SimpleNamespace(quit=lambda: calls.append("fallback-quit"))
+    packaging_smoke._request_gui_quit(ui, application)
+    assert calls == ["production-quit" if window_exists else "fallback-quit"]
 
 
 @pytest.mark.parametrize("result", [0, 1])

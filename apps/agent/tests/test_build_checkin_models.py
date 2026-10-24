@@ -258,6 +258,15 @@ def test_loading_model_strip_states() -> None:
     assert _loading(_game(), options=_options()).randomizer is None
 
 
+def test_saved_widget_pick_stays_visible_when_randomizer_is_disabled_after_the_draw():
+    game = _game()
+    game.live = LiveState(game_key="k", randomizer=DT, randomizer_enabled=False)
+    strip = _loading(game, options=_options()).randomizer
+    assert strip is not None
+    assert strip.rolled_key == DT.key and strip.rolled_name == DT.name
+    assert not strip.can_roll_now
+
+
 def test_loading_model_locked_labels() -> None:
     game = _game(declared=DT)
     mine = _loading(game)

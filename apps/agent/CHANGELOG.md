@@ -25,6 +25,14 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
   restores interaction; Standard and other expanded layouts stay interactive.
   Existing minimize and close-to-tray behavior is unchanged.
 
+### Changed - Widget-only Randomizer
+- Keep current-game Randomizer draws, visuals, sounds and spoken results in the
+  widget only. Companion retains silent shared-pool configuration and a read-only
+  saved result; no native current-game Randomizer popup or draw engine runs.
+- Build check-in cards show the widget's selected result. A Roll in widget action
+  only releases its decision hold, never performs a native draw. Native scouting
+  voice remains independent and unchanged.
+
 ## 0.22.1
 
 ### Fixed - Replay icons and installer verification

@@ -50,13 +50,11 @@ def test_randomizer_state_loads_shared_settings_options_and_optional_current_int
     assert "private-token" not in repr(result)
 
 
-def test_native_roll_uses_canonical_server_endpoint_instead_of_only_releasing_hold(client_state):
+def test_native_roll_is_rejected_before_any_network_request(client_state):
     client, state = client_state
-    result = client.action({"action": "randomizer_roll", "matchup": "PvZ", "gameKey": "Opp|Streamer|1790000000000", "releaseHold": True})
-    method, url, kwargs = state["calls"][-1]
-    assert method == "POST" and url.endswith("/live/Opp%7CStreamer%7C1790000000000/randomizer")
-    assert kwargs["json"] == {"matchup": "PvZ", "releaseHold": True}
-    assert result["randomizer"]["name"] == "Canonical name"
+    with pytest.raises(CompanionError, match="overlay widget"):
+        client.action({"action": "randomizer_roll", "matchup": "PvZ", "gameKey": "Opp|Streamer|1790000000000", "releaseHold": True})
+    assert state["calls"] == []
 
 
 def test_pool_edits_preserve_other_matchups_weights_and_opening_units(client_state):
@@ -91,10 +89,34 @@ def test_invalid_native_roll_inputs_never_send_a_request(client_state, updates):
     assert state["calls"] == []
 
 
-def test_expected_conflicts_show_safe_recoverable_messages():
+def test_native_roll_cannot_reach_the_server_even_when_a_conflict_would_return():
     client = CompanionClient(lambda: ("https://api.example.test", "private-token"),
         transport=lambda *args, **kwargs: response({"error": {"code": "hold_active", "message": "private-server-data"}}, 409))
-    with pytest.raises(CompanionError, match="loading check-in") as failure:
+    with pytest.raises(CompanionError, match="overlay widget") as failure:
         client.action({"action": "randomizer_roll", "matchup": "PvZ", "gameKey": "Opp|Streamer|1790000000000", "releaseHold": False})
-    assert failure.value.code == "hold_active"
+    assert failure.value.code is None
     assert "private" not in str(failure.value)
+
+
+def test_pool_action_rejects_previous_account_before_reading_or_writing(client_state):
+    client, state = client_state
+    with pytest.raises(CompanionError, match="pairing changed"):
+        client.action({"action": "randomizer_settings", "matchup": "PvZ", "enabled": True,
+                       "accountKey": "previous-account"})
+    assert not state["calls"]
+
+
+def test_pool_save_cannot_cross_accounts_between_preference_read_and_write():
+    connection = ["https://api.example.test", "first-token"]
+    calls = []
+
+    def transport(method, url, **options):
+        calls.append(method)
+        if method == "GET":
+            connection[1] = "second-token"
+        return response({"matchups": {}})
+
+    client = CompanionClient(lambda: connection, transport=transport)
+    with pytest.raises(CompanionError, match="pairing changed"):
+        client.action({"action": "randomizer_settings", "matchup": "PvZ", "enabled": True})
+    assert calls == ["GET"]

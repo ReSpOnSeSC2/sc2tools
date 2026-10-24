@@ -5,24 +5,29 @@ import { ArrowRight, Download, SlidersHorizontal, Star } from "lucide-react";
 const PANELS = [
   {
     image: "/landing/companion-selectors.png",
+    width: 1440, height: 1080, caption: "",
     alt: "Native Companion build selectors with current matchup and independent check-in controls, using sample data",
     title: "Choose your opening before the game.",
     text: "Pick your plan in the native 1v1 build selector. Keep loading prompts and after-game check-ins independently enabled without opening an OBS source.",
   },
   {
     image: "/landing/companion-postgame.png",
+    width: 1440, height: 1080, caption: "",
     alt: "Native Companion after-game check-in with your build and the opponent's strategy, using sample 1v1 data",
     title: "Review both builds after the game.",
     text: "Confirm or correct your opening and the opponent's strategy after an eligible 1v1 match. Automatic check-ins remain 1v1-only, not inferred for team games.",
   },
   {
     image: "/landing/companion-randomizer.png",
-    alt: "Native Companion randomizer with a selected matchup and saved eligible build pool, using sample 1v1 data",
-    title: "Let your saved pool choose.",
-    text: "Choose eligible builds for each matchup and roll one shared saved pick for a 1v1 game. The randomizer does not automatically draw for team games.",
+    width: 900, height: 480,
+    caption: "Actual desktop settings only · sample pool and read-only widget pick, not a native live-draw popup.",
+    alt: "Companion Randomizer pool configuration and the saved widget result, using sample data",
+    title: "Configure the pool. Let the widget roll.",
+    text: "Companion silently configures your shared pool and displays the widget's saved pick. Randomizer animation, sound and spoken results stay in the widget. There is no native current-game Randomizer popup or draw engine.",
   },
   {
     image: "/landing/companion-ghost.png",
+    width: 1440, height: 1080, caption: "",
     alt: "Native Build Order Ghost with replay sources, player preview and matchup target, using sample data",
     title: "Practice from the replay you trust.",
     text: "Open a local replay or choose from your synced games. Preview a human player's build order and save a 1v1 matchup target, or explicitly arm a temporary target for a confirmed current team game.",
@@ -45,11 +50,11 @@ export function CompanionShowcase() {
         <div className="min-w-0">
           <div className="flex items-start gap-3 text-text-muted">
             <SlidersHorizontal className="mt-1 h-5 w-5 shrink-0 text-accent-cyan" aria-hidden />
-            <p className="text-body">One game assistance switch, plus separate controls for Session, scouting, opponent panels, spoken reports, build selectors, randomizer and Ghost. Turn them on or off whenever you need.</p>
+            <p className="text-body">One game assistance switch, plus separate controls for Session, scouting, opponent panels, spoken scouting reports, build selectors and Ghost. Turn them on or off whenever you need.</p>
           </div>
-          <p className="mt-4 text-caption text-text-muted">Runs without OBS. Stream overlays remain an optional way to show selected features to viewers.</p>
+          <p className="mt-4 text-caption text-text-muted">Runs without OBS for native scouting, Session, build selectors and Ghost. Randomizer draws and their visuals, sounds and speech belong only to its browser or OBS widget; Companion provides silent configuration and a read-only saved result.</p>
           <p className="mt-3 text-caption text-text-muted">Home and Back keep browsing simple. Separate opponent and game arrows retain your place; Assistance and Agent menus keep the controls nearby.</p>
-          <p className="mt-3 text-caption text-text-muted">Opt in to native Windows system-voice reports for fresh human 1v1 games or the selected confirmed live enemy in Hybrid team mode. Voice, master and mode switches work together. OBS voice settings stay separate; keep only one scouting voice enabled to avoid duplicate audio.</p>
+          <p className="mt-3 text-caption text-text-muted">Opt in to native Windows system-voice reports for fresh human 1v1 games or the selected confirmed live enemy in Hybrid team mode. Native scouting voice is unaffected by widget-only Randomizer playback. Voice, master and mode switches work together. OBS voice settings stay separate; keep only one scouting voice enabled to avoid duplicate audio.</p>
           <p className="mt-3 text-caption text-text-muted">Save your own Ladder, Customs, Teams, Practice and Review presets. Customize each feature locally, with an optional Ctrl+Shift+F10 master shortcut. Hybrid adds confirmed enemy selection for team scouting; automatic check-ins and randomizer draws remain 1v1-only.</p>
           <p role="note" aria-label="Companion preview availability" className="mt-4 rounded-sm border border-warning/40 bg-bg-surface p-3 text-caption text-text-muted"><strong className="font-semibold text-text">Companion 0.23.0 verification preview is for local verification only and is not available in the current stable download.</strong> A signed public release is pending; unsigned verification builds are separate test artifacts. Session requires pairing and an available SC2 Tools connection. Team scouting also needs fresh live SC2 telemetry; unknown history and MMR stay unavailable.</p>
           <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -123,10 +128,13 @@ export function CompanionShowcase() {
       </div>
       <div className="mt-10 grid min-w-0 gap-8 md:grid-cols-2">
         {PANELS.map((panel) => (
-          <div key={panel.image} className="min-w-0">
-            <div className="overflow-hidden rounded-md border border-border-strong bg-[#10131f]">
-              <Image src={panel.image} alt={panel.alt} width={1440} height={1080} sizes="(max-width: 767px) 100vw, 50vw" className="h-auto w-full" />
-            </div>
+          <div key={panel.title} className="min-w-0">
+            <figure>
+              <div className="overflow-hidden rounded-md border border-border-strong bg-[#10131f]">
+                <Image src={panel.image} alt={panel.alt} width={panel.width} height={panel.height} sizes="(max-width: 767px) 100vw, 50vw" className="h-auto w-full" />
+              </div>
+              {panel.caption && <figcaption className="mt-3 text-micro text-text-dim">{panel.caption}</figcaption>}
+            </figure>
             <h3 className="mt-4 font-serif text-2xl font-semibold text-text">{panel.title}</h3>
             <p className="mt-2 text-body text-text-muted">{panel.text}</p>
           </div>

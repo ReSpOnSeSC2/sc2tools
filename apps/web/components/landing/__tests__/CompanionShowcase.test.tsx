@@ -79,7 +79,6 @@ describe("desktop Companion landing showcase", () => {
     }
     expect(text).not.toContain("Team-game guidance is not supported");
     expect(within(container).getByRole("img", { name: /Native Companion after-game check-in/ }).getAttribute("src")).toContain("companion-postgame.png");
-    expect(within(container).getByRole("img", { name: /Native Companion randomizer with a selected matchup/ }).getAttribute("src")).toContain("companion-randomizer.png");
     const team = within(container).getByRole("img", { name: /Detailed Companion Hybrid team roster/ });
     expect(team.getAttribute("src")).toContain("companion-team-hybrid.png");
     expect(team.getAttribute("width")).toBe("1024");
@@ -106,5 +105,22 @@ describe("desktop Companion landing showcase", () => {
     expect(container.textContent).toContain("Actual native panels · 150 × 138 each · sample data");
     expect(container.textContent).toContain("rating region are not a verified active server");
     expect(container.querySelectorAll("img")).toHaveLength(9);
+  });
+
+  it("keeps Randomizer playback in the widget without retiring native scouting voice", () => {
+    const { container } = render(<CompanionShowcase />);
+    for (const phrase of ["Configure the pool. Let the widget roll.", "silently configures your shared pool",
+      "read-only saved result", "Randomizer animation, sound and spoken results stay in the widget",
+      "no native current-game Randomizer popup or draw engine",
+      "Native scouting voice is unaffected by widget-only Randomizer playback"]) {
+      expect(container.textContent).toContain(phrase);
+    }
+    const settings = within(container).getByRole("img", { name: /Companion Randomizer pool configuration and the saved widget result/ });
+    expect(settings.getAttribute("src")).toContain("companion-randomizer.png");
+    expect(settings.getAttribute("width")).toBe("900");
+    expect(settings.getAttribute("height")).toBe("480");
+    expect(container.textContent).toContain("Actual desktop settings only · sample pool and read-only widget pick");
+    expect(container.textContent).toContain("not a native live-draw popup");
+    expect(container.textContent).not.toContain("roll one shared saved pick");
   });
 });

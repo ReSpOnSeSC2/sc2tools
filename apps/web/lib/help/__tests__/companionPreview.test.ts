@@ -4,11 +4,12 @@ import { helpBlockText } from "../articleText";
 
 describe("Companion preview availability", () => {
   it("distinguishes native preview instructions from the current stable installer", () => {
+    const currentPreview = new Set(["desktop-companion", "install-app", "randomizer", "build-check-in"]);
     for (const slug of ["desktop-companion", "install-app", "randomizer", "practice-ghost-build", "build-check-in", "desktop-app-overview"]) {
       const article = getArticle(slug);
       expect(article, slug).toBeDefined();
       const text = article!.body.map(helpBlockText).join(" ");
-      expect(text, slug).toContain(`Companion ${slug === "desktop-companion" ? "0.23.0 verification" : "0.21.0"} preview`);
+      expect(text, slug).toContain(`Companion ${currentPreview.has(slug) ? "0.23.0 verification" : "0.21.0"} preview`);
       expect(text, slug).toContain("current stable download");
     }
     for (const slug of ["desktop-companion", "install-app"]) {
@@ -60,6 +61,33 @@ describe("Companion preview availability", () => {
       expect(gallery.caption).toContain("150 × 138");
       expect(gallery.caption).toContain("sample data");
       expect(gallery.caption).toContain("not a verified active server");
+    }
+  });
+
+  it("removes native Randomizer rolls across the related setup guides", () => {
+    for (const slug of ["desktop-companion", "randomizer", "build-check-in", "install-app"]) {
+      const text = getArticle(slug)!.body.map(helpBlockText).join(" ");
+      expect(text, slug).toContain("widget");
+      expect(text, slug).not.toContain("standalone randomizer");
+      expect(text, slug).not.toContain("native randomizer waits");
+      expect(text, slug).not.toContain("native Companion roll suppresses");
+      expect(text, slug).not.toContain("without needing OBS");
+      expect(text, slug).not.toContain("Companion draws immediately");
+    }
+    const article = getArticle("desktop-companion")!;
+    const text = article.body.map(helpBlockText).join(" ");
+    for (const phrase of ["animation, sounds and spoken results are widget-only", "no native current-game Randomizer window",
+      "automatic/manual draw engine", "saved result is read-only", "already selected result rather than drawing again",
+      "Roll in widget", "Native scouting voice is unaffected by widget-only Randomizer playback"]) {
+      expect(text).toContain(phrase);
+    }
+    const settings = article.body.find(block => block.type === "image" && block.src === "/landing/companion-randomizer.png");
+    expect(settings?.type).toBe("image");
+    if (settings?.type === "image") {
+      expect(settings.alt).toContain("without a native roll control");
+      expect(settings.caption).toContain("900 × 480");
+      expect(settings.caption).toContain("sample data");
+      expect(settings.caption).toContain("not a native live-draw popup");
     }
   });
 });

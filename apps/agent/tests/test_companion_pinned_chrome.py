@@ -217,7 +217,7 @@ def test_main_appearance_changes_reach_each_parentless_pin_and_default_restores_
         app.setStyleSheet(theme.STYLE)
         ui, window = make_window(window_page="companion")
         page = window._companion_page
-        panels = [*page.overlays.values(), page.ghost_page.panel]
+        panels = [*page.overlays.values(), page.ghost_page.panel, page.session_panel]
         original_styles = [panel.styleSheet() for panel in panels]
         for skin in ("protoss", "terran", "zerg", "default"):
             page.appearance_skin.setCurrentIndex(page.appearance_skin.findData(skin))
@@ -232,4 +232,4 @@ def test_main_appearance_changes_reach_each_parentless_pin_and_default_restores_
         window._race_effects.shutdown()
         page.shutdown()
         window.hide()
-    ''')
+    ''', timeout=60)

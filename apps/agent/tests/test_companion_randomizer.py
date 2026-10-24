@@ -85,23 +85,26 @@ def test_loads_real_pool_off_thread_and_honors_loading_hold(panel):
     assert widget.pool.topLevelItemCount() == 2
     assert widget.pool.topLevelItem(0).text(0) == "Blink opener"
     assert widget.pool.topLevelItem(0).checkState(0) == QtCore.Qt.Checked
-    assert "loading check-in" in widget.status.text()
+    assert "overlay widget" in widget.status.text()
+    assert not hasattr(widget, "roll_button")
     assert not state["rolled"]
 
 
-def test_roll_now_actually_requests_persisted_pick_and_never_redraws(panel):
+def test_only_observes_the_widget_pick_and_cannot_draw_or_redraw(panel):
     widget, state, app = panel
-    widget.roll_button.click()
+    assert not hasattr(widget, "roll_button") and not hasattr(widget, "request_roll_now")
+    state["rolled"][widget._context[0]] = {"key": "first", "name": "Canonical persisted pick"}
+    widget.refresh()
     wait_until(app, lambda: "Canonical persisted pick" in widget.result_label.text())
-    assert [call for call in state["calls"] if call["action"] == "randomizer_roll"][0]["releaseHold"] is True
     for _ in range(3):
         widget.refresh()
         wait_until(app, lambda: not widget._busy)
-    assert len([call for call in state["calls"] if call["action"] == "randomizer_roll"]) == 1
-    assert not widget.roll_button.isEnabled()
+    widget._request("roll", {"action": "randomizer_roll"})
+    assert not [call for call in state["calls"] if call["action"] == "randomizer_roll"]
+    assert "Read-only widget result" in widget.status.text()
 
 
-def test_explicit_roll_waits_for_busy_read_and_unchanged_master_does_not_refresh(panel):
+def test_busy_read_and_unchanged_master_never_launch_a_native_draw(panel):
     widget, state, app = panel
     before = len(state["calls"])
     widget.set_assistance_enabled(True)
@@ -112,20 +115,24 @@ def test_explicit_roll_waits_for_busy_read_and_unchanged_master_does_not_refresh
     state["read_entered"] = threading.Event()
     widget.refresh()
     wait_until(app, state["read_entered"].is_set)
-    widget.request_roll_now()
+    widget._request("roll", {"action": "randomizer_roll"})
     assert not state["rolled"]
     state["read_block"].set()
-    wait_until(app, lambda: "Canonical persisted pick" in widget.result_label.text())
+    wait_until(app, lambda: not widget._busy)
     rolls = [call for call in state["calls"] if call["action"] == "randomizer_roll"]
-    assert len(rolls) == 1 and rolls[0]["releaseHold"] is True
+    assert not rolls and not state["rolled"]
 
 
-def test_match_start_autorolls_without_any_overlay_source(panel):
+def test_match_start_and_progress_never_autoroll_without_the_widget(panel):
     widget, state, app = panel
     widget.update_snapshot(snapshot(phase="match_started"))
     widget.refresh()
-    wait_until(app, lambda: "Canonical persisted pick" in widget.result_label.text())
-    assert [call for call in state["calls"] if call["action"] == "randomizer_roll"][0]["releaseHold"] is False
+    wait_until(app, lambda: not widget._busy)
+    widget.update_snapshot(snapshot(phase="match_in_progress"))
+    widget.refresh()
+    wait_until(app, lambda: not widget._busy)
+    assert not state["rolled"]
+    assert not [call for call in state["calls"] if call["action"] == "randomizer_roll"]
 
 
 def test_master_gate_prevents_rolls_and_toggling_remains_available(panel):
@@ -134,7 +141,7 @@ def test_master_gate_prevents_rolls_and_toggling_remains_available(panel):
     widget.update_snapshot(snapshot(phase="match_started"))
     widget.refresh()
     wait_until(app, lambda: not widget._busy)
-    assert not state["rolled"] and not widget.roll_button.isEnabled()
+    assert not state["rolled"] and not hasattr(widget, "roll_button")
     widget.enabled_check.setChecked(False)
     wait_until(app, lambda: not widget._busy and not widget._pending_settings)
     assert state["config"]["matchups"]["PvZ"]["enabled"] is False
@@ -149,12 +156,12 @@ def test_master_off_cancels_a_queued_explicit_draw_before_read_finishes(panel):
     state["read_entered"] = threading.Event()
     widget.refresh()
     wait_until(app, state["read_entered"].is_set)
-    widget.request_roll_now()
+    widget._request("roll", {"action": "randomizer_roll"})
     widget.set_assistance_enabled(False)
     state["read_block"].set()
     wait_until(app, lambda: not widget._busy)
     assert not state["rolled"]
-    assert widget._explicit_roll is None
+    assert not hasattr(widget, "_explicit_roll")
     assert widget.enabled_check.isEnabled()
 
 
@@ -166,7 +173,7 @@ def test_rapid_toggle_writes_are_serialized_and_last_choice_wins(panel):
     wait_until(app, state["settings_entered"].is_set)
     widget.enabled_check.setChecked(True)
     widget.enabled_check.setChecked(False)
-    assert not widget.roll_button.isEnabled()
+    assert not hasattr(widget, "roll_button")
     state["settings_block"].set()
     wait_until(app, lambda: not widget._busy and not widget._pending_settings)
     assert state["config"]["matchups"]["PvZ"]["enabled"] is False
@@ -188,7 +195,7 @@ def test_declared_build_blocks_randomization(panel):
     widget.update_snapshot(snapshot(phase="match_started"))
     widget.refresh()
     wait_until(app, lambda: "Manual plan" in widget.result_label.text())
-    assert not widget.roll_button.isEnabled()
+    assert not hasattr(widget, "roll_button")
     assert not state["rolled"]
 
 
@@ -217,6 +224,32 @@ def test_network_errors_are_visible_and_shutdown_blocks_new_work(panel):
     widget.refresh()
     widget.update_snapshot(snapshot(phase="match_started"))
     assert len(state["calls"]) == before
+
+
+def test_account_change_discards_old_private_pool_pick_and_delayed_response(panel):
+    widget, state, app = panel
+    source = {**snapshot(), "accountKey": "first-account"}
+    widget.update_snapshot(source)
+    wait_until(app, lambda: not widget._busy)
+    state["rolled"][widget._context[0]] = {"key": "first", "name": "Private old pick"}
+    blocked = threading.Event()
+    state["read_block"] = blocked
+    state["read_entered"] = threading.Event()
+    widget.refresh()
+    wait_until(app, state["read_entered"].is_set)
+    state["read_block"] = None
+    state["rolled"].clear()
+    state["options"] = {"builds": [{"key": "new", "name": "New account pool"}]}
+    widget.update_snapshot({**snapshot(), "accountKey": "second-account"})
+    wait_until(app, lambda: not widget._busy)
+    blocked.set()
+    app.processEvents()
+    assert "Private old pick" not in widget.result_label.text()
+    assert widget.pool.topLevelItem(0).text(0) == "New account pool"
+    assert state["calls"][-1]["accountKey"] == "second-account"
+    widget.update_snapshot({"paired": False})
+    assert widget.pool.topLevelItemCount() == 0
+    assert not widget.enabled_check.isEnabled()
 
 
 @pytest.mark.parametrize("patch", [{"phase": "match_ended"}, {"isReplay": True}, {"players": [{}, {}, {}]},

@@ -499,7 +499,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             controls = QtWidgets.QVBoxLayout()
             self.preference_checks = {}
             assistance_tooltips = {
-                "overlaysEnabled": "Master switch for pinned panels, spoken scouting, build selectors, Randomizer and Ghost. Off hides or stops assistance; replay syncing and browsing continue. Your individual choices stay saved.",
+                "overlaysEnabled": "Master switch for native pinned panels, spoken scouting, build selectors and Ghost. Off hides or stops native assistance; replay syncing and browsing continue. Randomizer draws, animation and audio stay in the separate overlay widget, controlled by its own settings.",
                 "opponentOverlay": "Keep the current opponent card above other windows during a game, even when the main window is minimized. Requires In-game assistance and a mode that allows the opponent panel.",
                 "scoutingOverlay": "Keep previous encounters, build-vs-build and recorded replay timings above other windows during a game. Historical scouting only—not live enemy tracking. Requires In-game assistance and an allowed mode.",
             }
@@ -761,14 +761,13 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
                 self.workspace_tabs, handler=handler, QtCore=QtCore,
                 QtGui=QtGui, QtWidgets=QtWidgets,
             )
-            self.build_selectors.roll_now.clicked.connect(self.randomizer_page.request_roll_now)
             self.ghost_page = build_companion_ghost(
                 self.workspace_tabs, handler=handler, QtCore=QtCore,
                 QtGui=QtGui, QtWidgets=QtWidgets,
             )
             self.ghost_page.referencesChanged.connect(self._ghost_references_changed)
             self.workspace_tabs.addTab(self.build_selectors, "Build selectors")
-            self.workspace_tabs.addTab(self.randomizer_page, "Randomizer")
+            self.workspace_tabs.addTab(self.randomizer_page, "Randomizer settings")
             self.workspace_tabs.addTab(self.ghost_page, "Build Order Ghost")
             self._build_density_ui(layout)
 
@@ -2151,7 +2150,7 @@ def build_companion_page(parent, *, handler, QtCore, QtGui, QtWidgets,
             if team_game:
                 self.build_selectors.hint.setText("Team Hybrid uses selected-enemy history and an explicitly chosen Ghost target. Automatic 1v1 pre/post-game build check-ins are unavailable in team games.")
             self.randomizer_page.set_assistance_enabled(enabled and gates["randomizer"],
-                reason="Team games do not auto-roll a 1v1 build pool. Your matchup settings stay saved." if team_game else f"{caption} preset keeps Randomizer guidance hidden; account settings stay saved." if enabled and not gates["randomizer"] else None)
+                reason="Team games have no native 1v1 widget-pick guidance. Pool settings remain available; the overlay widget runs separately." if team_game else f"{caption} preset hides native widget-pick guidance only; overlay draws, sounds and voice use the widget's own settings." if enabled and not gates["randomizer"] else None)
             if hasattr(self.ghost_page, "set_team_context"):
                 self.ghost_page.set_team_context(self.team_ghost_context())
             self.ghost_page.set_assistance_enabled(enabled and gates["ghost"],

@@ -237,6 +237,8 @@ class CompanionClient:
 
     def _randomizer_action(self, request):
         action = request["action"]
+        if action == "randomizer_roll":
+            raise CompanionError("Random draws, animation and audio run in the overlay widget. Build check-in shows the widget's saved pick.")
         matchup = request.get("matchup")
         if not isinstance(matchup, str) or not re.fullmatch(r"[PTZ]v[PTZ]", matchup):
             raise CompanionError("Choose a concrete matchup for the randomizer.")
@@ -244,16 +246,15 @@ class CompanionClient:
         if game_key is not None and (not isinstance(game_key, str) or not game_key
                                      or len(game_key) > 500 or not re.search(r"\|[0-9]{1,16}$", game_key)):
             raise CompanionError("Refresh the current game before rolling.")
-        if action == "randomizer_roll":
-            release_hold = request.get("releaseHold")
-            if not game_key or type(release_hold) is not bool:
-                raise CompanionError("Choose Roll now during a current match.")
-            return self._request("POST", "/v1/build-intents/live/" + quote(game_key, safe="") + "/randomizer",
-                                 body={"matchup": matchup, "releaseHold": release_hold})
-        config = self._request("GET", "/v1/me/preferences/randomizer")
+        connection = tuple(self._connection_provider())
+        if request.get("accountKey") is not None and (
+                not connection[1] or request["accountKey"] != session_account_key(*connection)):
+            raise CompanionError("Your agent pairing changed. Refresh before editing the widget pool.")
+        config = self._request("GET", "/v1/me/preferences/randomizer", expected_connection=connection)
         if action == "randomizer_state":
-            options = self._request("GET", "/v1/build-intents/options", params={"matchup": matchup})
-            intent = self._request("GET", "/v1/build-intents/live/" + quote(game_key, safe=""), missing_ok=True) if game_key else None
+            options = self._request("GET", "/v1/build-intents/options", params={"matchup": matchup}, expected_connection=connection)
+            intent = self._request("GET", "/v1/build-intents/live/" + quote(game_key, safe=""),
+                missing_ok=True, expected_connection=connection) if game_key else None
             return {"config": config, "options": options, "intent": intent}
         if "enabled" in request and type(request["enabled"]) is not bool:
             raise CompanionError("The randomizer switch must be on or off.")
@@ -273,7 +274,7 @@ class CompanionClient:
                     or any(not isinstance(key, str) or not key or len(key) > 200 for key in keys)
                     or len(set(keys)) != len(keys)):
                 raise CompanionError("Choose valid builds for this randomizer pool.")
-            options = self._request("GET", "/v1/build-intents/options", params={"matchup": matchup})
+            options = self._request("GET", "/v1/build-intents/options", params={"matchup": matchup}, expected_connection=connection)
             available = {row.get("key"): row for row in options.get("builds", []) if isinstance(row, dict)}
             if any(key not in available for key in keys):
                 raise CompanionError("A build is no longer available for this matchup. Refresh the pool.")
@@ -287,7 +288,7 @@ class CompanionClient:
             current["enabled"] = request["enabled"]
         config["matchups"][matchup] = current
         config.setdefault("version", 2)
-        saved = self._request("PUT", "/v1/me/preferences/randomizer", body=config)
+        saved = self._request("PUT", "/v1/me/preferences/randomizer", body=config, expected_connection=connection)
         return {"config": saved}
 
     def _request(self, method, path, *, params=None, body=None, missing_ok=False, expected_connection=None):

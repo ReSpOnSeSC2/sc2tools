@@ -23,6 +23,10 @@ corresponding GitHub Release.
 - Make pinned panels and main Compact click-through only while verified SC2 is
   foreground. Alt+Tab away unlocks them; Standard stays interactive. Existing
   minimize, close-to-tray and pinned-panel behavior is unchanged.
+- Keep Randomizer draws, visuals, sounds and spoken results widget-only. Native
+  Companion offers silent pool configuration and a read-only result, not a
+  current-game Randomizer popup or engine. Check-ins display the widget's saved
+  result; native scouting voice is unaffected.
 
 ### Agent 0.22.1 - Replay unit icons and installer verification
 - Show bundled unit icons for replay steps whose source category is unknown,
