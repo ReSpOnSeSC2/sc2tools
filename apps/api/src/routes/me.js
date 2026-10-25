@@ -72,6 +72,7 @@ const ME_MMR_MAX_TOONS = 8;
  *   isAdminEmail?: (email: string) => boolean,
  *   onAdminGranted?: (clerkUserId: string) => void,
  *   buildIntents?: { preferencesChanged(userId: string, type: string): void } | null,
+   *   onRivalsChanged?: (userId:string) => void,
  *   logger?: import('pino').Logger,
  * }} deps
  */
@@ -452,6 +453,9 @@ function buildMeRouter(deps) {
           : type === "analyzerViews" ? sanitizeAnalyzerViews(req.body, true)
             : type === "rivals" ? sanitizeRivals(req.body, true) : req.body;
       const saved = await deps.users.updatePreferences(auth.userId, type, body);
+      if (type === "rivals") {
+        try { deps.onRivalsChanged?.(auth.userId); } catch { /* Advisory cache refresh; preferences are already saved. */ }
+      }
       if (deps.buildIntents) {
         try {
           // Build check-in switches reach the agent as a user-room ping;

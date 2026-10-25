@@ -6,7 +6,7 @@ describe("table CSV serialization", () => {
   it.each([['a,b', '"a,b"'], ['say "hi"', '"say ""hi"""'], ['two\nlines', '"two\nlines"'], ['two\r\nlines', '"two\r\nlines"']])("quotes %j without losing cell content", (value, expected) => {
     expect(csvCell(value)).toBe(expected);
   });
-  it.each(["=SUM(A1)", "+cmd", "-12", "@name", "\tformula", "\rformula"])("guards spreadsheet text %j", value => {
+  it.each(["=SUM(A1)", "+cmd", "-12", "@name", "\tformula", "\rformula", "  =SUM(A1)", "\n@formula", " \uFEFF+formula"])("guards spreadsheet text %j", value => {
     expect(csvCell(value)).toContain(`'${value}`);
   });
   it("does not apply the text guard to negative numeric MMR or raw fractions", () => {

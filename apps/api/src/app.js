@@ -566,6 +566,7 @@ function makeServices(deps, clerk) {
   const overlayLive = new OverlayLiveService(deps.db, {
     gameDetails,
     pulseMmr,
+    rivals,
   });
   // LiveGameBroker — in-process pub/sub for the agent → web SSE
   // bridge AND the agent → OBS overlay Socket.io fan-out.
@@ -877,7 +878,7 @@ function makeServices(deps, clerk) {
   const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, gameContext, tickerFacts, community, aggregations.trendsRequests]) {
+    for (const service of [overlayLive, rivals, gameContext, tickerFacts, community, aggregations.trendsRequests]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
@@ -1325,6 +1326,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       isAdminEmail,
       onAdminGranted,
       buildIntents: services.buildIntents,
+      onRivalsChanged: (userId) => { services.overlayLive.invalidateForUser(userId); services.rivals.invalidateForUser(userId); },
       logger: deps.logger,
     }),
   );
@@ -1647,7 +1649,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   );
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildCatalogRouter({ catalog: services.catalog, auth }),
+    buildCatalogRouter({ catalog: services.catalog, opponents: services.opponents, auth }),
   );
   app.use(
     SERVICE.ROUTE_PREFIX,

@@ -89,6 +89,7 @@ export function OpponentsTab({
     true,
     (raw): raw is boolean => typeof raw === "boolean",
   );
+  const showPlayerGroups = groupByPlayer || quick === "rivals";
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -184,10 +185,10 @@ export function OpponentsTab({
     () =>
       groupOpponentsByPlayer(
         normalised,
-        groupByPlayer ? pulseLinks?.links : null,
-        groupByPlayer,
+        showPlayerGroups ? pulseLinks?.links : null,
+        showPlayerGroups,
       ),
-    [normalised, groupByPlayer, pulseLinks],
+    [normalised, showPlayerGroups, pulseLinks],
   );
 
   // The API leaders rank individual accounts. With grouping enabled, rank
@@ -302,8 +303,8 @@ export function OpponentsTab({
     if (id && location) prefetchTimer.current = setTimeout(() => location.prefetch(opponentDossierHref(id)), 150);
   }, [location]);
   useEffect(() => () => { if (prefetchTimer.current) clearTimeout(prefetchTimer.current); }, []);
-  const reset = () => { setSearch(""); setMinGames(1); setMmrImpactFilter("all"); setHasNotes(false); setQuick("all"); setGroupByPlayer(true); sort.setSortExplicit("lastPlayed", "desc"); };
-  const changed = Boolean(quick !== "all" || search || minGames !== 1 || mmrImpactFilter !== "all" || hasNotes || !groupByPlayer || sort.sortBy !== "lastPlayed" || sort.sortDir !== "desc");
+  const reset = () => { setSearch(""); setMinGames(1); setMmrImpactFilter("all"); setHasNotes(false); setQuick("all"); setGroupByPlayer(true); setColumnOverrides({}); sort.setSortExplicit("lastPlayed", "desc"); };
+  const changed = Boolean(Object.keys(columnOverrides).length || quick !== "all" || search || minGames !== 1 || mmrImpactFilter !== "all" || hasNotes || !groupByPlayer || sort.sortBy !== "lastPlayed" || sort.sortDir !== "desc");
 
   const toggleGroup = useCallback((pulseId: string) => {
     setExpandedGroups((prev) => {
@@ -321,9 +322,9 @@ export function OpponentsTab({
   const exportRows = useCallback(() => {
     if (currentExport.current !== exportScope) return;
     const period = filters.since || filters.until ? `${filters.since?.slice(0, 10) || "beginning"}_${filters.until?.slice(0, 10) || "now"}` : "all-time";
-    const scope = `Opponents · ${groupByPlayer ? "grouped players" : "accounts"} · ${path} · search ${search || "(none)"} · min games ${minGames} · ${quick} · MMR ${mmrImpactFilter} · notes ${hasNotes} · ${sort.sortBy} ${sort.sortDir}`;
+    const scope = `Opponents · ${showPlayerGroups ? "grouped players" : "accounts"} · ${path} · search ${search || "(none)"} · min games ${minGames} · ${quick} · MMR ${mmrImpactFilter} · notes ${hasNotes} · ${sort.sortBy} ${sort.sortDir}`;
     downloadCsv(`sc2tools-opponents-${period}.csv`, toCsv({ columns: OPPONENT_CSV_COLUMNS, rows: items, scope }));
-  }, [exportScope, filters.since, filters.until, groupByPlayer, path, search, minGames, quick, mmrImpactFilter, hasNotes, sort.sortBy, sort.sortDir, items]);
+  }, [exportScope, filters.since, filters.until, showPlayerGroups, path, search, minGames, quick, mmrImpactFilter, hasNotes, sort.sortBy, sort.sortDir, items]);
   const exportDisabled = !items.length || isLoading || isLoadingMore || hitMaxPages || !!error || search !== deferredSearch;
   useEffect(() => {
     onExportAction?.({ count: items.length, disabled: exportDisabled, download: exportRows });
@@ -412,7 +413,7 @@ export function OpponentsTab({
         <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
           <span aria-live="polite" className="text-xs text-text-dim">
             {isRefreshing ? "Updating… · " : isLoadingMore ? `Loading more opponents… (${rawItems.length.toLocaleString()} so far) · ` : ""}
-            {items.length.toLocaleString()} {groupByPlayer ? "players" : "accounts"}
+            {items.length.toLocaleString()} {showPlayerGroups ? "players" : "accounts"}
             {groupByPlayer && mergedNameCount > 0
               ? ` · ${mergedNameCount.toLocaleString()} accounts merged`
               : null}

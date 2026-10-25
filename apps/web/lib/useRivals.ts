@@ -6,6 +6,7 @@ import { apiCall, useApi } from "./clientApi";
 import { opponentPlayerKey, type GroupableOpponent, type PulseLink } from "./opponentGroups";
 
 export const MAX_RIVALS = 50;
+const EMPTY_KEYS: string[] = [];
 type RivalIdentity = Pick<GroupableOpponent, "pulseId" | "pulseCharacterId" | "globalIdentity">;
 export function rivalKeys(row: RivalIdentity & { identities?: RivalIdentity[] }, links?: Record<string, PulseLink> | null) {
   const identities = row.identities || [row];
@@ -24,7 +25,7 @@ export function useRivals() {
   const active = useRef<AbortController | null>(null);
   const [state, setState] = useState<{ owner: string | null | undefined; saving: boolean; error: string | null }>({ owner: userId, saving: false, error: null });
   useEffect(() => { active.current?.abort(); active.current = null; return () => active.current?.abort(); }, [userId]);
-  const keys = prefs.isPreviousData ? [] : prefs.data?.keys || [];
+  const keys = prefs.isPreviousData ? EMPTY_KEYS : prefs.data?.keys || EMPTY_KEYS;
   const saving = state.owner === userId && state.saving;
   const toggle = async (candidates: string[]) => {
     if (!userId || active.current || prefs.isLoading || prefs.error || !prefs.data || !candidates.length) return;

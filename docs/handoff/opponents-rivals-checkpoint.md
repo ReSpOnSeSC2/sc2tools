@@ -9,7 +9,7 @@ existing notes, URL/persistent sorting, real dossier links, delayed prefetch,
 request recovery and browser Back restoration remain. Earlier source branches
 for Strength, Mechanics, Story and stream titles are preserved.
 
-## Foundation (in progress)
+## Implemented
 
 - Shared Wilson rivalry selection and one 100-row render window, including
   expanded identities; Show 100 more; restored 200/400-row windows still work.
@@ -30,25 +30,43 @@ for Strength, Mechanics, Story and stream titles are preserved.
   and two global cold admissions. Excess/missing data remains unknown.
 - Live badges use only fresh public viewer-cache observations and cached public
   channel aliases; list requests do not start live-status provider traffic.
-- Cheap owner-checked dossier star-key route/component is prepared. Header and
-  overlay integration, shared dossier replay CSV, Help and final evidence remain.
+- Cheap owner-checked dossier star-key route/component is integrated in the
+  header. Matched stars set the overlay's explicit RIVAL tag below the former
+  three-meeting threshold; display-name-only fallback cannot attach a star.
+- Dossier CSV uses the existing replay serializer and the same account limiter
+  and streaming loop as the library. Paging and export share one owned history
+  scope, including linked identities, global/local filters and explicit analyzed
+  sample membership; the dossier cap is 5,000 newest matching rows.
+- Removed the unimported old `components/OpponentsList.tsx`; repository search
+  leaves only the unrelated admin response type. Strategies' nested height cap
+  now applies on desktop only. Help and its generated index are updated.
 
 ## Local evidence so far
 
-- 45 focused web tests, including 1,500 rows (100 then 200), previous Back
+- 182 focused web/Help tests, including 1,500 rows (100 then 200), previous Back
   restoration, owner/token/response fences, Wilson bounds and CSV cells.
-- 27 focused API tests with temporary MongoDB and mocked providers, covering
+- 112 distinct focused API tests with temporary MongoDB and mocked providers, covering
   visibility/owner/filter scope, top-20 lower-bound streaks, recent cap,
   generation invalidation, raw rating history, cache TTL/admission and cache-only
-  live status.
+  live status, existing dossier/overlay consumers, scoped CSV parity, empty and
+  malformed analysis samples, 5,001→5,000 truncation and shared route admission.
 - API/web typechecks and strict scoped lint pass for the foundation.
+- Required-engine integrated production build and every unchanged bundle budget
+  passed: Today 227.3/240 kB, game 316.7/440, list 120/180, dossier 475.2/500,
+  overlay 233.9/240. Existing giant-file/hook warnings remain baseline warnings.
+- 79 local browser assertions at 320/390/768/1440 in light/dark, with actual
+  consumers and production CSS/fonts. Captures live under
+  `docs/handoff/screenshots/opponents-{list,rivals}-{theme}-{width}.png`.
+  Long-name grid overflow found there was corrected. Providers/nonlocal traffic
+  are blocked; the only writes were synthetic local star preferences.
 
 ## Integration / remaining work
 
-Integrate frozen Dossier #714 and replay-library-control before final gates,
-preserving shared visibility invalidators, installed-native compatibility and
-the replay CSV serializer/admission. Extend that existing export primitive for
-the dossier's trusted owner/opponent/sample scope and 5,000-row cap; do not add
-an independent serializer or admission policy. Finish consumer/owner tests,
-Help/changelog, responsive local-browser evidence and unchanged-budget build.
+Frozen Dossier #714 and replay-library #716 (`fb528645`) integrated cleanly at
+`b7b52b8b`, preserving installed-native compatibility, all visibility markers
+and existing cache invalidators. Game-control changes also invalidate Rivals,
+with a fence on admitted reads. Root's review accepted the shared CSV scope
+extraction. Integrate #716's final account-case follow-up (`cd44666a`) and fresh
+main before remote gates; preserve both packs and refresh any required evidence.
+Final CI/PR/merge evidence will be appended after the expected head is green.
 No production job, migration, real account write or provider operation was run.

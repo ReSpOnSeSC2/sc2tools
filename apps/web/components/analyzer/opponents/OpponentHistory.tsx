@@ -14,6 +14,7 @@ import { PlayerChannelLinks } from "../PlayerChannelLinks";
 import type { usePlayerChannels } from "../usePlayerChannels";
 import { AliasChip, IdentityRow, NotePreview, OpponentLink, OpponentRow } from "./OpponentTableRows";
 import { OpponentRace } from "./OpponentRace";
+import { RevealedChip } from "../RevealedChip";
 import { type Opp, type OpenOpponent, notePreview } from "./types";
 
 const EXTRA_COLUMNS = [{ key: "pulseId", label: "Pulse ID" }, { key: "mmr", label: "Last MMR" }, { key: "netMmr", label: "Net MMR" }, { key: "mmrWon", label: "MMR won" }, { key: "mmrLost", label: "MMR lost" }] as const;
@@ -35,7 +36,7 @@ export function OpponentHistory({ items, expanded, visibleCount, onMore, sort, c
       <ul aria-label="Opponent history" aria-busy={busy || undefined} className="divide-y divide-line">
         {loading ? <li className="p-3"><Skeleton rows={8} /></li> : rows.map(entry => <li key={`${entry.kind}:${entry.row.pulseId}`} className={entry.kind === "identity" ? "border-l-4 border-l-accent/30 bg-bg-elevated p-3 pl-6" : "p-3"}>
           <MobileOpponent row={entry.row} onOpen={onOpen} onPrefetch={onPrefetch} />
-          <div className="mt-1 flex flex-wrap items-center gap-1">
+          <div className="mt-1 flex flex-wrap items-center gap-1 [&_a]:min-h-11">
             {entry.kind === "parent" ? <>{star(entry.row)}{entry.row.groupSize > 1 ? <AliasChip group={entry.row} expanded={expanded.has(entry.row.pulseId)} onToggle={() => onToggle(entry.row.pulseId)} /> : null}</> : null}
             <NotePreview previews={(entry.kind === "parent" ? entry.row.identities : [entry.row]).map(notePreview).filter(Boolean)} />
             <PlayerChannelLinks channels={channelsFor(entry.row)} playerName={entry.row.name} compact />
@@ -65,11 +66,11 @@ export function OpponentHistory({ items, expanded, visibleCount, onMore, sort, c
 
 function MobileOpponent({ row, onOpen, onPrefetch }: { row: Opp; onOpen: OpenOpponent; onPrefetch: (id: string | null) => void }) {
   const decided = row.wins + row.losses;
-  return <OpponentLink opponent={row} onOpen={onOpen} onPointerEnter={() => onPrefetch(row.pulseId)} onPointerLeave={() => onPrefetch(null)} className="block min-h-11 rounded-lg focus-visible:ring-2 focus-visible:ring-accent">
+  return <OpponentLink opponent={row} onOpen={onOpen} onPointerEnter={() => onPrefetch(row.pulseId)} onPointerLeave={() => onPrefetch(null)} className="block min-h-11 rounded-lg text-text focus-visible:ring-2 focus-visible:ring-accent">
     <span className="flex min-w-0 flex-wrap items-center gap-2"><span className="min-w-0 flex-1 truncate font-semibold">{row.name || "unnamed"}</span><OpponentRace row={row} />{opponentRegion(row) ? <span className="text-micro text-text-dim">{opponentRegion(row)}</span> : null}<span aria-hidden>→</span></span>
-    {row.revealedName && row.revealedName !== row.name ? <span className="block truncate text-caption text-accent">aka {row.revealedName}</span> : null}
+    <RevealedChip name={row.globalIdentity?.displayName || row.revealedName} displayedName={row.name} confirmed={!!row.globalIdentity} />
     <span className="my-2 flex h-1.5 overflow-hidden rounded-full bg-bg-elevated" aria-hidden><span className="bg-success" style={{ width: decided ? `${100 * row.wins / decided}%` : "0%" }} /><span className="bg-danger" style={{ width: decided ? `${100 * row.losses / decided}%` : "0%" }} /></span>
-    <span className="flex flex-wrap justify-between gap-2 text-caption"><span>{row.wins}–{row.losses} · {pct1(row.winRate)} · {row.games} games</span><span className={typeof row.netMmr === "number" && row.netMmr < 0 ? "text-danger" : "text-text-muted"}>{(row.mmrPairs || 0) > 0 && typeof row.netMmr === "number" ? `${row.netMmr > 0 ? "+" : ""}${row.netMmr} MMR` : "MMR unmeasured"}</span></span>
+    <span className="flex flex-wrap justify-between gap-2 text-caption"><span><span className="sr-only">Wins–losses: </span>{row.wins}–{row.losses} · {pct1(row.winRate)} · {row.games} games</span><span className={`rounded-full border border-line px-1.5 tabular-nums ${typeof row.netMmr === "number" && row.netMmr < 0 ? "text-danger" : "text-text-muted"}`}>{(row.mmrPairs || 0) > 0 && typeof row.netMmr === "number" ? `${row.netMmr > 0 ? "+" : ""}${row.netMmr} MMR` : "MMR unmeasured"}</span></span>
     <span className="mt-1 block text-caption text-text-dim">Last played {row.lastPlayed ? <time dateTime={row.lastPlayed} title={new Date(row.lastPlayed).toLocaleString()}>{fmtAgo(row.lastPlayed)}</time> : "unknown"}</span>
   </OpponentLink>;
 }

@@ -178,7 +178,7 @@ export function MmrImpactCells({ opponent, columns = { netMmr: true, mmrWon: tru
         className={`px-2 py-1 text-right leading-tight tabular-nums ${
           net > 0 ? "text-success" : net < 0 ? "text-danger" : "text-text-muted"
         }`}
-        title={`${pairs} verified ${pairs === 1 ? "pair" : "pairs"}; average ${formatSignedDecimal(opponent.mmrAvgDelta)} MMR per pair`}
+        title={`${pairs} verified ${pairs === 1 ? "pair" : "pairs"}; average ${formatSignedDecimal(opponent.mmrAvgDelta)} MMR per pair; MMR won +${Math.round(opponent.mmrWon || 0)}; MMR lost -${Math.round(opponent.mmrLost || 0)}`}
       >
         <span className="font-semibold">{formatSignedMmr(net)}</span>
         <span className="block text-micro font-normal leading-tight text-text-dim">

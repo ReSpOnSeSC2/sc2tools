@@ -7,7 +7,7 @@ export function csvCell(value: CsvCell): string {
   if (value == null) return "";
   if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
   let text = String(value);
-  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  if (/^[\s\u0000-\u001f]*[=+\-@]|^[\t\r]/u.test(text)) text = `'${text}`;
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 }
 

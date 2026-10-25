@@ -9,6 +9,8 @@ const usePlayerChannelsMock = vi.fn();
 const useFiltersMock = vi.fn();
 const useRivalsMock = vi.fn();
 const useRivalSummaryMock = vi.fn();
+const downloadCsvMock = vi.fn();
+vi.mock("@/lib/csvExport", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/csvExport")>(), downloadCsv: (...args: unknown[]) => downloadCsvMock(...args) }));
 
 vi.mock("@/lib/useRivals", async importOriginal => ({ ...await importOriginal<typeof import("@/lib/useRivals")>(), useRivals: () => useRivalsMock() }));
 vi.mock("@/lib/useRivalSummary", () => ({ useRivalSummary: (...args: unknown[]) => useRivalSummaryMock(...args) }));
@@ -111,6 +113,7 @@ const impacts = [
 ];
 
 beforeEach(() => {
+  downloadCsvMock.mockReset();
   useRivalsMock.mockReturnValue({ keys: [], toggle: vi.fn(), loading: false, saving: false });
   useRivalSummaryMock.mockReturnValue({ data: undefined, error: false, loading: false, retry: vi.fn() });
   useFiltersMock.mockReturnValue({ filters: {}, dbRev: 7 });
@@ -146,6 +149,7 @@ afterEach(() => {
   vi.clearAllMocks();
   sessionStorage.clear();
   vi.useRealTimers();
+  vi.unstubAllGlobals();
 });
 
 describe("opponent list controls and navigation", () => {
@@ -579,5 +583,71 @@ describe("opponents progressive list", () => {
     expect(screen.getByText(/Updating…/)).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "Search opponents" }), { target: { value: "Player" } });
     expect(within(table).getAllByRole("row")).toHaveLength(101);
+  });
+});
+
+describe("rivals and responsive opponent consumers", () => {
+  it("hides unmeasured/default impact and Pulse columns, and Reset restores column defaults", () => {
+    useAllNetMmrOpponentsMock.mockReturnValue({ items: [], isLoading: false });
+    render(<OpponentsTab />); const table = screen.getByRole("table");
+    expect(within(table).queryByRole("columnheader", { name: /Last MMR|Net MMR|Pulse ID/ })).toBeNull();
+    expect(table.style.minWidth).toBe("640px");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Last MMR" }));
+    expect(within(table).getByRole("columnheader", { name: /Last MMR/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+    expect(within(table).queryByRole("columnheader", { name: /Last MMR/ })).toBeNull();
+  });
+  it("sorts primary race while grouped rows display every recorded race", () => {
+    useApiPaginatedMock.mockReturnValue({ items: [{ ...opponents[0], race: "Z" }, { ...opponents[1], race: "P" }], isLoading: false });
+    render(<OpponentsTab />); const table = screen.getByRole("table");
+    fireEvent.click(within(table).getByRole("button", { name: /Race/ }));
+    expect(within(table).getAllByRole("row")[1].textContent).toContain("Alpha");
+    fireEvent.click(within(table).getByRole("button", { name: /Race/ }));
+    expect(within(table).getAllByRole("row")[1].textContent).toContain("Beta");
+    expect(within(table).getByRole("img", { name: "Protoss" })).toBeTruthy();
+    expect(within(table).getByRole("img", { name: "Zerg" })).toBeTruthy();
+  });
+  it("uses actual mobile dossier links with notes/disclosures/stars outside the anchor and the same Back flag", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches:true, addEventListener:vi.fn(), removeEventListener:vi.fn() }));
+    useApiMock.mockReturnValue({ data: { links: { "101": { accountId:"one" }, "202": { accountId:"one" } } } });
+    useApiPaginatedMock.mockReturnValue({ items: [{ ...opponents[0], race:"Z", notes:"Check the third" }, { ...opponents[1], race:"P" }], isLoading:false });
+    const onOpen = vi.fn(); render(<OpponentsTab onOpen={onOpen} />);
+    expect(screen.queryByRole("table")).toBeNull(); const cards = screen.getByRole("list", { name:"Opponent history" });
+    const alias = within(cards).getByRole("button", { name:/Show the 2 names/ });
+    expect(alias.closest("a")).toBeNull(); expect(within(cards).getByRole("button", { name:/Scouting note/ }).closest("a")).toBeNull();
+    expect(within(cards).getByRole("button", { name:/Star Beta/ }).closest("a")).toBeNull();
+    fireEvent.click(alias); expect(onOpen).not.toHaveBeenCalled(); expect(within(cards).getAllByRole("listitem")).toHaveLength(3);
+    const link = cards.querySelector('a[href="/app/opponents/beta"]')!;
+    fireEvent.click(link); expect(onOpen).toHaveBeenCalledWith("beta"); expect(sessionStorage.getItem("opponents:from-list")).toBe("1");
+    fireEvent.change(screen.getByRole("combobox", { name:"Sort opponents" }), { target:{value:"name"} });
+    expect(screen.getByRole<HTMLSelectElement>("combobox", { name:"Sort opponents" }).value).toBe("name");
+  });
+  it("exports all1500 sorted matching rows rather than the logical window", () => {
+    const rows = Array.from({length:1500},(_,i) => ({ ...opponents[0], pulseId:`p-${i}`, name:`Player ${String(i).padStart(4,"0")}` }));
+    useApiPaginatedMock.mockReturnValue({ items:rows, isLoading:false, isLoadingMore:false });
+    render(<OpponentsTab />); expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(101);
+    fireEvent.click(screen.getByRole("button", { name:"Export CSV" }));
+    expect(downloadCsvMock).toHaveBeenCalledTimes(1); const [filename,csv] = downloadCsvMock.mock.calls[0];
+    expect(filename).toBe("sc2tools-opponents-all-time.csv"); expect(csv).toContain("Player 1499"); expect(csv.split("\r\n")).toHaveLength(1504);
+  });
+  it("passes explicit recent counts to Hot rematch and keeps starred rivals separate from Regulars", () => {
+    const lastPlayed = new Date().toISOString();
+    useApiPaginatedMock.mockReturnValue({ items:[{ ...opponents[0], lastPlayed }, opponents[1]], isLoading:false });
+    useRivalSummaryMock.mockReturnValue({ data:{ recentComplete:true, weekGames:{ alpha:2 }, rivals:[] }, loading:false });
+    useRivalsMock.mockReturnValue({ keys:["solo:alpha"], loading:false, toggle:vi.fn() });
+    render(<OpponentsTab />);
+    expect(within(screen.getByRole("region", { name:"Rivalries" })).getByText("Hot rematch").parentElement?.textContent).toContain("Alpha");
+    fireEvent.click(screen.getByRole("button", { name:"Rivals (1)" }));
+    expect(screen.getByRole("region", { name:"Starred rivals" }).textContent).toContain("Alpha");
+    expect(screen.queryByRole("table")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name:"Regulars: 5+ games" }));
+    expect(screen.queryByRole("region", { name:"Starred rivals" })).toBeNull();
+  });
+  it("uses onboarding only after an unfiltered owner existence check proves no recorded games", () => {
+    useApiPaginatedMock.mockReturnValue({ items:[], isLoading:false });
+    useRivalSummaryMock.mockReturnValue({ data:{ hasAnyGames:false, recentComplete:true, weekGames:{}, rivals:[] }, loading:false });
+    const view = render(<OpponentsTab />); expect(screen.getByText("No games synced yet")).toBeTruthy();
+    useRivalSummaryMock.mockReturnValue({ data:{ hasAnyGames:true, recentComplete:true, weekGames:{}, rivals:[] }, loading:false }); view.rerender(<OpponentsTab />);
+    expect(screen.queryByText("No games synced yet")).toBeNull(); expect(screen.getByText("No opponents match these filters")).toBeTruthy();
   });
 });

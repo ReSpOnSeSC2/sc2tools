@@ -1,7 +1,7 @@
 import { coerceRace, type Race } from "./race";
 import type { CsvColumn } from "./csvExport";
 import type { OpponentGroup } from "./opponentGroups";
-import type { Opp } from "@/components/analyzer/opponents/types";
+import { notePreview, type Opp } from "@/components/analyzer/opponents/types";
 
 export function opponentRace(value: unknown): Race | null {
   return typeof value === "string" && /^(p|protoss|t|terran|z|zerg|r|random)$/i.test(value.trim()) ? coerceRace(value) : null;
@@ -23,6 +23,6 @@ export const OPPONENT_CSV_COLUMNS: CsvColumn<OpponentGroup<Opp>>[] = [
   { key: "mmrWon", label: "MMR won", format: (value, row) => row.mmrPairs ? value as number : null },
   { key: "mmrLost", label: "MMR lost", format: (value, row) => row.mmrPairs ? value as number : null },
   { key: "lastPlayed", label: "Last played", format: value => typeof value === "string" && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null },
-  { key: "notes", label: "Notes preview", format: (_value, row) => row.identities.map(item => item.notesMeta?.preview || item.notes || "").filter(Boolean).join(" | ") },
+  { key: "notes", label: "Notes preview", format: (_value, row) => row.identities.map(notePreview).filter(Boolean).join(" | ") },
   { key: "pulseId", label: "Merged accounts", format: (_value, row) => row.identities.map(item => item.toonHandle || item.pulseId).join(" | ") },
 ];
