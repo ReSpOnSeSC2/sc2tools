@@ -15,6 +15,15 @@ beforeEach(async () => {
 const LOADED = { timeout: 10_000 };
 
 describe("LazyHelpLink", () => {
+  it("keeps a named link while the default article title is still loading", async () => {
+    render(<LazyHelpLink slug="stay-up-to-date" />);
+    const fallback = screen.getByRole("link", { name: "Help", exact: true });
+    expect(fallback.getAttribute("href")).toBe("/help/stay-up-to-date");
+    expect(fallback.textContent).toBe("Help");
+    const loaded = await screen.findByRole("link", { name: "Stay up to date", exact: true }, LOADED);
+    expect(loaded.getAttribute("aria-haspopup")).toBe("dialog");
+  });
+
   it("shows a plain link to the article until HelpLink loads, then opens the side sheet", async () => {
     render(<LazyHelpLink slug="stream-dock">Dock help</LazyHelpLink>);
     const fallback = screen.getByRole("link", { name: "Dock help" });
