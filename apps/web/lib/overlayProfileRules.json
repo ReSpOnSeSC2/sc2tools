@@ -38,6 +38,7 @@
     "lower-third": 14000,
     "stats-ticker": null,
     "countdown-timer": null,
-    "build-profile": null
+    "build-profile": null,
+    "series": null
   }
 }

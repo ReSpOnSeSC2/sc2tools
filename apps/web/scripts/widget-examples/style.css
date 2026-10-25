@@ -14,6 +14,7 @@ body::before{display:none!important;content:none!important}*{box-sizing:border-b
 .display-box>div:not(.widget-shell){position:relative!important;inset:auto!important;width:100%;height:auto;justify-content:center;align-items:center}
 .display-box--randomizer{width:800px;height:650px;transform:translate(-50%,-50%) scale(1.8)}
 .display-box--build-profile{width:620px;height:730px}
+.display-box--series{width:1000px;height:600px}.display-box--series>.widget-shell{zoom:1.8!important}
 .display-box--multichat{width:520px;height:500px;transform:translate(-50%,-50%) scale(1.35)}.display-box--multichat>div{height:500px!important}
 .display-box--chat-highlight{width:640px;height:200px;transform:translate(-50%,-50%) scale(1.7)}
 .display-box--chat-poll{width:420px;height:320px;transform:translate(-50%,-50%) scale(2.3)}

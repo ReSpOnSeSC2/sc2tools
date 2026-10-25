@@ -54,6 +54,7 @@ const KNOWN_WIDGETS = Object.freeze([
   "stats-ticker",
   "countdown-timer",
   "build-profile",
+  "series",
 ]);
 
 const RESOLVE_CACHE_TTL_MS = 10_000;

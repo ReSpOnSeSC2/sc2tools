@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useRef, useState } from "react";
-const GAME_WIDGETS = new Set(["opponent", "match-result", "post-game", "mmr-delta", "streak", "cheese", "rematch", "rival", "rank", "meta", "topbuilds", "fav-opening", "best-answer", "scouting", "session", "randomizer", "ghost-build", "session-recap", "chat-oracle", "stats-ticker"]);
+const GAME_WIDGETS = new Set(["opponent", "match-result", "post-game", "mmr-delta", "streak", "cheese", "rematch", "rival", "rank", "meta", "topbuilds", "fav-opening", "best-answer", "scouting", "session", "randomizer", "ghost-build", "session-recap", "chat-oracle", "stats-ticker", "series"]);
 export const isGameWidget = (widget: string) => GAME_WIDGETS.has(widget);
 
 /** Uses the existing Studio socket replay; never opens another connection/read.

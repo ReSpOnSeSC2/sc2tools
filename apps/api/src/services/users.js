@@ -1,5 +1,6 @@
 "use strict";
 const { sanitizeGameMomentAlerts } = require("./multichatAppearance");
+const { sanitizeChatCommands } = require("./chatCommands");
 
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
@@ -815,7 +816,7 @@ class UsersService {
       { projection: { _id: 0, [`preferences.${type}`]: 1 } },
     );
     const prefs = (doc && doc.preferences && doc.preferences[type]) || {};
-    return type === "analyzerViews" ? sanitizeAnalyzerViews(prefs) : prefs;
+    return type === "analyzerViews" ? sanitizeAnalyzerViews(prefs) : type === "chatCommands" ? sanitizeChatCommands(prefs) : prefs;
   }
 
   /** One indexed preferences read replaces AppHome's existing misc lookup.
@@ -847,6 +848,7 @@ class UsersService {
       const alerts = /** @type {Record<string,unknown>} */ (prefs.alerts);
       if (alerts.gameMoments !== undefined) prefs = { ...prefs, alerts: { ...alerts, gameMoments: sanitizeGameMomentAlerts(alerts.gameMoments, true) } };
     }
+    if (type === "chatCommands") prefs = sanitizeChatCommands(prefs, true);
     if (type === "onboarding") {
       // Independent checklist, goals and What's New writes must not replace
       // each other's fields. A literal merge is atomic and treats payload

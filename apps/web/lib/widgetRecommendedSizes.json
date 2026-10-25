@@ -22,6 +22,7 @@
   "chat-alerts": { "width": 720, "height": 900 },
   "stream-goals": { "width": 720, "height": 600 },
   "build-profile": { "width": 720, "height": 900 },
+  "series": { "width": 640, "height": 420 },
   "session-recap": { "width": 640, "height": 600 },
   "countdown-timer": { "width": 720, "height": 480 },
   "stats-ticker": { "width": 1920, "height": 180 },

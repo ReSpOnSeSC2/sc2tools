@@ -6,7 +6,7 @@ Run from `apps/web`:
 node scripts/widget-examples/server.mjs
 ```
 
-Open `http://localhost:4317/?widget=opponent`. Choose any of the 31 widgets in the dropdown or set its catalog ID in the URL. The `#capture` stage is 1400 × 900 pixels at the top of the page. Controls sit below that stage.
+Open `http://localhost:4317/?widget=opponent`. Choose a widget in the dropdown or set its catalog ID in the URL. Set `WIDGET_EXAMPLES_PORT` for an isolated local fixture when that port is already in use. The `#capture` stage is 1400 × 900 pixels at the top of the page. Controls sit below that stage.
 
 This development tool imports the real widget components and their production artwork. Vite aliases only their data/audio hooks to deterministic synthetic fixtures. No real account, overlay token, chat connection, or API is used. The fixed test token is a local fixture label. Fetch and WebSocket are blocked/replaced locally; Vite HMR is disabled. Each selection reloads the page so entry state is reproducible.
 
@@ -23,7 +23,7 @@ Optimize all captures from `apps/web`:
 node scripts/pack-widget-examples.mjs C:/SC2TOOLS/.tmp/widget-examples-captures
 ```
 
-This writes the 31 WebP images used by the public learning page to
+This writes the widget WebP images used by the public learning page to
 `public/images/widget-examples/`. The learning catalog tests verify that
 every supported widget has a 1400 × 900 image. Review a contact sheet and the
 full-size examples whenever the widget designs change.
