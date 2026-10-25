@@ -40,7 +40,30 @@ Final local proof with main725+726 integrated:
 
 Main725 and actual726 squash integrated cleanly (only725 additive changelog
 conflict, preserving both entries). Final production build/budgets and responsive
-recapture pass; all eight captures individually reviewed. Remaining: open/attach
-scoped PR, review current-head CI/deployment gates and squash only when green.
+recapture pass; all eight captures individually reviewed. PR728 subsequently
+merged with all exact-head checks and deployment gates green (see below).
 Token Rotation726 merged c781b3402c76d4fcc12249af76a06621c34c2071 after all nine
 GitHub checks and Vercel passed on eb7441a4; fresh main725 merge-tree was clean.
+
+
+## Lifecycle correction after728
+
+PR728 merged af68351e62a54f07c12f84f0f4335cef9fbea231 with all current-head
+GitHub/deployment gates green. Follow-up branch codex/fix-admin-user-live-games
+applies the shared LIVE_GAME_MATCH to both list count/sort paths and detail
+history: deleted/pending markers are not games, while hidden stored replays
+remain visible to administrators. Detail's separate wipeGameCount calls the
+existing authoritative gdpr.countGamesForWipe. The wipe card uses that preview
+and explains any pending-record difference; deletion filter/mutation semantics
+are unchanged. No list-row count fanout was added.
+
+Local177 API tests across11 admin/ops suites pass, including marker-only owner,
+hidden game, both group paths, CSV, recent list and a real pending-only wipe
+confirmation (Games0/preview1,202 accepted). API/web types, scoped web lint
+and207 admin web cases across27 suites pass; API lint has zero errors.
+Next-only production build and all existing budgets pass: Today238.7/240,
+Dock224.5/225, opponent476/500 kB gzip. Actual Chromium80 checks at375/1440
+light/dark pass, including the pending-record explanation and real wipe dialog
+39 count, cancelled without mutation. Four loopback synthetic exports only;
+all nonlocal traffic blocked. Updated four detail captures individually viewed.
+This narrow follow-up has no engine or infrastructure changes.

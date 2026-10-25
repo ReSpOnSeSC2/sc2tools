@@ -81,7 +81,7 @@ describe("Admin Users matched pages and private exports", () => {
     expect(prepared).toMatchObject({ total: 10001, truncated: true }); expect(lines).toBe(10001);
   }, 30000);
   test("detail includes only five newest lightweight games", async () => {
-    const admin = new AdminService({ db, gdpr: {}, adminIds: () => ["env-admin"] });
+    const admin = new AdminService({ db, gdpr: { countGamesForWipe: userId => db.games.countDocuments({ userId, _deleted: { $ne: true } }) }, adminIds: () => ["env-admin"] });
     await db.games.insertMany(Array.from({ length: 6 }, (_, i) => ({ userId: "alpha", gameId: `new-${i}`, date: new Date(+now + i), result: "Tie", map: "Recent", opponent: { displayName: "Rival", pulseId: "p" }, secret: "never" })));
     const detail = await admin.userDetail("alpha");
     expect(detail.isAdmin).toBe(true); expect(detail.recentGames.map(g => g.gameId)).toEqual(["new-5", "new-4", "new-3", "new-2", "new-1"]);
@@ -98,6 +98,32 @@ describe("Admin Users matched pages and private exports", () => {
     expect(rows.items.map(e => e.eventId)).toEqual(["mine"]);
     expect(rows.items[0].payload.email).toBe("a+one@example.test");
     expect((await db.adminEvents.findOne({ eventId: "mine" })).payload.email).toBeUndefined();
+  });
+  test("deleted/pending markers never count as replays; hidden stored games stay visible to admin", async () => {
+    await db.users.insertMany([{ userId: "markers", clerkUserId: "markers-clerk", createdAt: now }, { userId: "hidden", clerkUserId: "hidden-clerk", createdAt: now }]);
+    const liveDate = new Date("2026-09-01T00:00:00Z");
+    await db.games.insertMany([
+      { userId: "markers", gameId: "deleted", _deleted: true },
+      { userId: "markers", gameId: "pending", _deletionPending: true },
+      { userId: "hidden", gameId: "hidden-live", excluded: true, date: liveDate, result: "Victory", map: "Hidden map", opponent: { displayName: "Rival", pulseId: "p" } },
+      { userId: "hidden", gameId: "hidden-deleted", _deleted: true, date: now, result: "Defeat" },
+      { userId: "hidden", gameId: "hidden-pending", _deletionPending: true, date: now, result: "Victory" },
+    ]);
+    for (const sort of ["lastActivity", "games", "opponents"]) {
+      const rows = await service.list({ sort });
+      expect(rows.items.find(row => row.userId === "markers")).toMatchObject({ gameCount: 0, firstActivity: null });
+      expect(rows.items.find(row => row.userId === "hidden")).toMatchObject({ gameCount: 1, firstActivity: liveDate, lastActivity: liveDate });
+      const withGames = await service.list({ sort, filter: "with_games" });
+      expect(withGames.items.some(row => row.userId === "markers")).toBe(false); expect(withGames.items.some(row => row.userId === "hidden")).toBe(true); expect(withGames.total).toBe(4);
+      const noGames = await service.list({ sort, filter: "no_games" });
+      expect(noGames.items.map(row => row.userId).sort()).toEqual(["markers", "zero"]); expect(noGames.total).toBe(2);
+    }
+    const admin = new AdminService({ db, gdpr: { countGamesForWipe: userId => db.games.countDocuments({ userId, _deleted: { $ne: true } }) } });
+    const empty = await admin.userDetail("markers"), hidden = await admin.userDetail("hidden");
+    expect(empty.games).toEqual({ total: 0, wins: 0, losses: 0, firstActivity: null, lastActivity: null }); expect(empty.recentGames).toEqual([]); expect(empty.wipeGameCount).toBe(1);
+    expect(hidden.games).toEqual({ total: 1, wins: 1, losses: 0, firstActivity: liveDate, lastActivity: liveDate }); expect(hidden.recentGames.map(row => row.gameId)).toEqual(["hidden-live"]);
+    const csv = await service.prepareCsv({ search: "markers" }); let text = ""; for await (const chunk of csv.stream) text += chunk;
+    expect(text).toContain(",0,0,false,,false\r\n");
   });
   test("export route streams attachment, audits counts only, and admits once per admin/minute", async () => {
     await db.users.insertOne({ userId: "export-admin", clerkUserId: "export-admin-clerk", createdAt: now });
