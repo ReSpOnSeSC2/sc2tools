@@ -151,6 +151,23 @@ test("whole Game Desk mutation joins rotation admission before any owner or toke
   expect(await db.multichatStudio.countDocuments({})).toBe(0);
 });
 
+test("a held full drain cannot publish an older reveal after the next round completed", async () => {
+  await round(); let release, entered;
+  const held = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const leaders = engagement.topOracles.bind(engagement);
+  jest.spyOn(engagement, "topOracles").mockImplementationOnce(async (...args) => { entered(); await held; return leaders(...args); });
+  const older = engagement.settlePrediction([TOKEN], { gameKey: "game-one", result: "win" }); await started;
+  const resumed = new MultichatEngagementService(db, { io: engagement.io });
+  await round("game-two");
+  await resumed.settlePrediction([TOKEN], { gameKey: "game-two", result: "loss" });
+  release(); await older;
+  const reveals = events.filter(event => event.payload.type === "prediction-settled").map(event => event.payload);
+  expect(reveals.map(event => event.gameKey)).toEqual(["game-one", "game-two"]);
+  expect(reveals.map(event => event.settlementSequence)).toEqual([1, 2]);
+  expect((await resumed.summary(TOKEN))).toMatchObject({ settlementSequence: 2, latestRoundKey: "game-two", prediction: null });
+});
+
 test.each(["owner-write", "stream-mark"])("reversed reset completion at %s retains the newer anchor and stream mark", async boundary => {
   const olderAt = Date.now() - 10_000, newerAt = olderAt + 5000;
   await db.games.insertOne({ userId: OWNER, gameId: "between-resets", date: new Date(olderAt + 2000), result: "win", myMmr: 5000 });

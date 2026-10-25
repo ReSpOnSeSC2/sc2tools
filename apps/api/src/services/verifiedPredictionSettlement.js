@@ -36,6 +36,8 @@ class VerifiedPredictionSettlement {
   async resume(token) {
     const state = await this.deps.studio._findDocument(token, { projection: { oraclePending: 1, oracleSequence: 1 } });
     if (state?.oraclePending) await this.drain(token, state);
+    const sequence = state?.oracleSequence;
+    return Number.isSafeInteger(sequence) ? sequence : 0;
   }
 
   /** @param {string} token @param {any} state */
@@ -56,9 +58,13 @@ class VerifiedPredictionSettlement {
       }
       if (!doc.notifiedAt) {
         const leaders = await topOracles(token);
-        emit(token, { type: "prediction-settled", gameKey: job.gameKey, result: job.result, tally: totals,
-          correctCount: picks.filter(p => p.pick === job.result).length, pointsEach: this.deps.points, topOracles: leaders });
-        await predictions.updateOne({ _id: doc._id, settlementSequence: sequence }, { $set: { notifiedAt: new Date(now()) } });
+        const current = await studio._findDocument(token, { projection: { oracleSequence: 1, oraclePending: 1 } });
+        const receipt = await predictions.findOne({ _id: doc._id }, { projection: { notifiedAt: 1 } });
+        if (current?.oracleSequence === sequence && current?.oraclePending?.gameKey === job.gameKey && !receipt?.notifiedAt) {
+          emit(token, { type: "prediction-settled", gameKey: job.gameKey, settlementSequence: sequence, result: job.result, tally: totals,
+            correctCount: picks.filter(p => p.pick === job.result).length, pointsEach: this.deps.points, topOracles: leaders });
+          await predictions.updateOne({ _id: doc._id, settlementSequence: sequence }, { $set: { notifiedAt: new Date(now()) } });
+        }
       }
     } else if (doc?.resolution === "verified" && doc.settlementState !== "complete") {
       // A mismatching incomplete receipt cannot be silently skipped.

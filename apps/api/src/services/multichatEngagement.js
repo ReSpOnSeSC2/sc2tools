@@ -447,7 +447,6 @@ class MultichatEngagementService {
     );
     if (!doc) return false;
     const tally = tallyPicks(doc.picks ?? {});
-    await this.predictions.updateOne({ _id: doc._id }, { $set: { tally } });
     this._emit(token, { type: "prediction-settled", gameKey, result, tally, manual: true, pointsEach: 0, correctCount: 0, topOracles: [] });
     return true;
   }
@@ -553,7 +552,7 @@ class MultichatEngagementService {
    * @param {string} token
    */
   async summary(token) {
-    await this.verifiedSettlement.resume(token);
+    const settlementSequence = await this.verifiedSettlement.resume(token);
     // The streamer never ranks on their own boards (wall + oracles).
     const selfKeys = await this._selfKeys(token);
     /** @type {Record<string, any>} */
@@ -570,8 +569,8 @@ class MultichatEngagementService {
         .toArray(),
       this.topOracles(token, 5, selfKeys),
       this.predictions.findOne(
-        { token, settled: false },
-        { sort: { openedAt: -1 }, projection: { _id: 0, gameKey: 1, opponent: 1, picks: 1, openedAt: 1, locksAtMs: 1 } },
+        { token },
+        { sort: { openedAt: -1, _id: -1 }, projection: { _id: 0, settled: 1, gameKey: 1, opponent: 1, picks: 1, openedAt: 1, locksAtMs: 1 } },
       ),
       this.clips
         .find({ token }, { projection: { _id: 0, token: 0, atDate: 0 } })
@@ -619,7 +618,9 @@ class MultichatEngagementService {
         rank: rankName(levelForXp(v.xp ?? 0)),
       })),
       oracles: topOracles,
-      prediction: open && !isStalePrediction(open, this.now())
+      settlementSequence,
+      latestRoundKey: open?.gameKey ?? null,
+      prediction: open && !open.settled && !isStalePrediction(open, this.now())
         ? {
             gameKey: open.gameKey,
             opponent: open.opponent,

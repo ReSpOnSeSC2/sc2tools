@@ -101,6 +101,8 @@ class TwitchChatBotService {
     /** @type {Map<string, {userId: string, atMs: number}>} token→user cache */
     this._tokenCache = new Map();
     this._ircIdSeq = 0;
+    /** @type {Map<string, number>} bounded verified-reveal delivery cursor */
+    this._oracleSequences = new Map();
     /** @type {((userId:string)=>Promise<string|null>)|null} */
     this.shoutoutLine = null;
   }
@@ -246,6 +248,13 @@ class TwitchChatBotService {
     if (!userId) return;
     const conn = this._conns.get(userId);
     if (!conn || conn.state !== "connected") return;
+    if (msg.type === "prediction-settled" && Number.isSafeInteger(msg.settlementSequence) && msg.settlementSequence > 0) {
+      if (msg.settlementSequence < (this._oracleSequences.get(token) || 0)) return;
+      while (this._oracleSequences.size >= 256 && !this._oracleSequences.has(token)) {
+        const oldest = this._oracleSequences.keys().next().value; if (!oldest) break; this._oracleSequences.delete(oldest);
+      }
+      this._oracleSequences.set(token, msg.settlementSequence);
+    }
     /** @type {string|null} */
     let line = null;
     /** @type {string} */

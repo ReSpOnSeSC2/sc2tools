@@ -30,6 +30,7 @@ import type { LiveGamePayload } from "../types";
 const REVEAL_MS = 30_000;
 
 interface Settle {
+  manual?: boolean;
   result: "win" | "loss";
   tally: PredictionTally;
   correctCount: number;
@@ -48,7 +49,7 @@ function ConnectedChatOracleWidget({
   /** Shared overlay payload — read ONLY for the Test-fire flag. */
   live?: LiveGamePayload | null;
 }) {
-  const { summary, lastEvent } = useEngagementState(
+  const { summary, lastEvent, loaded } = useEngagementState(
     token,
     engagementEvent ?? null,
   );
@@ -69,17 +70,19 @@ function ConnectedChatOracleWidget({
 
   const [settle, setSettle] = useState<Settle | null>(null);
   useEffect(() => {
-    if (!lastEvent) return;
+    if (!loaded || !lastEvent) { setSettle(null); return; }
     // The next game starting kills the reveal instantly — a leftover
     // "chat was RIGHT / nobody called it" card must never sit over
     // the new game's CALL IT window.
-    if (lastEvent.type === "prediction-open") {
+    if (lastEvent.type === "prediction-open" || lastEvent.type === "prediction-cancelled") {
       setSettle(null);
       return;
     }
     if (lastEvent.type !== "prediction-settled") return;
+    if (summary.prediction && typeof lastEvent.gameKey === "string" && summary.prediction.gameKey !== lastEvent.gameKey) return;
     const tally = sanitizeTally(lastEvent.tally);
     setSettle({
+      manual: lastEvent.manual === true,
       result: lastEvent.result === "win" ? "win" : "loss",
       tally,
       correctCount: Math.max(0, Math.round(Number(lastEvent.correctCount) || 0)),
@@ -88,7 +91,7 @@ function ConnectedChatOracleWidget({
         ? (lastEvent.topOracles as OracleEntry[]).slice(0, 3)
         : [],
     });
-  }, [lastEvent]);
+  }, [lastEvent, summary.prediction, loaded]);
 
   // The auto-dismiss timer is keyed on the reveal itself, NOT on
   // lastEvent — an unrelated engagement event landing mid-reveal
@@ -225,11 +228,11 @@ function RevealCard({ settle }: { settle: Settle }) {
     <div className="oracle-card" style={cardStyle}>
       <div style={kickerStyle}>🔮 THE ORACLE SPEAKS</div>
       <div style={titleStyle}>
-        {tally.total === 0
+        {settle.manual ? `Result: ${result.toUpperCase()} — resolved manually` : tally.total === 0
           ? `Nobody called it — result: ${result.toUpperCase()}`
           : `Chat said ${majorityPct}% ${majority.toUpperCase()} — chat was ${chatRight ? "RIGHT" : "WRONG"}`}
       </div>
-      {tally.total > 0 ? (
+      {settle.manual ? <p style={{ fontSize: 12, opacity: 0.8 }}>No points or oracle accuracy recorded.</p> : tally.total > 0 ? (
         <div style={tallyRowStyle}>
           <span style={{ fontWeight: 700 }}>
             {correctCount} oracle{correctCount === 1 ? "" : "s"} +{pointsEach} pts
