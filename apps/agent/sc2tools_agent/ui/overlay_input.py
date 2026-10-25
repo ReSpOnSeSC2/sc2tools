@@ -159,6 +159,8 @@ def build_scouting_control(source, *, QtCore, QtWidgets):
         def __init__(self):
             flags = (QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint | QtCore.Qt.WindowStaysOnTopHint
                      | QtCore.Qt.WindowDoesNotAcceptFocus)
+            # Keep native proxies outside the compact card's child controls.
+            # Header styling is copied in sync without changing ownership.
             super().__init__(source.window())
             self.setWindowFlags(flags)
             self.setAttribute(QtCore.Qt.WA_ShowWithoutActivating)
@@ -168,27 +170,32 @@ def build_scouting_control(source, *, QtCore, QtWidgets):
             self.setCursor(QtCore.Qt.PointingHandCursor)
             self.setObjectName(source.objectName())
             self.setAccessibleName(source.accessibleName())
-            self.setCheckable(True)
+            self.setCheckable(source.isCheckable())
             self.clicked.connect(self._activate_source)
             self._signature = None
 
         def _activate_source(self, _checked=False):
-            if (not source.isVisible() or not source.isEnabled() or source.window().isMinimized()
+            if (not self.isVisible() or not source.isVisible() or not source.isEnabled() or source.window().isMinimized()
                     or source.property("compactAction") in {"expand", "unavailable"}):
                 self.setChecked(source.isChecked())
                 return
             source.click()
 
         def sync(self):
-            signature = (source.icon().cacheKey(), source.iconSize().toTuple(), source.styleSheet(),
-                         source.toolTip(), source.isChecked(), source.text(), source.toolButtonStyle())
+            parent = source.parentWidget()
+            inherited = parent.styleSheet() if parent is not None and parent is not source.window() else ""
+            stylesheet = "\n".join(style for style in (inherited, source.styleSheet()) if style)
+            signature = (source.icon().cacheKey(), source.iconSize().toTuple(), stylesheet,
+                         source.toolTip(), source.isChecked(), source.text(), source.toolButtonStyle(),
+                         source.isCheckable())
             if signature != self._signature:
                 self.setIcon(source.icon())
                 self.setIconSize(source.iconSize())
                 self.setText(source.text())
                 self.setToolButtonStyle(source.toolButtonStyle())
-                self.setStyleSheet(source.styleSheet())
+                self.setStyleSheet(stylesheet)
                 self.setToolTip(source.toolTip())
+                self.setCheckable(source.isCheckable())
                 self.setChecked(source.isChecked())
                 self._signature = signature
             position = source.mapToGlobal(QtCore.QPoint())
