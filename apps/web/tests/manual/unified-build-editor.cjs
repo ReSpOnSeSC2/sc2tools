@@ -3,7 +3,7 @@
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {execFileSync}=require('node:child_process'),{chromium,expect}=require('@playwright/test'),axe=require('axe-core');
 const root=process.cwd(),shots='../../docs/handoff/screenshots',calls=[],unexpected=[],saved=new Map();
-let origin,checks=0,captures=0,holdDetail=false,releaseDetail,malformedList=false;
+let origin,checks=0,captures=0,holdDetail=false,releaseDetail,malformedList=false,holdSave=false,releaseSave;
 const legacy={slug:'legacy',name:'Legacy opener',race:'Protoss',vsRace:'Zerg',signature:[{unit:'Gateway',count:2,beforeSec:100,proxy:true}],notes:'Preserve private notes'};
 const css=fs.readdirSync('.next/static/css',{recursive:true}).filter(name=>name.endsWith('.css')).map(name=>fs.readFileSync(path.join('.next/static/css',name),'utf8')).join('\n');
 const fonts=`@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk-latin.woff2');font-weight:100 900}@font-face{font-family:FixtureDisplay;src:url('/fonts/bricolage-grotesque-latin.woff2');font-weight:100 900}:root{--font-sans:FixtureSans;--font-display:FixtureDisplay}`;
@@ -18,7 +18,7 @@ const server=http.createServer(async(req,res)=>{
     if(p==='/v1/custom-builds/preview-matches')return json({matches:[],almost_matches:[],scanned_games:24,truncated:false});
     if(p==='/v1/custom-builds')return json({items:[...saved.entries()].filter(([key])=>key.startsWith(owner+':')).map(([,value])=>value),total:0,libraryTotal:saved.size,limit:50});
     if(p.startsWith('/v1/community/my-build-publication/'))return json({published:false,authorName:'Synthetic owner',publishAnonymously:false,mirrorPending:false});
-    if(p.startsWith('/v1/custom-builds/')){const slug=decodeURIComponent(p.split('/').at(-1));if(req.method==='PUT'){saved.set(owner+':'+slug,{...body,slug});return json({saved:true,reclassify:null})}return json(saved.get(owner+':'+slug)||legacy)}
+    if(p.startsWith('/v1/custom-builds/')){const slug=decodeURIComponent(p.split('/').at(-1));if(req.method==='PUT'){if(holdSave){holdSave=false;await new Promise(resolve=>{releaseSave=resolve})}saved.set(owner+':'+slug,{...body,slug});return json({saved:true,reclassify:null})}return json(saved.get(owner+':'+slug)||legacy)}
     if(p==='/v1/replays'){
       if(malformedList){malformedList=false;return json({items:'older incompatible shape'})}
       const race=url.searchParams.get('race')||'P',next=url.searchParams.has('cursor'),label=url.searchParams.get('build');
@@ -65,7 +65,12 @@ async function chooseToken(page,token){const input=page.getByRole('combobox',{na
       await input.press('Escape');await expect(page.getByRole('listbox')).toHaveCount(0);await expect(page.getByRole('dialog')).toHaveCount(1);checks+=2;
       await chooseToken(page,'BuildGateway');await expect(page.getByRole('button',{name:'Save build',exact:true})).toBeEnabled();checks++;
       await page.getByText('How rules count',{exact:true}).click();await expect(page.getByRole('link',{name:'How build rules are counted'})).toHaveAttribute('href','/help/rules-explained');checks++;
-      await page.getByRole('button',{name:'Save build',exact:true}).click();await expect(page.getByRole('dialog')).toHaveCount(0);checks++;
+      if(width===300&&theme==='dark'){
+        holdSave=true;await input.focus();await expect(page.getByRole('listbox')).toBeVisible();
+        await page.getByRole('button',{name:'Save build',exact:true}).evaluate(node=>node.click());await expect.poll(()=>typeof releaseSave).toBe('function');
+        await expect(input).toBeDisabled();await expect(page.getByRole('listbox')).toHaveCount(0);checks+=2;releaseSave();releaseSave=undefined;
+      }else await page.getByRole('button',{name:'Save build',exact:true}).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0);checks++;
       const put=calls.filter(call=>call.method==='PUT').at(-1);expect(put.body).toMatchObject({createOnly:true,rules:[{name:'BuildGateway'}],shareWithCommunity:false});checks++;
       const notification=page.getByRole('button',{name:'Dismiss notification'});if(await notification.count())await notification.first().click();
       await page.getByRole('button',{name:'New build',exact:true}).click();await page.getByRole('button',{name:/From one of my games/}).click();
@@ -98,5 +103,5 @@ async function chooseToken(page,token){const input=page.getByRole('combobox',{na
     }
     expect(unexpected).toEqual([]);expect(calls.filter(call=>call.path.endsWith('/preview-matches')).every(call=>call.body.rules.every(rule=>rule.name!=='not-a-known-action'))).toBe(true);checks+=2;
     console.log(JSON.stringify({result:'PASS',checks,captures,requests:calls.length}));
-  }finally{releaseDetail?.();await browser.close();server.closeAllConnections();server.close()}
-})().catch(error=>{console.error(error);process.exitCode=1;releaseDetail?.();server.closeAllConnections();server.close()});
+  }finally{releaseDetail?.();releaseSave?.();await browser.close();server.closeAllConnections();server.close()}
+})().catch(error=>{console.error(error);process.exitCode=1;releaseDetail?.();releaseSave?.();server.closeAllConnections();server.close()});

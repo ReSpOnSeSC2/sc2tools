@@ -86,6 +86,7 @@ const ANNOUNCE_TTL_MS = 5000;
  */
 export function BuildEditorRules({
   draft,
+  disabled = false,
   errors,
   sourceRows,
   countRepeats = true,
@@ -197,6 +198,7 @@ export function BuildEditorRules({
           rules={rules}
           focusIndex={focusIndex}
           race={draft.race}
+          disabled={disabled}
           onUpdate={updateRule}
           onQuantity={changeQuantity}
           onCount={setRuleCount}
@@ -498,6 +500,7 @@ interface RulesListPanelProps {
   rules: ReadonlyArray<BuildRule>;
   focusIndex: number | null;
   race?: string;
+  disabled?: boolean;
   onUpdate: BuildEditorRulesProps["updateRule"];
   onQuantity: (idx: number, q: RuleQuantifier, carry: number) => void;
   onCount: BuildEditorRulesProps["setRuleCount"];
@@ -509,6 +512,7 @@ function RulesListPanel({
   rules,
   focusIndex,
   race,
+  disabled,
   onUpdate,
   onQuantity,
   onCount,
@@ -547,6 +551,7 @@ function RulesListPanel({
                 ctx={contexts[idx]}
                 autoFocusName={idx === focusIndex}
                 race={race}
+                disabled={disabled}
                 onUpdate={(patch) => onUpdate(idx, patch)}
                 onQuantity={(q, carry) => onQuantity(idx, q, carry)}
                 onCount={(n) => onCount(idx, n)}

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useState, type ComponentProps } from "react";
 
@@ -29,6 +29,16 @@ afterEach(() => {
 });
 
 describe("BuildEditorModal safeguards", () => {
+  it("disables portalled choices while Save is held even when activation keeps focus in the action input", async () => {
+    let finish!: (value: unknown) => void; const held = new Promise(resolve => { finish = resolve; });
+    harness.apiCall.mockImplementation((_token, _path, options) => options?.method === "PUT" ? held : Promise.resolve({ matches: [], almost_matches: [], scanned_games: 0, truncated: false }));
+    renderEditor({ initialDraft: { rules: [{ type: "before", name: "BuildSpawningPool", time_lt: 120 }] } });
+    const picker = screen.getByRole("combobox", { name: "Rule 1 action" }); fireEvent.focus(picker); expect(screen.getByRole("listbox")).toBeTruthy();
+    // AX/button activation need not move DOM focus as a mouse press does.
+    fireEvent.click(screen.getByRole("button", { name: "Save build" }));
+    expect(picker.matches(":disabled")).toBe(true); expect(screen.queryByRole("listbox")).toBeNull();
+    await act(async () => finish({ saved: true, reclassify: null }));
+  });
   it("keeps the real token picker in the dialog, consumes its Escape and blocks an unknown action", () => {
     const onClose = vi.fn(); renderEditor({ onClose, initialDraft: { rules: [{ type: "before", name: "BuildSpawningPool", time_lt: 120 }] } });
     const picker = screen.getByRole("combobox", { name: /Rule 1 action/ }); fireEvent.focus(picker);

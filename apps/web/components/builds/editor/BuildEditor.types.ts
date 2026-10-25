@@ -181,6 +181,8 @@ export interface BuildEditorBasicsProps {
 
 export interface BuildEditorRulesProps {
   draft: BuildEditorDraft;
+  /** Portalled pickers must mirror the surrounding disabled fieldset. */
+  disabled?: boolean;
   errors: BuildEditorErrors;
   sourceRows: ReadonlyArray<SourceTimelineRow>;
   /** See BuildEditorContext.countRepeats. */

@@ -34,7 +34,11 @@ augments. ADR0055 records the catalog and request boundaries.
 
 ## Validation
 
-- 380 affected web/Builds/Definitions/Help/landing/game consumer tests passed.
+- 380 affected web/Builds/Definitions/Help/landing/game consumer tests passed;
+  83 affected editor/Combobox cases also pass after the final held-save fix,
+  including its new regression. Portalled choices explicitly mirror the
+  disabled fieldset while Save is pending, including AX activation that leaves
+  focus in the input.
   Includes malformed/held responses, owner/filter ABA, known-token coverage,
   exact canonical storage, legacy signature rows, source-safe saves, modal
   keyboard behavior and rejected-import recovery. Web types and changed-source
@@ -45,12 +49,12 @@ augments. ADR0055 records the catalog and request boundaries.
   Today 238.8/240, Builds 195.6/270, game 316.4/440, opponent 452.5/500,
   Dock 214.5/225, dedicated widget 319.0/325 kB. Existing unrelated lint warnings
   remain; changed-source lint is strict and clean.
-- Real-source browser matrix: 318 checks, 44 captures, ten light/dark contexts
+- Real-source browser matrix: 320 checks, 44 captures, ten light/dark contexts
   at 300/320/390/768/1440. Actual Library/creation flow/rich modal/Definitions/
   legacy launcher/replay Save consumer, production CSS/fonts, real SWR/API
   transport, explicit synthetic auth/Next/API data and blocked external traffic.
   Covers picker point hit-testing/44px options, no horizontal overflow, Escape
-  and dirty confirmation, keyboard Save, local-owner/source resets, malformed
+  and dirty confirmation, keyboard/AX Save with a held response, local-owner/source resets, malformed
   Retry, held selected reads across filter/owner ABA, and chooser axe scans.
 - Real Next/webpack public ReplayDemo: nine checks. First editor chunk is
   deliberately aborted, local Retry loads the actual editor/timeline, the same

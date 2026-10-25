@@ -61,6 +61,7 @@ export interface RuleRowProps {
   /** Focus the token input on mount (a rule just added from the add bar). */
   autoFocusName?: boolean;
   race?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -82,6 +83,7 @@ export function RuleRow({
   onRemove,
   autoFocusName = false,
   race,
+  disabled = false,
 }: RuleRowProps) {
   const id = useId();
   const readoutId = `${id}-readout`;
@@ -116,6 +118,7 @@ export function RuleRow({
           onUpdate={onUpdate}
           onRemove={onRemove}
           race={race}
+          disabled={disabled}
         />
         <div className="flex flex-wrap items-center gap-1.5">
           <QuantityPicker
@@ -159,6 +162,7 @@ function RuleSubject({
   onUpdate,
   onRemove,
   race,
+  disabled,
 }: {
   rule: BuildRule;
   index: number;
@@ -168,6 +172,7 @@ function RuleSubject({
   onUpdate: RuleRowProps["onUpdate"];
   onRemove: RuleRowProps["onRemove"];
   race?: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
@@ -183,7 +188,7 @@ function RuleSubject({
           className="flex-shrink-0"
         />
       ) : null}
-      <TokenPicker value={rule.name} race={race} onChange={name => onUpdate({ name })} autoFocus={autoFocus} label={`Rule ${index + 1} action`} />
+      <TokenPicker value={rule.name} race={race} disabled={disabled} onChange={name => onUpdate({ name })} autoFocus={autoFocus} label={`Rule ${index + 1} action`} />
       <button
         type="button"
         onClick={onRemove}

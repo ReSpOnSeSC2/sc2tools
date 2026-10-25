@@ -325,6 +325,7 @@ export function BuildEditorModal({
             {legacySignature && editor.draft.rules.length === 0 ? <p role="note" className="mb-4 rounded-lg border border-accent-cyan/30 bg-accent-cyan/10 p-3 text-caption text-text-muted">This build uses the older signature format. Click a timeline row to turn it into a rule. Until you add one, it keeps matching by its signature.</p> : null}
             <BuildEditorRules
               draft={editor.draft}
+              disabled={editor.saving || editor.savedOk}
               errors={editor.errors}
               sourceRows={sourceRows}
               countRepeats={countRepeats}
