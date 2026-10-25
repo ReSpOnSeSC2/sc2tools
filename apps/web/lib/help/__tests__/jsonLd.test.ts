@@ -32,9 +32,13 @@ describe("help structured data", () => {
 
   it("marks troubleshooting question lists up as an FAQPage", () => {
     const faq = helpFaqItems(article("troubleshooting-and-support"));
-    expect(faq[0]).toEqual({
+    expect(faq).toContainEqual({
       question: "Changes not showing in OBS?",
       answer: expect.stringContaining("Press Save first"),
+    });
+    expect(faq).toContainEqual({
+      question: "Website or data not loading?",
+      answer: expect.stringContaining("checks run from your browser"),
     });
     const blocks = helpArticleJsonLd(article("troubleshooting-and-support"), SITE);
     expect(blocks.map((block) => block["@type"])).toEqual(["BreadcrumbList", "FAQPage"]);

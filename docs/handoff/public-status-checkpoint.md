@@ -68,3 +68,15 @@ four are checked in; ten captures and logs remain in `.cache`.
 This is a pre-deployment checkpoint. Require fresh exact-head CI, then deploy
 the primary route before attaching the alias. Record final live route and alias
 verification in the attached PR. Preserve primary domains and DNS records.
+
+PR755 responsive CI passed; full web CI found one outdated structured-data
+test that assumed the OBS question was the first troubleshooting FAQ. It now
+checks the existing OBS and new status entries independently of editorial order.
+All seven FAQ/sitemap checks and strict test-file lint pass. Runtime code and
+the validated production build are unchanged by this correction.
+
+Vercel currently reports a daily deployment rate limit for the preview. The
+existing production deployment remains Ready on main9b7ef88 (opponent columns).
+Do not upgrade plans or repeatedly submit deployments. The next required CI
+head will receive its normal Git deployment attempt; no domain/config change
+has been performed while the primary status page is unavailable.
