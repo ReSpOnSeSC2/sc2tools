@@ -1,8 +1,5 @@
-"""Desktop stream controls, isolated from replay processing and scene switching.
-
-Constructing the service never opens OAuth, sends RTMP, or changes a cloud
-broadcast. Account setup and preparation are explicit GUI actions. The worker
-only rearms a previously prepared session after both outputs and events end.
+"""Desktop stream controls with independent opt-in title and session workers.
+Construction performs no OAuth or broadcast writes; account setup is explicit.
 """
 from __future__ import annotations
 

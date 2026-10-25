@@ -109,16 +109,7 @@ class StreamTitleController:
                     selected = [name for name, enabled in self.settings["platforms"].items()
                                 if enabled and self.settings["last_titles"].get(name) != title]
                     if selected:
-                        # Persist before sending: a crash or ambiguous receipt
-                        # must not repeat the same provider write on restart.
-                        attempted = copy.deepcopy(self.settings)
-                        attempted["last_attempt"] = self.worker.last_attempt
-                        for name in selected:
-                            attempted["last_titles"][name] = title
-                        self._persist(attempted)
-                        self.settings = attempted
-                        service._apply_title(title, service.backend.metadata["description"], selected, client=client)
-                        self.message = "Automatic title request completed. See each platform's receipt."
+                        self._deliver(title, selected, client)
                     else:
                         self.message = "Rendered title is unchanged; no platform request was sent."
                 except ValueError as error:
@@ -126,3 +117,30 @@ class StreamTitleController:
                 except Exception:
                     self.message = "Automatic title could not be completed. Check platform receipts before retrying."
             service._publish()
+
+    def _deliver(self, title, selected, client):
+        service = self.service
+        for name in selected:
+            if service.stop_event.is_set() or self.owner() != self.settings["owner"]:
+                break
+            # A known local preflight failure has made no provider attempt.
+            # Keep its receipt separate and still deliver other selections.
+            if name == "youtube" and not service._setup_matches(service._connection_context()):
+                service.platform_results[name] = {"ok": False,
+                    "message": "Save YouTube setup for this account before updating its title."}
+                continue
+            # Persist this platform immediately before its path. An ambiguous
+            # attempt must not repeat after restart; untouched platforms may.
+            attempted = copy.deepcopy(self.settings)
+            attempted["last_attempt"] = self.worker.last_attempt
+            attempted["last_titles"][name] = title
+            self._persist(attempted)
+            self.settings = attempted
+            try:
+                service._apply_title(title, service.backend.metadata["description"], [name], client=client)
+            except Exception as error:
+                service.platform_results[name] = {"ok": False,
+                    "message": "Automatic title could not be completed. Check this platform before retrying."}
+                if getattr(error, "pairing_changed", False):
+                    break
+        self.message = "Automatic title requests completed. See each platform's receipt."

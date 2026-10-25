@@ -133,11 +133,58 @@ def test_same_title_is_marked_before_ambiguous_write_and_not_retried(service):
         raise RuntimeError("private provider token")
     instance._apply_title = ambiguous
     refresh(instance)
-    assert "could not be completed" in instance.status()["title_automation"]["message"]
+    assert "could not be completed" in instance.status()["platform_results"]["twitch"]["message"]
     instance.titles.worker.clock = lambda: 1800
     refresh(instance)
     assert "unchanged" in instance.status()["title_automation"]["message"]
     assert "private provider" not in str(instance.status())
+
+
+def test_youtube_preflight_failure_does_not_suppress_other_selected_providers(service):
+    instance, calls, _, _ = service
+    configure(instance, youtube=True)
+    instance.titles.settings["platforms"] = {"youtube": True, "twitch": True, "kick": True}
+    # A foreign tracked setup must never receive this owner's metadata.
+    instance.backend.config["expected_channel_id"] = "stale-fixture-channel"
+    instance.backend.config["cloud_account_key"] = "stale-owner"
+    instance._setup_account_key = "stale-owner"
+    refresh(instance)
+    writes = [call for call in calls if call[0] == "POST"]
+    assert [call[2]["json"]["platforms"] for call in writes] == [["twitch"], ["kick"]]
+    assert "youtube" not in instance.titles.settings["last_titles"]
+    assert "Save YouTube setup" in instance.status()["platform_results"]["youtube"]["message"]
+    # Once local setup is corrected, the unchanged title is still eligible
+    # for YouTube alone. The other two attempted platforms remain deduped.
+    instance._setup_account_key = instance.cloud_client.context()["accountKey"]
+    instance.backend.config["cloud_account_key"] = instance._setup_account_key
+    observed = []
+    instance._apply_title = lambda title, description, platforms, **kw: observed.extend(platforms)
+    instance.titles.worker.clock = lambda: 1800
+    refresh(instance)
+    assert observed == ["youtube"]
+
+
+def test_cached_status_masks_statistics_before_account_refresh_and_disables_consent(service):
+    instance, calls, _, connection = service
+    configure(instance)
+    refresh(instance, automatic=False)
+    assert instance.status()["title_automation"]["values"]["mmr"] == "5000"
+    connection[1] = "new-fixture-owner-token"
+    masked = instance.status()["title_automation"]
+    assert masked["enabled"] is False and masked["values"] == {} and masked["template"] == ""
+    instance._publish()
+    assert instance.titles.settings["enabled"] is False
+
+
+def test_real_runner_accepted_upload_hands_off_without_network(tmp_path):
+    from sc2tools_agent.runner import _handle_checkin_game_accepted
+    from sc2tools_agent.state import AgentState
+    accepted = []
+    stream = SimpleNamespace(on_game_accepted=lambda *args: accepted.append(args))
+    cell = SimpleNamespace(stream_service=stream, build_checkin=None)
+    game = SimpleNamespace(my_race=None, date_iso=None)
+    _handle_checkin_game_accepted(tmp_path, AgentState(), cell, "fixture.SC2Replay", game, "fixture-game", {})
+    assert accepted == [("fixture.SC2Replay", game, "fixture-game", {})]
 
 
 def test_strict_boolean_and_account_settings_validation():
