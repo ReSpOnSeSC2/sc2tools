@@ -59,6 +59,11 @@
       "id": "uptime",
       "aliases": [],
       "description": "Time since the stream session was started"
+    },
+    {
+      "id": "series",
+      "aliases": [],
+      "description": "This token's best-of score and next scheduled map"
     }
   ],
   "platforms": [
@@ -264,6 +269,22 @@
       "aliases": [],
       "description": "Time since the stream session was started",
       "trigger": "uptime",
+      "enabled": true,
+      "cooldownSec": 15,
+      "platforms": [
+        "twitch",
+        "kick",
+        "youtube",
+        "tiktok",
+        "nightbot"
+      ],
+      "answerOnStream": true
+    },
+    {
+      "id": "series",
+      "aliases": [],
+      "description": "This token's best-of score and next scheduled map",
+      "trigger": "series",
       "enabled": true,
       "cooldownSec": 15,
       "platforms": [

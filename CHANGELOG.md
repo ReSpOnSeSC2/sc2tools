@@ -33,6 +33,7 @@ corresponding GitHub Release.
 
 ### Stream Dock
 
+- Run an opt-in best-of series with an exact opponent, scheduled maps and manual score corrections. Accepted replays with a recorded start update the score once; the Series widget and shared `!series` command show the same score without posting automatically.
 - The new Game section and sticky status header show match and session context, Crystal Ball votes and safe round controls, a confirmed session reset, reversible game-widget hiding, and approved opponent shout-outs. Manual results earn no oracle points or accuracy; verified scoring recovers safely after interrupted writes.
 - Collapse panels into live summaries, pin frequently used sections, and keep the layout in this browser. Dock controls now show connection text and keyboard focus, give touch users larger targets, and offer selected text when clipboard access is unavailable.
 

@@ -10,12 +10,12 @@ describe("authoritative chat command catalog", () => {
   it("is fresh against the actual API registry, defaults, limits and reserved names", () => {
     expect(catalog).toEqual({ commands: registry.CHAT_COMMANDS, platforms: registry.PLATFORMS, variables: registry.VARIABLES,
       reserved: [...registry.RESERVED], maxCustom: registry.MAX_CUSTOM_COMMANDS, defaults: registry.configuredCommands({ builtins: [], custom: [] }) });
-    expect(catalog.commands).toHaveLength(11);
+    expect(catalog.commands).toHaveLength(12);
     for (const command of catalog.commands) expect(buildBioText("protoss")).toContain(`!${command.id}`);
   });
   it("expands sparse preferences without carrying unknown fields into a save", () => {
     const value = readChatCommands({ builtins: [{ id: "mmr", trigger: "rating", enabled: false, secret: "discard" }], custom: [] });
-    expect(value.builtins).toHaveLength(11); expect(value.builtins.find(row => row.id === "mmr")).toMatchObject({ trigger: "rating", enabled: false, cooldownSec: 15 });
+    expect(value.builtins).toHaveLength(12); expect(value.builtins.find(row => row.id === "mmr")).toMatchObject({ trigger: "rating", enabled: false, cooldownSec: 15 });
     expect(JSON.stringify(serializeChatCommands(value))).not.toContain("secret");
     expect(commandGroups(value).find(group => group.id === "stats")!.commands.some(row => row.syntax.startsWith("!rating"))).toBe(false);
   });

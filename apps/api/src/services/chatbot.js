@@ -155,6 +155,7 @@ class ChatbotService {
    *   chatStats?: import('./chatStats').ChatStatsService,
    *   engagement?: Pick<import('./multichatEngagement').MultichatEngagementService,'topOracles'>,
    *   studio?: Pick<import('./multichatStudio').MultichatStudioService,'get'>,
+   *   series?: Pick<import('./streamSeries').StreamSeriesService,'chatLine'>,
    *   now?: ()=>number,
    *   logger?: import('pino').Logger,
    * }} [services]
@@ -167,6 +168,7 @@ class ChatbotService {
     this.chatStats = services.chatStats;
     this.engagement = services.engagement;
     this.studio = services.studio;
+    this.series = services.series;
     this.now = services.now || Date.now;
     this.logger = services.logger || null;
   }
@@ -283,6 +285,7 @@ class ChatbotService {
     if (command === "build") return this.buildLine(token);
     const userId = await this._userIdForToken(token); if (!userId) return null;
     try {
+      if (command === "series") return clip(await this.series?.chatLine(token, userId) ?? "Series scoreboard is temporarily unavailable.");
       if (command === "oracle") {
         const rows = await this.engagement?.topOracles(token, 3);
         return clip(rows?.length ? `Top oracles: ${rows.map((row, index) => `${index + 1}. ${clean(row.user)} ${row.score} pts (${row.correct}/${row.total})`).join(" · ")}` : "No prediction scores yet.");

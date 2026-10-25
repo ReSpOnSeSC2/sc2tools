@@ -5,6 +5,8 @@ const { connect } = require("../src/db/connect");
 const { OverlayTokensService } = require("../src/services/overlayTokens");
 const { MultichatStudioService } = require("../src/services/multichatStudio");
 const { StreamSeriesService } = require("../src/services/streamSeries");
+const { ChatbotService } = require("../src/services/chatbot");
+const { ChatCommandService } = require("../src/services/chatCommandService");
 const START = Date.parse("2026-10-25T10:00:00Z"), NOW = START + 3_600_000;
 const OWNER = "series-owner";
 let mongo, db, tokens, token, other, studio, svc, events, completed, clock;
@@ -147,4 +149,17 @@ test("a Series HTTP/bootstrap read held in H2H is fenced after the token rotates
   const rotated = await tokens.rotate(OWNER, token); expect(rotated.token).toBeTruthy();
   release.resolve();
   await expect(pending).rejects.toMatchObject({ code: "invalid_overlay_token" });
+});
+test("!series extends the existing registry/composer and cooldowns without H2H hydration or provider work", async () => {
+  expect(await svc.chatLine(token, OWNER)).toBe("No series has been started in this Dock.");
+  await svc.act(token, OWNER, startBody({ format: 5 })); clock = NOW; await svc.ingest(OWNER, [game()]);
+  const hydration = jest.spyOn(svc, "headToHead"), stats = { snapshot: jest.fn() };
+  const chatbot = new ChatbotService(db, { overlayTokens: tokens, series: svc, chatStats: stats });
+  const commands = new ChatCommandService({ chatbot, overlayTokens: tokens,
+    users: { getPreferences: async () => ({ builtins: [{ id: "series", trigger: "matchscore" }] }) } });
+  const answer = await commands.answer(token, { command: "matchscore", platform: "nightbot", user: "Viewer" });
+  expect(answer).toMatchObject({ status: "reply", command: "series", text: "Bo5 vs Clem: 1–0, next map Goldenaura." });
+  expect((await commands.answer(token, { command: "series", platform: "nightbot", user: "Another" })).status).toBe("cooldown");
+  expect(hydration).not.toHaveBeenCalled(); expect(stats.snapshot).not.toHaveBeenCalled();
+  expect(JSON.stringify(answer)).not.toMatch(/S2|receipt|private-replay|userId/);
 });

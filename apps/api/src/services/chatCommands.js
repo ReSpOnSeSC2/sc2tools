@@ -15,6 +15,7 @@ const CHAT_COMMANDS = Object.freeze([
   { id: "peak", aliases: [], description: "Recorded current-season peak on your latest region" },
   { id: "oracle", aliases: [], description: "The top three prediction scorers" },
   { id: "uptime", aliases: [], description: "Time since the stream session was started" },
+  { id: "series", aliases: [], description: "This token's best-of score and next scheduled map" },
 ]);
 const PLATFORMS = Object.freeze(["twitch", "kick", "youtube", "tiktok", "nightbot"]);
 const VARIABLES = Object.freeze(["user", "mmr", "record", "opponent", "streak"]);

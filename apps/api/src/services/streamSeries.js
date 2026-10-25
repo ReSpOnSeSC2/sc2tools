@@ -47,6 +47,21 @@ class StreamSeriesService {
     return snapshot;
   }
 
+  /** Shared Chat v2 composer: one projected local read, no H2H aggregate or
+   * provider lookup. The registry owns aliases, enablement and cooldowns.
+   * @param {string} token @param {string} owner */
+  async chatLine(token, owner) {
+    await this._checkOwner(token, owner);
+    const row = await this.studio._findDocument(token, { projection: { streamSeries: 1 } });
+    const series = publicSeries(readSeries(row?.streamSeries));
+    await this._checkOwner(token, owner);
+    if (!series) return "No series has been started in this Dock.";
+    const status = series.status === "complete" ? series.score.you > series.score.opponent ? ", series won" : ", series lost"
+      : series.status === "ended" ? ", ended" : series.status === "paused" ? ", automatic scoring paused" : "";
+    const next = ["active", "paused"].includes(series.status) && series.currentMap ? `, next map ${series.currentMap}` : "";
+    return `Bo${series.format} vs ${series.opponentName}: ${series.score.you}–${series.score.opponent}${next}${status}.`;
+  }
+
   /** @param {string} owner @param {ReturnType<typeof readSeries>} stored */
   async snapshot(owner, stored) {
     const series = publicSeries(stored);

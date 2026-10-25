@@ -652,6 +652,7 @@ function makeServices(deps, clerk, adminClerkIds) {
       await multichatEngagement._recordMomentAdmitted(token, { kind: "game-event",
         reason: `Series ${series.score.you > series.score.opponent ? "won" : "lost"} — Bo${series.format} vs ${series.opponentName}: ${series.score.you}–${series.score.opponent}` });
     } });
+  chatbot.series = streamSeries;
   // Reconnect every enabled bot on boot — best-effort, non-blocking.
   void twitchChatBot.restoreAll();
   const aggregations = new AggregationsService(deps.db, { mmrExpectation });

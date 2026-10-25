@@ -140,6 +140,29 @@ Deploy API and web together, then refresh existing Dock and overlay Browser Sour
 
 At stream start, confirm Start new session to reset the account's session boundary and this token's clip timestamp mark. Hide game widgets is reversible and keeps chat/scenes running; verify your refreshed sources hide and resume before relying on it live. Crystal Ball manual/cancel controls never award points or accuracy. Shout-outs use only reviewed exact opponent channels; a configured matching Twitch bot queues them, otherwise Copy shout-out is available. Validation used synthetic loopback data and no actual bot or provider posts.
 
+## Series mode (Wave 4)
+
+Deploy API and web together, then refresh existing Dock and overlay Browser
+Sources. No environment variable, collection, index, job or provider connection
+is added. In the Dock's Series section, choose an opponent, best-of format and
+optional ordered maps, then explicitly Start. In Settings → Overlay → Widgets,
+enable Series for All-in-one or copy its dedicated 640×420 Browser Source.
+It starts off and stays transparent until a series exists.
+
+Automatic scoring requires a matching replay with a recorded exact start after
+Start. Old uploads without that field remain manual-only; known account
+mismatches never fall back to a shared name. Use ±1 to correct a score and End
+to stop scoring. Eighty retained replay receipts pause automatic scoring until
+the next Start. Lifetime H2H is unavailable without an exact recorded account.
+The shared Chat commands editor controls `!series` aliases, platforms and
+cooldown; no bot is enabled and no message is posted automatically.
+
+Use the silent local preview or Test in OBS to inspect the scorecard; tests do
+not start or score a series. Roll back by ending the series and disabling its
+widget, then reverting the feature commit if needed. Stored Studio state can
+remain safely bounded. Implementation verification uses synthetic local owners,
+replays and socket traffic only.
+
 ## Game moment alerts (Wave 4)
 
 - No new environment variables, collections, indexes, migrations or provider connections.
