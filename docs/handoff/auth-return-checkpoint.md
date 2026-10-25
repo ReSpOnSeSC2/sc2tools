@@ -65,9 +65,17 @@ the existing landing/replay entry points. This leaves room for an exact known
 catalog-ID allowlist for `/definitions?variant=...`, with no private `/builds`
 continuation. The shared helper, generated 197 IDs and parity test match PR738.
 Unknown IDs, additional/duplicate parameters and nested paths are rejected.
-The resumed Definitions page exposes its own explicit private-variant action;
-no hidden navigation or creation is introduced by the auth helper.
+This public continuation is shared with PR738's explicit Definitions action;
+the auth helper introduces no hidden navigation or creation.
 
 These additions pass 104 affected web consumer assertions, full web types and
 strict new-source lint. The integrated production build passes every unchanged
-budget: landing 189.5/215, Today 238.2/240 and widget 318.8/325 kB.
+budget: landing 189.6/215, Today 238.2/240 and widget 318.8/325 kB.
+
+The final source also integrates main `c7b9446f` (Series and Chat) and the
+requested seven-minute air opening correction from PR740, including both
+generated API catalogs. The required engine is `25b300818c31d41b`; no old
+engine build is used. The final actual Chromium auth matrix again passes
+145 checks / eight contexts / 16 unchanged captures, with 24 synthetic writes,
+no unexpected requests and no external traffic. Every final production budget
+passes after this integration. Final-head remote checks remain the merge gate.
