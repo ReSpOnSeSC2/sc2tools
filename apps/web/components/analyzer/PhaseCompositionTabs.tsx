@@ -12,6 +12,7 @@ import { ChevronRight } from "lucide-react";
 import { EmptyState } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { fmtMinutes, wrColor } from "@/lib/format";
+import { revealHorizontally } from "@/lib/a11y/revealHorizontally";
 import { UnitCompositionTable, unitLabel, compositionTime, type UnitSummary } from "./UnitCompositionTable";
 
 export type Phase = "early" | "earlyMid" | "mid" | "midLate" | "late";
@@ -158,6 +159,7 @@ export function PhaseCompositionTabs({
   }, [sampleSize, preferredPhase]);
   const [active, setActive] = useState<Phase>(initial);
   const tabRefs = useRef<Partial<Record<Phase, HTMLButtonElement | null>>>({});
+  const tablist = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!(sampleSize[active] > 0)) setActive(initial);
@@ -171,17 +173,14 @@ export function PhaseCompositionTabs({
     const index = enabled.indexOf(phase);
     const next = event.key === "Home" ? enabled[0] : event.key === "End" ? enabled[enabled.length - 1] : enabled[(index + (event.key === "ArrowRight" ? 1 : -1) + enabled.length) % enabled.length];
     setActive(next);
-    tabRefs.current[next]?.focus();
+    tabRefs.current[next]?.focus({ preventScroll: true });
   };
 
   useEffect(() => {
     const node = tabRefs.current[active];
-    if (!node || typeof node.scrollIntoView !== "function") return;
-    node.scrollIntoView({
-      behavior: "smooth",
-      inline: "center",
-      block: "nearest",
-    });
+    // Analysis arrives asynchronously below the viewport. Never scroll the
+    // reader down to this card merely because its selected tab just mounted.
+    if (node && tablist.current) revealHorizontally(tablist.current, node);
   }, [active]);
 
   const activeRow = perPhase[active];
@@ -207,6 +206,7 @@ export function PhaseCompositionTabs({
           ``overflow-x-auto`` the thin scrollbar appears only when needed
           and the Card stops being forced past the viewport edge. */}
       <div
+        ref={tablist}
         role="tablist"
         aria-label="Phase compositions"
         aria-orientation="horizontal"
