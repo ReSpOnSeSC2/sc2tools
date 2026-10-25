@@ -83,6 +83,9 @@ describe("services/recentResults", () => {
       expect(captured[0]).toEqual({
         $match: {
           userId: "u1",
+          excluded: { $ne: true },
+          _deleted: { $ne: true },
+          _deletionPending: { $ne: true },
           isResumedFromReplay: { $ne: true },
         },
       });

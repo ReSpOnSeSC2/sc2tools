@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH, isStatsGame } = require("../util/gameVisibility");
+
 const {
   LADDER_META_BUCKET_WIDTH,
   LADDER_META_LOW_CAP,
@@ -80,6 +82,7 @@ const GUIDE_MMR_BANDS = LADDER_META_MMR_BANDS;
 
 /** Ineligibility reason codes (logged as-is; never carry PII). */
 const INELIGIBLE = Object.freeze({
+  EXCLUDED: "excluded",
   RESUMED: "resumed",
   CUSTOM_BUILD: "custom_build",
   NOT_1V1: "not_1v1",
@@ -160,6 +163,7 @@ function classifierRow(game) {
  */
 function guideIneligibilityReason(raw) {
   if (!raw || typeof raw !== "object") return INELIGIBLE.BAD_MATCHUP;
+  if (!isStatsGame(raw)) return INELIGIBLE.EXCLUDED;
   const game = classifierRow(/** @type {Record<string, any>} */ (raw));
   if (game.isResumedFromReplay === true) return INELIGIBLE.RESUMED;
   if (game._customBuildSlug !== undefined) return INELIGIBLE.CUSTOM_BUILD;
@@ -216,7 +220,7 @@ function guideGamesMatch(matchup, opts = {}) {
     myBuild: { $type: "string", $in: [...buildNamesForMatchup(matchup)] },
     "opponent.race": { $in: racePrefixRegexes(matchup[OPP_RACE_INDEX]) },
     myRace: { $in: racePrefixRegexes(matchup[MY_RACE_INDEX]) },
-    isResumedFromReplay: { $ne: true },
+    ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
     _customBuildSlug: { $exists: false },
     $and: [
       { $or: [{ playerCount: { $exists: false } }, { playerCount: ONE_V_ONE_PLAYERS }] },

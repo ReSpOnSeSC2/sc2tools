@@ -1,4 +1,5 @@
 "use strict";
+const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 
 /**
  * Private original-.SC2Replay storage backed by Cloudflare R2 (or another
@@ -106,6 +107,7 @@ class ReplayFilesService {
         {
           userId,
           gameId,
+          ...LIVE_GAME_MATCH,
           "replayUpload.uploadId": activeIntent.uploadId,
           "replayUpload.state": "pending",
         },
@@ -132,7 +134,7 @@ class ReplayFilesService {
       expiresAt: new Date(now.getTime() + this.uploadExpiresSec * 2000),
     };
     /** @type {Record<string, any>} */
-    const intentFilter = { userId, gameId };
+    const intentFilter = { userId, gameId, ...LIVE_GAME_MATCH };
     if (game.replayUpload?.uploadId) {
       intentFilter["replayUpload.uploadId"] = game.replayUpload.uploadId;
       if (game.replayUpload.state) {
@@ -232,6 +234,7 @@ class ReplayFilesService {
       {
         userId,
         gameId,
+          ...LIVE_GAME_MATCH,
         "replayUpload.uploadId": uploadId,
         "replayUpload.state": "pending",
       },
@@ -326,6 +329,7 @@ class ReplayFilesService {
       {
         userId,
         gameId,
+          ...LIVE_GAME_MATCH,
         "replayUpload.uploadId": uploadId,
         "replayUpload.state": "completing",
       },
@@ -490,7 +494,7 @@ class ReplayFilesService {
   /** @param {string} userId @param {string} gameId */
   async _ownedGame(userId, gameId) {
     return this.games.findOne(
-      { userId, gameId },
+      { userId, gameId, ...LIVE_GAME_MATCH },
       {
         projection: {
           _id: 0,
@@ -527,6 +531,7 @@ class ReplayFilesService {
       {
         userId,
         gameId,
+          ...LIVE_GAME_MATCH,
         "replayUpload.uploadId": uploadId,
         "replayUpload.state": "completing",
       },
@@ -537,7 +542,8 @@ class ReplayFilesService {
   /** @param {string} userId @param {string} gameId @param {string} uploadId */
   async _clearIntent(userId, gameId, uploadId) {
     await this.games.updateOne(
-      { userId, gameId, "replayUpload.uploadId": uploadId },
+      { userId, gameId,
+          ...LIVE_GAME_MATCH, "replayUpload.uploadId": uploadId },
       { $unset: { replayUpload: "" } },
     );
   }
@@ -561,7 +567,8 @@ class ReplayFilesService {
   /** @param {string} userId @param {string} gameId @param {Date|string} storedAt */
   async _clearMarker(userId, gameId, storedAt) {
     await this.games.updateOne(
-      { userId, gameId, "replayFile.storedAt": storedAt },
+      { userId, gameId,
+          ...LIVE_GAME_MATCH, "replayFile.storedAt": storedAt },
       { $unset: { replayFile: "" } },
     );
   }

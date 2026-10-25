@@ -19,6 +19,7 @@ import {
   type PresetId,
 } from "@/lib/datePresets";
 import { coerceRace } from "@/lib/race";
+import { accountFilter, accountHandles } from "./accountFilter";
 import type { LogicalSeason } from "@/lib/useSeasons";
 
 /** Matches GAME_TOO_SHORT_THRESHOLD_SECONDS in replay-engine/core/strategy_detector_helpers.py. */
@@ -62,6 +63,8 @@ export type AnalyzerFilters = {
    * pre-date the field.
    */
   regions?: string;
+  /** Up to 20 literal owner toon handles. Absent means every account. */
+  accounts?: string;
   /**
    * Ladder-game filter. "ladder" keeps ranked ladder games;
    * "nonladder" keeps custom / unranked games. The legacy wire name is
@@ -235,7 +238,7 @@ export function filtersToQuery(p: Record<string, unknown>): string {
     // opt-out from the default cohort persists. It remains a no-op on the
     // wire, where an omitted parameter means no constraint.
     if ((k === "map_pool" || k === "game_size") && v === "all") continue;
-    usp.set(k, String(v));
+    usp.set(k, k === "accounts" ? accountFilter(v) ?? "" : String(v));
   }
   const q = usp.toString();
   return q ? `?${q}` : "";
@@ -271,6 +274,7 @@ export const FILTER_LABELS: Readonly<Record<string, string>> = {
   macro_min: "Minimum macro",
   macro_max: "Maximum macro",
   regions: "Regions",
+  accounts: "Accounts",
   map_pool: "Game type",
   game_size: "Game size",
   exclude_too_short: "Too-short games",
@@ -374,6 +378,7 @@ export function withMyRace(
 export type ActiveFilterKey =
   | "preset"
   | "regions"
+  | "accounts"
   | "map_pool"
   | "game_size"
   | "length"
@@ -442,6 +447,8 @@ export function describeActiveFilters(
     }
   }
 
+  if (filters.accounts) add("accounts", accountHandles(filters.accounts).join(", "), { accounts: undefined });
+
   if (filters.map_pool === "nonladder" || filters.map_pool === "all") {
     add("map_pool", filters.map_pool === "all" ? "Both" : "Custom games", {
       map_pool: DEFAULT_ANALYZER_FILTERS.map_pool,
@@ -492,6 +499,7 @@ export function summarizeFilters(filters: AnalyzerFilters, seasons?: LogicalSeas
     regions.length === ANALYZER_REGIONS.length ? "All regions" : regions.join(", "),
     gameLengthLabel(filters.min_minutes, filters.max_minutes) || "Any length",
   ];
+  if (filters.accounts) labels.push(`${accountHandles(filters.accounts).length} selected account${accountHandles(filters.accounts).length === 1 ? "" : "s"}`);
   const race = normalizeRaceCode(filters.race);
   const opponent = normalizeRaceCode(filters.opp_race);
   if (race || opponent) labels.push(`${race || "Any race"} vs ${opponent || "any race"}`);

@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+
 const crypto = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { stampVersion } = require("../db/schemaVersioning");
@@ -279,6 +281,7 @@ class CommunityService {
      * @type {Map<string, {available: boolean, expiresAt: number}>}
      */
     this.opponentAvailability = new Map();
+    this.availabilityRevision = 0;
     /** @type {() => number} */
     this.now = typeof opts.now === "function" ? opts.now : Date.now;
   }
@@ -1079,7 +1082,7 @@ class CommunityService {
               { _customOpponentStrategySlug: { $in: sourceSlugs } },
               { "buildIntent.opponent.detected.slug": { $in: sourceSlugs } },
             ],
-            isResumedFromReplay: { $ne: true },
+            ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
           },
         },
         {
@@ -1464,6 +1467,10 @@ class CommunityService {
     return summarizeOpponentGames(pulseId, pulseCharacterId, games);
   }
 
+  /** A contribution can change the global k-floor for linked aliases.
+   * @param {string} _userId */
+  invalidateForUser(_userId) { this.availabilityRevision++; this.opponentAvailability.clear(); }
+
   /**
    * Whether ``/community/opponents/:pulseId`` has a public profile, for
    * the private dossier's "Public profile" link. Uses the same indexed
@@ -1475,11 +1482,13 @@ class CommunityService {
    * @returns {Promise<boolean>}
    */
   async opponentProfileAvailable(pulseId) {
+    const revision = this.availabilityRevision;
     const now = this.now();
     const cached = this.opponentAvailability.get(pulseId);
     if (cached && cached.expiresAt > now) return cached.available;
     const { filter } = await this._opponentScope(pulseId);
     const available = !(await this._opponentRemoved(pulseId)) && await this._opponentFloorMet(filter);
+    if (revision !== this.availabilityRevision) return false;
     // Re-insert so insertion order is answer age: the cap below drops
     // the oldest answers first.
     this.opponentAvailability.delete(pulseId);
@@ -1525,14 +1534,14 @@ class CommunityService {
     /** @type {Record<string, any>} */
     const filter = pulseCharacterId
       ? {
-          isResumedFromReplay: { $ne: true },
+          ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
           $or: [
             { "opponent.pulseId": pulseId },
             { "opponent.pulseCharacterId": pulseCharacterId },
           ],
         }
       : {
-          isResumedFromReplay: { $ne: true },
+          ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
           "opponent.pulseId": pulseId,
         };
     return { filter, pulseCharacterId };
@@ -1729,7 +1738,7 @@ class CommunityService {
           },
         },
       );
-    if (report.targetType === "opponent") this.opponentAvailability.delete(report.targetId);
+    if (report.targetType === "opponent") this.invalidateForUser("");
     return { resolved: result.modifiedCount };
   }
 

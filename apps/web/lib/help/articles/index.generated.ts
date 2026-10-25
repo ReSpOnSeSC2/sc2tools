@@ -7,6 +7,8 @@ import type { HelpArticle } from "../types";
 import accountData_backupsAndExport from "./account-data/backups-and-export";
 import accountData_deleteAccount from "./account-data/delete-account";
 import accountData_deletingGameHistory from "./account-data/deleting-game-history";
+import accountData_exportCsv from "./account-data/export-csv";
+import accountData_hideOrDeleteAGame from "./account-data/hide-or-delete-a-game";
 import accountData_notifications from "./account-data/notifications";
 import accountData_playerChannels from "./account-data/player-channels";
 import accountData_privacyCookies from "./account-data/privacy-cookies";
@@ -17,6 +19,7 @@ import analyzer_analyzerFilters from "./analyzer/analyzer-filters";
 import analyzer_arcade from "./analyzer/arcade";
 import analyzer_builds from "./analyzer/builds";
 import analyzer_dashboardAndAnalyzer from "./analyzer/dashboard-and-analyzer";
+import analyzer_filterByAccount from "./analyzer/filter-by-account";
 import analyzer_howAnalysisWorks from "./analyzer/how-analysis-works";
 import analyzer_macro from "./analyzer/macro";
 import analyzer_maps from "./analyzer/maps";
@@ -87,6 +90,8 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   accountData_backupsAndExport,
   accountData_deleteAccount,
   accountData_deletingGameHistory,
+  accountData_exportCsv,
+  accountData_hideOrDeleteAGame,
   accountData_notifications,
   accountData_playerChannels,
   accountData_privacyCookies,
@@ -97,6 +102,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   analyzer_arcade,
   analyzer_builds,
   analyzer_dashboardAndAnalyzer,
+  analyzer_filterByAccount,
   analyzer_howAnalysisWorks,
   analyzer_macro,
   analyzer_maps,

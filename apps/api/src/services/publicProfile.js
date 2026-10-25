@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+
 const { CommunityService } = require("./community");
 const { AggregationsService } = require("./aggregations");
 const { BuildsService } = require("./builds");
@@ -177,7 +179,7 @@ class PublicProfileService {
         {
           $match: {
             userId,
-            isResumedFromReplay: { $ne: true },
+            ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
             myRace: { $type: "string", $ne: "" },
           },
         },

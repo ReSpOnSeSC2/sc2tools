@@ -1,0 +1,10 @@
+{
+  "maximumSelection": 25,
+  "deleteConfirmation": "DELETE GAME",
+  "reasons": [
+    { "value": "friend_played", "label": "Friend played" },
+    { "value": "disconnect_bug", "label": "Disconnect or bug" },
+    { "value": "off_race_practice", "label": "Off-race practice" },
+    { "value": "other", "label": "Other" }
+  ]
+}

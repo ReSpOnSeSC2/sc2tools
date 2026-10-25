@@ -1,4 +1,5 @@
 "use strict";
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 
 /**
  * AdminGlobalService — platform-wide ("global") tracking for the
@@ -310,6 +311,7 @@ class AdminGlobalService {
     const facet = await this.db.games
       .aggregate(
         [
+          { $match: STATS_GAME_MATCH },
           {
             $facet: {
               // Platform-wide: a confirmed build check-in or opponent
@@ -642,7 +644,7 @@ class AdminGlobalService {
  * @returns {Record<string, any>}
  */
 function pulseGamesMatch(pulseId) {
-  return { $or: [{ oppPulseId: pulseId }, { "opponent.pulseId": pulseId }] };
+  return { ...STATS_GAME_MATCH, $or: [{ oppPulseId: pulseId }, { "opponent.pulseId": pulseId }] };
 }
 
 /**

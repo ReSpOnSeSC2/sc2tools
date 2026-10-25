@@ -63,10 +63,12 @@ class GameDetailsService {
    *   deleteAllForUser: (userId: string) => Promise<void>,
    *   bulkReadCapacitySnapshot?: () => {active: number, queued: number, maxActive: number, maxWaiters: number},
    * }} store  Backend that satisfies the gameDetailsStore contract.
+   * @param {{deletedGameIds?:(userId:string,gameIds:string[])=>Promise<Set<string>>}} [opts]
    */
-  constructor(store) {
+  constructor(store, opts = {}) {
     if (!store) throw new Error("GameDetailsService: store required");
     this.store = store;
+    this.deletedGameIds = opts.deletedGameIds;
   }
 
   /**
@@ -92,6 +94,8 @@ class GameDetailsService {
   async upsert(userId, gameId, date, fields, opts = {}) {
     if (!userId) throw new Error("userId required");
     if (!gameId) throw new Error("gameId required");
+    const isDeleted = async () => this.deletedGameIds && (await this.deletedGameIds(userId, [gameId])).has(gameId);
+    if (await isDeleted()) throw require("../util/deletedGames").gameDeletedError();
     /** @type {Record<string, any>} */
     const blob = {};
     let any = false;
@@ -107,6 +111,10 @@ class GameDetailsService {
       return;
     }
     await this.store.write(userId, gameId, date, blob, opts);
+    if (await isDeleted()) {
+      await this.store.delete(userId, gameId);
+      throw require("../util/deletedGames").gameDeletedError();
+    }
   }
 
   /**
@@ -119,6 +127,7 @@ class GameDetailsService {
    * @returns {Promise<Record<string, any> | null>}
    */
   async findOne(userId, gameId, opts = {}) {
+    if (this.deletedGameIds && (await this.deletedGameIds(userId, [gameId])).has(gameId)) return null;
     // Always use the bulk-reader's process-wide admission gate, even for a
     // single unprojected legacy caller. This prevents several panels/tabs from
     // bypassing the R2 concurrency and waiter limits through `store.read()`.
@@ -149,7 +158,8 @@ class GameDetailsService {
    * @returns {Promise<Map<string, Record<string, any>>>}
    */
   async findMany(userId, gameIds, opts = {}) {
-    return this.store.readMany(userId, gameIds, opts);
+    const deleted = this.deletedGameIds ? await this.deletedGameIds(userId, gameIds) : new Set();
+    return this.store.readMany(userId, gameIds.filter(id => !deleted.has(id)), opts);
   }
 
   /**

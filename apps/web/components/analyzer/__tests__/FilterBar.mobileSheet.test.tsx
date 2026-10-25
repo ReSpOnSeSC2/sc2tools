@@ -7,6 +7,7 @@ import {
   type AnalyzerFilters,
 } from "@/lib/filterContext";
 import { FilterBar } from "../FilterBar";
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "owner" }) }));
 
 // The Matchup picker asks which races you have played: "none yet" here.
 vi.mock("@/lib/clientApi", () => ({

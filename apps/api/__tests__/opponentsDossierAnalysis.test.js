@@ -118,6 +118,18 @@ describe("private dossier brief and explicit analysis", () => {
     expect(rich.notes).toBe("Private scout");
   });
 
+  test("brief and analyzed samples retain the exact account cohort across legacy separator case", async () => {
+    await db.games.updateMany({ userId: OWNER }, { $set: { myToonHandle: "1-S2-1-999" } });
+    await db.games.updateOne({ userId: OWNER, gameId: "sample-0" }, { $set: { myToonHandle: "1-s2-1-111" } });
+    await db.games.updateOne({ userId: OWNER, gameId: "sample-1" }, { $set: { myToonHandle: "1-S2-1-111" } });
+    const brief = await request(appFor()).get(`/opponents/${PULSE}?accounts=1-S2-1-111`);
+    expect(brief.status).toBe(200); expect(brief.body.totals.total).toBe(2);
+    expect(brief.body.games.map(row => row.id)).toEqual(["sample-1", "sample-0"]);
+    const analysis = await request(appFor()).get(`/opponents/${PULSE}/analysis?accounts=1-s2-1-111`);
+    expect(analysis.status).toBe(200); expect(analysis.body.analyzedGameIds).toEqual(["sample-1", "sample-0"]);
+    expect(gameDetails.findOne.mock.calls.map(([, id]) => id)).toEqual(["sample-1", "sample-0"]);
+  });
+
   test("analysis forwards the complete facet scope and retryable admission failure without calling get", async () => {
     const briefGet = jest.spyOn(service, "get");
     const analysis = jest.spyOn(service, "getAnalysis").mockRejectedValue(Object.assign(new Error("busy"), {

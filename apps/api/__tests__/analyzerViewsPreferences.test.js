@@ -14,6 +14,18 @@ beforeAll(async () => { h = await createHarness(); await h.seedUser("owner"); aw
 afterAll(async () => { await h.close(); });
 beforeEach(async () => { jest.restoreAllMocks(); await h.db.users.updateMany({}, { $unset: { preferences: "" } }); });
 
+test("account cohorts persist in private saved/default views and an invalid complete write changes nothing", async () => {
+  const accounts = Array.from({ length: 20 }, (_, n) => `2-S2-1-${n + 1000000000}`).join(",");
+  const expected = accounts.split(",").sort().join(",");
+  expect((await put({ views: [view("account", "Account", { accounts })], defaultViewId: "account" })).status).toBe(200);
+  expect((await defaultView()).body.defaultView.filters.accounts).toBe(expected);
+  for (const malformed of [".*", "2-S2-1-1,", Array(21).fill("2-S2-1-1").join(","), "2-S2-1-1,wrong-id"]) {
+    expect((await put({ views: [view("bad", "Bad", { accounts: malformed })], defaultViewId: "bad" })).status).toBe(400);
+    expect((await get()).body.views[0].filters.accounts).toBe(expected);
+  }
+  expect((await get("other")).body.views).toEqual([]);
+});
+
 test("fresh views are bounded empty defaults, and all new reads/writes are private no-store", async () => {
   const fresh = await get();
   expect(fresh.status).toBe(200); expect(fresh.body).toEqual({ views: [], defaultViewId: null });

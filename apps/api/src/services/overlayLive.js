@@ -5,6 +5,7 @@ const {
   enrichEnvelope: enrichEnvelopeImpl,
   LiveEnrichmentCoordinator,
   invalidateEnrichmentForOpponent: invalidateEnrichmentForOpponentImpl,
+  invalidateEnrichmentForUser,
 } = require("./overlayLiveEnrichment");
 const aggregations = require("./overlayLiveAggregations");
 const {
@@ -857,6 +858,12 @@ class OverlayLiveService {
       isFirstForGameKey,
       this._enrichmentCoordinator,
     );
+  }
+
+  /** @param {string} userId */
+  invalidateForUser(userId) {
+    invalidateEnrichmentForUser(this._enrichmentCache, userId);
+    this._lastEnrichedGameKey.delete(userId);
   }
 
   /** Test helper: drop the per-user enrichment cache. */

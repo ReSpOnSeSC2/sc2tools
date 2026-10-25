@@ -1,0 +1,23 @@
+[
+  { "key": "gameId", "description": "Your replay's stable game ID." },
+  { "key": "date", "description": "Replay date and time in UTC." },
+  { "key": "result", "description": "Victory, Defeat or Tie." },
+  { "key": "myRace", "description": "The race you played." },
+  { "key": "myBuild", "description": "Your stored build label." },
+  { "key": "map", "description": "The map name recorded in the replay." },
+  { "key": "durationSec", "description": "Game duration in real seconds." },
+  { "key": "macroScore", "description": "Your available macro score." },
+  { "key": "apm", "description": "Your available average actions per minute." },
+  { "key": "spq", "description": "Your available spending quotient." },
+  { "key": "opponent", "description": "The opponent's recorded display name." },
+  { "key": "oppRace", "description": "The opponent's played race." },
+  { "key": "oppMmr", "description": "The available stored opponent rating; historical rows may lack replay-time provenance." },
+  { "key": "oppLeague", "description": "The available numeric opponent league ID." },
+  { "key": "oppStrategy", "description": "The effective opponent strategy in your library." },
+  { "key": "oppPulseId", "description": "The opponent identity recorded in your private library." },
+  { "key": "myMmr", "description": "Your available stored rating; historical rows may lack replay-time provenance." },
+  { "key": "matchup", "description": "Played races, such as PvT." },
+  { "key": "region", "description": "Your account's ladder region when known." },
+  { "key": "effectiveBuild", "description": "Your confirmed build check-in label when applied, otherwise the classified build." },
+  { "key": "gameUrl", "description": "A link to your private game page; sign-in is required." }
+]

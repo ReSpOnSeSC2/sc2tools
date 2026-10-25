@@ -609,13 +609,23 @@ class ReviewsService {
       .toArray();
     let closed = 0;
     for (const row of active) {
-      const exists = await this.db.games.findOne({ userId, gameId: row.gameId }, { projection: { _id: 1 } });
+      const exists = await this.db.games.findOne({ userId, gameId: row.gameId, _deleted: { $ne: true } }, { projection: { _id: 1 } });
       if (!exists) {
         await this._setClosed(row._id, "game_unavailable");
         closed += 1;
       }
     }
     return closed;
+  }
+
+  /** Revoke just this game's active grants without loading another thread.
+   * @param {string} userId @param {string} gameId */
+  async closeForGame(userId, gameId) {
+    const result = await this.db.reviewRequests.updateMany(
+      { userId, gameId, status: { $in: [...ACTIVE_STATUSES] } },
+      { $set: { status: "closed", closedAt: new Date(this.now()), updatedAt: new Date(this.now()), closedReason: "game_unavailable", listed: false, indexable: false }, $unset: { activeKey: "" } },
+    );
+    return result.modifiedCount;
   }
 
   // ── Scoped grant ────────────────────────────────────────────────

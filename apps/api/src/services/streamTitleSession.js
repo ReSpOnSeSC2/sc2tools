@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { resultBucket } = require("../util/parseQuery");
 const RACES = new Map([["Protoss", "P"], ["Terran", "T"], ["Zerg", "Z"]]);
@@ -17,7 +19,7 @@ async function streamTitleSession(db, games, userId) {
   const now = new Date();
   const since = new Date(now.getTime() - 90 * 86400000);
   const rows = await db.games.find({ userId, date: { $gte: since, $lte: now },
-    isResumedFromReplay: { $ne: true }, isLadderGame: true }, { projection: {
+    ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true }, isLadderGame: true }, { projection: {
     _id: 0, date: 1, myMmr: 1, myRace: 1, myToonHandle: 1, result: 1, "opponent.race": 1,
   }, maxTimeMS: 2000 }).sort({ date: -1, _id: -1 }).limit(HISTORY_LIMIT).toArray();
   /** @type {Record<string, {wins:number, losses:number}>} */

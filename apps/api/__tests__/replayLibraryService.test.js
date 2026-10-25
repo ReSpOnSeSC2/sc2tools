@@ -85,6 +85,8 @@ describe("ReplayLibraryService", () => {
     expect(page.sourceGames).toHaveLength(1);
     expect(page.items[0]).toEqual({
       gameId: "g-safe",
+      excluded: false,
+      exclusionReason: null,
       date: "2026-08-20T12:00:00.000Z",
       result: "Victory",
       map: "Alcyone LE",
@@ -126,6 +128,8 @@ describe("ReplayLibraryService", () => {
     for (const secret of ["private-sha", "private-object-key", "private-heavy-detail", "userId", "toonHandle", "pulseCharacterId"]) expect(ownerJson).not.toContain(secret);
     const publicPage = await service.list("owner", { view: "detector" });
     expect(publicPage.items[0].opponent).not.toHaveProperty("pulseId");
+    expect(publicPage.items[0]).not.toHaveProperty("excluded");
+    expect(publicPage.items[0]).not.toHaveProperty("exclusionReason");
     const publicJson = JSON.stringify(publicPage.items);
     expect(publicJson).not.toContain("private-pulse-id");
     expect(publicJson).not.toContain("private-sha");

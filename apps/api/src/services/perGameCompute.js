@@ -1,4 +1,5 @@
 "use strict";
+const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 
 const { randomUUID } = require("crypto");
 const { COLLECTIONS, LIMITS } = require("../config/constants");
@@ -162,7 +163,7 @@ class PerGameComputeService {
    * @param {string} gameId
    */
   async hasGame(userId, gameId) {
-    return !!await this.db.games.findOne({ userId, gameId }, { projection: { _id: 1 } });
+    return !!await this.db.games.findOne({ userId, gameId, ...LIVE_GAME_MATCH }, { projection: { _id: 1 } });
   }
 
   /**
@@ -208,7 +209,7 @@ class PerGameComputeService {
     const slim = opts.slim !== undefined
       ? opts.slim
       : await this.db.games.findOne(
-        { userId, gameId },
+        { userId, gameId, ...LIVE_GAME_MATCH },
         { projection: slimProjection },
       );
     // Check ownership/existence before storage I/O. An unrelated or deleted
@@ -343,7 +344,7 @@ class PerGameComputeService {
    */
   async mapPlayback(userId, gameId) {
     const slim = await this.db.games.findOne(
-      { userId, gameId },
+      { userId, gameId, ...LIVE_GAME_MATCH },
       { projection: { _id: 0, gameId: 1, map: 1, durationSec: 1, myRace: 1 } },
     );
     if (!slim) return null;
@@ -367,7 +368,7 @@ class PerGameComputeService {
     // cost minimal even though _readGameWithDetails normally pulls
     // the full doc.
     const slim = await this.db.games.findOne(
-      { userId, gameId },
+      { userId, gameId, ...LIVE_GAME_MATCH },
       {
         projection: {
           _id: 0,
@@ -413,7 +414,7 @@ class PerGameComputeService {
    */
   async apmCurve(userId, gameId) {
     const slim = await this.db.games.findOne(
-      { userId, gameId },
+      { userId, gameId, ...LIVE_GAME_MATCH },
       {
         projection: {
           _id: 0,
@@ -480,12 +481,12 @@ class PerGameComputeService {
     }
     stampVersion(set, COLLECTIONS.GAMES);
     await this.db.games.updateOne(
-      { userId, gameId },
+      { userId, gameId, ...LIVE_GAME_MATCH },
       { $set: set, $unset: { macroBreakdown: "" } },
     );
     if (this.gameDetails) {
       const slim = await this.db.games.findOne(
-        { userId, gameId },
+        { userId, gameId, ...LIVE_GAME_MATCH },
         { projection: { _id: 0, date: 1 } },
       );
       const date = slim && slim.date instanceof Date
@@ -513,12 +514,12 @@ class PerGameComputeService {
     const set = {};
     stampVersion(set, COLLECTIONS.GAMES);
     await this.db.games.updateOne(
-      { userId, gameId },
+      { userId, gameId, ...LIVE_GAME_MATCH },
       { $set: set, $unset: { apmCurve: "" } },
     );
     if (this.gameDetails) {
       const slim = await this.db.games.findOne(
-        { userId, gameId },
+        { userId, gameId, ...LIVE_GAME_MATCH },
         { projection: { _id: 0, date: 1 } },
       );
       const date = slim && slim.date instanceof Date
@@ -563,6 +564,7 @@ class PerGameComputeService {
         {
           userId,
           gameId,
+          ...LIVE_GAME_MATCH,
           $or: [
             { [leasePath]: { $exists: false } },
             { [`${leasePath}.leaseUntil`]: { $lte: now } },
@@ -595,7 +597,7 @@ class PerGameComputeService {
       if (acquired) break;
       if (opts.signal && opts.signal.aborted) throw requestAbortError();
       const existing = await this.db.games.findOne(
-        { userId, gameId },
+        { userId, gameId, ...LIVE_GAME_MATCH },
         { projection: { _id: 1 } },
       );
       if (!existing) throw new Error("game_not_found");
@@ -613,7 +615,8 @@ class PerGameComputeService {
       );
       if (!stillAllowed) {
         await this.db.games.updateOne(
-          { userId, gameId, [`${leasePath}.id`]: writeToken },
+          { userId, gameId,
+          ...LIVE_GAME_MATCH, [`${leasePath}.id`]: writeToken },
           { $set: { _customBuildRevision: randomUUID() }, $unset: {
             [leasePath]: "",
             _customBuildClassificationSequence: "",
@@ -634,7 +637,8 @@ class PerGameComputeService {
       if (renewalPromise) return renewalPromise;
       renewalPromise = (async () => {
         const renewed = await this.db.games.updateOne(
-          { userId, gameId, [`${leasePath}.id`]: writeToken },
+          { userId, gameId,
+          ...LIVE_GAME_MATCH, [`${leasePath}.id`]: writeToken },
           {
             $set: {
               [`${leasePath}.leaseUntil`]: new Date(
@@ -682,7 +686,8 @@ class PerGameComputeService {
         );
         if (leaseLost) throw opponentBuildOrderBusyError();
         const stillOwner = await this.db.games.findOne(
-          { userId, gameId, [`${leasePath}.id`]: writeToken },
+          { userId, gameId,
+          ...LIVE_GAME_MATCH, [`${leasePath}.id`]: writeToken },
           { projection: { _id: 1 } },
         );
         if (!stillOwner) throw opponentBuildOrderBusyError();
@@ -694,7 +699,8 @@ class PerGameComputeService {
       // after another process has acquired the row, but it cannot release the
       // new owner's fence or rotate its revision.
       const released = await this.db.games.updateOne(
-        { userId, gameId, [`${leasePath}.id`]: writeToken },
+        { userId, gameId,
+          ...LIVE_GAME_MATCH, [`${leasePath}.id`]: writeToken },
         {
           $set: {
             _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
@@ -797,9 +803,7 @@ class PerGameComputeService {
     // match narrows by build / opponent.strategy. Combined, the
     // ``limit`` cap applies to games that satisfy both — which is what
     // the StrategiesTab build × strategy comparison view needs.
-    const baseMatch = opts.filters
-      ? gamesMatchStage(userId, opts.filters)
-      : { userId, isResumedFromReplay: { $ne: true } };
+    const baseMatch = gamesMatchStage(userId, opts.filters || {});
     const extraMatch =
       opts.match && typeof opts.match === "object" && !Array.isArray(opts.match)
         ? opts.match
@@ -971,9 +975,7 @@ class PerGameComputeService {
       ? "opponent"
       : opts.perspective === "both" ? "both" : "you";
     const includeMacroBreakdown = !!opts.includeMacroBreakdown;
-    const baseMatch = opts.filters
-      ? gamesMatchStage(userId, opts.filters)
-      : { userId, isResumedFromReplay: { $ne: true } };
+    const baseMatch = gamesMatchStage(userId, opts.filters || {});
     const extraMatch = opts.match && typeof opts.match === "object"
       && !Array.isArray(opts.match) ? opts.match : null;
     const filter = rulePreviewViewMatch(
@@ -1273,7 +1275,7 @@ class MacroBackfillService {
     const force = !!opts.force;
     const limit = clampPositive(opts.limit, 0);
     /** @type {Record<string, any>} */
-    const filter = { userId, isResumedFromReplay: { $ne: true } };
+    const filter = { userId, ...LIVE_GAME_MATCH, isResumedFromReplay: { $ne: true } };
     // "Needs macro" is detected via the slim row's macroScore — score
     // and breakdown travel together, and post-v0.4.3 the breakdown
     // blob never sits on the slim row (it's $unset on every upsert),
