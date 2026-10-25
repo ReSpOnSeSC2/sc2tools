@@ -291,6 +291,7 @@ async function recordLayout(page, stage) {
       expect(await page.evaluate(() => scrollY)).toBe(0); expect(await page.evaluate(() => document.activeElement.id)).toBe('reader'); checks += 2;
 
       await page.evaluate(() => document.fonts.ready);
+      if (width >= 768) await page.getByRole('table', { name: 'Opponent history' }).locator('..').evaluate(node => { node.scrollLeft = 0; });
       await recordLayout(page, 'before-capture');
       await page.screenshot({ path: path.join(output, `opponent-columns-${theme}-${width}.png`), fullPage: true });
       await recordLayout(page, 'after-capture');
