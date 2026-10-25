@@ -41,6 +41,8 @@ describe("recorded ladder moment rules", () => {
       expect(kinds({ ...input, ...patch })).not.toContain("leagueChange");
     }
   });
+});
+describe("recorded victory moment rules", () => {
   test.each([5, 10])("win streak celebrates exactly %i decided wins", count => {
     const history = Array.from({ length: count - 1 }, (_, i) => prior({ gameId: `prior${i}`, myMmr: 4001 }));
     expect(deriveGameMoments({ game: game(), history }).find(moment => moment.kind === "winStreak")?.headline).toBe(`${count} wins in a row`);
