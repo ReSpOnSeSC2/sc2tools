@@ -892,6 +892,7 @@ def test_plan_covers_both_scenes_with_the_expected_items() -> None:
     assert [i.label for i in plan.scenes[1].items] == [
         "Game capture",
         "Webcam",
+        "All-in-one overlay",
         "Chat alerts",
         "Manual scene override",
     ]
