@@ -6,11 +6,11 @@ const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const RETRY_MS = 60_000;
 /** @typedef {import('./twitchAutomationProvider').TwitchAutomationProvider & {}} Provider */
 /** @typedef {import('./twitchAutomationProvider').Grant & {connectionRevision:string}} Grant */
-/** @param {string} accountId @param {{name?:unknown,race?:unknown}} opponent @param {unknown} myRace */
+/** @param {string} accountId @param {{name?:unknown,displayName?:unknown,race?:unknown}} opponent @param {unknown} myRace */
 function opponentKey(accountId, opponent, myRace) {
   /** @param {unknown} value */
   const race = value => plain(value).toLowerCase().replace(/^p$/, "protoss").replace(/^t$/, "terran").replace(/^z$/, "zerg").replace(/^r$/, "random");
-  return createHash("sha256").update(JSON.stringify([accountId, plain(opponent.name).toLowerCase(), race(opponent.race), race(myRace)])).digest("hex");
+  return createHash("sha256").update(JSON.stringify([accountId, plain(opponent.name || opponent.displayName).toLowerCase(), race(opponent.race), race(myRace)])).digest("hex");
 }
 /** Only public control/status fields leave this service. Never include provider
  * credentials, account IDs, game keys containing names, outcome IDs or errors.
@@ -19,7 +19,7 @@ function receiptStatus(row) {
   if (!row) return null;
   const prediction = row.prediction || {}, marker = row.marker || {};
   return { prediction: prediction.status, marker: marker.status, reason: prediction.reason || row.reason || null,
-    canCancel: ["pending", "creating", "active", "locked", "unknown"].includes(prediction.status),
+    canCancel: ["pending", "creating", "active", "locked"].includes(prediction.status) || prediction.status === "unknown" && Boolean(prediction.predictionId),
     canResolve: ["active", "locked", "unknown"].includes(prediction.status) && row.settlement?.action === "resolve" && Boolean(prediction.winId && prediction.lossId),
     deadlineAt: row.deadlineAt instanceof Date ? row.deadlineAt.toISOString() : null };
 }
@@ -31,15 +31,17 @@ class TwitchAutomationService {
   /** @param {{users:Pick<import('./users').UsersService,'getPreferences'>,
    * integrations:import('./platformIntegrations').PlatformIntegrationsService,
    * receipts:import('./twitchAutomationReceipts').TwitchAutomationReceipts,provider:Provider,
-   * usersCollection:import('mongodb').Collection<any>,isCurrent?:(userId:string,envelope:Record<string,any>)=>boolean,now?:()=>number}} deps */
+   * usersCollection:import('mongodb').Collection<any>,enabled?:boolean,isCurrent?:(userId:string,envelope:Record<string,any>)=>boolean,now?:()=>number}} deps */
   constructor(deps) {
     this.deps = deps; this.now = deps.now || Date.now; this.active = 0;
+    /** @type {ReturnType<typeof setInterval>|null} */ this.timer = null;
     /** @type {Promise<{checked:number}>|null} */ this.recovering = null;
     /** @type {Map<string,{until:number,value:boolean}>} */ this.eligible = new Map();
   }
 
   /** No queue or background retry of an overloaded CREATE. @template T @param {()=>Promise<T>} callback */
   async admitted(callback) {
+    if (this.deps.enabled !== true) throw Object.assign(new Error("Twitch automation has not been enabled by the server owner."), { status: 503, code: "twitch_automation_disabled" });
     if (this.active >= 2) throw Object.assign(new Error("Twitch automation is busy. Check status shortly."), { status: 409, code: "twitch_automation_busy" });
     this.active++; try { return await callback(); } finally { this.active--; }
   }
@@ -72,6 +74,7 @@ class TwitchAutomationService {
    * @param {{source:string,receivedAt:number}} source
    * @param {{ranked1v1:boolean,source:'verified-live-queue'}|null} [queueEvidence] */
   async onLive(userId, envelope, source, queueEvidence = null) {
+    if (this.deps.enabled !== true) return null;
     const policy = eligibility(envelope, source, this.now(), queueEvidence);
     if (!["match_loading", "match_started"].includes(envelope.phase) || !policy.marker && policy.reason !== "ranked_status_unavailable" && !policy.prediction) return null;
     const prefs = await this.preferences(userId);
@@ -174,14 +177,15 @@ class TwitchAutomationService {
    * identity; a same-opponent rematch must not settle the previous game.
    * @param {string} userId @param {string} gameKey @param {Record<string,any>} game */
   async settleVerifiedReplay(userId, gameKey, game) {
+    if (this.deps.enabled !== true) return null;
     const row = await this.deps.receipts.read(userId, gameKey); if (!row) return null;
     const started = new Date(game.startedAt).getTime(), ended = new Date(game.date).getTime();
     if (game.isResumedFromReplay || game.playerCount !== 2 || game.matchFormat && game.matchFormat !== "1v1" || !game.opponent
       || !Number.isFinite(started) || !(row.matchStartedAt instanceof Date) || Math.abs(started - row.matchStartedAt.getTime()) > 120_000
       || !Number.isFinite(ended) || ended > this.now() + 30_000 || this.now() - ended > 15 * 60_000
       || opponentKey(row.accountId, game.opponent, game.myRace) !== row.opponentKey || !Number.isFinite(game.durationSec) || game.durationSec < 0) return null;
-    if (game.durationSec < 60) await this.deps.receipts.requestSettlement(userId, gameKey, { action: "cancel", reason: "short_game" });
-    else if (game.isLadderGame === true && ["Victory", "Defeat"].includes(game.result)) await this.deps.receipts.requestSettlement(userId, gameKey, { action: "resolve", outcome: game.result === "Victory" ? "win" : "loss", reason: "verified_result" });
+    if (game.durationSec < 60) await this.withOwner(userId, () => this.deps.receipts.requestSettlement(userId, gameKey, { action: "cancel", reason: "short_game" }));
+    else if (game.isLadderGame === true && ["Victory", "Defeat"].includes(game.result)) await this.withOwner(userId, () => this.deps.receipts.requestSettlement(userId, gameKey, { action: "resolve", outcome: game.result === "Victory" ? "win" : "loss", reason: "verified_result" }));
     else return null;
     return this.processReceipt(userId, gameKey);
   }
@@ -189,13 +193,20 @@ class TwitchAutomationService {
    * an outcome. Cancel records its durable intent even during CREATE.
    * @param {string} userId @param {string} gameKey @param {'resolve'|'cancel'} action */
   async action(userId, gameKey, action) {
+    if (this.deps.enabled !== true) throw Object.assign(new Error("Twitch automation has not been enabled by the server owner."), { status: 503, code: "twitch_automation_disabled" });
     const row = await this.deps.receipts.read(userId, gameKey); if (!row) return null;
-    if (action === "cancel") await this.deps.receipts.requestSettlement(userId, gameKey, { action: "cancel", reason: "dock_cancel" });
+    if (action === "cancel") {
+      const requested = await this.withOwner(userId, () => this.deps.receipts.requestSettlement(userId, gameKey, { action: "cancel", reason: "dock_cancel" }));
+      const current = requested || await this.deps.receipts.read(userId, gameKey);
+      if (current?.prediction.status === "resolving") throw Object.assign(new Error("Twitch settlement is already in progress. Check its confirmed status."), { status: 409, code: "twitch_settlement_in_progress" });
+      if (current?.prediction.status === "unknown" && !current.prediction.predictionId) throw Object.assign(new Error("Twitch did not confirm its prediction ID. Check the Twitch dashboard manually."), { status: 409, code: "twitch_prediction_id_unavailable" });
+    }
     else if (action !== "resolve" || row.settlement?.action !== "resolve") throw Object.assign(new Error("A verified replay result is required."), { status: 409, code: "twitch_result_unavailable" });
     return this.processReceipt(userId, gameKey);
   }
   /** @param {string} userId @param {string} gameKey */
   async processReceipt(userId, gameKey) {
+    if (this.deps.enabled !== true) return null;
     const row = await this.deps.receipts.read(userId, gameKey); if (!row) return null;
     if (["disabled", "skipped", "canceled", "resolved", "error"].includes(row.prediction.status) || !row.prediction.predictionId) return receiptStatus(row);
     return this.admitted(() => this.withOwner(userId, () => this.deps.integrations.withTwitchAutomationGrant(userId, { predictions: true }, grant => this.drain(userId, row, grant))));
@@ -204,27 +215,39 @@ class TwitchAutomationService {
   /** One indexed metadata batch per minute, no replay reads or remote object
    * searches. Expired CREATE becomes unknown, never another POST. */
   async recover() {
+    if (this.deps.enabled !== true) return { checked: 0 };
     if (this.recovering) return this.recovering;
     const work = this.recoverBatch().finally(() => { if (this.recovering === work) this.recovering = null; }); this.recovering = work; return work;
   }
   async recoverBatch() {
-    const rows = await this.deps.receipts.due(); let checked = 0;
+    const rows = await this.deps.receipts.due(); let checked = 0; const started = this.now();
     for (const row of rows) {
+      if (this.now() - started > 45_000) break;
       try {
-        await this.deps.receipts.expireWaitingMarker(row.userId, row.gameKey);
-        await this.deps.receipts.abandonPendingMarker(row.userId, row.gameKey);
-        if (row.prediction.status === "pending") await this.deps.receipts.requestSettlement(row.userId, row.gameKey, { action: "cancel", reason: "game_ended_before_create" });
-        for (const kind of /** @type {const} */ (["prediction", "marker"])) {
-          if (["creating", "locking", "resolving", "canceling"].includes(row[kind].status)) {
-            const ticket = await this.deps.receipts.claim(row.userId, row.gameKey, kind, row[kind].status, "unknown");
-            if (ticket) await this.deps.receipts.finish(ticket, "unknown", { reason: "worker_expired", ...(kind === "prediction" && row.prediction.predictionId ? { retryAt: new Date(this.now()) } : {}) });
+        await this.withOwner(row.userId, async () => {
+          await this.deps.receipts.expireWaitingMarker(row.userId, row.gameKey);
+          await this.deps.receipts.abandonPendingMarker(row.userId, row.gameKey);
+          if (row.prediction.status === "pending") await this.deps.receipts.requestSettlement(row.userId, row.gameKey, { action: "cancel", reason: "game_ended_before_create" });
+          for (const kind of /** @type {const} */ (["prediction", "marker"])) {
+            if (["creating", "locking", "resolving", "canceling"].includes(row[kind].status)) {
+              const ticket = await this.deps.receipts.claim(row.userId, row.gameKey, kind, row[kind].status, "unknown");
+              if (ticket) await this.deps.receipts.finish(ticket, "unknown", { reason: "worker_expired", ...(kind === "prediction" && row.prediction.predictionId ? { retryAt: new Date(this.now()) } : {}) });
+            }
           }
-        }
+        });
         await this.processReceipt(row.userId, row.gameKey); checked++;
-      } catch { /* A single disconnected/busy owner must not block the batch. */ }
+      } catch {
+        try { await this.withOwner(row.userId, () => this.deps.receipts.deferCheck(row.userId, row.gameKey)); } catch { /* Erasure owns this row. */ }
+      }
     }
     return { checked };
   }
+  start() {
+    if (this.timer || this.deps.enabled !== true || !this.deps.integrations.isConfigured("twitch")) return;
+    const tick = () => { void this.recover().catch(() => {}); };
+    this.timer = setInterval(tick, 60_000); this.timer.unref?.(); tick();
+  }
+  async stop() { if (this.timer) clearInterval(this.timer); this.timer = null; await this.recovering; }
 }
 
 module.exports = { TwitchAutomationService, receiptStatus, opponentKey, RETRY_MS };

@@ -91,6 +91,7 @@ function captureGuideSample(guideSamples, userId, game, customTag, created) {
  *   liveGameBroker?: import('../services/liveGameBroker').LiveGameBroker,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   gameMoments?: import('../services/gameMoments').GameMomentsService,
+ *   twitchAutomation?: import('../services/twitchAutomation').TwitchAutomationService,
  *   gameVods?: {
  *     resolveForGames: (userId: string, games: Array<Record<string, any>>, opts?: {includeOpponent?: boolean}) => Promise<{
  *       configuredPlatforms: string[],
@@ -944,16 +945,19 @@ function buildGamesRouter(deps) {
           }
         }
       }
+      const freshGame = accepted.length > 0 ? pickFreshOverlayGame(competitiveIncoming, competitiveAccepted) : null;
+      if (freshGame && deps.twitchAutomation?.deps.enabled === true && deps.liveGameBroker) {
+        const key = pickGameKey(deps.liveGameBroker, userId, freshGame, { oppName: freshGame.opponent?.displayName });
+        // Dormant under the default-off server gate. Independent from overlay
+        // token/socket fanout; service also checks replay start/matchup identity.
+        void deps.twitchAutomation.settleVerifiedReplay(userId, key, freshGame).catch(() => {});
+      }
       // Realtime nudge so an open SPA tab refreshes without polling.
       if (deps.io && accepted.length > 0) {
         // Reuse the same freshness gate for the session MMR refresh and
         // the post-game overlay fan-out. Historical resync batches must
         // not bypass the Pulse cache, while a genuinely new match must
         // not inherit the pre-game rating for another five minutes.
-        const freshGame = pickFreshOverlayGame(
-          competitiveIncoming,
-          competitiveAccepted,
-        );
         deps.io.to(`user:${userId}`).emit("games:changed", {
           count: accepted.length,
           // Quarantined replay-resume markers are excluded from /me stats.

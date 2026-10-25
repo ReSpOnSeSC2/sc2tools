@@ -25,17 +25,23 @@ beforeEach(async () => {
     createMarker: jest.fn(async () => ({ markerId: "exact-marker", positionSeconds: 300 })),
     prediction: jest.fn(async () => ({ status: "ACTIVE", ...ids })), endPrediction: jest.fn(async (_grant, _id, status) => ({ status })) };
   users = { getPreferences: jest.fn(async () => prefs) };
-  service = new TwitchAutomationService({ users, usersCollection, receipts, provider, integrations, now: () => now });
+  service = new TwitchAutomationService({ users, usersCollection, receipts, provider, integrations, enabled: true, now: () => now });
 });
 function envelope(changes = {}) { return { phase: "match_loading", gameKey: `Synthetic rival|Synthetic owner|${now}`, capturedAt: now / 1000, isReplay: false,
   players: [{ name: "Synthetic owner", type: "user" }, { name: "Synthetic rival", type: "user" }], user: { name: "Synthetic owner", race: "Protoss" }, opponent: { name: "Synthetic rival", race: "Zerg", mmr: 4000 }, map: "Synthetic map", ...changes }; }
 const live = (env = envelope(), evidence = null, owner = "owner-A") => service.onLive(owner, env, { source: "device", receivedAt: now }, evidence);
-const replay = (changes = {}) => ({ gameId: "replay-1", startedAt: new Date(now).toISOString(), date: new Date(now).toISOString(), durationSec: 600, playerCount: 2, matchFormat: "1v1", isLadderGame: true, result: "Victory", opponent: { name: "Synthetic rival", race: "Zerg" }, myRace: "Protoss", ...changes });
+const replay = (changes = {}) => ({ gameId: "replay-1", startedAt: new Date(now).toISOString(), date: new Date(now).toISOString(), durationSec: 600, playerCount: 2, matchFormat: "1v1", isLadderGame: true, result: "Victory", opponent: { displayName: "Synthetic rival", race: "Zerg" }, myRace: "Protoss", ...changes });
 async function active() { prefs.predictionsEnabled = true; const env = envelope(); await live(env, ranked); return env; }
 
 test("default-off does no receipt/provider/grant work and progress events do no preference reads", async () => {
   await live(); expect(await collection.countDocuments()).toBe(0); expect(integrations.withTwitchAutomationGrant).not.toHaveBeenCalled();
   users.getPreferences.mockClear(); await live(envelope({ phase: "match_in_progress" })); expect(users.getPreferences).not.toHaveBeenCalled();
+});
+test("server master gate defaults off even with saved opt-ins and valid mocked queue evidence", async () => {
+  prefs.predictionsEnabled = true; prefs.markersEnabled = true;
+  service = new TwitchAutomationService({ users, usersCollection, receipts, provider, integrations, now: () => now });
+  await live(envelope(), ranked); await live(envelope({ phase: "match_started" })); expect(await service.recover()).toEqual({ checked: 0 }); service.start();
+  expect(service.timer).toBeNull(); expect(users.getPreferences).not.toHaveBeenCalled(); expect(integrations.withTwitchAutomationGrant).not.toHaveBeenCalled(); expect(await collection.countDocuments()).toBe(0);
 });
 test("current desktop/raw queue metadata cannot create a prediction, while real human starts can mark", async () => {
   prefs.predictionsEnabled = true; expect(await live(envelope({ isRanked: true, queue: "ranked1v1" }))).toMatchObject({ prediction: "skipped", reason: "ranked_status_unavailable" });
@@ -86,13 +92,14 @@ test("verified winning result arriving during CREATE survives the same race", as
   expect(provider.endPrediction).toHaveBeenCalledWith(grant, ids.predictionId, "RESOLVED", ids.winId);
 });
 test("restart recovers a known active no-result prediction with a refund at20min", async () => {
-  const env = await active(); now += config.limits.resultTimeoutMs + 1; service = new TwitchAutomationService({ users, usersCollection, receipts, provider, integrations, now: () => now });
+  const env = await active(); now += config.limits.resultTimeoutMs + 1; service = new TwitchAutomationService({ users, usersCollection, receipts, provider, integrations, enabled: true, now: () => now });
   expect(await service.recover()).toEqual({ checked: 1 }); expect(provider.endPrediction).toHaveBeenCalledWith(grant, ids.predictionId, "CANCELED", undefined);
   expect((await receipts.read("owner-A", env.gameKey)).settlement.reason).toBe("result_timeout");
 });
 test("unknown CREATE without provider ID is not blindly repeated by reconnect, recovery or Cancel", async () => {
   prefs.predictionsEnabled = true; provider.createPrediction.mockRejectedValue(new TwitchAutomationProviderError("unconfirmed", 504, true)); const env = envelope(); await live(env, ranked);
-  now += 21 * 60_000; await service.recover(); await service.action("owner-A", env.gameKey, "cancel"); await live(envelope({ gameKey: env.gameKey }), ranked);
+  now += 21 * 60_000; await service.recover(); await expect(service.action("owner-A", env.gameKey, "cancel")).rejects.toMatchObject({ code: "twitch_prediction_id_unavailable" }); await live(envelope({ gameKey: env.gameKey }), ranked);
+  expect(receiptStatus(await receipts.read("owner-A", env.gameKey)).canCancel).toBe(false);
   expect(provider.createPrediction).toHaveBeenCalledTimes(1); expect(provider.endPrediction).not.toHaveBeenCalled(); expect(provider.prediction).not.toHaveBeenCalled();
 });
 test("partial CREATE IDs never authorize Resolve; known exact prediction can be refunded after timeout", async () => {
@@ -140,4 +147,11 @@ test("background provider work holds and releases the existing owner erasure lea
   release.resolve(); await task; expect((await usersCollection.findOne({ userId: "owner-A" }))._dataMutations).toHaveLength(0);
   await usersCollection.updateOne({ userId: "owner-A" }, { $set: { _gdprMutation: { operation: "fixture" } } }); now += 60_000;
   await expect(live(envelope({ phase: "match_started" }))).rejects.toMatchObject({ code: "gdpr_operation_busy" }); expect(provider.createMarker).toHaveBeenCalledTimes(1);
+});
+test("late Cancel cannot overwrite an already-dispatched resolution or claim a refund", async () => {
+  const env = await active(), entered = deferred(), release = deferred(); provider.endPrediction.mockImplementation(async (_grant, _id, status) => { entered.resolve(); await release.promise; return { status }; });
+  const resolving = service.settleVerifiedReplay("owner-A", env.gameKey, replay()); await entered.promise;
+  await expect(service.action("owner-A", env.gameKey, "cancel")).rejects.toMatchObject({ status: 409, code: "twitch_settlement_in_progress" });
+  expect((await receipts.read("owner-A", env.gameKey)).settlement.action).toBe("resolve"); release.resolve(); await resolving;
+  expect((await receipts.read("owner-A", env.gameKey)).prediction.status).toBe("resolved"); expect(provider.endPrediction).toHaveBeenCalledTimes(1);
 });

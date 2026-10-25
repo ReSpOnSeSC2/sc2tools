@@ -12,6 +12,7 @@ const {
 const { browserUploadStatusOf } = require("../services/replayFilesCors");
 const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
 const { sanitizeRivals } = require("../util/rivalsPreferences");
+const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("../services/twitchAutomationPolicy");
 const {
   CHECKIN_PREF_TYPE,
   sanitizeCheckinPrefs,
@@ -397,6 +398,7 @@ function buildMeRouter(deps) {
     "multichat",
     "analyzerViews",
     "rivals",
+    TWITCH_PREF_TYPE,
     CHECKIN_PREF_TYPE,
   ]);
 
@@ -413,7 +415,7 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
-      if (type === "analyzerViews" || type === "rivals") res.set("Cache-Control", "private, no-store");
+      if (type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE) res.set("Cache-Control", "private, no-store");
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
         return;
@@ -422,7 +424,7 @@ function buildMeRouter(deps) {
       res.json(type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(prefs)
         : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(prefs)
           : type === "analyzerViews" ? sanitizeAnalyzerViews(prefs)
-            : type === "rivals" ? sanitizeRivals(prefs) : prefs);
+            : type === "rivals" ? sanitizeRivals(prefs) : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(prefs) : prefs);
     } catch (err) {
       next(err);
     }
@@ -433,7 +435,8 @@ function buildMeRouter(deps) {
       const auth = req.auth;
       if (!auth) throw new Error("auth_required");
       const { type } = req.params;
-      if (type === "analyzerViews" || type === "rivals") res.set("Cache-Control", "private, no-store");
+      if (type === "analyzerViews" || type === "rivals" || type === TWITCH_PREF_TYPE) res.set("Cache-Control", "private, no-store");
+      if (type === TWITCH_PREF_TYPE && auth.source !== "clerk") { res.status(403).json({ error: { code: "clerk_required" } }); return; }
       if (!PREF_TYPES.has(type)) {
         res.status(404).json({ error: { code: "unknown_preference_type" } });
         return;
@@ -451,7 +454,7 @@ function buildMeRouter(deps) {
       const body = type === CHECKIN_PREF_TYPE ? sanitizeCheckinPrefs(req.body)
         : type === NOTIFICATIONS_PREF_TYPE ? sanitizeNotificationPrefs(req.body)
           : type === "analyzerViews" ? sanitizeAnalyzerViews(req.body, true)
-            : type === "rivals" ? sanitizeRivals(req.body, true) : req.body;
+            : type === "rivals" ? sanitizeRivals(req.body, true) : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(req.body, true) : req.body;
       const saved = await deps.users.updatePreferences(auth.userId, type, body);
       if (type === "rivals") {
         try { deps.onRivalsChanged?.(auth.userId); } catch { /* Advisory cache refresh; preferences are already saved. */ }

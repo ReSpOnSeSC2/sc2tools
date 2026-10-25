@@ -51,6 +51,7 @@ class TwitchAutomationReceipts {
     await this.rows.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
     await this.rows.createIndex({ nextCheckAt: 1 });
     await this.rows.createIndex({ userId: 1, opponentKey: 1, createdAt: -1 });
+    await this.rows.createIndex({ userId: 1, "prediction.status": 1, createdAt: -1 });
   }
 
   /** A caller holds its provider connection lease across rematch check/reserve.
@@ -73,6 +74,12 @@ class TwitchAutomationReceipts {
   }
   /** @param {string} userId @param {string} gameKey */
   read(userId, gameKey) { return this.rows.findOne({ userId, gameKey }, { projection: { _id: 0 }, maxTimeMS: 1500 }); }
+  /** Preserve access to an older open prediction when a rematch is skipped.
+   * @param {string} userId */
+  latestOpen(userId) {
+    return this.rows.findOne({ userId, "prediction.status": { $in: ["pending", "creating", "active", "locked", "unknown", "resolving", "canceling"] } },
+      { projection: { _id: 0 }, sort: { createdAt: -1 }, maxTimeMS: 1500 });
+  }
   /** @param {string} userId @param {string} opponentKey @param {string} exceptGame */
   recentOpponent(userId, opponentKey, exceptGame) {
     return this.rows.findOne({ userId, opponentKey, gameKey: { $ne: exceptGame }, createdAt: { $gte: new Date(this.now() - config.limits.rematchMs) },
@@ -81,7 +88,7 @@ class TwitchAutomationReceipts {
 
   /** Persist the desired final state before contacting Twitch. A result or
    * cancellation received during CREATE survives that lease and any restart.
-   * Cancel wins over an unconfirmed result; terminal provider receipts stay
+   * Cancel wins before resolution dispatch; terminal provider receipts stay
    * immutable. A not-yet-dispatched prediction is canceled without a POST.
    * @param {string} userId @param {string} gameKey
    * @param {{action:'cancel'|'resolve',outcome?:'win'|'loss',reason:'verified_result'|'short_game'|'result_timeout'|'dock_cancel'|'game_ended_before_create'}} request */
@@ -90,7 +97,7 @@ class TwitchAutomationReceipts {
       || !["verified_result", "short_game", "result_timeout", "dock_cancel", "game_ended_before_create"].includes(request.reason)) invalid("invalid_twitch_settlement");
     const now = new Date(this.now());
     const desired = { action: request.action, ...(request.action === "resolve" ? { outcome: request.outcome } : {}), reason: request.reason, requestedAt: now };
-    return this.rows.findOneAndUpdate({ userId, gameKey, "prediction.status": { $nin: TERMINAL },
+    return this.rows.findOneAndUpdate({ userId, gameKey, "prediction.status": { $nin: [...TERMINAL, ...(request.action === "cancel" ? ["resolving"] : [])] },
       ...(request.action === "resolve" ? { settlement: { $exists: false } } : { "settlement.action": { $ne: "cancel" } }) }, [
       { $set: { settlement: { $literal: desired }, updatedAt: now,
         "prediction.status": { $cond: [{ $eq: ["$prediction.status", "pending"] }, "canceled", "$prediction.status"] },
@@ -166,6 +173,14 @@ class TwitchAutomationReceipts {
     return this.rows.findOneAndUpdate({ userId, gameKey, "marker.status": "pending" }, [
       { $set: { "marker.status": "skipped", "marker.reason": "start_not_dispatched", updatedAt: new Date(this.now()) } }, nextCheckStage(),
     ], { returnDocument: "after", projection: { _id: 0 }, maxTimeMS: 1500 });
+  }
+
+  /** Disconnected owners must not monopolize the earliest recovery batch.
+   * This delays only metadata inspection; it never clears a provider lease.
+   * @param {string} userId @param {string} gameKey */
+  async deferCheck(userId, gameKey) {
+    return this.rows.updateOne({ userId, gameKey, nextCheckAt: { $lte: new Date(this.now()) } },
+      { $set: { nextCheckAt: new Date(this.now() + 60_000) } }, { maxTimeMS: 1500 });
   }
 
   /** @param {number} [limit] */
