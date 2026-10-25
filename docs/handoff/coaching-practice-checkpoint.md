@@ -25,5 +25,12 @@ unavailable-build prefill, modal geometry, saved payload and no overflow/errors.
 Phone evidence wraps its text and puts the download control below it. Final
 independent review and full remote gates remain pending.
 
+Root independently reviewed API/math/UI and all eight screenshots without a
+blocker. Initial full CI found one broad realtime fixture still keyed to the old
+unfiltered assignment URL; its assertion now names the active-state resource.
+The one-socket reconnect/fanout assertions remain unchanged. Product source and
+build evidence are unchanged by this test-only correction; final gates must use
+the replacement head.
+
 No production account operation, migration, job, grade, score, AI, release,
 infrastructure or budget change. Local synthetic tests only.
