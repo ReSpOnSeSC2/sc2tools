@@ -94,7 +94,7 @@ export function BuildCheckInSettings() {
     <>
       <Section
         title="Build check-in"
-        description="Tell sc2tools which build you were going for. A confirmed check-in counts the game toward that build's record, even when the replay was classified as something else."
+        description="Game-screen prompts are off by default. Choose which ones you want. A confirmed check-in counts the game toward your planned build's record, even when the replay was classified as something else."
       >
         <Card>
           <div className="space-y-3">

@@ -83,7 +83,8 @@ def test_private_scouting_fallback_fails_fast_without_sleeping():
     sleep.assert_not_called()
 
 
-def test_local_scouting_preference_defaults_on_and_round_trips_off(tmp_path):
-    assert load_state(tmp_path).show_scouting_at_loading is True
-    save_state(tmp_path, AgentState(show_scouting_at_loading=False))
+def test_local_scouting_preference_defaults_off_and_preserves_explicit_choices(tmp_path):
     assert load_state(tmp_path).show_scouting_at_loading is False
+    for enabled in (True, False):
+        save_state(tmp_path, AgentState(show_scouting_at_loading=enabled))
+        assert load_state(tmp_path).show_scouting_at_loading is enabled

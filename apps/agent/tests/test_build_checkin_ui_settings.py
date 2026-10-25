@@ -98,7 +98,7 @@ def test_waits_for_the_controller_then_the_preference(make) -> None:
     group.controller_bound()
     assert group.hint.text() == HINT_LOADING
     assert not group.enabled_box.isEnabled()
-    group.apply_prefs(CheckinPrefs(ask_at_loading=False))
+    group.apply_prefs(CheckinPrefs(enabled=True, ask_at_loading=False, ask_after_game=True))
     assert group.state == "ready"
     assert group.hint.text() == HINT_READY
     assert [box.isChecked() for box in boxes(group)] == [True, False, True]
@@ -122,7 +122,7 @@ def test_showing_the_group_retries_an_unloaded_preference(make) -> None:
 def test_children_follow_the_master_switch(make) -> None:
     controller = Controller()
     group = make(controller)
-    group.apply_prefs(CheckinPrefs(enabled=False))
+    group.apply_prefs(CheckinPrefs(enabled=False, ask_at_loading=True, ask_after_game=True))
     assert not group.enabled_box.isChecked()
     assert group.enabled_box.isEnabled()
     assert not group.loading_box.isEnabled() and not group.after_box.isEnabled()
@@ -132,10 +132,20 @@ def test_children_follow_the_master_switch(make) -> None:
     assert group.loading_box.isEnabled() and group.after_box.isEnabled()
 
 
+def test_fresh_settings_are_unchecked_and_master_does_not_enable_prompt_choices(make) -> None:
+    group = make(Controller(available=None))
+    assert not any(box.isChecked() for box in (*boxes(group), group.scouting_box))
+    group.apply_prefs(CheckinPrefs())
+    assert not any(box.isChecked() for box in (*boxes(group), group.scouting_box))
+    group.enabled_box.click()
+    assert group.enabled_box.isChecked()
+    assert not any(box.isChecked() for box in (group.loading_box, group.after_box, group.scouting_box))
+
+
 def test_each_box_writes_its_own_field(make) -> None:
     controller = Controller()
     group = make(controller)
-    group.apply_prefs(CheckinPrefs())
+    group.apply_prefs(CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     group.loading_box.click()
     group.after_box.click()
     group.enabled_box.click()
@@ -147,8 +157,8 @@ def test_each_box_writes_its_own_field(make) -> None:
 def test_outside_changes_sync_without_writing_back(make) -> None:
     controller = Controller()
     group = make(controller)
-    group.apply_prefs(CheckinPrefs())
-    group.apply_prefs(CheckinPrefs(ask_after_game=False))  # card link / website
+    group.apply_prefs(CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
+    group.apply_prefs(CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=False))  # card link / website
     assert not group.after_box.isChecked()
     assert controller.changes == []
 
@@ -157,12 +167,12 @@ def test_a_reverted_save_is_explained(make) -> None:
     clock = Clock()
     controller = Controller()
     group = make(controller, clock=clock)
-    group.apply_prefs(CheckinPrefs())
+    group.apply_prefs(CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     group.after_box.click()
-    group.apply_prefs(CheckinPrefs(ask_after_game=False))  # optimistic echo
+    group.apply_prefs(CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=False))  # optimistic echo
     assert group.hint.text() == HINT_READY
     clock.now += 6
-    group.apply_prefs(CheckinPrefs())  # the write failed: back to the server's
+    group.apply_prefs(CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))  # the write failed: back to the server's
     assert group.after_box.isChecked()
     assert group.hint.text() == HINT_SAVE_FAILED
     # Much later a different value is just a change made elsewhere.
@@ -178,7 +188,7 @@ def test_clicks_before_the_preference_loaded_change_nothing(make) -> None:
     group.enabled_box.setEnabled(True)
     group.enabled_box.click()
     assert controller.changes == []
-    assert group.enabled_box.isChecked() and not group.enabled_box.isEnabled()
+    assert not group.enabled_box.isChecked() and not group.enabled_box.isEnabled()
 
 
 # ---------------------------------------------------- with the real controller
@@ -304,7 +314,7 @@ def test_gui_wires_the_view_settings_and_backlog(tmp_path: Path) -> None:
         # The boot worker binds and paints before the window is wired.
         def early():
             proxy.bind_controller(controller)
-            proxy.update_prefs(CheckinPrefs(ask_after_game=False))
+            proxy.update_prefs(CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=False))
             proxy.show_loading(LoadingCardModel(game_key="k|1", title="PvZ · vs Foo",
                                                 waiting_for_matchup=False))
         worker = threading.Thread(target=early)

@@ -2,6 +2,18 @@
 
 All notable changes to `@sc2tools/agent` go here. Newest first.
 
+## 0.24.5
+
+### Changed - Game-screen assistance is opt-in
+- Start pre-game and post-game build selectors, and loading-screen scouting,
+  off for new or unset preferences. Opponent/scouting pins, spoken scouting,
+  Session, Ghost and the assistance master switch also remain off by default.
+- Use the same explicit opt-in defaults in the Agent, API and website. Preserve
+  saved enabled choices; missing or malformed flags do not enable prompts.
+- Keep fresh offline sessions quiet. Apply a saved account opt-in as soon as it
+  loads, without duplicate preference updates or waiting for another game event.
+- Update Settings, help and documentation to explain how to enable features.
+
 ## 0.24.4
 
 ### Fixed - One Compact opponent display

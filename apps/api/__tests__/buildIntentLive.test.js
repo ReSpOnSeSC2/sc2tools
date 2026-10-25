@@ -101,7 +101,8 @@ describe("build check-in live records", () => {
   async function newUser({ hold = false } = {}) {
     userCounter += 1;
     const userId = `live-user-${userCounter}`;
-    await db.users.insertOne({ userId, clerkUserId: `clerk_live_${userCounter}`, preferences: {} });
+    await db.users.insertOne({ userId, clerkUserId: `clerk_live_${userCounter}`,
+      preferences: { buildCheckin: { enabled: true, askAtLoading: true, askAfterGame: true } } });
     if (hold) {
       await setPrefs(db, userId, { randomizer: randomizerPrefs("PvZ", [PHOENIX_KEY, "pvz-robo-opener"]) });
       await addOverlayToken(db, userId, `tok-${userCounter}`, ["opponent", "randomizer"]);

@@ -308,7 +308,7 @@ class AgentState:
     build_checkin_prefs: Optional[Dict[str, bool]] = None
     # Scouting visibility is local to this PC; cloud check-in switches retain
     # their three-boolean contract for older web and desktop clients.
-    show_scouting_at_loading: bool = True
+    show_scouting_at_loading: bool = False
     """The last ``buildCheckin`` preference the server confirmed
     (``enabled`` / ``askAtLoading`` / ``askAfterGame``). The cloud stays
     the source of truth; this copy only decides the cards while the
@@ -488,7 +488,7 @@ def load_state(state_dir: Path) -> AgentState:
             raw.get("build_checkin_card_positions"),
         ),
         build_checkin_prefs=_coerce_checkin_prefs(raw.get("build_checkin_prefs")),
-        show_scouting_at_loading=raw.get("show_scouting_at_loading") is not False,
+        show_scouting_at_loading=raw.get("show_scouting_at_loading") is True,
         last_known_race=raw.get("last_known_race") if raw.get("last_known_race") in ("Protoss", "Terran", "Zerg") else None,
         last_known_race_at=_coerce_str(raw.get("last_known_race_at")),
         companion_panel_positions=_coerce_panel_positions(raw.get("companion_panel_positions")),
@@ -749,12 +749,12 @@ _CHECKIN_PREF_KEYS = ("enabled", "askAtLoading", "askAfterGame")
 def _coerce_checkin_prefs(value: object) -> Optional[Dict[str, bool]]:
     """Return ``value`` as the three ``buildCheckin`` flags, or ``None``.
 
-    Same reading as the API's sanitiser: only an explicit ``false``
-    turns a flag off.
+    Same reading as the API's sanitiser: only an explicit ``true``
+    opts into a feature.
     """
     if not isinstance(value, dict):
         return None
-    return {key: value.get(key) is not False for key in _CHECKIN_PREF_KEYS}
+    return {key: value.get(key) is True for key in _CHECKIN_PREF_KEYS}
 
 
 def _coerce_str_list(value: object) -> List[str]:

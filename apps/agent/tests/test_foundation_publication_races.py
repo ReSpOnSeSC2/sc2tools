@@ -155,7 +155,8 @@ def owned_checkin_fixture():
     identity = [api.base_url, api.device_token, "owner-a"]
     executor = ManualExecutor()
     controller = BuildCheckinController(api=api, executor=executor,
-        identity_provider=lambda: tuple(identity), prefs=CheckinPrefs())
+        identity_provider=lambda: tuple(identity),
+        prefs=CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     game = LiveGame("game-key", 1000, 0, game_id="game-a", my_race="Protoss", opp_race="Zerg")
     game.op_inflight = LiveOp("register")
     game.live_read_inflight = game.live_refetch = game.resend_inflight = game.scouting_fetching = True

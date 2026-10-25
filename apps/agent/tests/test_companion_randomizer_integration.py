@@ -28,7 +28,7 @@ def test_embedded_selector_requests_a_saved_pick_without_running_native_animatio
     state = {"calls": [], "roll": None, "declared": None}
 
     class Controller:
-        prefs = CheckinPrefs()
+        prefs = CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True)
         available = True
         released = False
         releases = 0

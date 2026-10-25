@@ -25,7 +25,7 @@ const article: HelpArticle = {
     "win rate",
     "planned badge",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-24",
   body: [
     {
       type: "paragraph",
@@ -44,13 +44,13 @@ const article: HelpArticle = {
     {
       type: "steps",
       items: [
-        "Open [Settings → Build check-in](/settings?tab=checkin). Three switches, all on by default: **Build check-ins** (the master switch), **Ask during the loading screen** and **Ask after each game**. Press Save.",
+        "Open [Settings → Build check-in](/settings?tab=checkin). Three switches, all off by default: **Build check-ins** (the master switch), **Ask during the loading screen** and **Ask after each game**. Enable the prompts you want, then press Save. Existing saved choices are kept when updating.",
         "The desktop app's Settings tab has the same three switches, kept in sync with the website. Every card also has a quick link to stop asking (**Don't ask at loading**, **Turn off check-ins after games**).",
       ],
     },
     { type: "heading", text: "Use selectors inside Companion", anchor: "companion" },
     { type: "paragraph", text: "Use **Agent 0.24.1 or later** for the latest embedded selectors and Randomize control. Update through **Agent → Check for updates** or the [Windows download](/download). See [Desktop Companion](/help/desktop-companion)." },
-    { type: "paragraph", text: "Open **Companion → Build selectors** in the Windows app to handle your build choices in the same workspace as scouting and Ghost. Keep **Game assistance enabled** on for game assistance, then use the individual selector controls to decide when to ask. You can turn these on or off whenever you want. The native selector works without an OBS source; [Desktop Companion](/help/desktop-companion) explains the shared workspace." },
+    { type: "paragraph", text: "Open **Companion → Build selectors** in the Windows app to handle your build choices in the same workspace as scouting and Ghost. Game-screen assistance starts off. Turn **In-game assistance** on and select the individual features you want, including either build selector. You can turn these on or off whenever you want. The native selector works without an OBS source; [Desktop Companion](/help/desktop-companion) explains the shared workspace." },
     { type: "heading", text: "Preview and move the cards", anchor: "preview-and-move" },
     {
       type: "steps",

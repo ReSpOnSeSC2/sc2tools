@@ -197,16 +197,21 @@ describe("mutations", () => {
 });
 
 describe("sanitizeCheckinPrefs", () => {
-  it("defaults every missing or malformed flag to true", () => {
+  it("requires an explicit true for every check-in flag", () => {
     expect(sanitizeCheckinPrefs(undefined)).toEqual({
-      enabled: true,
-      askAtLoading: true,
-      askAfterGame: true,
+      enabled: false,
+      askAtLoading: false,
+      askAfterGame: false,
     });
     expect(sanitizeCheckinPrefs({ enabled: false, askAtLoading: "no" })).toEqual({
       enabled: false,
-      askAtLoading: true,
-      askAfterGame: true,
+      askAtLoading: false,
+      askAfterGame: false,
+    });
+    const optedIn = { enabled: true, askAtLoading: true, askAfterGame: true };
+    expect(sanitizeCheckinPrefs(optedIn)).toEqual(optedIn);
+    expect(sanitizeCheckinPrefs({ enabled: 1, askAtLoading: "true" })).toEqual({
+      enabled: false, askAtLoading: false, askAfterGame: false,
     });
   });
 });

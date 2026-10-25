@@ -210,11 +210,11 @@ def _matchup(raw: Mapping[str, Any]) -> Optional[str]:
 
 @dataclass(frozen=True)
 class CheckinPrefs:
-    """``users.preferences.buildCheckin``; every flag defaults to on."""
+    """``users.preferences.buildCheckin``; each prompt requires an opt-in."""
 
-    enabled: bool = True
-    ask_at_loading: bool = True
-    ask_after_game: bool = True
+    enabled: bool = False
+    ask_at_loading: bool = False
+    ask_after_game: bool = False
 
     @property
     def loading_cards(self) -> bool:
@@ -233,13 +233,13 @@ class CheckinPrefs:
 
 
 def parse_prefs(raw: Any) -> Optional[CheckinPrefs]:
-    """Missing flags are on, matching the API's sanitiser."""
+    """Only explicit true flags opt in, matching the API's sanitiser."""
     if not isinstance(raw, dict):
         return None
     return CheckinPrefs(
-        enabled=raw.get("enabled") is not False,
-        ask_at_loading=raw.get("askAtLoading") is not False,
-        ask_after_game=raw.get("askAfterGame") is not False,
+        enabled=raw.get("enabled") is True,
+        ask_at_loading=raw.get("askAtLoading") is True,
+        ask_after_game=raw.get("askAfterGame") is True,
     )
 
 
