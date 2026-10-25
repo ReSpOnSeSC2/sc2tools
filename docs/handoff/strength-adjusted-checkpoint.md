@@ -1,6 +1,6 @@
 # Strength-adjusted win rates checkpoint
 
-Worktree: `.worktrees/wave3-my-reviews`; branch: `codex/wave3-strength-adjusted`, originally based on merged benchmark main `1309693b`. Actual main through Mechanics PR709 and Saved Views PR711 is integrated. The prior Mechanics branch is preserved at `fc25757d`; PR709 merged as `6cced788` after all current-head checks passed.
+Worktree: `.worktrees/wave3-my-reviews`; branch: `codex/wave3-strength-adjusted`, originally based on merged benchmark main `1309693b`. Actual main through dossier PR712 (`6885aafe`), Mechanics PR709 and Saved Views PR711 is integrated without conflicts. The prior Mechanics branch is preserved at `fc25757d`; PR709 merged as `6cced788` after all current-head checks passed.
 
 ## API and deterministic calibration
 
@@ -29,5 +29,6 @@ Trends' Matchup rating card shares the exact grouped-matchup URL/resource with t
 - 148 local browser checks pass at 320/390/768/1440 in light and dark. Actual Builds, Strategies, Battlefield, rating-card components and fetch hooks render with production CSS/fonts. Auth/Next, unrelated MMR panels and the veto planner are explicit synthetic boundaries; all non-local requests are blocked. No account, Agent or provider operation occurs.
 - Browser checks verify table/mobile sorting, partial and unknown rating coverage, header Help links, Wilson/thin-sample presentation, aliased map sums, null sparkline gaps, native window inspection, same-resource request reuse and no page overflow. New chip text has at least 4.5:1 computed contrast over its actual tinted background in both themes. Inspected screenshots are `screenshots/strength-{builds,bvs,strategies,maps,rating}-*.png`.
 - Root and independent reviews approved the math direction, PAV weighting, symmetry/raw evidence counts, inverse/tails, API eligibility and UI/Help honesty. Race-alias and visibility findings are fixed with regressions. A final fresh-main integration and exact-head remote checks remain required before merge.
+- After merging dossier PR712, 176 API tests/one snapshot across ten suites, 127 web/Help tests across 19 suites and full API/web types plus strict changed/new source lint pass. The merge is orthogonal to the strength UI; the successful local production build predates only the upstream dossier bundle split, so the final combined production build is verified by the remote gates.
 
 No release version, signed installer, tag or AI feature was changed. No production job, migration, new infrastructure or budget increase was performed.
