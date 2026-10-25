@@ -32,5 +32,12 @@ catalog drift, web consumer and required browser bundle checks passed:
   modules, 1.19 MiB; smoke parsed a 142,939-byte payload.
 - Real Pyodide worker glue: six checks passed, including every installed-view
   CPython fixture/perspective golden and the shared runtime contract.
+- Production web build and every unchanged bundle budget passed: landing
+  214.7/215 kB, Today 238.8/240 kB and widget 318.8/325 kB.
+- Actual production definitions: 16 Chromium checks passed at 320/light and
+  1440/dark, verifying all three rendered descriptions and no horizontal
+  overflow. Captures: `screenshots/pvz-air-opening-seven-minutes-*.png`.
+  Reproduce with a production server on port 3994 and
+  `node tests/manual/pvz-air-definitions.cjs` from `apps/web`.
 
 No version pin, budget or infrastructure setting changes accompany this fix.
