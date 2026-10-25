@@ -12,6 +12,7 @@ export interface GameOpponentSummary {
   displayName?: string | null;
   race?: string | null;
   mmr?: number | null;
+  leagueId?: number | null;
   strategy?: string | null;
   pulseId?: string | null;
 }

@@ -25,6 +25,10 @@ corresponding GitHub Release.
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
 - Your reviewer profile shows verified leagues, badges, karma and synced-game eligibility. Leaderboard and weekly digest preferences live together there and restore their previous value if saving fails.
 
+### Game benchmarks
+
+- Compare each game's macro score, APM, spending quotient and length with your earlier ranked matchup games and cached league percentiles, with visible sample sizes and update dates. League distributions stay hidden below 50 samples per measurement; personal build timings now reach the late-expansion loss analysis when five earlier natural timings are available.
+
 ### Agent 0.24.5 - Opt-in game-screen assistance
 - Default build selectors and loading-screen scouting to off, matching the
   existing off defaults for native pins, spoken scouting, Session and Ghost.
