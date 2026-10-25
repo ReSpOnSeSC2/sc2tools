@@ -202,7 +202,9 @@ describe("/guides/maps/[map]", () => {
     expect(container.querySelector("#other-maps")).toBeNull();
     const section = document.getElementById("best-openers")!;
     expect(within(section).getAllByRole("heading", { level: 3 }).map((node) => node.textContent)).toEqual(["PvZ", "TvZ", "ZvP"]);
-    expect(screen.queryByRole("navigation", { name: "On this page" })).toBeNull();
+    const nav = screen.getByRole("navigation", { name: "On this page" });
+    expect(within(nav).getByRole("link", { name: "You on this map" }).getAttribute("href")).toBe("#your-map");
+    expect(within(nav).queryByRole("link", { name: "Other maps" })).toBeNull();
   });
 
   it("renders the race matrix and best openers per matchup", async () => {

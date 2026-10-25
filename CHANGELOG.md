@@ -16,6 +16,15 @@ corresponding GitHub Release.
 - Read a short, fixed-rule account of a replay in Battle report, Caster or Tactical tone, with known timestamps linked to the same game clock. Copy it as plain text or Markdown.
 - Revisit captioned map stills with race-colored unit dots and side labels. Army-value charts cover moments without complete map frames; unknown samples stay gaps and partial recordings do not rewrite the account.
 
+### Maps and veto planning
+
+- Compare the current ladder pool by matchup with sample sizes, Wilson ranges and community context. Choose one to three suggested vetoes from maps with at least five decided games; stale pool data and failed refreshes pause recommendations.
+- Open the games behind a map or matchup, apply a map to every analyzer section, and return to a highlighted map from a deep link. Map sorting is remembered, and map guides can privately compare your own record after signing in.
+
+### Added
+
+- Admin Build Studio lists and versions all preset, private custom and community definitions. Preset replacements use one validated policy across compatible server, desktop and browser engines, with explicit completion clocks, custom-rule precedence, reviewed restores and offline fallback.
+
 ### My reviews dashboard
 
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
@@ -191,6 +200,10 @@ corresponding GitHub Release.
 ### Desktop game history
 
 - The desktop Dashboard shows game summaries, local Today W–L/MMR and replay-history progress. Recent games survives restarts with 200 private local outcomes, status/date filters, skipped reasons and selective retries. Re-sync moves to Settings Maintenance; optional game-result notifications exclude history imports.
+
+### Desktop stream titles
+
+- Streams previews MMR, league, session record, streak and matchup tokens. Optional automatic updates start off, target only selected connected platforms, skip unchanged titles and run at most once every ten minutes after a live replay syncs.
 
 ### Build supply and exports
 

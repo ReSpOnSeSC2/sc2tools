@@ -26,6 +26,7 @@ function fakePyodide(glue: Glue): PyodideLike {
 
 function baseGlue(header: unknown): Glue {
   return {
+    _sc2t_policy: () => "verified-hash",
     _sc2t_players: () => "{}",
     _sc2t_parse: () => "{}",
     _sc2t_unzip: () => JSON.stringify(header),

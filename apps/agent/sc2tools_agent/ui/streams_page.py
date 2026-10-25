@@ -5,7 +5,6 @@ import threading
 import webbrowser
 import re
 import copy
-from collections import Counter
 
 CATALOG_PLACEHOLDERS = {
     "idle": "Connect YouTube first", "loading": "Loading…",
@@ -163,12 +162,14 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             command_layout.addLayout(label_row)
             self.title_input = QtWidgets.QLineEdit()
             self.title_input.setObjectName("streamTitle")
-            self.title_input.setMaxLength(70)
+            self.title_input.setMaxLength(500)
             self.title_input.setPlaceholderText("Give your next stream a title")
             self.title_input.setMinimumHeight(44)
             self.title_input.textEdited.connect(self._title_edited)
             self.title_input.returnPressed.connect(self.save_title)
             command_layout.addWidget(self.title_input)
+            from .stream_title_controls import StreamTitleControls
+            self.title_controls = StreamTitleControls(self, command_layout, QtCore, QtWidgets)
             description_header = QtWidgets.QHBoxLayout()
             self.description_label = self._label("YouTube description", name="studioEyebrow")
             self.description_scope = self._label("Applies to both YouTube formats", True)
@@ -415,7 +416,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
 
         def _title_edited(self):
             self.title_dirty = True
-            self.counter.setText(f"{len(self.title_input.text())} / 70")
+            self.title_controls.edited()
+            self.counter.setText(f"{len(self.title_input.text())} / 500 template")
             self._buttons()
 
         def _description_edited(self):
@@ -440,6 +442,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.obs_copy_key.setEnabled(details_available)
             self.obs_reveal.setEnabled(details_available)
             self.obs_destination.setEnabled(not self.busy)
+            self.title_controls.buttons()
 
         def refresh(self):
             if provider is None:
@@ -469,6 +472,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 self.busy = False
                 self.title_dirty = self.description_dirty = self.description_draft = self.setup_dirty = False
                 self.setup_edits.clear()
+                self.title_controls.dirty = False
                 self._clear_obs_connection()
             if state.get("account_mode") != self._obs_account_mode:
                 self._clear_obs_connection()
@@ -476,8 +480,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.state = state
             metadata = state.get("metadata", {})
             if not self.title_dirty:
-                self.title_input.setText(metadata.get("title", ""))
-                self.counter.setText(f"{len(self.title_input.text())} / 70")
+                self.title_input.setText(state.get("title_automation", {}).get("template") or metadata.get("title", ""))
+                self.counter.setText(f"{len(self.title_input.text())} / 500 template")
             saved_description = "description" in metadata and state.get("metadata_saved") is not False
             if not self.description_dirty or self.description_draft and saved_description:
                 blocked = self.description_input.blockSignals(True)
@@ -487,6 +491,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 self.description_input.blockSignals(blocked)
                 self.description_dirty = draft
                 self.description_draft = draft
+            self.title_controls.render(state)
             self.loaded = True
             self.notice.setText(state.get("message", "Check your stream connections."))
             youtube = state.get("youtube", {})
@@ -577,60 +582,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self._buttons()
 
         def _suggest_catalog_choices(self):
-            """Fill unambiguous form choices without saving or replacing edits."""
-            state = self.state
-            catalog = state.get("catalog", {})
-            config = state.get("configuration", {})
-
-            def choose(combo, value):
-                index = combo.findData(value)
-                if index >= 0:
-                    blocked = combo.blockSignals(True)
-                    combo.setCurrentIndex(index)
-                    combo.blockSignals(blocked)
-
-            channels = {row.get("id") for row in catalog.get("channels", []) if row.get("id")}
-            if self.channel_combo.currentData() is None and "channel_id" not in self.setup_edits and not config.get("channel_id") and len(channels) == 1:
-                choose(self.channel_combo, next(iter(channels)))
-            channel = self.channel_combo.currentData()
-            if not channel or channel not in channels:
-                return
-
-            def eligible(row):
-                status = row.get("status") or {}
-                return (row.get("channel_id") in {None, channel}
-                    and not any(row.get(key) is False for key in ("eligible", "selectable", "available"))
-                    and row.get("bound_elsewhere") is not True and not row.get("bound_broadcast_id")
-                    and row.get("stream_status", status.get("streamStatus") if isinstance(status, dict) else None) != "active")
-
-            inventory = catalog.get("streams", [])
-            counts = Counter(row.get("id") for row in inventory)
-            rows = [row for row in inventory if row.get("id") and counts[row["id"]] == 1 and eligible(row)]
-            roles = {}
-            for row in rows:
-                title = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", row.get("title", "")).lower()
-                horizontal = bool(re.search(r"\b(horizontal|landscape)\b", title))
-                portrait = bool(re.search(r"\b(vertical|portrait)\b", title))
-                roles[row["id"]] = "horizontal_id" if horizontal and not portrait else "portrait_id" if portrait and not horizontal else None
-            combos = {"horizontal_id": self.horizontal_combo, "portrait_id": self.portrait_combo}
-            for key in ("horizontal_id", "portrait_id") * 2:
-                combo = combos[key]
-                other = combos["portrait_id" if key == "horizontal_id" else "horizontal_id"].currentData()
-                if key in self.setup_edits or config.get(key):
-                    continue
-                eligible_ids = {row["id"] for row in rows}
-                if combo.currentData() is not None and (combo.currentData() == other or combo.currentData() not in eligible_ids):
-                    choose(combo, None)
-                if combo.currentData() is not None:
-                    continue
-                candidates = {row["id"] for row in rows if row["id"] != other}
-                named = {identity for identity in candidates if roles.get(identity) == key}
-                if len(named) == 1:
-                    choose(combo, next(iter(named)))
-                elif other is not None and len(candidates) == 1:
-                    identity = next(iter(candidates))
-                    if roles.get(identity) in {None, key}:
-                        choose(combo, identity)
+            from .streams_page_catalog import suggest_catalog_choices
+            suggest_catalog_choices(self)
 
         def _render_catalog_status(self, state, youtube):
             status = state.get("catalog_status") or {}
@@ -705,6 +658,9 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 if result["action"] == "set_metadata":
                     self.title_dirty = self.description_dirty = False
                     self.description_draft = False
+                if result["action"] == "configure_title_automation":
+                    self.title_controls.dirty = False
+                    self.title_dirty = False
                 if result["action"] == "configure_youtube":
                     self.setup_dirty = False
                     self.setup_edits.clear()
@@ -827,29 +783,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.job({"action": "use_sc2tools_connections" if local else "use_local_connections"})
 
         def connect_platform(self, platform):
-            if self.state.get("account_mode") == "sc2tools":
-                self.job({"action": "connect_" + platform})
-                return
-            dialog = QtWidgets.QDialog(self)
-            dialog.setWindowTitle("Connect " + platform.title())
-            layout = QtWidgets.QFormLayout(dialog)
-            client_id = QtWidgets.QLineEdit()
-            layout.addRow("Your OAuth app client ID", client_id)
-            secret = QtWidgets.QLineEdit()
-            secret.setEchoMode(QtWidgets.QLineEdit.Password)
-            if platform == "kick":
-                layout.addRow("Client secret", secret)
-                layout.addRow(self._label("Register this redirect URL in your Kick app: http://localhost:8768/oauth/kickcallback", True))
-            account = QtWidgets.QLineEdit()
-            layout.addRow("Expected account name", account)
-            hint = self._label("Use an OAuth app you own. Authorize in your browser; SC2Tools will verify and remember this account.", True)
-            layout.addRow(hint)
-            buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-            buttons.accepted.connect(dialog.accept)
-            buttons.rejected.connect(dialog.reject)
-            layout.addRow(buttons)
-            if dialog.exec():
-                self.job({"action": "connect_" + platform, "client_id": client_id.text().strip(), "client_secret": secret.text(), "expected_account": account.text().strip()})
+            from .stream_title_controls import connect_platform
+            connect_platform(self, platform, QtWidgets)
 
         def configure(self):
             if self.privacy.currentData() is None:

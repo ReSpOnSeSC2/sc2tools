@@ -54,6 +54,7 @@ export const PRIVACY_LINE =
  * games of someone who has not played for a while.
  */
 export const TRY_SESSION_OPTIONS: UseInstantSessionOptions = {
+  refreshPolicy: false,
   maxFiles: MAX_TRY_FILES,
   onlyOneVsOne: true,
   initialDateWindow: { kind: "all" },

@@ -10,7 +10,7 @@ export function safeGameSource(raw: unknown, label?: unknown, filters?: unknown)
     const url = new URL(raw, "https://sc2tools.invalid");
     if (url.origin !== "https://sc2tools.invalid" || !/^\/(?:app|builds)(?:\/|$)/.test(url.pathname) || /^\/app\/game(?:\/|$)/.test(url.pathname)) return null;
     const tab = url.searchParams.get("tab");
-    const inferred = url.pathname.startsWith("/app/replays") || tab === "replays" ? "Replays" : url.pathname.startsWith("/app/opponents") || tab === "opponents" ? "Opponents" : tab === "macro" ? "Macro" : tab === "builds" || url.pathname.startsWith("/app/builds") || url.pathname.startsWith("/builds") ? "Builds" : "Today";
+    const inferred = url.pathname.startsWith("/app/replays") || tab === "replays" ? "Replays" : url.pathname.startsWith("/app/opponents") || tab === "opponents" ? "Opponents" : url.pathname.startsWith("/app/maps") || tab === "battlefield" ? "Maps" : url.pathname.startsWith("/app/macro") || tab === "macro" ? "Macro" : tab === "builds" || url.pathname.startsWith("/app/builds") || url.pathname.startsWith("/builds") ? "Builds" : "Today";
     return { href: `${url.pathname}${url.search}${url.hash}`, label: typeof label === "string" && label.trim() ? label.trim().slice(0, 100) : inferred,
       ...(typeof filters === "string" ? { filters: gameSourceFilters(filters) } : {}) };
   } catch { return null; }

@@ -741,6 +741,10 @@ describe("GET /v1/custom-builds/:slug/compositions", () => {
       }),
     );
     expect(putRes.status).toBe(200);
+    // The accepted save queues real classification of earlier matching games.
+    // Wait for that generation before comparing cache slots: its completion
+    // correctly invalidates cached counts, independently of strategy scoping.
+    await waitForReclassification(db, userId, putRes.body.reclassify.generation);
 
     // The prior tests in this describe block share the same Mongo
     // instance and seed games that ALSO satisfy this build's matchup

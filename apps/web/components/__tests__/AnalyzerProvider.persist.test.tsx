@@ -58,6 +58,8 @@ describe("pickPersisted", () => {
       opp_race: "T",
       // Drill-down filters set by clicking into a chart/build/etc.
       map: "site delta le",
+      map_exact: '["site delta le","Site Delta"]',
+      map_exact_label: "site delta le",
       mmr_min: 5000,
       mmr_max: 6000,
       build: "PvT - 1 Gate Expand",
@@ -65,6 +67,8 @@ describe("pickPersisted", () => {
     });
     expect(out).toEqual({ preset: "all", regions: "EU", race: "Z", opp_race: "T" });
     expect(out).not.toHaveProperty("map");
+    expect(out).not.toHaveProperty("map_exact");
+    expect(out).not.toHaveProperty("map_exact_label");
     expect(out).not.toHaveProperty("mmr_min");
     expect(out).not.toHaveProperty("build");
     expect(out).not.toHaveProperty("opp_strategy");
