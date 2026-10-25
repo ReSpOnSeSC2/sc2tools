@@ -213,7 +213,7 @@ describe("build check-in route guards", () => {
         throw new Error("io down");
       });
       const res = await putPrefs(user.web, "buildCheckin", { askAfterGame: false }).expect(200);
-      expect(res.body).toEqual({ enabled: true, askAtLoading: true, askAfterGame: false });
+      expect(res.body).toEqual({ enabled: false, askAtLoading: false, askAfterGame: false });
     });
   });
 

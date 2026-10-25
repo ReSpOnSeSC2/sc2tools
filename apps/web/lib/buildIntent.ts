@@ -70,7 +70,7 @@ export interface BuildOptionsResponse {
   builds: BuildOption[];
 }
 
-/** Cloud preference `buildCheckin`; every flag defaults to true. */
+/** Cloud preference `buildCheckin`; every prompt requires an opt-in. */
 export interface BuildCheckinPrefs {
   enabled: boolean;
   askAtLoading: boolean;
@@ -208,9 +208,9 @@ export const PENDING_DISMISS_PATH = "/v1/build-intents/pending/dismiss";
 export const BUILD_CHECKIN_SETTINGS_HREF = "/settings?tab=checkin";
 
 export const DEFAULT_CHECKIN_PREFS: BuildCheckinPrefs = {
-  enabled: true,
-  askAtLoading: true,
-  askAfterGame: true,
+  enabled: false,
+  askAtLoading: false,
+  askAfterGame: false,
 };
 
 const MATCHUP_RE = /^[PTZ]v[PTZ]$/;
@@ -407,18 +407,18 @@ export async function putCheckinPrefs(
 }
 
 /**
- * Exactly the three booleans; anything missing or malformed is `true`,
+ * Exactly the three booleans; anything missing or malformed is `false`,
  * matching the server's default.
  *
  * Example: `sanitizeCheckinPrefs({ enabled: false })` →
- * `{ enabled: false, askAtLoading: true, askAfterGame: true }`.
+ * `{ enabled: false, askAtLoading: false, askAfterGame: false }`.
  */
 export function sanitizeCheckinPrefs(raw: unknown): BuildCheckinPrefs {
-  const source = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   return {
-    enabled: source.enabled !== false,
-    askAtLoading: source.askAtLoading !== false,
-    askAfterGame: source.askAfterGame !== false,
+    enabled: source.enabled === true,
+    askAtLoading: source.askAtLoading === true,
+    askAfterGame: source.askAfterGame === true,
   };
 }
 

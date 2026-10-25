@@ -1,5 +1,7 @@
 "use client";
 
+import { GameAnalysisLink, GameSourceLabelProvider } from "@/components/analyzer/GameAnalysisLink";
+
 import { type ReactNode, useMemo, useState } from "react";
 import Link from "next/link";
 import { Card, EmptyState, Skeleton, Stat } from "@/components/ui/Card";
@@ -148,6 +150,7 @@ export function BuildDossier({
   } | null>(null);
   const scope = `${apiPath}|${phasePerspective ?? "default"}`;
   const activeGameFilter = gameFilter?.scope === scope ? gameFilter : null;
+  const customRules = apiPath.startsWith("/v1/custom-builds/");
 
   if (isLoading && !data && !error) {
     return (
@@ -206,7 +209,7 @@ export function BuildDossier({
   };
 
   return (
-    <div className="space-y-5">
+    <GameSourceLabelProvider label={data.name} replace={!customRules} filters={`${new URL(apiPath, "https://sc2tools.invalid").search.slice(1)}${customRules ? "" : `&build=${encodeURIComponent(data.name)}`}`}><div className="space-y-5">
       {headerSlot ? headerSlot(data) : null}
       {sectionNavigation ? <BuildDossierNav /> : null}
       {error ? (
@@ -258,7 +261,7 @@ export function BuildDossier({
       />
       </section>
       {footerSlot ? footerSlot(data) : null}
-    </div>
+    </div></GameSourceLabelProvider>
   );
 }
 
@@ -613,9 +616,9 @@ function CompositionSampleGame({ gameId, cached }: { gameId: string; cached?: Bu
           <button type="button" onClick={() => { void mutate(); }} className="inline-flex min-h-11 items-center text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Try again</button>
         </div> : <p className="text-caption text-text-muted" role="status">{isLoading ? "Loading sample game…" : "Sample game details unavailable"}</p>}
       </div>
-      <Link href={`/app/game/${encodeURIComponent(gameId)}`} className="inline-flex min-h-11 shrink-0 items-center rounded-md border border-border px-3 py-2 text-caption text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+      <GameAnalysisLink gameId={gameId} className="inline-flex min-h-11 shrink-0 items-center rounded-md border border-border px-3 py-2 text-caption text-text hover:bg-bg-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
         Open game
-      </Link>
+      </GameAnalysisLink>
     </li>
   );
 }

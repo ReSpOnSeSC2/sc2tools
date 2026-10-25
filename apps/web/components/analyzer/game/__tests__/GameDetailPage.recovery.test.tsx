@@ -22,6 +22,10 @@ vi.mock("@/lib/clientApi", () => ({ useApi: (path: string) => {
       : macro ? {} : build ? { events: [], opp_events: [] } : undefined };
 } }));
 import { GameDetailPage } from "../GameDetailPage";
+// Load the real lazy chunk before timed DOM assertions; browser checks cover its loading state.
+import "../GameMacroSection";
+import "../BuildOrderColumns";
+import "../BuildWorkspaceActions";
 beforeEach(() => { state.macroError = null; state.buildError = null; state.gameError = null; state.loading = false; state.crash = false; state.retry.mockReset(); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 

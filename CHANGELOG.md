@@ -21,6 +21,13 @@ corresponding GitHub Release.
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
 - Your reviewer profile shows verified leagues, badges, karma and synced-game eligibility. Leaderboard and weekly digest preferences live together there and restore their previous value if saving fails.
 
+### Agent 0.24.5 - Opt-in game-screen assistance
+- Default build selectors and loading-screen scouting to off, matching the
+  existing off defaults for native pins, spoken scouting, Session and Ghost.
+- Align Agent, API and website preference handling: require explicit true flags,
+  preserve saved choices, and keep new/offline accounts free of automatic prompts.
+- Apply saved opt-ins promptly when account settings load, and document activation.
+
 ### Agent 0.24.4 - One Compact opponent display
 - Fold Compact into the visible pinned opponent HUD, preserving its position and
   one scouting control; reopen the main Agent in Standard.
@@ -214,6 +221,11 @@ corresponding GitHub Release.
 
 - The game page includes the complete macro report, priced leaks and Recompute analysis, with section links that keep the replay mounted. Bank joins the chart metrics, and this browser remembers your selection.
 - Supply blocks, loss causes, macro moments and build steps seek one replay clock. Playback follows through the chart and current build step; timestamp links, completed upgrades and measured banked resources give each moment context.
+
+### Game navigation and replay controls
+
+- Step through older and newer games with remembered all, opponent, matchup or build scope, optional recorded head-to-head totals and Alt+arrow shortcuts. Back links retain the originating list, filters and named build context; opponent names open their dossiers where an identity is available.
+- Focus the replay for keyboard seeking, slow motion, event jumps, fullscreen and a shortcut sheet. Replay display choices, speed, volume and mobile panels are remembered on this device, and seeks are announced to screen readers.
 
 ### Shared game analysis
 

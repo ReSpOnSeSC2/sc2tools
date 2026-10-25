@@ -5,6 +5,7 @@ import { MapLabel } from "@/components/maps/MapArtwork";
 import { fmtDate, fmtMinutes } from "@/lib/format";
 
 export type ProfileGame = {
+  opponent_pulse_id?: string | null;
   id?: string | null;
   date?: string | null;
   /** Client release / numeric build from the replay header. With ``date``

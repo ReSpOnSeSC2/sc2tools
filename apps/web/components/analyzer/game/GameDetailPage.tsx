@@ -16,6 +16,7 @@ import { GameDetailSkeleton } from "./GameDetailSkeleton";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import type { GameVodLinksResponse } from "@/components/analyzer/GameStreamLinks";
 import type { AutopsyGame } from "@/lib/lossAutopsy";
+import { GameNavigation } from "./GameNavigation";
 import { GameDetailShell } from "./GameDetailShell";
 import { GameExportMenu } from "./GameExportMenu";
 import dynamic from "next/dynamic";
@@ -69,6 +70,7 @@ import { useBuildCheckInRevision } from "@/components/build-checkin/BuildCheckIn
  * timeline for an explanatory empty state. Never a blank page.
  */
 type GameDetailPageProps = {
+  source?: import("@/lib/gameNavigation").GameSource | null;
   gameId: string;
   opponentContext?: OpponentNavigationContext | null;
   /** Initial game-clock position from a replay example link. */
@@ -93,6 +95,7 @@ export function GameDetailPage(props: GameDetailPageProps) {
 }
 
 function GameDetailContent({
+  source,
   gameId,
   opponentContext,
   initialTimeSec,
@@ -219,6 +222,7 @@ function GameDetailContent({
 
   return (
     <GameDetailShell
+      source={source}
       game={game}
       exportAction={<GameExportMenu game={game} buildOrders={buildReq.data} macroBreakdown={breakdown} pending={buildStatus === "loading" || macroStatus === "loading"} />}
       opponentContext={opponentContext}
@@ -228,6 +232,7 @@ function GameDetailContent({
       oppStrategyLabel={checkinOpponent ? checkinOpponent.label : undefined}
       oppCorrected={checkinOpponent ? checkinOpponent.corrected : undefined}
     >
+      <GameNavigation game={game} source={source} opponentContext={opponentContext} buildLabel={checkinBuild ? checkinBuild.label : game.myBuild} />
       <GameWorkspaceNav />
       <BuildCheckInCard
         gameId={gameId}

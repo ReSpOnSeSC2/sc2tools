@@ -15,6 +15,7 @@ from sc2tools_agent.build_checkin.controller import (
     RESHOW_MAX_WAIT_SEC,
 )
 from sc2tools_agent.build_checkin.models import (
+    CheckinPrefs,
     CHECKING_REPLAY,
     STATUS_REPLAY_UNAVAILABLE,
     STATUS_SAVE_FAILED,
@@ -504,7 +505,7 @@ def test_confirm_after_ingest_uses_the_game_and_clears_the_matchup_cache(h: Harn
 
 def test_confirm_shows_busy_until_saved() -> None:
     executor = ManualExecutor()
-    h = Harness(executor=executor)
+    h = Harness(executor=executor, prefs=CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     key = h.new_key()
     _finish(h, key)
     executor.run_all()
@@ -639,7 +640,7 @@ def test_card_auto_hides_after_two_idle_minutes(h: Harness) -> None:
 
 def test_auto_hide_never_interrupts_a_save() -> None:
     executor = ManualExecutor()
-    h = Harness(executor=executor)
+    h = Harness(executor=executor, prefs=CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     key = h.new_key()
     _finish(h, key)
     executor.run_all()
@@ -990,7 +991,7 @@ def test_already_bound_after_the_acceptance_bound_the_card_reroutes() -> None:
     """The upload's acceptance reaches the state thread before the 409 of
     the live answer: the answer still goes to the game."""
     executor = ManualExecutor()
-    h = Harness(executor=executor)
+    h = Harness(executor=executor, prefs=CheckinPrefs(enabled=True, ask_at_loading=True, ask_after_game=True))
     h.boot()
     key = h.new_key()
     h.play(key)

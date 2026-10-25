@@ -2,6 +2,9 @@
 
 import { useChromeBreadcrumb } from "@/components/chrome/ChromeContext";
 import type { ReactNode } from "react";
+import { backToGameSource, type GameSource } from "@/lib/gameNavigation";
+import { useDocumentTitle } from "@/lib/useDocumentTitle";
+import { gameTitle } from "./gameTitle";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
@@ -47,8 +50,10 @@ export function GameDetailShell({
   oppStrategyLabel,
   oppCorrected,
   exportAction,
+  source,
 }: {
   game: GameSummary;
+  source?: GameSource | null;
   children: ReactNode;
   exportAction?: ReactNode;
   opponentContext?: OpponentNavigationContext | null;
@@ -62,6 +67,7 @@ export function GameDetailShell({
   /** Opponent-build correction marker; undefined falls back to the slim row's flag. */
   oppCorrected?: { detected: string | null } | null;
 }) {
+  useDocumentTitle(gameTitle(game));
   const matchup = matchupLabel(game.myRace, game.opponent?.race);
   const namedOpponent = (game.opponent?.displayName || "").trim();
   const oppName = namedOpponent || "Opponent";
@@ -72,11 +78,11 @@ export function GameDetailShell({
     (opponentContext?.displayName || "").trim() ||
     (game.opponent?.displayName || "").trim() ||
     "opponent";
-  const backHref = opponentProfileHref(opponentContext);
-  const backLabel = opponentContext
+  const backHref = source?.href ?? opponentProfileHref(opponentContext);
+  const backLabel = source ? `Back to ${source.label}` : opponentContext
     ? `Back to ${backName}`
     : "Back to Today";
-  const inChrome = useChromeBreadcrumb({ backHref, backLabel, trail: opponentContext ? [{ label: "Opponents", href: "/app/opponents" }, { label: backName, href: backHref }, { label: `${matchup || "Replay"} on ${game.map || "Unknown map"}` }] : [{ label: "Today", href: "/app" }, { label: `${matchup || "Replay"} on ${game.map || "Unknown map"}` }] });
+  const inChrome = useChromeBreadcrumb({ backHref, backLabel, trail: source ? [{ label: source.label, href: source.href }, { label: `${matchup || "Replay"} on ${game.map || "Unknown map"}` }] : opponentContext ? [{ label: "Opponents", href: "/app/opponents" }, { label: backName, href: backHref }, { label: `${matchup || "Replay"} on ${game.map || "Unknown map"}` }] : [{ label: "Today", href: "/app" }, { label: `${matchup || "Replay"} on ${game.map || "Unknown map"}` }] });
   const replayAvailable =
     game.replayAvailable === true || Boolean(game.replayFile?.storedAt);
   const replaySizeBytes =
@@ -101,6 +107,7 @@ export function GameDetailShell({
       <header id="overview" className="space-y-3 scroll-mt-[var(--game-section-offset,8rem)]">
         <Link
           href={backHref}
+          onClick={(event) => backToGameSource(event, source ?? null)}
           className={`${inChrome ? "md:hidden " : ""}inline-flex min-h-[44px] items-center gap-1.5 rounded text-caption font-medium text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />

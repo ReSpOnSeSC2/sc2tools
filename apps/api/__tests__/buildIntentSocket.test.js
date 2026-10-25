@@ -158,6 +158,7 @@ describe("build check-in realtime", () => {
     const gameKey = `Opp|Streamer|${KEY_MS + userCounter}`;
     await db.users.insertOne({ userId, clerkUserId: `clerk_sock_${userCounter}`, preferences: {} });
     await setPrefs(db, userId, {
+      buildCheckin: { enabled: true, askAtLoading: true, askAfterGame: true },
       randomizer: randomizerPrefs("PvZ", [PHOENIX_KEY, ROBO_KEY, "custom:ghost", "custom:dt"]),
     });
     await addCustomBuild(db, userId, "dt", { name: "DT Rush" });

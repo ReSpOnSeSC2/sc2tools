@@ -10,6 +10,7 @@ import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { AllGamesTable } from "../AllGamesTable";
 import type { ProfileGame } from "../Last5GamesTimeline";
 import { fmtDate, fmtMinutes } from "@/lib/format";
+import { GameSourceProvider } from "@/lib/useGameSource";
 
 type Band = { lo: number; hi: number; wins: number; losses: number; total: number };
 
@@ -79,7 +80,7 @@ export function OppMmrBucketGamesModal({
         />
       ) : (
         <>
-          {isGlobal ? <GlobalBucketGames games={games} /> : <PersonalBucketGames games={games} />}
+          {isGlobal ? <GlobalBucketGames games={games} /> : <GameSourceProvider filters={filtersToQuery({ ...filters, mmr_min: band.lo, mmr_max: band.hi - 1 })} replace><PersonalBucketGames games={games} /></GameSourceProvider>}
           {data && data.total > games.length ? (
             <p className="mt-3 text-micro text-text-dim">
               Showing the {games.length.toLocaleString()} most recent of{" "}

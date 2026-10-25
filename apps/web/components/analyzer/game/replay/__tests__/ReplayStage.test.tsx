@@ -8,6 +8,7 @@ import { payload, v4Payload } from "./fixtures";
 // registers its automatic cleanup -- without this every render stays
 // mounted and the next query matches the previous test's DOM too.
 beforeEach(() => {
+  window.localStorage.clear();
   vi.stubGlobal("matchMedia", (query: string) => ({
     matches: query.includes("min-width: 1280px"),
     addEventListener() {},
@@ -102,14 +103,14 @@ describe("ReplayStage", () => {
     expect((within(bar).getByTitle(/Opponent — gas banked/i)).textContent ?? "").toContain("50");
   });
 
-  it("cycles the speed button through 1× / 4× / 8× / 16×", () => {
+  it("cycles through the full slow-motion and fast playback speeds", () => {
     render(<ReplayStage playback={payload()} />);
     const speed = screen.getByRole("button", { name: /playback speed/i });
     expect((speed).textContent ?? "").toContain("8×");
     fireEvent.click(speed);
     expect((speed).textContent ?? "").toContain("16×");
     fireEvent.click(speed);
-    expect((speed).textContent ?? "").toContain("1×");
+    expect((speed).textContent ?? "").toContain("0.25×");
   });
 
   it("seeks when a build-order row is activated", () => {
