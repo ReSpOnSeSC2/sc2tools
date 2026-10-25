@@ -1,6 +1,6 @@
 # Battle report implementation checkpoint
 
-Implements final-plan `battle-report` on new `codex/wave3-battle-report`, reusing the clean merged export worktree at `.worktrees/wave3-build-exports`. The original export branch/head remains preserved. It starts from tested game-story math `50116a49`; completed Story UI/main changes must be integrated before the final PR. This checkpoint records work in progress, not shipped status.
+Implements final-plan `battle-report` on new `codex/wave3-battle-report`, reusing the clean merged export worktree at `.worktrees/wave3-build-exports`. The original export branch/head remains preserved. It starts from tested game-story math `50116a49` and integrates the completed Story UI and playback changes. This checkpoint records work in progress, not shipped status.
 
 ## Root's engine contract and provenance
 
@@ -20,8 +20,11 @@ Engine validation: 51 tests/36 snapshots, full web types and strict source lint.
 - Missing map frames use a cropped recorded army-value chart, with gaps for explicit missing values or intervals over 30 seconds. Missing nearby samples show an unavailable message. Report controls never start a recording or publish anything.
 - Copy text/Markdown supports a selected-text fallback. Copy stays disabled while recorded details are initially loading. Help article `battle-reports` describes the controls, data limits, frames and copy links.
 
-## Verification so far
+## Verification
 
-- 93 tests pass across the reviewed pure engine, report/snapshot/page-input consumers and game-page/recovery suites. This includes 51 core cases/36 golden snapshots and the real mounted-player timestamp wiring regression.
-- Full web types and strict changed UI/renderer/help lint pass. Source engine files remain owned by root; UI changes are staged independently.
-- Still pending: integration of finished Story/main, regenerated Help index, final affected tests/production build/budgets, real browser checks/screenshots, independent review, PR and green-CI merge.
+- 450 tests pass across 52 files: reviewed report engine/consumers, game page, Story/playback renderer/controller, recovery and Help suites. This includes 51 core report cases/36 golden snapshots and the real mounted-player timestamp wiring regression.
+- Full web types and strict changed UI/renderer/help lint pass. Help regenerates to 76 articles. Source engine files remain owned by root; UI changes are staged independently.
+- Combined production build with required engine `604e9d4618a6414b` passes every unchanged route budget: landing 214.2/215 kB, Today 224.4/240, game 313.6/440, opponent 491.5/500, Guides 168.4/175 and Help 180.2/200.
+- `node tests/manual/battle-report.cjs` passes 56 browser checks with production CSS and actual Hanken/Bricolage/Fraunces fonts. The local fixture mounts real game/report/player and authenticated SWR/client API consumers with synthetic auth/API boundaries, blocks nonlocal traffic and rejects/asserts no API writes. Local checked-in Alcyone artwork is served through the existing image URL. One manifest/legacy request pair serves both player and report. Tone/copy/clock/retained player, actual race-color pixels, mirror solid/outline identity and theme redraw, segmented arrival narrative invariance, missing data, long names, one-paragraph ending, denied-clipboard selected fallback and no overflow/uncaught errors pass.
+- Nine screenshots were visually reviewed: `screenshots/battle-report-{320,390,768,1440}.png` and `screenshots/battle-report-{zerg-mirror-dark,missing-detail-light,segmented-dark,long-names-light,short-gg-light}-390.png`. Section captures set sticky fixture/page chrome to static only while taking the image, so it cannot overlay the report after a seek.
+- Still pending: final main integration, independent review, PR and green-CI merge.
