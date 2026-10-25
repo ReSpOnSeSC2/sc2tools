@@ -2,11 +2,18 @@
 
 import { useChromeBreadcrumb } from "@/components/chrome/ChromeContext";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "@clerk/nextjs";
 import type { OpponentProfileResp } from "./ProfileView.types";
+import { MergedToonsChip, MergedIdentitiesLine, ProfilePulseLine, PublicProfileLink } from "./DossierHeaderDetails";
 import { useSWRConfig } from "swr";
 import Link from "next/link";
-import { ChevronLeft, ExternalLink, Users } from "lucide-react";
+import dynamic from "next/dynamic";
+import { SectionNav } from "@/components/ui/SectionNav";
+import { LazyHelpLink } from "@/components/help/LazyHelpLink";
+import { DossierOnView } from "./DossierOnView";
+import { DossierIdentitySection } from "./DossierIdentitySection";
+import { dossierIsBusy, useDossierBusyRetry } from "./useDossierBusyRetry";
 import { DossierFilterBar } from "./DossierFilterBar";
 import { Button } from "@/components/ui/Button";
 import { useToastOptional } from "@/components/ui/Toast";
@@ -14,9 +21,10 @@ import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { isOpponentKey } from "@/lib/opponentCache";
 import { useApi } from "@/lib/clientApi";
 import { RevealedChip } from "./RevealedChip";
-import { UnsavedNoteProvider, useUnsavedNote } from "./UnsavedNoteContext";
+import { UnsavedNoteProvider } from "./UnsavedNoteContext";
 import {
   filtersToQuery,
+  summarizeFilters,
   useFilters,
   type AnalyzerFilters,
 } from "@/lib/filterContext";
@@ -24,21 +32,18 @@ import { useLocalStorageState } from "@/lib/useLocalStorageState";
 import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import {
   LS_GROUP_BY_PLAYER,
-  type MergedIdentity,
 } from "@/lib/opponentGroups";
 import { Card, EmptyState, Stat, WrBar } from "@/components/ui/Card";
 import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { isNotFoundError } from "@/lib/requestErrors";
 import { pct1, wrColor } from "@/lib/format";
-import { OPPONENT_PROFILE_MIN_PLAYERS } from "@/lib/communityOpponent";
 import {
   isBarcodeName,
-  pickPulseLabel,
-  sc2pulseCharacterUrl,
 } from "@/lib/sc2pulse";
 import { OpponentReplayHistory } from "./OpponentReplayHistory";
-import { LadderContextCard } from "./LadderContextCard";
-import { OpponentDiagnosticsPanel } from "./OpponentDiagnosticsPanel";
+const ScoutingBriefCard = dynamic(() => import("./ScoutingBriefCard").then(module => module.ScoutingBriefCard));
+const OpponentSeriesStrip = dynamic(() => import("./OpponentSeriesStrip").then(module => module.OpponentSeriesStrip));
+const LadderContextCard = dynamic(() => import("./LadderContextCard").then(module => module.LadderContextCard));
 import {
   HeadlineMmrChip,
   RaceMmrPanel,
@@ -47,20 +52,17 @@ import {
 } from "./OpponentRaceMmr";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import { PredictedStrategiesList } from "./PredictedStrategiesList";
-import { StrategyTendencyChart } from "./StrategyTendencyChart";
 import { H2HTrendsSection } from "./h2h/H2HTrendsSection";
 import type { BuildMatchupSelection } from "./h2h/BuildMatrix";
 import { gameOutcome } from "@/lib/h2hSeries";
 import { WhereGamesEndBar } from "./WhereGamesEndBar";
-import type { BuildPhasePayload, BuildTransitionsPayload } from "@/lib/serverApi";
+import type { BuildPhasePayload } from "@/lib/serverApi";
 import {
   OpponentNotesCard,
   type OpponentNotesValue,
 } from "./OpponentNotesCard";
-import { OpponentIdentityCandidates } from "./OpponentIdentityCandidates";
 import { PlayerChannelLinks } from "./PlayerChannelLinks";
 import { usePlayerChannels } from "./usePlayerChannels";
-import { OpponentIdentitySubmission } from "./OpponentIdentitySubmission";
 import {
   DOSSIER_ERROR_COPY,
   DossierSkeleton,
@@ -101,26 +103,10 @@ export function ProfileView({
   onBack: () => void;
   backHref?: string;
 }) {
-  return <UnsavedNoteProvider onLeaveList={onBack}><ProfileViewContent pulseId={pulseId} onBack={onBack} backHref={backHref} /></UnsavedNoteProvider>;
-}
-
-function ProfileViewContent({ pulseId, onBack, backHref }: { pulseId: string; onBack: () => void; backHref: string }) {
-  const guard = useUnsavedNote();
-  return (
-    <div className="space-y-3">
-      <Link href={backHref}
-        onClick={(event) => {
-          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-          event.preventDefault(); guard?.navigate(onBack);
-        }}
-        className="inline-flex min-h-[44px] items-center gap-1 rounded-md px-2 py-1 text-caption uppercase tracking-wider text-text-muted hover:text-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-      >
-        <ChevronLeft className="h-4 w-4" aria-hidden />
-        All opponents
-      </Link>
-      <ProfileBody pulseId={pulseId} backHref={backHref} />
-    </div>
-  );
+  const { userId, isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded) return <DossierSkeleton />;
+  if (!isSignedIn || !userId) return <p role="status" className="text-caption text-text-muted">Sign in to view opponent history.</p>;
+  return <UnsavedNoteProvider key={`${userId}:${pulseId}`} onLeaveList={onBack}><ProfileBody pulseId={pulseId} backHref={backHref} /></UnsavedNoteProvider>;
 }
 
 function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string }) {
@@ -129,7 +115,10 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
   // opponents list that led here. In particular, opening an opponent
   // must not silently re-introduce custom or team games after the list
   // was narrowed to ladder 1v1.
-  const { filters, dbRev } = useFilters();
+  const { filters: analyzerFilters, dbRev, seasons } = useFilters();
+  const [allTime, setAllTime] = useState(false);
+  const filters = useMemo(() => allTime ? { ...analyzerFilters, preset: "all" as const, since: undefined, until: undefined } : analyzerFilters, [allTime, analyzerFilters]);
+  const [identityOpen, setIdentityOpen] = useState(false), [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const debouncedDbRev = useDebouncedValue(dbRev, 2000);
   const toast = useToastOptional()?.toast;
   const myName = useMyDisplayName();
@@ -145,9 +134,13 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
   const profileQuery = buildProfileQuery(filters, groupByPlayer);
   const profile = useApi<OpponentProfileResp>(
     `/v1/opponents/${encodeURIComponent(pulseId)}${profileQuery}#${debouncedDbRev}`,
-    { keepPreviousData: true },
+    { keepPreviousData: true, shouldRetryOnError: false },
   );
   const { data, mutate } = profile;
+  const busyRetrying = useDossierBusyRetry(`${pulseId}:${profileQuery}`, profile.error, mutate);
+  const anonymous = !!data && !data.globalIdentity && hasUnrevealedBarcodeIdentity(data);
+  const unresolved = !!data && !data.pulseCharacterId;
+  useEffect(() => { if (anonymous || unresolved) setIdentityOpen(true); if (unresolved) setDiagnosticsOpen(true); }, [anonymous, unresolved]);
   // Per-race SC2Pulse breakdown — fetched in parallel (live, cached
   // server-side) so it doesn't block the main profile render. Drives
   // the header MMR chip + the "Ladder MMR by race" panel.
@@ -216,7 +209,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         skeleton={<DossierSkeleton />}
         filtered
         errorCopy={DOSSIER_ERROR_COPY}
-        renderError={(error) => (isNotFoundError(error) ? <OpponentNotFound /> : undefined)}
+        renderError={(error) => isNotFoundError(error) ? <OpponentNotFound /> : dossierIsBusy(error) && busyRetrying ? <div role="status" className="rounded-xl border border-border p-5"><p>Analyzing… retrying</p><Button variant="ghost" onClick={() => void mutate()}>Retry now</Button></div> : undefined}
       />
       </div>
     );
@@ -261,10 +254,10 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
   };
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 max-w-full space-y-5">
       {!chromeBreadcrumb ? <nav aria-label="Breadcrumb" className="text-caption text-text-muted"><Link href={backHref} className="underline">Opponents</Link><span aria-hidden> / </span><span aria-current="page">{opponentName}</span></nav> : null}
       <header aria-label="Opponent profile" className="flex flex-wrap items-end justify-between gap-4">
-        <div className="w-full min-w-0 sm:w-auto sm:flex-1">
+        <div className="w-full min-w-0 lg:w-auto lg:flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="break-words text-h2 font-semibold">{data.name || "unnamed"}</h1>
             <RevealedChip
@@ -281,12 +274,13 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
               <MergedToonsChip handles={data.mergedToonHandles} />
             )}
           </div>
-          <ProfilePulseLine
+          {data.series ? <div className="my-3"><OpponentSeriesStrip series={data.series} /></div> : null}
+          <div className="flex flex-wrap items-center gap-3"><ProfilePulseLine
             pulseCharacterId={data.pulseCharacterId}
             toonHandle={data.toonHandle}
             pulseId={data.pulseId || pulseId}
             recordedAccount={Boolean(data.globalIdentity)}
-          />
+          /><a href="#dossier-identity" className="inline-flex min-h-11 items-center text-caption text-accent underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" onClick={() => { setIdentityOpen(true); setDiagnosticsOpen(true); }}>Data looks wrong?</a></div>
           {playerChannels ? (
             <div className="mt-3 [&_a]:min-h-11">
               <PlayerChannelLinks
@@ -303,7 +297,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
             <PublicProfileLink href={publicHref} />
           ) : null}
         </div>
-        <div className={`grid w-full grid-cols-2 gap-3 sm:w-auto sm:grid-cols-4 ${filterActive ? "[&>div]:border-accent" : ""}`}>
+        <div className={`grid w-full grid-cols-2 gap-3 sm:grid-cols-4 lg:w-auto ${filterActive ? "[&>div]:border-accent" : ""}`}>
           <Stat label={filterActive ? "Games (filtered)" : "Games"} value={t.total || 0} />
           <Stat label={filterActive ? "W (filtered)" : "W"} value={t.wins || 0} color="rgb(var(--success))" />
           <Stat label={filterActive ? "L (filtered)" : "L"} value={t.losses || 0} color="rgb(var(--danger))" />
@@ -315,6 +309,8 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         </div>
       </header>
 
+      <div className="flex flex-wrap items-center gap-2 text-caption text-text-muted"><span>Showing {summarizeFilters(filters, seasons)}</span><Button variant="ghost" onClick={() => setAllTime(value => !value)}>{allTime ? "Use analyzer dates" : "Show all time"}</Button><LazyHelpLink slug="opponent-dossier">How to read this page</LazyHelpLink></div>
+      {data.games?.length === 0 && !!data.series?.games.length ? <p className="text-caption text-text-muted">No games in this range.{data.series.lastSeen ? ` You last met on ${new Date(data.series.lastSeen).toLocaleDateString()}.` : ""} <button type="button" className="min-h-11 px-2 text-accent underline" onClick={() => setAllTime(true)}>Show all time</button></p> : null}
       {profile.error ? <div role="status" className="flex items-center gap-3 text-caption text-warning">
         <span>Couldn't refresh after your last game</span><Button variant="ghost" size="sm" onClick={() => mutate()}>Retry</Button>
       </div> : null}
@@ -324,66 +320,18 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         ...(selectedBuildMatchup ? [{ key: "build", label: "Build", value: `${selectedBuildMatchup.myBuild} vs ${selectedBuildMatchup.oppStrategy}`, clear: () => setSelectedBuildMatchup(null) }] : []),
       ]} onClear={() => { setSelectedMap(null); setSelectedStrategy(null); setSelectedBuildMatchup(null); }} />
       {filterActive && data.gamesTruncated ? <p className="text-caption text-text-muted">Filtered summary uses the latest analyzed games. Replay history below searches your full history.</p> : null}
-      <OpponentReplayHistory
-        // A query-scope or database revision change must reset cursor history
-        // to page one. Remounting avoids briefly applying an old opaque cursor
-        // to a new filter set.
-        key={`${replayHistoryPath}:${dbRev}`}
-        path={replayHistoryPath}
-        selectedMap={selectedMap} onSelectMap={setSelectedMap} maps={Object.keys(data.byMap || {})}
-        initialGames={filteredGames}
-        profileTruncated={data.gamesTruncated}
-        targetGameId={pendingGameId}
-        targetGameSeq={pendingGameSeq}
-        myName={myName}
-        opponentContext={{
-          pulseId,
-          displayName: data.name || data.displayNameSample || null,
-        }}
-      />
-
-      <OpponentNotesCard
-        pulseId={pulseId}
-        initialNotes={data.notes}
-        initialNotesReadAloud={data.notesReadAloud}
-        onSaved={(value: OpponentNotesValue) => {
-          void mutate(
-            { ...data, ...value },
-            { revalidate: false },
-          );
-        }}
-      />
-
-      {identitySubmissionEnabled ? (
-        <OpponentIdentitySubmission pulseId={pulseId} onChanged={() => {
-          void refreshCache(isOpponentKey(pulseId));
-        }} />
-      ) : null}
-
-      <OpponentIdentityCandidates
-        pulseId={pulseId}
-        enabled={identityCandidatesEnabled}
-        race={data.oppRaceModal}
-      />
-
-      <RaceMmrPanel breakdown={races} isLoading={racesLoading} confirmedIdentity={data.globalIdentity} />
-
-      {/* SC2Pulse ladder context — league/percentile, season record,
-          peak, 90-day MMR sparkline, pro identity + linked accounts.
-          Fetched in parallel with the profile; renders nothing while
-          the opponent's pulseCharacterId is still unresolved. */}
-      <LadderContextCard pulseId={pulseId} confirmedIdentity={data.globalIdentity} />
-
-      <OpponentDiagnosticsPanel
-        collapsible
-        initiallyExpanded={!data.pulseCharacterId || !data.mmr}
-        onRetried={async (response) => {
-          await refreshCache(isOpponentKey(pulseId));
-          if (response.resolvedPulseCharacterId) toast?.success("Pulse data refreshed");
-          else toast?.info("Still couldn't find their SC2Pulse profile");
-        }}
-        diagnosticsPath={`/v1/opponents/${encodeURIComponent(pulseId)}/diagnostics`}
-        retryPath={`/v1/opponents/${encodeURIComponent(pulseId)}/retry-pulse`}
+      <SectionNav variant="bar" aria-label="Dossier sections" items={[{ id: "dossier-brief", label: "Brief" }, { id: "dossier-tendencies", label: "Tendencies" }, { id: "dossier-history", label: "History" }, { id: "dossier-ladder", label: "Ladder" }, { id: "dossier-identity", label: "Identity" }]} />
+      <section id="dossier-brief" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Brief</h2><ScoutingBriefCard profile={data} /></section>
+      <section id="dossier-tendencies" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-5"><h2 className="text-h3 font-semibold">Tendencies</h2>
+      <H2HTrendsSection
+        games={games}
+        oppRace={data.oppRaceModal}
+        opponentName={opponentName}
+        selectedMap={selectedMap}
+        onSelectMap={setSelectedMap}
+        selectedBuildMatchup={selectedBuildMatchup}
+        onSelectBuildMatchup={(selection) => { setSelectedBuildMatchup(selection); setSelectedStrategy(null); }}
+        onSelectGame={handleSelectGame}
       />
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
@@ -394,8 +342,8 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
             <ul className="space-y-2 text-sm">
               {byMap.map((m) => (
                 <li key={m.name}>
-                  <button className="flex min-h-11 w-full items-center justify-between text-left" aria-pressed={selectedMap === m.name} onClick={() => setSelectedMap(selectedMap === m.name ? null : m.name)}>
-                    <span>{m.name}</span>
+                  <button className={`flex min-h-11 w-full items-center justify-between rounded px-2 text-left ${selectedMap === m.name ? "bg-accent/10 ring-1 ring-accent" : ""}`} aria-pressed={selectedMap === m.name} onClick={() => setSelectedMap(selectedMap === m.name ? null : m.name)}>
+                    <span className="min-w-0 flex-1 break-words">{m.name}</span>
                     <span
                       className="tabular-nums"
                       style={{ color: wrColor(m.winRate, m.total) }}
@@ -416,8 +364,8 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
             <ul className="space-y-2 text-sm">
               {byStrategy.map((s) => (
                 <li key={s.name}>
-                  <button className="flex min-h-11 w-full items-center justify-between text-left" aria-pressed={selectedStrategy === s.name} onClick={() => { setSelectedStrategy(selectedStrategy === s.name ? null : s.name); setSelectedBuildMatchup(null); }}>
-                    <span>{s.name}</span>
+                  <button className={`flex min-h-11 w-full items-center justify-between rounded px-2 text-left ${selectedStrategy === s.name ? "bg-accent/10 ring-1 ring-accent" : ""}`} aria-pressed={selectedStrategy === s.name} onClick={() => { setSelectedStrategy(selectedStrategy === s.name ? null : s.name); setSelectedBuildMatchup(null); }}>
+                    <span className="min-w-0 flex-1 break-words">{s.name}</span>
                     <span
                       className="tabular-nums"
                       style={{ color: wrColor(s.winRate, s.total) }}
@@ -425,6 +373,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
                       {s.wins}-{s.losses} · {pct1(s.winRate)}
                     </span>
                   </button>
+                  <p className="text-micro text-text-muted">{Math.round(100 * s.total / Math.max(1, byStrategy.reduce((sum, row) => sum + row.total, 0)))}% of tagged decided games</p><div className="h-1.5 overflow-hidden rounded-full bg-bg-elevated" aria-hidden><div className="h-full bg-accent" style={{ width: `${100 * s.total / Math.max(1, byStrategy.reduce((sum, row) => sum + row.total, 0))}%` }} /></div>
                   <WrBar wins={s.wins} losses={s.losses} />
                 </li>
               ))}
@@ -433,39 +382,47 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         </Card>
       </div>
 
-      {/* ``min-w-0`` on the grid children lets the columns shrink
-          below their intrinsic content size — long strategy names
-          inside the Cards would otherwise overflow the page. */}
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="min-w-0">
-          <Card title={<span>Build tendencies (top 5 strategies){filterActive ? <small className="ml-2 font-normal text-text-dim">All games, not filtered</small> : null}</span>}>
-            <StrategyTendencyChart strategies={data.topStrategies || []} />
-          </Card>
-        </div>
-        <div className="min-w-0">
-          <Card title={<span>Likely strategies next{filterActive ? <small className="ml-2 font-normal text-text-dim">All games, not filtered</small> : null}</span>}>
-            <PredictedStrategiesList
-              predictions={data.predictedStrategies || []}
-            />
-          </Card>
-        </div>
-      </div>
-
-      <H2HTrendsSection
-        games={games}
-        oppRace={data.oppRaceModal}
-        opponentName={opponentName}
-        selectedMap={selectedMap}
-        onSelectMap={setSelectedMap}
-        selectedBuildMatchup={selectedBuildMatchup}
-        onSelectBuildMatchup={(selection) => { setSelectedBuildMatchup(selection); setSelectedStrategy(null); }}
-        onSelectGame={handleSelectGame}
-      />
-
+      <Card title={<span>Likely strategies next{filterActive ? <small className="ml-2 font-normal text-text-dim">All games, not filtered</small> : null}</span>}><PredictedStrategiesList predictions={data.predictedStrategies || []} /></Card>
       <WhereGamesEndSection
         filtered={filterActive}
         finalPhaseDistribution={data.phases?.finalPhaseDistribution}
+      />      </section>
+      <section id="dossier-history" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-5"><h2 className="text-h3 font-semibold">History</h2>
+      <OpponentReplayHistory
+        // A query-scope or database revision change must reset cursor history
+        // to page one. Remounting avoids briefly applying an old opaque cursor
+        // to a new filter set.
+        key={`${replayHistoryPath}:${dbRev}`}
+        path={replayHistoryPath}
+        selectedMap={selectedMap} onSelectMap={setSelectedMap} maps={Object.keys(data.byMap || {})}
+        initialGames={filteredGames}
+        profileTruncated={data.gamesTruncated}
+        targetGameId={pendingGameId}
+        targetGameSeq={pendingGameSeq}
+        myName={myName}
+        opponentContext={{
+          pulseId,
+          displayName: data.name || data.displayNameSample || null,
+        }}
       />
+
+      <OpponentNotesCard
+        headingLevel={3}
+        pulseId={pulseId}
+        initialNotes={data.notes}
+        initialNotesReadAloud={data.notesReadAloud}
+        onSaved={(value: OpponentNotesValue) => {
+          void mutate(
+            { ...data, ...value },
+            { revalidate: false },
+          );
+        }}
+      />
+
+      </section>
+      <section id="dossier-ladder" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Ladder</h2><DossierOnView label="Ladder context"><LadderContextCard pulseId={pulseId} confirmedIdentity={data.globalIdentity}><RaceMmrPanel embedded breakdown={races} isLoading={racesLoading} confirmedIdentity={data.globalIdentity} /></LadderContextCard></DossierOnView></section>
+      <DossierIdentitySection pulseId={pulseId} open={identityOpen} onOpenChange={setIdentityOpen} diagnosticsOpen={diagnosticsOpen} submission={identitySubmissionEnabled} candidates={identityCandidatesEnabled} race={data.oppRaceModal} onChanged={() => { void refreshCache(isOpponentKey(pulseId)); }} onRetried={async response => { await refreshCache(isOpponentKey(pulseId)); if (response.resolvedPulseCharacterId) toast?.success("Pulse data refreshed"); else toast?.info("Still couldn't find their SC2Pulse profile"); }} />
+
 
 
     </div>
@@ -579,166 +536,6 @@ export function buildOpponentReplayHistoryQuery(
         : {}),
     },
     mergeLinked,
-  );
-}
-
-/**
- * Disclosure chip rendered in the profile header when the opponent's
- * games were merged across more than one toon_handle (the rare
- * Battle.net rebind case where SC2Pulse keeps the same canonical
- * character id but the in-replay toon rotates). The chip's
- * native ``title`` attribute lists every merged toon so the user
- * can hover/long-press for the full set without us shipping a
- * dedicated tooltip primitive. Hidden entirely on the single-toon
- * common case so existing profiles look identical.
- *
- * Touch-target: the chip itself is non-interactive (no link / no
- * tap action), so the 44 px minimum-touch rule from the rest of the
- * SPA doesn't apply — it's an inline disclosure, sized to read
- * comfortably alongside the h1 on both mobile and desktop without
- * crowding the stat strip.
- */
-function MergedToonsChip({
-  handles,
-}: {
-  handles?: string[] | null;
-}) {
-  if (!handles || handles.length <= 1) return null;
-  const summary = `Merged across ${handles.length} toons`;
-  // Native title on a span — browsers / screen readers surface it
-  // as the accessible description. Mobile users get the same on
-  // long-press in most browsers; we don't need a custom tooltip.
-  return (
-    <span
-      role="note"
-      aria-label={`${summary}: ${handles.join(", ")}`}
-      title={`Same SC2Pulse character across:\n${handles.join("\n")}`}
-      className="inline-flex items-center rounded-full border border-accent-cyan/40 bg-accent-cyan/10 px-2 py-0.5 text-micro font-medium uppercase tracking-wider text-accent-cyan"
-    >
-      {summary}
-    </span>
-  );
-}
-
-/**
- * Per-name breakdown for a merged player profile: every name SC2Pulse
- * links to this player, with its own W-L, so "all their games on one
- * page" stays auditable per name. The stats on this page already span
- * all of them — this line is disclosure, not navigation. Renders
- * nothing on single-identity profiles.
- */
-function MergedIdentitiesLine({
-  identities,
-  mainName,
-}: {
-  identities?: MergedIdentity[] | null;
-  mainName?: string;
-}) {
-  if (!identities || identities.length <= 1) return null;
-  return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-      <span
-        className="text-micro uppercase tracking-wider text-text-dim"
-        title="SC2Pulse links these names to the same player — this page merges all of their games"
-      >
-        Plays as
-      </span>
-      {identities.map((identity) => {
-        const label = identity.name || "unnamed";
-        const isMain = !!mainName && identity.name === mainName;
-        return (
-          <span
-            key={identity.pulseId}
-            title={`${label} · ${identity.wins}-${identity.losses} vs you`}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-caption ${
-              isMain
-                ? "border-accent/40 bg-accent/10 text-text"
-                : "border-border bg-bg-elevated text-text-muted"
-            }`}
-          >
-            <span className="max-w-[9rem] truncate">{label}</span>
-            <span className="tabular-nums text-micro text-text-dim">
-              {identity.wins}-{identity.losses}
-            </span>
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * Pulse identity line in the profile header. Mirrors the table-cell
- * treatment in OpponentsTab: when we have a real SC2Pulse character
- * id, link out to nephest with the resolved id; otherwise fall back to
- * the toon_handle (the value from the user's replay folder name) and
- * label it accordingly.
- */
-const PUBLIC_PROFILE_TIP = `Anyone can see this opponent's public profile: games from every SC2 Tools player who has faced them, combined. It only exists once at least ${OPPONENT_PROFILE_MIN_PLAYERS} different players have, and it never shows names or battle tags.`;
-
-/** Link to /community/opponents/<id>, shown only once that profile exists. */
-function PublicProfileLink({ href }: { href: string }) {
-  return (
-    <>
-      <Link
-        href={href}
-        title={PUBLIC_PROFILE_TIP}
-        aria-describedby="public-profile-tip"
-        className="mt-1 inline-flex min-h-[32px] items-center gap-1.5 rounded-sm text-caption font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        <Users className="h-3.5 w-3.5" aria-hidden />
-        Public profile
-      </Link>
-      <span id="public-profile-tip" className="sr-only">
-        {PUBLIC_PROFILE_TIP}
-      </span>
-    </>
-  );
-}
-
-function ProfilePulseLine({
-  pulseCharacterId,
-  toonHandle,
-  pulseId,
-  recordedAccount = false,
-}: {
-  pulseCharacterId?: string | null;
-  toonHandle?: string | null;
-  pulseId: string;
-  recordedAccount?: boolean;
-}) {
-  const label = pickPulseLabel({ pulseCharacterId, toonHandle, pulseId });
-  if (!label) {
-    return (
-      <div className="font-mono text-caption text-text-dim">Pulse ID —</div>
-    );
-  }
-  if (label.isPulseCharacterId) {
-    return (
-      <div className="flex flex-wrap items-center gap-2 font-mono text-caption text-text-dim">
-        <span>{recordedAccount ? "Played account · Pulse ID" : "Pulse ID"}</span>
-        <a
-          href={sc2pulseCharacterUrl(label.value)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-        >
-          {label.value}
-          <ExternalLink className="h-3 w-3" aria-hidden />
-        </a>
-        {toonHandle ? (
-          <span className="text-text-muted">· toon {toonHandle}</span>
-        ) : null}
-      </div>
-    );
-  }
-  return (
-    <div className="font-mono text-caption text-text-dim">
-      Toon {label.value}
-      <span className="ml-2 text-micro uppercase tracking-wider text-text-muted">
-        sc2pulse id not resolved yet
-      </span>
-    </div>
   );
 }
 

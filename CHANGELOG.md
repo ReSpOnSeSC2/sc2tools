@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Opponent dossier
+
+- Read and copy a six-line scouting brief, follow the all-time meeting series, and move through the dossier with sticky section links. Date overrides stay local to this opponent; history remains directly above private notes.
+- Identity and data quality share one disclosure, normal identity forms wait until requested, and ladder ratings share one card. Busy analysis retries with backoff, while missing history and network failures have distinct recovery states.
+
 ### Maps and veto planning
 
 - Compare the current ladder pool by matchup with sample sizes, Wilson ranges and community context. Choose one to three suggested vetoes from maps with at least five decided games; stale pool data and failed refreshes pause recommendations.

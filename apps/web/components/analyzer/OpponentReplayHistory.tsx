@@ -6,6 +6,7 @@ import { useApi } from "@/lib/clientApi";
 import type { OpponentNavigationContext } from "@/lib/opponentNavigation";
 import { AllGamesTable } from "./AllGamesTable";
 import type { ProfileGame } from "./Last5GamesTimeline";
+import { GameSourceLabelProvider } from "./GameAnalysisLink";
 
 export const OPPONENT_REPLAY_PAGE_SIZE = 200;
 
@@ -83,7 +84,7 @@ export function OpponentReplayHistory({
   };
 
   return (
-    <Card title={title}>
+    <GameSourceLabelProvider label="Opponent history" filters={pagePath.split("?")[1] ?? ""} replace><Card title={title}>
       <div className="mb-3 flex flex-wrap gap-3 text-caption">
         <label>Show: <select aria-label="Filter replay results" className="min-h-11 rounded border border-border bg-bg-surface px-2" value={result}
           onChange={(event) => { setResult(event.target.value); setCursor(null); setNewerCursors([]); }}>
@@ -165,7 +166,7 @@ export function OpponentReplayHistory({
           </div>
         </nav>
       ) : null}
-    </Card>
+    </Card></GameSourceLabelProvider>
   );
 }
 

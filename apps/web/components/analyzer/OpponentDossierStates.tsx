@@ -40,7 +40,7 @@ export function OpponentNotFound() {
     <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard">
       <EmptyStatePanel
         icon={<UserX className="h-5 w-5" aria-hidden />}
-        title="We couldn't find this opponent in your replays"
+        title="Not in your history"
         description="The link may be out of date, or the games against them were deleted."
         action={
           <Link

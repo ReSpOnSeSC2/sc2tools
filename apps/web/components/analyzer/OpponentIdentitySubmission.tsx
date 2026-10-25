@@ -46,11 +46,34 @@ export function IdentityStatus({ status }: { status: IdentityProposal["status"] 
 }
 
 export function OpponentIdentitySubmission(props: { pulseId: string; onChanged?: () => void }) {
-  return <IdentitySubmissionBody key={props.pulseId} {...props} />;
+  const { userId, isLoaded, isSignedIn } = useAuth();
+  const ownerId = isLoaded && isSignedIn && userId ? userId : null;
+  const currentOwner = useRef(ownerId);
+  currentOwner.current = ownerId;
+  if (!isLoaded) return <div role="status" aria-label="Loading player identity"><Skeleton rows={2} /></div>;
+  if (!ownerId) return null;
+  return <IdentitySubmissionBody key={`${ownerId}:${props.pulseId}`} ownerId={ownerId} currentOwner={currentOwner} {...props} />;
 }
 
-function IdentitySubmissionBody({ pulseId, onChanged }: { pulseId: string; onChanged?: () => void }) {
+function IdentitySubmissionBody({ pulseId, onChanged, ownerId, currentOwner }: { pulseId: string; onChanged?: () => void; ownerId: string; currentOwner: { current: string | null } }) {
   const { getToken } = useAuth();
+  const active = useRef(true);
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => {
+    active.current = true;
+    return () => { active.current = false; request.current?.abort(); };
+  }, []);
+  const stillOwner = () => active.current && currentOwner.current === ownerId;
+  function guardedToken(controller: AbortController) {
+    return async () => {
+      if (!stillOwner()) throw new DOMException("Identity owner changed", "AbortError");
+      controller.signal.throwIfAborted();
+      const token = await getToken();
+      if (!stillOwner()) throw new DOMException("Identity owner changed", "AbortError");
+      controller.signal.throwIfAborted();
+      return token;
+    };
+  }
   const path = `/v1/opponents/${encodeURIComponent(pulseId)}/identity-submissions`;
   const { data, error, isLoading, mutate } = useApi<IdentityContext>(path, { revalidateOnFocus: false });
   const [editing, setEditing] = useState(false);
@@ -79,54 +102,64 @@ function IdentitySubmissionBody({ pulseId, onChanged }: { pulseId: string; onCha
   }
 
   async function save() {
-    if (saving || !data || !target) return;
+    if (saving || !data || !target || !stillOwner()) return;
     const trimmed = reason.trim();
     if (trimmed.length < IDENTITY_REASON_MIN) { setSaveError("Explain the match in at least 10 characters."); return; }
     setSaving(true); setSaveError(null); setNotice(null);
+    const controller = new AbortController(); request.current = controller;
     try {
       if (data.isAdmin) {
-        const response = await apiCall<IdentityContext>(getToken, `/v1/opponents/${encodeURIComponent(pulseId)}/confirmed-identity`, {
+        const response = await apiCall<IdentityContext>(guardedToken(controller), `/v1/opponents/${encodeURIComponent(pulseId)}/confirmed-identity`, {
           method: "PUT", body: JSON.stringify({ targetKey: target.key, reason: trimmed, revision: editing ? revision : data.revision ?? data.confirmed?.revision ?? 0 }),
+          signal: controller.signal,
         });
+        if (!stillOwner() || controller.signal.aborted) return;
         await mutate(response, { revalidate: false });
+        if (!stillOwner() || controller.signal.aborted) return;
         onChanged?.();
         setNotice("Identity confirmed for everyone.");
       } else {
-        const response = await apiCall<IdentityContext>(getToken, path, { method: "POST", body: JSON.stringify({ targetKey: target.key, reason: trimmed, ...(submissionRevision !== undefined ? { submissionRevision } : {}) }) });
+        const response = await apiCall<IdentityContext>(guardedToken(controller), path, { method: "POST", body: JSON.stringify({ targetKey: target.key, reason: trimmed, ...(submissionRevision !== undefined ? { submissionRevision } : {}) }), signal: controller.signal });
+        if (!stillOwner() || controller.signal.aborted) return;
         await mutate(response, { revalidate: false });
+        if (!stillOwner() || controller.signal.aborted) return;
         setNotice("Identity submitted for admin review. Your replay history is available to the reviewer.");
       }
       setEditing(false); setTarget(null); setReason("");
-    } catch (err) { setSaveError(identityError(err)); }
-    finally { setSaving(false); }
+    } catch (err) { if (stillOwner() && !controller.signal.aborted) setSaveError(identityError(err)); }
+    finally { if (stillOwner()) setSaving(false); if (request.current === controller) request.current = null; }
   }
 
   async function unlink() {
-    if (saving || unlinkReason.trim().length < IDENTITY_REASON_MIN) return;
+    if (saving || unlinkReason.trim().length < IDENTITY_REASON_MIN || !stillOwner()) return;
     setSaving(true); setSaveError(null);
+    const controller = new AbortController(); request.current = controller;
     try {
-      const response = await apiCall<IdentityContext>(getToken, `/v1/opponents/${encodeURIComponent(pulseId)}/confirmed-identity`, {
+      const response = await apiCall<IdentityContext>(guardedToken(controller), `/v1/opponents/${encodeURIComponent(pulseId)}/confirmed-identity`, {
         method: "DELETE", body: JSON.stringify({ reason: unlinkReason.trim(), revision }),
+        signal: controller.signal,
       });
+      if (!stillOwner() || controller.signal.aborted) return;
       await mutate(response, { revalidate: false });
+      if (!stillOwner() || controller.signal.aborted) return;
       setRevision(response.revision ?? 0);
       setUnlinking(false); setEditing(false); setTarget(null); setReason("");
       setNotice("Confirmed identity removed for everyone."); onChanged?.();
-    } catch (err) { setSaveError(identityError(err)); }
-    finally { setSaving(false); }
+    } catch (err) { if (stillOwner() && !controller.signal.aborted) setSaveError(identityError(err)); }
+    finally { if (stillOwner()) setSaving(false); if (request.current === controller) request.current = null; }
   }
 
   if (isLoading) return <div role="status" aria-label="Loading player identity"><Skeleton rows={2} /></div>;
   if (error) return <Card><p role="alert" className="text-body text-danger">Couldn&apos;t load identity submissions. {error.message}</p><Button className="mt-3" variant="secondary" onClick={() => void mutate()}>Retry identity lookup</Button></Card>;
   if (!data || (!data.eligible && !data.confirmed && !data.submission)) return null;
   const canEdit = data.eligible;
-  const showForm = canEdit && (editing || (!data.confirmed && !data.submission));
+  const showForm = canEdit && (editing || (data.isAdmin && !data.confirmed && !data.submission));
 
   return <Card>
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h2 className="flex items-center gap-2 text-h3 font-bold"><Fingerprint className="h-5 w-5 shrink-0 text-accent" aria-hidden />Player identity</h2>
+          <h3 className="flex items-center gap-2 text-h3 font-bold"><Fingerprint className="h-5 w-5 shrink-0 text-accent" aria-hidden />Player identity</h3>
           <p className="mt-1 text-body text-text-muted">{data.isAdmin ? "Identify this barcode by selecting a player and explaining the match. Your confirmation updates the shared identity immediately." : "Know who plays on this barcode? Select their known account and explain the match. An administrator checks the evidence before it becomes a shared identity."}</p>
         </div>
         {data.isAdmin ? <Badge size="sm" iconLeft={<ShieldCheck className="h-3.5 w-3.5" />}>Admin controls</Badge> : null}
@@ -153,7 +186,7 @@ function IdentitySubmissionBody({ pulseId, onChanged }: { pulseId: string; onCha
           {editing ? <Button variant="ghost" disabled={saving} onClick={() => { setEditing(false); setTarget(null); setReason(""); setSaveError(null); }}>Cancel</Button> : null}
         </div>
       </form> : canEdit ? <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" disabled={saving} onClick={beginEdit}>{data.isAdmin ? data.confirmed ? "Change confirmed identity" : "Confirm an identity" : data.submission ? "Update submission" : "Suggest another identity"}</Button>
+        <Button variant="secondary" disabled={saving} onClick={beginEdit}>{data.isAdmin ? data.confirmed ? "Change confirmed identity" : "Confirm an identity" : data.submission ? "Update submission" : "Know who this is? Suggest an identity"}</Button>
         {data.isAdmin && data.confirmed ? <Button variant="ghost" disabled={saving} className="text-danger" onClick={() => { setRevision(data.revision ?? data.confirmed!.revision); setUnlinkReason(""); setSaveError(null); setUnlinking(true); }}>Remove confirmed identity</Button> : null}
       </div> : null}
       {saveError && !unlinking ? <p role="alert" className="text-body text-danger">{saveError}</p> : null}
