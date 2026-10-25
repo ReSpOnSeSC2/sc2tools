@@ -18,6 +18,7 @@
 // so a long-running OBS source recovers without needing a manual reload.
 
 import { useEffect } from "react";
+import { useOverlayPreview } from "@/lib/overlayPreviewContext";
 import { API_BASE } from "../clientApi";
 import {
   EMPTY_ALERT_MEDIA_GRANT,
@@ -78,8 +79,9 @@ function useGrantFrom(url: string | null): void {
 
 /** Overlay surface: authenticate with the widget's URL token. */
 export function useOverlayAlertMediaGrant(token: string | null | undefined): void {
+  const preview = useOverlayPreview();
   useGrantFrom(
-    token
+    token && !preview
       ? `${API_BASE}/v1/multichat/${encodeURIComponent(token)}/alert-media`
       : null,
   );

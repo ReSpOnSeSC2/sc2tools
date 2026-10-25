@@ -1,4 +1,6 @@
 "use client";
+import { withOverlayDemo } from "../OverlayDemoBoundary";
+import fixtures from "@/lib/overlaySamples.json";
 
 /**
  * SupporterWallWidget — cross-platform loyalty: today's top
@@ -23,14 +25,9 @@ import type { LiveGamePayload } from "../types";
 
 const TOAST_MS = 8_000;
 
-const TEST_WALL: WallEntry[] = [
-  { user: "TestGrinder", platform: "twitch", xp: 1240, level: 4, rank: "" },
-  { user: "KickEnjoyer", platform: "kick", xp: 660, level: 3, rank: "" },
-  { user: "TubeWatcher", platform: "youtube", xp: 300, level: 2, rank: "" },
-  { user: "TokFan", platform: "tiktok", xp: 120, level: 1, rank: "" },
-];
+const TEST_WALL = fixtures.demo.supporterWall as WallEntry[];
 
-export function SupporterWallWidget({
+function ConnectedSupporterWallWidget({
   token,
   engagementEvent,
   live,
@@ -225,3 +222,5 @@ const hintStyle: CSSProperties = {
   letterSpacing: "0.04em",
   color: "rgba(255,255,255,0.55)",
 };
+
+export const SupporterWallWidget = withOverlayDemo(ConnectedSupporterWallWidget);

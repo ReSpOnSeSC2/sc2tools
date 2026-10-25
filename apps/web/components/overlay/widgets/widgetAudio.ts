@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useOverlayPreview } from "@/lib/overlayPreviewContext";
 
 const AUDIO_ON = new Set(["1", "true", "on", "yes"]);
 const AUDIO_OFF = new Set(["0", "false", "off", "no"]);
@@ -21,14 +22,16 @@ export function resolveWidgetAudioOwner(search: string): boolean {
 
 /** Hydrate silent, then honor the Browser Source's explicit role. */
 export function useWidgetAudioOwner(): boolean {
+  const preview = useOverlayPreview();
   const [owner, setOwner] = useState(false);
   useEffect(() => {
+    if (preview) return;
     const update = () => setOwner(resolveWidgetAudioOwner(window.location.search));
     update();
     window.addEventListener("popstate", update);
     return () => window.removeEventListener("popstate", update);
-  }, []);
-  return owner;
+  }, [preview]);
+  return !preview && owner;
 }
 
 /**

@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Local widget playground
+
+- Preview every widget with sample scenarios and theme presets, alone or together, in Stream Studio, the widget guides and Settings. Silent local previews use no account or overlay token; Test in OBS remains the check for a real source.
+
 ### Widget manager
 
 - Find overlay widgets in grouped cards with search, source sizes, OBS drag links and private URLs hidden until revealed. Starter packs show exactly what they enable, keep existing selections and detect changes from another tab.

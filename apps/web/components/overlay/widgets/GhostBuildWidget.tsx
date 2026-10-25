@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useOverlayPreview } from "@/lib/overlayPreviewContext";
 import type { LiveGameEnvelope, LiveGamePayload } from "../types";
 import { WidgetShell, WidgetHeader, Dim } from "../WidgetShell";
 import {
@@ -71,6 +72,7 @@ export function GhostBuildWidget({
    *  behaviour of letting the engine decide. */
   voicePrefs?: VoicePrefs | null;
 }) {
+  const preview = useOverlayPreview();
   const config = useMemo(() => decodeGhostBuildConfig(ghostParam), [ghostParam]);
   // Keep old v1 URLs recognizable, but never fan their one build across all
   // matchups. The user gets a migration prompt instead of incorrect coaching.
@@ -126,12 +128,12 @@ export function GhostBuildWidget({
   // The steps the voice coach would speak — mirrors the render path's
   // guards, computed unconditionally so the hook order stays stable.
   const voiceSteps = useMemo(() => {
-    if (!voiceEnabled || !config || !matchActive || randomBlocked) return null;
+    if (preview || !voiceEnabled || !config || !matchActive || randomBlocked) return null;
     if (races.ownRaceIsRandom) return null;
     if (!ghostMatchupKey(races.ownRace, races.opponentRace)) return null;
     const t = selectGhostTarget(config, races.ownRace, races.opponentRace);
     return t ? t.steps : null;
-  }, [voiceEnabled, config, matchActive, randomBlocked, races]);
+  }, [preview, voiceEnabled, config, matchActive, randomBlocked, races]);
   useGhostVoice(voiceSteps, clockSec, voicePrefs ?? null);
 
   if (!config) {
