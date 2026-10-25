@@ -109,7 +109,7 @@ const server = http.createServer((req, res) => {
         expect(await probe()).toEqual({ own: true, opponentCenter: false, ring: true }); checks++;
         for (const next of ['light', 'dark']) { await page.evaluate(value => document.documentElement.setAttribute('data-theme', value), next); await expect.poll(probe).toEqual({ own: true, opponentCenter: false, ring: true }); } checks++;
       }
-      if (id === 'missing-detail') { await expect(report.getByText('No army-value samples near this moment.').first()).toBeVisible(); await expect(report.locator('canvas')).toHaveCount(0); checks++; }
+      if (id === 'missing-detail') { await expect(report.getByText('No army-value samples near this moment.').first()).toBeVisible(); await expect(report.getByText('Recorded army-value samples appear when available. Map snapshots need map data synced by the desktop app.').first()).toBeVisible(); await expect(report.locator('canvas')).toHaveCount(0); checks++; }
       if (id === 'segmented') {
         await expect(page.locator('#replay canvas')).toBeVisible(); const before = await report.locator('[data-report-paragraph]').allTextContents();
         expect(requests.filter(value => /\/segments\//.test(value))).toHaveLength(1); await expect(report.locator('canvas')).toHaveCount(0); checks++;

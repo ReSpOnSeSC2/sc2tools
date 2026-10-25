@@ -39,6 +39,8 @@ describe("battle snapshots", () => {
     expect(view.container.querySelectorAll("path")).toHaveLength(0); expect(view.container.querySelectorAll("circle")).toHaveLength(2);
     view.rerender(<BattleSnapshot moment={{ id: "swing", time: 30, caption: "Largest sampled lead swing" }} duration={120} onSeek={seek} />);
     expect(screen.getByText("No army-value samples near this moment.")).toBeTruthy(); expect(screen.queryByRole("img")).toBeNull();
+    expect(screen.getByText("Recorded army-value samples appear when available. Map snapshots need map data synced by the desktop app.")).toBeTruthy();
+    expect(screen.queryByText(/samples shown here/)).toBeNull();
   });
 
   it("names both sides and races and distinguishes mirror-match dots by fill and outline", () => {
