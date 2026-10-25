@@ -135,9 +135,9 @@ function serializeLatestGame(row) {
 }
 
 /** Remove all intermediate fields, including on empty/no-game fast-path rows.
- * @param {Record<string, any>} row
+ * @param {Record<string, any>} row @param {boolean} confirmedMongo
  */
-function applyListDetails(row) {
+function applyListDetails(row, confirmedMongo) {
   const durationSum = row._listDurationSum || 0;
   const durationSamples = row._listDurationSamples || 0;
   const macroSum = row._listMacroSum || 0;
@@ -146,20 +146,22 @@ function applyListDetails(row) {
     latestGame: serializeLatestGame(row._listLatest),
     duration: { sumSec: durationSum, samples: durationSamples, averageSec: durationSamples ? durationSum / durationSamples : null },
     macro: { sum: macroSum, samples: macroSamples, average: macroSamples ? macroSum / macroSamples : null },
-    ...indexedBuildOrder(row),
+    ...indexedBuildOrder(row, confirmedMongo),
   });
   for (const key of SUMMARY_FIELDS) delete row[key];
 }
 
 /** R2 metadata describes the last indexed object, not guaranteed current state
  * after a later PUT's metadata acknowledgement fails. Never infer absence.
- * @param {Record<string, any>} row
+ * Even a row without storedIn can be obsolete after a first R2 PUT whose
+ * initial metadata update failed. Require the active backend to prove Mongo.
+ * @param {Record<string, any>} row @param {boolean} confirmedMongo
  */
-function indexedBuildOrder(row) {
+function indexedBuildOrder(row, confirmedMongo) {
   const metadata = new Map((row._listDetailRows || []).map((/** @type {any} */ item) => [item.gameId, item]));
   const candidates = (row._listCandidates || []).filter((/** @type {any} */ item) => datedGame(item));
   let latest = null;
-  let complete = row._listTotal > 0 && candidates.length === row._listTotal;
+  let complete = confirmedMongo === true && row._listTotal > 0 && candidates.length === row._listTotal;
   for (const candidate of candidates) {
     const detail = /** @type {any} */ (metadata.get(candidate.gameId));
     const stamp = detail?.opponentListDetail?.opponentBuildOrder;
@@ -216,9 +218,9 @@ function listDetailsPipeline(userId, match, pulseIds) {
 /** Replaces the existing latest-name batch (and unfiltered latest-seen batch).
  * Never reads R2 or adds a request per opponent.
  * @param {import('mongodb').Collection} games @param {string} userId
- * @param {Record<string, any>} match @param {any[]} rows
+ * @param {Record<string, any>} match @param {any[]} rows @param {boolean} [confirmedMongo]
  */
-async function overlayListDetails(games, userId, match, rows) {
+async function overlayListDetails(games, userId, match, rows, confirmedMongo = false) {
   if (!rows.length) return;
   const pulseIds = [...new Set(rows.map((row) => row.pulseId).filter((id) => typeof id === "string" && id.length > 0))];
   if (!pulseIds.length) return;
@@ -234,7 +236,7 @@ async function overlayListDetails(games, userId, match, rows) {
       for (const key of SUMMARY_FIELDS) row[key] = summary[key];
       if (summary.latestDate instanceof Date && summary.latestDate > (row.lastSeen || new Date(0))) row.lastPlayed = summary.latestDate;
     }
-    applyListDetails(row);
+    applyListDetails(row, confirmedMongo);
   }
 }
 

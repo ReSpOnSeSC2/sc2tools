@@ -414,7 +414,7 @@ class OpponentsService {
     // ``{opponent.pulseId, userId, date}`` index).
     await Promise.all([
       opts.includeListDetails === true
-        ? overlayListDetails(this.db.games, userId, gamesMatchStage(userId, filters), page)
+        ? overlayListDetails(this.db.games, userId, gamesMatchStage(userId, filters), page, this.gameDetails?.store?.kind === "mongo")
         : Promise.all([this._overlayLatestNameFromGames(userId, page), this._overlayLatestSeenFromGames(userId, page)]),
       this._overlayLatestMmrFromGames(userId, page),
       this._overlayGlobalIdentities(page),
@@ -549,7 +549,7 @@ class OpponentsService {
     await this._overlayFromOpponents(userId, page);
     await this._overlayRevealedNamesFromOpponents(userId, page);
     if (opts.includeListDetails === true) {
-      await overlayListDetails(this.db.games, userId, match, page);
+      await overlayListDetails(this.db.games, userId, match, page, this.gameDetails?.store?.kind === "mongo");
     } else {
       await this._overlayLatestNameFromGames(userId, page);
     }

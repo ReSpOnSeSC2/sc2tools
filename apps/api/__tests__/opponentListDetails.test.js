@@ -27,7 +27,9 @@ describe("opt-in opponent list scalar details", () => {
   beforeAll(async () => {
     mongo = await MongoMemoryServer.create();
     db = await connect({ uri: mongo.getUri(), dbName: "opponent_list_details" });
-    service = new OpponentsService(db, "test-only", { gameDetails: { findMany: () => { throw new Error("must not hydrate"); } } });
+    service = new OpponentsService(db, "test-only", { gameDetails: {
+      store: { kind: "mongo" }, findMany: () => { throw new Error("must not hydrate"); },
+    } });
     app = express();
     app.use(buildOpponentsRouter({ opponents: service, auth: (req, res, next) => {
       if (!req.headers["x-user"]) return res.sendStatus(401);
@@ -233,6 +235,16 @@ describe("opt-in opponent list scalar details", () => {
     await db.gameDetails.insertOne({ userId: "foreign", gameId: "a", opponentListDetail: { v: 1, opponentBuildOrder: stamp(true) } });
     const row = (await load("?listDetails=1")).body.items[0];
     expect(row).toMatchObject({ latestOppBuildOrder: null, opponentBuildOrderAvailability: "unknown" });
+  });
+
+  test.each([undefined, "", "r2", "future"])("an unconfirmed active store %s cannot claim complete Mongo coverage", async (kind) => {
+    const previous = service.gameDetails.store;
+    service.gameDetails.store = kind === undefined ? undefined : { kind };
+    try {
+      const { items } = (await load("?listDetails=1")).body;
+      expect(items[0]).toMatchObject({ latestOppBuildOrder: { gameId: "old-log" }, opponentBuildOrderAvailability: "unknown" });
+      expect(items[1]).toMatchObject({ latestOppBuildOrder: null, opponentBuildOrderAvailability: "unknown" });
+    } finally { service.gameDetails.store = previous; }
   });
 
   test("the metadata join uses the existing owner/game index and never scans or returns heavy fields", async () => {

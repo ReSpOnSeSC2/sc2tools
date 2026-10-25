@@ -31,6 +31,8 @@ const {
 } = require("../src/services/gameDetailsStore");
 const { COLLECTIONS } = require("../src/config/constants");
 const { GameDetailsService } = require("../src/services/gameDetails");
+const { overlayListDetails } = require("../src/services/opponentListDetails");
+const { gamesMatchStage } = require("../src/util/parseQuery");
 
 const gunzip = promisify(zlib.gunzip);
 const gzip = promisify(zlib.gzip);
@@ -708,6 +710,35 @@ describe("R2DetailsStore", () => {
     expect((await store.read("u1", "opponent-unknown")).oppBuildLog).toEqual([]);
     expect((await collection.findOne({ userId: "u1", gameId: "opponent-unknown" })).opponentListDetail)
       .toEqual({ v: 1, opponentBuildOrder: { v: 1, available: true } });
+  });
+
+  test.each([
+    [[], ["[0:00] Hatchery"], false],
+    [["[0:00] Hatchery"], [], true],
+  ])("first Mongo-to-R2 cutover metadata failure cannot claim current availability: %j -> %j", async (oldLog, newLog, oldAvailable) => {
+    const date = new Date();
+    const gameId = "first-cutover";
+    const mongoStore = new MongoDetailsStore({ gameDetails: collection });
+    await mongoStore.write("u1", gameId, date, { oppBuildLog: oldLog });
+    const fail = jest.spyOn(collection, "updateOne").mockRejectedValueOnce(new Error("metadata unavailable"));
+    try { await expect(store.write("u1", gameId, date, { oppBuildLog: newLog })).rejects.toThrow("metadata unavailable"); }
+    finally { fail.mockRestore(); }
+    const metadata = await collection.findOne({ userId: "u1", gameId });
+    expect(metadata.storedIn).toBeUndefined();
+    expect(metadata.opponentListDetail.opponentBuildOrder).toEqual({ v: 1, available: oldAvailable });
+    expect((await store.read("u1", gameId)).oppBuildLog).toEqual(newLog);
+    const active = new GameDetailsService(store);
+    const games = mongoClient.db("test_gd_r2").collection(COLLECTIONS.GAMES);
+    await games.deleteMany({});
+    await games.insertOne({ userId: "u1", gameId, date, opponent: { pulseId: "one" } });
+    const rows = [{ pulseId: "one" }];
+    const reads = jest.spyOn(s3, "send");
+    try {
+      await overlayListDetails(games, "u1", gamesMatchStage("u1", {}), rows, active.store.kind === "mongo");
+      expect(rows[0].opponentBuildOrderAvailability).toBe("unknown");
+      expect(rows[0].latestOppBuildOrder).toEqual(oldAvailable ? { gameId, date: date.toISOString() } : null);
+      expect(reads).not.toHaveBeenCalled();
+    } finally { reads.mockRestore(); await games.deleteMany({}); }
   });
 
   test("historical R2 backfill projects the real source arrays and leaves the heavy object untouched", async () => {
