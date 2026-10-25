@@ -145,6 +145,7 @@ test.describe("/try instant analysis", () => {
     await expect(editor).toBeVisible({ timeout: ENGINE_TIMEOUT_MS });
     await expect(editor.getByText(/Pylon/).first()).toBeVisible();
     await expect(editor.getByRole("link", { name: "Sign up to save" })).toBeVisible();
+    await editor.getByRole("button", { name: "Close", exact: true }).last().click();
     await page.getByRole("button", { name: /· Zerg/ }).click();
     await expect(page.getByRole("dialog", { name: /Save as new build/ }).getByText(/Hatchery|Spawning Pool|SpawningPool/).first()).toBeVisible();
     expect(traffic.engineRequests.length).toBeGreaterThan(0);

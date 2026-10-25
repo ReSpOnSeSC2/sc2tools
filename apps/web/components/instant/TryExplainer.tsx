@@ -37,7 +37,7 @@ const FOLDERS: ReadonlyArray<{ os: string; path: string }> = [
 const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   {
     q: "Can I try it with one replay from the home page?",
-    a: "Yes. The home-page build editor demo reads one 1v1 replay in your browser when Instant Analysis is available. Choose your player, then explore both build orders in the editor. The replay never leaves your device, and nothing is saved unless you later choose a separate account action.",
+    a: "Yes. The home-page build editor demo reads one 1v1 replay in your browser when Instant Analysis is available. Choose your player to open the editor; close it to reopen either player's build order without analyzing again. The replay never leaves your device, and nothing is saved unless you later choose a separate account action.",
   },
   {
     q: "Do my replays get uploaded?",

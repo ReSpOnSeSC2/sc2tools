@@ -8,7 +8,7 @@ const h = vi.hoisted(() => ({ factory: vi.fn(), fetch: vi.fn(), boot: vi.fn(), s
 vi.mock("@/lib/instant/flag", () => ({ getInstantImportMode: () => "all" }));
 vi.mock("@/lib/instant/engineClient", () => ({ createEngineClient: (...args: unknown[]) => h.factory(...args) }));
 vi.mock("@/lib/analytics/gtag", () => ({ gaEvent: vi.fn() }));
-vi.mock("@/components/builds/editor", () => ({ BuildEditorModal: (props: BuildEditorModalProps) => props.open ? <section aria-label="Parsed editor"><h2>Parsed build editor</h2><output>{JSON.stringify({ game: props.gameId, race: props.race, vs: props.vsRace, events: props.events, demo: props.demoMode })}</output></section> : null }));
+vi.mock("@/components/builds/editor", () => ({ BuildEditorModal: (props: BuildEditorModalProps) => props.open ? <section aria-label="Parsed editor"><h2>Parsed build editor</h2><output>{JSON.stringify({ game: props.gameId, race: props.race, vs: props.vsRace, events: props.events, demo: props.demoMode })}</output><button onClick={props.onClose}>Close editor fixture</button></section> : null }));
 const info: EngineInfo = { engineVersion: "fixture", pyodideVersion: "314.0.7", pythonVersion: "3.14", bundleId: "fixture", bootMs: 1 };
 const players: Extract<PlayersResult, { ok: true }> = { ok: true, players: [
   { pid: 1, name: "Alpha", toon: "1-S2-1-1", race: "Protoss", result: "Win" }, { pid: 2, name: "Beta", toon: "1-S2-1-2", race: "Zerg", result: "Loss" },
@@ -37,6 +37,7 @@ describe("landing browser session with real controller", () => {
     drop(); await screen.findByRole("heading", { name: "Which player are you?" });
     fireEvent.click(screen.getByRole("button", { name: /Alpha · Protoss/ }));
     const editor = await screen.findByRole("region", { name: "Parsed editor" }); expect(editor.textContent).toContain("Pylon"); expect(editor.textContent).toContain('"demo":true');
+    fireEvent.click(screen.getByRole("button", { name: "Close editor fixture" }));
     fireEvent.click(screen.getByRole("button", { name: /Beta.*Zerg/ })); expect(editor.isConnected).toBe(false);
     expect(screen.getByRole("region", { name: "Parsed editor" }).textContent).toContain("Overlord");
     expect(h.scan).toHaveBeenCalledTimes(1); expect(h.parse).toHaveBeenCalledTimes(1); expect(h.fetch).not.toHaveBeenCalled();

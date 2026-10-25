@@ -122,6 +122,7 @@ export function ReplayDemo() {
   const inFlight = useRef(false);
   const dropRef = useRef<HTMLButtonElement>(null);
   const errorRef = useRef<HTMLHeadingElement>(null);
+  const playerChoices = useRef<HTMLElement>(null);
   const accept = useReplayAccept();
   const [intakeMessage, setIntakeMessage] = useState("");
   const [fileSize, setFileSize] = useState(0);
@@ -131,9 +132,8 @@ export function ReplayDemo() {
   const [error, setError] = useState<PreviewError | null>(null);
   const [statusOpen, setStatusOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
-  // Which player's build the editor is seeded with. Default to the
-  // first player (index 0) — the visitor can swap sides via the
-  // floating perspective chip rendered above the modal scrim.
+  // The parsed side opens first. Closing the editor exposes both source
+  // choices without placing controls over the modal's title or close button.
   const [perspective, setPerspective] = useState<0 | 1>(0);
   const warm = () => { if (browserMode) setBrowserIntent(true); };
   const closeStatus = useCallback(() => {
@@ -158,6 +158,11 @@ export function ReplayDemo() {
     const timer = window.setTimeout(() => errorRef.current?.focus(), 0);
     return () => window.clearTimeout(timer);
   }, [statusOpen, error]);
+  useEffect(() => {
+    if (!dossier || editorOpen) return;
+    const timer = setTimeout(() => playerChoices.current?.querySelector<HTMLButtonElement>(`[data-player-index="${perspective}"]`)?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, [dossier, editorOpen, perspective]);
 
   const me = dossier?.players[perspective] ?? null;
   const opp = dossier?.players[perspective === 0 ? 1 : 0] ?? null;
@@ -267,6 +272,7 @@ export function ReplayDemo() {
               <input
                 ref={inputRef}
                 type="file"
+                aria-label="Replay for the build editor demo"
                 accept={accept}
                 className="sr-only"
                 onChange={(e) => { const file = e.currentTarget.files?.[0] ?? null; e.currentTarget.value = ""; setIntakeMessage(""); void onPick(file); }}
@@ -289,6 +295,12 @@ export function ReplayDemo() {
           <div><ReplayDropPreview privateParse={browserMode} onActivate={() => { warm(); inputRef.current?.click(); }} /><p className="mt-2 text-caption text-text-muted">Drag a replay here or click to choose</p></div>
         </div>
         {intakeMessage ? <p role="alert" className="px-6 pb-4 text-caption text-text-muted">{intakeMessage}</p> : null}
+        {dossier && !editorOpen ? <section ref={playerChoices} aria-label="Parsed replay build orders" className="space-y-2 border-t border-border p-6">
+          <p className="text-caption text-text-muted">Replay ready. Open either player&apos;s build order; switching sides does not analyze the replay again.</p>
+          <div className="grid min-w-0 gap-2 sm:grid-cols-2">{dossier.players.map((player, index) => <Button key={player.handle ?? index} data-player-index={index} variant="secondary" className="min-h-11 min-w-0 whitespace-normal [overflow-wrap:anywhere]" onClick={() => { setPerspective(index as 0 | 1); setEditorOpen(true); }}>
+            {player.name} · {player.race}
+          </Button>)}</div>
+        </section> : null}
       </Card>
 
       <Modal
@@ -342,13 +354,6 @@ export function ReplayDemo() {
         demoMode
       />
 
-      {dossier && editorOpen ? (
-        <PerspectiveSwitcherToast
-          dossier={dossier}
-          perspective={perspective}
-          onSelect={setPerspective}
-        />
-      ) : null}
     </section>
   );
 }
@@ -383,51 +388,6 @@ function defaultBuildName(
   const a = me.race?.charAt(0).toUpperCase() || "?";
   const b = opp.race?.charAt(0).toUpperCase() || "?";
   return `${a}v${b} — Custom`;
-}
-
-/**
- * Floating chip rendered alongside the BuildEditor demo modal so the
- * visitor can flip between which player's build the editor is seeded
- * with. Positioned at the top of the viewport so it sits above the
- * modal scrim without competing with the editor's own header.
- */
-function PerspectiveSwitcherToast({
-  dossier,
-  perspective,
-  onSelect,
-}: {
-  dossier: PreviewDossier;
-  perspective: 0 | 1;
-  onSelect: (next: 0 | 1) => void;
-}) {
-  return (
-    <div className="pointer-events-none fixed inset-x-0 top-3 z-[60] flex justify-center px-3">
-      <div className="pointer-events-auto flex items-center gap-2 rounded-full border border-border bg-bg-elevated/95 px-3 py-1.5 text-caption text-text-muted shadow-lg backdrop-blur">
-        <span className="hidden sm:inline">Editing build for:</span>
-        {dossier.players.map((p, i) => {
-          const isActive = perspective === i;
-          return (
-            <button
-              key={p.handle ?? `p${i}`}
-              type="button"
-              onClick={() => onSelect(i as 0 | 1)}
-              aria-pressed={isActive}
-              className={[
-                "inline-flex items-center gap-1 rounded-full px-3 py-1 font-medium",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
-                isActive
-                  ? "bg-accent-cyan/20 text-accent-cyan"
-                  : "text-text-muted hover:bg-bg-subtle hover:text-text",
-              ].join(" ")}
-            >
-              <span>{p.name}</span>
-              <span className="text-text-dim">· {p.race}</span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
 }
 
 function DossierLoading() {

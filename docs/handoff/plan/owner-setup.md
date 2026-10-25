@@ -195,3 +195,9 @@ replays and socket traffic only.
 - Comparative facts use one bounded slim replay read and exact account/race context. Recorded MMR is game-start MMR. Current regional season data is cache-only; missing/incomplete evidence suppresses a season peak. Only actual Pulse league snapshots establish league changes.
 - A conditional receipt on the existing game row prevents duplicate posts on reprocessing. Historical imports, resumed, hidden and deleted games do not create moments. Delivery is best effort after the receipt, so a crash can miss an alert rather than repeat it.
 - Rollback: turn moments and bot posting off in Settings, Save, then revert the feature commit if needed. Existing receipts are harmless; do not remove them to replay history.
+
+## Home-page browser replay demo (Wave 5)
+
+No new environment variable, service, collection, index or migration is required. The existing build-time `NEXT_PUBLIC_INSTANT_IMPORT=all` selects the local one-file demo; `off` and `admins` keep the previous rate-limited server demo during the planned one-release compatibility window. This work does not change a deployed flag or execute a release. Browser parsing uses the same self-hosted worker/engine as `/try`, starts downloading only on intent, performs no policy/API lookup and never falls back to an upload on failure. The parsed demo is memory-only.
+
+Keep `/v1/public/preview-replay`, its health route and the preview CLI wiring for that compatibility release. After an actual release has exercised the local path, retire those routes/wiring and their tests in a separate explicit change. During the window, the existing flag rollback restores the previous server path with its upload disclosure. See `docs/instant-analysis.md` rollout step 3 and `/try#home-replay-demo`.
