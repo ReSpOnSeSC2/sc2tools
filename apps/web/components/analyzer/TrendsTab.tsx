@@ -17,6 +17,7 @@ import {
 } from "@/lib/timeseries";
 import { FingerprintCard } from "./FingerprintCard";
 import { MatchupOverTimeChart } from "./charts/MatchupOverTimeChart";
+import { MatchupRatingCard } from "./charts/MatchupRatingCard";
 import { MatchupGameLengthCard } from "./charts/MatchupGameLengthCard";
 import { TimeOfDayHeatmap } from "./charts/TimeOfDayHeatmap";
 import { GameLengthWrChart } from "./charts/GameLengthWrChart";
@@ -161,6 +162,7 @@ export function TrendsTab() {
           {/* Matchup win rates read as a breakdown of the headline win rate. */}
           <div className="md:col-span-2">
             <MatchupOverTimeChart bucket={bucket as "day" | "week" | "month"} />
+            <MatchupRatingCard />
           </div>
       </div>
       </TrendsGroup>

@@ -17,6 +17,8 @@ import { Button } from "@/components/ui/Button";
 import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
 import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { usePersistentSort } from "@/components/ui/SortableTh";
+import { StrengthCell, StrengthGuide, WinRateRange } from "./StrengthAdjusted";
+import type { StrengthFields } from "@/lib/strengthAdjusted";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { AllGamesTable } from "./AllGamesTable";
@@ -25,7 +27,7 @@ import { StrategyMmrPanel } from "./mmr/StrategyMmrPanel";
 import { BuildMatchupHeatmap } from "./mmr/BuildMatchupHeatmap";
 import type { ProfileGame } from "./Last5GamesTimeline";
 
-type StratRow = {
+type StratRow = StrengthFields & {
   name: string;
   wins: number;
   losses: number;
@@ -226,6 +228,7 @@ function ByOppStrategyView({
           onChange={(e) => setSearch(e.target.value)}
         />
         <MinGamesPicker value={minGames} onChange={setMinGames} />
+        <button type="button" className="min-h-11 rounded-lg border border-border px-3 text-caption" aria-pressed={sort.sortBy === "winsAboveExpected"} onClick={() => sort.setSortExplicit("winsAboveExpected", sort.sortBy === "winsAboveExpected" && sort.sortDir === "desc" ? "asc" : "desc")}>Vs expected {sort.sortBy === "winsAboveExpected" ? sort.sortDir === "desc" ? "↓" : "↑" : ""}</button>
         <WinRateSortToggle
           dir={sort.sortBy === "winRate" ? sort.sortDir : "desc"}
           active={sort.sortBy === "winRate"}
@@ -235,6 +238,7 @@ function ByOppStrategyView({
       <div className="text-micro text-text-dim">
         Click any card to see the games where you faced that strategy.
       </div>
+      <StrengthGuide />
 
       {rows.length === 0 ? (
         <Card>
@@ -283,6 +287,8 @@ function ByOppStrategyView({
                 </span>
               </div>
               <WrBar wins={s.wins} losses={s.losses} />
+              <WinRateRange row={s} total={s.total} />
+              <div className="mt-2"><StrengthCell row={s} /></div>
               <div className="mt-2 flex items-center justify-between text-micro tabular-nums text-text-dim">
                 <span>{s.total} games</span>
                 <span className="opacity-0 transition group-hover:opacity-100">

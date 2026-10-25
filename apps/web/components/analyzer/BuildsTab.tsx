@@ -15,12 +15,14 @@ import { usePersistentSort, SortableTh } from "@/components/ui/SortableTh";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
 import { BuildEditorModal } from "./BuildEditorModal";
+import { StrengthCell, StrengthGuide, WinRateRange } from "./StrengthAdjusted";
+import type { StrengthFields } from "@/lib/strengthAdjusted";
 import { NoFilterMatches } from "./EmptyStates";
 import { BuildMmrPanel } from "./mmr/BuildMmrPanel";
 import { BuildAgingCurve } from "./mmr/BuildAgingCurve";
 import { MmrProgressionByBuild } from "./mmr/MmrProgressionByBuild";
 
-type BuildRow = {
+type BuildRow = StrengthFields & {
   name: string;
   total: number;
   wins: number;
@@ -88,6 +90,7 @@ export function BuildsTab() {
           onChange={(e) => setSearch(e.target.value)}
         />
         <MinGamesPicker value={minGames} onChange={setMinGames} />
+        <button type="button" className="min-h-11 rounded-lg border border-border px-3 text-caption" aria-pressed={sort.sortBy === "winsAboveExpected"} onClick={() => sort.setSortExplicit("winsAboveExpected", sort.sortBy === "winsAboveExpected" && sort.sortDir === "desc" ? "asc" : "desc")}>Vs expected {sort.sortBy === "winsAboveExpected" ? sort.sortDir === "desc" ? "↓" : "↑" : ""}</button>
         <WinRateSortToggle
           dir={sort.sortBy === "winRate" ? sort.sortDir : "desc"}
           active={sort.sortBy === "winRate"}
@@ -99,6 +102,7 @@ export function BuildsTab() {
       </div>
 
       {data || !error ? <Card>
+        <div className="mb-3"><StrengthGuide /></div>
         {rows.length === 0 ? (
           <NoFilterMatches
             title="No builds match these filters"
@@ -149,6 +153,8 @@ export function BuildsTab() {
                     <div className="w-full">
                       <WrBar wins={b.wins} losses={b.losses} />
                     </div>
+                    <WinRateRange row={b} total={b.total} />
+                    <StrengthCell row={b} />
                   </button>
                 </li>
               ))}
@@ -159,13 +165,14 @@ export function BuildsTab() {
                   numeric cols don't grab equal shares of leftover space
                   and push WR off the right edge — see StrategiesTabBuildVs
                   for the same treatment. */}
-              <table className="w-full table-fixed text-sm">
+              <table className="w-full min-w-[40rem] table-fixed text-sm">
                 <colgroup>
                   <col />
                   <col style={{ width: "3.5rem" }} />
                   <col style={{ width: "3.5rem" }} />
                   <col style={{ width: "4.5rem" }} />
                   <col style={{ width: "4.5rem" }} />
+                  <col style={{ width: "8rem" }} />
                   <col style={{ width: "8rem" }} />
                 </colgroup>
                 <thead className="bg-bg-elevated">
@@ -175,6 +182,7 @@ export function BuildsTab() {
                     <SortableTh col="losses" label="L" {...sort} align="right" />
                     <SortableTh col="total" label="Games" {...sort} align="right" />
                     <SortableTh col="winRate" label="WR" {...sort} align="right" />
+                    <SortableTh col="winsAboveExpected" label="Vs expected" {...sort} align="right" />
                     <th className="px-3 py-2 text-left text-micro uppercase text-text-dim">
                       Trend
                     </th>
@@ -199,7 +207,9 @@ export function BuildsTab() {
                         style={{ color: wrColor(b.winRate, b.total) }}
                       >
                         {pct1(b.winRate)}
+                        <WinRateRange row={b} total={b.total} />
                       </td>
+                      <td className="px-2 py-1.5 text-right"><StrengthCell row={b} /></td>
                       <td className="px-3 py-1.5">
                         <WrBar wins={b.wins} losses={b.losses} />
                       </td>

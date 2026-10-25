@@ -57,6 +57,23 @@ describe("same curve in Mongo sums and pure inverse lookup", () => {
 });
 
 describe("bounded last-50 matchup performance", () => {
+  test("hidden contributions cannot enter rated metrics/series and do not hide another uploader's copy", async () => {
+    await db.games.insertMany([game(1, { excluded: true }), game(2), game(1, { userId: "other-owner" })]);
+    const builds = new BuildsService(db), aggregations = new AggregationsService(db);
+    expect((await builds.list("owner", {}))[0]).toMatchObject({ ratedGames: 1, ratedWins: 0 });
+    expect((await builds.list("other-owner", {}))[0]).toMatchObject({ ratedGames: 1, ratedWins: 1 });
+    const response = await aggregations.matchupTimeseries("owner", {}, {});
+    expect(response.ratingSeries[0]).toMatchObject({ sampleGames: 1, ratedGames: 1 });
+    expect(response.ratingSeries[0].points[0].date).toEqual(game(2).date);
+  });
+
+  test("initials and case variants retain paired MMR eligibility in rows and rating series", async () => {
+    await db.games.insertMany([game(1, { myRace: "p", opponent: { race: "z", mmr: 4000, mmrSource: "replay", strategy: "Pool" } }), game(2, { myRace: "PROTOSS", opponent: { race: "ZERG", mmr: 4000, mmrSource: "replay", strategy: "Pool" } })]);
+    expect((await new BuildsService(db).list("owner", {}))[0]).toMatchObject({ ratedGames: 2, excludedIneligible: 0, expectedWins: 1 });
+    const response = await new AggregationsService(db).matchupTimeseries("owner", { groupByOwnRace: true }, {});
+    expect(response.ratingSeries).toHaveLength(1); expect(response.ratingSeries[0]).toMatchObject({ matchup: "PvZ", ratedGames: 2, sampleGames: 2, perfRating: 4000 });
+  });
+
   test("same scoped timeseries scan returns each pair's latest50 and explicit missing-MMR coverage", async () => {
     await db.games.insertMany(Array.from({ length: 65 }, (_, i) => game(i, i === 64 ? { myMmrSource: undefined } : {})));
     await db.games.insertMany([game(66, { isLadderGame: false }), game(67, { userId: "another-owner" }), game(68, { myRace: "Terran" })]);

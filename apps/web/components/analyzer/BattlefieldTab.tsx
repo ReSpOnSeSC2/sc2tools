@@ -21,9 +21,11 @@ import { MapVetoPlanner } from "./maps/MapVetoPlanner";
 import { MapGamesModal } from "./maps/MapGamesModal";
 import type { MapGamesDrill } from "./maps/MapVetoTable";
 import { Toggle } from "@/components/ui/Toggle";
-import { poolMapRows } from "@/lib/mapVeto";
+import { opponentRace, poolMapRows } from "@/lib/mapVeto";
+import { sumStrength, type StrengthFields } from "@/lib/strengthAdjusted";
+import { StrengthCell, StrengthGuide, WinRateRange } from "./StrengthAdjusted";
 
-type Row = {
+type Row = StrengthFields & {
   /** Matchup label ("vs P"). */
   name: string;
   wins: number;
@@ -36,7 +38,7 @@ type Row = {
 type MatchupRow = Row;
 
 /** One (map, matchup) cell from /v1/maps/matchups. */
-type MapMatchupRow = {
+type MapMatchupRow = StrengthFields & {
   map: string;
   matchup: string;
   wins: number;
@@ -46,7 +48,7 @@ type MapMatchupRow = {
 };
 
 /** A map with its per-matchup breakdown, grouped client-side. */
-type MapMatchupGroup = {
+type MapMatchupGroup = StrengthFields & {
   map: string;
   maps: string[];
   wins: number;
@@ -119,10 +121,14 @@ export function BattlefieldTab() {
   const mapMatchupGroups = useMemo<MapMatchupGroup[]>(() => {
     const names = new Map<string, string>();
     for (const row of mapMuApi.data ?? []) if (!names.has(currentMapPoolKey(row.map))) names.set(currentMapPoolKey(row.map), row.map);
-    const groups = poolMapRows([...names.values()], mapMuApi.data ?? []).map((row) => ({ map: row.gameMap, maps: row.gameMaps,
+    const groups = poolMapRows([...names.values()], mapMuApi.data ?? []).map((row) => {
+      const source = (mapMuApi.data ?? []).filter(cell => currentMapPoolKey(cell.map) === currentMapPoolKey(row.gameMap));
+      return { map: row.gameMap, maps: row.gameMaps, ...sumStrength(source), winRateRange: row.all.ci,
       wins: row.all.wins, losses: row.all.losses, total: row.all.total, winRate: row.all.winRate,
-      cells: Object.entries(row.cells).map(([race, cell]) => ({ map: row.gameMap, matchup: race === "unknown" ? "vs Unknown" : `vs ${race}`, wins: cell.wins, losses: cell.losses, total: cell.total, winRate: cell.winRate })).filter((cell) => cell.total >= minGames).sort((a, b) => b.total - a.total),
-    })).filter((group) => group.cells.length > 0);
+      cells: Object.entries(row.cells).map(([race, cell]) => ({ map: row.gameMap, matchup: race === "unknown" ? "vs Unknown" : `vs ${race}`, wins: cell.wins, losses: cell.losses, total: cell.total, winRate: cell.winRate,
+        ...sumStrength(source.filter(entry => opponentRace(entry.matchup) === race)), winRateRange: cell.ci,
+      })).filter((cell) => cell.total >= minGames).sort((a, b) => b.total - a.total),
+    }; }).filter((group) => group.cells.length > 0);
     // Stable alphabetical input gives equal numeric values a deterministic
     // map-name tie-break when the selected sort is applied below.
     groups.sort((a, b) => a.map.localeCompare(b.map));
@@ -179,6 +185,7 @@ export function BattlefieldTab() {
       </div>
 
       <Card title="Matchups">
+        <div className="mb-3 space-y-2"><StrengthGuide /><button type="button" aria-label="Sort matchups by vs expected" aria-pressed={muSort.sortBy === "winsAboveExpected"} className="min-h-11 rounded-lg border border-border px-3 text-caption" onClick={() => muSort.setSortExplicit("winsAboveExpected", muSort.sortBy === "winsAboveExpected" && muSort.sortDir === "desc" ? "asc" : "desc")}>Vs expected {muSort.sortBy === "winsAboveExpected" ? muSort.sortDir === "desc" ? "↓" : "↑" : ""}</button></div>
         <QueryState
           q={muApi}
           skeleton={<SkeletonRows rows={4} label="Loading matchups" />}
@@ -219,6 +226,8 @@ export function BattlefieldTab() {
                       <FormSparkline results={m.recent} />
                     </div>
                     <WrBar wins={m.wins} losses={m.losses} />
+                    <WinRateRange row={m} total={m.total} />
+                    <StrengthCell row={m} />
                   </li>
                 ))}
               </ul>
@@ -227,7 +236,7 @@ export function BattlefieldTab() {
                   so the W/L/Games/WR columns pack tightly and don't grab
                   equal shares of leftover space. */}
               <div className="hidden md:block overflow-x-auto">
-                <table className="w-full table-fixed text-sm">
+                <table className="w-full min-w-[40rem] table-fixed text-sm">
                   <colgroup>
                     <col />
                     <col style={{ width: "3.5rem" }} />
@@ -235,6 +244,7 @@ export function BattlefieldTab() {
                     <col style={{ width: "4.5rem" }} />
                     <col style={{ width: "4.5rem" }} />
                     <col style={{ width: "7rem" }} />
+                    <col style={{ width: "8rem" }} />
                   </colgroup>
                   <thead className="bg-bg-elevated">
                     <tr>
@@ -243,6 +253,7 @@ export function BattlefieldTab() {
                       <SortableTh col="losses" label="L" {...muSort} align="right" />
                       <SortableTh col="total" label="Games" {...muSort} align="right" />
                       <SortableTh col="winRate" label="WR" {...muSort} align="right" />
+                      <SortableTh col="winsAboveExpected" label="Vs expected" {...muSort} align="right" />
                       <th className="px-3 py-2 text-right text-micro uppercase text-text-dim">
                         Recent
                       </th>
@@ -262,7 +273,9 @@ export function BattlefieldTab() {
                           style={{ color: wrColor(m.winRate, m.total) }}
                         >
                           {pct1(m.winRate)}
+                          <WinRateRange row={m} total={m.total} />
                         </td>
+                        <td className="px-2 py-1.5 text-right"><StrengthCell row={m} /></td>
                         <td className="px-3 py-1.5 text-right">
                           <FormSparkline results={m.recent} />
                         </td>
@@ -277,6 +290,7 @@ export function BattlefieldTab() {
       </Card>
 
       <Card title="Win rate by map by matchup">
+        <div className="mb-3"><StrengthGuide /></div>
         <QueryState
           q={mapMuApi}
           skeleton={<SkeletonRows rows={4} label="Loading map matchups" />}
@@ -319,6 +333,7 @@ export function BattlefieldTab() {
                       <option value="total">Games</option>
                       <option value="wins">Wins</option>
                       <option value="losses">Losses</option>
+                      <option value="winsAboveExpected">Vs expected</option>
                     </select>
                   </label>
                   <button
@@ -379,6 +394,7 @@ export function BattlefieldTab() {
                         </span>
                       </span>
                     </div>
+                    <div className="mb-2 flex flex-wrap items-center justify-end gap-2"><WinRateRange row={g} total={g.total} /><StrengthCell row={g} /></div>
                     <ul className="space-y-2 pl-1">
                       {g.cells.map((c) => (
                         <li key={c.matchup} className="flex flex-col gap-1">
@@ -401,6 +417,7 @@ export function BattlefieldTab() {
                             </span>
                           </div>
                           <WrBar wins={c.wins} losses={c.losses} />
+                          <div className="flex flex-wrap items-center justify-between gap-2"><StrengthCell row={c} /><WinRateRange row={c} total={c.total} /></div>
                         </li>
                       ))}
                     </ul>

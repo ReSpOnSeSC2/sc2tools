@@ -16,16 +16,23 @@ function ratingExpression(path) {
   return { $and: [{ $isNumber: path }, { $gte: [path, 500] }, { $lte: [path, 9999] }, { $eq: [path, { $trunc: { $cond: [{ $isNumber: path }, path, 0] } }] }] };
 }
 
+/** Accept the same recognized race names/initials and case variants as the
+ * analyzer, while keeping unknown strings and Computer out of the cohort.
+ * @param {string} path */
+function raceExpression(path) {
+  return { $in: [{ $toLower: { $trim: { input: { $ifNull: [path, ""] } } } }, ["p", "protoss", "t", "terran", "z", "zerg", "r", "random"]] };
+}
+
 /** Both authoritative format and legacy player count are checked: an
  * explicit team format cannot become 1v1 through a stale count of two. */
 function ladderExpression() {
   return { $and: [
     { $eq: ["$isLadderGame", true] },
+    { $ne: ["$excluded", true] },
     { $ne: ["$isResumedFromReplay", true] },
     { $or: [{ $eq: ["$matchFormat", "1v1"] }, { $and: [{ $in: [{ $type: "$matchFormat" }, ["missing", "null"]] }, { $eq: ["$playerCount", 2] }] }] },
     { $or: [{ $in: [{ $type: "$playerCount" }, ["missing", "null"]] }, { $eq: ["$playerCount", 2] }] },
-    { $in: ["$myRace", ["Protoss", "Terran", "Zerg", "Random"]] },
-    { $in: ["$opponent.race", ["Protoss", "Terran", "Zerg", "Random"]] },
+    raceExpression("$myRace"), raceExpression("$opponent.race"),
   ] };
 }
 

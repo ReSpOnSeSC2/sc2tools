@@ -43,6 +43,14 @@ describe("bounded replay-only corpus calibration", () => {
 });
 
 describe("calibration publication and read fallback", () => {
+  test("recognized race initials and case variants are eligible while unknown/Computer are excluded", async () => {
+    const aliases = ["p", "PROTOSS", "P", " protoss ", "t", "Terran", "ZERG", "r", "Random"];
+    await db.collection("games").insertMany(aliases.map(myRace => game({ myRace, opponent: { race: "z", mmr: 4200, mmrSource: "replay" } })));
+    await db.collection("games").insertMany([game({ myRace: "Unknown" }), game({ excluded: true }), game({ opponent: { race: "Computer", mmr: 4200, mmrSource: "replay" } })]);
+    const spy = jest.spyOn(service.games, "aggregate"); await service.recompute();
+    expect(await service.games.aggregate(spy.mock.calls[0][0]).toArray()).toEqual([{ bin: 32, n: aliases.length, wins: aliases.length }]);
+  });
+
   test("lost lease never replaces a complete previous aggregate", async () => {
     await service.recompute(); const before = await service.readRun();
     await expect(service.recompute({ beforePublish: async () => { throw new Error("lost lease"); } })).rejects.toThrow("lost lease");
