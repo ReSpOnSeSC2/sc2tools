@@ -25,6 +25,7 @@ import { getInstantImportMode } from "@/lib/instant/flag";
 import { LazyBuildEditorModal as BuildEditorModal } from "@/components/builds/editor/LazyBuildEditorModal";
 import { buildLogToEvents } from "@/lib/build-events";
 import type { RaceLite, VsRaceLite } from "@/lib/build-rules";
+import { SampleReportButton } from "@/components/instant/SampleReportButton";
 import { ReplayDemoBrowserIsland } from "./ReplayDemoBrowserIsland";
 import type { DemoRequest } from "./ReplayDemoBrowserSession";
 import type { PreviewDossier, PreviewPlayer } from "./replayDemoPreview";
@@ -304,6 +305,7 @@ export function ReplayDemo() {
           </Button>)}</div>
         </section> : null}
       </Card>
+      {getInstantImportMode() === "all" ? <SampleReportButton mobileOnly /> : null}
 
       <Modal
         open={statusOpen}

@@ -15,6 +15,9 @@ import { notFound } from "next/navigation";
 import { TryExplainer } from "@/components/instant/TryExplainer";
 import { TryPage } from "@/components/instant/TryPage";
 import { getInstantImportMode, type InstantImportMode } from "@/lib/instant/flag";
+import { guidesEnabled } from "@/lib/guides/flags";
+import { fetchPublishedGuidePaths } from "@/lib/guides/api";
+import { buildReportGuideLinks } from "@/lib/instant/reportGuideLinks";
 
 /**
  * Page metadata per rollout mode: none when "off" (the route is a plain
@@ -45,12 +48,13 @@ export const metadata: Metadata = tryMetadata(getInstantImportMode());
  * Example:
  *   <TryRoute />
  */
-export default function TryRoute() {
+export default async function TryRoute() {
   const mode = getInstantImportMode();
   if (mode === "off") notFound();
+  const guideLinks = guidesEnabled() ? buildReportGuideLinks(await fetchPublishedGuidePaths().catch(() => null)) : [];
   return (
     <>
-      <TryPage mode={mode} />
+      <TryPage mode={mode} guideLinks={guideLinks} />
       {/* The crawlable description is public only when the tool is. */}
       {mode === "all" ? <TryExplainer /> : null}
     </>

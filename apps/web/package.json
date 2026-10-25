@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
-    "prebuild": "node scripts/build-browser-engine.mjs",
+    "prebuild": "node scripts/build-browser-engine.mjs && node ../../scripts/build-sample-report.mjs",
     "build": "next build",
     "start": "next start -p 3000",
     "lint": "next lint",
@@ -19,6 +19,7 @@
     "guides:catalog": "node scripts/export-guide-catalog.mjs",
     "commands:catalog": "node scripts/gen-chat-command-catalog.mjs",
     "help:index": "node scripts/gen-help-index.mjs",
+    "sample:build": "node ../../scripts/build-sample-report.mjs",
     "perf:budget": "node scripts/check-perf-budget.mjs",
     "definitions:gen": "node scripts/gen-build-definitions.mjs",
     "postdefinitions:gen": "node scripts/gen-build-variant-ids.mjs",

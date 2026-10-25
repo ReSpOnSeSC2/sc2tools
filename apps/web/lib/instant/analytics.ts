@@ -86,6 +86,15 @@ export function trackInstantReportView(): void {
   gaEvent("instant_report_view");
 }
 
+/** Delivery only, never a preview/cancel; consent is enforced by gaEvent. */
+export function trackInstantReportShared(method: "web_share" | "download" | "text"): void {
+  gaEvent("instant_report_shared", { method });
+}
+
+export function trackInstantSampleView(): void {
+  gaEvent("instant_sample_view");
+}
+
 /**
  * The visitor clicked "sign up to keep these games".
  *

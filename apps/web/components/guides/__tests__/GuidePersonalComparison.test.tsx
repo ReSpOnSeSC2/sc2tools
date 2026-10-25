@@ -20,6 +20,7 @@ vi.mock("@/lib/clientApi", () => ({
 
 import { GuidePersonalComparison } from "@/components/guides/GuidePersonalComparison";
 import { FIXTURE_BUILD_PUBLISHED, FIXTURE_ME } from "@/lib/guides/__fixtures__";
+import { BuildTimingsSection } from "@/components/guides/build/BuildTimingsSection";
 
 const COMMUNITY = (FIXTURE_BUILD_PUBLISHED.timings?.milestones ?? []).map(({ key, label, event, median }) => ({
   key,
@@ -47,9 +48,24 @@ afterEach(() => {
   harness.api = { data: undefined, error: undefined, isLoading: false };
   harness.useApi.mockReset();
   harness.mutate.mockReset();
+  vi.unstubAllEnvs();
 });
 
 describe("GuidePersonalComparison", () => {
+  it("retains the Try CTA beside a real populated timings table without duplicating sign-in copy", () => {
+    vi.stubEnv("NEXT_PUBLIC_INSTANT_IMPORT", "all");
+    render(<BuildTimingsSection payload={FIXTURE_BUILD_PUBLISHED} blurb={[]} />);
+    expect(screen.getAllByRole("link", { name: "Sign in to see your own timings next to these" })).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "analyze your replays in your browser — no download" }).getAttribute("href")).toContain("focus=pvz%2Fstargate-into-glaives");
+    expect(harness.useApi).not.toHaveBeenCalled();
+  });
+
+  it.each(["off", "admins"])("hides the public Try CTA in%s mode", (mode) => {
+    vi.stubEnv("NEXT_PUBLIC_INSTANT_IMPORT", mode);
+    render(<BuildTimingsSection payload={FIXTURE_BUILD_PUBLISHED} blurb={[]} />);
+    expect(screen.queryByRole("link", { name: "analyze your replays in your browser — no download" })).toBeNull();
+    expect(harness.useApi).not.toHaveBeenCalled();
+  });
   it("asks signed-out visitors to sign in and makes no request", async () => {
     await renderComparison();
     const link = screen.getByRole("link", { name: "Sign in to see your own timings next to these" });

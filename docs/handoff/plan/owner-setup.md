@@ -233,3 +233,14 @@ Keep `/v1/public/preview-replay`, its health route and the preview CLI wiring fo
   reference payloads. A card requests its reference only on explicit Practice.
 - Paste parsing and exports run locally. No external parser or AI service is
   used. Rollback may leave the optional field stored; older readers ignore it.
+
+### Browser report conversion (ADR 0062)
+
+- No new flags, infrastructure, provider consent, account writes or release.
+  Existing Instant Analysis off/admins/all and Guides flags govern visibility.
+- Sharing runs locally after explicit preview/delivery actions. Analytics still
+  requires existing consent and sends only fixed method names.
+- Optional fixture samples are generated from the current verified engine
+  bundle, with version and source/bundle identity checks. Missing Python hides
+  the sample instead of retaining stale data. No private replay should be used
+  to build the public sample artifact.

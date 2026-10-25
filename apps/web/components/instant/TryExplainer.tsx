@@ -36,6 +36,14 @@ const FOLDERS: ReadonlyArray<{ os: string; path: string }> = [
 
 const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   {
+    q: "Can I share my report?",
+    a: "Yes. Choose Share report, then untick any rows you do not want in the preview. Share the PNG, download it, or copy the matching text. The image contains selected totals, up to three matchup records, a catalog opener with at least three games, and a measured macro score. Player names, accounts and individual game details are excluded. Nothing is published automatically.",
+  },
+  {
+    q: "Can I see an example first?",
+    a: "Choose See a sample report when it is available. It shows real fixture replays with identities removed, in a labelled example frame. The sample is loaded only when you ask for it; it is not saved to your browser's game history or uploaded to an account. Your own report links detected openers to published build or counter guides, and a guide can highlight its matching opener in your report.",
+  },
+  {
     q: "Can I try it with one replay from the home page?",
     a: "Yes. The home-page build editor demo reads one 1v1 replay in your browser when Instant Analysis is available. Choose your player to open the editor; close it to reopen either player's build order without analyzing again. The replay never leaves your device, and nothing is saved unless you later choose a separate account action.",
   },
