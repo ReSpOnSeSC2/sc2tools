@@ -23,6 +23,7 @@
  */
 
 const { AdminUsersService } = require("./adminUsers");
+const { LIVE_GAME_MATCH } = require("../util/gameVisibility");
 const { COLLECTIONS } = require("../config/constants");
 const { disabledBrowserUploadStatus } = require("./replayFilesCors");
 
@@ -185,11 +186,12 @@ class AdminService {
       opponentCount,
       recentOpponents,
       recentGames,
+      wipeGameCount,
     ] = await Promise.all([
       this.db.users.findOne({ userId }, { projection: { _id: 0 } }),
       this.db.games
         .aggregate([
-          { $match: { userId } },
+          { $match: { userId, ...LIVE_GAME_MATCH } },
           {
             $group: {
               _id: null,
@@ -225,7 +227,10 @@ class AdminService {
         .sort({ lastSeen: -1, pulseId: 1 })
         .limit(5)
         .toArray(),
-      this.db.games.find({ userId }, { projection: { _id: 0, gameId: 1, date: 1, map: 1, result: 1, "opponent.displayName": 1, "opponent.pulseId": 1 } }).sort({ date: -1, _id: -1 }).limit(5).toArray(),
+      this.db.games.find({ userId, ...LIVE_GAME_MATCH }, { projection: { _id: 0, gameId: 1, date: 1, map: 1, result: 1, "opponent.displayName": 1, "opponent.pulseId": 1 } }).sort({ date: -1, _id: -1 }).limit(5).toArray(),
+      // Wipe recovery also owns already-pending records. Keep its authoritative
+      // preview separate from the live replay statistics shown above.
+      this.gdpr.countGamesForWipe(userId),
     ]);
     const stats = gameStats[0] || {
       gameCount: 0,
@@ -244,6 +249,7 @@ class AdminService {
       isAdmin: user ? user.role === "admin" || this.userDirectory.adminIds().includes(user.clerkUserId) : false,
       createdAt: user ? user.createdAt || null : null,
       lastSeenAt: user ? user.lastSeenAt || null : null,
+      wipeGameCount,
       games: {
         total: Number(stats.gameCount) || 0,
         wins: Number(stats.wins) || 0,

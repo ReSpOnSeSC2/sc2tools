@@ -61,6 +61,8 @@ corresponding GitHub Release.
 
 ### Admin Users
 
+- Keep deleted replay markers out of account game counts and recent history, while showing the authoritative pending-record count before a wipe.
+
 - Browse exact totals with sortable pages and signup, admin and inactive-agent filters. Export matching accounts as a bounded private CSV, inspect recent games/activity, and copy account IDs with a manual fallback.
 
 ### Public link previews
