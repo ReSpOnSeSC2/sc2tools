@@ -1,5 +1,6 @@
 "use strict";
 
+const { policyLabelForGame } = require("./presetIngest");
 const { createHash, randomUUID } = require("crypto");
 const { COLLECTIONS } = require("../config/constants");
 const { expectedVersion, stampVersion } = require("../db/schemaVersioning");
@@ -72,6 +73,12 @@ const RECLASSIFY_WORKER_RETRY_MS = 1000;
 const RECLASSIFY_LEASE_MS = 60 * 1000;
 const RECLASSIFY_LEASE_RENEW_MS = 20 * 1000;
 const RECLASSIFY_RECOVERY_INTERVAL_MS = 15 * 1000;
+
+function definitionTransactionsRequired() {
+  return Object.assign(new Error("build_definition_transactions_required"), {
+    status: 503, code: "build_definition_transactions_required",
+  });
+}
 
 /** @param {any} build @returns {"you"|"opponent"} */
 function buildPerspective(build) {
@@ -356,9 +363,11 @@ class CustomBuildsService {
    * @param {{
    *   customBuilds: import('mongodb').Collection,
    *   customBuildJobs?: import('mongodb').Collection,
+   *   client?: import('mongodb').MongoClient,
    * }} db
    * @param {{
    *   perGame?: import('./types').PerGameComputeService,
+   *   presetPolicies?: import('./presetPolicies').PresetPoliciesService,
    *   logger?: {warn?: Function, error?: Function},
    *   onReclassified?: (userId: string, result: Record<string, any>) => void|Promise<void>,
    *   onGamesChanged?: (userId: string, count: number) => void,
@@ -377,6 +386,7 @@ class CustomBuildsService {
     this.reclassifyJobs = db.customBuildJobs
       || /** @type {any} */ (db.customBuilds).s.db.collection("custom_build_jobs");
     this.perGame = opts.perGame || null;
+    this.presetPolicies = opts.presetPolicies || null;
     this.logger = opts.logger || null;
     this.onReclassified = opts.onReclassified || null;
     this.onGamesChanged = opts.onGamesChanged || null;
@@ -596,41 +606,89 @@ class CustomBuildsService {
    *
    * @param {string} userId
    * @param {{slug: string} & Record<string, unknown>} build
+   * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean}} [options]
    */
-  async upsert(userId, build) {
-    return this._withUserBuildMutation(
-      userId,
-      () => this._upsertUnlocked(userId, build),
-    );
+  async upsert(userId, build, options = {}) {
+    return this._withUserBuildMutation(userId, async () => {
+      const client = this.db.client;
+      if (!client) {
+        if (options.expectedRevision !== undefined) throw definitionTransactionsRequired();
+        await this._upsertUnlocked(userId, build, options);
+        return;
+      }
+      const session = client.startSession();
+      let renamedCheckins = 0;
+      let initialReadCompleted = false;
+      try {
+        // Definition CAS and linked check-in names commit together, including
+        // ordinary owner saves on another API process. Publish only once,
+        // after commit; the Mongo driver may retry this callback.
+        await session.withTransaction(async () => {
+          renamedCheckins = await this._upsertUnlocked(userId, build, {
+            ...options, session, deferNotifications: true,
+            onInitialRead: () => { initialReadCompleted = true; },
+          });
+        });
+      } catch (error) {
+        const failure = /** @type {any} */ (error);
+        // Standalone development Mongo rejects the first transactional read
+        // before any write. Keep legacy owner saves available there; a
+        // version-fenced admin save must never fall back to partial writes.
+        if (!initialReadCompleted && failure?.code === 20 && /Transaction numbers are only allowed/.test(String(failure.message))) {
+          if (options.expectedRevision !== undefined) throw definitionTransactionsRequired();
+          await this._upsertUnlocked(userId, build, options);
+          return;
+        }
+        throw error;
+      } finally {
+        await session.endSession();
+      }
+      if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
+      this._notifyDefinitionsChanged(userId);
+    });
   }
 
   /**
    * @private
    * @param {string} userId
    * @param {{slug: string} & Record<string, unknown>} build
+   * @param {{expectedRevision?:number, expectedId?:string, recordHistory?:boolean, session?:import('mongodb').ClientSession, deferNotifications?:boolean, onInitialRead?:()=>void}} [options]
    */
-  async _upsertUnlocked(userId, build) {
+  async _upsertUnlocked(userId, build, options = {}) {
     if (!build || !build.slug) throw new Error("slug required");
     // Build check-ins (and opponent corrections) store the declared custom
-    // build's display name on the replay row. Rename them before saving,
-    // whatever the reclassify flag, so name-keyed stats never split the build
-    // (a retried save renames again).
-    const previous = typeof this.db.customBuilds.findOne === "function"
+    // build's display name on the replay row. Rename them in the same
+    // transaction as the definition, independent of the reclassify flag.
+    const previous = options.recordHistory
+      ? await this.db.customBuilds.aggregate([
+        { $match: { userId, slug: build.slug, deletedAt: { $exists: false }, ...(options.expectedId ? { _id: new (require('mongodb').ObjectId)(options.expectedId) } : {}) } },
+        { $limit: 1 },
+        { $project: { _id: 0, ...ROOT_PUBLIC_BUILD_EXPRESSION, definitionRevision: { $ifNull: ["$definitionRevision", 0] }, updatedAt: 1 } },
+      ], options.session ? { session: options.session } : {}).next()
+      : typeof this.db.customBuilds.findOne === "function"
       ? await this.db.customBuilds.findOne(
         { userId, slug: build.slug },
-        { projection: { _id: 0, name: 1, perspective: 1 } },
+        { projection: { _id: 0, name: 1, perspective: 1, definitionRevision: 1 }, ...(options.session ? { session: options.session } : {}) },
       )
       : null;
+    options.onInitialRead?.();
+    if (options.expectedRevision !== undefined && (!previous || (previous.definitionRevision || 0) !== options.expectedRevision)) {
+      throw Object.assign(new Error("build_definition_changed"), { status: 409, code: "build_definition_changed" });
+    }
     const overrideName = checkinRenameTarget(previous, build, "you");
     const opponentOverrideName = checkinRenameTarget(previous, build, "opponent");
     const games = this._gamesCollection();
+    const renameGames = options.session && games
+      ? /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ ({
+        updateMany: (/** @type {any} */ filter, /** @type {any} */ update) => games.updateMany(filter, update, { session: options.session }),
+      })) : games;
     let renamedCheckins = 0;
-    if (games && overrideName !== null) {
-      renamedCheckins += await renameCustomOverrides(games, userId, build.slug, overrideName);
+    if (renameGames && overrideName !== null) {
+      renamedCheckins += await renameCustomOverrides(renameGames, userId, build.slug, overrideName);
     }
-    if (games && opponentOverrideName !== null) {
+    if (renameGames && opponentOverrideName !== null) {
       renamedCheckins += await renameCustomOpponentOverrides(
-        games, userId, build.slug, opponentOverrideName,
+        renameGames, userId, build.slug, opponentOverrideName,
       );
     }
     const now = new Date();
@@ -642,14 +700,21 @@ class CustomBuildsService {
     // Background classification state is server-owned. Never allow a web
     // client save to forge, erase, or replace it.
     delete doc.reclassifyJob;
+    delete doc.definitionRevision;
+    delete doc._definitionHistory;
     stampVersion(doc, COLLECTIONS.CUSTOM_BUILDS);
-    await this.db.customBuilds.updateOne(
-      { userId, slug: build.slug },
-      { $setOnInsert: { createdAt: now }, $set: doc, $unset: { deletedAt: "" } },
-      { upsert: true },
+    const saved = await /** @type {import('mongodb').Collection<any>} */ (this.db.customBuilds).updateOne(
+      { userId, slug: build.slug, ...(options.expectedRevision === undefined ? {} : { deletedAt: { $exists: false } }), ...(options.expectedId ? { _id: new (require('mongodb').ObjectId)(options.expectedId) } : {}), ...(options.expectedRevision === undefined ? {} : options.expectedRevision === 0 ? { $or: [{ definitionRevision: 0 }, { definitionRevision: { $exists: false } }] } : { definitionRevision: options.expectedRevision }) },
+      /** @type {import('mongodb').Document} */ ({ $setOnInsert: { createdAt: now }, $set: doc, $unset: { deletedAt: "" }, $inc: { definitionRevision: 1 },
+        ...(options.recordHistory && previous ? { $push: { _definitionHistory: { $each: [{ revision: previous.definitionRevision || 0, savedAt: now, build: Object.fromEntries(Object.entries(previous).filter(([key]) => key !== "definitionRevision" && key !== "updatedAt")) }], $slice: -10 } } } : {}) }),
+      { upsert: options.expectedRevision === undefined, ...(options.session ? { session: options.session } : {}) },
     );
-    if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
-    this._notifyDefinitionsChanged(userId);
+    if (options.expectedRevision !== undefined && !saved.matchedCount) throw Object.assign(new Error("build_definition_changed"), { status: 409, code: "build_definition_changed" });
+    if (!options.deferNotifications) {
+      if (renamedCheckins > 0) this._notifyGamesChanged(userId, renamedCheckins);
+      this._notifyDefinitionsChanged(userId);
+    }
+    return renamedCheckins;
   }
 
   /**
@@ -2394,6 +2459,8 @@ class CustomBuildsService {
    *
    * @param {string} userId
    * @param {{
+   *   presetEvidence?: any,
+   *   durationSec?: number,
    *   gameId?: string,
    *   myRace?: string|null,
    *   myBuild?: string|null,
@@ -2520,6 +2587,9 @@ class CustomBuildsService {
     // per axis: an overridden axis keeps the declared build and takes the
     // classifier's outcome as its detected label; other axes get the plain
     // classification (buildIntentGuards).
+    const policy = game.presetEvidence && this.presetPolicies ? await this.presetPolicies.current() : null;
+    const policyBuild = policy ? policyLabelForGame(policy, game, "you") : null;
+    const policyStrategy = policy ? policyLabelForGame(policy, game, "opponent") : null;
     const fenced = typeof opts.expectedRevision === "string";
     const payloadBuild = typeof game.myBuild === "string" ? game.myBuild : null;
     const payloadStrategy = game.opponent && typeof game.opponent === "object"
@@ -2534,7 +2604,10 @@ class CustomBuildsService {
           gameId: probe.gameId,
           ...(fenced ? { _customBuildRevision: opts.expectedRevision } : {}),
         },
-        tagClassificationPipeline({ ...decision, payloadBuild, payloadStrategy }),
+        tagClassificationPipeline({ ...decision,
+          payloadBuild: decision.you.mode === "unset" ? policyBuild ?? payloadBuild : payloadBuild,
+          payloadStrategy: decision.opponent.mode === "unset" ? policyStrategy ?? payloadStrategy : payloadStrategy,
+          policyBuild, policyStrategy }),
         { projection: { _id: 1 } },
       );
       if (fenced && !written) {

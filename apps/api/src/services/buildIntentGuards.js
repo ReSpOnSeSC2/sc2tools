@@ -213,6 +213,8 @@ function detectedOutcome(outcome, payloadLabel, detectedPath) {
  *   opponent: AxisOutcome,
  *   payloadBuild: string|null,
  *   payloadStrategy?: string|null,
+ *   policyBuild?: string|null,
+ *   policyStrategy?: string|null,
  *   clearStaging: boolean,
  * }} decision ``clearStaging`` drops reclassify staging + sequence (a
  *   definitive classification); false only restores a check-in's label
@@ -228,7 +230,7 @@ function tagClassificationPipeline(decision) {
     _schemaVersion: expectedVersion(COLLECTIONS.GAMES),
     myBuild: unlessOverride(
       "$buildIntent.build.name",
-      you.mode === "set" ? { $literal: you.name } : "$myBuild",
+      you.mode === "set" ? { $literal: you.name } : you.mode === "unset" && typeof decision.policyBuild === "string" ? { $literal: decision.policyBuild } : "$myBuild",
     ),
     _customBuildSlug: unlessOverride(
       OVERRIDE_SLUG_EXPR,
@@ -247,10 +249,10 @@ function tagClassificationPipeline(decision) {
       opponent: detectedOutcome(opponent, payloadStrategy, "$buildIntent.opponent.detected"),
     }),
   };
-  if (opponent.mode === "set") {
+  if (opponent.mode === "set" || opponent.mode === "unset" && typeof decision.policyStrategy === "string") {
     set["opponent.strategy"] = unlessOppOverride(
       "$buildIntent.opponent.build.name",
-      { $literal: opponent.name },
+      { $literal: opponent.mode === "set" ? opponent.name : decision.policyStrategy },
     );
   } else {
     set.opponent = RESTORE_DECLARED_OPPONENT_EXPR;

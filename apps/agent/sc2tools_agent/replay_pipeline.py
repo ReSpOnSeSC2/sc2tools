@@ -490,6 +490,8 @@ class CloudGame:
     # local file. The upload queue augments this list from its persistent
     # path_by_game_id reverse index during a full Re-sync.
     resumed_replay_game_ids: Optional[List[str]] = None
+    # Appended for positional constructor compatibility. Transient API evidence.
+    preset_evidence: Optional[Dict[str, Any]] = None
 
     def to_payload(self) -> Dict[str, Any]:
         # ``earlyBuildLog`` / ``oppEarlyBuildLog`` are intentionally
@@ -509,6 +511,8 @@ class CloudGame:
             "buildLog": self.build_log,
             "oppBuildLog": self.opp_build_log,
         }
+        if self.preset_evidence is not None:
+            out["presetEvidence"] = self.preset_evidence
         if self.my_build:
             out["myBuild"] = self.my_build
         if self.my_ladder_race:
@@ -784,6 +788,17 @@ def parse_replay_for_cloud(
     return game
 
 
+def _parse_with_preset_policy(parse_deep, file_path, handle, state_dir):
+    if state_dir is None:
+        # The browser worker installs its validated manifest in this isolated
+        # interpreter. No state directory, file writes or network from parsing.
+        return parse_deep(str(file_path), handle)
+    from .preset_policy import load_cached_policy
+    from core.preset_policy import policy_scope
+    with policy_scope(load_cached_policy(state_dir)):
+        return parse_deep(str(file_path), handle)
+
+
 def parse_replay_for_cloud_ex(
     file_path: Path,
     *,
@@ -831,7 +846,7 @@ def parse_replay_for_cloud_ex(
 
     handle = player_handle or _read_player_handle(state_dir)
     try:
-        ctx = parse_deep(str(file_path), handle or "")
+        ctx = _parse_with_preset_policy(parse_deep, file_path, handle or "", state_dir)
     except Exception as exc:  # noqa: BLE001
         log.warning("parse_deep_failed for %s: %s", file_path.name, exc)
         return None, SKIP_PARSE_FAILED
@@ -868,7 +883,7 @@ def parse_replay_for_cloud_ex(
                 # path that fills those — calling _resolve_me_opp on
                 # the existing ctx would skip them.
                 try:
-                    ctx = parse_deep(str(file_path), me_p.name)
+                    ctx = _parse_with_preset_policy(parse_deep, file_path, me_p.name, state_dir)
                 except Exception as exc:  # noqa: BLE001
                     log.warning(
                         "parse_deep_failed_after_toon_recovery for %s: %s",
@@ -1127,6 +1142,7 @@ def parse_replay_for_cloud_ex(
             str(my_ladder_race_raw) if my_ladder_race_raw else None
         ),
         my_build=getattr(ctx, "my_build", None),
+        preset_evidence=getattr(ctx, "preset_evidence", None),
         map_name=str(ctx.map_name),
         duration_sec=int(ctx.length_seconds or 0),
         macro_score=macro_score_value,

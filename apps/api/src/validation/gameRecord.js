@@ -32,6 +32,7 @@ const BUILD_LOG_LINE_MAX_LENGTH = 256;
 // bounded even though the surrounding agent payload remains forward
 // compatible.
 const { PLAY_SIGNATURE_SCHEMA, validPlaySignatureSemantics } = require("./playSignature");
+const { PRESET_EVIDENCE_SCHEMA } = require("./presetEvidence");
 const { CASUALTY_EVENTS_SCHEMA } = require("./casualtyEvents");
 const { INGEST_PROVENANCE, LIMITS } = require("../config/constants");
 
@@ -82,6 +83,7 @@ const GAME_SCHEMA = {
   ],
   properties: {
     // Shared with POST /v1/games/exists so every stored id can be looked up.
+    presetEvidence: PRESET_EVIDENCE_SCHEMA,
     gameId: { type: "string", minLength: 1, maxLength: LIMITS.GAME_ID_MAX_LENGTH },
     isResumedFromReplay: { type: "boolean" },
     resumedReplayGameIds: {

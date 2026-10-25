@@ -158,3 +158,78 @@ different account's ID.
 
 Admin URLs still require an admin account. Sharing a URL does not grant access;
 send it only through an appropriate private support channel.
+
+## Build Studio
+
+Open **Content → Build Studio** to traverse every released preset, every private
+custom definition across owners, and every community snapshot, including removed
+listings. Next definitions uses a stable keyset cursor; it is not an arbitrary
+first-page cap. Private/community rows show their owner and source slug. Filter
+by the owner's internal user ID when needed.
+
+Select a definition to inspect all its valid stored steps and rules. A v3
+rule-only definition legitimately has no authored steps. Released procedural
+presets show their real source/description; empty legacy signatures are never
+presented as executable criteria. The two Archon Drop presets expose the same
+shared criteria used at their released tree slots, including a real Warp Prism
+**completion by 6:00**. Structure presence, construction starts, production starts
+and unit completion have separate clocks. Hallucinations and units without their
+observed prerequisite technology do not satisfy real-unit counts.
+
+For a preset, choose **Replace detection criteria**, **Disable this preset label**,
+or **Keep released decision tree**. Replacement alternatives are ORed; every
+condition within an alternative must pass. Lower priority wins, with the label as
+a deterministic tie-breaker. Detection surfaces are fixed by the released
+catalog: personal Protoss matchup presets cannot rename generic opponent Protoss
+strategies, and vice versa; Terran/Zerg retain their existing shared taxonomy.
+Private custom-rule matches take precedence. If a released match is replaced or
+disabled and no replacement matches, it becomes **Unclassified** instead of
+bypassing the edit through its old hardcoded predicate.
+
+Authored preset reference steps and descriptions are editable independently of
+detection. Steps do not become hidden rules. Supply is bounded to the SC2 cap of
+200. **Run unsaved preview** evaluates bounded raw/synthetic events without a
+policy write. **Review changes** shows before/after data; **Confirm save** applies
+a new version using the expected active hash. A competing edit returns a conflict
+and preserves the draft. Reload latest is an explicit discard action. **Review
+restore to released** removes the selected preset's policy override. Global preset
+policy history allows inspection of a complete historical manifest before
+restoring it as a new immutable revision; it never rewrites history.
+
+Custom/community definitions expose their safe complete JSON shape for editing
+names, steps, signatures and v3 rules. Private notes, replay links, ownership,
+publication/removal state and counters are not editable. A community correction
+changes its published snapshot independently of the private source and keeps a
+removed listing removed. Private saves can explicitly queue owner-scoped
+reclassification. All saves check the current definition version and hold the
+owner's shared data-write lease, so account erasure/restore excludes the edit.
+Previous definitions are reviewed and restored as a new version. Community
+versions include their listing title and description alongside the build rules;
+restoring older records without those fields keeps the current listing text.
+Private definition/version writes and linked game check-in renames commit in one
+MongoDB transaction before cache notifications. All versioned admin saves and
+preset restores require transaction support and return a recoverable 503 when it
+is unavailable. Standalone development MongoDB permits only legacy owner saves;
+it never falls back to partial writes for a versioned admin operation.
+Invalid legacy definitions exceeding validated bounds are marked incomplete and cannot be
+silently overwritten by their bounded projection; they require a reviewed repair.
+
+The shared runtime contract is **schema 1 / evaluator 1** (`preset-policy-v1`),
+not a promise that an old installed executable supports it. Compatible desktop
+engines refresh the anonymous global manifest after healthy heartbeats. Signed-in
+browser imports refresh before analysis, at most once per minute. The
+visitor-only `/try` flow retains its no-API-before-save promise and uses bundled
+classification rules. A validated last-good manifest survives outages; fresh
+installs fall back to their bundled released
+trees. Hash/schema/label incompatibility never installs an unverified policy.
+Older clients and incomplete raw evidence keep their uploaded classification;
+update and reanalyse those files to adopt current policy. Existing history does
+not silently change after a global save. Confirmed build selections/corrections
+remain the displayed label while the current detector result is stored separately.
+
+Repository validation: `python apps/replay-engine/scripts/export_preset_catalog.py
+--check` verifies the generated catalog, detector surfaces, source fingerprint and
+full real-unit prerequisite/proxy tables. Re-run the generator after released
+classifier changes. New executable labels/schema/evaluator behavior ship through
+normal desktop/browser releases; an admin cannot upload executable code, URLs or
+arbitrary new labels through this editor.

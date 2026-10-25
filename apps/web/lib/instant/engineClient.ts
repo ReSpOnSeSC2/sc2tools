@@ -52,6 +52,8 @@ export interface EngineClientOptions {
   pointerUrl?: string;
   /** Budget for downloading + starting the engine. Default 120 s. */
   bootTimeoutMs?: number;
+  /** False keeps visitor analysis fully local after engine download. */
+  refreshPolicy?: boolean;
 }
 
 export const DEFAULT_PER_FILE_TIMEOUT_MS = 60_000;
@@ -252,6 +254,7 @@ class QueuedEngineClient implements EngineClient {
       return new EngineSession({
         factory: this.config.workerFactory,
         pointerUrl: this.config.pointerUrl,
+        refreshPolicy: this.config.refreshPolicy,
         onProgress: (event) => this.forwardProgress(event),
       });
     } catch (error) {
@@ -383,5 +386,6 @@ export function createEngineClient(options: EngineClientOptions = {}): EngineCli
     recycleEvery: options.recycleEvery ?? DEFAULT_RECYCLE_EVERY,
     pointerUrl: absoluteUrl(options.pointerUrl ?? ENGINE_POINTER_URL),
     bootTimeoutMs: options.bootTimeoutMs ?? DEFAULT_BOOT_TIMEOUT_MS,
+    refreshPolicy: options.refreshPolicy !== false,
   });
 }

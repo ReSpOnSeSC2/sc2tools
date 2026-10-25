@@ -29,6 +29,11 @@ def _sc2t_bytes(data):
     return data.to_bytes() if hasattr(data, "to_bytes") else bytes(data)
 
 
+def _sc2t_policy(raw):
+    from core.preset_policy import install_policy
+    return install_policy(_sc2t_json.loads(raw))
+
+
 def _sc2t_players(data, filename):
     try:
         return _sc2t_json.dumps(_sc2t_ia.list_replay_players(_sc2t_bytes(data), filename=filename))
@@ -78,7 +83,7 @@ def _sc2t_unzip_done():
     _sc2t_gc.collect()
 `;
 
-const GLUE_FUNCTIONS = ["_sc2t_players", "_sc2t_parse", "_sc2t_unzip", "_sc2t_unzip_take", "_sc2t_unzip_done"] as const;
+const GLUE_FUNCTIONS = ["_sc2t_policy", "_sc2t_players", "_sc2t_parse", "_sc2t_unzip", "_sc2t_unzip_take", "_sc2t_unzip_done"] as const;
 type GlueName = (typeof GLUE_FUNCTIONS)[number];
 
 /** One unpacked entry; `lastModified` is its stored zip time (epoch ms) when valid. */
@@ -100,6 +105,7 @@ interface UnzipHeader {
 
 /** Typed calls into the glue. Raw JSON strings are narrowed by the caller. */
 export interface EngineRuntime {
+  installPolicy?(raw: string): string;
   players(bytes: Uint8Array, filename: string): string;
   parse(bytes: Uint8Array, filename: string, toon: string, handle: string, wantDigests: boolean): string;
   unzip(bytes: Uint8Array): UnzipResult;
@@ -180,6 +186,7 @@ export function createEngineRuntime(pyodide: PyodideLike): EngineRuntime {
     }
   };
   return {
+    installPolicy: (raw) => asString(call("_sc2t_policy", raw), "policy"),
     players: (bytes, filename) => asString(call("_sc2t_players", bytes, filename), "players"),
     parse: (bytes, filename, toon, handle, wantDigests) =>
       asString(call("_sc2t_parse", bytes, filename, toon, handle, wantDigests), "parse"),

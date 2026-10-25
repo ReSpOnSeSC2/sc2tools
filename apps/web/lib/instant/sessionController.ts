@@ -49,6 +49,8 @@ export interface SessionControllerOptions {
   wantDigests?: boolean;
   /** Engine factory; defaults to `createEngineClient` (tests inject a mock). */
   clientFactory?: () => EngineClient;
+  /** False preserves /try's no-API-before-save privacy promise. */
+  refreshPolicy?: boolean;
 }
 
 /** User actions exposed by the session hook (bound: safe to pass as callbacks). */
@@ -293,7 +295,7 @@ export function createSessionController(
   store: SessionStore,
   options: () => SessionControllerOptions,
 ): SessionController {
-  const engine = new SessionEngine(() => (options().clientFactory ?? createEngineClient)());
+  const engine = new SessionEngine(() => options().clientFactory?.() ?? createEngineClient({ refreshPolicy: options().refreshPolicy !== false }));
   const controller = new InstantSessionController(store, options, engine);
   const { addFiles, setDateWindow, start, choose, cancel, reset, prewarm } = controller;
   return {

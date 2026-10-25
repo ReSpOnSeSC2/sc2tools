@@ -9,6 +9,7 @@ based on the matchup string.
 from __future__ import annotations
 
 from typing import Optional
+from .preset_defaults import ARCHON_DROP_PRISM_DEADLINE_SECONDS, matches_released_preset
 
 from .strategy_detector_helpers import (
     PROXY_2_GATE_GATEWAY_DEADLINE_SECONDS,
@@ -20,7 +21,6 @@ from .strategy_detector_helpers import (
 
 
 ALPHASTAR_ROBO_DEADLINE_SECONDS = 5 * 60 + 30
-ARCHON_DROP_PRISM_DEADLINE_SECONDS = 6 * 60
 STANDARD_MACRO_THIRD_FOLLOW_WINDOW_SECONDS = 4 * 60
 
 
@@ -263,12 +263,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # rewound training-start display times. Late transport and ordinary
     # Templar transitions do not prove a drop. Keep this BEFORE Stargate
     # into Robo so the drop's Robotics Facility does not hide it.
-    if (
-        stargate_first_tech
-        and has_building("TemplarArchive", 540)
-        and count_units("Archon", 540) >= 2
-        and count_units("WarpPrism", ARCHON_DROP_PRISM_DEADLINE_SECONDS) >= 1
-    ):
+    if matches_released_preset("PvZ - Archon Drop", ctx):
         return "PvZ - Archon Drop"
 
     # Stargate into Robo: Stargate-first opener (Phoenix / Oracle / VR
@@ -405,14 +400,7 @@ def detect_pvz(ctx: DetectionContext) -> Optional[str]:
     # DT drop into Archon: the real transport must complete by 6:00,
     # with actual DT production AND an observed Archon morph by 9:00.
     # DTs and tech alone cannot establish the Archon follow-up.
-    if (
-        twilight_time < building_time("DarkShrine")
-        and has_building("DarkShrine", 540)
-        and has_building("RoboticsFacility", 540)
-        and count_units("DarkTemplar", 540) >= 3
-        and count_units("Archon", 540) >= 1
-        and count_units("WarpPrism", ARCHON_DROP_PRISM_DEADLINE_SECONDS) >= 1
-    ):
+    if matches_released_preset("PvZ - DT drop into Archon Drop", ctx):
         return "PvZ - DT drop into Archon Drop"
     # Standard DT Opener: Dark Shrine is built BEFORE any Stargate /
     # Robotics Facility (pure ordering -- no time threshold) and at
