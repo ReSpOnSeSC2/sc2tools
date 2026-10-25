@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { API_BASE, boundedApiRequest, buildApiError } from "@/lib/clientApi";
 import { twitchCurrent, twitchReason, TWITCH_STATE_LABELS, type TwitchCurrent } from "@/lib/twitchAutomation";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -14,6 +14,8 @@ function ActiveTwitchControls({ token, onInvalid }: { token: string; onInvalid?:
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState(""), [notice, setNotice] = useState("");
   const [confirm, setConfirm] = useState<{ action: "resolve" | "cancel"; gameKey: string } | null>(null);
   const scopeRef = useRef<Scope | null>(null), invalidRef = useRef(onInvalid); invalidRef.current = onInvalid;
+  const busyStatusRef = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => { if (busy) busyStatusRef.current?.focus(); }, [busy]);
   const refreshRef = useRef<() => void>(() => {});
   useEffect(() => {
     const scope: Scope = { active: true, controller: null, busy: false }; scopeRef.current = scope;
@@ -79,6 +81,8 @@ function ActiveTwitchControls({ token, onInvalid }: { token: string; onInvalid?:
     {error ? <p role="alert" className="text-caption text-danger">{error}</p> : null}{notice ? <p role="status" className="text-caption">{notice}</p> : null}
     <ConfirmDialog open={confirm !== null} focusCancel loading={busy} title={confirm?.action === "cancel" ? "Cancel Twitch prediction?" : "Resolve Twitch prediction?"}
       description={confirm?.action === "cancel" ? "Request cancellation and a Channel Points refund. Twitch must confirm it before this Dock reports a refund." : "Use the stored replay-verified result. You cannot choose or override its outcome here."}
-      confirmLabel={confirm?.action === "cancel" ? "Request refund" : "Resolve verified result"} onClose={() => { if (!busy) setConfirm(null); }} onConfirm={() => void act()} />
+      confirmLabel={confirm?.action === "cancel" ? "Request refund" : "Resolve verified result"} onClose={() => { if (!busy) setConfirm(null); }} onConfirm={() => void act()}>
+      <p ref={busyStatusRef} tabIndex={-1} role="status" className="text-caption outline-none">{busy ? "Waiting for Twitch confirmation…" : "The Dock will show Twitch's confirmed final state."}</p>
+    </ConfirmDialog>
   </section>;
 }

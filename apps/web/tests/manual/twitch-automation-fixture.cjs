@@ -1,0 +1,20 @@
+/* Real Settings/editor/auth-fenced hook, Dock controls/dialog and public Learn
+ * consumers. Next, Clerk and Twitch are explicit synthetic local boundaries. */
+const fs = require('node:fs'), esbuild = require('esbuild');
+const root = process.cwd(), origin = process.env.TWITCH_FIXTURE_ORIGIN;
+if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(origin || '')) throw new Error('Loopback origin required');
+fs.mkdirSync('.tmp', { recursive: true });
+const boundaries = {
+  'next/link': `import React from'react';export default function Link({children,prefetch,scroll,replace,...props}){return <a {...props}>{children}</a>}`,
+  'next/image': `import React from'react';export default function Image({fill,priority,unoptimized,...props}){return <img {...props}/>} `,
+  'next/navigation': `export function useRouter(){return{push:href=>location.assign(href),replace:href=>location.replace(href)}}export function usePathname(){return location.pathname}export function useSearchParams(){return new URLSearchParams(location.search)}`,
+  'next/dynamic': `import React from'react';export default function dynamic(loader,options){const Lazy=React.lazy(()=>Promise.resolve(loader()).then(mod=>typeof mod==='function'?{default:mod}:mod));return props=><React.Suspense fallback={options?.loading?.()||null}><Lazy {...props}/></React.Suspense>}`,
+  '@clerk/nextjs': `import{useSyncExternalStore}from'react';let state={isLoaded:true,isSignedIn:true,userId:'synthetic-a'},held=null;const sub=fn=>{addEventListener('fixture-auth',fn);return()=>removeEventListener('fixture-auth',fn)};window.fixtureAuth=(id,loaded=true,signed=!!id)=>{state={isLoaded:loaded,isSignedIn:signed,userId:id};dispatchEvent(new Event('fixture-auth'))};window.fixtureHoldJwt=()=>{held={promise:new Promise(resolve=>{window.fixtureReleaseJwt=resolve})}};export function useAuth(){const auth=useSyncExternalStore(sub,()=>state);return{...auth,getToken:async()=>{if(held){const value=held;held=null;return value.promise}return auth.userId}}}`,
+  '@sentry/nextjs': 'export function captureException(){}export function captureMessage(){}export function addBreadcrumb(){}',
+};
+const plugin = { name: 'explicit-loopback-boundaries', setup(build) {
+  build.onResolve({ filter: /.*/ }, args => boundaries[args.path] ? { path: args.path, namespace: 'fixture' } : undefined);
+  build.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ loader: 'tsx', resolveDir: root, contents: boundaries[args.path] }));
+} };
+fs.writeFileSync('.tmp/twitch-automation-fixture.tsx', `import React,{useState}from'react';import{createRoot}from'react-dom/client';import{SettingsTwitchAutomation}from'@/components/analyzer/settings/SettingsTwitchAutomation';import{DockTwitchAutomation}from'@/components/dock/DockTwitchAutomation';import{WidgetExplorer}from'@/components/stream-studio/WidgetExplorer';window.fixturePopupUrls=[];window.open=()=>({closed:false,close(){this.closed=true},location:{replace(url){window.fixturePopupUrls.push(url)}}});function Fixture(){const[token,setToken]=useState('synthetic-a');window.fixtureToken=setToken;const view=new URLSearchParams(location.search).get('view');return <main className="mx-auto min-w-0 max-w-5xl space-y-4 p-3 sm:p-6"><h1 className="text-h2">{view==='dock'?'Stream Dock · Game':view==='guide'?'Stream Studio Learn':'Overlay · Chat & alerts'}</h1>{view==='dock'?<DockTwitchAutomation token={token}/>:view==='guide'?<WidgetExplorer/>:<SettingsTwitchAutomation/>}</main>}createRoot(document.getElementById('root')).render(<Fixture/>);`);
+esbuild.build({ entryPoints: ['.tmp/twitch-automation-fixture.tsx'], bundle: true, outfile: '.tmp/twitch-automation-fixture.js', alias: { '@': root }, plugins: [plugin], jsx: 'automatic', define: { 'process.env': '{}', 'process.env.NODE_ENV': '"production"', 'process.env.NEXT_PUBLIC_API_BASE': JSON.stringify(origin) }, logLevel: 'warning' }).catch(error => { console.error(error); process.exitCode = 1; });
