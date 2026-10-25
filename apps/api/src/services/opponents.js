@@ -7,6 +7,7 @@ const { expectedVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { parseExactMapNames } = require("../util/exactMapFilter");
 const { opponentSeries } = require("./opponentSeries");
+const { parseAnalysisGameIds } = require("../util/opponentAnalysisMembership");
 const { eraForGame } = require("../util/patchEra");
 const { opponentGamesFilter } = require("../util/opponentIdentity");
 const {
@@ -1276,10 +1277,12 @@ class OpponentsService {
    *   mergeLinked?: boolean,
    *   limit?: number,
    *   cursor?: string, result?: unknown,
+   *   analysisGameIds?: string[],
    * }} [opts]
-   * @returns {Promise<{items: object[], nextCursor: string|null}|null>}
+   * @returns {Promise<{items: object[], nextCursor: string|null, membership?: {scope: "analysis_sample", requestedGameCount: number}}|null>}
    */
   async listGames(userId, pulseId, opts = {}) {
+    const analysisGameIds = parseAnalysisGameIds(opts.analysisGameIds);
     const doc = await this.db.opponents.findOne(
       { userId, pulseId },
       {
@@ -1310,6 +1313,7 @@ class OpponentsService {
       gamesMatchStage(userId, opts.filters || {}),
       identityFilter,
     ];
+    if (analysisGameIds) clauses.push({ gameId: { $in: analysisGameIds } });
     const resultClause = resultMatchClause(opts.result);
     if (resultClause) clauses.push(resultClause);
     if (cursor) {
@@ -1322,17 +1326,24 @@ class OpponentsService {
     }
 
     const limit = clampOpponentGamesLimit(opts.limit);
-    /** @type {Array<any>} */
-    const rows = await this.db.games
+    const query = this.db.games
       .find({ $and: clauses }, { projection: PROFILE_GAME_ROW_PROJECTION })
       .sort({ date: -1, _id: -1 })
-      .limit(limit + 1)
-      .toArray();
+      .limit(limit + 1);
+    // Reuse the existing unique owner/game index: at most 100 selected IDs
+    // are examined even when this opponent has a large replay history.
+    if (analysisGameIds) query.hint({ userId: 1, gameId: 1 });
+    /** @type {Array<any>} */
+    const rows = await query.toArray();
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
     const last = page[page.length - 1];
     return {
-      items: page.map(serializeCompactProfileGame),
+      items: page.map((game) => ({
+        ...serializeCompactProfileGame(game),
+        ...(analysisGameIds ? { analysisSampleMember: true } : {}),
+      })),
+      ...(analysisGameIds ? { membership: { scope: "analysis_sample", requestedGameCount: analysisGameIds.length } } : {}),
       nextCursor: hasMore && last
         ? encodeOpponentGamesCursor(last.date, last._id)
         : null,
@@ -1458,15 +1469,13 @@ class OpponentsService {
   }
 
   /**
-   * Build the full opponent profile payload consumed by the SPA's
-   * `OpponentProfile` view: totals, byMap, byStrategy, top strategies,
-   * recency-weighted predictions, matchup-aware median timings (overall
-   * + per matchup), last 5 games, and the full games array (newest
-   * first) for the all-games table.
+   * Build the slim opponent brief: identity, all-time series, scoped
+   * totals, strategies, predictions and metadata-only replay rows.
+   * Detail-backed timings, phases and scouting require getAnalysis().
    *
    * Analyzer filtering: totals / byMap / byStrategy / topStrategies /
-   * timings / phases / scouting / the all-games table are computed from
-   * the shared analyzer scope. `last5Games` and `predictedStrategies`
+   * the replay table are computed from the shared analyzer scope.
+   * `last5Games` and `predictedStrategies`
    * intentionally ignore only the date bounds (they describe recent
    * activity), while still honoring game-kind, race, map, and other
    * cohort filters. This prevents a ladder-1v1 profile from silently
@@ -1490,6 +1499,29 @@ class OpponentsService {
    * }} [opts]
    */
   async get(userId, pulseId, opts = {}) {
+    return this._getProfile(userId, pulseId, opts, false);
+  }
+
+  /**
+   * Explicit bounded detail analysis. includeProfile retains the single rich
+   * request used by the native companion without hydrating the default route.
+   * @param {string} userId
+   * @param {string} pulseId
+   * @param {{filters?: import('../util/parseQuery').GlobalFilters, since?: Date, until?: Date, mergeLinked?: boolean, includeProfile?: boolean}} [opts]
+   */
+  async getAnalysis(userId, pulseId, opts = {}) {
+    return this._getProfile(userId, pulseId, opts, true);
+  }
+
+  /**
+   * Shared owner, linked-identity and slim cohort loading for both surfaces.
+   * @private
+   * @param {string} userId
+   * @param {string} pulseId
+   * @param {{filters?: import('../util/parseQuery').GlobalFilters, since?: Date, until?: Date, mergeLinked?: boolean, includeProfile?: boolean}} opts
+   * @param {boolean} analyze
+   */
+  async _getProfile(userId, pulseId, opts = {}, analyze = false) {
     // Keep direct since/until options working for internal callers and
     // older tests while the HTTP route supplies the complete parsed
     // filter object.
@@ -1570,22 +1602,6 @@ class OpponentsService {
       filterGamesByDate(scopedRawGames, filters.since, filters.until),
       filters.patchEra,
     );
-    const analyticalSelection = selectProfileAnalyticalGames(
-      scopedRawGames,
-      rawFilteredGames,
-    );
-    const analytical = await this._hydrateProfileAnalyticalSample(
-      userId,
-      analyticalSelection.items,
-    );
-    const analyticalFilteredGames = analytical
-      .filter((row) => row.inDateScope)
-      .map((row) => row.youGame);
-    const analyticalOpponentGames = analytical
-      .filter((row) => row.inDateScope)
-      .map((row) => row.opponentGame);
-    const analysisSampleTruncated = analyticalSelection.filteredTotal
-      > analyticalFilteredGames.length;
     const allGames = scopedRawGames.map(serializeGameForProfile);
     const filteredGames = rawFilteredGames.map(serializeGameForProfile);
     // Authoritative current name. ``rawGames`` is sorted by date desc
@@ -1639,7 +1655,106 @@ class OpponentsService {
       filteredGames,
       hasProfileFilters(filters) ? null : doc,
     );
-    const dna = computeDnaFields(filteredGames, analyticalFilteredGames);
+    const dna = computeDnaFields(filteredGames, null);
+    // Predictions and the most-recent-5 list ignore date bounds but
+    // remain inside the active analyzer cohort — see method jsdoc.
+    const predictedStrategies = Dna.recencyWeightedStrategies(allGames);
+    const last5Games = allGames.slice(0, 5);
+    // "Last MMR" overlay — same race-aware contract as the list path.
+    // The column means "the opponent's rating in the race they played
+    // in your most recent game against them". ``rawGames`` is sorted
+    // date desc, so rawGames[0] is the most recent game; we take its
+    // opponent race, then surface the MMR from the most recent game OF
+    // THAT RACE that carries one (from replay data or the race-correct
+    // forward enrichment job). It WINS over the opponents-row
+    // ``doc.mmr`` — SC2Pulse's race-AGNOSTIC current rating
+    // (``_fetchTeams`` collapses all races to the most-recently-played
+    // team), which would surface the wrong race for a multi-race
+    // opponent (their Protoss 6360 on a row whose last game was Terran
+    // 5400). Falls back to ``doc.mmr`` when no same-race game carries
+    // one (the replay omitted it and recent enrichment missed). Pure
+    // database read — no Pulse traffic.
+    /** @type {{mmr: number, region: string|null}|null} */
+    let mmrOverlay = null;
+    const latestOppRace =
+      rawGames.length > 0 && rawGames[0] && rawGames[0].opponent
+        ? rawGames[0].opponent.race
+        : null;
+    const latestOppLetter = canonicalRaceLetter(latestOppRace);
+    if (latestOppLetter) {
+      for (const g of rawGames) {
+        const gLetter = canonicalRaceLetter(
+          g && g.opponent && g.opponent.race,
+        );
+        if (gLetter !== latestOppLetter) continue;
+        const m = Number(g && g.opponent && g.opponent.mmr);
+        if (!Number.isFinite(m) || m <= 0) continue;
+        mmrOverlay = {
+          mmr: Math.round(m),
+          region: typeof g.opponent.region === "string"
+            ? g.opponent.region
+            : null,
+        };
+        break;
+      }
+    }
+    const profile = {
+      ...doc,
+      // An approved label belongs to the person, while the original
+      // account name remains available for barcode review/correction.
+      displayNameSample: doc.globalIdentity || linked
+        ? doc.displayNameSample || ""
+        : authoritativeName || doc.displayNameSample || "",
+      name: authoritativeName,
+      notes,
+      notesReadAloud,
+      // Merged extras: the per-name breakdown (newest first) and the
+      // group's revealed name — any identity's reveal (or the pro
+      // nickname from the linkage) labels the whole player.
+      ...(linked
+        ? {
+            mergedIdentities: linked.identities,
+          }
+        : {}),
+      revealedName: doc.globalIdentity?.displayName || linked?.revealedName || doc.revealedName || null,
+      ...(mmrOverlay ? { mmr: mmrOverlay.mmr } : {}),
+      ...(mmrOverlay && (doc.region == null || doc.region === "")
+        ? { region: mmrOverlay.region }
+        : {}),
+      mergedToonHandles,
+      series,
+      totals,
+      byMap: aggregates.byMap,
+      byStrategy: aggregates.byStrategy,
+      topStrategies: dna.topStrategies,
+      predictedStrategies,
+      myRace: dna.myRace,
+      oppRaceModal: dna.oppRaceModal,
+      matchupLabel: dna.matchupLabel,
+      matchupCounts: dna.matchupCounts,
+      last5Games,
+      gamesTruncated,
+      games: filteredGames,
+    };
+    if (!analyze) return profile;
+
+    const analyticalSelection = selectProfileAnalyticalGames(
+      scopedRawGames,
+      rawFilteredGames,
+    );
+    const analytical = await this._hydrateProfileAnalyticalSample(
+      userId,
+      analyticalSelection.items,
+    );
+    const analyticalFilteredGames = analytical
+      .filter((row) => row.inDateScope)
+      .map((row) => row.youGame);
+    const analyticalOpponentGames = analytical
+      .filter((row) => row.inDateScope)
+      .map((row) => row.opponentGame);
+    const analysisSampleTruncated = analyticalSelection.filteredTotal
+      > analyticalFilteredGames.length;
+    const timingDna = computeDnaFields(filteredGames, analyticalFilteredGames);
     // Phase trajectory + transition Sankey for "How games against this
     // opponent play out". Pure compute over the same date-filtered
     // games that drive the by-map / by-strategy / median-timings
@@ -1686,10 +1801,6 @@ class OpponentsService {
       name: opponentLabel,
       transitions: transitionsCompute,
     };
-    // Predictions and the most-recent-5 list ignore date bounds but
-    // remain inside the active analyzer cohort — see method jsdoc.
-    const predictedStrategies = Dna.recencyWeightedStrategies(allGames);
-    const last5Games = allGames.slice(0, 5);
     // Per-game scouting envelopes for the overlay's scouting widget.
     // Operates on the un-serialized scopedRawGames entries (which still
     // carry ``macroBreakdown`` + ``oppBuildLog``) so the per-game
@@ -1715,100 +1826,40 @@ class OpponentsService {
       .filter((row) => row.inDateScope && row.scouting)
       .slice(0, OPPONENT_PROFILE_SCOUTING_MAX_GAMES)
       .map((row) => row.scouting);
-    const matchupTimingsLegacy = dna.matchupTimings;
+    const matchupTimingsLegacy = timingDna.matchupTimings;
     const matchupTimings = projectMatchupTimings(matchupTimingsLegacy);
-    // "Last MMR" overlay — same race-aware contract as the list path.
-    // The column means "the opponent's rating in the race they played
-    // in your most recent game against them". ``rawGames`` is sorted
-    // date desc, so rawGames[0] is the most recent game; we take its
-    // opponent race, then surface the MMR from the most recent game OF
-    // THAT RACE that carries one (from replay data or the race-correct
-    // forward enrichment job). It WINS over the opponents-row
-    // ``doc.mmr`` — SC2Pulse's race-AGNOSTIC current rating
-    // (``_fetchTeams`` collapses all races to the most-recently-played
-    // team), which would surface the wrong race for a multi-race
-    // opponent (their Protoss 6360 on a row whose last game was Terran
-    // 5400). Falls back to ``doc.mmr`` when no same-race game carries
-    // one (the replay omitted it and recent enrichment missed). Pure
-    // database read — no Pulse traffic.
-    /** @type {{mmr: number, region: string|null}|null} */
-    let mmrOverlay = null;
-    const latestOppRace =
-      rawGames.length > 0 && rawGames[0] && rawGames[0].opponent
-        ? rawGames[0].opponent.race
-        : null;
-    const latestOppLetter = canonicalRaceLetter(latestOppRace);
-    if (latestOppLetter) {
-      for (const g of rawGames) {
-        const gLetter = canonicalRaceLetter(
-          g && g.opponent && g.opponent.race,
-        );
-        if (gLetter !== latestOppLetter) continue;
-        const m = Number(g && g.opponent && g.opponent.mmr);
-        if (!Number.isFinite(m) || m <= 0) continue;
-        mmrOverlay = {
-          mmr: Math.round(m),
-          region: typeof g.opponent.region === "string"
-            ? g.opponent.region
-            : null,
-        };
-        break;
-      }
-    }
-    return {
-      ...doc,
-      // An approved label belongs to the person, while the original
-      // account name remains available for barcode review/correction.
-      displayNameSample: doc.globalIdentity || linked
-        ? doc.displayNameSample || ""
-        : authoritativeName || doc.displayNameSample || "",
-      name: authoritativeName,
-      notes,
-      notesReadAloud,
-      // Merged extras: the per-name breakdown (newest first) and the
-      // group's revealed name — any identity's reveal (or the pro
-      // nickname from the linkage) labels the whole player.
-      ...(linked
-        ? {
-            mergedIdentities: linked.identities,
-          }
-        : {}),
-      revealedName: doc.globalIdentity?.displayName || linked?.revealedName || doc.revealedName || null,
-      ...(mmrOverlay ? { mmr: mmrOverlay.mmr } : {}),
-      ...(mmrOverlay && (doc.region == null || doc.region === "")
-        ? { region: mmrOverlay.region }
-        : {}),
-      mergedToonHandles,
-      series,
-      totals,
-      byMap: aggregates.byMap,
-      byStrategy: aggregates.byStrategy,
-      topStrategies: dna.topStrategies,
-      predictedStrategies,
-      myRace: dna.myRace,
-      oppRaceModal: dna.oppRaceModal,
-      matchupLabel: dna.matchupLabel,
-      matchupCounts: dna.matchupCounts,
+    const analysis = {
+      pulseId,
+      myRace: timingDna.myRace,
+      oppRaceModal: timingDna.oppRaceModal,
+      matchupLabel: timingDna.matchupLabel,
+      matchupCounts: timingDna.matchupCounts,
       matchupTimings,
       matchupTimingsLegacy,
-      medianTimings: projectMedianTimings(dna.medianTimings),
-      medianTimingsLegacy: dna.medianTimings,
-      medianTimingsOrder: dna.medianTimingsOrder,
+      medianTimings: projectMedianTimings(timingDna.medianTimings),
+      medianTimingsLegacy: timingDna.medianTimings,
+      medianTimingsOrder: timingDna.medianTimingsOrder,
       phases,
       transitions,
-      last5Games,
       last5GamesScouting,
       gamesScouting,
       playerCard: computePlayerCard(
         analytical.filter((row) => row.inDateScope).map((row) => row.opponentTendencies),
         { totalGames: gamesTruncated ? null : filteredGames.length, sampleLimit: OPPONENT_PROFILE_ANALYSIS_MAX_GAMES, sampled: gamesTruncated },
       ),
+      analyzedGameIds: analyticalFilteredGames
+        .filter((game) => typeof game.gameId === "string" && game.gameId.length > 0)
+        .map((game) => game.gameId),
       analysisSampleSize: analyticalFilteredGames.length,
       analysisSampleLimit: OPPONENT_PROFILE_ANALYSIS_MAX_GAMES,
       analysisSampleTruncated,
+      analysisCohortSize: filteredGames.length,
+      buildOrdersAvailable: analyticalFilteredGames.filter((game) => game.oppBuildLog.length > 0).length,
+      buildOrdersTotal: analyticalFilteredGames.length,
+      yourBuildOrdersAvailable: analyticalFilteredGames.filter((game) => game.buildLog.length > 0).length,
       gamesTruncated,
-      games: filteredGames,
     };
+    return opts.includeProfile ? { ...profile, ...analysis } : analysis;
   }
 
   /**
@@ -4121,15 +4172,14 @@ function computeTotals(games, doc) {
  * to keep the method short.
  *
  * @param {Array<object>} games slim cohort used for counts/tendencies
- * @param {Array<object>} [timingGames] bounded detail-backed timing sample
+ * @param {Array<object>|null} [timingGames] bounded detail-backed timing sample
  */
 function computeDnaFields(games, timingGames = games) {
   const myRace = Dna.resolveMyRace(games);
   const oppRaceModal = Dna.resolveModalOppRace(games);
-  const medianTimings = Dna.computeMatchupAwareMedianTimings(
-    timingGames,
-    myRace,
-  );
+  const medianTimings = timingGames
+    ? Dna.computeMatchupAwareMedianTimings(timingGames, myRace)
+    : {};
   const medianTimingsOrder = Object.keys(medianTimings);
   const matchupLabel = TimingCatalog.matchupLabel(myRace, oppRaceModal);
 
@@ -4146,7 +4196,7 @@ function computeDnaFields(games, timingGames = games) {
   }
   /** @type {Record<string, {timings: object, order: string[]}>} */
   const matchupTimings = {};
-  if (myRace) {
+  if (myRace && timingGames) {
     for (const ml of Object.keys(matchupCounts)) {
       const opp = ml.slice(-1);
       const t = Dna.computeMedianTimingsForMatchup(

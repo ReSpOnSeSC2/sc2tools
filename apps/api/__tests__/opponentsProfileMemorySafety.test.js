@@ -89,7 +89,7 @@ describe("OpponentsService profile detail memory bounds", () => {
       gameDetails,
     });
 
-    const out = await service.get(userId, pulseId);
+    const out = await service.getAnalysis(userId, pulseId, { includeProfile: true });
 
     expect(out.games).toHaveLength(101);
     expect(out.totals).toMatchObject({ wins: 51, losses: 50, total: 101 });
