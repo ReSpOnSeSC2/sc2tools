@@ -7,6 +7,14 @@ import allowlist from "./accessibility-allowlist.json";
 type Exception = { page: string; theme: string; project: string; rule: string; target: string; reason: string };
 const reviewed = allowlist as Exception[];
 
+/** Optional synthetic production captures for human review, never CI input. */
+export async function captureAccessibility(page: Page, info: TestInfo, label: string, fullPage = false) {
+  if (!process.env.A11Y_SHOTS_DIR) return;
+  const dir = path.resolve(process.env.A11Y_SHOTS_DIR);
+  await mkdir(dir, { recursive: true });
+  await page.screenshot({ path: path.join(dir, `contrast-accessibility-${info.project.name}-${label}.png`), fullPage });
+}
+
 /** Exact page/theme/viewport/rule/target exceptions only; no disabled rules. */
 export async function checkAccessibility(page: Page, info: TestInfo, route: string, theme: string) {
   await page.evaluate(() => document.fonts.ready);
@@ -24,5 +32,8 @@ export async function checkAccessibility(page: Page, info: TestInfo, route: stri
   // Local diagnostic scans cannot disable the CI gate.
   if (process.env.A11Y_COLLECT_ONLY === "1" && !process.env.CI) return;
   const unexpected = issues.filter(issue => !reviewed.some(row => row.reason.trim() && row.page === issue.page && row.theme === issue.theme && row.project === issue.project && row.rule === issue.rule && row.target === issue.target));
+  if (info.project.name !== "tablet-768" && ["/", "/legal/accessibility", "/guides/pvz/stargate-into-glaives"].includes(route)) {
+    await captureAccessibility(page, info, `${theme}-${route.replace(/[^a-z0-9]/gi, "_")}`, route === "/legal/accessibility");
+  }
   expect(unexpected.map(row => ({ ...row, summary: row.summary?.slice(0, 280) })), `${route} ${theme} serious/critical accessibility regressions`).toEqual([]);
 }

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { captureAccessibility } from "./accessibility-check";
 
 test("System follows device changes and updates browser chrome", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
@@ -47,6 +48,7 @@ test("phone navigation traps focus, offers all themes and restores its trigger",
   await expect(drawer).toBeVisible();
   const first = drawer.getByRole("link", { name: "SC2 Tools — home", exact: true });
   await expect(first).toBeFocused();
+  await captureAccessibility(page, info, "dark-menu");
   await page.keyboard.press("Shift+Tab");
   const system = drawer.getByRole("radio", { name: "System", exact: true });
   await expect(system).toBeFocused();
@@ -56,6 +58,7 @@ test("phone navigation traps focus, offers all themes and restores its trigger",
   await page.keyboard.press("Home");
   await expect(drawer.getByRole("radio", { name: "Light", exact: true })).toBeFocused();
   await expect(page.locator("html")).toHaveAttribute("data-theme-mode", "light");
+  await captureAccessibility(page, info, "light-menu");
   await page.keyboard.press("End");
   await expect(system).toBeFocused();
   await expect(system).toHaveAttribute("aria-checked", "true");
@@ -73,6 +76,7 @@ test("compact theme keyboard options restore focus after closing", async ({ page
   await page.keyboard.press("ArrowDown");
   const dialog = page.getByRole("dialog", { name: "Appearance", exact: true });
   await expect(dialog).toBeVisible();
+  await captureAccessibility(page, info, "dark-appearance-dialog");
   const system = dialog.getByRole("radio", { name: "System", exact: true });
   await system.focus();
   await page.keyboard.press("Home");
