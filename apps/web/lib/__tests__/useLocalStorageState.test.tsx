@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
-import { useCallback } from "react";
+import { StrictMode, useCallback } from "react";
 import {
   useLocalStoragePositiveInt,
   useLocalStorageState,
@@ -85,7 +85,43 @@ describe("useLocalStorageState", () => {
   });
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     window.localStorage.clear();
+  });
+
+  it("preserves saved column choices through root StrictMode and a later session", () => {
+    const key = "analyzer.opponents.columns", saved = { pulseId: true, mmr: false };
+    localStorage.setItem(key, JSON.stringify(saved));
+    let observed: object = {};
+    const view = render(<StrictMode><HookProbe storageKey={key} fallback={{}} onState={value => { observed = value; }} /></StrictMode>);
+    expect(observed).toEqual(saved);
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual(saved);
+    view.unmount();
+    render(<StrictMode><HookProbe storageKey={key} fallback={{}} onState={value => { observed = value; }} /></StrictMode>);
+    expect(observed).toEqual(saved);
+    expect(JSON.parse(localStorage.getItem(key)!)).toEqual(saved);
+  });
+
+  it("saves an explicit change before navigation can unmount the page", () => {
+    let setter: (next: number) => void = () => {};
+    render(<HookProbe storageKey="immediate" fallback={1} onState={(_value, next) => { setter = next; }} />);
+    act(() => {
+      setter(23);
+      expect(JSON.parse(localStorage.getItem("immediate")!)).toBe(23);
+    });
+    cleanup();
+    expect(JSON.parse(localStorage.getItem("immediate")!)).toBe(23);
+  });
+
+  it("does not write defaults or another key's value during hydration", () => {
+    localStorage.setItem("first", "7"); localStorage.setItem("second", "9");
+    const writes = vi.spyOn(Storage.prototype, "setItem");
+    let observed = 0;
+    const view = render(<HookProbe storageKey="first" fallback={1} onState={value => { observed = value; }} />);
+    expect(observed).toBe(7);
+    view.rerender(<HookProbe storageKey="second" fallback={2} onState={value => { observed = value; }} />);
+    expect(observed).toBe(9);
+    expect(writes).not.toHaveBeenCalled();
   });
 
   it("returns the fallback when nothing is stored", () => {

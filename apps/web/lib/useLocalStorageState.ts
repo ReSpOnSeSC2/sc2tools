@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 /**
  * SSR-safe persistent state.
@@ -18,9 +18,10 @@ import { useEffect, useRef, useState } from "react";
  * This hook keeps SSR and the first client render in sync by
  * always starting at ``fallback``, then upgrading to the stored
  * value in an effect that runs only on the client after mount.
- * The persist effect is gated on the same ``hydrated`` flag so it
- * cannot clobber a real stored value with the fallback before the
- * read effect ran.
+ * Only explicit changes write to storage. Writing from a mount effect
+ * can save the first render's fallback over the value being restored,
+ * especially during StrictMode's repeated setup or a storage-key change.
+ * The setter writes immediately so navigating away cannot lose a choice.
  *
  * Values are JSON-encoded for forward-compat (objects, arrays, etc.);
  * non-string scalars round-trip cleanly. Malformed values fall back.
@@ -39,17 +40,18 @@ export function useLocalStorageState<T>(
   fallback: T,
   validate?: (raw: unknown) => raw is T,
 ): [T, (next: T) => void] {
-  const [value, setValue] = useState<T>(fallback);
-  const hydratedRef = useRef<boolean>(false);
+  const [state, setState] = useState<{ key: string; value: T }>({ key, value: fallback });
+  const value = state.key === key ? state.value : fallback;
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    let restored = fallback;
     try {
       const raw = window.localStorage.getItem(key);
       if (raw !== null) {
         const parsed = JSON.parse(raw) as unknown;
         if (validate ? validate(parsed) : true) {
-          setValue(parsed as T);
+          restored = parsed as T;
         }
       }
     } catch {
@@ -57,7 +59,7 @@ export function useLocalStorageState<T>(
       // fallback; the next setValue call will overwrite the bad
       // entry with a fresh one.
     }
-    hydratedRef.current = true;
+    setState(current => current.key === key && Object.is(current.value, restored) ? current : { key, value: restored });
     // Intentionally exclude ``fallback`` and ``validate`` from the
     // dependency array — they're typically inline / new each render
     // and re-running the hydration on every render would clobber the
@@ -66,16 +68,16 @@ export function useLocalStorageState<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  useEffect(() => {
-    if (!hydratedRef.current) return;
+  const setValue = useCallback((next: T) => {
+    setState({ key, value: next });
     if (typeof window === "undefined") return;
     try {
-      window.localStorage.setItem(key, JSON.stringify(value));
+      window.localStorage.setItem(key, JSON.stringify(next));
     } catch {
       // Storage quota exceeded or denied — non-fatal; we'll retry on
       // the next setValue.
     }
-  }, [key, value]);
+  }, [key]);
 
   return [value, setValue];
 }
