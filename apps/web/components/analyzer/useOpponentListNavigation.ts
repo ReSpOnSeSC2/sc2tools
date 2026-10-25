@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { usePersistentSort } from "@/components/ui/SortableTh";
 import { OPPONENT_COMPARATORS } from "./opponentListSort";
+import { OPPONENT_DETAIL_SORT_KEYS } from "@/lib/opponentPresentation";
 
 export type MmrImpactFilter = "all" | "tracked" | "net-gain" | "net-loss";
 export type OpponentListLocation = {
@@ -13,7 +14,7 @@ export type OpponentListLocation = {
   prefetch: (href: string) => void;
   navigate: (href: string) => void;
 };
-const SORTS = new Set(["name", "race", "pulseId", "wins", "losses", "winRate", "games", "mmr", "netMmr", "mmrWon", "mmrLost", "lastPlayed"]);
+const SORTS = new Set(["name", "race", "pulseId", "wins", "losses", "winRate", "games", "mmr", "netMmr", "mmrWon", "mmrLost", "lastPlayed", ...OPPONENT_DETAIL_SORT_KEYS]);
 export function readOpponentListQuery(query: string) {
   const params = new URLSearchParams(query);
   const impact = params.get("impact");

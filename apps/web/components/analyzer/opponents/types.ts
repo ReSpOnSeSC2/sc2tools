@@ -1,9 +1,10 @@
 import type { GlobalPlayerIdentity } from "@/lib/opponentGroups";
+import type { OpponentListDetails } from "@/lib/opponentListDetails";
 
 export type OpenOpponent = (id: string, fromLink?: boolean) => boolean;
 export type OpponentExportAction = { count: number; disabled: boolean; download: () => void };
 
-export type Opp = {
+export type Opp = OpponentListDetails & {
   pulseId: string;
   pulseCharacterId?: string | null;
   toonHandle?: string | null;
