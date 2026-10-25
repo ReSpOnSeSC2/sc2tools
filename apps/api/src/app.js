@@ -84,6 +84,7 @@ const { OverlayLiveService } = require("./services/overlayLive");
 const { LiveGameBroker } = require("./services/liveGameBroker");
 const { OpponentChannelsCache } = require("./services/opponentChannels");
 const { GameDeskService } = require("./services/gameDesk");
+const { StreamSeriesService } = require("./services/streamSeries");
 const { AggregationsService } = require("./services/aggregations");
 const { MacroReportService } = require("./services/macroReport");
 const { StreakService } = require("./services/streak");
@@ -635,6 +636,11 @@ function makeServices(deps, clerk, adminClerkIds) {
     engagement: multichatEngagement, games, broker: liveGameBroker, channels: opponentChannels,
     tokens: overlayTokens, bot: twitchChatBot, io: deps.io });
   twitchChatBot.shoutoutLine = userId => gameDesk.shoutoutLine(userId);
+  const streamSeries = new StreamSeriesService({ studio: multichatStudio, games: deps.db.games,
+    tokens: overlayTokens, io: deps.io, onCompleted: async (token, series) => {
+      await multichatEngagement._recordMomentAdmitted(token, { kind: "game-event",
+        reason: `Series ${series.score.you > series.score.opponent ? "won" : "lost"} — Bo${series.format} vs ${series.opponentName}: ${series.score.you}–${series.score.opponent}` });
+    } });
   // Reconnect every enabled bot on boot — best-effort, non-blocking.
   void twitchChatBot.restoreAll();
   const aggregations = new AggregationsService(deps.db, { mmrExpectation });
@@ -898,7 +904,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, rivals, gameContext, tickerFacts, community, aggregations.trendsRequests]) {
+    for (const service of [overlayLive, rivals, gameContext, tickerFacts, community, aggregations.trendsRequests, streamSeries]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
@@ -933,6 +939,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     tiktokChatRelay,
     multichatStudio,
     gameDesk,
+    streamSeries,
     multichatSounds,
     multichatEngagement,
     multichatViewers,
@@ -1434,6 +1441,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       tiktokRelay: services.tiktokChatRelay,
       studio: services.multichatStudio,
       gameDesk: services.gameDesk,
+      series: services.streamSeries,
       sounds: services.multichatSounds,
       engagement: services.multichatEngagement,
       viewers: services.multichatViewers,
@@ -1584,6 +1592,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       liveGameBroker: services.liveGameBroker,
       engagement: services.multichatEngagement,
       ladderMapPool: services.seasons ? services.seasons.ladderMapPool : undefined,
+      series: services.streamSeries,
       replayFiles: services.replayFiles || undefined,
       io: deps.io,
       guideSamples: services.guideSamples,

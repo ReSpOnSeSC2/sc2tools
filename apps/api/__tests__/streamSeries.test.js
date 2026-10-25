@@ -139,3 +139,12 @@ test("an H2H lookup held across invalidation cannot refill the old cache", async
   svc.invalidateForUser(OWNER); release.resolve();
   expect(await pending).toBeNull(); expect(svc.h2h.size).toBe(0);
 });
+test("a Series HTTP/bootstrap read held in H2H is fenced after the token rotates", async () => {
+  await svc.act(token, OWNER, startBody());
+  const original = svc.headToHead.bind(svc), entered = deferred(), release = deferred();
+  jest.spyOn(svc, "headToHead").mockImplementation(async (...args) => { entered.resolve(); await release.promise; return original(...args); });
+  const pending = svc.get(token, OWNER); await entered.promise;
+  const rotated = await tokens.rotate(OWNER, token); expect(rotated.token).toBeTruthy();
+  release.resolve();
+  await expect(pending).rejects.toMatchObject({ code: "invalid_overlay_token" });
+});

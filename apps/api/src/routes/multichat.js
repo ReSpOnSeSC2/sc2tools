@@ -8,6 +8,7 @@ const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
 const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
+const { registerStreamSeriesRoutes } = require("./streamSeries");
 
 const {
   YoutubeChatError,
@@ -66,6 +67,7 @@ const {
  *   tiktokRelay: import('../services/tiktokChatRelay').TikTokChatRelay,
  *   studio: import('../services/multichatStudio').MultichatStudioService,
  *   gameDesk?: import('../services/gameDesk').GameDeskService,
+ *   series?: import('../services/streamSeries').StreamSeriesService,
  *   sounds?: import('../services/multichatSounds').MultichatSoundsService,
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   viewers?: import('../services/multichatViewers').MultichatViewersService,
@@ -159,6 +161,7 @@ function buildMultichatRouter(deps) {
   };
 
   router.use("/multichat/:token", globalLimiter);
+  registerStreamSeriesRoutes(router, { series: deps.series, limiter, tokenAuth });
 
   router.get(
     "/multichat/:token/config",

@@ -24,9 +24,11 @@ export function newestStudioSnapshot(current: StudioState | null, next: StudioSt
  * their existing GET fallback; this connection supplies immediate saved-state
  * updates without reconnecting when drafts or callback identities change.
  */
-export function useStudioUpdates(token: string, onUpdate: (state: StudioState) => void, enabled = true, controlOnly = false): { status: OverlayConnectionStatus; liveGame: LiveGameEnvelope | null; lastLiveAt: number | null; session: LiveGamePayload["session"] | null; gameStatus: DockGameStatus | null; engagementEvent: unknown } {
+export function useStudioUpdates(token: string, onUpdate: (state: StudioState) => void, enabled = true, controlOnly = false): { status: OverlayConnectionStatus; liveGame: LiveGameEnvelope | null; lastLiveAt: number | null; session: LiveGamePayload["session"] | null; gameStatus: DockGameStatus | null; engagementEvent: unknown; seriesEvent: unknown; lastOpponent: string | null } {
   const [connection, setConnection] = useState<{ token: string; status: OverlayConnectionStatus }>({ token, status: "connecting" });
   const [facts, setFacts] = useState<StudioLiveFacts>({ token, liveGame: null, lastLiveAt: null, session: null, gameStatus: null, engagementEvent: null });
+  const [series, setSeries] = useState<{ token: string; value: unknown }>({ token, value: undefined });
+  const [lastOpponent, setLastOpponent] = useState<{ token: string; name: string } | null>(null);
   const callbackRef = useRef({ token, onUpdate });
   callbackRef.current = { token, onUpdate };
   useEffect(() => {
@@ -76,6 +78,7 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
     const receiveVerified = (raw: unknown) => {
       if (!current() || !raw || typeof raw !== "object" || Array.isArray(raw)) return;
       const value = raw as Record<string, unknown>;
+      if (typeof value.oppName === "string" && value.oppName.trim() && value.oppName.length <= 80) setLastOpponent({ token, name: value.oppName });
       if (!["win", "loss"].includes(String(value.result)) || typeof value.gameKey !== "string") return;
       setFacts(previous => previous.token === token && previous.gameStatus && (previous.gameStatus.gameKey ?? previous.gameStatus.endedGameKey) === value.gameKey
         ? { ...previous, gameStatus: { ...previous.gameStatus, verified: true } } : previous);
@@ -85,6 +88,8 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
     };
     socket.on("overlay:live", receiveVerified);
     socket.on("overlay:engagement", receiveEngagement);
+    const receiveSeries = (raw: unknown) => { if (current()) setSeries({ token, value: raw }); };
+    socket.on("overlay:series", receiveSeries);
     const outgoing = (event: string) => { if (event === "overlay:resync") clearFacts(); };
     socket.on("overlay:liveGame", receiveLive);
     socket.on("overlay:session", receiveSession);
@@ -95,6 +100,7 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
       cancelled = true;
       socket.off("overlay:multichat", receive);
       socket.off("overlay:live", receiveVerified); socket.off("overlay:engagement", receiveEngagement);
+      socket.off("overlay:series", receiveSeries);
       socket.off("overlay:liveGame", receiveLive); socket.off("overlay:session", receiveSession);
       socket.off("connect", clearFacts); socket.off("disconnect", clearFacts);
       socket.offAnyOutgoing?.(outgoing);
@@ -106,5 +112,7 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
     lastLiveAt: enabled && facts.token === token ? facts.lastLiveAt : null,
     session: enabled && facts.token === token ? facts.session : null,
     gameStatus: enabled && facts.token === token ? facts.gameStatus : null,
-    engagementEvent: enabled && facts.token === token ? facts.engagementEvent : null };
+    engagementEvent: enabled && facts.token === token ? facts.engagementEvent : null,
+    seriesEvent: enabled && series.token === token ? series.value : undefined,
+    lastOpponent: enabled && lastOpponent?.token === token ? lastOpponent.name : null };
 }

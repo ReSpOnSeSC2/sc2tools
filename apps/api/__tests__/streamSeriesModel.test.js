@@ -55,6 +55,11 @@ test("stored Victory/Defeat and legacy result spellings score exactly once per p
   expect(third.score).toEqual({ you: 2, opponent: 1 });
   expect(third.revision).toBe(4);
 });
+test("ingest-normalized string IDs retain the shared 200-character limit, while legacy numeric IDs are not new ingests", () => {
+  expect(scoreSeriesGame(begin(), game({ gameId: "123" }), NOW)).not.toBeNull();
+  expect(scoreSeriesGame(begin(), game({ gameId: "x".repeat(200) }), NOW)).not.toBeNull();
+  for (const gameId of [123, 0, "", "x".repeat(201)]) expect(scoreSeriesGame(begin(), game({ gameId }), NOW)).toBeNull();
+});
 test("ties consume a recorded map without inventing wins, losses or completion", () => {
   const next = scoreSeriesGame(begin(), game({ result: "Tie" }), NOW);
   expect(next.score).toEqual({ you: 0, opponent: 0 });
@@ -74,6 +79,10 @@ test("manual correction is bounded, retains dedupe and can reopen an accidentall
   expect(scoreSeriesGame(reopen, game(), NOW)).toBeNull();
   expect(editSeries(reopen, { action: "adjust", revision: reopen.revision, side: "you", delta: -1 }, NOW).score.you).toBe(0);
   expect(() => editSeries(complete, { action: "adjust", revision: complete.revision, side: "opponent", delta: 1 }, NOW)).toThrow("series_already_decided");
+});
+test("manual completion before a replay does not claim a planned map was played", () => {
+  const manuallyWon = editSeries(begin({ format: 1 }), { action: "adjust", revision: 1, side: "you", delta: 1 }, NOW);
+  expect(publicSeries(manuallyWon)).toMatchObject({ status: "complete", gamesPlayed: 0, currentMap: null, nextMap: null });
 });
 test("stale manual operations and malformed actions fail closed; explicit End never reopens", () => {
   const series = begin();

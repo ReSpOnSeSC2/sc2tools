@@ -90,6 +90,7 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *   resolveVoicePrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveRandomizerPrefs?: (userId: string) => Promise<Record<string, unknown> | null>,
  *   resolveStudioState?: (token: string) => Promise<Record<string, unknown> | null>,
+ *   resolveSeries?: (token: string, owner: string) => Promise<Record<string, unknown> | null>,
  *   resolvePlatformEvents?: (userId: string) => Promise<Array<Record<string, unknown>>>,
  *   resolveLiveSnapshot?: (userId: string) => {
  *     prelude?: object|null,
@@ -292,6 +293,7 @@ function attachSocketAuth(io, opts) {
       if (t && opts.resolveStudioState) {
         replayOverlayStudioState(socket, opts.resolveStudioState, t);
       }
+      if (t && u && opts.resolveSeries) replayOverlaySeries(socket, opts.resolveSeries, t, u);
       if (u && opts.resolvePlatformEvents) {
         replayOverlayPlatformEvents(socket, opts.resolvePlatformEvents, u);
       }
@@ -386,6 +388,7 @@ function attachSocketAuth(io, opts) {
         if (t && opts.resolveStudioState) {
           replayOverlayStudioState(socket, opts.resolveStudioState, t);
         }
+        if (t && opts.resolveSeries) replayOverlaySeries(socket, opts.resolveSeries, t, userId);
         if (opts.resolvePlatformEvents) {
           replayOverlayPlatformEvents(socket, opts.resolvePlatformEvents, userId);
         }
@@ -610,6 +613,17 @@ function replayOverlayStudioState(socket, resolveStudioState, token) {
       // The client's GET + slow poll remain as a fallback. Studio state must
       // never make an otherwise healthy overlay socket fail to connect.
     });
+}
+
+/** Series snapshots have monotonic revisions, including manual controls and
+ * new Start, so a held bootstrap cannot overwrite a newer live event.
+ * @param {{data:Record<string,any>,connected?:boolean,emit:(event:string,payload:unknown)=>unknown}} socket
+ * @param {(token:string,owner:string)=>Promise<Record<string,unknown>|null>} resolve
+ * @param {string} token @param {string} owner */
+function replayOverlaySeries(socket, resolve, token, owner) {
+  Promise.resolve().then(() => resolve(token, owner)).then(series => {
+    if (socket.connected !== false && socket.data.overlayToken === token && socket.data.overlayUserId === owner) socket.emit("overlay:series", series);
+  }).catch(() => {});
 }
 
 /**

@@ -25,6 +25,7 @@ export function useDockSummaries(studio: StudioState, ready: boolean, platforms:
   const timerLeft = studio.timer ? Math.max(0, studio.timer.endsAt - now) : 0;
   return {
     "dock-game": { summary: studio.gameWidgetsPaused ? "Game widgets hidden" : "Match & session controls", active: studio.gameWidgetsPaused, loading: !ready },
+    "dock-series": { summary: "No active series" },
     "dock-scout": { summary: "Live opponent brief" },
     "dock-chat": { summary: `${count} ${count === 1 ? "platform" : "platforms"}`, loading: !platformsReady || !ready },
     "dock-highlight": { summary: studio.highlight ? "Pinned" : "Nothing pinned", active: !!studio.highlight, loading: !ready },

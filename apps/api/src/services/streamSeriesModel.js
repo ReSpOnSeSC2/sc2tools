@@ -4,6 +4,7 @@ const { createHash } = require("crypto");
 const { parseAccounts } = require("../util/accountFilter");
 const { resultBucket } = require("../util/parseQuery");
 const { isStatsGame } = require("../util/gameVisibility");
+const { LIMITS } = require("../config/constants");
 
 const FORMATS = Object.freeze([1, 3, 5, 7]);
 const MAX_SERIES_GAMES = 80;
@@ -105,7 +106,10 @@ function scoreSeriesGame(series, game, now) {
   if (series.status !== "active" || !isStatsGame(game) || game.isTest === true || game.isResumedFromReplay === true
     || !matchesSeriesOpponent(series, game)) return null;
   const startedAt = timestamp(game.startedAt), endedAt = timestamp(game.date);
-  const gameId = typeof game.gameId === "string" && game.gameId.length <= 128 ? game.gameId : "";
+  // POST /games validates a nonempty string (including numeric-looking
+  // strings) at this shared ceiling. Historical numeric database IDs never
+  // enter this accepted-ingest path and are not coerced into new receipts.
+  const gameId = typeof game.gameId === "string" && game.gameId.length <= LIMITS.GAME_ID_MAX_LENGTH ? game.gameId : "";
   const result = resultBucket(game.result) ?? (["tie", "draw"].includes(String(game.result).toLowerCase()) ? "draw" : null);
   if (!gameId || !result || startedAt === null || endedAt === null || startedAt <= series.startedAt
     || endedAt < startedAt || endedAt > now + 60_000) return null;
@@ -146,10 +150,12 @@ function editSeries(series, body, now) {
 function publicSeries(series) {
   if (!series) return null;
   const index = series.status === "active" || series.status === "paused" ? series.games.length : Math.max(0, series.games.length - 1);
+  const finished = series.status === "complete" || series.status === "ended";
   return { v: 1, revision: series.revision, format: series.format, opponentName: series.opponentName,
     maps: series.maps, score: series.score, status: series.status, startedAt: series.startedAt,
     playerRace: series.playerRace, opponentRace: series.opponentRace, gamesPlayed: series.games.length,
-    currentMap: series.maps[index] ?? null, nextMap: series.maps[index + 1] ?? null,
+    currentMap: finished ? series.games.at(-1)?.map ?? (series.games.length ? series.maps[index] ?? null : null) : series.maps[index] ?? null,
+    nextMap: finished ? null : series.maps[index + 1] ?? null,
     games: series.games.map(({ result, map }) => ({ result, map })) };
 }
 

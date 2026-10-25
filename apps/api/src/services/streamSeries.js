@@ -40,7 +40,11 @@ class StreamSeriesService {
   async get(token, owner) {
     await this._checkOwner(token, owner);
     const row = await this.studio._findDocument(token, { projection: { streamSeries: 1 } });
-    return this.snapshot(owner, readSeries(row?.streamSeries));
+    const snapshot = await this.snapshot(owner, readSeries(row?.streamSeries));
+    // H2H/Mongo may have been held while this bearer was rotated/revoked.
+    // Both HTTP and socket bootstrap use this same final ownership fence.
+    await this._checkOwner(token, owner);
+    return snapshot;
   }
 
   /** @param {string} owner @param {ReturnType<typeof readSeries>} stored */
@@ -90,8 +94,7 @@ class StreamSeriesService {
       const next = body.action === "start" ? startSeries(body, this.now(), randomUUID(), body.revision + 1)
         : current ? editSeries(current, body, this.now()) : null;
       if (!next) throw seriesError(409, "series_not_started");
-      await this.commit(token, owner, row.streamSeries, next);
-      return this.snapshot(owner, next);
+      return this.commit(token, owner, row.streamSeries, next);
     });
   }
 
@@ -107,13 +110,15 @@ class StreamSeriesService {
     }, { $set: { streamSeries: next, updatedAt: new Date(this.now()) } });
     if (!written.matchedCount) throw seriesError(409, "series_changed");
     const dto = await this.snapshot(owner, next);
+    await this._checkOwner(token, owner);
     this.io?.to(`overlay:${token}`).emit("overlay:series", dto);
     // The durable receipt makes ambiguous/retried writes unable to repeat the
     // advisory moment. Completion never reconnects or enables a provider.
     if (completed && dto) {
       try { await this.onCompleted?.(token, dto); } catch { /* moment is advisory */ }
     }
-    return next;
+    await this._checkOwner(token, owner);
+    return dto;
   }
 
   /** All accepted non-synthetic rows, not merely the freshest live payload,
