@@ -88,14 +88,23 @@ const pointHit = locator => locator.evaluate(node => { const rect = node.getBoun
     }
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: 'reduce' }); await context.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
     for (const suffix of ['', '/widget/mmr-delta', '/scene/between-games']) {
-      const page = await context.newPage(); await page.clock.install(); await page.goto(`${origin}/overlay/${token}${suffix}`); await page.waitForFunction(() => window.fixtureProfileReady === true);
+      const page = await context.newPage(); await page.clock.install(); await page.goto(`${origin}/overlay/${token}${suffix}`); await page.waitForFunction(() => window.fixtureProfileReady === true); const initialTime = await page.evaluate(() => Date.now()); await page.clock.pauseAt(new Date(initialTime + 1000));
       await page.evaluate(() => window.fixtureConfig({ v: 1, theme: { accent: '#abcdef' }, widgetOptions: { 'mmr-delta': { durationSec: 45 } } }, 2));
       if (!suffix.includes('/scene/')) await page.evaluate(() => window.fixtureLive({ gameKey: 'synthetic-initial', mmrDelta: 18, myMmr: 4218 }));
       await expect(page.locator('[style*="--ov-accent"]').first()).toHaveCSS('--ov-accent', '#abcdef'); checks++;
       await page.evaluate(() => window.fixtureConfig({ v: 1, theme: { accent: '#000000' }, widgetOptions: {} }, 1)); await expect(page.locator('[style*="--ov-accent"]').first()).toHaveCSS('--ov-accent', '#abcdef'); checks++;
       if (!suffix.includes('/scene/')) {
         await page.evaluate(() => window.fixtureLive({ gameKey: 'synthetic-one', mmrDelta: 18, myMmr: 4218 })); await expect(page.getByText('+18', { exact: true })).toBeVisible(); await page.clock.runFor(11_000); await expect(page.getByText('+18', { exact: true })).toBeVisible(); await page.clock.runFor(34_000); await expect(page.getByText('+18', { exact: true })).toHaveCount(0); checks++;
-        for (const [duration, revision] of [[60, 3], [5, 4]]) { await page.evaluate(({ duration, revision }) => { window.fixtureConfig({ v: 1, theme: { accent: '#abcdef' }, widgetOptions: { 'mmr-delta': { durationSec: duration } } }, revision); window.fixtureLive({ gameKey: 'sample', mmrDelta: 18, isTest: true, testWidget: 'mmr-delta', testNonce: revision }); }, { duration, revision }); await expect(page.getByText('+18', { exact: true })).toBeVisible(); await page.clock.runFor(Math.min(duration, 20) * 1000 - 1); await expect(page.getByText('+18', { exact: true })).toBeVisible(); await page.clock.runFor(1); await expect(page.getByText('+18', { exact: true })).toHaveCount(0); checks++; }
+        for (const [duration, revision] of [[60, 3], [5, 4]]) {
+          await page.evaluate(({ duration, revision }) => {
+            window.fixtureConfig({ v: 1, theme: { accent: '#abcdef' }, widgetOptions: { 'mmr-delta': { durationSec: duration } } }, revision);
+            window.fixtureLive({ gameKey: 'sample', mmrDelta: 18, isTest: true, testWidget: 'mmr-delta', testNonce: revision });
+          }, { duration, revision });
+          const sample = page.locator('[data-overlay-layer="test"]').getByText('+18', { exact: true });
+          await expect(sample).toBeVisible(); await page.clock.runFor(Math.min(duration, 20) * 1000 - 1); await expect(sample).toBeVisible();
+          await page.clock.runFor(1); await expect(sample).toHaveCount(0);
+          await expect(page.getByText('+18', { exact: true }).filter({ visible: true })).toHaveCount(0); checks++;
+        }
       }
       await page.goto(`${origin}/overlay/${token}${suffix}?theme=`); await page.waitForFunction(() => window.fixtureProfileReady === true); await page.evaluate(() => window.fixtureConfig({ v: 1, theme: { accent: '#abcdef' }, widgetOptions: {} }, 3));
       if (!suffix.includes('/scene/')) await page.evaluate(() => window.fixtureLive({ gameKey: 'synthetic-two', mmrDelta: 18 }));
