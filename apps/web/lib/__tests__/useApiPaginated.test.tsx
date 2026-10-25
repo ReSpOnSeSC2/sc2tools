@@ -51,6 +51,31 @@ afterEach(() => {
 });
 
 describe("useApiPaginated account changes", () => {
+  it("does not send a held A JWT after switching to B, even when it resolves with B credentials", async () => {
+    const token = deferred<string>(); harness.auth.getToken.mockReturnValueOnce(token.promise);
+    const fetcher = vi.fn(async () => pageResponse([{ id: "b-1" }])); vi.stubGlobal("fetch", fetcher);
+    const view = renderHook(() => useApiPaginated<{ id: string }>("/v1/opponents", 1));
+    await waitFor(() => expect(harness.auth.getToken).toHaveBeenCalledOnce());
+    harness.auth.userId = "user-b"; view.rerender();
+    await waitFor(() => expect(view.result.current.items).toEqual([{ id: "b-1" }]));
+    await act(async () => token.resolve("token-user-b"));
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a held A body through A→B→A and retains the new A rows", async () => {
+    const body = deferred<{ items: { id: string }[]; nextBefore: null }>();
+    const fetcher = vi.fn().mockResolvedValueOnce({ ok: true, json: () => body.promise }).mockImplementation(async (_url, init: RequestInit) => pageResponse([{ id: (init.headers as Record<string, string>).authorization === "Bearer token-user-b" ? "b-1" : "a-new" }]));
+    vi.stubGlobal("fetch", fetcher);
+    const view = renderHook(() => useApiPaginated<{ id: string }>("/v1/opponents", 1));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledOnce());
+    harness.auth.userId = "user-b"; view.rerender();
+    await waitFor(() => expect(view.result.current.items).toEqual([{ id: "b-1" }]));
+    harness.auth.userId = "user-a"; view.rerender();
+    await waitFor(() => expect(view.result.current.items).toEqual([{ id: "a-new" }]));
+    await act(async () => body.resolve({ items: [{ id: "a-old" }], nextBefore: null }));
+    expect(view.result.current.items).toEqual([{ id: "a-new" }]);
+  });
+
   it("clears and aborts user A pages while a slow failing A request retires", async () => {
     const slowA = deferred<Response>();
     const signals = new Map<string, AbortSignal>();

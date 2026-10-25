@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Save } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { BuildEditorModal } from "@/components/builds/editor";
+import { LazyBuildEditorModal as BuildEditorModal } from "@/components/builds/editor/LazyBuildEditorModal";
 import type { BuildOrderEvent } from "@/lib/build-events";
 import type {
   BuildEventRow,
