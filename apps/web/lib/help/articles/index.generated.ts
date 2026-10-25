@@ -52,6 +52,7 @@ import desktopApp_desktopCompanion from "./desktop-app/desktop-companion";
 import desktopApp_desktopScouting from "./desktop-app/desktop-scouting";
 import desktopApp_pairingTroubleshooting from "./desktop-app/pairing-troubleshooting";
 import desktopApp_replayFolders from "./desktop-app/replay-folders";
+import gamePage_benchmarks from "./game-page/benchmarks";
 import gamePage_gamePageAccuratePlayback from "./game-page/game-page-accurate-playback";
 import gamePage_gamePageReplay from "./game-page/game-page-replay";
 import gamePage_gamePage from "./game-page/game-page";
@@ -128,6 +129,7 @@ export const ALL_HELP_ARTICLES: readonly HelpArticle[] = [
   desktopApp_desktopScouting,
   desktopApp_pairingTroubleshooting,
   desktopApp_replayFolders,
+  gamePage_benchmarks,
   gamePage_gamePageAccuratePlayback,
   gamePage_gamePageReplay,
   gamePage_gamePage,

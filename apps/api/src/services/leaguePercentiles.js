@@ -193,7 +193,18 @@ class LeaguePercentilesService {
       )
     );
     if (!row || typeof row.n !== "number" || row.n < MIN_SAMPLE) return null;
-    return /** @type {PercentileRow} */ (row);
+    // A sufficiently large band can still have one metric supplied by only a
+    // handful of players. Suppress its distribution in the payload itself,
+    // rather than relying on the caller to hide only its percentile label.
+    /** @type {Record<string,MetricTable>} */
+    const metrics = {};
+    for (const metric of METRICS) {
+      const item = row.metrics?.[metric];
+      const n = typeof item?.n === "number" && Number.isFinite(item.n) ? item.n : 0;
+      metrics[metric] = { n, deciles: n >= MIN_SAMPLE ? sanitizeDeciles(item?.deciles) : null };
+    }
+    return { leagueId: row.leagueId, league: row.league, matchup: row.matchup,
+      n: row.n, metrics, updatedAt: row.updatedAt };
   }
 
   /**

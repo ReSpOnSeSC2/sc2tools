@@ -13,6 +13,7 @@ const {
 } = require("../middleware/replayIngestAdmission");
 const { registerGamesExistsRoute } = require("./gamesExists");
 const { registerGameNeighborsRoute } = require("./gameNeighbors");
+const { registerGameContextRoute } = require("./gameContext");
 const { normalizePoolBuildNames } = require("../util/poolBuildNames");
 const {
   stampIngestProvenance,
@@ -77,6 +78,7 @@ function captureGuideSample(guideSamples, userId, game, customTag, created) {
  *
  * @param {{
  *   games: import('../services/types').GamesService,
+ *   gameContext?: import('../services/gameContext').GameContextService,
  *   opponents: import('../services/types').OpponentsService,
  *   users?: {
  *     addPulseId: (userId: string, pulseId: string) => Promise<boolean>,
@@ -162,6 +164,7 @@ function buildGamesRouter(deps) {
   // Declared before every ``/games/:gameId`` route so the literal path wins.
   registerGamesExistsRoute(router, { games: deps.games });
   registerGameNeighborsRoute(router, { games: deps.games });
+  registerGameContextRoute(router, { gameContext: deps.gameContext });
 
   router.get("/games", async (req, res, next) => {
     try {
