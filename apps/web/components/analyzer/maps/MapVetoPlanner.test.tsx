@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MapVetoPlanner } from "./MapVetoPlanner";
+import { POOL_MAX_AGE_MS } from "@/lib/currentMapPool";
 
 const state = vi.hoisted(() => ({ now: Date.now(), filters: { race: "P", opp_race: "T", since: "2026-10-01" } as Record<string, string>, source: "persisted" as "persisted" | "fallback", age: 0, error: false, stale: false, paths: [] as (string | null)[], copied: vi.fn(), retry: vi.fn() }));
 const CELLS = [{ map: "Alpha LE", matchup: "vs Z", wins: 1, losses: 9, total: 10 }, { map: "Beta", matchup: "vs Z", wins: 9, losses: 1, total: 10 }, { map: "Tiny", matchup: "vs Z", wins: 0, losses: 4, total: 10 }];
@@ -12,9 +13,21 @@ vi.mock("@/components/maps/MapArtwork", () => ({ MapLabel: ({ name }: { name: st
 vi.mock("@/components/help/LazyHelpLink", () => ({ LazyHelpLink: () => <span>Help</span> }));
 
 beforeEach(() => { state.now = Date.now(); state.age = 0; state.source = "persisted"; state.error = false; state.stale = false; state.filters = { race: "P", opp_race: "T", since: "2026-10-01" }; state.paths = []; state.copied.mockReset(); state.copied.mockResolvedValue(undefined); state.retry.mockReset(); Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: state.copied } }); });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("map veto planner", () => {
+  it("expires suggestions on a long-open page while preserving the selected 90-day sample anchor", () => {
+    vi.useFakeTimers(); vi.setSystemTime(state.now); state.age = POOL_MAX_AGE_MS - 30_000;
+    render(<MapVetoPlanner openGames={vi.fn()} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Sample window" }), { target: { value: "90d" } });
+    const sample = state.paths.filter((path) => path?.includes("/maps/matchups")).at(-1);
+    expect(screen.getByText("Suggested veto")).toBeTruthy();
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(screen.queryByText("Suggested veto")).toBeNull();
+    expect((screen.getByRole("button", { name: "Copy veto list" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(state.paths.filter((path) => path?.includes("/maps/matchups")).at(-1)).toBe(sample);
+  });
+
   it("uses a bounded shared sample, real rankings, community side, copy and cell drilldowns", async () => {
     const open = vi.fn(); render(<MapVetoPlanner openGames={open} />);
     expect((screen.getByRole("combobox", { name: "Ranking matchup" }) as HTMLSelectElement).value).toBe("Z");
@@ -23,7 +36,7 @@ describe("map veto planner", () => {
     const alpha = screen.getByRole("button", { name: "View games on Alpha" }).closest("tr")!;
     expect(within(alpha).getByText("Suggested veto")).toBeTruthy(); expect(within(alpha).getByText(/Community 55/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "View vs Z games on Alpha" }));
-    expect(open).toHaveBeenCalledWith({ map: "Alpha LE", opponent: "Z", filters: { race: "P", opp_race: undefined, since: "2026-10-01" } });
+    expect(open).toHaveBeenCalledWith({ map: "Alpha LE", maps: ["Alpha LE"], opponent: "Z", filters: { race: "P", opp_race: undefined, since: "2026-10-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Copy veto list" })); await waitFor(() => expect(state.copied).toHaveBeenCalledWith("Suggested SC2 vetoes vs Z: Alpha"));
     expect(new Set(state.paths.filter((path) => path?.startsWith("/v1/maps/matchups"))).size).toBe(1);
     expect(state.paths.some((path) => path?.includes("/games"))).toBe(false);

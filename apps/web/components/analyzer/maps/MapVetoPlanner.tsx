@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import { filtersToQuery, useFilters, type AnalyzerFilters } from "@/lib/filterContext";
 import { useSeasons } from "@/lib/useSeasons";
-import { currentPool } from "@/lib/currentMapPool";
+import { useCurrentMapPool } from "@/lib/useCurrentMapPool";
 import { mostPlayedMapMatchup, poolMapRows, vetoMaps, type MapFormStats, type MapMatchupStats } from "@/lib/mapVeto";
 import { useGuideMapPool } from "@/lib/useGuideMapPool";
 import { Card } from "@/components/ui/Card";
@@ -39,7 +39,7 @@ export function MapVetoPlanner({ openGames }: { openGames: (drill: MapGamesDrill
   const cells = useApi<MapMatchupStats[]>(`/v1/maps/matchups${filtersToQuery(scope)}#${dbRev}`, { keepPreviousData: false });
   const matchup = choice ?? mostPlayedMapMatchup(cells.data ?? [], filters.race?.[0]?.toUpperCase() === "R");
   const forms = useApi<MapFormStats[]>(choice !== null || cells.data !== undefined ? `/v1/maps${filtersToQuery({ ...scope, opp_race: matchup || undefined })}#${dbRev}` : null, { keepPreviousData: false });
-  const pool = currentPool(catalog.data, now); const rows = poolMapRows(pool.maps, cells.isPreviousData ? [] : cells.data ?? [], forms.isPreviousData ? [] : forms.data ?? []);
+  const pool = useCurrentMapPool(catalog.data); const rows = poolMapRows(pool.maps, cells.isPreviousData ? [] : cells.data ?? [], forms.isPreviousData ? [] : forms.data ?? []);
   const suggested = pool.fresh && !cells.error && !cells.isPreviousData ? vetoMaps(rows, matchup, count) : [];
   const mine = filters.race?.[0]?.toUpperCase() ?? "";
   return <Card title="Current ladder pool" right={<LazyHelpLink slug="maps">How to use</LazyHelpLink>} className="min-w-0">
@@ -53,7 +53,7 @@ export function MapVetoPlanner({ openGames }: { openGames: (drill: MapGamesDrill
         <QueryState q={cells} errorTitle="Couldn't load your map sample" filtered isEmpty={() => false}>{() => <MapVetoTable rows={rows} suggested={suggested} matchup={matchup} mine={mine} community={community.data?.maps ?? []} openGames={(drill) => openGames({ ...drill, filters: scope })} />}</QueryState>
         {cells.error && cells.data ? <p role="status" className="text-caption text-warning">The displayed map sample could not refresh; recommendations are paused. <button type="button" className="min-h-11 text-accent underline" onClick={() => { void cells.mutate(); }}>Retry sample</button></p> : null}
         {forms.error ? <p className="text-micro text-text-muted">Recent form is unavailable. <button className="min-h-11 text-accent underline" onClick={() => { void forms.mutate(); }}>Retry form</button></p> : null}
-        <p className="text-micro text-text-dim">{community.data?.computedAt ? `Community snapshot ${new Date(community.data.computedAt).toLocaleDateString()}, ${community.data.era === "after" ? "12" : "8"} starting workers. Personal and community sample windows may differ.` : "Community snapshot unavailable."}{!/^[PTZ]$/.test(mine) ? " Choose your race in the filter bar for individual-matchup community comparisons." : " Community comparisons use the selected race's side; unpublished cells stay unavailable."}</p>
+        <p className="text-micro text-text-dim">{community.data?.computedAt ? `Community ranked 1v1 snapshot ${new Date(community.data.computedAt).toLocaleDateString()}, ${community.data.era === "after" ? "12" : "8"} starting workers. Your filters and sample window may differ.` : "Community snapshot unavailable."}{!/^[PTZ]$/.test(mine) ? " Choose your race in the filter bar for individual-matchup community comparisons." : " Community comparisons use the selected race's side; unpublished cells stay unavailable."}{community.error ? <> <button type="button" className="min-h-11 text-accent underline" onClick={() => { void community.mutate(); }}>Retry community</button></> : null}</p>
         {!suggested.length && pool.fresh && cells.data && !cells.error && !cells.isPreviousData ? <p className="text-caption text-text-muted">No map has enough decided games for a veto in this matchup.</p> : null}
         <CopyVetoes key={`${suggested.join("|")}:${matchup}`} names={suggested} matchup={matchup} />
       </div>}

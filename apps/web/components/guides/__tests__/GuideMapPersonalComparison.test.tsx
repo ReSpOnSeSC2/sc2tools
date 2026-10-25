@@ -24,7 +24,7 @@ describe("map guide personal comparison", () => {
     expect(screen.queryByText(/Community 55/)).toBeNull();
     fireEvent.change(screen.getByRole("combobox", { name: "Your race" }), { target: { value: "P" } });
     expect(await screen.findByText(/Community 55.*−15.0 pp/)).toBeTruthy();
-    expect(state.paths.at(-1)).toBe("/v1/maps/matchups?patch_era=after&race=P");
+    expect(state.paths.at(-1)).toBe("/v1/maps/matchups?patch_era=after&map_pool=ladder&game_size=1v1&race=P");
     expect(screen.getByRole("link", { name: "Open your maps and veto planner" }).getAttribute("href")).toBe("/app/maps?focus=Alpha");
   });
   it("offers recovery without a false empty sample on request failure", async () => {

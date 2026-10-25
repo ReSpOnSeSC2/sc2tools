@@ -69,6 +69,10 @@ describe("durable game sources", () => {
     expect(gameSourceFilters(`q=${"x".repeat(257)}&map=ok`)).toBe("map=ok");
     expect(gameSourceFilters("q=bad%00value&build=ok")).toBe("build=ok");
     expect(gameSourceFilters("x".repeat(4097))).toBe("");
+    const aliases = JSON.stringify(["Alpha LE", "Alpha"]);
+    const mapSource = safeGameSource("/app/maps", "Maps", new URLSearchParams({ map: "Alpha LE", map_exact: aliases }).toString())!;
+    const restoredMap = gameSourceFromQuery(Object.fromEntries(new URL(gameAnalysisHref("map-game", null, mapSource), "https://example.test").searchParams));
+    expect(new URL(ownerNeighborPath("map-game", "all", restoredMap), "https://example.test").searchParams.get("map_exact")).toBe(aliases);
     const source = safeGameSource("/app/replays?keep=1#archive", "Replays", "race=P&search=Rival")!;
     const roundTrip = gameSourceFromQuery(Object.fromEntries(new URL(gameAnalysisHref("one", null, source), "https://example.test").searchParams));
     expect(roundTrip).toEqual(source);

@@ -7,7 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { BattlefieldTab } from "../BattlefieldTab";
-const poolState = vi.hoisted(() => ({ fresh: false }));
+const poolState = vi.hoisted(() => ({ fresh: false, aliases: false }));
 
 const mapMatchups = [
   {
@@ -54,7 +54,7 @@ const mapMatchups = [
 
 const useApiMock = vi.fn((path: string) => {
   if (path.startsWith("/v1/maps/matchups")) {
-    return { data: mapMatchups, isLoading: false };
+    return { data: poolState.aliases ? [...mapMatchups, { map: "Ancient Cistern LE", matchup: "vs Z", wins: 1, losses: 1, total: 2, winRate: 0.5 }] : mapMatchups, isLoading: false };
   }
   if (path.startsWith("/v1/matchups")) {
     return {
@@ -88,9 +88,9 @@ vi.mock("@/lib/useLocalStorageState", async (original) => ({
 }));
 vi.mock("@/lib/useSeasons", () => ({ useSeasons: () => ({ data: poolState.fresh ? { mapPool: ["Ancient Cistern LE"], mapPoolSource: "persisted", mapPoolFetchedAt: Date.now() } : undefined }) }));
 vi.mock("../maps/MapVetoPlanner", () => ({ MapVetoPlanner: () => null }));
-vi.mock("../maps/MapGamesModal", () => ({ MapGamesModal: ({ drill }: { drill: { map: string; opponent?: string } | null }) => drill ? <div role="dialog" aria-label="Map games">{drill.map} {drill.opponent}</div> : null }));
+vi.mock("../maps/MapGamesModal", () => ({ MapGamesModal: ({ drill }: { drill: { map: string; maps?: string[]; opponent?: string } | null }) => drill ? <div role="dialog" aria-label="Map games">{drill.map} {drill.opponent}<output aria-label="Exact map aliases">{JSON.stringify(drill.maps)}</output></div> : null }));
 
-beforeEach(() => { poolState.fresh = false; localStorage.clear(); window.history.replaceState(null, "", "/app/maps"); });
+beforeEach(() => { poolState.fresh = false; poolState.aliases = false; localStorage.clear(); window.history.replaceState(null, "", "/app/maps"); });
 
 vi.mock("@/components/maps/MapPreviewDialog", () => ({
   MapPreviewDialog: ({
@@ -125,6 +125,15 @@ function mapOrder(): string[] {
 }
 
 describe("BattlefieldTab map performance", () => {
+  it("combines edition aliases once and drills the complete cohort represented by its record", () => {
+    poolState.aliases = true; render(<BattlefieldTab />);
+    expect(document.querySelectorAll("#map-ancientcistern")).toHaveLength(1);
+    const group = screen.getByRole("button", { name: "View games on Ancient Cistern" }).closest("li")!;
+    expect(within(group).getByText("6W")).toBeTruthy(); expect(within(group).getByText("3L")).toBeTruthy();
+    fireEvent.click(within(group).getByRole("button", { name: "View vs Z games on Ancient Cistern" }));
+    expect(screen.getByLabelText("Exact map aliases").textContent).toBe('["Ancient Cistern","Ancient Cistern LE"]');
+  });
+
   it("defaults to a fresh current pool using edition matching and can show every map", () => {
     poolState.fresh = true; render(<BattlefieldTab />);
     expect(screen.getByRole("switch", { name: "Current ladder pool only" }).getAttribute("aria-checked")).toBe("true");

@@ -52,6 +52,14 @@ describe("defaultAnalyzerFilters", () => {
 });
 
 describe("describeActiveFilters", () => {
+  it("clears the full exact alias cohort with the visible map chip", () => {
+    const filters = { map: "Alpha LE", map_exact: '["Alpha LE","Alpha"]', map_exact_label: "Alpha LE" };
+    const chip = describeActiveFilters(filters).find((entry) => entry.key === "map")!;
+    const cleared = applyFilterPatch(filters, chip.clearPatch);
+    expect(filtersToQuery(cleared)).toBe("");
+    expect(cleared.map_exact).toBeUndefined(); expect(cleared.map_exact_label).toBeUndefined();
+  });
+
   it("lists nothing for the defaults", () => {
     expect(describeActiveFilters(DEFAULTS)).toEqual([]);
     expect(describeActiveFilters({ ...DEFAULT_ANALYZER_FILTERS })).toEqual([]);

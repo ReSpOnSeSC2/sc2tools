@@ -1,10 +1,10 @@
 import { currentMapPoolKey } from "./currentMapPool";
 import type { GuideCi, GuideIndexMap } from "./guides/types";
 
-export type MapMatchupStats = { map: string; matchup: string; wins: number; losses: number; total: number; winRate?: number };
+export type MapMatchupStats = { map: string; matchup: string; wins: number; losses: number; total: number; winRate?: number | null };
 export type MapFormStats = { name: string; wins: number; losses: number; total: number; recent?: ("win" | "loss")[] };
 export type MapRecord = { wins: number; losses: number; total: number; decided: number; winRate: number | null; ci: GuideCi | null };
-export type VetoMap = { name: string; gameMap: string; all: MapRecord; cells: Record<string, MapRecord>; recent?: ("win" | "loss")[] };
+export type VetoMap = { name: string; gameMap: string; gameMaps: string[]; all: MapRecord; cells: Record<string, MapRecord>; recent?: ("win" | "loss")[] };
 const count = (value: number) => Number.isSafeInteger(value) && value >= 0 ? value : 0;
 
 /** Matches the guides API's 95% Wilson primitive; ties never enter the denominator. */
@@ -25,14 +25,15 @@ export function opponentRace(label: string): string {
 export function poolMapRows(pool: readonly string[], cells: readonly MapMatchupStats[], forms: readonly MapFormStats[] = []): VetoMap[] {
   return pool.map((name) => {
     const key = currentMapPoolKey(name), matches = cells.filter((row) => currentMapPoolKey(row.map) === key);
+    const formRows = forms.filter((row) => currentMapPoolKey(row.name) === key);
     const all = mapRecord(), byRace: Record<string, MapRecord> = {};
     for (const row of matches) {
       const race = opponentRace(row.matchup), old = byRace[race] ?? mapRecord();
       byRace[race] = mapRecord(old.wins + count(row.wins), old.losses + count(row.losses), old.total + count(row.total));
       all.wins += count(row.wins); all.losses += count(row.losses); all.total += count(row.total);
     }
-    return { name, gameMap: matches[0]?.map ?? name, all: mapRecord(all.wins, all.losses, all.total), cells: byRace,
-      recent: forms.find((row) => currentMapPoolKey(row.name) === key)?.recent };
+    return { name, gameMap: matches[0]?.map ?? name, gameMaps: [...new Set(matches.map((row) => row.map))], all: mapRecord(all.wins, all.losses, all.total), cells: byRace,
+      recent: formRows.length === 1 ? formRows[0].recent?.slice().reverse() : undefined };
   });
 }
 

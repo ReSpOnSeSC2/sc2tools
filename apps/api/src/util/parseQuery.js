@@ -9,6 +9,7 @@
  */
 
 const { PATCH_ERA_AFTER, PATCH_ERA_BEFORE, buildEraMatch } = require("./patchEra");
+const { parseExactMapNames } = require("./exactMapFilter");
 const {
   REGION_HANDLE_PREFIX,
   REGION_LABELS,
@@ -29,6 +30,7 @@ const REGION_CODES = new Set(REGION_LABELS);
  *   race?: 'P'|'T'|'Z'|'R',
  *   oppRace?: 'P'|'T'|'Z'|'R',
  *   map?: string,
+ *   mapExact?: string[],
  *   mmrMin?: number,
  *   mmrMax?: number,
  *   oppStrategy?: string,
@@ -50,8 +52,8 @@ const REGION_CODES = new Set(REGION_LABELS);
  * Parse the standard global filter bar from `req.query`.
  *
  * Returns a normalised filter object the services consume directly.
- * Unknown / invalid params are dropped silently — never throws on bad
- * input from the browser.
+ * Unknown / invalid legacy params are dropped silently. An explicit malformed
+ * exact-map cohort is rejected instead of broadening a drilldown's sample.
  *
  * @param {Record<string, unknown>} q
  * @returns {GlobalFilters}
@@ -78,6 +80,7 @@ function parseFilters(q) {
   if (typeof q.map === "string" && q.map.trim()) {
     out.map = q.map.trim().toLowerCase();
   }
+  if (q.map_exact !== undefined) out.mapExact = parseExactMapNames(q.map_exact);
   const mmrMin = parseFiniteInt(q.mmr_min);
   if (mmrMin !== undefined) out.mmrMin = mmrMin;
   const mmrMax = parseFiniteInt(q.mmr_max);
@@ -251,7 +254,9 @@ function gamesMatchStage(userId, filters) {
   if (f.oppRace) {
     match["opponent.race"] = raceMatcher(f.oppRace);
   }
-  if (f.map) {
+  if (f.mapExact !== undefined) {
+    match.map = { $in: parseExactMapNames(JSON.stringify(f.mapExact)) };
+  } else if (f.map) {
     match.map = caseInsensitiveContains(f.map);
   }
   if (typeof f.mmrMin === "number" || typeof f.mmrMax === "number") {

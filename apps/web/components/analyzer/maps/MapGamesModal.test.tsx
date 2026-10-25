@@ -10,12 +10,12 @@ afterEach(() => { cleanup(); state.paths = []; state.setFilters.mockClear(); });
 describe("map sample drilldown", () => {
   it("fetches one bounded cohort, preserves the selected planner window and filters everything by map", () => {
     window.history.replaceState(null, "", "/app/maps#sample");
-    const close = vi.fn(); render(<MapGamesModal drill={{ map: "Alpha LE", opponent: "T", filters: { since: "2026-09-01", race: "Z" } }} onClose={close} />);
-    expect(new URL(state.paths[0]!, "https://example.test").searchParams.toString()).toBe("since=2026-09-01&race=Z&map=Alpha+LE&opp_race=T&sort=date_desc&limit=100");
+    const close = vi.fn(); render(<MapGamesModal drill={{ map: "Alpha LE", maps: ["Alpha LE", "Alpha"], opponent: "T", filters: { since: "2026-09-01", race: "Z" } }} onClose={close} />);
+    expect(Object.fromEntries(new URL(state.paths[0]!, "https://example.test").searchParams)).toEqual({ since: "2026-09-01", race: "Z", map: "Alpha LE", map_exact: '["Alpha LE","Alpha"]', opp_race: "T", sort: "date_desc", limit: "100" });
     expect(screen.getByText("owned-game: Blink")).toBeTruthy(); expect(screen.getByText("Showing the latest 1 of 101 matching games.")).toBeTruthy();
-    expect(Object.fromEntries(new URLSearchParams(screen.getByLabelText("Game source cohort").textContent!))).toEqual({ since: "2026-09-01", race: "Z", map: "Alpha LE", opp_race: "T" });
+    expect(Object.fromEntries(new URLSearchParams(screen.getByLabelText("Game source cohort").textContent!))).toEqual({ since: "2026-09-01", race: "Z", map: "Alpha LE", map_exact: '["Alpha LE","Alpha"]', opp_race: "T" });
     fireEvent.click(screen.getByRole("button", { name: "Filter everything to this map" }));
-    expect(state.setFilters).toHaveBeenCalledWith({ race: "P", opp_race: "Z", map: "Alpha LE" }); expect(close).toHaveBeenCalledOnce();
+    expect(state.setFilters).toHaveBeenCalledWith({ race: "P", opp_race: "Z", map: "Alpha LE", map_exact: '["Alpha LE","Alpha"]', map_exact_label: "Alpha LE" }); expect(close).toHaveBeenCalledOnce();
     window.history.replaceState(null, "", "/");
   });
 });

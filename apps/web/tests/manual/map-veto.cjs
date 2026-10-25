@@ -18,7 +18,8 @@ const server = http.createServer((req, res) => {
   const json = value => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value)); };
   if (url.pathname === '/v1/seasons') return json(pool);
   if (url.pathname === '/v1/guides') return json(community);
-  const matches = cells.filter(row => (!url.searchParams.get('map') || row.map.toLowerCase().includes(url.searchParams.get('map').toLowerCase())) && (!url.searchParams.get('opp_race') || row.matchup === `vs ${url.searchParams.get('opp_race')}`));
+  const exact = url.searchParams.has('map_exact') ? JSON.parse(url.searchParams.get('map_exact')) : null;
+  const matches = cells.filter(row => (exact ? exact.includes(row.map) : !url.searchParams.get('map') || row.map.toLowerCase().includes(url.searchParams.get('map').toLowerCase())) && (!url.searchParams.get('opp_race') || row.matchup === `vs ${url.searchParams.get('opp_race')}`));
   if (url.pathname === '/v1/maps/matchups') return json(matches);
   if (url.pathname === '/v1/maps') return json(matches.map(row => ({ name: row.map, wins: row.wins, losses: row.losses, total: row.total, recent: ['loss', 'win', 'loss', 'loss', 'win'] })));
   if (url.pathname === '/v1/matchups') return json([{ name: 'vs Z', wins: 11, losses: 17, total: 37, winRate: 0.39, recent: ['win', 'loss'] }]);

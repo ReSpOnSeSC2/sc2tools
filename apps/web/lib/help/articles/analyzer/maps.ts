@@ -39,7 +39,7 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "One block per map with your overall record on it, then a row for each matchup you've played there.",
+        "One block per map with your overall record on it, then a row for each matchup you've played there. Edition aliases are combined; numbered maps such as Sanctuary II and Sanctuary III stay distinct.",
         "Sort the maps by **Win rate**, **Games**, **Wins** or **Losses**, and flip the direction with the button next to it.",
         "Click a map name or matchup to inspect its games. Preview map opens a larger map picture.",
         "Current ladder pool only starts on when the pool source and age are fresh. When pool data is fallback, missing or over eight days old, it starts off and warns you. You can still show every historical map.",
@@ -54,12 +54,12 @@ const article: HelpArticle = {
     { type: "list", items: [
       "Ranking matchup defaults to your most-played opponent race in the sample; a Random race filter defaults to All matchups. This control changes the recommendation while all matchup columns stay visible. The planner compares every opponent race, independently of an opponent-race filter above it.",
       "Choose Filter range, Last 90 days or Current season. Current season needs a measured season start. Other global filters still apply. Set your own race in the filter bar to compare the matching side of the community matchup; mixed-race and unpublished community cells stay unavailable.",
-      "Each cell shows wins, losses, the decided sample n and the likely range. Recent form dots refer to the ranking matchup, oldest to newest. Community numbers show their snapshot date and worker era; their sample window can differ from yours, so a delta is context rather than a controlled comparison.",
+      "Each cell shows wins, losses, the decided sample n and the likely range. Recent form dots refer to the ranking matchup, oldest to newest; form is unavailable when edition variants cannot be ordered reliably. Community numbers show their snapshot date and worker era; their sample window can differ from yours, so a delta is context rather than a controlled comparison.",
       "The pool source, fetch date and age are shown. Stale, missing or fallback pool data disables suggestions and copying until a fresh pool is available. A failed sample refresh also pauses recommendations and offers Retry.",
       "Copy veto list copies only eligible suggestions. If clipboard access is unavailable, a selectable text field appears.",
     ] },
     { type: "heading", text: "Inspect games and compare a map guide", anchor: "map-games" },
-    { type: "paragraph", text: "Every pool map and matchup cell, and every detailed map row, opens the latest 100 matching games. The selected sample filters are preserved. The footer's Filter everything to this map applies that map to all analyzer sections. Public map guides also offer You on this map: sign in to load your own record, choose your race for community comparisons, and open the planner from there." },
+    { type: "paragraph", text: "Every pool map and matchup cell, and every detailed map row, opens the latest 100 matching games. The selected sample filters and observed edition aliases are preserved, including when moving between games. The footer's Filter everything to this map applies that exact map cohort to all analyzer sections; clear its Map chip to remove it. Public map guides also offer You on this map: sign in to load your own current-worker-era ranked 1v1 record, choose your race for community comparisons, and open the planner from there." },
     { type: "heading", text: "How much data it needs", anchor: "sample-size" },
     {
       type: "list",

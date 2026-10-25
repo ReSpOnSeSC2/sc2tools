@@ -13,12 +13,12 @@ import { GUIDE_LINK_CLASS } from "../guideUi";
 
 export function GuideMapSignedInComparison({ payload }: { payload: GuideMapPayload }) {
   const [race, setRace] = useState("");
-  const query = useApi<MapMatchupStats[]>(`/v1/maps/matchups?patch_era=${payload.era}${race ? `&race=${race}` : ""}`, { revalidateOnFocus: false, keepPreviousData: false });
+  const query = useApi<MapMatchupStats[]>(`/v1/maps/matchups?patch_era=${payload.era}&map_pool=ladder&game_size=1v1${race ? `&race=${race}` : ""}`, { revalidateOnFocus: false, keepPreviousData: false });
   const row = poolMapRows([payload.map], query.isPreviousData ? [] : query.data ?? [])[0];
   const community: GuideIndexMap[] = payload.published ? [{ map: payload.map, slug: payload.mapSlug, games: payload.games, cells: payload.matchups }] : [];
   const focus = `/app/maps?focus=${encodeURIComponent(payload.map)}`;
   return <div className="space-y-3"><label className="block max-w-xs text-caption font-semibold text-text">Your race<Select value={race} onChange={(event) => setRace(event.target.value)}><option value="">All my races</option>{["P", "T", "Z"].map((value) => <option key={value} value={value}>{value === "P" ? "Protoss" : value === "T" ? "Terran" : "Zerg"}</option>)}</Select></label>
-    <p className="text-micro text-text-muted">Your synced {payload.era === "after" ? "12" : "8"}-worker games across all time; ties are excluded from win rates. Select your race for community comparisons.</p>
+    <p className="text-micro text-text-muted">Your synced ranked 1v1 {payload.era === "after" ? "12" : "8"}-worker games across all time; ties are excluded from win rates. Select your race for community comparisons. The community snapshot may use a different time window.</p>
     <QueryState q={query} errorTitle="Couldn't load your map record" isEmpty={() => !row.all.total} empty={<p className="text-caption text-text-muted">You have no synced games on this map in this sample yet. <Link href="/download" className={GUIDE_LINK_CLASS}>Sync your replays</Link> to compare.</p>}>
       {() => <div className="grid gap-2 sm:grid-cols-3">{["P", "T", "Z"].map((opponent) => {
         const record = row.cells[opponent] ?? mapRecord(), rate = communityMapRate(community, payload.map, race, opponent);

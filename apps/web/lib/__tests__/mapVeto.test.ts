@@ -23,8 +23,14 @@ describe("map sample statistics and veto ranking", () => {
   });
   it("combines matching pool aliases and per-race cells without inventing missing records", () => {
     const rows = poolMapRows(["Alpha", "Beta"], [{ map: "Alpha LE", matchup: "vs Z", wins: 2, losses: 3, total: 6 }, { map: "Alpha", matchup: "vs T", wins: 4, losses: 1, total: 5 }]);
-    expect(rows[0]).toMatchObject({ gameMap: "Alpha LE", all: { wins: 6, losses: 4, total: 11, decided: 10, winRate: 0.6 }, cells: { Z: { decided: 5 }, T: { decided: 5 } } });
+    expect(rows[0]).toMatchObject({ gameMap: "Alpha LE", gameMaps: ["Alpha LE", "Alpha"], all: { wins: 6, losses: 4, total: 11, decided: 10, winRate: 0.6 }, cells: { Z: { decided: 5 }, T: { decided: 5 } } });
     expect(rows[1].all.winRate).toBeNull();
+  });
+  it("keeps distinct numbered maps separate and does not invent alias form chronology", () => {
+    const rows = poolMapRows(["Sanctuary II", "Sanctuary III"], [{ map: "Sanctuary II LE", matchup: "vs Z", wins: 1, losses: 4, total: 5 }, { map: "Sanctuary III", matchup: "vs Z", wins: 5, losses: 0, total: 5 }],
+      [{ name: "Sanctuary II LE", wins: 1, losses: 4, total: 5, recent: ["win", "loss"] }, { name: "Sanctuary III", wins: 5, losses: 0, total: 5, recent: ["win"] }, { name: "Sanctuary III LE", wins: 1, losses: 0, total: 1, recent: ["win"] }]);
+    expect(rows[0]).toMatchObject({ gameMaps: ["Sanctuary II LE"], all: { decided: 5 }, recent: ["loss", "win"] });
+    expect(rows[1]).toMatchObject({ gameMaps: ["Sanctuary III"], recent: undefined });
   });
   it("never vetoes a map with fewer than five decided games, including ties-heavy maps", () => {
     const rows = poolMapRows(["Tiny", "Weak", "Strong", "Ties"], [
