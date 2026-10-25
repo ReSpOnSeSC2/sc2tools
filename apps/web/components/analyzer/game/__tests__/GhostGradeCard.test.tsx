@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { ToastProvider } from "@/components/ui/Toast";
-import { ArmGhostFromLogButton, GhostGradeCard } from "../GhostGradeCard";
+import { ArmGhostFromLogButton, GhostGradeCard } from "../GhostGradeContent";
 import {
   assignGhostTarget,
   emptyGhostBuildConfig,

@@ -20,7 +20,7 @@ export function normalizeGhostSnapshot(input: unknown): GhostBuildConfig | null 
 }
 
 const CACHE_PREFIX = "sc2tools:ghost-build:account:v2:";
-export const GHOST_SYNC_EVENT = "sc2tools:ghost-build-armed";
+export { GHOST_SYNC_EVENT } from "./ghostPracticeEvents";
 export function readGhostPracticeCache(owner: string): GhostBuildConfig | null {
   try {
     const raw = localStorage.getItem(CACHE_PREFIX + owner);

@@ -43,6 +43,10 @@ function config(
 }
 
 describe("GhostMatchupManager", () => {
+  it("does not call a synced assignment an empty library", () => {
+    render(<GhostMatchupManager loadout={{ v: 2, slots: { PvT: target("Synced opening") } }} library={[]} onAssign={vi.fn()} onClear={vi.fn()} />);
+    expect(screen.getByText("Synced opening")).toBeTruthy(); expect(screen.queryByText("No timed builds saved yet")).toBeNull();
+  });
   it("renders nine responsive slots grouped by the player's race", () => {
     render(
       <GhostMatchupManager
@@ -108,7 +112,7 @@ describe("GhostMatchupManager", () => {
 
     const pvt = screen.getByLabelText("Select build for PvT") as HTMLSelectElement;
     expect(pvt.disabled).toBe(true);
-    expect(screen.getByText("No saved PvT builds available yet.")).toBeTruthy();
+    expect(screen.getByText("No PvT builds saved in this browser yet.")).toBeTruthy();
     const describedBy = pvt.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
     expect(document.getElementById(describedBy!)).toBeTruthy();
