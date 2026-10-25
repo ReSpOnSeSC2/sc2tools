@@ -766,13 +766,25 @@ read it trimmed and case-insensitively, so `All` also requires the engine.
 2. **`admins`.** The engine build becomes required. Dogfood signed-in
    imports and Folder Sync; watch `ingestSource: "browser"` rows,
    `instant_error` kinds and the `browser_ingest_daily` counts.
-3. **`all`.** Open `/try` and the entry points to everyone. The landing
-   replay demo still POSTs to `/v1/public/preview-replay` (its copy says
-   so); moving it onto the in-browser engine and retiring that route is
-   follow-up work.
+3. **`all`.** Open `/try` and the entry points to everyone. The home-page
+   one-replay build editor demo now uses the same browser worker with a
+   one-file, 1v1, all-time session. Hovering/focusing its drop zone starts
+   warm-up; page view alone does not download the engine. It asks which
+   player is yours, keeps both build orders and opens the existing demo
+   editor only after a successful parse. Its "How this works" link opens
+   `/try#home-replay-demo`. Browser failure/unsupported capability never
+   falls back to uploading. No local report is persisted by this demo.
+
+**One-release compatibility window:** `off`/`admins` still use the old
+rate-limited landing server demo and its explicit upload copy. Keep
+`/v1/public/preview-replay`, its health route and `preview_replay_cli.py`
+wiring until the browser path has completed a release. Then remove those
+routes/wiring and their obsolete tests in an explicit retirement change.
+No release or rollout flag was changed while implementing this migration.
 
 The API needs no flag; the daily cap is its safety valve. **Rollback:** set
-the flag to `off` and redeploy. Browser-uploaded games stay valid and are
+the flag to `off` and redeploy; during the compatibility window the landing
+demo returns to its server parser. Browser-uploaded games stay valid and are
 identifiable by `ingestSource: "browser"` and `engineVersion`.
 
 ## Budgets

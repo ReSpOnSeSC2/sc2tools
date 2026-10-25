@@ -36,6 +36,10 @@ const FOLDERS: ReadonlyArray<{ os: string; path: string }> = [
 
 const FAQ: ReadonlyArray<{ q: string; a: string }> = [
   {
+    q: "Can I try it with one replay from the home page?",
+    a: "Yes. The home-page build editor demo reads one 1v1 replay in your browser when Instant Analysis is available. Choose your player, then explore both build orders in the editor. The replay never leaves your device, and nothing is saved unless you later choose a separate account action.",
+  },
+  {
     q: "Do my replays get uploaded?",
     a: "No. The replays are read on your device and never leave your browser. The parsed games stay on this device for 7 days; only if you choose to save them to a free account are the parsed games (not the replay files) uploaded.",
   },
@@ -133,7 +137,7 @@ function Questions() {
       <SectionHeading>Questions</SectionHeading>
       <div className="space-y-4">
         {FAQ.map(({ q, a }) => (
-          <div key={q} className="max-w-prose">
+          <div key={q} id={q === "Can I try it with one replay from the home page?" ? "home-replay-demo" : undefined} className="max-w-prose scroll-mt-24">
             <h3 className="text-body-lg font-semibold text-text">{q}</h3>
             <p className="mt-1 text-body text-text-muted">{a}</p>
           </div>

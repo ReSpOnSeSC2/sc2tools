@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useDropTarget } from "@/components/instant/useDropTarget";
 import { useReplayAccept } from "@/components/instant/useReplayAccept";
-import { isReplayFileName } from "@/lib/instant/fileIntake";
+import { isReplayFileName, MAX_REPLAY_BYTES } from "@/lib/instant/fileIntake";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -20,19 +20,22 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
-import { API_BASE } from "@/lib/clientApi";
+import { API_BASE, boundedApiRequest } from "@/lib/clientApi";
 import { getInstantImportMode } from "@/lib/instant/flag";
 import { BuildEditorModal } from "@/components/builds/editor";
 import { buildLogToEvents } from "@/lib/build-events";
 import type { RaceLite, VsRaceLite } from "@/lib/build-rules";
+import { ReplayDemoBrowserIsland } from "./ReplayDemoBrowserIsland";
+import type { DemoRequest } from "./ReplayDemoBrowserSession";
+import type { PreviewDossier, PreviewPlayer } from "./replayDemoPreview";
 
 /**
  * ReplayDemo — landing-page "drop a replay, see the real dossier" CTA.
  *
- * The demo runs a real parse on the server: when the visitor picks a
- * file, we POST the binary to /v1/public/preview-replay (an unauth'd
- * rate-limited route backed by sc2reader). The route returns both
- * players' identity, race, result, and build log.
+ * With Instant Analysis enabled for everyone, real intent loads a private
+ * one-file browser session. No replay bytes/payload reach the API. The old
+ * rate-limited server path remains only for the one-release flag-off
+ * compatibility window; browser failures never fall through to it.
  *
  * On success we open the rich BuildEditorModal in demoMode so the
  * visitor can experience the real "Save as new build" template:
@@ -44,24 +47,6 @@ import type { RaceLite, VsRaceLite } from "@/lib/build-rules";
  * No mock data — if the upload fails, we surface the failure and a
  * sign-up CTA instead of pretending we know what's in the file.
  */
-
-interface PreviewPlayer {
-  name: string;
-  race: string;
-  result: string;
-  handle: string | null;
-  build_log: string[];
-  mmr?: number;
-}
-
-interface PreviewDossier {
-  ok: true;
-  game_id: string;
-  map: string;
-  duration_sec: number;
-  date: string;
-  players: [PreviewPlayer, PreviewPlayer];
-}
 
 interface PreviewError {
   code: string;
@@ -122,7 +107,7 @@ function PrivateTryLink() {
         href="/try"
         className="inline-flex min-h-[44px] items-center gap-1.5 font-semibold text-accent underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
       >
-        Analyze privately in your browser instead
+        Analyze more replays in your browser
         <ArrowRight className="h-4 w-4" aria-hidden />
       </Link>
     </p>
@@ -130,6 +115,9 @@ function PrivateTryLink() {
 }
 
 export function ReplayDemo() {
+  const browserMode = getInstantImportMode() === "all";
+  const [browserIntent, setBrowserIntent] = useState(false), [browserRequest, setBrowserRequest] = useState<DemoRequest | null>(null);
+  const activeBrowser = useRef<DemoRequest | null>(null), sequence = useRef(0), legacyRequest = useRef<AbortController | null>(null), live = useRef(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const inFlight = useRef(false);
   const dropRef = useRef<HTMLButtonElement>(null);
@@ -147,12 +135,24 @@ export function ReplayDemo() {
   // first player (index 0) — the visitor can swap sides via the
   // floating perspective chip rendered above the modal scrim.
   const [perspective, setPerspective] = useState<0 | 1>(0);
+  const warm = () => { if (browserMode) setBrowserIntent(true); };
+  const closeStatus = useCallback(() => {
+    sequence.current++; legacyRequest.current?.abort(); activeBrowser.current = null;
+    setBrowserRequest(null); inFlight.current = false; setBusy(false); setStatusOpen(false); dropRef.current?.focus();
+  }, []);
+  const browserBusy = useCallback((request: DemoRequest, value: boolean) => { if (live.current && activeBrowser.current === request) { inFlight.current = value; setBusy(value); } }, []);
+  const browserSuccess = useCallback((request: DemoRequest, value: PreviewDossier) => {
+    if (!live.current || activeBrowser.current !== request) return;
+    activeBrowser.current = null; setBrowserRequest(null); inFlight.current = false; setBusy(false);
+    setDossier(value); setStatusOpen(false); setPerspective(0); setEditorOpen(true);
+  }, []);
+  useEffect(() => { live.current = true; return () => { live.current = false; legacyRequest.current?.abort(); activeBrowser.current = null; }; }, []);
   const { dragging, handlers } = useDropTarget(busy, (files) => {
     const replays = files.filter((file) => isReplayFileName(file.name));
     if (!replays.length) { setIntakeMessage("That isn't a .SC2Replay file. Drop a replay from your StarCraft II Replays folder."); return; }
     setIntakeMessage(replays.length > 1 ? `Using ${replays[0].name}. The demo reads one replay at a time.` : "");
     void onPick(replays[0]);
-  });
+  }, warm);
   useEffect(() => {
     if (!statusOpen || !error) return;
     const timer = window.setTimeout(() => errorRef.current?.focus(), 0);
@@ -183,22 +183,26 @@ export function ReplayDemo() {
       setError({ code: "empty_body", message: "" });
       return;
     }
-    if (file.size > MAX_BYTES) {
+    if (file.size > (browserMode ? MAX_REPLAY_BYTES : MAX_BYTES)) {
       setError({ code: "too_large", message: "" });
       return;
     }
     inFlight.current = true;
     setBusy(true);
+    if (browserMode) {
+      const request = { file, id: ++sequence.current }; activeBrowser.current = request;
+      setBrowserIntent(true); setBrowserRequest(request); setStatusOpen(false); return;
+    }
+    const controller = new AbortController(), id = ++sequence.current;
+    legacyRequest.current?.abort(); legacyRequest.current = controller;
+    const current = () => live.current && id === sequence.current && !controller.signal.aborted;
     try {
-      const buf = await file.arrayBuffer();
-      const res = await fetch(`${API_BASE}/v1/public/preview-replay`, {
-        method: "POST",
-        headers: { "content-type": "application/octet-stream" },
-        body: buf,
-      });
-      const requestId =
-        res.headers.get("x-request-id") || undefined;
-      const json = await res.json().catch(() => null);
+      const { res, json, requestId } = await boundedApiRequest(async signal => {
+        const buf = await file.arrayBuffer(); signal.throwIfAborted();
+        const response = await fetch(`${API_BASE}/v1/public/preview-replay`, { method: "POST", signal, headers: { "content-type": "application/octet-stream" }, body: buf });
+        return { res: response, requestId: response.headers.get("x-request-id") || undefined, json: await response.json().catch(() => null) };
+      }, 40_000, controller.signal);
+      if (!current()) return;
       if (!res.ok || !json) {
         const code = json?.error?.code || `http_${res.status}`;
         const message = json?.error?.message || "";
@@ -226,17 +230,17 @@ export function ReplayDemo() {
       setStatusOpen(false);
       setEditorOpen(true);
     } catch (err) {
+      if (!current()) return;
       const message = err instanceof Error ? err.message : "network error";
-      setError({ code: "network", message });
+      setError({ code: (err as { code?: string })?.code === "request_timeout" ? "preview_timeout" : "network", message });
     } finally {
-      inFlight.current = false;
-      setBusy(false);
+      if (current()) { inFlight.current = false; setBusy(false); }
     }
   }
 
   return (
     <section className="mx-auto max-w-5xl">
-      <Card {...handlers} padded={false} className={`relative overflow-hidden !rounded-md ${dragging ? "ring-2 ring-accent" : ""}`}>
+      <Card {...handlers} onPointerEnter={warm} onFocusCapture={warm} padded={false} className={`relative overflow-hidden !rounded-md ${dragging ? "ring-2 ring-accent" : ""}`}>
         {dragging ? <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center bg-bg/90 text-h3 text-accent">Drop to analyze</div> : null}
         <div className="grid items-center gap-6 p-6 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] md:gap-10 md:p-10">
           <div className="space-y-4">
@@ -255,7 +259,7 @@ export function ReplayDemo() {
                 ref={dropRef}
                 variant="primary"
                 size="lg"
-                onClick={() => inputRef.current?.click()}
+                onClick={() => { warm(); inputRef.current?.click(); }}
                 iconLeft={<Upload className="h-5 w-5" aria-hidden />}
               >
                 Choose a replay
@@ -265,7 +269,7 @@ export function ReplayDemo() {
                 type="file"
                 accept={accept}
                 className="sr-only"
-                onChange={(e) => { const file = e.currentTarget.files?.[0] ?? null; e.currentTarget.value = ""; void onPick(file); }}
+                onChange={(e) => { const file = e.currentTarget.files?.[0] ?? null; e.currentTarget.value = ""; setIntakeMessage(""); void onPick(file); }}
               />
               <Link
                 href="/sign-up"
@@ -276,19 +280,20 @@ export function ReplayDemo() {
               </Link>
             </div>
             <p className="text-caption text-text-dim">
-              Uploaded once to our server, parsed, then deleted.
+              {browserMode ? "Runs in your browser — the replay never leaves your device." : "Uploaded once to our server, parsed, then deleted."}
             </p>
+            {browserMode ? <p className="text-caption"><Link href="/try#home-replay-demo" className="inline-flex min-h-11 items-center font-semibold text-accent underline">How this works</Link></p> : null}
             <PrivateTryLink />
           </div>
 
-          <div><ReplayDropPreview onActivate={() => inputRef.current?.click()} /><p className="mt-2 text-caption text-text-muted">Drag a replay here or click to choose</p></div>
+          <div><ReplayDropPreview privateParse={browserMode} onActivate={() => { warm(); inputRef.current?.click(); }} /><p className="mt-2 text-caption text-text-muted">Drag a replay here or click to choose</p></div>
         </div>
         {intakeMessage ? <p role="alert" className="px-6 pb-4 text-caption text-text-muted">{intakeMessage}</p> : null}
       </Card>
 
       <Modal
         open={statusOpen}
-        onClose={() => { setStatusOpen(false); dropRef.current?.focus(); }}
+        onClose={closeStatus}
         footer={error && !busy ? <div className="flex flex-wrap gap-2"><Button onClick={() => inputRef.current?.click()}>Choose another replay</Button>{getInstantImportMode() === "all" && PRIVATE_RETRY_CODES.has(error.code) ? <Link href="/try" className="inline-flex min-h-11 items-center rounded-full border border-border px-4 font-semibold text-accent">Analyze it in your browser</Link> : null}</div> : undefined}
         size="lg"
         title={
@@ -322,7 +327,10 @@ export function ReplayDemo() {
         )}
       </Modal>
 
+      {browserMode && browserIntent ? <ReplayDemoBrowserIsland request={browserRequest} onSuccess={browserSuccess} onBusy={browserBusy} onClose={closeStatus} /> : null}
+
       <BuildEditorModal
+        key={`${dossier?.game_id ?? "empty"}:${perspective}`}
         open={editorOpen && !!dossier}
         onClose={() => setEditorOpen(false)}
         events={editorEvents}
@@ -559,7 +567,7 @@ function ErrorTechnicalDetails({ error }: { error: PreviewError }) {
   );
 }
 
-function ReplayDropPreview({ onActivate }: { onActivate: () => void }) {
+function ReplayDropPreview({ onActivate, privateParse }: { onActivate: () => void; privateParse: boolean }) {
   return (
     <button
       type="button"
@@ -586,7 +594,7 @@ function ReplayDropPreview({ onActivate }: { onActivate: () => void }) {
           Pick a replay
         </span>
         <span className="block text-caption text-text-muted">
-          .SC2Replay · parsed live, never stored
+          {privateParse ? ".SC2Replay · parsed locally, never uploaded" : ".SC2Replay · parsed live, never stored"}
         </span>
       </span>
     </button>
