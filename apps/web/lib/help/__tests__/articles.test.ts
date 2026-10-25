@@ -306,6 +306,7 @@ describe("reviews and coaching articles", () => {
       "locker",
       "practice-sharing",
       "practice-plans",
+      "how-progress-is-counted",
       "sessions",
     ]);
     expect(allTextFields(article!).join(" ")).toContain("the workspace never grades or scores your play");

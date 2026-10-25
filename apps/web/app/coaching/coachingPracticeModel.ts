@@ -64,6 +64,8 @@ export type PracticeAssignment = {
   createdAt: string;
   updatedAt: string;
   progress: {
+    /** Latest qualifying game from the existing progress aggregation. */
+    lastGameAt?: string | null;
     state: ProgressState;
     playedGames: number;
     requiredGamesTotal: number;
@@ -84,13 +86,18 @@ export type AssignmentsPayload = {
   page?: number;
   limit?: number;
   hasMore?: boolean;
+  counts?: AssignmentCounts;
 };
+export type AssignmentFilter = "active" | "upcoming" | "ended" | "cancelled" | "all";
+export type AssignmentCounts = Record<AssignmentFilter, number>;
 
 export type AssignmentGamesPayload = {
   assignmentId: string;
   page: number;
   limit: number;
   total: number;
+  wins?: number;
+  losses?: number;
   hasMore: boolean;
   games: PracticeGame[];
 };
@@ -121,6 +128,7 @@ export type SlimGame = { b?: string; bid?: string };
 export type BuildSuggestion = { id: string; name: string; matchBy: "name" | "slug" };
 
 export type AssignmentDraft = {
+  unavailableBuild?: boolean;
   studentId: string;
   type: AssignmentType;
   requiredGames: string;
@@ -363,4 +371,23 @@ export function buildId(name: string) {
 export function requestId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `practice-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+/** Calendar arithmetic uses date keys, independent of DST hour lengths.
+ * The caller creates a fresh clientRequestId outside this pure function. */
+export function nextWindowDraft(assignment: PracticeAssignment, todayKey: string): Omit<AssignmentDraft, "clientRequestId"> {
+  const requirement = assignment.requirement;
+  const days = Math.max(1, Math.round((Date.parse(requirement.window.endsOn) - Date.parse(requirement.window.startsOn)) / 86_400_000) + 1);
+  let startsOn = addDays(requirement.window.endsOn, 1);
+  if (startsOn < todayKey) startsOn = todayKey;
+  const recurrence = requirement.recurrence === "once" ? "weekly" : requirement.recurrence;
+  if (requirement.type === "total" && requirement.recurrence !== "once") {
+    const aligned = defaultCalendarRange(startsOn, recurrence);
+    if (aligned.startsOn < startsOn) startsOn = addDays(aligned.endsOn, 1);
+  }
+  const build = requirement.build;
+  return { studentId: assignment.student.id, type: requirement.type, requiredGames: String(requirement.requiredGames),
+    buildSelection: build ? buildSuggestionKey(build) : "manual", buildName: build?.name ?? "", recurrence,
+    totalRangeInitialized: requirement.type === "total", dateRangeEdited: true, startsOn, endsOn: addDays(startsOn, days - 1),
+    timeZone: requirement.timeZone, title: requirement.title ?? "", note: requirement.note ?? "" };
 }
