@@ -29,6 +29,7 @@ export function useGhostPractice() {
   useEffect(() => {
     currentOwner.current = owner;
     active.current?.abort(); active.current = null;
+    setState({ owner, saving: false, error: null });
     setCache(owner ? { owner, config: readGhostPracticeCache(owner) } : null);
     return () => { currentOwner.current = null; const pending = active.current; active.current = null; pending?.abort(); };
   }, [owner]);

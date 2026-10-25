@@ -29,7 +29,7 @@ export function PracticeButton({ build, target, guideHref, privateBuild, matchup
   const [state, setState] = useState<{ scope: string; busy: boolean; message: string; error: boolean }>({ scope, busy: false, message: "", error: false });
   const myRace = race(build.race), theirs = race(build.vsRace);
   const matchup = initialMatchup ?? (myRace && theirs ? `${myRace}v${theirs}` as GhostMatchupKey : undefined);
-  useEffect(() => { current.current = scope; active.current?.abort(); active.current = null; return () => { current.current = ""; const pending = active.current; active.current = null; pending?.abort(); }; }, [scope]);
+  useEffect(() => { current.current = scope; active.current?.abort(); active.current = null; setState({ scope, busy: false, message: "", error: false }); return () => { current.current = ""; const pending = active.current; active.current = null; pending?.abort(); }; }, [scope]);
   const close = () => { setOpen(false); onClose?.(); };
   const assign = async (slot: GhostMatchupKey) => {
     if (!owner || current.current !== scope || active.current) return;

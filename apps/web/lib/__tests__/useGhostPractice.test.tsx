@@ -50,6 +50,22 @@ describe("owner-scoped synced Ghost assignments", () => {
     h.auth = { ...h.auth, userId: "b", getToken: vi.fn().mockResolvedValue("token-b") };
     expect(await lateUndo("PvT", target)).toBe(false); expect(patches()).toHaveLength(0);
   });
+  it("returning A-B-A starts idle and a held old body cannot overwrite the newer A operation", async () => {
+    const view = renderHook(() => useGhostPractice(), { wrapper });
+    await waitFor(() => expect(view.result.current.hasConfig).toBe(true));
+    let release!: (value: unknown) => void;
+    fetcher.mockImplementationOnce(async () => ({ ok: true, status: 200, json: () => new Promise(resolve => { release = resolve; }) }));
+    let older!: Promise<boolean>; act(() => { older = view.result.current.assign("PvT", null); });
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    h.auth = { ...h.auth, userId: "b" }; view.rerender();
+    h.auth = { ...h.auth, userId: "a" }; view.rerender();
+    expect(view.result.current.saving).toBe(false);
+    fetcher.mockImplementation(async () => new Response(JSON.stringify({ v: 2, slots: {}, revision: 3 }), { status: 200 }));
+    await act(async () => { expect(await view.result.current.assign("PvT", null)).toBe(true); });
+    await act(async () => { release({ ...account, revision: 2 }); expect(await older).toBe(false); });
+    expect(view.result.current.config.slots).toEqual({}); expect(view.result.current.config.revision).toBe(3);
+    expect(view.result.current.saving).toBe(false); expect(view.result.current.error).toBeNull();
+  });
   it.each(["token", "body"] as const)("a stalled %s settles at the real deadline and late work cannot publish", async held => {
     const view = renderHook(() => useGhostPractice(), { wrapper });
     await waitFor(() => expect(view.result.current.hasConfig).toBe(true));

@@ -47,6 +47,8 @@ describe("shared Practice split button", () => {
     h.auth = { ...h.auth, isLoaded: false }; view.rerender(<PracticeButton build={build} />);
     await act(async () => release("old-token"));
     expect(h.mutate).not.toHaveBeenCalled(); expect(screen.queryByText(/Practicing “/)).toBeNull();
+    h.auth = { ...h.auth, isLoaded: true }; view.rerender(<PracticeButton build={build} />);
+    expect((screen.getByRole("button", { name: "Practice in PvT" }) as HTMLButtonElement).disabled).toBe(false);
   });
   it("shows a failed save and lets the same explicit action retry", async () => {
     h.assign.mockRejectedValueOnce(new Error("Couldn't reach practice. Try again.")); render(<PracticeButton build={build} />);
