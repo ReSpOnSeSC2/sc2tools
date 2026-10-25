@@ -36,6 +36,7 @@ vi.mock("@/components/community/CommunityBuildSignatureTimeline", () => ({
   },
 }));
 vi.mock("@/components/community/CommunityVotePanel", () => ({ CommunityVotePanel: () => null }));
+vi.mock("@/components/practice/PracticeButton", () => ({ PracticeButton: () => null }));
 vi.mock("@/components/community/CommunityVoteControls", () => ({ CommunityVoteControls: () => null }));
 vi.mock("@/components/community/CommunityBuildReport", () => ({ CommunityBuildReport: () => <p>Report fixture</p> }));
 vi.mock("@/components/community/CommunityBuildOwnerControls", () => ({
@@ -190,7 +191,7 @@ describe("/community/builds/[slug]", () => {
     expect(labels).toEqual(["Matchup", "Type", "Rules", "Skill level", "Published", "Updated"]);
     expect(screen.getByText("Protoss", { exact: false })).toBeTruthy();
     expect(screen.getByText("Opponent build to scout")).toBeTruthy();
-    expect(container.querySelectorAll("aside > .hidden.lg\\:block")).toHaveLength(2);
+    expect(container.querySelectorAll("aside > .hidden.lg\\:block")).toHaveLength(3);
     expect(screen.getByText("Report fixture").closest("aside")).toBeTruthy();
   });
 

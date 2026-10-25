@@ -76,7 +76,8 @@ describe("Stream Studio learning catalog", () => {
     const byId = new Map(WIDGET_GUIDES.map((guide) => [guide.id, guide]));
     expect(byId.get("build-profile")?.check).toContain("no Test button");
     expect(byId.get("build-profile")?.setup.join(" ")).toContain("Show widget");
-    expect(byId.get("ghost-build")?.troubleshooting).toContain("old URL");
+    expect(byId.get("ghost-build")?.troubleshooting).toContain("Assignments are saved to your account");
+    expect(byId.get("ghost-build")?.troubleshooting).toContain("explicit empty account setup disarms old fragments");
     expect(byId.get("countdown-timer")?.appears).toContain("until Clear");
     expect(byId.get("chat-highlight")?.appears).toContain("Clear highlight");
     expect(byId.get("chat-poll")?.explanation).toContain("Close poll");
