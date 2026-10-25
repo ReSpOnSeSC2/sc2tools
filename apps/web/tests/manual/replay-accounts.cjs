@@ -28,7 +28,7 @@ const server = http.createServer((req, res) => {
       return send({ gameId, excluded: body.excluded });
     }); return;
   }
-  if (url.pathname === '/v1/replays') return send({ profile: { handle: 'synthetic-owner', displayName: 'Synthetic owner' }, items: [game], page: { hasMore: true, nextCursor: 'synthetic-cursor' }, total: 2, summary: { total: 2, wins: 1, losses: 1, ties: 0, avgDurationSec: 630 } });
+  if (url.pathname === '/v1/replays') return send({ profile: { handle: 'synthetic-owner', displayName: 'Synthetic owner' }, items: [game, { ...game, gameId: 'synthetic-second', map: 'Synthetic second map' }], page: { hasMore: true, nextCursor: 'synthetic-cursor' }, total: 2, summary: { total: 2, wins: 1, losses: 1, ties: 0, avgDurationSec: 630 } });
   if (url.pathname === '/v1/random-summary') return send({ perRace: { Protoss: { games: 2 } } });
   if (url.pathname === '/v1/seasons') return send({ items: [] });
   if (url.pathname === '/v1/me/replay-sharing') return send({ enabled: false, handle: null });
@@ -131,6 +131,40 @@ const server = http.createServer((req, res) => {
       expect(mutations).toHaveLength(count); expect(await page.evaluate(() => window.fixtureCompleted)).toBe(completed); checks++;
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true); expect(errors).toEqual([]); checks++; await context.close();
     }
-    console.log(JSON.stringify({ checks, screenshots: 24, cssFiles: fs.readdirSync('.next/static/css').filter(name => name.endsWith('.css')), externalNetwork: 'blocked' }));
+    for (const [width, theme] of [320, 390, 768, 1440].flatMap(width => [[width, 'light'], [width, 'dark']])) {
+      const context = await browser.newContext({ viewport: { width, height: 1000 }, reducedMotion: 'reduce' }), page = await context.newPage(), errors = [];
+      page.on('pageerror', error => errors.push(error.message)); await context.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
+      await context.request.get(`${origin}/fixture-reset`); await page.goto(`${origin}/app/replays?filters=1&preset=all&theme=${theme}`);
+      await page.getByRole('button', { name: 'Select replays', exact: true }).click();
+      for (const id of ['synthetic-game', 'synthetic-second']) await page.getByRole('checkbox', { name: `Select replay ${id}`, exact: true }).check();
+      await expect(page.getByText('2 selected · this page only (up to 25)', { exact: true })).toBeVisible(); checks++;
+      await page.getByRole('button', { name: 'Hide from stats', exact: true }).click(); let dialog = page.getByRole('dialog');
+      await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused(); await dialog.getByRole('button', { name: 'Friend played', exact: true }).click(); await dialog.getByRole('button', { name: 'Hide from stats', exact: true }).click();
+      await expect(dialog).toHaveCount(0); expect(mutations.slice(-2).map(row => row.gameId)).toEqual(['synthetic-game', 'synthetic-second']); await expect(page.getByText('0 selected · this page only (up to 25)', { exact: true })).toBeVisible(); checks++;
+      for (const id of ['synthetic-game', 'synthetic-second']) await page.getByRole('checkbox', { name: `Select replay ${id}`, exact: true }).check();
+      await page.getByRole('button', { name: 'Delete selected games…', exact: true }).click(); dialog = page.getByRole('dialog');
+      await expect(dialog.getByRole('button', { name: 'Delete permanently' })).toBeDisabled(); await dialog.getByRole('textbox', { name: 'Type DELETE 2 GAMES to confirm' }).fill('DELETE 2 GAMES');
+      if (width === 320 && theme === 'dark' || width === 1440 && theme === 'light') await page.screenshot({ path: `../../docs/handoff/screenshots/replay-controls-library-delete-${theme}-${width}.png` });
+      await dialog.getByRole('button', { name: 'Delete permanently' }).click(); await expect(dialog).toHaveCount(0); expect(mutations.slice(-2).map(row => row.method)).toEqual(['DELETE', 'DELETE']); checks++;
+      await page.goto(`${origin}/app/replays?fixtureHeader=1&theme=${theme}`); const trigger = page.getByLabel('More game actions', { exact: true });
+      await trigger.click(); await expect(page.getByRole('button', { name: 'Hide from stats', exact: true })).toBeVisible();
+      if (width === 320 && theme === 'light' || width === 1440 && theme === 'dark') await page.screenshot({ path: `../../docs/handoff/screenshots/replay-controls-header-menu-${theme}-${width}.png` });
+      for (const name of ['Hide from stats', 'Delete game…']) {
+        const hit = await page.getByRole('button', { name, exact: true }).evaluate(node => { const r = node.getBoundingClientRect(), target = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return { hit: !!target && (target === node || node.contains(target)), rect: { x: r.x, y: r.y, width: r.width, height: r.height } }; });
+        expect(hit.hit, `${name} is not hit-testable before Playwright auto-scroll: ${JSON.stringify(hit.rect)}`).toBe(true);
+      } checks++;
+      await page.keyboard.press('Escape'); await expect(trigger.locator('..')).not.toHaveAttribute('open', ''); await expect(trigger).toBeFocused(); checks++;
+      await trigger.click(); await page.mouse.click(1, 1); await expect(trigger.locator('..')).not.toHaveAttribute('open', ''); checks++;
+      await trigger.click(); await page.getByRole('button', { name: 'Hide from stats', exact: true }).click(); dialog = page.getByRole('dialog');
+      await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused(); await expect(trigger.locator('..')).not.toHaveAttribute('open', ''); await dialog.getByRole('button', { name: 'Cancel', exact: true }).click(); await expect(trigger).toBeFocused(); checks++;
+      await page.evaluate(() => { window.fixtureHeldToken = new Promise(resolve => { window.fixtureReleaseToken = resolve; }); });
+      await trigger.click(); await page.getByRole('button', { name: 'Delete game…', exact: true }).click(); dialog = page.getByRole('dialog');
+      await dialog.getByRole('textbox', { name: 'Type DELETE GAME to confirm' }).fill('DELETE GAME'); await dialog.getByRole('button', { name: 'Delete permanently' }).click();
+      const focusBeforeEscape = await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 300));
+      await page.keyboard.press('Escape'); await page.mouse.click(1, 1); await expect(dialog).toHaveCount(1); expect(await dialog.evaluate(node => node.contains(document.activeElement)), JSON.stringify({ focusBeforeEscape, focusAfterBackdrop: await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 300)) })).toBe(true); checks++;
+      await page.evaluate(() => { window.fixtureReleaseToken('synthetic-token'); window.fixtureHeldToken = null; }); await expect(dialog).toHaveCount(0); expect(mutations.at(-1)).toMatchObject({ method: 'DELETE', gameId: 'synthetic-header' }); checks++;
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true); expect(errors).toEqual([]); checks++; await context.close();
+    }
+    console.log(JSON.stringify({ checks, screenshots: 28, cssFiles: fs.readdirSync('.next/static/css').filter(name => name.endsWith('.css')), externalNetwork: 'blocked' }));
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
