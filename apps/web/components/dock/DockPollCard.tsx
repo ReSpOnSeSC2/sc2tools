@@ -4,7 +4,10 @@ import { DockButton } from "./DockControls";
 import { useState } from "react";
 import type { StudioPoll } from "@/lib/multichat/useStudioState";
 import type { ChatMessage } from "@/lib/multichat/types";
-import { DockBuildVote } from "./DockBuildVote";
+import dynamic from "next/dynamic";
+const DockBuildVote = dynamic(() => import("./DockBuildVote").then(module => module.DockBuildVote), {
+  loading: () => <p role="status" className="text-caption text-text-muted">Loading saved builds…</p>,
+});
 import { DockPoll } from "./DockPoll";
 import type { DockPost } from "./dockActions";
 

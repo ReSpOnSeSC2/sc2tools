@@ -24,7 +24,8 @@ import { DockButton } from "./DockControls";
  *     commits — mis-taps in a 300px dock are cheap, unblocking isn't.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import styles from "./DockLayout.module.css";
 import { fallbackColor, mergeDisplayFeed } from "@/lib/multichat/feed";
 import {
   excludeBlockedUsers,
@@ -292,8 +293,8 @@ export function DockChat({
                   </div>
                   <div className="mt-0.5 min-w-0 break-words text-text">
                     <span
-                      className="font-semibold"
-                      style={{ color: fallbackColor(event.user) }}
+                      className={`${styles.name} font-semibold`}
+                      style={{ "--dock-name-color": fallbackColor(event.user) } as CSSProperties}
                     >
                       {event.user}
                     </span>
@@ -329,15 +330,15 @@ export function DockChat({
                   </span>
                   <span
                     className="mr-1.5 inline-flex h-4 shrink-0 items-center justify-center rounded px-1.5 align-middle text-micro font-extrabold leading-none tracking-wide"
-                    style={{ background: meta.color, color: meta.fg }}
+                    style={{ background: m.platform === "youtube" ? "#c92a2a" : meta.color, color: meta.fg }}
                     title={`${meta.label} chat`}
                     aria-label={`${meta.label} chat`}
                   >
                     {meta.short}
                   </span>
                   <span
-                    className="font-semibold"
-                    style={{ color: m.color || fallbackColor(m.user) }}
+                    className={`${styles.name} font-semibold`}
+                    style={{ "--dock-name-color": m.color || fallbackColor(m.user) } as CSSProperties}
                   >
                     {m.user}
                   </span>

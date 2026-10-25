@@ -10,7 +10,7 @@ import { Toggle, type ToggleProps } from "@/components/ui/Toggle";
 export const DOCK_CONTROL = "min-h-8 [@media(pointer:coarse)]:min-h-10 [@media(pointer:coarse)]:min-w-10";
 type DockButtonProps = Omit<ButtonProps, "size"> & { danger?: boolean; success?: boolean };
 export const DockButton = forwardRef<HTMLButtonElement, DockButtonProps>(function DockButton({ danger, success, variant, className = "", style, ...props }, ref) {
-  return <Button ref={ref} size="sm" variant={variant ?? (danger ? "danger" : "secondary")} className={`${DOCK_CONTROL} ${success ? "border-success/50 bg-success/15 text-success hover:bg-success/25" : ""} ${className}`} style={{ ...style, height: "2rem" }} {...props} />;
+  return <Button ref={ref} size="sm" variant={variant ?? "secondary"} className={`${DOCK_CONTROL} ${danger ? "border-danger/50 bg-danger/10 text-danger hover:bg-danger/15" : success ? "border-success/50 bg-success/15 text-success hover:bg-success/25" : ""} ${className}`} style={{ ...style, height: "2rem" }} {...props} />;
 });
 export const DockInput = forwardRef<HTMLInputElement, InputProps>(function DockInput({ className = "", ...props }, ref) {
   return <Input ref={ref} inputSize="sm" className={`${DOCK_CONTROL} ${className}`} {...props} />;

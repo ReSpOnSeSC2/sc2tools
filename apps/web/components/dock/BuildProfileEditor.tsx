@@ -3,7 +3,10 @@
 import { DockInput, DockSelect, DockButton } from "./DockControls";
 
 import { useEffect, useRef, useState } from "react";
-import { BuildProfileChart } from "@/components/overlay/widgets/BuildProfileWidget";
+import dynamic from "next/dynamic";
+const BuildProfileChart = dynamic(() => import("@/components/overlay/widgets/BuildProfileWidget").then(module => module.BuildProfileChart), {
+  loading: () => <p role="status" className="text-caption text-text-muted">Loading graph…</p>,
+});
 import type { DockPost } from "./dockActions";
 import { DockSnapshotState } from "./useDockPanelActions";
 import {
@@ -33,6 +36,7 @@ export function BuildProfileEditor({
 }) {
   const [draft, setDraft] = useState(() => copyProfile(profile));
   const [dirty, setDirty] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   // Set synchronously before React commits: a poll in the same beat cannot
   // overwrite the first keystroke or selection.
   const dirtyRef = useRef(false);
@@ -176,12 +180,12 @@ export function BuildProfileEditor({
           <p>These are your assessments for this build, rather than automatic replay measurements or a measured ladder popularity rate.</p>
         </div>
       </details>
-      <details className="min-w-0 rounded-md border border-border p-2 text-caption text-text-muted">
+      <details onToggle={event => setPreviewOpen(event.currentTarget.open)} className="min-w-0 rounded-md border border-border p-2 text-caption text-text-muted">
         <summary className="flex min-h-8 cursor-pointer items-center [@media(pointer:coarse)]:min-h-10 text-text">Preview graph</summary>
         <div className="mt-2">
-          {draftComplete
+          {draftComplete && previewOpen
             ? <BuildProfileChart profile={draft} preview />
-            : <p className="py-2">Enter a build title and all five ratings to preview the graph.</p>}
+            : !draftComplete ? <p className="py-2">Enter a build title and all five ratings to preview the graph.</p> : null}
         </div>
       </details>
       <div className="flex flex-wrap gap-2">

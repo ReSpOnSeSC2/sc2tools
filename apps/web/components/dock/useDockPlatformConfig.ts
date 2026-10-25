@@ -111,4 +111,3 @@ export function useDockPlatformConfig(token: string, onInvalid: () => void): {
     loaded,
   };
 }
-

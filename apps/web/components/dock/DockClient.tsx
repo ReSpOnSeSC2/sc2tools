@@ -512,10 +512,10 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
   };
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-6xl p-2 font-sans text-text sm:p-3">
+    <div className={`${styles.root} mx-auto min-h-screen w-full max-w-6xl p-2 font-sans text-text sm:p-3`}>
       {/* Narrow-mode sticky jump tabs — the OBS dock has no room for
           a permanent two-column layout. */}
-      <nav aria-label="Dock sections" className="sticky top-0 z-10 -mx-2 mb-2 flex items-center gap-1 overflow-x-auto border-b border-border bg-[#0b0e14] px-2 py-1.5 lg:hidden">
+      <nav aria-label="Dock sections" className="sticky top-0 z-10 -mx-2 mb-2 flex items-center gap-1 overflow-x-auto border-b border-border bg-bg px-2 py-1.5 lg:hidden">
         {DOCK_SECTIONS.map((s) => (
           <DockButton
             key={s.id}
