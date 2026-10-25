@@ -47,3 +47,9 @@ service and uptime reads the already-saved stream-session anchor.
 
 No AI/model call, new infrastructure, collection, index, background job,
 environment variable, provider integration or production action is introduced.
+
+Nightbot snippet syntax follows its official
+[QueryString](https://docs.nightbot.tv/variables/querystring) and
+[UrlFetch](https://docs.nightbot.tv/variables/urlfetch) documentation; arguments
+and viewer names are URL-encoded, and the380-character line fits its plain-text
+response limit. This is copied configuration, never an automatic provider write.

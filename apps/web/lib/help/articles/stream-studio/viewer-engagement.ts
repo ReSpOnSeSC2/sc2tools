@@ -46,16 +46,6 @@ const article: HelpArticle = {
     {
       type: "callout",
       tone: "info",
-      title: "Crystal Ball fair play",
-      text: "Only replay-verified results award oracle points or affect accuracy. In Stream Dock → Game, Cancel round awards nothing. For 30 minutes after a matching game ends without a verified result, before another match starts, the streamer can confirm Resolve Win or Resolve Loss; viewers see **resolved manually**, with no points or accuracy change. Voting locks early in the game, and a late verified replay cannot score a cancelled or manually resolved round.",
-    },
-    {
-      type: "paragraph",
-      text: "**!so** asks the enabled Twitch bot for the current opponent's approved stream links. It ignores arbitrary targets and stays silent when the opponent has no approved exact identity match. Stream Dock → Game also offers Shout out, with Copy shout-out when a matching bot is unavailable.",
-    },
-    {
-      type: "callout",
-      tone: "info",
       title: "Tip",
       text: "The same card in **Overlay → Multi-platform chat** copies the bio text with your saved commands and rank race. When you separately enable the **Chat bot**, it posts answers in Twitch chat and counts `!win`/`!loss` calls and XP with the dock closed. Platform connection and bot activation are separate from saving command settings.",
     },
