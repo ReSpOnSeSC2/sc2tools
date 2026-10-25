@@ -6,6 +6,7 @@ const { USER_SCOPED_COLLECTIONS } = require("./gdpr");
 const { stampVersion } = require("../db/schemaVersioning");
 const { COLLECTIONS } = require("../config/constants");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
+const { protectDeletedSnapshotGames, liveBackupGamesMatch } = require("./backupGameDeletion");
 
 // Credentials and work queues are live state, not restore points. Restoring a
 // snapshot must not revive an unlinked PC or restart an old import/classifier.
@@ -80,6 +81,7 @@ class UserBackupsService {
           : /** @type {any} */ (db)[key]?.find({ userId }, { projection: key === "users" ? { _id: 0, userId: 1, ...(jsonKey === "preferences" ? preferenceProjection : profileProjection) } : { _id: 0 } }).batchSize(BATCH);
         if (!source) continue;
         for await (const row of source) {
+          if (key === "games" && (row._deleted || row._deletionPending)) continue;
           if (counts[jsonKey] % BATCH === 0 && opts.assert) await opts.assert();
           const record = jsonKey === "preferences" ? { userId, preferences: Object.fromEntries(PREFERENCE_KEYS.filter((name) => Object.hasOwn(row.preferences || {}, name)).map((name) => [name, row.preferences[name]])) }
             : jsonKey === "accountProfile" ? { userId, ...Object.fromEntries(PROFILE_KEYS.filter((name) => Object.hasOwn(row, name)).map((name) => [name, row[name]])) } : row;
@@ -171,13 +173,15 @@ class UserBackupsService {
       }
       if (!header || !ended || RESTORABLE.some(([, name]) => !Object.hasOwn(counts, name))) throw failure("backup_invalid", 422);
       if (counts.preferences > 1 || counts.accountProfile > 1) throw failure("backup_invalid", 422);
-      await flush(); return { operationId, counts };
+      await flush();
+      await protectDeletedSnapshotGames(this.db, this.staging, userId, operationId, counts);
+      return { operationId, counts };
     } catch (error) { await this.staging.deleteMany({ operationId }); throw error; }
   }
   /** @param {string} userId @param {string} operationId */
   missingGames(userId, operationId) {
     return this.db.games.aggregate([
-      { $match: { userId } },
+      { $match: liveBackupGamesMatch(userId) },
       { $lookup: { from: STAGING, let: { gameId: "$gameId" }, pipeline: [
         { $match: { operationId, key: "games", $expr: { $eq: ["$gameId", "$$gameId"] } } }, { $limit: 1 }, { $project: { _id: 1 } },
       ], as: "saved" } }, { $match: { saved: { $size: 0 } } }, { $project: { _id: 0, gameId: 1 } },
@@ -186,7 +190,9 @@ class UserBackupsService {
   /** @param {string} userId */
   async membershipRevision(userId) {
     const hash = createHash("sha256");
-    for await (const row of this.db.games.find({ userId }, { projection: { _id: 0, gameId: 1 } }).sort({ gameId: 1 }).batchSize(BATCH)) hash.update(`${JSON.stringify(row.gameId)}\n`);
+    for await (const row of this.db.games.find({ userId }, { projection: { _id: 0, gameId: 1, _deleted: 1, _deletionPending: 1, excluded: 1 } }).sort({ gameId: 1 }).batchSize(BATCH)) {
+      hash.update(`${JSON.stringify([row.gameId, row._deleted === true, row._deletionPending === true, row.excluded === true])}\n`);
+    }
     return hash.digest("hex").slice(0, 24);
   }
   /** @param {string} userId @param {string} id */
@@ -200,7 +206,7 @@ class UserBackupsService {
     try {
       fence = await this.gdpr._acquireMutationFence(userId, "snapshot_preview");
       const removed = (await this.missingGames(userId, staged.operationId).group({ _id: null, count: { $sum: 1 } }).next())?.count || 0;
-      const current = await this.db.games.countDocuments({ userId }); const kept = current - removed;
+      const current = await this.db.games.countDocuments(liveBackupGamesMatch(userId)); const kept = current - removed;
       return { games: { kept, removed, added: staged.counts.games - kept }, customBuilds: staged.counts.customBuilds, opponentNotes: staged.counts.opponentNotes, overlayTokens: staged.counts.overlayTokens, currentRevision: await this.membershipRevision(userId) };
     } finally { if (fence) await this.gdpr._releaseMutationFence(userId, fence); await this.staging.deleteMany({ operationId: staged.operationId }); }
   }
@@ -247,7 +253,7 @@ class UserBackupsService {
           await restoreUserSettings(this.db.users, userId, key, await this.staging.findOne({ operationId: staged.operationId, key }));
           continue;
         }
-        await collection.deleteMany({ userId });
+        await collection.deleteMany(dbKey === "games" ? liveBackupGamesMatch(userId) : { userId });
         /** @type {any[]} */ let rows = []; let bytes = 0;
         for await (const row of this.staging.find({ operationId: staged.operationId, key }).sort({ ordinal: 1 }).batchSize(BATCH)) {
           const data = { ...row.data, userId }; delete data._id; rows.push(data); bytes += BSON.calculateObjectSize(data);
@@ -256,6 +262,9 @@ class UserBackupsService {
         if (rows.length) { await fence.assert(); await collection.insertMany(rows); }
       }
       if (this.gdpr.guideSamples) await this.gdpr.guideSamples.deleteForUser(userId);
+      for await (const row of this.staging.find({ operationId: staged.operationId, key: "recountOpponent" }).batchSize(BATCH)) {
+        await fence.assert(); await this.gdpr.recountOpponent(userId, String(row.gameId));
+      }
       await this.gdpr._scrubUserGuideExamples(userId);
       return { restoredAt: new Date(), counts: staged.counts };
     } finally { await this.staging.deleteMany({ operationId: staged.operationId }); }

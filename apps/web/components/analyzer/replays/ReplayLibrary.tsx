@@ -34,6 +34,9 @@ import { useToast } from "@/components/ui/Toast";
 import { apiCall, useApi, type ClientApiError } from "@/lib/clientApi";
 import { filtersToQuery, useFilters } from "@/lib/filterContext";
 import { ReplayList } from "./ReplayList";
+import { ReplayCsvExportButton } from "./ReplayCsvExportButton";
+import { GameControlActions } from "./GameControlActions";
+import { GameSourceLabelProvider } from "../GameAnalysisLink";
 import type { ReplayLibraryResponse, ReplaySharingResponse } from "./types";
 import { useReplayListFilters } from "@/lib/useReplayListFilters";
 
@@ -44,11 +47,20 @@ type SortFilter = "date_desc" | "date_asc";
 
 /** Signed-in replay archive mounted at /app/replays. */
 export function ReplayLibrary() {
+  const { userId, isLoaded, isSignedIn } = useAuth();
+  if (!isLoaded) return <Skeleton rows={3} />;
+  if (!isSignedIn || !userId) return null;
+  return <ReplayLibraryBody key={userId} />;
+}
+
+function ReplayLibraryBody() {
   const { filters, dbRev } = useFilters();
   const { search, setSearch, result, setResult, matchup, setMatchup, sort, setSort, reset: resetReplayFilters } = useReplayListFilters();
   const deferredSearch = useDeferredValue(search.trim());
   const [cursor, setCursor] = useState<string | null>(null);
   const [cursorHistory, setCursorHistory] = useState<Array<string | null>>([]);
+  const [selecting, setSelecting] = useState(false), [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(new Set());
+  const selectionButton = useRef<HTMLButtonElement>(null);
 
   const filterKey = useMemo(
     () => JSON.stringify({ filters, deferredSearch, result, matchup, sort }),
@@ -73,12 +85,29 @@ export function ReplayLibrary() {
     if (cursor) params.set("cursor", cursor);
     return `/v1/replays?${params.toString()}`;
   }, [filters, sort, deferredSearch, result, matchup, cursor]);
+  // Export is an explicit action on the controls now visible to the user;
+  // the list's deferred search and pagination must not lag that intention.
+  const exportQuery = useMemo(() => {
+    const params = new URLSearchParams(filtersToQuery(filters).slice(1));
+    params.set("sort", sort);
+    if (search.trim()) params.set("search", search.trim());
+    if (result !== "all") params.set("result", result);
+    if (matchup !== "all") params.set("matchup", matchup);
+    return params.toString();
+  }, [filters, search, result, matchup, sort]);
+  const selectionScope = `${exportQuery}:${cursor || ""}`;
+  const priorSelectionScope = useRef(selectionScope);
+  useEffect(() => {
+    if (priorSelectionScope.current === selectionScope) return;
+    priorSelectionScope.current = selectionScope; setSelectedIds(new Set());
+  }, [selectionScope]);
 
   const {
     data,
     error,
     isLoading,
     isValidating,
+    isPreviousData,
     mutate,
   } = useApi<ReplayLibraryResponse>(path, {
     keepPreviousData: true,
@@ -92,6 +121,9 @@ export function ReplayLibrary() {
   }, [dbRev, mutate]);
 
   const playerName = data?.profile.displayName?.trim() || "You";
+  const selectionStale = Boolean(isPreviousData) || search.trim() !== deferredSearch || priorSelectionScope.current !== selectionScope;
+  const currentSelection = selectionStale ? new Set<string>() : selectedIds;
+  const selectedTargets = (data?.items || []).filter(game => currentSelection.has(game.gameId));
   const hasReplayFilters = search.length > 0 || result !== "all" || matchup !== "all" || sort !== "date_desc";
 
   function goOlder() {
@@ -121,6 +153,7 @@ export function ReplayLibrary() {
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-display text-h3 font-bold text-text">Replay archive</h2>
+                <ReplayCsvExportButton query={exportQuery} />
                 {data ? (
                   <Badge variant="cyan" size="sm">
                     {data.items.length}{data.total != null ? ` of ${data.total.toLocaleString()}` : ""} shown
@@ -178,8 +211,17 @@ export function ReplayLibrary() {
               <Button variant="ghost" size="sm" onClick={resetReplayFilters} disabled={!hasReplayFilters}>
                 Reset
               </Button>
+              <Button variant="secondary" size="sm" aria-pressed={selecting} onClick={() => { setSelecting(value => !value); setSelectedIds(new Set()); }}>Select replays</Button>
             </div>
           </div>
+          {selecting ? <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+            <Button ref={selectionButton} variant="secondary" disabled={selectionStale || !data?.items.length} onClick={() => setSelectedIds(currentSelection.size === data?.items.length ? new Set() : new Set(data?.items.map(game => game.gameId) || []))}>{currentSelection.size === data?.items.length && currentSelection.size ? "Clear selection" : "Select this page"}</Button>
+            <span className="text-caption text-text-muted">{currentSelection.size} selected · this page only (up to {PAGE_SIZE})</span>
+            <GameControlActions targets={selectedTargets} scopeKey={`library:${selectionScope}`} onComplete={async changes => {
+              setSelectedIds(previous => new Set([...previous].filter(id => !changes.some(change => change.gameId === id))));
+              await mutate(); if (priorSelectionScope.current === selectionScope) selectionButton.current?.focus();
+            }} />
+          </div> : null}
         </div>
 
         <div>
@@ -188,7 +230,7 @@ export function ReplayLibrary() {
           ) : error ? (
             <ReplayError error={error} onRetry={() => void mutate()} />
           ) : data ? (
-            <ReplayList items={data.items} owner playerName={playerName} listQuery={path.split("?", 2)[1]} />
+            <GameSourceLabelProvider label="Replay Library" filters={path.split("?", 2)[1]} replace><ReplayList items={data.items} owner playerName={playerName} listQuery={path.split("?", 2)[1]} selection={selecting ? { selectedIds: currentSelection, disabled: selectionStale, onToggle: gameId => { if (selectionStale) return; setSelectedIds(previous => { const next = new Set(previous); if (next.has(gameId)) next.delete(gameId); else next.add(gameId); return next; }); } } : undefined} /></GameSourceLabelProvider>
           ) : null}
         </div>
 

@@ -21,6 +21,7 @@ import { SnapshotManager } from "./SnapshotManager";
 import { DataRepairCard } from "./DataRepairCard";
 
 const AccountDeleteDialog = dynamic(() => import("./AccountDeleteDialog"), { ssr: false });
+const HiddenGames = dynamic(() => import("./HiddenGames"), { ssr: false });
 
 export function SettingsBackups() {
   const { getToken } = useAuth();
@@ -137,6 +138,8 @@ export function SettingsBackups() {
 
       <SnapshotManager onRestored={refreshHistory} />
       <DataRepairCard onStarted={refreshHistory} />
+
+      <HiddenGames />
 
       <Section
         title="Delete game history"

@@ -496,6 +496,16 @@ class GuideSamplesService {
     return res.deletedCount || 0;
   }
 
+  /** Retain a reversible sample while excluding its owner's contribution.
+   * Settle writes already in flight so they cannot overwrite the flag.
+   * @param {string} userId @param {string} gameId @param {boolean} excluded */
+  async setExcluded(userId, gameId, excluded) {
+    await this._settleInFlight();
+    await this.coll.updateOne(this._key(userId, gameId), excluded
+      ? { $set: { excluded: true } }
+      : { $unset: { excluded: "" } });
+  }
+
   /**
    * Resolve once no capture write is in flight, including writes started
    * while waiting (tests, shutdown — where ingest has stopped).

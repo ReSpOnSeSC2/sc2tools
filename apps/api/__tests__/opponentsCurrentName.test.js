@@ -407,7 +407,7 @@ describe("OpponentsService current-name invariant", () => {
       expect(out.items[0].lastPlayed).toEqual(new Date("2026-03-19"));
     });
 
-    test("heals the stored lastSeen so the next sort places the opponent correctly", async () => {
+    test("read-time date overlay leaves stored lastSeen to fenced ingest/recount writes", async () => {
       const userId = "u_lastseen_heal";
       await seedLastSeenBugState(userId);
       await opponents.list(userId);
@@ -415,7 +415,7 @@ describe("OpponentsService current-name invariant", () => {
         userId,
         pulseId: baseGame.pulseId,
       });
-      expect(row.lastSeen).toEqual(new Date("2026-03-19"));
+      expect(row.lastSeen).toEqual(new Date("2018-10-20"));
     });
 
     test("does NOT overlay backward when stored lastSeen is fresher than any game date", async () => {

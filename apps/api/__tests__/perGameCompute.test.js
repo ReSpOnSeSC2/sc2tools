@@ -14,7 +14,7 @@ describe("services/perGameCompute", () => {
     const detailRead = jest.fn();
     const service = new PerGameComputeService({ games: { findOne } }, { gameDetails: { findOne: detailRead } });
     expect(await service.hasGame("u", "g")).toBe(true);
-    expect(findOne).toHaveBeenCalledWith({ userId: "u", gameId: "g" }, { projection: { _id: 1 } });
+    expect(findOne).toHaveBeenCalledWith(expect.objectContaining({ userId: "u", gameId: "g" }), { projection: { _id: 1 } });
     expect(detailRead).not.toHaveBeenCalled();
     findOne.mockResolvedValue(null);
     expect(await service.hasGame("other", "g")).toBe(false);
@@ -767,6 +767,9 @@ describe("services/perGameCompute", () => {
       await svc.listForRulePreview("u1", {});
       expect(capture.match).toEqual({
         userId: "u1",
+        excluded: { $ne: true },
+        _deleted: { $ne: true },
+        _deletionPending: { $ne: true },
         isResumedFromReplay: { $ne: true },
       });
     });
@@ -860,6 +863,9 @@ describe("services/perGameCompute", () => {
       });
       expect(observedFilter).toEqual({
         userId: "u1",
+        excluded: { $ne: true },
+        _deleted: { $ne: true },
+        _deletionPending: { $ne: true },
         isResumedFromReplay: { $ne: true },
         myBuild: "PvZ - AlphaStar Style (Oracle/Robo)",
         "opponent.strategy": "Zerg - 3 Base Macro (Hatch First)",
@@ -891,17 +897,26 @@ describe("services/perGameCompute", () => {
       await svc.listForRulePreview("u1", { limit: 10, match: "bogus" });
       expect(observedFilter).toEqual({
         userId: "u1",
+        excluded: { $ne: true },
+        _deleted: { $ne: true },
+        _deletionPending: { $ne: true },
         isResumedFromReplay: { $ne: true },
       });
       // @ts-expect-error — exercising the defensive path
       await svc.listForRulePreview("u1", { limit: 10, match: [1, 2] });
       expect(observedFilter).toEqual({
         userId: "u1",
+        excluded: { $ne: true },
+        _deleted: { $ne: true },
+        _deletionPending: { $ne: true },
         isResumedFromReplay: { $ne: true },
       });
       await svc.listForRulePreview("u1", { limit: 10, match: null });
       expect(observedFilter).toEqual({
         userId: "u1",
+        excluded: { $ne: true },
+        _deleted: { $ne: true },
+        _deletionPending: { $ne: true },
         isResumedFromReplay: { $ne: true },
       });
     });

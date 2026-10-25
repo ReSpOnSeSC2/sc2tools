@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { AnalyzerProvider } from "../AnalyzerProvider";
 import { filtersToQuery, useFilters } from "@/lib/filterContext";
+vi.mock("@clerk/nextjs", () => ({ useAuth: () => ({ isLoaded: true, isSignedIn: true, userId: "owner" }) }));
 vi.mock("@/lib/useSeasons", async (original) => ({ ...(await original<typeof import("@/lib/useSeasons")>()), useSeasons: () => ({ data: undefined }) }));
 vi.mock("@/lib/useUserSocket", () => ({ useUserSocket: () => undefined }));
 vi.mock("@/components/analyzer/arcade/hooks/useAnalysisGames", () => ({ AnalysisGamesProvider: ({ children }: { children: React.ReactNode }) => children }));

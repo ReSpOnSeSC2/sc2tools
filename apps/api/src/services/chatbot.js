@@ -1,5 +1,7 @@
 "use strict";
 
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+
 /**
  * ChatbotService — one-line plain-text answers for Nightbot /
  * StreamElements / Fossabot custom-API commands.
@@ -444,7 +446,7 @@ class ChatbotService {
     }
     try {
       return await this.db.games.findOne(
-        { userId, isResumedFromReplay: { $ne: true } },
+        { userId, ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true } },
         { projection: { _id: 0 }, sort: { date: -1 } },
       );
     } catch (err) {
@@ -533,7 +535,7 @@ class ChatbotService {
       return await this.db.games.findOne(
         {
           userId,
-          isResumedFromReplay: { $ne: true },
+          ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
           myBuild: { $type: "string", $ne: "" },
         },
         {

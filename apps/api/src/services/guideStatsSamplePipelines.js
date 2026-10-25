@@ -1,4 +1,5 @@
 "use strict";
+const { STATS_GAME_MATCH } = require("../util/gameVisibility");
 
 /**
  * guide_stats aggregation pipelines over ``guide_samples`` (milestone
@@ -63,6 +64,7 @@ function sampleBaseStages(matchup, projection) {
   return [
     {
       $match: {
+        ...STATS_GAME_MATCH,
         matchup,
         buildKey: { $in: [...buildNamesForMatchup(matchup)] },
         era: { $in: [...PATCH_ERAS] },

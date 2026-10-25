@@ -1,11 +1,14 @@
 "use strict";
 
+const { STATS_GAME_MATCH, isStatsGame } = require("../util/gameVisibility");
+
 const { ObjectId } = require("mongodb");
 const { LIMITS, COLLECTIONS } = require("../config/constants");
 const { hmac } = require("../util/hash");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { parseExactMapNames } = require("../util/exactMapFilter");
+const { accountMatchHandles } = require("../util/accountFilter");
 const { opponentSeries } = require("./opponentSeries");
 const { parseAnalysisGameIds } = require("../util/opponentAnalysisMembership");
 const { eraForGame } = require("../util/patchEra");
@@ -164,6 +167,7 @@ const OPPONENT_PROFILE_DOC_PROJECTION = {
 };
 
 const PROFILE_GAME_PROJECTION = {
+  myToonHandle: 1,
   // Kept internally for the one-row-at-a-time legacy detail fallback. The
   // strict response serializer below never exposes Mongo identifiers.
   _id: 1,
@@ -748,7 +752,7 @@ class OpponentsService {
       {
         $match: {
           userId,
-          isResumedFromReplay: { $ne: true },
+          ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
           "opponent.pulseId": { $in: pulseIds },
           "opponent.displayName": { $type: "string", $ne: "" },
         },
@@ -840,7 +844,7 @@ class OpponentsService {
       {
         $match: {
           userId,
-          isResumedFromReplay: { $ne: true },
+          ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
           "opponent.pulseId": { $in: pulseIds },
         },
       },
@@ -869,7 +873,7 @@ class OpponentsService {
       {
         $match: {
           userId,
-          isResumedFromReplay: { $ne: true },
+          ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
           "opponent.pulseId": { $in: pulseIds },
           "opponent.mmr": { $type: "number" },
         },
@@ -1006,11 +1010,9 @@ class OpponentsService {
    * (``OpponentsTab.tsx``) already prefers ``lastPlayed`` over
    * ``lastSeen``, matching the filtered path's output shape.
    *
-   * Opportunistic write-back: when stored ``lastSeen`` is older than
-   * the games-derived latest, we queue a bulk update to heal the row
-   * in place. Failures are non-fatal — the next read will retry.
-   * This means a stale-row user gets corrected sort order on their
-   * next list call, without waiting for the one-shot migration.
+   * Keep this overlay read-only. A games snapshot taken before Hide must
+   * not write its stale date over an exclusive owner-control recount.
+   * Ingest/recounts maintain the stored date used by the cursor sort.
    *
    * One aggregation per page. Uses the
    * ``{opponent.pulseId, userId, date}`` index. Safe on an empty page.
@@ -1032,7 +1034,7 @@ class OpponentsService {
       {
         $match: {
           userId,
-          isResumedFromReplay: { $ne: true },
+          ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
           "opponent.pulseId": { $in: pulseIds },
         },
       },
@@ -1050,8 +1052,6 @@ class OpponentsService {
         byPulseId.set(doc._id, doc.latestDate);
       }
     }
-    /** @type {Array<{updateOne: {filter: object, update: object}}>} */
-    const heals = [];
     for (const r of rows) {
       if (!r || typeof r.pulseId !== "string") continue;
       const latest = byPulseId.get(r.pulseId);
@@ -1062,24 +1062,7 @@ class OpponentsService {
       if (latestMs > storedMs) {
         // Surface to the frontend immediately.
         r.lastPlayed = latest;
-        // Heal the stored row so the next list call's
-        // ``{ lastSeen: -1 }`` sort places this opponent correctly.
-        heals.push({
-          updateOne: {
-            filter: { userId, pulseId: r.pulseId },
-            update: { $set: { lastSeen: latest } },
-          },
-        });
       }
-    }
-    if (heals.length === 0) return;
-    try {
-      await this.db.opponents.bulkWrite(heals, { ordered: false });
-    } catch (err) {
-      this.logger.warn(
-        { err, userId, count: heals.length },
-        "opponents_lastseen_heal_failed",
-      );
     }
   }
 
@@ -1577,7 +1560,9 @@ class OpponentsService {
       : idsFilter
         ? { userId, ...idsFilter }
         : { userId, "opponent.pulseId": pulseId };
+    Object.assign(gamesFilter, STATS_GAME_MATCH);
     gamesFilter.isResumedFromReplay = { $ne: true };
+    if (Array.isArray(filters.accounts) && filters.accounts.length) gamesFilter.myToonHandle = { $in: accountMatchHandles(filters.accounts) };
     /** @type {Array<any>} */
     const fetchedGames = await this.db.games
       .find(gamesFilter, { projection: PROFILE_GAME_PROJECTION })
@@ -2232,7 +2217,7 @@ class OpponentsService {
     for (const [pulseId, boundary] of boundaryByPulseId) {
       const competitive = {
         userId,
-        isResumedFromReplay: { $ne: true },
+        ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
         $or: [
           { "opponent.pulseId": pulseId },
           { oppPulseId: pulseId },
@@ -3098,7 +3083,7 @@ class OpponentsService {
     if (!row) return null;
     const inReplayMmrCount = await this.db.games.countDocuments({
       userId,
-      isResumedFromReplay: { $ne: true },
+      ...STATS_GAME_MATCH, isResumedFromReplay: { $ne: true },
       "opponent.pulseId": pulseId,
       "opponent.mmr": { $type: "number" },
     });
@@ -3866,7 +3851,8 @@ function hasFilters(f) {
       || typeof f.maxMinutes === "number"
       || f.excludeTooShort
       || f.mapPool
-      || f.gameSize,
+      || f.gameSize
+      || (Array.isArray(f.accounts) && f.accounts.length > 0),
   );
 }
 
@@ -3946,10 +3932,13 @@ function serializeCompactProfileGame(g) {
  * @returns {Array<any>}
  */
 function filterGamesByAnalyzerScope(games, f) {
+  games = games.filter(isStatsGame);
   if (!f || typeof f !== "object") return games;
   const exactMaps = f.mapExact === undefined ? null : new Set(parseExactMapNames(JSON.stringify(f.mapExact)));
+  const accounts = f.accounts ? new Set(accountMatchHandles(f.accounts)) : null;
   return games.filter((g) => {
     if (!g || typeof g !== "object") return false;
+    if (accounts && !accounts.has(g.myToonHandle)) return false;
     const opp = g.opponent || {};
 
     if (f.race && canonicalRaceLetter(g.myRace) !== f.race) return false;

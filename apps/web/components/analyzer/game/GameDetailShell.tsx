@@ -114,7 +114,8 @@ export function GameDetailShell({
           {backLabel}
         </Link>
 
-        <Card variant="feature" padded={false} className="group/map relative">
+        <Card variant="feature" padded={false} className="group/map relative overflow-visible">
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl">
           <MapArtwork
             mapName={game.map}
             size="hero"
@@ -129,6 +130,7 @@ export function GameDetailShell({
             aria-hidden
             className="absolute inset-0 bg-gradient-to-t from-bg-surface/80 via-transparent to-bg-surface/20"
           />
+          </div>
 
           <div className="relative space-y-3 p-4 sm:p-5">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

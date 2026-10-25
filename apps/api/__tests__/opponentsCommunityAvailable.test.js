@@ -50,6 +50,9 @@ describe("CommunityService.opponentProfileAvailable", () => {
     const { db, calls } = fakeDb({ contributors: 5, pulseCharacterId: "994428" });
     await new CommunityService(db).opponentProfileAvailable("1-S2-1-1");
     expect(calls.lastFilter).toEqual({
+      excluded: { $ne: true },
+      _deleted: { $ne: true },
+      _deletionPending: { $ne: true },
       isResumedFromReplay: { $ne: true },
       $or: [
         { "opponent.pulseId": "1-S2-1-1" },
