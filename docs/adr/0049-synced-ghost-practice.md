@@ -30,17 +30,23 @@ data moves only through an explicit owner-specific migration; an unscoped old
 localStorage value is never another account's offline fallback. Account caches
 are keyed by owner. Authentication, cancellation and actual deadlines surround
 token lookup, response bodies and save acknowledgement boundaries.
+Reads also carry an owner epoch, so an A→B→A transition cannot reuse a held
+token lookup or response body from the first A session.
 
 Practice uses a saved private build's reference first, then its owned source
 replay, then positive rule deadlines as labelled checkpoints. Public snapshots
 cannot name a private source replay or select an unrelated same-slug private
-reference. Published guides reuse their recorded community medians. Negative,
+reference. A source replay must match the chosen own race even when a saved
+definition was edited after capture. Published guides reuse their recorded
+community medians. Negative,
 maximum-count and proxy-location constraints do not become produced steps;
 cumulative count rules do not invent duplicate production. Native Companion
 assignments and its assistance opt-in remain separate.
 
-Practice actions and the app chip load their larger code lazily. A build-card
-render starts no per-card reference lookup or provider fan-out. OBS source URLs
+Practice actions, replay grading/reference controls and the app chip load their
+larger code lazily, with bounded chunk loading and local retry. The preference
+transport is framework-free to preserve server-guide bundle boundaries. A
+build-card render starts no per-card reference lookup or provider fan-out. OBS source URLs
 remain permanent across assignment edits. The separate URL voice opt-in still
 requires a new URL when that switch changes. No production operation or desktop
 release is part of this implementation.

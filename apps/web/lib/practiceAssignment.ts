@@ -2,6 +2,7 @@ import { apiCall, boundedApiRequest } from "./clientApi";
 import { writeSynced } from "./ghostSyncIO";
 import { referencePracticeTarget, replayOrderTarget, ruleCheckpointTarget } from "./practiceTarget";
 import { buildGhostTargetFromGuide } from "./guides/ghost";
+import { normalizeConcreteGhostRace } from "./ghostBuild";
 import type { GuideBuildPayload } from "./guides/types";
 import type { GhostMatchupKey, GhostTarget } from "./ghostBuild";
 
@@ -48,8 +49,12 @@ export async function resolvePracticeTarget(input: PracticeInput, matchup: Ghost
   }
   if (input.privateBuild && input.build.sourceGameId) {
     try {
-      const order = await apiCall<{ events?: unknown; opp_events?: unknown }>(getToken, `/v1/games/${encodeURIComponent(input.build.sourceGameId)}/build-order`, { signal });
-      const target = replayOrderTarget(input.build.name, input.build.perspective === "opponent" ? order.opp_events : order.events, input.build.sourceGameId);
+      const order = await apiCall<{ events?: unknown; opp_events?: unknown; my_race?: unknown; opp_race?: unknown }>(getToken, `/v1/games/${encodeURIComponent(input.build.sourceGameId)}/build-order`, { signal });
+      const otherSide = input.build.perspective === "opponent";
+      // A saved definition's race can be edited after capture. An old replay
+      // must not silently coach a different faction in the newly chosen slot.
+      const ownRace = normalizeConcreteGhostRace(otherSide ? order.opp_race : order.my_race);
+      const target = ownRace === matchup[0] ? replayOrderTarget(input.build.name, otherSide ? order.opp_events : order.events, input.build.sourceGameId) : null;
       if (target) return { target, source: "Source replay build order" };
     } catch (error) {
       if (!error || typeof error !== "object" || !("status" in error) || error.status !== 404) throw error;

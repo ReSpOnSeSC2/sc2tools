@@ -2,9 +2,10 @@
 
 import { useAuth } from "@clerk/nextjs";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { boundedApiRequest, useApi } from "./clientApi";
+import { boundedApiRequest } from "./clientApi";
 import { emptyGhostBuildConfig, type GhostBuildConfig, type GhostMatchupKey, type GhostTarget } from "./ghostBuild";
-import { GHOST_PREF_PATH, writeSynced, type GhostPatch } from "./ghostSyncIO";
+import { GHOST_PREF_PATH, readSynced, writeSynced, type GhostPatch } from "./ghostSyncIO";
+import { useGhostResource } from "./useGhostResource";
 import { GHOST_SYNC_EVENT, normalizeGhostSnapshot, readGhostPracticeCache, writeGhostPracticeCache } from "./ghostSyncModel";
 import { useUserSocket } from "./useUserSocket";
 
@@ -20,7 +21,7 @@ export function useGhostPractice() {
   const owner = isLoaded && isSignedIn && userId ? userId : null;
   const currentOwner = useRef(owner); currentOwner.current = owner;
   const active = useRef<AbortController | null>(null);
-  const prefs = useApi<GhostBuildConfig | null>(GHOST_PREF_PATH, { keepPreviousData: false, revalidateOnFocus: true }, { timeoutMs: GHOST_REQUEST_TIMEOUT });
+  const prefs = useGhostResource<GhostBuildConfig | null>(GHOST_PREF_PATH, readSynced);
   const refresh = prefs.mutate;
   const [state, setState] = useState<{ owner: string | null; saving: boolean; error: string | null }>({ owner, saving: false, error: null });
   const [cache, setCache] = useState<{ owner: string; config: GhostBuildConfig | null } | null>(null);
@@ -33,7 +34,7 @@ export function useGhostPractice() {
     setCache(owner ? { owner, config: readGhostPracticeCache(owner) } : null);
     return () => { currentOwner.current = null; const pending = active.current; active.current = null; pending?.abort(); };
   }, [owner]);
-  const incoming = useMemo(() => !owner || prefs.isPreviousData ? null : normalizeGhostSnapshot(prefs.data), [owner, prefs.isPreviousData, prefs.data]);
+  const incoming = useMemo(() => !owner ? null : normalizeGhostSnapshot(prefs.data), [owner, prefs.data]);
   if (owner && incoming && (!latest.current || (incoming.revision ?? 0) >= (latest.current.config.revision ?? 0))) latest.current = { owner, config: incoming };
   const clean = owner && latest.current?.owner === owner ? latest.current.config : null;
   useEffect(() => {

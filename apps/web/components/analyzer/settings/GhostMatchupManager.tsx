@@ -122,7 +122,7 @@ export function GhostMatchupManager({
         </p>
       </div>
 
-      {library.length === 0 ? (
+      {library.length === 0 && assignedCount(loadout) === 0 ? (
         <div
           className="min-w-0 rounded-xl border border-dashed border-border bg-bg-elevated/40 px-4"
           data-testid="ghost-library-empty"
@@ -312,8 +312,9 @@ function MatchupSlot({
         </Select>
         <p id={helpId} className="break-words text-micro text-text-dim">
           {hasChoices
-            ? `${library.length} saved ${matchup} build${library.length === 1 ? "" : "s"} available.`
-            : `No saved ${matchup} builds available yet.`}
+            ? `${library.length} saved ${matchup} build${library.length === 1 ? "" : "s"} in this browser.`
+            : target ? "No other builds saved in this browser. Use Practice on another build to replace this assignment."
+              : `No ${matchup} builds saved in this browser yet.`}
         </p>
       </div>
 

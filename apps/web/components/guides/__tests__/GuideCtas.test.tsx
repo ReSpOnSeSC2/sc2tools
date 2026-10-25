@@ -72,8 +72,8 @@ describe("GuideCtas", () => {
     });
   });
 
-  it("delegates the guide target to the shared synced Practice action and retains analytics", () => {
-    renderCtas(); fireEvent.click(screen.getByRole("button", { name: "Practice in PvZ" }));
+  it("delegates the guide target to the shared synced Practice action and retains analytics", async () => {
+    renderCtas(); fireEvent.click(await screen.findByRole("button", { name: "Practice in PvZ" }));
     expect(mocks.practice).toMatchObject({ matchup: "PvZ", target: TARGET });
     expect(mocks.gaEvent).toHaveBeenCalledWith("guide_cta_click", { cta: "practice", matchup: "PvZ", build: "stargate-into-glaives" });
   });

@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { lazy, Suspense } from "react";
 import { useAuth } from "@clerk/nextjs";
 import { ArrowRight, TrendingUp } from "lucide-react";
-import { PracticeButton } from "@/components/practice/PracticeButton";
 import { gaEvent } from "@/lib/analytics/gtag";
 import type { GhostTarget } from "@/lib/ghostBuild";
 import type { GuideMatchup } from "@/lib/guides/types";
@@ -11,6 +11,7 @@ import {
   GUIDE_PRIMARY_ACTION_CLASS,
   GUIDE_SECONDARY_ACTION_CLASS,
 } from "@/components/guides/guideUi";
+const PracticeButton = lazy(() => import("@/components/practice/PracticeButton").then(module => ({ default: module.PracticeButton })));
 
 /**
  * GuideCtas — the three calls to action on a build guide:
@@ -52,7 +53,7 @@ export function GuideCtas({ matchup, buildSlug, matchupPath, ghostTarget }: Guid
           {signedIn ? "See your record with this build" : "Track your win rate with this build — free"}
         </Link>
         {signedIn ? <Link href="/app/builds" className={GUIDE_SECONDARY_ACTION_CLASS} onClick={() => track("my-builds")}>Open my builds</Link> : null}
-        {ghostTarget ? <PracticeButton build={{ name: ghostTarget.name, race: matchup[0], vsRace: matchup[2] }} target={ghostTarget} matchup={matchup} onPractice={() => track("practice")} /> : null}
+        {ghostTarget ? <Suspense fallback={<span role="status" className={GUIDE_SECONDARY_ACTION_CLASS}>Loading practice…</span>}><PracticeButton build={{ name: ghostTarget.name, race: matchup[0], vsRace: matchup[2] }} target={ghostTarget} matchup={matchup} onPractice={() => track("practice")} /></Suspense> : null}
         <Link href={matchupPath} onClick={() => track("matchup")} className={GUIDE_SECONDARY_ACTION_CLASS}>
           See what&apos;s winning
           <ArrowRight className="h-4 w-4" aria-hidden />

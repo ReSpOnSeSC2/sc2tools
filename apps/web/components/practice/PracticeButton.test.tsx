@@ -34,10 +34,10 @@ describe("shared Practice split button", () => {
     await waitFor(() => expect(h.assign).toHaveBeenCalledOnce()); expect(h.assign.mock.calls[0][1]).toBe("PvZ");
     expect(screen.getByRole("link", { name: "Open Ghost settings" }).getAttribute("href")).toBe("/settings?tab=overlay&section=look");
   });
-  it("requires sign-in and never creates an anonymous browser-only assignment", () => {
+  it("requires sign-in and never creates an anonymous browser-only assignment", async () => {
     h.auth = { ...h.auth, isSignedIn: false }; render(<PracticeButton build={build} />);
     fireEvent.click(screen.getByRole("button", { name: "Practice in PvT" }));
-    expect(screen.getByRole("link", { name: /Sign in to save/ }).getAttribute("href")).toBe("/sign-in"); expect(h.assign).not.toHaveBeenCalled();
+    expect((await screen.findByRole("link", { name: /Sign in to save/ })).getAttribute("href")).toBe("/sign-in"); expect(h.assign).not.toHaveBeenCalled();
   });
   it("cancels a held token at a same-user auth-loading boundary", async () => {
     let release!: (token: string) => void; h.auth.getToken.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));

@@ -15,7 +15,7 @@ describe("honest practice source selection", () => {
     expect(result.target.steps).toHaveLength(80); expect(result.target.sourceGameId).toBe("ref"); expect(result.source).toMatch(/reference/); expect(h.call).toHaveBeenCalledTimes(1);
   });
   it("then reads the private source replay using the build's perspective", async () => {
-    h.call.mockResolvedValueOnce({ references: {} }).mockResolvedValueOnce({ events: [{ time: 10, name: "Wrong" }], opp_events: [{ time: 12, name: "SCV" }, { time: 40, name: "Barracks" }] });
+    h.call.mockResolvedValueOnce({ references: {} }).mockResolvedValueOnce({ my_race: "Protoss", opp_race: "Terran", events: [{ time: 10, name: "Wrong" }], opp_events: [{ time: 12, name: "SCV" }, { time: 40, name: "Barracks" }] });
     const result = await resolvePracticeTarget({ ...input, build: { ...input.build, perspective: "opponent" } }, "TvP", async () => "token", signal());
     expect(result.target.steps).toEqual([{ supply: null, t: 40, name: "Barracks" }]); expect(result.target.sourceGameId).toBe("source");
     expect(h.call.mock.calls[1][1]).toBe("/v1/games/source/build-order");
@@ -24,6 +24,11 @@ describe("honest practice source selection", () => {
     h.call.mockResolvedValueOnce({ references: {} }).mockRejectedValueOnce({ status: 404 });
     const result = await resolvePracticeTarget(input, "PvT", async () => "token", signal());
     expect(result.source).toMatch(/not recorded/); expect(result.target.name).toMatch(/checkpoints/); expect(result.target.steps[0].t).toBe(60);
+  });
+  it.each(["Terran", "Unknown"])("does not use a source replay from %s for an edited Protoss definition", async my_race => {
+    h.call.mockResolvedValueOnce({ references: {} }).mockResolvedValueOnce({ my_race, events: [{ time: 30, name: "Barracks" }] });
+    const result = await resolvePracticeTarget(input, "PvT", async () => "token", signal());
+    expect(result.source).toMatch(/Rule deadlines/); expect(result.target.steps[0].name).toBe("Gateway");
   });
   it("does not let a public snapshot fetch a named private replay", async () => {
     h.call.mockResolvedValue({ references: {} });
