@@ -47,6 +47,7 @@ from .build_definitions import (
 from .custom_builds import load_custom_builds
 from .event_extractor import build_log_lines, extract_events
 from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
+from .preset_policy import policy_snapshot, classification_evidence
 
 
 # =========================================================
@@ -99,6 +100,7 @@ class ReplayContext:
     my_events: List[Dict] = field(default_factory=list)
     opp_events: List[Dict] = field(default_factory=list)
     extract_stats: Dict[str, int] = field(default_factory=dict)
+    preset_evidence: Optional[Dict[str, Any]] = None
     my_build: Optional[str] = None
     opp_strategy: Optional[str] = None
     build_log: List[str] = field(default_factory=list)
@@ -487,8 +489,9 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
     # `perspective`. The loader defaults older v3 entries to the user side but
     # never lets an explicit opponent build enter the user's detector.
     custom = load_custom_builds()
-    opp_detector = OpponentStrategyDetector(custom["Opponent"])
-    my_detector = UserBuildDetector(custom["Self"])
+    preset_policy = policy_snapshot()
+    opp_detector = OpponentStrategyDetector(custom["Opponent"], preset_policy=preset_policy)
+    my_detector = UserBuildDetector(custom["Self"], preset_policy=preset_policy)
 
     matchup = f"vs {ctx.opponent.race}"
     # Custom v3 rules rewind finish-time events by the replay's own patch
@@ -515,6 +518,7 @@ def parse_replay(file_path: str, my_handle: str, depth: str = "live") -> ReplayC
         game_length_seconds=ctx.length_seconds,
         eight_worker=eight_worker,
     )
+    ctx.preset_evidence = classification_evidence(preset_policy, my_detector, opp_detector, my_events, opp_events)
     # "8 Pool" on the 8-worker patch 5.0.16, "12 Pool" on every other patch.
     ctx.opp_strategy = name_for_game_version(ctx.opp_strategy, ctx.game_version)
     ctx.my_build = name_for_game_version(ctx.my_build, ctx.game_version)

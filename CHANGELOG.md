@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- Admin Build Studio lists and versions all preset, private custom and community definitions. Preset replacements use one validated policy across compatible server, desktop and browser engines, with explicit completion clocks, custom-rule precedence, reviewed restores and offline fallback.
+
 ### My reviews dashboard
 
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
@@ -186,6 +190,10 @@ corresponding GitHub Release.
 ### Desktop game history
 
 - The desktop Dashboard shows game summaries, local Today W–L/MMR and replay-history progress. Recent games survives restarts with 200 private local outcomes, status/date filters, skipped reasons and selective retries. Re-sync moves to Settings Maintenance; optional game-result notifications exclude history imports.
+
+### Desktop stream titles
+
+- Streams previews MMR, league, session record, streak and matchup tokens. Optional automatic updates start off, target only selected connected platforms, skip unchanged titles and run at most once every ten minutes after a live replay syncs.
 
 ### Build supply and exports
 

@@ -7,10 +7,20 @@ const { parsePlatform } = require("./platformIntegrations");
  * Provider credentials stay in services; no route accepts a user/channel ID.
  * @param {{auth:import('express').RequestHandler,
  * integrations:import('../services/platformIntegrations').PlatformIntegrationsService,
+ * titleSession?:(userId:string)=>Promise<unknown>,
  * streamingTitles:import('../services/streamingTitles').StreamingTitlesService}} deps
  */
-function buildAgentStreamingRouter({ auth, integrations, streamingTitles }) {
+function buildAgentStreamingRouter({ auth, integrations, streamingTitles, titleSession }) {
   const router = express.Router();
+  router.get("/agent/streaming/session", auth, async (req, res, next) => {
+    try {
+      const userId = requireAccount(req);
+      if (Object.keys(req.query).length) throw new PlatformIntegrationError(400, "stream_session_request_invalid", "Session statistics use only the paired account.");
+      if (!titleSession) throw new Error("session unavailable");
+      res.set("Cache-Control", "no-store");
+      res.json(await titleSession(userId));
+    } catch (error) { next(safeFailure(error)); }
+  });
   router.get("/agent/streaming/status", auth, async (req, res, next) => {
     try {
       const userId = requireAccount(req);

@@ -40,6 +40,7 @@ from analytics.macro_score import compute_macro_score
 from .build_definitions import is_eight_worker_game, name_for_game_version
 from .custom_builds import load_custom_builds
 from .strategy_detector import OpponentStrategyDetector, UserBuildDetector
+from .preset_policy import policy_snapshot
 
 
 def load_replay_with_fallback(file_path: str):
@@ -118,8 +119,9 @@ def process_replay_task(file_path: str, player_name: str) -> dict:
             return {'status': 'error', 'file_path': file_path, 'error': "No events extracted."}
 
         custom_data = load_custom_builds()
-        opp_detector = OpponentStrategyDetector(custom_data["Opponent"])
-        my_detector = UserBuildDetector(custom_data["Self"])
+        policy = policy_snapshot()
+        opp_detector = OpponentStrategyDetector(custom_data["Opponent"], preset_policy=policy)
+        my_detector = UserBuildDetector(custom_data["Self"], preset_policy=policy)
 
         matchup = f"vs {opponent.play_race}"
         release = getattr(replay, 'release_string', None)
@@ -243,8 +245,9 @@ def debug_analyze_replay(file_path: str, player_name: str) -> str:
     lines.append(f"\nExtraction stats: {extract_stats}")
 
     custom_data = load_custom_builds()
-    opp_detector = OpponentStrategyDetector(custom_data["Opponent"])
-    my_detector = UserBuildDetector(custom_data["Self"])
+    policy = policy_snapshot()
+    opp_detector = OpponentStrategyDetector(custom_data["Opponent"], preset_policy=policy)
+    my_detector = UserBuildDetector(custom_data["Self"], preset_policy=policy)
 
     matchup = f"vs {opponent.play_race}"
     eight_worker = is_eight_worker_game(

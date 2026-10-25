@@ -37,8 +37,14 @@ class BaseStrategyDetector:
     # functions directly.
     UNIT_TECH_PREREQUISITES = UNIT_TECH_PREREQUISITES
 
-    def __init__(self, custom_builds: List[Dict]):
+    def __init__(self, custom_builds: List[Dict], preset_policy=None):
         self.custom_builds = custom_builds or []
+        self.custom_match = False
+        self.released_label = None
+        # Each parse owns one immutable policy snapshot. A concurrent policy
+        # refresh cannot mix versions across the two sides of this detector.
+        from .preset_policy import policy_snapshot, validate_policy
+        self.preset_policy = policy_snapshot() if preset_policy is None else validate_policy(preset_policy)
 
     # ---------- prereq-aware unit accounting ----------
     @staticmethod

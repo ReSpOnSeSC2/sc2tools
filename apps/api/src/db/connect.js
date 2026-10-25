@@ -318,6 +318,7 @@ async function ensureIndexes(ctx, opts = {}) {
   await ctx.ghostExamples.createIndex({ publishedAt: -1, _id: 1 });
   await ctx.ghostExamples.createIndex({ matchup: 1, publishedAt: -1, _id: 1 });
   await Promise.all([
+    ctx.siteConfig.createIndex({ kind: 1, revision: -1 }, { name: "preset_policy_history" }),
     ctx.jobRuns.createIndex({ job: 1, startedAt: -1 }),
     ctx.users.createIndex({ createdAt: -1, userId: 1 }),
     ctx.adminAudit.createIndex({ createdAt: 1 }, { expireAfterSeconds: 400 * 86400 }),
@@ -475,6 +476,7 @@ async function ensureIndexes(ctx, opts = {}) {
 
   await ctx.customBuilds.createIndex({ userId: 1, slug: 1 }, { unique: true });
   await ctx.customBuilds.createIndex({ userId: 1, updatedAt: -1 });
+  await ctx.customBuilds.createIndex({ userId: 1, _id: 1 }, { name: "admin_custom_build_catalog" });
   await ctx.customBuildJobs.createIndex({ userId: 1 }, { unique: true });
   await ctx.customBuildJobs.createIndex({ status: 1, leaseUntil: 1 });
 
@@ -617,6 +619,7 @@ async function ensureIndexes(ctx, opts = {}) {
   // dedupe + the publish/unpublish toggle.
   await ctx.communityBuilds.createIndex({ slug: 1 }, { unique: true });
   await ctx.communityBuilds.createIndex({ ownerUserId: 1, slug: 1 });
+  await ctx.communityBuilds.createIndex({ ownerUserId: 1, _id: 1 }, { name: "admin_community_build_catalog" });
   await ctx.communityBuilds.createIndex({ removed: 1, votes: -1 });
   await ctx.communityBuilds.createIndex({ matchup: 1, removed: 1, votes: -1 });
   await ctx.communityBuilds.createIndex({ removed: 1, "build.race": 1, "build.vsRace": 1, votes: -1 });

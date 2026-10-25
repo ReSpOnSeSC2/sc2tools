@@ -17,6 +17,7 @@
  *   worker.postMessage({ type: "boot", pointerUrl });
  *   // <- { type: "ready", info, heapBytes }
  */
+import { createPresetPolicyRefresh } from "./presetPolicyRefresh";
 import { bootEngine } from "./engineBoot";
 import { createEngineRuntime } from "./enginePyGlue";
 import { createEngineWorkerHost, type BootedRuntime } from "./engineWorkerHost";
@@ -40,7 +41,7 @@ async function bootWorkerEngine(pointerUrl: string): Promise<BootedRuntime> {
 
 const handle = createEngineWorkerHost(
   { post: (event, transfer) => scope.postMessage(event, transfer ?? []) },
-  { boot: bootWorkerEngine },
+  { boot: bootWorkerEngine, refreshPolicy: createPresetPolicyRefresh(process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080") },
 );
 
 scope.onmessage = (event) => {
