@@ -1,4 +1,6 @@
 "use client";
+import dynamic from "next/dynamic";
+const LazySeriesWidget = dynamic(() => import("./widgets/SeriesWidget").then(module => module.SeriesWidget), { ssr: false });
 
 import { OverlayPreviewContext } from "@/lib/overlayPreviewContext";
 import type { LiveGamePayload } from "./types";
@@ -43,6 +45,7 @@ export function CompositeTestWidgets({ live, session, randomizer, targets }: {
     ["scouting", <ScoutingWidget key="scouting" live={live} liveGame={null} />],
     ["session", <SessionWidget key="session" live={live} session={session} />],
     ["randomizer", <RandomizerWidget key="randomizer" live={live} liveGame={null} config={randomizer} visible />],
+    ["series", <LazySeriesWidget key="series" rawSeries={null} preview composite />],
   ] as const;
   const visible = cards.filter(([id]) => targets(id));
   if (!visible.length) return null;
