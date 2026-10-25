@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
-import { API_BASE } from "@/lib/clientApi";
+import { API_BASE, boundedApiRequest } from "@/lib/clientApi";
 import type { LiveGameEnvelope } from "@/components/overlay/types";
+import { mergeLiveGameStreamerHistory, type StickyStreamerHistory } from "@/components/overlay/mergeLiveGameStreamerHistory";
 
 /**
  * Live-game state surfaced to the dashboard from the cloud's
@@ -19,6 +20,7 @@ export interface LiveGameState {
   lastUpdatedAt: number | null;
   /** True while the SSE connection is established. */
   connected: boolean;
+  retry?: () => void;
 }
 
 /**
@@ -46,8 +48,13 @@ export interface LiveGameState {
  * data.
  */
 export function useLiveGame(): LiveGameState {
-  const { getToken, isLoaded, isSignedIn } = useAuth();
-  const [state, setState] = useState<LiveGameState>({
+  const { getToken, isLoaded, isSignedIn, userId, sessionId } = useAuth();
+  const scope = `${userId || ""}:${sessionId || ""}`;
+  const tokenGetter = useRef(getToken); tokenGetter.current = getToken;
+  const [revision, setRevision] = useState(0);
+  const retry = useCallback(() => setRevision(value => value + 1), []);
+  const [state, setState] = useState<LiveGameState & { scope: string }>({
+    scope,
     live: null,
     lastUpdatedAt: null,
     connected: false,
@@ -57,11 +64,13 @@ export function useLiveGame(): LiveGameState {
   // tear down the previous fetch.
   const abortRef = useRef<AbortController | null>(null);
   const reconnectRef = useRef<number | null>(null);
-  const cancelledRef = useRef<boolean>(false);
-
   useEffect(() => {
-    if (!isLoaded || !isSignedIn) return;
-    cancelledRef.current = false;
+    if (!isLoaded || !isSignedIn) { setState({ scope: "", live: null, lastUpdatedAt: null, connected: false }); return; }
+    let cancelled = false;
+    let sticky: StickyStreamerHistory | null = null;
+    const commit = (next: LiveGameState | ((previous: LiveGameState) => LiveGameState)) => {
+      if (!cancelled) setState(previous => ({ ...(typeof next === "function" ? next(previous.scope === scope ? previous : { live: null, lastUpdatedAt: null, connected: false }) : next), scope }));
+    };
     let attempt = 0;
 
     const cleanupTimer = () => {
@@ -72,7 +81,7 @@ export function useLiveGame(): LiveGameState {
     };
 
     const scheduleReconnect = () => {
-      if (cancelledRef.current) return;
+      if (cancelled) return;
       // Exponential-ish back-off, capped — the cloud is single-instance
       // today; mashing reconnect during a real outage is anti-social.
       const delay = Math.min(10_000, 500 * Math.pow(2, attempt));
@@ -85,12 +94,12 @@ export function useLiveGame(): LiveGameState {
     };
 
     const connect = async () => {
-      if (cancelledRef.current) return;
+      if (cancelled) return;
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       let token: string | null = null;
       try {
-        token = await getToken();
+        token = await boundedApiRequest(async signal => { const value = await tokenGetter.current(); signal.throwIfAborted(); return value; }, 10_000, ctrl.signal);
       } catch {
         // Token fetch failed (Clerk session lost). Reconnect path will
         // try again — we don't try to drive the user through a sign-in
@@ -98,16 +107,20 @@ export function useLiveGame(): LiveGameState {
         scheduleReconnect();
         return;
       }
-      if (cancelledRef.current) return;
+      if (cancelled) return;
+      if (!token) { scheduleReconnect(); return; }
       let res: Response;
       try {
-        res = await fetch(`${API_BASE}/v1/me/live`, {
+        res = await boundedApiRequest(signal => {
+          signal.addEventListener("abort", () => ctrl.abort(), { once: true });
+          return fetch(`${API_BASE}/v1/me/live`, {
           headers: token ? { authorization: `Bearer ${token}` } : undefined,
           signal: ctrl.signal,
           cache: "no-store",
-        });
+          });
+        }, 15_000, ctrl.signal);
       } catch (err) {
-        if (cancelledRef.current) return;
+        if (cancelled) return;
         if (isAbortError(err)) return;
         scheduleReconnect();
         return;
@@ -120,19 +133,23 @@ export function useLiveGame(): LiveGameState {
       // hello immediately) — reset back-off so subsequent transient
       // closes don't keep doubling the delay.
       attempt = 0;
-      setState((prev) => ({ ...prev, connected: true }));
+      if (cancelled) { void res.body.cancel().catch(() => {}); return; }
+      commit((prev) => ({ ...prev, connected: true }));
       const reader = res.body.getReader();
+      const cancelReader = () => { void reader.cancel().catch(() => {}); };
+      ctrl.signal.addEventListener("abort", cancelReader, { once: true });
       const decoder = new TextDecoder("utf-8");
       let buf = "";
       try {
         for (;;) {
-          if (cancelledRef.current) {
+          if (cancelled) {
             reader.cancel().catch(() => {});
             return;
           }
           const { value, done } = await reader.read();
           if (done) break;
           buf += decoder.decode(value, { stream: true });
+          if (buf.length > 262_144) throw new Error("Live update frame too large");
           // SSE event delimiter is a blank line. Split-and-keep the
           // residual partial frame for the next iteration.
           let idx;
@@ -146,14 +163,16 @@ export function useLiveGame(): LiveGameState {
                 || env.phase === "idle"
                 || env.phase === "menu"
               ) {
-                setState({
+                sticky = null;
+                commit({
                   live: null,
                   lastUpdatedAt: Date.now(),
                   connected: true,
                 });
               } else {
-                setState({
-                  live: env,
+                const merged = mergeLiveGameStreamerHistory(env, sticky); sticky = merged.sticky;
+                commit({
+                  live: merged.envelope,
                   lastUpdatedAt: Date.now(),
                   connected: true,
                 });
@@ -162,13 +181,16 @@ export function useLiveGame(): LiveGameState {
           }
         }
       } catch (err) {
-        if (cancelledRef.current) return;
+        if (cancelled) return;
         if (!isAbortError(err)) {
           // Stream errored mid-read — fall through to reconnect.
         }
+      } finally {
+        ctrl.signal.removeEventListener("abort", cancelReader);
+        cancelReader();
       }
-      if (!cancelledRef.current) {
-        setState((prev) => ({ ...prev, connected: false }));
+      if (!cancelled) {
+        commit((prev) => ({ ...prev, connected: false }));
         scheduleReconnect();
       }
     };
@@ -176,7 +198,7 @@ export function useLiveGame(): LiveGameState {
     void connect();
 
     return () => {
-      cancelledRef.current = true;
+      cancelled = true;
       cleanupTimer();
       if (abortRef.current) {
         try {
@@ -187,9 +209,11 @@ export function useLiveGame(): LiveGameState {
         abortRef.current = null;
       }
     };
-  }, [isLoaded, isSignedIn, getToken]);
+  }, [isLoaded, isSignedIn, scope, revision]);
 
-  return state;
+  return isLoaded && isSignedIn && state.scope === scope
+    ? { live: state.live, lastUpdatedAt: state.lastUpdatedAt, connected: state.connected, retry }
+    : { live: null, lastUpdatedAt: null, connected: false, retry };
 }
 
 /**

@@ -24,6 +24,7 @@ export function useDockSummaries(studio: StudioState, ready: boolean, platforms:
   const remaining = scene?.countdownEndsAt ? Math.max(0, scene.countdownEndsAt - now) : null;
   const timerLeft = studio.timer ? Math.max(0, studio.timer.endsAt - now) : 0;
   return {
+    "dock-scout": { summary: "Live opponent brief" },
     "dock-chat": { summary: `${count} ${count === 1 ? "platform" : "platforms"}`, loading: !platformsReady || !ready },
     "dock-highlight": { summary: studio.highlight ? "Pinned" : "Nothing pinned", active: !!studio.highlight, loading: !ready },
     "dock-scenes": { summary: scene ? `${STUDIO_SCENE_LABELS[scene.mode]}${remaining !== null ? ` · ${formatCountdown(remaining)}` : ""}` : "Live", active: !!scene, loading: !ready },

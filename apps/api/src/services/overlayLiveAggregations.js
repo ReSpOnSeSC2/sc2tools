@@ -252,6 +252,7 @@ async function recentGamesForOpponent(games, userId, opp, myRace, oppRace, exclu
     .find(filter, {
       projection: {
         _id: 0,
+        gameId: 1,
         result: 1,
         durationSec: 1,
         map: 1,
@@ -275,6 +276,7 @@ async function recentGamesForOpponent(games, userId, opp, myRace, oppRace, exclu
       result: chip,
       lengthText: formatLengthText(Number(r.durationSec) || 0),
     };
+    if (typeof r.gameId === "string" && r.gameId.length <= 200) Object.assign(row, { gameId: r.gameId });
     if (r.map) row.map = String(r.map);
     if (r.myBuild) row.myBuild = String(r.myBuild);
     if (r.opponent && r.opponent.strategy) row.oppBuild = String(r.opponent.strategy);

@@ -9,7 +9,7 @@ import { DockClient } from "../DockClient";
 const sockets = vi.hoisted(() => [] as Array<{ receive?: (raw: unknown) => void; on: ReturnType<typeof vi.fn>; off: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>);
 vi.mock("socket.io-client", () => ({ io: () => {
   const socket = { receive: undefined as ((raw: unknown) => void) | undefined, on: vi.fn(), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn() };
-  socket.on.mockImplementation((_event, callback) => { socket.receive = callback; });
+  socket.on.mockImplementation((event, callback) => { if (event === "overlay:multichat") socket.receive = callback; });
   sockets.push(socket);
   return socket;
 } }));
