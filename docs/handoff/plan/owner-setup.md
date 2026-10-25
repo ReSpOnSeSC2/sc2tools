@@ -15,6 +15,20 @@ entry. Help covers the behavior under Filters, Replays and Today.
 
 Deploy the API before the web so the private `opponentScouting` preference is available. No new environment variable, secret, collection, index, migration, job or infrastructure is needed. The existing identity/account caches and k-floor Ladder Meta documents are read with fixed bounds; scouting does not warm upstream identity links or recompute the corpus. Grouping defaults on and saves per signed-in account; the former unscoped browser value is not silently written into another account. Verify the grouping control and `/help/opponent-scouting#how-the-forecast-works` using disposable fixtures. Existing desktop apps keep their compatible brief until a future ordinary update includes the new confidence copy; no version, installer, tag or release was produced. Revert the web before API on rollback; the saved preference can remain unused.
 
+## Synced Ghost practice
+
+Deploy the API before the web so `/v1/me/preferences/ghost` GET/PUT/PATCH and
+socket snapshots are available. No environment variable, secret, collection,
+index, migration or background job is needed. Existing active overlay tokens
+receive the owner's assignments; no integration is enabled. In Settings →
+Overlay → Look, explicitly move old browser assignments once if wanted. New
+dedicated Ghost URLs remain permanent across assignment changes and clear
+actions. Legacy fragments keep working until account configuration is present;
+an explicit empty account config disarms them. The URL-specific Voice coach
+switch still needs a new copy if changed. Native Companion has separate local
+target/assistance controls. No version bump, installer or release was performed.
+See `/help/practice-ghost-build`.
+
 ## Widget manager
 
 Deploy the API before the web so the authenticated bulk widget-selection PUT is available. No new environment variable, secret, collection, migration or infrastructure is required. Existing tokens and enable/config events are reused. Starter packs require the user's review and confirmation and preserve other enabled widgets. The shared recommended-size JSON is included by the existing desktop packaging specification; no installer, version bump, tag or release was performed. Existing OBS scene dimensions remain unchanged. Verify a local or off-air Browser Source by copying/dragging it, checking its recommended size and using Preview before sending any live sample. The steps are in `/help/obs-overlay-setup`.

@@ -64,6 +64,7 @@ const { buildPresetPolicyRouter } = require("./routes/presetPolicy");
 const { BuildIntentsService } = require("./services/buildIntents");
 const { GhostExamplesService } = require("./services/ghostExamples");
 const { GhostReferencesService } = require("./services/ghostReferences");
+const { GhostConfigService } = require("./services/ghostConfig");
 const { DevicePairingsService } = require("./services/devicePairings");
 const { OverlayTokensService } = require("./services/overlayTokens");
 const { PlatformIntegrationsService } = require("./services/platformIntegrations");
@@ -709,6 +710,7 @@ function makeServices(deps, clerk, adminClerkIds) {
   const strategyPhases = new StrategyPhasesService(deps.db, { perGame });
   const ghostExamples = new GhostExamplesService({ db: deps.db, gameDetails });
   const ghostReferences = new GhostReferencesService({ db: deps.db, gameDetails });
+  const ghostConfig = new GhostConfigService({ db: deps.db, overlayTokens, io: deps.io });
   const macroBackfill = new MacroBackfillService(deps.db, { io: deps.io });
   const imports = new ImportService(deps.db, { io: deps.io, notifications, logger: deps.logger });
   const spatial = new SpatialService(deps.db);
@@ -937,6 +939,7 @@ function makeServices(deps, clerk, adminClerkIds) {
     buildStudio,
     ghostExamples,
     ghostReferences,
+    ghostConfig,
     pairings,
     overlayTokens,
     platformIntegrations,
@@ -1362,6 +1365,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
       isAdminEmail,
       onAdminGranted,
       buildIntents: services.buildIntents,
+      ghostConfig: services.ghostConfig,
       onRivalsChanged: (userId) => { services.overlayLive.invalidateForUser(userId); services.rivals.invalidateForUser(userId); },
       onScoutingChanged: (userId) => services.overlayLive.invalidateForUser(userId),
       logger: deps.logger,

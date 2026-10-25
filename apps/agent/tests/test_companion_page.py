@@ -112,6 +112,8 @@ def companion():
 
     page = build_companion_page(None, handler=handler, QtCore=QtCore, QtGui=QtGui, QtWidgets=QtWidgets)
     page.timer.stop()
+    page.show()
+    page.console.navigate("scouting")
     try:
         wait_until(app, lambda: page._detail.get("name") == "Library one", timeout=15)
     except AssertionError:
@@ -136,12 +138,19 @@ def test_handler_calls_run_off_the_gui_thread_and_real_timelines_render(companio
     assert all(worker != threading.get_ident() for worker in state["threads"])
     assert "Blink expand" in page.build_labels.text()
     assert "Bio timing" in page.build_labels.text()
+    page.set_density("full")
+    page.tabs.setCurrentIndex(0)
+    app.processEvents()
     mine = page.trees["tech"]["my"]
     assert mine.topLevelItem(0).text(0) == "Cybernetics Core"
     assert mine.topLevelItem(0).text(1) == "1:25"
     assert mine.topLevelItem(0).text(2) == "Started"
     assert mine.topLevelItem(1).text(2) == "Completed"
+    page.tabs.setCurrentIndex(2)
+    app.processEvents()
     assert page.trees["upgrades"]["my"].topLevelItem(0).text(0) == "Blink"
+    page.tabs.setCurrentIndex(1)
+    app.processEvents()
     assert page.trees["build"]["my"].topLevelItem(0).text(2) == "Recorded"
 
 

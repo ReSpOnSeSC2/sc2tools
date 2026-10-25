@@ -124,7 +124,7 @@ describe("BuildCard actions menu", () => {
     expect(menu.className).toContain("overflow-y-auto");
     expect(
       screen.getAllByRole("menuitem").map((item) => item.textContent),
-    ).toEqual(["Open full page", "Edit", "Re-match replays", "Publish…", "Delete"]);
+    ).toEqual(["Open full page", "Edit", "Practice this", "Re-match replays", "Publish…", "Delete"]);
     for (const item of screen.getAllByRole("menuitem")) {
       expect(item.className).toContain("min-h-11");
     }
@@ -243,7 +243,7 @@ describe("BuildCard variants and Community actions", () => {
     expect(publication.paths).toContain("/v1/community/my-build-publication/pvt-three-gate");
     publication.data = { published: true, publicSlug: "public-three-gate", mirrorPending: false };
     view.rerender(<BuildCard build={build({ isPublic: true })} {...callbacks} onDuplicate={vi.fn()} onChanged={changed} />);
-    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Open full page", "Edit", "Duplicate", "Update listing", "View on Community", "Copy public link", "Unpublish", "Delete"]);
+    expect(screen.getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Open full page", "Edit", "Duplicate", "Practice this", "Update listing", "View on Community", "Copy public link", "Unpublish", "Delete"]);
     expect(screen.getByRole("menuitem", { name: "View on Community" }).getAttribute("href")).toBe("/community/builds/public-three-gate");
     fireEvent.click(screen.getByRole("menuitem", { name: "Copy public link" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/community/builds/public-three-gate`));

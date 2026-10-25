@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { backToGameSource, safeGameSource } from "@/lib/gameNavigation";
 import { usePathname } from "next/navigation";
 import { ClerkLoading, useAuth, SignedIn, SignedOut, UserButton } from "@clerk/nextjs";
@@ -38,6 +39,7 @@ import { NavProgress, startNavProgress } from "./NavProgress";
 import { LogoMark } from "./LogoMark";
 import { WhatsNewButton } from "@/components/announcements/WhatsNewButton";
 import { SiteIncidentBanner } from "@/components/announcements/SiteIncidentBanner";
+const PracticeChip = dynamic(() => import("@/components/practice/PracticeChip").then(module => module.PracticeChip), { ssr: false });
 
 /* ------------------------------------------------------------------
  * AppChrome — the shell every signed-in surface renders inside:
@@ -337,6 +339,7 @@ function AppChromeShell({ children }: { children: ReactNode }) {
         </header>
 
         <SiteStats variant="app" wide analyzer={isAnalyzerPath(pathname)} signedIn={isSignedIn === true} syncStatus={<SignedIn><SyncStatus compact /></SignedIn>} />
+        <SignedIn><PracticeChip /></SignedIn>
 
         <main
           id="main-content"

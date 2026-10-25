@@ -16,6 +16,7 @@ import {
 import { BuildDossier } from "./BuildDossier";
 import { BuildDefinitionCard } from "./BuildDefinitionCard";
 import { BuildKebab } from "./BuildCard";
+import { PracticeButton } from "@/components/practice/PracticeButton";
 import type { CustomBuild } from "./types";
 
 /**
@@ -109,6 +110,7 @@ export function BuildDossierModal({
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              <PracticeButton build={build} privateBuild />
               <Button
                 size="sm"
                 variant="secondary"
