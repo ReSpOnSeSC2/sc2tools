@@ -219,6 +219,11 @@ const REGISTRY = Object.freeze({
     currentVersion: 1,
     versionKey: VERSION_KEY,
   },
+  [COLLECTIONS.TWITCH_AUTOMATION_RECEIPTS]: {
+    collection: COLLECTIONS.TWITCH_AUTOMATION_RECEIPTS,
+    currentVersion: 1,
+    versionKey: VERSION_KEY,
+  },
   // Operational + ancillary collections. None of these have a
   // multi-version migration history yet — they all started life on
   // v1 and stay there until a future shape change. Listing them here

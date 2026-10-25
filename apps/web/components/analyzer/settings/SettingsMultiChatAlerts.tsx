@@ -15,6 +15,7 @@ import { Toggle } from "@/components/ui/Toggle";
 import { ChatAlertCard } from "@/components/overlay/widgets/ChatAlertCard";
 import { useApi } from "@/lib/clientApi";
 import { SettingsGameMoments } from "./SettingsGameMoments";
+import { LazyTwitchAutomationSettings } from "./LazyTwitchAutomationSettings";
 import type { ChatSoundConfig } from "@/lib/multichat/sound";
 import { setAlertMediaGrant, toAlertMediaGrant } from "@/lib/multichat/mediaBase";
 import {
@@ -205,6 +206,7 @@ export function SettingsMultiChatAlerts({
   return (
     <div className="min-w-0 space-y-4">
       <SettingsGameMoments key={overlayToken ?? "no-token"} value={value.gameMoments} onChange={gameMoments => set({ gameMoments })} presets={availablePresets} motion={value.motion} sound={sound} overlayToken={overlayToken} />
+      <LazyTwitchAutomationSettings />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-body font-medium text-text">

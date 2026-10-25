@@ -531,3 +531,15 @@ export const WIDGET_GUIDES: readonly WidgetGuide[] = WIDGET_GUIDE_CONTENT.map(gu
   placement: `${guide.placement} Recommended standalone Browser Source: ${widgetSizes[guide.id].width} × ${widgetSizes[guide.id].height}.`,
   settingsHref: `/settings?tab=overlay&section=widgets&widget=${encodeURIComponent(guide.id)}`,
 }));
+
+/** Automation has no Browser Source or fake widget preview. Its stable Learn
+ * anchor lives beside the widget library and never opens a provider session. */
+export const STUDIO_AUTOMATION_GUIDES = [{
+  id: "twitch-predictions", name: "Twitch Predictions & game markers",
+  summary: "Optional Channel Points Predictions and stream bookmarks, with separate Twitch consent and explicit Save.",
+  capability: "Current desktop telemetry cannot prove ranked queue status. Automatic Twitch Predictions are skipped; known live two-human 1v1 starts can still add opted-in markers.",
+  needs: ["An affiliate or partner Twitch broadcaster and a live channel.", "Server-owner enablement, then your separate Predictions or markers permission and saved opt-in.", "A paired desktop agent reporting a fresh real player game; markers also require VODs enabled."],
+  setup: ["Open Settings → Overlay → Chat & alerts → Twitch automation. Both switches start off.", "Connect Predictions for Channel Points permission, or Connect markers for stream marker permission. Complete Twitch's window, then Refresh status.", "Choose a 30–300 second window (default 120) and a plain title using {me}, {opp}, {oppRace} and {oppMmr}. Win and Loss are fixed; rendered titles stop at 45 characters.", "Enable the choices you want and press Save Twitch automation. Connecting alone changes neither switch.", "In Stream Dock → Game, check the native Twitch prediction state. Confirmed Cancel requests a refund; Resolve uses only an already verified replay result."],
+  recovery: "Predictions skip rematches within 10 minutes. Games under 60 seconds or no result within 20 minutes request refunds. Unconfirmed creates are never blindly repeated. If Twitch did not return a prediction ID, check the Twitch dashboard manually.",
+  settingsHref: "/settings?tab=overlay&section=chat#twitch-automation", helpSlug: "viewer-engagement", helpAnchor: "twitch-predictions",
+}] as const;

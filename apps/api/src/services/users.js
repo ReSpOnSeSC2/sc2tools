@@ -8,6 +8,7 @@ const { stampVersion } = require("../db/schemaVersioning");
 const { ladderRegionFromToonHandle } = require("../util/regionFromToonHandle");
 const { claimUserDataLease } = require("../middleware/userDataWriteFence");
 const { sanitizeAnalyzerViews } = require("../util/analyzerViews");
+const { PREF_TYPE: TWITCH_PREF_TYPE, sanitizeTwitchAutomation } = require("./twitchAutomationPolicy");
 
 const REPLAY_SHARE_ID_RE = /^[A-Za-z0-9_-]{32}$/;
 const REPLAY_SHARE_SLUG_SUFFIX_BYTES = 5;
@@ -816,7 +817,8 @@ class UsersService {
       { projection: { _id: 0, [`preferences.${type}`]: 1 } },
     );
     const prefs = (doc && doc.preferences && doc.preferences[type]) || {};
-    return type === "analyzerViews" ? sanitizeAnalyzerViews(prefs) : type === "chatCommands" ? sanitizeChatCommands(prefs) : prefs;
+    return type === "analyzerViews" ? sanitizeAnalyzerViews(prefs) : type === TWITCH_PREF_TYPE ? sanitizeTwitchAutomation(prefs)
+      : type === "chatCommands" ? sanitizeChatCommands(prefs) : prefs;
   }
 
   /** One indexed preferences read replaces AppHome's existing misc lookup.
@@ -844,6 +846,7 @@ class UsersService {
    */
   async updatePreferences(userId, type, prefs) {
     if (type === "analyzerViews") prefs = sanitizeAnalyzerViews(prefs, true);
+    if (type === TWITCH_PREF_TYPE) prefs = sanitizeTwitchAutomation(prefs, true);
     if (type === "multichat" && prefs.alerts && typeof prefs.alerts === "object") {
       const alerts = /** @type {Record<string,unknown>} */ (prefs.alerts);
       if (alerts.gameMoments !== undefined) prefs = { ...prefs, alerts: { ...alerts, gameMoments: sanitizeGameMomentAlerts(alerts.gameMoments, true) } };

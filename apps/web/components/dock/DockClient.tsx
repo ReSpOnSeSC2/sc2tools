@@ -72,6 +72,7 @@ import { DockStatusHeader } from "./DockStatusHeader";
 import { loadGameDesk } from "./dockLazyLoaders";
 import { DockLazyPanel } from "./DockLazyPanel";
 const loadScout = () => import("./DockScout").then(module => module.DockScout);
+const loadTwitchAutomation = () => import("./DockTwitchAutomation").then(module => module.DockTwitchAutomation);
 const loadSeries = () => import("./DockSeries").then(module => module.DockSeries);
 
 /** Platform config re-read cadence — same as the OBS widget. */
@@ -379,7 +380,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
     tally?.total ?? 0, engagement.clipMoments.length, engagementReady);
   summaries["dock-series"] = seriesSummary;
   const panels: Record<DockSectionId, ReactNode> = {
-    "dock-game": <DockLazyPanel label="game desk" loader={loadGameDesk} componentProps={{ token, live: updates?.liveGame ?? null, lastLiveAt: updates?.lastLiveAt ?? null, gameStatus: updates?.gameStatus ?? null, session: updates?.session ?? null, studio, engagement, ready: studioSnapshotReady && engagementReady, busy, onPost: postStudioAction }} />,
+    "dock-game": <><DockLazyPanel label="game desk" loader={loadGameDesk} componentProps={{ token, live: updates?.liveGame ?? null, lastLiveAt: updates?.lastLiveAt ?? null, gameStatus: updates?.gameStatus ?? null, session: updates?.session ?? null, studio, engagement, ready: studioSnapshotReady && engagementReady, busy, onPost: postStudioAction }} /><DockLazyPanel label="Twitch prediction controls" loader={loadTwitchAutomation} componentProps={{ token, onInvalid }} /></>,
     "dock-series": <DockLazyPanel label="Series controls" loader={loadSeries} componentProps={{ token, rawEvent: updates?.seriesEvent, live: updates?.liveGame ?? null, lastOpponent: updates?.lastOpponent ?? null, onInvalid, onSummary: receiveSeriesSummary }} />,
     "dock-scout": <DockLazyPanel label="live scouting" loader={loadScout} componentProps={{ live: updates?.liveGame ?? null, lastUpdatedAt: updates?.lastLiveAt ?? null }} />,
     "dock-chat": <>

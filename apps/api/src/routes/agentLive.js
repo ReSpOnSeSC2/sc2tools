@@ -71,6 +71,7 @@ function normalizeName(value) {
  *   engagement?: import('../services/multichatEngagement').MultichatEngagementService,
  *   overlayTokens?: import('../services/types').OverlayTokensService,
  *   buildIntents?: { registerFromEnvelope: (userId: string, envelope: unknown) => Promise<unknown> },
+ *   twitchAutomation?: import('../services/twitchAutomation').TwitchAutomationService,
  *   logger?: import('pino').Logger,
  * }} deps
  */
@@ -101,6 +102,12 @@ function buildAgentLiveRouter(deps) {
         receivedAt: Date.now(),
       };
       const accepted = deps.broker.publish(auth.userId, enriched);
+      if (accepted && auth.source === "device" && deps.twitchAutomation?.deps.enabled === true && ["match_loading", "match_started"].includes(enriched.phase)) {
+        // Default-off server gate plus explicit opt-ins are both required.
+        // Current native telemetry cannot supply trusted ranked queue evidence;
+        // raw envelope hints/browser diagnostics never enter that argument.
+        void deps.twitchAutomation.onLive(auth.userId, enriched, { source: "device", receivedAt: enriched.receivedAt }, null).catch(() => {});
+      }
       // Crystal Ball: a loading/starting match opens a prediction
       // window on every active overlay token. Idempotent per gameKey
       // (the agent posts ~1 Hz), best-effort, never blocks the ack.
