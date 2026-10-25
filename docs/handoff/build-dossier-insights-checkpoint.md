@@ -48,8 +48,8 @@ The approved seven-minute cutoff dependency `3dceab1c` was integrated at `2a4c56
 Actual main `e2fa5d08` has a clean merge tree identical to that HEAD tree; no extra
 bookkeeping merge is needed. Required engine `25b300818c31d41b` builds/smokes
 successfully. The production Next baseline passes every unchanged budget:
-landing 214.9/215, Today 239/240, game 312.7/440, Builds 196.7/270,
-opponent 471.6/500, Dock 215.2/225, AIO 238.3/240, widget 322.4/325,
+landing 214.9/215, Today 239.1/240, game 312.7/440, Builds 197/270,
+opponent 471.7/500, Dock 215.3/225, AIO 238.3/240, widget 322.5/325,
 guide 168.7/175 kB. It uses the public nonfunctional example Clerk key from CI.
 
 The actual-source loopback browser matrix passes 189 checks with 32 captures at
@@ -72,7 +72,18 @@ existing bounded case/underscore/dot alphabet and has a regression.
 
 Actual selected and logged timing counts are separate from the 25-game cap,
 including the case of 30 performance games with only five eligible timings.
-Help, ADR, changelog and owner notes are written. Final fresh-main integration,
-independent UI/visual signoff, PR and all remote gates remain outstanding.
+Help, ADR, changelog and owner notes are written. Actual main #741 at
+`59633bfe` is integrated at `2102fa1c`; the two additive changelog/setup conflicts
+retain both packs. App wiring differs from main only by injecting the existing
+game-details reader into BuildsService. Engine/native files are absent from the
+feature diff. Combined service wiring/readers pass 44 tests and one snapshot,
+with full API types. The final integrated production build/budgets and browser
+matrix pass. The catalog/library aggregation test also verifies the same Held
+floor end to end, including zero and small samples, with no hydration.
+
+Eight representative light-phone/dark-desktop captures are committed under
+`docs/handoff/screenshots/build-dossier-*`. Complete captures/call receipts remain
+in the local evidence folder. Independent API review is clear; full UI/visual
+review and expected-head GitHub/Vercel gates are tracked in the attached PR.
 No production or provider operations were performed. Never run an old f96
 engine prebuild; shared engine writes must remain coordinated on 25b source.

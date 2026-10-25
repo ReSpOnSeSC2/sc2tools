@@ -88,7 +88,7 @@ test.each(["catalog", "custom"])("%s exposes actual selected timing coverage whe
   expect(read).toHaveBeenCalledTimes(5);
 });
 
-test("library stats reuse the same live declared denominator without hydration or list fanout", async () => {
+test("catalog and library summaries share the live declared denominator without hydration or list fanout", async () => {
   const deps = await fixture(), details = jest.spyOn(deps.details, "findMany");
   await deps.games.updateMany({ userId: owner, gameId: { $in: ["game-2", "game-3", "game-4"] } }, { $set: { buildIntent: {
     status: "confirmed", applied: true, build: ref, detected: { name: ref.name, slug: ref.slug },
@@ -97,9 +97,12 @@ test("library stats reuse the same live declared denominator without hydration o
   const service = new CustomBuildsService(deps, { perGame: /** @type {any} */ ({ gameDetails: deps.details }) });
   const [stats] = await service.evaluateAllStats(owner, { slugs: [ref.slug] });
   expect(stats).toMatchObject({ total: 30, wins: 15, losses: 15, planHeldRate: 4 / 5 });
+  const catalog = new BuildsService(deps, { gameDetails: deps.details });
+  expect((await catalog.list(owner, {})).find(row => row.name === ref.name)).toMatchObject({ total: 30, planHeldRate: 4 / 5 });
   expect(details).not.toHaveBeenCalled();
   await deps.games.updateOne({ userId: owner, gameId: "game-4" }, { $unset: { buildIntent: "" } });
   expect((await service.evaluateAllStats(owner, { slugs: [ref.slug] }))[0].planHeldRate).toBeNull();
+  expect((await catalog.list(owner, {})).find(row => row.name === ref.name)?.planHeldRate).toBeNull();
 });
 
 test("an aborted held detail read cannot hydrate a second game or return a partial summary", async () => {
