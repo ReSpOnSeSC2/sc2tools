@@ -73,6 +73,8 @@ export interface ClipMoment {
 }
 
 export interface EngagementSummary {
+  settlementSequence?: number;
+  latestRoundKey?: string;
   wall: WallEntry[];
   oracles: OracleEntry[];
   prediction: OpenPrediction | null;
@@ -182,6 +184,8 @@ export function sanitizeEngagement(raw: unknown): EngagementSummary {
         : null,
   };
   return {
+    ...(Number.isSafeInteger(s.settlementSequence) && Number(s.settlementSequence) >= 0 ? { settlementSequence: Number(s.settlementSequence) } : {}),
+    ...(str(s.latestRoundKey) ? { latestRoundKey: str(s.latestRoundKey) } : {}),
     wall,
     oracles,
     prediction: p
@@ -214,6 +218,11 @@ export function useEngagementState(
   const [summary, setSummary] = useState<EngagementSummary>(EMPTY_ENGAGEMENT);
   const [lastEvent, setLastEvent] = useState<Record<string, unknown> | null>(null);
   const lastEventAtRef = useRef(0);
+  const cursor = useRef({ token, sequence: 0, roundKey: "" });
+  const eventToken = useRef<string | null>(null);
+  const seenEvent = useRef<unknown>(null);
+  const summaryToken = useRef<string | null>(null);
+  if (cursor.current.token !== token) { cursor.current = { token, sequence: 0, roundKey: "" }; lastEventAtRef.current = 0; eventToken.current = null; }
 
   useEffect(() => {
     if (preview) return;
@@ -227,8 +236,15 @@ export function useEngagementState(
         );
         if (!res.ok) return;
         const body: unknown = await res.json();
-        if (cancelled || lastEventAtRef.current > startedAt) return;
-        setSummary(sanitizeEngagement(body));
+        if (cancelled || cursor.current.token !== token) return;
+        const next = sanitizeEngagement(body), newer = (next.settlementSequence ?? 0) > cursor.current.sequence;
+        if (newer || lastEventAtRef.current <= startedAt) {
+          cursor.current.sequence = Math.max(cursor.current.sequence, next.settlementSequence ?? 0);
+          cursor.current.roundKey = next.latestRoundKey ?? next.prediction?.gameKey ?? cursor.current.roundKey;
+          if (newer) setLastEvent(null);
+          summaryToken.current = token;
+          setSummary(next);
+        }
         setLoadedToken(token);
       } catch {
         /* transient — next tick retries */
@@ -243,12 +259,22 @@ export function useEngagementState(
   }, [token, preview]);
 
   useEffect(() => {
-    if (!engagementEvent || typeof engagementEvent !== "object") return;
-    lastEventAtRef.current = Date.now();
+    if (!engagementEvent || typeof engagementEvent !== "object" || seenEvent.current === engagementEvent) return;
+    seenEvent.current = engagementEvent;
     const ev = engagementEvent as Record<string, unknown>;
+    const sequence = Number.isSafeInteger(ev.settlementSequence) ? Number(ev.settlementSequence) : 0;
+    const key = str(ev.gameKey), previous = cursor.current;
+    if (sequence > 0 && sequence < previous.sequence) return;
+    if (["prediction-settled", "prediction-cancelled", "prediction-tally"].includes(String(ev.type))
+      && previous.roundKey && key && previous.roundKey !== key && sequence <= previous.sequence) return;
+    if (ev.type === "prediction-open" || ev.type === "prediction-settled") previous.roundKey = key || previous.roundKey;
+    previous.sequence = Math.max(previous.sequence, sequence);
+    lastEventAtRef.current = Date.now(); eventToken.current = token;
     setLastEvent(ev);
     // Live merges that keep the summary fresh between refetches.
-    setSummary((prev) => {
+    const reset = summaryToken.current !== token; summaryToken.current = token;
+    setSummary((previous) => {
+      const prev = reset ? EMPTY_ENGAGEMENT : previous;
       if (ev.type === "prediction-open") {
         return {
           ...prev,
@@ -263,12 +289,14 @@ export function useEngagementState(
         };
       }
       if (ev.type === "prediction-tally" && prev.prediction) {
+        if (typeof ev.gameKey === "string" && ev.gameKey !== prev.prediction.gameKey) return prev;
         return {
           ...prev,
           prediction: { ...prev.prediction, tally: sanitizeTally(ev.tally) },
         };
       }
-      if (ev.type === "prediction-settled") {
+      if (ev.type === "prediction-settled" || ev.type === "prediction-cancelled") {
+        if (prev.prediction && typeof ev.gameKey === "string" && ev.gameKey !== prev.prediction.gameKey) return prev;
         return { ...prev, prediction: null };
       }
       if (ev.type === "clip-moment") {
@@ -277,7 +305,8 @@ export function useEngagementState(
       }
       return prev;
     });
-  }, [engagementEvent]);
+  }, [engagementEvent, token]);
 
-  return { summary, lastEvent, loaded: !!preview || loadedToken === token };
+  return { summary: preview || loadedToken === token && summaryToken.current === token ? summary : EMPTY_ENGAGEMENT,
+    lastEvent: eventToken.current === token ? lastEvent : null, loaded: !!preview || loadedToken === token };
 }

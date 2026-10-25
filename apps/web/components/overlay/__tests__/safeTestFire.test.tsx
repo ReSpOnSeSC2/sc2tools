@@ -7,10 +7,10 @@ import { TEST_DURATION_MS } from "../widgetLifecycle";
 
 type Handler = (...args: unknown[]) => void;
 class FakeSocket {
-  handlers = new Map<string, Handler>();
+  handlers = new Map<string, Handler[]>();
   connect() {} off() {} emit() {} disconnect() {}
-  on(event: string, handler: Handler) { this.handlers.set(event, handler); }
-  fire(event: string, value: unknown) { this.handlers.get(event)?.(value); }
+  on(event: string, handler: Handler) { this.handlers.set(event, [...this.handlers.get(event) || [], handler]); }
+  fire(event: string, value: unknown) { for (const handler of this.handlers.get(event) || []) handler(value); }
 }
 const sockets: FakeSocket[] = [];
 vi.mock("socket.io-client", () => ({ io: () => { const socket = new FakeSocket(); sockets.push(socket); return socket; } }));
@@ -21,6 +21,7 @@ beforeEach(() => { sockets.length = 0; vi.useFakeTimers(); });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 const fire = (event: string, value: unknown) => act(() => { sockets.forEach((socket) => socket.fire(event, value)); });
 const advance = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+const configure = (enabledWidgets: string[]) => { fire("overlay:config", { enabledWidgets }); fire("overlay:multichat", { gameWidgetsPaused: false }); };
 const realGame = (name = "RealOpponent") => ({ type: "liveGameState", phase: "match_in_progress", gameKey: "real-game", opponent: { name, race: "Terran" }, capturedAt: 1 });
 const realSession = (mmrCurrent = 5432) => ({ wins: 7, losses: 2, games: 9, mmrCurrent, region: "NA" });
 function sample() {
@@ -29,7 +30,7 @@ function sample() {
 }
 function mount(surface: string) {
   const view = render(surface === "all" ? <OverlayClient token="token" /> : <><OverlayWidgetClient token="token" widget="opponent" /><OverlayWidgetClient token="token" widget="session" /></>);
-  fire("overlay:config", { enabledWidgets: ["opponent", "session"] }); fire("overlay:liveGame", realGame()); fire("overlay:session", realSession());
+  configure(["opponent", "session"]); fire("overlay:liveGame", realGame()); fire("overlay:session", realSession());
   return view.container;
 }
 const layer = (container: HTMLElement) => [...container.querySelectorAll('[data-overlay-layer="test"]')].map((node) => node.textContent).join(" ");
@@ -61,7 +62,7 @@ describe.each(["all", "dedicated"])("safe samples on %s sources", (surface) => {
   });
   it("keeps real post-game payload updates underneath a targeted result sample", () => {
     const { container } = render(surface === "all" ? <OverlayClient token="token" /> : <OverlayWidgetClient token="token" widget="match-result" />);
-    fire("overlay:config", { enabledWidgets: ["match-result"] });
+    configure(["match-result"]);
     fire("overlay:live", { oppName: "RealOpponent", result: "win", map: "RealMapAlpha" });
     fire("overlay:live", { oppName: "SampleOpponent", result: "loss", map: "SampleMapBeta", isTest: true, testNonce: "result-sample", testWidget: "match-result" });
     fire("overlay:live", { oppName: "RealOpponent", result: "win", map: "RealMapOmega" });
@@ -71,7 +72,7 @@ describe.each(["all", "dedicated"])("safe samples on %s sources", (surface) => {
   });
   it("does not restart a real announcement's expired deadline after the sample ends", () => {
     const { container } = render(surface === "all" ? <OverlayClient token="token" /> : <OverlayWidgetClient token="token" widget="match-result" />);
-    fire("overlay:config", { enabledWidgets: ["match-result"] });
+    configure(["match-result"]);
     fire("overlay:live", { oppName: "RealOpponent", result: "win", map: "RealMap" }); advance(5_000);
     fire("overlay:live", { oppName: "SampleOpponent", result: "loss", map: "SampleMap", isTest: true, testNonce: "timed-result", testWidget: "match-result" });
     advance(TEST_DURATION_MS);

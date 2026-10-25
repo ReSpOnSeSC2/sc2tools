@@ -180,6 +180,8 @@ export type LiveGamePayload = {
      * this to render the "Xm" elapsed-time stamp the SPA shows.
      */
     sessionStartedAt?: string;
+    /** Owner's monotonic manual-reset boundary. Used to fence old fanouts. */
+    sessionAnchorAt?: string;
     /** Current win/loss run, if 2+. Drives the streak chip. */
     streak?: { kind: "win" | "loss"; count: number };
   };
@@ -513,7 +515,11 @@ export interface LiveGameEnvelopeProfile {
  * Pulse-resolved field set on the envelope.
  */
 export interface LiveGameEnvelope {
-  /** Optional directly supplied map; unavailable maps keep all-map forecast weights. */
+  /** Cloud-reviewed exact identity links. Agent assertions are stripped. */
+  opponentChannels?: { twitch?: string; youtube?: string };
+  /** Cloud-observed ended match, with no opponent data. Key expires after 30min. */
+  lastEndedGame?: { gameKey?: string; endedAt: number };
+  /** Optional live source data; omitted maps keep all-map forecast weights. */
   map?: string;
   type: "liveGameState";
   phase: LiveGamePhase;
