@@ -81,7 +81,7 @@ it("keeps Show all time local and resets it for another opponent", () => {
 it("provides one page heading and a sticky section navigation without a duplicate back action", () => {
   render(<ProfileView pulseId="target" onBack={() => undefined} />);
   expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
-  expect(within(screen.getByRole("navigation", { name: "Dossier sections" })).getByRole("link", { name: "Brief" }).getAttribute("aria-current")).toBe("true");
+  expect(within(screen.getByRole("navigation", { name: "Dossier sections" })).getByRole("link", { name: "Ladder" }).getAttribute("aria-current")).toBe("true");
   expect(screen.queryByRole("link", { name: "All opponents" })).toBeNull();
   expect(screen.queryByText(/Build tendencies/)).toBeNull();
 });

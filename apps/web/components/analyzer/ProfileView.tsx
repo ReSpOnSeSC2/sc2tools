@@ -327,7 +327,41 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         ...(selectedBuildMatchup ? [{ key: "build", label: "Build", value: `${selectedBuildMatchup.myBuild} vs ${selectedBuildMatchup.oppStrategy}`, clear: () => setSelectedBuildMatchup(null) }] : []),
       ]} onClear={() => { setSelectedMap(null); setSelectedStrategy(null); setSelectedBuildMatchup(null); setSelectedTiming(null); }} />
       {filterActive && data.gamesTruncated ? <p className="text-caption text-text-muted">Filtered summary uses the latest analyzed games. Replay history below searches your full history.</p> : null}
-      <SectionNav variant="bar" aria-label="Dossier sections" items={[{ id: "dossier-brief", label: "Brief" }, { id: "dossier-tendencies", label: "Tendencies" }, { id: "dossier-timings", label: "Timings" }, { id: "dossier-history", label: "History" }, { id: "dossier-ladder", label: "Ladder" }, { id: "dossier-identity", label: "Identity" }]} />
+      <SectionNav variant="bar" aria-label="Dossier sections" items={[{ id: "dossier-ladder", label: "Ladder" }, { id: "dossier-history", label: "History" }, { id: "dossier-brief", label: "Brief" }, { id: "dossier-tendencies", label: "Tendencies" }, { id: "dossier-timings", label: "Timings" }, { id: "dossier-identity", label: "Identity" }]} />
+      <section id="dossier-ladder" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Ladder</h2><DossierOnView label="Ladder context"><LadderContextCard pulseId={pulseId} confirmedIdentity={data.globalIdentity}><RaceMmrPanel embedded breakdown={races} isLoading={racesLoading} confirmedIdentity={data.globalIdentity} /></LadderContextCard></DossierOnView></section>
+      <section id="dossier-history" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-5"><h2 className="text-h3 font-semibold">History</h2>
+      <OpponentReplayHistory
+        // A query-scope or database revision change must reset cursor history
+        // to page one. Remounting avoids briefly applying an old opaque cursor
+        // to a new filter set.
+        key={`${replayHistoryPath}:${dbRev}`}
+        path={replayHistoryPath}
+        selectedMap={selectedMap} onSelectMap={setSelectedMap} maps={Object.keys(data.byMap || {})}
+        initialGames={filteredGames}
+        profileTruncated={data.gamesTruncated}
+        targetGameId={pendingGameId}
+        targetGameSeq={pendingGameSeq}
+        myName={myName}
+        opponentContext={{
+          pulseId,
+          displayName: data.name || data.displayNameSample || null,
+        }}
+      />
+
+      <OpponentNotesCard
+        headingLevel={3}
+        pulseId={pulseId}
+        initialNotes={data.notes}
+        initialNotesReadAloud={data.notesReadAloud}
+        onSaved={(value: OpponentNotesValue) => {
+          void mutate(
+            { ...data, ...value },
+            { revalidate: false },
+          );
+        }}
+      />
+
+      </section>
       <section id="dossier-brief" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Brief</h2><ScoutingBriefCard profile={data} /></section>
       <section id="dossier-tendencies" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-5"><h2 className="text-h3 font-semibold">Tendencies</h2>
       <H2HTrendsSection
@@ -391,40 +425,6 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
 
       </section>
       <section id="dossier-timings" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Timings and phases</h2><DossierOnView key={`${profileQuery}:${debouncedDbRev}`} label="Timing and phase analysis"><DossierAnalysisSection path={`/v1/opponents/${encodeURIComponent(pulseId)}/analysis${profileQuery}#${debouncedDbRev}`} sourceFilters={profileQuery} scopeLabel={summarizeFilters(filters, seasons)} predictions={profile.isPreviousData ? null : data.predictedStrategies || []} selected={selectedTiming} onSelect={setSelectedTiming} /></DossierOnView></section>
-      <section id="dossier-history" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-5"><h2 className="text-h3 font-semibold">History</h2>
-      <OpponentReplayHistory
-        // A query-scope or database revision change must reset cursor history
-        // to page one. Remounting avoids briefly applying an old opaque cursor
-        // to a new filter set.
-        key={`${replayHistoryPath}:${dbRev}`}
-        path={replayHistoryPath}
-        selectedMap={selectedMap} onSelectMap={setSelectedMap} maps={Object.keys(data.byMap || {})}
-        initialGames={filteredGames}
-        profileTruncated={data.gamesTruncated}
-        targetGameId={pendingGameId}
-        targetGameSeq={pendingGameSeq}
-        myName={myName}
-        opponentContext={{
-          pulseId,
-          displayName: data.name || data.displayNameSample || null,
-        }}
-      />
-
-      <OpponentNotesCard
-        headingLevel={3}
-        pulseId={pulseId}
-        initialNotes={data.notes}
-        initialNotesReadAloud={data.notesReadAloud}
-        onSaved={(value: OpponentNotesValue) => {
-          void mutate(
-            { ...data, ...value },
-            { revalidate: false },
-          );
-        }}
-      />
-
-      </section>
-      <section id="dossier-ladder" tabIndex={-1} className="min-w-0 max-w-full scroll-mt-32 space-y-3"><h2 className="text-h3 font-semibold">Ladder</h2><DossierOnView label="Ladder context"><LadderContextCard pulseId={pulseId} confirmedIdentity={data.globalIdentity}><RaceMmrPanel embedded breakdown={races} isLoading={racesLoading} confirmedIdentity={data.globalIdentity} /></LadderContextCard></DossierOnView></section>
       <DossierIdentitySection pulseId={pulseId} open={identityOpen} onOpenChange={setIdentityOpen} diagnosticsOpen={diagnosticsOpen} submission={identitySubmissionEnabled} candidates={identityCandidatesEnabled} race={data.oppRaceModal} onChanged={() => { void refreshCache(isOpponentKey(pulseId)); }} onRetried={async response => { await refreshCache(isOpponentKey(pulseId)); if (response.resolvedPulseCharacterId) toast?.success("Pulse data refreshed"); else toast?.info("Still couldn't find their SC2Pulse profile"); }} />
 
 
