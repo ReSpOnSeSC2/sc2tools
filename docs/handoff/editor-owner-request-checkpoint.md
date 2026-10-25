@@ -39,5 +39,12 @@ remaining same-owner subscriber can Retry. The focused shared-helper/consumer
 matrix passed 180 assertions before integration; the combined full suite and
 production checks are rerun on this branch before merge.
 
+An actual root-StrictMode consumer integration exposed a deduped initial read
+being aborted during effect replay. Cleanup still invalidates capabilities
+immediately, then aborts held transport at one microtask unless that exact
+scope was synchronously reactivated. Root StrictMode duplicate subscribers now
+load with and without deadlines. Real unmount, auth-loading and A→B→A guards
+remain covered, including an immediately invoked retained mutation callback.
+
 No provider call, integration enabling, environment mutation, version, release,
 data migration, infrastructure or budget change accompanies this correction.

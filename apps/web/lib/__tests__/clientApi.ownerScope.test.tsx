@@ -40,6 +40,21 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("useApi actual SWR owner isolation", () => {
+  it.each([undefined, 20_000])("keeps duplicate StrictMode consumers ready with request deadline %s", async timeoutMs => {
+    const fetcher = vi.fn(async () => response("A")); vi.stubGlobal("fetch", fetcher);
+    const f = fixture();
+    function Consumer({ label }: { label: string }) {
+      const query = useApi<PrivateData>(path, undefined, { timeoutMs });
+      const ready = query.data?.privateOwner === "A" && !query.isLoading && !query.isPreviousData && !query.error;
+      return <div data-testid={label}>{ready ? "ready" : "pending"}</div>;
+    }
+    const view = render(<StrictMode><f.wrapper><Consumer label="first" /><Consumer label="second" /></f.wrapper></StrictMode>);
+    await waitFor(() => {
+      expect(view.getByTestId("first").textContent).toBe("ready");
+      expect(view.getByTestId("second").textContent).toBe("ready");
+    });
+  });
+
   it("loads under StrictMode effect replay without retaining the retired first operation", async () => {
     const fetcher = vi.fn(async () => response("A")); vi.stubGlobal("fetch", fetcher);
     const f = fixture();
@@ -122,7 +137,12 @@ describe("useApi actual SWR owner isolation", () => {
     vi.stubGlobal("fetch", fetcher);
     const f = fixture(), view = f.render();
     await waitFor(() => expect(stage === "JWT" ? h.auth.getToken : fetcher).toHaveBeenCalledOnce());
+    const retainedRequest = view.result.current.request;
     view.unmount();
+    // Capability invalidation is immediate; physical abort follows one
+    // microtask so a root StrictMode setup replay can retain its shared read.
+    const rejected = retainedRequest({ method: "POST" });
+    await expect(rejected).rejects.toMatchObject({ name: "AbortError" });
     if (signal) expect(signal.aborted).toBe(true);
     await act(async () => { heldToken.resolve("A-token"); heldBody.resolve({ privateOwner: "A", revision: "retired" }); });
     expect(f.data("A")).toBeUndefined();
