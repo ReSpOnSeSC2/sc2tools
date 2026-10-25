@@ -139,12 +139,14 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             command_layout.addLayout(label_row)
             self.title_input = QtWidgets.QLineEdit()
             self.title_input.setObjectName("streamTitle")
-            self.title_input.setMaxLength(70)
+            self.title_input.setMaxLength(500)
             self.title_input.setPlaceholderText("Give your next stream a title")
             self.title_input.setMinimumHeight(44)
             self.title_input.textEdited.connect(self._title_edited)
             self.title_input.returnPressed.connect(self.save_title)
             command_layout.addWidget(self.title_input)
+            from .stream_title_controls import StreamTitleControls
+            self.title_controls = StreamTitleControls(self, command_layout, QtCore, QtWidgets)
             description_header = QtWidgets.QHBoxLayout()
             self.description_label = self._label("YouTube description", name="studioEyebrow")
             self.description_scope = self._label("Applies to both YouTube formats", True)
@@ -391,7 +393,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
 
         def _title_edited(self):
             self.title_dirty = True
-            self.counter.setText(f"{len(self.title_input.text())} / 70")
+            self.title_controls.edited()
+            self.counter.setText(f"{len(self.title_input.text())} / 500 template")
             self._buttons()
 
         def _description_edited(self):
@@ -416,6 +419,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.obs_copy_key.setEnabled(details_available)
             self.obs_reveal.setEnabled(details_available)
             self.obs_destination.setEnabled(not self.busy)
+            self.title_controls.buttons()
 
         def refresh(self):
             if provider is None:
@@ -441,8 +445,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.state = state
             metadata = state.get("metadata", {})
             if not self.title_dirty:
-                self.title_input.setText(metadata.get("title", ""))
-                self.counter.setText(f"{len(self.title_input.text())} / 70")
+                self.title_input.setText(state.get("title_automation", {}).get("template") or metadata.get("title", ""))
+                self.counter.setText(f"{len(self.title_input.text())} / 500 template")
             saved_description = "description" in metadata and state.get("metadata_saved") is not False
             if not self.description_dirty or self.description_draft and saved_description:
                 blocked = self.description_input.blockSignals(True)
@@ -452,6 +456,7 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 self.description_input.blockSignals(blocked)
                 self.description_dirty = draft
                 self.description_draft = draft
+            self.title_controls.render(state)
             self.loaded = True
             self.notice.setText(state.get("message", "Check your stream connections."))
             youtube = state.get("youtube", {})
@@ -654,6 +659,9 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
                 if result["action"] == "set_metadata":
                     self.title_dirty = self.description_dirty = False
                     self.description_draft = False
+                if result["action"] == "configure_title_automation":
+                    self.title_controls.dirty = False
+                    self.title_dirty = False
                 if result["action"] == "configure_youtube":
                     self.setup_dirty = False
                     self.setup_edits.clear()
@@ -769,29 +777,8 @@ def build_streams_page(parent, *, provider, handler, QtCore, QtWidgets):
             self.job({"action": "use_sc2tools_connections" if local else "use_local_connections"})
 
         def connect_platform(self, platform):
-            if self.state.get("account_mode") == "sc2tools":
-                self.job({"action": "connect_" + platform})
-                return
-            dialog = QtWidgets.QDialog(self)
-            dialog.setWindowTitle("Connect " + platform.title())
-            layout = QtWidgets.QFormLayout(dialog)
-            client_id = QtWidgets.QLineEdit()
-            layout.addRow("Your OAuth app client ID", client_id)
-            secret = QtWidgets.QLineEdit()
-            secret.setEchoMode(QtWidgets.QLineEdit.Password)
-            if platform == "kick":
-                layout.addRow("Client secret", secret)
-                layout.addRow(self._label("Register this redirect URL in your Kick app: http://localhost:8768/oauth/kickcallback", True))
-            account = QtWidgets.QLineEdit()
-            layout.addRow("Expected account name", account)
-            hint = self._label("Use an OAuth app you own. Authorize in your browser; SC2Tools will verify and remember this account.", True)
-            layout.addRow(hint)
-            buttons = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
-            buttons.accepted.connect(dialog.accept)
-            buttons.rejected.connect(dialog.reject)
-            layout.addRow(buttons)
-            if dialog.exec():
-                self.job({"action": "connect_" + platform, "client_id": client_id.text().strip(), "client_secret": secret.text(), "expected_account": account.text().strip()})
+            from .stream_title_controls import connect_platform
+            connect_platform(self, platform, QtWidgets)
 
         def configure(self):
             if self.privacy.currentData() is None:

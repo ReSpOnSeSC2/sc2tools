@@ -4,6 +4,11 @@ All notable changes to `@sc2tools/agent` go here. Newest first.
 
 ## Unreleased
 
+- Streams supports live statistic-token previews and optional updates to selected
+  Twitch, Kick and YouTube accounts after synced games. Automatic updates start
+  off, preserve platform receipts, skip unchanged titles and run at most every
+  ten minutes without blocking replay uploads.
+
 - PvZ Archon Drop detection requires a real Warp Prism completed by 6:00 and
   observed Archons, preventing late Templar transitions from being called drops.
 

@@ -65,10 +65,13 @@ def render_title(template, stats):
     segment that cannot fit must be edited; no word or Unicode character is cut.
     Final validation stays owned by the existing cross-platform shared_title.
     """
-    from .service import shared_title
+    return render_values(template, title_values(stats))
 
+
+def render_values(template, values):
+    """Preview only validated token values, also used by the Qt field."""
+    from .service import shared_title
     template = validate_template(template)
-    values = title_values(stats)
     segments = []
     for segment in template.split("|"):
         segment = segment.strip()

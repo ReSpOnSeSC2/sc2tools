@@ -75,6 +75,26 @@ describe("real buildApp paired-agent stream control boundary", () => {
   });
   function agent(req) { return req.set("authorization", `Bearer ${deviceToken}`); }
 
+  test("private stream-title snapshot uses only the authenticated owner and never calls a provider", async () => {
+    const before = providerFetch.mock.calls.length;
+    const session = jest.spyOn(services.games, "todaySession").mockResolvedValue({ wins: 1, losses: 0, mmrCurrent: 5001, league: "Grandmaster", region: "NA" });
+    await db.games.insertMany([
+      { userId: owner, gameId: "title-fixture", date: new Date(), isLadderGame: true, myRace: "Protoss", myMmr: 5000,
+        myToonHandle: "1-S2-1-10", result: "win", opponent: { race: "Zerg", displayName: "private-name" } },
+      { userId: "other-owner", gameId: "foreign-fixture", date: new Date(), isLadderGame: true, myMmr: 8000, result: "win" },
+    ]);
+    try {
+      const response = await agent(request(app).get("/v1/agent/streaming/session")).expect(200);
+      expect(response.headers["cache-control"]).toBe("no-store");
+      expect(response.body).toMatchObject({ schema: 1, mmr: 5001, league: "Grandmaster", peak: 5000, winRates: { PvZ: { wins: 1, losses: 0 } } });
+      expect(JSON.stringify(response.body)).not.toMatch(/private-name|S2-1|8000|fixture-private/);
+      expect(session).toHaveBeenCalledWith(owner, undefined, { reuseRecent: true });
+      await agent(request(app).get("/v1/agent/streaming/session?userId=other-owner")).expect(400);
+      await request(app).get("/v1/agent/streaming/session").expect(401);
+      expect(providerFetch.mock.calls.length).toBe(before);
+    } finally { session.mockRestore(); }
+  });
+
   test("actual mounted router accepts device auth and keeps normal web integrations Clerk-only", async () => {
     const response = await agent(request(app).get("/v1/agent/streaming/status")).expect(200);
     expect(response.body.platforms.find((row) => row.platform === "twitch"))

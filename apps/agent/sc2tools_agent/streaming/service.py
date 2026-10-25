@@ -99,6 +99,8 @@ class StreamService:
         self.next_platform_check = 0
         self.prompt = ""
         self._cached = {}
+        from .title_controller import StreamTitleController
+        self.titles = StreamTitleController(self)
         self._publish()
 
     def _publish(self):
@@ -116,7 +118,7 @@ class StreamService:
             "metadata": copy.deepcopy(self.backend.metadata), "metadata_saved": self.metadata_saved, "message": self.message,
             "catalog": copy.deepcopy(self.catalog), "configured": bool(self.backend.config.get("runtime_enabled")),
             "catalog_status": copy.deepcopy(self.catalog_status),
-            "account_mode": self.account_mode,
+            "account_mode": self.account_mode, "title_automation": self.titles.snapshot(),
             "configuration": {"privacy": self.backend.config.get("streams", {}).get("horizontal", {}).get("privacy", "public"),
                 "channel_id": self.backend.config.get("expected_channel_id"),
                 "horizontal_id": self.backend.config.get("streams", {}).get("horizontal", {}).get("reusable_stream_id"),
@@ -282,43 +284,17 @@ class StreamService:
             with self.snapshot_lock:
                 self.prompt = ""
             if kind == "set_metadata":
-                title = shared_title(payload.get("title"))
+                template = payload.get("title")
+                title = self.titles.preview(template)
                 description = payload.get("description", self.backend.metadata["description"])
-                result = self.backend.dispatch({"action": "set_metadata", "title": title, "description": description})
-                if result.get("code") == "metadata_invalid":
-                    raise ValueError("Use a description within 4,808 UTF-8 bytes without angle brackets; space is reserved for the horizontal stream link.")
-                if result.get("future_template_saved") is False:
-                    raise ValueError("The title could not be saved locally. Check free disk space, then try again. Platform titles were not changed.")
-                self.metadata_saved = True
-                self.platform_results = {"youtube": {"ok": result.get("ok", False), "message": " ".join(result.get("messages", []))}}
-                for name in ("twitch", "kick"):
-                    adapter = self.adapters.get(name)
-                    if adapter is None:
-                        self.platform_results[name] = {"ok": False, "message": "Account connection required."}
-                    else:
-                        try:
-                            status = adapter.update_title(title)
-                            self.platform_status[name] = status
-                            verified = status.get("title") == title and status.get("titleVerified") is not False
-                            offline = (name == "kick" and status.get("titleStatus") == "accepted_offline"
-                                and status.get("accepted") is True and status.get("titleVerified") is False
-                                and status.get("title") == title and status.get("connected") is True)
-                            messages = {"pending": "Title accepted; confirmation is pending.",
-                                "rejected": "Title was rejected. Your account remains connected.",
-                                "unverified": "Title request could not be verified. Check the platform before trying again."}
-                            message = ("Title verified." if verified else
-                                "Title accepted by Kick. Its API hides the title while offline." if offline else
-                                messages.get(status.get("titleStatus"), "Title has not been verified."))
-                            self.platform_results[name] = {"ok": verified or offline, "message": message,
-                                "title_verified": verified, "title_status": status.get("titleStatus", "verified" if verified else "unverified")}
-                        except Exception as error:
-                            # An inconclusive write/readback is not evidence that
-                            # OAuth was revoked. Only explicit authorization loss
-                            # clears a previously verified connection.
-                            if getattr(error, "connection_invalid", False) is True:
-                                self.platform_status[name] = {"platform": name, "connected": False, "reason": "Stream-control permission must be reconnected."}
-                            self.platform_results[name] = {"ok": False, "message": "Title request could not be verified. Check the platform before trying again."}
+                self._apply_title(title, description, ("youtube", "twitch", "kick"))
+                self.titles.save_template(template)
                 self.message = "Title saved for future YouTube sessions. See each platform below for the current save result."
+            elif kind == "configure_title_automation":
+                self.titles.save(payload)
+            elif kind == "refresh_title_preview":
+                self.titles.worker.preview_pending = True
+                self.titles.worker.wake.set()
             elif kind in {"prepare", "recover"}:
                 result = self.backend.dispatch({"action": kind}, outputs=self._outputs())
                 self.message = " ".join(result.get("messages", []))
@@ -378,6 +354,16 @@ class StreamService:
             else:
                 raise ValueError("This stream action is unavailable.")
             return self._publish()
+
+    def _apply_title(self, title, description, platforms, *, client=None):
+        from .title_delivery import apply_title
+        return apply_title(self, title, description, platforms, client=client)
+
+    def on_game_event(self, event):
+        self.titles.worker.on_event(event)
+
+    def on_game_accepted(self, *accepted):
+        self.titles.worker.on_game_accepted(*accepted)
 
     def _obs_connection(self, payload):
         scope = payload.get("scope")
@@ -576,6 +562,7 @@ class StreamService:
         self.stop_event.clear()
         self.thread = threading.Thread(target=self._run, name="sc2tools-streams", daemon=True)
         self.thread.start()
+        self.titles.worker.start()
 
     def _run(self):
         # Reconnect only credentials created by this feature. No consent flow
@@ -652,6 +639,7 @@ class StreamService:
 
     def close(self):
         self.stop_event.set()
+        self.titles.worker.close()
         if self.thread:
             self.thread.join(timeout=4)
         # A bounded cloud call may still be unwinding. Do not release the

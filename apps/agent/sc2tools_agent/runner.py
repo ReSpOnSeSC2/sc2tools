@@ -564,6 +564,8 @@ def _run_headless(
     )
     stream_service = _build_stream_service(cfg, state, no_obs=no_obs)
     recovery_cell.stream_service = stream_service
+    if live_bus is not None and stream_service:
+        live_bus.subscribe(stream_service.on_game_event)
     recovery_cell.socket_client = socket_client
     recovery_cell.live_transport = live_transport
 
@@ -1063,6 +1065,8 @@ def _gui_boot_worker(
                 device_token=state.device_token,
             )
             live_bus.subscribe(cell.activity_gate.on_event)
+            if cell.stream_service:
+                live_bus.subscribe(cell.stream_service.on_game_event)
             cell.live_bus = live_bus
             cell.live_poller = live_poller
             cell.live_bridge = live_bridge
@@ -2007,6 +2011,9 @@ def _handle_checkin_game_accepted(state_dir: Path, state: AgentState, cell: Any,
     controller = getattr(cell, "build_checkin", None)
     if controller is not None:
         controller.on_game_accepted(path, game, *accepted)
+    streams = getattr(cell, "stream_service", None)
+    if streams is not None:
+        streams.on_game_accepted(path, game, *accepted)
 
 
 def _remember_build_checkin_position(
@@ -2997,7 +3004,7 @@ def _build_obs_switcher(
 
 
 def _build_stream_service(cfg, state, *, no_obs=False):
-    """Independent lifecycle worker; never subscribes to scene/game events."""
+    """Independent stream workers; title updates wait for live game sync."""
     try:
         from .streaming.service import StreamService
 

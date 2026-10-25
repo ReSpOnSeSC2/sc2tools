@@ -39,11 +39,24 @@ def validated_obs_connection(value, stream_id):
 
 
 class CloudStreamingClient:
-    def __init__(self, connection_provider, *, transport=None):
+    def __init__(self, connection_provider, *, transport=None, guard=None):
         self.connection_provider = connection_provider
         self.transport = transport or requests.request
+        self.guard = guard
+
+    def bound(self, connection, *, guard=None):
+        return CloudStreamingClient(lambda: connection, transport=self.transport,
+            guard=lambda: self.connection_provider() == connection and (guard is None or guard()))
+
+    def title_session(self):
+        result = self._request("GET", "/v1/agent/streaming/session")
+        if not isinstance(result, dict) or type(result.get("schema")) is not int or result.get("schema") != 1:
+            raise CloudStreamError("Stream-title statistics are unavailable on this server.")
+        return result
 
     def _request(self, method, path, *, params=None, body=None):
+        if self.guard is not None and not self.guard():
+            raise CloudStreamError("The paired account changed. Review automatic title settings again.")
         base, token = self.connection_provider()
         if not token:
             raise CloudStreamError("Pair this agent with your SC2Tools account first.")
@@ -67,6 +80,8 @@ class CloudStreamingClient:
             if not 200 <= response.status_code < 300:
                 raise CloudStreamError("SC2Tools could not verify the stream request. Check the session before trying again.", http_status=response.status_code)
             result = response.json()
+            if self.guard is not None and not self.guard():
+                raise CloudStreamError("The paired account changed. Review automatic title settings again.")
             if not isinstance(result, (dict, list)):
                 raise CloudStreamError("SC2Tools returned incomplete stream information.")
             return result

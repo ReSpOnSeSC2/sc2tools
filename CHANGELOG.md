@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Desktop stream titles
+
+- Streams previews MMR, league, session record, streak and matchup tokens. Optional automatic updates start off, target only selected connected platforms, skip unchanged titles and run at most once every ten minutes after a live replay syncs.
+
 ### Build supply and exports
 
 - Game build orders show prior-sample supply with an approximation marker, worker/supply filters and aligned times. Either side can copy text, supply-first text, Markdown or SALT, print a compact cheat sheet, arm a confirmed Ghost target or open the custom-build editor.
