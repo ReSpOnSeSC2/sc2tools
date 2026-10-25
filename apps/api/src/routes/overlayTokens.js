@@ -127,6 +127,17 @@ function buildOverlayTokensRouter(deps) {
     },
   );
 
+  // Starter packs replace only this owner's active token selection.
+  authed.put("/overlay-tokens/:token/widgets", async (req, res, next) => {
+    try {
+      const auth = req.auth; if (!auth) throw new Error("auth_required");
+      const token = String(req.params.token);
+      const result = await deps.overlayTokens.setEnabledWidgets(auth.userId, token, req.body?.enabled, req.body?.expectedEnabled);
+      deps.io?.to(`overlay:${token}`).emit("overlay:config", result);
+      res.set("Cache-Control", "private, no-store").json(result);
+    } catch (err) { next(err); }
+  });
+
   // Per-token rate limit on live overlay events. A leaked token
   // shouldn't be able to fan out hundreds of messages per second to
   // the overlay's socket room; 10/sec is plenty for the legitimate

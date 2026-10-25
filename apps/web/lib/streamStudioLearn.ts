@@ -1,4 +1,5 @@
 import type { WidgetId } from "@/components/overlay/widgetLifecycle";
+import widgetSizes from "./widgetRecommendedSizes.json";
 
 export type WidgetGuide = {
   id: WidgetId;
@@ -13,6 +14,7 @@ export type WidgetGuide = {
   check: string;
   troubleshooting: string;
   placement: string;
+  recommendedSize: { width: number; height: number };
   /** All-in-one widgets also have an independently positionable widget URL. */
   source: "all-in-one" | "dedicated";
   settingsHref: string;
@@ -40,7 +42,7 @@ const configuredChat = "At least one platform enabled in Multi-platform chat, wi
 
 function sourceSetup(name: string): readonly string[] {
   return [
-    `Open Settings → Overlay and enable ${name} in OBS Browser Source URLs.`,
+    `Open Settings → Overlay → Widgets and enable ${name}.`,
     `Use Copy beside ${name} to copy its widget URL.`,
     "In OBS, add a Browser Source, paste the copied URL, and position it in your scene.",
     `Keep that source loaded, then press Test beside ${name} in Settings. During a live match, use Preview here instead for a local sample, or confirm Send anyway to show samples to viewers for about 20 seconds. Stop restores the real data.`,
@@ -51,7 +53,7 @@ function dockSetup(name: string, action: string): readonly string[] {
   return [
     `In Settings → Overlay, enable ${name} and use Copy beside its URL.`,
     "Paste it into a dedicated OBS Browser Source and position it in your scene.",
-    "Open Stream Dock from Multi-platform chat; in OBS you can add its URL under Docks → Custom Browser Docks.",
+    "Copy Stream Dock from Overlay → Setup; in OBS add it under Docks → Custom Browser Docks.",
     action,
   ];
 }
@@ -61,7 +63,7 @@ function dockSetup(name: string, action: string): readonly string[] {
  * fixtures. Source support follows OverlayClient's COMPOSITE_WIDGETS; the
  * separate widget URLs are available for all entries.
  */
-export const WIDGET_GUIDES: readonly WidgetGuide[] = [
+const WIDGET_GUIDE_CONTENT: readonly Omit<WidgetGuide, "recommendedSize">[] = [
   {
     id: "opponent", name: "Opponent identity", group: "game",
     summary: "A quick introduction to the player on the other side of the match.",
@@ -506,3 +508,11 @@ export const WIDGET_GUIDES: readonly WidgetGuide[] = [
     source: "dedicated", settingsHref: OVERLAY_SETTINGS, related: ["countdown-timer", "session-recap", "supporter-wall"],
   },
 ];
+
+/** Shared standalone source sizes also ship as data with the desktop builder. */
+export const WIDGET_GUIDES: readonly WidgetGuide[] = WIDGET_GUIDE_CONTENT.map(guide => ({
+  ...guide,
+  recommendedSize: widgetSizes[guide.id],
+  placement: `${guide.placement} Recommended standalone Browser Source: ${widgetSizes[guide.id].width} × ${widgetSizes[guide.id].height}.`,
+  settingsHref: `/settings?tab=overlay&section=widgets&widget=${encodeURIComponent(guide.id)}`,
+}));

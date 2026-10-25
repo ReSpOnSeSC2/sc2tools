@@ -1,6 +1,6 @@
 /**
  * The Overlay tab holds two forms with their own Save buttons —
- * Multi-platform chat and the chat bot (rendered inside it). Both publish
+ * Multi-platform chat and the chat bot (in Dock & bot). Both publish
  * their unsaved state, so switching tabs asks before dropping either
  * one's edits, the tab shows the unsaved dot for either, and saving one
  * never clears the other's. The real forms render; the API and Clerk
@@ -11,6 +11,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { ToastProvider } from "@/components/ui/Toast";
 import { SettingsShell } from "../SettingsShell";
 import { SettingsMultiChat } from "../SettingsMultiChat";
+import { OverlayBotSettings } from "../OverlayDockSetup";
 
 const BOT = {
   enabled: false,
@@ -66,7 +67,7 @@ function renderOverlay() {
     <ToastProvider>
       <SettingsShell
         initialTab="overlay"
-        renderTab={(id) => (id === "overlay" ? <SettingsMultiChat token="tok" /> : <p>panel {id}</p>)}
+        renderTab={(id) => (id === "overlay" ? <><SettingsMultiChat token="tok" /><OverlayBotSettings /></> : <p>panel {id}</p>)}
       />
     </ToastProvider>,
   );

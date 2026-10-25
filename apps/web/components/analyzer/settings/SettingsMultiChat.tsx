@@ -26,7 +26,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "@clerk/nextjs";
-import { ExternalLink, Languages, LayoutPanelLeft, MessageSquare, Wand2 } from "lucide-react";
+import { ExternalLink, Languages, MessageSquare, Wand2 } from "lucide-react";
 import { apiCall, useApi, API_BASE } from "@/lib/clientApi";
 import {
   RANK_RACES,
@@ -67,12 +67,12 @@ import {
   type ChatTtsConfig,
 } from "@/lib/multichat/tts";
 import type { MultichatConfig } from "@/lib/multichat/types";
-import { UrlRow } from "./OverlayUrlRow";
+
 import { SettingsMultiChatAppearance } from "./SettingsMultiChatAppearance";
 import { SettingsMultiChatAlerts } from "./SettingsMultiChatAlerts";
 import { SettingsMultiChatTts } from "./SettingsMultiChatTts";
 import { ChatCommandsCard } from "./ChatCommandsCard";
-import { ChatBotCard } from "./ChatBotCard";
+
 import { OfficialPlatformConnections } from "./OfficialPlatformConnections";
 import { usePublishDirty } from "./SettingsContext";
 
@@ -224,6 +224,7 @@ function configFromDraft(
 }
 
 export function SettingsMultiChat({ token }: { token: string | null }) {
+  void token;
   const { getToken } = useAuth();
   const { toast } = useToast();
   const { data, isLoading, error, mutate } = useApi<MultichatConfig>(
@@ -238,13 +239,6 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
   const [detecting, setDetecting] = useState(false);
   const [kickManualOpen, setKickManualOpen] = useState(false);
   const [kickPaste, setKickPaste] = useState("");
-
-  // window.origin is unavailable during SSR — resolve it post-mount so
-  // the dock URL renders without a hydration mismatch.
-  const [origin, setOrigin] = useState("");
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
 
   // Hydrate the draft once per fetched config; user edits win after.
   useEffect(() => {
@@ -408,23 +402,6 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
           </div>
         ) : (
           <div className="space-y-5">
-            {token ? (
-              <div id="stream-dock" className="scroll-mt-28 space-y-2 rounded-lg border border-border bg-bg-elevated/40 p-3">
-                <div className="flex items-center gap-2 text-body font-medium text-text">
-                  <LayoutPanelLeft className="h-4 w-4 text-accent-cyan" aria-hidden />
-                  Stream Dock
-                </div>
-                <p className="text-caption text-text-dim">
-                  Your second-screen control panel for this chat: pin
-                  highlights, run polls, track goals and block spammers
-                  mid-stream. In OBS, add it via{" "}
-                  <b>Docks → Custom Browser Docks</b> — or open it on a
-                  phone or second monitor.
-                </p>
-                {origin ? <UrlRow url={`${origin}/dock/${token}`} compact /> : null}
-              </div>
-            ) : null}
-
             <div className="flex flex-wrap items-end gap-3">
               <label className="block w-72 min-w-0">
                 <div className="mb-1 text-caption text-text-dim">
@@ -455,7 +432,7 @@ export function SettingsMultiChat({ token }: { token: string | null }) {
 
             <ChatCommandsCard rankRace={draft.rankRace} />
 
-            <ChatBotCard twitchChannel={draft.twitchChannel.trim()} />
+
 
             <OfficialPlatformConnections />
 

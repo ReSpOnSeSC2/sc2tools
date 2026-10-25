@@ -65,6 +65,7 @@ ICON_DIR = HERE / "sc2tools_agent" / "ui"
 # startup. ``replay_pipeline._ensure_analyzer_on_path`` adds the engine
 # root to sys.path at runtime.
 DATAS = [(str(HERE / "CHANGELOG.md"), ".")]
+DATAS.append((str(REPO_ROOT / "apps" / "web" / "lib" / "widgetRecommendedSizes.json"), "sc2tools_agent/live"))
 # Optional bot source is data, never a PyInstaller import target. Torch/JAX,
 # checkpoints and replay corpora stay in a separate opt-in local environment.
 BOT_RUNTIME = REPO_ROOT / "apps" / "bot-runtime"
