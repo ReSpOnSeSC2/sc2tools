@@ -363,7 +363,7 @@ describe("POST /v1/games triggers overlay:live broadcast", () => {
     for (const e of captured.liveEmits) {
       expect(e.payload.matchup).toBe("PvZ");
       expect(e.payload.result).toBe("win");
-      expect(e.payload.rank).toEqual({ league: "Diamond", tier: 1, mmr: 4310 });
+      expect(e.payload.rank).toEqual({ league: "Diamond", tier: 1, mmr: 4310, source: "estimate" });
       // Cheese alert because the opponent's strategy is "Pool first".
       expect(e.payload.cheeseProbability).toBeGreaterThanOrEqual(0.4);
     }
