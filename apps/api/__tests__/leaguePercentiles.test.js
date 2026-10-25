@@ -308,14 +308,15 @@ describe("league percentile benchmarks", () => {
       expect(percentileOf(table, "macroScore", "55")).toBeNull();
     });
 
-    test("flat decile ladder still returns an in-range integer", () => {
+    test("tied decile ladders use the tied interval midpoint", () => {
       const flat = {
         ...table,
         metrics: { macroScore: { n: 100, deciles: Array(9).fill(50) } },
       };
       const p = percentileOf(flat, "macroScore", 50);
-      expect(p).toBeGreaterThanOrEqual(1);
-      expect(p).toBeLessThanOrEqual(99);
+      expect(p).toBe(50);
+      const partial = { ...flat, metrics: { macroScore: { n: 100, deciles: [10,20,30,40,40,40,70,80,90] } } };
+      expect(percentileOf(partial, "macroScore", 40)).toBe(50);
     });
   });
 });
