@@ -4,6 +4,8 @@ The owner requested the entire HANDOFF program through waves 2–6, and no AI fe
 
 ## Latest checkpoint — 2026-10-25
 
+Strength713 merged at8369fc5053ebb43910a3d17e7d1842aab74a473d and Dossier B714 at016bfff90e2b68fdc9e87151d1eb425a7fca27d8 after every final check and Vercel passed. Widget manager715 is frozen at89d37812a069810e01eac4cf16f03b451be5fc9b; replay library716 is frozen atcd44666ad0a09d75a4917e21d9a56d98a52431de. Those two PRs are still awaiting final checks and must not be called merged. Opponents/Rivals and live overlay profiles are in their preserved worktrees undergoing final local validation. The new widget playground uses its own branch in the preserved stream-title worktree; it has31 real offline widget cases, shared API/client scenario parity,352 browser checks and an unchanged-budget production proof. Its final integrated build/suite/PR remain in progress. The full roadmap and final owner setup guide remain unfinished.
+
 This section supersedes the older in-progress notes below. Build Studio702, default-off mocked stream titles703, map veto706, playback705, Story/fight ledger707 and benchmarks708 have merged after final CI and Vercel. Their original source branches and worktrees are preserved. Latest benchmark squash is1309693b; Story is c3c6b4fb and playback c050e659.
 
 Battle reports710 merged2a4ae2da and saved views711 mergedfba5c3fd after every final check and Vercel passed. Saved views retains100 browser checks and reviewed screenshots; final CI passed5,277 API tests/9 skips and761 web suites/1 skip. The original source branches and clean worktrees are preserved. Mechanics progress709 is integrating these newer squashes and finishing its final gates; do not discard that branch or its strength follow-on.
