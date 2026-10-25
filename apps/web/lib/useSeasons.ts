@@ -27,6 +27,9 @@ export type SeasonsApiResponse = {
   current: number | null;
   source: "pulse" | "fallback";
   fetchedAt: number | null;
+  mapPool?: string[];
+  mapPoolSource?: "liquipedia" | "persisted" | "fallback";
+  mapPoolFetchedAt?: number | null;
 };
 
 /** Reduce per-region rows down to one row per global season. */

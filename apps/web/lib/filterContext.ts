@@ -30,6 +30,10 @@ export type AnalyzerFilters = {
   race?: string;
   opp_race?: string;
   map?: string;
+  /** Exact observed map aliases behind a drilldown (JSON), paired with its visible map chip. */
+  map_exact?: string;
+  /** UI-only binding; changing the visible map makes an older exact cohort inactive. */
+  map_exact_label?: string;
   mmr_min?: number;
   mmr_max?: number;
   /** Filter by the user's classified build (myBuild on game records). */
@@ -205,7 +209,7 @@ function coerceMinutes(raw: unknown): number | undefined {
  * stored region selection's revision (AnalyzerProvider); hydration keeps it
  * out of the filters, and this keeps it off the wire regardless.
  */
-const UI_ONLY_KEYS = new Set(["preset", "regions_rev"]);
+const UI_ONLY_KEYS = new Set(["preset", "regions_rev", "map_exact_label"]);
 
 /**
  * Build a query string from filter object — empty values dropped. A patch
@@ -220,6 +224,7 @@ export function filtersToQuery(p: Record<string, unknown>): string {
   for (const [k, v] of Object.entries(p)) {
     if (v === undefined || v === null || v === "") continue;
     if (UI_ONLY_KEYS.has(k)) continue;
+    if (k === "map_exact" && p.map_exact_label !== undefined && p.map !== p.map_exact_label) continue;
     // ``exclude_too_short: false`` is the user's explicit opt-out and
     // needs to land in localStorage so the choice persists, but sending
     // it on the wire is a no-op (the API's gamesMatchStage only acts
@@ -468,7 +473,7 @@ export function describeActiveFilters(
     add("opp_strategy", filters.opp_strategy, { opp_strategy: undefined }, "Strategies");
   }
 
-  if (filters.map) add("map", filters.map, { map: undefined });
+  if (filters.map) add("map", filters.map, { map: undefined, ...(filters.map_exact !== undefined ? { map_exact: undefined, map_exact_label: undefined } : {}) });
 
   const mmr = mmrRangeLabel(filters.mmr_min, filters.mmr_max);
   if (mmr) add("mmr", mmr, { mmr_min: undefined, mmr_max: undefined });
