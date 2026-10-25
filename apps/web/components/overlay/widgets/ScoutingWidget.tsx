@@ -2,7 +2,7 @@
 
 import { MapArtwork } from "@/components/maps/MapArtwork";
 import { Icon } from "@/components/ui/Icon";
-import { humanizeRuleEntity } from "@/lib/build-rules-copy";
+import { humanizeRuleEntity } from "@/lib/build-rule-entity";
 import type {
   LiveGameEnvelope,
   LiveGameEnvelopeProfile,

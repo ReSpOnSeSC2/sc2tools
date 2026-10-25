@@ -22,6 +22,8 @@ import {
   ruleTone,
   type RuleQuantifier,
 } from "@/lib/build-rules-quantity";
+import { humanizeRuleEntity } from "./build-rule-entity";
+export { humanizeRuleEntity } from "./build-rule-entity";
 
 /** Same token shape sanitiseRule keeps; anything else is dropped on save. */
 const RULE_TOKEN_RE = /^[A-Za-z][A-Za-z0-9]*$/;
@@ -35,23 +37,6 @@ const RESEARCH_RE = /^Research[A-Za-z]/;
 /* Entity names                                                       */
 /* ------------------------------------------------------------------ */
 
-/** In-game names for tokens whose engine name reads badly. */
-const ENTITY_OVERRIDES: Readonly<Record<string, string>> = {
-  adeptpiercingattack: "Resonating Glaives",
-  resonatingglaives: "Resonating Glaives",
-  lurkermp: "Lurker",
-  swarmhostmp: "Swarm Host",
-  vikingfighter: "Viking",
-  helliontank: "Hellbat",
-  blinktech: "Blink",
-  shieldwall: "Combat Shield",
-  punishergrenades: "Concussive Shells",
-  warpgateresearch: "Warp Gate",
-  zerglingmovementspeed: "Metabolic Boost",
-  zerglingattackspeed: "Adrenal Glands",
-  overlordspeed: "Pneumatized Carapace",
-};
-
 /** Upgrades the replay names without a Research verb ("Buildoverlordspeed"). */
 const VERBLESS_UPGRADES: ReadonlySet<string> = new Set([
   "zerglingmovementspeed",
@@ -64,28 +49,6 @@ function isResearchToken(name: string): boolean {
   if (RESEARCH_RE.test(name)) return true;
   const stripped = name.replace(VERB_PREFIX_RE, "");
   return VERBLESS_UPGRADES.has(stripped.replace(/[^A-Za-z0-9]/g, "").toLowerCase());
-}
-
-/**
- * Display name for a rule token: strips the Build/Train/Research/Morph
- * verb, applies the in-game overrides (Glaives, LurkerMP, SwarmHostMP,
- * VikingFighter, HellionTank, the lower-case Zerg upgrades) and spaces
- * camelCase and trailing digits.
- *   "BuildVoidRay" → "Void Ray"; "ResearchProtossGroundWeaponsLevel1"
- *   → "Protoss Ground Weapons Level 1";
- *   "Researchzerglingmovementspeed" → "Metabolic Boost"; "" → "".
- * Never changes the stored token.
- */
-export function humanizeRuleEntity(name: string): string {
-  const raw = String(name || "").trim();
-  if (!raw) return "";
-  const stripped = raw.replace(VERB_PREFIX_RE, "");
-  const normalized = stripped.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
-  const override = ENTITY_OVERRIDES[normalized];
-  if (override) return override;
-  return (stripped.charAt(0).toUpperCase() + stripped.slice(1))
-    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/([a-z])(\d)/g, "$1 $2");
 }
 
 /** Last words that read the same in the plural. */
