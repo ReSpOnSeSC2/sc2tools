@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { RotateCcw, X } from "lucide-react";
+import { CopyViewLink } from "./CopyViewLink";
 import {
   applyFilterPatch,
   defaultAnalyzerFilters,
@@ -69,6 +70,7 @@ export function ActiveFilterChips({ className = "" }: { className?: string }) {
       <p className="sr-only" role="status">
         {announcement}
       </p>
+      <CopyViewLink />
       {active.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <span id={labelId} className="text-micro uppercase tracking-wider text-text-dim">

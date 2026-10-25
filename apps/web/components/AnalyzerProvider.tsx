@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect, type ReactNode } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef, type ReactNode } from "react";
+import dynamic from "next/dynamic";
 import {
   ANALYZER_REGIONS,
   DEFAULT_ANALYZER_FILTERS,
@@ -23,6 +24,9 @@ import {
 } from "@/lib/useSeasons";
 import { useUserSocket } from "@/lib/useUserSocket";
 import { AnalysisGamesProvider } from "@/components/analyzer/arcade/hooks/useAnalysisGames";
+import { isAnalyzerViewPath, viewFiltersFromQuery } from "@/lib/analyzerViews";
+
+const AnalyzerFilterUrlSync = dynamic(() => import("./analyzer/AnalyzerFilterUrlSync").then(module => module.AnalyzerFilterUrlSync), { ssr: false });
 
 const LS_KEY = "analyzer.filters";
 
@@ -210,6 +214,19 @@ export function hydrateStoredFilters(
   return next;
 }
 
+/** URL snapshots replace a recipient's stored cohort. Older partial links
+ * override only their explicit keys, including explicit empty values. */
+export function filtersFromViewQuery(base: AnalyzerFilters, parsed: ReturnType<typeof viewFiltersFromQuery>, seasons: LogicalSeason[] = []): AnalyzerFilters {
+  if (parsed.error) return base;
+  const next: Record<string, unknown> = { ...(parsed.snapshot ? defaultAnalyzerFilters(seasons) : base) };
+  if (parsed.snapshot && parsed.filters.preset === "custom") { delete next.since; delete next.until; }
+  for (const key of parsed.keys) delete next[key];
+  Object.assign(next, parsed.filters);
+  if (!parsed.keys.includes("preset") && parsed.keys.some(key => key === "since" || key === "until")) next.preset = "custom";
+  if (next.map_exact_label !== undefined && next.map !== next.map_exact_label) { delete next.map_exact; delete next.map_exact_label; }
+  return hydrateStoredFilters({ ...next, regions_rev: REGIONS_REV } as StoredFilters, seasons);
+}
+
 /**
  * Wraps the analyzer pages with shared filter state + a `dbRev`
  * counter that downstream useApi hooks include in their cache key so
@@ -227,14 +244,20 @@ export function hydrateStoredFilters(
 export function AnalyzerProvider({
   children,
   analysisGamesEnabled = false,
+  syncUrl = false,
 }: {
   children: ReactNode;
   /** Full replay history is opt-in: Arcade enables it; Daily Pulse can request it. */
   analysisGamesEnabled?: boolean;
+  /** AnalyzerFrame enables route synchronization; standalone hosts remain independent. */
+  syncUrl?: boolean;
 }) {
   const [filters, setFiltersState] = useState<AnalyzerFilters>(initialFilters);
   const [dbRev, setDbRev] = useState(0);
   const bumpRev = useCallback(() => setDbRev((v) => v + 1), []);
+  const [filtersReady, setFiltersReady] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const urlSession = useRef(false);
 
   // Cloud-driven auto-refresh. The games ingest route fans out
   // ``games:changed`` to ``user:<userId>``; bumping ``dbRev`` invalidates
@@ -260,8 +283,13 @@ export function AnalyzerProvider({
   // Hydrate from localStorage after mount.
   useEffect(() => {
     const stored = readStored();
-    const next = hydrateStoredFilters(stored, logicalSeasons);
+    let next = hydrateStoredFilters(stored, logicalSeasons);
+    if (syncUrl && isAnalyzerViewPath(window.location.pathname)) {
+      const parsed = viewFiltersFromQuery(new URLSearchParams(window.location.search));
+      if (parsed.present) { next = filtersFromViewQuery(next, parsed, logicalSeasons); setUrlError(parsed.error ?? null); urlSession.current = true; }
+    }
     setFiltersState(next);
+    setFiltersReady(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -286,8 +314,14 @@ export function AnalyzerProvider({
   const setFilters = useCallback((next: AnalyzerFilters) => {
     if (next.map_exact_label !== undefined && next.map !== next.map_exact_label) next = { ...next, map_exact: undefined, map_exact_label: undefined };
     setFiltersState(next);
-    writeStored(next);
+    if (!urlSession.current) writeStored(next);
   }, []);
+
+  const applyUrl = useCallback((parsed: ReturnType<typeof viewFiltersFromQuery>) => {
+    urlSession.current = true;
+    setUrlError(parsed.error ?? null);
+    setFiltersState(previous => filtersFromViewQuery(previous, parsed, logicalSeasons));
+  }, [logicalSeasons]);
 
   const value = useMemo(
     () => ({
@@ -301,10 +335,11 @@ export function AnalyzerProvider({
   );
   return (
     <FiltersContext.Provider value={value}>
+      {syncUrl ? <AnalyzerFilterUrlSync ready={filtersReady} filters={filters} onNavigate={applyUrl} /> : null}
       {/* dbRev has already passed the shared refresh clock; avoid a second 30s wait. */}
-      <AnalysisGamesProvider enabled={analysisGamesEnabled} refreshQuietMs={0}>
+      {!urlError ? <AnalysisGamesProvider enabled={analysisGamesEnabled} refreshQuietMs={0}>
         {children}
-      </AnalysisGamesProvider>
+      </AnalysisGamesProvider> : null}
     </FiltersContext.Provider>
   );
 }

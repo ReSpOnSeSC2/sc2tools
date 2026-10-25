@@ -6,7 +6,9 @@ import { RefreshCcw } from "lucide-react";
 import { apiCall, useApi } from "@/lib/clientApi";
 import { Button } from "@/components/ui/Button";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
-import { useLocalStoragePositiveInt } from "@/lib/useLocalStorageState";
+import { useLocalStoragePositiveInt, useLocalStorageState } from "@/lib/useLocalStorageState";
+import { isMechanicsBucket, type MechanicsBucket } from "@/lib/mechanicsTrend";
+import { MixOverTimeChart } from "./charts/MixOverTimeChart";
 import { pct1, wrColor } from "@/lib/format";
 import { checkinsText } from "@/lib/buildIntent";
 import { Card, Skeleton, WrBar } from "@/components/ui/Card";
@@ -42,6 +44,7 @@ export function BuildsTab() {
   const [search, setSearch] = useState("");
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_BUILDS, 1);
   const [editing, setEditing] = useState<string | null>(null);
+  const [bucket, setBucket] = useLocalStorageState<MechanicsBucket>("analyzer.trends.bucket", "week", isMechanicsBucket);
   const sort = usePersistentSort(LS_BUILDS_SORT, "total", "desc");
 
   const { data, isLoading, error, mutate } = useApi<BuildRow[]>(
@@ -223,6 +226,7 @@ export function BuildsTab() {
       </Card> : null}
 
       <BuildMmrPanel />
+      <div className="space-y-2"><label className="flex items-center gap-2 text-caption text-text-muted">Group build mix by<select aria-label="Build mix period" value={bucket} onChange={event => setBucket(event.target.value as MechanicsBucket)} className="min-h-11 rounded-md border border-border bg-bg-surface px-2 text-text"><option value="day">Day</option><option value="week">Week</option><option value="month">Month</option></select></label><MixOverTimeChart endpoint="timeseries/my-builds" title="Build mix over time" caption="Recorded game counts per build and calendar period." bucket={bucket} /></div>
 
       {/* ``[&>*]:min-w-0`` style applied per-child below — see each
           chart wrapper. Without it the long build labels in the chart

@@ -134,7 +134,7 @@ export function AnalyzerFrame({
 
   return (
     <MeContext.Provider value={me}>
-      <AnalyzerProvider analysisGamesEnabled={isArcade}>
+      <AnalyzerProvider analysisGamesEnabled={isArcade} syncUrl>
         {isGameRoute ? (
           <>
             {browserImportEnabled ? <FolderSyncAutoRunner className="mb-4" /> : null}
