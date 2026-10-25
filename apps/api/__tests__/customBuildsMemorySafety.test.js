@@ -2466,6 +2466,7 @@ describe("custom-build rule scan memory safety", () => {
     const cancellationStarted = deferred();
     const releaseCancellation = deferred();
     const gamesCollection = db.collection("games");
+    await gamesCollection.createIndex({ userId: 1, gameId: 1 }, { unique: true });
     await gamesCollection.insertOne({
       userId,
       gameId: "gdpr-order-game",

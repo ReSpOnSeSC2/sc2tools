@@ -13,4 +13,10 @@ function parseAccounts(raw) {
   }
   return [...new Set(values.map(value => value.trim().toUpperCase()))].sort();
 }
-module.exports = { parseAccounts };
+/** One SC2 identity has two accepted separator spellings, S2 and s2.
+ * Keep legacy matches as bounded literal index keys, never fuzzy regexes.
+ * @param {unknown} raw @returns {string[]|undefined} */
+function accountMatchHandles(raw) {
+  return parseAccounts(raw)?.flatMap(value => [value, value.replace("-S2-", "-s2-")]);
+}
+module.exports = { parseAccounts, accountMatchHandles };

@@ -10,7 +10,7 @@
 
 const { PATCH_ERA_AFTER, PATCH_ERA_BEFORE, buildEraMatch } = require("./patchEra");
 const { parseExactMapNames } = require("./exactMapFilter");
-const { parseAccounts } = require("./accountFilter");
+const { parseAccounts, accountMatchHandles } = require("./accountFilter");
 const {
   REGION_HANDLE_PREFIX,
   REGION_LABELS,
@@ -245,7 +245,7 @@ function gamesMatchStage(userId, filters) {
   // stats routes never parse them from an arbitrary query.
   if (f.excludedOnly) match.excluded = true;
   else if (!f.includeExcluded) match.excluded = { $ne: true };
-  if (f.accounts) match.myToonHandle = { $in: parseAccounts(f.accounts) };
+  if (f.accounts) match.myToonHandle = { $in: accountMatchHandles(f.accounts) };
   if (f.since || f.until) {
     /** @type {Record<string, Date>} */
     const range = {};

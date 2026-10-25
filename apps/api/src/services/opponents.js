@@ -8,6 +8,7 @@ const { hmac } = require("../util/hash");
 const { expectedVersion } = require("../db/schemaVersioning");
 const { gamesMatchStage } = require("../util/parseQuery");
 const { parseExactMapNames } = require("../util/exactMapFilter");
+const { accountMatchHandles } = require("../util/accountFilter");
 const { opponentSeries } = require("./opponentSeries");
 const { parseAnalysisGameIds } = require("../util/opponentAnalysisMembership");
 const { prepareReplayCsv } = require("./replayCsv");
@@ -1563,7 +1564,7 @@ class OpponentsService {
         : { userId, "opponent.pulseId": pulseId };
     Object.assign(gamesFilter, STATS_GAME_MATCH);
     gamesFilter.isResumedFromReplay = { $ne: true };
-    if (Array.isArray(filters.accounts) && filters.accounts.length) gamesFilter.myToonHandle = { $in: filters.accounts };
+    if (Array.isArray(filters.accounts) && filters.accounts.length) gamesFilter.myToonHandle = { $in: accountMatchHandles(filters.accounts) };
     /** @type {Array<any>} */
     const fetchedGames = await this.db.games
       .find(gamesFilter, { projection: PROFILE_GAME_PROJECTION })
@@ -3936,9 +3937,10 @@ function filterGamesByAnalyzerScope(games, f) {
   games = games.filter(isStatsGame);
   if (!f || typeof f !== "object") return games;
   const exactMaps = f.mapExact === undefined ? null : new Set(parseExactMapNames(JSON.stringify(f.mapExact)));
+  const accounts = f.accounts ? new Set(accountMatchHandles(f.accounts)) : null;
   return games.filter((g) => {
     if (!g || typeof g !== "object") return false;
-    if (Array.isArray(f.accounts) && f.accounts.length && !f.accounts.includes(g.myToonHandle)) return false;
+    if (accounts && !accounts.has(g.myToonHandle)) return false;
     const opp = g.opponent || {};
 
     if (f.race && canonicalRaceLetter(g.myRace) !== f.race) return false;

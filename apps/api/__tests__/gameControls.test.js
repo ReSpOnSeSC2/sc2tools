@@ -146,6 +146,17 @@ test("account catalog uses only this owner's live account metadata and retains h
   expect((await call("get", "/v1/replays?accounts=1-S2-1-111111,malformed")).status).toBe(400);
 });
 
+test("a canonical account choice also selects stored lowercase SC2 separators without widening the cohort", async () => {
+  await h.db.games.updateOne({ userId: owner, gameId: ID }, { $set: { myToonHandle: "1-s2-1-111111" } });
+  const catalog = await call("get", "/v1/game-accounts");
+  expect(catalog.body.items).toHaveLength(1); expect(catalog.body.items[0].handle).toBe("1-S2-1-111111");
+  const filtered = await call("get", "/v1/replays?accounts=1-S2-1-111111");
+  expect(filtered.body.items.map(row => row.gameId)).toEqual([ID]);
+  expect((await call("get", "/v1/replays?accounts=1-S2-1-222222")).body.items).toEqual([]);
+  await h.db.games.insertOne({ userId: owner, gameId: "same-canonical-account", date: new Date(), myToonHandle: "1-S2-1-111111", myMmr: 5000 });
+  const deduped = await call("get", "/v1/game-accounts"); expect(deduped.body.items).toHaveLength(1); expect(deduped.body.items[0].mmr).toBe(5000);
+});
+
 test("cleanup errors retain retry state, never report success or permit Unhide", async () => {
   const replay = { delete: jest.fn().mockRejectedValueOnce(new Error("object_cleanup_failed")).mockResolvedValue(undefined) };
   h.services.gdpr.replayFiles = replay;

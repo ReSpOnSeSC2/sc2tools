@@ -42,7 +42,7 @@ test("numeric values and ordinary quoted cells retain their meanings", () => {
 });
 test("exports a BOM/shared columns/current account+replay filters with no hidden, deleted or foreign rows", async () => {
   await db.games.insertMany([
-    game(1, { myBuild: "=PRIVATEFORMULA", opponent: { displayName: "+Rival", race: "Terran", strategy: "Bio", secret: "private-other-field" } }),
+    game(1, { myToonHandle: "2-s2-1-123", myBuild: "=PRIVATEFORMULA", opponent: { displayName: "+Rival", race: "Terran", strategy: "Bio", secret: "private-other-field" } }),
     game(2, { excluded: true }), game(3, { _deleted: true }), game(4, { _deletionPending: true }),
     game(5, { userId: "different-owner" }), game(6, { myToonHandle: "1-S2-1-999" }), game(7, { result: "Defeat" }), game(8, { map: "Other LE" }),
   ]);
