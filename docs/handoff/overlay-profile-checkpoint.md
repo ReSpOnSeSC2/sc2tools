@@ -13,15 +13,15 @@ Task: `overlay-profile-sync` and its configurable-hold-times augment. PR: https:
 
 ## Local verification
 
-- 769 affected web tests across 60 files passed; 75 integrated profile/widget/Learn/SaveBar tests passed after the frozen widget-manager dependency merge. The final token-transition refinement separately passed its 13 real-client regressions and strict lint.
+- 769 affected web tests across 60 files passed; 96 integrated profile/widget/Learn/SaveBar tests passed after fresh main included the merged replay and widget-manager foundations. The final token-transition refinement separately passed its 13 real-client regressions and strict lint.
 - 62 API tests across 8 suites passed, including disposable Mongo ownership/CAS, stale in-flight cache, widget/profile field isolation, socket connect configuration, revocation, and flattened runtime packaging.
 - Full web/API types passed. Changed web files passed strict lint; the new validator/tests passed strict API lint. Existing touched API files passed with their pre-existing function-length warning rule excluded.
-- Required-engine build and smoke passed with bundle `604e9d4618a6414b`. The final web-only rebuild (`95992`) reused that verified unchanged engine and passed after the token-transition refinement.
-- All unchanged performance budgets passed: landing 214.4/215, Today 227.1/240, opponent 471.1/500, all-in-one overlay 233.8/240, standalone widget 311.6/325, Settings 179.3/260 kB gzip.
+- Required-engine build and smoke passed with bundle `604e9d4618a6414b`. The final web-only rebuild (`53003`) reused that verified unchanged engine and passed after the token-transition refinement.
+- All unchanged performance budgets passed: landing 214.5/215, Today 228.1/240, opponent 471.9/500, all-in-one overlay 233.8/240, standalone widget 311.6/325, Settings 179.3/260 kB gzip.
 - Final local Chromium harness passed 135 checks, with real SettingsShell, widget cards, profile draft and overlay clients. Explicit synthetic API/auth/socket/Next boundaries; all nonlocal traffic blocked. Widths 320/390/768/1440, light/dark; 20 captures under `docs/handoff/screenshots/overlay-profile-*`.
 - Browser proof includes combined Save/reload retention, legacy opt-in without automatic write, owner reset, actual dirty-tab guard, persistent Display disabling, point-hit select controls, Escape focus return, URL precedence, old revision rejection, production hold extension and 5-second/20-second Test expiry on both clients.
 - Help index regeneration left no content diff. Root independent source review found no blocking issue.
 
 ## Remaining release gates
 
-PR 717 remains draft until dependency PR 715 is merged and the fresh main integration is checked. Read CI only through `read_pull_request_check_diagnostics`, retaining the returned head revision. Squash merge only after every GitHub check passes on the final expected head; inspect actual Vercel status. No production operation was performed during this work.
+Dependency PR 715 is merged. Fresh main, including replay PR 716 and the widget manager, was integrated at `874d3c4e`; types, 96 web consumers, 62 API cases, the production build/budgets and all 135 browser checks passed again. Final-head CI is the remaining gate. Read CI only through `read_pull_request_check_diagnostics`, retaining the returned head revision. Squash merge only after every GitHub check passes on the final expected head; inspect actual Vercel status. No production operation was performed during this work.
