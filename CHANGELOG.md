@@ -39,6 +39,7 @@ corresponding GitHub Release.
 ### Build editor request ownership
 
 - Cancel pending editor saves, previews and replay inspection when the account, source or open draft changes. Bound stalled requests and suppress stale publication repairs, notifications and completion callbacks. Load the optional editor on demand with Retry and Cancel.
+- Keep private queries, personalized public responses and paginated review results with the account that requested them, including account changes while authentication or a response body is pending.
 
 ### Admin Users
 

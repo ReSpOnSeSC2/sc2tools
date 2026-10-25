@@ -1,4 +1,4 @@
-# Shared editor ownership correction
+# Shared request ownership correction
 
 Save, preview and replay-inspection requests are scoped to the loaded signed-in
 owner and one open/source epoch. An account/loading/close/source change makes
@@ -23,6 +23,28 @@ fixtures preserve the real bounded request helper. Initial verification: 58
 affected assertions passed across the actual request hook, modal, saved-editor,
 lazy-load and landing consumers; full web types passed. Final production,
 browser and remote CI evidence is recorded with the PR before merge.
+
+The shared `useApi`, personalized `usePublicApi` and private review-page
+fetchers use the actual initiating SWR key's owner and a fresh epoch for every
+auth transition. JWT, response-header, error-body and success-body continuations
+must still belong to that epoch before dispatch or cache publication. Anonymous
+public requests stay tokenless even if sign-in finishes while they are pending.
+Paginated private requests retain their existing guard with added real-fetch
+regressions. Ordinary standalone `apiCall` behavior remains compatible.
+
+Real SWR cache regressions reproduced the old A-key/B-token contamination and
+now reject it, including A→B→A, loading transitions, ignored aborts and StrictMode
+replay. The initiating hook's unmount aborts its shared pending promise; a
+remaining same-owner subscriber can Retry. The focused shared-helper/consumer
+matrix passed 180 assertions before integration; the combined full suite and
+production checks are rerun on this branch before merge.
+
+An actual root-StrictMode consumer integration exposed a deduped initial read
+being aborted during effect replay. Cleanup still invalidates capabilities
+immediately, then aborts held transport at one microtask unless that exact
+scope was synchronously reactivated. Root StrictMode duplicate subscribers now
+load with and without deadlines. Real unmount, auth-loading and A→B→A guards
+remain covered, including an immediately invoked retained mutation callback.
 
 No provider call, integration enabling, environment mutation, version, release,
 data migration, infrastructure or budget change accompanies this correction.
