@@ -29,12 +29,36 @@ bundle 25b300818c31d41b. Missing Python/failure removes stale JSON and hides the
 button. Sample code/data/pointer fetch only after a click, never persist games
 and have a real deadline/Retry. The same launcher appears on mobile landing.
 
-Initial full Instant/report/landing/guide/rollout sweep: 597 tests/57 suites;
-sample foundation: nine cases, deterministic real generation and strict lint.
-Final reviewed race/guide consumers: 59 tests/six suites. Strict changed-source
-lint passes; full types, integrated Landing test-only follow-up, production
-build/budgets and actual browser/capture evidence follow before publication.
-Help index now has 89 articles, including `/help/instant-analysis`.
+Frozen verification passes 607 affected tests across 58 suites, then 136
+combined public metadata/cache/guide/Try consumers across 15 suites and 43 final
+focus/history consumers. Full types and strict changed-source lint pass. Help
+generation is deterministic at 89 articles, including `/help/instant-analysis`.
+Landing's exact test-only `24aa9836` correction is integrated. Actual main
+`5dee4be9` is merged at `330a8bb6`, preserving its Try metadata/OG and public
+cache behavior; API bytes match current main. Final focus/history source is
+preserved at `342fdb8c`.
+
+Required engine 25b builds and smokes successfully (223 files/79 pyc and a
+142,939-byte parse). The optional sample regenerates deterministically, and
+the shared engine slot was released immediately. The final integrated Next
+build passes all unchanged budgets: Try 235.9/240, landing 191.6/215, guides
+169.3/175, Today 238.8/240, opponent 447.2/500 and widget 323.9/325 kB gzip.
+
+The actual component browser matrix passes 242 checks/25 captures at
+320/390/768/1440, both themes and reduced motion. All native share/download/
+clipboard APIs are mocked; nonlocal requests and writes are blocked, with zero
+attempted writes. It verifies selected image/text, the same mounted focus URL
+remove/return flow, repeated completions, keyboard trapping/Escape/trigger
+restoration, empty-history samples, consent/rollout, populated guide timings,
+and scoped axe (global contrast belongs to the separate theme pack). PNG
+encoding has a 20-second deadline. Seven individually inspected representatives
+are committed under `docs/handoff/screenshots/try-conversion-*`; full local
+evidence is `.cache/try-conversion-evidence/result.json`.
+
+Independent non-sample source review and root privacy/source review are clear.
+Root visual review, the Landing dependency, exact-head CI/Vercel and coordinated
+merge remain the publication/merge gates. No remote feature push was made
+before this final proof was preserved.
 
 No API endpoint, production job/migration, upload/publication/provider action,
 infrastructure/budget increase, native/engine version or release change. Shared
