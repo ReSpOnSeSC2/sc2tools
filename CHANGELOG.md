@@ -11,6 +11,9 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+- Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.
+
 ### Live overlay display
 
 - Save an overlay theme and per-widget display times to its token. Connected OBS sources receive changes without re-copying URLs; existing `?theme=` URLs keep working and retain their explicit look. Previous browser themes can be moved into a draft with an explicit Save.

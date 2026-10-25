@@ -7,7 +7,7 @@ import { DashboardKpiStrip } from "@/components/analyzer/DashboardKpiStrip";
 import { LadderPulseFrame } from "@/components/analyzer/LadderPulseFrame";
 import { hrefForTab, opponentDossierHref } from "@/components/analyzer/tabs";
 import { AgentUpgradeNotice } from "@/components/dashboard/AgentUpgradeNotice";
-import { LiveGamePanel } from "@/components/dashboard/LiveGamePanel";
+import { LiveScoutingBrief } from "@/components/scouting/LiveScoutingBrief";
 import { useDashboardMe } from "@/components/dashboard/AnalyzerFrame";
 import { SectionBoundary } from "@/components/ui/SectionBoundary";
 import { useInstantImport } from "@/lib/instant/useInstantImport";
@@ -49,7 +49,7 @@ export function TodayView() {
           a non-idle phase. Boundary keeps a malformed live envelope
           from taking Today down. */}
       <SectionBoundary label="the live game panel">
-        <LiveGamePanel />
+        <LiveScoutingBrief />
       </SectionBoundary>
 
       <DashboardKpiStrip />

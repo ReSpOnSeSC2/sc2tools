@@ -37,7 +37,7 @@ const article: HelpArticle = {
     { type: "heading", text: "The live game", anchor: "live-game" },
     {
       type: "paragraph",
-      text: "While you're in a game, a card at the top shows the matchup, your opponent and the game clock. It comes from the desktop app on your gaming PC, so it only appears while the app is running, and it goes away when you're back in the menus.",
+      text: "While the desktop app is running, Today shows your [live scouting brief](/help/live-scouting) during loading screens: opponent identity, your recorded openings and an existing note. It becomes a one-line bar during the game. Choose Second screen to keep the larger brief open on another display; stale updates and menus clear it.",
     },
     { type: "heading", text: "The cards", anchor: "cards" },
     {
