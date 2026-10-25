@@ -17,6 +17,7 @@ const columnStorageKey = 'analyzer.opponents.columns';
 const reads = [], unexpected = [], blocked = [], errors = [], cases = [];
 let javascript = '', holdList = false, heldResponses = [], checks = 0, currentCase = 'initialization';
 const layoutStages = [];
+let lastPickerBounds = null;
 const runStamp = new Date().toISOString().replace(/[:.]/g, '-');
 fs.mkdirSync(output, { recursive: true });
 const cssFiles = fs.readdirSync('.next/static/css', { recursive: true }).filter(name => name.endsWith('.css'));
@@ -91,18 +92,41 @@ const rowFor = (page, width, name) => {
 const picker = page => page.locator('details').filter({ has: page.locator('summary').filter({ hasText: /^Columns$/ }) });
 async function openPicker(page) { const node = picker(page); if (!await node.evaluate(element => element.open)) await node.locator('summary').click(); return node; }
 async function closePicker(page) { const node = picker(page); if (await node.evaluate(element => element.open)) await node.locator('summary').press('Escape'); }
-async function assertPickerBounds(menu) {
-  const bounds = await menu.locator('fieldset').evaluate(node => {
+async function assertPickerBounds(menu, reservedBottom = 0) {
+  const measure = () => menu.locator('fieldset').evaluate(node => {
     const rect = node.getBoundingClientRect();
-    return { left: rect.left, right: rect.right, width: rect.width, height: rect.height, viewportWidth: innerWidth, viewportHeight: innerHeight, internalOverflow: node.scrollWidth > node.clientWidth };
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom, width: rect.width, height: rect.height, viewportWidth: innerWidth, viewportHeight: innerHeight, internalOverflow: node.scrollWidth > node.clientWidth };
   });
+  await expect.poll(async () => {
+    lastPickerBounds = await measure();
+    return { topInside: lastPickerBounds.top >= 4, bottomInside: lastPickerBounds.bottom <= lastPickerBounds.viewportHeight - reservedBottom - 4 };
+  }, { message: 'Whole column picker fits vertically after measuring/flipping/repositioning' }).toEqual({ topInside: true, bottomInside: true });
+  const bounds = await measure();
   expect(bounds.left, 'Picker remains inside the left viewport edge').toBeGreaterThanOrEqual(0);
   expect(bounds.right, 'Picker remains inside the right viewport edge').toBeLessThanOrEqual(bounds.viewportWidth);
   expect(bounds.width).toBeLessThanOrEqual(bounds.viewportWidth - 32 + 1);
   expect(bounds.height).toBeLessThanOrEqual(bounds.viewportHeight * .7 + 1);
   expect(bounds.internalOverflow, 'Picker labels do not create horizontal overflow').toBe(false);
   checks++;
-  return bounds;
+  return { ...bounds, reservedBottom };
+}
+async function assertResetReachable(menu) {
+  const fieldset = menu.locator('fieldset');
+  await fieldset.evaluate(node => { node.scrollTop = node.scrollHeight; });
+  const reset = menu.getByRole('button', { name: 'Reset columns', exact: true });
+  await expect(reset).toBeVisible(); await expect(reset).toBeInViewport({ ratio: 1 });
+  const inside = await reset.evaluate(node => {
+    const button = node.getBoundingClientRect(), popup = node.closest('fieldset').getBoundingClientRect();
+    return button.top >= popup.top && button.bottom <= popup.bottom && button.left >= popup.left && button.right <= popup.right;
+  });
+  expect(inside, 'Reset remains reachable within the visible popup after internal scrolling').toBe(true); checks++;
+}
+async function assertPickerAnchored(menu) {
+  await expect.poll(() => menu.evaluate(node => {
+    const anchor = node.querySelector('summary').getBoundingClientRect(), popup = node.querySelector('fieldset').getBoundingClientRect();
+    return Math.min(Math.abs(popup.top - anchor.bottom), Math.abs(anchor.top - popup.bottom));
+  }), { message: 'Popup follows its summary when the outer document scrolls' }).toBeLessThanOrEqual(12);
+  checks++;
 }
 async function cell(page, width, name, label) {
   const row = rowFor(page, width, name);
@@ -155,6 +179,20 @@ async function recordLayout(page, stage) {
       let menu = await openPicker(page);
       await expect(menu.getByRole('checkbox')).toHaveCount(19); await expect(menu.getByText('Saved automatically in this browser.')).toBeVisible(); checks++;
       const initialPickerBounds = await assertPickerBounds(menu);
+      await page.setViewportSize({ width, height: 700 });
+      const shorterPickerBounds = await assertPickerBounds(menu); await assertResetReachable(menu);
+      const previousChromeBottom = await page.evaluate(() => {
+        const root = document.documentElement, previous = root.style.getPropertyValue('--chrome-bottom');
+        root.style.setProperty('--chrome-bottom', '64px'); dispatchEvent(new Event('resize')); return previous;
+      });
+      const chromeReservedPickerBounds = await assertPickerBounds(menu, 64); await assertResetReachable(menu);
+      await page.evaluate(previous => {
+        if (previous) document.documentElement.style.setProperty('--chrome-bottom', previous);
+        else document.documentElement.style.removeProperty('--chrome-bottom');
+        dispatchEvent(new Event('resize'));
+      }, previousChromeBottom);
+      await page.setViewportSize({ width, height: 1000 });
+      await assertPickerBounds(menu); await menu.locator('fieldset').evaluate(node => { node.scrollTop = 0; });
       await menu.getByRole('checkbox', { name: 'Region', exact: true }).check();
       await menu.getByRole('checkbox', { name: 'Scouting notes', exact: true }).check();
       expect(reads.slice(start).filter(read => read.path === '/v1/opponents').every(read => !new URLSearchParams(read.query).has('listDetails'))).toBe(true); checks++;
@@ -267,6 +305,11 @@ async function recordLayout(page, stage) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true); checks++;
       menu = await openPicker(page); await menu.locator('fieldset').evaluate(node => { node.scrollTop = node.scrollHeight; });
       const restoredPickerBounds = await assertPickerBounds(menu);
+      await assertResetReachable(menu);
+      const beforeOuterScroll = await page.evaluate(() => scrollY);
+      await page.evaluate(() => scrollBy(0, 80));
+      await expect.poll(() => page.evaluate(() => scrollY)).toBeGreaterThan(beforeOuterScroll);
+      const scrolledPickerBounds = await assertPickerBounds(menu); await assertPickerAnchored(menu); await assertResetReachable(menu);
       await page.screenshot({ path: path.join(output, `opponent-columns-picker-${theme}-${width}.png`) });
       await menu.getByRole('button', { name: 'Reset columns', exact: true }).click();
       for (const label of labels) await expect(menu.getByRole('checkbox', { name: label, exact: true })).not.toBeChecked();
@@ -274,7 +317,7 @@ async function recordLayout(page, stage) {
       await page.reload(); await settled(page); menu = await openPicker(page);
       for (const label of labels) await expect(menu.getByRole('checkbox', { name: label, exact: true })).not.toBeChecked();
       await closePicker(page); checks++;
-      cases.push({ width, theme, checks, persistedInNewContext: true, replayNetworkRequests: reads.filter(read => read.path.endsWith('/replay-download')).length - replayBefore, initialPickerBounds, restoredPickerBounds });
+      cases.push({ width, theme, checks, persistedInNewContext: true, replayNetworkRequests: reads.filter(read => read.path.endsWith('/replay-download')).length - replayBefore, initialPickerBounds, shorterPickerBounds, chromeReservedPickerBounds, restoredPickerBounds, scrolledPickerBounds });
       await context.close(); console.log(JSON.stringify(cases.at(-1)));
     }
     expect(errors).toEqual([]); expect(unexpected).toEqual([]); expect(blocked).toEqual([]); checks += 3;
@@ -303,4 +346,4 @@ async function recordLayout(page, stage) {
     holdList = false; for (const send of heldResponses) send(); heldResponses = [];
     await browser.close(); await new Promise(resolve => server.close(resolve));
   }
-})().catch(error => { console.error(error); fs.writeFileSync(path.join(output, 'failure.json'), JSON.stringify({ error: error.stack, checks, cases, unexpected, blocked, errors }, null, 2)); server.close(); process.exitCode = 1; });
+})().catch(error => { console.error(error); fs.writeFileSync(path.join(output, 'failure.json'), JSON.stringify({ error: error.stack, checks, cases, lastPickerBounds, unexpected, blocked, errors }, null, 2)); server.close(); process.exitCode = 1; });
