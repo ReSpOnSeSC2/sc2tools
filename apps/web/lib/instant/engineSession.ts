@@ -36,6 +36,7 @@ export interface SessionOptions {
   factory: () => WorkerLike;
   /** Absolute URL of `/engine/current.json`. */
   pointerUrl: string;
+  refreshPolicy?: boolean;
   onProgress: (progress: EngineProgress) => void;
 }
 
@@ -102,7 +103,7 @@ export class EngineSession {
         timeoutMs,
       );
       this.bootWaiter = { resolve, reject, timer };
-      this.worker.postMessage({ type: "boot", pointerUrl: this.options.pointerUrl });
+      this.worker.postMessage({ type: "boot", pointerUrl: this.options.pointerUrl, ...(this.options.refreshPolicy === false ? { refreshPolicy: false } : {}) });
     });
     return this.bootPromise;
   }

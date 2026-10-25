@@ -42,11 +42,15 @@ vi.mock("@/lib/instant/useInstantSession", () => ({
 }));
 
 import { INSTANT_ENGINE_VERSION } from "@/lib/instant/engineVersion";
-import { PRIVACY_LINE, TryPage } from "../TryPage";
+import { PRIVACY_LINE, TRY_SESSION_OPTIONS, TryPage } from "../TryPage";
 
 const RAW = readFileSync(path.join(__dirname, "../../../lib/instant/__tests__/fixtures/warpgate_payload.json"), "utf8");
 const GAME_ID = "2026-05-08T19:08:12|Squirtuoz|Tourmaline LE|470";
 const DATE = "2026-05-08T19:08:12Z";
+
+it("explicitly disables live-policy API refresh for the local visitor session", () => {
+  expect(TRY_SESSION_OPTIONS.refreshPolicy).toBe(false);
+});
 
 function parsedGame(): ParsedGame {
   return {

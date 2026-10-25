@@ -11,6 +11,10 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Added
+
+- Admin Build Studio lists and versions all preset, private custom and community definitions. Preset replacements use one validated policy across compatible server, desktop and browser engines, with explicit completion clocks, custom-rule precedence, reviewed restores and offline fallback.
+
 ### My reviews dashboard
 
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.

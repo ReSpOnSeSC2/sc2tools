@@ -4,7 +4,7 @@ const article: HelpArticle = {
   slug: "custom-builds",
   title: "Detected builds and your Build library",
   summary:
-    "Every game gets a build label from fixed rules that come with SC2 Tools. Your Build library keeps your own definitions privately, each with its own record.",
+    "Every game gets a build label from deterministic rules that come with SC2 Tools and compatible shared preset policies. Your Build library keeps your own definitions privately, each with its own record.",
   category: "builds",
   audience: "player",
   keywords: [
@@ -29,10 +29,12 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "SC2 Tools names the build in every game two ways. **Detected builds** are the labels that come with the app, like *PvZ - Stargate into Glaives*. Your **Build library** holds the builds you define yourself and save privately.",
     },
+    { type: "heading", text: "Shared preset updates", anchor: "shared-preset-updates" },
+    { type: "paragraph", text: "Administrators can correct preset detection through a versioned shared policy. Compatible desktop engines refresh after healthy heartbeats; browser analysis refreshes before parsing, at most once per minute. Offline engines retain their last verified policy, and older clients retain their released rules until updated. Existing game labels change only when those files are reanalysed. Your matching private custom rules keep priority, including when a private build shares a preset name. A tightened preset that no longer matches becomes Unclassified rather than falling through to its old criteria." },
     { type: "heading", text: "Detected builds" },
     {
       type: "paragraph",
-      text: "The analyzer reads each replay and labels your build and your opponent's with fixed rules: the same replay always gets the same label, and no AI is involved. [Build definitions](/definitions) lists every label with the rule behind it, and you can search it or filter by race and matchup.",
+      text: "The analyzer reads each replay and labels your build and your opponent's with deterministic rules. The same replay, rule version and private custom definitions produce the same label; no AI is involved. [Build definitions](/definitions) lists every label with the rule behind it, and you can search it or filter by race and matchup.",
     },
     {
       type: "list",

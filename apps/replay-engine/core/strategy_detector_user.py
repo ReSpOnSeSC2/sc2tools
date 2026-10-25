@@ -23,6 +23,7 @@ from .strategy_detector_pvp import detect_pvp
 from .strategy_detector_pvt import detect_pvt
 from .strategy_detector_pvz import detect_pvz
 from .strategy_detector_race import classify_by_race
+from .preset_policy import apply_policy
 
 
 class UserBuildDetector(BaseStrategyDetector):
@@ -36,6 +37,8 @@ class UserBuildDetector(BaseStrategyDetector):
         game_length_seconds: float = None,
         eight_worker: bool = False,
     ) -> str:
+        self.custom_match = False
+        self.released_label = None
         # ``eight_worker`` (the replay was played on the 8-worker patch
         # 5.0.16) only picks the build durations custom v3 rules rewind
         # by; see BaseStrategyDetector.check_custom_rules.
@@ -88,7 +91,15 @@ class UserBuildDetector(BaseStrategyDetector):
                 rules, buildings, units, upgrades, main_loc,
                 eight_worker=eight_worker,
             ):
+                self.custom_match = True
                 return cb["name"]
+
+        def finish(label):
+            self.released_label = label
+            return apply_policy(
+                self.preset_policy, label, my_race, _matchup_to_vs_race(matchup),
+                my_events, self, eight_worker,
+            )
 
         # 2. Zerg / Terran: delegate to the shared race classifier so the
         # user's own build classifies exactly like the opponent's would,
@@ -96,10 +107,10 @@ class UserBuildDetector(BaseStrategyDetector):
         # "Terran - Fast 3 CC" instead of "Unclassified - Terran"). The
         # opponent detector runs the same classify_by_race trees.
         if my_race in ("Zerg", "Terran"):
-            return classify_by_race(
+            return finish(classify_by_race(
                 my_race, my_events, self,
                 opp_race=_matchup_to_vs_race(matchup),
-            )
+            ))
 
         # 3. Protoss matchups dispatch to per-matchup decision trees.
         ctx = DetectionContext(
@@ -112,14 +123,14 @@ class UserBuildDetector(BaseStrategyDetector):
         if "vs Zerg" in matchup:
             label = detect_pvz(ctx)
             if label is not None:
-                return label
+                return finish(label)
         elif "vs Protoss" in matchup:
             label = detect_pvp(ctx)
             if label is not None:
-                return label
+                return finish(label)
         elif "vs Terran" in matchup:
             label = detect_pvt(ctx)
             if label is not None:
-                return label
+                return finish(label)
 
-        return f"Unclassified - {my_race}"
+        return finish(f"Unclassified - {my_race}")
