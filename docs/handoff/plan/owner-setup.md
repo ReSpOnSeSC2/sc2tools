@@ -242,3 +242,17 @@ replays and socket traffic only.
   reference payloads. A card requests its reference only on explicit Practice.
 - Paste parsing and exports run locally. No external parser or AI service is
   used. Rollback may leave the optional field stored; older readers ignore it.
+
+## Optional public Community cache (ADR 0056)
+
+No environment value, integration, collection, index, migration or provider is
+enabled by this change. API `COMMUNITY_REVALIDATE_URL` and the shared server-only
+`COMMUNITY_REVALIDATE_SECRET` in API/web are optional and must be configured
+together later by the owner. See `docs/DEPLOYMENT_GUIDE.md` for the exact signed
+protocol and local validation. Unset API configuration sends nothing; unset web
+secret keeps user-derived public reads/share cards uncached. General configured
+Community data uses300-second tags; best-effort purge has no guaranteed seconds
+to visibility. Opponent API/fetch/page always remain no-store, with a bounded
+one-hour service LRU behind fresh floor/removal admission. No six-hour rendered
+opponent cache is enabled. Rollback is a source revert; no data conversion or
+production mutation is required.

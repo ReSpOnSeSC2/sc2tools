@@ -8,6 +8,7 @@ import { HelpSupportLine } from "@/components/help/HelpSupportLine";
 import { articlesByCategory, helpArticlePath, popularArticles } from "@/lib/help";
 import { helpInlinePlainText } from "@/lib/help/inline";
 import { siteTitle } from "@/lib/siteTitle";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 const TITLE = "Help center";
 // Social cards get no title template, so they carry the brand themselves.
@@ -15,20 +16,7 @@ const SHARE_TITLE = siteTitle(TITLE);
 const DESCRIPTION =
   "How to set up SC2 Tools, pair the desktop app, read your stats, use build check-in and run Stream Studio. Search or browse by topic.";
 
-export const metadata: Metadata = {
-  title: TITLE,
-  description: DESCRIPTION,
-  alternates: { canonical: "/help" },
-  openGraph: {
-    type: "website",
-    siteName: "SC2 Tools",
-    url: "/help",
-    title: SHARE_TITLE,
-    description: DESCRIPTION,
-    images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "SC2 Tools Help" }],
-  },
-  twitter: { card: "summary_large_image", title: SHARE_TITLE, description: DESCRIPTION, images: ["/og.jpg"] },
-};
+export const metadata: Metadata = pageMetadata({ title: TITLE, description: DESCRIPTION, canonical: "/help", shareTitle: SHARE_TITLE });
 
 const TOPIC_LINK_CLASS =
   "group -mx-2 flex min-h-11 items-center justify-between gap-3 rounded-md px-2 py-1.5 text-body font-medium text-text hover:bg-bg-elevated hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent";

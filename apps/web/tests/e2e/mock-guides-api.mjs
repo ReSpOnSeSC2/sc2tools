@@ -213,6 +213,11 @@ const MAP_GUIDE = {
 
 /** Exact API paths → JSON bodies (200). */
 export const GUIDE_ROUTES = new Map([
+  ["/v1/guides/pvz/counter/12-pool", {
+    matchup: "PvZ", matchupSlug: "pvz", strategyKey: "Zerg - 12 Pool", strategySlug: "12-pool", name: "12 Pool",
+    description: "Synthetic early-pressure counter guide.", myRace: "Protoss", oppRace: "Zerg", era: "after", patch: PATCH,
+    computedAt: NOW, published: true, overall: cell(180, 30, 108), openers: PVZ_OPENERS.filter(row => row.published), videos: [], eightWorkerVideos: [],
+  }],
   ["/v1/guides", INDEX],
   ["/v1/guides/pvz", MATCHUP],
   ["/v1/guides/pvz/stargate-into-glaives", BUILD],

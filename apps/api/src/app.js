@@ -123,6 +123,7 @@ const { GuideSamplesService } = require("./services/guideSamples");
 const { buildGuideSamplesBackfillJob } = require("./jobs/guideSamplesBackfillJob");
 const { GuideStatsService } = require("./services/guideStats");
 const { buildGuideRevalidator } = require("./services/guideRevalidate");
+const { buildCommunityRevalidator } = require("./services/communityRevalidate");
 const { buildGuideStatsRecomputeJob } = require("./jobs/guideStatsRecomputeJob");
 const { GuideVideosService } = require("./services/guideVideos");
 const { buildGuideVideosSyncJob } = require("./jobs/guideVideosSyncJob");
@@ -714,7 +715,10 @@ function makeServices(deps, clerk, adminClerkIds) {
       }
     },
   });
-  const buildStudio = new AdminBuildStudioService(deps.db, { customBuilds, policies: presetPolicies });
+  const communityRevalidator = buildCommunityRevalidator({ url: deps.config.communityRevalidateUrl,
+    secret: deps.config.communityRevalidateSecret, logger: deps.logger });
+  const buildStudio = new AdminBuildStudioService(deps.db, { customBuilds, policies: presetPolicies,
+    onCommunityChanged: communityRevalidator.notify });
   // Opponent-log recomputes replace data consumed by opponent-perspective
   // custom rules. Coalesce a fresh all-build pass after the detail write so a
   // scan that overlapped the write cannot silently complete on old details.
@@ -852,7 +856,9 @@ function makeServices(deps, clerk, adminClerkIds) {
   const community = new CommunityService(deps.db, {
     slugSecret: deps.config.serverPepper,
     notifications,
+    onPublicChanged: communityRevalidator.notify,
   });
+  gdpr.onCommunityChanged = userId => community.invalidateForUser(userId);
   gdpr.backups = new UserBackupsService(deps.db, { gdpr, store: deps.userBackupsStore || buildUserBackupsStore(deps.config), logger: deps.logger });
   const dataRepairs = new DataRepairsService(deps.db, { gdpr, notifications, logger: deps.logger });
   // Opt-in public player pages (/p/:handle). Derives entirely from
@@ -942,13 +948,17 @@ function makeServices(deps, clerk, adminClerkIds) {
       keyFile: null,
     },
   });
-  const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
+  const invalidatePrivateGameCaches = (/** @type {string} */ userId) => {
     games.invalidateForUser(userId);
     // Each owner-aware invalidator fences late in-flight cache completion.
-    for (const service of [overlayLive, rivals, gameContext, tickerFacts, chatStats, community, aggregations.trendsRequests, streamSeries]) {
+    for (const service of [overlayLive, rivals, gameContext, tickerFacts, chatStats, aggregations.trendsRequests, streamSeries]) {
       service.invalidateForUser(userId);
     }
     adminGlobalTrends.queries.clear(); adminGlobalTrends.history.invalidate();
+  };
+  gdpr.onGamesChanged = invalidatePrivateGameCaches;
+  const gameControls = new GameControlsService(deps.db, { gdpr, onChanged: async (userId) => {
+    invalidatePrivateGameCaches(userId); community.invalidateForUser(userId);
     deps.io?.to(`user:${userId}`).emit("games:changed", { count: 1, inserted: 0, bulk: false, reason: "game-control" });
   } });
   return {

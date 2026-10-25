@@ -124,6 +124,8 @@ class GdprService {
    *   overlayTokens?: import('./types').OverlayTokensService|null,
    *   io?: import('socket.io').Server,
    *   siteStats?: import('./siteStats').SiteStatsService,
+   *   onCommunityChanged?:(userId:string)=>void,
+   *   onGamesChanged?:(userId:string)=>void,
    * }} [opts]
    *   ``opts.opponents`` lets ``rebuildOpponentsForUser`` immediately
    *   chain a pulse-character-id backfill so the admin "Rebuild
@@ -139,6 +141,8 @@ class GdprService {
     this.overlayTokens = opts.overlayTokens || null;
     this.io = opts.io || null;
     this.siteStats = opts.siteStats || null;
+    this.onCommunityChanged = opts.onCommunityChanged || null;
+    this.onGamesChanged = opts.onGamesChanged || null;
     this.opponents = (opts && opts.opponents) || null;
     this.logger = (opts && opts.logger) || null;
     // GameDetailsService — the store-aware deleter for the heavy
@@ -158,6 +162,25 @@ class GdprService {
     // so they cannot ride the PURGE_ONLY list: the service hashes for us.
     // Optional — focused tests build GdprService with fake dbs.
     this.guideSamples = (opts && opts.guideSamples) || null;
+  }
+
+  /** Invalidate after each committed contribution/publication deletion, even
+   * if a later cleanup step fails. The callback cannot weaken the fence.
+   * @param {string} userId */
+  notifyCommunityChanged(userId) { try { this.onCommunityChanged?.(userId); } catch { /* Advisory only. */ } }
+  /** @param {string} userId */
+  notifyGamesChanged(userId) {
+    this.notifyCommunityChanged(userId);
+    try { this.onGamesChanged?.(userId); } catch { /* The mutation/fence outcome is unchanged. */ }
+  }
+  /** Known no-ops need no purge; an unknown write outcome must purge even if
+   * the driver rejects after committing the mutation.
+   * @template T @param {string} userId @param {()=>Promise<T>} operation @param {(value:T)=>boolean} changed @param {boolean} [gamesChanged] @returns {Promise<T>} */
+  async communityMutation(userId, operation, changed, gamesChanged = false) {
+    const notify = () => gamesChanged ? this.notifyGamesChanged(userId) : this.notifyCommunityChanged(userId);
+    let known = false;
+    try { const value = await operation(); const didChange = changed(value); known = true; if (didChange) notify(); return value; }
+    finally { if (!known) notify(); }
   }
 
   /**
@@ -374,14 +397,16 @@ class GdprService {
 
     addDeletionCounts(counts, await this._deleteCoachingData(userId, gdprFence));
     addDeletionCounts(counts, await purgeTokenData(this.db, userId, gdprFence, { overlayTokens: this.overlayTokens, io: this.io }));
-    counts.communityVotesRemoved = await scrubCommunityVotes(this.db, userId);
+    counts.communityVotesRemoved = await this.communityMutation(userId, () => scrubCommunityVotes(this.db, userId), count => count > 0);
 
     await gdprFence.assert();
     for (const [key] of USER_SCOPED_COLLECTIONS) {
       await gdprFence.assert();
       const coll = /** @type {any} */ (this.db)[key];
       if (!coll) continue;
-      const res = await coll.deleteMany({ userId });
+      // Full erasure retires all owner snapshots, including already-empty
+      // history; partial range wipes below still optimize known no-op deletes.
+      const res = key === "games" ? await this.communityMutation(userId, () => coll.deleteMany({ userId }), () => true, true) : await coll.deleteMany({ userId });
       counts[key] = res.deletedCount || 0;
     }
 
@@ -401,7 +426,7 @@ class GdprService {
     for (const [key, field] of PURGE_ONLY_COLLECTIONS) {
       const coll = /** @type {any} */ (this.db)[key];
       if (!coll) continue;
-      const res = await coll.deleteMany({ [field]: userId });
+      const res = key === "communityBuilds" ? await this.communityMutation(userId, () => coll.deleteMany({ [field]: userId }), value => value.deletedCount > 0) : await coll.deleteMany({ [field]: userId });
       counts[key] = res.deletedCount || 0;
     }
 
@@ -852,7 +877,7 @@ class GdprService {
     if (guideGameIds && !this.replayFiles) gamesDeleteFilter = { userId, gameId: { $in: guideGameIds } };
 
     await gdprFence.assert();
-    const gamesRes = await this.db.games.deleteMany(gamesDeleteFilter);
+    const gamesRes = await this.communityMutation(userId, () => this.db.games.deleteMany(gamesDeleteFilter), value => (value.deletedCount || 0) > 0, true);
     const guideSamplesDeleted = await this._deleteWipedGuideSamples(userId, guideGameIds);
     // Every example of the handle goes (not just the wiped range): the
     // nightly run re-picks examples from the surviving games.
