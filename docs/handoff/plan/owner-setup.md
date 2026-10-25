@@ -87,3 +87,8 @@ No environment variable, collection, migration or paid service is required. The 
 ### Live overlay profiles
 
 Deploy the API and web together for `overlay-profile-sync`. The API Dockerfile includes the authored `overlayProfileRules.json` at its flattened runtime path; no environment variable, collection, index, migration or paid service is added. Existing tokens default safely until their owner explicitly saves a profile. In Settings → Overlay, choose a theme in Look or a timed widget's Display time, then Save overlay display. Confirm the connected Browser Source updates without changing its URL. A previously copied `?theme=` URL deliberately keeps its explicit look; remove that one override if the source should follow saved changes. Persistent/self-driven widgets keep their own visibility, and test events remain capped at 20 seconds. The previous browser theme banner only fills a draft; opening Settings never silently writes it to a token.
+
+# Widget playground
+
+No additional owner configuration is required. The normal API image includes the shared sample JSON; deploy API and web normally. Use Settings → Overlay → Widgets → Preview, Stream Studio or the public playground to inspect silent local sample data before using Test in OBS. The playground uses no account or overlay token and makes no provider request. No production integration or account setting was changed while validating it.
+

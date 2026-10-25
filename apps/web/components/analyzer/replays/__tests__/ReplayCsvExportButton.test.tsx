@@ -19,6 +19,30 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("private CSV export", () => {
+  it("reuses the authenticated CSV download for a dossier's exact local/sample scope and5k cap", async () => {
+    const sample = JSON.stringify(["one", "two"]);
+    render(<ReplayCsvExportButton opponentId="1-S2-1-99" query={`map=Exact+LE&build=Gateway&opp_strategy=Pool&result=loss&mergeLinked=1&analysisGameIds=${encodeURIComponent(sample)}&cursor=old&limit=200&owner=other`} />);
+    expect(screen.getByText(/up to 5,000 games/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+    const url = new URL(fetcher.mock.calls[0][0]);
+    expect(url.pathname).toBe("/v1/opponents/1-S2-1-99/export.csv");
+    expect(Object.fromEntries(url.searchParams)).toEqual({ map: "Exact LE", build: "Gateway", opp_strategy: "Pool", result: "loss", mergeLinked: "1", analysisGameIds: sample });
+  });
+  it("cancels an old dossier's deferred token when the opponent changes", async () => {
+    const token = deferred<string>(); auth.getToken.mockReturnValue(token.promise);
+    const view = render(<ReplayCsvExportButton opponentId="old" query="result=win" />);
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    view.rerender(<ReplayCsvExportButton opponentId="new" query="result=win" />);
+    await act(async () => { token.resolve("token-a"); await token.promise; });
+    expect(fetcher).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled();
+  });
+  it("discloses the dossier cap when the shared server sentinel says truncated", async () => {
+    fetcher.mockResolvedValue(response(true)); render(<ReplayCsvExportButton opponentId="rival" query="" />);
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("first 5,000 matching games newest first"));
+    expect(screen.queryByText(/50,000/)).toBeNull();
+  });
   it("keeps actual filters/search/result/matchup and removes paging, credentials and unknown keys", async () => {
     const query = "race=P&accounts=2-s2-1-2,1-S2-1-1&search=Rival&result=loss&matchup=PvZ&sort=date_asc&cursor=old&limit=10&token=secret&owner=other";
     render(<ReplayCsvExportButton query={query} />);

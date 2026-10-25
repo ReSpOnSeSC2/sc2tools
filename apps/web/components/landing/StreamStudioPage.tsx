@@ -18,6 +18,7 @@ import { PRODUCT_FACTS } from "@/lib/productFacts";
 import { OVERLAY_CREDIT_TEXT } from "@/lib/overlayCredit";
 import { StreamStudioCtas } from "./StreamStudioCtas";
 import { StreamManagerShowcase } from "@/components/landing/StreamManagerShowcase";
+import { LazyWidgetPlayground } from "@/components/stream-studio/LazyWidgetPlayground";
 
 interface FeatureGroup {
   title: string;
@@ -294,6 +295,7 @@ export function StreamStudioPage({ tryEnabled }: { tryEnabled: boolean }) {
       <Hero />
       <StreamManagerShowcase className="mt-16 md:mt-20" />
       <Features />
+      <section id="widget-playground" className="mt-16 space-y-5 scroll-mt-28"><h2 className="font-serif text-h2">Try the widgets here</h2><p className="text-body text-text-muted">Explore sample scenarios and themes before adding a Browser Source. Nothing is sent to OBS.</p><LazyWidgetPlayground /></section>
       <Setup />
       <Questions />
       <FinalCta tryEnabled={tryEnabled} />

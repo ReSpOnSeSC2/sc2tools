@@ -1,38 +1,34 @@
 "use client";
 
-import { Fragment, memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
-import Link from "next/link";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ChevronDown,
-  ChevronRight,
-  CornerDownRight,
-  ExternalLink,
   Search,
-  StickyNote,
   X,
 } from "lucide-react";
 import { useFilters, filtersToQuery } from "@/lib/filterContext";
 import { useApi } from "@/lib/clientApi";
 import { useApiPaginated } from "@/lib/useApiPaginated";
-import { PlayerChannelLinks, type PlayerChannels } from "./PlayerChannelLinks";
 import { usePlayerChannels } from "./usePlayerChannels";
 import { useLocalStoragePositiveInt, useLocalStorageState } from "@/lib/useLocalStorageState";
-import { fmtAgo, fmtMmr, pct1, wrColor } from "@/lib/format";
-import { pickPulseLabel, sc2pulseCharacterUrl } from "@/lib/sc2pulse";
 import {
   groupMatchesSearch,
   groupOpponentsByPlayer,
   LS_GROUP_BY_PLAYER,
-  type GlobalPlayerIdentity,
   type OpponentGroup,
   type PulseLinksResponse,
 } from "@/lib/opponentGroups";
+import { useRivals, rivalKeys } from "@/lib/useRivals";
+import { useRivalSummary } from "@/lib/useRivalSummary";
+import { rivalSummaryGroups } from "@/lib/rivalSummaryGroups";
+import { StarredRivalCards } from "./opponents/StarredRivalCards";
+import { downloadCsv, toCsv } from "@/lib/csvExport";
+import { opponentColumns, opponentRace, OPPONENT_CSV_COLUMNS, type OpponentColumns } from "@/lib/opponentPresentation";
+import { RivalStar } from "./opponents/RivalStar";
+import { RivalriesStrip } from "./opponents/RivalriesStrip";
+import { OpponentHistory, OpponentColumnPicker } from "./opponents/OpponentHistory";
 import { Button } from "@/components/ui/Button";
-import { RevealedChip } from "./RevealedChip";
-import { Skeleton } from "@/components/ui/Card";
 import { RequestError } from "@/components/ui/RequestError";
 import { Toggle } from "@/components/ui/Toggle";
-import { SortableTh } from "@/components/ui/SortableTh";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { opponentDossierHref } from "./tabs";
@@ -40,43 +36,15 @@ import { visibleOpponentId } from "./opponentListSort";
 import { useOpponentListNavigation, type MmrImpactFilter, type OpponentListLocation, type OpponentListSnapshot } from "./useOpponentListNavigation";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { useAllNetMmrOpponents } from "@/lib/netMmrOpponents";
-import { NoOpponentsMatch } from "./EmptyStates";
+import { NoGamesYet, NoOpponentsMatch } from "./EmptyStates";
 import {
-  MmrImpactCells,
   MmrImpactLeaders,
   type MmrImpactLeader,
 } from "./OpponentMmrImpact";
 
-const LS_MIN_OPP = "analyzer.opponents.minGames";
-type OpenOpponent = (id: string, fromLink?: boolean) => boolean;
+import { type Opp, type OpenOpponent, type OpponentExportAction, notePreview } from "./opponents/types";
 
-type Opp = {
-  pulseId: string;
-  pulseCharacterId?: string | null;
-  toonHandle?: string | null;
-  name?: string;
-  displayNameSample?: string;
-  // Revealed identity behind a barcode, from Pulse or an approved
-  // community submission. The recorded account name stays separate.
-  revealedName?: string | null;
-  globalIdentity?: GlobalPlayerIdentity | null;
-  wins: number;
-  losses: number;
-  games: number;
-  gameCount?: number;
-  winRate: number;
-  mmr?: number | null;
-  netMmr?: number | null;
-  mmrWon?: number;
-  mmrLost?: number;
-  mmrPairs?: number;
-  mmrAvgDelta?: number | null;
-  lastPlayed: string | null;
-  lastSeen?: string | null;
-  notesMeta?: { preview: string };
-  notes?: string;
-};
-const notePreview = (opponent: Opp) => opponent.notesMeta?.preview || Array.from((opponent.notes || "").replace(/\s+/g, " ").trim()).slice(0, 140).join("");
+const LS_MIN_OPP = "analyzer.opponents.minGames";
 
 /**
  * Opponents tab — full filters, search, sort, drilldown.
@@ -100,22 +68,28 @@ export function OpponentsTab({
   onOpen,
   location,
   onResultCount,
+  onExportAction,
 }: {
   onOpen?: (pulseId: string) => void;
   location?: OpponentListLocation;
   onResultCount?: (count: number) => void;
+  onExportAction?: (action: OpponentExportAction | null) => void;
 }) {
   const { filters, dbRev } = useFilters();
   const { search, setSearch, impact: mmrImpactFilter, setImpact: setMmrImpactFilter, hasNotes, setHasNotes, sort, remember } = useOpponentListNavigation(location);
+  const rivals = useRivals();
+  const [quick, setQuick] = useState<"all" | "regulars" | "week" | "rivals">("all");
+  const [columnOverrides, setColumnOverrides] = useLocalStorageState<Partial<OpponentColumns>>("analyzer.opponents.columns", {}, (value): value is Partial<OpponentColumns> => !!value && typeof value === "object" && !Array.isArray(value) && Object.entries(value).every(([key, visible]) => ["pulseId", "mmr", "netMmr", "mmrWon", "mmrLost"].includes(key) && typeof visible === "boolean"));
   const searchRef = useRef<HTMLInputElement>(null);
   const deferredSearch = useDeferredValue(search);
-  const [visibleCount, setVisibleCount] = useState(200);
+  const [visibleCount, setVisibleCount] = useState(100);
   const [minGames, setMinGames] = useLocalStoragePositiveInt(LS_MIN_OPP, 1);
   const [groupByPlayer, setGroupByPlayer] = useLocalStorageState<boolean>(
     LS_GROUP_BY_PLAYER,
     true,
     (raw): raw is boolean => typeof raw === "boolean",
   );
+  const showPlayerGroups = groupByPlayer || quick === "rivals";
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     new Set(),
   );
@@ -173,7 +147,7 @@ export function OpponentsTab({
   // means the server is still warming its linkage cache and a later
   // visit will merge more rows.
   const { data: pulseLinks, isLoading: isPulseLinksLoading } = useApi<PulseLinksResponse>(
-    groupByPlayer ? "/v1/opponents/pulse-links" : null,
+    "/v1/opponents/pulse-links",
     { revalidateOnFocus: false },
   );
 
@@ -211,10 +185,10 @@ export function OpponentsTab({
     () =>
       groupOpponentsByPlayer(
         normalised,
-        groupByPlayer ? pulseLinks?.links : null,
-        groupByPlayer,
+        showPlayerGroups ? pulseLinks?.links : null,
+        showPlayerGroups,
       ),
-    [normalised, groupByPlayer, pulseLinks],
+    [normalised, showPlayerGroups, pulseLinks],
   );
 
   // The API leaders rank individual accounts. With grouping enabled, rank
@@ -251,11 +225,14 @@ export function OpponentsTab({
   // aliases, revealed name, pulse ids, toon handles). The backend
   // `search` query param is a no-op for the legacy endpoint, so
   // filter here.
+  const summaryGroups = useMemo(() => rivalSummaryGroups(groups, rivals.keys, pulseLinks?.links), [groups, rivals.keys, pulseLinks]);
+  const summary = useRivalSummary(summaryGroups, filtersToQuery(params), dbRev, !isLoading && !isLoadingMore && !rivals.loading && !isPulseLinksLoading);
+  const groupsWithWeek = useMemo(() => groups.map(group => ({ ...group, weekGames: summary.data?.recentComplete ? group.identities.reduce((sum, identity) => sum + (summary.data?.weekGames[identity.pulseId] || 0), 0) : undefined })), [groups, summary.data]);
   const searchedItems = useMemo(() => {
     const q = deferredSearch.trim();
-    if (!q) return groups;
-    return groups.filter((g) => groupMatchesSearch(g, q));
-  }, [groups, deferredSearch]);
+    if (!q) return groupsWithWeek;
+    return groupsWithWeek.filter((g) => groupMatchesSearch(g, q));
+  }, [groupsWithWeek, deferredSearch]);
 
   const filteredItems = useMemo(
     () =>
@@ -263,14 +240,17 @@ export function OpponentsTab({
         (o) =>
           (o.games || 0) >= minGames
           && matchesMmrImpactFilter(o, mmrImpactFilter)
-          && (!hasNotes || o.identities.some((identity) => Boolean(notePreview(identity)))),
+          && (!hasNotes || o.identities.some((identity) => Boolean(notePreview(identity))))
+          && (quick !== "regulars" || o.games >= 5)
+          && (quick !== "week" || (!!o.lastPlayed && Date.parse(o.lastPlayed) <= Date.now() && Date.parse(o.lastPlayed) >= Date.now() - 7 * 86_400_000))
+          && (quick !== "rivals" || rivalKeys(o, pulseLinks?.links).some(key => rivals.keys.includes(key))),
       ),
-    [searchedItems, minGames, mmrImpactFilter, hasNotes],
+    [searchedItems, minGames, mmrImpactFilter, hasNotes, quick, pulseLinks, rivals.keys],
   );
 
   const { sortRows } = sort;
   const items = useMemo(
-    () => sortRows(filteredItems, (row, col) => col === "pulseId" ? visibleOpponentId(row) : (row as unknown as Record<string, unknown>)[col]),
+    () => sortRows(filteredItems, (row, col) => col === "pulseId" ? visibleOpponentId(row) : col === "race" ? opponentRace(row.race) : (row as unknown as Record<string, unknown>)[col]),
     [filteredItems, sortRows],
   );
   // Rows only the Min games picker is hiding, for the empty state.
@@ -281,7 +261,7 @@ export function OpponentsTab({
   const mergedNameCount = normalised.length - groups.length;
   const channelsFor = usePlayerChannels(normalised);
 
-  useEffect(() => setVisibleCount(200), [search, sort.sortBy, sort.sortDir, minGames, mmrImpactFilter, groupByPlayer, hasNotes]);
+  useEffect(() => setVisibleCount(100), [search, sort.sortBy, sort.sortDir, minGames, mmrImpactFilter, groupByPlayer, hasNotes, path, quick]);
   useEffect(() => { onResultCount?.(items.length); }, [items.length, onResultCount]);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
@@ -305,7 +285,7 @@ export function OpponentsTab({
   useEffect(() => {
     if (isLoading || isLoadingMore || (groupByPlayer && isPulseLinksLoading) || !rawItems.length || !restore.current) return;
     const stored = restore.current; restore.current = null;
-    setVisibleCount(Math.max(200, Math.min(8000, stored.renderWindow)));
+    setVisibleCount(Math.max(100, Math.min(8000, stored.renderWindow)));
     setExpandedGroups(new Set(stored.expandedGroups));
     let second = 0;
     const first = requestAnimationFrame(() => { second = requestAnimationFrame(() => window.scrollTo(0, Math.max(0, stored.scrollY))); });
@@ -323,8 +303,8 @@ export function OpponentsTab({
     if (id && location) prefetchTimer.current = setTimeout(() => location.prefetch(opponentDossierHref(id)), 150);
   }, [location]);
   useEffect(() => () => { if (prefetchTimer.current) clearTimeout(prefetchTimer.current); }, []);
-  const reset = () => { setSearch(""); setMinGames(1); setMmrImpactFilter("all"); setHasNotes(false); setGroupByPlayer(true); sort.setSortExplicit("lastPlayed", "desc"); };
-  const changed = Boolean(search || minGames !== 1 || mmrImpactFilter !== "all" || hasNotes || !groupByPlayer || sort.sortBy !== "lastPlayed" || sort.sortDir !== "desc");
+  const reset = () => { setSearch(""); setMinGames(1); setMmrImpactFilter("all"); setHasNotes(false); setQuick("all"); setGroupByPlayer(true); setColumnOverrides({}); sort.setSortExplicit("lastPlayed", "desc"); };
+  const changed = Boolean(Object.keys(columnOverrides).length || quick !== "all" || search || minGames !== 1 || mmrImpactFilter !== "all" || hasNotes || !groupByPlayer || sort.sortBy !== "lastPlayed" || sort.sortDir !== "desc");
 
   const toggleGroup = useCallback((pulseId: string) => {
     setExpandedGroups((prev) => {
@@ -334,6 +314,26 @@ export function OpponentsTab({
       return next;
     });
   }, []);
+
+  const columns = opponentColumns(columnOverrides, mmrImpactItems.some(row => (row.pairs || 0) > 0));
+  const exportScope = JSON.stringify([rivals.owner, path, search, minGames, quick, mmrImpactFilter, hasNotes, groupByPlayer, sort.sortBy, sort.sortDir]);
+  const currentExport = useRef<string | null>(exportScope); currentExport.current = exportScope;
+  useEffect(() => { currentExport.current = exportScope; return () => { currentExport.current = null; }; }, [exportScope]);
+  const exportRows = useCallback(() => {
+    if (currentExport.current !== exportScope) return;
+    const period = filters.since || filters.until ? `${filters.since?.slice(0, 10) || "beginning"}_${filters.until?.slice(0, 10) || "now"}` : "all-time";
+    const scope = `Opponents · ${showPlayerGroups ? "grouped players" : "accounts"} · ${path} · search ${search || "(none)"} · min games ${minGames} · ${quick} · MMR ${mmrImpactFilter} · notes ${hasNotes} · ${sort.sortBy} ${sort.sortDir}`;
+    downloadCsv(`sc2tools-opponents-${period}.csv`, toCsv({ columns: OPPONENT_CSV_COLUMNS, rows: items, scope }));
+  }, [exportScope, filters.since, filters.until, showPlayerGroups, path, search, minGames, quick, mmrImpactFilter, hasNotes, sort.sortBy, sort.sortDir, items]);
+  const exportDisabled = !rivals.owner || !items.length || isLoading || isLoadingMore || hitMaxPages || !!error || search !== deferredSearch;
+  useEffect(() => {
+    onExportAction?.({ count: items.length, disabled: exportDisabled, download: exportRows });
+    return () => onExportAction?.(null);
+  }, [items.length, exportDisabled, exportRows, onExportAction]);
+  const star = (row: OpponentGroup<Opp>) => {
+    const candidates = rivalKeys(row, pulseLinks?.links);
+    return <RivalStar name={row.name || "unnamed opponent"} starred={candidates.some(key => rivals.keys.includes(key))} disabled={rivals.loading || rivals.saving || rivals.unavailable || !!isPulseLinksLoading} onToggle={() => { void rivals.toggle(candidates); }} />;
+  };
 
   const showSkeleton = isLoading && rawItems.length === 0;
 
@@ -349,6 +349,18 @@ export function OpponentsTab({
         onOpen={open}
       />
 
+      <RivalriesStrip rows={items} onOpen={open} incomplete={isLoading || isLoadingMore || hitMaxPages || !!error} recentAvailable={summary.data?.recentComplete === true} />
+      <div className="flex flex-wrap items-center gap-2" aria-label="Quick opponent views">
+        <Button variant={quick === "all" ? "primary" : "secondary"} aria-pressed={quick === "all"} onClick={() => setQuick("all")}>All opponents</Button>
+        <Button variant={quick === "regulars" ? "primary" : "secondary"} aria-pressed={quick === "regulars"} onClick={() => setQuick(quick === "regulars" ? "all" : "regulars")}>Regulars: 5+ games</Button>
+        <Button variant={quick === "week" ? "primary" : "secondary"} aria-pressed={quick === "week"} onClick={() => setQuick(quick === "week" ? "all" : "week")}>Played this week</Button>
+        <Button variant="secondary" onClick={() => { setQuick("all"); sort.setSortExplicit("losses", "desc"); }}>Lost to most</Button>
+        <Button variant={quick === "rivals" ? "primary" : "secondary"} aria-pressed={quick === "rivals"} onClick={() => setQuick(quick === "rivals" ? "all" : "rivals")}>Rivals ({rivals.keys.length})</Button>
+        <OpponentColumnPicker columns={columns} onChange={(key, checked) => setColumnOverrides({ ...columnOverrides, [key]: checked })} onReset={() => setColumnOverrides({})} />
+        {!onExportAction ? <Button variant="secondary" disabled={exportDisabled} title={`Export all ${items.length.toLocaleString()} matching ${groupByPlayer ? "players" : "accounts"}, including rows outside the render window`} onClick={exportRows}>Export CSV</Button> : null}
+      </div>
+      {rivals.error || rivals.unavailable ? <div role="alert" className="flex flex-wrap items-center gap-2 text-caption text-warning"><p>{rivals.error || "Rival preferences are temporarily unavailable."}</p>{rivals.unavailable ? <Button variant="ghost" size="sm" onClick={rivals.retry}>Retry rival preferences</Button> : null}</div> : null}
+      {summary.error ? <p role="status" className="flex flex-wrap items-center gap-2 text-caption text-text-muted">Recent rival details are unavailable.<Button variant="ghost" size="sm" onClick={summary.retry}>Retry rival details</Button></p> : null}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative w-full sm:max-w-sm">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-dim" aria-hidden />
@@ -401,7 +413,7 @@ export function OpponentsTab({
         <div className="ml-auto flex w-full flex-col items-end gap-1 sm:w-auto">
           <span aria-live="polite" className="text-xs text-text-dim">
             {isRefreshing ? "Updating… · " : isLoadingMore ? `Loading more opponents… (${rawItems.length.toLocaleString()} so far) · ` : ""}
-            {items.length.toLocaleString()} {groupByPlayer ? "players" : "accounts"}
+            {items.length.toLocaleString()} {showPlayerGroups ? "players" : "accounts"}
             {groupByPlayer && mergedNameCount > 0
               ? ` · ${mergedNameCount.toLocaleString()} accounts merged`
               : null}
@@ -427,6 +439,8 @@ export function OpponentsTab({
           table so it stays readable on a phone. */}
       {error && rawItems.length === 0 ? (
         <RequestError error={error} onRetry={retryOpponents} title="Opponents" filtered />
+      ) : !showSkeleton && rawItems.length === 0 && summary.data?.hasAnyGames === false ? <NoGamesYet /> : quick === "rivals" ? (
+        <StarredRivalCards rows={items} summary={summary.data} keyFor={row => rivalKeys(row, pulseLinks?.links).find(key => rivals.keys.includes(key))} onOpen={open} star={star} channelsFor={channelsFor} totalStars={rivals.keys.length} />
       ) : !showSkeleton && items.length === 0 ? (
         <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard">
           {hasNotes ? <div className="p-6 text-center"><h3 className="font-semibold">No opponents with notes yet. Add one from any dossier.</h3><Button className="mt-3" variant="secondary" onClick={() => setHasNotes(false)}>Show opponents without notes</Button></div> : <NoOpponentsMatch
@@ -451,224 +465,11 @@ export function OpponentsTab({
           />}
         </div>
       ) : (
-        <div className="rounded-xl border-2 border-line bg-bg-surface shadow-hard overflow-x-auto">
-          <table
-            aria-label="Opponent history"
-            className="w-full min-w-[1020px] text-sm"
-          >
-            <thead className="bg-bg-elevated">
-              <tr>
-                <SortableTh
-                  col="name"
-                  label="Opponent"
-                  {...sort}
-                  compact
-                  width="8.5rem"
-                />
-                <SortableTh
-                  col="pulseId"
-                  label="Pulse ID"
-                  {...sort}
-                  compact
-                  width="7.5rem"
-                />
-                <SortableTh
-                  col="wins"
-                  label="W"
-                  title="Wins"
-                  {...sort}
-                  compact
-                  align="right"
-                  width="3rem"
-                />
-                <SortableTh
-                  col="losses"
-                  label="L"
-                  title="Losses"
-                  {...sort}
-                  compact
-                  align="right"
-                  width="3rem"
-                />
-                <SortableTh
-                  col="winRate"
-                  label="Win rate"
-                  {...sort}
-                  compact
-                  align="right"
-                  width="5rem"
-                />
-                <SortableTh
-                  col="games"
-                  label="Games"
-                  {...sort}
-                  compact
-                  align="right"
-                  width="4rem"
-                />
-                <SortableTh
-                  col="mmr"
-                  label="Last MMR"
-                  title="MMR from the most recent game you played against this opponent"
-                  {...sort}
-                  compact
-                  align="right"
-                  width="5.5rem"
-                />
-                <SortableTh
-                  col="netMmr"
-                  label="Net MMR"
-                  title="Verified game-time MMR gained or lost across consecutive ranked 1v1 replay pairs"
-                  {...sort}
-                  compact
-                  align="right"
-                  width="6rem"
-                />
-                <SortableTh
-                  col="mmrWon"
-                  label="MMR won"
-                  title="Total positive MMR deltas earned against this opponent"
-                  {...sort}
-                  compact
-                  align="right"
-                  width="5.5rem"
-                />
-                <SortableTh
-                  col="mmrLost"
-                  label="MMR lost"
-                  title="Total MMR lost to this opponent, shown as a positive magnitude"
-                  {...sort}
-                  compact
-                  align="right"
-                  width="5.5rem"
-                />
-                <SortableTh
-                  col="lastPlayed"
-                  label="Last"
-                  {...sort}
-                  compact
-                  align="right"
-                  width="6.5rem"
-                />
-                <th className="relative w-8 px-1 py-1.5 text-right text-text-dim"><span className="sr-only">Open dossier</span><span aria-hidden>→</span></th>
-              </tr>
-            </thead>
-            <tbody aria-busy={search !== deferredSearch || undefined} className={search !== deferredSearch ? "opacity-70" : undefined}>
-              {showSkeleton ? (
-                <tr>
-                  <td colSpan={12} className="px-3 py-3">
-                    <Skeleton rows={8} />
-                  </td>
-                </tr>
-              ) : (
-                items.slice(0, visibleCount).map((o) => (
-                  <OpponentRow key={o.pulseId} row={o} expanded={expandedGroups.has(o.pulseId)}
-                    onToggle={toggleGroup} onOpen={open} onPrefetch={prefetch} channelsFor={channelsFor} />
-                ))
-              )}
-            </tbody>
-          </table>
-          {items.length > visibleCount ? <Button variant="secondary" className="m-3"
-            onClick={() => setVisibleCount((count) => count + 200)}>
-            Show 200 more (of {items.length.toLocaleString()})
-          </Button> : null}
-        </div>
+        <OpponentHistory items={items} expanded={expandedGroups} visibleCount={visibleCount} onMore={() => setVisibleCount(count => count + 100)} sort={sort} columns={columns} onToggle={toggleGroup} onOpen={open} onPrefetch={prefetch} channelsFor={channelsFor} star={star} loading={showSkeleton} busy={search !== deferredSearch} />
       )}
     </div>
   );
 }
-
-function rowCanOpen(event: MouseEvent<HTMLTableRowElement>) {
-  return event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey
-    && !(event.target as HTMLElement).closest("a,button,input,select,textarea") && !window.getSelection()?.toString();
-}
-
-const OpponentRow = memo(function OpponentRow({ row: o, expanded, onToggle, onOpen, onPrefetch, channelsFor }: {
-  row: OpponentGroup<Opp>; expanded: boolean; onToggle: (id: string) => void;
-  onOpen: OpenOpponent; channelsFor: ReturnType<typeof usePlayerChannels>;
-  onPrefetch: (id: string | null) => void;
-}) {
-  return (
-                  <Fragment>
-                    <tr
-                      onClick={(event) => { if (rowCanOpen(event)) onOpen(o.pulseId); }}
-                      onPointerEnter={() => onPrefetch(o.pulseId)} onPointerLeave={() => onPrefetch(null)}
-                      className="group cursor-pointer border-t border-border hover:bg-accent/10"
-                    >
-                      <td
-                        className="px-2 py-1 text-text group-hover:text-accent"
-                        title={groupRowTitle(o)}
-                      >
-                        <span className="flex min-w-0 items-center gap-1">
-                          <OpponentLink opponent={o} onOpen={onOpen} className="min-w-[4rem] max-w-[12rem] truncate hover:underline">
-                            {o.name || (
-                              <span className="italic text-text-dim">unnamed</span>
-                            )}
-                          </OpponentLink>
-                          <RevealedChip
-                            name={o.revealedName}
-                            displayedName={o.name}
-                            confirmed={!!o.globalIdentity}
-                          />
-                          <PlayerChannelLinks channels={channelsFor(o) || o.identities.map(channelsFor).find(Boolean)} playerName={o.revealedName || o.name} compact />
-                          <NotePreview previews={o.identities.map(notePreview).filter(Boolean)} />
-                          {o.groupSize > 1 ? (
-                            <AliasChip
-                              group={o}
-                              expanded={expanded}
-                              onToggle={() => onToggle(o.pulseId)}
-                            />
-                          ) : null}
-                        </span>
-                      </td>
-                      <PulseIdCell opp={o} />
-                      <td className="px-2 py-1 text-right tabular-nums text-success">
-                        {o.wins}
-                      </td>
-                      <td className="px-2 py-1 text-right tabular-nums text-danger">
-                        {o.losses}
-                      </td>
-                      <td
-                        className="px-2 py-1 text-right tabular-nums"
-                        style={{ color: wrColor(o.winRate, o.games) }}
-                      >
-                        {pct1(o.winRate)}
-                      </td>
-                      <td className="px-2 py-1 text-right tabular-nums text-text-muted">
-                        {o.games}
-                      </td>
-                      <td
-                        className="px-2 py-1 text-right tabular-nums text-text-muted"
-                        title={
-                          typeof o.mmr === "number"
-                            ? "MMR from the most recent game you played against this opponent"
-                            : "No MMR on record yet"
-                        }
-                      >
-                        {fmtMmr(o.mmr)}
-                      </td>
-                      <MmrImpactCells opponent={o} />
-                      <td className="px-2 py-1 text-right text-xs text-text-dim">
-                        {o.lastPlayed ? <time dateTime={o.lastPlayed} title={new Date(o.lastPlayed).toLocaleString()}>{fmtAgo(o.lastPlayed)}</time> : "—"}
-                      </td>
-                      <td className="px-1 py-1 text-right text-text-dim group-hover:text-accent">
-                        <OpponentOpenButton opponent={o} onOpen={onOpen} />
-                      </td>
-                    </tr>
-                    {o.groupSize > 1 && expanded
-                      ? o.identities.map((identity) => (
-                          <IdentityRow
-                            key={identity.pulseId}
-                            identity={identity}
-                            channels={channelsFor(identity)}
-                            onOpen={onOpen}
-                            onPrefetch={onPrefetch}
-                          />
-                        ))
-                      : null}
-                  </Fragment>
-  );
-});
 
 function matchesMmrImpactFilter(
   opponent: OpponentGroup<Opp>,
@@ -679,202 +480,4 @@ function matchesMmrImpactFilter(
   if (filter === "tracked") return pairs > 0;
   if (pairs === 0 || typeof opponent.netMmr !== "number") return false;
   return filter === "net-gain" ? opponent.netMmr > 0 : opponent.netMmr < 0;
-}
-
-/** Hover title for a (possibly grouped) opponent row. */
-function groupRowTitle(o: OpponentGroup<Opp>): string {
-  const base = o.revealedName
-    ? `${o.name || "unnamed"} · revealed as ${o.revealedName}`
-    : o.name || "";
-  if (o.aliasNames.length === 0) return base;
-  return `${base} · also plays as ${o.aliasNames.join(", ")}`;
-}
-
-/**
- * "+N names" disclosure chip on a grouped row. SC2Pulse says these
- * names are the same player; the chip both announces that and expands
- * the per-name breakdown underneath. stopPropagation so toggling
- * never triggers the row's deep-dive navigation.
- */
-function AliasChip({
-  group,
-  expanded,
-  onToggle,
-}: {
-  group: OpponentGroup<Opp>;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const extra = group.groupSize - 1;
-  const Chevron = expanded ? ChevronDown : ChevronRight;
-  return (
-    <button
-      type="button"
-      aria-expanded={expanded}
-      aria-label={`${expanded ? "Hide" : "Show"} the ${group.groupSize} names this player uses`}
-      title={`Same player${group.globalIdentity ? " · confirmed identity" : " on SC2Pulse"} · also plays as ${group.aliasNames.join(", ")}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        onToggle();
-      }}
-      className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full bg-accent/15 px-2 py-0.5 text-micro font-semibold text-accent transition-colors hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-bg"
-    >
-      +{extra} {extra === 1 ? "name" : "names"}
-      <Chevron className="h-3 w-3" aria-hidden />
-    </button>
-  );
-}
-
-/**
- * One identity inside an expanded group — the per-name W/L/games
- * breakdown. Clickable like a main row, opening THAT identity's deep
- * dive (each name keeps its own game history and profile).
- */
-function IdentityRow({
-  identity,
-  channels,
-  onOpen,
-  onPrefetch,
-}: {
-  identity: Opp;
-  channels?: PlayerChannels;
-  onOpen: OpenOpponent;
-  onPrefetch: (id: string | null) => void;
-}) {
-  const revealedName = identity.globalIdentity?.displayName.trim() || identity.revealedName;
-  return (
-    <tr
-      onClick={(event) => { if (rowCanOpen(event)) onOpen(identity.pulseId); }}
-      onPointerEnter={() => onPrefetch(identity.pulseId)} onPointerLeave={() => onPrefetch(null)}
-      className="group cursor-pointer border-t border-border/60 bg-bg-elevated/40 hover:bg-accent/10"
-    >
-      <td
-        className="py-1 pl-5 pr-2 text-text-muted group-hover:text-accent"
-        title={identity.name || ""}
-      >
-        <span className="flex min-w-0 items-center gap-1">
-          <CornerDownRight
-            className="h-3 w-3 flex-shrink-0 text-text-dim"
-            aria-hidden
-          />
-          <OpponentLink opponent={identity} onOpen={onOpen} className="min-w-[4rem] max-w-[12rem] truncate hover:underline">
-            {identity.name || (
-              <span className="italic text-text-dim">unnamed</span>
-            )}
-          </OpponentLink>
-          <RevealedChip name={revealedName} displayedName={identity.name} confirmed={!!identity.globalIdentity} />
-          <PlayerChannelLinks channels={channels} playerName={revealedName || identity.name} compact />
-          <NotePreview previews={[notePreview(identity)].filter(Boolean)} />
-        </span>
-      </td>
-      <PulseIdCell opp={identity} />
-      <td className="px-2 py-1 text-right tabular-nums text-success">
-        {identity.wins}
-      </td>
-      <td className="px-2 py-1 text-right tabular-nums text-danger">
-        {identity.losses}
-      </td>
-      <td
-        className="px-2 py-1 text-right tabular-nums"
-        style={{ color: wrColor(identity.winRate, identity.games) }}
-      >
-        {pct1(identity.winRate)}
-      </td>
-      <td className="px-2 py-1 text-right tabular-nums text-text-muted">
-        {identity.games}
-      </td>
-      <td className="px-2 py-1 text-right tabular-nums text-text-muted">
-        {fmtMmr(identity.mmr)}
-      </td>
-      <MmrImpactCells opponent={identity} />
-      <td className="px-2 py-1 text-right text-xs text-text-dim">
-        {identity.lastPlayed ? <time dateTime={identity.lastPlayed} title={new Date(identity.lastPlayed).toLocaleString()}>{fmtAgo(identity.lastPlayed)}</time> : "—"}
-      </td>
-      <td className="px-1 py-1 text-right text-text-dim group-hover:text-accent">
-        <OpponentOpenButton opponent={identity} onOpen={onOpen} />
-      </td>
-    </tr>
-  );
-}
-
-function OpponentOpenButton({
-  opponent,
-  onOpen,
-}: {
-  opponent: Pick<Opp, "pulseId" | "name">;
-  onOpen: OpenOpponent;
-}) {
-  const name = opponent.name || "unnamed opponent";
-  return (
-    <OpponentLink opponent={opponent} onOpen={onOpen}
-      aria-label={`Open dossier for ${name}`}
-      className="inline-flex h-7 w-7 items-center justify-center rounded text-current hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      <span aria-hidden>→</span>
-    </OpponentLink>
-  );
-}
-
-function OpponentLink({ opponent, onOpen, children, ...props }: { opponent: Pick<Opp, "pulseId" | "name">; onOpen: OpenOpponent; children: React.ReactNode } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, "href" | "onClick">) {
-  return <Link href={opponentDossierHref(opponent.pulseId)} prefetch={false} {...props} onClick={(event) => {
-    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
-    event.stopPropagation(); if (onOpen(opponent.pulseId, true)) event.preventDefault();
-  }}>{children}</Link>;
-}
-
-function NotePreview({ previews }: { previews: string[] }) {
-  if (!previews.length) return null;
-  return <span className="group/note relative inline-flex shrink-0 items-center gap-1">
-    <button type="button" aria-label={`Scouting note: ${previews[0]}`} title={previews[0]} onClick={(event) => event.stopPropagation()} className="flex h-8 w-8 items-center justify-center rounded text-accent focus-visible:ring-2 focus-visible:ring-accent"><StickyNote className="h-3.5 w-3.5" aria-hidden /></button>
-    {previews.length > 1 ? <span className="text-micro text-text-dim">+{previews.length - 1} more</span> : null}
-    <span role="tooltip" className="pointer-events-none absolute left-0 top-full z-20 hidden w-64 whitespace-normal rounded-lg border border-line bg-bg-elevated p-3 text-caption text-text shadow-hard group-hover/note:block group-focus-within/note:block">{previews[0]}</span>
-  </span>;
-}
-
-/**
- * The "Pulse ID" cell. When the agent has resolved the opponent's
- * canonical SC2Pulse character id (e.g. "994428"), show it as a link
- * to sc2pulse.nephest.com. Otherwise, show the raw toon_handle in dim
- * mono with a "(toon)" hint so the user can tell at a glance that
- * resolution hasn't happened yet (e.g. SC2Pulse was down during
- * the first ingest, or the opponent isn't ranked yet).
- */
-function PulseIdCell({ opp }: { opp: Opp }) {
-  const label = pickPulseLabel(opp);
-  const stop = (e: React.MouseEvent) => e.stopPropagation();
-  if (!label) {
-    return (
-      <td className="px-2 py-1 text-xs text-text-dim">—</td>
-    );
-  }
-  if (label.isPulseCharacterId) {
-    return (
-      <td
-        className="truncate px-2 py-1 font-mono text-xs"
-        title={opp.toonHandle || opp.pulseId}
-      >
-        <a
-          href={sc2pulseCharacterUrl(label.value)}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={stop}
-          className="inline-flex items-center gap-1 text-accent-cyan hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-        >
-          {label.value}
-          <ExternalLink className="h-3 w-3" aria-hidden />
-        </a>
-      </td>
-    );
-  }
-  return (
-    <td
-      className="truncate px-2 py-1 font-mono text-xs text-text-dim"
-      title={`${label.value} · sc2pulse character id not resolved yet`}
-    >
-      {label.value}
-      <span className="ml-1 text-micro uppercase tracking-wider text-text-muted">
-        toon
-      </span>
-    </td>
-  );
 }

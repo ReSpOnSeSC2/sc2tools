@@ -407,7 +407,7 @@ const SELF_DRIVEN_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>([
   "build-profile",
 ]);
 
-function WidgetRenderer({
+export function WidgetRenderer({
   widget,
   token,
   live,

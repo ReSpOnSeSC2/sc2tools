@@ -132,6 +132,10 @@ COPY apps/api/ ./
 # The API runtime is flattened to /app; its shared profile rules resolve at /web.
 COPY apps/web/lib/overlayProfileRules.json /web/lib/overlayProfileRules.json
 
+# The API and client read the same pure sample data. /app/src/services' relative
+# ../../../web path resolves here in the flattened runtime image.
+COPY apps/web/lib/overlaySamples.json /web/lib/overlaySamples.json
+
 # Drop root: the server shells out to a Python interpreter on the
 # public replay-preview path, so an exploited parser must not hand out
 # root in the container. The node base image ships a `node` user; the

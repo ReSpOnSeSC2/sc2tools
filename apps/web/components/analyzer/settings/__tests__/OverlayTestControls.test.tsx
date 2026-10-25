@@ -34,7 +34,7 @@ describe("Settings live-game Test confirmation", () => {
     const fetch = vi.fn().mockResolvedValue(answer(409, "live_match")); vi.stubGlobal("fetch", fetch);
     mount(); fireEvent.click(screen.getByRole("button", { name: "Test opponent" }));
     const preview = await screen.findByRole("link", { name: /Preview here instead/ });
-    expect(preview.getAttribute("href")).toBe("https://fixture.local/overlay/owned-token/widget/opponent?demo=1");
+    expect(preview.getAttribute("href")).toBe("https://fixture.local/stream-studio/playground?widget=opponent");
     expect(preview.getAttribute("target")).toBe("_blank"); expect(preview.getAttribute("rel")).toContain("noopener");
     fireEvent.click(preview); expect(screen.queryByRole("dialog")).toBeNull(); expect(fetch).toHaveBeenCalledTimes(1);
   });

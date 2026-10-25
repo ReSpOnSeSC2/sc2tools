@@ -15,6 +15,10 @@ corresponding GitHub Release.
 
 - Save an overlay theme and per-widget display times to its token. Connected OBS sources receive changes without re-copying URLs; existing `?theme=` URLs keep working and retain their explicit look. Previous browser themes can be moved into a draft with an explicit Save.
 
+### Local widget playground
+
+- Preview every widget with sample scenarios and theme presets, alone or together, in Stream Studio, the widget guides and Settings. Silent local previews use no account or overlay token; Test in OBS remains the check for a real source.
+
 ### Widget manager
 
 - Find overlay widgets in grouped cards with search, source sizes, OBS drag links and private URLs hidden until revealed. Starter packs show exactly what they enable, keep existing selections and detect changes from another tab.
@@ -45,6 +49,11 @@ corresponding GitHub Release.
 - Hide a replay from your own statistics and scouting, then Unhide it from Settings. Single-game and page-limited bulk deletion require an exact typed confirmation, retain local files, and keep incomplete cloud cleanup available for retry.
 - Filter analyzer views by up to twenty SC2 accounts, including saved views, shared filter links and replay navigation.
 - Export the current replay filters and sort order as a formula-safe UTF-8 CSV, with a shared column dictionary and a visible 50,000-row cap.
+
+### Opponents list and rivals
+
+- Find regular opponents with Wilson-based rivalry cards, private stars and a saved-rivals view showing measured streaks, usual openers and cached public ladder movement. Fresh public cache observations can mark an approved channel Live now.
+- Use phone dossier cards, race and region labels, remembered column choices, quick views and a shared 100-row window. Export every matching sorted opponent or up to 5,000 scoped dossier replays with the existing safe CSV download and account limit.
 
 ### My reviews dashboard
 

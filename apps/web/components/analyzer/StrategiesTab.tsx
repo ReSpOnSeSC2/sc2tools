@@ -422,7 +422,7 @@ function StrategyGamesView({
         </Card>
       ) : (
         <Card title={`All games (${games.length}) · newest first`}>
-          <div className="-mx-2 max-h-[640px] overflow-x-auto">
+          <div className="-mx-2 overflow-x-auto md:max-h-[640px]">
             <AllGamesTable games={games} myName={myName} />
           </div>
         </Card>

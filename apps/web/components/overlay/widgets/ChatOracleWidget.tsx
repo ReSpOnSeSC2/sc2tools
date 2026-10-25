@@ -1,4 +1,6 @@
 "use client";
+import { withOverlayDemo } from "../OverlayDemoBoundary";
+import fixtures from "@/lib/overlaySamples.json";
 
 /**
  * ChatOracleWidget — the Crystal Ball prediction game. While a game
@@ -35,7 +37,7 @@ interface Settle {
   topOracles: OracleEntry[];
 }
 
-export function ChatOracleWidget({
+function ConnectedChatOracleWidget({
   token,
   engagementEvent,
   live,
@@ -116,21 +118,12 @@ export function ChatOracleWidget({
       <Frame test>
         {demoPhase === 2 ? (
           <RevealCard
-            settle={{
-              result: "win",
-              tally: { win: 14, loss: 7, total: 21 },
-              correctCount: 14,
-              pointsEach: 10,
-              topOracles: [
-                { user: "TestOracle", platform: "twitch", score: 40, correct: 4, total: 5 },
-                { user: "GruntyViewer", platform: "kick", score: 30, correct: 3, total: 4 },
-              ],
-            }}
+            settle={fixtures.demo.oracle.settle as Settle}
           />
         ) : (
           <WindowCard
-            opponent="TestOpponent"
-            tally={{ win: 9, loss: 4, total: 13 }}
+            opponent={fixtures.demo.oracle.window.opponent}
+            tally={fixtures.demo.oracle.window.tally}
           />
         )}
       </Frame>
@@ -367,3 +360,5 @@ const chipStyle: CSSProperties = {
   fontWeight: 800,
   flexShrink: 0,
 };
+
+export const ChatOracleWidget = withOverlayDemo(ConnectedChatOracleWidget);

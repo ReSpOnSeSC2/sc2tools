@@ -7,6 +7,7 @@ import type { OpponentNavigationContext } from "@/lib/opponentNavigation";
 import { AllGamesTable } from "./AllGamesTable";
 import type { ProfileGame } from "./Last5GamesTimeline";
 import { GameSourceLabelProvider } from "./GameAnalysisLink";
+import { ReplayCsvExportButton } from "./replays/ReplayCsvExportButton";
 
 export const OPPONENT_REPLAY_PAGE_SIZE = 200;
 
@@ -92,6 +93,7 @@ export function OpponentReplayHistory({
     <GameSourceLabelProvider label={sampled ? "Analyzed sample history" : "Opponent history"} filters={sourceQuery.toString()} sampled={sampled} replace><Card title={title}>
       {sampled ? <p className="mb-3 text-caption text-text-muted">Selected analyzed sample{data?.membership ? ` · ${data.membership.requestedGameCount} linked games` : ""}.</p> : null}
       <div className="mb-3 flex flex-wrap gap-3 text-caption">
+        <ReplayCsvExportButton query={pagePath.split("?")[1] || ""} opponentId={opponentContext.pulseId} />
         <label>Show: <select aria-label="Filter replay results" className="min-h-11 rounded border border-border bg-bg-surface px-2" value={result}
           onChange={(event) => { setResult(event.target.value); setCursor(null); setNewerCursors([]); }}>
           <option value="">All results</option><option value="win">Wins</option><option value="loss">Losses</option>
