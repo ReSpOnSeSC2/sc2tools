@@ -73,12 +73,14 @@ describe("SettingsMultiChatAlerts", () => {
     render(<Harness spy={spy} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Shuffle all" }));
-    for (const picker of screen.getAllByRole("combobox")) {
+    for (const kind of CHAT_EVENT_KINDS) {
+      const picker = screen.getByRole("combobox", { name: `${EVENT_KIND_LABEL[kind]} alert visual` });
       expect((picker as HTMLSelectElement).value).toBe("shuffle");
     }
 
     fireEvent.click(screen.getByRole("button", { name: "Recommended mix" }));
-    for (const picker of screen.getAllByRole("combobox")) {
+    for (const kind of CHAT_EVENT_KINDS) {
+      const picker = screen.getByRole("combobox", { name: `${EVENT_KIND_LABEL[kind]} alert visual` });
       expect((picker as HTMLSelectElement).value).not.toBe("shuffle");
     }
 
@@ -97,7 +99,8 @@ describe("SettingsMultiChatAlerts", () => {
     }));
 
     fireEvent.click(screen.getByRole("button", { name: "Classic all" }));
-    for (const picker of screen.getAllByRole("combobox")) {
+    for (const kind of CHAT_EVENT_KINDS) {
+      const picker = screen.getByRole("combobox", { name: `${EVENT_KIND_LABEL[kind]} alert visual` });
       expect((picker as HTMLSelectElement).value).toBe("classic");
     }
   });

@@ -31,6 +31,9 @@ export interface ChatAlertCardProps {
   motion: AlertVisualMotion;
   /** Settings uses this to keep the demo comfortably inside its preview. */
   preview?: boolean;
+  /** Internal recorded-game adapter; provider events use their normal labels. */
+  sourceLabel?: string;
+  kindLabel?: string;
 }
 
 type AlertCssVars = CSSProperties & {
@@ -74,6 +77,8 @@ export function ChatAlertCard({
   preset,
   motion,
   preview = false,
+  sourceLabel,
+  kindLabel,
 }: ChatAlertCardProps) {
   const meta = PLATFORM_META[event.platform];
   const panel = panelGradient(preset);
@@ -114,11 +119,11 @@ export function ChatAlertCard({
           <div className="ca-eyebrow">
             <span
               className="ca-platform"
-              style={{ background: meta.color, color: meta.fg }}
+              style={sourceLabel ? { background: "rgba(148,163,184,.2)", color: "inherit" } : { background: meta.color, color: meta.fg }}
             >
-              {meta.short}
+              {sourceLabel || meta.short}
             </span>
-            <span className="ca-kind">{EVENT_KIND_LABEL[event.kind]}</span>
+            <span className="ca-kind">{kindLabel || EVENT_KIND_LABEL[event.kind]}</span>
             <span className="ca-callout">{preset.callout}</span>
             {event.amount ? <span className="ca-amount">{event.amount}</span> : null}
           </div>

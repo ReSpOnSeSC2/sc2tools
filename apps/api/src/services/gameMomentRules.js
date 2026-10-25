@@ -22,9 +22,12 @@ function ladderContext(game) {
 /** @param {Record<string,any>} a @param {Record<string,any>} b */
 function sameOpponent(a, b) {
   const first = a.opponent || {}, second = b.opponent || {};
-  if (first.pulseCharacterId != null && second.pulseCharacterId != null) return /^[1-9][0-9]{0,31}$/.test(String(first.pulseCharacterId)) && String(first.pulseCharacterId) === String(second.pulseCharacterId);
   const toon = first.toonHandle || first.pulseId, other = second.toonHandle || second.pulseId;
-  return typeof toon === "string" && /^\d+-S2-\d+-\d+$/.test(toon) && toon === other;
+  const validToon = (/** @type {unknown} */ value) => typeof value === "string" && /^[1-9][0-9]?-S2-[1-9][0-9]?-[0-9]{1,20}$/i.test(value);
+  // A known account mismatch wins over a stale/shared numeric profile ID.
+  if (validToon(toon) && validToon(other) && toon.toUpperCase() !== other.toUpperCase()) return false;
+  if (first.pulseCharacterId != null && second.pulseCharacterId != null) return /^[1-9][0-9]{0,31}$/.test(String(first.pulseCharacterId)) && String(first.pulseCharacterId) === String(second.pulseCharacterId);
+  return validToon(toon) && validToon(other) && toon.toUpperCase() === other.toUpperCase();
 }
 /** Ties don't break a decided streak; unknown outcomes prevent a claim.
  * @param {Record<string,any>[]} rows @param {string} kind */

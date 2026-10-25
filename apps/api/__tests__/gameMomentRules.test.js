@@ -59,6 +59,12 @@ describe("recorded victory moment rules", () => {
     expect(kinds({ game: game(), history: [prior({ result: "Defeat", opponent: { pulseCharacterId: "88", displayName: "Enemy" } })] })).not.toContain("revengeWin");
     expect(kinds({ game: game(), history: [prior(), prior({ gameId: "older", result: "Defeat" })] })).not.toContain("revengeWin");
   });
+  test("known toon mismatch rejects a stale equal Pulse ID for revenge", () => {
+    const current = game({ opponent: { pulseCharacterId: "77", toonHandle: "1-S2-1-90" } });
+    const previous = prior({ result: "Defeat", opponent: { pulseCharacterId: "77", toonHandle: "2-S2-1-90" } });
+    expect(kinds({ game: current, history: [previous] })).not.toContain("revengeWin");
+    expect(kinds({ game: current, history: [prior({ ...previous, opponent: { pulseCharacterId: "77", pulseId: "1-S2-1-90" } })] })).toContain("revengeWin");
+  });
   test("giant killer compares replay ratings only and requires a win and at least200 MMR", () => {
     const opponent = { pulseCharacterId: "77", mmr: 4201, mmrSource: "replay" };
     expect(kinds({ game: game({ opponent }), history: [] })).toContain("giantKiller");
