@@ -467,6 +467,11 @@ class AggregationsService {
             // macro scoring simply come back null instead of dragging
             // the average toward zero.
             avgMacroScore: { $avg: "$macroScore" },
+            avgApm: { $avg: "$apm" },
+            avgSpq: { $avg: "$spq" },
+            macroN: { $sum: { $cond: [{ $isNumber: "$macroScore" }, 1, 0] } },
+            apmN: { $sum: { $cond: [{ $isNumber: "$apm" }, 1, 0] } },
+            spqN: { $sum: { $cond: [{ $isNumber: "$spq" }, 1, 0] } },
           },
         },
         // Keep the most recent N buckets (not the oldest). Users with
@@ -483,20 +488,18 @@ class AggregationsService {
             losses: 1,
             total: 1,
             avgMacroScore: 1,
+            avgApm: 1,
+            avgSpq: 1,
+            macroN: 1,
+            apmN: 1,
+            spqN: 1,
           },
         },
       ])
       .toArray();
     return {
       interval,
-      points: rows.map((r) => ({
-        ...r,
-        winRate: r.total ? r.wins / r.total : 0,
-        avgMacroScore:
-          typeof r.avgMacroScore === "number"
-            ? Math.round(r.avgMacroScore * 10) / 10
-            : null,
-      })),
+      points: rows.map(shapeTimeseriesPoint),
     };
   }
 
@@ -1006,6 +1009,20 @@ async function applyRaceGrouping(filters, runOnce) {
     out[race] = await runOnce({ ...base, race: letterMap[race] });
   }
   return out;
+}
+
+/** Round measured means without converting missing data into zero.
+ * @param {Record<string, any>} row */
+function shapeTimeseriesPoint(row) {
+  /** @type {Record<string, any>} */
+  const point = { ...row, winRate: row.total ? row.wins / row.total : 0 };
+  for (const key of ["avgMacroScore", "avgApm", "avgSpq"]) {
+    point[key] = typeof row[key] === "number" && Number.isFinite(row[key]) ? Math.round(row[key] * 10) / 10 : null;
+  }
+  for (const key of ["macroN", "apmN", "spqN"]) {
+    point[key] = Number.isInteger(row[key]) && row[key] >= 0 ? row[key] : 0;
+  }
+  return point;
 }
 
 module.exports = {

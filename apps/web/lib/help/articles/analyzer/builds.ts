@@ -22,8 +22,9 @@ const article: HelpArticle = {
     "reclassify my games",
     "personal notes",
     "publish to community",
+    "build mix over time",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
     {
       type: "paragraph",
@@ -43,6 +44,7 @@ const article: HelpArticle = {
       type: "table",
       head: ["Chart", "What it answers"],
       rows: [
+        ["Build mix over time", "Recorded game counts for each build and calendar period. Select a period to read its counts; empty dates remain gaps. Grouping shares your Day, Week or Month preference with Trends and Mechanics progress."],
         ["Win rate by MMR — your builds", "One line per build, with your MMR when you played it along the bottom. Shows which builds hold up as you climb."],
         ["Build mastery curve", "Your running win rate with each build by how many times you've played it, not by date: an early dip that climbs means the build is settling in."],
         ["MMR progression by build", "Your MMR over time, split by the build you played."],

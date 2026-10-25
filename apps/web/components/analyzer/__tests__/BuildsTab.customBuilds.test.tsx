@@ -24,6 +24,7 @@ vi.mock("../BuildEditorModal", () => ({
 vi.mock("../mmr/BuildMmrPanel", () => ({ BuildMmrPanel: () => null }));
 vi.mock("../mmr/BuildAgingCurve", () => ({ BuildAgingCurve: () => null }));
 vi.mock("../mmr/MmrProgressionByBuild", () => ({ MmrProgressionByBuild: () => null }));
+vi.mock("../charts/MixOverTimeChart", () => ({ MixOverTimeChart: () => null }));
 
 import { BuildsTab } from "../BuildsTab";
 
