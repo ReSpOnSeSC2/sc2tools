@@ -24,7 +24,7 @@ const fonts = "@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk
   const server=http.createServer((req,res)=>{
     const url=new URL(req.url,origin);
     if(url.pathname==='/fixture.js'){res.setHeader('content-type','text/javascript;charset=utf-8');return res.end(fs.readFileSync('.tmp/guide-videos-fixture.js'))}
-    if(url.pathname.startsWith('/fonts/')){res.setHeader('content-type','font/woff2');return res.end(fs.readFileSync(path.join('public',url.pathname)))}
+    if(url.pathname.startsWith('/fonts/')){res.setHeader('content-type','font/woff2');return res.end(fs.readFileSync(path.join('app',url.pathname)))}
     res.setHeader('content-type','text/html;charset=utf-8');res.end('<!doctype html><html data-theme="'+(url.searchParams.get('theme')==='dark'?'dark':'light')+'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>'+css+'\n'+fonts+'</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>');
   });
   await new Promise(resolve=>server.listen(3244,'127.0.0.1',resolve));
@@ -32,11 +32,11 @@ const fonts = "@font-face{font-family:FixtureSans;src:url('/fonts/hanken-grotesk
   try {
     for(const width of [375,1440])for(const theme of ['light','dark']){
       const context=await browser.newContext({viewport:{width,height:1000},reducedMotion:'reduce'});
-      await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
+      await context.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.request().url().startsWith('https://i.ytimg.com/')?route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#142432"/><text x="240" y="140" text-anchor="middle" fill="#b2d4df" font-family="sans-serif" font-size="18">Local fixture thumbnail</text></svg>'}):route.abort());
       const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
       await page.goto(origin+'/guides/videos?theme='+theme);await expect(page.getByRole('heading',{name:'All build order videos'})).toBeVisible();
       await expect(page.locator('[data-guide-video-watch]')).toHaveCount(24);checks++;
-      await expect(page.getByRole('button',{name:'All (55)',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'PvZ (30)',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Other (5)',exact:true})).toBeVisible();checks++;
+      await expect(page.getByRole('button',{name:'All (55)',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'PvZ (30)',exact:true})).toBeVisible();await expect(page.getByRole('button',{name:'Other (5)',exact:true})).toBeVisible();expect((await page.getByRole('button',{name:'PvZ (30)',exact:true}).boundingBox()).height).toBeGreaterThanOrEqual(44);checks++;
       await page.evaluate(()=>document.fonts.ready);await page.screenshot({path:'../../docs/handoff/screenshots/guide-videos-'+theme+'-'+width+'.png'});checks++;
       await page.getByRole('button',{name:'Show more (31 left)'}).click();await expect(page.locator('[data-guide-video-watch]')).toHaveCount(48);expect(await page.evaluate(()=>document.activeElement?.textContent)).toContain('Recorded build order 25');checks++;
       await page.getByRole('button',{name:'PvZ (30)',exact:true}).click();await expect(page.getByRole('status')).toContainText('30 videos found · Showing 24');await expect(page).toHaveURL(/matchup=pvz/);checks++;

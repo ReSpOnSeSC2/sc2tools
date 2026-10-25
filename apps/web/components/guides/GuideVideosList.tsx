@@ -97,7 +97,7 @@ export function GuideVideosList({ payload, initialMatchup = "all", initialVideos
           {chips.map((chip) => {
             const count = chip === "all" ? payload.videos.length : counts.get(chip) ?? 0;
             if (!count) return null;
-            return <Button key={chip} size="sm" variant={matchup === chip ? "primary" : "secondary"} aria-pressed={matchup === chip} onClick={() => selectMatchup(chip)}>
+            return <Button key={chip} size="sm" className="min-h-11" variant={matchup === chip ? "primary" : "secondary"} aria-pressed={matchup === chip} onClick={() => selectMatchup(chip)}>
               {chip === "all" ? "All" : chip === "other" ? "Other" : chip} ({count})
             </Button>;
           })}
@@ -120,7 +120,7 @@ export function GuideVideosList({ payload, initialMatchup = "all", initialVideos
         actions={<GuideVideoActions channel={payload.channel} playlists={payload.playlists} />}
       />
       {filtered.length === 0 && payload.videos.length > 0 ? <Button variant="secondary" onClick={clearFilters} className="mt-4">Clear filters</Button> : null}
-      {filtered.length > limit ? <Button variant="secondary" className="mt-4" onClick={() => { focusIndex.current = limit; setLimit(limit + PAGE_SIZE); }}>
+      {filtered.length > limit ? <Button variant="secondary" className="mt-4" onClick={() => { focusIndex.current = results.current?.querySelectorAll("[data-guide-video-watch]").length ?? 0; setLimit(limit + PAGE_SIZE); }}>
         Show more ({filtered.length - limit} left)
       </Button> : null}
       </div>

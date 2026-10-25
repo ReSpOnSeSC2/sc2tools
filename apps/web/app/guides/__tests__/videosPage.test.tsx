@@ -178,6 +178,16 @@ describe("/guides/videos", () => {
     expect(screen.getByRole("button", { name: "TvP (1)" }).getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("focuses the first new playable card when an earlier malformed URL was omitted", async () => {
+    const videos = libraryVideos(26);
+    videos[0] = { ...videos[0], url: "https://example.com/not-youtube" };
+    mocks.fetchGuideVideos.mockResolvedValue(ok(payload({ videos, eightWorkerVideos: [] })));
+    const { container } = render(await GuideVideosPage({}));
+    expect(container.querySelectorAll("[data-guide-video-watch]")).toHaveLength(23);
+    fireEvent.click(screen.getByRole("button", { name: "Show more (2 left)" }));
+    expect(document.activeElement?.textContent).toContain("Library build order 25");
+  });
+
   it("adds a separate same-tab guide link only for safe matched build metadata", async () => {
     const videos = libraryVideos(5).map((video, index) => ({ ...video, matchup: "PvZ" as const, buildSlug: ["stargate-into-glaives", null, "../admin", "bad?slug", ""][index] }));
     mocks.fetchGuideVideos.mockResolvedValue(ok(payload({ videos, eightWorkerVideos: [] })));
