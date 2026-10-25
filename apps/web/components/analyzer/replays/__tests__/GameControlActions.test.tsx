@@ -76,6 +76,17 @@ describe("owner-fenced replay controls", () => {
     await act(async () => { body.resolve({ gameId: "first", deleted: true }); await body.promise; });
     expect(done).not.toHaveBeenCalled(); expect(screen.queryByRole("status")).toBeNull();
   });
+  it("keeps a busy confirmation open without letting the backdrop take mouse focus", async () => {
+    const token = deferred<string | null>(); auth.getToken.mockReturnValueOnce(token.promise);
+    render(<GameControlActions targets={one} scopeKey="game" />); startDelete();
+    const dialog = screen.getByRole("dialog"), close = within(dialog).getByRole("button", { name: "Close" });
+    expect(document.activeElement).toBe(within(dialog).getByRole("status")); close.focus();
+    fireEvent.keyDown(close, { key: "Escape" });
+    const backdrop = screen.getByRole("button", { name: "Close dialog" });
+    const mouse = new MouseEvent("mousedown", { bubbles: true, cancelable: true }); fireEvent(backdrop, mouse); fireEvent.click(backdrop);
+    expect(mouse.defaultPrevented).toBe(true); expect(screen.getByRole("dialog")).toBe(dialog); expect(dialog.contains(document.activeElement)).toBe(true);
+    await act(async () => { token.resolve("token-a"); }); await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
   it.each(["token", "body"])("settles a stalled %s after the deadline and enables retry", async boundary => {
     vi.useFakeTimers(); const pending = deferred<never>();
     try {

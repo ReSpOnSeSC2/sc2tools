@@ -4,7 +4,7 @@ const request = require("supertest");
 jest.mock("@clerk/backend", () => require("./helpers/clerkMock")());
 const { createHarness, SECRET } = require("./helpers/reviewsHarness");
 const { claimUserDataLease } = require("../src/middleware/userDataWriteFence");
-let h, originalReplayFiles, originalPlaybackArtifacts;
+let h, originalReplayFiles, originalPlaybackArtifacts, originalGameDetails;
 const ID = "controlled-replay";
 const owner = "u_owner", other = "u_other";
 const gamePath = () => `/v1/games/${encodeURIComponent(ID)}`;
@@ -14,12 +14,14 @@ beforeAll(async () => {
   h = await createHarness();
   originalReplayFiles = h.services.gdpr.replayFiles;
   originalPlaybackArtifacts = h.services.gdpr.playbackArtifacts;
+  originalGameDetails = h.services.gdpr.gameDetails;
 });
 afterAll(async () => { await h?.close(); });
 beforeEach(async () => {
   jest.restoreAllMocks();
   h.services.gdpr.replayFiles = originalReplayFiles;
   h.services.gdpr.playbackArtifacts = originalPlaybackArtifacts;
+  h.services.gdpr.gameDetails = originalGameDetails;
   for (const name of ["games", "gameDetails", "opponents", "users", "opponentNotes", "reviewRequests", "macroJobs", "guideSamples", "userBackups"]) await h.db[name].deleteMany({});
   await h.seedUser("owner", { displayName: "Owner" }); await h.seedUser("other", { displayName: "Other" });
   await h.seedGame("owner", { gameId: ID }); await h.seedGame("other", { gameId: ID });
@@ -187,6 +189,33 @@ test("existing artifact markers fail closed even when that store is absent on th
   await h.db.games.updateOne({ userId: owner, gameId: ID }, { $set: { playbackArtifact: { artifactId: "existing-private-object" } } });
   await expect(h.services.gameControls.deleteGame(owner, ID)).rejects.toMatchObject({ status: 503, code: "game_cleanup_unavailable" });
   expect(await h.db.games.findOne({ userId: owner, gameId: ID })).not.toHaveProperty("_deletionPending");
+});
+
+test.each(["playback", "details"])("full erasure retains a %s cleanup marker when its required backend is missing", async missing => {
+  const replay = { delete: jest.fn(async () => {}), deleteAllForUser: jest.fn(async () => {}) };
+  const playback = { deleteMany: jest.fn(async () => {}), deleteAllForUser: jest.fn(async () => {}) };
+  h.services.gdpr.replayFiles = replay; h.services.gdpr.playbackArtifacts = playback;
+  await h.db.games.insertOne({ userId: owner, gameId: "failed-cleanup", _deleted: true, excluded: true, _cleanupRequired: { [missing]: true } });
+  if (missing === "playback") h.services.gdpr.playbackArtifacts = null;
+  else h.services.gdpr.gameDetails = null;
+  await expect(h.services.gdpr.deleteAll(owner, { identityAlreadyDeleted: true })).rejects.toMatchObject({ status: 503, code: "game_cleanup_unavailable" });
+  expect(await h.db.games.findOne({ userId: owner, gameId: "failed-cleanup" })).toMatchObject({ _cleanupRequired: { [missing]: true } });
+  expect(await h.db.users.findOne({ userId: owner })).not.toHaveProperty("_gdprMutation");
+  expect(replay.deleteAllForUser).not.toHaveBeenCalled();
+  h.services.gdpr.playbackArtifacts = playback; h.services.gdpr.gameDetails = originalGameDetails;
+  await h.services.gdpr.deleteAll(owner, { identityAlreadyDeleted: true });
+  expect(await h.db.games.countDocuments({ userId: owner })).toBe(0);
+  expect(await h.db.users.findOne({ userId: owner })).toBeNull();
+  expect(await h.db.games.countDocuments({ userId: other })).toBe(1);
+  expect(replay.deleteAllForUser).toHaveBeenCalledWith(owner); expect(playback.deleteAllForUser).toHaveBeenCalledWith(owner);
+});
+
+test("another game's missing-backend marker does not block a correctly scoped single delete", async () => {
+  h.services.gdpr.replayFiles = { delete: jest.fn(async () => {}) }; h.services.gdpr.playbackArtifacts = null;
+  const marker = { userId: owner, gameId: "unrelated-pending", _deleted: true, excluded: true, _cleanupRequired: { playback: true } };
+  await h.db.games.insertOne(marker);
+  await expect(h.services.gameControls.deleteGame(owner, ID)).resolves.toMatchObject({ deleted: true });
+  expect(await h.db.games.findOne({ userId: owner, gameId: "unrelated-pending" })).toMatchObject(marker);
 });
 
 test("a delayed detail writer cannot recreate a deleted blob or metadata row", async () => {

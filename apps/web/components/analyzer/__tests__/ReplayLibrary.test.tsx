@@ -27,7 +27,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@clerk/nextjs", () => ({
-  useAuth: () => ({ getToken: mocks.getToken }),
+  useAuth: () => ({ getToken: mocks.getToken, userId: "owner", isLoaded: true, isSignedIn: true }),
 }));
 
 vi.mock("@/components/dashboard/AnalyzerFrame", () => ({

@@ -1059,6 +1059,7 @@ class GdprService {
         isResumedFromReplay: { $ne: true },
         excluded: { $ne: true },
         _deleted: { $ne: true },
+        _deletionPending: { $ne: true },
         "opponent.pulseId": pulseId || { $exists: true, $ne: "" },
       },
       {
@@ -1368,25 +1369,34 @@ class GdprService {
    * @param {boolean} [additionalMarker]
    */
   async _assertReplayCleanupAvailable(gameFilter, additionalMarker = false) {
-    if (this.replayFiles) return;
+    const missingRequirements = [
+      ...(!this.replayFiles ? [{ "_cleanupRequired.replay": true }] : []),
+      ...(!this.playbackArtifacts ? [{ "_cleanupRequired.playback": true }] : []),
+      ...(!this.gameDetails ? [{ "_cleanupRequired.details": true }] : []),
+    ];
+    if (this.replayFiles && !missingRequirements.length) return;
     const archivedGame = await this.db.games.findOne(
       {
         ...gameFilter,
         $or: [
-          { "replayFile.storedAt": { $exists: true } },
-          { "replayUpload.uploadId": { $exists: true } },
-          { "playbackArtifact.artifactId": { $exists: true } },
-          { "playbackUpload.artifactId": { $exists: true } },
+          ...missingRequirements,
+          ...(!this.replayFiles ? [
+            { "replayFile.storedAt": { $exists: true } },
+            { "replayUpload.uploadId": { $exists: true } },
+            { "playbackArtifact.artifactId": { $exists: true } },
+            { "playbackUpload.artifactId": { $exists: true } },
+          ] : []),
         ],
       },
-      { projection: { _id: 1 } },
+      { projection: { _id: 1 }, hint: { userId: 1, gameId: 1 }, maxTimeMS: 5000 },
     );
-    if (!archivedGame && !additionalMarker) return;
+    if (!archivedGame && !(additionalMarker && !this.replayFiles)) return;
+    const code = this.replayFiles ? "game_cleanup_unavailable" : "replay_storage_unavailable";
     const err = /** @type {Error & {status: number, code: string}} */ (
-      new Error("replay_storage_unavailable")
+      new Error(code)
     );
     err.status = 503;
-    err.code = "replay_storage_unavailable";
+    err.code = code;
     throw err;
   }
 }

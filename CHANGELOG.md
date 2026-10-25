@@ -31,6 +31,12 @@ corresponding GitHub Release.
 - Share analyzer filter links without replacing device preferences. Save up to twelve named views with their section, manage them from Views, and choose a default for the first Today visit of a session.
 - Admin Build Studio lists and versions all preset, private custom and community definitions. Preset replacements use one validated policy across compatible server, desktop and browser engines, with explicit completion clocks, custom-rule precedence, reviewed restores and offline fallback.
 
+### Replay library
+
+- Hide a replay from your own statistics and scouting, then Unhide it from Settings. Single-game and page-limited bulk deletion require an exact typed confirmation, retain local files, and keep incomplete cloud cleanup available for retry.
+- Filter analyzer views by up to twenty SC2 accounts, including saved views, shared filter links and replay navigation.
+- Export the current replay filters and sort order as a formula-safe UTF-8 CSV, with a shared column dictionary and a visible 50,000-row cap.
+
 ### My reviews dashboard
 
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
