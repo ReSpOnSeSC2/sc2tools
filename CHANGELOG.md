@@ -17,6 +17,10 @@ corresponding GitHub Release.
 - Save opponent column and sort choices immediately in this browser so returning to the page or starting a later session keeps them. Selected details also appear in phone cards, and optional summary fields are available in CSV exports.
 - Cancel replay downloads when the account or replay source changes, and allow retry after a bounded wait.
 
+### Fixed
+
+- The desktop scouting report's X and minimize buttons now work while StarCraft II has focus, alongside the scouting icon. Other report content continues to pass game clicks through.
+
 ### Opponent page position
 
 - Keep your reading position when recorded compositions finish loading. Active phase and section chips scroll only within their own horizontal strips; section links still navigate when selected.
