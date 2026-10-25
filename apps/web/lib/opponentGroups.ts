@@ -122,7 +122,7 @@ export function groupOpponentsByPlayer<T extends GroupableOpponent>(
 ): OpponentGroup<T>[] {
   const buckets = new Map<string, T[]>();
   for (const row of rows) {
-    const key = enabled ? groupKey(row, links) : `solo:${row.pulseId}`;
+    const key = enabled ? opponentPlayerKey(row, links) : `solo:${row.pulseId}`;
     const bucket = buckets.get(key);
     if (bucket) bucket.push(row);
     else buckets.set(key, [row]);
@@ -164,8 +164,8 @@ export function groupMatchesSearch<T extends GroupableOpponent>(
   return false;
 }
 
-function groupKey(
-  row: GroupableOpponent,
+export function opponentPlayerKey(
+  row: Pick<GroupableOpponent, "pulseId" | "pulseCharacterId" | "globalIdentity">,
   links?: Record<string, PulseLink> | null,
 ): string {
   if (row.globalIdentity?.groupKey) return row.globalIdentity.groupKey;

@@ -7,6 +7,7 @@
 // long-running Browser Source picks up fresh facts as games land.
 
 import { useEffect, useState } from "react";
+import { useOverlayPreview } from "@/lib/overlayPreviewContext";
 import { API_BASE } from "@/lib/clientApi";
 
 const REFRESH_MS = 5 * 60_000;
@@ -37,9 +38,11 @@ export function sanitizeTickerFacts(raw: unknown): TickerFact[] {
 }
 
 export function useTickerFacts(token: string): TickerFact[] {
+  const preview = useOverlayPreview();
   const [facts, setFacts] = useState<TickerFact[]>([]);
 
   useEffect(() => {
+    if (preview) return;
     let cancelled = false;
     const load = async () => {
       try {
@@ -61,7 +64,7 @@ export function useTickerFacts(token: string): TickerFact[] {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [token]);
+  }, [token, preview]);
 
   return facts;
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { useOverlayPreview } from "@/lib/overlayPreviewContext";
 
 const FIRST_CHECK_MS = 15_000;
 const CHECK_INTERVAL_MS = 2 * 60_000;
@@ -118,7 +119,7 @@ export function overlayFeedTailIsQuiet(
  * the Dock returns Live so an update never blanks an active break scene.
  */
 export function useOverlayBuildRefresh({
-  enabled,
+  enabled: requestedEnabled,
   safeToReload,
   replaceLocation,
 }: {
@@ -127,6 +128,8 @@ export function useOverlayBuildRefresh({
   /** Dependency seam for non-navigating lifecycle tests. */
   replaceLocation?: (href: string) => void;
 }) {
+  const preview = useOverlayPreview();
+  const enabled = requestedEnabled && !preview;
   const safeToReloadRef = useRef(safeToReload);
   const pendingReloadRef = useRef(false);
   const reloadRequestedRef = useRef(false);

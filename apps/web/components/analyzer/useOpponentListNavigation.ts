@@ -13,7 +13,7 @@ export type OpponentListLocation = {
   prefetch: (href: string) => void;
   navigate: (href: string) => void;
 };
-const SORTS = new Set(["name", "pulseId", "wins", "losses", "winRate", "games", "mmr", "netMmr", "mmrWon", "mmrLost", "lastPlayed"]);
+const SORTS = new Set(["name", "race", "pulseId", "wins", "losses", "winRate", "games", "mmr", "netMmr", "mmrWon", "mmrLost", "lastPlayed"]);
 export function readOpponentListQuery(query: string) {
   const params = new URLSearchParams(query);
   const impact = params.get("impact");

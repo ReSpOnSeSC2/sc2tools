@@ -77,7 +77,7 @@ export function OverlayLiveTestDialog({ pending, busy, origin = "", onClose, onS
     confirmLabel="Send anyway" loading={busy} focusCancel>
     <p className="mb-3 text-body-sm text-text-muted">Stop or automatic expiry removes only the sample. Your real opponent, game and session keep updating underneath.</p>
     {pending ? <Link className="inline-flex min-h-11 items-center rounded px-2 text-accent-cyan underline focus-visible:outline focus-visible:outline-2"
-      href={`${origin}/overlay/${encodeURIComponent(pending.token)}${pending.widget ? `/widget/${encodeURIComponent(pending.widget)}` : ""}?demo=1`}
+      href={`${origin}/stream-studio/playground${pending.widget ? `?widget=${encodeURIComponent(pending.widget)}` : ""}`}
       target="_blank" rel="noopener noreferrer" onClick={onClose}>Preview here instead<span className="sr-only"> (opens in a new tab)</span></Link> : null}
   </ConfirmDialog>;
 }

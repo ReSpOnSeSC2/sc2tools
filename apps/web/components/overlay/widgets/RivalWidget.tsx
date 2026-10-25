@@ -12,7 +12,7 @@ export function RivalWidget({ live }: { live: LiveGamePayload | null }) {
   return (
     <WidgetShell slot="top-center-3" accent="magenta" visible width={380}>
       <WidgetHeader>
-        <span style={{ fontSize: 15 }}>Rival</span>
+        <span style={{ fontSize: 15 }}>{r.starred ? "RIVAL ★" : "Rival"}</span>
         <Dim>{r.name || "—"}</Dim>
       </WidgetHeader>
       <WidgetFooter>

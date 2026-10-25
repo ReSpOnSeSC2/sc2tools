@@ -4,6 +4,7 @@ const express = require("express");
 const { parseFilters } = require("../util/parseQuery");
 const rateLimitModule = require("express-rate-limit");
 const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore");
+const { parseAnalysisGameIds } = require("../util/opponentAnalysisMembership");
 
 /**
  * /v1/catalog, /v1/definitions, /v1/export.csv, /v1/playback —
@@ -14,6 +15,7 @@ const { BoundedRateLimitStore } = require("../middleware/boundedRateLimitStore")
  * @param {{
  *   catalog: import('../services/types').CatalogService,
  *   auth: import('express').RequestHandler,
+ *   opponents?: Pick<import('../services/opponents').OpponentsService,'prepareGamesCsv'>,
  * }} deps
  */
 function buildCatalogRouter(deps) {
@@ -41,13 +43,18 @@ function buildCatalogRouter(deps) {
     }
   });
 
-  router.get("/export.csv", exportLimiter, async (req, res, next) => {
+  router.get(["/export.csv", "/opponents/:pulseId/export.csv"], exportLimiter, async (req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
     const controller = new AbortController();
     const disconnected = () => controller.abort();
     res.once("close", disconnected);
     try {
       const userId = requireAuth(req).userId;
-      const prepared = await deps.catalog.prepareCsv(userId, parseFilters(req.query), { search: req.query.search, result: req.query.result, matchup: req.query.matchup, sort: req.query.sort, signal: controller.signal });
+      const opponentId = req.params.pulseId;
+      const prepared = opponentId
+        ? await deps.opponents?.prepareGamesCsv(userId, opponentId, { filters: parseFilters(req.query), mergeLinked: req.query.mergeLinked === "1", result: req.query.result, analysisGameIds: parseAnalysisGameIds(req.query.analysisGameIds), signal: controller.signal })
+        : await deps.catalog.prepareCsv(userId, parseFilters(req.query), { search: req.query.search, result: req.query.result, matchup: req.query.matchup, sort: req.query.sort, signal: controller.signal });
+      if (!prepared) { res.status(404).json({ error: { code: "not_found" } }); return; }
       res.set("Cache-Control", "private, no-store");
       res.set("X-Export-Truncated", String(prepared.truncated));
       res.setHeader("content-type", "text/csv; charset=utf-8");
