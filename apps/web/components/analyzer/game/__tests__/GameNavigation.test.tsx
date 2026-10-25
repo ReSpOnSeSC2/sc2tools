@@ -78,6 +78,8 @@ describe("durable game sources", () => {
   it("rejects redirects, game chains and oversized URLs, and names originating lists", () => {
     for (const raw of ["https://evil.test/app", "//evil.test/app", "/app\\evil", "/app/../settings", "/app/game/a", "/application", "/app?" + "x".repeat(2048)]) expect(safeGameSource(raw)).toBeNull();
     expect(gameSourceFromQuery({ from: ["/app?tab=macro&race=P", "/bad"] })?.label).toBe("Macro");
+    expect(gameSourceFromQuery({ from: "/app/maps?focus=Alcyone" })?.label).toBe("Maps");
+    expect(gameSourceFromQuery({ from: "/app/macro#leaks" })?.label).toBe("Macro");
     expect(gameSourceFromQuery({ from: "/app?tab=builds", fromLabel: "PvZ – Archon Drop" })?.label).toBe("PvZ – Archon Drop");
     expect(gameAnalysisHref("one", null, { href: "//evil.test", label: "bad" })).toBe("/app/game/one");
     expect(ownerNeighborPath("one", "all", { href: "/app?since=2026-01-01&token=secret&from=bad", label: "Today" })).toBe("/v1/games/one/neighbors?scope=all&since=2026-01-01");

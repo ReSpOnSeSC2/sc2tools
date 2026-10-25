@@ -10,6 +10,7 @@ import { QueryState } from "@/components/ui/QueryState";
 import { AllGamesTable } from "../AllGamesTable";
 import type { ProfileGame } from "../Last5GamesTimeline";
 import type { MapGamesDrill } from "./MapVetoTable";
+import { GameSourceProvider } from "@/lib/useGameSource";
 
 type GamesResponse = { total?: number; games: Array<{ id?: string; date?: string; map?: string; opponent?: string; opp_race?: string; result?: string; build?: string; game_length?: number; my_race?: string; macro_score?: number; opponent_pulse_id?: string }> };
 
@@ -23,7 +24,7 @@ export function MapGamesModal({ drill, onClose }: { drill: MapGamesDrill | null;
   return <Modal open={!!drill} onClose={onClose} title={`${drill?.map ?? "Map"}${drill?.opponent ? ` · vs ${drill.opponent}` : ""}`} description="Games behind this map and matchup, using the selected sample filters." size="2xl"
     footer={<Button variant="secondary" onClick={() => { if (drill) setFilters({ ...filters, map: drill.map }); onClose(); }}>Filter everything to this map</Button>}>
     <QueryState q={request} filtered errorTitle="Couldn't load these map games" isEmpty={() => !games.length} empty={<p className="text-caption text-text-muted">No games match this map sample.</p>}>
-      {() => <><AllGamesTable games={games} myName={myName} />{(request.data?.total ?? 0) > games.length ? <p className="mt-3 text-micro text-text-dim">Showing the latest {games.length} of {request.data?.total} matching games.</p> : null}</>}
+      {() => <><GameSourceProvider label="Maps" filters={query ?? ""} replace><AllGamesTable games={games} myName={myName} /></GameSourceProvider>{(request.data?.total ?? 0) > games.length ? <p className="mt-3 text-micro text-text-dim">Showing the latest {games.length} of {request.data?.total} matching games.</p> : null}</>}
     </QueryState>
   </Modal>;
 }

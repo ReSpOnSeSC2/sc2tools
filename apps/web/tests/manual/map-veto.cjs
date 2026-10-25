@@ -59,7 +59,7 @@ const server = http.createServer((req, res) => {
       await expect(page.getByRole('dialog')).toContainText('Sample rival'); await expect(page.getByRole('dialog')).toContainText('Ancient Cistern LE'); checks++;
       await page.getByRole('button', { name: 'Filter everything to this map' }).click(); await expect(page.getByRole('dialog')).toHaveCount(0); await expect(page.getByLabel('Applied global map')).toHaveText('Ancient Cistern LE'); checks++;
       await page.goto(origin + '/app/maps?focus=Sanctuary%20III%20LE'); await expect(page.getByRole('dialog')).toBeVisible();
-      await expect(page.locator('#map-sanctuaryiii')).toHaveClass(/ring-2 ring-accent/); await page.keyboard.press('Escape'); checks++;
+      await expect(page.locator('#map-sanctuaryiii')).toHaveClass(/ring-2 ring-accent/); await page.keyboard.press('Escape'); await expect(page.locator('#map-sanctuaryiii')).toBeInViewport(); checks++;
       await page.goto(origin + '/guides/maps/ancient-cistern'); await expect(page.getByRole('heading', { name: 'You on this map' })).toBeVisible();
       await page.getByRole('combobox', { name: 'Your race' }).selectOption('P'); await expect(page.getByText(/Community 54.0/)).toBeVisible();
       if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) throw new Error(`Guide overflow ${width}`); checks++;
