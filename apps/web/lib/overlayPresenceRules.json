@@ -1,0 +1,28 @@
+{
+  "surfaces": [
+    "all-in-one",
+    "widget",
+    "scene",
+    "dock"
+  ],
+  "scenes": [
+    "between-games",
+    "starting-soon",
+    "brb",
+    "intermission",
+    "manual",
+    "frontier-cantina",
+    "renegade-battlecruiser-bridge",
+    "orbital-station-concourse",
+    "interstellar-broadcast-studio",
+    "volcanic-world-overlook",
+    "ancient-carrier-sanctuary",
+    "psionic-mothership-nexus"
+  ],
+  "audioWidgets": [
+    "scouting",
+    "multichat",
+    "chat-alerts",
+    "ghost-build"
+  ]
+}

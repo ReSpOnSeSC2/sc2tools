@@ -1,0 +1,9 @@
+# Overlay health
+
+Wave4 `overlay-presence-health` is in progress on `codex/wave4-overlay-health` in the reused clean merged Battle Report worktree `.worktrees/wave3-build-exports`. The original Battle Report branch remains preserved. Base includes main716, frozen widget-manager715 and profile717 source; final squashes and Playground integration remain before shipping.
+
+Implemented: strict socket surface/widget metadata and server connection times; owned counts endpoint; token-authenticated counts-only Dock endpoint; shared one-per-five-second bounded admission after ownership; a one-second in-memory adapter deadline; recent broker publication time; visible-only Settings checklist and per-widget badges; counts-only Dock strip. No source IDs, private owner information, credentials, new collection or provider request are returned.
+
+Current evidence:34 focused API/socket/route assertions pass, including unauthorized-budget isolation, counts-only Dock response and stalled adapter settlement.13 health web assertions pass for duplicate/unknown states, shared polling, visibility, authentication transitions, held token/body deadlines and retry. Existing48 relevant profile/manager/Dock/helper assertions pass; some overlap those13. API/web types and strict new-module lint pass. Final integrated production build/budgets, runtime fixture proof, real browser matrix, independent final review and PR gates remain.
+
+Help `overlay-health`, the first Learn troubleshooting item and Crash Course readiness step are added. A source count includes ordinary browser pages and cannot inspect the OBS scene or mixer. Agent status reflects a live device connection; older clients should be checked in Devices. Missing recent game-update time remains unknown after cache expiry/restart. No production configuration or account was changed.

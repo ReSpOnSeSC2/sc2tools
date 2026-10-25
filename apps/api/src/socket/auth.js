@@ -4,6 +4,7 @@ const { verifyToken } = require("@clerk/backend");
 const { sha256 } = require("../util/hash");
 const { updatePlaybackJob } = require("../services/replayPlaybackJobs");
 const { scoutingDeviceRoom } = require("../services/agentScouting");
+const { overlayDescriptor } = require("../services/overlayPresence");
 
 /** Min interval (ms) between accepted ``overlay:resync`` requests on
  * one socket. Tighter than 2 s would let a misbehaving client trigger
@@ -131,6 +132,7 @@ function attachSocketAuth(io, opts) {
         socket.data.overlayToken = overlayToken;
         socket.data.overlayUserId = hit.userId;
         socket.data.kind = "overlay";
+        socket.data.overlayPresence = overlayDescriptor(socket.handshake?.auth);
         // Stash the OBS Browser Source's IANA timezone so the
         // session-widget aggregation can anchor "today" to the
         // streamer's wall clock. Defaults to UTC at the
@@ -207,6 +209,7 @@ function attachSocketAuth(io, opts) {
 
   io.on("connection", (socket) => {
     if (socket.data.kind === "overlay") {
+      socket.data.overlayConnectedAt = Date.now();
       const t = socket.data.overlayToken;
       const u = socket.data.overlayUserId;
       if (t) socket.join(`overlay:${t}`);

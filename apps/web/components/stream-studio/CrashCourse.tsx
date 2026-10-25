@@ -100,8 +100,8 @@ const LESSONS: ReadonlyArray<Lesson> = [
     promise: "Separate a layout check from proof that real game information is arriving.",
     steps: [
       {
-        title: "Use sample data to check the picture",
-        body: <>Enable a widget in <strong>Settings → Overlay</strong> and choose its <strong>Test</strong> button while watching OBS. Most tests display a sample for about 20 seconds; choose <strong>Stop</strong> to dismiss it sooner. <strong>Test all</strong> helps check a complete scene. Build profile is controlled directly from its settings or the Stream Dock.</>,
+        title: "Check readiness, then preview and Test",
+        body: <>First check <Link href="/help/overlay-health" className="text-accent underline">Ready to go live?</Link> in Overlay setup for connected sources and possible duplicate audio. Enable a widget in <strong>Settings → Overlay</strong> and choose its <strong>Test</strong> button while watching OBS. Most tests display a sample for about 20 seconds; choose <strong>Stop</strong> to dismiss it sooner. <strong>Test all</strong> helps check a complete scene. Build profile is controlled directly from its settings or the Stream Dock.</>,
       },
       {
         title: "Expect different cards at different times",
