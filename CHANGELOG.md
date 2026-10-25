@@ -378,7 +378,6 @@ corresponding GitHub Release.
 
 ### Opponent lists and private notes
 
-- Opponent pages show Ladder first and History second, followed by the remaining sections; their section navigation follows the same order.
 - Search, sort and note filters stay in the address bar. Dossier links preserve the list's expanded rows and scroll position, with natural name sorting and numeric Pulse IDs.
 - Private note previews appear in the list. Unsaved drafts recover in the same tab, Ctrl/Cmd+Enter saves, and returning to the list asks before discarding edits. Replay history remains directly above notes.
 
