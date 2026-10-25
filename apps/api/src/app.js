@@ -312,7 +312,8 @@ function buildApp(deps) {
         logger: deps.logger,
       })
     : noopClerkClient());
-  const services = makeServices(deps, clerk);
+  const adminClerkIds = new Set(deps.config.adminUserIds || []);
+  const services = makeServices(deps, clerk, adminClerkIds);
   registerRuntimeCapacityProviders(deps.runtimeCapacityRegistry, services);
   const app = express();
   app.set("trust proxy", 1);
@@ -329,7 +330,6 @@ function buildApp(deps) {
   // mutated in place by the email-allowlist + admin-grant paths. The
   // REST ``isAdmin`` gate and the socket layer both read this live set;
   // the boot sequence also merges persisted DB admins into it.
-  const adminClerkIds = new Set(deps.config.adminUserIds || []);
   mountRoutes(app, deps, services, clerk, adminClerkIds, auth);
   app.use(buildErrorHandler(deps.logger));
   return { app, services, adminClerkIds };
@@ -338,8 +338,9 @@ function buildApp(deps) {
 /**
  * @param {AppDeps} deps
  * @param {import('./services/clerkClient').ClerkClient} clerk
+ * @param {Set<string>} adminClerkIds
  */
-function makeServices(deps, clerk) {
+function makeServices(deps, clerk, adminClerkIds) {
   // Admin notification stream — wired BEFORE UsersService so the
   // user-creation paths (ensureFromClerk first-touch, webhook upsert)
   // can fire signup events without a forward reference.
@@ -858,6 +859,7 @@ function makeServices(deps, clerk) {
   // its dependencies are already constructed.
   const admin = new AdminService({
     db: deps.db,
+    adminIds: () => [...adminClerkIds],
     gdpr,
     infrastructureUsage,
   });

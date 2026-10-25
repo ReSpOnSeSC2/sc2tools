@@ -216,3 +216,15 @@ describe("admin backup alerts", () => {
     expect(screen.queryByText("installed@example.com · confirmed by agent")).toBeNull();
   });
 });
+
+
+it("retains the user scope in the feed URL and disables global mark-read", () => {
+  navigation.visit("/admin/notifications?userId=fixture-owner&unread=0");
+  scenario.unreadCount = 3;
+  render(<AdminNotificationsPage />);
+  expect(lastFeedPath()).toContain("userId=fixture-owner");
+  expect(lastFeedPath()).not.toContain("unread=true");
+  expect((screen.getByRole("button", { name: "Mark all 3 unread as read" }) as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("button", { name: "Clear user filter" }));
+  expect(lastFeedPath()).not.toContain("userId=");
+});
