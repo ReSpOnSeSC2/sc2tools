@@ -35,7 +35,7 @@ export function PublicOgCard({ card, icons = [] }: { card: PublicOgCardData; ico
   </div>;
 }
 
-export async function renderPublicOgImage(value: PublicOgCardData | null) {
+export async function renderPublicOgImage(value: PublicOgCardData | null, allowCache = true) {
   const card = value ?? FALLBACK, icons = await iconsFor(card);
-  return new ImageResponse(<PublicOgCard card={card} icons={icons} />, { ...GUIDE_OG_SIZE, headers: { "Cache-Control": value ? CACHE : "public, max-age=60, s-maxage=60" } });
+  return new ImageResponse(<PublicOgCard card={card} icons={icons} />, { ...GUIDE_OG_SIZE, headers: { "Cache-Control": !allowCache ? "private, no-store, max-age=0" : value ? CACHE : "public, max-age=60, s-maxage=60" } });
 }

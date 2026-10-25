@@ -1,4 +1,5 @@
 import { getJsonWithStatus } from "@/lib/serverApi";
+import { communityCacheOptions } from "@/lib/communityCache";
 
 export const PUBLIC_OG_READ_TIMEOUT_MS = 2500;
 
@@ -9,7 +10,8 @@ export async function readPublicOg<T>(path: string): Promise<T | null> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
-      getJsonWithStatus<T>(path, { signal: controller.signal }).then(result => result.data),
+      getJsonWithStatus<T>(path, { signal: controller.signal,
+        ...(path.startsWith("/v1/community/") ? communityCacheOptions(/^\/v1\/community\/builds\/([A-Za-z0-9_-]+)$/.exec(path)?.[1]) : {}) }).then(result => result.data),
       new Promise<null>(resolve => {
         timer = setTimeout(() => { controller.abort(); resolve(null); }, PUBLIC_OG_READ_TIMEOUT_MS);
       }),

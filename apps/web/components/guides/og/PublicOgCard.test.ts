@@ -22,4 +22,9 @@ describe("actual public social image renderer", () => {
     expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1200, 630]);
     expect(png.length).toBeGreaterThan(10_000);
   });
+  it("keeps user-published cards uncached when purge is unavailable without affecting their real PNG", async () => {
+    const response = await renderPublicOgImage({ ...marketingOg("try"), kind: "Community build" }, false);
+    expect(response.headers.get("Cache-Control")).toContain("no-store");
+    const png = Buffer.from(await response.arrayBuffer()); expect(png.readUInt32BE(16)).toBe(1200);
+  });
 });

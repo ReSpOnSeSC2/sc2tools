@@ -1,6 +1,6 @@
 # 0056 — Public metadata and share images
 
-Status: accepted for metadata; cache revalidation follows separately.
+Status: accepted for metadata and bounded public cache revalidation.
 
 ## Context
 
@@ -43,8 +43,38 @@ sitemap route for its canonical, own OG title and matching Twitter title.
 
 ## Follow-up boundary
 
-Community ISR/tag invalidation, API cache headers and corpus caching are PR B.
-They do not ship implicitly with this metadata change. That change must reuse
-the existing guides HMAC verification, preserve last-good renders on failures
-and document its operator secret without enabling an integration or adding
-infrastructure.
+PR B adds the following cache contract without activating operator configuration:
+
+- General Community server reads use a 300-second data cache tagged `community`
+  and, for a valid public slug, `community-build:<slug>`. Without the web purge
+  secret these reads and user-derived social cards remain uncached. Detail
+  outages throw into the existing unavailable boundary, preserving a last-good
+  ISR render rather than replacing it with an outage or a false 404.
+- Successful public Community API responses use `s-maxage=60` and
+  `stale-while-revalidate=600`. Private, owner, admin, missing and error responses
+  remain `private, no-store`. The site-stats proxy uses 15/60 seconds; its upstream
+  read remains uncached, and errors remain uncached.
+- Opponent pages and API responses deliberately remain uncached, including when
+  purge is configured. The planned 21,600-second opponent render and general
+  public API header would bypass the current removal/privacy floor if a purge
+  failed. A bounded one-hour service LRU instead avoids repeated materialization:
+  every request still checks authoritative removal, identity and five-owner
+  admission before reading it. The LRU holds at most 128 payloads of 64 KiB,
+  with two concurrent cold materializations and generation-fenced late results.
+
+The optional Community sender reuses the guides raw-body HMAC protocol with
+scope `community`, a separate shared secret, five-minute signature tolerance,
+4 KiB/2-second receiver body bounds, and a five-second sender deadline. One
+active notification and one coalesced pending notification bound work. It logs
+only a status or fixed failure label. Missing configuration is a no-op; failed
+notifications do not turn a committed user mutation into an error.
+
+Publish/update/unpublish, moderation, rounded-score changes, admin edits and
+game visibility/deletion/GDPR/restore paths retire the relevant service caches
+and notify the tag receiver. Unknown write outcomes conservatively invalidate
+before any fallible verification read; known no-op votes and validation failures
+do not purge. Owner game changes reuse the existing private invalidators through
+one narrow GDPR callback. No new query, durable revision, index, worker or service
+is introduced. Purge is best effort, so publication copy promises no fixed
+seconds-to-visibility guarantee. Configuration and its limits are documented in
+the deployment guide; no production secret or environment value is changed.

@@ -17,7 +17,7 @@ vi.mock("@/lib/serverApi", () => ({ getJsonWithStatus: mocks.getJsonWithStatus }
 vi.mock("next/navigation", () => ({ notFound: mocks.notFound }));
 vi.mock("@/components/ui/Icon", () => ({ Icon: () => null }));
 
-import CommunityOpponentPage, { generateMetadata } from "@/app/community/opponents/[pulseId]/page";
+import CommunityOpponentPage, { generateMetadata, dynamic } from "@/app/community/opponents/[pulseId]/page";
 
 const TOON = "2-S2-1-4242";
 const params = () => Promise.resolve({ pulseId: TOON });
@@ -52,9 +52,19 @@ afterEach(() => {
   cleanup();
   mocks.getJsonWithStatus.mockReset();
   mocks.notFound.mockClear();
+  vi.unstubAllEnvs();
 });
 
 describe("/community/opponents/[pulseId]", () => {
+  it("never reuses a warm configured render when a failed purge leaves current admission below the floor", async () => {
+    vi.stubEnv("COMMUNITY_REVALIDATE_SECRET", "configured-but-purge-unavailable");
+    expect(dynamic).toBe("force-dynamic"); mocks.getJsonWithStatus.mockResolvedValueOnce({ data: aggregate(), status: 200 });
+    await generateMetadata({ params: params() });
+    mocks.getJsonWithStatus.mockResolvedValueOnce({ data: aggregate({ contributors: 4 }), status: 200 });
+    await expect(CommunityOpponentPage({ params: params() })).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(mocks.getJsonWithStatus).toHaveBeenCalledTimes(2);
+    for (const call of mocks.getJsonWithStatus.mock.calls) expect(call[1]).toEqual({ revalidateSec: 0, tags: [] });
+  });
   it("is a 404 below the player floor, in the page and the metadata", async () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status: 404 });
     await expect(CommunityOpponentPage({ params: params() })).rejects.toThrow("NEXT_NOT_FOUND");
@@ -66,17 +76,11 @@ describe("/community/opponents/[pulseId]", () => {
     await expect(CommunityOpponentPage({ params: params() })).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
-  it.each([null, 503])("offers a full reload on an outage (%s) with noindex, never 'not enough data'", async (status) => {
+  it.each([null, 503])("throws on outage %s rather than replacing a last-good render or claiming insufficient data", async (status) => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status });
-    render(await CommunityOpponentPage({ params: params() }));
-    expect(screen.getByRole("heading", { level: 1, name: "This opponent profile is temporarily unavailable" })).toBeTruthy();
-    const retry = screen.getByRole("link", { name: "Try again" });
-    expect(retry.getAttribute("href")).toBe(`/community/opponents/${TOON}`);
-    // A native anchor forces a fresh server fetch rather than reusing a failed RSC payload.
-    expect(retry.tagName).toBe("A");
+    await expect(CommunityOpponentPage({ params: params() })).rejects.toThrow("Opponent profile temporarily unavailable");
     expect(mocks.notFound).not.toHaveBeenCalled();
-    const metadata = await generateMetadata({ params: params() });
-    expect(metadata.robots).toEqual({ index: false, follow: false });
+    await expect(generateMetadata({ params: params() })).rejects.toThrow("Opponent profile temporarily unavailable");
   });
 
   it("titles the page by race and Pulse id, never the toon handle, and is indexable", async () => {

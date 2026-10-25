@@ -47,6 +47,7 @@ corresponding GitHub Release.
 ### Public link previews
 
 - Public pages use their own canonical and social titles. Shared community builds and authors, Try and Download gain branded preview cards; build rules show their deadlines clearly. Public member dates use a consistent time zone, and unavailable share data falls back promptly.
+- Public Community lists can refresh through bounded signed cache invalidation after edits and removals. Opponent profiles always recheck current privacy admission; interrupted writes and partial game wipes retire cached contributions safely.
 
 ### Stream Dock
 

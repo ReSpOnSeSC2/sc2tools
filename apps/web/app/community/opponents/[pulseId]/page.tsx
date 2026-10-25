@@ -6,10 +6,10 @@ import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/Stat";
-import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import { pct1, wrColor } from "@/lib/format";
 import { raceIconName } from "@/lib/race";
 import { getJsonWithStatus } from "@/lib/serverApi";
+import { communityCacheOptions } from "@/lib/communityCache";
 import {
   OPPONENT_PROFILE_MIN_PLAYERS,
   mapRows,
@@ -37,11 +37,13 @@ import {
 interface PageProps {
   params: Promise<{ pulseId: string }>;
 }
+export const dynamic = "force-dynamic";
 
 /** generateMetadata and the page make the same request; Next dedupes it. */
 function loadOpponent(pulseId: string) {
   return getJsonWithStatus<CommunityOpponentAggregate>(
     `/v1/community/opponents/${encodeURIComponent(pulseId)}`,
+    communityCacheOptions(undefined, true),
   );
 }
 
@@ -52,10 +54,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { data, status } = await loadOpponent(pulseId);
   if (status === 404 || (data && !meetsPlayerFloor(data))) notFound();
   if (!data) {
-    return {
-      title: "Opponent profile unavailable · Community",
-      robots: { index: false, follow: false },
-    };
+    throw new Error("Opponent profile temporarily unavailable");
   }
   return {
     title: `${opponentMetaTitle(data)} · Community`,
@@ -69,13 +68,7 @@ export default async function CommunityOpponentPage({ params }: PageProps) {
   const { data, status } = await loadOpponent(pulseId);
   if (status === 404 || (data && !meetsPlayerFloor(data))) notFound();
   if (!data) {
-    return (
-      <CommunityUnavailable
-        title="This opponent profile is temporarily unavailable"
-        retryHref={`/community/opponents/${encodeURIComponent(pulseId)}`}
-        standalone
-      />
-    );
+    throw new Error("Opponent profile temporarily unavailable");
   }
 
   const race = opponentRace(data.race);

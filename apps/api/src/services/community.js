@@ -19,6 +19,7 @@ const {
 } = require("./communityBuildSnapshot");
 const { communitySitemap } = require("./communitySitemap");
 const { communityListFilter } = require("./communityListFilters");
+const { CommunityOpponentCache } = require("./communityOpponentCache");
 const { listOwnerBuilds } = require("./communityOwnerBuilds");
 const {
   DETECTOR_OPP_SLUG_EXPR,
@@ -260,7 +261,8 @@ function pickTop(counts) {
 class CommunityService {
   /**
    * @param {import('../db/connect').DbContext} db
-   * @param {{slugSecret?: Buffer|string, now?: () => number, notifications?: import('./notifications').NotificationsService}} [opts]
+   * @param {{slugSecret?: Buffer|string, now?: () => number, notifications?: import('./notifications').NotificationsService,
+   * onPublicChanged?:()=>void}} [opts]
    */
   constructor(db, opts = {}) {
     this.db = db;
@@ -284,6 +286,17 @@ class CommunityService {
     this.availabilityRevision = 0;
     /** @type {() => number} */
     this.now = typeof opts.now === "function" ? opts.now : Date.now;
+    this.opponentAggregates = new CommunityOpponentCache({ now: this.now });
+    this.onPublicChanged = opts.onPublicChanged || null;
+  }
+
+  /** Advisory, after a public mutation commits. No secret or private ID is sent. */
+  notifyPublicChanged() { try { this.onPublicChanged?.(); } catch { /* Committed state remains authoritative. */ } }
+  /** A driver error can follow a committed write. Invalidate before any
+   * verification read, including when that read also fails.
+   * @template T @param {()=>Promise<T>} operation @returns {Promise<T>} */
+  async attemptPublicWrite(operation) {
+    try { return await operation(); } catch (error) { this.notifyPublicChanged(); throw error; }
   }
 
   /**
@@ -459,11 +472,11 @@ class CommunityService {
     const updatingExisting = !!existing;
     let created = false;
     try {
-      const result = await this.db.communityBuilds.updateOne(
+      const result = await this.attemptPublicWrite(() => this.db.communityBuilds.updateOne(
         existing ? { _id: existing._id } : { ownerUserId: userId, sourceSlug: userSlug },
         mutation,
         { upsert: true },
-      );
+      ));
       created = result.upsertedCount > 0;
     } catch (error) {
       // Retryable/network errors can be reported after Mongo has committed.
@@ -497,10 +510,10 @@ class CommunityService {
       slug = winner.slug;
       doc.slug = winner.slug;
       try {
-        await this.db.communityBuilds.updateOne(
+        await this.attemptPublicWrite(() => this.db.communityBuilds.updateOne(
           { _id: winner._id },
           { $set: doc, $inc: { publicationSequence: 1 } },
-        );
+        ));
       } catch (retryError) {
         const retryCommitted = await this.db.communityBuilds.findOne({
           _id: winner._id,
@@ -510,6 +523,7 @@ class CommunityService {
       }
       }
     }
+    this.notifyPublicChanged();
     // Mirror published state onto the private doc so the "Published"
     // badge + the editor's share toggle reflect reality across every
     // publish entry point (this dialog, the save-time toggle, forks).
@@ -652,10 +666,10 @@ class CommunityService {
       };
     let removed = false;
     try {
-      const res = await this.db.communityBuilds.updateMany(
+      const res = await this.attemptPublicWrite(() => this.db.communityBuilds.updateMany(
         { ...sourceFilter, removed: { $ne: true } },
         mutation,
-      );
+      ));
       removed = res.matchedCount > 0;
     } catch (error) {
       const active = await this.db.communityBuilds.findOne({
@@ -668,6 +682,7 @@ class CommunityService {
         publicationRevision,
       }));
     }
+    if (removed) this.notifyPublicChanged();
     // Keep the private doc's badge in sync even when nothing was live to
     // remove — the author's intent is "not shared".
     const mirrored = await this._mirrorPrivatePublicationState(
@@ -953,9 +968,9 @@ class CommunityService {
         $inc: { publicationSequence: 1 },
       };
       try {
-        const res = opts.adminUserId
-          ? await this.db.communityBuilds.updateOne(filter, mutation)
-          : await this.db.communityBuilds.updateMany(filter, mutation);
+        const res = await this.attemptPublicWrite(() => opts.adminUserId
+          ? this.db.communityBuilds.updateOne(filter, mutation)
+          : this.db.communityBuilds.updateMany(filter, mutation));
         removed = res.modifiedCount > 0;
       } catch (error) {
         const verificationFilter = !opts.adminUserId && sourceSlug
@@ -970,6 +985,7 @@ class CommunityService {
       }
     }
 
+    if (removed) this.notifyPublicChanged();
     if (sourceSlug) {
       await this._mirrorPrivatePublicationState(
         existing.ownerUserId,
@@ -1383,7 +1399,7 @@ class CommunityService {
     // Return the preimage from the same atomic pipeline write. It gives us
     // both the old vote and this operation's authoritative resulting score,
     // even while other accounts vote concurrently.
-    const before = await this.db.communityBuilds.findOneAndUpdate(
+    const before = await this.attemptPublicWrite(() => this.db.communityBuilds.findOneAndUpdate(
       { slug, removed: false },
       [
         { $set: {
@@ -1393,13 +1409,16 @@ class CommunityService {
         { $set: { votes: { $subtract: [{ $size: "$upvotes" }, { $size: "$downvotes" }] } } },
       ],
       { returnDocument: "before", projection: { upvotes: 1, downvotes: 1, ownerUserId: 1, title: 1 } },
-    );
+    ));
     if (!before) throw Object.assign(new Error("build_not_found"), { status: 404, code: "build_not_found" });
     const up = new Set(Array.isArray(before.upvotes) ? before.upvotes : []);
     const down = new Set(Array.isArray(before.downvotes) ? before.downvotes : []);
+    const previousScore = up.size - down.size;
     const old = up.has(userId) ? 1 : down.has(userId) ? -1 : 0;
     if (delta === 1) up.add(userId); else up.delete(userId);
     if (delta === -1) down.add(userId); else down.delete(userId);
+    const votes = up.size - down.size;
+    if (Math.round(previousScore) !== Math.round(votes)) this.notifyPublicChanged();
     if (delta === 1 && old !== 1 && before.ownerUserId !== userId) {
       const day = new Date(this.now()).toISOString().slice(0, 10);
       const render = (/** @type {number} */ count) => ({ title: `${count} upvote${count === 1 ? "" : "s"} on ${before.title || "your build"}` });
@@ -1407,7 +1426,7 @@ class CommunityService {
         ...render(1), href: `/community/builds/${encodeURIComponent(slug)}`,
         groupKey: `community-vote:${slug}:${day}`, eventKey: `community-vote:${slug}:${day}:${userId}`, render }, null);
     }
-    return { votes: up.size - down.size, myVote: delta, changed: old !== delta };
+    return { votes, myVote: delta, changed: old !== delta };
   }
 
   /** @param {string} userId @param {string} slug */
@@ -1442,11 +1461,14 @@ class CommunityService {
    * @param {string} pulseId
    */
   async aggregateOpponent(pulseId) {
+    if (typeof pulseId !== "string" || !pulseId || pulseId.length > 120) return null;
+    const revision = this.opponentAggregates.revision;
     if (await this._opponentRemoved(pulseId)) return null;
     const { filter, pulseCharacterId } = await this._opponentScope(pulseId);
     if (!(await this._opponentFloorMet(filter))) {
       return null;
     }
+    const value = await this.opponentAggregates.read(JSON.stringify([pulseId, pulseCharacterId]), async () => {
     const games = await this.db.games
       .find(filter, {
         projection: {
@@ -1463,13 +1485,20 @@ class CommunityService {
       // bounds memory for celebrity opponents. Most recent-inserted
       // rows win (natural order); counts below reflect the capped set.
       .limit(AGGREGATE_OPPONENT_MAX_GAMES)
+      .maxTimeMS(5000)
       .toArray();
     return summarizeOpponentGames(pulseId, pulseCharacterId, games);
+    }, revision);
+    if (revision !== this.opponentAggregates.revision) throw Object.assign(new Error("community_data_changed"), { status: 503, code: "community_data_changed" });
+    return value;
   }
 
   /** A contribution can change the global k-floor for linked aliases.
    * @param {string} _userId */
-  invalidateForUser(_userId) { this.availabilityRevision++; this.opponentAvailability.clear(); }
+  invalidateForUser(_userId) {
+    this.availabilityRevision++; this.opponentAvailability.clear(); this.opponentAggregates.invalidate();
+    this.notifyPublicChanged();
+  }
 
   /**
    * Whether ``/community/opponents/:pulseId`` has a public profile, for
@@ -1526,7 +1555,7 @@ class CommunityService {
         pulseId,
         pulseCharacterId: { $type: "string", $ne: "" },
       },
-      { projection: { _id: 0, pulseCharacterId: 1 } },
+      { projection: { _id: 0, pulseCharacterId: 1 }, maxTimeMS: 5000 },
     );
     const pulseCharacterId = charIdRow && typeof charIdRow.pulseCharacterId === "string"
       ? charIdRow.pulseCharacterId
@@ -1558,7 +1587,7 @@ class CommunityService {
    * @returns {Promise<boolean>}
    */
   async _opponentFloorMet(filter) {
-    const distinctUserIds = (await this.db.games.distinct("userId", filter))
+    const distinctUserIds = (await this.db.games.distinct("userId", filter, { maxTimeMS: 5000 }))
       .filter((userId) => typeof userId === "string" && userId.length > 0);
     return distinctUserIds.length >= K_ANONYMITY_THRESHOLD;
   }
@@ -1727,7 +1756,8 @@ class CommunityService {
       else await external.restore(report.targetId);
     }
     // One decision settles every open report for the same target.
-    const result = await this.db.communityReports.updateMany(
+    let result;
+    try { result = await this.db.communityReports.updateMany(
         { targetType: report.targetType, targetId: report.targetId, resolvedAt: null },
         {
           $set: {
@@ -1737,8 +1767,7 @@ class CommunityService {
             resolutionNote: note || null,
           },
         },
-      );
-    if (report.targetType === "opponent") this.invalidateForUser("");
+      ); } finally { if (report.targetType === "opponent") this.invalidateForUser(""); }
     return { resolved: result.modifiedCount };
   }
 

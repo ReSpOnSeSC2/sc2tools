@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Calendar } from "lucide-react";
 import { getJsonWithStatus } from "@/lib/serverApi";
+import { communityCacheOptions } from "@/lib/communityCache";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -11,7 +12,6 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { fmtAgo } from "@/lib/format";
 import { coerceRace, raceIconName, raceTint } from "@/lib/race";
 import { AuthorChip } from "@/components/community/AuthorChip";
-import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import { CommunityBuildSignatureTimeline } from "@/components/community/CommunityBuildSignatureTimeline";
 import { CommunityGamePlan } from "@/components/community/CommunityGamePlan";
 import { CommunityVotePanel } from "@/components/community/CommunityVotePanel";
@@ -45,6 +45,7 @@ import { absoluteUrl } from "@/lib/seo/absoluteUrl";
 function loadBuild(slug: string) {
   return getJsonWithStatus<CommunityBuildDetail>(
     `/v1/community/builds/${encodeURIComponent(slug)}`,
+    communityCacheOptions(slug),
   );
 }
 
@@ -59,10 +60,7 @@ export async function generateMetadata({
   const { data, status } = await loadBuild(slug);
   if (status === 404) notFound();
   if (!data) {
-    return {
-      title: UNAVAILABLE_TITLE,
-      robots: { index: false, follow: false },
-    };
+    throw new Error(UNAVAILABLE_TITLE);
   }
   const description =
     trimDescription(data.description || "", 200) ||
@@ -96,13 +94,7 @@ export default async function CommunityBuildPage({
   const { data, status } = await loadBuild(slug);
   if (status === 404) notFound();
   if (!data) {
-    return (
-      <CommunityUnavailable
-        title={UNAVAILABLE_TITLE}
-        retryHref={`/community/builds/${encodeURIComponent(slug)}`}
-        standalone
-      />
-    );
+    throw new Error(UNAVAILABLE_TITLE);
   }
 
   const build = data.build || {};

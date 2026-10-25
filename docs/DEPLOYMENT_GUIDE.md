@@ -332,3 +332,55 @@ Run through these, in order, after every redeploy:
   long-running Node process; Render handles that, Vercel does not by default.
 - Don't put your character_id or account_id into any public repo or
   Vercel env var. Those stay in your local `profile.json`.
+
+## Current app: optional Community cache revalidation
+
+This section applies to `apps/api` and `apps/web`; the older cloud/SPA setup
+above is separate. Source defaults do not enable a purge integration. No
+production configuration is changed by the cache implementation.
+
+If the owner later configures revalidation, set these values together:
+
+| Runtime | Variable | Purpose |
+| --- | --- | --- |
+| API | `COMMUNITY_REVALIDATE_URL` | The web origin's `/api/revalidate-community` endpoint. |
+| API and web | `COMMUNITY_REVALIDATE_SECRET` | The same private, independently generated shared secret in both runtimes. Never use a public-prefixed variable. |
+
+The signed JSON body is `{ts,scope:"community"}` using the existing guides
+raw-body HMAC header/protocol, with a separate scope and secret. The receiver
+accepts a five-minute clock window, at most 4 KiB and two seconds of body
+reading. It invalidates the Community tag/layout and sitemap. The sender has a
+five-second deadline, one active request and one coalesced pending notification;
+it logs only a status or fixed error label. Unset API values make sending a
+no-op. Unset web secret returns 503 and keeps public Community reads and
+user-derived social cards uncached. Configure both runtimes before relying on
+fast refresh; a web-only secret cannot establish working delivery.
+
+With configuration present, general Community pages use a 300-second tagged
+data cache (`community`, plus a validated per-build tag). Publish/update,
+unpublish, moderation, rounded vote-score changes, admin edits and game
+visibility/deletion/restore/GDPR changes notify the receiver. Unknown mutation
+outcomes invalidate conservatively. Delivery is best effort: a failed or
+unavailable purge can leave a general list/build cached until its normal
+refresh, so the UI makes no unconditional "within seconds" promise. A detail
+outage preserves the last successful ISR render; an uncached failure uses the
+unavailable/retry boundary, while a confirmed missing resource remains a 404.
+
+Successful general public API responses use `public, s-maxage=60,
+stale-while-revalidate=600`; owner/admin data, missing resources and errors stay
+`private, no-store`. The web site-stats proxy uses 15/60 seconds on success and
+no-store on errors, with an uncached upstream request.
+
+Opponent data is the deliberate exception: API, data fetch and page rendering
+always remain no-store, even with working purge. The planned six-hour render
+window is unsafe when a failed purge could retain a removed profile or bypass
+the five-owner privacy floor. A bounded one-hour, 128-entry service LRU reduces
+materialization work, with a 64 KiB payload cap, two cold workers and current
+removal/identity/floor admission on every request. Generation invalidation
+rejects late fills. No extra endpoint, index or background corpus scan is
+required. A CDN must preserve this no-store exception.
+
+Validate configuration only against disposable local fixtures first: signed
+scope/body rejection, publish and removal invalidation, configured failed-purge
+opponent requests, public/private response headers and an upstream outage.
+Never use a real account mutation merely to smoke-test purge delivery.

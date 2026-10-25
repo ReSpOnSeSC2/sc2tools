@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Users } from "lucide-react";
 import { getJsonWithStatus } from "@/lib/serverApi";
+import { communityCacheOptions } from "@/lib/communityCache";
 import { Banner } from "@/components/Banner";
 import { Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
@@ -35,7 +36,7 @@ function loadBuilds(query: CommunityQuery) {
   params.set("sort", query.sort);
   if (query.search) params.set("q", query.search);
   params.set("limit", String(COMMUNITY_PAGE_SIZE)); params.set("offset", String(query.offset));
-  return getJsonWithStatus<CommunityBuildListResponse>("/v1/community/builds?" + params.toString());
+  return getJsonWithStatus<CommunityBuildListResponse>("/v1/community/builds?" + params.toString(), communityCacheOptions());
 }
 
 export async function generateMetadata({ searchParams }: { searchParams: CommunitySearchParams }): Promise<Metadata> {

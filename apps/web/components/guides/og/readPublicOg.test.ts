@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PUBLIC_OG_READ_TIMEOUT_MS, readPublicOg } from "./readPublicOg";
 
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 describe("bounded public social image reads", () => {
   it.each(["headers", "body"])("returns neutral data when %s are held", async phase => {
     vi.useFakeTimers();
@@ -32,5 +32,12 @@ describe("bounded public social image reads", () => {
   it("handles malformed JSON without leaking a raw response", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => { throw Error("private upstream detail"); } }));
     expect(await readPublicOg("/v1/community/builds/public-build")).toBeNull();
+  });
+  it("shares configured public Community tags without transporting the secret", async () => {
+    vi.stubEnv("COMMUNITY_REVALIDATE_SECRET", "local-secret");
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ title: "Public" })); vi.stubGlobal("fetch", fetcher);
+    await readPublicOg("/v1/community/builds/public-build");
+    expect(fetcher.mock.calls[0][1].next).toEqual({ revalidate: 300, tags: ["community", "community-build:public-build"] });
+    expect(JSON.stringify(fetcher.mock.calls)).not.toContain("local-secret");
   });
 });

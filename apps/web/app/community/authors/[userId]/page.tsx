@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getJsonWithStatus } from "@/lib/serverApi";
+import { communityCacheOptions } from "@/lib/communityCache";
 import { Card } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { AuthorProfile } from "@/components/community/AuthorProfile";
-import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import type { CommunityAuthorProfile } from "@/components/community/types";
 import { pageMetadata } from "@/lib/seo/pageMetadata";
 
@@ -31,6 +31,7 @@ interface PageParams {
 function loadProfile(userId: string) {
   return getJsonWithStatus<CommunityAuthorProfile>(
     `/v1/community/authors/${encodeURIComponent(userId)}`,
+    communityCacheOptions(),
   );
 }
 
@@ -40,14 +41,10 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   const { userId } = await params;
   const { data: profile, status } = await loadProfile(userId);
   if (!profile) {
-    return status === 404
-      ? {
+    if (status !== 404) throw new Error(UNAVAILABLE_TITLE);
+    return {
           title: "Author profile",
           description: "This SC2 Tools community profile is private or doesn't exist.",
-          robots: { index: false, follow: false },
-        }
-      : {
-          title: UNAVAILABLE_TITLE,
           robots: { index: false, follow: false },
         };
   }
@@ -67,15 +64,8 @@ export default async function CommunityAuthorPage({ params }: PageParams) {
   const { userId } = await params;
   const { data: profile, status } = await loadProfile(userId);
   if (!profile) {
-    return status === 404 ? (
-      <NotFoundPanel />
-    ) : (
-      <CommunityUnavailable
-        title={UNAVAILABLE_TITLE}
-        retryHref={`/community/authors/${encodeURIComponent(userId)}`}
-        standalone
-      />
-    );
+    if (status !== 404) throw new Error(UNAVAILABLE_TITLE);
+    return <NotFoundPanel />;
   }
   return <AuthorProfile profile={profile} />;
 }
