@@ -1,7 +1,7 @@
 "use strict";
 
 const { createHash } = require("crypto");
-const { OverlayTokenWrites, rotationBusy } = require("./overlayTokenWrites");
+const { OverlayTokenWrites } = require("./overlayTokenWrites");
 const { OverlayTokenRotation, replacementTargets } = require("./overlayTokenRotation");
 const { COLLECTIONS } = require("../config/constants");
 const { randomToken } = require("../util/hash");
@@ -195,8 +195,7 @@ class OverlayTokensService {
     const pending = this.db.overlayTokens
       .findOne({ token, revokedAt: null })
       .then((row) => {
-        if (!row || row._rotationPending) return null;
-        if (row._rotation) throw rotationBusy();
+        if (!row || row._rotationPending || row._rotation) return null;
         // Revocation/widget mutation removes the owning in-flight entry. A
         // lookup that was already awaiting Mongo must not return its stale
         // pre-mutation value to socket or HTTP waiters afterward.
@@ -360,7 +359,7 @@ class OverlayTokensService {
    * owner config before resolving chains or changing a generated source.
    * @param {string} userId */
   async replacementReceipts(userId) {
-    const rows = await this.db.overlayTokens.find({ userId, "_rotation.state": "complete" }, { projection: { token: 1, revokedAt: 1, _rotationPending: 1, _rotation: 1 }, maxTimeMS: 1000 }).sort({ createdAt: -1 }).limit(32).toArray();
+    const rows = await this.db.overlayTokens.find({ userId, "_rotation.state": "complete" }, { projection: { token: 1, revokedAt: 1, _rotationPending: 1, _rotation: 1 }, maxTimeMS: 1000 }).sort({ "_rotation.startedAt": -1 }).limit(32).toArray();
     if (!rows.length) return [];
     const targets = await replacementTargets(this.db.overlayTokens, userId, new Map(rows.map(row => [String(row.token), String(row._rotation.to)])), rows);
     return [...targets].flatMap(([from, target]) => target.token ? [{ from, to: target.token }] : []);

@@ -135,6 +135,23 @@ describe("DockClient", () => {
     expect(screen.getByText("Live chat")).toBeTruthy();
   });
 
+  it("shows a replacement reason for both socket and HTTP termination", async () => {
+    connection.status = "replaced";
+    const view = render(<DockClient token="old-token" />); await drain();
+    expect(screen.getByRole("heading", { name: "This Dock URL was replaced" })).toBeTruthy();
+    connection.status = "connected";
+    fetchMock.mockImplementation(async () => ({ status: 401, ok: false, json: async () => ({ error: { code: "overlay_token_replaced" } }) }));
+    view.rerender(<DockClient token="another-token" />); await drain();
+    expect(screen.getByRole("heading", { name: "This Dock URL was replaced" })).toBeTruthy();
+  });
+  it("treats a401 with a stalled reason body as terminal within a bounded time", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(async () => ({ status: 401, ok: false, json: () => new Promise(() => {}) }));
+    render(<DockClient token="stalled-body" />); await drain();
+    await act(async () => { await vi.advanceTimersByTimeAsync(501); });
+    expect(screen.getByRole("heading", { name: "This Dock link no longer works" })).toBeTruthy();
+  });
+
   it("shows a local reconnect status during a non-terminal outage", async () => {
     connection.status = "reconnecting";
     render(<DockClient token="token" />);

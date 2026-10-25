@@ -96,8 +96,13 @@ test("hides the reserved destination and drains a previously admitted Studio wri
   expect(await tokens.rotate("owner", original.token)).toEqual({ pending: true });
   expect(retired).toHaveBeenCalledWith(original.token);
   expect(await tokens.isReplaced(original.token)).toBe(true);
+  expect(await tokens.resolve(original.token)).toBeNull();
+  const express = require("express"), request = require("supertest");
+  const { buildMultichatRouter } = require("../src/routes/multichat");
+  const app = express(); app.use("/v1", buildMultichatRouter({ overlayTokens: tokens, studio, users: { getPreferences: jest.fn() }, tiktokRelay: {} }));
+  expect((await request(app).get(`/v1/multichat/${original.token}/config`).expect(401)).body.error.code).toBe("overlay_token_replaced");
   expect(await tokens.list("owner")).toEqual([expect.objectContaining({ token: original.token, rotationPending: true })]);
-  await expect(studio.update(original.token, { recap: true })).rejects.toMatchObject({ code: "overlay_rotation_pending" });
+  await expect(studio.update(original.token, { recap: true })).rejects.toMatchObject({ code: "invalid_overlay_token" });
   await expect(tokens.setProfile("owner", original.token, { v: 1, theme: {}, widgetOptions: {} }, 0)).rejects.toMatchObject({ status: 404 });
   await expect(tokens.rename("owner", original.token, "Changed")).rejects.toMatchObject({ status: 409 });
   release.resolve(); await writing;
@@ -233,4 +238,14 @@ test("cyclic or overlong replacement chains stop at a fixed hop bound", async ()
   const rows = Array.from({ length: 17 }, (_, i) => ({ token: String(i), revokedAt: new Date(), _rotation: { state: "complete", to: String((i + 1) % 17) } }));
   const result = await replacementTargets(collection, "owner", new Map([["source", "0"]]), rows);
   expect(result.get("source")).toEqual({}); expect(collection.find).not.toHaveBeenCalled();
+});
+
+
+test("recent rotation of an old-created token enters bounded offline receipts", async () => {
+  await db.overlayTokens.updateOne({ token: original.token }, { $set: { createdAt: new Date("1990-01-01") } });
+  const result = await tokens.rotate("owner", original.token);
+  await db.overlayTokens.insertMany(Array.from({ length: 33 }, (_, i) => ({ userId: "owner", token: `old-receipt-${i}`, createdAt: new Date("2100-01-01"), revokedAt: new Date("2000-01-01"), _rotation: { state: "complete", startedAt: new Date("2000-01-01"), to: result.token } })));
+  const receipts = await tokens.replacementReceipts("owner");
+  expect(receipts).toHaveLength(32);
+  expect(receipts).toContainEqual({ from: original.token, to: result.token });
 });

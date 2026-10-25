@@ -40,6 +40,8 @@ const server = http.createServer(async(req,res)=>{
  if(p==='/fixture.js'){res.setHeader('content-type','text/javascript');return res.end(fs.readFileSync('.tmp/token-rotation-fixture.js'))}
  if(p.startsWith('/fonts/')){res.setHeader('content-type','font/woff2');return res.end(fs.readFileSync(path.join('app',p)))}
  if(p==='/settings'){res.setHeader('content-type','text/html;charset=utf-8');return res.end(`<!doctype html><html data-theme="${url.searchParams.get('theme')==='dark'?'dark':'light'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}\n${fonts}</style></head><body><div id="root"></div><script src="/fixture.js"></script></body></html>`)}
+ const assetRoot=path.resolve('public'), asset=path.resolve(assetRoot,'.'+p);
+ if(asset.startsWith(assetRoot+path.sep)&&fs.existsSync(asset)&&fs.statSync(asset).isFile()){res.setHeader('content-type',({'.webp':'image/webp','.png':'image/png','.svg':'image/svg+xml'})[path.extname(asset)]||'application/octet-stream');return res.end(fs.readFileSync(asset))}
  res.statusCode=404;res.end();
 });
 (async()=>{
@@ -58,8 +60,9 @@ const server = http.createServer(async(req,res)=>{
    await page.getByRole('navigation',{name:'Overlay settings sections'}).getByRole('link',{name:'Widgets',exact:true}).click();await page.getByRole('button',{name:'Reveal',exact:true}).first().click();await expect(page.locator('code').first()).toContainText(`/overlay/${reserved}`);checks++;
    await page.getByRole('navigation',{name:'Overlay settings sections'}).getByRole('link',{name:'Setup',exact:true}).click();const dock=page.locator('section').filter({has:page.getByRole('heading',{name:'Add Stream Dock to OBS',exact:true})});await dock.getByRole('button',{name:'Reveal',exact:true}).click();await expect(dock.locator('code')).toContainText(`/dock/${reserved}`);checks++;
    await dock.getByRole('button',{name:'Hide URL',exact:true}).click();await page.getByRole('combobox',{name:'URLs shown for'}).selectOption('synthetic-live');await dock.getByRole('button',{name:'Reveal',exact:true}).click();await expect(dock.locator('code')).toContainText('/dock/synthetic-live');checks++;
-   await dock.getByRole('button',{name:'Hide URL',exact:true}).click();await page.getByRole('combobox',{name:'URLs shown for'}).scrollIntoViewIfNeeded();await page.screenshot({path:`../../docs/handoff/screenshots/token-rotation-selector-${theme}-${width}.png`});
-   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);checks+=2;
+   await dock.getByRole('button',{name:'Hide URL',exact:true}).click();await page.getByRole('navigation',{name:'Overlay settings sections'}).getByRole('link',{name:'Tokens',exact:true}).click();await page.getByRole('combobox',{name:'URLs shown for'}).scrollIntoViewIfNeeded();await page.screenshot({path:`../../docs/handoff/screenshots/token-rotation-selector-${theme}-${width}.png`});
+   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);expect(await page.locator('img[src="/logo-64.webp"]').evaluateAll(nodes=>nodes.length>0&&nodes.every(node=>node.complete&&node.naturalWidth>0))).toBe(true);checks+=3;
+   const before=writes.length;await page.evaluate(()=>{window.fixtureHeldToken=new Promise(resolve=>{window.releaseHeldToken=resolve})});await page.getByRole('textbox',{name:'Token label'}).fill('Held prior-owner draft');await page.getByRole('button',{name:'Save label',exact:true}).click();await page.evaluate(()=>window.fixtureAuth(null,false));await expect(page.getByRole('combobox',{name:'URLs shown for'})).toHaveCount(0);await page.evaluate(()=>window.releaseHeldToken('synthetic-old-session'));await page.waitForTimeout(100);expect(writes).toHaveLength(before);checks+=2;
    await context.close();console.log(JSON.stringify({width,theme,checks}));
   }
   expect(unexpected).toEqual([]);console.log(JSON.stringify({checks,syntheticLocalWrites:writes.length,nonlocalTraffic:'blocked'}));

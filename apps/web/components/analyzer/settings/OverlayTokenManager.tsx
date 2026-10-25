@@ -67,8 +67,8 @@ export function OverlayTokenManager({ items, selected, onSelect, onRefresh, comp
 
   if (!owner) return null;
   return <Card className="space-y-4">
-    <div className="flex flex-wrap items-end gap-3">
-      <label className="min-w-0 flex-1 text-body font-medium text-text">URLs shown for
+    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+      <label className="min-w-0 text-body font-medium text-text">URLs shown for
         <select className="mt-1 block w-full rounded-md border border-border bg-bg px-3 py-2 text-body" value={selected.token} disabled={busy || !owner || dirty} onChange={event => { setMessage(""); setError(""); onSelect(event.target.value); }}>
           {items.map(item => <option key={item.token} value={item.token}>{item.label} · {item.token.slice(-4)}{item.rotationPending ? " · rotation pending" : ""}</option>)}
         </select>

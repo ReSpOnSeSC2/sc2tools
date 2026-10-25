@@ -101,7 +101,7 @@ function usePlatformConfig(token: string, onInvalid: (replaced?: boolean) => voi
           `${API_BASE}/v1/multichat/${encodeURIComponent(token)}/config`,
           { cache: "no-store" },
         );
-        if (!cancelled && res.status === 401) { const body = await res.json().catch(() => null); if (!cancelled) onInvalid(body?.error?.code === "overlay_token_replaced"); return; }
+        if (!cancelled && res.status === 401) { const replaced = await responseWasReplaced(res); if (!cancelled) onInvalid(replaced); return; }
         if (!res.ok) return;
         const body: unknown = await res.json();
         if (!body || typeof body !== "object" || Array.isArray(body)) return;
@@ -167,6 +167,20 @@ function usePlatformConfig(token: string, onInvalid: (replaced?: boolean) => voi
     tts,
     loaded,
   };
+}
+
+/** An HTTP401 is already terminal; a malformed or stalled reason body must
+ * not keep the Dock alive. Ordinary responses identify replacement immediately.
+ */
+async function responseWasReplaced(response: Response): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve().then(() => response.json()).then(body => body?.error?.code === "overlay_token_replaced"),
+      new Promise<boolean>(resolve => { timer = setTimeout(() => resolve(false), 500); }),
+    ]);
+  } catch { return false; }
+  finally { clearTimeout(timer); }
 }
 
 const SECTIONS = [
@@ -264,7 +278,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
       const fetchSequence = ++studioFetchRef.current;
       try {
         const res = await fetch(studioUrl, { cache: "no-store" });
-        if (!cancelled && res.status === 401) { const body = await res.json().catch(() => null); if (!cancelled) onInvalid(body?.error?.code === "overlay_token_replaced"); return; }
+        if (!cancelled && res.status === 401) { const replaced = await responseWasReplaced(res); if (!cancelled) onInvalid(replaced); return; }
         if (!res.ok) return;
         const body: unknown = await res.json();
         if (
@@ -339,7 +353,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (rep
           body: JSON.stringify(patch),
           cache: "no-store",
         });
-        if (res.status === 401) { onInvalid(); return null; }
+        if (res.status === 401) { const replaced = await responseWasReplaced(res); onInvalid(replaced); return null; }
         if (!res.ok) {
           if (currentTokenRef.current === token) setError(`Save failed (${res.status}) — try again.`);
           return null;

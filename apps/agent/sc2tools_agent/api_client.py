@@ -570,6 +570,13 @@ class ApiClient:
             body={"token": token, "payload": payload},
         )
 
+    def get_overlay_tokens(self, *, interactive: bool = False) -> Dict[str, Any]:
+        """Fetch the authenticated owner's token inventory, including replacements."""
+        if not self.device_token:
+            raise PermissionError("agent_not_paired")
+        return (self._interactive("GET", "/v1/overlay-tokens") if interactive
+                else self._get("/v1/overlay-tokens", auth=True))
+
     def get_overlay_token(self, *, interactive: bool = False) -> Optional[str]:
         """Return the user's active overlay token, or ``None``.
 
@@ -584,15 +591,12 @@ class ApiClient:
         are filtered out; the first live one wins, matching how the
         website presents "your overlay URL".
         """
-        if not self.device_token:
-            raise PermissionError("agent_not_paired")
-        body = (self._interactive("GET", "/v1/overlay-tokens") if interactive
-                else self._get("/v1/overlay-tokens", auth=True))
+        body = self.get_overlay_tokens(interactive=interactive)
         for item in body.get("items") or []:
             if not isinstance(item, dict):
                 continue
             token = item.get("token")
-            if token and not item.get("revokedAt"):
+            if token and not item.get("revokedAt") and not item.get("rotationPending") and not item.get("replacedBy"):
                 return str(token)
         return None
 

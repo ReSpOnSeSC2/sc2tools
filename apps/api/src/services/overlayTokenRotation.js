@@ -33,7 +33,7 @@ class OverlayTokenRotation {
       const old = await this.db.overlayTokens.findOne({ userId, token, _rotationPending: { $ne: true } });
       if (!old || old.revokedAt && !old._rotation) throw Object.assign(new Error("not_found"), { status: 404, code: "not_found" });
       this.tokens.writes.block(token);
-      this.tokens.invalidate(token, true);
+      this.tokens.invalidate(token);
       // Atomic claim preserves the exact config current at admission closure.
       // A failed insert/response keeps this same reserved credential on retry.
       if (!old._rotation) {
@@ -41,7 +41,7 @@ class OverlayTokenRotation {
           $set: { _rotation: { to: randomToken(24), startedAt: new Date(), state: "pending" } },
         });
       }
-      this.tokens.invalidate(token, true);
+      this.tokens.invalidate(token);
       const source = await this.db.overlayTokens.findOne({ userId, token });
       if (!source?._rotation?.to) throw rotationBusy();
       const replacement = String(source._rotation.to);
