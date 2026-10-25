@@ -650,6 +650,66 @@ describe("R2DetailsStore", () => {
     expect((await store.read("u1", "ordered")).buildLog).toEqual(["[2:45] Stalker"]);
   });
 
+  test.each([
+    [["[0:00] Hatchery"], [], false],
+    [[], ["[0:00] Hatchery"], true],
+  ])("opponent metadata survives delayed R2 acknowledgement and later partial writes: %j -> %j", async (olderLog, newerLog, available) => {
+    const date = new Date();
+    let release, entered;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const arrived = new Promise((resolve) => { entered = resolve; });
+    const writeMetadata = store._writeMetadata.bind(store);
+    const pause = jest.spyOn(store, "_writeMetadata").mockImplementation(async (...args) => {
+      entered(); await gate; return writeMetadata(...args);
+    });
+    const older = store.write("u1", "opponent-ordered", date, { oppBuildLog: olderLog });
+    await arrived;
+    const concurrent = new R2DetailsStore({ client: s3, bucket: "test-bucket", prefix: "details", gameDetailsCollection: collection });
+    try {
+      await concurrent.write("u1", "opponent-ordered", date, { oppBuildLog: newerLog });
+      await concurrent.write("u1", "opponent-ordered", date, { apmCurve: { has_data: false } });
+    } finally { release(); await older; pause.mockRestore(); }
+    const metadata = await collection.findOne({ userId: "u1", gameId: "opponent-ordered" });
+    expect(metadata.opponentListDetail).toEqual({ v: 1, opponentBuildOrder: { v: 1, available } });
+    expect(metadata.storedIn).toBe("r2");
+    expect((await store.read("u1", "opponent-ordered")).oppBuildLog).toEqual(newerLog);
+    expect(await store.read("u1", "opponent-ordered")).not.toHaveProperty("opponentListDetail");
+  });
+
+  test("a stale R2 summary CAS cannot overwrite opponent facts published after its successful HEAD", async () => {
+    const date = new Date();
+    await store.write("u1", "opponent-cas", date, { oppBuildLog: [] });
+    let release, entered, paused = false;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const arrived = new Promise((resolve) => { entered = resolve; });
+    const updateOne = collection.updateOne.bind(collection);
+    const pause = jest.spyOn(collection, "updateOne").mockImplementation(async (filter, update, options) => {
+      if (!paused && update.$set?.opponentListDetail?.opponentBuildOrder?.available === true) {
+        paused = true; entered(); await gate;
+      }
+      return updateOne(filter, update, options);
+    });
+    const older = store.write("u1", "opponent-cas", date, { oppBuildLog: ["[0:00] Hatchery"] });
+    await arrived;
+    const concurrent = new R2DetailsStore({ client: s3, bucket: "test-bucket", prefix: "details", gameDetailsCollection: collection });
+    try { await concurrent.write("u1", "opponent-cas", date, { oppBuildLog: [] }); }
+    finally { release(); await older; pause.mockRestore(); }
+    expect((await collection.findOne({ userId: "u1", gameId: "opponent-cas" })).opponentListDetail)
+      .toEqual({ v: 1, opponentBuildOrder: { v: 1, available: false } });
+    expect((await store.read("u1", "opponent-cas")).oppBuildLog).toEqual([]);
+  });
+
+  test("R2 metadata is explicitly last known indexing when a later PUT succeeds but metadata fails", async () => {
+    const date = new Date();
+    await store.write("u1", "opponent-unknown", date, { oppBuildLog: ["[0:00] Hatchery"] });
+    const fail = jest.spyOn(collection, "updateOne").mockRejectedValueOnce(new Error("metadata unavailable"));
+    await expect(store.write("u1", "opponent-unknown", date, { oppBuildLog: [] })).rejects.toThrow("metadata unavailable");
+    fail.mockRestore();
+    expect((await store.read("u1", "opponent-unknown")).oppBuildLog).toEqual([]);
+    expect((await collection.findOne({ userId: "u1", gameId: "opponent-unknown" })).opponentListDetail)
+      .toEqual({ v: 1, opponentBuildOrder: { v: 1, available: true } });
+  });
+
   test("historical R2 backfill projects the real source arrays and leaves the heavy object untouched", async () => {
     const blob = { ...SAMPLE_BLOB, macroBreakdown: {
       stats_events: [{ time: 300, food_workers: 40, army_value: 3000 }],

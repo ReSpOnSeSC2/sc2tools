@@ -35,8 +35,9 @@ function buildOpponentsRouter(deps) {
         limit,
         before,
         filters,
+        ...(req.query.listDetails === "1" ? { includeListDetails: true } : {}),
       });
-      res.json(result);
+      res.set("Cache-Control", "private, no-store").json(result);
     } catch (err) {
       next(err);
     }
