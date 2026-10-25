@@ -3,6 +3,7 @@
 const { gamesMatchStage } = require("../util/parseQuery");
 const { computeDossierExtras } = require("./buildDossier");
 const { strengthPipeline, finishStrength } = require("./strengthAdjusted");
+const { OPPONENT_RACE_GROUP, OPPONENT_RACE_PROJECT } = require("../util/opponentRaceCounts");
 const {
   BUILD_INTENT_LABEL_PROJECTION,
   COUNTED_BY_CHECKIN_EXPR,
@@ -87,6 +88,7 @@ class BuildsService {
             total: { $sum: 1 },
             checkins: { $sum: COUNTED_BY_CHECKIN_EXPR },
             lastPlayed: { $max: "$date" },
+            ...OPPONENT_RACE_GROUP,
           },
         },
         {
@@ -98,6 +100,7 @@ class BuildsService {
             total: 1,
             checkins: 1,
             lastPlayed: 1,
+            myMatchups: OPPONENT_RACE_PROJECT,
             winRate: {
               $cond: [{ $gt: ["$total", 0] }, { $divide: ["$wins", "$total"] }, 0],
             },

@@ -628,7 +628,7 @@ describe("rivals and responsive opponent consumers", () => {
     render(<OpponentsTab />); expect(within(screen.getByRole("table")).getAllByRole("row")).toHaveLength(101);
     fireEvent.click(screen.getByRole("button", { name:"Export CSV" }));
     expect(downloadCsvMock).toHaveBeenCalledTimes(1); const [filename,csv] = downloadCsvMock.mock.calls[0];
-    expect(filename).toBe("sc2tools-opponents-all-time.csv"); expect(csv).toContain("Player 1499"); expect(csv.split("\r\n")).toHaveLength(1504);
+    expect(filename).toMatch(/^sc2tools-opponents-\d{4}-\d{2}-\d{2}\.csv$/); expect(csv).toContain("Player 1499"); expect(csv.split("\r\n")).toHaveLength(1504);
   });
   it("passes explicit recent counts to Hot rematch and keeps starred rivals separate from Regulars", () => {
     const lastPlayed = new Date().toISOString();

@@ -28,6 +28,14 @@ export function toCsv<Row extends object>({ columns, rows, scope, exportedAt = n
   return `\uFEFF${lines.join("\r\n")}\r\n`;
 }
 
+/** The user's calendar date, rather than UTC's date near local midnight. */
+export function csvFilename(section: string, exportedAt = new Date()): string {
+  if (!Number.isFinite(exportedAt.getTime())) throw new RangeError("Invalid CSV export date");
+  const name = section.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 64) || "table";
+  const date = `${exportedAt.getFullYear()}-${String(exportedAt.getMonth() + 1).padStart(2, "0")}-${String(exportedAt.getDate()).padStart(2, "0")}`;
+  return `sc2tools-${name}-${date}.csv`;
+}
+
 export function downloadCsv(filename: string, csv: string): void {
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const anchor = document.createElement("a");

@@ -5,6 +5,8 @@ import { POOL_MAX_AGE_MS } from "@/lib/currentMapPool";
 
 const state = vi.hoisted(() => ({ now: Date.now(), filters: { race: "P", opp_race: "T", since: "2026-10-01" } as Record<string, string>, source: "persisted" as "persisted" | "fallback", age: 0, error: false, stale: false, paths: [] as (string | null)[], copied: vi.fn(), retry: vi.fn() }));
 const CELLS = [{ map: "Alpha LE", matchup: "vs Z", wins: 1, losses: 9, total: 10 }, { map: "Beta", matchup: "vs Z", wins: 9, losses: 1, total: 10 }, { map: "Tiny", matchup: "vs Z", wins: 0, losses: 4, total: 10 }];
+const csvExport = vi.hoisted(() => ({ download: vi.fn() }));
+vi.mock("@/lib/csvExport", async original => ({ ...(await original<typeof import("@/lib/csvExport")>()), downloadCsv: csvExport.download }));
 vi.mock("@/lib/filterContext", async (original) => ({ ...(await original<typeof import("@/lib/filterContext")>()), useFilters: () => ({ filters: state.filters, dbRev: 7, seasons: [{ isCurrent: true, start: "2026-09-15" }] }) }));
 vi.mock("@/lib/useSeasons", () => ({ useSeasons: () => ({ data: { mapPool: ["Alpha", "Beta", "Tiny"], mapPoolSource: state.source, mapPoolFetchedAt: state.now - state.age }, mutate: vi.fn() }) }));
 vi.mock("@/lib/useGuideMapPool", () => ({ useGuideMapPool: () => ({ data: { computedAt: "2026-10-20", era: "after", maps: [{ map: "Alpha", cells: [{ matchup: "PvZ", winRate: 0.55 }] }] } }) }));
@@ -16,6 +18,17 @@ beforeEach(() => { state.now = Date.now(); state.age = 0; state.source = "persis
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe("map veto planner", () => {
+  it("exports the twelve displayed pool cells, local ranking and window without extra reads", () => {
+    csvExport.download.mockReset(); render(<MapVetoPlanner openGames={vi.fn()} />);
+    const requests = state.paths.length;
+    fireEvent.click(screen.getByRole("button", { name: /Export these rows as CSV/ }));
+    const [filename, csv] = csvExport.download.mock.calls[0];
+    expect(filename).toMatch(/^sc2tools-map-pool-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(csv).toContain("ranking vs Z"); expect(csv).toContain("window filters");
+    expect(csv.split("\r\n").filter((line: string) => /^(Alpha|Beta|Tiny),/.test(line))).toHaveLength(12);
+    expect(csv).toContain("Alpha,vs Z,1,9,10,10,0.1,0.55,true");
+    expect(state.paths.length).toBe(requests);
+  });
   it("expires suggestions on a long-open page while preserving the selected 90-day sample anchor", () => {
     vi.useFakeTimers(); vi.setSystemTime(state.now); state.age = POOL_MAX_AGE_MS - 30_000;
     render(<MapVetoPlanner openGames={vi.fn()} />);
