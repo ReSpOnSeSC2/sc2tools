@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { SectionNav } from "@/components/ui/SectionNav";
 
-const SECTIONS = [{ id: "overview", label: "Overview" }, { id: "replay", label: "Replay" }, { id: "macro", label: "Macro" }, { id: "builds", label: "Builds" }];
+const SECTIONS = [{ id: "overview", label: "Overview" }, { id: "battle-report", label: "Battle report" }, { id: "replay", label: "Replay" }, { id: "macro", label: "Macro" }, { id: "builds", label: "Builds" }];
 
 /** Native anchors keep the player mounted while the page is being explored. */
 export function GameWorkspaceNav() {

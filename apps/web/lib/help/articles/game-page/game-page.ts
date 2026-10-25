@@ -58,6 +58,7 @@ const article: HelpArticle = {
       head: ["Card", "What it shows"],
       rows: [
         ["Build check-in", "Which build you were going for, and the opponent's build if the replay named it wrong."],
+        ["Battle report", "A short factual account in three tones, captioned map or chart snapshots, replay-time links and plain-text/Markdown copy. See [Battle reports](/help/battle-reports)."],
         ["Macro", "The full macro breakdown, priced leaks, composition and match timeline. Choose Army, Workers, Supply, Income, Bank or APM when measured. Your selected metrics are remembered in this browser."],
         ["Map replay", "The game played back on the map. See [Map replay](/help/game-page-replay)."],
         ["Mechanics", "This game's macro score, spending quotient (SQ), APM, supply blocks and your race mechanics. Click a supply block to watch that moment in the replay."],
@@ -75,7 +76,7 @@ const article: HelpArticle = {
     { type: "paragraph", text: "When the exact casualty ledger is absent, sampled army-value drops estimate fight windows. Those rows are clearly marked estimated resources; they do not claim exact mineral, gas, supply or unit losses. Both sides need samples bracketing the window without gaps longer than 30 seconds to classify its trade. An explicit empty casualty ledger does not invent estimated fights. The ledger switches between a table and cards as space allows." },
     { type: "paragraph", text: "Wins also show the largest priced macro leak under Still cost you, so the next practice target remains visible. Draws get the same story. If the available data has no meaningful story, the empty Result placeholder disappears and Mechanics uses the row; a loss keeps its existing loss-analysis tab." },
     { type: "heading", text: "Reading your macro breakdown", anchor: "macro" },
-    { type: "paragraph", text: "Use Overview, Replay, Macro and Builds to move around this game without closing the replay. Macro includes the score's penalty bars, the biggest leaks and what went well. A priced leak estimates the resources or production time lost under fixed rules; it is a comparison aid, not a claim that it decided the result. Select a leak or a chart time to watch that moment. Bank adds unspent minerals and gas; missing samples stay unknown." },
+    { type: "paragraph", text: "Use Overview, Battle report, Replay, Macro and Builds to move around this game without closing the replay. Macro includes the score's penalty bars, the biggest leaks and what went well. A priced leak estimates the resources or production time lost under fixed rules; it is a comparison aid, not a claim that it decided the result. Select a leak or a chart time to watch that moment. Bank adds unspent minerals and gas; missing samples stay unknown." },
     { type: "heading", text: "Recompute analysis", anchor: "recompute" },
     { type: "paragraph", text: "Recompute analysis asks your connected desktop app to parse the existing replay again. It records nothing new and does not generate accurate map playback. Keep the app running with access to that replay. A reparse usually takes seconds; a busy app or a long replay can take longer. The request acknowledgement means the job was queued, not finished. This page refreshes the report for up to a minute; if it still has not arrived, check the desktop app and retry. The button explains when the app is offline. Connection or server errors have Retry instead." },
     { type: "heading", text: "Jump to any moment", anchor: "jump-to-any-moment" },
@@ -110,7 +111,7 @@ const article: HelpArticle = {
     {"type": "heading", "text": "When a section doesn't load", "anchor": "section-recovery"},
     {"type": "paragraph", "text": "A ‘Couldn't load …’ message with Retry means a temporary connection or server problem. Your replay is safe; retry that section without leaving the rest of the page. ‘Not computed yet’ or a missing-analysis explanation means this game has no analysis for that section yet. Loading placeholders mean the request is still running. If a section crashes, its Try again button remounts it while the rest of the page stays available."},
   ],
-  related: ["game-page-replay", "game-page-accurate-playback", "macro", "build-check-in"],
+  related: ["battle-reports", "game-page-replay", "game-page-accurate-playback", "macro", "build-check-in"],
 };
 
 export default article;

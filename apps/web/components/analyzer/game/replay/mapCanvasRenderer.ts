@@ -17,6 +17,7 @@ import { ME_ARMY, ME_WORKER, OPP_ARMY, OPP_WORKER, ME_SHEET, OPP_SHEET, BATTLE_W
 let fogCanvas: HTMLCanvasElement | null = null;
 
 interface DrawEntity {
+  side: "me" | "opp";
   x: number;
   y: number;
   cellPx: number;
@@ -41,7 +42,7 @@ function pushEntity(): DrawEntity {
   let e = entityPool[entityCount];
   if (!e) {
     e = {
-      x: 0, y: 0, cellPx: 0, handle: null, color: "red", facing: 0, frame: 0,
+      side: "me", x: 0, y: 0, cellPx: 0, handle: null, color: "red", facing: 0, frame: 0,
       name: "", iconKind: "unit", tint: "", dot: "", alpha: 1, worker: false,
     };
     entityPool[entityCount] = e;
@@ -67,6 +68,8 @@ function pushFog(x: number, y: number, r: number): void {
   fogCount += 1;
 }
 
+export type MapFrameStyle = { entities: "dots"; palette?: { me?: string; opp?: string } };
+
 export function renderFrame(
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement,
@@ -75,7 +78,9 @@ export function renderFrame(
   layout: HTMLImageElement | null,
   view: ViewTransform,
   markers?: readonly ReplayMapMarker[],
+  style?: MapFrameStyle,
 ) {
+  const dots = style?.entities === "dots";
   const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
   const w = canvas.width / dpr;
   const h = canvas.height / dpr;
@@ -102,7 +107,7 @@ export function renderFrame(
   // Icon tokens keep the old power-of-two quantisation so their cache
   // stays tiny (≤3 sizes); sprite atlases bucket internally.
   const iconDpr = dpr * Math.min(4, Math.pow(2, Math.ceil(Math.log2(Math.max(1, view.z)))));
-  beginSpriteFrame(rasterScale);
+  if (!dots) beginSpriteFrame(rasterScale);
 
   // Visible scene rect, for culling. A scene point p is drawn at
   // ox + p*z, so the visible range is [-ox/z, (w-ox)/z].
@@ -231,6 +236,7 @@ export function renderFrame(
     const facing = unitFacingAt(u, t, pos, attack);
 
     const e = pushEntity();
+    e.side = u.owner;
     e.x = sx;
     e.y = sy;
     e.cellPx = cellPx;
@@ -276,6 +282,7 @@ export function renderFrame(
     if (sy + cellPx < cullY0 || sy - cellPx > cullY1) continue;
 
     const e = pushEntity();
+    e.side = b.owner;
     e.x = sx;
     e.y = sy;
     e.cellPx = cellPx;
@@ -360,7 +367,7 @@ export function renderFrame(
     ctx.stroke();
   }
 
-  drawSpellEffects(ctx, playback, t, proj, view, w, h, "ground");
+  if (!dots) drawSpellEffects(ctx, playback, t, proj, view, w, h, "ground");
 
   /* ── Painter's pass ────────────────────────────────────────────
    * Back to front by ground-point Y. Sorting an index array keeps the
@@ -373,6 +380,16 @@ export function renderFrame(
   let alpha = 1;
   for (let i = 0; i < entityCount; i += 1) {
     const e = entityPool[drawOrder[i]];
+    if (dots) {
+      const radius = Math.max(2.5 / view.z, Math.min(4 / view.z, e.cellPx * 0.18));
+      const color = style.palette?.[e.side] || e.dot;
+      ctx.beginPath();
+      if (e.iconKind === "building") ctx.rect(e.x - radius, e.y - radius, radius * 2, radius * 2);
+      else ctx.arc(e.x, e.y, radius, 0, Math.PI * 2);
+      if (e.side === "me") { ctx.fillStyle = color; ctx.fill(); }
+      else { ctx.strokeStyle = color; ctx.lineWidth = 1.8 / view.z; ctx.stroke(); }
+      continue;
+    }
     if (e.alpha !== alpha) {
       ctx.globalAlpha = e.alpha;
       alpha = e.alpha;
@@ -403,10 +420,9 @@ export function renderFrame(
     }
   }
   if (alpha !== 1) ctx.globalAlpha = 1;
-  endSpriteFrame();
+  if (!dots) endSpriteFrame();
 
-  drawSpellEffects(ctx, playback, t, proj, view, w, h, "overlay");
-  drawWeaponEffects(ctx, playback, t, proj, view);
+  if (!dots) { drawSpellEffects(ctx, playback, t, proj, view, w, h, "overlay"); drawWeaponEffects(ctx, playback, t, proj, view); }
 
   // Battle pulses near their marker time — drawn last so the amber
   // ring reads over the sprites it is calling attention to.
