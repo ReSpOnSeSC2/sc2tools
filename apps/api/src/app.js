@@ -80,6 +80,7 @@ const { AggregationsService } = require("./services/aggregations");
 const { MacroReportService } = require("./services/macroReport");
 const { StreakService } = require("./services/streak");
 const { BuildsService } = require("./services/builds");
+const { MmrExpectationService } = require("./services/mmrExpectation");
 const { StrategyPhasesService } = require("./services/strategyPhases");
 const { BuildsMmrStatsService } = require("./services/buildsMmrStats");
 const {
@@ -442,6 +443,7 @@ function makeServices(deps, clerk) {
   const leaguePercentiles = new LeaguePercentilesService(deps.db, {
     logger: deps.logger,
   });
+  const mmrExpectation = new MmrExpectationService(deps.db);
   const gameContext = new GameContextService(deps.db, { leaguePercentiles, gameDetails });
   // Ladder Meta Radar — effectiveness-weighted opener meta by league
   // band + matchup from the corpus (jobs/ladderMetaRecomputeJob),
@@ -608,10 +610,10 @@ function makeServices(deps, clerk) {
   };
   // Reconnect every enabled bot on boot — best-effort, non-blocking.
   void twitchChatBot.restoreAll();
-  const aggregations = new AggregationsService(deps.db);
+  const aggregations = new AggregationsService(deps.db, { mmrExpectation });
   const macroReport = new MacroReportService(deps.db);
   const streak = new StreakService(deps.db);
-  const builds = new BuildsService(deps.db);
+  const builds = new BuildsService(deps.db, { mmrExpectation });
   const buildsMmrStats = new BuildsMmrStatsService(deps.db);
   const catalog = new CatalogService(deps.db);
   // Eager-load the JSON catalog so the first build-order /
@@ -844,7 +846,7 @@ function makeServices(deps, clerk) {
     db: deps.db,
     pulseDirectory,
   });
-  const adminGlobalTrends = new AdminGlobalTrendsService({ db: deps.db });
+  const adminGlobalTrends = new AdminGlobalTrendsService({ db: deps.db, mmrExpectation });
   // Atlas Cloud Backup health + in-app snapshot counts for /admin/health;
   // server.js runs the hourly stale-backup alert against the same cache.
   const backupStatus = new BackupStatusService({
@@ -926,6 +928,7 @@ function makeServices(deps, clerk) {
     pulseIntel,
     pulseLinks,
     leaguePercentiles,
+    mmrExpectation,
     gameContext,
     fingerprintPopulationCalibration,
     skillFingerprint,

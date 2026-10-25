@@ -1,9 +1,10 @@
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FiltersContext, type AnalyzerFilters } from "@/lib/filterContext";
+import type { StrengthFields } from "@/lib/strengthAdjusted";
 
 const harness = vi.hoisted(() => ({
-  rows: [] as Array<{ name: string; total: number; wins: number; losses: number; winRate: number; checkins?: number }>,
+  rows: [] as Array<StrengthFields & { name: string; total: number; wins: number; losses: number; winRate: number; checkins?: number }>,
   loaded: true, loading: false, error: null as Error | null,
   mutate: vi.fn(async () => undefined), paths: [] as string[],
 }));
@@ -46,6 +47,19 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Builds tab filtered custom build integration", () => {
+  it("sorts rated wins above expected and shows uncertainty without discarding partial coverage", () => {
+    harness.rows = [
+      { name: "Better adjusted", total: 7, wins: 5, losses: 2, winRate: 5/7, ratedGames: 4, ratedWins: 2, expectedWins: 1.5, winsAboveExpected: .5, excludedNoMmr: 3, winRateRange: { low: .36, high: .92 } },
+      { name: "Higher raw rate", total: 10, wins: 9, losses: 1, winRate: .9, ratedGames: 10, ratedWins: 9, expectedWins: 9.5, winsAboveExpected: -.5 },
+    ];
+    render(<BuildsTab />); const table = within(screen.getByRole("table"));
+    fireEvent.click(table.getByRole("button", { name: "Vs expected" }));
+    expect(table.getAllByRole("row")[1].textContent).toContain("Better adjusted");
+    expect(table.getByRole("img", { name: /2 rated wins − 1.50 expected wins/ }).title).toContain("3 missing paired ratings");
+    expect(table.getByRole("img", { name: /95% Wilson range 36.0 to 92.0/ })).toBeTruthy();
+    fireEvent.click(table.getByRole("button", { name: "Vs expected" })); expect(table.getAllByRole("row")[1].textContent).toContain("Higher raw rate");
+  });
+
   it("ranks custom and detected builds in one table with the same dossier action", () => {
     render(<BuildsTab />);
     const table = within(screen.getByRole("table"));

@@ -23,9 +23,10 @@ const ALLOWED_METHODS = new Set([
 const NET_METHODS = new Set(["netMmrByMatchup", "netMmrByOpponent"]);
 
 class AdminGlobalTrendsService {
-  /** @param {{db: import('../db/connect').DbContext}} deps */
-  constructor({ db }) {
+  /** @param {{db: import('../db/connect').DbContext,mmrExpectation?:Pick<import('./mmrExpectation').MmrExpectationService,'curve'>}} deps */
+  constructor({ db, mmrExpectation }) {
     this.db = db;
+    this.mmrExpectation = mmrExpectation;
     this.queries = new GlobalTrendsQueries();
     this.history = new GlobalTrendsHistory(db, (work) => this.queries.execute(work));
     this.refreshedAfter = 0;
@@ -171,7 +172,7 @@ class AdminGlobalTrendsService {
     const agg = new AggregationsService({
       games: /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ (games)),
       gameDetails: /** @type {import('mongodb').Collection} */ (/** @type {unknown} */ (gameDetails)),
-    });
+    }, { mmrExpectation: this.mmrExpectation });
     // Every time chart now emits the same date-range probe. The query cache
     // shares it across charts and requested intervals instead of rescanning.
     /** @type {any} */ (agg)._fitInterval = (
