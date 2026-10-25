@@ -53,7 +53,7 @@ for Strength, Mechanics, Story and stream titles are preserved.
   parity and shared route admission.
 - API/web typechecks and strict scoped lint pass for the foundation.
 - Required-engine integrated production build and every unchanged bundle budget
-  passed: Today 227.3/240 kB, game 316.7/440, list 120/180, dossier 475.2/500,
+  passed: Today 227.3/240 kB, game 316.7/440, list 120/180, dossier 475.5/500,
   overlay 233.9/240. Existing giant-file/hook warnings remain baseline warnings.
 - 79 local browser assertions at 320/390/768/1440 in light/dark, with actual
   consumers and production CSS/fonts. Captures live under
@@ -64,11 +64,15 @@ for Strength, Mechanics, Story and stream titles are preserved.
 ## Integration / remaining work
 
 Frozen Dossier #714 and replay-library #716 (`fb528645`) integrated cleanly at
-`b7b52b8b`, preserving installed-native compatibility, all visibility markers
-and existing cache invalidators. Game-control changes also invalidate Rivals,
-with a fence on admitted reads. Root's review accepted the shared CSV scope
-extraction. Integrate #716's final account-case follow-up (`cd44666a`) and fresh
-main before remote gates; preserve both packs and refresh any required evidence.
+`b7b52b8b`; the final account-case follow-up (`cd44666a`) then integrated at
+`f07298b9`. Fresh main #716 (`4a1e95a8`) was reconciled at `343a94c8`: its
+apps/changelog tree was proven identical to the already integrated dependency,
+and conflict resolution left the tested source tree byte-identical. Installed
+native compatibility, visibility markers and all existing cache invalidators
+are retained. Game-control changes also invalidate Rivals with an admitted-read
+fence. Root and independent reviews accepted API/CSV ownership and scope; the
+independent hook review is also clear after the fixes below. Final production
+build/budgets and 79 browser assertions were rerun on that reviewed source.
 Final CI/PR/merge evidence will be appended after the expected head is green.
 Independent review found and corrected two client boundaries before first CI:
 all auth fields now define owner scope, including loading/signout with a stale
@@ -77,4 +81,5 @@ and allows retry. Fifteen deterministic tests cover these paths and late
 settlement, including a held cache mutation; active controller identity also
 fences return-to-same-owner races. The initial preference read uses the existing
 API deadline too, with explicit retry recovery.
+Design decisions and flat-resource limits are recorded in ADR 0038.
 No production job, migration, real account write or provider operation was run.
