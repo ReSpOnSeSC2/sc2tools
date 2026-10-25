@@ -33,4 +33,16 @@ No engine source changed. The expected engine remains `25b300818c31d41b`; coordi
 
 ## Reproduction
 
+Released Reference editor and passive-scroll main `9f9e6439` are integrated at
+`6ed37753`. The only conflict was additive owner-setup documentation; both
+sections are retained. All product files merged cleanly. The new integration
+passes 77 actual Landing/editor/reference consumers in 11 files, a production
+build and every unchanged budget (landing 191.2/215, Today 238.7/240 kB). The
+actual Next/Webpack worker and phone-editor smoke passes three cases with one
+expected project skip in 15.6 seconds, retaining zero upload/API fallback and
+the notes/rules/overflow assertions. Both loopback servers exited; 3210/8080
+were verified released. This is a legitimate released-source integration;
+the earlier Vercel quota failure is not bypassed, and every final-head gate
+remains required before merge.
+
 From `apps/web`, run the focused landing/FAQ Vitest files, `tsc --noEmit`, strict scoped lint, then a local production build with the existing Instant flag set to `all` **only in that test process** and synthetic Clerk/API configuration. Keep API origins loopback. Run the new landing case in `tests/e2e/try-instant.spec.ts` on desktop-1280 and mobile-360, then `node tests/manual/landing-demo.cjs` against final production CSS with the local Playwright browser path configured. Every browser context blocks external traffic. Manual evidence uses `docs/handoff/screenshots/landing-demo-*.png`.
