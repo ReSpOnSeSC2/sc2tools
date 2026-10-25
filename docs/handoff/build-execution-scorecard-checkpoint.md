@@ -43,7 +43,17 @@ browser assertion now guards it. Seven reviewed representatives are committed
 under `docs/handoff/screenshots/build-execution-*`; full evidence remains in
 `.cache/build-execution-evidence`. Root UI/visual signoff is complete.
 
-Remaining: current-main/dependency reconciliation (including the user-priority
-shared tab-strip fix), a coordinated push/PR, exact-head CI/Vercel and merge.
+The approved shared tab-strip fix `97cd44c6` is integrated, then reconciled
+with its actual main squash `9f9e6439` at `deb0e438`. Both merges preserve
+the reviewed Scorecard source and all additive changelog entries; the actual
+squash reconciliation changes no application bytes. The live opponent section
+order is unchanged. All 133 affected web consumers across 14 suites, full web
+types and strict changed-source lint pass. The final isolated Next-only build
+passes every unchanged budget (opponent 448.3/500 kB); refreshed browser proof
+passes 132 Scorecard checks/15 captures and 53 passive-scroll checks, with
+nonlocal traffic blocked and zero writes. No shared engine rebuild was needed.
+
+Remaining: coordinated draft PR, Dossier dependency merge, exact-head
+CI/Vercel and merge.
 No production/provider operations or environment/version/release changes.
 Required-engine builds must coordinate current 25b; never run old f96 prebuilds.
