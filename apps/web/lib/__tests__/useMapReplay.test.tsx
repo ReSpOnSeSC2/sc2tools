@@ -45,6 +45,18 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("shared map replay recording controller", () => {
+  it("shows a failed refresh over an existing recording instead of reporting the old artifact as the new Ready result", async () => {
+    harness.api.data = payload("engine");
+    harness.statusData = { rebuild: null };
+    harness.api.request.mockRejectedValue(new Error("Desktop is busy."));
+    const hook = renderHook(() => useMapReplay("existing"));
+    expect(hook.result.current.phase).toBe("ready");
+    await act(async () => hook.result.current.refresh());
+    expect(hook.result.current.refreshing).toBe(false);
+    expect(hook.result.current.phase).toBe("failed");
+    expect(hook.result.current.refreshMessage).toBe("Desktop is busy.");
+    expect(hook.result.current.playback?.fidelity?.positions).toBe("engine");
+  });
   it("polls only lightweight status and downloads the completed record once", async () => {
     harness.api.data = payload("engine");
     harness.statusData = { rebuild: null };

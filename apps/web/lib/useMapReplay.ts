@@ -258,8 +258,8 @@ export function useMapReplay(gameId: string | null) {
 
   const phase: PlaybackPhase = state.refreshing ? jobStatus === "uploading" ? "uploading"
     : jobStatus === "processing" ? "recording" : "requested"
-    : state.completedRequestId || recordedFidelity?.positions === "engine" && recordedFidelity.complete !== false && recordedFidelity.attacks === "observed" ? "ready"
-    : state.startedAt > 0 && state.refreshMessage ? "failed" : "idle";
+    : state.startedAt > 0 && state.refreshMessage && !state.completedRequestId ? "failed"
+    : state.completedRequestId || recordedFidelity?.positions === "engine" && recordedFidelity.complete !== false && recordedFidelity.attacks === "observed" ? "ready" : "idle";
   return {
     playback,
     manifest,

@@ -307,6 +307,7 @@ export function ReplayStage({
         oppRace={oppRace}
       />
 
+      <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-2 xl:flex-row xl:items-stretch xl:gap-2.5 xl:p-2.5">
         {wide && showProduction ? (
           <ProductionRail
@@ -425,6 +426,7 @@ export function ReplayStage({
         </> : null}
       </section> : null}
 
+      </div>
     </section>
   );
 }
