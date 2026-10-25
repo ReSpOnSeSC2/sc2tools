@@ -10,11 +10,24 @@ const accounts = [{ handle: '2-S2-1-100', label: 'Main', region: 'EU', leagueId:
 const game = { gameId: 'synthetic-game', date: '2026-10-24T12:00:00Z', result: 'Victory', map: 'Blackrock LE', durationSec: 630, playerCount: 2, matchFormat: '1v1', myRace: 'Protoss', myBuild: 'PvZ - Stargate into Glaives', myMmr: 4700, macroScore: 72, opponent: { displayName: 'Synthetic rival', race: 'Zerg', mmr: 4750 }, matchup: 'PvZ', replayAvailable: false };
 let checks = 0;
 const csvRequests = [];
+const mutations = [], hiddenGames = new Map();
+const resetHidden = () => { hiddenGames.clear(); hiddenGames.set('hidden-one', { gameId: 'hidden-one', map: 'Hidden synthetic map', opponent: 'Synthetic rival', reason: 'friend_played', excluded: true }); hiddenGames.set('pending-one', { gameId: 'pending-one', map: '', opponent: '', reason: null, pendingDeletion: true, excluded: true }); };
+resetHidden();
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, origin), send = value => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(value)); };
   if (url.pathname === '/fixture.js') { res.setHeader('Content-Type', 'text/javascript; charset=utf-8'); return res.end(fs.readFileSync(path.join(repo, '.cache/replay-accounts-fixture.js'))); }
   if (url.pathname.startsWith('/app')) { res.setHeader('Content-Type', 'text/html; charset=utf-8'); return res.end(`<!doctype html><html data-theme="${url.searchParams.get('theme') === 'light' ? 'light' : 'dark'}"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}\n${fonts}</style></head><body class="bg-bg text-text"><div id="root"></div><script src="/fixture.js"></script></body></html>`); }
   if (url.pathname === '/v1/game-accounts') return send({ items: accounts });
+  if (url.pathname === '/fixture-reset') { resetHidden(); mutations.length = 0; return send({ ok: true }); }
+  if (url.pathname === '/v1/games/hidden') return send({ items: [...hiddenGames.values()], nextCursor: null });
+  if (/^\/v1\/games\/[^/]+$/.test(url.pathname) && ['PATCH', 'DELETE'].includes(req.method)) {
+    let raw = ''; req.on('data', chunk => { raw += chunk; }); req.on('end', () => {
+      const body = JSON.parse(raw || '{}'), gameId = decodeURIComponent(url.pathname.split('/').pop()); mutations.push({ method: req.method, gameId, body });
+      if (req.method === 'DELETE') { if (body.confirmation !== 'DELETE GAME') { res.statusCode = 400; return send({ error: { code: 'delete_confirmation_required' } }); } hiddenGames.delete(gameId); return send({ gameId, deleted: true }); }
+      if (body.excluded) hiddenGames.set(gameId, { gameId, map: 'Synthetic first map', opponent: 'Synthetic rival', reason: body.reason, excluded: true }); else hiddenGames.delete(gameId);
+      return send({ gameId, excluded: body.excluded });
+    }); return;
+  }
   if (url.pathname === '/v1/replays') return send({ profile: { handle: 'synthetic-owner', displayName: 'Synthetic owner' }, items: [game], page: { hasMore: true, nextCursor: 'synthetic-cursor' }, total: 2, summary: { total: 2, wins: 1, losses: 1, ties: 0, avgDurationSec: 630 } });
   if (url.pathname === '/v1/random-summary') return send({ perRace: { Protoss: { games: 2 } } });
   if (url.pathname === '/v1/seasons') return send({ items: [] });
@@ -61,6 +74,63 @@ const server = http.createServer((req, res) => {
       expect(new URLSearchParams(link.searchParams.get('fromFilters')).has('accounts')).toBe(false); checks++;
       expect(errors).toEqual([]); checks++; await context.close();
     }
-    console.log(JSON.stringify({ checks, screenshots: 16, externalNetwork: 'blocked' }));
+    for (const [width, theme] of [320, 390, 768, 1440].flatMap(width => [[width, 'light'], [width, 'dark']])) {
+      const context = await browser.newContext({ viewport: { width, height: 1000 }, reducedMotion: 'reduce' });
+      const page = await context.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
+      await context.route('**/*', route => route.request().url().startsWith(origin + '/') ? route.continue() : route.abort());
+      await context.request.get(`${origin}/fixture-reset`);
+      await page.goto(`${origin}/app/replays?fixtureControls=1&theme=${theme}`);
+      await expect(page.getByRole('heading', { name: 'Replay data controls' })).toBeVisible();
+      await page.evaluate(() => document.fonts.ready);
+      const single = page.locator('[data-fixture-single]'), bulk = page.locator('[data-fixture-bulk]');
+      await single.getByRole('button', { name: 'Hide from stats', exact: true }).click();
+      let dialog = page.getByRole('dialog'); await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused(); checks++;
+      await expect(dialog.getByRole('button', { name: 'Other', exact: true })).toHaveAttribute('aria-pressed', 'true');
+      await dialog.getByRole('button', { name: 'Friend played', exact: true }).click();
+      const target = await dialog.getByRole('button', { name: 'Friend played', exact: true }).boundingBox(); expect(target.height).toBeGreaterThanOrEqual(44); checks++;
+      if (width === 320 && theme === 'dark' || width === 1440 && theme === 'light') await page.screenshot({ path: `../../docs/handoff/screenshots/replay-controls-hide-${theme}-${width}.png` });
+      await dialog.getByRole('button', { name: 'Cancel', exact: true }).click(); expect(mutations).toHaveLength(0); checks++;
+      await single.getByRole('button', { name: 'Hide from stats', exact: true }).click(); dialog = page.getByRole('dialog');
+      await dialog.getByRole('button', { name: 'Disconnect or bug', exact: true }).click(); await dialog.getByRole('button', { name: 'Hide from stats', exact: true }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0); expect(mutations.at(-1)).toEqual({ method: 'PATCH', gameId: 'synthetic-one', body: { excluded: true, reason: 'disconnect_bug' } }); checks++;
+      await bulk.getByRole('button', { name: 'Hide from stats', exact: true }).click(); dialog = page.getByRole('dialog');
+      await dialog.getByRole('button', { name: 'Off-race practice', exact: true }).click(); await dialog.getByRole('button', { name: 'Hide from stats', exact: true }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0); expect(mutations.slice(-2).map(row => row.gameId)).toEqual(['synthetic-one', 'synthetic-two']); expect(mutations.slice(-2).every(row => row.body.reason === 'off_race_practice')).toBe(true); checks++;
+      await single.getByRole('button', { name: 'Delete game…', exact: true }).click(); dialog = page.getByRole('dialog');
+      await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused(); await expect(dialog.getByRole('button', { name: 'Delete permanently' })).toBeDisabled(); checks++;
+      const confirm = dialog.getByRole('textbox', { name: 'Type DELETE GAME to confirm' }); await confirm.fill('delete game'); await expect(dialog.getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
+      await confirm.fill('DELETE GAME'); await expect(dialog.getByRole('button', { name: 'Delete permanently' })).toBeEnabled(); checks++;
+      expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+      if (width === 320 && theme === 'light' || width === 1440 && theme === 'dark') await page.screenshot({ path: `../../docs/handoff/screenshots/replay-controls-delete-${theme}-${width}.png` });
+      await dialog.getByRole('button', { name: 'Delete permanently' }).click(); await expect(page.getByRole('dialog')).toHaveCount(0); expect(mutations.at(-1)).toEqual({ method: 'DELETE', gameId: 'synthetic-one', body: { confirmation: 'DELETE GAME' } }); checks++;
+      await bulk.getByRole('button', { name: 'Delete selected games…', exact: true }).click(); dialog = page.getByRole('dialog');
+      await dialog.getByRole('textbox', { name: 'Type DELETE 2 GAMES to confirm' }).fill('DELETE GAME'); await expect(dialog.getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
+      await dialog.getByRole('textbox', { name: 'Type DELETE 2 GAMES to confirm' }).fill('DELETE 2 GAMES'); await dialog.getByRole('button', { name: 'Delete permanently' }).click();
+      await expect(page.getByRole('dialog')).toHaveCount(0); expect(mutations.slice(-2).map(row => row.gameId)).toEqual(['synthetic-one', 'synthetic-two']); checks++;
+      await page.getByRole('button', { name: 'Refresh hidden games', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Refresh hidden games', exact: true })).toBeEnabled();
+      const hidden = page.getByText('hidden-one', { exact: true }).locator('..').locator('..');
+      await expect(hidden.getByRole('button', { name: 'Unhide', exact: true })).toBeVisible();
+      if ([390, 768].includes(width)) await page.screenshot({ path: `../../docs/handoff/screenshots/replay-controls-hidden-${theme}-${width}.png` });
+      await hidden.getByRole('button', { name: 'Unhide', exact: true }).click(); await expect(page.getByText('hidden-one', { exact: true })).toHaveCount(0); expect(mutations.at(-1)).toMatchObject({ method: 'PATCH', gameId: 'hidden-one', body: { excluded: false } }); checks++;
+      await expect(page.getByRole('button', { name: 'Refresh hidden games', exact: true })).toBeFocused(); checks++;
+      await page.getByRole('button', { name: 'Retry deletion…', exact: true }).click(); dialog = page.getByRole('dialog');
+      await expect(dialog.getByRole('button', { name: 'Delete permanently' })).toBeDisabled(); await dialog.getByRole('textbox', { name: 'Type DELETE GAME to confirm' }).fill('DELETE GAME'); await dialog.getByRole('button', { name: 'Delete permanently' }).click();
+      await expect(page.getByText('pending-one', { exact: true })).toHaveCount(0); expect(mutations.at(-1)).toMatchObject({ method: 'DELETE', gameId: 'pending-one' }); checks++;
+      const count = mutations.length, completed = await page.evaluate(() => window.fixtureCompleted);
+      await single.getByRole('button', { name: 'Hide from stats', exact: true }).click(); await page.evaluate(() => window.fixtureScope()); await expect(page.getByRole('dialog')).toHaveCount(0); expect(mutations).toHaveLength(count); checks++;
+      await page.evaluate(() => { window.fixtureHeldToken = new Promise(resolve => { window.fixtureReleaseToken = resolve; }); });
+      await single.getByRole('button', { name: 'Hide from stats', exact: true }).click(); await page.getByRole('dialog').getByRole('button', { name: 'Hide from stats', exact: true }).click();
+      await page.evaluate(() => window.fixtureScope()); await expect(page.getByRole('dialog')).toHaveCount(0);
+      await page.evaluate(() => { window.fixtureReleaseToken('synthetic-late-token'); window.fixtureHeldToken = null; });
+      expect(mutations).toHaveLength(count); expect(await page.evaluate(() => window.fixtureCompleted)).toBe(completed); checks++;
+      await page.evaluate(() => { window.fixtureHeldToken = new Promise(resolve => { window.fixtureReleaseToken = resolve; }); });
+      await single.getByRole('button', { name: 'Delete game…', exact: true }).click(); dialog = page.getByRole('dialog'); await dialog.getByRole('textbox', { name: 'Type DELETE GAME to confirm' }).fill('DELETE GAME'); await dialog.getByRole('button', { name: 'Delete permanently' }).click();
+      await page.evaluate(() => window.fixtureAuth('other-owner')); await expect(page.getByRole('dialog')).toHaveCount(0);
+      await page.evaluate(() => { window.fixtureReleaseToken('synthetic-late-token'); window.fixtureHeldToken = null; });
+      expect(mutations).toHaveLength(count); expect(await page.evaluate(() => window.fixtureCompleted)).toBe(completed); checks++;
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true); expect(errors).toEqual([]); checks++; await context.close();
+    }
+    console.log(JSON.stringify({ checks, screenshots: 24, cssFiles: fs.readdirSync('.next/static/css').filter(name => name.endsWith('.css')), externalNetwork: 'blocked' }));
   } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
