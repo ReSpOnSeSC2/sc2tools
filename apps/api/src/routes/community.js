@@ -2,7 +2,7 @@
 
 const express = require("express");
 const rateLimitModule = require("express-rate-limit");
-const { GUIDE_CACHE_CONTROL } = require("../config/guides");
+const PUBLIC_COMMUNITY_CACHE_CONTROL = "public, s-maxage=60, stale-while-revalidate=600";
 
 const rateLimit =
   /** @type {any} */ (rateLimitModule).default || rateLimitModule;
@@ -46,6 +46,9 @@ const rateLimit =
  */
 function buildCommunityRouter(deps) {
   const router = express.Router();
+  // Errors, authenticated reads and all writes stay private. Only the explicit
+  // successful public DTO routes below may opt into the shared response cache.
+  router.use((_req, res, next) => { res.set("Cache-Control", "private, no-store"); next(); });
 
   // Per-user write limits. These sit AFTER deps.auth in each chain, so
   // the key is the authenticated userId (IP fallback covers the
@@ -108,7 +111,7 @@ function buildCommunityRouter(deps) {
         sort,
         search: search || undefined,
       });
-      res.json(result);
+      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(result);
     } catch (err) {
       next(err);
     }
@@ -126,7 +129,7 @@ function buildCommunityRouter(deps) {
         perMatchup,
         totalCap,
       });
-      res.json(result);
+      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(result);
     } catch (err) {
       next(err);
     }
@@ -180,7 +183,7 @@ function buildCommunityRouter(deps) {
   router.get("/community/sitemap", async (_req, res, next) => {
     try {
       const sitemap = await deps.community.sitemap();
-      res.set("Cache-Control", GUIDE_CACHE_CONTROL).json(sitemap);
+      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(sitemap);
     } catch (err) {
       next(err);
     }
@@ -193,7 +196,7 @@ function buildCommunityRouter(deps) {
         res.status(404).json({ error: { code: "not_found" } });
         return;
       }
-      res.json(row);
+      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(row);
     } catch (err) {
       next(err);
     }
@@ -218,7 +221,7 @@ function buildCommunityRouter(deps) {
         });
         return;
       }
-      res.json(profile);
+      res.set("Cache-Control", PUBLIC_COMMUNITY_CACHE_CONTROL).json(profile);
     } catch (err) {
       next(err);
     }
@@ -240,6 +243,9 @@ function buildCommunityRouter(deps) {
         });
         return;
       }
+      // A separate HTTP cache cannot execute current contributor/removal
+      // admission or receive Next's tag purge. Keep this privacy-sensitive
+      // endpoint uncached; the bounded service LRU still avoids materialization.
       res.json(result);
     } catch (err) {
       next(err);

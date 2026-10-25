@@ -30,17 +30,10 @@ describe("/community/authors/[userId]", () => {
     expect((await generateMetadata({ params: params() })).robots).toEqual({ index: false, follow: false });
   });
 
-  it.each([null, 500])("shows the unavailable panel with noindex when the API answers %s", async (status) => {
+  it.each([null, 500])("throws for API outage %s to preserve last-good ISR output", async (status) => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status });
-    render(await CommunityAuthorPage({ params: params() }));
-    expect(screen.getByRole("heading", { level: 1, name: "This profile is temporarily unavailable" })).toBeTruthy();
-    expect(screen.queryByText("This profile is private or doesn't exist")).toBeNull();
-    expect(screen.getByRole("link", { name: "Try again" }).getAttribute("href")).toBe("/community/authors/u_fixture");
-    expect(screen.getByRole("link", { name: "Back to community" }).getAttribute("href")).toBe("/community");
-    const metadata = await generateMetadata({ params: params() });
-    expect(metadata.robots).toEqual({ index: false, follow: false });
-    // The root title template adds " · SC2 Tools".
-    expect(metadata.title).toBe("This profile is temporarily unavailable");
+    await expect(CommunityAuthorPage({ params: params() })).rejects.toThrow("This profile is temporarily unavailable");
+    await expect(generateMetadata({ params: params() })).rejects.toThrow("This profile is temporarily unavailable");
   });
 
   it("renders a public profile", async () => {

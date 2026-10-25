@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getJsonWithStatus } from "@/lib/serverApi";
+import { communityCacheOptions } from "@/lib/communityCache";
 import { Card } from "@/components/ui/Card";
 import { EmptyStatePanel } from "@/components/ui/EmptyState";
 import { AuthorProfile } from "@/components/community/AuthorProfile";
-import { CommunityUnavailable } from "@/components/community/CommunityUnavailable";
 import type { CommunityAuthorProfile } from "@/components/community/types";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
 /**
  * Public author profile route.
@@ -30,6 +31,7 @@ interface PageParams {
 function loadProfile(userId: string) {
   return getJsonWithStatus<CommunityAuthorProfile>(
     `/v1/community/authors/${encodeURIComponent(userId)}`,
+    communityCacheOptions(),
   );
 }
 
@@ -39,14 +41,10 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
   const { userId } = await params;
   const { data: profile, status } = await loadProfile(userId);
   if (!profile) {
-    return status === 404
-      ? {
+    if (status !== 404) throw new Error(UNAVAILABLE_TITLE);
+    return {
           title: "Author profile",
           description: "This SC2 Tools community profile is private or doesn't exist.",
-          robots: { index: false, follow: false },
-        }
-      : {
-          title: UNAVAILABLE_TITLE,
           robots: { index: false, follow: false },
         };
   }
@@ -54,30 +52,20 @@ export async function generateMetadata({ params }: PageParams): Promise<Metadata
     profile.totalBuilds === 1
       ? `1 published build by ${profile.displayName}.`
       : `${profile.totalBuilds} published builds by ${profile.displayName}.`;
-  return {
+  return pageMetadata({
     title: `${profile.displayName} · Community`,
     description,
-    openGraph: {
-      title: `${profile.displayName} — SC2 Tools community`,
-      description,
-      images: [{ url: "/og.jpg", width: 1200, height: 630 }],
-    },
-  };
+    canonical: `/community/authors/${encodeURIComponent(userId)}`,
+    shareTitle: `${profile.displayName} — SC2 Tools community`, routeOgImage: true,
+  });
 }
 
 export default async function CommunityAuthorPage({ params }: PageParams) {
   const { userId } = await params;
   const { data: profile, status } = await loadProfile(userId);
   if (!profile) {
-    return status === 404 ? (
-      <NotFoundPanel />
-    ) : (
-      <CommunityUnavailable
-        title={UNAVAILABLE_TITLE}
-        retryHref={`/community/authors/${encodeURIComponent(userId)}`}
-        standalone
-      />
-    );
+    if (status !== 404) throw new Error(UNAVAILABLE_TITLE);
+    return <NotFoundPanel />;
   }
   return <AuthorProfile profile={profile} />;
 }

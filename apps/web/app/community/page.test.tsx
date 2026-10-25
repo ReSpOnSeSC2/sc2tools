@@ -27,9 +27,16 @@ const search = (sp: Record<string, string> = {}) => Promise.resolve(sp);
 afterEach(() => {
   cleanup();
   mocks.getJsonWithStatus.mockReset();
+  vi.unstubAllEnvs();
 });
 
 describe("/community", () => {
+  it("uses public tagged data for configured cache refresh without caching the private Mine panel", async () => {
+    vi.stubEnv("COMMUNITY_REVALIDATE_SECRET", "configured-local");
+    mocks.getJsonWithStatus.mockResolvedValue({ data: { items: [], total: 0, hasMore: false }, status: 200 });
+    await generateMetadata({ searchParams: search() });
+    expect(mocks.getJsonWithStatus.mock.calls[0][1]).toEqual({ revalidateSec: 300, tags: ["community"] });
+  });
   it("keeps Mine private and skips every public server fetch", async () => {
     render(await CommunityPage({ searchParams: search({ mine: "1", race: "P", q: "old" }) }));
     expect(screen.getByText("Owner-only publications")).toBeTruthy();
@@ -65,7 +72,7 @@ describe("/community", () => {
     });
     render(await CommunityPage({ searchParams: search() }));
     expect(screen.getByText("Fixture opener")).toBeTruthy();
-    expect(mocks.getJsonWithStatus).toHaveBeenCalledWith("/v1/community/builds?sort=top&limit=24&offset=0");
+    expect(mocks.getJsonWithStatus).toHaveBeenCalledWith("/v1/community/builds?sort=top&limit=24&offset=0", { revalidateSec: 0, tags: [] });
   });
 
   it("preserves every filter in paging links and explains the current page", async () => {
@@ -74,7 +81,7 @@ describe("/community", () => {
     const nav = screen.getByRole("navigation", { name: "Pagination" }); expect(within(nav).getByText("Page 2 of 5")).toBeTruthy();
     expect(within(nav).getByRole("link", { name: "Next →" }).getAttribute("href")).toBe("/community?race=Z&vs=T&skill=diamond&sort=updated&q=roach&offset=48");
     expect(within(nav).getByRole("link", { name: "← Previous" }).getAttribute("href")).toBe("/community?race=Z&vs=T&skill=diamond&sort=updated&q=roach");
-    expect(mocks.getJsonWithStatus).toHaveBeenCalledWith("/v1/community/builds?race=Z&vsRace=T&skill=diamond&sort=updated&q=roach&limit=24&offset=24");
+    expect(mocks.getJsonWithStatus).toHaveBeenCalledWith("/v1/community/builds?race=Z&vsRace=T&skill=diamond&sort=updated&q=roach&limit=24&offset=24", { revalidateSec: 0, tags: [] });
   });
 
   it.each([{ offset: "0", hasMore: true, disabled: "← Previous" }, { offset: "96", hasMore: false, disabled: "Next →" }])("renders disabled ends as non-focusable text ($disabled)", async ({ offset, hasMore, disabled }) => {
@@ -104,7 +111,7 @@ describe("/community", () => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: { items: [], total: 0, hasMore: false }, status: 200 });
     render(await CommunityPage({ searchParams: search({ matchup: "PvZ" }) }));
     expect(screen.getByTestId("community-filters").dataset).toMatchObject({ race: "P", vs: "Z" });
-    expect(mocks.getJsonWithStatus).toHaveBeenCalledWith("/v1/community/builds?race=P&vsRace=Z&sort=top&limit=24&offset=0");
+    expect(mocks.getJsonWithStatus).toHaveBeenCalledWith("/v1/community/builds?race=P&vsRace=Z&sort=top&limit=24&offset=0", { revalidateSec: 0, tags: [] });
     expect((await generateMetadata({ searchParams: search({ matchup: "PvZ" }) })).alternates?.canonical).toBe("/community");
   });
 });

@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { LegalLayout, LegalHeading, legalSectionId } from "@/components/legal/LegalLayout";
 import { ISSUES_URL } from "@/lib/siteLinks";
+import { pageMetadata } from "@/lib/seo/pageMetadata";
 
-export const metadata = {
-  alternates: { canonical: "/legal/terms" },
+export const metadata = pageMetadata({
+  canonical: "/legal/terms",
   title: "Terms of Service",
   description: "Terms governing use of SC2 Tools.",
-};
+});
 
 const LAST_UPDATED = "2026-08-11";
 

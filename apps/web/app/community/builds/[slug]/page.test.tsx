@@ -212,17 +212,11 @@ describe("/community/builds/[slug] when the build can't be fetched", () => {
   it.each([
     ["the API is unreachable", null],
     ["the API fails", 503],
-  ])("says it is temporarily unavailable when %s, never a 404", async (_label, status) => {
+  ])("throws on %s so ISR preserves its last good render, never a 404", async (_label, status) => {
     mocks.getJsonWithStatus.mockResolvedValue({ data: null, status });
-    const { container } = render(await CommunityBuildPage({ params: params() }));
+    await expect(CommunityBuildPage({ params: params() })).rejects.toThrow("This build is temporarily unavailable");
     expect(mocks.notFound).not.toHaveBeenCalled();
-    const heading = container.querySelector("h1");
-    expect(heading?.textContent).toBe("This build is temporarily unavailable");
-    expect(container.textContent).toContain("The connection may have dropped, or the server may be restarting or being updated.");
-    const retry = Array.from(container.querySelectorAll("a")).find((a) => a.textContent?.includes("Try again"));
-    expect(retry?.getAttribute("href")).toBe("/community/builds/build-fixture0001");
-    const metadata = await generateMetadata({ params: params() });
-    expect(metadata.robots).toEqual({ index: false, follow: false });
+    await expect(generateMetadata({ params: params() })).rejects.toThrow("This build is temporarily unavailable");
   });
 
   it("returns a real 404 only when the API says the build doesn't exist", async () => {

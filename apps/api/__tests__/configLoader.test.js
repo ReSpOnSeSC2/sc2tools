@@ -277,6 +277,8 @@ describe("config loader - SC2 Tools Guides", () => {
       guidesEnabled: false,
       guidesRevalidateUrl: null,
       guidesRevalidateSecret: null,
+      communityRevalidateUrl: null,
+      communityRevalidateSecret: null,
       guidesYoutubeChannelId: null,
       guidesYoutubeChannelUrl: null,
       guidesYoutubePlaylist12Worker: null,
@@ -310,6 +312,19 @@ describe("config loader - SC2 Tools Guides", () => {
     expect(loadConfig({ ...BASE_ENV }).guidesEnabled).toBe(false);
     expect(loadConfig({ ...BASE_ENV, GUIDES_ENABLED: "1" }).guidesEnabled).toBe(true);
     expect(loadConfig({ ...BASE_ENV, GUIDES_ENABLED: "false" }).guidesEnabled).toBe(false);
+  });
+});
+
+describe("config loader - optional Community cache purge", () => {
+  test("full app config keeps both fields unset by default", () => {
+    expect(loadConfig({ ...BASE_ENV })).toMatchObject({ communityRevalidateUrl: null, communityRevalidateSecret: null });
+  });
+  test("carries explicit Community config independently of guides", () => {
+    expect(loadConfig({ ...BASE_ENV,
+      COMMUNITY_REVALIDATE_URL: "http://localhost:3210/api/revalidate-community", COMMUNITY_REVALIDATE_SECRET: "synthetic-community-secret",
+      GUIDES_REVALIDATE_SECRET: "synthetic-different-guides-secret",
+    })).toMatchObject({ communityRevalidateUrl: "http://localhost:3210/api/revalidate-community",
+      communityRevalidateSecret: "synthetic-community-secret", guidesRevalidateSecret: "synthetic-different-guides-secret" });
   });
 });
 
