@@ -265,6 +265,31 @@ class OverlayTokensService {
     };
   }
 
+  /** Replace one owned active token's allowlisted widget selection.
+   * @param {string} userId @param {string} token
+   * @param {unknown} enabled @param {unknown} [expectedEnabled]
+   */
+  async setEnabledWidgets(userId, token, enabled, expectedEnabled) {
+    const widgets = widgetSelection(enabled);
+    const match = /** @type {any} */ ({ userId, token, revokedAt: null });
+    if (expectedEnabled !== undefined) {
+      const expected = widgetSelection(expectedEnabled);
+      const sameDefaults = expected.length === DEFAULT_WIDGETS.length && DEFAULT_WIDGETS.every(id => expected.includes(id));
+      match.$or = [{ enabledWidgets: expected.length ? { $all: expected, $size: expected.length } : [] }, ...(sameDefaults ? [{ enabledWidgets: { $exists: false } }] : [])];
+    }
+    const row = await this.db.overlayTokens.findOneAndUpdate(match, { $set: { enabledWidgets: widgets } }, { returnDocument: "after", projection: { _id: 0, enabledWidgets: 1 } });
+    if (!row) {
+      const exists = await this.tokenBelongsToUser(userId, token);
+      const err = /** @type {Error & {status: number, code: string}} */ (new Error(exists ? "widget_selection_changed" : "not_found"));
+      err.status = exists ? 409 : 404; err.code = err.message; throw err;
+    }
+    const cacheKey = tokenCacheKey(token);
+    this.resolveCache.delete(cacheKey);
+    const pending = this.resolveInflight.get(cacheKey);
+    if (pending) this.invalidatedInflight.add(pending);
+    return { enabledWidgets: row.enabledWidgets };
+  }
+
   /**
    * Resolve userId from token without bumping `lastSeenAt`. Used by
    * the agent's overlay-events POST.
@@ -337,6 +362,15 @@ class OverlayTokensService {
  */
 function tokenCacheKey(token) {
   return createHash("sha256").update(String(token)).digest("base64url");
+}
+
+/** @param {unknown} value @returns {string[]} */
+function widgetSelection(value) {
+  if (!Array.isArray(value) || value.length > KNOWN_WIDGETS.length || value.some(id => typeof id !== "string" || !KNOWN_WIDGETS.includes(id)) || new Set(value).size !== value.length) {
+    const err = /** @type {Error & {status: number, code: string}} */ (new Error("invalid_widget_selection"));
+    err.status = 400; err.code = err.message; throw err;
+  }
+  return [...value].sort();
 }
 
 module.exports = {

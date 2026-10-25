@@ -6,23 +6,7 @@ import { CrashCourse } from "./CrashCourse";
 import { WidgetExplorer } from "./WidgetExplorer";
 import { LearnTroubleshooting } from "./LearnTroubleshooting";
 
-const STARTERS = [
-  { name: "Your first stream", goal: "A clean scoreboard and context for every game.", widgets: [
-    { id: "session", name: "Session record", why: "Keep the day's story on screen." },
-    { id: "opponent", name: "Opponent identity", why: "Introduce who you're facing." },
-    { id: "match-result", name: "Match result", why: "Let viewers catch the outcome." },
-  ] },
-  { name: "A practice night", goal: "Make the plan visible, then put it into practice.", widgets: [
-    { id: "ghost-build", name: "Ghost Build coach", why: "Follow the next steps of your chosen build." },
-    { id: "randomizer", name: "Build randomizer", why: "Choose an opening from your own pool." },
-    { id: "scouting", name: "Scouting tells", why: "Learn what to watch for from the opponent." },
-  ] },
-  { name: "A community night", goal: "Bring the conversation into the broadcast.", widgets: [
-    { id: "multichat", name: "Multi-platform chat", why: "Show the conversation in one place." },
-    { id: "chat-highlight", name: "Chat highlight", why: "Put a great question on screen." },
-    { id: "chat-poll", name: "Chat poll", why: "Give viewers a decision to make." },
-  ] },
-] as const;
+import { OVERLAY_STARTER_PACKS as STARTERS } from '@/lib/overlayStarterPacks';
 
 export function LearnPage() {
   return (
@@ -58,7 +42,7 @@ export function LearnPage() {
       <section id="starter-setups" aria-labelledby="starter-setups-title" className="scroll-mt-28 pt-16 md:pt-24">
         <p className="kicker">Pick a starting point</p>
         <h2 id="starter-setups-title" className="mt-3 font-serif text-3xl font-semibold text-text md:text-4xl">A small setup you can make your own.</h2>
-        <p className="mt-4 max-w-2xl text-body-lg text-text-muted">These are suggested combinations, not automatic presets. Open any widget&apos;s guide, then enable and test it in Settings.</p>
+        <p className="mt-4 max-w-2xl text-body-lg text-text-muted">Choose a starter pack, review exactly what it enables in Settings, then add and test its Browser Sources.</p>
         <div className="mt-7 grid gap-5 lg:grid-cols-3">
           {STARTERS.map((starter) => (
             <article key={starter.name} className="flex min-w-0 flex-col rounded-md border-2 border-line bg-bg-surface p-5 shadow-hard sm:p-6">
@@ -68,6 +52,7 @@ export function LearnPage() {
               <ul className="mt-5 space-y-4 border-t border-border pt-5">
                 {starter.widgets.map((widget) => <li key={widget.id}><a href={`/stream-studio/learn?widget=${widget.id}#widget-library`} className="inline-flex min-h-11 items-center gap-2 text-body font-semibold text-accent underline-offset-4 hover:underline">{widget.name}<ArrowRight className="h-4 w-4" aria-hidden /></a><p className="text-caption text-text-muted">{widget.why}</p></li>)}
               </ul>
+              <Link href={`/settings?tab=overlay&section=widgets&pack=${starter.id}`} className={buttonClassName({ className: "mt-5" })}>Enable this setup<ArrowRight className="h-4 w-4" aria-hidden /></Link>
             </article>
           ))}
         </div>

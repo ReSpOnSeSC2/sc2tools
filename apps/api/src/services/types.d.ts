@@ -814,6 +814,7 @@ export interface OverlayTokensService {
     widget: string,
     enabled: boolean,
   ): Promise<{ enabledWidgets: string[] }>;
+  setEnabledWidgets(userId: string, token: string, enabled: unknown, expectedEnabled?: unknown): Promise<{ enabledWidgets: string[] }>;
   tokenBelongsToUser(userId: string, token: string): Promise<boolean>;
 }
 

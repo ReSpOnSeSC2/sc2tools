@@ -1,5 +1,9 @@
 # Owner setup notes (accumulated)
 
+## Widget manager
+
+Deploy the API before the web so the authenticated bulk widget-selection PUT is available. No new environment variable, secret, collection, migration or infrastructure is required. Existing tokens and enable/config events are reused. Starter packs require the user's review and confirmation and preserve other enabled widgets. The shared recommended-size JSON is included by the existing desktop packaging specification; no installer, version bump, tag or release was performed. Existing OBS scene dimensions remain unchanged. Verify a local or off-air Browser Source by copying/dragging it, checking its recommended size and using Preview before sending any live sample. The steps are in `/help/obs-overlay-setup`.
+
 ## Recorded playback guidance and segment streaming
 
 No new infrastructure, secret, environment variable or manual migration is required. Deploy the API and web normally. Authenticated content-addressed segment responses use private immutable browser caching for seven days; manifests remain no-store and every server read still checks ownership. A website-requested artifact upload sends one private `playback_ready` bell notification after verified completion, using the existing notification service and delivery identity. Automatic uploads and viewer polling do not send it. Browser decoded segments have a 24 MB LRU budget; a miss retains the last frame, and Retry remains available. Recording itself stays explicitly requested or controlled by the desktop app's existing default-off automatic-capture setting. No production recording or account operation was performed during implementation.

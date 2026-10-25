@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Widget manager
+
+- Find overlay widgets in grouped cards with search, source sizes, OBS drag links and private URLs hidden until revealed. Starter packs show exactly what they enable, keep existing selections and detect changes from another tab.
+- Move through Overlay setup, widgets, appearance, chat, scenes, Dock and tokens with shareable section links. Widget-guide links focus the right Copy button, and local section changes retain unfinished edits.
+
 ### Opponent dossier
 
 - Read and copy a six-line scouting brief, follow the all-time meeting series, and move through the dossier with sticky section links. Date overrides stay local to this opponent; history remains directly above private notes.
