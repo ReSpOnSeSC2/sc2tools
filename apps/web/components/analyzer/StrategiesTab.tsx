@@ -1,31 +1,31 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useApi } from "@/lib/clientApi";
 import {
   useFilters,
   filtersToQuery,
-  type AnalyzerFilters,
 } from "@/lib/filterContext";
-import { useMyDisplayName } from "@/lib/useMyDisplayName";
 import {
   useLocalStoragePositiveInt,
   useLocalStorageState,
 } from "@/lib/useLocalStorageState";
 import { pct1, wrColor } from "@/lib/format";
 import { Button } from "@/components/ui/Button";
-import { Card, EmptyState, Skeleton, WrBar } from "@/components/ui/Card";
+import { Card, Skeleton, WrBar } from "@/components/ui/Card";
 import { QueryState, hasQueryData } from "@/components/ui/QueryState";
 import { usePersistentSort } from "@/components/ui/SortableTh";
 import { StrengthCell, StrengthGuide, WinRateRange } from "./StrengthAdjusted";
 import type { StrengthFields } from "@/lib/strengthAdjusted";
 import { MinGamesPicker } from "@/components/ui/MinGamesPicker";
 import { WinRateSortToggle } from "@/components/ui/WinRateSortToggle";
-import { AllGamesTable } from "./AllGamesTable";
 import { NoFilterMatches } from "./EmptyStates";
 import { StrategyMmrPanel } from "./mmr/StrategyMmrPanel";
 import { BuildMatchupHeatmap } from "./mmr/BuildMatchupHeatmap";
-import type { ProfileGame } from "./Last5GamesTimeline";
+import { StatCard } from "@/components/ui/Stat";
+import { SegmentedControl } from "@/components/ui/SegmentedControl";
+import { StrategyGamesSheet } from "./StrategyGamesSheet";
+import type { StrategyDrillFilter } from "@/lib/strategyDrill";
 
 type StratRow = StrengthFields & {
   name: string;
@@ -35,7 +35,7 @@ type StratRow = StrengthFields & {
   winRate: number;
 };
 
-import { BuildVsStrategyView, BuildVsStrategyComparison } from "./StrategiesTabBuildVs";
+import { BuildVsStrategyView } from "./StrategiesTabBuildVs";
 
 const RACE_OPTIONS = [
   { value: "", label: "Any race" },
@@ -45,55 +45,8 @@ const RACE_OPTIONS = [
   { value: "R", label: "Random" },
 ] as const;
 
-type GamesListResp = {
-  ok: boolean;
-  total: number;
-  games: Array<{
-    id?: string;
-    date?: string;
-    gameVersion?: string | null;
-    gameBuild?: number | null;
-    map?: string;
-    opponent?: string;
-    opp_race?: string;
-    opp_strategy?: string | null;
-    result?: string;
-    build?: string;
-    game_length?: number;
-    macro_score?: number | null;
-    my_race?: string | null;
-    matchFormat?: ProfileGame["matchFormat"];
-    playerCount?: number | null;
-  }>;
-};
-
-export type StrategyDrillFilter = { opp_strategy: string; build?: string };
-
-/**
- * Build the request for a Strategies drill-down from one merged parameter
- * object.  Keeping this as a single ``filtersToQuery`` call matters when a
- * StrategyFiltersBar value (notably ``build`` / ``opp_strategy``) is already
- * active: appending another copy by hand makes Express expose an array, which
- * the API's string-only filter parser intentionally rejects.
- *
- * The clicked cell/card is authoritative for the two drill axes; every other
- * analyzer filter is preserved verbatim so the dossier describes the same
- * cohort as the row that opened it.
- */
-export function strategyGamesPath(
-  filters: AnalyzerFilters,
-  drill: StrategyDrillFilter,
-  dbRev: number,
-): string {
-  const query = filtersToQuery({
-    ...filters,
-    opp_strategy: drill.opp_strategy,
-    build: drill.build ?? filters.build,
-    sort: "date_desc",
-    limit: 5000,
-  });
-  return `/v1/games-list${query}#${dbRev}`;
-}
+export { strategyGamesPath } from "@/lib/strategyDrill";
+export type { StrategyDrillFilter } from "@/lib/strategyDrill";
 
 const LS_VIEW = "analyzer.strategies.view";
 const LS_MIN = "analyzer.strategies.minGames";
@@ -113,32 +66,7 @@ function isBvsView(raw: unknown): raw is BvsView {
 type Kpi = { label: string; value: string | null; sub?: string | null };
 
 function KpiStrip({ items }: { items: Kpi[] }) {
-  if (!items || items.length === 0) return null;
-  return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      {items.map((k, i) => (
-        <div
-          key={i}
-          className="rounded-lg border border-border bg-bg-surface p-3"
-        >
-          <div className="truncate text-micro uppercase tracking-wider text-text-dim">
-            {k.label}
-          </div>
-          <div
-            className="mt-1 truncate text-sm font-medium text-text"
-            title={k.value || "—"}
-          >
-            {k.value || "—"}
-          </div>
-          {k.sub ? (
-            <div className="mt-0.5 text-micro tabular-nums text-text-dim">
-              {k.sub}
-            </div>
-          ) : null}
-        </div>
-      ))}
-    </div>
-  );
+  return <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{items.map(item => <StatCard key={item.label} label={item.label} value={item.value || "—"} hint={item.sub} size="sm" className="min-w-0 break-words" />)}</div>;
 }
 
 function bestWorst<T extends { winRate: number; total: number }>(
@@ -291,7 +219,7 @@ function ByOppStrategyView({
               <div className="mt-2"><StrengthCell row={s} /></div>
               <div className="mt-2 flex items-center justify-between text-micro tabular-nums text-text-dim">
                 <span>{s.total} games</span>
-                <span className="opacity-0 transition group-hover:opacity-100">
+                <span className="text-text-dim transition group-hover:text-text group-focus-visible:text-text">
                   View games
                 </span>
               </div>
@@ -303,133 +231,6 @@ function ByOppStrategyView({
   );
 }
 
-
-/* -------------------------------------------------------------------- */
-/* Drill-down: games list view                                          */
-/* -------------------------------------------------------------------- */
-
-function StrategyGamesView({
-  drill,
-  onBack,
-}: {
-  drill: StrategyDrillFilter;
-  onBack: () => void;
-}) {
-  const { filters, dbRev } = useFilters();
-  const myName = useMyDisplayName();
-  const apiPath = useMemo(
-    () => strategyGamesPath(filters, drill, dbRev),
-    [filters, drill, dbRev],
-  );
-
-  const gamesApi = useApi<GamesListResp>(apiPath);
-  const { data } = gamesApi;
-  const loaded = hasQueryData(gamesApi);
-
-  const games = useMemo<ProfileGame[]>(() => {
-    const raw = data?.games || [];
-    // Defensive client-side filter so a server that ignored an unknown
-    // query param can't leak unrelated games into the drill-down.
-    const filteredRaw = raw.filter((g) => {
-      if ((g.opp_strategy || "Unknown") !== drill.opp_strategy) return false;
-      if (drill.build && g.build !== drill.build) return false;
-      return true;
-    });
-    // Forward opp_race / macro_score through. AllGamesTable widens
-    // ProfileGame to GameRowData expecting these — without them, the
-    // Race column falls back to "?" for every row even when the
-    // strategy name explicitly says "Terran - …" or "Zerg - …".
-    return filteredRaw.map((g) => ({
-      id: g.id || null,
-      date: g.date || null,
-      gameVersion: g.gameVersion ?? null,
-      gameBuild: g.gameBuild ?? null,
-      result: g.result || null,
-      map: g.map || null,
-      opp_strategy: g.opp_strategy || null,
-      opp_race: g.opp_race || null,
-      my_race: g.my_race ?? null,
-      matchFormat: g.matchFormat ?? null,
-      playerCount: g.playerCount ?? null,
-      opponent: g.opponent || null,
-      my_build: g.build || null,
-      game_length: g.game_length ?? null,
-      macro_score: g.macro_score ?? null,
-    }));
-  }, [data, drill]);
-
-  const titleText = useMemo(() => {
-    if (drill.build) return `${drill.build}  vs  ${drill.opp_strategy}`;
-    return `vs ${drill.opp_strategy}`;
-  }, [drill]);
-
-  const summary = useMemo(() => {
-    const total = games.length;
-    let wins = 0;
-    let losses = 0;
-    for (const g of games) {
-      const r = String(g.result || "").toLowerCase();
-      if (r === "win" || r === "victory") wins++;
-      else if (r === "loss" || r === "defeat") losses++;
-    }
-    const wr = total ? wins / total : 0;
-    return { total, wins, losses, wr };
-  }, [games]);
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="text-xs uppercase tracking-wider text-text-muted hover:text-text"
-        >
-          ← back to strategies
-        </button>
-        <h2 className="truncate text-base font-semibold text-text">
-          {titleText}
-        </h2>
-        {loaded && summary.total > 0 ? (
-          // ``w-full md:w-auto`` forces the stats line onto its own row
-          // on mobile (so it left-aligns under the title) and lets it
-          // slot back into the flex row with ``md:ml-auto`` on desktop,
-          // where it sits right-aligned next to the back button + title.
-          <div className="w-full text-xs tabular-nums text-text-dim md:ml-auto md:w-auto">
-            <span className="text-text-muted">{summary.total}</span> games ·{" "}
-            <span className="text-success">{summary.wins}W</span> -{" "}
-            <span className="text-danger">{summary.losses}L</span> ·{" "}
-            <span style={{ color: wrColor(summary.wr, summary.total) }}>
-              {pct1(summary.wr)}
-            </span>
-          </div>
-        ) : null}
-      </div>
-      {/* When the drill carries both a build AND a strategy, the
-          2-column comparison renders above the games list — left side
-          is the user's perspective on their build, right side is the
-          opponent's perspective on the strategy. */}
-      {drill.build ? (
-        <BuildVsStrategyComparison
-          build={drill.build}
-          strategy={drill.opp_strategy}
-        />
-      ) : null}
-      {!loaded ? (
-        <QueryState q={gamesApi} skeleton={<Skeleton rows={6} />} errorTitle="Games" filtered />
-      ) : games.length === 0 ? (
-        <Card>
-          <EmptyState sub="No games match this filter combination." />
-        </Card>
-      ) : (
-        <Card title={`All games (${games.length}) · newest first`}>
-          <div className="-mx-2 overflow-x-auto md:max-h-[640px]">
-            <AllGamesTable games={games} myName={myName} />
-          </div>
-        </Card>
-      )}
-    </div>
-  );
-}
 
 /* -------------------------------------------------------------------- */
 /* Tab shell                                                            */
@@ -594,8 +395,7 @@ function truncateLabel(s: string, n = 28): string {
   return `${s.slice(0, n - 1)}…`;
 }
 
-export function StrategiesTab() {
-  const { filters } = useFilters();
+export function StrategiesTab({ drill: controlledDrill, onDrillChange }: { drill?: StrategyDrillFilter | null; onDrillChange?: (drill: StrategyDrillFilter | null) => void } = {}) {
   // Default to "bvs" — Build vs strategy carries more actionable
   // information (your build paired with what they did) than the flat
   // by-opponent-strategy summary. Existing saved preferences win.
@@ -610,18 +410,9 @@ export function StrategiesTab() {
     isBvsView,
   );
   const [bvsMinGames, setBvsMinGames] = useLocalStoragePositiveInt(LS_MIN, 3);
-  const [drill, setDrill] = useState<StrategyDrillFilter | null>(null);
-
-  // Close the drill-down if global filters change so the user isn't
-  // staring at stale rows.
-  const filtersKey = JSON.stringify(filters);
-  useEffect(() => {
-    setDrill(null);
-  }, [filtersKey]);
-
-  if (drill) {
-    return <StrategyGamesView drill={drill} onBack={() => setDrill(null)} />;
-  }
+  const [localDrill, setLocalDrill] = useState<StrategyDrillFilter | null>(null);
+  const drill = controlledDrill === undefined ? localDrill : controlledDrill;
+  const setDrill = (next: StrategyDrillFilter | null) => { if (controlledDrill === undefined) setLocalDrill(next); onDrillChange?.(next); };
 
   return (
     <div className="space-y-4">
@@ -632,22 +423,7 @@ export function StrategiesTab() {
             ? "Win rate vs opponent strategies"
             : "My build × Their strategy"}
         </h2>
-        <div className="inline-flex self-start overflow-hidden rounded-lg border-2 border-line sm:self-auto">
-          {(["bvs", "opp"] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              onClick={() => setView(v)}
-              className={`min-h-[36px] px-3 py-1 text-xs ${
-                view === v
-                  ? "bg-accent/20 text-accent"
-                  : "text-text-muted hover:bg-bg-elevated"
-              }`}
-            >
-              {v === "opp" ? "By opponent strategy" : "Build vs strategy"}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl label="Strategy view" value={view} options={[{ value: "bvs", label: "Build vs strategy" }, { value: "opp", label: "By opponent strategy" }]} onChange={setView} />
       </div>
       {view === "opp" ? (
         <ByOppStrategyView
@@ -655,8 +431,8 @@ export function StrategiesTab() {
         />
       ) : (
         <BuildVsStrategyView
-          onOpenBvs={(my_build, opp_strat) =>
-            setDrill({ build: my_build, opp_strategy: opp_strat })
+          onOpenBvs={(my_build, opp_strat, opp_race) =>
+            setDrill({ build: my_build, opp_strategy: opp_strat, opp_race })
           }
           initialView={bvsView}
           initialMinGames={bvsMinGames}
@@ -669,6 +445,7 @@ export function StrategiesTab() {
       )}
       <StrategyMmrPanel />
       <BuildMatchupHeatmap />
+      {drill && <StrategyGamesSheet drill={drill} onBack={() => setDrill(null)} />}
     </div>
   );
 }

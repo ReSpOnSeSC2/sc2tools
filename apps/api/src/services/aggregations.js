@@ -6,6 +6,7 @@ const trendsAgg = require("./trendsAggregations");
 const trendsInsights = require("./trendsInsights");
 const { TrendsRequests } = require("./trendsRequests");
 const { strengthPipeline, finishStrength } = require("./strengthAdjusted");
+const { OPPONENT_RACE_GROUP, OPPONENT_RACE_PROJECT } = require("../util/opponentRaceCounts");
 const { trendsExplorer } = require("./trendsExplorer");
 const {
   attachRecentByMap,
@@ -305,6 +306,7 @@ class AggregationsService {
             wins: { $sum: { $cond: [{ $eq: ["$_bucket", "win"] }, 1, 0] } },
             losses: { $sum: { $cond: [{ $eq: ["$_bucket", "loss"] }, 1, 0] } },
             total: { $sum: 1 },
+            ...OPPONENT_RACE_GROUP,
           },
         },
         {
@@ -312,6 +314,7 @@ class AggregationsService {
             _id: 0,
             my_build: "$_id.build",
             opp_strat: "$_id.strat",
+            myMatchups: OPPONENT_RACE_PROJECT,
             wins: 1,
             losses: 1,
             total: 1,
