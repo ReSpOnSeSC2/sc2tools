@@ -132,7 +132,7 @@ class PulseOpponentIntelService {
     }
     if (!payload || typeof payload !== "object") return null;
     try {
-      return buildIntel(id, /** @type {any} */ (payload));
+      return buildIntel(id, /** @type {any} */ (payload), this.now());
     } catch (err) {
       if (this.logger) {
         this.logger.warn({ err: String(err), id }, "pulse_intel_parse_failed");
@@ -170,8 +170,9 @@ class PulseOpponentIntelService {
  *
  * @param {string} id
  * @param {any} payload
+ * @param {number} now
  */
-function buildIntel(id, payload) {
+function buildIntel(id, payload, now) {
   const history = normaliseHistory(payload.history);
   const currentTeam = pickCurrentTeam(payload.teams);
   const self = pickSelfCharacter(id, payload.linkedDistinctCharacters);
@@ -213,6 +214,7 @@ function buildIntel(id, payload) {
           }
         : null,
     totalGamesPlayed: self ? self.totalGamesPlayed : null,
+    ratingDelta30d: ratingDelta30d(history, now),
     ratingHistory: downsample(history, SPARKLINE_MAX_POINTS).map((p) => ({
       t: p.t,
       rating: p.rating,
@@ -220,8 +222,22 @@ function buildIntel(id, payload) {
     pro,
     linkedCharacters: linked,
     pulseProfileUrl: `https://sc2pulse.nephest.com/sc2/?type=character&id=${id}&m=1`,
-    fetchedAt: new Date().toISOString(),
+    fetchedAt: new Date(now).toISOString(),
   };
+}
+
+/** Thirty-day movement needs an actual observation on each boundary, before
+ * downsampling. A two-day tolerance admits ordinary daily history gaps; old,
+ * future-only or sparse history stays unknown rather than borrowing a peak.
+ * @param {Array<{t:string,rating:number}>} history @param {number} now */
+function ratingDelta30d(history, now) {
+  const day = 86400000, boundary = now - 30 * day;
+  const valid = history.filter(row => Number.isFinite(row.rating) && Number.isFinite(Date.parse(row.t)) && Date.parse(row.t) <= now).sort((a,b) => Date.parse(a.t) - Date.parse(b.t));
+  const latest = valid[valid.length - 1];
+  const before = valid.filter(row => Date.parse(row.t) <= boundary);
+  const baseline = before[before.length - 1];
+  if (!latest || !baseline || Date.parse(latest.t) < now - 2 * day || Date.parse(baseline.t) < boundary - 2 * day) return null;
+  return { delta: latest.rating - baseline.rating, baselineAt: baseline.t, currentAt: latest.t };
 }
 
 /**
@@ -411,4 +427,4 @@ function downsample(rows, maxPoints) {
   return out;
 }
 
-module.exports = { PulseOpponentIntelService, LEAGUE_LABELS };
+module.exports = { PulseOpponentIntelService, LEAGUE_LABELS, ratingDelta30d };

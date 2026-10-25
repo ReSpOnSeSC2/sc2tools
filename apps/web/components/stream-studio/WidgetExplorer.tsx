@@ -8,6 +8,7 @@ import { LazyHelpLink } from "@/components/help/LazyHelpLink";
 import { buttonClassName } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { WIDGET_GROUPS, WIDGET_GUIDES, type WidgetGuide } from "@/lib/streamStudioLearn";
+import { LazyWidgetPlayground } from "./LazyWidgetPlayground";
 
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-bg";
 
@@ -250,7 +251,6 @@ function WidgetDetail({ guide, onRelated, detailRef }: { guide: WidgetGuide; onR
 function WidgetExample({ guide }: { guide: WidgetGuide }) {
   const [expanded, setExpanded] = useState(false);
   const src = `/images/widget-examples/${guide.id}.webp`;
-  const alt = `${guide.name} widget preview with sample data`;
 
   return (
     <>
@@ -262,12 +262,12 @@ function WidgetExample({ guide }: { guide: WidgetGuide }) {
             Enlarge preview
           </button>
         </div>
-        <Image src={src} alt={alt} width={1400} height={900} sizes="(min-width: 1024px) 780px, 100vw" className="block h-auto w-full" />
-        <figcaption className="border-t border-border px-4 py-3 text-caption text-text-muted">Actual widget design with sample data and default styling. Your theme and available data may change its appearance.</figcaption>
+        <LazyWidgetPlayground initialWidget={guide.id} compact fallbackAlt={`${guide.name} widget preview with sample data`} />
+        <figcaption className="border-t border-border px-4 py-3 text-caption text-text-muted">Local widget sample. Try a theme or scenario here; nothing is sent to OBS. Your real data may change its appearance.</figcaption>
       </figure>
       <Modal open={expanded} onClose={() => setExpanded(false)} title={`${guide.name} preview`} description="Example preview · sample data. Your theme and available data may change its appearance." size="3xl" mobileLayout="center"
         footer={<a href={src} target="_blank" rel="noopener noreferrer" className={`inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-4 py-2 text-caption font-semibold text-accent hover:bg-accent/10 ${FOCUS}`}><Expand className="h-4 w-4" aria-hidden />Open full-size image</a>}>
-        <Image src={src} alt={alt} width={1400} height={900} sizes="(min-width: 1400px) 1400px, 100vw" className="mx-auto block h-auto w-full" />
+        {expanded ? <LazyWidgetPlayground initialWidget={guide.id} compact autoLoad fallbackAlt={`${guide.name} widget preview with sample data`} /> : null}
       </Modal>
     </>
   );

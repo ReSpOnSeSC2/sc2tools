@@ -11,6 +11,7 @@ const { parseExactMapNames } = require("../util/exactMapFilter");
 const { accountMatchHandles } = require("../util/accountFilter");
 const { opponentSeries } = require("./opponentSeries");
 const { parseAnalysisGameIds } = require("../util/opponentAnalysisMembership");
+const { prepareReplayCsv } = require("./replayCsv");
 const { eraForGame } = require("../util/patchEra");
 const { opponentGamesFilter } = require("../util/opponentIdentity");
 const {
@@ -1265,6 +1266,30 @@ class OpponentsService {
    * @returns {Promise<{items: object[], nextCursor: string|null, membership?: {scope: "analysis_sample", requestedGameCount: number}}|null>}
    */
   async listGames(userId, pulseId, opts = {}) {
+    const scope = await this._replayHistoryScope(userId, pulseId, opts);
+    if (!scope) return null;
+    const { clauses, analysisGameIds } = scope;
+    const cursor = decodeOpponentGamesCursor(opts.cursor);
+    if (cursor) {
+      clauses.push({ $or: [{ date: { $lt: cursor.date } }, { date: cursor.date, _id: { $lt: cursor.id } }] });
+    }
+    const limit = clampOpponentGamesLimit(opts.limit);
+    const query = this.db.games.find({ $and: clauses }, { projection: PROFILE_GAME_ROW_PROJECTION }).sort({ date: -1, _id: -1 }).limit(limit + 1);
+    if (analysisGameIds) query.hint({ userId: 1, gameId: 1 });
+    /** @type {Array<any>} */ const rows = await query.toArray();
+    const hasMore = rows.length > limit, page = hasMore ? rows.slice(0, limit) : rows, last = page[page.length - 1];
+    return {
+      items: page.map(game => ({ ...serializeCompactProfileGame(game), ...(analysisGameIds ? { analysisSampleMember: true } : {}) })),
+      ...(analysisGameIds ? { membership: { scope: /** @type {const} */ ("analysis_sample"), requestedGameCount: analysisGameIds.length } } : {}),
+      nextCursor: hasMore && last ? encodeOpponentGamesCursor(last.date, last._id) : null,
+    };
+  }
+
+  /** The same owned identity, global/local filters and explicit sample gate
+   * power paging and export. A cursor limits only a page, never a CSV.
+   * @param {string} userId @param {string} pulseId
+   * @param {{filters?:import('../util/parseQuery').GlobalFilters,mergeLinked?:boolean,result?:unknown,analysisGameIds?:string[]}} opts */
+  async _replayHistoryScope(userId, pulseId, opts) {
     const analysisGameIds = parseAnalysisGameIds(opts.analysisGameIds);
     const doc = await this.db.opponents.findOne(
       { userId, pulseId },
@@ -1291,7 +1316,6 @@ class OpponentsService {
       : null;
     const identityFilter = profileGamesIdentityFilter(pulseId, doc, linked);
 
-    const cursor = decodeOpponentGamesCursor(opts.cursor);
     const clauses = [
       gamesMatchStage(userId, opts.filters || {}),
       identityFilter,
@@ -1299,38 +1323,16 @@ class OpponentsService {
     if (analysisGameIds) clauses.push({ gameId: { $in: analysisGameIds } });
     const resultClause = resultMatchClause(opts.result);
     if (resultClause) clauses.push(resultClause);
-    if (cursor) {
-      clauses.push({
-        $or: [
-          { date: { $lt: cursor.date } },
-          { date: cursor.date, _id: { $lt: cursor.id } },
-        ],
-      });
-    }
+    return { clauses, analysisGameIds };
+  }
 
-    const limit = clampOpponentGamesLimit(opts.limit);
-    const query = this.db.games
-      .find({ $and: clauses }, { projection: PROFILE_GAME_ROW_PROJECTION })
-      .sort({ date: -1, _id: -1 })
-      .limit(limit + 1);
-    // Reuse the existing unique owner/game index: at most 100 selected IDs
-    // are examined even when this opponent has a large replay history.
-    if (analysisGameIds) query.hint({ userId: 1, gameId: 1 });
-    /** @type {Array<any>} */
-    const rows = await query.toArray();
-    const hasMore = rows.length > limit;
-    const page = hasMore ? rows.slice(0, limit) : rows;
-    const last = page[page.length - 1];
-    return {
-      items: page.map((game) => ({
-        ...serializeCompactProfileGame(game),
-        ...(analysisGameIds ? { analysisSampleMember: true } : {}),
-      })),
-      ...(analysisGameIds ? { membership: { scope: "analysis_sample", requestedGameCount: analysisGameIds.length } } : {}),
-      nextCursor: hasMore && last
-        ? encodeOpponentGamesCursor(last.date, last._id)
-        : null,
-    };
+  /** Shared metadata-only replay serializer, 5,000-row dossier cap.
+   * @param {string} userId @param {string} pulseId
+   * @param {{filters?:import('../util/parseQuery').GlobalFilters,mergeLinked?:boolean,result?:unknown,analysisGameIds?:string[],signal?:AbortSignal}} [opts] */
+  async prepareGamesCsv(userId, pulseId, opts = {}) {
+    const scope = await this._replayHistoryScope(userId, pulseId, opts);
+    if (!scope) return null;
+    return prepareReplayCsv(this.db.games, userId, opts.filters || {}, { maxRows: 5000, trustedMatch: { $and: scope.clauses }, signal: opts.signal });
   }
 
   /**

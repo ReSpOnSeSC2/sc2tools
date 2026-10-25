@@ -176,6 +176,7 @@ export type LiveGamePayload = {
   meta?: { matchup?: string; topBuilds?: { name: string; share: number }[] };
   /** Rivalry context. */
   rival?: {
+    starred?: boolean;
     name?: string;
     headToHead?: { wins: number; losses: number };
     note?: string;

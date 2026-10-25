@@ -22,6 +22,7 @@ import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { isOpponentKey } from "@/lib/opponentCache";
 import { useApi } from "@/lib/clientApi";
 import { RevealedChip } from "./RevealedChip";
+import { DossierRivalStar } from "./opponents/DossierRivalStar";
 import { UnsavedNoteProvider } from "./UnsavedNoteContext";
 import {
   filtersToQuery,
@@ -264,6 +265,7 @@ function ProfileBody({ pulseId, backHref }: { pulseId: string; backHref: string 
         <div className="w-full min-w-0 lg:w-auto lg:flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="break-words text-h2 font-semibold">{data.name || "unnamed"}</h1>
+            <DossierRivalStar pulseId={data.pulseId || pulseId} name={data.name || "unnamed opponent"} />
             <RevealedChip
               size="md"
               name={data.globalIdentity?.displayName || data.revealedName}

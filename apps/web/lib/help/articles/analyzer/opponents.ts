@@ -30,7 +30,7 @@ const article: HelpArticle = {
     "barcode",
     "min games",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
     {
       type: "paragraph",
@@ -42,6 +42,7 @@ const article: HelpArticle = {
       head: ["Column", "What it shows"],
       rows: [
         ["Opponent", "Their name in your games. When the player behind a barcode name is known, their real name shows next to it."],
+        ["Race", "Every known race played by a grouped player's accounts; sorting uses the primary, most recent account's race. Unknown is a dash."],
         ["Pulse ID", "Their SC2Pulse ID, or their toon when SC2Pulse doesn't know them yet. See below."],
         ["W, L, Win rate, Games", "Your record against them."],
         ["Last MMR", "Their MMR in the most recent game you played against them."],
@@ -55,7 +56,8 @@ const article: HelpArticle = {
       text: "Click a column header to sort by it; click again to reverse. Click a row to open that opponent's dossier.",
     },
     { type: "heading", text: "Search, sort and share", anchor: "search-sort-share" },
-    { type: "paragraph", text: "Press **/** to focus search and **Esc** to clear it. **Reset** restores this page's search, minimum games, MMR impact, notes, grouping and sort without changing the global filters. Names sort naturally, ignoring case and accents; Pulse IDs sort numerically. Equal win rates put the larger sample first, then the name. Missing values stay last in either direction." },
+    { type: "paragraph", text: "Press **/** to focus search and **Esc** to clear it. **Reset** restores this page's search, minimum games, MMR impact, notes, grouping, columns and sort without changing the global filters. Names sort naturally, ignoring case and accents; Pulse IDs sort numerically. Equal win rates put the larger sample first, then the name. Missing values stay last in either direction." },
+    { type: "paragraph", text: "Phones show dossier cards and a Sort opponents menu using the same remembered sort as desktop. Columns remembers this device's choices: Pulse ID, MMR won and MMR lost start hidden, and Last MMR/Net MMR start hidden without verified pairs. Show 100 more expands the shared row window; expanded aliases count toward it. Read [Finding opponents and saving rivals](/help/opponent-dossier#finding-opponents) for Rivalries, private stars, quick views and full-list CSV export." },
     { type: "paragraph", text: "Bookmark or share the address bar to keep the search, sort, MMR impact and **Has notes** choice. Ctrl/Cmd-click or middle-click a name or dossier arrow to open another tab. **All opponents** returns to the prior list, expanded rows and scroll position. A new tab uses the last list address when available." },
     { type: "paragraph", text: "A note icon shows your private scouting preview on hover or keyboard focus. Grouped players show the first member's preview and how many more have notes. **Has notes** limits the list to players with a saved note." },
     { type: "heading", text: "Group same player", anchor: "group-same-player" },
