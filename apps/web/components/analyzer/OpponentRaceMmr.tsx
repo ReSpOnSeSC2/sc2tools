@@ -148,33 +148,35 @@ export function RaceMmrPanel({
   breakdown,
   isLoading,
   confirmedIdentity,
+  embedded = false,
 }: {
   breakdown: PulseRaceBreakdown | undefined;
   isLoading: boolean;
   confirmedIdentity?: GlobalPlayerIdentity | null;
+  embedded?: boolean;
 }) {
   const currentSource = matchesConfirmedIdentity(breakdown, confirmedIdentity);
   if (isLoading && (!breakdown || !currentSource)) {
     return (
-      <Card title="MMR by race">
+      <RaceMmrSurface embedded={embedded}>
         <Skeleton rows={3} />
-      </Card>
+      </RaceMmrSurface>
     );
   }
   if (!breakdown || !currentSource) return null;
   if (!breakdown.resolved || breakdown.races.length === 0) {
     if (breakdown.ladderIdentity?.confirmed) {
       return (
-        <Card title="MMR by race">
+        <RaceMmrSurface embedded={embedded}>
           <p className="text-caption text-text-muted">A current-season race breakdown is unavailable for this main profile.</p>
           <LadderMmrSource breakdown={breakdown} />
-        </Card>
+        </RaceMmrSurface>
       );
     }
     return null;
   }
   return (
-    <Card title="MMR by race">
+    <RaceMmrSurface embedded={embedded}>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -222,8 +224,12 @@ export function RaceMmrPanel({
         </table>
       </div>
       <LadderMmrSource breakdown={breakdown} />
-    </Card>
+    </RaceMmrSurface>
   );
+}
+
+function RaceMmrSurface({ embedded, children }: { embedded: boolean; children: import("react").ReactNode }) {
+  return embedded ? <section className="mt-5 border-t border-border pt-4"><h3 className="mb-3 text-caption font-semibold">MMR by race</h3>{children}</section> : <Card title="MMR by race">{children}</Card>;
 }
 
 function LadderMmrSource({ breakdown }: { breakdown: PulseRaceBreakdown }) {

@@ -32,7 +32,7 @@ const article: HelpArticle = {
     "public profile",
     "community profile",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
     {
       type: "paragraph",
@@ -44,17 +44,23 @@ const article: HelpArticle = {
       head: ["Part", "What it tells you"],
       rows: [
         ["Header", "Their name, MMR and Pulse ID, your games, wins, losses and win rate against them, and their Twitch or YouTube channel when they've connected one."],
-        ["Scouting notes", "Your own notes about this player. See below."],
+        ["10-second brief", "Up to six recorded-history lines: record and streak, likely opener, a build pairing with at least two games, maps and a rivalry storyline."],
+        ["All-time series", "First and last meeting dates, current and best recorded streaks, and the last ten decided results. Each result opens its replay."],
+        ["Scouting notes", "Your own notes directly below replay history."],
         ["Ladder MMR by race and ladder context", "Their current rating, league and recent form from SC2Pulse."],
         ["By map, By strategy", "Your record against them on each map, and against each opening they used."],
-        ["Build tendencies", "The openings they use most against you, over time."],
+        ["Strategy share", "The share of tagged decided games inside By strategy, alongside your record against each opening."],
         ["Likely strategies next", "What they're most likely to open with next time, weighted toward your last 10 games against them."],
         ["H2H trends", "Your games against them as a timeline, your streaks, and maps and build pairings side by side."],
         ["Where games end", "Whether your games against them tend to end early, in the mid game or late."],
         ["Replay history", "Every game against them, newest first, with a link to each game page."],
       ],
     },
+    { type: "heading", text: "Read or copy the brief", anchor: "brief" },
+    { type: "paragraph", text: "The brief starts with your record in the current dossier scope. It keeps sample counts visible and omits missing facts. **Copy brief** copies those lines; if clipboard access is unavailable, select and copy the text in the field. The all-time series beside the header uses stored meeting dates, so the oldest loaded replay is never presented as your first meeting. For large histories, streaks say that they use the latest 1,000 meetings, best streaks are labeled as sampled, and a current streak reaching the sample boundary is a lower bound." },
+    { type: "paragraph", text: "The sticky section chips follow the section on screen. Tendencies puts H2H charts before map and strategy rows, then predictions. History keeps replays directly above your notes. Ladder combines current race ratings and ladder context. Identity & data quality starts collapsed for normal profiles and opens automatically for an unrevealed barcode or unresolved account." },
     { type: "heading", text: "Narrow it down", anchor: "drill-down" },
+    { type: "paragraph", text: "The scope line shows the analyzer filters used here. **Show all time** removes the date and patch window for this dossier only; it leaves the global filter bar unchanged. **Use analyzer dates** restores that window. If this range has no games but your recorded history has some, the page shows the last meeting date and offers Show all time. Leaving the opponent resets the override." },
     {
       type: "paragraph",
       text: "Click a map, their strategy, or a build pairing to narrow the dossier. The active filters stay visible under the header. ‘(filtered)’ labels mark the narrowed stats; remove one chip or use **Clear all** to widen the view. A selected strategy and build pairing replace one another. Build tendencies, Likely strategies next, and Where games end always show all games in your analyzer scope and say ‘All games, not filtered’. Large histories explain when the filtered summary uses the latest analyzed games; the replay card still searches the full history.",
@@ -63,7 +69,7 @@ const article: HelpArticle = {
     {
       type: "list",
       items: [
-        "The replay history sits directly above your notes near the top of the dossier. The list also shows a private note preview, and its **Has notes** toggle finds opponents you have written about.",
+        "The replay history sits directly above your notes in History. The list also shows a private note preview, and its **Has notes** toggle finds opponents you have written about.",
         "Press **Ctrl+Enter** (or **Cmd+Enter** on a Mac) in the editor to save. A failed save keeps your text and offers **Retry**. The 500-character limit stays the same; the counter appears below 100 characters remaining.",
         "Unsaved drafts stay in this browser tab and restore when you return to the same opponent. **Discard** returns to the saved note. Following **All opponents** or the breadcrumb asks before discarding unsaved work; **Keep editing** is the default action.",
         "Write what you want to remember, for example *Hides tech after early pressure*, and press **Save notes**. Notes are private.",
@@ -84,7 +90,7 @@ const article: HelpArticle = {
         "If it's found, the Pulse ID, MMR and ladder context fill in, and your older games against them are updated too. If it still isn't, SC2Pulse doesn't list the player yet, often because they haven't played enough ranked games this season. Try again later.",
       ],
     },
-    {"type": "paragraph", "text": "Open **Identity & MMR diagnostics** when the account link or ladder MMR looks missing. Its summary separates a profile SC2Pulse has not found from a profile with no current ladder rating. **Retry SC2Pulse** refreshes the profile, ladder panels and channel links together and reports whether past game metadata was updated. An unresolved profile may appear after that player completes more ranked games. Technical details are available in a separate disclosure."},
+    {"type": "paragraph", "text": "Select **Data looks wrong?** beside the Pulse account line to open diagnostics inside Identity & data quality. An unresolved account opens this panel automatically; missing MMR alone does not. Its summary separates a profile SC2Pulse has not found from one with no current ladder rating. **Retry SC2Pulse** refreshes the profile, ladder panels and channel links together. A busy analysis retries with increasing delays; a missing record says Not in your history, while network failures keep a Retry action."},
     {"type": "paragraph", "text": "The replay card's Show filter selects all results, wins or losses without changing the header stats. Its Map selector shares the dossier's map filter. If older or newer pages exist, sorting by a field other than date applies only to the currently loaded page; the caption makes that limit explicit."},
     { type: "heading", text: "Barcodes and real identities", anchor: "barcode" },
     {
@@ -95,15 +101,17 @@ const article: HelpArticle = {
       type: "list",
       items: [
         "**Possible identity matches** compares this barcode with the players in your own replays: build patterns, control groups and replay actions. These are private leads, never proof, and the panel says how strong the evidence is.",
-        "Know who it is? Under **Player identity**, pick their known account and explain the match in at least 10 characters, for example a stream or replay detail that can be checked. Press **Submit for review**.",
+        "Know who it is? Open **Identity & data quality**, select **Know who this is? Suggest an identity**, then pick their known account and explain the match in at least 10 characters. Press **Submit for review**. The form stays collapsed until requested for ordinary accounts.",
         "An administrator checks the evidence. Once approved, the identity shows for everyone. Your submission shows **Awaiting review**, **Approved** or **Not approved**, with a note from the reviewer.",
       ],
     },
     { type: "heading", text: "The public profile", anchor: "public-profile" },
     {
       type: "paragraph",
-      text: "Once at least 5 different SC2 Tools players have faced this opponent, a **Public profile** link appears in the header. That page is open to everyone and combines all of those players' games: race, record, strategies seen and maps, counted from the opponent's side. It never shows names, battle tags, or who contributed.",
+      text: "Once at least 5 different SC2 Tools players have faced this opponent, a **Community profile** button appears in the header. That page is open to everyone and combines all of those players' games: race, record, strategies seen and maps, counted from the opponent's side. It never shows names, battle tags, or who contributed.",
     },
+    { type: "heading", text: "Group the same player", anchor: "group-same-player" },
+    { type: "paragraph", text: "The Opponents list's **Group same player** choice also applies to the dossier. When enabled, identities linked by SC2Pulse or a confirmed shared identity are combined within your own history. The header lists their account names and records. All-time first and last meeting dates span those linked accounts; switching the choice changes the dossier scope, without exposing another user's private history." },
     { type: "heading", text: "How much data it needs", anchor: "sample-size" },
     {
       type: "list",

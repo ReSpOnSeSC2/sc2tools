@@ -170,7 +170,7 @@ export function AllGamesTable({
   return (
     <div className="space-y-3">
       {pageLocalSort && sort.sortBy !== SORT_COLS.date ? <p role="status" className="text-caption text-text-muted">Sorting applies to {games.length === 1 ? "this game" : `these ${games.length} games`} only</p> : null}
-      <div className="hidden overflow-x-auto md:block">
+      <div className="relative hidden overflow-x-auto md:block">
         <table ref={tableRef} className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-bg-elevated text-micro uppercase text-text-muted">
             <tr>

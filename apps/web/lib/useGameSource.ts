@@ -34,6 +34,6 @@ export function useGameSource(label?: string, query?: string): GameSource | null
   const globalQuery = analyzerSection && !context.replace ? filtersToQuery(filters) : undefined;
   return useMemo(() => {
     const source = safeGameSource(href, label ?? context.label);
-    return source ? { ...source, filters: gameSourceFilters(new URL(href, "https://sc2tools.invalid").search, globalQuery, context.filters, query) } : null;
+    return source ? { ...source, filters: gameSourceFilters(context.replace ? undefined : new URL(href, "https://sc2tools.invalid").search, globalQuery, context.filters, query) } : null;
   }, [href, label, globalQuery, context, query]);
 }

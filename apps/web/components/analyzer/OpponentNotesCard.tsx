@@ -22,6 +22,7 @@ type OpponentNotesCardProps = {
   initialNotes?: string | null;
   initialNotesReadAloud?: boolean;
   onSaved?: (value: OpponentNotesValue) => void;
+  headingLevel?: 2 | 3;
 };
 
 /**
@@ -43,6 +44,7 @@ function OpponentNotesEditor({
   initialNotesReadAloud = false,
   onSaved,
   ownerId,
+  headingLevel = 2,
 }: OpponentNotesCardProps & { ownerId: string | null }) {
   const { getToken } = useAuth();
   const toastContext = useToastOptional();
@@ -108,6 +110,7 @@ function OpponentNotesEditor({
     }
   }
 
+  const Heading = headingLevel === 3 ? "h3" : "h2";
   return (
     <Card
       variant="feature"
@@ -118,12 +121,12 @@ function OpponentNotesEditor({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <StickyNote className="h-4 w-4 text-accent" aria-hidden />
-            <h2
+            <Heading
               id="opponent-notes-title"
               className="text-caption font-semibold uppercase tracking-wider text-text"
             >
               Opponent notes
-            </h2>
+            </Heading>
             <span className="rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-micro uppercase tracking-wider text-accent">
               Scouting widget
             </span>
