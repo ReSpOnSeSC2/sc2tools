@@ -98,6 +98,27 @@ describe("RandomizerWidget build check-in gate", () => {
     }]);
   });
 
+  it("does not restart a reveal on repeated match ticks, enrichment, phase changes or cloned saved picks", () => {
+    const saved = { key: "pvt-blink-stalkers", name: "PvT - Blink Stalkers", source: "catalog" as const };
+    const view = harness({ intent: intent({ randomizer: saved }) });
+    expect(reveals).toEqual([saved.key]);
+    for (let displayTime = 0; displayTime < 60; displayTime++) {
+      view.update({
+        liveGame: envelope({
+          phase: displayTime < 2 ? "match_started" : "match_in_progress",
+          displayTime,
+          streamerHistory: { oppName: "Opponent", matchup: "PvT", headToHead: { wins: 3, losses: 2 } },
+        }),
+        config: { ...cfg, matchups: { ...cfg.matchups } },
+        intent: intent({ randomizer: { ...saved } }),
+      });
+      advance(1000);
+    }
+    expect(reveals).toEqual([saved.key]);
+    expect(spins).toHaveLength(1);
+    expect(spins[0].roll).toBeNull();
+  });
+
   it("starts the wait once the matchup is known, so a late hold still lands", () => {
     const view = harness({ liveGame: envelope({ user: undefined, opponent: undefined }) });
     advance(5_000);

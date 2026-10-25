@@ -11,6 +11,15 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Agent 0.24.6 and Randomizer game-start performance
+- Bound the OBS Randomizer's motion simulations to 12 visual contenders and
+  30 FPS, retaining the complete weighted selection pool, chosen result, reveal
+  timing, sound and voice. Keep movement speed independent of refresh rate.
+- Avoid repeated native overlay checks for unchanged windows and focus, with
+  periodic and window-event recovery of click-through styles.
+- Pause queued historical uploads during matches when game-time import pausing
+  is enabled, while keeping fresh replay priority and queued history intact.
+
 ### Added
 - Analyzer tables now support keyboard build opening, global matchup chips, a matchup-scoped heatmap and a Strategy games sheet that stays open as filters change. CSV exports save the displayed Builds, Strategy pairs, Matchups, Maps and pool cells with their scope and local date.
 - Live scouting on Today and a large second-screen page reuse your recorded opponent history, with bounded opening counts, recent replay links and an exact-account note popover. The Stream Dock Scout view omits private notes and replay/account actions.

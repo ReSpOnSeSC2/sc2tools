@@ -47,6 +47,7 @@ interface Sumo {
 
 export function SumoShoveReveal({
   pool,
+  visualPool = pool,
   winner,
   winnerProbability,
   spinId,
@@ -60,12 +61,14 @@ export function SumoShoveReveal({
     () => seededShuffle(pool.filter((b) => b.id !== winner.id), spinId).map((b) => b.id),
     [pool, winner.id, spinId],
   );
+  const trackedIds = useMemo(() => new Set(visualPool.map((build) => build.id)), [visualPool]);
   const { eliminated, settled } = useEliminationSchedule(
     spinId,
     loserOrder,
     DURATION_MS,
     reducedMotion,
     onComplete,
+    trackedIds,
   );
   useRevealSound({
     style: "sumo",
@@ -77,13 +80,13 @@ export function SumoShoveReveal({
     ),
   });
 
-  const sprites = useMemo(() => assignPoolSprites(pool), [pool]);
+  const sprites = useMemo(() => assignPoolSprites(visualPool), [visualPool]);
   const sumosRef = useRef<Sumo[]>([]);
   const [, force] = useState(0);
 
   useMemo(() => {
-    sumosRef.current = pool.map((b, i) => {
-      const angle = (i / pool.length) * Math.PI * 2;
+    sumosRef.current = visualPool.map((b, i) => {
+      const angle = (i / visualPool.length) * Math.PI * 2;
       const rad = RING_R * 0.5;
       return {
         id: b.id,
@@ -98,11 +101,10 @@ export function SumoShoveReveal({
       };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spinId, pool]);
+  }, [spinId, visualPool]);
 
   useRaf(!reducedMotion && !settled, spinId, (dt) => {
     const sumos = sumosRef.current;
-    const speed = dt / 16;
     for (const s of sumos) {
       const out = eliminated.has(s.id) && s.id !== winner.id;
       if (out && !s.launched) {
@@ -115,8 +117,8 @@ export function SumoShoveReveal({
         s.launched = true;
         s.hit = 160;
       }
-      s.x += s.vx * dt * speed;
-      s.y += s.vy * dt * speed;
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
       if (s.hit > 0) s.hit -= dt;
       if (!out) {
         // Keep alive sumos inside the ring.
@@ -196,7 +198,7 @@ export function SumoShoveReveal({
           );
         })}
       </div>
-      <SpriteLegend pool={pool} sprites={sprites} eliminated={eliminated} />
+      <SpriteLegend pool={visualPool} sprites={sprites} eliminated={eliminated} />
       <WinnerCard
         winner={winner}
         rarity={rarity}
