@@ -227,7 +227,7 @@ class TwitchAutomationService {
         await this.withOwner(row.userId, async () => {
           await this.deps.receipts.expireWaitingMarker(row.userId, row.gameKey);
           await this.deps.receipts.abandonPendingMarker(row.userId, row.gameKey);
-          if (row.prediction.status === "pending") await this.deps.receipts.requestSettlement(row.userId, row.gameKey, { action: "cancel", reason: "game_ended_before_create" });
+          if (row.prediction.status === "pending") await this.deps.receipts.abandonPendingPrediction(row.userId, row.gameKey);
           for (const kind of /** @type {const} */ (["prediction", "marker"])) {
             if (["creating", "locking", "resolving", "canceling"].includes(row[kind].status)) {
               const ticket = await this.deps.receipts.claim(row.userId, row.gameKey, kind, row[kind].status, "unknown");

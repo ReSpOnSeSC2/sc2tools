@@ -155,3 +155,15 @@ test("late Cancel cannot overwrite an already-dispatched resolution or claim a r
   expect((await receipts.read("owner-A", env.gameKey)).settlement.action).toBe("resolve"); release.resolve(); await resolving;
   expect((await receipts.read("owner-A", env.gameKey)).prediction.status).toBe("resolved"); expect(provider.endPrediction).toHaveBeenCalledTimes(1);
 });
+test.each(["prediction", "marker"])("a stale pending recovery snapshot cannot cancel a live %s claim", async kind => {
+  const env = envelope(); await receipts.reserve("owner-A", env.gameKey, { accountId: "42", connectionRevision: "revision-A", opponentKey: "fixture", prediction: kind === "prediction" ? "pending" : "disabled", marker: kind === "marker" ? "pending" : "disabled" });
+  const snapshot = await receipts.read("owner-A", env.gameKey); jest.spyOn(receipts, "due").mockResolvedValue([snapshot]);
+  const claimed = await receipts.claim("owner-A", env.gameKey, kind, "pending", "creating"); expect(claimed).not.toBeNull();
+  await service.recover(); const row = await receipts.read("owner-A", env.gameKey); expect(row[kind].status).toBe("creating"); expect(row.settlement).toBeUndefined();
+});
+test("fresh pending lanes have a dispatch grace, then conditional recovery abandons them without provider writes", async () => {
+  const env = envelope(); await receipts.reserve("owner-A", env.gameKey, { accountId: "42", connectionRevision: "revision-A", opponentKey: "fixture", prediction: "pending", marker: "pending" });
+  expect(await service.recover()).toEqual({ checked: 0 }); expect((await receipts.read("owner-A", env.gameKey)).prediction.status).toBe("pending");
+  now += config.limits.leaseMs + 1; expect(await receipts.claim("owner-A", env.gameKey, "prediction", "pending", "creating")).toBeNull(); await service.recover();
+  expect(await receipts.read("owner-A", env.gameKey)).toMatchObject({ prediction: { status: "canceled" }, marker: { status: "skipped" } }); expect(provider.createPrediction).not.toHaveBeenCalled(); expect(provider.createMarker).not.toHaveBeenCalled();
+});

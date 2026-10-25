@@ -31,7 +31,7 @@ function nextCheckStage() {
   /** @param {string} kind */
   const next = kind => ({ $switch: { branches: [
     { case: { $in: [`$${kind}.status`, ["creating", "locking", "resolving", "canceling"]] }, then: `$${kind}.leaseUntil` },
-    { case: { $eq: [`$${kind}.status`, "pending"] }, then: "$createdAt" },
+    { case: { $eq: [`$${kind}.status`, "pending"] }, then: "$dispatchByAt" },
     { case: { $eq: [`$${kind}.status`, "waiting"] }, then: "$deadlineAt" },
     ...(kind === "prediction" ? [{ case: { $in: ["$prediction.status", ["active", "locked"]] }, then: { $ifNull: ["$settlement.requestedAt", "$deadlineAt"] } }] : []),
     { case: { $eq: [`$${kind}.status`, "unknown"] }, then: `$${kind}.retryAt` },
@@ -63,10 +63,11 @@ class TwitchAutomationReceipts {
     const now = new Date(this.now());
     const doc = { userId, gameKey, accountId: input.accountId, connectionRevision: input.connectionRevision, opponentKey: input.opponentKey,
       createdAt: now, updatedAt: now, deadlineAt: new Date(this.now() + config.limits.resultTimeoutMs),
+      dispatchByAt: new Date(this.now() + config.limits.leaseMs),
       expiresAt: new Date(this.now() + config.limits.receiptTtlMs),
       prediction: { status: input.prediction, revision: 0 }, marker: { status: input.marker, revision: 0 },
       ...(input.matchStartedAt instanceof Date && Number.isFinite(input.matchStartedAt.getTime()) ? { matchStartedAt: input.matchStartedAt } : {}),
-      ...([input.prediction, input.marker].includes("pending") ? { nextCheckAt: now } : input.marker === "waiting" ? { nextCheckAt: new Date(this.now() + config.limits.resultTimeoutMs) } : {}),
+      ...([input.prediction, input.marker].includes("pending") ? { nextCheckAt: new Date(this.now() + config.limits.leaseMs) } : input.marker === "waiting" ? { nextCheckAt: new Date(this.now() + config.limits.resultTimeoutMs) } : {}),
       reason: typeof input.reason === "string" ? input.reason.slice(0, 80) : null };
     try { await this.rows.updateOne({ userId, gameKey }, { $setOnInsert: doc }, { upsert: true, maxTimeMS: 1500 }); }
     catch (error) { if (/** @type {any} */ (error)?.code !== 11000) throw error; }
@@ -114,6 +115,7 @@ class TwitchAutomationReceipts {
     // Uncertain CREATE is never claimable as pending again. Only recovery can
     // mark an expired in-flight insert unknown, without another provider POST.
     const doc = await this.rows.findOneAndUpdate({ userId, gameKey, [`${kind}.status`]: from,
+      ...(from === "pending" && to === "creating" ? { dispatchByAt: { $gt: now } } : {}),
       ...(["locking", "resolving", "canceling"].includes(to) ? { [`${kind}.predictionId`]: { $type: "string" } } : {}),
       $or: [{ [`${kind}.leaseUntil`]: { $exists: false } }, { [`${kind}.leaseUntil`]: { $lte: now } }] }, [
       { $set: { [`${kind}.status`]: to, [`${kind}.leaseId`]: leaseId,
@@ -170,8 +172,17 @@ class TwitchAutomationReceipts {
   /** A crash before dispatch must not send a late stream marker on recovery.
    * @param {string} userId @param {string} gameKey */
   async abandonPendingMarker(userId, gameKey) {
-    return this.rows.findOneAndUpdate({ userId, gameKey, "marker.status": "pending" }, [
+    return this.rows.findOneAndUpdate({ userId, gameKey, "marker.status": "pending", dispatchByAt: { $lte: new Date(this.now()) } }, [
       { $set: { "marker.status": "skipped", "marker.reason": "start_not_dispatched", updatedAt: new Date(this.now()) } }, nextCheckStage(),
+    ], { returnDocument: "after", projection: { _id: 0 }, maxTimeMS: 1500 });
+  }
+
+  /** Recovery uses a pending-only CAS, never a stale snapshot to cancel a
+   * worker which has since claimed CREATE. @param {string} userId @param {string} gameKey */
+  async abandonPendingPrediction(userId, gameKey) {
+    const now = new Date(this.now());
+    return this.rows.findOneAndUpdate({ userId, gameKey, "prediction.status": "pending", dispatchByAt: { $lte: now } }, [
+      { $set: { "prediction.status": "canceled", settlement: { $literal: { action: "cancel", reason: "game_ended_before_create", requestedAt: now } }, updatedAt: now } }, nextCheckStage(),
     ], { returnDocument: "after", projection: { _id: 0 }, maxTimeMS: 1500 });
   }
 

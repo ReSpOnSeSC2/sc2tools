@@ -26,6 +26,8 @@ A bounded metadata collection records one receipt per owner/game. Prediction and
 
 An external create is durably marked `creating` before its request. If its outcome is uncertain, it becomes `unknown`; it never returns to pending, blindly POSTs again or adopts an arbitrary matching provider object. Known provider/outcome IDs are immutable. A known-ID ambiguous PATCH can be reconciled with that exact provider ID. Expired workers cannot finish a newer lease.
 
+Fresh pending reservations have a 30-second dispatch grace. Recovery inspects them only after that deadline and abandons them with a pending-only CAS. A stale recovery snapshot can never install cancellation intent or skip a marker after a live worker has claimed `creating`; expired pending rows can no longer enter CREATE.
+
 Markers reserved at loading wait for the actual game start. Recovery cannot create them from an old start. A verified replay result resolves a matching prediction; games under 60 seconds, no result within 20 minutes and explicit Dock cancellation request refunds. Recovery is capped at 25 receipts per pass and must not query the replay corpus.
 
 Settlement intent is persisted before provider work and survives a result or cancellation arriving during CREATE. Cancellation is admitted atomically before a resolution dispatch; a late Cancel cannot overwrite an already dispatched resolution or claim a refund. Missing prediction IDs disable the refund CTA and require a manual provider check. A partial known prediction ID may be canceled, but missing outcome IDs never authorize resolution or later adoption of guessed IDs. An unresolved partial receipt requests a timeout refund.

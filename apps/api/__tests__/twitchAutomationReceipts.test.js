@@ -67,10 +67,11 @@ test("rematch lookup is bounded to its owner and recent opponent receipt", async
   now += config.limits.rematchMs + 1; expect(await journal.recentOpponent("owner-A", input.opponentKey, "next-game")).toBeNull();
 });
 test("recovery batches stay bounded and fields cannot carry secrets or expression injection", async () => {
-  await Promise.all(Array.from({ length: 30 }, (_, i) => reserve(`game-${i}`))); expect(await journal.due(1000)).toHaveLength(25);
+  await Promise.all(Array.from({ length: 30 }, (_, i) => reserve(`game-${i}`))); expect(await journal.due(1000)).toHaveLength(0);
   const ticket = await journal.claim("owner-A", "game-1", "prediction", "pending", "creating");
   await expect(journal.finish(ticket, "active", { ...ids, accessToken: "must-not-store" })).rejects.toThrow();
   const result = await journal.finish(ticket, "active", { ...ids, reason: "$literal-provider-reason" }); expect(result.prediction.reason).toBe("$literal-provider-reason");
+  now += config.limits.leaseMs + 1; expect(await journal.due(1000)).toHaveLength(25);
 });
 
 test("cancel before dispatch prevents CREATE and never affects another owner", async () => {
