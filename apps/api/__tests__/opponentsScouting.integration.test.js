@@ -142,7 +142,7 @@ describe("OpponentsService last5GamesScouting", () => {
 
   test("envelope carries last5GamesScouting with 5 entries newest-first", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     expect(out).not.toBeNull();
     expect(Array.isArray(out.last5GamesScouting)).toBe(true);
     expect(out.last5GamesScouting.length).toBe(5);
@@ -155,7 +155,7 @@ describe("OpponentsService last5GamesScouting", () => {
   test("player card respects the requested date window and caller's private history", async () => {
     await seedFixture();
     await db.games.insertMany(makeFiveGameFixture("another-user", { pulseId, displayName }));
-    const out = await opponents.get(userId, pulseId, { since: new Date("2026-04-13T00:00:00Z") });
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true, since: new Date("2026-04-13T00:00:00Z") });
     expect(out.playerCard).toMatchObject({ sampleSize: 2, totalGames: 2, sampled: false });
     expect(out.playerCard.axes.every((axis) => axis.samples <= 2)).toBe(true);
     expect(out.last5GamesScouting).toHaveLength(5);
@@ -168,7 +168,7 @@ describe("OpponentsService last5GamesScouting", () => {
     await db.games.insertMany(Array.from({ length: 60 }, (_, i) => ({
       ...example, gameId: `extra-${i}`, date: new Date(Date.UTC(2026, 3, 15, 0, i)),
     })));
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     expect(out.gamesScouting).toHaveLength(60);
     expect(out.playerCard).toMatchObject({ sampleSize: 65, totalGames: 65, sampled: false });
     expect(out.playerCard.axes.find((axis) => axis.key === "economy").samples).toBe(65);
@@ -176,7 +176,7 @@ describe("OpponentsService last5GamesScouting", () => {
 
   test("per-game envelopes carry real build-order events with timestamps", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     const g = out.last5GamesScouting[0];
     expect(g.oppBuildOrder.length).toBeGreaterThan(0);
     const broodLord = g.oppBuildOrder.find((e) => e.name === "BroodLord");
@@ -188,7 +188,7 @@ describe("OpponentsService last5GamesScouting", () => {
 
   test("per-game envelopes do NOT leak macroBreakdown", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     for (const env of out.last5GamesScouting) {
       expect(env.macroBreakdown).toBeUndefined();
     }
@@ -196,7 +196,7 @@ describe("OpponentsService last5GamesScouting", () => {
 
   test("endPhase + endReason reflect the per-game classifier output", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     for (const env of out.last5GamesScouting) {
       expect(env.endPhase).toBe("late");
       expect(env.endReason).toBe("macro_game");
@@ -205,7 +205,7 @@ describe("OpponentsService last5GamesScouting", () => {
 
   test("oppCompositionByPhase.late surfaces the real BroodLord count", async () => {
     await seedFixture();
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     const env = out.last5GamesScouting[0];
     const lateUnits = env.oppCompositionByPhase.late.units;
     const broodLord = lateUnits.find((u) => u.token === "BroodLord");
@@ -226,7 +226,7 @@ describe("OpponentsService last5GamesScouting", () => {
       firstSeen: new Date("2026-04-10T00:00:00Z"),
       lastSeen: new Date("2026-04-10T00:00:00Z"),
     });
-    const out = await opponents.get(userId, pulseId);
+    const out = await opponents.getAnalysis(userId, pulseId, { includeProfile: true });
     expect(out).not.toBeNull();
     expect(out.last5GamesScouting).toEqual([]);
     expect(out.playerCard.sampleSize).toBe(0);
