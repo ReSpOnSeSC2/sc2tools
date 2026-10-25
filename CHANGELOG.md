@@ -11,6 +11,11 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Battle reports
+
+- Read a short, fixed-rule account of a replay in Battle report, Caster or Tactical tone, with known timestamps linked to the same game clock. Copy it as plain text or Markdown.
+- Revisit captioned map stills with race-colored unit dots and side labels. Army-value charts cover moments without complete map frames; unknown samples stay gaps and partial recordings do not rewrite the account.
+
 ### My reviews dashboard
 
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
