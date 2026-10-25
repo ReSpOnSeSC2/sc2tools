@@ -113,6 +113,26 @@ required URL setup. See `/help/obs-auto-scene-switching` and
 used disposable fixtures and fake/offscreen OBS boundaries; no production OBS or
 account integration was run.
 
+# Chat commands v2
+
+No new environment variable, secret, collection, index, migration or paid
+service is required. Deploy the API and web together. In Settings → Overlay →
+Multi-platform chat → Chat commands, explicitly open the editor, choose
+availability/alias/cooldown and Save. Custom replies allow only `{user}`,
+`{mmr}`, `{record}`, `{opponent}` and `{streak}`. Try shows the saved command's
+exact reply with the selected existing overlay token and never sends it.
+Copy Nightbot snippet copies that token's private credential URL; paste it
+only into the intended bot configuration. Existing integration switches remain
+off until the owner enables them separately. No account was enabled or used to
+publish a message during implementation.
+
+The record is a UTC calendar day, and uptime is time since Start new session,
+not a claim that Twitch has been live. Season replies need an already-cached
+current regional season boundary; a cold/unavailable catalog gives an honest
+unavailable line without starting provider traffic. History replies can be
+up to30seconds old and disclose safety-limited cohorts. Chat and on-stream
+cooldowns run independently so each surface can answer the same viewer once.
+
 
 # Stream Dock Game desk
 

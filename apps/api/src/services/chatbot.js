@@ -1,6 +1,8 @@
 "use strict";
 
 const { STATS_GAME_MATCH } = require("../util/gameVisibility");
+const { plainText } = require("./chatCommands");
+const { liveOpponentIdentity } = require("./chatStats");
 
 /**
  * ChatbotService — one-line plain-text answers for Nightbot /
@@ -51,7 +53,7 @@ const LIVE_PHASES = new Set([
  * @returns {string}
  */
 function clean(value) {
-  return String(value)
+  return plainText(value)
     .replace(/[\r\n\t\u2028\u2029]+/g, " ")
     .replace(/\s{2,}/g, " ")
     .trim();
@@ -150,6 +152,10 @@ class ChatbotService {
    *   overlayTokens?: import('./types').OverlayTokensService,
    *   liveGameBroker?: import('./liveGameBroker').LiveGameBroker,
    *   games?: import('./games').GamesService,
+   *   chatStats?: import('./chatStats').ChatStatsService,
+   *   engagement?: Pick<import('./multichatEngagement').MultichatEngagementService,'topOracles'>,
+   *   studio?: Pick<import('./multichatStudio').MultichatStudioService,'get'>,
+   *   now?: ()=>number,
    *   logger?: import('pino').Logger,
    * }} [services]
    */
@@ -158,6 +164,10 @@ class ChatbotService {
     this.overlayTokens = services.overlayTokens || null;
     this.liveGameBroker = services.liveGameBroker || null;
     this.games = services.games || null;
+    this.chatStats = services.chatStats;
+    this.engagement = services.engagement;
+    this.studio = services.studio;
+    this.now = services.now || Date.now;
     this.logger = services.logger || null;
   }
 
@@ -175,7 +185,7 @@ class ChatbotService {
       const opp = env
         ? /** @type {Record<string, any>|undefined} */ (env.opponent)
         : undefined;
-      if (env && opp && typeof opp.name === "string" && opp.name.trim()) {
+      if (env && !env.isReplay && opp && typeof opp.name === "string" && opp.name.trim()) {
         return clip(this._opponentLineFromEnvelope(env));
       }
       const post = this.liveGameBroker
@@ -222,7 +232,7 @@ class ChatbotService {
       const start = finiteNumber(session.mmrStart);
       if (start !== null) {
         const delta = mmr - start;
-        head += ` (${delta >= 0 ? "+" : ""}${delta} today)`;
+        head += ` (${delta >= 0 ? "+" : ""}${delta} this session)`;
       }
       bits.push(head);
     }
@@ -263,6 +273,46 @@ class ChatbotService {
   }
 
   /* ================= internals ================= */
+
+  /** Shared deterministic line composer for every registry transport.
+   * @param {string} token @param {string} command @param {string} [argument]
+   * @returns {Promise<string|null>} */
+  async commandLine(token, command, argument = "") {
+    if (command === "mmr") return this.mmrLine(token);
+    if (command === "opponent") return this.opponentLine(token);
+    if (command === "build") return this.buildLine(token);
+    const userId = await this._userIdForToken(token); if (!userId) return null;
+    try {
+      if (command === "oracle") {
+        const rows = await this.engagement?.topOracles(token, 3);
+        return clip(rows?.length ? `Top oracles: ${rows.map((row, index) => `${index + 1}. ${clean(row.user)} ${row.score} pts (${row.correct}/${row.total})`).join(" · ")}` : "No prediction scores yet.");
+      }
+      if (command === "uptime") {
+        const studio = await this.studio?.get(token);
+        const start = studio?.streamStartMs;
+        if (typeof start !== "number" || start <= 0 || start > this.now()) return "Stream session hasn't been started.";
+        const minutes = Math.floor((this.now() - start) / 60000);
+        return `Stream session uptime: ${Math.floor(minutes / 60)}h ${minutes % 60}m.`;
+      }
+      if (!this.chatStats) return "Recorded stats are temporarily unavailable.";
+      const stats = await this.chatStats.snapshot(userId);
+      if (command === "h2h") {
+        const envelope = this.liveGameBroker?.latest(userId);
+        const opponent = envelope && !envelope.isReplay && LIVE_PHASES.has(String(envelope.phase)) ? liveOpponentIdentity(envelope) : stats.latestOpponent;
+        return clip(await this.chatStats.h2h(userId, opponent));
+      }
+      if (command === "winrate") {
+        const raw = argument.trim().toLowerCase();
+        const aliases = { protoss: "p", terran: "t", zerg: "z", random: "r" };
+        const key = /** @type {Record<string,string>} */ (aliases)[raw] || raw || "all";
+        return clip(stats.winrates[key] || "Use !winrate [PvZ, Protoss, Terran, Zerg or Random].");
+      }
+      return clip(/** @type {Record<string,unknown>} */ (stats)[command] ? String(/** @type {Record<string,unknown>} */ (stats)[command]) : "Unknown command.");
+    } catch (error) {
+      this._warn(error, "chatbot_command_line_failed");
+      return "Recorded stats are temporarily unavailable.";
+    }
+  }
 
   /**
    * Token → userId via the shared OverlayTokensService lookup (same
@@ -512,7 +562,7 @@ class ChatbotService {
   _buildFromBrokerPayloads(userId) {
     if (!this.liveGameBroker) return null;
     const env = this.liveGameBroker.latest(userId);
-    if (env && typeof env.myBuild === "string" && env.myBuild.trim()) {
+    if (env && !env.isReplay && typeof env.myBuild === "string" && env.myBuild.trim()) {
       return `Current build: ${clean(env.myBuild)}`;
     }
     const post = /** @type {Record<string, any>|null} */ (
@@ -590,4 +640,4 @@ class ChatbotService {
   }
 }
 
-module.exports = { ChatbotService, MAX_LINE_CHARS };
+module.exports = { ChatbotService, MAX_LINE_CHARS, clip };
