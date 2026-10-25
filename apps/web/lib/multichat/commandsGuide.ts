@@ -92,7 +92,7 @@ export function buildBioText(rankRace: RankRace, preferences?: ChatCommandPrefer
   const ladder = RANK_LADDERS[rankRace];
   const ladderLine = `${ladder.slice(0, ladder.length - 1).join(" → ")} → ${ladder[ladder.length - 1].toUpperCase()}`;
   const lines: string[] = [
-    "💬 CHAT COMMANDS — work from Twitch, Kick, YouTube AND TikTok chat:",
+    preferences ? "💬 CHAT COMMANDS — availability follows this channel's saved platform settings:" : "💬 CHAT COMMANDS — work from Twitch, Kick, YouTube AND TikTok chat:",
     "",
     "🔮 PREDICTIONS — when my next game is loading, call it:",
     "!win — you think I win · !loss — you think I choke",

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const env = vi.hoisted(() => ({ auth: { userId: "A", isLoaded: true, isSignedIn: true, getToken: vi.fn() }, read: { data: { builtins: [], custom: [] }, isLoading: false, isPreviousData: false, error: null as unknown, mutate: vi.fn() } }));
 vi.mock("@clerk/nextjs", () => ({ useAuth: () => env.auth }));
@@ -37,4 +37,14 @@ it("has a selected read-only clipboard fallback and clears private draft/preview
   fireEvent.change(screen.getByRole("textbox", { name: "Alias for !mmr" }), { target: { value: "private_alias" } });
   env.auth.userId = "B"; view.rerender(<ChatCommandsEditor token="synthetic-B" onSaved={vi.fn()} />);
   await waitFor(() => expect(screen.getByRole("textbox", { name: "Alias for !mmr" })).toHaveProperty("value", "mmr")); expect(screen.queryByDisplayValue(/synthetic-A/)).toBeNull();
+});
+it("ignores a held clipboard rejection after auth loading and permits a new owner's copy", async () => {
+  let reject!: (reason: Error) => void; writeText.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+  const view = render(<ChatCommandsEditor token="synthetic-A" onSaved={vi.fn()} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Copy Nightbot · !mmr" })); await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+  env.auth.isLoaded = false; view.rerender(<ChatCommandsEditor token="synthetic-A" onSaved={vi.fn()} />);
+  env.auth.isLoaded = true; env.auth.userId = "B"; view.rerender(<ChatCommandsEditor token="synthetic-B" onSaved={vi.fn()} />);
+  await act(async () => reject(new Error("Late A clipboard failure"))); await screen.findByRole("button", { name: "Copy Nightbot · !mmr" });
+  expect(screen.queryByRole("textbox", { name: "Copy this Nightbot snippet" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Copy Nightbot · !mmr" })); await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2)); expect(writeText.mock.calls[1][0]).toContain("/synthetic-B/mmr?");
 });

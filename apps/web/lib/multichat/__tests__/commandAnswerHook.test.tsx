@@ -46,6 +46,15 @@ it("fences held bodies across A→B→A token changes and skips messages already
   view.rerender({ messages: [live], token: "B" }); view.rerender({ messages: [live], token: "A" });
   await act(async () => finish({ status: "reply", text: "Late private answer", command: "mmr" })); expect(view.result.current).toBeNull(); expect(fetch).toHaveBeenCalledTimes(1);
 });
+it("does not publish a held rank answer after the loyalty theme changes", async () => {
+  let finish!: (value: unknown) => void;
+  vi.mocked(fetch).mockResolvedValue({ ok: true, status: 200, json: () => new Promise(resolve => { finish = resolve; }) } as Response);
+  const view = renderHook(({ messages, rankRace }) => useCommandAnswers(messages, { ...args, rankRace }), { initialProps: { messages: [] as ChatMessage[], rankRace: "protoss" as "protoss" | "zerg" } });
+  const live = message("rank-theme", "!rank"); view.rerender({ messages: [live], rankRace: "protoss" }); await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  view.rerender({ messages: [live], rankRace: "zerg" });
+  await act(async () => finish({ found: true, xp: 40, level: 2, xpToNext: 20, oracleScore: 0 }));
+  expect(view.result.current).toBeNull(); expect(fetch).toHaveBeenCalledTimes(1);
+});
 it("expires answers and settles a held request deadline without blocking new commands", async () => {
   vi.useFakeTimers(); const view = renderHook(({ messages }) => useCommandAnswers(messages, args), { initialProps: { messages: [] as ChatMessage[] } });
   await act(async () => view.rerender({ messages: [message("a", "!record")] }));

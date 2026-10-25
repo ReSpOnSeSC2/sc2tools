@@ -24,6 +24,10 @@ describe("authoritative chat command catalog", () => {
     value.custom.push({ ...newCustomCommand(), trigger: "greet", response: "Hello {user}" });
     expect(buildBioText("zerg", value)).toContain("!rating"); expect(buildBioText("zerg", value)).toContain("also !mmr");
     expect(buildBioText("zerg", value)).toContain("!greet — custom channel reply"); expect(buildBioText("zerg", value)).not.toContain("Hello {user}");
+    value.builtins.forEach(command => { command.platforms = ["nightbot"]; });
+    expect(buildBioText("zerg", value)).toContain("availability follows this channel's saved platform settings");
+    expect(buildBioText("zerg", value)).not.toContain("work from Twitch, Kick");
+    expect(buildBioText("zerg")).toContain("work from Twitch, Kick");
   });
   it("rejects reserved/colliding aliases, limits, markup and unknown variables", () => {
     const value = readChatCommands({}); value.custom.push({ ...newCustomCommand(), trigger: "rank", response: "Hi {user}" });
