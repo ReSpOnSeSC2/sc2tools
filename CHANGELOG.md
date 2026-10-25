@@ -11,6 +11,12 @@ corresponding GitHub Release.
 
 ## [Unreleased]
 
+### Opponent list columns
+
+- Choose latest replay download, map/result, your and the opponent's build, recorded build-order links/dates, game lengths, your macro breakdown/averages and scouting notes. Matching game filters and measured sample counts apply; incomplete build-order dates stay unknown or marked Latest known.
+- Save opponent column and sort choices immediately in this browser so returning to the page or starting a later session keeps them. Selected details also appear in phone cards, and optional summary fields are available in CSV exports.
+- Cancel replay downloads when the account or replay source changes, and allow retry after a bounded wait.
+
 ### Fixed
 
 - The desktop scouting report's X and minimize buttons now work while StarCraft II has focus, alongside the scouting icon. Other report content continues to pass game clicks through.

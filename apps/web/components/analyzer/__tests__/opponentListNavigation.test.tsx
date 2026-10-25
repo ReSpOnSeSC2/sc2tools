@@ -2,6 +2,7 @@ import { act, cleanup, render, renderHook, screen } from "@testing-library/react
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { readOpponentListQuery, storedOpponentListUrl, useOpponentListNavigation, writeOpponentListQuery } from "../useOpponentListNavigation";
 import { RevealedChip } from "../RevealedChip";
+import { StrictMode, type ReactNode } from "react";
 
 beforeEach(() => { localStorage.clear(); sessionStorage.clear(); window.history.replaceState({}, "", "/app/opponents"); });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
@@ -30,6 +31,27 @@ it("applies browser Back URL state without briefly rewriting it with the previou
   expect(result.current.search).toBe("Beta"); expect(result.current.sort.sortBy).toBe("games"); expect(result.current.hasNotes).toBe(true);
   expect(back.replace).not.toHaveBeenCalled();
   act(() => vi.advanceTimersByTime(300)); expect(back.replace).not.toHaveBeenCalled();
+});
+it("keeps URL hydration and Back read-only while intentional external setters persist in StrictMode", () => {
+  vi.useFakeTimers();
+  const saved = { sortBy: "games", sortDir: "asc" };
+  const key = "analyzer.opponents.sort";
+  localStorage.setItem(key, JSON.stringify(saved));
+  const first = route("sort=name&dir=desc");
+  const { result, rerender, unmount } = renderHook(({ location }) => useOpponentListNavigation(location), {
+    initialProps: { location: first }, wrapper: ({ children }: { children: ReactNode }) => <StrictMode>{children}</StrictMode>,
+  });
+  expect(result.current.sort.sortBy).toBe("name");
+  expect(JSON.parse(localStorage.getItem(key)!)).toEqual(saved);
+  const back = route("sort=lastPlayed&dir=asc");
+  rerender({ location: back });
+  expect(result.current.sort.sortBy).toBe("lastPlayed");
+  expect(result.current.sort.sortDir).toBe("asc");
+  expect(JSON.parse(localStorage.getItem(key)!)).toEqual(saved);
+  expect(back.replace).not.toHaveBeenCalled();
+  act(() => result.current.sort.setSortExplicit("wins", "desc"));
+  unmount();
+  expect(JSON.parse(localStorage.getItem(key)!)).toEqual({ sortBy: "wins", sortDir: "desc" });
 });
 it("flushes a pending search into the history entry and saves the exact render window before a dossier opens", () => {
   const location = route("future=keep");
