@@ -127,6 +127,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.useRealTimers();
   document.body.style.overflow = "";
 });
@@ -141,7 +142,7 @@ describe("CoachingPractice", () => {
     expect(harness.requestedPaths).toContain("/v1/coaching/assignments?state=active&limit=100");
     const table = screen.getByRole("table"); expect(within(table).getAllByRole("row")[1].textContent).toContain("Aster");
     expect(within(table).getByText(/Behind schedule · 0 of 5 games/)).toBeTruthy();
-    fireEvent.click(within(table).getByRole("button", { name: "Aster" }));
+    fireEvent.click(within(table).getAllByRole("row")[1].querySelector("td")!);
     expect(harness.requestedPaths).toContain("/v1/coaching/assignments?studentId=student-1&page=1&limit=20&state=active");
     expect(screen.getByRole("button", { name: "Assign again" })).toBeTruthy();
   });
@@ -157,6 +158,7 @@ describe("CoachingPractice", () => {
   });
 
   it("repeats even a cancelled plan with copied fields, a new identity and a visible unavailable-build error", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-09-04T12:00:00Z"));
     harness.rosterData = { state: { students: [{ id: "student-1", name: "Aster", userId: "user-1" }] } };
     harness.assignmentsData = assignmentPayload([makeAssignment({ status: "cancelled", progress: makeProgress({ state: "cancelled" }) })]);
     harness.observedGamesByPath = { "/v1/coaching/students/user-1/games": { games: [] } };
@@ -167,6 +169,7 @@ describe("CoachingPractice", () => {
     expect(screen.getByLabelText(/^Starts/)).toHaveProperty("value", "2026-09-08");
     expect(screen.getByLabelText(/^Ends/)).toHaveProperty("value", "2026-09-14");
     expect(screen.getByRole("combobox", { name: "Build" })).toHaveProperty("value", "");
+    expect(screen.getByRole("combobox", { name: "Build" }).getAttribute("aria-invalid")).toBe("true");
     expect(await screen.findByText("Choose a build available for this student.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Assign plan" })).toHaveProperty("disabled", true);
   });

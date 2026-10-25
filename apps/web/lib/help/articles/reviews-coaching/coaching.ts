@@ -75,8 +75,7 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "To stop, the student presses **Revoke access** on the Practice tab, and the coach loses access right away. Allowing again later starts a new sharing period; games from the earlier plans stay private.",
     },
-    { type: "heading", anchor: "practice-plans", text: "Practice plans" },
-    { type: "heading", anchor: "assigning-practice-plans", text: "Assigning practice plans" },
+    { type: "heading", anchor: "practice-plans", text: "Assigning practice plans" },
     {
       type: "paragraph",
       text: "The coach sets a plan with **Assign games**. Each plan counts games from the student's synced replays with fixed rules, so nobody types in a number and nothing is self-reported.",
@@ -107,7 +106,7 @@ const article: HelpArticle = {
     },
     { type: "heading", anchor: "how-progress-is-counted", text: "How progress is counted" },
     { type: "paragraph", text: "Only eligible synced 1v1 replays count, after the plan was assigned. Periods follow the player's time zone, including daylight-saving changes. The period strip marks reached targets in green, past unmet targets in red, the current period with an accent ring, and upcoming periods in a dim style. Select a period to read its recorded count. The streak counts consecutive reached periods ending with the last finished period; the current unfinished period does not add to it." },
-    { type: "paragraph", text: "**Behind schedule** compares the current period's recorded games with the whole-number part of its target multiplied by the elapsed share of that period. It is schedule pace, not a grade or a prediction. The roster's last qualifying game is taken from active plans, and its dates are labeled UTC. **Games and replay evidence** shows the full qualifying count and W–L across all pages; its percentage uses wins plus losses, excluding ties. Use **Retry** inside the list after a failed read." },
+    { type: "paragraph", text: "**Behind schedule** compares the current period's recorded games with its target multiplied by the elapsed share of that period, rounded down to a whole game. It is schedule pace, not a grade or a prediction. The roster's last qualifying game is taken from active plans, and its dates are labeled UTC. **Games and replay evidence** shows the full qualifying count and W–L across all pages; its percentage uses wins plus losses, excluding ties. Use **Retry** inside the list after a failed read." },
     { type: "heading", anchor: "sessions", text: "Booking sessions" },
     {
       type: "steps",

@@ -37,7 +37,7 @@ export function AssignmentModal({
   const field = (name: keyof AssignmentDraft) => ({
     name,
     id: `${formId}-${name}`,
-    invalid: Boolean((attempted || touched[name]) && errors[name]),
+    invalid: Boolean((attempted || touched[name] || (name === "buildSelection" && draft.unavailableBuild)) && errors[name]),
     onBlur: () => setTouched((current) => ({ ...current, [name]: true })),
   });
   const error = (name: keyof AssignmentDraft) => (attempted || touched[name] || (name === "buildSelection" && draft.unavailableBuild)) ? errors[name] : undefined;

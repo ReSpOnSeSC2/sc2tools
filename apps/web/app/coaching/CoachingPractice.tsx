@@ -332,7 +332,7 @@ function PracticeWorkspace({ role }: { role: CoachingRole }) {
 
   const openAgain = (assignment: PracticeAssignment) => {
     if (!assignableStudents.some(student => student.id === assignment.student.id)) return;
-    const today = localDateKey(new Date(now), assignment.requirement.timeZone);
+    const today = localDateKey(new Date(Date.now()), assignment.requirement.timeZone);
     setDraft({ ...nextWindowDraft(assignment, today), clientRequestId: requestId() });
   };
 

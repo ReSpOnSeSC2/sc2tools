@@ -1258,6 +1258,12 @@ describe("coaching game assignments", () => {
         paginated: true,
       }),
     );
+    await request(app).get("/v1/coaching/assignments?state=ended").expect(200);
+    expect(coaching.listAssignments).toHaveBeenLastCalledWith("coach-user", coachRole, expect.objectContaining({ state: "ended" }));
+    const allowedCalls = coaching.listAssignments.mock.calls.length;
+    await request(app).get("/v1/coaching/assignments?state=unknown").expect(400);
+    await request(app).get("/v1/coaching/assignments?state=active&state=ended").expect(400);
+    expect(coaching.listAssignments).toHaveBeenCalledTimes(allowedCalls);
     await request(app)
       .post("/v1/coaching/students/student-1/assignments")
       .send(definition())

@@ -31,6 +31,7 @@ export function AssignmentCard({
     ?? (progress.requiredGamesTotal || assignment.requirement.requiredGames);
   const percentage = required > 0 ? Math.min(100, (played / required) * 100) : 0;
   const recurring = assignment.requirement.recurrence !== "once";
+  const periodHeading = selected ? "Selected" : progress.state === "upcoming" ? "First" : progress.state === "met" || progress.state === "missed" ? "Final" : progress.state === "cancelled" ? "Last recorded" : "This";
   const title = assignment.requirement.title?.trim() || requirementTitle(assignment);
   const status = progressStateLabel(progress.state);
   const remaining = Math.max(0, required - played);
@@ -71,7 +72,7 @@ export function AssignmentCard({
           <div className="flex items-end justify-between gap-3">
             <div>
               <p className="text-micro font-bold uppercase tracking-wider text-text-dim">
-                {recurring ? `${selected ? "Selected" : "This"} ${cadenceNoun(assignment.requirement.recurrence)}` : "Progress"}
+                {recurring ? `${periodHeading} ${cadenceNoun(assignment.requirement.recurrence)}` : "Progress"}
               </p>
               <p className="mt-1 font-display text-h3 font-extrabold tabular-nums text-text">
                 {played}<span className="text-body text-text-muted"> / {required}</span>

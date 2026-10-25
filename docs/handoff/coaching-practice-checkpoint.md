@@ -9,10 +9,21 @@ schedule badge, period strip/streak, full evidence W–L and inline Retry. Exist
 private consent/grant scope, visible-state copy and replay evidence are retained.
 The main workspace is split into bounded presentation modules. See ADR 0042.
 
-Current verification: 66 API tests across five coaching suites, 88 web/coaching
-tests, API/web types green. Scoped API lint has zero errors and baseline legacy
-size warnings. Final responsive browser evidence, build/budgets and full gates
-pending; source remains under review.
+Current verification: 66 API tests across five coaching suites, 89 web/coaching
+tests and 77 Help checks (updated exact anchor fixture), API/web types and scoped
+web lint green. Scoped API lint has zero errors and baseline legacy size warnings.
+Fresh main `b2abc9c0` integrated cleanly. Required-engine production build passes
+all unchanged budgets: landing 214.5/215 kB, Today 228.3/240, dossier 475.9/500;
+coaching first load is 199 kB.
+
+Forty browser assertions pass at 375/1440px, light/dark: actual workspace/clientApi,
+production CSS and committed fonts, all nonlocal traffic blocked and four local
+synthetic assignment posts. Eight captures are under
+`docs/handoff/screenshots/coaching-{roster,plan}-{theme}-{width}.png`. Checks cover
+roster ordering, selected-player/state scope, period history, W–L and retry,
+unavailable-build prefill, modal geometry, saved payload and no overflow/errors.
+Phone evidence wraps its text and puts the download control below it. Final
+independent review and full remote gates remain pending.
 
 No production account operation, migration, job, grade, score, AI, release,
 infrastructure or budget change. Local synthetic tests only.
