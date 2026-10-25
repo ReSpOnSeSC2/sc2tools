@@ -110,7 +110,7 @@ const retiredRequest = () => new DOMException("This account request is no longer
 
 /** The SWR key owns the response, even if Clerk changes while JWT/body awaits.
  * A fresh object for each auth transition also rejects an A→B→A completion. */
-function useOwnerRequestScope(owner: string | null, getToken: () => Promise<string | null>) {
+export function useOwnerRequestScope(owner: string | null, getToken: () => Promise<string | null>) {
   const ref = useRef<OwnerScope>({ owner, active: !!owner, controllers: new Set() });
   if (ref.current.owner !== owner) {
     ref.current.active = false;
