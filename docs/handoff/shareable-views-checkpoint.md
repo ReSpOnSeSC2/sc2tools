@@ -15,7 +15,9 @@ The first plain `/app` visit uses a single projected indexed user read through `
 ## Validation
 
 - API: 55 real-Mongo preference/default-route tests; full API types and new-test lint passed. One read supplies default view plus legacy tab; no game-history reads or new aggregation.
-- Web: focused codec, provider, URL/history, dialog, clipboard, first-visit, existing chip/frame/persistence and Help checks passed. Final build, browser evidence and exact-head CI are recorded in the PR before merge.
+- Web: 115 focused codec/provider/URL/dialog/clipboard/first-visit/chip/frame/persistence/Help checks, plus 11 shared Modal checks passed; full types and strict changed-source lint passed.
+- Required integrated production build and every unchanged budget passed: landing 214.1/215, Today 226.7/240, game 312.7/440 and opponent 490.4/500 kB. The final Modal close-target correction is also covered by its tests and the browser geometry checks; exact-head CI rebuilds before merge.
+- Browser: 100 checks at 320/390/768/1440 px passed using production CSS/fonts and explicit synthetic auth/API/router boundaries, including CRUD/default, actual AppHome first-visit behavior, clipboard fallback, Back/Forward, pending-navigation and invalid-exact recovery, storage isolation, focus/keyboard, 44 px dialog targets, contrast, no overflow/errors/external requests. Eight light/dark screenshots are in `screenshots/analyzer-views-*.png`; root and independent visual review passed.
 - Independent review found and resolved custom-range and exact-chip mismatch normalization, pending navigation writes, malformed exact cohort fallback, and stale clipboard completion.
 
 ## Setup and rollback

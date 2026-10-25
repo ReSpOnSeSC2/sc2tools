@@ -2,6 +2,14 @@
 
 The owner requested the entire HANDOFF program through waves 2–6, and no AI features or AI API calls. Keep progressing; prepared branches are not completion.
 
+## Latest checkpoint — 2026-10-25
+
+This section supersedes the older in-progress notes below. Build Studio702, default-off mocked stream titles703, map veto706, playback705, Story/fight ledger707 and benchmarks708 have merged after final CI and Vercel. Their original source branches and worktrees are preserved. Latest benchmark squash is1309693b; Story is c3c6b4fb and playback c050e659.
+
+Mechanics progress709 and battle reports710 are finishing their final merge gates. Saved views711 is on `codex/wave3-shareable-views` in `.worktrees/wave3-coaching-forms`: source is independently reviewed,55 API tests,126 focused web/Modal tests,100 browser checks, types/lint, integrated required build and all unchanged budgets pass. See `shareable-views-checkpoint.md` for exact scope, bounds and evidence; final-head CI and merge remain required.
+
+The next packs are dossier-upgrade (brief/layout then cheap-profile/lazy-analysis split) and strength-adjusted-winrates (bounded deterministic calibration with honest replay-MMR eligibility). They are implementation work in progress, not shipped. Remaining roadmap waves and the final `docs/SETUP_GUIDE.md` are still required. No production migration, integration activation, title publication, installer execution/signing/release, version bump or tag occurred.
+
 ## Completed and merged
 
 PR #647 was already merged at task start; its description was completed accurately. PR #648 fixed all twelve confirmed phase2a findings, the bundle/CI failure and the requested placement of opponent replay history directly above notes. All 44 review dispositions are recorded in review-resolution-phase2a.md.

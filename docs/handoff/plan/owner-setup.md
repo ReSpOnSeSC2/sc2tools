@@ -70,3 +70,7 @@ No new environment variable, secret, database migration or desktop release is re
 ### Build supply and exports
 
 No environment variable, collection, migration or paid service is required. The API enriches display build events from already-stored player stats; it does not change raw classifier timestamps. After deployment, open an owned game, choose Builds, verify prior-sample supply and use either column’s menu. Header CSV/JSON exports run locally. Custom/Community rule-only definitions copy their matching conditions, and signature deadlines remain identified. Help: `/help/build-orders-export`. No production reanalysis is performed by this change.
+# Saved analyzer views
+
+`shareable-views` needs no new environment variables, services, indexes, jobs or migration. The existing private preferences API stores up to twelve named filter/section views. A single indexed user read supplies first-visit saved-view/default-tab behavior. Deploy the API and web changes normally; no production account settings were changed during validation.
+
