@@ -17,10 +17,10 @@ const LOADED = { timeout: 10_000 };
 describe("LazyHelpLink", () => {
   it("keeps a named link while the default article title is still loading", async () => {
     render(<LazyHelpLink slug="stay-up-to-date" />);
-    const fallback = screen.getByRole("link", { name: "Help", exact: true });
+    const fallback = screen.getByRole("link", { name: "Help" });
     expect(fallback.getAttribute("href")).toBe("/help/stay-up-to-date");
     expect(fallback.textContent).toBe("Help");
-    const loaded = await screen.findByRole("link", { name: "Stay up to date", exact: true }, LOADED);
+    const loaded = await screen.findByRole("link", { name: "Stay up to date" }, LOADED);
     expect(loaded.getAttribute("aria-haspopup")).toBe("dialog");
   });
 

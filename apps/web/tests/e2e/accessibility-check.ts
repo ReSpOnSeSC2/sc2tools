@@ -21,7 +21,7 @@ export async function checkAccessibility(page: Page, info: TestInfo, route: stri
   const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   const issues = result.violations.filter(row => row.impact === "serious" || row.impact === "critical").flatMap(row => row.nodes.map(node => ({
     page: route, theme, project: info.project.name, rule: row.id, target: JSON.stringify(node.target),
-    impact: row.impact, summary: node.failureSummary, help: row.helpUrl,
+    impact: row.impact, summary: node.failureSummary, html: node.html.slice(0, 600), help: row.helpUrl,
   })));
   await info.attach("accessibility", { body: JSON.stringify({ issues, incomplete: result.incomplete.map(row => row.id) }), contentType: "application/json" });
   if (process.env.A11Y_AUDIT_DIR) {

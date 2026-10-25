@@ -6,6 +6,6 @@ export const THEME_TOKENS = {
   },
   light: {
     accent: "#0e7d8c", "bg-surface": "#ffffff", "bg-elevated": "#f9fbfe",
-    text: "#0d121a", "text-muted": "#3f4856", danger: "#d24449", success: "#1c9c56", warning: "#b07618",
+    text: "#0d121a", "text-muted": "#3f4856", danger: "#b8333a", success: "#157a43", warning: "#8f5f0f",
   },
 } as const;

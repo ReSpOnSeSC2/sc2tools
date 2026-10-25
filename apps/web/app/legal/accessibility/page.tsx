@@ -15,7 +15,7 @@ export default function AccessibilityPage() {
   return <article className="mx-auto max-w-3xl space-y-8">
     <PageHeader title="Accessibility" description="We want replay analysis and community knowledge to be usable by more players." />
     <section className="space-y-3" aria-labelledby="accessibility-target"><h2 id="accessibility-target" className="text-h2 font-semibold">Our target</h2>
-      <p>We aim for <a href="https://www.w3.org/TR/WCAG22/" className="underline">WCAG 2.2 Level AA</a>. We check shared colour tokens, public pages and keyboard interactions as part of development. Automated checks cover only part of accessibility; this statement is a target and an account of current support, not a claim that every screen meets every criterion.</p>
+      <p>We aim for <a href="https://www.w3.org/TR/WCAG22/" className="underline">WCAG 2.2 Level AA</a>. We check shared color tokens, public pages and keyboard interactions as part of development. Automated checks cover only part of accessibility; this statement is a target and an account of current support, not a claim that every screen meets every criterion.</p>
     </section>
     <section className="space-y-3" aria-labelledby="accessibility-keyboard"><h2 id="accessibility-keyboard" className="text-h2 font-semibold">Keyboard and appearance</h2>
       <p>Use Tab and Shift+Tab to move between controls, Enter to follow links, and Enter or Space to press buttons. The skip link moves to the main content. Escape closes supported menus and dialogs; focus returns to their opening control.</p>

@@ -241,3 +241,12 @@ to visibility. Opponent API/fetch/page always remain no-store, with a bounded
 one-hour service LRU behind fresh floor/removal admission. No six-hour rendered
 opponent cache is enabled. Rollback is a source revert; no data conversion or
 production mutation is required.
+
+# Appearance and accessibility
+
+No new environment variables or account setup. Existing Light/Dark choices
+remain valid; System follows the device when no choice is stored. Appearance
+controls and Help explain keyboard use. The public statement records the
+WCAG 2.2 AA target and known limits. CI installs pinned axe tooling, checks the
+actual CSS contrast matrix and scans public pages in both themes. Exact
+exceptions need a reviewed reason; the initial exception file is empty.
