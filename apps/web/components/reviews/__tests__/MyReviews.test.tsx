@@ -19,7 +19,8 @@ vi.mock("next/navigation", async () => {
     window.addEventListener("popstate", listener); return () => window.removeEventListener("popstate", listener);
   }, () => window.location.search)) };
 });
-vi.mock("@/lib/clientApi", () => ({
+vi.mock("@/lib/clientApi", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/clientApi")>(),
   apiCall: harness.apiCall,
   useApi: (path: string) => ({
     data: harness.data[path],
@@ -79,7 +80,7 @@ it("defaults to Needs your response when its count is positive and requests that
   expect(screen.getByRole("tab", { name: "Needs your response (1)" }).getAttribute("aria-selected")).toBe("true");
   expect(await screen.findByText("Question for NEEDS")).toBeTruthy();
   expect(window.location.search).toBe("?tab=needs");
-  expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/me/reviews?section=asked&tab=needs&limit=20");
+  expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/me/reviews?section=asked&tab=needs&limit=20", { signal: expect.any(AbortSignal) });
   expect(screen.queryByText("Question for AAAAAAAAAAAAAAAA")).toBeNull();
   expect(screen.getByRole("tab", { name: "Closed (4)" })).toBeTruthy();
 });
@@ -116,7 +117,7 @@ it("appends request pages without duplicating cards and preserves them while ret
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   expect(await screen.findByText("Question for OLDER")).toBeTruthy();
   expect(within(screen.getByRole("list", { name: "Your review requests" })).getAllByRole("listitem")).toHaveLength(3);
-  expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), expect.stringContaining("cursor=asked%2Bnext"));
+  expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), expect.stringContaining("cursor=asked%2Bnext"), { signal: expect.any(AbortSignal) });
   expect(screen.queryByRole("button", { name: "Load more requests" })).toBeNull();
 });
 
@@ -129,7 +130,7 @@ it("resets the written list on Most upvoted and appends its independently sorted
   fireEvent.click(screen.getByRole("radio", { name: "Most upvoted" }));
   expect(screen.queryByText("Scout at 4:30.")).toBeNull();
   expect(await screen.findByText("Most useful answer")).toBeTruthy();
-  expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/me/reviews?section=answered&sort=top&limit=20");
+  expect(harness.apiCall).toHaveBeenCalledWith(expect.any(Function), "/v1/me/reviews?section=answered&sort=top&limit=20", { signal: expect.any(AbortSignal) });
   fireEvent.click(screen.getByRole("button", { name: "Load more written reviews" }));
   expect(await screen.findByText("Second most upvoted")).toBeTruthy();
   expect(within(screen.getByRole("list", { name: "Reviews you've written" })).getAllByRole("listitem")).toHaveLength(2);
