@@ -59,6 +59,34 @@ describe("services/twitchChatBot", () => {
   let deps;
   let bot;
 
+  test("rotation swaps only the existing exact owner credential without provider reconnect", async () => {
+    await bot.configure("u1", CFG);
+    const conn = bot._conns.get("u1"), socket = sockets[0];
+    bot.replaceOverlayToken("another", "tokA", "new"); expect(conn.overlayToken).toBe("tokA");
+    bot.replaceOverlayToken("u1", "unrelated", "new"); expect(conn.overlayToken).toBe("tokA");
+    bot.replaceOverlayToken("u1", "tokA", "new"); expect(conn.overlayToken).toBe("new");
+    expect(bot._conns.get("u1")).toBe(conn); expect(sockets).toHaveLength(1); expect(socket.closed).toBe(false);
+    bot.stop("u1"); bot.replaceOverlayToken("u1", "new", "later"); expect(bot._conns.size).toBe(0);
+  });
+
+  test("a bot restored during pending rotation adopts only its exact completed source", async () => {
+    deps.overlayTokens.list.mockResolvedValue([{ token: "pending", rotationPending: true }]);
+    await bot.configure("u1", CFG);
+    const conn = bot._conns.get("u1"); expect(conn.overlayToken).toBeNull();
+    bot.replaceOverlayToken("u1", "unrelated", "other"); expect(conn.overlayToken).toBeNull();
+    bot.replaceOverlayToken("u1", "pending", "ready"); expect(conn.overlayToken).toBe("ready");
+    expect(sockets).toHaveLength(1);
+  });
+  test("completion receipts fence a held configure lookup and preserve a healthy different token", async () => {
+    let release; deps.overlayTokens.list.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+    const configuring = bot.configure("u1", CFG);
+    bot.replaceOverlayToken("u1", "old", "mid"); bot.replaceOverlayToken("u1", "mid", "ready");
+    release([{ token: "old" }]); await configuring;
+    const conn = bot._conns.get("u1"); expect(conn.overlayToken).toBe("ready");
+    bot.replaceOverlayToken("u1", "unrelated", "other"); expect(conn.overlayToken).toBe("ready");
+    expect(sockets).toHaveLength(1);
+  });
+
   beforeEach(() => {
     jest.useFakeTimers();
     sockets = [];

@@ -132,6 +132,7 @@ async function main() {
     audience: config.clerkJwtAudience,
     isAdminClerkId: (clerkUserId) => adminClerkIds.has(clerkUserId),
     resolveOverlayToken: (token) => services.overlayTokens.resolve(token),
+    isOverlayTokenReplaced: (token) => services.overlayTokens.isReplaced(token),
     validateOverlayToken: (userId, token) =>
       services.overlayTokens.tokenBelongsToUser(userId, token),
     resolveDeviceToken: (tokenHash) =>

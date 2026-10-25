@@ -80,6 +80,7 @@ const ROLL_REPORT_WINDOW_MS = 60_000;
  *   issuer?: string,
  *   audience?: string,
  *   resolveOverlayToken?: (token: string) => Promise<{userId: string, label: string, enabledWidgets?: string[],profile?:unknown,profileRevision?:number}|null>,
+ *   isOverlayTokenReplaced?: (token:string) => Promise<boolean>,
  *   validateOverlayToken?: (userId: string, token: string) => Promise<boolean>,
  *   resolveDeviceToken?: (tokenHash: string) => Promise<{userId: string, deviceId?: string}|null>,
  *   resolveSession?: (userId: string, timezone?: string) => Promise<{
@@ -126,7 +127,7 @@ function attachSocketAuth(io, opts) {
         }
         const hit = await opts.resolveOverlayToken(overlayToken);
         if (!hit) {
-          next(new Error("invalid_overlay_token"));
+          next(new Error(await opts.isOverlayTokenReplaced?.(overlayToken) ? "overlay_token_replaced" : "invalid_overlay_token"));
           return;
         }
         socket.data.overlayToken = overlayToken;

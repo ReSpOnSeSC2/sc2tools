@@ -207,7 +207,7 @@ class UserBackupsService {
       fence = await this.gdpr._acquireMutationFence(userId, "snapshot_preview");
       const removed = (await this.missingGames(userId, staged.operationId).group({ _id: null, count: { $sum: 1 } }).next())?.count || 0;
       const current = await this.db.games.countDocuments(liveBackupGamesMatch(userId)); const kept = current - removed;
-      return { games: { kept, removed, added: staged.counts.games - kept }, customBuilds: staged.counts.customBuilds, opponentNotes: staged.counts.opponentNotes, overlayTokens: staged.counts.overlayTokens, currentRevision: await this.membershipRevision(userId) };
+      return { games: { kept, removed, added: staged.counts.games - kept }, customBuilds: staged.counts.customBuilds, opponentNotes: staged.counts.opponentNotes, overlayTokens: 0, currentRevision: await this.membershipRevision(userId) };
     } finally { if (fence) await this.gdpr._releaseMutationFence(userId, fence); await this.staging.deleteMany({ operationId: staged.operationId }); }
   }
   /** @param {string} userId @param {string} id @param {{assert:()=>Promise<void>}} fence @param {string|undefined} [expectedRevision] */
@@ -249,6 +249,10 @@ class UserBackupsService {
       await this.db.macroJobs.deleteMany({ userId });
       for (const [dbKey, key] of RESTORABLE) {
         await fence.assert(); const collection = /** @type {any} */ (this.db)[dbKey]; if (!collection) continue;
+        // Keep the historical section readable for existing snapshot formats,
+        // but credentials/lifecycle are current security state. Restoring an
+        // older row must never revive a rotated leaked URL or erase its target.
+        if (dbKey === "overlayTokens") continue;
         if (dbKey === "users") {
           await restoreUserSettings(this.db.users, userId, key, await this.staging.findOne({ operationId: staged.operationId, key }));
           continue;
@@ -266,7 +270,7 @@ class UserBackupsService {
         await fence.assert(); await this.gdpr.recountOpponent(userId, String(row.gameId));
       }
       await this.gdpr._scrubUserGuideExamples(userId);
-      return { restoredAt: new Date(), counts: staged.counts };
+      return { restoredAt: new Date(), counts: { ...staged.counts, overlayTokens: 0 } };
     } finally { await this.staging.deleteMany({ operationId: staged.operationId }); }
   }
   /** Lazy, once-per-ISO-week CAS; a failed attempt leaves the next ingest able to retry. @param {string} userId @param {Date} [now] */

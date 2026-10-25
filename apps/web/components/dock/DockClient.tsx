@@ -75,7 +75,7 @@ const DEFAULT_MODERATION_APPEARANCE = {
  * every engine when the object identity changes, so styling blobs
  * must never ride along and equal payloads must not mint new objects.
  */
-function usePlatformConfig(token: string, onInvalid: () => void): {
+function usePlatformConfig(token: string, onInvalid: (replaced?: boolean) => void): {
   platforms: MultichatConfig | null;
   moderationAppearance: Pick<ChatAppearance, "blockedUsers" | "hideBots">;
   /** Read-aloud voice settings, shared with the OBS multichat widget. */
@@ -101,7 +101,7 @@ function usePlatformConfig(token: string, onInvalid: () => void): {
           `${API_BASE}/v1/multichat/${encodeURIComponent(token)}/config`,
           { cache: "no-store" },
         );
-        if (!cancelled && res.status === 401) { onInvalid(); return; }
+        if (!cancelled && res.status === 401) { const body = await res.json().catch(() => null); if (!cancelled) onInvalid(body?.error?.code === "overlay_token_replaced"); return; }
         if (!res.ok) return;
         const body: unknown = await res.json();
         if (!body || typeof body !== "object" || Array.isArray(body)) return;
@@ -183,14 +183,15 @@ const SECTIONS = [
 
 export function DockClient({ token }: { token: string }) {
   const [invalidToken, setInvalidToken] = useState<string | null>(null);
+  const [replaced, setReplaced] = useState(false);
   const activeTokenRef = useRef(token);
   activeTokenRef.current = token;
-  const onInvalid = useCallback(() => {
-    if (activeTokenRef.current === token) setInvalidToken(token);
+  const onInvalid = useCallback((wasReplaced = false) => {
+    if (activeTokenRef.current === token) { setInvalidToken(token); setReplaced(wasReplaced); }
   }, [token]);
   if (invalidToken === token) return <div className="flex min-h-screen items-center justify-center p-4 text-text">
     <div role="alert" className="max-w-md space-y-3 rounded-lg border border-warning/40 bg-bg-surface p-5">
-      <h1 className="text-h3 font-semibold">This Dock link no longer works</h1>
+      <h1 className="text-h3 font-semibold">{replaced ? "This Dock URL was replaced" : "This Dock link no longer works"}</h1>
       <p>It was revoked or mistyped. Copy a fresh Dock URL from Settings → Overlay.</p>
       <a href="/settings?tab=overlay" target="_blank" rel="noreferrer" className="text-accent-cyan underline">Open Overlay settings<span className="sr-only"> (opens in new tab)</span></a>
     </div>
@@ -200,7 +201,7 @@ export function DockClient({ token }: { token: string }) {
   return <ActiveDockClient key={token} token={token} onInvalid={onInvalid} />;
 }
 
-function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () => void }) {
+function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: (replaced?: boolean) => void }) {
   const { platforms, moderationAppearance, tts, loaded } =
     usePlatformConfig(token, onInvalid);
   const { messages, events, statuses } = useMultiChat({
@@ -252,7 +253,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
     adoptStudioSnapshot(next);
   });
   const connectionStatus = updates?.status ?? "connected";
-  useEffect(() => { if (connectionStatus === "invalid") onInvalid(); }, [connectionStatus, onInvalid]);
+  useEffect(() => { if (connectionStatus === "invalid" || connectionStatus === "replaced") onInvalid(connectionStatus === "replaced"); }, [connectionStatus, onInvalid]);
 
   useEffect(() => {
     let cancelled = false;
@@ -263,7 +264,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
       const fetchSequence = ++studioFetchRef.current;
       try {
         const res = await fetch(studioUrl, { cache: "no-store" });
-        if (!cancelled && res.status === 401) { onInvalid(); return; }
+        if (!cancelled && res.status === 401) { const body = await res.json().catch(() => null); if (!cancelled) onInvalid(body?.error?.code === "overlay_token_replaced"); return; }
         if (!res.ok) return;
         const body: unknown = await res.json();
         if (

@@ -507,7 +507,10 @@ function makeServices(deps, clerk) {
   });
   const replayLibrary = new ReplayLibraryService(deps.db);
   const pairings = new DevicePairingsService(deps.db, { adminEvents, logger: deps.logger });
-  const overlayTokens = new OverlayTokensService(deps.db);
+  const overlayTokens = new OverlayTokensService(deps.db, { onRotationStarted: token => {
+    deps.io?.to(`overlay:${token}`).emit("overlay:config", { replacedBy: true });
+    deps.io?.in(`overlay:${token}`).disconnectSockets(true);
+  } });
   const platformIntegrations = new PlatformIntegrationsService(deps.db, {
     config: deps.config.platformIntegrations || { enabled: false },
     overlayTokens,
@@ -547,7 +550,7 @@ function makeServices(deps, clerk) {
     log: deps.logger,
   });
   const rivals = new RivalsService(deps.db, { users, pulse: new RivalsPulseService(pulseIntel), channels: playerChannels, viewers: multichatViewers, identities: playerIdentities });
-  const multichatStudio = new MultichatStudioService(deps.db, { io: deps.io });
+  const multichatStudio = new MultichatStudioService(deps.db, { io: deps.io, overlayTokens });
   const multichatSounds = new MultichatSoundsService(deps.db);
   // users + overlayTokens let the service resolve the streamer's own
   // channel identities, so the broadcaster never headlines their own
@@ -615,6 +618,7 @@ function makeServices(deps, clerk) {
     chatbot,
     logger: deps.logger,
   });
+  overlayTokens.rotation.onCompleted = (userId, from, to) => twitchChatBot.replaceOverlayToken(userId, from, to);
   multichatEngagement.onEvent = (token, msg) => {
     void twitchChatBot.handleEngagementEvent(token, msg).catch(() => {});
   };
@@ -1227,7 +1231,7 @@ function mountRoutes(app, deps, services, clerk, adminClerkIds, auth) {
   // routers so the unauth'd endpoints aren't intercepted upstream.
   app.use(
     SERVICE.ROUTE_PREFIX,
-    buildDevicePairingsRouter({ pairings: services.pairings, auth }),
+    buildDevicePairingsRouter({ pairings: services.pairings, overlayTokens: services.overlayTokens, auth }),
   );
   // Official OAuth callbacks + signed platform webhooks must remain in the
   // public bundle. Account management paths apply Clerk auth per route.
