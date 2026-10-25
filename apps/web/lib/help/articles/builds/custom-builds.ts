@@ -51,15 +51,21 @@ const article: HelpArticle = {
       type: "paragraph",
       text: "A custom build is your own version of an opener: a short list of rules such as *At least 1 Stargate before 3:30* or *No Robotics Facility before 6:00*. A game matches when every rule passes, and the build's page then shows its record, matchups, maps and recent games. Builds in your library are private until you publish one. [How build rules are counted](/help/rules-explained) explains each kind of rule.",
     },
-    { type: "heading", text: "Make a custom build" },
+    { type: "heading", text: "Create your first build (4 ways)", anchor: "create" },
     {
       type: "steps",
       items: [
-        "**From one of your games.** Open any game and click **Save as new build** on its build order. Click **+** on the steps that define the build, check the live match preview, name it and save.",
-        "**From scratch.** In [your library](/builds), click **New build** and add its steps yourself.",
-        "**From the community.** Open a build on [Community](/community) and click **Save to my library** for a private copy you can edit. See [Publish and reuse community builds](/help/publish-community-builds).",
+        "**From one of my games.** In [your library](/builds), choose **New build → From one of my games**, select your race and opponent race, then pick a replay. Only its build order is loaded. You can also open any game and click **Save as new build** on its build order. Click **+** on the steps that define your build.",
+        "**From a detected build.** Choose a catalog label and a replay with that stored build label (including confirmed check-ins). Its name, race and matchup prefill your variant. **Make my own variant** on [Build definitions](/definitions) opens this path directly. Your private variant does not change the analyzer’s built-in rules.",
+        "**Blank build.** Choose **New build → Blank build**, name it and add your rules. Search friendly unit, building and upgrade names; selecting a result stores its exact action token. Choices follow your race, and eligible buildings show **Proxy eligible**. An unknown action stays visible with an error and blocks preview and saving until corrected.",
+        "**Copy a Community build.** Open a build on [Community](/community) and click **Save to my library** for a private copy you can edit. See [Publish and reuse community builds](/help/publish-community-builds).",
       ],
     },
+    {
+      type: "paragraph",
+      text: "**From a pasted build order** previews supported time/supply formats and opens a private reference plan. See [Write or paste a build order](/help/build-order-paste). Every create and edit path uses the same rich editor, with **How rules count** and its worked-example Help link. In an action picker, use Arrow keys, Home/End and Enter to choose; Escape closes the list first, and Tab continues through the form.",
+    },
+    { type: "paragraph", text: "If making a detected variant asks you to sign in, the public Definitions page keeps the selected catalog label. Choose **Continue private variant** there to open your draft. Returning from sign-in never saves a build automatically." },
     {
       type: "paragraph",
       text: "**Save build** keeps your changes. **Save & re-match** also checks your past games against the new rules for that build, so its record includes matching replays.",

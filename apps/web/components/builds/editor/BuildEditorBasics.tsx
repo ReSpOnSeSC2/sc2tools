@@ -279,6 +279,7 @@ function SkillLevelSelect({
       ) : null}
       <Select
         value={value ?? ""}
+        aria-label="Skill level"
         onChange={(e) =>
           onChange(
             e.target.value
