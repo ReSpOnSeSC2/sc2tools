@@ -58,10 +58,25 @@ test("a deleted custom identity never falls back to a same-name catalog grade or
   expect((await endpoint()).body).toMatchObject({ unavailable: "definition_missing", build: { deleted: true }, rules: [], matchPct: null });
   expect(h.services.builds.detail).not.toHaveBeenCalled();
 });
+test.each([null, "..", "../other"])("an invalid or missing declared custom identity cannot become a same-name catalog lookup: %j", async slug => {
+  await seed("current", { buildIntent: { status: "confirmed", applied: true, build: { name: "Catalog opening", source: "custom", slug } } });
+  expect((await endpoint()).body).toMatchObject({ unavailable: "definition_missing", build: { source: "custom", deleted: true }, matchPct: null });
+  expect(h.services.builds.detail).not.toHaveBeenCalled();
+});
 test("valid worker-only evidence can check rules without a useless timing hydration", async () => {
   await custom(); await seed("current", { _customBuildSlug: "private" });
   await h.services.gameDetails.upsert("u_owner", "current", date, { buildLog: ["[0:15] Probe"] });
   expect((await endpoint()).body).toMatchObject({ matchPct: 0, knownCount: 1, timings: [] });
+  expect(h.services.customBuilds.evaluateBuild).not.toHaveBeenCalled();
+});
+test.each([{ buildLog: ['malformed retained legacy log'] }, { buildLog: ['[0:10] RewardBadge', '[0:20] BeaconFoo'] }])("unparseable/noise-only raw logs never establish negative or exact-zero rules: %j", async ({ buildLog }) => {
+  await custom(); await seed("current", { _customBuildSlug: "private" });
+  await h.db.customBuilds.updateOne({ slug: "private" }, { $set: { rules: ["not_before", "count_max", "count_exact"].map(type => ({ type, name: "BuildGateway", time_lt: 120, count: 0 })) } });
+  await h.services.gameDetails.upsert("u_owner", "current", date, { buildLog });
+  const body = (await endpoint()).body;
+  expect(body).toMatchObject({ unavailable: "log_missing", matchPct: null, knownCount: 0 });
+  expect(body.rules).toHaveLength(3);
+  for (const row of body.rules) expect(row).toMatchObject({ unavailable: true, pass: false, got: null, evidenceSec: null });
   expect(h.services.customBuilds.evaluateBuild).not.toHaveBeenCalled();
 });
 test("neighboring game/card/timeline reads reuse one compact baseline and rule edits change the hash", async () => {
@@ -79,6 +94,12 @@ test("Reference practice priority is advertised without retaining reference step
   const body = (await endpoint()).body;
   expect(body.build.hasReferenceBuildOrder).toBe(true);
   expect(JSON.stringify(body)).not.toContain("PRIVATE_REFERENCE_NOTE"); expect(body.build.buildOrder).toBeUndefined();
+});
+test.each([{ race: "Terran" }, { vsRace: "Terran" }])("edited definition races cannot grade an incompatible historic game: %j", async patch => {
+  await custom(); await seed("current", { _customBuildSlug: "private" });
+  expect((await endpoint()).body.matchPct).toBe(100);
+  await h.db.customBuilds.updateOne({ slug: "private" }, { $set: patch });
+  expect((await endpoint()).body).toMatchObject({ unavailable: "matchup_mismatch", matchPct: null, rules: [], timings: [] });
 });
 test("actual detail-log replacement invalidates unchanged game/build/rule keys immediately", async () => {
   await custom(); await seed("current", { _customBuildSlug: "private" });
@@ -125,6 +146,15 @@ test("a held baseline cannot populate or return after owner visibility invalidat
   h.services.gameExecution.invalidateForUser("u_owner"); release(baseline());
   expect((await pending).status).toBe(503);
   expect(h.services.gameExecution.cache.size).toBe(0);
+});
+test("a ranged history wipe retires a surviving game's cached timing baseline", async () => {
+  await seed(); await seed("prior", { date: new Date("2026-10-19T12:00:00Z") });
+  expect((await endpoint()).body.timings[0].medianSec).toBe(230);
+  const next = baseline(); next.matchupTimingsLegacy.PvZ.timings.Stargate.medianSeconds = 260;
+  h.services.builds.detail.mockResolvedValueOnce(next);
+  await h.services.gdpr.wipeGames("u_owner", { since: new Date("2026-10-19T00:00:00Z"), until: new Date("2026-10-20T00:00:00Z") });
+  expect(await h.db.games.countDocuments({ userId: "u_owner", gameId: "current" })).toBe(1);
+  expect((await endpoint()).body.timings[0].medianSec).toBe(260);
 });
 test("bounded LRU expiry and global work admission use no persistent cache writes", async () => {
   let now = 10; const service = new BuildExecutionService(h.db, { perGame: h.services.perGame, builds: h.services.builds, customBuilds: h.services.customBuilds, now: () => now });

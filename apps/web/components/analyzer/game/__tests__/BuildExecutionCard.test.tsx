@@ -45,6 +45,7 @@ it("has honest no-build, missing-log, unavailable-definition, retry and loading 
   const view = render(<BuildExecutionCard gameId="g" />); expect(screen.getByText("Check in a build to grade this game.")).toBeTruthy();
   view.rerender(<BuildExecutionCard gameId="g" unavailable />); expect(screen.getByText(/Rules are unknown until an own build log/)).toBeTruthy();
   data.build!.deleted = true; view.rerender(<BuildExecutionCard data={data} gameId="g" />); expect(screen.getByText(/definition is no longer available/)).toBeTruthy();
+  data.build!.deleted = false; data.unavailable = "matchup_mismatch"; view.rerender(<BuildExecutionCard data={data} gameId="g" />); expect(screen.getByText(/no longer fits this saved definition/)).toBeTruthy();
   view.rerender(<BuildExecutionCard gameId="g" loading />); expect(screen.getByRole("status")).toBeTruthy();
   view.rerender(<BuildExecutionCard gameId="g" error={{ status: 503 }} onRetry={retry} />); fireEvent.click(screen.getByRole("button", { name: "Retry" })); expect(retry).toHaveBeenCalledOnce();
 });

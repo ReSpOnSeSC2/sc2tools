@@ -256,8 +256,9 @@ class PerGameComputeService {
   async buildExecutionEvents(userId, gameId, options = {}) {
     const { slim, blob } = await this._readGameWithDetails(userId, gameId, { fields: ["buildLog"], signal: options.signal });
     if (!slim) return null;
-    const available = Array.isArray(blob.buildLog) && blob.buildLog.length > 0;
-    return { available, events: available ? eventsToStartTime(parseBuildLogWithProxies(blob.buildLog, this.catalog, slim.spatial, "my"), slim) : null };
+    const hasLog = Array.isArray(blob.buildLog) && blob.buildLog.length > 0;
+    const events = hasLog ? eventsToStartTime(parseBuildLogWithProxies(blob.buildLog, this.catalog, slim.spatial, "my"), slim) : null;
+    return { available: !!events?.length, events };
   }
 
   /**

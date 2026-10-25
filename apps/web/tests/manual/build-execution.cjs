@@ -16,6 +16,7 @@ function fixture(id, owner) {
   if (id === 'small') execution.timings = execution.timings.map(row => ({ ...row, n: 2, medianSec: null, p25Sec: null, p75Sec: null, deltaSec: null }));
   if (id === 'catalog' || id === 'empty') { execution.rules = []; execution.ruleCount = execution.knownCount = execution.passedCount = 0; execution.matchPct = null; if (id === 'catalog') { execution.build.source = 'catalog'; execution.build.name = 'Catalog opening'; delete execution.build.slug; } }
   if (id === 'none') { execution.build = null; execution.source = 'none'; execution.rules = []; execution.ruleCount = execution.knownCount = execution.passedCount = 0; execution.matchPct = null; execution.timings = []; }
+  if (id === 'mismatch') { execution.unavailable = 'matchup_mismatch'; execution.rules = []; execution.ruleCount = execution.knownCount = execution.passedCount = 0; execution.matchPct = null; execution.timings = []; }
   const name = execution.build?.name || null;
   const game = { gameId: id, date: '2026-10-20T12:00:00Z', result: 'Victory', myRace: 'Protoss', myBuild: name, durationSec: 600, map: 'Synthetic map', myMmr: 4100, opponent: { displayName: 'Recorded opponent', race: 'Zerg', strategy: 'Roach pressure', mmr: 4050 } };
   const events = [[0, 'Nexus'], [50, 'Assimilator'], [100, 'CyberneticsCore'], [140, 'Nexus'], [230, 'Stargate'], [290, 'Stargate']].map(([time, name]) => ({ time, name, category: 'building', is_building: true, race: 'Protoss', supply: 24 }));
@@ -85,10 +86,10 @@ const server = http.createServer((req, res) => {
       await page.evaluate(() => document.fonts.ready); await card.screenshot({ path: path.join(evidence, `scorecard-${theme}-${width}.png`), style: 'nav[aria-label="Game sections"]{visibility:hidden!important}' }); captures++;
       expect(errors).toEqual([]); checks++; await ctx.close();
     }
-    for (const [id, copy] of [['unknown', 'Overall percentage withheld.'], ['small', 'Timings appear after 3 games'], ['catalog', 'Catalog builds show timings only.'], ['empty', 'This build has no rules yet.'], ['missing', 'Rules are unknown until an own build log'], ['none', 'Check in a build to grade this game.']]) {
+    for (const [id, copy] of [['unknown', 'Overall percentage withheld.'], ['small', 'Timings appear after 3 games'], ['catalog', 'Catalog builds show timings only.'], ['empty', 'This build has no rules yet.'], ['missing', 'Rules are unknown until an own build log'], ['none', 'Check in a build to grade this game.'], ['mismatch', 'no longer fits this saved definition']]) {
       const ctx = await context(390), page = await ctx.newPage(), before = calls.length;
       await page.goto(`${origin}/app/game/${id}?theme=dark`); await expect(page.getByText(copy, { exact: false }).first()).toBeVisible(); checks++;
-      if (['unknown', 'catalog', 'empty', 'missing', 'none'].includes(id)) { await expect(page.getByText('50% match')).toHaveCount(0); checks++; }
+      if (['unknown', 'catalog', 'empty', 'missing', 'none', 'mismatch'].includes(id)) { await expect(page.getByText('50% match')).toHaveCount(0); checks++; }
       if (id === 'missing') { await page.waitForLoadState('networkidle'); expect(calls.slice(before).some(row => row.path.endsWith('/build-execution'))).toBe(false); checks++; }
       await page.locator('#builds').screenshot({ path: path.join(evidence, `${id}-dark-390.png`), style: 'nav[aria-label="Game sections"]{visibility:hidden!important}' }); captures++; await ctx.close();
     }

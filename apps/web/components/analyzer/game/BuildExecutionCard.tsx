@@ -21,6 +21,7 @@ export function BuildExecutionCard({ data, gameId, events, loading, error, unava
   if (loading) return <Card title="Build execution" right={help}><div role="status" className="h-28 animate-pulse rounded bg-bg-elevated motion-reduce:animate-none">Loading recorded build evidence…</div></Card>;
   if (unavailable || data?.unavailable === "log_missing") return <Card title="Build execution" right={help}><p className="text-caption text-text-muted">Build evidence is unavailable for this replay. Rules are unknown until an own build log is extracted; no percentage is shown.</p></Card>;
   if (!data?.build) return <Card title="Build execution" right={help}><p className="text-caption text-text-muted">Check in a build to grade this game.</p></Card>;
+  if (data.unavailable === "matchup_mismatch" || data.unavailable === "matchup_unknown") return <Card title="Build execution" right={help}><p className="text-caption text-text-muted">The recorded matchup is unavailable or no longer fits this saved definition. No rule grade or timing comparison is shown.</p></Card>;
   if (data.unavailable === "resumed" || data.build.deleted) return <Card title="Build execution" right={help}><p className="text-caption text-text-muted">{data.build.deleted ? "This build definition is no longer available." : "A resumed replay has no build execution comparison."} No percentage is shown.</p></Card>;
   const percentage = checkedMatchPercentage(data);
   return <Card title="Build execution" right={help} aria-label="Private build execution evidence">

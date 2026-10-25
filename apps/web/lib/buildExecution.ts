@@ -10,7 +10,7 @@ export type BuildExecution = { build: (PracticeSource & { source: "custom" | "ca
   source: "confirmed" | "detected" | "none"; matchup: string | null; rules: ExecutionRule[];
   passedCount: number; knownCount: number; ruleCount: number; matchPct: number | null;
   timings: ExecutionTiming[]; timingMinSample: number; timingSampleSelected: number; timingSampleGames: number; timingSampleLimit: number;
-  unavailable?: "no_build" | "definition_missing" | "log_missing" | "resumed" };
+  unavailable?: "no_build" | "definition_missing" | "log_missing" | "resumed" | "matchup_mismatch" | "matchup_unknown" };
 
 /** This exact normalized resource feeds the card, clock rail and timeline.
  * An unavailable/failed/previous response never supplies a percentage. */

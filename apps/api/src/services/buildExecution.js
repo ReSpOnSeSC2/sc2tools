@@ -7,6 +7,7 @@ const { extractRules } = require("./customBuilds");
 const { evaluateRulesDetailed } = require("./buildRulesEvaluator");
 const { executionTimings, MIN_SAMPLE } = require("./buildExecutionTimings");
 const { matchupLabel } = require("./timingCatalog");
+const { customFitsMatchup } = require("./buildIntentOptions");
 
 const CACHE_LIMIT = 200, BASELINE_LIMIT = 100, TTL_MS = 5 * 60_000, MAX_WORK = 4;
 const PROJECTION = Object.freeze({ _id: 0, gameId: 1, date: 1, gameVersion: 1, gameBuild: 1,
@@ -50,17 +51,21 @@ class BuildExecutionService {
     if (!game) return null;
     if (!this.revisions.current(owner, epoch)) throw busy();
     const declared = overrideActive(game) ? game.buildIntent.build : null;
-    const slug = navigationIdentity(declared ? declared.source === "custom" ? declared.slug : null : game._customBuildSlug);
+    const rawSlug = declared ? declared.source === "custom" ? declared.slug : null : game._customBuildSlug;
+    const custom = declared ? declared.source === "custom" : typeof rawSlug === "string" && rawSlug.length > 0;
+    const slug = typeof rawSlug === "string" && /^[a-zA-Z0-9._-]{1,80}$/.test(rawSlug) && rawSlug !== "." && rawSlug !== ".." ? rawSlug : null;
     const name = navigationIdentity(declared?.name || game.myBuild);
     const definition = slug && !declared?.deleted ? await this.opts.customBuilds.get(owner, slug) : null;
     const own = !definition || !definition.perspective || definition.perspective === "you";
     const rules = definition && own ? extractRules(definition).slice(0, 80) : [];
-    const build = name ? { name, source: slug ? "custom" : "catalog", key: slug ? customKeyForSlug(slug) : catalogKeyForName(name),
+    const build = name ? { name, source: custom ? "custom" : "catalog", key: custom ? slug ? customKeyForSlug(slug) : null : catalogKeyForName(name),
       ...(slug ? { slug } : {}), race: game.myRace || null, vsRace: game.opponent?.race || null,
-      deleted: !!declared?.deleted || !!slug && (!definition || !own), rules,
+      deleted: !!declared?.deleted || custom && (!slug || !definition || !own), rules,
+      matchupMismatch: !!definition && !customFitsMatchup(definition, matchupLabel(game.myRace, game.opponent?.race)),
       hasReferenceBuildOrder: !!definition?.hasReferenceBuildOrder || !!definition?.buildOrder?.steps?.length } : null;
     const source = declared ? "confirmed" : name ? "detected" : "none";
-    const rulesHash = hash([rules, definition?.updatedAt, definition?.revision, definition?.name, build?.hasReferenceBuildOrder]);
+    const rulesHash = hash([rules, definition?.updatedAt, definition?.revision, definition?.name,
+      definition?.race, definition?.vsRace, definition?.perspective, build?.hasReferenceBuildOrder]);
     const prefix = `${JSON.stringify(owner)}|${epoch.id}|`;
     const key = `${prefix}${hash([game, build?.key, rulesHash])}`;
     const cached = this.read(this.cache, key);
@@ -85,13 +90,14 @@ class BuildExecutionService {
     const empty = { build, source, matchup, rules: [], ruleCount: 0, knownCount: 0, passedCount: 0, matchPct: null,
       timings: [], timingMinSample: MIN_SAMPLE, timingSampleSelected: 0, timingSampleGames: 0, timingSampleLimit: 25 };
     if (!build || build.deleted || game.isResumedFromReplay === true) return { ...empty, unavailable: game.isResumedFromReplay ? "resumed" : build?.deleted ? "definition_missing" : "no_build" };
+    if (build.matchupMismatch || !matchup) return { ...empty, unavailable: build.matchupMismatch ? "matchup_mismatch" : "matchup_unknown" };
     const evidence = await this.opts.perGame.buildExecutionEvents(owner, String(game.gameId), { signal });
     if (!evidence) return null;
     const { available, events } = evidence;
     const detailed = evaluateRulesDetailed(build.rules || [], events, available);
     // Missing/failed/unextracted own evidence cannot trigger a useless max25
     // timing hydration. Rules remain unknown, including negative rules.
-    if (!events?.length || !matchup) return { ...empty, ...detailed, unavailable: "log_missing" };
+    if (!events?.length) return { ...empty, ...detailed, unavailable: "log_missing" };
     if (!executionTimings(null, matchup, events).length) return { ...empty, ...detailed };
     const dossier = await this.baseline(owner, build, baselineKey, signal);
     return { ...empty, ...detailed, timings: executionTimings(dossier, matchup, events),
