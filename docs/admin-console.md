@@ -89,8 +89,9 @@ or search text. No credentials are exported.
 User detail measures:
 
 - **Games:** stored games and recorded wins/losses, including undecided games in
-  the total. **Win rate:** wins divided by wins plus losses; no decided games
-  displays an em dash.
+  the total.
+- **Win rate:** wins divided by wins plus losses; no decided games displays an
+  em dash.
 - **Opponents:** stored opponent records for this account.
 - **Last activity:** latest replay date on detail. The list and CSV fall back to
   last sign-in, then signup when an account has no replays, matching their sort.

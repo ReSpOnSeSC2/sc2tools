@@ -31,7 +31,7 @@ function OwnerExport({ query }: { query: string }) {
       setMessage(result.truncated ? "Download started. Limited to the first 10,000 matching users, latest activity first. Narrow your filters for the rest." : "CSV download started.");
     } catch (error) {
       if (active.current !== controller || controller.signal.aborted) return;
-      setMessage(error && typeof error === "object" && "message" in error ? String(error.message) : "Couldn't export users. Retry shortly.");
+      setMessage(error && typeof error === "object" && "code" in error && error.code === "request_timeout" ? "Export took too long. Narrow the search or account filter, then retry." : error && typeof error === "object" && "message" in error ? String(error.message) : "Couldn't export users. Retry shortly.");
     } finally { if (active.current === controller) { active.current = null; setPending(false); } }
   };
   return <div className="min-w-0 space-y-1"><Button variant="secondary" disabled={pending} aria-busy={pending} onClick={() => void download()}>{pending ? "Preparing CSV…" : "Export CSV"}</Button><p className="text-micro text-text-muted">Matching filters · up to 10,000 users · once per minute</p><p className="text-micro text-text-muted">Counted at export start; rows can change during download.</p>{message ? <p role="status" className="max-w-sm text-caption text-text-muted">{message}</p> : null}</div>;

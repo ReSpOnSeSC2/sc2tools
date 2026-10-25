@@ -88,3 +88,21 @@ it("settles held auth at the export deadline and never sends it after scope/sign
   mocks.auth.isLoaded = false; view.rerender(<AdminUsersExport query="filter=all" />);
   await act(async () => { resolve("stale"); }); expect(fetch).not.toHaveBeenCalled(); expect(mocks.save).not.toHaveBeenCalled();
 });
+
+it("cancels a held prior-owner token during auth loading before any export request", async () => {
+  const fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
+  let resolve!: (value: string) => void; mocks.auth.getToken.mockReturnValue(new Promise(done => { resolve = done; }));
+  const view = render(<AdminUsersExport query="filter=all" />); fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+  mocks.auth.isLoaded = false; view.rerender(<AdminUsersExport query="filter=all" />);
+  await act(async () => { resolve("old-owner-token"); });
+  expect(fetch).not.toHaveBeenCalled(); expect(mocks.save).not.toHaveBeenCalled();
+});
+it("withholds a late CSV body after the matching filters change", async () => {
+  let resolve!: (blob: Blob) => void;
+  vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, headers: new Headers(), blob: () => new Promise<Blob>(done => { resolve = done; }) })));
+  const view = render(<AdminUsersExport query="filter=all" />); fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+  await waitFor(() => expect(resolve).toBeTypeOf("function"));
+  view.rerender(<AdminUsersExport query="filter=admins" />);
+  await act(async () => { resolve(new Blob(["old cohort"])); });
+  expect(mocks.save).not.toHaveBeenCalled(); expect(screen.queryByRole("status")).toBeNull();
+});

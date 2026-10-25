@@ -20,24 +20,27 @@ accounts. List/CSV Last activity matches the exact sort fallback (replay,
 sign-in, signup). Count and truncation describe the export-start read; streamed
 rows can change concurrently and are not represented as a database snapshot.
 
-Local proof before fresh-main integration:
+Final local proof with main725+726 integrated:
 
-- API types pass;76 tests across adminUsers/admin/adminEvents pass, including
+- API types pass;182 tests across12 suites (admin, ops console, rotation route)
+  pass, including
   every sort/direction, filter boundaries, zero/orphan accounts, auth, actual
   10,001-account streamed cap, formula/CSV escaping, audit and event privacy.
-- Web types and scoped lint pass;204 admin consumer tests across27 suites pass.
+- Web types and scoped lint pass;206 admin consumer tests across27 suites pass,
+  including held-token auth transition and late-body filter-change exports.
 - Required engine prebuild604e9d4618a6414b and production build pass. All bundle
-  budgets unchanged: landing214.5/215, Today228.4/240, opponent476/500,
-  Dock223.1/225, overlay234.3/240, widgets314.9/325 kB gzip.
+  budgets unchanged: landing214.6/215, Today238.7/240, opponent476/500,
+  Dock224.5/225, overlay234.7/240, widgets315.3/325 kB gzip.
 - Actual shell/list/detail clientApi Chromium fixture:72 assertions at375/1440,
   light/dark; four synthetic loopback exports, all nonlocal traffic blocked.
   Eight captures in screenshots/admin-users-{list,detail}-{light,dark}-{375,1440}.
 - Root reviewed grouping/count predicates, event privacy, CSV admission/cancel
   and links. Corrected the reviewed activity DTO/sort mismatch and explicitly
-  stated count-time export semantics. Final review/build/PR gates pending.
+  stated count-time export semantics. Source/representative visual review clear.
 
-Remaining: integrate fresh main725, final combined build/budgets and responsive
-recapture after the small wrapping/caption fixes, then create/attach scoped PR,
-review current-head CI/deployment gates and squash only when all green.
-Token Rotation726 remains independently owned at expected eb7441a4 while this
-branch is active; never use this branch HEAD to merge726.
+Main725 and actual726 squash integrated cleanly (only725 additive changelog
+conflict, preserving both entries). Final production build/budgets and responsive
+recapture pass; all eight captures individually reviewed. Remaining: open/attach
+scoped PR, review current-head CI/deployment gates and squash only when green.
+Token Rotation726 merged c781b3402c76d4fcc12249af76a06621c34c2071 after all nine
+GitHub checks and Vercel passed on eb7441a4; fresh main725 merge-tree was clean.
