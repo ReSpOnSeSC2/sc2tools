@@ -254,6 +254,11 @@ corresponding GitHub Release.
 - Game pages summarize measured lead changes, replay highlights and recorded fight trades, with exact or explicitly estimated losses. Timestamp controls seek the shared replay, and narrow screens use readable fight cards.
 - Wins and draws use the same story view, wins retain their top macro leak, and loss pages keep Why you lost selected alongside Game story. Games without meaningful observations give Mechanics the full row.
 
+### Mechanics progress
+
+- Macro tracks macro score, APM and SQ over calendar periods with measured-game counts, small-sample markers, honest gaps and an optional matchup-specific opponent-bracket median.
+- Build stats includes Build mix over time with the shared grouping preference. Macro keeps one leak ledger and offers a working score-older-games action or desktop setup when no scores exist.
+
 ### Shared game analysis
 
 - Back keeps archive filters and page context; older/newer games and arrow-key navigation follow the same filtered list.

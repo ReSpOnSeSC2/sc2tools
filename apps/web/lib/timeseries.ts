@@ -23,6 +23,12 @@ export type ApiTimeseriesPoint = {
   winRate: number;
   /** Mean macro score across the bucket's scored games; null when none carry a score. */
   avgMacroScore?: number | null;
+  avgApm?: number | null;
+  avgSpq?: number | null;
+  /** Each metric counts its own measured games, not every game in the period. */
+  macroN?: number | null;
+  apmN?: number | null;
+  spqN?: number | null;
 };
 
 export type ApiTimeseriesResponse = {
@@ -37,6 +43,11 @@ export type Period = {
   losses: number;
   winRate: number;
   avgMacroScore?: number | null;
+  avgApm?: number | null;
+  avgSpq?: number | null;
+  macroN?: number | null;
+  apmN?: number | null;
+  spqN?: number | null;
 };
 
 /**
@@ -141,6 +152,14 @@ export function apiToPeriods(
     wins: p.wins ?? 0,
     losses: p.losses ?? 0,
     winRate: p.winRate ?? 0,
-    avgMacroScore: typeof p.avgMacroScore === "number" ? p.avgMacroScore : null,
+    avgMacroScore: typeof p.avgMacroScore === "number" && Number.isFinite(p.avgMacroScore) ? p.avgMacroScore : null,
+    ...("avgApm" in p ? { avgApm: measuredAverage(p.avgApm) } : {}),
+    ...("avgSpq" in p ? { avgSpq: measuredAverage(p.avgSpq) } : {}),
+    ...("macroN" in p ? { macroN: measuredCount(p.macroN) } : {}),
+    ...("apmN" in p ? { apmN: measuredCount(p.apmN) } : {}),
+    ...("spqN" in p ? { spqN: measuredCount(p.spqN) } : {}),
   }));
 }
+
+const measuredAverage = (value: unknown) => typeof value === "number" && Number.isFinite(value) ? value : null;
+const measuredCount = (value: unknown) => typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;

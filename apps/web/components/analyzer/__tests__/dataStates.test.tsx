@@ -95,7 +95,7 @@ describe("failed requests show Retry, not an empty state", () => {
 
   it("Macro: the report", async () => {
     render(<MacroTab />);
-    expect(screen.getByTestId("request-error")).toBeTruthy();
+    expect(screen.getAllByTestId("request-error")).toHaveLength(2);
     expect(screen.queryByText("No scored games yet")).toBeNull();
     await pressFirstRetry();
     expect(harness.mutate).toHaveBeenCalledTimes(1);
