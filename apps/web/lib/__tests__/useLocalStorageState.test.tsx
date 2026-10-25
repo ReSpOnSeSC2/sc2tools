@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
 import { StrictMode, useCallback } from "react";
+import { renderToString } from "react-dom/server";
+import { hydrateRoot } from "react-dom/client";
 import {
   useLocalStoragePositiveInt,
   useLocalStorageState,
@@ -23,15 +25,13 @@ import {
  *   1. SSR-safe first render returns the fallback (no DOM access).
  *   2. After mount we read localStorage exactly once and upgrade
  *      the state to the stored value.
- *   3. The persist effect is gated on the post-mount flag so we do
- *      NOT clobber a real stored value with the fallback on the
- *      first render's write.
+ *   3. Hydration is read-only. Explicit setters write immediately,
+ *      so StrictMode cannot save a fallback over the stored value.
  *   4. Validator discards corrupt entries (e.g. a stringified zero
  *      or non-number) and stays on the fallback.
  *
- * NOTE: tests run under jsdom, so ``window`` and ``localStorage``
- * are present at "SSR" time. To exercise the SSR branch we mock the
- * read failure rather than ripping the window out.
+ * The real renderToString/hydrateRoot case below verifies that SSR
+ * never touches storage, even though jsdom supplies a window.
  */
 
 function HookProbe<T>({
@@ -87,6 +87,29 @@ describe("useLocalStorageState", () => {
     cleanup();
     vi.restoreAllMocks();
     window.localStorage.clear();
+  });
+
+  it("renders the same fallback during SSR and initial hydration before restoring without writes", async () => {
+    localStorage.setItem("server-preference", "7");
+    const reads = vi.spyOn(Storage.prototype, "getItem"), writes = vi.spyOn(Storage.prototype, "setItem");
+    function VisiblePreference() {
+      const [value] = useLocalStorageState("server-preference", 1);
+      return <output>{value}</output>;
+    }
+    const element = <StrictMode><VisiblePreference /></StrictMode>;
+    const html = renderToString(element);
+    expect(html).toContain(">1<");
+    expect(reads).not.toHaveBeenCalled();
+    expect(writes).not.toHaveBeenCalled();
+    const container = document.createElement("div"), onRecoverableError = vi.fn();
+    container.innerHTML = html; document.body.append(container);
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    try {
+      await act(async () => { root = hydrateRoot(container, element, { onRecoverableError }); });
+      expect(container.textContent).toBe("7");
+      expect(onRecoverableError).not.toHaveBeenCalled();
+      expect(writes).not.toHaveBeenCalled();
+    } finally { act(() => root?.unmount()); container.remove(); }
   });
 
   it("preserves saved column choices through root StrictMode and a later session", () => {
@@ -178,9 +201,7 @@ describe("useLocalStorageState", () => {
       "(the regression that caused 'stuck on 1' after a refresh)",
     () => {
       window.localStorage.setItem("no-clobber-key", JSON.stringify(11));
-      // We mount the hook and immediately read what's persisted —
-      // the persist effect must NOT have fired before the read
-      // effect upgraded the state.
+      // Restoring the saved preference must never write the fallback.
       render(
         <HookProbe<number>
           storageKey="no-clobber-key"
@@ -190,9 +211,7 @@ describe("useLocalStorageState", () => {
           }}
         />,
       );
-      // After mount + both effects, the stored value must still be 11
-      // (set by hydration upgrade), not 1 (the fallback that the old
-      // pattern's write effect fired immediately).
+      // The read-only hydration keeps the original stored value.
       expect(
         JSON.parse(window.localStorage.getItem("no-clobber-key") || "null"),
       ).toBe(11);

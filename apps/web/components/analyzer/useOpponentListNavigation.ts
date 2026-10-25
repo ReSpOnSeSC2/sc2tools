@@ -63,7 +63,7 @@ export function useOpponentListNavigation(location?: OpponentListLocation) {
     if (location.query === written.current) { written.current = null; return; }
     const next = readOpponentListQuery(location.query);
     applying.current = JSON.stringify(next);
-    setSearch(next.q); setImpact(next.impact); setHasNotes(next.notes); setSortExplicit(next.sort, next.dir);
+    setSearch(next.q); setImpact(next.impact); setHasNotes(next.notes); setSortExplicit(next.sort, next.dir, { persist: false });
   }, [location, setSortExplicit]);
   useEffect(() => {
     if (!location) return;
