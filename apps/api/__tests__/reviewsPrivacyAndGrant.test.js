@@ -142,7 +142,20 @@ describe("reviews: opponent redaction and the scoped grant", () => {
       .set("authorization", h.bearer("asker"))
       .send({ gameId: wiped, question: QUESTION });
     expect(created.status).toBe(201);
-    await h.services.gdpr.wipeGames(h.userId("asker"));
+    // Supertest observes the response before its asynchronous finish-hook
+    // lease release necessarily reaches Mongo. This direct service call must
+    // start after that HTTP write is quiescent, just as the fixture intends.
+    const userId = h.userId("asker");
+    const deadline = Date.now() + 5_000;
+    for (;;) {
+      const owner = await h.db.users.findOne({ userId }, { projection: { _dataMutations: 1 } });
+      expect(owner).not.toBeNull();
+      if (!owner._dataMutations?.length) break;
+      if (Date.now() >= deadline) throw new Error("review request write lease did not release");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await h.services.gdpr.wipeGames(userId);
+    expect((await h.db.users.findOne({ userId }))._gdprMutation).toBeUndefined();
     const doc = await h.db.reviewRequests.findOne({ _id: created.body.id });
     expect(doc.status).toBe("closed");
   });

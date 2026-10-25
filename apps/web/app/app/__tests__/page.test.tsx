@@ -67,12 +67,32 @@ describe("/app default tab", () => {
     expect(await visit()).toBe("/app/maps");
     expect(harness.redirect).toHaveBeenCalledWith("/app/maps");
     const [path, init] = harness.apiFetch.mock.calls[0];
-    expect(path).toBe("/v1/me/preferences/misc");
+    expect(path).toBe("/v1/me/analyzer-default-view");
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("reads a section slug such as maps too", async () => {
     prefersTab("maps");
+    expect(await visit()).toBe("/app/maps");
+  });
+
+  it("opens the default saved cohort ahead of the legacy default tab", async () => {
+    harness.apiFetch.mockResolvedValue({ ok: true, data: { defaultTab: "maps", defaultView: { id: "season", name: "Season", section: "replays", filters: { preset: "season:67", race: "P", build: "Pressure" } } } });
+    const href = await visit();
+    expect(href?.split("?")[0]).toBe("/app/replays");
+    expect(new URLSearchParams(href!.split("?")[1]).get("preset")).toBe("season:67");
+    expect(new URLSearchParams(href!.split("?")[1]).get("filters")).toBe("1");
+    expect(harness.apiFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([{ filters: "1" }, { race: "P" }, { race: "" }, { preset: "all" }])("explicit filter URL bypasses the default lookup (%j)", async query => {
+    prefersTab("maps");
+    expect(await visit(query)).toBeNull();
+    expect(harness.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the legacy tab if a saved-view record is invalid", async () => {
+    harness.apiFetch.mockResolvedValue({ ok: true, data: { defaultTab: "maps", defaultView: { name: "Invalid", section: "https://example.com", filters: {} } } });
     expect(await visit()).toBe("/app/maps");
   });
 
@@ -114,6 +134,11 @@ describe("/app legacy links keep priority", () => {
   it("?tab= wins over the default tab", async () => {
     prefersTab("battlefield");
     expect(await visit({ tab: "trends" })).toBe("/app/trends");
+    expect(harness.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps explicit filters and local query state on a legacy tab redirect", async () => {
+    expect(await visit({ tab: "trends", race: "P", preset: "season:67", view: "chart" })).toBe("/app/trends?race=P&preset=season%3A67&view=chart");
     expect(harness.apiFetch).not.toHaveBeenCalled();
   });
 

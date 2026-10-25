@@ -15,6 +15,10 @@ corresponding GitHub Release.
 
 - Read and copy a six-line scouting brief, follow the all-time meeting series, and move through the dossier with sticky section links. Date overrides stay local to this opponent; history remains directly above private notes.
 - Identity and data quality share one disclosure, normal identity forms wait until requested, and ladder ratings share one card. Busy analysis retries with backoff, while missing history and network failures have distinct recovery states.
+### Battle reports
+
+- Read a short, fixed-rule account of a replay in Battle report, Caster or Tactical tone, with known timestamps linked to the same game clock. Copy it as plain text or Markdown.
+- Revisit captioned map stills with race-colored unit dots and side labels. Army-value charts cover moments without complete map frames; unknown samples stay gaps and partial recordings do not rewrite the account.
 
 ### Maps and veto planning
 
@@ -23,12 +27,17 @@ corresponding GitHub Release.
 
 ### Added
 
+- Share analyzer filter links without replacing device preferences. Save up to twelve named views with their section, manage them from Views, and choose a default for the first Today visit of a session.
 - Admin Build Studio lists and versions all preset, private custom and community definitions. Preset replacements use one validated policy across compatible server, desktop and browser engines, with explicit completion clocks, custom-rule precedence, reviewed restores and offline fallback.
 
 ### My reviews dashboard
 
 - My reviews separates requests by status with counts, shareable tabs and older pages. Written reviews can be sorted by newest or most upvoted, with independent paging and retry recovery.
 - Your reviewer profile shows verified leagues, badges, karma and synced-game eligibility. Leaderboard and weekly digest preferences live together there and restore their previous value if saving fails.
+
+### Game benchmarks
+
+- Compare each game's macro score, APM, spending quotient and length with your earlier ranked matchup games and cached league percentiles, with visible sample sizes and update dates. League distributions stay hidden below 50 samples per measurement; personal build timings now reach the late-expansion loss analysis when five earlier natural timings are available.
 
 ### Agent 0.24.5 - Opt-in game-screen assistance
 - Default build selectors and loading-screen scouting to off, matching the

@@ -36,8 +36,10 @@ const article: HelpArticle = {
     "games missing",
     "no data",
     "wrong numbers",
+    "saved views",
+    "share filters",
   ],
-  updated: "2026-10-23",
+  updated: "2026-10-25",
   body: [
     { type: "heading", text: "Using filters", anchor: "using-filters" },
     { type: "paragraph", text: "The summary lists your date range, game type, game size, regions, length and any matchup. **Filters** counts all facets that differ from the defaults. On a computer, date, matchup and region stay inline; open Filters for the other choices. On a phone, Filters opens the complete editor, with Reset to defaults and Done at the bottom. Changes apply immediately." },
@@ -108,6 +110,10 @@ const article: HelpArticle = {
       title: "Filters picked in Strategies follow you across filtered views",
       text: "When you pick **My build** or **Opp strategy** in Strategies, that filter applies to filtered analyzer views (including Games in range, Opponents, Trends, Maps and Builds) until you clear it. Its chip says *set in Strategies*. These two reset when you reload the page; everything else in the filter bar is remembered.",
     },
+    { type: "heading", text: "Save and share a view", anchor: "save-and-share-a-view" },
+    { type: "paragraph", text: "Use **Copy link to this view** beside Active filters to share the current filters and section. A link opens the recipient's own games with those filters. It does not grant access to your history. Date presets such as Last 30 days roll forward; a selected season keeps that season. If copying is unavailable, select and copy the link shown in the field." },
+    { type: "paragraph", text: "Open **Views** in the filter bar to save up to 12 named views to your account. Save current view keeps the filters and section, including a build or map drilldown. Apply reopens it; Rename changes its name; Delete removes it. Names must be unique. Set a view as default to open it on the first plain Today visit of a browser session, ahead of the older Default tab setting. Clear default view to use that setting again." },
+    { type: "paragraph", text: "The address updates as filters change without adding a browser history entry for each edit. Back and Forward restore filters carried by a link. URL filters take priority for that session and do not replace the normal filter choices remembered on this device. Opening a plain analyzer page in a new session restores those device choices; build and strategy drilldowns are never saved to device storage." },
     { type: "heading", text: "On a phone", anchor: "phone" },
     {
       type: "paragraph",
