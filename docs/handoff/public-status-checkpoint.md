@@ -42,7 +42,29 @@ The Help index still contains the same 88 articles and leaves no semantic
 generated change. Initial tests reproduced and corrected a Windows module-name
 collision: the component is `StatusChecks.tsx`, its helper is `reachability.ts`.
 
+The final combined tree includes opponent columns #754 at `64e3a771` and passes
+the production build and every unchanged bundle budget. `/status` prerenders at
+119 kB first load. Today 238.7/240 kB, opponents 120.5/180, dossier 451.6/500,
+overlay 239.7/240 and widget 323.8/325 all pass. Engine `25b300818c31d41b`
+(1.6.12/Python 3.14.2) rebuilt and smoke-parsed successfully. Actual prerendered
+HTML has two Unknown badges, two Not checked yet labels, no Reachable badge and
+no external Clerk script.
+
 The manual browser fixture uses actual route/components, committed fonts and
 production CSS with synthetic framework boundaries and two loopback public
-probes. Browser/build/CI and hostname evidence will be recorded after execution.
-Domain attachment has not yet been performed. Preserve primary domains and DNS.
+probes. **172 assertions pass** at 320/390/768/1440 in light and dark themes:
+initial Checking, independent success/HTTP 503 results, unknown payload/network
+responses, keyboard Refresh and Tab focus, timestamps, 44 px controls, viewport
+containment and no focus/online polling. Probe requests omit cookies and
+Authorization; no external requests, writes or page errors occurred. The 80
+probe observations include browser transport retries for deliberate network
+failures. Existing installed Chromium required normal local output permissions;
+no browser was installed. Browser/server stopped and port 3273 was released.
+
+Root inspected four representative owned captures (light 320, dark 1440 and
+partial results in both themes at 390). All are contained and legible. These
+four are checked in; ten captures and logs remain in `.cache`.
+
+This is a pre-deployment checkpoint. Require fresh exact-head CI, then deploy
+the primary route before attaching the alias. Record final live route and alias
+verification in the attached PR. Preserve primary domains and DNS records.
