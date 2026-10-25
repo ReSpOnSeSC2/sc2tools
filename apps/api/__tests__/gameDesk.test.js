@@ -89,6 +89,12 @@ test("pause persists a strict boolean and can be reversed", async () => {
   expect((await post({ action: "gamePause", paused: true })).body.gameWidgetsPaused).toBe(true);
   expect((await post({ action: "gamePause", paused: false })).body.gameWidgetsPaused).toBe(false);
 });
+test("a persisted anchor ahead of the clock still excludes earlier games", async () => {
+  const anchor = new Date(Date.now() + 60_000).toISOString();
+  await db.users.updateOne({ userId: OWNER }, { $set: { sessionAnchorAt: anchor } });
+  await db.games.insertOne({ userId: OWNER, gameId: "before-clock-boundary", date: new Date(Date.now() - 1000), result: "win" });
+  expect(await games.todaySession(OWNER)).toMatchObject({ wins: 0, losses: 0, games: 0, sessionAnchorAt: anchor });
+});
 test("shoutout offers copy text without a bot and never accepts arbitrary target or message", async () => {
   live.phase = "match_in_progress";
   await db.playerChannels.insertOne({ identityKeys: ["toon:1-S2-1-123"], source: "admin", channels: { twitch: "https://twitch.tv/approved" } });

@@ -34,7 +34,7 @@ class VerifiedPredictionSettlement {
   /** Recovery on the existing summary read, including after process restart.
    * @param {string} token */
   async resume(token) {
-    const state = await this.deps.studio._findDocument(token, { projection: { oraclePending: 1, oracleSequence: 1 } });
+    const state = await this.deps.studio.col.findOne({ studioKey: token }, { projection: { oraclePending: 1, oracleSequence: 1 }, maxTimeMS: 1000 });
     if (state?.oraclePending) await this.drain(token, state);
     const sequence = state?.oracleSequence;
     return Number.isSafeInteger(sequence) ? sequence : 0;
@@ -58,7 +58,7 @@ class VerifiedPredictionSettlement {
       }
       if (!doc.notifiedAt) {
         const leaders = await topOracles(token);
-        const current = await studio._findDocument(token, { projection: { oracleSequence: 1, oraclePending: 1 } });
+        const current = await studio.col.findOne({ studioKey: token }, { projection: { oracleSequence: 1, oraclePending: 1 }, maxTimeMS: 1000 });
         const receipt = await predictions.findOne({ _id: doc._id }, { projection: { notifiedAt: 1 } });
         if (current?.oracleSequence === sequence && current?.oraclePending?.gameKey === job.gameKey && !receipt?.notifiedAt) {
           emit(token, { type: "prediction-settled", gameKey: job.gameKey, settlementSequence: sequence, result: job.result, tally: totals,

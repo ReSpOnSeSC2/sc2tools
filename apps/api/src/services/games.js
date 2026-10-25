@@ -1042,7 +1042,7 @@ class GamesService {
     // the current play burst with games that have not happened yet.
     const nowMs = Date.now();
     const anchorMs = typeof profile.sessionAnchorAt === "string" ? Date.parse(profile.sessionAnchorAt) : NaN;
-    const sessionAnchor = Number.isFinite(anchorMs) && anchorMs <= nowMs ? anchorMs : null;
+    const sessionAnchor = Number.isFinite(anchorMs) ? anchorMs : null;
     const now = new Date(nowMs);
     const cutoff = new Date(nowMs - 14 * 24 * 60 * 60 * 1000);
     const rows = await this.db.games

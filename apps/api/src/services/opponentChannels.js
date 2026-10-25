@@ -13,7 +13,9 @@ class OpponentChannelsCache {
     const key = typeof envelope.gameKey === "string" ? envelope.gameKey : "";
     if (!key || key.length > 120) return {};
     let identity;
-    try { identity = normalizeIdentity({ pulseCharacterId: envelope.opponent?.profile?.pulse_character_id, toonHandle: envelope.opponent?.toonHandle }); } catch { return {}; }
+    const profile = envelope.opponent?.profile;
+    const pulseCharacterId = profile?.confidence !== undefined && profile.confidence !== 1 ? null : profile?.pulse_character_id;
+    try { identity = normalizeIdentity({ pulseCharacterId, toonHandle: envelope.opponent?.toonHandle }); } catch { return {}; }
     const cacheKey = JSON.stringify([userId, key, identity]);
     const revision = this.directory.liveRevision;
     const hit = this.cache.get(cacheKey);

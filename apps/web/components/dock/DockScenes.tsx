@@ -11,7 +11,7 @@ import { DockInput, DockButton } from "./DockControls";
  */
 
 import { useEffect, useRef, useState } from "react";
-import { formatCountdown } from "@/components/overlay/widgets/StreamSceneWidget";
+import { formatCountdown } from "@/lib/multichat/countdown";
 import type {
   StudioBrollConfig,
   StudioScene,

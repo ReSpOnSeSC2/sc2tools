@@ -298,6 +298,7 @@ class MultichatEngagementService {
     if (now - (this._lastTallyAt.get(token) ?? 0) >= TALLY_THROTTLE_MS) {
       this._lastTallyAt.set(token, now);
       const doc = await this.predictions.findOne({ _id: open._id });
+      if (doc?.settled) return;
       this._emit(token, {
         type: "prediction-tally",
         gameKey: doc?.gameKey,
@@ -570,7 +571,7 @@ class MultichatEngagementService {
       this.topOracles(token, 5, selfKeys),
       this.predictions.findOne(
         { token },
-        { sort: { openedAt: -1, _id: -1 }, projection: { _id: 0, settled: 1, gameKey: 1, opponent: 1, picks: 1, openedAt: 1, locksAtMs: 1 } },
+        { sort: { openedAt: -1 }, projection: { _id: 0, settled: 1, gameKey: 1, opponent: 1, picks: 1, openedAt: 1, locksAtMs: 1 } },
       ),
       this.clips
         .find({ token }, { projection: { _id: 0, token: 0, atDate: 0 } })

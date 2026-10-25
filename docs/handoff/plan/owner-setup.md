@@ -95,3 +95,9 @@ Deploy the API and web together for `overlay-profile-sync`. The API Dockerfile i
 # Widget playground
 
 No additional owner configuration is required. The normal API image includes the shared sample JSON; deploy API and web normally. Use Settings → Overlay → Widgets → Preview, Stream Studio or the public playground to inspect silent local sample data before using Test in OBS. The playground uses no account or overlay token and makes no provider request. No production integration or account setting was changed while validating it.
+
+# Stream Dock Game desk
+
+Deploy API and web together, then refresh existing Dock and overlay Browser Sources once so their game-widget hiding and manual-result labels update. No environment variable, service, collection, index or migration is added. Game is the first Dock section; its sticky header keeps scene, active opponent, session and connection visible. Current desktop agents omit the live map, so that field correctly says unavailable.
+
+At stream start, confirm Start new session to reset the account's session boundary and this token's clip timestamp mark. Hide game widgets is reversible and keeps chat/scenes running; verify your refreshed sources hide and resume before relying on it live. Crystal Ball manual/cancel controls never award points or accuracy. Shout-outs use only reviewed exact opponent channels; a configured matching Twitch bot queues them, otherwise Copy shout-out is available. Validation used synthetic loopback data and no actual bot or provider posts.

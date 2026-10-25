@@ -10,8 +10,14 @@ Dock controls wrap the existing UI primitives. Fine pointers retain dense 32px c
 
 Collapsed summaries use the same studio state, local poll tally and engagement snapshot as the open panels. Unknown data stays Loading rather than implying a zero. The b-roll editor is loaded only after its disclosure is opened and stays mounted after that to preserve its draft.
 
-The plan's Scout migration remains pending the `live-scouting-brief` predecessor: no token-authenticated Scout panel exists in the current source. The private analyzer dossier brief is not an appropriate replacement. Game desk's Scout work must follow that predecessor; this foundation changes only the existing panels.
+The subsequent `live-scouting-brief` predecessor supplies the token-authenticated Scout panel through an explicit public projection. The private analyzer dossier brief remains separate. Game desk preserves that projection and the shared active-only live/session socket contract.
 
-The separately owned counts-only `DockPresenceStrip` remains independent and will move into the future status header when Game desk is implemented.
+Game desk places the independent counts-only `DockPresenceStrip` inside its sticky status header. Header height is measured so jump targets and scroll-spy retain the correct offset at narrow widths. A separately loaded Game panel keeps optional controls out of the initial Dock bundle and uses the same local retry boundary.
 
 Optional build picking, b-roll management and graph previews each have a local import/render boundary. A load has a 20-second deadline; explicit Retry creates a fresh lazy identity and invokes the import factory again. An unavailable optional chunk cannot unmount the other panels or their drafts.
+
+Game desk stores its strict boolean pause on the existing Studio document. Existing overlay sockets replay that state; game widgets and scouting voice wait for it on a cold source and after resync, without adding sockets or polling. Chat, scenes and other production controls remain usable. Approved opponent channels use bounded exact identity reads with no seed/import/provider/name resolution; directory mutations fence cached and in-flight results.
+
+Verified prediction settlement uses a durable per-token lane and monotonic sequence on the canonical Studio row. The current lane drains before another sequence can start. A single scalar receipt per viewer makes score increments resumable and idempotent without an unbounded ledger or per-chat writes. Existing engagement summary reads resume a pending lane after a restart through one bounded indexed metadata read. Cancel/manual/verified outcomes compete for the same prediction claim; manual and cancelled rounds never enter oracle scores or accuracy. Verified reveal sequences and the durable summary cursor reject late older delivery in the widget and bot.
+
+Session reset writes a monotonic account anchor and advances the token's stream-start mark from the committed anchor. The session resolver applies that lower bound, discards held pre-reset computations, and includes the anchor in its DTO so clients reject late older fanouts. No collection, index, migration, environment variable, or external activation is introduced.

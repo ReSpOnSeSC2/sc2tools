@@ -5,7 +5,9 @@ import { createOverlaySocket, type OverlayConnectionStatus } from "@/components/
 import { sanitizeStudioState, type StudioState } from "./useStudioState";
 import type { LiveGameEnvelope, LiveGamePayload } from "@/components/overlay/types";
 import { mergeLiveGameStreamerHistory, type StickyStreamerHistory } from "@/components/overlay/mergeLiveGameStreamerHistory";
-type StudioLiveFacts = { token: string; liveGame: LiveGameEnvelope | null; lastLiveAt: number | null; session: LiveGamePayload["session"] | null };
+import { newerSession } from "./sessionSnapshot";
+export type DockGameStatus = { gameKey: string | null; phase: LiveGameEnvelope["phase"]; isReplay: boolean; verified: boolean };
+type StudioLiveFacts = { gameStatus: DockGameStatus | null; engagementEvent: unknown; token: string; liveGame: LiveGameEnvelope | null; lastLiveAt: number | null; session: LiveGamePayload["session"] | null };
 
 /** Timestamp ordering shared by the two manual control surfaces. */
 export function newestStudioSnapshot(current: StudioState | null, next: StudioState): StudioState {
@@ -22,9 +24,9 @@ export function newestStudioSnapshot(current: StudioState | null, next: StudioSt
  * their existing GET fallback; this connection supplies immediate saved-state
  * updates without reconnecting when drafts or callback identities change.
  */
-export function useStudioUpdates(token: string, onUpdate: (state: StudioState) => void, enabled = true, controlOnly = false): { status: OverlayConnectionStatus; liveGame: LiveGameEnvelope | null; lastLiveAt: number | null; session: LiveGamePayload["session"] | null } {
+export function useStudioUpdates(token: string, onUpdate: (state: StudioState) => void, enabled = true, controlOnly = false): { status: OverlayConnectionStatus; liveGame: LiveGameEnvelope | null; lastLiveAt: number | null; session: LiveGamePayload["session"] | null; gameStatus: DockGameStatus | null; engagementEvent: unknown } {
   const [connection, setConnection] = useState<{ token: string; status: OverlayConnectionStatus }>({ token, status: "connecting" });
-  const [facts, setFacts] = useState<StudioLiveFacts>({ token, liveGame: null, lastLiveAt: null, session: null });
+  const [facts, setFacts] = useState<StudioLiveFacts>({ token, liveGame: null, lastLiveAt: null, session: null, gameStatus: null, engagementEvent: null });
   const callbackRef = useRef({ token, onUpdate });
   callbackRef.current = { token, onUpdate };
   useEffect(() => {
@@ -34,7 +36,7 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
     const current = () => !cancelled && callbackRef.current.token === token;
     const clearFacts = () => {
       sticky = null;
-      if (current()) setFacts({ token, liveGame: null, lastLiveAt: null, session: null });
+      if (current()) setFacts({ token, liveGame: null, lastLiveAt: null, session: null, gameStatus: null, engagementEvent: null });
     };
     const connection = createOverlaySocket(token, { surface: "dock", auth: controlOnly ? { controlOnly: true } : undefined, onStatus: (status) => setConnection({ token, status }) });
     const socket = connection.socket;
@@ -51,7 +53,9 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
       if (value.type !== "liveGameState" || !["idle", "menu", "match_loading", "match_started", "match_in_progress", "match_ended"].includes(value.phase)) return;
       const active = ["match_loading", "match_started", "match_in_progress"].includes(value.phase) && !value.isReplay;
       const merged = active ? mergeLiveGameStreamerHistory(value, sticky) : null; sticky = merged?.sticky ?? null;
-      setFacts(previous => ({ ...(previous.token === token ? previous : { token, session: null }), liveGame: merged?.envelope ?? null, lastLiveAt: Date.now() }));
+      const gameKey = typeof value.gameKey === "string" && value.gameKey.length <= 120 ? value.gameKey : null;
+      setFacts(previous => ({ ...(previous.token === token ? previous : { token, session: null, engagementEvent: null }), liveGame: merged?.envelope ?? null, lastLiveAt: Date.now(),
+        gameStatus: { gameKey, phase: value.phase, isReplay: value.isReplay === true, verified: previous.token === token && previous.gameStatus?.gameKey === gameKey && previous.gameStatus.verified === true } }));
     };
     const receiveSession = (raw: unknown) => {
       if (!current() || !raw || typeof raw !== "object" || Array.isArray(raw)) return;
@@ -61,8 +65,21 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
       for (const key of ["mmrStart", "mmrCurrent"] as const) if (typeof value[key] === "number" && Number.isFinite(value[key]) && value[key] > 0 && value[key] < 100_000) session[key] = value[key];
       if (value.streak && ["win", "loss"].includes(value.streak.kind) && Number.isSafeInteger(value.streak.count) && value.streak.count > 0) session.streak = { kind: value.streak.kind, count: Math.min(value.streak.count, 100_000) };
       if (typeof value.sessionStartedAt === "string" && Number.isFinite(Date.parse(value.sessionStartedAt))) session.sessionStartedAt = value.sessionStartedAt;
-      setFacts(previous => ({ ...(previous.token === token ? previous : { token, liveGame: null, lastLiveAt: null }), session }));
+      if (typeof value.sessionAnchorAt === "string" && Number.isFinite(Date.parse(value.sessionAnchorAt))) session.sessionAnchorAt = value.sessionAnchorAt;
+      setFacts(previous => ({ ...(previous.token === token ? previous : { token, liveGame: null, lastLiveAt: null, gameStatus: null, engagementEvent: null }), session: newerSession(previous.token === token ? previous.session ?? null : null, session) }));
     };
+    const receiveVerified = (raw: unknown) => {
+      if (!current() || !raw || typeof raw !== "object" || Array.isArray(raw)) return;
+      const value = raw as Record<string, unknown>;
+      if (!["win", "loss"].includes(String(value.result)) || typeof value.gameKey !== "string") return;
+      setFacts(previous => previous.token === token && previous.gameStatus && previous.gameStatus.gameKey === value.gameKey
+        ? { ...previous, gameStatus: { ...previous.gameStatus, verified: true } } : previous);
+    };
+    const receiveEngagement = (raw: unknown) => {
+      if (current() && raw && typeof raw === "object" && !Array.isArray(raw)) setFacts(previous => previous.token === token ? { ...previous, engagementEvent: raw } : previous);
+    };
+    socket.on("overlay:live", receiveVerified);
+    socket.on("overlay:engagement", receiveEngagement);
     const outgoing = (event: string) => { if (event === "overlay:resync") clearFacts(); };
     socket.on("overlay:liveGame", receiveLive);
     socket.on("overlay:session", receiveSession);
@@ -72,6 +89,7 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
     return () => {
       cancelled = true;
       socket.off("overlay:multichat", receive);
+      socket.off("overlay:live", receiveVerified); socket.off("overlay:engagement", receiveEngagement);
       socket.off("overlay:liveGame", receiveLive); socket.off("overlay:session", receiveSession);
       socket.off("connect", clearFacts); socket.off("disconnect", clearFacts);
       socket.offAnyOutgoing?.(outgoing);
@@ -81,5 +99,7 @@ export function useStudioUpdates(token: string, onUpdate: (state: StudioState) =
   return { status: connection.token === token ? connection.status : "connecting",
     liveGame: enabled && facts.token === token ? facts.liveGame : null,
     lastLiveAt: enabled && facts.token === token ? facts.lastLiveAt : null,
-    session: enabled && facts.token === token ? facts.session : null };
+    session: enabled && facts.token === token ? facts.session : null,
+    gameStatus: enabled && facts.token === token ? facts.gameStatus : null,
+    engagementEvent: enabled && facts.token === token ? facts.engagementEvent : null };
 }

@@ -67,7 +67,8 @@ import { useDockScrollSpy } from "./useDockScrollSpy";
 import { useDockSummaries } from "./useDockSummaries";
 import { usePollTally } from "./usePollTally";
 export { DockButton } from "./DockControls";
-import { DockPresenceStrip } from "./DockPresenceStrip";
+import { DockStatusHeader } from "./DockStatusHeader";
+import { loadGameDesk } from "./dockLazyLoaders";
 import { DockLazyPanel } from "./DockLazyPanel";
 const loadScout = () => import("./DockScout").then(module => module.DockScout);
 
@@ -109,7 +110,6 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
   const viewers = useViewerCounts(token, events);
   // Clip-moment log keeps its own boot fetch + 60s fallback. The lightweight
   // studio subscription below listens only for control-state updates.
-  const { summary: engagement, loaded: engagementReady } = useEngagementState(token, null);
 
   // Keep readiness tied to the token as part of the snapshot itself. That
   // makes a token change fail closed on its very first render instead of
@@ -148,6 +148,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
     adoptStudioSnapshot(next);
   });
   const connectionStatus = updates?.status ?? "connected";
+  const { summary: engagement, loaded: engagementReady } = useEngagementState(token, updates?.engagementEvent ?? null);
   useEffect(() => { if (connectionStatus === "invalid") onInvalid(); }, [connectionStatus, onInvalid]);
 
   useEffect(() => {
@@ -365,11 +366,13 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
   useEffect(() => { setDockUrl(window.location.href); }, []);
   const { layout, setOpen, togglePin, setBrollOpen, reset } = useDockLayout();
   const ordered = orderedDockSections(layout);
-  const { active, jumpTo } = useDockScrollSpy(setOpen);
+  const [headerHeight, setHeaderHeight] = useState(64);
+  const { active, jumpTo } = useDockScrollSpy(setOpen, headerHeight);
   const tally = usePollTally(moderatedMessages, studio.poll);
   const summaries = useDockSummaries(studio, studioSnapshotReady, platforms, loaded,
     tally?.total ?? 0, engagement.clipMoments.length, engagementReady);
   const panels: Record<DockSectionId, ReactNode> = {
+    "dock-game": <DockLazyPanel label="game desk" loader={loadGameDesk} componentProps={{ token, live: updates?.liveGame ?? null, lastLiveAt: updates?.lastLiveAt ?? null, gameStatus: updates?.gameStatus ?? null, session: updates?.session ?? null, studio, engagement, ready: studioSnapshotReady && engagementReady, busy, onPost: postStudioAction }} />,
     "dock-scout": <DockLazyPanel label="live scouting" loader={loadScout} componentProps={{ live: updates?.liveGame ?? null, lastUpdatedAt: updates?.lastLiveAt ?? null }} />,
     "dock-chat": <>
 <DockChat embedded
@@ -516,11 +519,11 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
   };
 
   return (
-    <div className={`${styles.root} mx-auto min-h-screen w-full max-w-6xl p-2 font-sans text-text sm:p-3`}>
-      <DockPresenceStrip token={token} />
+    <div className={`${styles.root} mx-auto min-h-screen w-full max-w-6xl p-2 font-sans text-text sm:p-3`} style={{ "--dock-sticky-height": `${headerHeight}px` } as CSSProperties}>
+      <DockStatusHeader token={token} studio={studio} ready={studioSnapshotReady} live={updates?.liveGame ?? null} lastLiveAt={updates?.lastLiveAt ?? null} session={updates?.session ?? null} status={connectionStatus} onHeight={setHeaderHeight}>
       {/* Narrow-mode sticky jump tabs — the OBS dock has no room for
           a permanent two-column layout. */}
-      <nav aria-label="Dock sections" className="sticky top-0 z-10 -mx-2 mb-2 flex items-center gap-1 overflow-x-auto border-b border-border bg-bg px-2 py-1.5 lg:hidden">
+      <nav aria-label="Dock sections" className="flex items-center gap-1 overflow-x-auto py-1.5 lg:hidden">
         {DOCK_SECTIONS.map((s) => (
           <DockButton
             key={s.id}
@@ -534,6 +537,7 @@ function ActiveDockClient({ token, onInvalid }: { token: string; onInvalid: () =
           </DockButton>
         ))}
       </nav>
+      </DockStatusHeader>
       <div className="mb-2 flex justify-end"><DockButton onClick={reset}>Reset layout</DockButton></div>
 
       {connectionStatus === "reconnecting" ? <p role="status" className="mb-2 text-caption text-text-muted">Reconnecting to SC2 Tools…</p> : null}

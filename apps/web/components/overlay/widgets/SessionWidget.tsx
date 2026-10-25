@@ -12,6 +12,7 @@ export type SessionSummary = {
   mmrCurrent?: number;
   region?: string;
   sessionStartedAt?: string;
+  sessionAnchorAt?: string;
   streak?: { kind: "win" | "loss"; count: number };
   /**
    * Set when the aggregate was emitted by the Test route. The

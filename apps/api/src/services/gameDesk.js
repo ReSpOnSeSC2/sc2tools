@@ -59,8 +59,8 @@ class GameDeskService {
     // A directory response must not resurrect an opponent after game end/change.
     const current = /** @type {Record<string,any>|null} */ (this.deps.broker.latest(userId));
     return current && current.gameKey === live.gameKey
-      && JSON.stringify([current.opponent?.toonHandle, current.opponent?.profile?.pulse_character_id])
-        === JSON.stringify([live.opponent?.toonHandle, live.opponent?.profile?.pulse_character_id])
+      && JSON.stringify([current.opponent?.toonHandle, current.opponent?.profile?.pulse_character_id, current.opponent?.profile?.confidence])
+        === JSON.stringify([live.opponent?.toonHandle, live.opponent?.profile?.pulse_character_id, live.opponent?.profile?.confidence])
       && ["match_loading", "match_started", "match_in_progress"].includes(String(current.phase))
       ? shoutoutText(channels) : null;
   }

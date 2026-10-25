@@ -51,3 +51,8 @@ test("inactive, replay, keyless and malformed identity paths never query the dir
   for (const patch of [{ phase: "match_ended" }, { isReplay: true }, { gameKey: "" }, { gameKey: "x".repeat(121) }]) expect(await cache.forMatch("owner", { ...envelope, ...patch })).toEqual({});
   expect(read).not.toHaveBeenCalled(); expect(await directory.resolveApprovedExact({ pulseCharacterId: "bad" })).toEqual({});
 });
+test("an explicitly ambiguous Pulse profile cannot advertise a name-resolved channel", async () => {
+  await db.playerChannels.insertOne({ id: "uncertain", source: "admin", identityKeys: ["pulse:12"], channels: { twitch: "https://twitch.tv/wrong" } });
+  expect(await cache.forMatch("owner", { ...envelope, opponent: { profile: { pulse_character_id: 12, confidence: 0.5 } } })).toEqual({});
+  expect(await cache.forMatch("owner", { ...envelope, opponent: { toonHandle: "1-S2-1-123", profile: { pulse_character_id: 12, confidence: 0.5 } } })).toEqual({});
+});

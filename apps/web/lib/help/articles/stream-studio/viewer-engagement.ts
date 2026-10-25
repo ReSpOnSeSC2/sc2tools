@@ -22,13 +22,23 @@ const article: HelpArticle = {
     "chat bot",
     "bio",
   ],
-  updated: "2026-10-22",
+  updated: "2026-10-25",
   body: [
     {
       type: "paragraph",
       text: "Viewers on all four platforms share one progression: 2 XP per chat message plus bonuses for subs, raids, gifts and Super Chats. Levels climb a StarCraft unit ladder themed by the race you pick in the multichat settings; the supporter wall shows today's top 5 and announces level-ups on stream. Before each of your games, chat calls `!win` or `!loss` — the verified result awards oracle points and shows whether chat was right. Everything below is what your viewers can type:",
     },
     { type: "widget", widget: "chat-commands" },
+    {
+      type: "callout",
+      tone: "info",
+      title: "Crystal Ball fair play",
+      text: "Only replay-verified results award oracle points or affect accuracy. In Stream Dock → Game, Cancel round awards nothing. After a matching game ends without a verified result, the streamer can confirm Resolve Win or Resolve Loss; viewers see **resolved manually**, with no points or accuracy change. Voting locks early in the game, and a late verified replay cannot score a cancelled or manually resolved round.",
+    },
+    {
+      type: "paragraph",
+      text: "**!so** asks the enabled Twitch bot for the current opponent's approved stream links. It ignores arbitrary targets and stays silent when the opponent has no approved exact identity match. Stream Dock → Game also offers Shout out, with Copy shout-out when a matching bot is unavailable.",
+    },
     {
       type: "callout",
       tone: "info",
