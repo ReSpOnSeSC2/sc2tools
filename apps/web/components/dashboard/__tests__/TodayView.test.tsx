@@ -32,8 +32,8 @@ vi.mock("@/components/dashboard/AgentUpgradeNotice", () => ({
   AgentUpgradeNotice: () => <div data-testid="agent-upgrade" />,
 }));
 
-vi.mock("@/components/dashboard/LiveGamePanel", () => ({
-  LiveGamePanel: () => <div data-testid="live-game" />,
+vi.mock("@/components/scouting/LiveScoutingBrief", () => ({
+  LiveScoutingBrief: () => <div data-testid="live-game" />,
 }));
 
 vi.mock("@/components/analyzer/DashboardKpiStrip", () => ({

@@ -56,6 +56,22 @@ describe("per-opponent scouting notes", () => {
     });
   });
 
+  test("text-only live saves preserve the stored read-aloud setting atomically", async () => {
+    await opponents.updateNotes("owner", "pulse-1", { notes: "Old packet", notesReadAloud: true });
+    await db.opponentNotes.updateOne({ userId: "owner", pulseId: "pulse-1" }, { $set: { notesReadAloud: false } });
+    const saved = await opponents.updateNotes("owner", "pulse-1", { notes: "New text", preserveReadAloud: true });
+    expect(saved.notesReadAloud).toBe(false);
+    expect(await db.opponentNotes.findOne({ userId: "owner", pulseId: "pulse-1" })).toMatchObject({ notes: "New text", notesReadAloud: false });
+    await db.opponentNotes.updateOne({ userId: "owner", pulseId: "pulse-1" }, { $set: { notesReadAloud: true } });
+    expect((await opponents.updateNotes("owner", "pulse-1", { notes: "Another text", preserveReadAloud: true })).notesReadAloud).toBe(true);
+    expect(await opponents.updateNotes("other-owner", "pulse-1", { notes: "No", preserveReadAloud: true })).toBeNull();
+  });
+
+  test("preserve mode defaults a new note to silent and rejects a conflicting toggle", async () => {
+    expect((await opponents.updateNotes("owner", "pulse-1", { notes: "First text", preserveReadAloud: true })).notesReadAloud).toBe(false);
+    await expect(opponents.updateNotes("owner", "pulse-1", { notes: "Bad", preserveReadAloud: true, notesReadAloud: true })).rejects.toThrow();
+  });
+
   test("persists a versioned private note and attaches it to the profile", async () => {
     const saved = await opponents.updateNotes("owner", "pulse-1", {
       notes: "  Watch for proxy barracks.  ",
@@ -234,6 +250,16 @@ describe("PUT /opponents/:pulseId/notes", () => {
 
     expect(res.status).toBe(404);
     expect(res.body).toEqual({ error: { code: "not_found" } });
+  });
+
+  test("accepts strict text-only preservation and rejects a simultaneous speech toggle", async () => {
+    const updateNotes = jest.fn(async () => ({ notes: "Text only", notesReadAloud: false, opponentName: "CurrentName", pulseCharacterId: null }));
+    const { app } = appWith(updateNotes);
+    const saved = await request(app).put("/opponents/pulse-1/notes").send({ notes: "Text only", preserveReadAloud: true });
+    expect(saved.status).toBe(200); expect(saved.body.notesReadAloud).toBe(false);
+    expect(updateNotes).toHaveBeenCalledWith("owner", "pulse-1", { notes: "Text only", preserveReadAloud: true });
+    const bad = await request(app).put("/opponents/pulse-1/notes").send({ notes: "Bad", preserveReadAloud: true, notesReadAloud: true });
+    expect(bad.status).toBe(400); expect(updateNotes).toHaveBeenCalledTimes(1);
   });
 
   test("keeps a successful save successful if cache invalidation fails", async () => {

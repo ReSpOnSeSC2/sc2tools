@@ -71,6 +71,11 @@ export type LiveGamePayload = {
   oppRace?: string;
   /** Opponent display name (battle tag without #1234 disambiguator). */
   oppName?: string;
+  /** Exact resolved current opponent toon; never inferred from a name alone. */
+  oppPulseId?: string;
+  opponentIdentityMatched?: boolean;
+  /** The exact current toon already has an owned opponent row for note writes. */
+  opponentNotesWritable?: boolean;
   /**
    * SC2Pulse "revealed" identity behind a barcode / anonymised account
    * — the pro/main nickname the community linked on
@@ -119,6 +124,8 @@ export type LiveGamePayload = {
    * numbers the opponent dossier shows (last 10 games count double).
    */
   predictedStrategies?: { name: string; weight: number }[];
+  /** Plain frequencies from the existing bounded replay sample. */
+  openingHistory?: { name: string; samples: number; of: number }[];
   /** Top builds the player likes vs this matchup. */
   topBuilds?: { name: string; total: number; winRate: number }[];
   /** Best answer vs this opponent's most-likely opening. */
@@ -138,6 +145,7 @@ export type LiveGamePayload = {
    * vs OPP build". Newest first.
    */
   recentGames?: Array<{
+    gameId?: string;
     /** "Win" | "Loss" | "Tie" — uppercased for the result-chip text. */
     result: "Win" | "Loss" | "Tie";
     /** Duration as `m:ss`, pre-formatted so the widget stays markup-only. */
@@ -537,6 +545,7 @@ export interface LiveGameEnvelope {
    * once Pulse responds (or stays absent if Pulse is down).
    */
   opponent?: {
+    toonHandle?: string | null;
     name?: string | null;
     race?: string | null;
     /** SC2Pulse "revealed" pro/main name behind a barcode, when known. */
@@ -567,6 +576,9 @@ export interface LiveGameEnvelope {
     | "myRace"
     | "oppRace"
     | "oppName"
+    | "oppPulseId"
+    | "opponentIdentityMatched"
+    | "opponentNotesWritable"
     | "oppRevealedName"
     | "oppMmr"
     | "matchup"
@@ -577,6 +589,7 @@ export interface LiveGameEnvelope {
     | "cheeseProbability"
     | "cheeseHistory"
     | "predictedStrategies"
+    | "openingHistory"
     | "topBuilds"
     | "bestAnswer"
     | "favOpening"
