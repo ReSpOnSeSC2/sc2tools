@@ -237,7 +237,7 @@ describe("RuleRow", () => {
     const readoutId = picker().getAttribute("aria-describedby");
     expect(readoutId).toBeTruthy();
     expect(countBox()?.getAttribute("aria-describedby")).toBe(readoutId);
-    expect(screen.getByRole("textbox", { name: "Unit, building or upgrade" })).toBeTruthy();
+    expect(screen.getByRole("combobox", { name: "Rule 1 action" })).toBeTruthy();
 
     const remove = screen.getByRole("button", {
       name: "Remove rule 1: at least 1 Void Ray before 6:40",

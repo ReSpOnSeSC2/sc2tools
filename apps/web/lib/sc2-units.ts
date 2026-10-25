@@ -146,6 +146,11 @@ function costTable(era?: PatchEra | null): Readonly<Record<string, UnitCost>> {
   return table;
 }
 
+/** Read-only catalog for offline generators. Ordinary unit lookups remain lazy. */
+export function unitCostCatalog(era?: PatchEra | null): Readonly<Record<string, UnitCost>> {
+  return costTable(era);
+}
+
 /** Worker name set (lowercase, alias-folded). */
 const WORKER_NAMES = new Set(["drone", "probe", "scv", "mule"]);
 

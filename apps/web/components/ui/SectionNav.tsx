@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { revealHorizontally } from "@/lib/a11y/revealHorizontally";
 
 export interface SectionNavItem { id: string; label: string }
 export interface SectionNavProps { items: readonly SectionNavItem[]; "aria-label"?: string; variant?: "rail" | "bar" }
@@ -40,7 +41,9 @@ export function SectionNav({ items, "aria-label": label = "On this page", varian
   }, [encodedItems]);
   useEffect(() => {
     const el = scroller.current;
-    if (el && el.getBoundingClientRect().top < window.innerHeight) el.querySelector<HTMLElement>('[aria-current]')?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    const chip = el?.querySelector<HTMLElement>('[aria-current]');
+    // Scroll-spy updates may reveal a chip, never move the reading position.
+    if (el && chip) revealHorizontally(el, chip);
   }, [active]);
   return <nav aria-label={label} className={`sticky top-[calc(3.5rem+env(safe-area-inset-top))] z-20 min-w-0 self-start border-y border-border bg-bg/95 py-0.5 supports-[backdrop-filter]:backdrop-blur-sm sm:top-[calc(4rem+env(safe-area-inset-top))] print:hidden ${variant === "rail" ? "lg:col-start-2 lg:row-start-1 lg:top-24 lg:border-0 lg:bg-transparent" : ""}`}>
     <h2 className={`sr-only mb-2 text-caption font-semibold ${variant === "rail" ? "lg:not-sr-only" : ""}`}>{label}</h2>

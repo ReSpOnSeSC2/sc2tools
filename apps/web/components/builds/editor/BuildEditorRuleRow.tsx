@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { MapPin, X } from "lucide-react";
 import { Icon } from "@/components/ui/Icon";
 import { Select } from "@/components/ui/Select";
+import { TokenPicker } from "./TokenPicker";
 import {
   COUNT_MAX,
   PROXY_RULE_DISTANCE_HINT,
@@ -59,6 +60,8 @@ export interface RuleRowProps {
   onRemove: () => void;
   /** Focus the token input on mount (a rule just added from the add bar). */
   autoFocusName?: boolean;
+  race?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -79,6 +82,8 @@ export function RuleRow({
   onCount,
   onRemove,
   autoFocusName = false,
+  race,
+  disabled = false,
 }: RuleRowProps) {
   const id = useId();
   const readoutId = `${id}-readout`;
@@ -112,6 +117,8 @@ export function RuleRow({
           autoFocus={autoFocusName}
           onUpdate={onUpdate}
           onRemove={onRemove}
+          race={race}
+          disabled={disabled}
         />
         <div className="flex flex-wrap items-center gap-1.5">
           <QuantityPicker
@@ -154,6 +161,8 @@ function RuleSubject({
   autoFocus,
   onUpdate,
   onRemove,
+  race,
+  disabled,
 }: {
   rule: BuildRule;
   index: number;
@@ -162,11 +171,9 @@ function RuleSubject({
   autoFocus: boolean;
   onUpdate: RuleRowProps["onUpdate"];
   onRemove: RuleRowProps["onRemove"];
+  race?: string;
+  disabled?: boolean;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  useEffect(() => {
-    if (autoFocus) inputRef.current?.focus();
-  }, [autoFocus]);
   return (
     <div className="flex min-w-0 items-center gap-2">
       {/* Here, not first in the group, where space-y would push line 1 down. */}
@@ -181,16 +188,7 @@ function RuleSubject({
           className="flex-shrink-0"
         />
       ) : null}
-      <input
-        ref={inputRef}
-        type="text"
-        value={rule.name}
-        placeholder="BuildStargate"
-        title="Event token (e.g. BuildStargate, ResearchBlink)"
-        aria-label="Unit, building or upgrade"
-        onChange={(e) => onUpdate({ name: e.target.value.trim() })}
-        className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-caption text-text placeholder:text-text-dim focus:border-border-strong focus:outline-none"
-      />
+      <TokenPicker value={rule.name} race={race} disabled={disabled} onChange={name => onUpdate({ name })} autoFocus={autoFocus} label={`Rule ${index + 1} action`} />
       <button
         type="button"
         onClick={onRemove}

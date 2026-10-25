@@ -87,6 +87,15 @@ afterEach(() => {
 });
 
 describe("SaveToLibraryButton", () => {
+  it("copies a public reference plan while discarding a hostile nested private source replay ID", async () => {
+    harness.apiCall.mockResolvedValue({ saved: true });
+    render(<SaveToLibraryButton title="Reference plan" communitySlug="public-reference" build={{ ...SNAPSHOT, buildOrder: { v: 1, source: "game", sourceGameId: "private-secret", steps: [{ t: null, supply: 14, action: "Future action" }] } }} />);
+    fireEvent.click(screen.getByRole("button", { name: /Save to my library/ }));
+    await waitFor(() => expect(saves()).toHaveLength(1));
+    const body = JSON.parse(String(saves()[0][2].body));
+    expect(body.buildOrder).toEqual({ v: 1, source: "game", steps: [{ t: null, supply: 14, action: "Future action" }] });
+    expect(JSON.stringify(body)).not.toContain("private-secret");
+  });
   it("offers signed-out visitors a sign-up that returns to this build", () => {
     harness.signedIn = false;
     renderButton();
