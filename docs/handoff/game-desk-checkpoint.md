@@ -1,7 +1,7 @@
 # Dock Game desk checkpoint
 
-2026-10-25. Branch `codex/wave4-dock-game-desk`, based on actual main through
-`af68351e` (728). The merged Dock foundation and stream-safe Scout predecessor
+2026-10-25. Branch `codex/wave4-dock-game-desk`, integrated actual main through
+owner commit `9bb3f5ca` (agent0.24.6/Randomizer correction). The merged Dock foundation and stream-safe Scout predecessor
 are preserved. ADR0039 and `plan/owner-setup.md` describe the storage and rollout.
 
 ## Result
@@ -48,7 +48,7 @@ to receive pause/manual-result behavior. No native release is required.
 - Failure/concurrency tests hold viewer awards, leaders reads, session writes and
   old owner callbacks. They cover durable resume, successive pending lanes,
   reversed reset completion, post-rotation denial and late closed-round reveal.
-- Browser engine built and smoked: `604e9d4618a6414b`, engine1.6.12,
+- Browser engine built and smoked after owner integration: `f96c086eb83fdc40`, engine1.6.12,
   Python3.14.2. Next production build uses the repository CI public placeholder;
   production budgets remain unchanged. Dock214.6/225kB, Today238.9/240,
   landing214.7/215, game317.1/440, opponent476.1/500.
@@ -58,6 +58,12 @@ to receive pause/manual-result behavior. No native release is required.
 - The real production Next Dock route passed3 viewport checks (300/768/1440),
   including retained drafts and an actual rejected optional chunk followed by
   successful Retry. These use synthetic API routes and block socket traffic.
+- First CI passed the API and responsive jobs; the full web run passed7449
+  cases and exposed10 assertions in one older safe-sample fixture that omitted
+  the now-required Studio pause snapshot. The fixture now models multiple socket
+  listeners and supplies that saved snapshot explicitly. All16 sample cases,
+  five actual pause regressions and22 owner Randomizer check-in cases pass after
+  integration (43 total); assertions about sample/real restoration are retained.
 
 The repeatable manual harness is `apps/web/tests/manual/game-desk.cjs` with its
 explicit boundary bundle. It mounts real Dock and OverlayWidgetClient consumers
