@@ -1361,107 +1361,102 @@ class OpponentsService {
    * @param {Array<{game: any, inDateScope: boolean, recentScouting: boolean}>} selected
    */
   async _hydrateProfileAnalyticalSample(userId, selected) {
-    const releaseAdmission = await opponentProfileAnalysisAdmission.acquire();
-    try {
-      const out = [];
-      let filteredScoutingCount = 0;
-      for (const choice of selected) {
-        const slim = choice.game;
-        /** @type {Record<string, any>|null} */
-        let detail = null;
-        if (
-          this.gameDetails
-          && typeof this.gameDetails.findOne === "function"
-          && slim.gameId
-        ) {
-          try {
-            detail = await this.gameDetails.findOne(
-              userId,
-              String(slim.gameId),
-              { fields: ["buildLog", "oppBuildLog", "macroBreakdown"] },
-            );
-          } catch (err) {
-            this.logger.warn(
-              { err },
-              "opponent profile detail read failed; trying legacy inline row",
-            );
-          }
-        }
-
-        const needsLegacyInline = !detail
-          || !Array.isArray(detail.buildLog)
-          || !Array.isArray(detail.oppBuildLog)
-          || !detail.macroBreakdown;
-        /** @type {Record<string, any>|null} */
-        let inline = null;
-        if (needsLegacyInline && slim._id) {
-          inline = await this.db.games.findOne(
-            { userId, _id: slim._id },
-            { projection: PROFILE_DETAIL_PROJECTION },
+    const out = [];
+    let filteredScoutingCount = 0;
+    for (const choice of selected) {
+      const slim = choice.game;
+      /** @type {Record<string, any>|null} */
+      let detail = null;
+      if (
+        this.gameDetails
+        && typeof this.gameDetails.findOne === "function"
+        && slim.gameId
+      ) {
+        try {
+          detail = await this.gameDetails.findOne(
+            userId,
+            String(slim.gameId),
+            { fields: ["buildLog", "oppBuildLog", "macroBreakdown"] },
+          );
+        } catch (err) {
+          this.logger.warn(
+            { err },
+            "opponent profile detail read failed; trying legacy inline row",
           );
         }
-
-        const buildLog = compactAnalysisBuildLog(
-          detail?.buildLog ?? inline?.buildLog,
-        );
-        const oppBuildLog = compactAnalysisBuildLog(
-          detail?.oppBuildLog ?? inline?.oppBuildLog,
-        );
-        const macroBreakdown = compactAnalysisMacroBreakdown(
-          detail?.macroBreakdown ?? inline?.macroBreakdown,
-        );
-        const hydrated = {
-          ...slim,
-          buildLog,
-          oppBuildLog,
-          macroBreakdown,
-        };
-
-        let scouting = null;
-        if (
-          choice.recentScouting
-          || (choice.inDateScope
-            && filteredScoutingCount < OPPONENT_PROFILE_SCOUTING_MAX_GAMES)
-        ) {
-          if (choice.inDateScope) filteredScoutingCount += 1;
-          try {
-            scouting = computePerGameScouting(hydrated);
-          } catch (err) {
-            this.logger.warn(
-              { err },
-              "opponent profile scouting reduction failed",
-            );
-          }
-        }
-
-        // The compact logs remain for DNA timings. Macro detail is replaced by
-        // two tiny prepared summaries because downstream phase panels score
-        // the game from both player perspectives.
-        const compactBase = {
-          ...profileAnalyticalMetadata(slim),
-          buildLog,
-          oppBuildLog,
-        };
-        out.push({
-          inDateScope: choice.inDateScope,
-          recentScouting: choice.recentScouting,
-          scouting,
-          opponentTendencies: scouting?.opponentTendencies || computeOpponentTendencies(hydrated),
-          youGame: {
-            ...compactBase,
-            _phasePrepared: safePrepareComposition(hydrated, "you"),
-          },
-          opponentGame: {
-            ...compactBase,
-            opponentLabelAgrees: opponentAgreesWithDetector(slim),
-            _phasePrepared: safePrepareComposition(hydrated, "opponent"),
-          },
-        });
       }
-      return out;
-    } finally {
-      releaseAdmission();
+
+      const needsLegacyInline = !detail
+        || !Array.isArray(detail.buildLog)
+        || !Array.isArray(detail.oppBuildLog)
+        || !detail.macroBreakdown;
+      /** @type {Record<string, any>|null} */
+      let inline = null;
+      if (needsLegacyInline && slim._id) {
+        inline = await this.db.games.findOne(
+          { userId, _id: slim._id },
+          { projection: PROFILE_DETAIL_PROJECTION },
+        );
+      }
+
+      const buildLog = compactAnalysisBuildLog(
+        detail?.buildLog ?? inline?.buildLog,
+      );
+      const oppBuildLog = compactAnalysisBuildLog(
+        detail?.oppBuildLog ?? inline?.oppBuildLog,
+      );
+      const macroBreakdown = compactAnalysisMacroBreakdown(
+        detail?.macroBreakdown ?? inline?.macroBreakdown,
+      );
+      const hydrated = {
+        ...slim,
+        buildLog,
+        oppBuildLog,
+        macroBreakdown,
+      };
+
+      let scouting = null;
+      if (
+        choice.recentScouting
+        || (choice.inDateScope
+          && filteredScoutingCount < OPPONENT_PROFILE_SCOUTING_MAX_GAMES)
+      ) {
+        if (choice.inDateScope) filteredScoutingCount += 1;
+        try {
+          scouting = computePerGameScouting(hydrated);
+        } catch (err) {
+          this.logger.warn(
+            { err },
+            "opponent profile scouting reduction failed",
+          );
+        }
+      }
+
+      // The compact logs remain for DNA timings. Macro detail is replaced by
+      // two tiny prepared summaries because downstream phase panels score
+      // the game from both player perspectives.
+      const compactBase = {
+        ...profileAnalyticalMetadata(slim),
+        buildLog,
+        oppBuildLog,
+      };
+      out.push({
+        inDateScope: choice.inDateScope,
+        recentScouting: choice.recentScouting,
+        scouting,
+        opponentTendencies: scouting?.opponentTendencies || computeOpponentTendencies(hydrated),
+        youGame: {
+          ...compactBase,
+          _phasePrepared: safePrepareComposition(hydrated, "you"),
+        },
+        opponentGame: {
+          ...compactBase,
+          opponentLabelAgrees: opponentAgreesWithDetector(slim),
+          _phasePrepared: safePrepareComposition(hydrated, "opponent"),
+        },
+      });
     }
+    return out;
   }
 
   profileAnalysisCapacitySnapshot() {
@@ -1510,7 +1505,15 @@ class OpponentsService {
    * @param {{filters?: import('../util/parseQuery').GlobalFilters, since?: Date, until?: Date, mergeLinked?: boolean, includeProfile?: boolean}} [opts]
    */
   async getAnalysis(userId, pulseId, opts = {}) {
-    return this._getProfile(userId, pulseId, opts, true);
+    // Admit before loading even slim cohorts: queued work retains neither
+    // linked identities nor 1000-row metadata arrays. Keep the slot until all
+    // detail reduction, timing and phase computation has completed.
+    const releaseAdmission = await opponentProfileAnalysisAdmission.acquire();
+    try {
+      return await this._getProfile(userId, pulseId, opts, true);
+    } finally {
+      releaseAdmission();
+    }
   }
 
   /**
